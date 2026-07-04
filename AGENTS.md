@@ -36,6 +36,9 @@ changes in this repository.
   in code.
 - Add `///` documentation for public APIs, but avoid comments that merely
   restate obvious code.
+- 新实现的代码优先使用中文注释；公共 API、协议适配、状态机、错误处理和不易
+  直观看懂的分支应尽可能补充 `///` 或简短行内注释，同时避免只复述代码字面
+  行为的空注释。
 
 ## Architecture
 

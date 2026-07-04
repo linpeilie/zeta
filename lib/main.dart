@@ -1,20 +1,43 @@
+import 'dart:async';
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import 'package:window_manager/window_manager.dart';
+
+import 'src/app/app.dart';
+import 'src/app/window_bootstrap.dart';
+import 'src/core/logging/app_logging.dart';
+
+export 'src/app/app.dart' show MainApp;
 
 void main() {
-  runApp(const MainApp());
+  runZonedGuarded(
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
+      await windowManager.ensureInitialized();
+      configureAppLogging();
+      _installGlobalErrorLogging();
+      await bootstrapDesktopWindow();
+      runApp(const MainApp());
+    },
+    (error, stackTrace) {
+      loggerFor('zeta.app').severe('Unhandled zone error', error, stackTrace);
+    },
+  );
 }
 
-class MainApp extends StatelessWidget {
-  const MainApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: Scaffold(
-        body: Center(
-          child: Text('Hello World!'),
-        ),
-      ),
+void _installGlobalErrorLogging() {
+  final log = loggerFor('zeta.app');
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    log.severe(
+      'Flutter framework error: ${details.exceptionAsString()}',
+      details.exception,
+      details.stack,
     );
-  }
+  };
+  PlatformDispatcher.instance.onError = (error, stackTrace) {
+    log.severe('Unhandled platform error', error, stackTrace);
+    return true;
+  };
 }
