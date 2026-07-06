@@ -247,7 +247,7 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
     process.stderr
         .transform(utf8.decoder)
         .transform(const LineSplitter())
-        .listen(_stderrLines.add, onError: _handleStreamError);
+        .listen(_handleStderrLine, onError: _handleStreamError);
     unawaited(_watchExit(process));
     _started = true;
   }
@@ -263,7 +263,6 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
     final id = _nextId++;
     final completer = Completer<Object?>();
     _pending[id] = completer;
-    _log.fine('Sending JSON-RPC request $method with id $id');
     // 请求 id 与响应 id 一一对应；超时后移除 pending，防止迟到响应污染状态。
     _pendingTimers[id] = Timer(timeout, () {
       final pending = _pending.remove(id);
@@ -279,7 +278,7 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
         'id': id,
         'method': method,
         'params': params ?? const <String, Object?>{},
-      });
+      }, description: 'JSON-RPC request $method with id $id');
     } catch (error) {
       _pending.remove(id);
       _pendingTimers.remove(id)?.cancel();
@@ -291,12 +290,14 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
   @override
   void sendNotification(String method, {Object? params}) {
     _ensureOpen();
-    _log.fine('Sending JSON-RPC notification $method');
     unawaited(
       _write(<String, Object?>{
         'method': method,
         'params': params ?? const <String, Object?>{},
-      }).catchError((Object error, StackTrace stackTrace) {
+      }, description: 'JSON-RPC notification $method').catchError((
+        Object error,
+        StackTrace stackTrace,
+      ) {
         _handleStreamError(error, stackTrace);
       }),
     );
@@ -309,11 +310,16 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
     JsonRpcError? error,
   }) async {
     _ensureOpen();
-    _log.fine('Sending JSON-RPC response for id $id');
     if (error != null) {
-      await _write(<String, Object?>{'id': id, 'error': error.toJson()});
+      await _write(<String, Object?>{
+        'id': id,
+        'error': error.toJson(),
+      }, description: 'JSON-RPC error response for id $id');
     } else {
-      await _write(<String, Object?>{'id': id, 'result': result});
+      await _write(<String, Object?>{
+        'id': id,
+        'result': result,
+      }, description: 'JSON-RPC response for id $id');
     }
   }
 
@@ -353,6 +359,7 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
     if (line.trim().isEmpty) {
       return;
     }
+    _log.fine('Received JSON-RPC stdout line: $line');
 
     final Object? decoded;
     try {
@@ -474,8 +481,20 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
     );
   }
 
-  Future<void> _write(Map<String, Object?> message) {
+  void _handleStderrLine(String line) {
+    if (line.trim().isEmpty) {
+      return;
+    }
+    _log.fine('Received JSON-RPC stderr line: $line');
+    _stderrLines.add(line);
+  }
+
+  Future<void> _write(
+    Map<String, Object?> message, {
+    required String description,
+  }) {
     final encoded = jsonEncode(message);
+    _log.fine('Sending $description: $encoded');
     // IOSink 在 flush/addStream 期间不允许并发写入；所有 JSONL 输出都走同一条队列。
     final operation = _writeQueue.then((_) async {
       final process = _process;

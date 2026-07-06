@@ -71,6 +71,14 @@ void main() {
         'tool-1',
       );
       expect(
+        events.whereType<AgentToolCallEvent>().single.toolCall.sessionId,
+        'thread-1',
+      );
+      expect(
+        events.whereType<AgentToolCallEvent>().single.toolCall.turnId,
+        'turn-1',
+      );
+      expect(
         events.whereType<AgentToolCallEvent>().single.toolCall.kind,
         AgentToolKind.execute,
       );
@@ -190,6 +198,8 @@ void main() {
         final approval = await approvalFuture;
         expect(approval.request.kind, AgentPermissionKind.commandExecution);
         expect(approval.request.command, 'dart format .');
+        expect(approval.request.sessionId, 'thread-1');
+        expect(approval.request.turnId, 'turn-1');
 
         await provider.respondToPermission(
           AgentPermissionDecision(
@@ -953,6 +963,7 @@ void main() {
         await Future<void>.delayed(Duration.zero);
 
         final usageEvent = events.whereType<AgentTokenUsageEvent>().single;
+        expect(usageEvent.sessionId, 'thread-1');
         expect(usageEvent.turnId, 'turn-live');
         expect(usageEvent.tokenUsage.totalTokens, 1300);
         expect(usageEvent.tokenUsage.inputTokens, 1000);
@@ -1091,6 +1102,52 @@ void main() {
       expect(defaultModel.serviceTiers, hasLength(1));
       expect(defaultModel.serviceTiers.first.id, 'priority');
       expect(defaultModel.serviceTiers.first.name, 'Fast');
+    });
+
+    test(
+      'ignores local MCP transport stderr when MCP app is not running',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final sub = provider.events.listen(events.add);
+        addTearDown(sub.cancel);
+        addTearDown(provider.dispose);
+
+        await provider.initialize();
+        peer.emitStderr(
+          'mrmcp::transport::worker worker quit with fatal: '
+          'Transport channel closed, when Client(HttpRequest(HttpRequest('
+          '"http/request failed: error sending request for url '
+          '(http://127.0.0.1:64342/stream)")))',
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(events.whereType<AgentErrorEvent>(), isEmpty);
+      },
+    );
+
+    test('keeps non-MCP stderr visible as AgentErrorEvent', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      final events = <AgentEvent>[];
+      final sub = provider.events.listen(events.add);
+      addTearDown(sub.cancel);
+      addTearDown(provider.dispose);
+
+      await provider.initialize();
+      peer.emitStderr('Codex fatal: failed to initialize model provider');
+      await Future<void>.delayed(Duration.zero);
+
+      final error = events.whereType<AgentErrorEvent>().single;
+      expect(error.message, 'Codex stderr');
+      expect(error.details, 'Codex fatal: failed to initialize model provider');
     });
 
     test('listModels returns cached list without extra request', () async {
@@ -1409,6 +1466,10 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
         raw: <String, Object?>{'id': id, 'method': method, 'params': params},
       ),
     );
+  }
+
+  void emitStderr(String line) {
+    _stderrLines.add(line);
   }
 
   void completeStart() {

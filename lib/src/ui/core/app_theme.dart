@@ -21,6 +21,7 @@ ThemeData buildCompactTheme() {
   return ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,
+    fontFamily: 'JetBrainsMono',
     colorScheme: colorScheme.copyWith(
       surface: ideSurfaceColor,
       primary: ideAccentColor,

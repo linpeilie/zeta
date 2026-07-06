@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
@@ -15,9 +17,12 @@ final _log = loggerFor('zeta.agent.conversation');
 /// 它负责把 UI 输入转换成 provider 调用，并把 [AgentEvent] 转换成消息列表、
 /// 工具卡片、审批卡片和状态胶囊。Widget 层只监听这个对象，不直接依赖 Codex。
 class AgentConversationViewModel extends ChangeNotifier {
-  AgentConversationViewModel({required this.providerController});
+  AgentConversationViewModel({required this.providerController}) {
+    _seedInitialStandbyTimeline();
+  }
 
   static const String defaultThreadTitle = 'New thread';
+  static const int _historyPageSize = 3;
   static const AgentConversationMessage _welcomeMessage =
       AgentConversationMessage(
         id: 'welcome',
@@ -37,14 +42,13 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   /// 当前会话，对应 provider 里的 thread。
   AgentSession? _session;
-
-  /// 当前正在运行的回合，对应 provider 里的 turn。
-  AgentTurn? _activeTurn;
   String? _projectPath;
   String? _contextFilePath;
 
   /// 从会话恢复出的 thread id；真正发送消息时再尝试 resume。
   String? _restoredSessionId;
+  AgentThreadOpenPhase _threadOpenPhase = AgentThreadOpenPhase.idle;
+  bool _requiresResumedSelectedThread = false;
   bool _settingsLoaded = false;
   bool _disposed = false;
   int _threadSwitchToken = 0;
@@ -69,9 +73,34 @@ class AgentConversationViewModel extends ChangeNotifier {
   /// 与 [_timelineEntries] 一一对应的 turn 分组 id；用于按 turn 聚合时间线。
   final List<String> _timelineEntryTurnIds = <String>[_standbyTurnId];
 
-  /// 各 turn 分组的运行时元数据（状态、时间、耗时）。
-  final Map<String, _TurnGroupMetadata> _turnMetadata =
-      <String, _TurnGroupMetadata>{};
+  /// 时间线条目所属的 turn id，用于增量更新 turn store。
+  final Map<String, String> _turnIdsByTimelineEntryId = <String, String>{};
+
+  /// 已加载历史 turn 的顺序；只对线程历史分页窗口生效。
+  final List<String> _historicalTurnOrder = <String>[];
+
+  /// 当前会话新增的 live turn 顺序；不参与“加载更早”窗口裁剪。
+  final List<String> _liveTurnOrder = <String>[];
+
+  /// turn 分组的增量缓存，避免每次从扁平 timeline 全量 regroup。
+  final Map<String, AgentConversationTurnState> _turnGroups =
+      <String, AgentConversationTurnState>{};
+
+  /// 历史区版本；仅在可见历史/standby 区发生变化时递增。
+  final ValueNotifier<int> _historyVersionNotifier = ValueNotifier<int>(0);
+
+  /// 标题区版本；thread 标题、运行状态、token 汇总变化时递增。
+  final ValueNotifier<int> _headerVersionNotifier = ValueNotifier<int>(0);
+
+  /// 输入区版本；模型列表、发送/取消按钮状态变化时递增。
+  final ValueNotifier<int> _composerVersionNotifier = ValueNotifier<int>(0);
+
+  /// 自动滚动信号；仅在需要“可能滚到底部”时递增。
+  final ValueNotifier<int> _autoScrollTickNotifier = ValueNotifier<int>(0);
+
+  /// 当前 live turn 引用；仅在 live turn 绑定切换时通知。
+  final ValueNotifier<AgentConversationTurnState?> _liveTurnNotifier =
+      ValueNotifier<AgentConversationTurnState?>(null);
 
   /// 当前正在追加条目的 turn 分组 id；为 null 时落到 standby 分组。
   String? _currentTurnGroupId;
@@ -85,9 +114,13 @@ class AgentConversationViewModel extends ChangeNotifier {
   final Set<String> _expandedPlanMessageIds = <String>{};
   final Set<String> _expandedCommandGroupIds = <String>{};
   final Set<String> _expandedFileEditItemIds = <String>{};
-  int _autoScrollTick = 0;
+  int _visibleHistoryStartIndex = 0;
   String _currentThreadTitle = defaultThreadTitle;
   AgentProviderStatus _status = const AgentProviderStatus.idle();
+  Timer? _streamFlushTimer;
+  bool _streamNeedsLiveFlush = false;
+  bool _streamNeedsHeaderFlush = false;
+  bool _streamNeedsAutoScroll = false;
 
   /// provider 推送的可用模型列表。
   AgentModelList? _modelList;
@@ -109,37 +142,66 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   /// 按出现顺序排列的 turn 分组，每组携带自己的消息体列表。
   ///
-  /// 历史恢复和实时事件都会按 turn 聚合，UI 据此分回合渲染。standby 分组
-  /// （welcome 消息、回合外的系统提示）排在最前。
+  /// 历史只显示当前可见窗口内的 turn；live turn 和 standby 分组始终可见。
   List<AgentConversationTurnGroup> get conversationTurns {
-    final groups = <String, List<AgentTimelineEntry>>{};
-    final order = <String>[];
-    final seen = <String>{};
-    for (var index = 0; index < _timelineEntries.length; index += 1) {
-      final turnId = _timelineEntryTurnIds[index];
-      (groups[turnId] ??= <AgentTimelineEntry>[]).add(_timelineEntries[index]);
-      if (seen.add(turnId)) {
-        order.add(turnId);
-      }
-    }
-    return <AgentConversationTurnGroup>[
-      for (final turnId in order)
-        AgentConversationTurnGroup(
-          id: turnId,
-          entries: List<AgentTimelineEntry>.unmodifiable(groups[turnId]!),
-          isStandby: turnId == _standbyTurnId,
-          status: _turnMetadata[turnId]?.status,
-          startedAt: _turnMetadata[turnId]?.startedAt,
-          completedAt: _turnMetadata[turnId]?.completedAt,
-          duration: _turnMetadata[turnId]?.duration,
-          tokenUsage: _turnMetadata[turnId]?.tokenUsage,
-        ),
+    final visibleTurnIds = <String>[
+      if (standbyTurnState case final standby? when standby.entries.isNotEmpty)
+        standby.id,
+      for (final turn in visibleHistoryTurnStates) turn.id,
+      if (liveTurnState case final live?) live.id,
     ];
+    return List<AgentConversationTurnGroup>.unmodifiable(
+      <AgentConversationTurnGroup>[
+        for (final turnId in visibleTurnIds) _turnGroupSnapshot(turnId),
+      ],
+    );
   }
+
+  /// 当前分页窗口内的历史 turn 集合，不包含 standby/live turn。
+  List<AgentConversationTurnGroup> get visibleHistoryTurns =>
+      List<AgentConversationTurnGroup>.unmodifiable(
+        <AgentConversationTurnGroup>[
+          for (final turn in visibleHistoryTurnStates) turn.snapshot(),
+        ],
+      );
+
+  AgentConversationTurnState? get standbyTurnState =>
+      _turnGroups[_standbyTurnId];
+
+  List<AgentConversationTurnState> get visibleHistoryTurnStates =>
+      List<AgentConversationTurnState>.unmodifiable(
+        _historicalTurnOrder
+            .skip(_visibleHistoryStartIndex)
+            .map((turnId) => _turnGroups[turnId])
+            .whereType<AgentConversationTurnState>(),
+      );
+
+  AgentConversationTurnState? get liveTurnState => _liveTurnNotifier.value;
+
+  /// 历史窗口前面是否还有更早的 turn 未展开。
+  bool get hasOlderTurns => _visibleHistoryStartIndex > 0;
 
   AgentProviderStatus get status => _status;
 
-  int get autoScrollTick => _autoScrollTick;
+  int get autoScrollTick => _autoScrollTickNotifier.value;
+
+  int get historyVersion => _historyVersionNotifier.value;
+
+  int get headerVersion => _headerVersionNotifier.value;
+
+  int get composerVersion => _composerVersionNotifier.value;
+
+  ValueListenable<int> get historyVersionListenable => _historyVersionNotifier;
+
+  ValueListenable<int> get headerVersionListenable => _headerVersionNotifier;
+
+  ValueListenable<int> get composerVersionListenable =>
+      _composerVersionNotifier;
+
+  ValueListenable<int> get autoScrollTickListenable => _autoScrollTickNotifier;
+
+  ValueListenable<AgentConversationTurnState?> get liveTurnListenable =>
+      _liveTurnNotifier;
 
   String? get projectPath => _projectPath;
 
@@ -201,14 +263,18 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   String get currentThreadTitle => _currentThreadTitle;
 
-  bool get showRunningIndicator => isRunning;
+  bool get showRunningIndicator => isTurnRunning;
+
+  AgentThreadOpenPhase get threadOpenPhase => _threadOpenPhase;
+
+  bool get requiresResumedSelectedThread => _requiresResumedSelectedThread;
 
   AgentTokenUsage? get currentTurnTokenUsage {
-    final activeTurn = _activeTurn;
-    if (activeTurn == null) {
+    final runningTurnId = _selectedRunningTurnId();
+    if (runningTurnId == null) {
       return null;
     }
-    return _turnMetadata[activeTurn.id]?.tokenUsage;
+    return _turnGroups[runningTurnId]?.tokenUsage;
   }
 
   /// 当前 thread 下所有 turn 的累计 token 用量，用于标题栏右侧展示总成本。
@@ -219,8 +285,11 @@ class AgentConversationViewModel extends ChangeNotifier {
     int? reasoningOutputTokens;
     int? totalTokens;
 
-    for (final metadata in _turnMetadata.values) {
-      final usage = metadata.tokenUsage;
+    for (final turn in _turnGroups.values) {
+      if (turn.isStandby) {
+        continue;
+      }
+      final usage = turn.tokenUsage;
       if (usage == null) {
         continue;
       }
@@ -254,10 +323,11 @@ class AgentConversationViewModel extends ChangeNotifier {
     );
   }
 
-  bool get isRunning =>
-      _activeTurn != null ||
-      _status.state == AgentProviderConnectionState.running ||
-      _status.state == AgentProviderConnectionState.connecting;
+  bool get isTurnRunning => _selectedRunningTurnId() != null;
+
+  bool get isRunning => isTurnRunning;
+
+  bool get canSubmitMessage => _threadOpenPhase == AgentThreadOpenPhase.idle;
 
   bool isToolCallExpanded(String toolCallId) {
     return _expandedToolCallIds.contains(toolCallId);
@@ -278,11 +348,25 @@ class AgentConversationViewModel extends ChangeNotifier {
     return _expandedFileEditItemIds.contains(fileEditItemId);
   }
 
+  /// 扩大历史窗口，一次多显示固定页数的更早 turn。
+  bool loadOlderTurns() {
+    final nextStartIndex = math.max(
+      0,
+      _visibleHistoryStartIndex - _historyPageSize,
+    );
+    if (nextStartIndex == _visibleHistoryStartIndex) {
+      return false;
+    }
+    _visibleHistoryStartIndex = nextStartIndex;
+    _publishUiChanges(history: true);
+    return true;
+  }
+
   void toggleToolCall(String toolCallId) {
     if (!_expandedToolCallIds.add(toolCallId)) {
       _expandedToolCallIds.remove(toolCallId);
     }
-    _notify();
+    _publishUiChanges(history: true, liveTurn: true);
   }
 
   /// 切换计划消息折叠状态。
@@ -290,7 +374,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     if (!_expandedPlanMessageIds.add(messageId)) {
       _expandedPlanMessageIds.remove(messageId);
     }
-    _notify();
+    _publishUiChanges(history: true, liveTurn: true);
   }
 
   /// 切换命令集折叠状态。
@@ -298,7 +382,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     if (!_expandedCommandGroupIds.add(commandGroupId)) {
       _expandedCommandGroupIds.remove(commandGroupId);
     }
-    _notify();
+    _publishUiChanges(history: true, liveTurn: true);
   }
 
   /// 切换文件编辑项详情展开状态。
@@ -306,7 +390,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     if (!_expandedFileEditItemIds.add(fileEditItemId)) {
       _expandedFileEditItemIds.remove(fileEditItemId);
     }
-    _notify();
+    _publishUiChanges(history: true, liveTurn: true);
   }
 
   /// 加载全局 provider 设置。
@@ -332,7 +416,7 @@ class AgentConversationViewModel extends ChangeNotifier {
         details: error.toString(),
       );
     }
-    _notify();
+    _publishUiChanges();
   }
 
   /// 预加载模型列表。
@@ -359,7 +443,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     } catch (error, stackTrace) {
       _log.warning('Could not preload Agent models', error, stackTrace);
     }
-    _notify();
+    _publishUiChanges(composer: true);
   }
 
   /// 选择模型，同步到 provider 并持久化。
@@ -415,7 +499,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       provider.updateModelSelection(_modelSelection);
     }
     await providerController.persistModelSelection(_modelSelection);
-    _notify();
+    _publishUiChanges(composer: true);
   }
 
   /// 处理 provider 推送的模型列表。
@@ -425,7 +509,7 @@ class AgentConversationViewModel extends ChangeNotifier {
   void _handleModelList(AgentModelList modelList) {
     _modelList = modelList;
     _reconcileSelection();
-    _notify();
+    _publishUiChanges(composer: true);
   }
 
   /// 根据模型列表校正当前选择，确保 modelId/effort/tier 都有效。
@@ -491,14 +575,18 @@ class AgentConversationViewModel extends ChangeNotifier {
     _projectPath = projectPath;
     _contextFilePath = contextFilePath;
     if (projectChanged) {
+      _threadSwitchToken += 1;
       _session = null;
-      _activeTurn = null;
       _restoredSessionId = restoredSessionId;
+      _threadOpenPhase = AgentThreadOpenPhase.idle;
+      _requiresResumedSelectedThread = false;
       _currentThreadTitle = defaultThreadTitle;
     } else if (restoredSessionId != null) {
       _restoredSessionId = restoredSessionId;
+      _threadOpenPhase = AgentThreadOpenPhase.idle;
+      _requiresResumedSelectedThread = false;
     }
-    _notify();
+    _publishUiChanges(header: true, composer: true);
   }
 
   /// 发送用户消息。
@@ -506,16 +594,34 @@ class AgentConversationViewModel extends ChangeNotifier {
   /// 没有 active turn 时创建新回合；已有 active turn 时发送 steer，保持完整工具循环。
   Future<void> sendMessage(String text) async {
     final trimmed = text.trim();
-    if (trimmed.isEmpty) {
+    if (trimmed.isEmpty || !canSubmitMessage) {
       return;
     }
 
+    if (_requiresResumedSelectedThread && _selectedThreadId == null) {
+      return;
+    }
+
+    final switchToken = _threadSwitchToken;
+    final selectedThreadId = _selectedThreadId;
+    final runningTurnId = _selectedRunningTurnId();
+
     // 新回合：先开一个临时 turn 分组承载用户消息，待 turn 真正启动后重命名为真实 turn id。
     // steer：追加到当前回合的分组里。
-    final isNewTurn = _activeTurn == null;
+    final isNewTurn = runningTurnId == null;
     if (isNewTurn) {
       _pendingTurnGroupId = 'pending-${DateTime.now().microsecondsSinceEpoch}';
       _currentTurnGroupId = _pendingTurnGroupId;
+      _turnStateFor(
+        _pendingTurnGroupId!,
+        isStandby: false,
+        isHistorical: false,
+      ).updateMetadata(
+        status: AgentHistoryTurnStatus.running,
+        startedAt: DateTime.now(),
+      );
+    } else {
+      _currentTurnGroupId = runningTurnId;
     }
     _addConversationMessage(
       AgentConversationMessage(
@@ -528,7 +634,13 @@ class AgentConversationViewModel extends ChangeNotifier {
       state: AgentProviderConnectionState.running,
       message: 'Agent is working',
     );
-    _notify();
+    _publishUiChanges(
+      syncLiveTurn: true,
+      liveTurn: true,
+      header: true,
+      composer: true,
+      autoScroll: true,
+    );
 
     try {
       await loadSettings();
@@ -537,11 +649,16 @@ class AgentConversationViewModel extends ChangeNotifier {
         projectPath: _projectPath,
         filePath: _contextFilePath,
       );
-      final session = await _ensureSession(provider, context);
+      final session = await _ensureSession(
+        provider,
+        context,
+        switchToken: switchToken,
+        expectedThreadId: selectedThreadId,
+      );
       _log.info('Sending Agent request with provider ${provider.config.id}');
       // 同一个输入框承担“新请求”和“追加 steer”两种行为。
       if (isNewTurn) {
-        _activeTurn = await provider.sendMessage(
+        final turn = await provider.sendMessage(
           session: session,
           message: _messageWithContext(trimmed),
           context: context,
@@ -549,8 +666,15 @@ class AgentConversationViewModel extends ChangeNotifier {
         // 兜底：若 provider 未推送 AgentTurnStartedEvent（或事件尚未重命名临时分组），
         // 用返回的 turn id 把临时分组改成真实回合。
         final pendingId = _pendingTurnGroupId;
-        if (pendingId != null && _activeTurn != null) {
-          _beginLiveTurnGroup(_activeTurn!);
+        if (pendingId != null &&
+            _isStillSelectedThread(switchToken, session.id)) {
+          _beginLiveTurnGroup(turn);
+          _publishUiChanges(
+            syncLiveTurn: true,
+            liveTurn: true,
+            header: true,
+            composer: true,
+          );
         }
       } else {
         await provider.steerTurn(
@@ -565,12 +689,21 @@ class AgentConversationViewModel extends ChangeNotifier {
         error,
         stackTrace,
       );
+      if (!_isStillSelectedThread(switchToken, selectedThreadId)) {
+        return;
+      }
       _markUnavailable(error.message, details: error.toString());
     } on UnsupportedError catch (error, stackTrace) {
       _log.warning('Unsupported Agent provider', error, stackTrace);
+      if (!_isStillSelectedThread(switchToken, selectedThreadId)) {
+        return;
+      }
       _markError(error.message ?? 'Provider is not supported');
     } catch (error, stackTrace) {
       _log.warning('Agent request failed', error, stackTrace);
+      if (!_isStillSelectedThread(switchToken, selectedThreadId)) {
+        return;
+      }
       _markError('Agent request failed', details: error.toString());
     } finally {
       // 未能启动 turn 时清理临时分组标记；成功时由 AgentTurnStartedEvent 处理已清空。
@@ -580,34 +713,36 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   /// 取消正在运行的回合。
   Future<void> cancelActiveTurn() async {
-    final turn = _activeTurn;
     final provider = _provider;
-    if (turn == null || provider == null) {
+    final turnId = _selectedCancelableTurnId();
+    final sessionId = _selectedThreadId;
+    if (turnId == null || sessionId == null || provider == null) {
       return;
     }
-    _log.info('Cancelling Agent turn ${turn.id}');
-    await provider.cancelTurn(turn);
+    _log.info('Cancelling Agent turn $turnId');
+    await provider.cancelTurn(AgentTurn(id: turnId, sessionId: sessionId));
   }
 
   /// 切换到项目列表中选中的 thread。
-  ///
-  /// 运行中的回合不能切换，调用方会先检查 [isRunning] 并给用户提示。
   Future<void> switchThread(AgentThreadSummary thread) async {
-    if (isRunning) {
-      return;
-    }
-
     final switchToken = ++_threadSwitchToken;
+    _flushPendingStreamChangesNow();
     _session = null;
-    _activeTurn = null;
     _restoredSessionId = thread.id;
+    _requiresResumedSelectedThread = true;
+    _threadOpenPhase = AgentThreadOpenPhase.loadingHistory;
     _currentThreadTitle = thread.displayName;
     _clearConversation();
     _status = const AgentProviderStatus(
       state: AgentProviderConnectionState.connecting,
       message: 'Loading history',
     );
-    _notify();
+    _publishUiChanges(
+      history: true,
+      syncLiveTurn: true,
+      header: true,
+      composer: true,
+    );
 
     try {
       await loadSettings();
@@ -620,54 +755,29 @@ class AgentConversationViewModel extends ChangeNotifier {
         return;
       }
       _applyHistorySnapshot(history, thread);
-      _status = const AgentProviderStatus(
-        state: AgentProviderConnectionState.connecting,
-        message: 'Opening thread',
+      _threadOpenPhase = AgentThreadOpenPhase.idle;
+      _status = AgentProviderStatus(
+        state: AgentProviderConnectionState.ready,
+        message: '$activeProviderName ready',
       );
-      _notify();
+      _publishUiChanges(
+        history: true,
+        syncLiveTurn: true,
+        header: true,
+        composer: true,
+        autoScroll: true,
+      );
     } catch (error, stackTrace) {
       if (!_isCurrentSwitch(switchToken)) {
         return;
       }
+      _threadOpenPhase = AgentThreadOpenPhase.openFailed;
       _log.warning(
         'Could not load Agent thread history ${thread.id}',
         error,
         stackTrace,
       );
       _markError('Could not load thread history', details: error.toString());
-      return;
-    }
-
-    try {
-      final provider = await _ensureProvider();
-      final session = await provider.resumeSession(
-        thread.id,
-        context: AgentContext(
-          projectPath: _projectPath ?? thread.projectPath,
-          filePath: _contextFilePath,
-        ),
-      );
-      if (!_isCurrentSwitch(switchToken)) {
-        return;
-      }
-      _session = session;
-      _restoredSessionId = session.id;
-      _applySessionTitle(session);
-      _status = AgentProviderStatus(
-        state: AgentProviderConnectionState.ready,
-        message: '$activeProviderName ready',
-      );
-      _notify();
-    } catch (error, stackTrace) {
-      if (!_isCurrentSwitch(switchToken)) {
-        return;
-      }
-      _log.warning(
-        'Could not resume Agent thread ${thread.id}',
-        error,
-        stackTrace,
-      );
-      _markError('Could not open Agent thread', details: error.toString());
     }
   }
 
@@ -679,7 +789,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     required bool approved,
   }) async {
     _removePermissionRequest(request.id);
-    _notify();
+    _publishUiChanges(history: true, liveTurn: true);
     _log.info(
       'Responding to Agent permission ${request.kind.name}: approved=$approved',
     );
@@ -691,7 +801,16 @@ class AgentConversationViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _streamFlushTimer?.cancel();
     unawaited(_eventSubscription?.cancel());
+    for (final turn in _turnGroups.values) {
+      turn.dispose();
+    }
+    _historyVersionNotifier.dispose();
+    _headerVersionNotifier.dispose();
+    _composerVersionNotifier.dispose();
+    _autoScrollTickNotifier.dispose();
+    _liveTurnNotifier.dispose();
     super.dispose();
   }
 
@@ -710,8 +829,10 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   Future<AgentSession> _ensureSession(
     AgentProvider provider,
-    AgentContext context,
-  ) async {
+    AgentContext context, {
+    required int switchToken,
+    required String? expectedThreadId,
+  }) async {
     final existing = _session;
     if (existing != null) {
       return existing;
@@ -721,28 +842,48 @@ class AgentConversationViewModel extends ChangeNotifier {
     if (restoredSessionId != null) {
       try {
         _log.fine('Resuming Agent session $restoredSessionId');
-        // 先尝试恢复上次 thread；失败时回退到新建 thread。
-        _session = await provider.resumeSession(
+        // 先尝试恢复上次 thread；普通工作区恢复失败时才回退到新建 thread。
+        final session = await provider.resumeSession(
           restoredSessionId,
           context: context,
         );
-        _applySessionTitle(_session!);
-        return _session!;
+        if (_isStillSelectedThread(switchToken, expectedThreadId)) {
+          _session = session;
+          _restoredSessionId = session.id;
+          _threadOpenPhase = AgentThreadOpenPhase.idle;
+          _requiresResumedSelectedThread = false;
+          _applySessionTitle(session);
+        }
+        return session;
       } catch (error, stackTrace) {
         _log.warning(
           'Could not resume Agent session $restoredSessionId',
           error,
           stackTrace,
         );
-        _restoredSessionId = null;
+        if (_requiresResumedSelectedThread) {
+          if (_isStillSelectedThread(switchToken, expectedThreadId)) {
+            _threadOpenPhase = AgentThreadOpenPhase.openFailed;
+          }
+          rethrow;
+        }
+        if (_isStillSelectedThread(switchToken, expectedThreadId) &&
+            _restoredSessionId == restoredSessionId) {
+          _restoredSessionId = null;
+        }
       }
     }
 
     _log.fine('Starting new Agent session with provider ${provider.config.id}');
-    _session = await provider.startSession(context: context);
-    _restoredSessionId = _session!.id;
-    _applySessionTitle(_session!);
-    return _session!;
+    final session = await provider.startSession(context: context);
+    if (_isStillSelectedThread(switchToken, expectedThreadId)) {
+      _session = session;
+      _restoredSessionId = session.id;
+      _threadOpenPhase = AgentThreadOpenPhase.idle;
+      _requiresResumedSelectedThread = false;
+      _applySessionTitle(session);
+    }
+    return session;
   }
 
   /// 将 provider 事件规约成面板状态。
@@ -750,37 +891,116 @@ class AgentConversationViewModel extends ChangeNotifier {
     switch (event) {
       case AgentStatusEvent():
         _status = event.status;
+        _publishUiChanges();
       case AgentSessionStartedEvent():
+        if (!_shouldAcceptSessionStarted(event.session.id)) {
+          break;
+        }
         _session = event.session;
         _restoredSessionId = event.session.id;
+        _threadOpenPhase = AgentThreadOpenPhase.idle;
+        _requiresResumedSelectedThread = false;
         _applySessionTitle(event.session);
+        _publishUiChanges(header: true, composer: true);
       case AgentTurnStartedEvent():
-        _activeTurn = event.turn;
+        if (!_shouldHandleEventForCurrentThread(
+          sessionId: event.turn.sessionId,
+          turnId: event.turn.id,
+        )) {
+          break;
+        }
         _beginLiveTurnGroup(event.turn);
+        _flushStreamChangesNow(
+          syncLiveTurn: true,
+          liveTurn: true,
+          header: true,
+          composer: true,
+        );
       case AgentTurnCompletedEvent():
-        _activeTurn = null;
+        if (!_shouldHandleEventForCurrentThread(
+          sessionId: event.sessionId,
+          turnId: event.turnId,
+        )) {
+          break;
+        }
         _completeLiveTurnGroup(event.turnId);
-        if (_status.state == AgentProviderConnectionState.running) {
+        if (!isTurnRunning &&
+            _status.state == AgentProviderConnectionState.running) {
           _status = AgentProviderStatus(
             state: AgentProviderConnectionState.ready,
             message: '$activeProviderName ready',
           );
         }
+        _flushStreamChangesNow(
+          history: true,
+          syncLiveTurn: true,
+          header: true,
+          composer: true,
+          autoScroll: true,
+        );
       case AgentTokenUsageEvent():
+        if (!_shouldHandleEventForCurrentThread(
+          sessionId: event.sessionId,
+          turnId: event.turnId,
+        )) {
+          break;
+        }
         _updateTurnTokenUsage(event);
+        _scheduleStreamFlush(header: true);
       case AgentMessageDeltaEvent():
+        if (!_shouldHandleEventForCurrentThread(
+          sessionId: event.sessionId,
+          turnId: event.turnId,
+        )) {
+          break;
+        }
         _appendMessageDelta(event);
+        _scheduleStreamFlush(autoScroll: true);
       case AgentMessageUpdatedEvent():
+        if (!_shouldHandleEventForCurrentThread(
+          sessionId: event.sessionId,
+          turnId: event.turnId,
+        )) {
+          break;
+        }
         _updateMessage(event);
+        _flushStreamChangesNow(liveTurn: true, autoScroll: true);
       case AgentPlanUpdatedEvent():
+        if (!_shouldHandleEventForCurrentThread(
+          sessionId: event.sessionId,
+          turnId: event.turnId,
+        )) {
+          break;
+        }
         _upsertPlanMessage(event);
+        _flushStreamChangesNow(liveTurn: true, autoScroll: true);
       case AgentToolCallEvent():
+        if (!_shouldHandleEventForCurrentThread(
+          sessionId: event.toolCall.sessionId,
+          turnId: event.toolCall.turnId,
+        )) {
+          break;
+        }
         _upsertToolCall(event.toolCall);
+        _flushStreamChangesNow(liveTurn: true, autoScroll: true);
       case AgentPermissionRequestedEvent():
+        if (!_shouldHandleEventForCurrentThread(
+          sessionId: event.request.sessionId,
+          turnId: event.request.turnId,
+        )) {
+          break;
+        }
         _addPermissionRequest(event.request);
+        _flushStreamChangesNow(liveTurn: true, autoScroll: true);
       case AgentModelListEvent():
         _handleModelList(event.models);
       case AgentErrorEvent():
+        if (!_shouldHandleEventForCurrentThread(
+          sessionId: event.sessionId,
+          turnId: event.turnId,
+        )) {
+          break;
+        }
         _addConversationMessage(
           AgentConversationMessage(
             id: 'error-${DateTime.now().microsecondsSinceEpoch}',
@@ -790,8 +1010,8 @@ class AgentConversationViewModel extends ChangeNotifier {
                 : '${event.message}: ${event.details}',
           ),
         );
+        _flushStreamChangesNow(history: true, liveTurn: true, autoScroll: true);
     }
-    _notify();
   }
 
   /// 合并流式消息增量。
@@ -929,14 +1149,20 @@ class AgentConversationViewModel extends ChangeNotifier {
       message: message,
       details: details,
     );
-    _addConversationMessage(
+    final turnId = _addConversationMessage(
       AgentConversationMessage(
         id: 'unavailable-${DateTime.now().microsecondsSinceEpoch}',
         role: AgentMessageRole.system,
         text: details == null ? message : '$message: $details',
       ),
     );
-    _notify();
+    _publishUiChanges(
+      history: _isHistoryTurnId(turnId),
+      liveTurn: _isLiveTurnId(turnId),
+      header: true,
+      composer: true,
+      autoScroll: true,
+    );
   }
 
   /// 标记通用错误。
@@ -946,18 +1172,92 @@ class AgentConversationViewModel extends ChangeNotifier {
       message: message,
       details: details,
     );
-    _addConversationMessage(
+    final turnId = _addConversationMessage(
       AgentConversationMessage(
         id: 'error-${DateTime.now().microsecondsSinceEpoch}',
         role: AgentMessageRole.system,
         text: details == null ? message : '$message: $details',
       ),
     );
-    _notify();
+    _publishUiChanges(
+      history: _isHistoryTurnId(turnId),
+      liveTurn: _isLiveTurnId(turnId),
+      header: true,
+      composer: true,
+      autoScroll: true,
+    );
   }
 
   bool _isCurrentSwitch(int switchToken) {
     return !_disposed && switchToken == _threadSwitchToken;
+  }
+
+  String? get _selectedThreadId => _session?.id ?? _restoredSessionId;
+
+  bool _shouldAcceptSessionStarted(String sessionId) {
+    final selectedThreadId = _selectedThreadId;
+    if (selectedThreadId != null) {
+      return selectedThreadId == sessionId;
+    }
+    return !_requiresResumedSelectedThread;
+  }
+
+  bool _shouldHandleEventForCurrentThread({String? sessionId, String? turnId}) {
+    final selectedThreadId = _selectedThreadId;
+    if (sessionId != null) {
+      return selectedThreadId == sessionId;
+    }
+    if (turnId != null) {
+      return _turnGroups.containsKey(turnId) || turnId == _pendingTurnGroupId;
+    }
+    return true;
+  }
+
+  bool _isStillSelectedThread(int switchToken, String? expectedThreadId) {
+    if (!_isCurrentSwitch(switchToken)) {
+      return false;
+    }
+    final selectedThreadId = _selectedThreadId;
+    return expectedThreadId == null
+        ? true
+        : selectedThreadId == expectedThreadId;
+  }
+
+  String? _selectedRunningTurnId() {
+    final currentTurnGroupId = _currentTurnGroupId;
+    if (_turnGroups[currentTurnGroupId]?.status ==
+        AgentHistoryTurnStatus.running) {
+      return currentTurnGroupId;
+    }
+
+    for (var index = _liveTurnOrder.length - 1; index >= 0; index -= 1) {
+      final turnId = _liveTurnOrder[index];
+      if (_turnGroups[turnId]?.status == AgentHistoryTurnStatus.running) {
+        return turnId;
+      }
+    }
+
+    for (var index = _historicalTurnOrder.length - 1; index >= 0; index -= 1) {
+      final turnId = _historicalTurnOrder[index];
+      if (_turnGroups[turnId]?.status == AgentHistoryTurnStatus.running) {
+        return turnId;
+      }
+    }
+
+    for (final entry in _turnGroups.entries) {
+      if (entry.value.status == AgentHistoryTurnStatus.running) {
+        return entry.key;
+      }
+    }
+    return null;
+  }
+
+  String? _selectedCancelableTurnId() {
+    final turnId = _selectedRunningTurnId();
+    if (turnId == null || turnId == _pendingTurnGroupId) {
+      return null;
+    }
+    return turnId;
   }
 
   int? _sumOptionalInt(int? left, int? right) {
@@ -976,13 +1276,32 @@ class AgentConversationViewModel extends ChangeNotifier {
     _currentThreadTitle = title;
   }
 
+  void _seedInitialStandbyTimeline() {
+    final standbyGroup = _turnStateFor(
+      _standbyTurnId,
+      isStandby: true,
+      isHistorical: false,
+    );
+    standbyGroup.appendEntry(_timelineEntries.single);
+    _turnIdsByTimelineEntryId[_timelineEntries.single.id] = _standbyTurnId;
+  }
+
   void _clearConversation() {
+    _streamFlushTimer?.cancel();
+    _streamFlushTimer = null;
+    _streamNeedsLiveFlush = false;
+    _streamNeedsHeaderFlush = false;
+    _streamNeedsAutoScroll = false;
     _messages.clear();
     _toolCalls.clear();
     _permissionRequests.clear();
     _timelineEntries.clear();
     _timelineEntryTurnIds.clear();
-    _turnMetadata.clear();
+    _turnIdsByTimelineEntryId.clear();
+    _historicalTurnOrder.clear();
+    _liveTurnOrder.clear();
+    _turnGroups.clear();
+    _liveTurnNotifier.value = null;
     _messageIndexesByProviderId.clear();
     _expandedToolCallIds.clear();
     _expandedPlanMessageIds.clear();
@@ -990,6 +1309,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     _expandedFileEditItemIds.clear();
     _currentTurnGroupId = null;
     _pendingTurnGroupId = null;
+    _visibleHistoryStartIndex = 0;
   }
 
   void _applyHistorySnapshot(
@@ -1009,15 +1329,14 @@ class AgentConversationViewModel extends ChangeNotifier {
     }
 
     // 按返回的 turn 集合逐回合重建时间线，每个 turn 自带消息体列表。
+    String? runningTurnId;
     for (final turn in history.turns) {
+      final isRunningTurn = turn.status == AgentHistoryTurnStatus.running;
+      _registerHistoryTurn(turn, asLive: isRunningTurn);
       _currentTurnGroupId = turn.id;
-      _turnMetadata[turn.id] = _TurnGroupMetadata(
-        status: turn.status,
-        startedAt: turn.startedAt,
-        completedAt: turn.completedAt,
-        duration: turn.duration,
-        tokenUsage: turn.tokenUsage,
-      );
+      if (isRunningTurn) {
+        runningTurnId = turn.id;
+      }
       for (final entry in turn.entries) {
         switch (entry) {
           case AgentHistoryMessageEntry():
@@ -1041,48 +1360,68 @@ class AgentConversationViewModel extends ChangeNotifier {
         }
       }
     }
-    _currentTurnGroupId = null;
+    _visibleHistoryStartIndex = _defaultVisibleHistoryStartIndexForLength(
+      _historicalTurnOrder.length,
+    );
+    _currentTurnGroupId = runningTurnId;
+    _syncLiveTurnBinding();
   }
 
-  void _addConversationMessage(AgentConversationMessage message) {
+  String _addConversationMessage(AgentConversationMessage message) {
     _messages.add(message);
-    _appendTimelineEntry(AgentMessageTimelineEntry(message: message));
+    return _appendTimelineEntry(AgentMessageTimelineEntry(message: message));
   }
 
   /// 追加时间线条目，并打上当前 turn 分组 id。
-  void _appendTimelineEntry(AgentTimelineEntry entry) {
+  String _appendTimelineEntry(AgentTimelineEntry entry) {
+    final turnId = _currentTurnGroupId ?? _standbyTurnId;
     _timelineEntries.add(entry);
-    _timelineEntryTurnIds.add(_currentTurnGroupId ?? _standbyTurnId);
-    _markTimelineChanged();
+    _timelineEntryTurnIds.add(turnId);
+    _turnIdsByTimelineEntryId[entry.id] = turnId;
+    _turnStateFor(
+      turnId,
+      isStandby: turnId == _standbyTurnId,
+      isHistorical:
+          _currentTurnGroupId != null &&
+          _historicalTurnOrder.contains(turnId) &&
+          !_liveTurnOrder.contains(turnId),
+    ).appendEntry(entry);
+    return turnId;
   }
 
-  void _replaceTimelineMessage(AgentConversationMessage message) {
+  String? _replaceTimelineMessage(AgentConversationMessage message) {
     final index = _timelineEntries.indexWhere(
       (entry) =>
           entry is AgentMessageTimelineEntry && entry.message.id == message.id,
     );
     if (index == -1) {
-      return;
+      return null;
     }
-    _timelineEntries[index] = AgentMessageTimelineEntry(message: message);
-    _markTimelineChanged();
+    final updatedEntry = AgentMessageTimelineEntry(message: message);
+    _timelineEntries[index] = updatedEntry;
+    final turnId = _timelineEntryTurnIds[index];
+    _turnGroups[turnId]?.replaceEntry(updatedEntry);
+    return turnId;
   }
 
-  void _replaceTimelineTool(AgentToolCall toolCall) {
+  String? _replaceTimelineTool(AgentToolCall toolCall) {
     final index = _timelineEntries.indexWhere(
       (entry) =>
           entry is AgentToolTimelineEntry && entry.toolCall.id == toolCall.id,
     );
     if (index == -1) {
-      return;
+      return null;
     }
-    _timelineEntries[index] = AgentToolTimelineEntry(toolCall: toolCall);
-    _markTimelineChanged();
+    final updatedEntry = AgentToolTimelineEntry(toolCall: toolCall);
+    _timelineEntries[index] = updatedEntry;
+    final turnId = _timelineEntryTurnIds[index];
+    _turnGroups[turnId]?.replaceEntry(updatedEntry);
+    return turnId;
   }
 
-  void _addPermissionRequest(AgentPermissionRequest request) {
+  String _addPermissionRequest(AgentPermissionRequest request) {
     _permissionRequests.add(request);
-    _appendTimelineEntry(AgentPermissionTimelineEntry(request: request));
+    return _appendTimelineEntry(AgentPermissionTimelineEntry(request: request));
   }
 
   void _removePermissionRequest(String requestId) {
@@ -1092,22 +1431,100 @@ class AgentConversationViewModel extends ChangeNotifier {
       final entry = _timelineEntries[index];
       if (entry is AgentPermissionTimelineEntry &&
           entry.request.id == requestId) {
+        final turnId = _timelineEntryTurnIds[index];
         _timelineEntries.removeAt(index);
         _timelineEntryTurnIds.removeAt(index);
+        _turnIdsByTimelineEntryId.remove(entry.id);
+        _turnGroups[turnId]?.removeEntry(entry.id);
       } else {
         index += 1;
       }
     }
   }
 
-  void _notify() {
+  void _publishUiChanges({
+    bool history = false,
+    bool syncLiveTurn = false,
+    bool header = false,
+    bool composer = false,
+    bool liveTurn = false,
+    bool autoScroll = false,
+  }) {
+    if (_disposed) {
+      return;
+    }
+    if (syncLiveTurn) {
+      _syncLiveTurnBinding();
+    }
+    if (history) {
+      _historyVersionNotifier.value += 1;
+    }
+    if (header) {
+      _headerVersionNotifier.value += 1;
+    }
+    if (composer) {
+      _composerVersionNotifier.value += 1;
+    }
+    if (liveTurn) {
+      liveTurnState?.markDirty();
+      liveTurnState?.flushNow();
+    }
+    if (autoScroll) {
+      _autoScrollTickNotifier.value += 1;
+    }
+    _notifyLegacyListeners();
+  }
+
+  void _notifyLegacyListeners() {
     if (!_disposed) {
       notifyListeners();
     }
   }
 
-  void _markTimelineChanged() {
-    _autoScrollTick += 1;
+  void _scheduleStreamFlush({bool header = false, bool autoScroll = false}) {
+    if (_disposed) {
+      return;
+    }
+    _streamNeedsLiveFlush = true;
+    _streamNeedsHeaderFlush = _streamNeedsHeaderFlush || header;
+    _streamNeedsAutoScroll = _streamNeedsAutoScroll || autoScroll;
+    _streamFlushTimer ??= Timer(
+      const Duration(milliseconds: 16),
+      _flushPendingStreamChangesNow,
+    );
+  }
+
+  void _flushPendingStreamChangesNow() {
+    _flushStreamChangesNow();
+  }
+
+  void _flushStreamChangesNow({
+    bool history = false,
+    bool syncLiveTurn = false,
+    bool header = false,
+    bool composer = false,
+    bool liveTurn = false,
+    bool autoScroll = false,
+  }) {
+    if (_disposed) {
+      return;
+    }
+    final scheduledLiveFlush = _streamNeedsLiveFlush;
+    final scheduledHeaderFlush = _streamNeedsHeaderFlush;
+    final scheduledAutoScroll = _streamNeedsAutoScroll;
+    _streamFlushTimer?.cancel();
+    _streamFlushTimer = null;
+    _streamNeedsLiveFlush = false;
+    _streamNeedsHeaderFlush = false;
+    _streamNeedsAutoScroll = false;
+    _publishUiChanges(
+      history: history,
+      syncLiveTurn: syncLiveTurn,
+      header: header || scheduledHeaderFlush,
+      composer: composer,
+      liveTurn: liveTurn || scheduledLiveFlush,
+      autoScroll: autoScroll || scheduledAutoScroll,
+    );
   }
 
   /// turn 真正启动时，把 sendMessage 建立的临时分组重命名为真实 turn id，
@@ -1119,46 +1536,85 @@ class AgentConversationViewModel extends ChangeNotifier {
     }
     _currentTurnGroupId = turn.id;
     _pendingTurnGroupId = null;
-    final existing = _turnMetadata[turn.id];
-    _turnMetadata[turn.id] = _TurnGroupMetadata(
+    final turnState = _turnStateFor(
+      turn.id,
+      isStandby: false,
+      isHistorical: false,
+    );
+    turnState.updateMetadata(
       status: AgentHistoryTurnStatus.running,
-      startedAt: existing?.startedAt ?? DateTime.now(),
-      completedAt: existing?.completedAt,
-      duration: existing?.duration,
-      tokenUsage: existing?.tokenUsage,
+      startedAt: turnState.startedAt ?? DateTime.now(),
+      completedAt: turnState.completedAt,
+      duration: turnState.duration,
+      tokenUsage: turnState.tokenUsage,
     );
   }
 
   /// turn 完成时更新分组元数据；后续条目回到 standby 分组。
   void _completeLiveTurnGroup(String turnId) {
-    final meta = _turnMetadata[turnId];
-    final completedAt = DateTime.now();
-    _turnMetadata[turnId] = _TurnGroupMetadata(
-      status: AgentHistoryTurnStatus.completed,
-      startedAt: meta?.startedAt,
-      completedAt: completedAt,
-      duration: meta?.startedAt == null
-          ? null
-          : completedAt.difference(meta!.startedAt!),
-      tokenUsage: meta?.tokenUsage,
+    final turnState = _turnGroups[turnId];
+    if (turnState == null) {
+      _currentTurnGroupId = null;
+      _pendingTurnGroupId = null;
+      return;
+    }
+    final oldHistoryLength = _historicalTurnOrder.length;
+    final oldDefaultStartIndex = _defaultVisibleHistoryStartIndexForLength(
+      oldHistoryLength,
     );
+    final historyExpanded = _visibleHistoryStartIndex < oldDefaultStartIndex;
+    final previousVisibleCount = oldHistoryLength - _visibleHistoryStartIndex;
+    final completedAt = DateTime.now();
+    turnState.updateMetadata(
+      status: AgentHistoryTurnStatus.completed,
+      startedAt: turnState.startedAt,
+      completedAt: completedAt,
+      duration: turnState.startedAt == null
+          ? null
+          : completedAt.difference(turnState.startedAt!),
+      tokenUsage: turnState.tokenUsage,
+    );
+    _promoteTurnToHistorical(turnId);
+    if (historyExpanded) {
+      _visibleHistoryStartIndex = math.max(
+        0,
+        _historicalTurnOrder.length - previousVisibleCount,
+      );
+    } else {
+      _visibleHistoryStartIndex = _defaultVisibleHistoryStartIndexForLength(
+        _historicalTurnOrder.length,
+      );
+    }
     _currentTurnGroupId = null;
   }
 
   /// 用 provider 上报的 token 用量更新对应回合分组的元数据。
   ///
-  /// 优先按事件中的 turnId 定位分组；缺失时回退到当前活跃回合或 standby。
+  /// 优先按事件中的 turnId 定位分组；缺失时回退到当前运行回合。
   void _updateTurnTokenUsage(AgentTokenUsageEvent event) {
-    final turnId = event.turnId ?? _activeTurn?.id ?? _currentTurnGroupId;
+    final pendingId = _pendingTurnGroupId;
+    if (event.turnId != null &&
+        pendingId != null &&
+        !_turnGroups.containsKey(event.turnId) &&
+        _turnGroups.containsKey(pendingId)) {
+      _renameTurnGroup(pendingId, event.turnId!);
+      _pendingTurnGroupId = null;
+    }
+    final turnId =
+        event.turnId ?? _selectedRunningTurnId() ?? _currentTurnGroupId;
     if (turnId == null) {
       return;
     }
-    final meta = _turnMetadata[turnId];
-    _turnMetadata[turnId] = _TurnGroupMetadata(
-      status: meta?.status,
-      startedAt: meta?.startedAt,
-      completedAt: meta?.completedAt,
-      duration: meta?.duration,
+    final turnState = _turnStateFor(
+      turnId,
+      isStandby: false,
+      isHistorical: false,
+    );
+    turnState.updateMetadata(
+      status: turnState.status,
+      startedAt: turnState.startedAt,
+      completedAt: turnState.completedAt,
+      duration: turnState.duration,
       tokenUsage: event.tokenUsage,
     );
   }
@@ -1170,10 +1626,134 @@ class AgentConversationViewModel extends ChangeNotifier {
         _timelineEntryTurnIds[index] = newId;
       }
     }
-    final meta = _turnMetadata.remove(oldId);
-    if (meta != null) {
-      _turnMetadata[newId] = meta;
+    final historicalIndex = _historicalTurnOrder.indexOf(oldId);
+    if (historicalIndex != -1) {
+      _historicalTurnOrder[historicalIndex] = newId;
     }
+    final liveIndex = _liveTurnOrder.indexOf(oldId);
+    if (liveIndex != -1) {
+      _liveTurnOrder[liveIndex] = newId;
+    }
+    final group = _turnGroups.remove(oldId);
+    if (group != null) {
+      group.rename(newId);
+      _turnGroups[newId] = group;
+      for (final entry in group.entries) {
+        _turnIdsByTimelineEntryId[entry.id] = newId;
+      }
+    }
+    if (_currentTurnGroupId == oldId) {
+      _currentTurnGroupId = newId;
+    }
+    if (_pendingTurnGroupId == oldId) {
+      _pendingTurnGroupId = newId;
+    }
+  }
+
+  void _registerHistoryTurn(AgentHistoryTurn turn, {required bool asLive}) {
+    _turnStateFor(
+      turn.id,
+      isStandby: false,
+      isHistorical: !asLive,
+    ).updateMetadata(
+      status: turn.status,
+      startedAt: turn.startedAt,
+      completedAt: turn.completedAt,
+      duration: turn.duration,
+      tokenUsage: turn.tokenUsage,
+    );
+  }
+
+  AgentConversationTurnState _turnStateFor(
+    String turnId, {
+    required bool isStandby,
+    required bool isHistorical,
+  }) {
+    final existing = _turnGroups[turnId];
+    if (existing != null) {
+      if (!isStandby) {
+        if (isHistorical) {
+          _promoteTurnToHistorical(turnId);
+        } else {
+          _promoteTurnToLive(turnId);
+        }
+      }
+      return existing;
+    }
+    if (!isStandby) {
+      if (isHistorical) {
+        _promoteTurnToHistorical(turnId);
+      } else {
+        _promoteTurnToLive(turnId);
+      }
+    }
+    final created = AgentConversationTurnState(
+      id: turnId,
+      isStandby: isStandby,
+    );
+    _turnGroups[turnId] = created;
+    return created;
+  }
+
+  AgentConversationTurnGroup _turnGroupSnapshot(String turnId) {
+    final group = _turnGroups[turnId];
+    if (group == null) {
+      return AgentConversationTurnGroup(
+        id: turnId,
+        entries: const <AgentTimelineEntry>[],
+        isStandby: turnId == _standbyTurnId,
+      );
+    }
+    return group.snapshot();
+  }
+
+  void _syncLiveTurnBinding() {
+    final nextLiveTurn = _currentLiveTurnState();
+    if (identical(_liveTurnNotifier.value, nextLiveTurn)) {
+      return;
+    }
+    _liveTurnNotifier.value = nextLiveTurn;
+  }
+
+  AgentConversationTurnState? _currentLiveTurnState() {
+    final currentTurnGroupId = _currentTurnGroupId;
+    if (currentTurnGroupId != null) {
+      final current = _turnGroups[currentTurnGroupId];
+      if (current != null && current.isRunning) {
+        return current;
+      }
+    }
+    final runningTurnId = _selectedRunningTurnId();
+    if (runningTurnId == null) {
+      return null;
+    }
+    return _turnGroups[runningTurnId];
+  }
+
+  void _promoteTurnToLive(String turnId) {
+    _historicalTurnOrder.remove(turnId);
+    if (!_liveTurnOrder.contains(turnId)) {
+      _liveTurnOrder.add(turnId);
+    }
+  }
+
+  void _promoteTurnToHistorical(String turnId) {
+    _liveTurnOrder.remove(turnId);
+    if (!_historicalTurnOrder.contains(turnId)) {
+      _historicalTurnOrder.add(turnId);
+    }
+  }
+
+  int _defaultVisibleHistoryStartIndexForLength(int historyLength) {
+    return math.max(0, historyLength - _historyPageSize);
+  }
+
+  bool _isHistoryTurnId(String turnId) {
+    return turnId == _standbyTurnId || _historicalTurnOrder.contains(turnId);
+  }
+
+  bool _isLiveTurnId(String turnId) {
+    return _liveTurnOrder.contains(turnId) || _currentTurnGroupId == turnId;
   }
 }
 
@@ -1304,6 +1884,9 @@ class AgentConversationMessage {
   }
 }
 
+/// thread 打开阶段。
+enum AgentThreadOpenPhase { idle, loadingHistory, openFailed }
+
 /// Agent 面板的统一时间线条目。
 ///
 /// 历史记录和实时 provider 事件都会转换成这些条目，避免 UI 按类型分段后打乱顺序。
@@ -1388,19 +1971,103 @@ class AgentConversationTurnGroup {
   final AgentTokenUsage? tokenUsage;
 }
 
-/// turn 分组的运行时元数据（内部使用）。
-class _TurnGroupMetadata {
-  const _TurnGroupMetadata({
-    this.status,
-    this.startedAt,
-    this.completedAt,
-    this.duration,
-    this.tokenUsage,
-  });
+/// 单个 turn 的运行时状态。
+///
+/// 历史区使用快照渲染；live 区直接监听这个对象，避免流式增量时整页重建。
+class AgentConversationTurnState extends ChangeNotifier {
+  AgentConversationTurnState({required this.id, required this.isStandby});
 
-  final AgentHistoryTurnStatus? status;
-  final DateTime? startedAt;
-  final DateTime? completedAt;
-  final Duration? duration;
-  final AgentTokenUsage? tokenUsage;
+  String id;
+  final bool isStandby;
+  final List<AgentTimelineEntry> _entries = <AgentTimelineEntry>[];
+  AgentHistoryTurnStatus? _status;
+  DateTime? _startedAt;
+  DateTime? _completedAt;
+  Duration? _duration;
+  AgentTokenUsage? _tokenUsage;
+  bool _dirty = false;
+
+  List<AgentTimelineEntry> get entries => UnmodifiableListView(_entries);
+
+  AgentHistoryTurnStatus? get status => _status;
+
+  DateTime? get startedAt => _startedAt;
+
+  DateTime? get completedAt => _completedAt;
+
+  Duration? get duration => _duration;
+
+  AgentTokenUsage? get tokenUsage => _tokenUsage;
+
+  bool get isRunning => _status == AgentHistoryTurnStatus.running;
+
+  void appendEntry(AgentTimelineEntry entry) {
+    _entries.add(entry);
+    _dirty = true;
+  }
+
+  void replaceEntry(AgentTimelineEntry entry) {
+    final index = _entries.indexWhere((item) => item.id == entry.id);
+    if (index == -1) {
+      return;
+    }
+    _entries[index] = entry;
+    _dirty = true;
+  }
+
+  void removeEntry(String entryId) {
+    final removedCount = _entries.length;
+    _entries.removeWhere((entry) => entry.id == entryId);
+    if (_entries.length != removedCount) {
+      _dirty = true;
+    }
+  }
+
+  void rename(String nextId) {
+    if (id == nextId) {
+      return;
+    }
+    id = nextId;
+    _dirty = true;
+  }
+
+  void updateMetadata({
+    AgentHistoryTurnStatus? status,
+    DateTime? startedAt,
+    DateTime? completedAt,
+    Duration? duration,
+    AgentTokenUsage? tokenUsage,
+  }) {
+    _status = status;
+    _startedAt = startedAt;
+    _completedAt = completedAt;
+    _duration = duration;
+    _tokenUsage = tokenUsage;
+    _dirty = true;
+  }
+
+  void markDirty() {
+    _dirty = true;
+  }
+
+  void flushNow() {
+    if (!_dirty) {
+      return;
+    }
+    _dirty = false;
+    notifyListeners();
+  }
+
+  AgentConversationTurnGroup snapshot() {
+    return AgentConversationTurnGroup(
+      id: id,
+      entries: List<AgentTimelineEntry>.unmodifiable(_entries),
+      isStandby: isStandby,
+      status: _status,
+      startedAt: _startedAt,
+      completedAt: _completedAt,
+      duration: _duration,
+      tokenUsage: _tokenUsage,
+    );
+  }
 }

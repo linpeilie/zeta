@@ -803,6 +803,8 @@ class AgentToolCall {
     this.status = AgentToolStatus.pending,
     this.content,
     this.locations = const <String>[],
+    this.sessionId,
+    this.turnId,
     this.rawInput = const <String, Object?>{},
     this.rawOutput = const <String, Object?>{},
     this.raw = const <String, Object?>{},
@@ -826,6 +828,12 @@ class AgentToolCall {
   /// 工具涉及的文件或位置。
   final List<String> locations;
 
+  /// 可选会话 id，用于将实时事件路由到当前 thread。
+  final String? sessionId;
+
+  /// 可选回合 id，用于将实时事件路由到当前 turn。
+  final String? turnId;
+
   /// 原始输入 payload。
   final Map<String, Object?> rawInput;
 
@@ -847,6 +855,8 @@ class AgentPermissionRequest {
     this.description,
     this.command,
     this.cwd,
+    this.sessionId,
+    this.turnId,
     this.fileChanges = const <String, Object?>{},
     this.raw = const <String, Object?>{},
   });
@@ -868,6 +878,12 @@ class AgentPermissionRequest {
 
   /// 命令执行目录。
   final String? cwd;
+
+  /// 可选会话 id，用于将实时事件路由到当前 thread。
+  final String? sessionId;
+
+  /// 可选回合 id，用于将实时事件路由到当前 turn。
+  final String? turnId;
 
   /// 文件变更审批中的变更摘要。
   final Map<String, Object?> fileChanges;
@@ -951,9 +967,13 @@ class AgentTurnCompletedEvent extends AgentEvent {
 class AgentTokenUsageEvent extends AgentEvent {
   const AgentTokenUsageEvent({
     required this.tokenUsage,
+    this.sessionId,
     this.turnId,
     this.raw = const <String, Object?>{},
   });
+
+  /// 所属会话 id。
+  final String? sessionId;
 
   /// 所属回合 id；为空时由 ViewModel 归入当前活跃回合。
   final String? turnId;
@@ -1088,6 +1108,8 @@ class AgentErrorEvent extends AgentEvent {
   const AgentErrorEvent({
     required this.message,
     this.details,
+    this.sessionId,
+    this.turnId,
     this.raw = const <String, Object?>{},
   });
 
@@ -1096,6 +1118,12 @@ class AgentErrorEvent extends AgentEvent {
 
   /// 错误详情。
   final String? details;
+
+  /// 可选会话 id；全局 stderr / protocol 错误为空。
+  final String? sessionId;
+
+  /// 可选回合 id；全局 stderr / protocol 错误为空。
+  final String? turnId;
 
   /// 原始错误 payload。
   final Map<String, Object?> raw;

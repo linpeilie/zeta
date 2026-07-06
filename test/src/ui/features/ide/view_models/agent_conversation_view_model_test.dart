@@ -21,52 +21,27 @@ void main() {
       expect(viewModel.currentThreadTokenUsage, isNull);
     });
 
-    test('reads history before resuming a selected thread', () async {
+    test('loads history for a selected thread without resuming', () async {
       final provider = _FakeAgentProvider(
-        historySnapshot: AgentThreadHistorySnapshot(
-          threadId: 'thread-1',
-          turns: <AgentHistoryTurn>[
-            AgentHistoryTurn(
-              id: 'turn-1',
-              entries: <AgentHistoryEntry>[
-                const AgentHistoryMessageEntry(
-                  id: 'user-1',
-                  role: AgentMessageRole.user,
-                  text: 'What changed?',
-                ),
-                const AgentHistoryMessageEntry(
-                  id: 'agent-1',
-                  role: AgentMessageRole.agent,
-                  text: 'The provider layer changed.',
-                ),
-                AgentHistoryToolEntry(
-                  toolCall: AgentToolCall(
-                    id: 'tool-1',
-                    title: 'Run tests',
-                    kind: AgentToolKind.execute,
-                    status: AgentToolStatus.completed,
-                    content: 'flutter test',
-                  ),
-                ),
-                const AgentHistoryEventEntry(
-                  id: 'event-1',
-                  kind: AgentHistoryEventKind.search,
-                  title: 'Tool search',
-                  description: 'read_package_uris',
-                ),
-              ],
-            ),
-          ],
-        ),
+        historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+          'thread-1': _historySnapshot(
+            threadId: 'thread-1',
+            userText: 'What changed?',
+            agentText: 'The provider layer changed.',
+          ),
+        },
       );
       final viewModel = _createViewModel(provider);
       addTearDown(viewModel.dispose);
 
       await viewModel.switchThread(_thread());
 
-      expect(provider.calls, <String>['read:thread-1', 'resume:thread-1']);
+      expect(provider.calls, <String>['read:thread-1']);
       expect(provider.readSessionPaths, <String>['/repo/thread-1.jsonl']);
       expect(viewModel.status.state, AgentProviderConnectionState.ready);
+      expect(viewModel.threadOpenPhase, AgentThreadOpenPhase.idle);
+      expect(viewModel.isTurnRunning, isFalse);
+      expect(viewModel.canSubmitMessage, isTrue);
       expect(
         viewModel.timelineEntries.whereType<AgentMessageTimelineEntry>().map(
           (entry) => entry.message.text,
@@ -92,15 +67,26 @@ void main() {
       expect(viewModel.currentThreadTitle, 'Thread one');
     });
 
-    test('uses provider session title when available', () async {
-      final provider = _FakeAgentProvider(resumeSessionTitle: 'Resolved title');
-      final viewModel = _createViewModel(provider);
-      addTearDown(viewModel.dispose);
+    test(
+      'uses provider session title after resuming a selected thread',
+      () async {
+        final provider = _FakeAgentProvider(
+          resumeSessionTitle: 'Resolved title',
+        );
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
 
-      await viewModel.switchThread(_thread());
+        await viewModel.switchThread(_thread());
+        await viewModel.sendMessage('hello');
 
-      expect(viewModel.currentThreadTitle, 'Resolved title');
-    });
+        expect(provider.calls, <String>[
+          'read:thread-1',
+          'resume:thread-1',
+          'send:thread-1',
+        ]);
+        expect(viewModel.currentThreadTitle, 'Resolved title');
+      },
+    );
 
     test('uses provider session title after starting a new thread', () async {
       final provider = _FakeAgentProvider(startSessionTitle: 'Started title');
@@ -110,6 +96,7 @@ void main() {
       await viewModel.sendMessage('hello');
 
       expect(viewModel.currentThreadTitle, 'Started title');
+      expect(provider.calls, contains('start'));
     });
 
     test('resets header title after project switch', () async {
@@ -118,6 +105,7 @@ void main() {
       addTearDown(viewModel.dispose);
 
       await viewModel.switchThread(_thread());
+      await Future<void>.delayed(Duration.zero);
       viewModel.updateWorkspace(
         projectPath: '/other-repo',
         contextFilePath: null,
@@ -139,6 +127,7 @@ void main() {
       expect(provider.calls, <String>['read:thread-1']);
       expect(viewModel.status.state, AgentProviderConnectionState.error);
       expect(viewModel.status.message, 'Could not load thread history');
+      expect(viewModel.threadOpenPhase, AgentThreadOpenPhase.openFailed);
       final texts = viewModel.timelineEntries
           .whereType<AgentMessageTimelineEntry>()
           .map((entry) => entry.message.text)
@@ -147,45 +136,221 @@ void main() {
         texts.any((text) => text.contains('Could not load thread history')),
         isTrue,
       );
+      expect(viewModel.canSubmitMessage, isFalse);
     });
 
-    test('keeps loaded history when resume fails', () async {
+    test('keeps loaded history when first resume fails', () async {
       final provider = _FakeAgentProvider(
         failResume: true,
-        historySnapshot: const AgentThreadHistorySnapshot(
-          threadId: 'thread-1',
-          turns: <AgentHistoryTurn>[
-            AgentHistoryTurn(
-              id: 'turn-1',
-              entries: <AgentHistoryEntry>[
-                AgentHistoryMessageEntry(
-                  id: 'user-1',
-                  role: AgentMessageRole.user,
-                  text: 'Keep this history',
-                ),
-              ],
-            ),
-          ],
-        ),
+        historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+          'thread-1': const AgentThreadHistorySnapshot(
+            threadId: 'thread-1',
+            turns: <AgentHistoryTurn>[
+              AgentHistoryTurn(
+                id: 'turn-1',
+                entries: <AgentHistoryEntry>[
+                  AgentHistoryMessageEntry(
+                    id: 'user-1',
+                    role: AgentMessageRole.user,
+                    text: 'Keep this history',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        },
       );
       final viewModel = _createViewModel(provider);
       addTearDown(viewModel.dispose);
 
       await viewModel.switchThread(_thread());
+      await viewModel.sendMessage('Resume this thread');
 
       expect(provider.calls, <String>['read:thread-1', 'resume:thread-1']);
       expect(viewModel.status.state, AgentProviderConnectionState.error);
-      expect(viewModel.status.message, 'Could not open Agent thread');
+      expect(viewModel.threadOpenPhase, AgentThreadOpenPhase.openFailed);
+      expect(viewModel.canSubmitMessage, isFalse);
+      expect(provider.calls, isNot(contains('start')));
       final texts = viewModel.timelineEntries
           .whereType<AgentMessageTimelineEntry>()
           .map((entry) => entry.message.text)
           .toList();
       expect(texts, contains('Keep this history'));
+      expect(texts, contains('Resume this thread'));
+    });
+
+    test('switchThread allows switching away from a running thread', () async {
+      final provider = _FakeAgentProvider(
+        historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+          'thread-1': const AgentThreadHistorySnapshot(
+            threadId: 'thread-1',
+            turns: <AgentHistoryTurn>[
+              AgentHistoryTurn(
+                id: 'turn-running',
+                status: AgentHistoryTurnStatus.running,
+                entries: <AgentHistoryEntry>[
+                  AgentHistoryMessageEntry(
+                    id: 'history-a',
+                    role: AgentMessageRole.user,
+                    text: 'Thread one history',
+                  ),
+                ],
+              ),
+            ],
+          ),
+          'thread-2': _historySnapshot(
+            threadId: 'thread-2',
+            userText: 'Thread two history',
+          ),
+        },
+      );
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.switchThread(_thread(id: 'thread-1'));
+      expect(viewModel.isTurnRunning, isTrue);
+
+      await viewModel.switchThread(
+        _thread(id: 'thread-2', title: 'Thread two'),
+      );
+
+      expect(viewModel.currentThreadTitle, 'Thread two');
+      expect(viewModel.threadOpenPhase, AgentThreadOpenPhase.idle);
       expect(
-        texts.any((text) => text.contains('Could not open Agent thread')),
-        isTrue,
+        viewModel.timelineEntries.whereType<AgentMessageTimelineEntry>().map(
+          (entry) => entry.message.text,
+        ),
+        contains('Thread two history'),
+      );
+      expect(
+        viewModel.timelineEntries.whereType<AgentMessageTimelineEntry>().map(
+          (entry) => entry.message.text,
+        ),
+        isNot(contains('Thread one history')),
+      );
+      expect(provider.calls, <String>['read:thread-1', 'read:thread-2']);
+    });
+
+    test('running selected thread resumes and steers on first send', () async {
+      final provider = _FakeAgentProvider(
+        historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+          'thread-1': const AgentThreadHistorySnapshot(
+            threadId: 'thread-1',
+            turns: <AgentHistoryTurn>[
+              AgentHistoryTurn(
+                id: 'turn-running',
+                status: AgentHistoryTurnStatus.running,
+                entries: <AgentHistoryEntry>[
+                  AgentHistoryMessageEntry(
+                    id: 'history-user-1',
+                    role: AgentMessageRole.user,
+                    text: 'Historical context',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        },
+      );
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.switchThread(_thread());
+      expect(viewModel.isTurnRunning, isTrue);
+      expect(viewModel.canSubmitMessage, isTrue);
+
+      await viewModel.sendMessage('hello while running');
+
+      expect(provider.calls, <String>[
+        'read:thread-1',
+        'resume:thread-1',
+        'steer:thread-1',
+      ]);
+      expect(
+        viewModel.timelineEntries.whereType<AgentMessageTimelineEntry>().map(
+          (entry) => entry.message.text,
+        ),
+        contains('hello while running'),
       );
     });
+
+    test(
+      'cancels the selected thread running turn without a resumed session',
+      () async {
+        final provider = _FakeAgentProvider(
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'thread-1': const AgentThreadHistorySnapshot(
+              threadId: 'thread-1',
+              turns: <AgentHistoryTurn>[
+                AgentHistoryTurn(
+                  id: 'turn-running',
+                  status: AgentHistoryTurnStatus.running,
+                  entries: <AgentHistoryEntry>[
+                    AgentHistoryMessageEntry(
+                      id: 'history-user-1',
+                      role: AgentMessageRole.user,
+                      text: 'Historical context',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          },
+        );
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.switchThread(_thread());
+        await viewModel.cancelActiveTurn();
+
+        expect(provider.calls, <String>[
+          'read:thread-1',
+          'cancel:thread-1:turn-running',
+        ]);
+      },
+    );
+
+    test(
+      'ignores realtime events from a non-selected thread after switching',
+      () async {
+        final provider = _FakeAgentProvider(
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'thread-1': _historySnapshot(
+              threadId: 'thread-1',
+              userText: 'Thread one history',
+            ),
+            'thread-2': _historySnapshot(
+              threadId: 'thread-2',
+              userText: 'Thread two history',
+            ),
+          },
+        );
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.switchThread(_thread(id: 'thread-1'));
+        await viewModel.switchThread(
+          _thread(id: 'thread-2', title: 'Thread two'),
+        );
+        provider.emit(
+          const AgentMessageDeltaEvent(
+            messageId: 'late-message',
+            delta: 'Late update from thread one',
+            role: AgentMessageRole.agent,
+            sessionId: 'thread-1',
+            turnId: 'thread-1-turn-1',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        final texts = viewModel.timelineEntries
+            .whereType<AgentMessageTimelineEntry>()
+            .map((entry) => entry.message.text)
+            .toList();
+        expect(texts, contains('Thread two history'));
+        expect(texts, isNot(contains('Late update from thread one')));
+      },
+    );
 
     test(
       'merges realtime agent message metadata into existing message',
@@ -282,52 +447,55 @@ void main() {
       final startedAt = DateTime.parse('2026-07-04T06:00:00.000Z');
       final completedAt = DateTime.parse('2026-07-04T06:00:03.000Z');
       final provider = _FakeAgentProvider(
-        historySnapshot: AgentThreadHistorySnapshot(
-          threadId: 'thread-1',
-          turns: <AgentHistoryTurn>[
-            AgentHistoryTurn(
-              id: 'turn-a',
-              entries: <AgentHistoryEntry>[
-                const AgentHistoryMessageEntry(
-                  id: 'user-a',
-                  role: AgentMessageRole.user,
-                  text: 'First request',
+        historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+          'thread-1': AgentThreadHistorySnapshot(
+            threadId: 'thread-1',
+            turns: <AgentHistoryTurn>[
+              AgentHistoryTurn(
+                id: 'turn-a',
+                entries: <AgentHistoryEntry>[
+                  const AgentHistoryMessageEntry(
+                    id: 'user-a',
+                    role: AgentMessageRole.user,
+                    text: 'First request',
+                  ),
+                  const AgentHistoryMessageEntry(
+                    id: 'agent-a',
+                    role: AgentMessageRole.agent,
+                    text: 'First response',
+                  ),
+                ],
+                status: AgentHistoryTurnStatus.completed,
+                startedAt: startedAt,
+                completedAt: completedAt,
+                duration: const Duration(seconds: 3),
+                tokenUsage: const AgentTokenUsage(
+                  inputTokens: 41910,
+                  cachedInputTokens: 19712,
+                  outputTokens: 1552,
+                  reasoningOutputTokens: 780,
+                  totalTokens: 43462,
                 ),
-                const AgentHistoryMessageEntry(
-                  id: 'agent-a',
-                  role: AgentMessageRole.agent,
-                  text: 'First response',
-                ),
-              ],
-              status: AgentHistoryTurnStatus.completed,
-              startedAt: startedAt,
-              completedAt: completedAt,
-              duration: const Duration(seconds: 3),
-              tokenUsage: const AgentTokenUsage(
-                inputTokens: 41910,
-                cachedInputTokens: 19712,
-                outputTokens: 1552,
-                reasoningOutputTokens: 780,
-                totalTokens: 43462,
               ),
-            ),
-            AgentHistoryTurn(
-              id: 'turn-b',
-              entries: <AgentHistoryEntry>[
-                const AgentHistoryMessageEntry(
-                  id: 'user-b',
-                  role: AgentMessageRole.user,
-                  text: 'Second request',
-                ),
-              ],
-            ),
-          ],
-        ),
+              AgentHistoryTurn(
+                id: 'turn-b',
+                entries: <AgentHistoryEntry>[
+                  const AgentHistoryMessageEntry(
+                    id: 'user-b',
+                    role: AgentMessageRole.user,
+                    text: 'Second request',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        },
       );
       final viewModel = _createViewModel(provider);
       addTearDown(viewModel.dispose);
 
       await viewModel.switchThread(_thread());
+      await Future<void>.delayed(Duration.zero);
 
       final turns = viewModel.conversationTurns;
       // 加载历史后 welcome 消息被清空，只剩两个历史回合。
@@ -364,6 +532,179 @@ void main() {
         containsAll(<String>['First request', 'Second request']),
       );
     });
+
+    test('pages historical turns into a visible window of 3', () async {
+      final provider = _FakeAgentProvider(
+        historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+          'thread-1': AgentThreadHistorySnapshot(
+            threadId: 'thread-1',
+            turns: <AgentHistoryTurn>[
+              for (var index = 1; index <= 5; index += 1)
+                AgentHistoryTurn(
+                  id: 'turn-$index',
+                  entries: <AgentHistoryEntry>[
+                    AgentHistoryMessageEntry(
+                      id: 'user-$index',
+                      role: AgentMessageRole.user,
+                      text: 'Request $index',
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        },
+      );
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.switchThread(_thread());
+      await Future<void>.delayed(Duration.zero);
+
+      expect(viewModel.hasOlderTurns, isTrue);
+      expect(
+        viewModel.visibleHistoryTurns.map((turn) => turn.id).toList(),
+        <String>['turn-3', 'turn-4', 'turn-5'],
+      );
+      expect(
+        viewModel.conversationTurns.map((turn) => turn.id).toList(),
+        <String>['turn-3', 'turn-4', 'turn-5'],
+      );
+      expect(
+        viewModel.timelineEntries.whereType<AgentMessageTimelineEntry>().map(
+          (entry) => entry.message.text,
+        ),
+        containsAll(<String>[
+          'Request 1',
+          'Request 2',
+          'Request 3',
+          'Request 4',
+          'Request 5',
+        ]),
+      );
+
+      expect(viewModel.loadOlderTurns(), isTrue);
+
+      expect(viewModel.hasOlderTurns, isFalse);
+      expect(
+        viewModel.conversationTurns.map((turn) => turn.id).toList(),
+        <String>['turn-1', 'turn-2', 'turn-3', 'turn-4', 'turn-5'],
+      );
+    });
+
+    test(
+      'keeps history and composer notifiers stable during live streaming flushes',
+      () async {
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.sendMessage('hello');
+
+        final liveTurn = viewModel.liveTurnState;
+        expect(liveTurn, isNotNull);
+
+        var historyNotifications = 0;
+        var headerNotifications = 0;
+        var composerNotifications = 0;
+        var liveNotifications = 0;
+        viewModel.historyVersionListenable.addListener(() {
+          historyNotifications += 1;
+        });
+        viewModel.headerVersionListenable.addListener(() {
+          headerNotifications += 1;
+        });
+        viewModel.composerVersionListenable.addListener(() {
+          composerNotifications += 1;
+        });
+        liveTurn!.addListener(() {
+          liveNotifications += 1;
+        });
+
+        final historyVersion = viewModel.historyVersion;
+        final headerVersion = viewModel.headerVersion;
+        final composerVersion = viewModel.composerVersion;
+
+        provider.emit(
+          const AgentMessageDeltaEvent(
+            messageId: 'agent-1',
+            delta: 'Streaming reply',
+            role: AgentMessageRole.agent,
+            phase: AgentMessagePhase.commentary,
+            status: AgentMessageStatus.streaming,
+          ),
+        );
+        provider.emit(
+          const AgentTokenUsageEvent(
+            tokenUsage: AgentTokenUsage(
+              inputTokens: 1000,
+              outputTokens: 300,
+              totalTokens: 1300,
+            ),
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 24));
+
+        expect(viewModel.historyVersion, historyVersion);
+        expect(viewModel.composerVersion, composerVersion);
+        expect(viewModel.headerVersion, greaterThan(headerVersion));
+        expect(historyNotifications, 0);
+        expect(composerNotifications, 0);
+        expect(headerNotifications, 1);
+        expect(liveNotifications, 1);
+      },
+    );
+
+    test(
+      'moves a completed live turn into the capped history window',
+      () async {
+        final provider = _FakeAgentProvider(
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'thread-1': AgentThreadHistorySnapshot(
+              threadId: 'thread-1',
+              turns: <AgentHistoryTurn>[
+                for (var index = 1; index <= 5; index += 1)
+                  AgentHistoryTurn(
+                    id: 'history-$index',
+                    entries: <AgentHistoryEntry>[
+                      AgentHistoryMessageEntry(
+                        id: 'history-user-$index',
+                        role: AgentMessageRole.user,
+                        text: 'Request $index',
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          },
+        );
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.switchThread(_thread());
+        await Future<void>.delayed(Duration.zero);
+        await viewModel.sendMessage('hello');
+
+        expect(
+          viewModel.visibleHistoryTurns.map((turn) => turn.id).toList(),
+          <String>['history-3', 'history-4', 'history-5'],
+        );
+        expect(viewModel.liveTurnState, isNotNull);
+
+        provider.emit(
+          const AgentTurnCompletedEvent(
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(viewModel.liveTurnState, isNull);
+        expect(
+          viewModel.visibleHistoryTurns.map((turn) => turn.id).toList(),
+          <String>['history-4', 'history-5', 'turn-1'],
+        );
+      },
+    );
 
     test(
       'groups live user message and agent reply into the same turn',
@@ -469,33 +810,36 @@ void main() {
       'aggregates header token usage across history and live turns',
       () async {
         final provider = _FakeAgentProvider(
-          historySnapshot: const AgentThreadHistorySnapshot(
-            threadId: 'thread-1',
-            turns: <AgentHistoryTurn>[
-              AgentHistoryTurn(
-                id: 'turn-a',
-                entries: <AgentHistoryEntry>[
-                  AgentHistoryMessageEntry(
-                    id: 'user-a',
-                    role: AgentMessageRole.user,
-                    text: 'Existing request',
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'thread-1': const AgentThreadHistorySnapshot(
+              threadId: 'thread-1',
+              turns: <AgentHistoryTurn>[
+                AgentHistoryTurn(
+                  id: 'turn-a',
+                  entries: <AgentHistoryEntry>[
+                    AgentHistoryMessageEntry(
+                      id: 'user-a',
+                      role: AgentMessageRole.user,
+                      text: 'Existing request',
+                    ),
+                  ],
+                  tokenUsage: AgentTokenUsage(
+                    inputTokens: 2000,
+                    cachedInputTokens: 500,
+                    outputTokens: 250,
+                    reasoningOutputTokens: 80,
+                    totalTokens: 2250,
                   ),
-                ],
-                tokenUsage: AgentTokenUsage(
-                  inputTokens: 2000,
-                  cachedInputTokens: 500,
-                  outputTokens: 250,
-                  reasoningOutputTokens: 80,
-                  totalTokens: 2250,
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          },
         );
         final viewModel = _createViewModel(provider);
         addTearDown(viewModel.dispose);
 
         await viewModel.switchThread(_thread());
+        await Future<void>.delayed(Duration.zero);
         await viewModel.sendMessage('hello');
         provider.emit(
           const AgentTokenUsageEvent(
@@ -632,17 +976,62 @@ AgentConversationViewModel _createViewModel(_FakeAgentProvider provider) {
   return viewModel;
 }
 
-AgentThreadSummary _thread({String id = 'thread-1'}) {
+AgentThreadSummary _thread({
+  String id = 'thread-1',
+  String title = 'Thread one',
+}) {
   return AgentThreadSummary(
     id: id,
     providerId: defaultAgentProviderId,
     projectPath: '/repo',
-    title: 'Thread one',
+    title: title,
     sessionPath: '/repo/$id.jsonl',
-    preview: 'Thread one',
+    preview: title,
     createdAt: DateTime.fromMillisecondsSinceEpoch(1),
     updatedAt: DateTime.fromMillisecondsSinceEpoch(2),
     status: AgentThreadRuntimeStatus.idle,
+  );
+}
+
+AgentThreadHistorySnapshot _historySnapshot({
+  required String threadId,
+  required String userText,
+  String agentText = 'Historical answer',
+}) {
+  return AgentThreadHistorySnapshot(
+    threadId: threadId,
+    turns: <AgentHistoryTurn>[
+      AgentHistoryTurn(
+        id: '$threadId-turn-1',
+        entries: <AgentHistoryEntry>[
+          AgentHistoryMessageEntry(
+            id: '$threadId-user-1',
+            role: AgentMessageRole.user,
+            text: userText,
+          ),
+          AgentHistoryMessageEntry(
+            id: '$threadId-agent-1',
+            role: AgentMessageRole.agent,
+            text: agentText,
+          ),
+          AgentHistoryToolEntry(
+            toolCall: AgentToolCall(
+              id: '$threadId-tool-1',
+              title: 'Run tests',
+              kind: AgentToolKind.execute,
+              status: AgentToolStatus.completed,
+              content: 'flutter test',
+            ),
+          ),
+          const AgentHistoryEventEntry(
+            id: 'event-1',
+            kind: AgentHistoryEventKind.search,
+            title: 'Tool search',
+            description: 'read_package_uris',
+          ),
+        ],
+      ),
+    ],
   );
 }
 
@@ -662,18 +1051,30 @@ class _FakeAgentProvider implements AgentProvider {
     this.startSessionTitle,
     this.resumeSessionTitle,
     AgentThreadHistorySnapshot? historySnapshot,
-  }) : historySnapshot =
+    Map<String, AgentThreadHistorySnapshot> historySnapshotsByThread =
+        const <String, AgentThreadHistorySnapshot>{},
+    Map<String, Completer<AgentSession>> resumeCompleters =
+        const <String, Completer<AgentSession>>{},
+  }) : _defaultHistorySnapshot =
            historySnapshot ??
            const AgentThreadHistorySnapshot(
              threadId: 'thread-1',
              turns: <AgentHistoryTurn>[],
-           );
+           ),
+       _historySnapshotsByThread = Map<String, AgentThreadHistorySnapshot>.from(
+         historySnapshotsByThread,
+       ),
+       _resumeCompleters = Map<String, Completer<AgentSession>>.from(
+         resumeCompleters,
+       );
 
   final bool failHistory;
   final bool failResume;
   final String? startSessionTitle;
   final String? resumeSessionTitle;
-  final AgentThreadHistorySnapshot historySnapshot;
+  final AgentThreadHistorySnapshot _defaultHistorySnapshot;
+  final Map<String, AgentThreadHistorySnapshot> _historySnapshotsByThread;
+  final Map<String, Completer<AgentSession>> _resumeCompleters;
   final List<String> calls = <String>[];
   final List<String?> readSessionPaths = <String?>[];
   final StreamController<AgentEvent> _events =
@@ -719,11 +1120,12 @@ class _FakeAgentProvider implements AgentProvider {
     if (failHistory) {
       throw StateError('history failed');
     }
-    return historySnapshot;
+    return _historySnapshotsByThread[threadId] ?? _defaultHistorySnapshot;
   }
 
   @override
   Future<AgentSession> startSession({required AgentContext context}) async {
+    calls.add('start');
     return AgentSession(
       id: 'thread-1',
       providerId: defaultAgentProviderId,
@@ -740,6 +1142,10 @@ class _FakeAgentProvider implements AgentProvider {
     if (failResume) {
       throw StateError('resume failed');
     }
+    final completer = _resumeCompleters[sessionId];
+    if (completer != null) {
+      return completer.future;
+    }
     return AgentSession(
       id: sessionId,
       providerId: defaultAgentProviderId,
@@ -753,6 +1159,7 @@ class _FakeAgentProvider implements AgentProvider {
     required String message,
     required AgentContext context,
   }) async {
+    calls.add('send:${session.id}');
     return AgentTurn(id: 'turn-1', sessionId: session.id);
   }
 
@@ -761,10 +1168,14 @@ class _FakeAgentProvider implements AgentProvider {
     required AgentSession session,
     required String message,
     required AgentContext context,
-  }) async {}
+  }) async {
+    calls.add('steer:${session.id}');
+  }
 
   @override
-  Future<void> cancelTurn(AgentTurn turn) async {}
+  Future<void> cancelTurn(AgentTurn turn) async {
+    calls.add('cancel:${turn.sessionId}:${turn.id}');
+  }
 
   @override
   Future<void> respondToPermission(AgentPermissionDecision decision) async {}

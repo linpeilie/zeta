@@ -294,7 +294,7 @@ void main() {
       provider.readHistorySessionPaths,
       contains('${directory.path}/thread-a.jsonl'),
     );
-    expect(provider.resumedSessions, contains('thread-a'));
+    expect(provider.resumedSessions, isEmpty);
     expect(find.text('Previously asked question'), findsOneWidget);
     expect(find.text('Historical answer'), findsOneWidget);
     expect(find.text('1 次执行'), findsOneWidget);
@@ -314,6 +314,7 @@ void main() {
     );
     expect(find.text('Requested user input'), findsOneWidget);
     expect(find.text('Selected thread: Initial thread'), findsNothing);
+    expect(find.text('Opening thread...'), findsNothing);
 
     await tester.tap(
       find.byKey(
@@ -331,6 +332,489 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets('loads older turns without jumping the viewport', (tester) async {
+    final session = _MemorySessionStore();
+    final directory = Directory.systemTemp.createTempSync('zeta_test_');
+    tempDirectories.add(directory);
+    File(
+      '${directory.path}${Platform.pathSeparator}sample.txt',
+    ).writeAsStringSync('hello from zeta');
+
+    final provider = _FakeAgentProvider(
+      threadHistories: <String, AgentThreadHistorySnapshot>{
+        'thread-a': AgentThreadHistorySnapshot(
+          threadId: 'thread-a',
+          turns: <AgentHistoryTurn>[
+            for (var turnIndex = 1; turnIndex <= 5; turnIndex += 1)
+              AgentHistoryTurn(
+                id: 'turn-$turnIndex',
+                entries: <AgentHistoryEntry>[
+                  for (
+                    var messageIndex = 0;
+                    messageIndex < 8;
+                    messageIndex += 1
+                  )
+                    AgentHistoryMessageEntry(
+                      id: 'turn-$turnIndex-message-$messageIndex',
+                      role: AgentMessageRole.agent,
+                      text: 'Turn $turnIndex message $messageIndex',
+                    ),
+                ],
+              ),
+          ],
+        ),
+      },
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[
+            _agentThread(
+              id: 'thread-a',
+              projectPath: directory.path,
+              title: 'Paged thread',
+            ),
+          ],
+          nextCursor: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        directoryPicker: () async => directory.path,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: _FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await tester.runAsync(_waitForIo);
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(ValueKey<String>('project-thread-${directory.path}-thread-a')),
+    );
+    await tester.pumpAndSettle();
+
+    final listFinder = find.byKey(const ValueKey('agent-message-list'));
+    final controller = tester
+        .widget<SingleChildScrollView>(listFinder)
+        .controller!;
+    controller.jumpTo(0);
+    await tester.pumpAndSettle();
+
+    final anchorFinder = find.text('Turn 3 message 0');
+    expect(anchorFinder, findsOneWidget);
+    final oldAnchorY = tester.getTopLeft(anchorFinder).dy;
+
+    await tester.tap(
+      find.byKey(const ValueKey('agent-load-older-turns-button')),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(controller.offset, greaterThan(0));
+    expect(tester.getTopLeft(anchorFinder).dy, closeTo(oldAnchorY, 2));
+  });
+
+  testWidgets('does not resume an existing thread until the first send', (
+    tester,
+  ) async {
+    final session = _MemorySessionStore();
+    final directory = Directory.systemTemp.createTempSync('zeta_test_');
+    tempDirectories.add(directory);
+    File(
+      '${directory.path}${Platform.pathSeparator}sample.txt',
+    ).writeAsStringSync('hello from zeta');
+
+    final provider = _FakeAgentProvider(
+      threadHistories: <String, AgentThreadHistorySnapshot>{
+        'thread-a': AgentThreadHistorySnapshot(
+          threadId: 'thread-a',
+          turns: const <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-a-1',
+              entries: <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'history-user-1',
+                  role: AgentMessageRole.user,
+                  text: 'Pending resume history',
+                ),
+              ],
+            ),
+          ],
+        ),
+      },
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[
+            _agentThread(
+              id: 'thread-a',
+              projectPath: directory.path,
+              title: 'Pending thread',
+            ),
+          ],
+          nextCursor: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        directoryPicker: () async => directory.path,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: _FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await tester.runAsync(_waitForIo);
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(ValueKey<String>('project-thread-${directory.path}-thread-a')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pending resume history'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('agent-thread-open-status')),
+      findsNothing,
+    );
+    expect(provider.resumedSessions, isEmpty);
+
+    final input = find.byKey(const ValueKey('agent-message-input'));
+    await tester.tap(input);
+    await tester.enterText(input, 'draft before first send');
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('agent-send-button')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+    await tester.pumpAndSettle();
+
+    expect(provider.resumedSessions, <String>['thread-a']);
+    expect(provider.sentMessages, <String>['draft before first send']);
+  });
+
+  testWidgets('switches away from a running thread without blocking', (
+    tester,
+  ) async {
+    final session = _MemorySessionStore();
+    final directory = Directory.systemTemp.createTempSync('zeta_test_');
+    tempDirectories.add(directory);
+    File(
+      '${directory.path}${Platform.pathSeparator}sample.txt',
+    ).writeAsStringSync('hello from zeta');
+
+    final provider = _FakeAgentProvider(
+      threadHistories: <String, AgentThreadHistorySnapshot>{
+        'thread-a': AgentThreadHistorySnapshot(
+          threadId: 'thread-a',
+          turns: const <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-a-1',
+              status: AgentHistoryTurnStatus.running,
+              entries: <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'history-a',
+                  role: AgentMessageRole.user,
+                  text: 'History A',
+                ),
+              ],
+            ),
+          ],
+        ),
+        'thread-b': AgentThreadHistorySnapshot(
+          threadId: 'thread-b',
+          turns: const <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-b-1',
+              entries: <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'history-b',
+                  role: AgentMessageRole.user,
+                  text: 'History B',
+                ),
+              ],
+            ),
+          ],
+        ),
+      },
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[
+            _agentThread(
+              id: 'thread-a',
+              projectPath: directory.path,
+              title: 'Thread A',
+            ),
+            _agentThread(
+              id: 'thread-b',
+              projectPath: directory.path,
+              title: 'Thread B',
+            ),
+          ],
+          nextCursor: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        directoryPicker: () async => directory.path,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: _FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await tester.runAsync(_waitForIo);
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(ValueKey<String>('project-thread-${directory.path}-thread-a')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('History A'), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-cancel-button')), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(ValueKey<String>('project-thread-${directory.path}-thread-b')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('History B'), findsOneWidget);
+    expect(find.text('History A'), findsNothing);
+    expect(
+      find.textContaining('Finish or cancel the turn before switching.'),
+      findsNothing,
+    );
+    expect(
+      provider.readHistories,
+      containsAll(<String>['thread-a', 'thread-b']),
+    );
+  });
+
+  testWidgets(
+    'shows Cancel for a running thread until text is entered, then steers on Send',
+    (tester) async {
+      final session = _MemorySessionStore();
+      final directory = Directory.systemTemp.createTempSync('zeta_test_');
+      tempDirectories.add(directory);
+      File(
+        '${directory.path}${Platform.pathSeparator}sample.txt',
+      ).writeAsStringSync('hello from zeta');
+
+      final provider = _FakeAgentProvider(
+        threadHistories: <String, AgentThreadHistorySnapshot>{
+          'thread-a': AgentThreadHistorySnapshot(
+            threadId: 'thread-a',
+            turns: const <AgentHistoryTurn>[
+              AgentHistoryTurn(
+                id: 'turn-a-1',
+                status: AgentHistoryTurnStatus.running,
+                entries: <AgentHistoryEntry>[
+                  AgentHistoryMessageEntry(
+                    id: 'history-a',
+                    role: AgentMessageRole.user,
+                    text: 'History A',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        },
+        threadPages: <AgentThreadPage>[
+          AgentThreadPage(
+            threads: <AgentThreadSummary>[
+              _agentThread(
+                id: 'thread-a',
+                projectPath: directory.path,
+                title: 'Thread A',
+              ),
+            ],
+            nextCursor: null,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MainApp(
+          enableNativeWindowFrame: false,
+          directoryPicker: () async => directory.path,
+          sessionLoader: session.load,
+          sessionSaver: session.save,
+          agentProviderFactory: _FakeAgentProviderFactory(provider),
+          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        ),
+      );
+
+      await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+      await tester.runAsync(_waitForIo);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(
+          ValueKey<String>('project-thread-${directory.path}-thread-a'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('agent-cancel-button')), findsOneWidget);
+      expect(find.byKey(const ValueKey('agent-send-button')), findsNothing);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('agent-message-input')),
+        'follow up',
+      );
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('agent-send-button')), findsOneWidget);
+      expect(find.byKey(const ValueKey('agent-cancel-button')), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+      await tester.pumpAndSettle();
+
+      expect(provider.resumedSessions, <String>['thread-a']);
+      expect(provider.sentMessages, isEmpty);
+      expect(provider.steeredMessages, <String>['follow up']);
+    },
+  );
+
+  testWidgets(
+    'keeps history visible and requires reselect after resume failure on first send',
+    (tester) async {
+      final session = _MemorySessionStore();
+      final directory = Directory.systemTemp.createTempSync('zeta_test_');
+      tempDirectories.add(directory);
+      File(
+        '${directory.path}${Platform.pathSeparator}sample.txt',
+      ).writeAsStringSync('hello from zeta');
+      var resumeAttempts = 0;
+
+      final provider = _FakeAgentProvider(
+        onResumeSession: (sessionId) {
+          resumeAttempts += 1;
+          if (resumeAttempts == 1) {
+            return Future<AgentSession>.error(StateError('resume failed'));
+          }
+          return Future<AgentSession>.value(
+            AgentSession(
+              id: sessionId,
+              providerId: defaultAgentProviderId,
+              title: 'Recovered thread',
+            ),
+          );
+        },
+        threadHistories: <String, AgentThreadHistorySnapshot>{
+          'thread-a': AgentThreadHistorySnapshot(
+            threadId: 'thread-a',
+            turns: const <AgentHistoryTurn>[
+              AgentHistoryTurn(
+                id: 'turn-a-1',
+                entries: <AgentHistoryEntry>[
+                  AgentHistoryMessageEntry(
+                    id: 'history-user-1',
+                    role: AgentMessageRole.user,
+                    text: 'History survives failure',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        },
+        threadPages: <AgentThreadPage>[
+          AgentThreadPage(
+            threads: <AgentThreadSummary>[
+              _agentThread(
+                id: 'thread-a',
+                projectPath: directory.path,
+                title: 'Retryable thread',
+              ),
+            ],
+            nextCursor: null,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MainApp(
+          enableNativeWindowFrame: false,
+          directoryPicker: () async => directory.path,
+          sessionLoader: session.load,
+          sessionSaver: session.save,
+          agentProviderFactory: _FakeAgentProviderFactory(provider),
+          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        ),
+      );
+
+      await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+      await tester.runAsync(_waitForIo);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(
+          ValueKey<String>('project-thread-${directory.path}-thread-a'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('History survives failure'), findsOneWidget);
+      expect(
+        find.text('Thread open failed. Click this thread again to retry.'),
+        findsNothing,
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('agent-message-input')),
+        'first try',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('History survives failure'), findsOneWidget);
+      expect(
+        find.text('Thread open failed. Click this thread again to retry.'),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('agent-send-button')), findsNothing);
+
+      await tester.tap(
+        find.byKey(
+          ValueKey<String>('project-thread-${directory.path}-thread-a'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('History survives failure'), findsOneWidget);
+      expect(
+        find.text('Thread open failed. Click this thread again to retry.'),
+        findsNothing,
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('agent-message-input')),
+        'second try',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+      await tester.pumpAndSettle();
+
+      expect(resumeAttempts, 2);
+      expect(_headerTitleText(tester), 'Recovered thread');
+      expect(provider.sentMessages, <String>['second try']);
+    },
+  );
 
   testWidgets(
     'shows answered request_user_input entries without placeholders',
@@ -1006,7 +1490,9 @@ void main() {
     await tester.pumpAndSettle();
 
     final listFinder = find.byKey(const ValueKey('agent-message-list'));
-    final controller = tester.widget<ListView>(listFinder).controller!;
+    final controller = tester
+        .widget<SingleChildScrollView>(listFinder)
+        .controller!;
     controller.jumpTo(0);
     await tester.pumpAndSettle();
     expect(controller.offset, 0);
@@ -1112,7 +1598,9 @@ void main() {
     await tester.pumpAndSettle();
 
     final listFinder = find.byKey(const ValueKey('agent-message-list'));
-    final controller = tester.widget<ListView>(listFinder).controller!;
+    final controller = tester
+        .widget<SingleChildScrollView>(listFinder)
+        .controller!;
     controller.jumpTo(0);
     await tester.pumpAndSettle();
     expect(controller.offset, 0);
@@ -1164,6 +1652,63 @@ void main() {
       findsOneWidget,
     );
     expect(provider.sentMessages.single, 'Summarize the current work');
+  });
+
+  testWidgets('keeps manual scroll position during live agent streaming', (
+    tester,
+  ) async {
+    final session = _MemorySessionStore();
+    final provider = _FakeAgentProvider(
+      completeTurns: false,
+      responseText: List<String>.generate(
+        160,
+        (index) => 'Streaming line $index',
+      ).join('\n'),
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: _FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('agent-message-input')),
+      'Keep streaming',
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+    await tester.pumpAndSettle();
+
+    final listFinder = find.byKey(const ValueKey('agent-message-list'));
+    final controller = tester
+        .widget<SingleChildScrollView>(listFinder)
+        .controller!;
+    expect(controller.position.maxScrollExtent, greaterThan(400));
+
+    controller.jumpTo(0);
+    await tester.pumpAndSettle();
+    expect(controller.offset, 0);
+
+    provider.emit(
+      const AgentMessageDeltaEvent(
+        messageId: 'message-1',
+        delta: '\nFollow-up streaming line',
+        role: AgentMessageRole.agent,
+        phase: AgentMessagePhase.response,
+        sessionId: 'thread-1',
+        turnId: 'turn-1',
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(controller.offset, lessThan(40));
   });
 
   testWidgets('merges live tool calls into a single command group', (
@@ -2000,6 +2545,7 @@ class _FakeAgentProvider implements AgentProvider {
     this.sessionTitle,
     this.tokenUsageDuringTurn,
     this.responseText = 'Fake response from provider',
+    this.onResumeSession,
     List<AgentThreadPage> threadPages = const <AgentThreadPage>[],
     Map<String, AgentThreadHistorySnapshot> threadHistories =
         const <String, AgentThreadHistorySnapshot>{},
@@ -2015,11 +2561,13 @@ class _FakeAgentProvider implements AgentProvider {
   final String? sessionTitle;
   final AgentTokenUsage? tokenUsageDuringTurn;
   final String responseText;
+  final Future<AgentSession> Function(String sessionId)? onResumeSession;
   final List<AgentThreadPage> _threadPages;
   final Map<String, AgentThreadHistorySnapshot> _threadHistories;
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
   final List<String> sentMessages = <String>[];
+  final List<String> steeredMessages = <String>[];
   final List<AgentThreadListQuery> listQueries = <AgentThreadListQuery>[];
   final List<String> readHistories = <String>[];
   final List<String?> readHistorySessionPaths = <String?>[];
@@ -2058,6 +2606,10 @@ class _FakeAgentProvider implements AgentProvider {
   }) async {
     await initialize();
     resumedSessions.add(sessionId);
+    final onResumeSession = this.onResumeSession;
+    if (onResumeSession != null) {
+      return onResumeSession(sessionId);
+    }
     return AgentSession(
       id: sessionId,
       providerId: defaultAgentProviderId,
@@ -2102,9 +2654,9 @@ class _FakeAgentProvider implements AgentProvider {
     required AgentContext context,
   }) async {
     sentMessages.add(message);
-    const turn = AgentTurn(id: 'turn-1', sessionId: 'thread-1');
+    final turn = AgentTurn(id: 'turn-1', sessionId: session.id);
     _events
-      ..add(const AgentTurnStartedEvent(turn))
+      ..add(AgentTurnStartedEvent(turn))
       ..add(
         AgentMessageDeltaEvent(
           messageId: 'message-1',
@@ -2113,13 +2665,14 @@ class _FakeAgentProvider implements AgentProvider {
           phase: emitCompletedCommentary
               ? AgentMessagePhase.commentary
               : AgentMessagePhase.response,
-          sessionId: 'thread-1',
-          turnId: 'turn-1',
+          sessionId: session.id,
+          turnId: turn.id,
         ),
       );
     if (tokenUsageDuringTurn != null) {
       _events.add(
         AgentTokenUsageEvent(
+          sessionId: session.id,
           turnId: turn.id,
           tokenUsage: tokenUsageDuringTurn!,
         ),
@@ -2127,43 +2680,47 @@ class _FakeAgentProvider implements AgentProvider {
     }
     if (emitCompletedCommentary) {
       _events.add(
-        const AgentMessageUpdatedEvent(
+        AgentMessageUpdatedEvent(
           messageId: 'message-1',
           phase: AgentMessagePhase.commentary,
           status: AgentMessageStatus.completed,
           duration: Duration(seconds: 102),
-          sessionId: 'thread-1',
-          turnId: 'turn-1',
+          sessionId: session.id,
+          turnId: turn.id,
         ),
       );
     }
     if (emitToolAndApproval) {
       _events
         ..add(
-          const AgentToolCallEvent(
+          AgentToolCallEvent(
             AgentToolCall(
               id: 'tool-1',
               title: 'Run tests',
               kind: AgentToolKind.execute,
               status: AgentToolStatus.inProgress,
               content: 'flutter test',
+              sessionId: session.id,
+              turnId: turn.id,
             ),
           ),
         )
         ..add(
-          const AgentPermissionRequestedEvent(
+          AgentPermissionRequestedEvent(
             AgentPermissionRequest(
               id: 'approval-1',
               title: 'Approve command',
               kind: AgentPermissionKind.commandExecution,
               command: 'flutter test',
+              sessionId: session.id,
+              turnId: turn.id,
             ),
           ),
         );
     }
     if (completeTurns) {
       _events.add(
-        const AgentTurnCompletedEvent(sessionId: 'thread-1', turnId: 'turn-1'),
+        AgentTurnCompletedEvent(sessionId: session.id, turnId: turn.id),
       );
     }
     return turn;
@@ -2175,7 +2732,7 @@ class _FakeAgentProvider implements AgentProvider {
     required String message,
     required AgentContext context,
   }) async {
-    sentMessages.add(message);
+    steeredMessages.add(message);
   }
 
   @override

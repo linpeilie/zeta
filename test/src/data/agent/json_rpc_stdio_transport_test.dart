@@ -1,17 +1,24 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:logging/logging.dart';
+import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/data/agent/json_rpc_stdio_transport.dart';
 
 void main() {
   group('JsonRpcStdioTransport', () {
     late Directory tempDirectory;
+    final records = <LogRecord>[];
 
-    setUp(() {
+    setUp(() async {
       tempDirectory = Directory.systemTemp.createTempSync('zeta_rpc_test_');
+      records.clear();
+      await resetAppLoggingForTesting();
+      configureAppLogging(level: Level.ALL, sink: records.add);
     });
 
-    tearDown(() {
+    tearDown(() async {
+      await resetAppLoggingForTesting();
       if (tempDirectory.existsSync()) {
         tempDirectory.deleteSync(recursive: true);
       }
@@ -34,10 +41,10 @@ void main() {
     }
   });
 }
-''');
+      ''');
         final transport = JsonRpcStdioTransport(
-          command: 'dart',
-          arguments: <String>['run', script.path],
+          command: _dartCommand,
+          arguments: _dartArguments(script),
         );
 
         await transport.start();
@@ -67,10 +74,10 @@ void main() {
     stdout.flush();
   });
 }
-''');
+      ''');
       final transport = JsonRpcStdioTransport(
-        command: 'dart',
-        arguments: <String>['run', script.path],
+        command: _dartCommand,
+        arguments: _dartArguments(script),
       );
 
       await transport.start();
@@ -80,6 +87,66 @@ void main() {
         throwsA(isA<JsonRpcException>()),
       );
       await transport.close();
+    });
+
+    test('logs full JSON-RPC payloads for stdout and stderr', () async {
+      final script = _writeServerScript(tempDirectory, '''
+import 'dart:convert';
+import 'dart:io';
+
+void main() {
+  stdin.transform(utf8.decoder).transform(const LineSplitter()).listen((line) {
+    final message = jsonDecode(line) as Map<String, dynamic>;
+    stderr.writeln('stderr: \${message['method']}');
+    stdout.writeln(jsonEncode({
+      'method': 'server/notice',
+      'params': {'echo': message['method']}
+    }));
+    stdout.writeln(jsonEncode({
+      'id': message['id'],
+      'result': {'ok': true}
+    }));
+    stdout.flush();
+    stderr.flush();
+  });
+}
+''');
+      final transport = JsonRpcStdioTransport(
+        command: _dartCommand,
+        arguments: _dartArguments(script),
+      );
+
+      await transport.start();
+      final stderrFuture = transport.stderrLines.first;
+      await transport.sendRequest('ping');
+      expect(await stderrFuture, 'stderr: ping');
+      await transport.close();
+
+      final messages = records
+          .where((record) => record.loggerName == 'zeta.agent.json_rpc_stdio')
+          .map((record) => record.message)
+          .toList();
+      expect(
+        messages,
+        contains(
+          'Sending JSON-RPC request ping with id 1: '
+          '{"id":1,"method":"ping","params":{}}',
+        ),
+      );
+      expect(
+        messages,
+        contains(
+          'Received JSON-RPC stdout line: '
+          '{"method":"server/notice","params":{"echo":"ping"}}',
+        ),
+      );
+      expect(
+        messages,
+        contains(
+          'Received JSON-RPC stdout line: {"id":1,"result":{"ok":true}}',
+        ),
+      );
+      expect(messages, contains('Received JSON-RPC stderr line: stderr: ping'));
     });
 
     test('reports invalid stdout without closing the transport', () async {
@@ -97,8 +164,8 @@ void main() {
 }
 ''');
       final transport = JsonRpcStdioTransport(
-        command: 'dart',
-        arguments: <String>['run', script.path],
+        command: _dartCommand,
+        arguments: _dartArguments(script),
       );
 
       await transport.start();
@@ -141,8 +208,8 @@ void main() {
 }
 ''');
       final transport = JsonRpcStdioTransport(
-        command: 'dart',
-        arguments: <String>['run', script.path],
+        command: _dartCommand,
+        arguments: _dartArguments(script),
       );
 
       await transport.start();
@@ -183,8 +250,8 @@ void main() {
 }
 ''');
       final transport = JsonRpcStdioTransport(
-        command: 'dart',
-        arguments: <String>['run', script.path],
+        command: _dartCommand,
+        arguments: _dartArguments(script),
       );
 
       await transport.start();
@@ -218,8 +285,8 @@ void main() {
               }) async {
                 await Future<void>.delayed(const Duration(milliseconds: 40));
                 return Process.start(
-                  executable,
-                  arguments,
+                  _dartCommand,
+                  _dartArguments(script),
                   workingDirectory: workingDirectory,
                   environment: environment,
                 );
@@ -245,4 +312,41 @@ void main() {
 File _writeServerScript(Directory directory, String source) {
   return File('${directory.path}${Platform.pathSeparator}server.dart')
     ..writeAsStringSync(source);
+}
+
+List<String> _dartArguments(File script) => <String>[script.path];
+
+String get _dartCommand {
+  const executableName = 'dart.exe';
+  final resolved = File(Platform.resolvedExecutable);
+  if (resolved.path.toLowerCase().endsWith(executableName)) {
+    return resolved.path;
+  }
+
+  final path = Platform.environment['PATH'];
+  if (path != null) {
+    for (final entry in path.split(';')) {
+      final trimmed = entry.trim();
+      if (trimmed.isEmpty) {
+        continue;
+      }
+
+      final direct = File('$trimmed${Platform.pathSeparator}$executableName');
+      if (direct.existsSync()) {
+        return direct.path;
+      }
+
+      final derivedFromFlutterBin = File(
+        '$trimmed${Platform.pathSeparator}cache'
+        '${Platform.pathSeparator}dart-sdk'
+        '${Platform.pathSeparator}bin'
+        '${Platform.pathSeparator}$executableName',
+      );
+      if (derivedFromFlutterBin.existsSync()) {
+        return derivedFromFlutterBin.path;
+      }
+    }
+  }
+
+  throw StateError('Could not locate dart.exe for JSON-RPC transport tests');
 }

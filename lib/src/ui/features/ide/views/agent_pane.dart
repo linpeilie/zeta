@@ -1,3 +1,6 @@
+import 'package:flutter/foundation.dart';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
@@ -8,6 +11,12 @@ import 'agent_timeline_grouping.dart';
 import '../view_models/agent_conversation_view_model.dart';
 
 const double _agentContentMaxWidth = 920;
+const int _markdownCollapseLineThreshold = 12;
+const int _markdownCollapseLengthThreshold = 420;
+const int _diffPreviewLineCount = 24;
+
+typedef _TurnSectionBuilder =
+    Widget Function(AgentConversationTurnGroup turn, bool showDivider);
 
 /// 中间 Agent 面板。
 ///
@@ -23,17 +32,23 @@ class AgentPane extends StatefulWidget {
 }
 
 class _AgentPaneState extends State<AgentPane> {
+  static const double _autoScrollBottomThreshold = 48;
+
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  bool _canSend = false;
+  final ValueNotifier<bool> _canSendNotifier = ValueNotifier<bool>(false);
+  bool _stickToBottom = true;
   late int _lastAutoScrollTick;
 
   @override
   void initState() {
     super.initState();
     _inputController.addListener(_handleInputChanged);
+    _scrollController.addListener(_handleScrollChanged);
     _lastAutoScrollTick = widget.viewModel.autoScrollTick;
-    widget.viewModel.addListener(_handleViewModelChanged);
+    widget.viewModel.autoScrollTickListenable.addListener(
+      _handleAutoScrollTickChanged,
+    );
   }
 
   @override
@@ -42,163 +57,145 @@ class _AgentPaneState extends State<AgentPane> {
     if (oldWidget.viewModel == widget.viewModel) {
       return;
     }
-    oldWidget.viewModel.removeListener(_handleViewModelChanged);
+    oldWidget.viewModel.autoScrollTickListenable.removeListener(
+      _handleAutoScrollTickChanged,
+    );
+    _stickToBottom = true;
     _lastAutoScrollTick = widget.viewModel.autoScrollTick;
-    widget.viewModel.addListener(_handleViewModelChanged);
+    widget.viewModel.autoScrollTickListenable.addListener(
+      _handleAutoScrollTickChanged,
+    );
   }
 
   @override
   void dispose() {
-    widget.viewModel.removeListener(_handleViewModelChanged);
+    widget.viewModel.autoScrollTickListenable.removeListener(
+      _handleAutoScrollTickChanged,
+    );
     _inputController.removeListener(_handleInputChanged);
+    _scrollController.removeListener(_handleScrollChanged);
     _inputController.dispose();
     _scrollController.dispose();
+    _canSendNotifier.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: widget.viewModel,
-      builder: (context, _) {
-        return ColoredBox(
-          color: ideFrameColor,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _AgentContentAlign(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
-                  child: _AgentHeader(viewModel: widget.viewModel),
-                ),
+    return ColoredBox(
+      color: ideFrameColor,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _AgentContentAlign(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+              child: ListenableBuilder(
+                listenable: widget.viewModel.headerVersionListenable,
+                builder: (context, _) {
+                  return _AgentHeader(viewModel: widget.viewModel);
+                },
               ),
-              Expanded(
-                // 对话、工具调用和审批卡片共用一个滚动流，模拟 Agent 面板的时间线。
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxWidth: _agentContentMaxWidth,
-                    ),
-                    child: ListView(
-                      key: const ValueKey('agent-message-list'),
-                      controller: _scrollController,
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                      children: _buildTimelineChildren(
-                        widget.viewModel.conversationTurns,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              _AgentContentAlign(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                  child: _AgentComposer(
-                    controller: _inputController,
-                    canSend: _canSend,
-                    isRunning: widget.viewModel.isRunning,
-                    onSend: _sendMessage,
-                    onCancel: widget.viewModel.cancelActiveTurn,
-                    models: widget.viewModel.models,
-                    selectedModel: widget.viewModel.selectedModel,
-                    selectedReasoningEffort:
-                        widget.viewModel.selectedReasoningEffort,
-                    selectedServiceTierId:
-                        widget.viewModel.selectedServiceTierId,
-                    showReasoningEffort: widget.viewModel.showReasoningEffort,
-                    showServiceTier: widget.viewModel.showServiceTier,
-                    onSelectModel: (modelId) =>
-                        widget.viewModel.selectModel(modelId),
-                    onSelectReasoningEffort: (effort) =>
-                        widget.viewModel.selectReasoningEffort(effort),
-                    onSelectServiceTier: (tierId) =>
-                        widget.viewModel.selectServiceTier(tierId),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-        );
-      },
+          Expanded(
+            // 对话、工具调用和审批卡片共用一个滚动流，模拟 Agent 面板的时间线。
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: _agentContentMaxWidth,
+                ),
+                child: SingleChildScrollView(
+                  key: const ValueKey('agent-message-list'),
+                  controller: _scrollController,
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                  // turn 卡片高度差异很大；改用精确内容高度滚动，避免
+                  // SliverList 在滚动过程中重估 maxScrollExtent 导致滚动条跳动。
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _AgentHistoryTurnsSection(
+                        viewModel: widget.viewModel,
+                        onLoadOlder: _loadOlderTurns,
+                        buildTurnSection: _buildTurnSection,
+                      ),
+                      _AgentLiveTurnSection(
+                        viewModel: widget.viewModel,
+                        hasLeadingTurn: () => _hasHistoryOrStandbyTurns,
+                        buildTurnSection: _buildTurnSection,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          _AgentComposerSection(
+            viewModel: widget.viewModel,
+            inputController: _inputController,
+            canSendListenable: _canSendNotifier,
+            onSend: _sendMessage,
+          ),
+        ],
+      ),
     );
   }
 
-  /// 按 turn 分组展开成 ListView 的扁平子节点列表。
-  ///
-  /// 每个 turn 之间插入一条 [_AgentTurnDivider]；standby 分组不带分隔线。
-  List<Widget> _buildTimelineChildren(List<AgentConversationTurnGroup> turns) {
-    final children = <Widget>[];
-    for (var index = 0; index < turns.length; index += 1) {
-      final turn = turns[index];
-      if (index > 0 && !turn.isStandby) {
-        children.add(_AgentTurnDivider(turn: turn));
-      }
-      final renderBlocks = buildAgentTimelineRenderBlocks(
-        turnId: turn.id,
-        entries: turn.entries,
-      );
-      for (final block in renderBlocks) {
-        children.add(switch (block) {
-          AgentTimelineEntryRenderBlock(:final entry) => _buildTimelineEntry(
-            entry,
-          ),
-          AgentTimelineCommandGroupRenderBlock(:final group) =>
-            _AgentCommandGroupCard(
-              group: group,
-              expanded: widget.viewModel.isCommandGroupExpanded(group.id),
-              onToggle: () => widget.viewModel.toggleCommandGroup(group.id),
-            ),
-          AgentTimelineFileEditGroupRenderBlock(:final group) =>
-            _AgentFileEditGroupCard(
-              group: group,
-              expanded: widget.viewModel.isCommandGroupExpanded(group.id),
-              isItemExpanded: widget.viewModel.isFileEditItemExpanded,
-              onToggle: () => widget.viewModel.toggleCommandGroup(group.id),
-              onToggleItem: widget.viewModel.toggleFileEditItem,
-            ),
-        });
-      }
-    }
-    return children;
+  bool get _hasHistoryOrStandbyTurns {
+    final standby = widget.viewModel.standbyTurnState;
+    return (standby?.entries.isNotEmpty ?? false) ||
+        widget.viewModel.visibleHistoryTurnStates.isNotEmpty;
   }
 
-  Widget _buildTimelineEntry(AgentTimelineEntry entry) {
-    return switch (entry) {
-      AgentMessageTimelineEntry(:final message) => _AgentMessageEntry(
-        message: message,
-        planExpanded: widget.viewModel.isPlanMessageExpanded(message.id),
-        onTogglePlan: () => widget.viewModel.togglePlanMessage(message.id),
-      ),
-      AgentToolTimelineEntry(:final toolCall) => _AgentToolCallCard(
-        toolCall: toolCall,
-        expanded: widget.viewModel.isToolCallExpanded(toolCall.id),
-        onToggle: () => widget.viewModel.toggleToolCall(toolCall.id),
-      ),
-      AgentPermissionTimelineEntry(:final request) => _AgentPermissionCard(
-        request: request,
-        onApprove: () =>
-            widget.viewModel.respondToPermission(request, approved: true),
-        onDeny: () =>
-            widget.viewModel.respondToPermission(request, approved: false),
-      ),
-      AgentHistoryEventTimelineEntry(:final event) => _AgentHistoryEventCard(
-        event: event,
-      ),
-    };
+  Widget _buildTurnSection(AgentConversationTurnGroup turn, bool showDivider) {
+    return _AgentTurnSection(
+      key: ValueKey<String>('turn-${turn.id}'),
+      turn: turn,
+      showDivider: showDivider,
+      viewModel: widget.viewModel,
+    );
   }
 
   void _handleInputChanged() {
     final canSend = _inputController.text.trim().isNotEmpty;
-    if (canSend == _canSend) {
+    if (canSend == _canSendNotifier.value) {
       return;
     }
-    setState(() {
-      _canSend = canSend;
+    _canSendNotifier.value = canSend;
+  }
+
+  void _loadOlderTurns() {
+    if (!widget.viewModel.hasOlderTurns) {
+      return;
+    }
+    final controller = _scrollController;
+    final hasClients = controller.hasClients;
+    final oldPixels = hasClients ? controller.position.pixels : 0.0;
+    final oldMaxScrollExtent = hasClients
+        ? controller.position.maxScrollExtent
+        : 0.0;
+    final changed = widget.viewModel.loadOlderTurns();
+    if (!changed || !hasClients) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!controller.hasClients) {
+        return;
+      }
+      final delta = controller.position.maxScrollExtent - oldMaxScrollExtent;
+      final targetOffset = (oldPixels + delta).clamp(
+        0.0,
+        controller.position.maxScrollExtent,
+      );
+      controller.jumpTo(targetOffset);
     });
   }
 
   void _sendMessage() {
+    if (!_canSendNotifier.value || !widget.viewModel.canSubmitMessage) {
+      return;
+    }
     final text = _inputController.text;
     if (text.trim().isEmpty) {
       return;
@@ -207,13 +204,32 @@ class _AgentPaneState extends State<AgentPane> {
     widget.viewModel.sendMessage(text);
   }
 
-  void _handleViewModelChanged() {
+  void _handleAutoScrollTickChanged() {
     final nextTick = widget.viewModel.autoScrollTick;
     if (nextTick == _lastAutoScrollTick) {
       return;
     }
+    final shouldScrollToEnd = _shouldStickToBottom();
     _lastAutoScrollTick = nextTick;
-    _scrollToEnd();
+    if (shouldScrollToEnd) {
+      _scrollToEnd();
+    }
+  }
+
+  void _handleScrollChanged() {
+    _stickToBottom = _shouldStickToBottom();
+  }
+
+  bool _shouldStickToBottom() {
+    if (!_scrollController.hasClients) {
+      return _stickToBottom;
+    }
+    return _distanceToBottom() <= _autoScrollBottomThreshold;
+  }
+
+  double _distanceToBottom() {
+    final position = _scrollController.position;
+    return position.maxScrollExtent - position.pixels;
   }
 
   void _scrollToEnd() {
@@ -228,6 +244,208 @@ class _AgentPaneState extends State<AgentPane> {
         curve: Curves.easeOut,
       );
     });
+  }
+}
+
+class _AgentHistoryTurnsSection extends StatelessWidget {
+  const _AgentHistoryTurnsSection({
+    required this.viewModel,
+    required this.onLoadOlder,
+    required this.buildTurnSection,
+  });
+
+  final AgentConversationViewModel viewModel;
+  final VoidCallback onLoadOlder;
+  final _TurnSectionBuilder buildTurnSection;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: viewModel.historyVersionListenable,
+      builder: (context, _) {
+        final turns = <AgentConversationTurnGroup>[
+          if (viewModel.standbyTurnState case final standby?
+              when standby.entries.isNotEmpty)
+            standby.snapshot(),
+          ...viewModel.visibleHistoryTurns,
+        ];
+        final children = <Widget>[];
+        if (viewModel.hasOlderTurns) {
+          children.add(
+            _AgentLoadOlderTurnsButton(onPressed: onLoadOlder, loading: false),
+          );
+        }
+        var hasRenderedTurn = false;
+        for (final turn in turns) {
+          children.add(
+            buildTurnSection(turn, hasRenderedTurn && !turn.isStandby),
+          );
+          hasRenderedTurn = true;
+        }
+        return Column(
+          key: const ValueKey('agent-history-turns-section'),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: children,
+        );
+      },
+    );
+  }
+}
+
+class _AgentLiveTurnSection extends StatelessWidget {
+  const _AgentLiveTurnSection({
+    required this.viewModel,
+    required this.hasLeadingTurn,
+    required this.buildTurnSection,
+  });
+
+  final AgentConversationViewModel viewModel;
+  final bool Function() hasLeadingTurn;
+  final _TurnSectionBuilder buildTurnSection;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: Listenable.merge(<Listenable>[
+        viewModel.historyVersionListenable,
+        viewModel.liveTurnListenable,
+      ]),
+      builder: (context, _) {
+        final turnState = viewModel.liveTurnState;
+        if (turnState == null) {
+          return const SizedBox.shrink();
+        }
+        return ListenableBuilder(
+          listenable: turnState,
+          builder: (context, _) {
+            final turn = turnState.snapshot();
+            return KeyedSubtree(
+              key: const ValueKey('agent-live-turn-section'),
+              child: buildTurnSection(
+                turn,
+                hasLeadingTurn() && !turn.isStandby,
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _AgentTurnSection extends StatelessWidget {
+  const _AgentTurnSection({
+    required this.turn,
+    required this.showDivider,
+    required this.viewModel,
+    super.key,
+  });
+
+  final AgentConversationTurnGroup turn;
+  final bool showDivider;
+  final AgentConversationViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final renderBlocks = buildAgentTimelineRenderBlocks(
+      turnId: turn.id,
+      entries: turn.entries,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        if (showDivider) _AgentTurnDivider(turn: turn),
+        for (final block in renderBlocks)
+          KeyedSubtree(
+            key: ValueKey<String>('turn-block-${turn.id}-${block.id}'),
+            child: _buildBlock(block),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildBlock(AgentTimelineRenderBlock block) {
+    return switch (block) {
+      AgentTimelineEntryRenderBlock(:final entry) => _buildTimelineEntry(entry),
+      AgentTimelineCommandGroupRenderBlock(:final group) =>
+        _AgentCommandGroupCard(group: group),
+      AgentTimelineFileEditGroupRenderBlock(:final group) =>
+        _AgentFileEditGroupCard(group: group),
+    };
+  }
+
+  Widget _buildTimelineEntry(AgentTimelineEntry entry) {
+    final collapseHeavyContent = viewModel.liveTurnState?.id != turn.id;
+    return switch (entry) {
+      AgentMessageTimelineEntry(:final message) => _AgentMessageEntry(
+        message: message,
+        collapseHeavyContent: collapseHeavyContent,
+      ),
+      AgentToolTimelineEntry(:final toolCall) => _AgentToolCallCard(
+        toolCall: toolCall,
+      ),
+      AgentPermissionTimelineEntry(:final request) => _AgentPermissionCard(
+        request: request,
+        onApprove: () => viewModel.respondToPermission(request, approved: true),
+        onDeny: () => viewModel.respondToPermission(request, approved: false),
+      ),
+      AgentHistoryEventTimelineEntry(:final event) => _AgentHistoryEventCard(
+        event: event,
+      ),
+    };
+  }
+}
+
+class _AgentComposerSection extends StatelessWidget {
+  const _AgentComposerSection({
+    required this.viewModel,
+    required this.inputController,
+    required this.canSendListenable,
+    required this.onSend,
+  });
+
+  final AgentConversationViewModel viewModel;
+  final TextEditingController inputController;
+  final ValueListenable<bool> canSendListenable;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    return _AgentContentAlign(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+        child: ListenableBuilder(
+          listenable: viewModel.composerVersionListenable,
+          builder: (context, _) {
+            return ValueListenableBuilder<bool>(
+              valueListenable: canSendListenable,
+              builder: (context, canSend, _) {
+                return _AgentComposer(
+                  controller: inputController,
+                  canSubmit: canSend && viewModel.canSubmitMessage,
+                  isTurnRunning: viewModel.isTurnRunning,
+                  threadOpenPhase: viewModel.threadOpenPhase,
+                  onSend: onSend,
+                  onCancel: viewModel.cancelActiveTurn,
+                  models: viewModel.models,
+                  selectedModel: viewModel.selectedModel,
+                  selectedReasoningEffort: viewModel.selectedReasoningEffort,
+                  selectedServiceTierId: viewModel.selectedServiceTierId,
+                  showReasoningEffort: viewModel.showReasoningEffort,
+                  showServiceTier: viewModel.showServiceTier,
+                  onSelectModel: (modelId) => viewModel.selectModel(modelId),
+                  onSelectReasoningEffort: (effort) =>
+                      viewModel.selectReasoningEffort(effort),
+                  onSelectServiceTier: (tierId) =>
+                      viewModel.selectServiceTier(tierId),
+                );
+              },
+            );
+          },
+        ),
+      ),
+    );
   }
 }
 
@@ -248,6 +466,41 @@ class _AgentContentAlign extends StatelessWidget {
   }
 }
 
+class _AgentLoadOlderTurnsButton extends StatelessWidget {
+  const _AgentLoadOlderTurnsButton({
+    required this.onPressed,
+    required this.loading,
+  });
+
+  final VoidCallback onPressed;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          key: const ValueKey('agent-load-older-turns-button'),
+          onPressed: loading ? null : onPressed,
+          icon: loading
+              ? const SizedBox.square(
+                  dimension: 12,
+                  child: CircularProgressIndicator(strokeWidth: 1.5),
+                )
+              : const Icon(Icons.history_rounded, size: 15),
+          label: Text(loading ? 'Loading older turns' : 'Load older turns'),
+          style: TextButton.styleFrom(
+            visualDensity: VisualDensity.compact,
+            textStyle: const TextStyle(fontSize: 11),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// thread 详情头部：左侧标题 + 运行图标，右侧当前 thread 累计 token 用量。
 class _AgentHeader extends StatelessWidget {
   const _AgentHeader({required this.viewModel});
@@ -260,32 +513,56 @@ class _AgentHeader extends StatelessWidget {
     final tokenUsage = viewModel.currentThreadTokenUsage;
     final tokenLabel = _tokenUsageLabel(tokenUsage);
     final tokenTooltip = _tokenUsageTooltip(tokenUsage);
+    final threadOpenStatusText = _threadOpenStatusText(viewModel);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Flexible(
-                child: Text(
-                  viewModel.currentThreadTitle,
-                  key: const ValueKey('agent-header-title'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.onSurface,
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      viewModel.currentThreadTitle,
+                      key: const ValueKey('agent-header-title'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
                   ),
-                ),
+                  if (viewModel.showRunningIndicator) ...[
+                    const SizedBox(width: 6),
+                    Icon(
+                      Icons.autorenew_rounded,
+                      key: const ValueKey('agent-header-running-icon'),
+                      size: 15,
+                      color: ideAccentColor,
+                    ),
+                  ],
+                ],
               ),
-              if (viewModel.showRunningIndicator) ...[
-                const SizedBox(width: 6),
-                Icon(
-                  Icons.autorenew_rounded,
-                  key: const ValueKey('agent-header-running-icon'),
-                  size: 15,
-                  color: ideAccentColor,
+              if (threadOpenStatusText != null) ...[
+                const SizedBox(height: 3),
+                Text(
+                  threadOpenStatusText,
+                  key: const ValueKey('agent-thread-open-status'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: 11,
+                    color:
+                        viewModel.threadOpenPhase ==
+                            AgentThreadOpenPhase.openFailed
+                        ? ideWarningColor
+                        : ideMutedTextColor.withValues(alpha: 0.82),
+                  ),
                 ),
               ],
             ],
@@ -331,8 +608,9 @@ class _AgentHeader extends StatelessWidget {
 class _AgentComposer extends StatelessWidget {
   const _AgentComposer({
     required this.controller,
-    required this.canSend,
-    required this.isRunning,
+    required this.canSubmit,
+    required this.isTurnRunning,
+    required this.threadOpenPhase,
     required this.onSend,
     required this.onCancel,
     required this.models,
@@ -347,8 +625,9 @@ class _AgentComposer extends StatelessWidget {
   });
 
   final TextEditingController controller;
-  final bool canSend;
-  final bool isRunning;
+  final bool canSubmit;
+  final bool isTurnRunning;
+  final AgentThreadOpenPhase threadOpenPhase;
   final VoidCallback onSend;
   final VoidCallback onCancel;
 
@@ -376,6 +655,14 @@ class _AgentComposer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasDraft = controller.text.trim().isNotEmpty;
+    final showSend =
+        threadOpenPhase == AgentThreadOpenPhase.idle &&
+        (!isTurnRunning || hasDraft);
+    final showCancel =
+        threadOpenPhase == AgentThreadOpenPhase.idle &&
+        isTurnRunning &&
+        !hasDraft;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: idePanelColor,
@@ -403,7 +690,7 @@ class _AgentComposer extends StatelessWidget {
               maxLines: 10,
               textInputAction: TextInputAction.send,
               onSubmitted: (_) {
-                if (canSend) {
+                if (canSubmit) {
                   onSend();
                 }
               },
@@ -443,7 +730,7 @@ class _AgentComposer extends StatelessWidget {
                   ),
                 ],
                 const Spacer(),
-                if (isRunning)
+                if (showCancel)
                   Tooltip(
                     message: 'Cancel',
                     child: DecoratedBox(
@@ -458,22 +745,28 @@ class _AgentComposer extends StatelessWidget {
                       ),
                     ),
                   )
-                else
+                else if (showSend)
                   Tooltip(
                     message: 'Send',
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: canSend
+                        color: canSubmit
                             ? ideAccentColor.withValues(alpha: 0.18)
                             : ideBorderColor.withValues(alpha: 0.2),
                         shape: BoxShape.circle,
                       ),
                       child: IconButton(
                         key: const ValueKey('agent-send-button'),
-                        onPressed: canSend ? onSend : null,
+                        onPressed: canSubmit ? onSend : null,
                         icon: const Icon(Icons.arrow_upward_rounded, size: 18),
                       ),
                     ),
+                  )
+                else
+                  const SizedBox(
+                    key: ValueKey('agent-send-unavailable-placeholder'),
+                    width: 40,
+                    height: 40,
                   ),
               ],
             ),
@@ -713,25 +1006,22 @@ class _ServiceTierButton extends StatelessWidget {
 class _AgentMessageEntry extends StatelessWidget {
   const _AgentMessageEntry({
     required this.message,
-    required this.planExpanded,
-    required this.onTogglePlan,
+    required this.collapseHeavyContent,
   });
 
   final AgentConversationMessage message;
-  final bool planExpanded;
-  final VoidCallback onTogglePlan;
+  final bool collapseHeavyContent;
 
   @override
   Widget build(BuildContext context) {
     if (message.isPlan) {
-      return _AgentPlanMessageCard(
-        message: message,
-        expanded: planExpanded,
-        onToggle: onTogglePlan,
-      );
+      return _AgentPlanMessageCard(message: message);
     }
     if (message.role == AgentMessageRole.agent) {
-      return _AgentMarkdownMessage(message: message);
+      return _AgentMarkdownMessage(
+        message: message,
+        collapseHeavyContent: collapseHeavyContent,
+      );
     }
     return _AgentBubbleMessage(message: message);
   }
@@ -893,14 +1183,91 @@ class _AgentBubbleMessage extends StatelessWidget {
 }
 
 /// 普通 Agent 正文使用全宽 Markdown 渲染。
-class _AgentMarkdownMessage extends StatelessWidget {
-  const _AgentMarkdownMessage({required this.message});
+///
+/// 超长 markdown 默认先展示预览，避免历史区滚动时提前创建整段重组件。
+class _AgentMarkdownMessage extends StatefulWidget {
+  const _AgentMarkdownMessage({
+    required this.message,
+    required this.collapseHeavyContent,
+  });
 
   final AgentConversationMessage message;
+  final bool collapseHeavyContent;
+
+  @override
+  State<_AgentMarkdownMessage> createState() => _AgentMarkdownMessageState();
+}
+
+class _AgentMarkdownMessageState extends State<_AgentMarkdownMessage> {
+  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
-    return _AgentMarkdownBody(data: message.text);
+    final markdown = widget.message.text;
+    if (!widget.collapseHeavyContent || !_shouldCollapseMarkdown(markdown)) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: RepaintBoundary(child: _AgentMarkdownBody(data: markdown)),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: _expanded
+                ? RepaintBoundary(
+                    key: ValueKey<String>(
+                      'agent-markdown-body-${widget.message.id}',
+                    ),
+                    child: _AgentMarkdownBody(data: markdown),
+                  )
+                : Text(
+                    _markdownPreviewText(markdown),
+                    key: ValueKey<String>(
+                      'agent-markdown-preview-${widget.message.id}',
+                    ),
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: 1.45,
+                      color: ideMutedTextColor.withValues(alpha: 0.86),
+                    ),
+                  ),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: ValueKey<String>(
+                'agent-markdown-toggle-${widget.message.id}',
+              ),
+              onPressed: () {
+                setState(() {
+                  _expanded = !_expanded;
+                });
+              },
+              icon: Icon(
+                _expanded
+                    ? Icons.unfold_less_rounded
+                    : Icons.unfold_more_rounded,
+                size: 15,
+              ),
+              label: Text(_expanded ? '收起正文' : '展开正文'),
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                textStyle: const TextStyle(fontSize: 11),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -922,105 +1289,122 @@ class _AgentMarkdownBody extends StatelessWidget {
 }
 
 /// plan 消息使用独立卡片渲染，默认只显示一行预览。
-class _AgentPlanMessageCard extends StatelessWidget {
-  const _AgentPlanMessageCard({
-    required this.message,
-    required this.expanded,
-    required this.onToggle,
-  });
+class _AgentPlanMessageCard extends StatefulWidget {
+  const _AgentPlanMessageCard({required this.message});
 
   final AgentConversationMessage message;
-  final bool expanded;
-  final VoidCallback onToggle;
+
+  @override
+  State<_AgentPlanMessageCard> createState() => _AgentPlanMessageCardState();
+}
+
+class _AgentPlanMessageCardState extends State<_AgentPlanMessageCard> {
+  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
-      child: DecoratedBox(
-        key: ValueKey<String>('agent-plan-card-${message.id}'),
-        decoration: BoxDecoration(
-          color: ideSurfaceColor,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: ideBorderColor),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 12, 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.checklist_rounded,
-                    size: 16,
-                    color: ideMutedTextColor.withValues(alpha: 0.75),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '计划',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: ideMutedTextColor.withValues(alpha: 0.85),
+      child: RepaintBoundary(
+        child: DecoratedBox(
+          key: ValueKey<String>('agent-plan-card-${widget.message.id}'),
+          decoration: BoxDecoration(
+            color: ideSurfaceColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: ideBorderColor),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 12, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.checklist_rounded,
+                      size: 16,
+                      color: ideMutedTextColor.withValues(alpha: 0.75),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '计划',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: ideMutedTextColor.withValues(alpha: 0.85),
+                        ),
                       ),
                     ),
-                  ),
-                  IconButton(
-                    key: ValueKey<String>('agent-plan-toggle-${message.id}'),
-                    tooltip: expanded ? '收起计划' : '展开计划',
-                    onPressed: onToggle,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints.tightFor(
-                      width: 28,
-                      height: 28,
+                    IconButton(
+                      key: ValueKey<String>(
+                        'agent-plan-toggle-${widget.message.id}',
+                      ),
+                      tooltip: _expanded ? '收起计划' : '展开计划',
+                      onPressed: () {
+                        setState(() {
+                          _expanded = !_expanded;
+                        });
+                      },
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 28,
+                        height: 28,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      icon: Icon(
+                        _expanded
+                            ? Icons.close_fullscreen_rounded
+                            : Icons.open_in_full_rounded,
+                        size: 16,
+                        color: ideMutedTextColor.withValues(alpha: 0.72),
+                      ),
                     ),
-                    visualDensity: VisualDensity.compact,
-                    icon: Icon(
-                      expanded
-                          ? Icons.close_fullscreen_rounded
-                          : Icons.open_in_full_rounded,
-                      size: 16,
-                      color: ideMutedTextColor.withValues(alpha: 0.72),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              AnimatedSize(
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOutCubic,
-                alignment: Alignment.topCenter,
-                child: expanded
-                    ? Padding(
-                        key: ValueKey<String>('agent-plan-body-${message.id}'),
-                        padding: const EdgeInsets.only(right: 4),
-                        child: _AgentMarkdownBody(data: message.text),
-                      )
-                    : SizedBox(
-                        key: ValueKey<String>(
-                          'agent-plan-preview-${message.id}',
-                        ),
-                        height: 20,
-                        child: Align(
-                          alignment: Alignment.topLeft,
-                          child: Text(
-                            _planPreviewText(message.text),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              height: 1.2,
-                              color: ideMutedTextColor.withValues(alpha: 0.72),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment.topCenter,
+                  child: _expanded
+                      ? RepaintBoundary(
+                          child: Padding(
+                            key: ValueKey<String>(
+                              'agent-plan-body-${widget.message.id}',
+                            ),
+                            padding: const EdgeInsets.only(right: 4),
+                            child: _AgentMarkdownBody(
+                              data: widget.message.text,
+                            ),
+                          ),
+                        )
+                      : SizedBox(
+                          key: ValueKey<String>(
+                            'agent-plan-preview-${widget.message.id}',
+                          ),
+                          height: 20,
+                          child: Align(
+                            alignment: Alignment.topLeft,
+                            child: Text(
+                              _planPreviewText(widget.message.text),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                height: 1.2,
+                                color: ideMutedTextColor.withValues(
+                                  alpha: 0.72,
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1031,24 +1415,29 @@ class _AgentPlanMessageCard extends StatelessWidget {
 /// 命令集折叠卡片。
 ///
 /// 连续工具调用和搜索事件会先规约成命令集，在这里统一展示摘要与展开列表。
-class _AgentCommandGroupCard extends StatelessWidget {
-  const _AgentCommandGroupCard({
-    required this.group,
-    required this.expanded,
-    required this.onToggle,
-  });
+class _AgentCommandGroupCard extends StatefulWidget {
+  const _AgentCommandGroupCard({required this.group});
 
   final AgentTimelineCommandGroup group;
-  final bool expanded;
-  final VoidCallback onToggle;
+
+  @override
+  State<_AgentCommandGroupCard> createState() => _AgentCommandGroupCardState();
+}
+
+class _AgentCommandGroupCardState extends State<_AgentCommandGroupCard> {
+  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: InkWell(
-        key: ValueKey<String>('agent-command-group-header-${group.id}'),
-        onTap: onToggle,
+        key: ValueKey<String>('agent-command-group-header-${widget.group.id}'),
+        onTap: () {
+          setState(() {
+            _expanded = !_expanded;
+          });
+        },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
@@ -1068,7 +1457,7 @@ class _AgentCommandGroupCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        _commandGroupSummary(group),
+                        _commandGroupSummary(widget.group),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -1082,7 +1471,7 @@ class _AgentCommandGroupCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Icon(
-                  expanded
+                  _expanded
                       ? Icons.keyboard_arrow_down_rounded
                       : Icons.chevron_right_rounded,
                   size: 16,
@@ -1090,23 +1479,29 @@ class _AgentCommandGroupCard extends StatelessWidget {
                 ),
               ],
             ),
-            if (expanded)
-              Padding(
-                key: ValueKey<String>('agent-command-group-body-${group.id}'),
-                padding: const EdgeInsets.only(top: 8, left: 22),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (
-                      var index = 0;
-                      index < group.items.length;
-                      index++
-                    ) ...[
-                      if (index > 0) const SizedBox(height: 8),
-                      _AgentCommandGroupItemRow(item: group.items[index]),
+            if (_expanded)
+              RepaintBoundary(
+                child: Padding(
+                  key: ValueKey<String>(
+                    'agent-command-group-body-${widget.group.id}',
+                  ),
+                  padding: const EdgeInsets.only(top: 8, left: 22),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (
+                        var index = 0;
+                        index < widget.group.items.length;
+                        index++
+                      ) ...[
+                        if (index > 0) const SizedBox(height: 8),
+                        _AgentCommandGroupItemRow(
+                          item: widget.group.items[index],
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
           ],
@@ -1141,20 +1536,19 @@ class _AgentCommandGroupItemRow extends StatelessWidget {
 /// 文件编辑组折叠卡片。
 ///
 /// 连续编辑操作会按文件拆分后显示在该组中，每个文件项支持独立展开详情。
-class _AgentFileEditGroupCard extends StatelessWidget {
-  const _AgentFileEditGroupCard({
-    required this.group,
-    required this.expanded,
-    required this.isItemExpanded,
-    required this.onToggle,
-    required this.onToggleItem,
-  });
+class _AgentFileEditGroupCard extends StatefulWidget {
+  const _AgentFileEditGroupCard({required this.group});
 
   final AgentTimelineFileEditGroup group;
-  final bool expanded;
-  final bool Function(String fileEditItemId) isItemExpanded;
-  final VoidCallback onToggle;
-  final ValueChanged<String> onToggleItem;
+
+  @override
+  State<_AgentFileEditGroupCard> createState() =>
+      _AgentFileEditGroupCardState();
+}
+
+class _AgentFileEditGroupCardState extends State<_AgentFileEditGroupCard> {
+  bool _expanded = false;
+  final Set<String> _expandedItemIds = <String>{};
 
   @override
   Widget build(BuildContext context) {
@@ -1165,8 +1559,14 @@ class _AgentFileEditGroupCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           InkWell(
-            key: ValueKey<String>('agent-file-edit-group-header-${group.id}'),
-            onTap: onToggle,
+            key: ValueKey<String>(
+              'agent-file-edit-group-header-${widget.group.id}',
+            ),
+            onTap: () {
+              setState(() {
+                _expanded = !_expanded;
+              });
+            },
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1183,9 +1583,9 @@ class _AgentFileEditGroupCard extends StatelessWidget {
                     children: [
                       Text.rich(
                         key: ValueKey<String>(
-                          'agent-file-edit-group-summary-${group.id}',
+                          'agent-file-edit-group-summary-${widget.group.id}',
                         ),
-                        _fileEditGroupSummarySpan(group),
+                        _fileEditGroupSummarySpan(widget.group),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -1199,7 +1599,7 @@ class _AgentFileEditGroupCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Icon(
-                  expanded
+                  _expanded
                       ? Icons.keyboard_arrow_down_rounded
                       : Icons.chevron_right_rounded,
                   size: 16,
@@ -1208,25 +1608,45 @@ class _AgentFileEditGroupCard extends StatelessWidget {
               ],
             ),
           ),
-          if (expanded)
-            Padding(
-              key: ValueKey<String>('agent-file-edit-group-body-${group.id}'),
-              padding: const EdgeInsets.only(top: 8, left: 22),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (var index = 0; index < group.items.length; index++) ...[
-                    if (index > 0) const SizedBox(height: 8),
-                    _AgentFileEditItemRow(
-                      item: group.items[index],
-                      expanded: isItemExpanded(group.items[index].id),
-                      onToggle: group.items[index].hasDetails
-                          ? () => onToggleItem(group.items[index].id)
-                          : null,
-                    ),
+          if (_expanded)
+            RepaintBoundary(
+              child: Padding(
+                key: ValueKey<String>(
+                  'agent-file-edit-group-body-${widget.group.id}',
+                ),
+                padding: const EdgeInsets.only(top: 8, left: 22),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (
+                      var index = 0;
+                      index < widget.group.items.length;
+                      index++
+                    ) ...[
+                      if (index > 0) const SizedBox(height: 8),
+                      _AgentFileEditItemRow(
+                        key: ValueKey<String>(
+                          'agent-file-edit-item-${widget.group.items[index].id}',
+                        ),
+                        item: widget.group.items[index],
+                        expanded: _expandedItemIds.contains(
+                          widget.group.items[index].id,
+                        ),
+                        onToggle: widget.group.items[index].hasDetails
+                            ? () {
+                                setState(() {
+                                  final itemId = widget.group.items[index].id;
+                                  if (!_expandedItemIds.add(itemId)) {
+                                    _expandedItemIds.remove(itemId);
+                                  }
+                                });
+                              }
+                            : null,
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
         ],
@@ -1237,6 +1657,7 @@ class _AgentFileEditGroupCard extends StatelessWidget {
 
 class _AgentFileEditItemRow extends StatelessWidget {
   const _AgentFileEditItemRow({
+    super.key,
     required this.item,
     required this.expanded,
     this.onToggle,
@@ -1321,9 +1742,76 @@ class _AgentFileEditItemRow extends StatelessWidget {
           Padding(
             key: ValueKey<String>('agent-file-edit-item-details-${item.id}'),
             padding: const EdgeInsets.only(top: 6, right: 28),
-            child: _AgentHighlightedCodeBlock(
-              code: item.details!,
-              language: 'diff',
+            child: _AgentDiffDetails(item: item),
+          ),
+      ],
+    );
+  }
+}
+
+class _AgentDiffDetails extends StatefulWidget {
+  const _AgentDiffDetails({required this.item});
+
+  final AgentTimelineFileEditItem item;
+
+  @override
+  State<_AgentDiffDetails> createState() => _AgentDiffDetailsState();
+}
+
+class _AgentDiffDetailsState extends State<_AgentDiffDetails> {
+  bool _showAll = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final details = widget.item.details!;
+    final shouldCollapse = _shouldPreviewCodeBlock(
+      details,
+      maxLines: _diffPreviewLineCount,
+    );
+    final code = !_showAll && shouldCollapse
+        ? _previewCodeBlock(details, maxLines: _diffPreviewLineCount)
+        : details;
+    final hiddenLines = shouldCollapse
+        ? _codeBlockLineCount(details) - _diffPreviewLineCount
+        : 0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _AgentHighlightedCodeBlock(code: code, language: 'diff'),
+        if (shouldCollapse)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _showAll ? '已显示完整差异' : '已省略 $hiddenLines 行',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: ideMutedTextColor.withValues(alpha: 0.6),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  key: ValueKey<String>(
+                    'agent-file-edit-item-expand-all-${widget.item.id}',
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _showAll = !_showAll;
+                    });
+                  },
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: const Size(0, 28),
+                    textStyle: const TextStyle(fontSize: 11),
+                  ),
+                  child: Text(_showAll ? '收起差异' : '展开全部'),
+                ),
+              ],
             ),
           ),
       ],
@@ -1342,16 +1830,18 @@ class _AgentHighlightedCodeBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: _agentCodeBlockDecoration(),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(6),
-        child: HighlightView(
-          code,
-          language: language,
-          theme: _agentHighlightTheme(context),
-          padding: const EdgeInsets.all(10),
-          textStyle: _agentCodeTextStyle(context),
+    return RepaintBoundary(
+      child: DecoratedBox(
+        decoration: _agentCodeBlockDecoration(),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: HighlightView(
+            code,
+            language: language,
+            theme: _agentHighlightTheme(context),
+            padding: const EdgeInsets.all(10),
+            textStyle: _agentCodeTextStyle(context),
+          ),
         ),
       ),
     );
@@ -1361,25 +1851,35 @@ class _AgentHighlightedCodeBlock extends StatelessWidget {
 /// 工具调用卡片。
 ///
 /// 命令输出、文件变更、计划等 provider 事件都会规约到这个组件展示。
-class _AgentToolCallCard extends StatelessWidget {
-  const _AgentToolCallCard({
-    required this.toolCall,
-    required this.expanded,
-    required this.onToggle,
-  });
+class _AgentToolCallCard extends StatefulWidget {
+  const _AgentToolCallCard({required this.toolCall});
 
   final AgentToolCall toolCall;
-  final bool expanded;
-  final VoidCallback onToggle;
+
+  @override
+  State<_AgentToolCallCard> createState() => _AgentToolCallCardState();
+}
+
+class _AgentToolCallCardState extends State<_AgentToolCallCard> {
+  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
+    final canExpand =
+        widget.toolCall.content != null && widget.toolCall.content!.isNotEmpty;
+
     // 去掉卡片背景/边框，直接以文本行展示工具调用，保留可点击展开行为。
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: InkWell(
-        key: ValueKey<String>('agent-tool-header-${toolCall.id}'),
-        onTap: onToggle,
+        key: ValueKey<String>('agent-tool-header-${widget.toolCall.id}'),
+        onTap: canExpand
+            ? () {
+                setState(() {
+                  _expanded = !_expanded;
+                });
+              }
+            : null,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
@@ -1388,14 +1888,14 @@ class _AgentToolCallCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
-                  _toolIcon(toolCall.kind),
+                  _toolIcon(widget.toolCall.kind),
                   size: 14,
                   color: ideAccentColor.withValues(alpha: 0.7),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    toolCall.title,
+                    widget.toolCall.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -1407,25 +1907,31 @@ class _AgentToolCallCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Icon(
-                  expanded
+                  _expanded
                       ? Icons.keyboard_arrow_down_rounded
                       : Icons.chevron_right_rounded,
                   size: 16,
-                  color: ideMutedTextColor.withValues(alpha: 0.55),
+                  color: canExpand
+                      ? ideMutedTextColor.withValues(alpha: 0.55)
+                      : ideMutedTextColor.withValues(alpha: 0.25),
                 ),
               ],
             ),
-            if (expanded && toolCall.content != null)
-              Padding(
-                key: ValueKey<String>('agent-tool-body-${toolCall.id}'),
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  toolCall.content!,
-                  style: TextStyle(
-                    color: ideMutedTextColor.withValues(alpha: 0.6),
-                    fontFamily: 'Menlo',
-                    fontSize: 11,
-                    height: 1.35,
+            if (_expanded && widget.toolCall.content != null)
+              RepaintBoundary(
+                child: Padding(
+                  key: ValueKey<String>(
+                    'agent-tool-body-${widget.toolCall.id}',
+                  ),
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    widget.toolCall.content!,
+                    style: TextStyle(
+                      color: ideMutedTextColor.withValues(alpha: 0.6),
+                      fontFamily: 'Menlo',
+                      fontSize: 11,
+                      height: 1.35,
+                    ),
                   ),
                 ),
               ),
@@ -1707,6 +2213,31 @@ String _planPreviewText(String markdown) {
   return 'Plan';
 }
 
+bool _shouldCollapseMarkdown(String markdown) {
+  return markdown.length >= _markdownCollapseLengthThreshold ||
+      _codeBlockLineCount(markdown) >= _markdownCollapseLineThreshold;
+}
+
+String _markdownPreviewText(String markdown) {
+  final parts = <String>[];
+  for (final rawLine in LineSplitter.split(markdown)) {
+    final preview = rawLine
+        .trim()
+        .replaceFirst(RegExp(r'^#+\s*'), '')
+        .replaceFirst(RegExp(r'^[-*+]\s+(\[[ xX]\]\s+)?'), '')
+        .replaceAll('`', '')
+        .trim();
+    if (preview.isEmpty) {
+      continue;
+    }
+    parts.add(preview);
+    if (parts.length >= 4 || parts.join(' ').length >= 220) {
+      break;
+    }
+  }
+  return parts.isEmpty ? 'Markdown message' : parts.join('  ');
+}
+
 InlineSpan _fileEditGroupSummarySpan(AgentTimelineFileEditGroup group) {
   final withStats = group.items.where(
     (item) => item.addedLines != null || item.removedLines != null,
@@ -1786,6 +2317,22 @@ String _toolKindLabel(AgentToolKind kind) {
     AgentToolKind.fetch => '获取',
     AgentToolKind.other => '操作',
   };
+}
+
+bool _shouldPreviewCodeBlock(String code, {required int maxLines}) {
+  return _codeBlockLineCount(code) > maxLines;
+}
+
+String _previewCodeBlock(String code, {required int maxLines}) {
+  final lines = LineSplitter.split(code).toList(growable: false);
+  if (lines.length <= maxLines) {
+    return code;
+  }
+  return lines.take(maxLines).join('\n');
+}
+
+int _codeBlockLineCount(String code) {
+  return LineSplitter.split(code).length;
 }
 
 /// 根据工具类型选择图标。
@@ -1922,6 +2469,15 @@ String? _formatDuration(Duration? duration) {
     return '${minutes}m ${seconds}s';
   }
   return '${seconds}s';
+}
+
+String? _threadOpenStatusText(AgentConversationViewModel viewModel) {
+  return switch (viewModel.threadOpenPhase) {
+    AgentThreadOpenPhase.loadingHistory => 'Loading thread history...',
+    AgentThreadOpenPhase.openFailed =>
+      'Thread open failed. Click this thread again to retry.',
+    AgentThreadOpenPhase.idle => null,
+  };
 }
 
 /// token 用量短标签，例如 "1.2k tokens"。

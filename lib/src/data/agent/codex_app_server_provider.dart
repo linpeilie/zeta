@@ -49,8 +49,10 @@ class CodexAppServerAgentProvider implements AgentProvider {
   /// 当前活跃的 Agent 会话，由 thread/start 或 thread/resume 设置。
   AgentSession? _session;
 
-  /// 当前正在执行的回合，由 turn/start 或 turn/started 通知设置。
-  AgentTurn? _activeTurn;
+  /// 各 thread 当前运行中的 turn id。
+  ///
+  /// provider 是全局共享实例，不能再假设同一时间只有一个 active turn。
+  final Map<String, String> _runningTurnIdsBySessionId = <String, String>{};
 
   /// 用户在输入框选择的模型组合，由 config 初始化，运行时通过
   /// [updateModelSelection] 同步；turn/start 会用它覆盖默认 model。
@@ -448,7 +450,7 @@ class CodexAppServerAgentProvider implements AgentProvider {
       },
     );
     final turn = _turnFromResult(result, session.id);
-    _activeTurn = turn;
+    _markRunningTurn(session.id, turn.id);
     _events.add(AgentTurnStartedEvent(turn));
     _log.fine('Started Codex turn ${turn.id}');
     return turn;
@@ -547,6 +549,12 @@ class CodexAppServerAgentProvider implements AgentProvider {
       if (line.trim().isEmpty) {
         return;
       }
+      if (_isIgnorableMcpTransportStderr(line)) {
+        _log.fine(
+          'Ignoring local MCP transport stderr (${line.length} characters)',
+        );
+        return;
+      }
 
       /// stderr 不一定是致命错误，但需要展示给用户/调试面板。
       _log.warning('Codex stderr line received (${line.length} characters)');
@@ -589,7 +597,7 @@ class CodexAppServerAgentProvider implements AgentProvider {
         /// 服务端通知回合已开始，记录活跃回合并发出事件。
         final turn = _turnFromNotification(notification.params);
         if (turn != null) {
-          _activeTurn = turn;
+          _markRunningTurn(turn.sessionId, turn.id);
           _events.add(AgentTurnStartedEvent(turn));
         }
       case 'turn/completed':
@@ -597,15 +605,20 @@ class CodexAppServerAgentProvider implements AgentProvider {
         /// 服务端通知回合已完成，清除活跃回合标记，恢复 ready 状态并发出完成事件。
         final threadId = _string(notification.params['threadId']);
         final turn = _map(notification.params['turn']);
-        final turnId = _string(turn['id']) ?? _activeTurn?.id;
+        final turnId =
+            _string(turn['id']) ??
+            _string(notification.params['turnId']) ??
+            (threadId == null ? null : _runningTurnIdsBySessionId[threadId]);
         if (threadId != null && turnId != null) {
-          _activeTurn = null;
-          _emitStatus(
-            AgentProviderStatus(
-              state: AgentProviderConnectionState.ready,
-              message: '${config.displayName} ready',
-            ),
-          );
+          _completeRunningTurn(threadId, turnId);
+          if (_runningTurnIdsBySessionId.isEmpty) {
+            _emitStatus(
+              AgentProviderStatus(
+                state: AgentProviderConnectionState.ready,
+                message: '${config.displayName} ready',
+              ),
+            );
+          }
           _events.add(
             AgentTurnCompletedEvent(
               sessionId: threadId,
@@ -683,10 +696,16 @@ class CodexAppServerAgentProvider implements AgentProvider {
 
         /// 服务端推送的 token 用量更新，转成 AgentTokenUsageEvent 供 UI 展示成本。
         final usage = _tokenUsageFromNotification(notification.params);
+        final threadId = _string(notification.params['threadId']);
         if (usage != null) {
           _events.add(
             AgentTokenUsageEvent(
-              turnId: _string(notification.params['turnId']) ?? _activeTurn?.id,
+              sessionId: threadId,
+              turnId:
+                  _string(notification.params['turnId']) ??
+                  (threadId == null
+                      ? null
+                      : _runningTurnIdsBySessionId[threadId]),
               tokenUsage: usage,
               raw: notification.params,
             ),
@@ -707,6 +726,8 @@ class CodexAppServerAgentProvider implements AgentProvider {
             message:
                 _string(notification.params['message']) ?? notification.method,
             details: _string(notification.params['details']),
+            sessionId: _string(notification.params['threadId']),
+            turnId: _string(notification.params['turnId']),
             raw: notification.params,
           ),
         );
@@ -795,6 +816,8 @@ class CodexAppServerAgentProvider implements AgentProvider {
           description: reason,
           command: _string(request.params['command']),
           cwd: _string(request.params['cwd']),
+          sessionId: _string(request.params['threadId']),
+          turnId: _string(request.params['turnId']),
           fileChanges: _map(request.params['fileChanges']),
           raw: request.params,
         ),
@@ -1301,6 +1324,8 @@ class CodexAppServerAgentProvider implements AgentProvider {
           : AgentToolStatus.inProgress,
       content: _string(item['text']) ?? _string(item['command']),
       locations: _locations(item),
+      sessionId: _string(notification.params['threadId']),
+      turnId: _string(notification.params['turnId']),
       rawInput: _map(item['rawInput']),
       rawOutput: _map(item['rawOutput']),
       raw: notification.params,
@@ -1370,6 +1395,8 @@ class CodexAppServerAgentProvider implements AgentProvider {
           _string(notification.params['delta']) ??
           _string(notification.params['output']) ??
           _string(notification.params['patch']),
+      sessionId: _string(notification.params['threadId']),
+      turnId: _string(notification.params['turnId']),
       raw: notification.params,
     );
   }
@@ -1427,6 +1454,16 @@ class CodexAppServerAgentProvider implements AgentProvider {
     _events
       ..add(AgentStatusEvent(status))
       ..add(AgentErrorEvent(message: message, details: details));
+  }
+
+  void _markRunningTurn(String sessionId, String turnId) {
+    _runningTurnIdsBySessionId[sessionId] = turnId;
+  }
+
+  void _completeRunningTurn(String sessionId, String turnId) {
+    if (_runningTurnIdsBySessionId[sessionId] == turnId) {
+      _runningTurnIdsBySessionId.remove(sessionId);
+    }
   }
 }
 
@@ -2493,6 +2530,21 @@ String? _string(Object? value) {
     return value;
   }
   return null;
+}
+
+/// 本地 MCP 软件未启动时，Codex/mrmcp 会持续向 stderr 写 transport worker
+/// 断开日志；这类日志不影响 thread 本身，避免刷进用户可见的 Agent 时间线。
+bool _isIgnorableMcpTransportStderr(String line) {
+  if (!line.contains('mrmcp::transport::worker')) {
+    return false;
+  }
+  if (!line.contains('127.0.0.1')) {
+    return false;
+  }
+  return line.contains('Transport channel closed') ||
+      line.contains('http/request failed') ||
+      line.contains('/stream') ||
+      line.contains('/mcp');
 }
 
 /// 从 Codex item 中挑选最适合 UI 展示的标题。

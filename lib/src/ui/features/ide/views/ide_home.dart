@@ -544,13 +544,6 @@ class _IdeHomeState extends State<IdeHome> {
     String projectPath,
     AgentThreadSummary thread,
   ) async {
-    if (_agentViewModel.isRunning) {
-      _showStatus(
-        'Agent is working. Finish or cancel the turn before switching.',
-      );
-      return;
-    }
-
     if (projectPath != _projectPath) {
       await _loadProject(projectPath, activateThreads: false);
     }
