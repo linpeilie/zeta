@@ -1,0 +1,1909 @@
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/main.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/ui/core/app_theme.dart';
+
+import '../../../testing/ide_test_harness.dart';
+
+void main() {
+  final tempDirectories = <Directory>[];
+
+  tearDown(() {
+    for (final directory in tempDirectories) {
+      if (directory.existsSync()) {
+        directory.deleteSync(recursive: true);
+      }
+    }
+    tempDirectories.clear();
+  });
+
+  testWidgets('loads older turns without jumping the viewport', (tester) async {
+    final session = MemorySessionStore();
+    final directory = Directory.systemTemp.createTempSync('zeta_test_');
+    tempDirectories.add(directory);
+    File(
+      '${directory.path}${Platform.pathSeparator}sample.txt',
+    ).writeAsStringSync('hello from zeta');
+
+    final provider = FakeAgentProvider(
+      threadHistories: <String, AgentThreadHistorySnapshot>{
+        'thread-a': AgentThreadHistorySnapshot(
+          threadId: 'thread-a',
+          turns: <AgentHistoryTurn>[
+            for (var turnIndex = 1; turnIndex <= 5; turnIndex += 1)
+              AgentHistoryTurn(
+                id: 'turn-$turnIndex',
+                entries: <AgentHistoryEntry>[
+                  for (
+                    var messageIndex = 0;
+                    messageIndex < 8;
+                    messageIndex += 1
+                  )
+                    AgentHistoryMessageEntry(
+                      id: 'turn-$turnIndex-message-$messageIndex',
+                      role: AgentMessageRole.agent,
+                      text: 'Turn $turnIndex message $messageIndex',
+                    ),
+                ],
+              ),
+          ],
+        ),
+      },
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[
+            agentThread(
+              id: 'thread-a',
+              projectPath: directory.path,
+              title: 'Paged thread',
+            ),
+          ],
+          nextCursor: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        directoryPicker: () async => directory.path,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await tester.runAsync(waitForIo);
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(ValueKey<String>('project-thread-${directory.path}-thread-a')),
+    );
+    await tester.pumpAndSettle();
+
+    final listFinder = find.byKey(const ValueKey('agent-message-list'));
+    final controller = tester
+        .widget<SingleChildScrollView>(listFinder)
+        .controller!;
+    controller.jumpTo(0);
+    await tester.pumpAndSettle();
+
+    final anchorFinder = find.text('Turn 3 message 0');
+    expect(anchorFinder, findsOneWidget);
+    final oldAnchorY = tester.getTopLeft(anchorFinder).dy;
+
+    await tester.tap(
+      find.byKey(const ValueKey('agent-load-older-turns-button')),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(controller.offset, greaterThan(0));
+    expect(tester.getTopLeft(anchorFinder).dy, closeTo(oldAnchorY, 2));
+  });
+
+  testWidgets('does not resume an existing thread until the first send', (
+    tester,
+  ) async {
+    final session = MemorySessionStore();
+    final directory = Directory.systemTemp.createTempSync('zeta_test_');
+    tempDirectories.add(directory);
+    File(
+      '${directory.path}${Platform.pathSeparator}sample.txt',
+    ).writeAsStringSync('hello from zeta');
+
+    final provider = FakeAgentProvider(
+      threadHistories: <String, AgentThreadHistorySnapshot>{
+        'thread-a': AgentThreadHistorySnapshot(
+          threadId: 'thread-a',
+          turns: const <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-a-1',
+              entries: <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'history-user-1',
+                  role: AgentMessageRole.user,
+                  text: 'Pending resume history',
+                ),
+              ],
+            ),
+          ],
+        ),
+      },
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[
+            agentThread(
+              id: 'thread-a',
+              projectPath: directory.path,
+              title: 'Pending thread',
+            ),
+          ],
+          nextCursor: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        directoryPicker: () async => directory.path,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await tester.runAsync(waitForIo);
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(ValueKey<String>('project-thread-${directory.path}-thread-a')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pending resume history'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('agent-thread-open-status')),
+      findsNothing,
+    );
+    expect(provider.resumedSessions, isEmpty);
+
+    final input = find.byKey(const ValueKey('agent-message-input'));
+    await tester.tap(input);
+    await tester.enterText(input, 'draft before first send');
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('agent-send-button')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+    await tester.pumpAndSettle();
+
+    expect(provider.resumedSessions, <String>['thread-a']);
+    expect(provider.sentMessages, <String>['draft before first send']);
+  });
+
+  testWidgets('switches away from a running thread without blocking', (
+    tester,
+  ) async {
+    final session = MemorySessionStore();
+    final directory = Directory.systemTemp.createTempSync('zeta_test_');
+    tempDirectories.add(directory);
+    File(
+      '${directory.path}${Platform.pathSeparator}sample.txt',
+    ).writeAsStringSync('hello from zeta');
+
+    final provider = FakeAgentProvider(
+      threadHistories: <String, AgentThreadHistorySnapshot>{
+        'thread-a': AgentThreadHistorySnapshot(
+          threadId: 'thread-a',
+          turns: const <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-a-1',
+              status: AgentHistoryTurnStatus.running,
+              entries: <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'history-a',
+                  role: AgentMessageRole.user,
+                  text: 'History A',
+                ),
+              ],
+            ),
+          ],
+        ),
+        'thread-b': AgentThreadHistorySnapshot(
+          threadId: 'thread-b',
+          turns: const <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-b-1',
+              entries: <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'history-b',
+                  role: AgentMessageRole.user,
+                  text: 'History B',
+                ),
+              ],
+            ),
+          ],
+        ),
+      },
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[
+            agentThread(
+              id: 'thread-a',
+              projectPath: directory.path,
+              title: 'Thread A',
+            ),
+            agentThread(
+              id: 'thread-b',
+              projectPath: directory.path,
+              title: 'Thread B',
+            ),
+          ],
+          nextCursor: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        directoryPicker: () async => directory.path,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await tester.runAsync(waitForIo);
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(ValueKey<String>('project-thread-${directory.path}-thread-a')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('History A'), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-cancel-button')), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(ValueKey<String>('project-thread-${directory.path}-thread-b')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('History B'), findsOneWidget);
+    expect(find.text('History A'), findsNothing);
+    expect(
+      find.textContaining('Finish or cancel the turn before switching.'),
+      findsNothing,
+    );
+    expect(
+      provider.readHistories,
+      containsAll(<String>['thread-a', 'thread-b']),
+    );
+  });
+
+  testWidgets(
+    'shows Cancel for a running thread until text is entered, then steers on Send',
+    (tester) async {
+      final session = MemorySessionStore();
+      final directory = Directory.systemTemp.createTempSync('zeta_test_');
+      tempDirectories.add(directory);
+      File(
+        '${directory.path}${Platform.pathSeparator}sample.txt',
+      ).writeAsStringSync('hello from zeta');
+
+      final provider = FakeAgentProvider(
+        threadHistories: <String, AgentThreadHistorySnapshot>{
+          'thread-a': AgentThreadHistorySnapshot(
+            threadId: 'thread-a',
+            turns: const <AgentHistoryTurn>[
+              AgentHistoryTurn(
+                id: 'turn-a-1',
+                status: AgentHistoryTurnStatus.running,
+                entries: <AgentHistoryEntry>[
+                  AgentHistoryMessageEntry(
+                    id: 'history-a',
+                    role: AgentMessageRole.user,
+                    text: 'History A',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        },
+        threadPages: <AgentThreadPage>[
+          AgentThreadPage(
+            threads: <AgentThreadSummary>[
+              agentThread(
+                id: 'thread-a',
+                projectPath: directory.path,
+                title: 'Thread A',
+              ),
+            ],
+            nextCursor: null,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MainApp(
+          enableNativeWindowFrame: false,
+          directoryPicker: () async => directory.path,
+          sessionLoader: session.load,
+          sessionSaver: session.save,
+          agentProviderFactory: FakeAgentProviderFactory(provider),
+          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        ),
+      );
+
+      await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+      await tester.runAsync(waitForIo);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(
+          ValueKey<String>('project-thread-${directory.path}-thread-a'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('agent-cancel-button')), findsOneWidget);
+      expect(find.byKey(const ValueKey('agent-send-button')), findsNothing);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('agent-message-input')),
+        'follow up',
+      );
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('agent-send-button')), findsOneWidget);
+      expect(find.byKey(const ValueKey('agent-cancel-button')), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+      await tester.pumpAndSettle();
+
+      expect(provider.resumedSessions, <String>['thread-a']);
+      expect(provider.sentMessages, isEmpty);
+      expect(provider.steeredMessages, <String>['follow up']);
+    },
+  );
+
+  testWidgets(
+    'keeps history visible and requires reselect after resume failure on first send',
+    (tester) async {
+      final session = MemorySessionStore();
+      final directory = Directory.systemTemp.createTempSync('zeta_test_');
+      tempDirectories.add(directory);
+      File(
+        '${directory.path}${Platform.pathSeparator}sample.txt',
+      ).writeAsStringSync('hello from zeta');
+      var resumeAttempts = 0;
+
+      final provider = FakeAgentProvider(
+        onResumeSession: (sessionId) {
+          resumeAttempts += 1;
+          if (resumeAttempts == 1) {
+            return Future<AgentSession>.error(StateError('resume failed'));
+          }
+          return Future<AgentSession>.value(
+            AgentSession(
+              id: sessionId,
+              providerId: defaultAgentProviderId,
+              title: 'Recovered thread',
+            ),
+          );
+        },
+        threadHistories: <String, AgentThreadHistorySnapshot>{
+          'thread-a': AgentThreadHistorySnapshot(
+            threadId: 'thread-a',
+            turns: const <AgentHistoryTurn>[
+              AgentHistoryTurn(
+                id: 'turn-a-1',
+                entries: <AgentHistoryEntry>[
+                  AgentHistoryMessageEntry(
+                    id: 'history-user-1',
+                    role: AgentMessageRole.user,
+                    text: 'History survives failure',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        },
+        threadPages: <AgentThreadPage>[
+          AgentThreadPage(
+            threads: <AgentThreadSummary>[
+              agentThread(
+                id: 'thread-a',
+                projectPath: directory.path,
+                title: 'Retryable thread',
+              ),
+            ],
+            nextCursor: null,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MainApp(
+          enableNativeWindowFrame: false,
+          directoryPicker: () async => directory.path,
+          sessionLoader: session.load,
+          sessionSaver: session.save,
+          agentProviderFactory: FakeAgentProviderFactory(provider),
+          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        ),
+      );
+
+      await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+      await tester.runAsync(waitForIo);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(
+          ValueKey<String>('project-thread-${directory.path}-thread-a'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('History survives failure'), findsOneWidget);
+      expect(
+        find.text('Thread open failed. Click this thread again to retry.'),
+        findsNothing,
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('agent-message-input')),
+        'first try',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('History survives failure'), findsOneWidget);
+      expect(
+        find.text('Thread open failed. Click this thread again to retry.'),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('agent-send-button')), findsNothing);
+
+      await tester.tap(
+        find.byKey(
+          ValueKey<String>('project-thread-${directory.path}-thread-a'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('History survives failure'), findsOneWidget);
+      expect(
+        find.text('Thread open failed. Click this thread again to retry.'),
+        findsNothing,
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('agent-message-input')),
+        'second try',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+      await tester.pumpAndSettle();
+
+      expect(resumeAttempts, 2);
+      expect(headerTitleText(tester), 'Recovered thread');
+      expect(provider.sentMessages, <String>['second try']);
+    },
+  );
+
+  testWidgets(
+    'shows answered request_user_input entries without placeholders',
+    (tester) async {
+      final session = MemorySessionStore();
+      final directory = Directory.systemTemp.createTempSync('zeta_test_');
+      tempDirectories.add(directory);
+      File(
+        '${directory.path}${Platform.pathSeparator}sample.txt',
+      ).writeAsStringSync('hello from zeta');
+      final now = DateTime.now();
+
+      final provider = FakeAgentProvider(
+        threadHistories: <String, AgentThreadHistorySnapshot>{
+          'thread-a': AgentThreadHistorySnapshot(
+            threadId: 'thread-a',
+            turns: <AgentHistoryTurn>[
+              const AgentHistoryTurn(
+                id: 'turn-a-qa',
+                entries: <AgentHistoryEntry>[
+                  AgentHistoryEventEntry(
+                    id: 'history-event-qa',
+                    kind: AgentHistoryEventKind.permission,
+                    title: 'Requested user input',
+                    qaPairs: <AgentUserInputQaPair>[
+                      AgentUserInputQaPair(
+                        questionId: 'command_scope',
+                        question: '命令集要把哪些条目合并进去？',
+                        answers: <String>['所有工具调用和搜索事件'],
+                      ),
+                      AgentUserInputQaPair(
+                        questionId: 'group_target',
+                        question: '这个折叠分组要应用到哪里？',
+                        answers: <String>['Agent 时间线'],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        },
+        threadPages: <AgentThreadPage>[
+          AgentThreadPage(
+            threads: <AgentThreadSummary>[
+              agentThread(
+                id: 'thread-a',
+                projectPath: directory.path,
+                title: 'Answered thread',
+                preview: 'Need answers',
+                lastActiveAt: now.subtract(const Duration(minutes: 5)),
+              ),
+            ],
+            nextCursor: null,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MainApp(
+          enableNativeWindowFrame: false,
+          directoryPicker: () async => directory.path,
+          sessionLoader: session.load,
+          sessionSaver: session.save,
+          agentProviderFactory: FakeAgentProviderFactory(provider),
+          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        ),
+      );
+
+      await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+      await tester.runAsync(waitForIo);
+      await tester.pump();
+
+      await tester.tap(
+        find.byKey(
+          ValueKey<String>('project-thread-${directory.path}-thread-a'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('命令集要把哪些条目合并进去？'), findsOneWidget);
+      expect(find.text('所有工具调用和搜索事件'), findsOneWidget);
+      expect(find.text('这个折叠分组要应用到哪里？'), findsOneWidget);
+      expect(find.text('Agent 时间线'), findsOneWidget);
+      expect(find.text('—'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'groups historical tools and searches into a collapsed command set',
+    (tester) async {
+      final session = MemorySessionStore();
+      final directory = Directory.systemTemp.createTempSync('zeta_test_');
+      tempDirectories.add(directory);
+      File(
+        '${directory.path}${Platform.pathSeparator}sample.txt',
+      ).writeAsStringSync('hello from zeta');
+
+      final provider = FakeAgentProvider(
+        threadHistories: <String, AgentThreadHistorySnapshot>{
+          'thread-a': AgentThreadHistorySnapshot(
+            threadId: 'thread-a',
+            turns: <AgentHistoryTurn>[
+              AgentHistoryTurn(
+                id: 'turn-a-1',
+                entries: <AgentHistoryEntry>[
+                  const AgentHistoryMessageEntry(
+                    id: 'history-user-1',
+                    role: AgentMessageRole.user,
+                    text: 'Please summarize the run',
+                  ),
+                  AgentHistoryToolEntry(
+                    toolCall: AgentToolCall(
+                      id: 'history-tool-1',
+                      title: 'Run tests',
+                      kind: AgentToolKind.execute,
+                      status: AgentToolStatus.completed,
+                      content: 'flutter test\nhidden log line',
+                    ),
+                  ),
+                  const AgentHistoryEventEntry(
+                    id: 'history-search-1',
+                    kind: AgentHistoryEventKind.search,
+                    title: 'Web search',
+                    description: 'OpenAI docs',
+                    content: 'OpenAI docs\nHidden result line',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        },
+        threadPages: <AgentThreadPage>[
+          AgentThreadPage(
+            threads: <AgentThreadSummary>[
+              agentThread(
+                id: 'thread-a',
+                projectPath: directory.path,
+                title: 'Grouped history',
+              ),
+            ],
+            nextCursor: null,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MainApp(
+          enableNativeWindowFrame: false,
+          directoryPicker: () async => directory.path,
+          sessionLoader: session.load,
+          sessionSaver: session.save,
+          agentProviderFactory: FakeAgentProviderFactory(provider),
+          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        ),
+      );
+
+      await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+      await tester.runAsync(waitForIo);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(
+          ValueKey<String>('project-thread-${directory.path}-thread-a'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('1 次执行 · 1 次搜索'), findsOneWidget);
+      expect(find.text('Run tests'), findsNothing);
+      expect(find.text('OpenAI docs'), findsNothing);
+      expect(find.text('hidden log line'), findsNothing);
+      expect(find.text('Hidden result line'), findsNothing);
+
+      await tester.tap(
+        find.byKey(
+          ValueKey<String>(
+            'agent-command-group-header-${commandGroupId('turn-a-1', 'tool-history-tool-1')}',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Run tests'), findsOneWidget);
+      expect(find.text('Web search · OpenAI docs'), findsOneWidget);
+      expect(find.text('flutter test'), findsNothing);
+      expect(find.text('OpenAI docs'), findsNothing);
+      expect(find.text('hidden log line'), findsNothing);
+      expect(find.text('Hidden result line'), findsNothing);
+      expect(
+        find.byKey(const ValueKey<String>('agent-tool-body-history-tool-1')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'renders file edits in a separate file edit group with file-level details',
+    (tester) async {
+      final session = MemorySessionStore();
+      final directory = Directory.systemTemp.createTempSync('zeta_test_');
+      tempDirectories.add(directory);
+      File(
+        '${directory.path}${Platform.pathSeparator}sample.txt',
+      ).writeAsStringSync('hello from zeta');
+
+      final provider = FakeAgentProvider(
+        threadHistories: <String, AgentThreadHistorySnapshot>{
+          'thread-a': AgentThreadHistorySnapshot(
+            threadId: 'thread-a',
+            turns: <AgentHistoryTurn>[
+              AgentHistoryTurn(
+                id: 'turn-a-1',
+                entries: <AgentHistoryEntry>[
+                  const AgentHistoryMessageEntry(
+                    id: 'history-user-1',
+                    role: AgentMessageRole.user,
+                    text: 'Apply edits',
+                  ),
+                  AgentHistoryToolEntry(
+                    toolCall: AgentToolCall(
+                      id: 'history-edit-1',
+                      title: 'Apply patch',
+                      kind: AgentToolKind.edit,
+                      status: AgentToolStatus.completed,
+                      locations: <String>['lib/main.dart', 'README.md'],
+                      rawOutput: patchApplyChanges(<String, String?>{
+                        'lib/main.dart': '@@ -1 +1 @@\n-old line\n+new line\n',
+                        'README.md': '@@ -0,0 +1 @@\n+docs line\n',
+                      }),
+                    ),
+                  ),
+                  AgentHistoryToolEntry(
+                    toolCall: AgentToolCall(
+                      id: 'history-tool-1',
+                      title: 'Run tests',
+                      kind: AgentToolKind.execute,
+                      status: AgentToolStatus.completed,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        },
+        threadPages: <AgentThreadPage>[
+          AgentThreadPage(
+            threads: <AgentThreadSummary>[
+              agentThread(
+                id: 'thread-a',
+                projectPath: directory.path,
+                title: 'Edit group history',
+              ),
+            ],
+            nextCursor: null,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MainApp(
+          enableNativeWindowFrame: false,
+          directoryPicker: () async => directory.path,
+          sessionLoader: session.load,
+          sessionSaver: session.save,
+          agentProviderFactory: FakeAgentProviderFactory(provider),
+          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        ),
+      );
+
+      await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+      await tester.runAsync(waitForIo);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(
+          ValueKey<String>('project-thread-${directory.path}-thread-a'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('2 个文件 · +2 / -1', findRichText: true), findsOneWidget);
+      expect(find.text('1 次执行'), findsOneWidget);
+      expect(find.text('Run tests'), findsNothing);
+
+      await tester.tap(
+        find.byKey(
+          ValueKey<String>(
+            'agent-file-edit-group-header-${fileEditGroupId('turn-a-1', 'history-edit-1')}',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('main.dart'), findsOneWidget);
+      expect(find.text('README.md'), findsOneWidget);
+      expect(find.text('+1 / -1', findRichText: true), findsOneWidget);
+      expect(find.text('+1 / -0', findRichText: true), findsOneWidget);
+      expect(find.text('Run tests'), findsNothing);
+
+      final historyGroupSummaryFinder = find.byKey(
+        ValueKey<String>(
+          'agent-file-edit-group-summary-${fileEditGroupId('turn-a-1', 'history-edit-1')}',
+        ),
+      );
+      final historyGroupSummary = tester.widget<Text>(
+        historyGroupSummaryFinder,
+      );
+      final historyGroupSpan = historyGroupSummary.textSpan! as TextSpan;
+      expect(historyGroupSpan.toPlainText(), '2 个文件 · +2 / -1');
+      final historyGroupChildren = historyGroupSpan.children!;
+      expect(
+        (historyGroupChildren[2] as TextSpan).style?.color,
+        ideAccentColor.withValues(alpha: 0.98),
+      );
+      expect(
+        (historyGroupChildren[4] as TextSpan).style?.color,
+        ideWarningColor.withValues(alpha: 0.98),
+      );
+
+      final historyLineStatsFinder = find.byKey(
+        const ValueKey<String>(
+          'agent-file-edit-item-line-stats-file-edit-history-edit-1-lib/main.dart',
+        ),
+      );
+      final historyLineStats = tester.widget<Text>(historyLineStatsFinder);
+      final historyLineSpan = historyLineStats.textSpan! as TextSpan;
+      expect(historyLineSpan.toPlainText(), '+1 / -1');
+      final historyLineChildren = historyLineSpan.children!;
+      expect(
+        (historyLineChildren[0] as TextSpan).style?.color,
+        ideAccentColor.withValues(alpha: 0.98),
+      );
+      expect(
+        (historyLineChildren[2] as TextSpan).style?.color,
+        ideWarningColor.withValues(alpha: 0.98),
+      );
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>(
+            'agent-file-edit-item-row-file-edit-history-edit-1-lib/main.dart',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(
+          const ValueKey<String>(
+            'agent-file-edit-item-details-file-edit-history-edit-1-lib/main.dart',
+          ),
+        ),
+        findsOneWidget,
+      );
+      final historyDetailsFinder = find.byKey(
+        const ValueKey<String>(
+          'agent-file-edit-item-details-file-edit-history-edit-1-lib/main.dart',
+        ),
+      );
+      expect(
+        find.descendant(
+          of: historyDetailsFinder,
+          matching: find.textContaining('@@ -1 +1 @@', findRichText: true),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: historyDetailsFinder,
+          matching: find.textContaining('+new line', findRichText: true),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: historyDetailsFinder,
+          matching: find.textContaining('+docs line', findRichText: true),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: historyDetailsFinder,
+          matching: find.textContaining('*** Begin Patch', findRichText: true),
+        ),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets('disables file edit item expansion when no details exist', (
+    tester,
+  ) async {
+    final session = MemorySessionStore();
+    final directory = Directory.systemTemp.createTempSync('zeta_test_');
+    tempDirectories.add(directory);
+    File(
+      '${directory.path}${Platform.pathSeparator}sample.txt',
+    ).writeAsStringSync('hello from zeta');
+
+    final provider = FakeAgentProvider(
+      threadHistories: <String, AgentThreadHistorySnapshot>{
+        'thread-a': AgentThreadHistorySnapshot(
+          threadId: 'thread-a',
+          turns: <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-a-1',
+              entries: <AgentHistoryEntry>[
+                AgentHistoryToolEntry(
+                  toolCall: AgentToolCall(
+                    id: 'history-edit-nodetail',
+                    title: 'File change',
+                    kind: AgentToolKind.edit,
+                    status: AgentToolStatus.completed,
+                    rawOutput: patchApplyChanges(<String, String?>{
+                      'lib/main.dart': null,
+                    }),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      },
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[
+            agentThread(
+              id: 'thread-a',
+              projectPath: directory.path,
+              title: 'No detail edits',
+            ),
+          ],
+          nextCursor: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        directoryPicker: () async => directory.path,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await tester.runAsync(waitForIo);
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(ValueKey<String>('project-thread-${directory.path}-thread-a')),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(
+        ValueKey<String>(
+          'agent-file-edit-group-header-${fileEditGroupId('turn-a-1', 'history-edit-nodetail')}',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final toggleFinder = find.byKey(
+      const ValueKey<String>(
+        'agent-file-edit-item-toggle-file-edit-history-edit-nodetail-lib/main.dart',
+      ),
+    );
+    expect(toggleFinder, findsOneWidget);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey<String>(
+          'agent-file-edit-item-row-file-edit-history-edit-nodetail-lib/main.dart',
+        ),
+      ),
+      warnIfMissed: false,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(
+        const ValueKey<String>(
+          'agent-file-edit-item-details-file-edit-history-edit-nodetail-lib/main.dart',
+        ),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('shows live header token usage while a turn is running', (
+    tester,
+  ) async {
+    final session = MemorySessionStore();
+    final provider = FakeAgentProvider(
+      completeTurns: false,
+      sessionTitle: 'Running thread',
+      tokenUsageDuringTurn: const AgentTokenUsage(
+        inputTokens: 1000,
+        cachedInputTokens: 200,
+        outputTokens: 300,
+        reasoningOutputTokens: 50,
+        totalTokens: 1300,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('agent-message-input')),
+      'Keep running',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+    await tester.pumpAndSettle();
+
+    expect(headerTitleText(tester), 'Running thread');
+    expect(
+      find.byKey(const ValueKey('agent-header-running-icon')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('agent-header-token')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('agent-header-token')),
+        matching: find.text('1.3k tokens'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('keeps the flattened agent pane stable in a narrow window', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(920, 820);
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final session = MemorySessionStore();
+    final provider = FakeAgentProvider(
+      completeTurns: false,
+      sessionTitle: 'Long running thread title for narrow layout',
+      tokenUsageDuringTurn: const AgentTokenUsage(
+        inputTokens: 3200,
+        cachedInputTokens: 1200,
+        outputTokens: 640,
+        reasoningOutputTokens: 180,
+        totalTokens: 3840,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('agent-message-input')),
+      'Keep the layout stable',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('agent-pane-host')), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-header-token')), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-cancel-button')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('keeps command group scroll position when toggling grouped history', (
+    tester,
+  ) async {
+    final session = MemorySessionStore();
+    final directory = Directory.systemTemp.createTempSync('zeta_test_');
+    tempDirectories.add(directory);
+    File(
+      '${directory.path}${Platform.pathSeparator}sample.txt',
+    ).writeAsStringSync('hello from zeta');
+
+    final provider = FakeAgentProvider(
+      threadHistories: <String, AgentThreadHistorySnapshot>{
+        'thread-a': AgentThreadHistorySnapshot(
+          threadId: 'thread-a',
+          turns: <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-a-1',
+              entries: <AgentHistoryEntry>[
+                const AgentHistoryMessageEntry(
+                  id: 'history-user-1',
+                  role: AgentMessageRole.user,
+                  text: 'Scroll test question',
+                ),
+                AgentHistoryToolEntry(
+                  toolCall: AgentToolCall(
+                    id: 'history-tool-a',
+                    title: 'History command',
+                    kind: AgentToolKind.execute,
+                    status: AgentToolStatus.completed,
+                    content: 'flutter test',
+                  ),
+                ),
+                const AgentHistoryEventEntry(
+                  id: 'history-search-a',
+                  kind: AgentHistoryEventKind.search,
+                  title: 'Tool search',
+                  description: 'rip_grep_packages',
+                ),
+                for (var index = 0; index < 30; index++)
+                  AgentHistoryMessageEntry(
+                    id: 'history-agent-$index',
+                    role: AgentMessageRole.agent,
+                    text: 'Trailing message $index',
+                  ),
+              ],
+            ),
+          ],
+        ),
+      },
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[
+            agentThread(
+              id: 'thread-a',
+              projectPath: directory.path,
+              title: 'Scrollable grouped thread',
+            ),
+          ],
+          nextCursor: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        directoryPicker: () async => directory.path,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await tester.runAsync(waitForIo);
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(ValueKey<String>('project-thread-${directory.path}-thread-a')),
+    );
+    await tester.pumpAndSettle();
+
+    final listFinder = find.byKey(const ValueKey('agent-message-list'));
+    final controller = tester
+        .widget<SingleChildScrollView>(listFinder)
+        .controller!;
+    controller.jumpTo(0);
+    await tester.pumpAndSettle();
+    expect(controller.offset, 0);
+
+    await tester.tap(
+      find.byKey(
+        ValueKey<String>(
+          'agent-command-group-header-${commandGroupId('turn-a-1', 'tool-history-tool-a')}',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(controller.offset, lessThan(40));
+    expect(find.text('History command'), findsOneWidget);
+    expect(find.text('Tool search'), findsOneWidget);
+    expect(find.text('rip_grep_packages'), findsNothing);
+    expect(
+      find.byKey(
+        ValueKey<String>(
+          'agent-command-group-body-${commandGroupId('turn-a-1', 'tool-history-tool-a')}',
+        ),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('keeps single command group scroll position stable', (
+    tester,
+  ) async {
+    final session = MemorySessionStore();
+    final directory = Directory.systemTemp.createTempSync('zeta_test_');
+    tempDirectories.add(directory);
+    File(
+      '${directory.path}${Platform.pathSeparator}sample.txt',
+    ).writeAsStringSync('hello from zeta');
+
+    final provider = FakeAgentProvider(
+      threadHistories: <String, AgentThreadHistorySnapshot>{
+        'thread-a': AgentThreadHistorySnapshot(
+          threadId: 'thread-a',
+          turns: <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-a-1',
+              entries: <AgentHistoryEntry>[
+                const AgentHistoryMessageEntry(
+                  id: 'history-user-1',
+                  role: AgentMessageRole.user,
+                  text: 'Scroll test question',
+                ),
+                AgentHistoryToolEntry(
+                  toolCall: AgentToolCall(
+                    id: 'history-tool-jump',
+                    title: 'History command',
+                    kind: AgentToolKind.execute,
+                    status: AgentToolStatus.completed,
+                    content: 'long output',
+                  ),
+                ),
+                for (var index = 0; index < 30; index++)
+                  AgentHistoryMessageEntry(
+                    id: 'history-agent-$index',
+                    role: AgentMessageRole.agent,
+                    text: 'Trailing message $index',
+                  ),
+              ],
+            ),
+          ],
+        ),
+      },
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[
+            agentThread(
+              id: 'thread-a',
+              projectPath: directory.path,
+              title: 'Scrollable thread',
+            ),
+          ],
+          nextCursor: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        directoryPicker: () async => directory.path,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await tester.runAsync(waitForIo);
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(ValueKey<String>('project-thread-${directory.path}-thread-a')),
+    );
+    await tester.pumpAndSettle();
+
+    final listFinder = find.byKey(const ValueKey('agent-message-list'));
+    final controller = tester
+        .widget<SingleChildScrollView>(listFinder)
+        .controller!;
+    controller.jumpTo(0);
+    await tester.pumpAndSettle();
+    expect(controller.offset, 0);
+
+    await tester.tap(
+      find.byKey(
+        ValueKey<String>(
+          'agent-command-group-header-${commandGroupId('turn-a-1', 'tool-history-tool-jump')}',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(controller.offset, lessThan(40));
+    expect(find.text('History command'), findsOneWidget);
+    expect(find.text('long output'), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('agent-tool-body-history-tool-jump')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('adds local agent messages from the composer', (tester) async {
+    final session = MemorySessionStore();
+    final provider = FakeAgentProvider();
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('agent-message-input')),
+      'Summarize the current work',
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Summarize the current work'), findsOneWidget);
+    expect(
+      find.textContaining('Fake response from provider', findRichText: true),
+      findsOneWidget,
+    );
+    expect(provider.sentMessages.single, 'Summarize the current work');
+  });
+
+  testWidgets('keeps manual scroll position during live agent streaming', (
+    tester,
+  ) async {
+    final session = MemorySessionStore();
+    final provider = FakeAgentProvider(
+      completeTurns: false,
+      responseText: List<String>.generate(
+        160,
+        (index) => 'Streaming line $index',
+      ).join('\n'),
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('agent-message-input')),
+      'Keep streaming',
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+    await tester.pumpAndSettle();
+
+    final listFinder = find.byKey(const ValueKey('agent-message-list'));
+    final controller = tester
+        .widget<SingleChildScrollView>(listFinder)
+        .controller!;
+    expect(controller.position.maxScrollExtent, greaterThan(400));
+
+    controller.jumpTo(0);
+    await tester.pumpAndSettle();
+    expect(controller.offset, 0);
+
+    provider.emit(
+      const AgentMessageDeltaEvent(
+        messageId: 'message-1',
+        delta: '\nFollow-up streaming line',
+        role: AgentMessageRole.agent,
+        phase: AgentMessagePhase.response,
+        sessionId: 'thread-1',
+        turnId: 'turn-1',
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(controller.offset, lessThan(40));
+  });
+
+  testWidgets('merges live tool calls into a single command group', (
+    tester,
+  ) async {
+    final session = MemorySessionStore();
+    final provider = FakeAgentProvider(completeTurns: false);
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('agent-message-input')),
+      'Run grouped tools',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+    await tester.pumpAndSettle();
+
+    provider.emit(
+      const AgentToolCallEvent(
+        AgentToolCall(
+          id: 'live-tool-1',
+          title: 'Run tests',
+          kind: AgentToolKind.execute,
+          status: AgentToolStatus.inProgress,
+          content: 'flutter test\nhidden log line',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 次执行'), findsOneWidget);
+    expect(find.text('Run tests'), findsNothing);
+
+    provider.emit(
+      const AgentToolCallEvent(
+        AgentToolCall(
+          id: 'live-tool-2',
+          title: 'Tool search',
+          kind: AgentToolKind.search,
+          status: AgentToolStatus.completed,
+          content: 'rip_grep_packages\nhidden result line',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 次执行 · 1 次搜索'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('agent-tool-header-live-tool-1')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('agent-tool-header-live-tool-2')),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(
+        ValueKey<String>(
+          'agent-command-group-header-${commandGroupId('turn-1', 'tool-live-tool-1')}',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Run tests'), findsOneWidget);
+    expect(find.text('Tool search'), findsOneWidget);
+    expect(find.text('flutter test'), findsNothing);
+    expect(find.text('rip_grep_packages'), findsNothing);
+    expect(find.text('hidden log line'), findsNothing);
+    expect(find.text('hidden result line'), findsNothing);
+  });
+
+  testWidgets('renders live file edits as a separate expandable file edit group', (
+    tester,
+  ) async {
+    final session = MemorySessionStore();
+    final provider = FakeAgentProvider(completeTurns: false);
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('agent-message-input')),
+      'Apply a patch',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+    await tester.pumpAndSettle();
+
+    provider.emit(
+      const AgentToolCallEvent(
+        AgentToolCall(
+          id: 'live-edit-1',
+          title: 'Apply patch',
+          kind: AgentToolKind.edit,
+          status: AgentToolStatus.inProgress,
+          locations: <String>['lib/main.dart', 'README.md'],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 个文件', findRichText: true), findsOneWidget);
+
+    provider.emit(
+      AgentToolCallEvent(
+        AgentToolCall(
+          id: 'live-edit-1',
+          title: 'Apply patch',
+          kind: AgentToolKind.edit,
+          status: AgentToolStatus.completed,
+          locations: const <String>['lib/main.dart', 'README.md'],
+          rawOutput: patchApplyChanges(<String, String?>{
+            'lib/main.dart': '@@ -1 +1 @@\n-old line\n+new line\n',
+            'README.md': '@@ -0,0 +1 @@\n+docs line\n',
+          }),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 个文件 · +2 / -1', findRichText: true), findsOneWidget);
+    expect(
+      find.byKey(
+        ValueKey<String>(
+          'agent-file-edit-group-header-${fileEditGroupId('turn-1', 'live-edit-1')}',
+        ),
+      ),
+      findsOneWidget,
+    );
+
+    provider.emit(
+      const AgentToolCallEvent(
+        AgentToolCall(
+          id: 'live-tool-3',
+          title: 'Run tests',
+          kind: AgentToolKind.execute,
+          status: AgentToolStatus.completed,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 次执行'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(
+        ValueKey<String>(
+          'agent-file-edit-group-header-${fileEditGroupId('turn-1', 'live-edit-1')}',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('main.dart'), findsOneWidget);
+    expect(find.text('README.md'), findsOneWidget);
+    expect(find.text('+1 / -1', findRichText: true), findsOneWidget);
+    expect(find.text('+1 / -0', findRichText: true), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey<String>(
+          'agent-file-edit-item-row-file-edit-live-edit-1-lib/main.dart',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(
+        const ValueKey<String>(
+          'agent-file-edit-item-details-file-edit-live-edit-1-lib/main.dart',
+        ),
+      ),
+      findsOneWidget,
+    );
+    final liveDetailsFinder = find.byKey(
+      const ValueKey<String>(
+        'agent-file-edit-item-details-file-edit-live-edit-1-lib/main.dart',
+      ),
+    );
+    expect(
+      find.descendant(
+        of: liveDetailsFinder,
+        matching: find.textContaining('@@ -1 +1 @@', findRichText: true),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: liveDetailsFinder,
+        matching: find.textContaining('+new line', findRichText: true),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: liveDetailsFinder,
+        matching: find.textContaining('+docs line', findRichText: true),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: liveDetailsFinder,
+        matching: find.textContaining('*** Begin Patch', findRichText: true),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('shows completed commentary messages by default', (tester) async {
+    final session = MemorySessionStore();
+    final provider = FakeAgentProvider(
+      responseText: 'Hidden commentary with `code`',
+      emitCompletedCommentary: true,
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('agent-message-input')),
+      'Explain internally',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('Hidden commentary', findRichText: true),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('renders ordinary agent messages as Markdown', (tester) async {
+    final session = MemorySessionStore();
+    final provider = FakeAgentProvider(
+      responseText:
+          '- First markdown item\n\nInline `code` sample\n\n```dart\nvoid main() {}\n```',
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('agent-message-input')),
+      'Render markdown',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('First markdown item', findRichText: true),
+      findsOneWidget,
+    );
+    expect(find.textContaining('code', findRichText: true), findsWidgets);
+    expect(
+      find.textContaining('void main', findRichText: true),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('renders plan messages as collapsible markdown cards', (
+    tester,
+  ) async {
+    final session = MemorySessionStore();
+    final directory = Directory.systemTemp.createTempSync('zeta_test_');
+    tempDirectories.add(directory);
+    final now = DateTime.now();
+    final provider = FakeAgentProvider(
+      threadHistories: <String, AgentThreadHistorySnapshot>{
+        'thread-plan': AgentThreadHistorySnapshot(
+          threadId: 'thread-plan',
+          turns: <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-plan',
+              entries: <AgentHistoryEntry>[
+                const AgentHistoryMessageEntry(
+                  id: 'user-plan',
+                  role: AgentMessageRole.user,
+                  text: 'Show the plan',
+                ),
+                AgentHistoryMessageEntry(
+                  id: 'turn-plan-plan',
+                  role: AgentMessageRole.agent,
+                  text:
+                      '# 命令集折叠分组\n\n## Summary\n\n- 第一项\n\n```dart\nvoid main() {}\n```',
+                  status: AgentMessageStatus.completed,
+                  raw: <String, Object?>{'type': 'plan'},
+                ),
+              ],
+            ),
+          ],
+        ),
+      },
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[
+            agentThread(
+              id: 'thread-plan',
+              projectPath: directory.path,
+              title: 'Plan thread',
+              lastActiveAt: now,
+            ),
+          ],
+          nextCursor: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        directoryPicker: () async => directory.path,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await tester.runAsync(waitForIo);
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(
+        ValueKey<String>('project-thread-${directory.path}-thread-plan'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('agent-plan-card-turn-plan-plan')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('agent-plan-preview-turn-plan-plan')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('agent-plan-body-turn-plan-plan')),
+      findsNothing,
+    );
+    expect(find.text('命令集折叠分组'), findsOneWidget);
+    expect(find.textContaining('第一项', findRichText: true), findsNothing);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('agent-plan-toggle-turn-plan-plan')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('agent-plan-body-turn-plan-plan')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('第一项', findRichText: true), findsOneWidget);
+    expect(
+      find.textContaining('void main', findRichText: true),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('renders tool calls, approval cards, and approval responses', (
+    tester,
+  ) async {
+    final session = MemorySessionStore();
+    final provider = FakeAgentProvider(emitToolAndApproval: true);
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('agent-message-input')),
+      'Run the checks',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 次执行'), findsOneWidget);
+    expect(find.text('Run tests'), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('agent-tool-body-tool-1')),
+      findsNothing,
+    );
+    expect(find.text('Approve command'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(
+        ValueKey<String>(
+          'agent-command-group-header-${commandGroupId('turn-1', 'tool-tool-1')}',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Run tests'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('agent-tool-body-tool-1')),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('agent-permission-approve-approval-1')),
+    );
+    await tester.pump();
+
+    expect(provider.approvedRequests, <String>['approval-1']);
+  });
+
+  testWidgets('cancel button interrupts an active provider turn', (
+    tester,
+  ) async {
+    final session = MemorySessionStore();
+    final provider = FakeAgentProvider(completeTurns: false);
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('agent-message-input')),
+      'Keep working',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('agent-cancel-button')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('agent-cancel-button')));
+    await tester.pump();
+
+    expect(provider.cancelledTurns, <String>['turn-1']);
+  });
+
+  testWidgets('shows provider unavailable when the provider cannot start', (
+    tester,
+  ) async {
+    final session = MemorySessionStore();
+    final provider = FakeAgentProvider(unavailable: true);
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('agent-message-input')),
+      'Hello',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('codex missing'), findsWidgets);
+  });
+}

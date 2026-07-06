@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import 'tree_view_controller.dart';
-import 'tree_view_theme.dart';
-import 'tree_node.dart';
-import 'models/node.dart';
+import 'package:flutter_treeview/src/tree_view_controller.dart';
+import 'package:flutter_treeview/src/tree_view_theme.dart';
+import 'package:flutter_treeview/src/tree_node.dart';
+import 'package:flutter_treeview/src/models/node.dart';
 
 /// Defines the [TreeView] widget.
 ///

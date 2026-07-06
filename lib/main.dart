@@ -4,11 +4,11 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
-import 'src/app/app.dart';
-import 'src/app/window_bootstrap.dart';
-import 'src/core/logging/app_logging.dart';
+import 'package:zeta/src/app/app.dart';
+import 'package:zeta/src/app/window_bootstrap.dart';
+import 'package:zeta/src/core/logging/app_logging.dart';
 
-export 'src/app/app.dart' show MainApp;
+export 'package:zeta/src/app/app.dart' show MainApp;
 
 void main() {
   runZonedGuarded(

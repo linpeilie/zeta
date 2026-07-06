@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../../../data/file_system/path_utils.dart';
-import '../../../../domain/agent/agent_models.dart';
-import '../../../core/app_theme.dart';
-import '../../../core/pane_widgets.dart';
-import '../view_models/project_threads_view_model.dart';
+import 'package:zeta/src/core/utils/path_utils.dart';
+import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
+import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/ui/core/pane_widgets.dart';
 
 typedef ProjectThreadSelected =
     void Function(String projectPath, AgentThreadSummary thread);

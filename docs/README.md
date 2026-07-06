@@ -5,6 +5,7 @@
 - [产品需求文档](./product_requirements.md)
 - [设计文档](./design_document.md)
 - [开发者文档](./developer_guide.md)
+- [工程规范](./engineering_standards.md)
 - [开发记录](./development_log.md)
 - [项目记忆](./project_memory.md)
 

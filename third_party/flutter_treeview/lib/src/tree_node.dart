@@ -2,10 +2,10 @@ import 'dart:math' show pi;
 
 import 'package:flutter/material.dart';
 
-import 'tree_view.dart';
-import 'tree_view_theme.dart';
-import 'expander_theme_data.dart';
-import 'models/node.dart';
+import 'package:flutter_treeview/src/tree_view.dart';
+import 'package:flutter_treeview/src/tree_view_theme.dart';
+import 'package:flutter_treeview/src/expander_theme_data.dart';
+import 'package:flutter_treeview/src/models/node.dart';
 
 const double _kBorderWidth = 0.75;
 

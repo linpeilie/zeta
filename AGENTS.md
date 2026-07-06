@@ -5,8 +5,8 @@ changes in this repository.
 
 ## Project Context
 
-- The app is currently a small Flutter application with `lib/main.dart` as the
-  entry point.
+- The app is a Flutter Desktop Agent IDE shell with `lib/main.dart` as the
+  entry point and `lib/src/app` as the composition boundary.
 - Supported generated platform folders are `linux`, `macos`, and `windows`.
 - The project uses `flutter_lints` through `analysis_options.yaml`.
 - Dart and Flutter skills are installed under `.agents/skills`; use the
@@ -16,7 +16,8 @@ changes in this repository.
 
 ## Default Workflow
 
-- Prefer small, focused changes that match the current simple project shape.
+- Prefer small, focused changes that match the current feature-sliced project
+  shape.
 - Run `dart format .` after editing Dart files.
 - Run `flutter analyze` before finishing code changes.
 - Run `flutter test` when tests exist or when adding/changing behavior.
@@ -42,12 +43,30 @@ changes in this repository.
 
 ## Architecture
 
-- Do not introduce a large architecture before the app needs it.
+- Treat the current `lib/src` structure as feature-sliced architecture:
+  `app` composes runtime dependencies, `core` holds cross-cutting utilities,
+  `features/<feature>` owns domain/application/data/presentation code, and
+  `ui/core` holds shared theme and shell widgets.
+- Keep dependency direction explicit: presentation depends on application and
+  domain contracts; application coordinates workflows; data implements external
+  protocols and storage; domain models stay pure and UI-agnostic.
+- Do not put new feature code back into broad top-level `data`, `domain`, or
+  `ui` buckets when a feature package is the natural owner.
+- Keep `main.dart` limited to startup, global error logging, desktop window
+  bootstrap, and `runApp`. Put app wiring in `lib/src/app`.
+- Keep concrete protocol details such as Codex app-server JSON-RPC, JSONL
+  history parsing, and provider configuration inside the agent data layer and
+  mappers. UI code should consume neutral domain events and provider contracts.
 - For simple local UI state, prefer Flutter built-ins such as `StatefulWidget`,
   `ValueNotifier`, `ValueListenableBuilder`, `FutureBuilder`, and
   `StreamBuilder`.
-- When app state becomes shared or complex, separate presentation, domain, data,
-  and core concerns.
+- When state becomes shared or complex, split responsibilities into:
+  immutable domain state, application controllers for async orchestration, and
+  presentation view models or listenable signals for rendering.
+- Use token/version guards for async loads that can be superseded, and check
+  disposed state before notifying listeners.
+- Expose collection state as unmodifiable snapshots unless mutation is an
+  intentional part of the API.
 - Prefer constructor dependency injection for testability.
 - Add third-party state management only when explicitly requested or clearly
   justified by the feature.
@@ -67,6 +86,13 @@ changes in this repository.
 - Use `LayoutBuilder`, `Flexible`, `Expanded`, `Wrap`, scroll views, and builder
   constructors to avoid overflow.
 - Keep visual styling centralized in `ThemeData` as the UI grows.
+- Reuse `ui/core` primitives such as panes, panel cards, window frame, and theme
+  constants before introducing feature-local visual primitives.
+- Keep the IDE UI compact, dense, and scannable. Long file paths, thread titles,
+  tool summaries, and status text must use bounded layout and ellipsis.
+- Use stable `ValueKey`s for repeated interactive timeline, thread, and file
+  tree rows. Add `RepaintBoundary` around expensive or high-frequency regions
+  such as streaming turns, highlighted code, and diff details.
 - Prefer Material 3 patterns and `ColorScheme.fromSeed` for app theming.
 - Ensure text remains readable with larger system text sizes.
 - Add semantic labels for non-text controls and important custom widgets.
@@ -80,6 +106,12 @@ changes in this repository.
 ## Data And Code Generation
 
 - Use plain Dart models for simple local data.
+- Keep persisted JSON versioned and tolerant. `tryDecode`-style readers must
+  handle missing fields, damaged content, and older versions without blocking
+  app startup.
+- Keep global provider configuration separate from project/session state.
+- Do not leak raw provider payloads into presentation; add mapper or codec
+  helpers near the data source instead.
 - If JSON models become complex or API-backed, prefer `json_serializable` and
   `json_annotation`.
 - When using code generation, ensure `build_runner` is present and run:
@@ -104,3 +136,5 @@ dart run build_runner build --delete-conflicting-outputs
 - Do not commit build outputs or `.dart_tool` contents.
 - Update this file when the project adopts routing, localization, app-wide
   state management, networking, assets, or a formal feature/module structure.
+- Keep `docs/engineering_standards.md`, `docs/developer_guide.md`, and
+  `docs/design_document.md` aligned when architecture boundaries change.

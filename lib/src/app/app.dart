@@ -1,13 +1,13 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
-import '../data/agent/agent_provider_config_store.dart';
-import '../data/agent/default_agent_provider_factory.dart';
-import '../data/session/ide_session_store.dart';
-import '../domain/agent/agent_provider.dart';
-import '../ui/core/app_theme.dart';
-import '../ui/features/ide/views/ide_home.dart';
-import 'app_constants.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/agent/data/default_agent_provider_factory.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
+import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
+import 'package:zeta/src/app/app_constants.dart';
 
 /// 应用根组件。
 ///

@@ -2,10 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import '../../../../core/logging/app_logging.dart';
-import '../../../../data/agent/agent_provider_config_store.dart';
-import '../../../../domain/agent/agent_models.dart';
-import '../../../../domain/agent/agent_provider.dart';
+import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 
 final _log = loggerFor('zeta.agent.provider_controller');
 

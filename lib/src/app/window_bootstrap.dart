@@ -3,8 +3,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
-import 'app_constants.dart';
-import '../ui/core/app_theme.dart';
+import 'package:zeta/src/app/app_constants.dart';
+import 'package:zeta/src/ui/core/app_theme.dart';
 
 /// 初始化桌面窗口。
 ///

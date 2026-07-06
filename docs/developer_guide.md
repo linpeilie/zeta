@@ -1,6 +1,6 @@
 # 开发者文档
 
-最后更新：2026-07-04
+最后更新：2026-07-07
 
 ## 1. 项目简介
 
@@ -32,9 +32,27 @@ lib/
   src/
     app/
     core/
-    data/
-    domain/
+    features/
+      agent/
+        application/
+        data/
+        domain/
+        presentation/
+      ide_session/
+        application/
+        data/
+        domain/
+      project_threads/
+        application/
+        domain/
+        presentation/
+      workspace/
+        application/
+        domain/
+        presentation/
     ui/
+      core/
+      features/ide/
 test/
 docs/
 third_party/
@@ -45,14 +63,15 @@ windows/
 
 重要模块：
 
-- `lib/src/app`：应用装配、窗口启动、常量。
-- `lib/src/core`：日志等基础设施。
-- `lib/src/domain/agent`：Agent 领域模型和 provider 接口。
-- `lib/src/data/agent`：Codex provider、JSON-RPC stdio 和 provider 配置存储。
-- `lib/src/data/session`：IDE 会话状态和持久化。
-- `lib/src/data/file_system`：文件树构建和路径工具。
-- `lib/src/ui/features/ide`：IDE 工作台 UI、view model 和 panes。
-- `test/src`：领域、data 和 view model 测试。
+- `lib/src/app`：应用装配、窗口启动、菜单桥接、shell controller 和常量。
+- `lib/src/core`：日志、路径工具等跨功能基础设施。
+- `lib/src/features/agent`：Agent provider 抽象、Codex data source、事件映射、对话状态和 Agent pane。
+- `lib/src/features/ide_session`：IDE 会话模型、状态构建、恢复协调和持久化。
+- `lib/src/features/project_threads`：项目 thread 列表状态、恢复快照、分页控制器和 view model。
+- `lib/src/features/workspace`：工作区目录规则、文件树构建、文件节点映射和 file tree pane。
+- `lib/src/ui/core`：主题、窗口框架、pane、panel、empty state 和状态标签等共享 UI 原语。
+- `lib/src/ui/features/ide`：IDE shell 视图、项目列表 pane 和 active provider controller。
+- `test/src`：app、core、feature 各层的单元测试和 widget 测试。
 
 ## 5. 开发流程
 
@@ -67,9 +86,14 @@ windows/
 - 使用现代空安全 Dart。
 - 优先使用 `const` 和不可变 widget。
 - UI 状态简单时使用 Flutter 内建机制，例如 `StatefulWidget`、`ChangeNotifier`、`ValueListenableBuilder`。
+- 复杂状态按“不可变 domain state + application controller + presentation view model/listenable signal”拆分。
+- 对可能被后续请求覆盖的异步流程使用 token 或版本号隔离旧结果。
+- 对外暴露集合时优先返回不可变集合或 unmodifiable view。
 - 公共 API 添加 `///` 文档。
 - 新实现中，对公共 API、协议适配、状态机、错误处理和不直观分支优先补充中文注释。
 - 不使用 `print`，需要保留的诊断信息使用 `dart:developer` 或项目日志封装。
+
+更完整的架构和评审规则见 [工程规范](./engineering_standards.md)。
 
 ## 7. Agent provider 开发指南
 
@@ -77,7 +101,7 @@ windows/
 
 1. 在领域层确认现有 `AgentProvider` 接口是否足够表达新 provider 能力。
 2. 在 data 层新增具体 provider 实现，不让 UI 直接依赖 provider 协议。
-3. 把 provider 原始事件映射成 `AgentEvent`、`AgentToolCall`、`AgentPermissionRequest` 等中立模型。
+3. 把 provider 原始事件映射成 `AgentEvent`、`AgentToolCall`、`AgentPermissionRequest`、`AgentThreadSummary` 等中立模型。
 4. 在 factory 中接入 provider kind。
 5. 添加单元测试覆盖初始化、session、turn、权限请求和错误映射。
 

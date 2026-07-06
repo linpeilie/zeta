@@ -1,40 +1,47 @@
 # 设计文档
 
-最后更新：2026-07-04
+最后更新：2026-07-07
 
 ## 1. 设计目标
 
-Zeta 的设计目标是让 Flutter UI、Agent provider、会话持久化和本地文件系统访问保持清晰分层。当前实现保持小型项目结构，不引入大型架构框架，但在 Agent 相关能力上预留 provider 抽象，方便未来接入 ACP、Claude Code 或其他 CLI。
+Zeta 的设计目标是让 Flutter UI、Agent provider、会话持久化和本地文件系统访问保持清晰分层。当前实现采用轻量 feature-sliced 结构，不引入大型架构框架，但在 Agent 相关能力上预留 provider 抽象，方便未来接入 ACP、Claude Code 或其他 CLI。
 
 ## 2. 总体架构
 
-当前代码按 `lib/src` 下的 app、core、data、domain、ui 分层组织：
+当前代码按 `lib/src` 下的 app、core、features、ui 分层组织。重构后的核心原则是以 feature 为内聚边界，在 feature 内再按 domain、application、data、presentation 拆分职责：
 
 - app：应用根组件、窗口启动、应用常量。
 - core：日志等跨层基础能力。
-- domain：Agent 中立模型和 provider 接口。
-- data：Codex app-server、JSON-RPC stdio、文件系统、会话存储等具体实现。
-- ui：窗口框架、主题、通用面板和 IDE 功能界面。
+- features/agent：Agent provider 抽象、Codex app-server、JSON-RPC stdio、历史解析、事件映射、对话 view model 和 Agent pane。
+- features/ide_session：会话状态、版本化持久化、恢复计划和恢复协调。
+- features/project_threads：项目 thread 快照、列表状态、分页控制器和 presentation view model。
+- features/workspace：文件树规则、树构建、文件节点映射和文件 pane。
+- ui/core：窗口框架、主题、通用面板和共享 UI primitives。
+- ui/features/ide：IDE shell 视图和 provider 选择相关 view model。
 
-依赖方向保持为 UI 依赖 domain 接口，data 实现 domain 接口，app 负责组合默认实现。
+依赖方向保持为 presentation/application 依赖 domain 接口，data 实现 domain 接口，app 负责组合默认实现。UI 不直接处理 Codex 原始协议或持久化 JSON。
 
 ## 3. 运行时结构
 
 ```text
 main()
   -> MainApp
+    -> IdeShellController
     -> IdeHome
       -> ProjectListPane
       -> AgentPane
       -> FileTreePane
 
-IdeHome
+IdeShellController
   -> IdeSessionStore
   -> ActiveAgentProviderController
   -> AgentConversationViewModel
-  -> ProjectThreadsViewModel
+  -> ProjectThreadsController
 
 AgentConversationViewModel
+  -> AgentConversationTimelineStore
+  -> AgentConversationUiSignals
+  -> AgentConversationModelSelectionController
   -> AgentProvider
     -> CodexAppServerAgentProvider
       -> JsonRpcPeer
@@ -136,7 +143,7 @@ IDE 会话状态目前版本为 2，持久化内容包括：
 - JSON-RPC stdio transport。
 - Codex provider 事件映射。
 - AgentConversationViewModel 状态机。
-- ProjectThreadsViewModel 分页、缓存、选择和错误状态。
+- ProjectThreadsController 和 ProjectThreadsViewModel 的分页、缓存、选择和错误状态分工。
 - App 或关键 Pane 的 widget 行为。
 
 新增功能应优先选择最靠近风险点的测试层级，避免为了简单 UI 调整引入过重测试。

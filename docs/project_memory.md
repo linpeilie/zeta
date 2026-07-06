@@ -1,6 +1,6 @@
 # 项目记忆
 
-最后更新：2026-07-04
+最后更新：2026-07-07
 
 本文记录跨任务应长期保留的项目事实、决策和约束。后续开发中，如果事实变化，应同步更新本文。
 
@@ -26,7 +26,8 @@
 
 ## 3. 架构决策
 
-- 保持简单分层，不提前引入大型架构框架。
+- 保持轻量 feature-sliced 分层，不提前引入大型架构框架。
+- feature 内按 domain、application、data、presentation 拆分；新功能优先进入对应 feature。
 - UI 依赖 domain 层的 Agent 抽象，不直接处理 Codex 原始协议。
 - data 层负责把 provider 协议映射成中立领域事件。
 - Agent 上下文当前只传项目路径和当前文件路径，不自动读取文件内容。
@@ -37,9 +38,11 @@
 ## 4. 重要模块记忆
 
 - `MainApp` 支持测试注入目录选择器、会话存储和 Agent provider factory。
-- `IdeHome` 组合三栏 UI，负责项目选择、文件树状态、会话恢复和 Agent workspace 同步。
-- `AgentConversationViewModel` 负责 Agent 消息、工具调用、审批请求和状态机。
-- `ProjectThreadsViewModel` 负责项目下 thread 列表、分页、缓存、选择和展开状态。
+- `IdeShellController` 协调项目选择、文件树状态、会话恢复、Agent workspace 同步和项目 thread 控制器。
+- `IdeHome` 组合三栏 UI，保持页面层职责轻量。
+- `AgentConversationViewModel` 对外暴露 Agent 面板状态，并委托 timeline store、UI signals、model selection controller 处理细分职责。
+- `ProjectThreadsController` 负责项目下 thread 分页、恢复、缓存快照、provider 交互和竞态隔离。
+- `ProjectThreadsViewModel` 是项目 thread 列表的纯状态容器。
 - `AgentProvider` 是 provider 能力接口。
 - `CodexAppServerAgentProvider` 是当前默认 provider 实现。
 - `JsonRpcPeer` 负责 stdio JSON-RPC 通信。
@@ -51,6 +54,7 @@
 - 结束代码变更前运行 `flutter analyze`。
 - 修改行为或新增逻辑时运行 `flutter test`。
 - 新公共 API、协议适配、状态机和错误处理优先写中文 `///` 注释。
+- 异步分页、恢复和流式输出应使用 token/version、分区 listenable 或节流信号隔离竞态与重建范围。
 - 不提交 build 输出和 `.dart_tool`。
 - 平台目录改动需要确认来源，不能无解释保留意外生成变更。
 

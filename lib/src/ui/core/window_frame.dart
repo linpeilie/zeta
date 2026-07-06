@@ -4,8 +4,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
-import '../../app/app_constants.dart';
-import 'app_theme.dart';
+import 'package:zeta/src/app/app_constants.dart';
+import 'package:zeta/src/ui/core/app_theme.dart';
 
 /// 包裹主内容的窗口外框。
 ///

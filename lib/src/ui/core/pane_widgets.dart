@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'app_theme.dart';
+import 'package:zeta/src/ui/core/app_theme.dart';
 
 class PanelCard extends StatelessWidget {
   const PanelCard({required this.child, super.key, this.color = idePanelColor});

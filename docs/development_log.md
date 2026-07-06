@@ -1,5 +1,14 @@
 # 开发记录
 
+## 2026-07-07
+
+### 提炼重构后工程规范
+
+- 扫描当前 `lib/` 结构，确认项目已经从宽泛分层演进为轻量 feature-sliced 架构。
+- 在 `AGENTS.md` 中补充 app/core/features/ui 边界、依赖方向、状态拆分、协议隔离、持久化容错和 UI 性能约束。
+- 新增 `docs/engineering_standards.md`，集中记录代码组织、状态编排、provider 协议边界、持久化、UI、文件系统和测试评审规范。
+- 同步更新开发者文档、设计文档和项目记忆，修正过时的目录结构与 ProjectThreads controller/view model 分工。
+
 ## 2026-07-04
 
 ### 初始化项目文档

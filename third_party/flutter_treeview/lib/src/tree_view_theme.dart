@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'expander_theme_data.dart';
-import 'tree_node.dart';
+import 'package:flutter_treeview/src/expander_theme_data.dart';
+import 'package:flutter_treeview/src/tree_node.dart';
 
 const double _kDefaultLevelPadding = 20;
 const int _kExpandSpeed = 130;
