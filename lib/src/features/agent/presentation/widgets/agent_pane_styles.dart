@@ -238,7 +238,7 @@ TextStyle _agentCodeTextStyle(BuildContext context, {TextStyle? baseStyle}) {
       ).style.copyWith(color: Theme.of(context).colorScheme.onSurface);
   return effectiveBase.copyWith(
     color: Theme.of(context).colorScheme.onSurface,
-    fontFamily: 'Menlo',
+    fontFamily: ideFontFamily,
     fontSize: 11,
     height: 1.35,
     backgroundColor: Colors.transparent,

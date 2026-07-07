@@ -11,6 +11,7 @@ const Color ideWarningColor = Color(0xFFE6B450);
 
 const double idePanelGap = 8;
 const double idePanelRadius = 6;
+const String ideFontFamily = 'JetBrainsMono';
 
 ThemeData buildCompactTheme() {
   final colorScheme = ColorScheme.fromSeed(
@@ -21,7 +22,7 @@ ThemeData buildCompactTheme() {
   return ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,
-    fontFamily: 'JetBrainsMono',
+    fontFamily: ideFontFamily,
     colorScheme: colorScheme.copyWith(
       surface: ideSurfaceColor,
       primary: ideAccentColor,
