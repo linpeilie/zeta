@@ -24,9 +24,12 @@ class FileTreePane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    String title = "Files";
+    if (projectPath != null) {
+      title = "Files • " + fileName(projectPath!);
+    }
     return Pane(
-      title: 'Files',
-      subtitle: projectPath == null ? null : fileName(projectPath!),
+      title: title,
       child: Builder(
         builder: (context) {
           if (isLoading) {

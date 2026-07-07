@@ -23,6 +23,7 @@ void main() {
   testWidgets('opens a folder and selects a file from the tree', (
     tester,
   ) async {
+    _useWideWindow(tester);
     final session = MemorySessionStore();
     final directory = Directory.systemTemp.createTempSync('zeta_test_');
     tempDirectories.add(directory);
@@ -60,6 +61,7 @@ void main() {
   testWidgets('opens this repository and shows top-level files', (
     tester,
   ) async {
+    _useWideWindow(tester);
     final session = MemorySessionStore();
     final repositoryDirectory = Directory.current;
 
@@ -77,6 +79,8 @@ void main() {
     await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
     await tester.runAsync(waitForIo);
     await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('right-tools-action')));
+    await tester.pump();
 
     expect(
       find.byKey(fileNodeKey(fileName(repositoryDirectory.path))),
@@ -87,6 +91,7 @@ void main() {
   });
 
   testWidgets('loads nested file tree folders after expansion', (tester) async {
+    _useWideWindow(tester);
     final session = MemorySessionStore();
     final directory = Directory.systemTemp.createTempSync('zeta_test_');
     tempDirectories.add(directory);
@@ -120,5 +125,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('main.dart'), findsOneWidget);
+  });
+}
+
+void _useWideWindow(WidgetTester tester) {
+  tester.view
+    ..physicalSize = const Size(1400, 900)
+    ..devicePixelRatio = 1;
+  addTearDown(() {
+    tester.view
+      ..resetPhysicalSize()
+      ..resetDevicePixelRatio();
   });
 }

@@ -25,6 +25,7 @@ void main() {
   testWidgets('restores the previous project and selected file on restart', (
     tester,
   ) async {
+    _useWideWindow(tester);
     final session = MemorySessionStore();
     final directory = Directory.systemTemp.createTempSync('zeta_test_');
     tempDirectories.add(directory);
@@ -75,6 +76,7 @@ void main() {
   });
 
   testWidgets('restores expanded file tree folders on restart', (tester) async {
+    _useWideWindow(tester);
     final session = MemorySessionStore();
     final directory = Directory.systemTemp.createTempSync('zeta_test_');
     tempDirectories.add(directory);
@@ -128,6 +130,7 @@ void main() {
   testWidgets(
     'restores project root contents without showing the root folder',
     (tester) async {
+      _useWideWindow(tester);
       final directory = Directory.systemTemp.createTempSync('zeta_test_');
       tempDirectories.add(directory);
 
@@ -164,6 +167,7 @@ void main() {
   );
 
   testWidgets('ignores missing paths when restoring a session', (tester) async {
+    _useWideWindow(tester);
     final session = MemorySessionStore(
       jsonEncode(<String, Object?>{
         'version': 1,
@@ -193,6 +197,7 @@ void main() {
   testWidgets(
     'does not let a slow session restore replace a user-opened folder',
     (tester) async {
+      _useWideWindow(tester);
       final restoreCompleter = Completer<String?>();
       final savedSession = MemorySessionStore();
       final restoredDirectory = Directory.systemTemp.createTempSync(
@@ -244,4 +249,15 @@ void main() {
       expect(find.text('restored.txt'), findsNothing);
     },
   );
+}
+
+void _useWideWindow(WidgetTester tester) {
+  tester.view
+    ..physicalSize = const Size(1400, 900)
+    ..devicePixelRatio = 1;
+  addTearDown(() {
+    tester.view
+      ..resetPhysicalSize()
+      ..resetDevicePixelRatio();
+  });
 }

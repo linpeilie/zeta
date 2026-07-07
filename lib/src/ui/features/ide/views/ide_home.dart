@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:multi_split_view/multi_split_view.dart';
 
 import 'package:zeta/src/app/menu_action_bridge.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
@@ -17,8 +16,8 @@ import 'package:zeta/src/ui/features/ide/views/project_list_pane.dart';
 
 /// IDE 主界面。
 ///
-/// 当前布局是 Projects / Agent / Files 三栏；具体项目、会话和 Agent thread
-/// 编排由 [IdeShellController] 承接。
+/// 当前布局是左右图标栏、左右活动面板与中间 Agent 主编辑区组成的五列结构；
+/// 具体项目、会话和 Agent thread 编排由 [IdeShellController] 承接。
 class IdeHome extends StatefulWidget {
   const IdeHome({
     required this.directoryPicker,
@@ -40,8 +39,27 @@ class IdeHome extends StatefulWidget {
 }
 
 class _IdeHomeState extends State<IdeHome> {
+  static const double _activityRailWidth = 36;
+  static const double _initialPanelWidth = 260;
+  static const double _minPanelWidth = 200;
+  static const double _maxPanelWidth = 400;
+  static const double _minMainEditorWidth = 320;
+  static const double _rightOverlayBreakpoint = 1000;
+  static const double _initialPanelRatio = 0.5;
+  static const double _minPanelRatio = 0.1;
+  static const double _maxPanelRatio = 0.9;
+
   late final IdeShellController _shellController;
-  late final MultiSplitViewController _splitController;
+
+  bool _leftTopVisible = true;
+  bool _leftBottomVisible = false;
+  bool _rightTopVisible = true;
+  bool _rightBottomVisible = false;
+  bool _rightOverlayOpen = false;
+  double _leftPanelWidth = _initialPanelWidth;
+  double _rightPanelWidth = _initialPanelWidth;
+  double _leftTopRatio = _initialPanelRatio;
+  double _rightTopRatio = _initialPanelRatio;
 
   @override
   void initState() {
@@ -53,13 +71,6 @@ class _IdeHomeState extends State<IdeHome> {
       agentProviderConfigStore: widget.agentProviderConfigStore,
       statusReporter: _showStatus,
     )..addListener(_handleShellChanged);
-    _splitController = MultiSplitViewController(
-      areas: [
-        Area(id: 'projects', size: 220, min: 180, max: 340),
-        Area(id: 'agent', flex: 1, min: 360),
-        Area(id: 'files', size: 280, min: 220, max: 460),
-      ],
-    );
     // 生产环境注册原生菜单的「打开项目」回调，与工具栏按钮走同一逻辑。
     if (widget.enableNativeWindowFrame) {
       MenuActionBridge.instance.setOpenProject(_handleMenuOpenProject);
@@ -73,7 +84,6 @@ class _IdeHomeState extends State<IdeHome> {
     }
     _shellController.removeListener(_handleShellChanged);
     _shellController.dispose();
-    _splitController.dispose();
     super.dispose();
   }
 
@@ -82,25 +92,11 @@ class _IdeHomeState extends State<IdeHome> {
     final body = WindowFrame(
       enableNativeWindowFrame: widget.enableNativeWindowFrame,
       child: Padding(
-        padding: const EdgeInsets.only(
-          left: idePanelGap,
-          right: idePanelGap,
-          bottom: idePanelGap,
-        ),
-        child: MultiSplitViewTheme(
-          data: MultiSplitViewThemeData(
-            dividerThickness: idePanelGap,
-            dividerPainter: DividerPainters.background(
-              color: ideFrameColor,
-              highlightedColor: ideFrameColor,
-            ),
-          ),
-          child: MultiSplitView(
-            controller: _splitController,
-            axis: Axis.horizontal,
-            pushDividers: true,
-            builder: _buildSplitArea,
-          ),
+        padding: const EdgeInsets.all(idePanelGap),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return _buildIdeLayout(maxWidth: constraints.maxWidth);
+          },
         ),
       ),
     );
@@ -108,51 +104,368 @@ class _IdeHomeState extends State<IdeHome> {
     return Scaffold(body: body);
   }
 
-  Widget _buildSplitArea(BuildContext context, Area area) {
-    return switch (area.id) {
-      'projects' => PanelCard(
-        key: const ValueKey('projects-panel-card'),
-        child: ProjectListPane(
-          projects: _shellController.projects,
-          activeProject: _shellController.activeProjectPath,
-          threadStateFor: _shellController.projectThreadStateFor,
-          onOpenProject: _openProject,
-          onSelectProject: (path) {
-            unawaited(_shellController.selectKnownProject(path));
-          },
-          onSelectThread: (projectPath, thread) {
-            unawaited(
-              _shellController.selectProjectThread(projectPath, thread),
-            );
-          },
-          onLoadMoreThreads: (projectPath) {
-            unawaited(_shellController.loadMoreThreads(projectPath));
-          },
-          onRetryThreads: (projectPath) {
-            unawaited(_shellController.retryThreads(projectPath));
-          },
+  Widget _buildIdeLayout({required double maxWidth}) {
+    final leftPanelVisible = _leftTopVisible || _leftBottomVisible;
+    final rightPanelVisible = _rightTopVisible || _rightBottomVisible;
+    final rightOverlayAvailableWidth =
+        maxWidth - _activityRailWidth - idePanelGap;
+    final useRightOverlay =
+        rightOverlayAvailableWidth < _rightOverlayBreakpoint;
+    final panelWidths = _effectivePanelWidths(
+      maxWidth: maxWidth,
+      leftPanelVisible: leftPanelVisible,
+      rightPanelVisible: !useRightOverlay && rightPanelVisible,
+    );
+
+    final content = Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          width: _activityRailWidth,
+          child: _ActivityRail(
+            top: _ActionIcon(
+              key: const ValueKey('left-projects-action'),
+              icon: Icons.account_tree_rounded,
+              tooltip: 'Projects',
+              semanticLabel: 'Toggle projects panel',
+              active: _leftTopVisible,
+              onPressed: () {
+                setState(() {
+                  _leftTopVisible = !_leftTopVisible;
+                });
+              },
+            ),
+            bottom: _ActionIcon(
+              key: const ValueKey('left-context-action'),
+              icon: Icons.data_object_rounded,
+              tooltip: 'Context',
+              semanticLabel: 'Toggle context panel',
+              active: _leftBottomVisible,
+              onPressed: () {
+                setState(() {
+                  _leftBottomVisible = !_leftBottomVisible;
+                });
+              },
+            ),
+          ),
         ),
-      ),
-      'files' => PanelCard(
-        key: const ValueKey('files-panel-card'),
-        child: FileTreePane(
-          controller: _shellController.treeController,
-          projectPath: _shellController.activeProjectPath,
-          isLoading: _shellController.isLoadingProject,
-          onNodeTap: _shellController.handleTreeNodeTap,
-          onExpansionChanged: _shellController.handleTreeExpansionChanged,
+        const SizedBox(width: idePanelGap),
+        if (leftPanelVisible) ...[
+          SizedBox(
+            key: const ValueKey('left-activity-panel'),
+            width: panelWidths.left,
+            child: _ResizableColumn(
+              topVisible: _leftTopVisible,
+              bottomVisible: _leftBottomVisible,
+              topRatio: _leftTopRatio,
+              onTopRatioChanged: (ratio) {
+                setState(() {
+                  _leftTopRatio = ratio.clamp(_minPanelRatio, _maxPanelRatio);
+                });
+              },
+              heightHandleKey: const ValueKey('left-height-resize-handle'),
+              top: _buildProjectsPanel(),
+              bottom: _buildPlaceholderPanel(
+                key: const ValueKey('context-panel-card'),
+                title: 'Context',
+                icon: Icons.hub_rounded,
+                message: 'No file context',
+              ),
+            ),
+          ),
+          _HorizontalResizeHandle(
+            key: const ValueKey('left-width-resize-handle'),
+            onDragUpdate: (details) {
+              setState(() {
+                _leftPanelWidth = (_leftPanelWidth + details.delta.dx).clamp(
+                  _minPanelWidth,
+                  _maxPanelWidth,
+                );
+              });
+            },
+          ),
+        ],
+        Expanded(
+          child: _RoundedPanel(
+            key: const ValueKey('agent-pane-host'),
+            color: ideEditorColor,
+            child: AgentPane(viewModel: _shellController.agentViewModel),
+          ),
         ),
+        if (!useRightOverlay && rightPanelVisible) ...[
+          _HorizontalResizeHandle(
+            key: const ValueKey('right-width-resize-handle'),
+            onDragUpdate: (details) {
+              setState(() {
+                _rightPanelWidth = (_rightPanelWidth - details.delta.dx).clamp(
+                  _minPanelWidth,
+                  _maxPanelWidth,
+                );
+              });
+            },
+          ),
+          SizedBox(
+            key: const ValueKey('right-activity-panel'),
+            width: panelWidths.right,
+            child: _buildRightPanel(),
+          ),
+        ],
+        const SizedBox(width: idePanelGap),
+        SizedBox(
+          width: _activityRailWidth,
+          child: _ActivityRail(
+            top: _ActionIcon(
+              key: const ValueKey('right-files-action'),
+              icon: Icons.folder_rounded,
+              tooltip: 'Files',
+              semanticLabel: 'Toggle files panel',
+              active: _rightTopVisible,
+              onPressed: () {
+                _toggleRightPanel(isTop: true, useOverlay: useRightOverlay);
+              },
+            ),
+            bottom: _ActionIcon(
+              key: const ValueKey('right-tools-action'),
+              icon: Icons.build_circle_rounded,
+              tooltip: 'Tools',
+              semanticLabel: 'Toggle tools panel',
+              active: _rightBottomVisible,
+              onPressed: () {
+                _toggleRightPanel(isTop: false, useOverlay: useRightOverlay);
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+
+    if (!useRightOverlay || !_rightOverlayOpen || !rightPanelVisible) {
+      return content;
+    }
+
+    final overlayWidth = _rightPanelWidth.clamp(_minPanelWidth, _maxPanelWidth);
+    final rightInset = _activityRailWidth + idePanelGap;
+    return Stack(
+      children: [
+        content,
+        Positioned.fill(
+          right: rightInset,
+          child: GestureDetector(
+            key: const ValueKey('right-overlay-scrim'),
+            behavior: HitTestBehavior.translucent,
+            onTap: _closeRightOverlay,
+          ),
+        ),
+        Positioned(
+          key: const ValueKey('right-activity-overlay'),
+          top: 0,
+          right: rightInset,
+          bottom: 0,
+          width: overlayWidth,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.34),
+                  blurRadius: 24,
+                  offset: const Offset(-8, 0),
+                ),
+              ],
+            ),
+            child: _buildRightPanel(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  _PanelWidths _effectivePanelWidths({
+    required double maxWidth,
+    required bool leftPanelVisible,
+    required bool rightPanelVisible,
+  }) {
+    var leftWidth = _leftPanelWidth;
+    var rightWidth = _rightPanelWidth;
+    final visiblePanels =
+        (leftPanelVisible ? 1 : 0) + (rightPanelVisible ? 1 : 0);
+    if (visiblePanels == 0 || !maxWidth.isFinite) {
+      return _PanelWidths(left: leftWidth, right: rightWidth);
+    }
+
+    final fixedWidth =
+        (_activityRailWidth * 2) +
+        (idePanelGap * 2) +
+        (leftPanelVisible ? idePanelGap : 0) +
+        (rightPanelVisible ? idePanelGap : 0);
+    final availablePanelWidth = maxWidth - fixedWidth - _minMainEditorWidth;
+    final minimumPanelWidth = _minPanelWidth * visiblePanels;
+
+    if (availablePanelWidth < minimumPanelWidth) {
+      if (leftPanelVisible) {
+        leftWidth = _minPanelWidth;
+      }
+      if (rightPanelVisible) {
+        rightWidth = _minPanelWidth;
+      }
+      return _PanelWidths(left: leftWidth, right: rightWidth);
+    }
+
+    if (visiblePanels == 1) {
+      if (leftPanelVisible) {
+        leftWidth = leftWidth.clamp(_minPanelWidth, availablePanelWidth);
+      }
+      if (rightPanelVisible) {
+        rightWidth = rightWidth.clamp(_minPanelWidth, availablePanelWidth);
+      }
+      return _PanelWidths(left: leftWidth, right: rightWidth);
+    }
+
+    final requestedPanelWidth = leftWidth + rightWidth;
+    if (requestedPanelWidth <= availablePanelWidth) {
+      return _PanelWidths(left: leftWidth, right: rightWidth);
+    }
+
+    final extraWidth = availablePanelWidth - minimumPanelWidth;
+    final requestedExtraWidth =
+        (leftWidth - _minPanelWidth) + (rightWidth - _minPanelWidth);
+    if (requestedExtraWidth <= 0) {
+      return _PanelWidths(left: _minPanelWidth, right: _minPanelWidth);
+    }
+
+    final shrinkRatio = extraWidth / requestedExtraWidth;
+    leftWidth = _minPanelWidth + ((leftWidth - _minPanelWidth) * shrinkRatio);
+    rightWidth = _minPanelWidth + ((rightWidth - _minPanelWidth) * shrinkRatio);
+    return _PanelWidths(left: leftWidth, right: rightWidth);
+  }
+
+  Widget _buildProjectsPanel() {
+    return _RoundedPanel(
+      key: const ValueKey('projects-panel-card'),
+      child: ProjectListPane(
+        projects: _shellController.projects,
+        activeProject: _shellController.activeProjectPath,
+        threadStateFor: _shellController.projectThreadStateFor,
+        onOpenProject: _openProject,
+        onSelectProject: (path) {
+          unawaited(_shellController.selectKnownProject(path));
+        },
+        onSelectThread: (projectPath, thread) {
+          unawaited(_shellController.selectProjectThread(projectPath, thread));
+        },
+        onLoadMoreThreads: (projectPath) {
+          unawaited(_shellController.loadMoreThreads(projectPath));
+        },
+        onRetryThreads: (projectPath) {
+          unawaited(_shellController.retryThreads(projectPath));
+        },
       ),
-      _ => ColoredBox(
-        key: const ValueKey('agent-pane-host'),
-        color: ideFrameColor,
-        child: AgentPane(viewModel: _shellController.agentViewModel),
+    );
+  }
+
+  Widget _buildFilesPanel() {
+    return _RoundedPanel(
+      key: const ValueKey('files-panel-card'),
+      child: FileTreePane(
+        controller: _shellController.treeController,
+        projectPath: _shellController.activeProjectPath,
+        isLoading: _shellController.isLoadingProject,
+        onNodeTap: _shellController.handleTreeNodeTap,
+        onExpansionChanged: _shellController.handleTreeExpansionChanged,
       ),
-    };
+    );
+  }
+
+  Widget _buildRightPanel() {
+    return _ResizableColumn(
+      topVisible: _rightTopVisible,
+      bottomVisible: _rightBottomVisible,
+      topRatio: _rightTopRatio,
+      onTopRatioChanged: (ratio) {
+        setState(() {
+          _rightTopRatio = ratio.clamp(_minPanelRatio, _maxPanelRatio);
+        });
+      },
+      heightHandleKey: const ValueKey('right-height-resize-handle'),
+      top: _buildFilesPanel(),
+      bottom: _buildPlaceholderPanel(
+        key: const ValueKey('tools-panel-card'),
+        title: 'Tools',
+        icon: Icons.terminal_rounded,
+        message: 'No tools running',
+      ),
+    );
+  }
+
+  Widget _buildPlaceholderPanel({
+    required Key key,
+    required String title,
+    required IconData icon,
+    required String message,
+  }) {
+    return _RoundedPanel(
+      key: key,
+      child: Pane(
+        title: title,
+        trailing: Icon(icon, size: 16, color: ideMutedTextColor),
+        child: EmptyState(text: message),
+      ),
+    );
   }
 
   void _openProject() {
     unawaited(_shellController.openProject());
+  }
+
+  void _toggleRightPanel({required bool isTop, required bool useOverlay}) {
+    setState(() {
+      if (!useOverlay) {
+        if (isTop) {
+          _rightTopVisible = !_rightTopVisible;
+        } else {
+          _rightBottomVisible = !_rightBottomVisible;
+        }
+        return;
+      }
+
+      final currentlyVisible = isTop ? _rightTopVisible : _rightBottomVisible;
+      final otherVisible = isTop ? _rightBottomVisible : _rightTopVisible;
+      if (_rightOverlayOpen && currentlyVisible && !otherVisible) {
+        if (isTop) {
+          _rightTopVisible = false;
+        } else {
+          _rightBottomVisible = false;
+        }
+        _rightOverlayOpen = false;
+        return;
+      }
+
+      if (_rightOverlayOpen && currentlyVisible) {
+        if (isTop) {
+          _rightTopVisible = false;
+        } else {
+          _rightBottomVisible = false;
+        }
+        _rightOverlayOpen = _rightTopVisible || _rightBottomVisible;
+        return;
+      }
+
+      if (isTop) {
+        _rightTopVisible = true;
+      } else {
+        _rightBottomVisible = true;
+      }
+      _rightOverlayOpen = true;
+    });
+  }
+
+  void _closeRightOverlay() {
+    if (!_rightOverlayOpen) {
+      return;
+    }
+    setState(() {
+      _rightOverlayOpen = false;
+    });
   }
 
   /// 原生菜单「文件 - 打开项目」入口，与工具栏按钮一致。
@@ -179,5 +492,198 @@ class _IdeHomeState extends State<IdeHome> {
           behavior: SnackBarBehavior.floating,
         ),
       );
+  }
+}
+
+class _RoundedPanel extends StatelessWidget {
+  const _RoundedPanel({
+    required this.child,
+    super.key,
+    this.color = idePanelColor,
+  });
+
+  final Widget child;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _PanelWidths {
+  const _PanelWidths({required this.left, required this.right});
+
+  final double left;
+  final double right;
+}
+
+class _ActivityRail extends StatelessWidget {
+  const _ActivityRail({required this.top, required this.bottom});
+
+  final Widget top;
+  final Widget bottom;
+
+  @override
+  Widget build(BuildContext context) {
+    return _RoundedPanel(
+      color: ideSurfaceColor,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 1),
+        child: Column(children: [top, const Spacer(), bottom]),
+      ),
+    );
+  }
+}
+
+class _ActionIcon extends StatelessWidget {
+  const _ActionIcon({
+    required this.icon,
+    required this.tooltip,
+    required this.semanticLabel,
+    required this.active,
+    required this.onPressed,
+    super.key,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final String semanticLabel;
+  final bool active;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = active ? Colors.white : ideMutedTextColor;
+    return Tooltip(
+      message: tooltip,
+      waitDuration: const Duration(milliseconds: 500),
+      child: Semantics(
+        button: true,
+        selected: active,
+        label: semanticLabel,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onPressed,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              width: 32,
+              height: 32,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(icon, size: 20, color: foreground),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ResizableColumn extends StatelessWidget {
+  const _ResizableColumn({
+    required this.topVisible,
+    required this.bottomVisible,
+    required this.topRatio,
+    required this.onTopRatioChanged,
+    required this.top,
+    required this.bottom,
+    required this.heightHandleKey,
+  });
+
+  final bool topVisible;
+  final bool bottomVisible;
+  final double topRatio;
+  final ValueChanged<double> onTopRatioChanged;
+  final Widget top;
+  final Widget bottom;
+  final Key heightHandleKey;
+
+  @override
+  Widget build(BuildContext context) {
+    if (topVisible && !bottomVisible) {
+      return SizedBox.expand(child: top);
+    }
+    if (!topVisible && bottomVisible) {
+      return SizedBox.expand(child: bottom);
+    }
+    if (!topVisible && !bottomVisible) {
+      return const SizedBox.shrink();
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final resizableHeight = constraints.maxHeight - idePanelGap;
+        final topHeight = resizableHeight * topRatio.clamp(0.1, 0.9);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(height: topHeight, child: top),
+            _VerticalResizeHandle(
+              key: heightHandleKey,
+              onDragUpdate: (details) {
+                onTopRatioChanged(
+                  (topHeight + details.delta.dy) / resizableHeight,
+                );
+              },
+            ),
+            Expanded(child: bottom),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _HorizontalResizeHandle extends StatelessWidget {
+  const _HorizontalResizeHandle({required this.onDragUpdate, super.key});
+
+  final GestureDragUpdateCallback onDragUpdate;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeLeftRight,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragUpdate: onDragUpdate,
+        child: const SizedBox(
+          width: idePanelGap,
+          child: ColoredBox(color: ideFrameColor),
+        ),
+      ),
+    );
+  }
+}
+
+class _VerticalResizeHandle extends StatelessWidget {
+  const _VerticalResizeHandle({required this.onDragUpdate, super.key});
+
+  final GestureDragUpdateCallback onDragUpdate;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeUpDown,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onVerticalDragUpdate: onDragUpdate,
+        child: const SizedBox(
+          height: idePanelGap,
+          child: ColoredBox(color: ideFrameColor),
+        ),
+      ),
+    );
   }
 }

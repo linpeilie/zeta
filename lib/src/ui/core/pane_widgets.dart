@@ -51,10 +51,6 @@ class Pane extends StatelessWidget {
           Container(
             height: 36,
             padding: const EdgeInsets.only(left: 10, right: 6),
-            decoration: const BoxDecoration(
-              color: ideSurfaceColor,
-              border: Border(bottom: BorderSide(color: ideBorderColor)),
-            ),
             child: Row(
               children: [
                 Expanded(
