@@ -205,10 +205,7 @@ class _AgentMarkdownMessageState extends State<_AgentMarkdownMessage> {
   Widget build(BuildContext context) {
     final markdown = widget.message.text;
     if (!widget.collapseHeavyContent || !_shouldCollapseMarkdown(markdown)) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 14),
-        child: RepaintBoundary(child: _AgentMarkdownBody(data: markdown)),
-      );
+      return RepaintBoundary(child: _AgentMarkdownBody(data: markdown));
     }
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),

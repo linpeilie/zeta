@@ -330,6 +330,9 @@ String _jsonlToolTitle({
   if (name == 'exec_command') {
     return _trimmedText(_string(arguments['cmd'])) ?? 'Run command';
   }
+  if (name == 'shell_command') {
+    return _trimmedText(_string(arguments['command'])) ?? 'Run shell command';
+  }
   if (name == 'apply_patch') {
     return 'Apply patch';
   }

@@ -53,7 +53,7 @@ class _IdeHomeState extends State<IdeHome> {
 
   bool _leftTopVisible = true;
   bool _leftBottomVisible = false;
-  bool _rightTopVisible = true;
+  bool _rightTopVisible = false;
   bool _rightBottomVisible = false;
   bool _rightOverlayOpen = false;
   double _leftPanelWidth = _initialPanelWidth;
