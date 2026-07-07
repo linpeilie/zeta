@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -153,6 +154,109 @@ void main() {
         expect(viewModel.isPlanMessageExpanded('history-plan-1'), isTrue);
         expect(
           find.byKey(const ValueKey<String>('agent-plan-body-history-plan-1')),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'renders live agent markdown through a streaming controller and commits the final update',
+      (tester) async {
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(provider.dispose);
+        addTearDown(viewModel.dispose);
+
+        await tester.pumpWidget(_TestApp(viewModel: viewModel));
+        await viewModel.sendMessage('Stream markdown');
+        await tester.pumpAndSettle();
+
+        provider.emitEvent(
+          const AgentMessageDeltaEvent(
+            messageId: 'message-1',
+            delta: '# Title\n\nDraft paragraph\n\n```dart\nfinal ',
+            role: AgentMessageRole.agent,
+            phase: AgentMessagePhase.response,
+            status: AgentMessageStatus.streaming,
+            sessionId: 'session-1',
+            turnId: 'turn-1',
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final liveSectionFinder = find.byKey(
+          const ValueKey<String>('agent-live-turn-section'),
+        );
+        final liveMarkdownWidget = _markdownWidgetUnder(
+          tester,
+          liveSectionFinder,
+        );
+        _expectMarkdownWidgetDefaults(liveMarkdownWidget);
+        expect(liveMarkdownWidget.data, isNull);
+        final controller = liveMarkdownWidget.controller;
+        expect(controller, isNotNull);
+        expect(
+          controller!.data,
+          '# Title\n\nDraft paragraph\n\n```dart\nfinal ',
+        );
+        expect(controller.streamingState.hasDraft, isTrue);
+        expect(
+          find.textContaining('Draft paragraph', findRichText: true),
+          findsOneWidget,
+        );
+
+        provider.emitEvent(
+          const AgentMessageDeltaEvent(
+            messageId: 'message-1',
+            delta: 'answer = true;',
+            role: AgentMessageRole.agent,
+            phase: AgentMessagePhase.response,
+            status: AgentMessageStatus.streaming,
+            sessionId: 'session-1',
+            turnId: 'turn-1',
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final updatedMarkdownWidget = _markdownWidgetUnder(
+          tester,
+          liveSectionFinder,
+        );
+        expect(identical(updatedMarkdownWidget.controller, controller), isTrue);
+        expect(
+          controller.data,
+          '# Title\n\nDraft paragraph\n\n```dart\nfinal answer = true;',
+        );
+
+        provider.emitEvent(
+          const AgentMessageUpdatedEvent(
+            messageId: 'message-1',
+            text:
+                '# Title\n\nDraft paragraph\n\n```dart\nfinal answer = true;\n```',
+            role: AgentMessageRole.agent,
+            phase: AgentMessagePhase.response,
+            status: AgentMessageStatus.completed,
+            sessionId: 'session-1',
+            turnId: 'turn-1',
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final completedMarkdownWidget = _markdownWidgetUnder(
+          tester,
+          liveSectionFinder,
+        );
+        expect(
+          identical(completedMarkdownWidget.controller, controller),
+          isTrue,
+        );
+        expect(
+          controller.data,
+          '# Title\n\nDraft paragraph\n\n```dart\nfinal answer = true;\n```',
+        );
+        expect(controller.streamingState.hasDraft, isFalse);
+        expect(
+          find.textContaining('answer', findRichText: true),
           findsOneWidget,
         );
       },
@@ -465,6 +569,23 @@ String? _fontFamilyForInlineSpan(
     return inheritedStyle?.fontFamily;
   }
   return null;
+}
+
+MarkdownWidget _markdownWidgetUnder(WidgetTester tester, Finder ancestor) {
+  final finder = find.descendant(
+    of: ancestor,
+    matching: find.byType(MarkdownWidget),
+  );
+  expect(finder, findsOneWidget);
+  return tester.widget<MarkdownWidget>(finder);
+}
+
+void _expectMarkdownWidgetDefaults(MarkdownWidget widget) {
+  expect(widget.useColumn, isTrue);
+  expect(widget.selectable, isTrue);
+  expect(widget.padding, EdgeInsets.zero);
+  expect(widget.enableCopyFullDocumentShortcut, isFalse);
+  expect(widget.showCopyAllInContextMenu, isFalse);
 }
 
 class _FakeAgentProviderFactory implements AgentProviderFactory {

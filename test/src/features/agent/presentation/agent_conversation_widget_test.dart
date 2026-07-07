@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:zeta/main.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -1685,11 +1686,22 @@ void main() {
       find.textContaining('First markdown item', findRichText: true),
       findsOneWidget,
     );
-    expect(find.textContaining('code', findRichText: true), findsWidgets);
     expect(
       find.textContaining('void main', findRichText: true),
       findsOneWidget,
     );
+    final markdownWidget = tester
+        .widgetList<MarkdownWidget>(find.byType(MarkdownWidget))
+        .singleWhere(
+          (widget) => widget.data?.contains('First markdown item') ?? false,
+        );
+    expect(markdownWidget.data, isNotNull);
+    expect(markdownWidget.controller, isNull);
+    expect(markdownWidget.useColumn, isTrue);
+    expect(markdownWidget.selectable, isTrue);
+    expect(markdownWidget.padding, EdgeInsets.zero);
+    expect(markdownWidget.enableCopyFullDocumentShortcut, isFalse);
+    expect(markdownWidget.showCopyAllInContextMenu, isFalse);
   });
 
   testWidgets('renders plan messages as collapsible markdown cards', (
@@ -1791,6 +1803,16 @@ void main() {
       find.textContaining('void main', findRichText: true),
       findsOneWidget,
     );
+    final planMarkdownWidget = tester.widget<MarkdownWidget>(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey<String>('agent-plan-body-turn-plan-plan'),
+        ),
+        matching: find.byType(MarkdownWidget),
+      ),
+    );
+    expect(planMarkdownWidget.data, isNotNull);
+    expect(planMarkdownWidget.controller, isNull);
   });
 
   testWidgets('renders tool calls, approval cards, and approval responses', (

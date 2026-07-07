@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_highlight/flutter_highlight.dart';
-import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';

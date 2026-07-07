@@ -185,48 +185,53 @@ Color _historyEventAccent(AgentHistoryEventKind kind) {
   };
 }
 
-MarkdownStyleSheet _agentMarkdownStyleSheet(BuildContext context) {
+MarkdownThemeData _agentMarkdownTheme(BuildContext context) {
   final textColor = Theme.of(context).colorScheme.onSurface;
   final base = DefaultTextStyle.of(
     context,
   ).style.copyWith(color: textColor, height: 1.42);
   final codeStyle = _agentCodeTextStyle(context, baseStyle: base);
 
-  return MarkdownStyleSheet(
-    p: base,
-    pPadding: const EdgeInsets.only(bottom: 8),
-    a: base.copyWith(color: ideAccentColor, fontWeight: FontWeight.w600),
-    code: codeStyle.copyWith(
-      backgroundColor: ideMutedTextColor.withValues(alpha: 0.16),
-    ),
+  return MarkdownThemeData.fallback(
+    context,
+    maxContentWidth: _agentContentMaxWidth,
+  ).copyWith(
+    padding: EdgeInsets.zero,
     blockSpacing: 8,
-    listIndent: 22,
-    listBullet: base,
-    listBulletPadding: const EdgeInsets.only(right: 8),
-    strong: const TextStyle(fontWeight: FontWeight.w700),
-    em: const TextStyle(fontStyle: FontStyle.italic),
-    h1: base.copyWith(fontSize: 20, fontWeight: FontWeight.w700),
-    h2: base.copyWith(fontSize: 17, fontWeight: FontWeight.w700),
-    h3: base.copyWith(fontSize: 15, fontWeight: FontWeight.w700),
-    h4: base.copyWith(fontWeight: FontWeight.w700),
-    h5: base.copyWith(fontWeight: FontWeight.w700),
-    h6: base.copyWith(fontWeight: FontWeight.w700),
-    blockquote: base.copyWith(color: ideMutedTextColor),
-    blockquotePadding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-    blockquoteDecoration: BoxDecoration(
-      color: ideSurfaceColor,
-      borderRadius: BorderRadius.circular(6),
-      border: const Border(left: BorderSide(color: ideAccentColor, width: 3)),
+    listItemSpacing: 4,
+    bodyStyle: base,
+    quoteStyle: base.copyWith(color: ideMutedTextColor),
+    linkStyle: base.copyWith(
+      color: ideAccentColor,
+      fontWeight: FontWeight.w600,
     ),
-    codeblockPadding: const EdgeInsets.all(10),
-    codeblockDecoration: _agentCodeBlockDecoration(),
-    tableHead: base.copyWith(fontWeight: FontWeight.w700),
-    tableBody: base,
-    tableBorder: TableBorder.all(color: ideBorderColor),
-    tableCellsPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-    horizontalRuleDecoration: const BoxDecoration(
-      border: Border(top: BorderSide(color: ideBorderColor)),
-    ),
+    inlineCodeStyle: codeStyle,
+    inlineCodeBackgroundColor: ideMutedTextColor.withValues(alpha: 0.16),
+    codeBlockStyle: codeStyle,
+    codeBlockPadding: const EdgeInsets.all(10),
+    codeBlockBackgroundColor: ideSurfaceColor,
+    codeBlockBorderRadius: BorderRadius.circular(6),
+    quotePadding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+    quoteBackgroundColor: ideSurfaceColor,
+    quoteBorderColor: ideAccentColor,
+    quoteBorderWidth: 3,
+    quoteBorderRadius: BorderRadius.circular(6),
+    tableHeaderStyle: base.copyWith(fontWeight: FontWeight.w700),
+    tableCellPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+    tableBorderColor: ideBorderColor,
+    tableHeaderBackgroundColor: ideSurfaceColor,
+    tableRowBackgroundColor: Colors.transparent,
+    dividerColor: ideBorderColor,
+    selectionColor: ideAccentColor.withValues(alpha: 0.24),
+    imagePlaceholderBackgroundColor: ideSurfaceColor,
+    heading1Style: base.copyWith(fontSize: 20, fontWeight: FontWeight.w700),
+    heading2Style: base.copyWith(fontSize: 17, fontWeight: FontWeight.w700),
+    heading3Style: base.copyWith(fontSize: 15, fontWeight: FontWeight.w700),
+    heading4Style: base.copyWith(fontWeight: FontWeight.w700),
+    heading5Style: base.copyWith(fontWeight: FontWeight.w700),
+    heading6Style: base.copyWith(fontWeight: FontWeight.w700),
+    showHeading1Divider: false,
+    showHeading2Divider: false,
   );
 }
 

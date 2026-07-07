@@ -5,11 +5,13 @@ class _AgentMessageEntry extends StatelessWidget {
   const _AgentMessageEntry({
     required this.message,
     required this.collapseHeavyContent,
+    required this.useStreamingMarkdown,
     required this.viewModel,
   });
 
   final AgentConversationMessage message;
   final bool collapseHeavyContent;
+  final bool useStreamingMarkdown;
   final AgentConversationViewModel viewModel;
 
   @override
@@ -21,6 +23,7 @@ class _AgentMessageEntry extends StatelessWidget {
       return _AgentMarkdownMessage(
         message: message,
         collapseHeavyContent: collapseHeavyContent,
+        useStreamingMarkdown: useStreamingMarkdown,
       );
     }
     return _AgentBubbleMessage(message: message);
@@ -189,10 +192,12 @@ class _AgentMarkdownMessage extends StatefulWidget {
   const _AgentMarkdownMessage({
     required this.message,
     required this.collapseHeavyContent,
+    required this.useStreamingMarkdown,
   });
 
   final AgentConversationMessage message;
   final bool collapseHeavyContent;
+  final bool useStreamingMarkdown;
 
   @override
   State<_AgentMarkdownMessage> createState() => _AgentMarkdownMessageState();
@@ -200,12 +205,77 @@ class _AgentMarkdownMessage extends StatefulWidget {
 
 class _AgentMarkdownMessageState extends State<_AgentMarkdownMessage> {
   bool _expanded = false;
+  MarkdownController? _markdownController;
+  bool _streamCommitted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncMarkdownController();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AgentMarkdownMessage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.message.id != widget.message.id ||
+        oldWidget.useStreamingMarkdown != widget.useStreamingMarkdown) {
+      _disposeMarkdownController();
+    }
+    _syncMarkdownController();
+  }
+
+  @override
+  void dispose() {
+    _disposeMarkdownController();
+    super.dispose();
+  }
+
+  MarkdownController _ensureMarkdownController() {
+    return _markdownController ??= MarkdownController();
+  }
+
+  void _syncMarkdownController() {
+    if (!widget.useStreamingMarkdown) {
+      _disposeMarkdownController();
+      return;
+    }
+    final controller = _ensureMarkdownController();
+    final nextText = widget.message.text;
+    final currentText = controller.data;
+    if (nextText != currentText) {
+      if (nextText.startsWith(currentText)) {
+        controller.appendChunk(nextText.substring(currentText.length));
+      } else {
+        controller.setData(nextText);
+      }
+      _streamCommitted = false;
+    }
+
+    final isCompleted = widget.message.status == AgentMessageStatus.completed;
+    if (isCompleted && !_streamCommitted) {
+      controller.commitStream();
+      _streamCommitted = true;
+    } else if (!isCompleted) {
+      _streamCommitted = false;
+    }
+  }
+
+  void _disposeMarkdownController() {
+    _markdownController?.dispose();
+    _markdownController = null;
+    _streamCommitted = false;
+  }
 
   @override
   Widget build(BuildContext context) {
     final markdown = widget.message.text;
+    final useStreamingMarkdown = widget.useStreamingMarkdown;
     if (!widget.collapseHeavyContent || !_shouldCollapseMarkdown(markdown)) {
-      return RepaintBoundary(child: _AgentMarkdownBody(data: markdown));
+      return RepaintBoundary(
+        child: useStreamingMarkdown
+            ? _AgentMarkdownBody(controller: _ensureMarkdownController())
+            : _AgentMarkdownBody(data: markdown),
+      );
     }
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -269,18 +339,23 @@ class _AgentMarkdownMessageState extends State<_AgentMarkdownMessage> {
 }
 
 class _AgentMarkdownBody extends StatelessWidget {
-  const _AgentMarkdownBody({required this.data});
+  const _AgentMarkdownBody({this.data, this.controller})
+    : assert((data == null) != (controller == null));
 
-  final String data;
+  final String? data;
+  final MarkdownController? controller;
 
   @override
   Widget build(BuildContext context) {
-    return MarkdownBody(
+    return MarkdownWidget(
       data: data,
-      fitContent: false,
-      selectable: false,
-      softLineBreak: true,
-      styleSheet: _agentMarkdownStyleSheet(context),
+      controller: controller,
+      theme: _agentMarkdownTheme(context),
+      useColumn: true,
+      selectable: true,
+      padding: EdgeInsets.zero,
+      enableCopyFullDocumentShortcut: false,
+      showCopyAllInContextMenu: false,
     );
   }
 }

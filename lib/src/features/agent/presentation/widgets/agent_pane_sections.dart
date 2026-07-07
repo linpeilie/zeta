@@ -129,11 +129,13 @@ class _AgentTurnSection extends StatelessWidget {
   }
 
   Widget _buildTimelineEntry(AgentTimelineEntry entry) {
-    final collapseHeavyContent = viewModel.liveTurnState?.id != turn.id;
+    final isLiveTurn = viewModel.liveTurnState?.id == turn.id;
+    final collapseHeavyContent = !isLiveTurn;
     return switch (entry) {
       AgentMessageTimelineEntry(:final message) => _AgentMessageEntry(
         message: message,
         collapseHeavyContent: collapseHeavyContent,
+        useStreamingMarkdown: isLiveTurn,
         viewModel: viewModel,
       ),
       AgentToolTimelineEntry(:final toolCall) => _AgentToolCallCard(
