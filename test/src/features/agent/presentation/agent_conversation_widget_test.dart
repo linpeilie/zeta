@@ -1432,6 +1432,37 @@ void main() {
     expect(provider.sentMessages.single, 'Summarize the current work');
   });
 
+  testWidgets('renders user messages as selectable text for copy', (
+    tester,
+  ) async {
+    final session = MemorySessionStore();
+    final provider = FakeAgentProvider();
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('agent-message-input')),
+      'Copy this user message',
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.widgetWithText(SelectableText, 'Copy this user message'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('keeps manual scroll position during live agent streaming', (
     tester,
   ) async {

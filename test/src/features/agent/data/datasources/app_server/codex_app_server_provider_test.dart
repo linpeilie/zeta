@@ -89,95 +89,7 @@ void main() {
       await provider.dispose();
     });
 
-    test(
-      'logs structured realtime notifications and server requests',
-      () async {
-        final records = <LogRecord>[];
-        await resetAppLoggingForTesting();
-        configureAppLogging(level: Level.ALL, sink: records.add);
-        addTearDown(resetAppLoggingForTesting);
-
-        final peer = _FakeJsonRpcPeer();
-        final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
-          peer: peer,
-        );
-        addTearDown(provider.dispose);
-
-        await provider.initialize();
-        peer.emitNotification('turn/started', <String, Object?>{
-          'threadId': 'thread-1',
-          'turn': <String, Object?>{'id': 'turn-1'},
-        });
-        peer.emitNotification('item/agentMessage/delta', <String, Object?>{
-          'threadId': 'thread-1',
-          'turnId': 'turn-1',
-          'itemId': 'message-1',
-          'delta': 'Hello',
-        });
-        peer.emitServerRequest(
-          id: 1,
-          method: 'item/commandExecution/requestApproval',
-          params: <String, Object?>{
-            'threadId': 'thread-1',
-            'turnId': 'turn-1',
-            'command': 'flutter test',
-          },
-        );
-        await Future<void>.delayed(Duration.zero);
-
-        final fineMessages = records
-            .where(
-              (record) =>
-                  record.loggerName == 'zeta.agent.codex_app_server' &&
-                  record.level == Level.FINE,
-            )
-            .map((record) => record.message)
-            .toList();
-
-        expect(
-          fineMessages,
-          anyElement(
-            allOf(
-              contains('Realtime notification'),
-              contains('method=turn/started'),
-              contains('threadId=thread-1'),
-              contains('turnId=turn-1'),
-              contains('itemId=-'),
-              contains('events=AgentTurnStartedEvent'),
-            ),
-          ),
-        );
-        expect(
-          fineMessages,
-          anyElement(
-            allOf(
-              contains('Realtime notification'),
-              contains('method=item/agentMessage/delta'),
-              contains('threadId=thread-1'),
-              contains('turnId=turn-1'),
-              contains('itemId=message-1'),
-              contains('events=AgentMessageDeltaEvent'),
-            ),
-          ),
-        );
-        expect(
-          fineMessages,
-          anyElement(
-            allOf(
-              contains('Realtime server request'),
-              contains('method=item/commandExecution/requestApproval'),
-              contains('threadId=thread-1'),
-              contains('turnId=turn-1'),
-              contains('itemId=-'),
-              contains('events=AgentPermissionRequestedEvent'),
-            ),
-          ),
-        );
-      },
-    );
-
-    test('does not log item/completed realtime notifications', () async {
+    test('does not log realtime notifications and server requests', () async {
       final records = <LogRecord>[];
       await resetAppLoggingForTesting();
       configureAppLogging(level: Level.ALL, sink: records.add);
@@ -191,16 +103,25 @@ void main() {
       addTearDown(provider.dispose);
 
       await provider.initialize();
-      peer.emitNotification('item/completed', <String, Object?>{
+      peer.emitNotification('turn/started', <String, Object?>{
+        'threadId': 'thread-1',
+        'turn': <String, Object?>{'id': 'turn-1'},
+      });
+      peer.emitNotification('item/agentMessage/delta', <String, Object?>{
         'threadId': 'thread-1',
         'turnId': 'turn-1',
-        'item': <String, Object?>{
-          'id': 'message-1',
-          'type': 'agentMessage',
-          'text': 'Done',
-          'status': 'completed',
-        },
+        'itemId': 'message-1',
+        'delta': 'Hello',
       });
+      peer.emitServerRequest(
+        id: 1,
+        method: 'item/commandExecution/requestApproval',
+        params: <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'command': 'flutter test',
+        },
+      );
       await Future<void>.delayed(Duration.zero);
 
       final fineMessages = records
@@ -213,12 +134,63 @@ void main() {
           .toList();
 
       expect(
+        fineMessages,
+        isNot(anyElement(contains('Realtime notification'))),
+      );
+      expect(
         fineMessages.where(
-          (message) => message.contains('method=item/completed'),
+          (message) => message.contains('Realtime server request'),
         ),
         isEmpty,
       );
     });
+
+    test(
+      'ignores mcpServer/startupStatus/updated notifications for logs and events',
+      () async {
+        final records = <LogRecord>[];
+        await resetAppLoggingForTesting();
+        configureAppLogging(level: Level.ALL, sink: records.add);
+        addTearDown(resetAppLoggingForTesting);
+
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+        addTearDown(subscription.cancel);
+
+        await provider.initialize();
+        await Future<void>.delayed(Duration.zero);
+        events.clear();
+        records.clear();
+        peer.emitNotification(
+          'mcpServer/startupStatus/updated',
+          <String, Object?>{'status': 'starting', 'message': 'warming'},
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        final codexFineMessages = records
+            .where(
+              (record) =>
+                  record.loggerName == 'zeta.agent.codex_app_server' &&
+                  record.level == Level.FINE,
+            )
+            .map((record) => record.message)
+            .toList();
+
+        expect(events, isEmpty);
+        expect(
+          codexFineMessages.where(
+            (message) => message.contains('mcpServer/startupStatus/updated'),
+          ),
+          isEmpty,
+        );
+      },
+    );
 
     test(
       'maps completed agent message notifications without creating tool cards',

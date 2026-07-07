@@ -401,6 +401,9 @@ class CodexAppServerAgentProvider implements AgentProvider {
 
   /// 将服务端通知委托给通知映射器，再由 provider 协调状态变更。
   void _handleNotification(JsonRpcNotification notification) {
+    if (_shouldIgnoreNotification(notification.method)) {
+      return;
+    }
     if (_isErrorNotification(notification.method)) {
       _log.warning(
         'Codex ${notification.method}: '
@@ -437,7 +440,6 @@ class CodexAppServerAgentProvider implements AgentProvider {
       }
     }
 
-    _logRealtimeNotification(notification, mapping.events);
     for (final event in mapping.events) {
       _events.add(event);
     }
@@ -446,7 +448,6 @@ class CodexAppServerAgentProvider implements AgentProvider {
   /// 将服务端审批请求委托给审批映射器，再由 provider 保存待处理状态。
   void _handleServerRequest(JsonRpcRequest request) {
     final mapped = _approvalMapper.mapRequest(request);
-    _logRealtimeServerRequest(request, mapped.event);
     _pendingApprovals[mapped.pendingApproval.id] = mapped.pendingApproval;
     _events.add(mapped.event);
   }
@@ -478,62 +479,10 @@ class CodexAppServerAgentProvider implements AgentProvider {
     }
   }
 
-  void _logRealtimeNotification(
-    JsonRpcNotification notification,
-    List<AgentEvent> events,
-  ) {
-    if (events.isEmpty || notification.method == 'item/completed') {
-      return;
-    }
-    _log.fine(
-      'Realtime notification '
-      'method=${notification.method} '
-      'threadId=${_realtimeThreadId(notification.params) ?? '-'} '
-      'turnId=${_realtimeTurnId(notification.params) ?? '-'} '
-      'itemId=${_realtimeItemId(notification.params) ?? '-'} '
-      'events=${events.map(_agentEventName).join(',')}',
-    );
-  }
-
-  void _logRealtimeServerRequest(JsonRpcRequest request, AgentEvent event) {
-    _log.fine(
-      'Realtime server request '
-      'method=${request.method} '
-      'threadId=${_realtimeThreadId(request.params) ?? '-'} '
-      'turnId=${_realtimeTurnId(request.params) ?? '-'} '
-      'itemId=${_realtimeItemId(request.params) ?? '-'} '
-      'events=${_agentEventName(event)}',
-    );
-  }
-
-  String? _realtimeThreadId(Map<String, Object?> params) {
-    return _string(params['threadId']) ?? _string(_map(params['thread'])['id']);
-  }
-
-  String? _realtimeTurnId(Map<String, Object?> params) {
-    return _string(params['turnId']) ?? _string(_map(params['turn'])['id']);
-  }
-
-  String? _realtimeItemId(Map<String, Object?> params) {
-    return _string(params['itemId']) ??
-        _string(params['toolCallId']) ??
-        _string(_map(params['item'])['id']);
-  }
-
-  String _agentEventName(AgentEvent event) {
-    return switch (event) {
-      AgentStatusEvent() => 'AgentStatusEvent',
-      AgentSessionStartedEvent() => 'AgentSessionStartedEvent',
-      AgentTurnStartedEvent() => 'AgentTurnStartedEvent',
-      AgentTurnCompletedEvent() => 'AgentTurnCompletedEvent',
-      AgentTokenUsageEvent() => 'AgentTokenUsageEvent',
-      AgentMessageDeltaEvent() => 'AgentMessageDeltaEvent',
-      AgentMessageUpdatedEvent() => 'AgentMessageUpdatedEvent',
-      AgentPlanUpdatedEvent() => 'AgentPlanUpdatedEvent',
-      AgentToolCallEvent() => 'AgentToolCallEvent',
-      AgentPermissionRequestedEvent() => 'AgentPermissionRequestedEvent',
-      AgentErrorEvent() => 'AgentErrorEvent',
-      AgentModelListEvent() => 'AgentModelListEvent',
+  bool _shouldIgnoreNotification(String method) {
+    return switch (method) {
+      'mcpServer/startupStatus/updated' => true,
+      _ => false,
     };
   }
 }

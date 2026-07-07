@@ -73,55 +73,61 @@ void main() {
       await transport.close();
     });
 
-    test('logs full JSON-RPC payloads for stdout and stderr', () async {
-      final transport = JsonRpcStdioTransport(
-        command: 'fake-json-rpc-server',
-        processStarter: _fakeProcessStarter((process, message) {
-          process
-            ..writeStderr('stderr: ${message['method']}')
-            ..writeStdout(<String, Object?>{
-              'method': 'server/notice',
-              'params': <String, Object?>{'echo': message['method']},
-            })
-            ..writeStdout(<String, Object?>{
-              'id': message['id'],
-              'result': <String, Object?>{'ok': true},
-            });
-        }),
-      );
+    test(
+      'does not log incoming JSON-RPC notifications and keeps stderr logs',
+      () async {
+        final transport = JsonRpcStdioTransport(
+          command: 'fake-json-rpc-server',
+          processStarter: _fakeProcessStarter((process, message) {
+            process
+              ..writeStderr('stderr: ${message['method']}')
+              ..writeStdout(<String, Object?>{
+                'method': 'server/notice',
+                'params': <String, Object?>{'echo': message['method']},
+              })
+              ..writeStdout(<String, Object?>{
+                'id': message['id'],
+                'result': <String, Object?>{'ok': true},
+              });
+          }),
+        );
 
-      await transport.start();
-      final stderrFuture = transport.stderrLines.first;
-      await transport.sendRequest('ping');
-      expect(await stderrFuture, 'stderr: ping');
-      await transport.close();
+        await transport.start();
+        final stderrFuture = transport.stderrLines.first;
+        await transport.sendRequest('ping');
+        expect(await stderrFuture, 'stderr: ping');
+        await transport.close();
 
-      final messages = records
-          .where((record) => record.loggerName == 'zeta.agent.json_rpc_stdio')
-          .map((record) => record.message)
-          .toList();
-      expect(
-        messages,
-        contains(
-          'Sending JSON-RPC request ping with id 1: '
-          '{"id":1,"method":"ping","params":{}}',
-        ),
-      );
-      expect(
-        messages,
-        contains(
-          'Received JSON-RPC stdout line: '
-          '{"method":"server/notice","params":{"echo":"ping"}}',
-        ),
-      );
-      expect(
-        messages,
-        contains(
-          'Received JSON-RPC stdout line: {"id":1,"result":{"ok":true}}',
-        ),
-      );
-      expect(messages, contains('Received JSON-RPC stderr line: stderr: ping'));
-    });
+        final messages = records
+            .where((record) => record.loggerName == 'zeta.agent.json_rpc_stdio')
+            .map((record) => record.message)
+            .toList();
+        expect(
+          messages,
+          contains(
+            'Sending JSON-RPC request ping with id 1: '
+            '{"id":1,"method":"ping","params":{}}',
+          ),
+        );
+        expect(
+          messages,
+          isNot(anyElement(contains('Received JSON-RPC notification'))),
+        );
+        expect(
+          messages,
+          anyElement(
+            allOf(
+              contains('Received JSON-RPC response id=1'),
+              contains('characters'),
+            ),
+          ),
+        );
+        expect(
+          messages,
+          contains('Received JSON-RPC stderr line: stderr: ping'),
+        );
+      },
+    );
 
     test('reports invalid stdout without closing the transport', () async {
       final transport = JsonRpcStdioTransport(

@@ -359,7 +359,7 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
     if (line.trim().isEmpty) {
       return;
     }
-    _log.fine('Received JSON-RPC stdout line: $line');
+    final payloadLength = line.length;
 
     final Object? decoded;
     try {
@@ -392,13 +392,19 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
     final id = raw['id'];
     // JSON-RPC 响应：带 id 且包含 result 或 error。
     if (id != null && (raw.containsKey('result') || raw.containsKey('error'))) {
+      _log.fine(
+        'Received JSON-RPC response id=$id ($payloadLength characters)',
+      );
       _handleResponse(id, raw);
       return;
     }
 
     // 服务端请求：带 id 和 method，需要客户端稍后 sendResponse。
     if (method is String && id != null) {
-      _log.fine('Received JSON-RPC server request $method');
+      _log.fine(
+        'Received JSON-RPC server request $method '
+        'id=$id ($payloadLength characters)',
+      );
       _serverRequests.add(
         JsonRpcRequest(
           id: id,
@@ -412,7 +418,6 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
 
     // 服务端通知：只有 method，不需要响应。
     if (method is String) {
-      _log.fine('Received JSON-RPC notification $method');
       _notifications.add(
         JsonRpcNotification(
           method: method,

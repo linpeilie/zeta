@@ -170,7 +170,7 @@ class _AgentBubbleMessage extends StatelessWidget {
                 children: [
                   const SizedBox(width: 8),
                   Flexible(
-                    child: Text(
+                    child: SelectableText(
                       message.text,
                       style: const TextStyle(height: 1.35),
                     ),
