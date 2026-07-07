@@ -1,5 +1,7 @@
 import 'package:zeta/src/features/agent/domain/agent_model_codec.dart';
 
+const Object agentThreadSummaryUnset = Object();
+
 /// Agent thread 当前运行状态。
 enum AgentThreadRuntimeStatus { notLoaded, idle, active, systemError, unknown }
 
@@ -73,6 +75,40 @@ class AgentThreadSummary {
 
   /// 旧展示标题入口，保留给尚未迁移的调用点。
   String get displayTitle => displayName;
+
+  AgentThreadSummary copyWith({
+    String? id,
+    String? providerId,
+    String? projectPath,
+    Object? title = agentThreadSummaryUnset,
+    Object? sessionPath = agentThreadSummaryUnset,
+    String? preview,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Object? recencyAt = agentThreadSummaryUnset,
+    AgentThreadRuntimeStatus? status,
+    Map<String, Object?>? raw,
+  }) {
+    return AgentThreadSummary(
+      id: id ?? this.id,
+      providerId: providerId ?? this.providerId,
+      projectPath: projectPath ?? this.projectPath,
+      title: identical(title, agentThreadSummaryUnset)
+          ? this.title
+          : title as String?,
+      sessionPath: identical(sessionPath, agentThreadSummaryUnset)
+          ? this.sessionPath
+          : sessionPath as String?,
+      preview: preview ?? this.preview,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      recencyAt: identical(recencyAt, agentThreadSummaryUnset)
+          ? this.recencyAt
+          : recencyAt as DateTime?,
+      status: status ?? this.status,
+      raw: raw ?? this.raw,
+    );
+  }
 
   Map<String, Object?> toJson() {
     return <String, Object?>{

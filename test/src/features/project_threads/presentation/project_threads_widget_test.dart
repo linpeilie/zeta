@@ -202,4 +202,92 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets(
+    'shows a running icon instead of relative time for active threads',
+    (tester) async {
+      final session = MemorySessionStore();
+      final directory = Directory.systemTemp.createTempSync('zeta_test_');
+      tempDirectories.add(directory);
+      File(
+        '${directory.path}${Platform.pathSeparator}sample.txt',
+      ).writeAsStringSync('hello from zeta');
+      final now = DateTime.now();
+
+      final provider = FakeAgentProvider(
+        threadPages: <AgentThreadPage>[
+          AgentThreadPage(
+            threads: <AgentThreadSummary>[
+              agentThread(
+                id: 'thread-a',
+                projectPath: directory.path,
+                title: 'Running thread',
+                lastActiveAt: now.subtract(const Duration(minutes: 5)),
+              ),
+            ],
+            nextCursor: null,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MainApp(
+          enableNativeWindowFrame: false,
+          directoryPicker: () async => directory.path,
+          sessionLoader: session.load,
+          sessionSaver: session.save,
+          agentProviderFactory: FakeAgentProviderFactory(provider),
+          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        ),
+      );
+
+      await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+      await tester.runAsync(waitForIo);
+      await tester.pumpAndSettle();
+
+      expect(find.text('5m'), findsOneWidget);
+      expect(
+        find.byKey(
+          ValueKey<String>(
+            'project-thread-running-icon-${directory.path}-thread-a',
+          ),
+        ),
+        findsNothing,
+      );
+
+      provider.emit(
+        const AgentTurnStartedEvent(
+          AgentTurn(id: 'turn-1', sessionId: 'thread-a'),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('5m'), findsNothing);
+      expect(
+        find.byKey(
+          ValueKey<String>(
+            'project-thread-running-icon-${directory.path}-thread-a',
+          ),
+        ),
+        findsOneWidget,
+      );
+
+      provider.emit(
+        const AgentTurnCompletedEvent(sessionId: 'thread-a', turnId: 'turn-1'),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        find.byKey(
+          ValueKey<String>(
+            'project-thread-running-icon-${directory.path}-thread-a',
+          ),
+        ),
+        findsNothing,
+      );
+      expect(find.text('5m'), findsOneWidget);
+    },
+  );
 }

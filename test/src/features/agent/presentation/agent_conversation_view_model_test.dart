@@ -659,6 +659,88 @@ void main() {
     );
 
     test(
+      'throttles high-frequency tool output updates into a single live flush',
+      () async {
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.sendMessage('hello');
+
+        final liveTurn = viewModel.liveTurnState;
+        expect(liveTurn, isNotNull);
+
+        var historyNotifications = 0;
+        var headerNotifications = 0;
+        var composerNotifications = 0;
+        var liveNotifications = 0;
+        var autoScrollNotifications = 0;
+        viewModel.historyVersionListenable.addListener(() {
+          historyNotifications += 1;
+        });
+        viewModel.headerVersionListenable.addListener(() {
+          headerNotifications += 1;
+        });
+        viewModel.composerVersionListenable.addListener(() {
+          composerNotifications += 1;
+        });
+        viewModel.autoScrollTickListenable.addListener(() {
+          autoScrollNotifications += 1;
+        });
+        liveTurn!.addListener(() {
+          liveNotifications += 1;
+        });
+
+        final historyVersion = viewModel.historyVersion;
+        final headerVersion = viewModel.headerVersion;
+        final composerVersion = viewModel.composerVersion;
+        final autoScrollTick = viewModel.autoScrollTick;
+
+        provider.emit(
+          const AgentToolCallEvent(
+            AgentToolCall(
+              id: 'tool-1',
+              title: 'Command output',
+              kind: AgentToolKind.execute,
+              status: AgentToolStatus.inProgress,
+              content: 'line 1',
+            ),
+          ),
+        );
+        provider.emit(
+          const AgentToolCallEvent(
+            AgentToolCall(
+              id: 'tool-1',
+              title: 'Command output',
+              kind: AgentToolKind.execute,
+              status: AgentToolStatus.inProgress,
+              content: 'line 2',
+            ),
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 24));
+
+        expect(viewModel.historyVersion, historyVersion);
+        expect(viewModel.headerVersion, headerVersion);
+        expect(viewModel.composerVersion, composerVersion);
+        expect(viewModel.autoScrollTick, greaterThan(autoScrollTick));
+        expect(historyNotifications, 0);
+        expect(headerNotifications, 0);
+        expect(composerNotifications, 0);
+        expect(liveNotifications, 1);
+        expect(autoScrollNotifications, 1);
+        expect(
+          viewModel.timelineEntries
+              .whereType<AgentToolTimelineEntry>()
+              .single
+              .toolCall
+              .content,
+          'line 2',
+        );
+      },
+    );
+
+    test(
       'moves a completed live turn into the capped history window',
       () async {
         final provider = _FakeAgentProvider(

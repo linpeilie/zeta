@@ -75,6 +75,51 @@ void main() {
     });
 
     test(
+      'tracks running thread ids from provider turn lifecycle events',
+      () async {
+        final provider = _FakeAgentProvider(
+          pages: <AgentThreadPage>[_page(_threads(1), nextCursor: null)],
+        );
+        final controller = _createController(provider);
+
+        controller.activateProject('/repo');
+        await _flushAsync();
+
+        provider.emit(
+          const AgentTurnStartedEvent(
+            AgentTurn(id: 'turn-1', sessionId: 'thread-0'),
+          ),
+        );
+        await _flushAsync();
+
+        expect(controller.stateFor('/repo').runningThreadIds, <String>{
+          'thread-0',
+        });
+
+        provider.emit(
+          const AgentTurnStartedEvent(
+            AgentTurn(id: 'turn-2', sessionId: 'thread-unknown'),
+          ),
+        );
+        await _flushAsync();
+
+        expect(controller.stateFor('/repo').runningThreadIds, <String>{
+          'thread-0',
+        });
+
+        provider.emit(
+          const AgentTurnCompletedEvent(
+            sessionId: 'thread-0',
+            turnId: 'turn-1',
+          ),
+        );
+        await _flushAsync();
+
+        expect(controller.stateFor('/repo').runningThreadIds, isEmpty);
+      },
+    );
+
+    test(
       'ignores duplicate loads while a project is already loading',
       () async {
         final provider = _FakeAgentProvider(
@@ -290,5 +335,9 @@ class _FakeAgentProvider implements AgentProvider {
   @override
   Future<void> dispose() async {
     await _events.close();
+  }
+
+  void emit(AgentEvent event) {
+    _events.add(event);
   }
 }

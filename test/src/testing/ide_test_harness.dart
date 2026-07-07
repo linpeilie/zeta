@@ -63,6 +63,7 @@ AgentThreadSummary agentThread({
   required String title,
   String? preview,
   DateTime? lastActiveAt,
+  AgentThreadRuntimeStatus status = AgentThreadRuntimeStatus.idle,
 }) {
   final activeAt = lastActiveAt ?? DateTime.fromMillisecondsSinceEpoch(2);
   return AgentThreadSummary(
@@ -75,7 +76,7 @@ AgentThreadSummary agentThread({
     createdAt: DateTime.fromMillisecondsSinceEpoch(1),
     updatedAt: activeAt,
     recencyAt: activeAt,
-    status: AgentThreadRuntimeStatus.idle,
+    status: status,
   );
 }
 

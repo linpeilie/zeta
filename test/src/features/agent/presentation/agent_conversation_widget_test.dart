@@ -1048,6 +1048,95 @@ void main() {
     );
   });
 
+  testWidgets(
+    'shows running icons in both the header and project thread list for an active thread',
+    (tester) async {
+      final session = MemorySessionStore();
+      final directory = Directory.systemTemp.createTempSync('zeta_test_');
+      tempDirectories.add(directory);
+      File(
+        '${directory.path}${Platform.pathSeparator}sample.txt',
+      ).writeAsStringSync('hello from zeta');
+
+      final provider = FakeAgentProvider(
+        completeTurns: false,
+        sessionTitle: 'Running thread',
+        threadPages: <AgentThreadPage>[
+          AgentThreadPage(
+            threads: <AgentThreadSummary>[
+              agentThread(
+                id: 'thread-a',
+                projectPath: directory.path,
+                title: 'Running thread',
+              ),
+            ],
+            nextCursor: null,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MainApp(
+          enableNativeWindowFrame: false,
+          directoryPicker: () async => directory.path,
+          sessionLoader: session.load,
+          sessionSaver: session.save,
+          agentProviderFactory: FakeAgentProviderFactory(provider),
+          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        ),
+      );
+
+      await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+      await tester.runAsync(waitForIo);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(
+          ValueKey<String>('project-thread-${directory.path}-thread-a'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('agent-message-input')),
+        'Keep running',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('agent-header-running-icon')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          ValueKey<String>(
+            'project-thread-running-icon-${directory.path}-thread-a',
+          ),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('agent-cancel-button')));
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('agent-header-running-icon')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(
+          ValueKey<String>(
+            'project-thread-running-icon-${directory.path}-thread-a',
+          ),
+        ),
+        findsNothing,
+      );
+    },
+  );
+
   testWidgets('keeps the flattened agent pane stable in a narrow window', (
     tester,
   ) async {

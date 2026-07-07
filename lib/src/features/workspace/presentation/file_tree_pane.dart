@@ -26,7 +26,7 @@ class FileTreePane extends StatelessWidget {
   Widget build(BuildContext context) {
     String title = "Files";
     if (projectPath != null) {
-      title = "Files • " + fileName(projectPath!);
+      title = 'Files • ${fileName(projectPath!)}';
     }
     return Pane(
       title: title,

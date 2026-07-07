@@ -183,7 +183,9 @@ class _ProjectThreadList extends StatelessWidget {
       for (final thread in state.threads)
         _ThreadTile(
           projectPath: projectPath,
-          thread: thread,
+          thread: state.runningThreadIds.contains(thread.id)
+              ? thread.copyWith(status: AgentThreadRuntimeStatus.active)
+              : thread,
           selected: thread.id == state.selectedThreadId,
           onTap: () => onSelectThread(projectPath, thread),
         ),
@@ -224,6 +226,7 @@ class _ThreadTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isRunning = thread.status == AgentThreadRuntimeStatus.active;
     final lastActiveLabel = _relativeThreadTime(
       thread.lastActiveAt,
       DateTime.now(),
@@ -260,7 +263,17 @@ class _ThreadTile extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (lastActiveLabel != null) ...[
+                if (isRunning) ...[
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.autorenew_rounded,
+                    key: ValueKey<String>(
+                      'project-thread-running-icon-$projectPath-${thread.id}',
+                    ),
+                    size: 14,
+                    color: ideAccentColor,
+                  ),
+                ] else if (lastActiveLabel != null) ...[
                   const SizedBox(width: 8),
                   Text(
                     lastActiveLabel,

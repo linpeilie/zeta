@@ -125,6 +125,7 @@ class IdeShellController extends ChangeNotifier {
       await _loadProject(projectPath, activateThreads: false);
     }
 
+    projectThreadsController.registerThreadMapping(projectPath, thread.id);
     projectThreadsController.selectThread(projectPath, thread);
     _agentThreadIdsByProject[projectPath] = thread.id;
     _requestSessionSave();
@@ -276,6 +277,9 @@ class IdeShellController extends ChangeNotifier {
       activeProjectPath: session.activeProjectPath,
       snapshot: projectThreadsSessionSnapshotFromIdeSessionState(session),
     );
+    for (final entry in _agentThreadIdsByProject.entries) {
+      projectThreadsController.registerThreadMapping(entry.key, entry.value);
+    }
     _syncAgentWorkspace();
     _log.info(
       'Restored IDE session with ${session.projectPaths.length} projects',
@@ -336,13 +340,20 @@ class IdeShellController extends ChangeNotifier {
 
   void _syncAgentWorkspace() {
     final projectPath = _projectPath;
+    final restoredSessionId = projectPath == null
+        ? null
+        : _agentThreadIdsByProject[projectPath];
+    if (projectPath != null && restoredSessionId != null) {
+      projectThreadsController.registerThreadMapping(
+        projectPath,
+        restoredSessionId,
+      );
+    }
     // Agent 上下文只传项目路径和当前文件路径；不会读取文件内容。
     agentViewModel.updateWorkspace(
       projectPath: projectPath,
       contextFilePath: _currentFilePath,
-      restoredSessionId: projectPath == null
-          ? null
-          : _agentThreadIdsByProject[projectPath],
+      restoredSessionId: restoredSessionId,
     );
     // 项目就绪后预加载模型列表，使输入框下方控件在发送前可用。
     if (projectPath != null) {
@@ -362,6 +373,7 @@ class IdeShellController extends ChangeNotifier {
 
     // Agent 创建或恢复 thread 后，把 thread id 写回项目级映射。
     _agentThreadIdsByProject[projectPath] = sessionId;
+    projectThreadsController.registerThreadMapping(projectPath, sessionId);
     projectThreadsController.selectThreadId(projectPath, sessionId);
     _requestSessionSave();
   }
@@ -387,6 +399,7 @@ class IdeShellController extends ChangeNotifier {
     _sessionCoordinator.dispose();
     projectThreadsViewModel.removeListener(_handleProjectThreadsChanged);
     agentViewModel.removeListener(_handleAgentChanged);
+    projectThreadsController.dispose();
     projectThreadsViewModel.dispose();
     agentViewModel.dispose();
     agentProviderController.dispose();

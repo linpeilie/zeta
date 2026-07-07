@@ -13,6 +13,7 @@ class ProjectThreadListState {
     this.isLoadingInitial = false,
     this.isLoadingMore = false,
     this.threads = const <AgentThreadSummary>[],
+    this.runningThreadIds = const <String>{},
     this.nextCursor,
     this.errorMessage,
     this.selectedThreadId,
@@ -33,6 +34,9 @@ class ProjectThreadListState {
   /// 已加载的 thread 摘要。
   final List<AgentThreadSummary> threads;
 
+  /// 当前项目内临时标记为执行中的 thread id。
+  final Set<String> runningThreadIds;
+
   /// 下一页游标，空表示没有更多。
   final String? nextCursor;
 
@@ -50,6 +54,7 @@ class ProjectThreadListState {
     bool? isLoadingInitial,
     bool? isLoadingMore,
     List<AgentThreadSummary>? threads,
+    Set<String>? runningThreadIds,
     Object? nextCursor = projectThreadUnset,
     Object? errorMessage = projectThreadUnset,
     Object? selectedThreadId = projectThreadUnset,
@@ -60,6 +65,9 @@ class ProjectThreadListState {
       isLoadingInitial: isLoadingInitial ?? this.isLoadingInitial,
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       threads: threads ?? this.threads,
+      runningThreadIds: runningThreadIds == null
+          ? this.runningThreadIds
+          : Set<String>.unmodifiable(runningThreadIds),
       nextCursor: identical(nextCursor, projectThreadUnset)
           ? this.nextCursor
           : nextCursor as String?,

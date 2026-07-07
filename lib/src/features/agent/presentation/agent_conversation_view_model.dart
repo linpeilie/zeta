@@ -684,6 +684,10 @@ class AgentConversationViewModel extends ChangeNotifier {
           break;
         }
         _timeline.upsertToolCall(event.toolCall);
+        if (event.toolCall.status == AgentToolStatus.inProgress) {
+          _scheduleStreamFlush(autoScroll: true);
+          break;
+        }
         _flushStreamChangesNow(liveTurn: true, autoScroll: true);
       case AgentPermissionRequestedEvent():
         if (!_shouldHandleEventForCurrentThread(
