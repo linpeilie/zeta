@@ -1,6 +1,7 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
+import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/data/default_agent_provider_factory.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -21,6 +22,7 @@ class MainApp extends StatelessWidget {
     this.sessionSaver,
     this.agentProviderFactory,
     this.agentProviderConfigStore,
+    this.projectLocationOpener,
   });
 
   final Future<String?> Function()? directoryPicker;
@@ -29,6 +31,7 @@ class MainApp extends StatelessWidget {
   final Future<void> Function(String value)? sessionSaver;
   final AgentProviderFactory? agentProviderFactory;
   final AgentProviderConfigStore? agentProviderConfigStore;
+  final ProjectLocationOpener? projectLocationOpener;
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +47,8 @@ class MainApp extends StatelessWidget {
             agentProviderFactory ?? const DefaultAgentProviderFactory(),
         agentProviderConfigStore:
             agentProviderConfigStore ?? _createAgentProviderConfigStore(),
+        projectLocationOpener:
+            projectLocationOpener ?? openPathInSystemFileManager,
       ),
     );
   }

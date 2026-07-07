@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_treeview/flutter_treeview.dart' as tree;
 
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -38,6 +39,7 @@ class IdeShellController extends ChangeNotifier {
     required IdeSessionStore sessionStore,
     required AgentProviderFactory agentProviderFactory,
     required AgentProviderConfigStore agentProviderConfigStore,
+    this._projectLocationOpener = openPathInSystemFileManager,
     this._statusReporter,
   }) : agentProviderController = ActiveAgentProviderController(
          providerFactory: agentProviderFactory,
@@ -62,6 +64,7 @@ class IdeShellController extends ChangeNotifier {
   }
 
   final IdeDirectoryPicker _directoryPicker;
+  final ProjectLocationOpener _projectLocationOpener;
   final IdeShellStatusReporter? _statusReporter;
   final IdeSessionPersistenceCoordinator _sessionCoordinator;
 
@@ -115,6 +118,71 @@ class IdeShellController extends ChangeNotifier {
 
   Future<void> retryThreads(String projectPath) {
     return projectThreadsController.loadInitial(projectPath);
+  }
+
+  Future<void> startNewThreadForProject(String projectPath) async {
+    _sessionCoordinator.cancelPendingRestore();
+    if (projectPath != _projectPath) {
+      await _loadProject(projectPath, activateThreads: false);
+      if (_projectPath != projectPath) {
+        return;
+      }
+    }
+
+    projectThreadsController.clearSelectedThread(projectPath);
+    _agentThreadIdsByProject.remove(projectPath);
+    agentViewModel.updateWorkspace(
+      projectPath: projectPath,
+      contextFilePath: _currentFilePath,
+      resetConversation: true,
+    );
+    _requestSessionSave();
+    _notifyStateChanged();
+  }
+
+  Future<void> openProjectInSystemFileManager(String projectPath) async {
+    try {
+      await _projectLocationOpener(projectPath);
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Could not open project location in system file manager: $projectPath',
+        error,
+        stackTrace,
+      );
+      _statusReporter?.call('Could not open project location: $error');
+    }
+  }
+
+  Future<void> removeProject(String path) async {
+    final index = _projects.indexOf(path);
+    if (index == -1) {
+      return;
+    }
+
+    _sessionCoordinator.cancelPendingRestore();
+    final wasActive = path == _projectPath;
+    final nextProjectPath = wasActive && index + 1 < _projects.length
+        ? _projects[index + 1]
+        : null;
+
+    _projects.removeAt(index);
+    _agentThreadIdsByProject.remove(path);
+    projectThreadsController.retainProjects(_projects);
+
+    if (!wasActive) {
+      _requestSessionSave();
+      _notifyStateChanged();
+      return;
+    }
+
+    if (nextProjectPath != null) {
+      await _loadProject(nextProjectPath, activateThreads: false);
+      if (_projectPath == nextProjectPath) {
+        return;
+      }
+    }
+
+    _clearActiveWorkspace();
   }
 
   Future<void> selectProjectThread(
@@ -304,6 +372,15 @@ class IdeShellController extends ChangeNotifier {
 
   void _requestSessionSave() {
     _sessionCoordinator.requestSave(_currentSessionState());
+  }
+
+  void _clearActiveWorkspace() {
+    _projectPath = null;
+    _currentFilePath = null;
+    _treeController = tree.TreeViewController();
+    _syncAgentWorkspace();
+    _requestSessionSave();
+    _notifyStateChanged();
   }
 
   IdeSessionState _currentSessionState() {

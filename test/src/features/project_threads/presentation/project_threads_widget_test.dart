@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/main.dart';
@@ -130,14 +131,37 @@ void main() {
     expect(find.text('Hidden preview text'), findsNothing);
     expect(find.text('5m'), findsOneWidget);
     expect(find.text('3d'), findsOneWidget);
-    expect(find.byIcon(Icons.keyboard_arrow_down_rounded), findsOneWidget);
+    expect(
+      find.byKey(ValueKey<String>('project-tile-new-thread-${directory.path}')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(ValueKey<String>('project-tile-more-${directory.path}')),
+      findsNothing,
+    );
+
+    final mouse = await hoverProjectTile(tester, directory.path);
+    addTearDown(mouse.removePointer);
+    expect(
+      find.byKey(
+        ValueKey<String>('project-tile-expand-icon-${directory.path}'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(ValueKey<String>('project-tile-more-${directory.path}')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(ValueKey<String>('project-tile-new-thread-${directory.path}')),
+      findsOneWidget,
+    );
 
     await tester.tap(
       find.byKey(ValueKey<String>('project-tile-${directory.path}')),
     );
     await tester.pump();
     expect(find.text('Initial thread'), findsNothing);
-    expect(find.byIcon(Icons.chevron_right_rounded), findsOneWidget);
 
     await tester.tap(
       find.byKey(ValueKey<String>('project-tile-${directory.path}')),
@@ -290,4 +314,402 @@ void main() {
       expect(find.text('5m'), findsOneWidget);
     },
   );
+
+  testWidgets('shows project actions only while hovered', (tester) async {
+    final session = MemorySessionStore();
+    final directory = Directory.systemTemp.createTempSync('zeta_test_');
+    tempDirectories.add(directory);
+    File(
+      '${directory.path}${Platform.pathSeparator}sample.txt',
+    ).writeAsStringSync('hello from zeta');
+
+    final provider = FakeAgentProvider(
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[
+            agentThread(
+              id: 'thread-a',
+              projectPath: directory.path,
+              title: 'Hover thread',
+            ),
+          ],
+          nextCursor: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        directoryPicker: () async => directory.path,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await tester.runAsync(waitForIo);
+    await tester.pumpAndSettle();
+
+    final tileFinder = find.byKey(
+      ValueKey<String>('project-tile-${directory.path}'),
+    );
+    final initialHeight = tester.getSize(tileFinder).height;
+
+    expect(
+      find.byKey(ValueKey<String>('project-tile-actions-${directory.path}')),
+      findsNothing,
+    );
+
+    final mouse = await hoverProjectTile(tester, directory.path);
+    addTearDown(mouse.removePointer);
+    final hoveredHeight = tester.getSize(tileFinder).height;
+    expect(
+      find.byKey(ValueKey<String>('project-tile-actions-${directory.path}')),
+      findsOneWidget,
+    );
+    expect(hoveredHeight, initialHeight);
+
+    await mouse.moveTo(Offset.zero);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(ValueKey<String>('project-tile-actions-${directory.path}')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('starts a blank new thread from the project action', (
+    tester,
+  ) async {
+    final session = MemorySessionStore();
+    final directory = Directory.systemTemp.createTempSync('zeta_test_');
+    tempDirectories.add(directory);
+    File(
+      '${directory.path}${Platform.pathSeparator}sample.txt',
+    ).writeAsStringSync('hello from zeta');
+
+    final provider = FakeAgentProvider(
+      threadHistories: <String, AgentThreadHistorySnapshot>{
+        'thread-a': AgentThreadHistorySnapshot(
+          threadId: 'thread-a',
+          turns: <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-a-1',
+              entries: const <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'history-user-1',
+                  role: AgentMessageRole.user,
+                  text: 'Previously asked question',
+                ),
+                AgentHistoryMessageEntry(
+                  id: 'history-agent-1',
+                  role: AgentMessageRole.agent,
+                  text: 'Historical answer',
+                ),
+              ],
+            ),
+          ],
+        ),
+      },
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[
+            agentThread(
+              id: 'thread-a',
+              projectPath: directory.path,
+              title: 'Initial thread',
+            ),
+          ],
+          nextCursor: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        directoryPicker: () async => directory.path,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await tester.runAsync(waitForIo);
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(ValueKey<String>('project-thread-${directory.path}-thread-a')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(headerTitleText(tester), 'Initial thread');
+    expect(find.text('Previously asked question'), findsOneWidget);
+
+    final mouse = await hoverProjectTile(tester, directory.path);
+    addTearDown(mouse.removePointer);
+    await tester.tap(
+      find.byKey(ValueKey<String>('project-tile-new-thread-${directory.path}')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(headerTitleText(tester), 'New thread');
+    expect(find.text('Previously asked question'), findsNothing);
+    expect(find.text('Historical answer'), findsNothing);
+  });
+
+  testWidgets('opens the project location from the more menu', (tester) async {
+    final session = MemorySessionStore();
+    final directory = Directory.systemTemp.createTempSync('zeta_test_');
+    tempDirectories.add(directory);
+    File(
+      '${directory.path}${Platform.pathSeparator}sample.txt',
+    ).writeAsStringSync('hello from zeta');
+    final openedPaths = <String>[];
+
+    final provider = FakeAgentProvider(
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[
+            agentThread(
+              id: 'thread-a',
+              projectPath: directory.path,
+              title: 'Menu thread',
+            ),
+          ],
+          nextCursor: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        directoryPicker: () async => directory.path,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        projectLocationOpener: (path) async {
+          openedPaths.add(path);
+        },
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await tester.runAsync(waitForIo);
+    await tester.pumpAndSettle();
+
+    final mouse = await hoverProjectTile(tester, directory.path);
+    addTearDown(mouse.removePointer);
+    await tester.tap(
+      find.byKey(ValueKey<String>('project-tile-more-menu-${directory.path}')),
+    );
+    await tester.pumpAndSettle();
+
+    final dynamic openLocationItemState = tester.state(
+      find.byKey(
+        ValueKey<String>('project-tile-open-location-${directory.path}'),
+      ),
+    );
+    openLocationItemState.handleTap();
+    await tester.pumpAndSettle();
+
+    expect(openedPaths, <String>[directory.path]);
+  });
+
+  testWidgets('refreshes the project thread list from the more menu', (
+    tester,
+  ) async {
+    final session = MemorySessionStore();
+    final directory = Directory.systemTemp.createTempSync('zeta_test_');
+    tempDirectories.add(directory);
+    File(
+      '${directory.path}${Platform.pathSeparator}sample.txt',
+    ).writeAsStringSync('hello from zeta');
+
+    final provider = FakeAgentProvider(
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[
+            agentThread(
+              id: 'thread-a',
+              projectPath: directory.path,
+              title: 'Initial thread',
+            ),
+          ],
+          nextCursor: null,
+        ),
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[
+            agentThread(
+              id: 'thread-b',
+              projectPath: directory.path,
+              title: 'Refreshed thread',
+            ),
+          ],
+          nextCursor: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        directoryPicker: () async => directory.path,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await tester.runAsync(waitForIo);
+    await tester.pumpAndSettle();
+
+    expect(provider.listQueries, hasLength(1));
+    expect(find.text('Initial thread'), findsOneWidget);
+
+    final mouse = await hoverProjectTile(tester, directory.path);
+    addTearDown(mouse.removePointer);
+    await tester.tap(
+      find.byKey(ValueKey<String>('project-tile-more-menu-${directory.path}')),
+    );
+    await tester.pumpAndSettle();
+
+    final dynamic refreshItemState = tester.state(
+      find.byKey(
+        ValueKey<String>('project-tile-refresh-threads-${directory.path}'),
+      ),
+    );
+    refreshItemState.handleTap();
+    await tester.pumpAndSettle();
+
+    expect(provider.listQueries, hasLength(2));
+    expect(provider.listQueries.last.projectPath, directory.path);
+    expect(provider.listQueries.last.limit, 5);
+    expect(provider.listQueries.last.cursor, isNull);
+    expect(find.text('Initial thread'), findsNothing);
+    expect(find.text('Refreshed thread'), findsOneWidget);
+  });
+
+  testWidgets(
+    'removes the active project from the list and clears the workspace when no next project exists',
+    (tester) async {
+      final session = MemorySessionStore();
+      final directory = Directory.systemTemp.createTempSync('zeta_test_');
+      tempDirectories.add(directory);
+      File(
+        '${directory.path}${Platform.pathSeparator}sample.txt',
+      ).writeAsStringSync('hello from zeta');
+
+      final provider = FakeAgentProvider(
+        threadHistories: <String, AgentThreadHistorySnapshot>{
+          'thread-a': AgentThreadHistorySnapshot(
+            threadId: 'thread-a',
+            turns: <AgentHistoryTurn>[
+              AgentHistoryTurn(
+                id: 'turn-a-1',
+                entries: const <AgentHistoryEntry>[
+                  AgentHistoryMessageEntry(
+                    id: 'history-user-1',
+                    role: AgentMessageRole.user,
+                    text: 'Previously asked question',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        },
+        threadPages: <AgentThreadPage>[
+          AgentThreadPage(
+            threads: <AgentThreadSummary>[
+              agentThread(
+                id: 'thread-a',
+                projectPath: directory.path,
+                title: 'Active thread',
+              ),
+            ],
+            nextCursor: null,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MainApp(
+          enableNativeWindowFrame: false,
+          directoryPicker: () async => directory.path,
+          sessionLoader: session.load,
+          sessionSaver: session.save,
+          agentProviderFactory: FakeAgentProviderFactory(provider),
+          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        ),
+      );
+
+      await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+      await tester.runAsync(waitForIo);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(
+          ValueKey<String>('project-thread-${directory.path}-thread-a'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Previously asked question'), findsOneWidget);
+
+      final mouse = await hoverProjectTile(tester, directory.path);
+      addTearDown(mouse.removePointer);
+      await tester.tap(
+        find.byKey(
+          ValueKey<String>('project-tile-more-menu-${directory.path}'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final dynamic removeItemState = tester.state(
+        find.byKey(ValueKey<String>('project-tile-remove-${directory.path}')),
+      );
+      removeItemState.handleTap();
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(ValueKey<String>('project-tile-${directory.path}')),
+        findsNothing,
+      );
+      expect(find.text('No folder opened'), findsOneWidget);
+      expect(headerTitleText(tester), 'New thread');
+      expect(find.text('Previously asked question'), findsNothing);
+    },
+  );
+}
+
+Future<TestGesture> hoverProjectTile(
+  WidgetTester tester,
+  String projectPath,
+) async {
+  final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+  await gesture.addPointer(location: Offset.zero);
+  await tester.pump();
+  await gesture.moveTo(
+    tester.getCenter(find.byKey(ValueKey<String>('project-tile-$projectPath'))),
+  );
+  await tester.pumpAndSettle();
+  return gesture;
+}
+
+String openProjectLocationLabel() {
+  if (Platform.isMacOS) {
+    return '在 Finder 中打开';
+  }
+  if (Platform.isWindows) {
+    return '在资源管理器中打开';
+  }
+  return '在文件管理器中打开';
 }

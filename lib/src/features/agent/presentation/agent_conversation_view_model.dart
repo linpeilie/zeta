@@ -294,18 +294,30 @@ class AgentConversationViewModel extends ChangeNotifier {
     required String? projectPath,
     required String? contextFilePath,
     String? restoredSessionId,
+    bool resetConversation = false,
   }) {
     final projectChanged = projectPath != _projectPath;
     _projectPath = projectPath;
     _contextFilePath = contextFilePath;
-    if (projectChanged) {
+    if (projectChanged || resetConversation) {
+      _flushPendingStreamChangesNow();
       _threadSwitchToken += 1;
       _session = null;
       _restoredSessionId = restoredSessionId;
       _threadOpenPhase = AgentThreadOpenPhase.idle;
       _requiresResumedSelectedThread = false;
       _currentThreadTitle = defaultThreadTitle;
-    } else if (restoredSessionId != null) {
+      _status = const AgentProviderStatus.idle();
+      _timeline.resetToWelcomeState();
+      _publishUiChanges(
+        history: true,
+        syncLiveTurn: true,
+        header: true,
+        composer: true,
+      );
+      return;
+    }
+    if (restoredSessionId != null) {
       _restoredSessionId = restoredSessionId;
       _threadOpenPhase = AgentThreadOpenPhase.idle;
       _requiresResumedSelectedThread = false;

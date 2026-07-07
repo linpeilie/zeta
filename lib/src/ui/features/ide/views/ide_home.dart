@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'package:zeta/src/app/menu_action_bridge.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
+import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
@@ -25,6 +26,7 @@ class IdeHome extends StatefulWidget {
     required this.sessionStore,
     required this.agentProviderFactory,
     required this.agentProviderConfigStore,
+    required this.projectLocationOpener,
     super.key,
   });
 
@@ -33,6 +35,7 @@ class IdeHome extends StatefulWidget {
   final IdeSessionStore sessionStore;
   final AgentProviderFactory agentProviderFactory;
   final AgentProviderConfigStore agentProviderConfigStore;
+  final ProjectLocationOpener projectLocationOpener;
 
   @override
   State<IdeHome> createState() => _IdeHomeState();
@@ -69,6 +72,7 @@ class _IdeHomeState extends State<IdeHome> {
       sessionStore: widget.sessionStore,
       agentProviderFactory: widget.agentProviderFactory,
       agentProviderConfigStore: widget.agentProviderConfigStore,
+      projectLocationOpener: widget.projectLocationOpener,
       statusReporter: _showStatus,
     )..addListener(_handleShellChanged);
     // 生产环境注册原生菜单的「打开项目」回调，与工具栏按钮走同一逻辑。
@@ -358,6 +362,17 @@ class _IdeHomeState extends State<IdeHome> {
         },
         onRetryThreads: (projectPath) {
           unawaited(_shellController.retryThreads(projectPath));
+        },
+        onNewThread: (projectPath) {
+          unawaited(_shellController.startNewThreadForProject(projectPath));
+        },
+        onOpenProjectLocation: (projectPath) {
+          unawaited(
+            _shellController.openProjectInSystemFileManager(projectPath),
+          );
+        },
+        onRemoveProject: (projectPath) {
+          unawaited(_shellController.removeProject(projectPath));
         },
       ),
     );

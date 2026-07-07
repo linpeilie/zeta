@@ -65,6 +65,13 @@ class ProjectThreadsViewModel extends ChangeNotifier {
     );
   }
 
+  void clearSelectedThreadId(String projectPath) {
+    updateState(
+      projectPath,
+      (current) => current.copyWith(selectedThreadId: null),
+    );
+  }
+
   /// 只更新执行中的 thread 集合，避免影响其它项目列表状态。
   void setRunningThreadIds(String projectPath, Set<String> runningThreadIds) {
     updateState(

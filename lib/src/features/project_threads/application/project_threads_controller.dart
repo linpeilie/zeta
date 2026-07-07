@@ -131,6 +131,11 @@ class ProjectThreadsController {
     viewModel.selectThreadId(projectPath, threadId);
   }
 
+  /// 清空当前项目的 thread 选中态，用于切换到全新的会话草稿。
+  void clearSelectedThread(String projectPath) {
+    viewModel.clearSelectedThreadId(projectPath);
+  }
+
   /// 显式登记 thread 所属项目，供实时事件反查列表分组。
   void registerThreadMapping(String projectPath, String threadId) {
     _registerThreadMapping(projectPath, threadId);

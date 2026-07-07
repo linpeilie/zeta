@@ -289,6 +289,15 @@ class AgentConversationTimelineStore {
     _visibleHistoryStartIndex = 0;
   }
 
+  /// 清空当前对话，并恢复到仅包含 welcome 消息的初始待机态。
+  void resetToWelcomeState() {
+    clearConversation();
+    _messages.add(welcomeMessage);
+    _timelineEntries.add(AgentMessageTimelineEntry(message: welcomeMessage));
+    _timelineEntryTurnIds.add(standbyTurnId);
+    _seedInitialStandbyTimeline();
+  }
+
   void applyHistorySnapshot(
     AgentThreadHistorySnapshot history,
     AgentThreadSummary thread,
