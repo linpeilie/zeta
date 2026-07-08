@@ -6,6 +6,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/ui/core/ide_chip.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
@@ -28,43 +29,28 @@ class SettingsPage extends StatelessWidget {
   final ValueChanged<SettingsSection> onSectionSelected;
 
   static const double _navigationWidth = 240;
-  static const double _stackBreakpoint = 900;
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final useStackedLayout = constraints.maxWidth < _stackBreakpoint;
-        final navigation = _SettingsNavigation(
-          activeSection: activeSection,
-          onBackPressed: onBackPressed,
-          onSectionSelected: onSectionSelected,
-        );
-        final detail = _SettingsDetailPane(
-          activeSection: activeSection,
-          appearanceController: appearanceController,
-        );
-
-        if (useStackedLayout) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(height: 220, child: navigation),
-              const SizedBox(height: idePanelGap),
-              Expanded(child: detail),
-            ],
-          );
-        }
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(width: _navigationWidth, child: navigation),
-            const SizedBox(width: idePanelGap),
-            Expanded(child: detail),
-          ],
-        );
-      },
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          width: _navigationWidth,
+          child: _SettingsNavigation(
+            activeSection: activeSection,
+            onBackPressed: onBackPressed,
+            onSectionSelected: onSectionSelected,
+          ),
+        ),
+        const SizedBox(width: idePanelGap),
+        Expanded(
+          child: _SettingsDetailPane(
+            activeSection: activeSection,
+            appearanceController: appearanceController,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -170,18 +156,21 @@ class _AppearanceSettingsPane extends StatelessWidget {
     _ThemeModeTabSpec(
       keyName: 'system',
       title: '跟随系统',
+      icon: Icons.brightness_auto_rounded,
       description: '使用系统当前的浅色或深色偏好。',
       value: ThemeMode.system,
     ),
     _ThemeModeTabSpec(
       keyName: 'light',
       title: '浅色',
+      icon: Icons.light_mode_outlined,
       description: '使用浅底、低对比度边框和绿色强调色。',
       value: ThemeMode.light,
     ),
     _ThemeModeTabSpec(
       keyName: 'dark',
       title: '深色',
+      icon: Icons.dark_mode_outlined,
       description: '使用深底、高对比度面板和明亮强调色。',
       value: ThemeMode.dark,
     ),
@@ -231,7 +220,7 @@ class _AppearanceSettingsPane extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: IdeSpacing.space16),
-                      _ThemeModeTabBar(
+                      _ThemeModeChipBar(
                         tabs: _tabs,
                         groupValue: settings.themeMode,
                         onSelected: (value) {
@@ -324,18 +313,20 @@ class _ThemeModeTabSpec {
   const _ThemeModeTabSpec({
     required this.keyName,
     required this.title,
+    required this.icon,
     required this.description,
     required this.value,
   });
 
   final String keyName;
   final String title;
+  final IconData icon;
   final String description;
   final ThemeMode value;
 }
 
-class _ThemeModeTabBar extends StatelessWidget {
-  const _ThemeModeTabBar({
+class _ThemeModeChipBar extends StatelessWidget {
+  const _ThemeModeChipBar({
     required this.tabs,
     required this.groupValue,
     required this.onSelected,
@@ -347,30 +338,22 @@ class _ThemeModeTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    return DecoratedBox(
+    return Wrap(
       key: const ValueKey('settings-theme-tabs'),
-      decoration: BoxDecoration(
-        color: colors.surfaceElevated,
-        borderRadius: const BorderRadius.all(Radius.circular(idePanelRadius)),
-        border: Border.all(color: colors.border),
-      ),
-      child: Row(
-        children: [
-          for (var index = 0; index < tabs.length; index++) ...[
-            Expanded(
-              child: _ThemeModeTabButton(
-                key: ValueKey<String>('settings-theme-${tabs[index].keyName}'),
-                tab: tabs[index],
-                selected: tabs[index].value == groupValue,
-                onPressed: () => onSelected(tabs[index].value),
-              ),
-            ),
-            if (index < tabs.length - 1)
-              Container(width: 1, height: 40, color: colors.borderSubtle),
-          ],
-        ],
-      ),
+      spacing: IdeSpacing.space8,
+      runSpacing: IdeSpacing.space8,
+      children: [
+        for (final tab in tabs)
+          IdeChip(
+            key: ValueKey<String>('settings-theme-${tab.keyName}'),
+            label: tab.title,
+            leadingIcon: tab.icon,
+            trailingIcon: null,
+            selected: tab.value == groupValue,
+            onPressed: () => onSelected(tab.value),
+            semanticLabel: tab.title,
+          ),
+      ],
     );
   }
 }
@@ -497,70 +480,6 @@ class _SettingsNavItem extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ThemeModeTabButton extends StatelessWidget {
-  const _ThemeModeTabButton({
-    required this.tab,
-    required this.selected,
-    required this.onPressed,
-    super.key,
-  });
-
-  final _ThemeModeTabSpec tab;
-  final bool selected;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
-    final background = selected ? colors.primaryMuted : colors.surfaceElevated;
-    return PaneInteractiveSurface(
-      onPressed: onPressed,
-      selected: selected,
-      height: 40,
-      borderRadius: BorderRadius.zero,
-      backgroundColor: background,
-      hoverBackgroundColor: selected
-          ? background
-          : colors.border.withValues(alpha: 0.12),
-      semanticLabel: tab.title,
-      child: Semantics(
-        selected: selected,
-        label: tab.title,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              tab.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: textStyles.titleSmall.copyWith(
-                color: selected ? colors.accent : colors.textSecondary,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: IdeSpacing.space4),
-            if (selected)
-              Container(
-                key: ValueKey<String>(
-                  'settings-theme-${tab.keyName}-selected-indicator',
-                ),
-                width: 20,
-                height: 2,
-                decoration: BoxDecoration(
-                  color: colors.accent,
-                  borderRadius: const BorderRadius.all(Radius.circular(99)),
-                ),
-              )
-            else
-              const SizedBox(height: 2),
-          ],
-        ),
       ),
     );
   }

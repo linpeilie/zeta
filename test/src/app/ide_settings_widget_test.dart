@@ -8,6 +8,7 @@ import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/ui/core/ide_chip.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 
 import '../testing/ide_test_harness.dart';
@@ -77,8 +78,10 @@ void main() {
 
     expect(controller.settings.themeMode, ThemeMode.system);
     expect(
-      find.byKey(const ValueKey('settings-theme-system-selected-indicator')),
-      findsOneWidget,
+      tester
+          .widget<IdeChip>(find.byKey(const ValueKey('settings-theme-system')))
+          .selected,
+      isTrue,
     );
     expect(find.text('使用系统当前的浅色或深色偏好。'), findsOneWidget);
 
@@ -87,8 +90,10 @@ void main() {
 
     expect(controller.settings.themeMode, ThemeMode.dark);
     expect(
-      find.byKey(const ValueKey('settings-theme-dark-selected-indicator')),
-      findsOneWidget,
+      tester
+          .widget<IdeChip>(find.byKey(const ValueKey('settings-theme-dark')))
+          .selected,
+      isTrue,
     );
     expect(find.text('使用深底、高对比度面板和明亮强调色。'), findsOneWidget);
 
@@ -97,8 +102,10 @@ void main() {
 
     expect(controller.settings.themeMode, ThemeMode.light);
     expect(
-      find.byKey(const ValueKey('settings-theme-light-selected-indicator')),
-      findsOneWidget,
+      tester
+          .widget<IdeChip>(find.byKey(const ValueKey('settings-theme-light')))
+          .selected,
+      isTrue,
     );
     expect(find.text('使用浅底、低对比度边框和绿色强调色。'), findsOneWidget);
   });
