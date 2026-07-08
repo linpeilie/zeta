@@ -8,6 +8,7 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_context_menu.dart';
+import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_motion.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
@@ -454,9 +455,7 @@ class _ThreadTile extends StatelessWidget {
           horizontal: IdeSpacing.space8,
           vertical: IdeSpacing.space6,
         ),
-        borderRadius: const BorderRadius.all(
-          Radius.circular(IdeSpacing.space6),
-        ),
+        borderRadius: IdeRadius.allSmall,
         selectedBackgroundColor: colors.primaryMuted,
         hoverBackgroundColor: colors.border.withValues(alpha: 0.12),
         child: Row(

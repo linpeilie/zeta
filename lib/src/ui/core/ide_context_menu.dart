@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
-import 'app_theme.dart';
 import 'ide_colors.dart';
+import 'ide_effects.dart';
 import 'ide_spacing.dart';
 import 'ide_text_styles.dart';
 import 'pane_widgets.dart';
@@ -39,20 +40,12 @@ class IdeContextMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final brightness = Theme.of(context).brightness;
+    final brightness = ShadTheme.of(context).brightness;
     return RepaintBoundary(
       child: PanelCard(
         color: colors.surfaceOverlay,
-        borderRadius: BorderRadius.circular(IdeSpacing.space8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(
-              alpha: brightness == Brightness.dark ? 0.12 : 0.06,
-            ),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        borderRadius: IdeRadius.allLarge,
+        boxShadow: IdeEffects.overlayShadow(brightness),
         child: Padding(
           padding: IdeSpacing.all4,
           child: ConstrainedBox(
@@ -107,7 +100,7 @@ class _ContextMenuActionButton extends StatelessWidget {
       button: true,
       semanticLabel: action.semanticLabel,
       padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space12),
-      borderRadius: BorderRadius.circular(idePanelRadius),
+      borderRadius: IdeRadius.allSmall,
       child: Row(
         children: [
           if (action.leadingIcon != null) ...[

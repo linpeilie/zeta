@@ -600,6 +600,13 @@ class AgentConversationViewModel extends ChangeNotifier {
     return session;
   }
 
+  /// 最近一次已展示的错误概要。
+  ///
+  /// Codex 在失败时会同时发送 `error` 通知和带 `turn.error` 的
+  /// `turn/completed`，两者携带相同的错误文本；记录该值用于去重，
+  /// 避免同一条错误在时间线上出现两次。
+  String? _lastShownErrorMessage;
+
   /// 将 provider 事件规约成面板状态。
   void _handleEvent(AgentEvent event) {
     switch (event) {
@@ -623,6 +630,7 @@ class AgentConversationViewModel extends ChangeNotifier {
         )) {
           break;
         }
+        _lastShownErrorMessage = null;
         _timeline.beginLiveTurnGroup(event.turn);
         _flushStreamChangesNow(
           syncLiveTurn: true,
@@ -637,7 +645,13 @@ class AgentConversationViewModel extends ChangeNotifier {
         )) {
           break;
         }
-        _timeline.completeLiveTurnGroup(event.turnId);
+        // 先插失败原因，让消息归入该回合分组，再收尾分组。
+        _addTurnFailureMessage(event);
+        _timeline.completeLiveTurnGroup(
+          event.turnId,
+          status: event.status,
+          duration: event.duration,
+        );
         if (!isTurnRunning &&
             _status.state == AgentProviderConnectionState.running) {
           _status = AgentProviderStatus(
@@ -719,17 +733,49 @@ class AgentConversationViewModel extends ChangeNotifier {
         )) {
           break;
         }
+        _lastShownErrorMessage = event.message;
         _timeline.addConversationMessage(
           AgentConversationMessage(
             id: 'error-${DateTime.now().microsecondsSinceEpoch}',
             role: AgentMessageRole.system,
-            text: event.details == null
-                ? event.message
-                : '${event.message}: ${event.details}',
+            text: _errorMessageText(event),
           ),
         );
         _flushStreamChangesNow(history: true, liveTurn: true, autoScroll: true);
     }
+  }
+
+  /// 回合以失败终态结束时，把 `turn.error` 的原因插入时间线。
+  ///
+  /// 若同样的错误文本刚通过 `error` 通知展示过则跳过，避免重复。
+  void _addTurnFailureMessage(AgentTurnCompletedEvent event) {
+    final errorMessage = event.errorMessage;
+    if (event.status != AgentHistoryTurnStatus.failed ||
+        errorMessage == null ||
+        errorMessage == _lastShownErrorMessage) {
+      return;
+    }
+    _lastShownErrorMessage = errorMessage;
+    _timeline.addConversationMessage(
+      AgentConversationMessage(
+        id: 'turn-failed-${DateTime.now().microsecondsSinceEpoch}',
+        role: AgentMessageRole.system,
+        text: 'Turn failed: $errorMessage',
+      ),
+    );
+  }
+
+  /// 组装错误事件的展示文本；服务端声明会自动重试时附加提示。
+  String _errorMessageText(AgentErrorEvent event) {
+    final buffer = StringBuffer(event.message);
+    final details = event.details;
+    if (details != null && details.isNotEmpty) {
+      buffer.write(': $details');
+    }
+    if (event.willRetry ?? false) {
+      buffer.write(' (Codex will retry automatically)');
+    }
+    return buffer.toString();
   }
 
   String _messageWithContext(String message) {

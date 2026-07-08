@@ -6,7 +6,7 @@ import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:zeta/main.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/ui/core/ide_colors.dart';
 
 import '../../../testing/ide_test_harness.dart';
 
@@ -822,11 +822,11 @@ void main() {
       final historyGroupChildren = historyGroupSpan.children!;
       expect(
         (historyGroupChildren[2] as TextSpan).style?.color,
-        ideAccentColor.withValues(alpha: 0.98),
+        IdeColors.dark.success.withValues(alpha: 0.98),
       );
       expect(
         (historyGroupChildren[4] as TextSpan).style?.color,
-        ideWarningColor.withValues(alpha: 0.98),
+        IdeColors.dark.error.withValues(alpha: 0.98),
       );
 
       final historyLineStatsFinder = find.byKey(
@@ -840,11 +840,11 @@ void main() {
       final historyLineChildren = historyLineSpan.children!;
       expect(
         (historyLineChildren[0] as TextSpan).style?.color,
-        ideAccentColor.withValues(alpha: 0.98),
+        IdeColors.dark.success.withValues(alpha: 0.98),
       );
       expect(
         (historyLineChildren[2] as TextSpan).style?.color,
-        ideWarningColor.withValues(alpha: 0.98),
+        IdeColors.dark.error.withValues(alpha: 0.98),
       );
 
       await tester.tap(

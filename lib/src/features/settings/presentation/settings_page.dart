@@ -5,8 +5,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
-import 'package:zeta/src/ui/core/app_theme.dart';
-import 'package:zeta/src/ui/core/ide_chip.dart';
+import 'package:zeta/src/ui/core/ide_choice_card.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
@@ -43,7 +42,7 @@ class SettingsPage extends StatelessWidget {
             onSectionSelected: onSectionSelected,
           ),
         ),
-        const SizedBox(width: idePanelGap),
+        const SizedBox(width: IdeSpacing.space8),
         Expanded(
           child: _SettingsDetailPane(
             activeSection: activeSection,
@@ -164,7 +163,7 @@ class _AppearanceSettingsPane extends StatelessWidget {
       keyName: 'light',
       title: '浅色',
       icon: Icons.light_mode_outlined,
-      description: '使用浅底、低对比度边框和绿色强调色。',
+      description: '使用浅底、低对比度边框和蔚蓝强调色。',
       value: ThemeMode.light,
     ),
     _ThemeModeTabSpec(
@@ -194,10 +193,6 @@ class _AppearanceSettingsPane extends StatelessWidget {
           builder: (context, settings, _) {
             final textStyles = IdeTextStyles.of(context);
             final colors = IdeColors.of(context);
-            final selectedTab = _tabs.firstWhere(
-              (tab) => tab.value == settings.themeMode,
-              orElse: () => _tabs.first,
-            );
             return SingleChildScrollView(
               padding: IdeSpacing.all16,
               child: Center(
@@ -207,33 +202,18 @@ class _AppearanceSettingsPane extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        '主题模式',
-                        style: textStyles.displayLarge.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: IdeSpacing.space6),
-                      Text(
                         '设置页会立即应用主题和字体切换，并保留到下次启动。',
                         style: textStyles.bodySmall.copyWith(
                           color: colors.textSecondary,
                         ),
                       ),
                       const SizedBox(height: IdeSpacing.space16),
-                      _ThemeModeChipBar(
+                      _ThemeModeSection(
                         tabs: _tabs,
                         groupValue: settings.themeMode,
                         onSelected: (value) {
                           unawaited(appearanceController.setThemeMode(value));
                         },
-                      ),
-                      const SizedBox(height: IdeSpacing.space12),
-                      Text(
-                        selectedTab.description,
-                        key: const ValueKey('settings-theme-description'),
-                        style: textStyles.bodySmall.copyWith(
-                          color: colors.textSecondary,
-                        ),
                       ),
                       const SizedBox(height: IdeSpacing.space24),
                       _AppearanceSettingRow(
@@ -325,8 +305,11 @@ class _ThemeModeTabSpec {
   final ThemeMode value;
 }
 
-class _ThemeModeChipBar extends StatelessWidget {
-  const _ThemeModeChipBar({
+/// 主题模式设置行：左列标签与当前模式描述，右列选项卡片组。
+///
+/// 窄容器下自动改为上下堆叠，避免卡片组被压缩溢出。
+class _ThemeModeSection extends StatelessWidget {
+  const _ThemeModeSection({
     required this.tabs,
     required this.groupValue,
     required this.onSelected,
@@ -336,23 +319,80 @@ class _ThemeModeChipBar extends StatelessWidget {
   final ThemeMode groupValue;
   final ValueChanged<ThemeMode> onSelected;
 
+  static const double _labelColumnWidth = 168;
+  static const double _stackedBreakpoint = 520;
+
   @override
   Widget build(BuildContext context) {
-    return Wrap(
+    final selectedTab = tabs.firstWhere(
+      (tab) => tab.value == groupValue,
+      orElse: () => tabs.first,
+    );
+    final label = _ThemeModeLabel(description: selectedTab.description);
+    final cards = IdeChoiceCardGroup<ThemeMode>(
       key: const ValueKey('settings-theme-tabs'),
-      spacing: IdeSpacing.space8,
-      runSpacing: IdeSpacing.space8,
-      children: [
+      options: [
         for (final tab in tabs)
-          IdeChip(
-            key: ValueKey<String>('settings-theme-${tab.keyName}'),
+          IdeChoiceCardOption<ThemeMode>(
+            value: tab.value,
             label: tab.title,
-            leadingIcon: tab.icon,
-            trailingIcon: null,
-            selected: tab.value == groupValue,
-            onPressed: () => onSelected(tab.value),
+            icon: tab.icon,
             semanticLabel: tab.title,
+            key: ValueKey<String>('settings-theme-${tab.keyName}'),
           ),
+      ],
+      value: groupValue,
+      onChanged: onSelected,
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < _stackedBreakpoint) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              label,
+              const SizedBox(height: IdeSpacing.space12),
+              cards,
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(width: _labelColumnWidth, child: label),
+            const SizedBox(width: IdeSpacing.space16),
+            Expanded(child: cards),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ThemeModeLabel extends StatelessWidget {
+  const _ThemeModeLabel({required this.description});
+
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '主题模式',
+          style: textStyles.displaySmall.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: IdeSpacing.space4),
+        Text(
+          description,
+          key: const ValueKey('settings-theme-description'),
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+          style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
+        ),
       ],
     );
   }

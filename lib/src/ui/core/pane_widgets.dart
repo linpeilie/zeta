@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import 'app_theme.dart';
 import 'ide_colors.dart';
+import 'ide_effects.dart';
 import 'ide_motion.dart';
 import 'ide_spacing.dart';
 import 'ide_text_styles.dart';
@@ -180,9 +180,7 @@ class _PaneInteractiveSurfaceState extends State<PaneInteractiveSurface> {
     final shadTheme = ShadTheme.of(context);
     final colorScheme = shadTheme.colorScheme;
     final colors = IdeColors.of(context);
-    final radius =
-        widget.borderRadius ??
-        const BorderRadius.all(Radius.circular(idePanelRadius));
+    final radius = widget.borderRadius ?? IdeRadius.allSmall;
     final baseBackground = widget.backgroundColor ?? Colors.transparent;
     final hoverBackground =
         widget.hoverBackgroundColor ??
@@ -295,16 +293,8 @@ class PanelCard extends StatelessWidget {
       context,
       baseColor: color ?? shadTheme.colorScheme.card,
     );
-    final isDark = shadTheme.brightness == Brightness.dark;
     final defaultBoxShadow =
-        boxShadow ??
-        [
-          BoxShadow(
-            color: isDark ? const Color(0x1F000000) : const Color(0x06000000),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ];
+        boxShadow ?? IdeEffects.panelShadow(shadTheme.brightness);
     return Container(
       clipBehavior: clipBehavior,
       decoration: BoxDecoration(
@@ -344,8 +334,8 @@ class Pane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final shadTheme = ShadTheme.of(context);
+    final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final isDark = shadTheme.brightness == Brightness.dark;
     final trailingWidget = trailing;
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -390,9 +380,7 @@ class Pane extends StatelessWidget {
                             style: textStyles.titleSmall.copyWith(
                               fontWeight: FontWeight.w700,
                               letterSpacing: 0.2,
-                              color: isDark
-                                  ? const Color(0xFFF1F3F5)
-                                  : const Color(0xFF1F2937),
+                              color: colors.textPrimary,
                             ),
                           ),
                           if (subtitle != null)
@@ -456,7 +444,7 @@ class StateLabel extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space8),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(idePanelRadius),
+        borderRadius: IdeRadius.allSmall,
         border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Text(

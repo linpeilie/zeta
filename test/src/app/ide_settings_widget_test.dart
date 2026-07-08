@@ -8,7 +8,8 @@ import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
-import 'package:zeta/src/ui/core/ide_chip.dart';
+import 'package:zeta/src/ui/core/ide_choice_card.dart';
+import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 
 import '../testing/ide_test_harness.dart';
@@ -73,13 +74,20 @@ void main() {
     );
     await _pumpIdeWithSettings(tester, controller: controller);
 
+    // 回归断言：标题文字必须随主题切换重建为当前调色板的 textPrimary，
+    // 防止 token 访问器不监听 ShadTheme 时残留旧主题颜色（深浅混杂）。
+    Color? headingColor() =>
+        tester.widget<Text>(find.text('主题模式')).style?.color;
+
     await tester.tap(find.byKey(const ValueKey('titlebar-settings-action')));
     await tester.pumpAndSettle();
 
     expect(controller.settings.themeMode, ThemeMode.system);
     expect(
       tester
-          .widget<IdeChip>(find.byKey(const ValueKey('settings-theme-system')))
+          .widget<IdeChoiceCard>(
+            find.byKey(const ValueKey('settings-theme-system')),
+          )
           .selected,
       isTrue,
     );
@@ -91,11 +99,14 @@ void main() {
     expect(controller.settings.themeMode, ThemeMode.dark);
     expect(
       tester
-          .widget<IdeChip>(find.byKey(const ValueKey('settings-theme-dark')))
+          .widget<IdeChoiceCard>(
+            find.byKey(const ValueKey('settings-theme-dark')),
+          )
           .selected,
       isTrue,
     );
     expect(find.text('使用深底、高对比度面板和明亮强调色。'), findsOneWidget);
+    expect(headingColor(), IdeColors.dark.textPrimary);
 
     await tester.tap(find.byKey(const ValueKey('settings-theme-light')));
     await tester.pumpAndSettle();
@@ -103,11 +114,14 @@ void main() {
     expect(controller.settings.themeMode, ThemeMode.light);
     expect(
       tester
-          .widget<IdeChip>(find.byKey(const ValueKey('settings-theme-light')))
+          .widget<IdeChoiceCard>(
+            find.byKey(const ValueKey('settings-theme-light')),
+          )
           .selected,
       isTrue,
     );
-    expect(find.text('使用浅底、低对比度边框和绿色强调色。'), findsOneWidget);
+    expect(find.text('使用浅底、低对比度边框和蔚蓝强调色。'), findsOneWidget);
+    expect(headingColor(), IdeColors.light.textPrimary);
   });
 
   testWidgets('ui font picker shows system default and supports search', (

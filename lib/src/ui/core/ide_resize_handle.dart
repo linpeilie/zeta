@@ -40,7 +40,8 @@ class _IdeResizeHandleState extends State<IdeResizeHandle> {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final cursor = widget.axis == IdeResizeHandleAxis.horizontal
+    final isHorizontal = widget.axis == IdeResizeHandleAxis.horizontal;
+    final cursor = isHorizontal
         ? SystemMouseCursors.resizeLeftRight
         : SystemMouseCursors.resizeUpDown;
 
@@ -52,23 +53,25 @@ class _IdeResizeHandleState extends State<IdeResizeHandle> {
         onExit: (_) => _setHovered(false),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onHorizontalDragUpdate: widget.axis == IdeResizeHandleAxis.horizontal
-              ? widget.onDragUpdate
-              : null,
-          onVerticalDragUpdate: widget.axis == IdeResizeHandleAxis.vertical
-              ? widget.onDragUpdate
-              : null,
+          onHorizontalDragUpdate: isHorizontal ? widget.onDragUpdate : null,
+          onVerticalDragUpdate: !isHorizontal ? widget.onDragUpdate : null,
           child: SizedBox(
-            width: widget.axis == IdeResizeHandleAxis.horizontal
-                ? widget.thickness
-                : null,
-            height: widget.axis == IdeResizeHandleAxis.vertical
-                ? widget.thickness
-                : null,
-            child: AnimatedContainer(
-              duration: IdeMotion.fast,
-              curve: IdeMotion.curveDefault,
-              color: _hovered ? colors.borderSubtle : colors.frame,
+            width: isHorizontal ? widget.thickness : null,
+            height: !isHorizontal ? widget.thickness : null,
+            child: ColoredBox(
+              color: colors.frame,
+              // hover 时在命中区中央显示 2px accent 细线，提示可拖拽。
+              child: Center(
+                child: AnimatedContainer(
+                  duration: IdeMotion.fast,
+                  curve: IdeMotion.curveDefault,
+                  width: isHorizontal ? 2 : double.infinity,
+                  height: isHorizontal ? double.infinity : 2,
+                  color: _hovered
+                      ? colors.accent.withValues(alpha: 0.7)
+                      : Colors.transparent,
+                ),
+              ),
             ),
           ),
         ),

@@ -3,15 +3,15 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'app_theme.dart';
 
-const _darkTextTertiaryColor = Color(0xFF6B7280);
-const _lightTextTertiaryColor = Color(0xFF9CA3AF);
-const _darkInfoColor = Color(0xFF5B9BD5);
-const _lightInfoColor = Color(0xFF2B7AC5);
-const _darkWindowHoverColor = Color(0xFF303030);
-const _lightWindowHoverColor = Color(0xFFEAECEF);
-const _darkWindowIconColor = Color(0xFFB8B8B8);
-const _lightWindowIconColor = Color(0xFF4B5563);
-const _sharedCloseHoverColor = Color(0xFFD84E4E);
+const _darkTextTertiaryColor = Color(0xFF63666C);
+const _lightTextTertiaryColor = Color(0xFF8F929B);
+const _darkInfoColor = Color(0xFF55A8F5);
+const _lightInfoColor = Color(0xFF1173CF);
+const _darkWindowHoverColor = Color(0xFF2A2B2E);
+const _lightWindowHoverColor = Color(0xFFE1E2E6);
+const _darkWindowIconColor = Color(0xFFA6A9AE);
+const _lightWindowIconColor = Color(0xFF5B5E66);
+const _sharedCloseHoverColor = Color(0xFFE5484D);
 
 abstract final class _IdeColorSchemeCustomKeys {
   static const frame = 'frame';
@@ -134,56 +134,57 @@ class IdeColors extends ThemeExtension<IdeColors> {
   /// 关闭按钮的悬停背景（两个主题共用红色）。
   final Color closeHover;
 
-  /// 深色调色板：采用高端 Zed-Nord 风格，带有些许冷灰蓝调，降低眼睛疲劳。
+  /// 深色调色板「Graphite Night」：中性石墨底 + 蔚蓝强调，
+  /// 无色相偏移的灰阶层次，长时间注视友好。
   static const IdeColors dark = IdeColors(
-    frame: Color(0xFF0C0D0E),
-    surface: Color(0xFF16181C),
-    surfaceElevated: Color(0xFF1F2227),
-    surfaceOverlay: Color(0xFF26292F),
-    panel: Color(0xFF16181C),
-    editor: Color(0xFF111214),
-    border: Color(0xFF24272D),
-    borderSubtle: Color(0xFF1A1C20),
-    mutedText: Color(0xFF8C95A0),
-    textPrimary: Color(0xFFECEFF4),
-    textSecondary: Color(0xFF8C95A0),
-    textTertiary: Color(0xFF5C6370),
+    frame: Color(0xFF0A0A0B),
+    surface: Color(0xFF18191B),
+    surfaceElevated: Color(0xFF212225),
+    surfaceOverlay: Color(0xFF2C2D30),
+    panel: Color(0xFF18191B),
+    editor: Color(0xFF141517),
+    border: Color(0xFF2C2D31),
+    borderSubtle: Color(0xFF212225),
+    mutedText: Color(0xFF9EA1A7),
+    textPrimary: Color(0xFFECEDEF),
+    textSecondary: Color(0xFF9EA1A7),
+    textTertiary: Color(0xFF63666C),
     accent: ideAccentColor,
-    primaryMuted: Color(0x224FB286),
+    primaryMuted: Color(0x521B84FF),
     warning: ideWarningColor,
-    error: Color(0xFFEF5350),
-    success: Color(0xFF43A047),
-    info: Color(0xFF42A5F5),
+    error: Color(0xFFF0616B),
+    success: Color(0xFF4EC583),
+    info: Color(0xFF55A8F5),
     accentForeground: Colors.white,
-    windowHover: Color(0xFF24272D),
-    windowIcon: Color(0xFFADB5BD),
+    windowHover: Color(0xFF2A2B2E),
+    windowIcon: Color(0xFFA6A9AE),
     closeHover: _sharedCloseHoverColor,
   );
 
-  /// 浅色调色板：现代扁平风，以非常轻盈温润的灰白为底，低饱和绿作为强调色，
-  /// 拥有极高雅的对比度和舒适度。
+  /// 浅色调色板「Graphite Day」：中性浅灰白底 + 蔚蓝强调，扁平清爽，
+  /// 与深色主题共享同一套语义层级。
   static const IdeColors light = IdeColors(
-    frame: Color(0xFFF8F9FA),
+    frame: Color(0xFFEEEFF1),
     surface: Color(0xFFFFFFFF),
-    surfaceElevated: Color(0xFFF1F3F5),
+    surfaceElevated: Color(0xFFF4F5F7),
     surfaceOverlay: Color(0xFFFFFFFF),
     panel: Color(0xFFFFFFFF),
-    editor: Color(0xFFFAFBFC),
-    border: Color(0xFFE9ECEF),
-    borderSubtle: Color(0xFFF1F3F5),
-    mutedText: Color(0xFF6C757D),
-    textPrimary: Color(0xFF212529),
-    textSecondary: Color(0xFF495057),
-    textTertiary: Color(0xFF868E96),
-    accent: Color(0xFF1E9E58),
-    primaryMuted: Color(0x1F1E9E58),
-    warning: Color(0xFFD97706),
-    error: Color(0xFFE63946),
-    success: Color(0xFF1E9E58),
-    info: Color(0xFF0077B6),
-    accentForeground: Color(0xFF1E9E58),
-    windowHover: Color(0xFFE9ECEF),
-    windowIcon: Color(0xFF495057),
+    editor: Color(0xFFFAFAFB),
+    border: Color(0xFFE4E5E9),
+    borderSubtle: Color(0xFFEFF0F2),
+    mutedText: Color(0xFF5B5E66),
+    textPrimary: Color(0xFF1C1D1F),
+    textSecondary: Color(0xFF5B5E66),
+    textTertiary: Color(0xFF8F929B),
+    accent: Color(0xFF0B76D8),
+    primaryMuted: Color(0x3D0B76D8),
+    warning: Color(0xFFB45309),
+    error: Color(0xFFDE3B4E),
+    success: Color(0xFF178A50),
+    info: Color(0xFF1173CF),
+    accentForeground: Color(0xFF0B76D8),
+    windowHover: Color(0xFFE1E2E6),
+    windowIcon: Color(0xFF5B5E66),
     closeHover: _sharedCloseHoverColor,
   );
 
@@ -191,8 +192,12 @@ class IdeColors extends ThemeExtension<IdeColors> {
   ///
   /// 运行时优先从 [ShadTheme] 解析；仅在旧测试或兼容场景下回退到
   /// Material ThemeExtension。
+  ///
+  /// 必须注册 InheritedWidget 依赖（listen: true）：主题切换由
+  /// ShadAnimatedTheme 渐变驱动，若不监听，组件只会捕获动画起点的旧配色，
+  /// 导致浅色模式下残留深色文字/边框。
   static IdeColors of(BuildContext context) {
-    final shadTheme = ShadTheme.maybeOf(context, listen: false);
+    final shadTheme = ShadTheme.maybeOf(context);
     if (shadTheme != null) {
       return ideColorsFromShadTheme(shadTheme);
     }
@@ -314,8 +319,10 @@ ShadColorScheme shadColorSchemeFromIdeColors(
     secondaryForeground: colors.textPrimary,
     muted: colors.surfaceElevated,
     mutedForeground: colors.textSecondary,
-    accent: colors.accent,
-    accentForeground: colors.accentForeground,
+    // shadcn 语义中 accent 是 hover/选中行的弱化表面色（ghost 按钮、
+    // option hover 等都取它），品牌强调色统一走 primary。
+    accent: colors.surfaceElevated,
+    accentForeground: colors.textPrimary,
     destructive: colors.error,
     destructiveForeground: Colors.white,
     border: colors.border,

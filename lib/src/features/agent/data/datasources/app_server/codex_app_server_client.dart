@@ -112,7 +112,9 @@ class _CodexAppServerClient {
         ],
         if (context.projectPath != null) 'cwd': context.projectPath,
         'model': ?model,
-        'reasoningEffort': ?selection.reasoningEffort,
+        // 协议字段名是 `effort`(TurnStartParams），域模型内仍叫
+        // reasoningEffort；`summary`（推理摘要模式）暂无 UI 来源，不发送。
+        'effort': ?selection.reasoningEffort,
         'serviceTier': ?selection.serviceTierId,
         'approvalPolicy': 'on-request',
       },

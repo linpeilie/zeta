@@ -112,6 +112,7 @@ InlineSpan _fileEditGroupSummarySpan(
   if (addedLines == 0 && removedLines == 0) {
     return TextSpan(text: '${group.items.length} 个文件');
   }
+  // 增删行数沿用 diff 语义色：新增为 success、删除为 error。
   return TextSpan(
     children: <InlineSpan>[
       TextSpan(text: '${group.items.length} 个文件'),
@@ -119,7 +120,7 @@ InlineSpan _fileEditGroupSummarySpan(
       TextSpan(
         text: '+$addedLines',
         style: TextStyle(
-          color: colors.accent.withValues(alpha: 0.98),
+          color: colors.success.withValues(alpha: 0.98),
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -127,7 +128,7 @@ InlineSpan _fileEditGroupSummarySpan(
       TextSpan(
         text: '-$removedLines',
         style: TextStyle(
-          color: colors.warning.withValues(alpha: 0.98),
+          color: colors.error.withValues(alpha: 0.98),
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -152,7 +153,7 @@ InlineSpan _fileEditLineStatsSpan(
       TextSpan(
         text: '+$added',
         style: TextStyle(
-          color: colors.accent.withValues(alpha: 0.98),
+          color: colors.success.withValues(alpha: 0.98),
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -160,7 +161,7 @@ InlineSpan _fileEditLineStatsSpan(
       TextSpan(
         text: '-$removed',
         style: TextStyle(
-          color: colors.warning.withValues(alpha: 0.98),
+          color: colors.error.withValues(alpha: 0.98),
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -263,9 +264,7 @@ MarkdownThemeData _agentMarkdownTheme(BuildContext context) {
     codeBlockStyle: codeStyle,
     codeBlockPadding: IdeSpacing.cardPadding,
     codeBlockBackgroundColor: colors.surfaceElevated,
-    codeBlockBorderRadius: const BorderRadius.all(
-      Radius.circular(IdeSpacing.space6),
-    ),
+    codeBlockBorderRadius: IdeRadius.allSmall,
     quotePadding: const EdgeInsets.fromLTRB(
       IdeSpacing.space12,
       IdeSpacing.space8,
@@ -275,9 +274,7 @@ MarkdownThemeData _agentMarkdownTheme(BuildContext context) {
     quoteBackgroundColor: colors.surfaceElevated.withValues(alpha: 0.82),
     quoteBorderColor: colors.info,
     quoteBorderWidth: 3,
-    quoteBorderRadius: const BorderRadius.all(
-      Radius.circular(IdeSpacing.space6),
-    ),
+    quoteBorderRadius: IdeRadius.allSmall,
     tableHeaderStyle: textStyles.titleSmall.copyWith(
       fontWeight: FontWeight.w700,
     ),
@@ -322,7 +319,7 @@ TextStyle _agentCodeTextStyle(BuildContext context, {TextStyle? baseStyle}) {
 BoxDecoration _agentCodeBlockDecoration(IdeColors colors) {
   return BoxDecoration(
     color: colors.surfaceElevated,
-    borderRadius: const BorderRadius.all(Radius.circular(IdeSpacing.space6)),
+    borderRadius: IdeRadius.allSmall,
     border: Border.all(color: colors.borderSubtle),
   );
 }

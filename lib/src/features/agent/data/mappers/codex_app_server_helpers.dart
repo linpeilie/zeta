@@ -870,6 +870,18 @@ int? _numberToInt(Object? value) {
   return null;
 }
 
+/// 依次尝试 camelCase 与 snake_case 键名读取整数值。
+///
+/// Codex 新协议（如 `thread/tokenUsage/updated`）使用 camelCase，
+/// 旧通知与 JSONL 历史使用 snake_case，读取时统一做双键兼容。
+int? _breakdownInt(
+  Map<String, Object?> source,
+  String camelKey,
+  String snakeKey,
+) {
+  return _numberToInt(source[camelKey]) ?? _numberToInt(source[snakeKey]);
+}
+
 /// 从多种格式中解析 DateTime：ISO 8601 字符串或毫秒时间戳。
 DateTime? _dateTimeFromAny(Object? value) {
   if (value is String) {
@@ -898,6 +910,11 @@ AgentHistoryTurnStatus _historyTurnStatus(
 ]) {
   return switch (status) {
     'completed' || 'complete' || 'done' => AgentHistoryTurnStatus.completed,
+    'interrupted' ||
+    'aborted' ||
+    'cancelled' ||
+    'canceled' => AgentHistoryTurnStatus.interrupted,
+    'failed' || 'error' => AgentHistoryTurnStatus.failed,
     'running' ||
     'started' ||
     'active' ||

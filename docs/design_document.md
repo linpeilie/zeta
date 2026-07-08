@@ -1,6 +1,6 @@
 # 设计文档
 
-最后更新：2026-07-07
+最后更新：2026-07-08
 
 ## 1. 设计目标
 
@@ -56,15 +56,25 @@ AgentConversationViewModel
 - Agent：展示上下文栏、状态胶囊、消息时间线、工具调用卡片、审批卡片和输入区。
 - Files：展示当前项目文件树，目录按需展开，文件选择只更新 Agent 上下文。
 
-### 主题
+### 主题与设计系统
 
-当前使用深色紧凑 IDE 风格：
+当前使用「Graphite 石墨蓝」视觉身份，深浅双主题（跟随系统/浅色/深色
+三种模式），细节规范见 `.cursor/skills/zeta-design-system/SKILL.md`：
 
-- 框架底色：深灰。
-- 面板底色：深色卡片。
-- 主强调色：绿色。
-- 警示/目录色：黄色。
-- 面板圆角和间距较小，适合桌面工具密度。
+- 深色「Graphite Night」：中性石墨框架底 `#0A0A0B`，面板 `#18191B`，
+  强调色蔚蓝 `#1B84FF`，selected 行用 accent 半透明铺底。
+- 浅色「Graphite Day」：中性浅灰底 `#EEEFF1`，白色面板，
+  强调色蔚蓝 `#0B76D8`。
+- 语义色独立：success 绿 / error 红 / warning 琥珀 / info 蓝；
+  diff 增删行使用 success/error。
+- 全部视觉取值集中在 `lib/src/ui/core/` 的 token 类：`IdeColors`（语义色）、
+  `IdeRadius`/`IdeEffects`（圆角四档 6/8/12/16、阴影预设与 scrim）、
+  `IdeSpacing`（4px 基准间距）、`IdeTextStyles`（语义字号）、
+  `IdeMotion`（动效）。
+- 主题装配通过 `buildShadTheme` 把 `IdeColors` 映射到 shadcn_ui 的
+  `ShadThemeData`，ghost 按钮/option/弹层/对话框的 hover 与阴影在主题层
+  统一，业务代码禁止硬编码颜色、圆角和阴影。
+- 面板圆角 8、间距紧凑，适合桌面工具密度。
 
 ## 5. Agent 设计
 

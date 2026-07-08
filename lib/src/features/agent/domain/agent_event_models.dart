@@ -35,11 +35,14 @@ class AgentTurnStartedEvent extends AgentEvent {
   final AgentTurn turn;
 }
 
-/// 回合已完成。
+/// 回合已结束（完成、被中断或失败）。
 class AgentTurnCompletedEvent extends AgentEvent {
   const AgentTurnCompletedEvent({
     required this.sessionId,
     required this.turnId,
+    this.status = AgentHistoryTurnStatus.completed,
+    this.errorMessage,
+    this.duration,
     this.raw = const <String, Object?>{},
   });
 
@@ -49,13 +52,23 @@ class AgentTurnCompletedEvent extends AgentEvent {
   /// 完成的回合 id。
   final String turnId;
 
+  /// 回合终态；对应 Codex `turn.status`（completed/interrupted/failed）。
+  final AgentHistoryTurnStatus status;
+
+  /// 失败原因；仅 `turn.error` 存在时携带。
+  final String? errorMessage;
+
+  /// provider 上报的回合耗时（`turn.durationMs`）。
+  final Duration? duration;
+
   /// 原始完成事件 payload。
   final Map<String, Object?> raw;
 }
 
 /// 回合 token 用量更新。
 ///
-/// 对应 Codex `turn/tokenCount` 通知，UI 据此在回合分隔线展示 token 成本。
+/// 对应 Codex `thread/tokenUsage/updated` 通知（旧版为 `turn/tokenCount`），
+/// UI 据此在回合分隔线展示 token 成本。
 class AgentTokenUsageEvent extends AgentEvent {
   const AgentTokenUsageEvent({
     required this.tokenUsage,
@@ -200,6 +213,8 @@ class AgentErrorEvent extends AgentEvent {
   const AgentErrorEvent({
     required this.message,
     this.details,
+    this.code,
+    this.willRetry,
     this.sessionId,
     this.turnId,
     this.raw = const <String, Object?>{},
@@ -210,6 +225,15 @@ class AgentErrorEvent extends AgentEvent {
 
   /// 错误详情。
   final String? details;
+
+  /// Codex 错误码（`codexErrorInfo`），如 `contextWindowExceeded`、
+  /// `unauthorized`、`httpConnectionFailed`；非协议错误或旧版协议为空。
+  ///
+  /// UI 可据此提供针对性引导（如上下文超限时建议压缩会话）。
+  final String? code;
+
+  /// 服务端是否会自动重试本回合；仅 `error` 通知携带，其余场景为空。
+  final bool? willRetry;
 
   /// 可选会话 id；全局 stderr / protocol 错误为空。
   final String? sessionId;

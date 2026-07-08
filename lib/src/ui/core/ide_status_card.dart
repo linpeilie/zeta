@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'ide_colors.dart';
+import 'ide_effects.dart';
 import 'ide_spacing.dart';
 import 'ide_text_styles.dart';
 import 'pane_widgets.dart';
@@ -42,9 +43,7 @@ class IdeStatusCard extends StatelessWidget {
         borderColor: accent.withValues(
           alpha: tone == IdeStatusCardTone.warning ? 0.35 : 0.26,
         ),
-        borderRadius: const BorderRadius.all(
-          Radius.circular(IdeSpacing.space8),
-        ),
+        borderRadius: IdeRadius.allMedium,
         child: Padding(
           padding: padding,
           child: Column(

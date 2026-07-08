@@ -15,9 +15,9 @@ import 'package:zeta/src/features/settings/application/appearance_settings_contr
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/workspace/presentation/file_tree_pane.dart';
-import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_activity_rail.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_resize_handle.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
@@ -125,7 +125,7 @@ class _IdeHomeState extends State<IdeHome> {
       ],
       showWindowControls: widget.showWindowControls,
       child: Padding(
-        padding: const EdgeInsets.all(idePanelGap),
+        padding: const EdgeInsets.all(IdeSpacing.space8),
         child: _buildPageBody(),
       ),
     );
@@ -184,7 +184,7 @@ class _IdeHomeState extends State<IdeHome> {
     final leftPanelVisible = _leftTopVisible || _leftBottomVisible;
     final rightPanelVisible = _rightTopVisible || _rightBottomVisible;
     final rightOverlayAvailableWidth =
-        maxWidth - _activityRailWidth - idePanelGap;
+        maxWidth - _activityRailWidth - IdeSpacing.space8;
     final useRightOverlay =
         rightOverlayAvailableWidth < _rightOverlayBreakpoint;
     final panelWidths = _effectivePanelWidths(
@@ -229,7 +229,7 @@ class _IdeHomeState extends State<IdeHome> {
             ],
           ),
         ),
-        const SizedBox(width: idePanelGap),
+        const SizedBox(width: IdeSpacing.space8),
         if (leftPanelVisible) ...[
           SizedBox(
             key: const ValueKey('left-activity-panel'),
@@ -295,7 +295,7 @@ class _IdeHomeState extends State<IdeHome> {
             child: _buildRightPanel(),
           ),
         ],
-        const SizedBox(width: idePanelGap),
+        const SizedBox(width: IdeSpacing.space8),
         SizedBox(
           width: _activityRailWidth,
           child: IdeActivityRail(
@@ -333,7 +333,8 @@ class _IdeHomeState extends State<IdeHome> {
     }
 
     final overlayWidth = _rightPanelWidth.clamp(_minPanelWidth, _maxPanelWidth);
-    final rightInset = _activityRailWidth + idePanelGap;
+    final rightInset = _activityRailWidth + IdeSpacing.space8;
+    final brightness = ShadTheme.of(context).brightness;
     return Stack(
       children: [
         content,
@@ -343,6 +344,7 @@ class _IdeHomeState extends State<IdeHome> {
             key: const ValueKey('right-overlay-scrim'),
             behavior: HitTestBehavior.translucent,
             onTap: _closeRightOverlay,
+            child: ColoredBox(color: IdeEffects.scrim(brightness)),
           ),
         ),
         Positioned(
@@ -353,14 +355,8 @@ class _IdeHomeState extends State<IdeHome> {
           width: overlayWidth,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(IdeSpacing.space8),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.34),
-                  blurRadius: 24,
-                  offset: const Offset(-8, 0),
-                ),
-              ],
+              borderRadius: IdeRadius.allMedium,
+              boxShadow: IdeEffects.overlayShadow(brightness),
             ),
             child: _buildRightPanel(),
           ),
@@ -384,9 +380,9 @@ class _IdeHomeState extends State<IdeHome> {
 
     final fixedWidth =
         (_activityRailWidth * 2) +
-        (idePanelGap * 2) +
-        (leftPanelVisible ? idePanelGap : 0) +
-        (rightPanelVisible ? idePanelGap : 0);
+        (IdeSpacing.space8 * 2) +
+        (leftPanelVisible ? IdeSpacing.space8 : 0) +
+        (rightPanelVisible ? IdeSpacing.space8 : 0);
     final availablePanelWidth = maxWidth - fixedWidth - _minMainEditorWidth;
     final minimumPanelWidth = _minPanelWidth * visiblePanels;
 
@@ -671,7 +667,7 @@ class _ResizableColumn extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final resizableHeight = constraints.maxHeight - idePanelGap;
+        final resizableHeight = constraints.maxHeight - IdeSpacing.space8;
         final topHeight = resizableHeight * topRatio.clamp(0.1, 0.9);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

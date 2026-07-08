@@ -81,19 +81,28 @@ changes in this repository.
 
 ## UI, Layout, And Accessibility
 
+- Before writing or changing any UI, read and follow the project design system
+  skill at `.cursor/skills/zeta-design-system/SKILL.md` (the "Graphite"
+  identity).
+- Theming is built on `shadcn_ui` plus design tokens in `lib/src/ui/core/`:
+  `IdeColors`, `IdeRadius`/`IdeEffects`, `IdeSpacing`, `IdeTextStyles`, and
+  `IdeMotion`. Do not use Material `ThemeData`/`ColorScheme.fromSeed` styling,
+  raw `Color(0x...)` values, hand-written `BoxShadow` lists, or ad-hoc
+  `BorderRadius.circular(...)` in feature code.
+- Resolve brightness only through `ShadTheme.of(context).brightness`.
 - Build responsive layouts that work on desktop-sized windows as well as narrow
   viewports.
 - Use `LayoutBuilder`, `Flexible`, `Expanded`, `Wrap`, scroll views, and builder
   constructors to avoid overflow.
-- Keep visual styling centralized in `ThemeData` as the UI grows.
-- Reuse `ui/core` primitives such as panes, panel cards, window frame, and theme
-  constants before introducing feature-local visual primitives.
+- Reuse `ui/core` primitives such as `Pane`, `PanelCard`,
+  `PaneInteractiveSurface`, `IdeChip`, `IdeContextMenu`, `IdeStatusCard`,
+  `IdeCollapsibleCard`, and the window frame before introducing feature-local
+  visual primitives.
 - Keep the IDE UI compact, dense, and scannable. Long file paths, thread titles,
   tool summaries, and status text must use bounded layout and ellipsis.
 - Use stable `ValueKey`s for repeated interactive timeline, thread, and file
   tree rows. Add `RepaintBoundary` around expensive or high-frequency regions
   such as streaming turns, highlighted code, and diff details.
-- Prefer Material 3 patterns and `ColorScheme.fromSeed` for app theming.
 - Ensure text remains readable with larger system text sizes.
 - Add semantic labels for non-text controls and important custom widgets.
 

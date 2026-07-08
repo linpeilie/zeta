@@ -567,8 +567,15 @@ class AgentConversationTimelineStore {
     );
   }
 
-  /// turn 完成时更新分组元数据；后续条目回到 standby 分组。
-  void completeLiveTurnGroup(String turnId) {
+  /// turn 结束时更新分组元数据；后续条目回到 standby 分组。
+  ///
+  /// [status] 为回合终态（完成/中断/失败）；[duration] 优先使用 provider
+  /// 上报的耗时，缺失时按本地开始时间估算。
+  void completeLiveTurnGroup(
+    String turnId, {
+    AgentHistoryTurnStatus status = AgentHistoryTurnStatus.completed,
+    Duration? duration,
+  }) {
     final turnState = _turnGroups[turnId];
     if (turnState == null) {
       currentTurnGroupId = null;
@@ -583,12 +590,14 @@ class AgentConversationTimelineStore {
     final previousVisibleCount = oldHistoryLength - _visibleHistoryStartIndex;
     final completedAt = DateTime.now();
     turnState.updateMetadata(
-      status: AgentHistoryTurnStatus.completed,
+      status: status,
       startedAt: turnState.startedAt,
       completedAt: completedAt,
-      duration: turnState.startedAt == null
-          ? null
-          : completedAt.difference(turnState.startedAt!),
+      duration:
+          duration ??
+          (turnState.startedAt == null
+              ? null
+              : completedAt.difference(turnState.startedAt!)),
       tokenUsage: turnState.tokenUsage,
     );
     _promoteTurnToHistorical(turnId);

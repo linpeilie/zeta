@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'ide_colors.dart';
+import 'ide_effects.dart';
 import 'ide_spacing.dart';
 import 'ide_text_styles.dart';
 import 'pane_widgets.dart';
@@ -35,12 +37,12 @@ class IdeChip extends StatelessWidget {
         : selected
         ? colors.accentForeground
         : colors.textSecondary;
-    final pillRadius = BorderRadius.circular(100);
-    final isDark = colors.frame.computeLuminance() < 0.5;
+    const pillRadius = IdeRadius.pill;
+    final isDark = ShadTheme.of(context).brightness == Brightness.dark;
 
     final background = selected
         ? colors.primaryMuted
-        : (isDark ? const Color(0x1F2B303B) : const Color(0x0C000000));
+        : colors.border.withValues(alpha: isDark ? 0.32 : 0.45);
     final borderColor = selected
         ? colors.accent.withValues(alpha: 0.4)
         : colors.border.withValues(alpha: 0.5);

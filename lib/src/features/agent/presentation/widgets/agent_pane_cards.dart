@@ -285,9 +285,7 @@ class _AgentHighlightedCodeBlock extends StatelessWidget {
       child: DecoratedBox(
         decoration: _agentCodeBlockDecoration(colors),
         child: ClipRRect(
-          borderRadius: const BorderRadius.all(
-            Radius.circular(IdeSpacing.space6),
-          ),
+          borderRadius: IdeRadius.allSmall,
           child: HighlightView(
             code,
             language: language,

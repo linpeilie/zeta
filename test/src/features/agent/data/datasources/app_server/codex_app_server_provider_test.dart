@@ -39,6 +39,35 @@ void main() {
       await provider.dispose();
     });
 
+    test('declares client capabilities during initialize', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+
+      await provider.initialize();
+
+      expect(peer.requestMethods.first, 'initialize');
+      final params = peer.requestParams.first! as Map<String, Object?>;
+      final clientInfo = params['clientInfo']! as Map<String, Object?>;
+      expect(clientInfo['name'], 'zeta');
+
+      final capabilities = params['capabilities']! as Map<String, Object?>;
+      expect(capabilities['experimentalApi'], isFalse);
+      expect(capabilities['requestAttestation'], isFalse);
+      expect(capabilities['mcpServerOpenaiFormElicitation'], isFalse);
+
+      final optOut = capabilities['optOutNotificationMethods']! as List<String>;
+      expect(optOut, contains('thread/realtime/outputAudio/delta'));
+      // 已消费或近期路线图内的通知不允许被屏蔽。
+      expect(optOut, isNot(contains('thread/tokenUsage/updated')));
+      expect(optOut, isNot(contains('turn/completed')));
+      expect(optOut, isNot(contains('item/reasoning/textDelta')));
+      expect(optOut, isNot(contains('account/rateLimits/updated')));
+      await provider.dispose();
+    });
+
     test('maps notifications to unified AgentEvents', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
@@ -319,6 +348,180 @@ void main() {
         await provider.dispose();
       },
     );
+
+    test(
+      'rejects unknown server requests with JSON-RPC error responses',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+
+        await provider.initialize();
+        peer.emitServerRequest(
+          id: 'unknown-1',
+          method: 'some/unknown/request',
+          params: const <String, Object?>{},
+        );
+        peer.emitServerRequest(
+          id: 'tool-call-1',
+          method: 'item/tool/call',
+          params: const <String, Object?>{'tool': 'my_tool'},
+        );
+        peer.emitServerRequest(
+          id: 'auth-1',
+          method: 'account/chatgptAuthTokens/refresh',
+          params: const <String, Object?>{},
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        // 拒绝类请求不应出现 UI 审批卡片。
+        expect(events.whereType<AgentPermissionRequestedEvent>(), isEmpty);
+
+        final unknown = peer.errorResponses['unknown-1'];
+        expect(unknown?.code, -32601);
+        expect(unknown?.message, contains('some/unknown/request'));
+        expect(peer.errorResponses['tool-call-1']?.code, -32601);
+        expect(
+          peer.errorResponses['tool-call-1']?.message,
+          contains('Dynamic tool calls'),
+        );
+        expect(peer.errorResponses['auth-1']?.code, -32601);
+        expect(peer.responses, isEmpty);
+
+        await subscription.cancel();
+        await provider.dispose();
+      },
+    );
+
+    test(
+      'responds to tool user input requests with schema-valid answers',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+
+        await provider.initialize();
+        peer.emitServerRequest(
+          id: 'input-1',
+          method: 'item/tool/requestUserInput',
+          params: const <String, Object?>{
+            'threadId': 'thread-1',
+            'turnId': 'turn-1',
+            'itemId': 'item-1',
+            'questions': <Object?>[],
+          },
+        );
+        peer.emitServerRequest(
+          id: 'input-2',
+          method: 'item/tool/requestUserInput',
+          params: const <String, Object?>{
+            'threadId': 'thread-1',
+            'turnId': 'turn-1',
+            'itemId': 'item-2',
+            'questions': <Object?>[],
+          },
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        final requests = events
+            .whereType<AgentPermissionRequestedEvent>()
+            .toList();
+        expect(requests, hasLength(2));
+        expect(requests.first.request.kind, AgentPermissionKind.userInput);
+
+        await provider.respondToPermission(
+          AgentPermissionDecision(
+            requestId: requests[0].request.id,
+            approved: true,
+          ),
+        );
+        await provider.respondToPermission(
+          AgentPermissionDecision(
+            requestId: requests[1].request.id,
+            approved: false,
+          ),
+        );
+
+        // answers 为必填字段；表单 UI 落地前同意/拒绝都回空答案。
+        expect(peer.responses['input-1'], <String, Object?>{
+          'answers': <String, Object?>{},
+        });
+        expect(peer.responses['input-2'], <String, Object?>{
+          'answers': <String, Object?>{},
+        });
+
+        await subscription.cancel();
+        await provider.dispose();
+      },
+    );
+
+    test('responds to MCP elicitation requests with action variants', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+
+      await provider.initialize();
+      for (final id in <String>['elicit-1', 'elicit-2', 'elicit-3']) {
+        peer.emitServerRequest(
+          id: id,
+          method: 'mcpServer/elicitation/request',
+          params: const <String, Object?>{
+            'threadId': 'thread-1',
+            'turnId': 'turn-1',
+          },
+        );
+      }
+      await Future<void>.delayed(Duration.zero);
+
+      final requests = events
+          .whereType<AgentPermissionRequestedEvent>()
+          .toList();
+      expect(requests, hasLength(3));
+
+      await provider.respondToPermission(
+        AgentPermissionDecision(
+          requestId: requests[0].request.id,
+          approved: true,
+        ),
+      );
+      await provider.respondToPermission(
+        AgentPermissionDecision(
+          requestId: requests[1].request.id,
+          approved: false,
+        ),
+      );
+      await provider.respondToPermission(
+        AgentPermissionDecision(
+          requestId: requests[2].request.id,
+          approved: false,
+          cancelTurn: true,
+        ),
+      );
+
+      expect(peer.responses['elicit-1'], <String, Object?>{
+        'action': 'accept',
+        'content': <String, Object?>{},
+      });
+      expect(peer.responses['elicit-2'], <String, Object?>{
+        'action': 'decline',
+      });
+      expect(peer.responses['elicit-3'], <String, Object?>{'action': 'cancel'});
+
+      await subscription.cancel();
+      await provider.dispose();
+    });
 
     test('lists project threads with Codex pagination params', () async {
       final peer = _FakeJsonRpcPeer();
@@ -1086,6 +1289,228 @@ void main() {
     );
 
     test(
+      'emits AgentTokenUsageEvent for thread/tokenUsage/updated notifications',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+        await provider.initialize();
+
+        final events = <AgentEvent>[];
+        final sub = provider.events.listen(events.add);
+        addTearDown(sub.cancel);
+
+        // 当前协议结构：tokenUsage 内嵌 camelCase 的 total/last breakdown。
+        peer.emitNotification('thread/tokenUsage/updated', <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-live',
+          'tokenUsage': <String, Object?>{
+            'total': <String, Object?>{
+              'inputTokens': 41910,
+              'cachedInputTokens': 19712,
+              'outputTokens': 1552,
+              'reasoningOutputTokens': 780,
+              'totalTokens': 43462,
+            },
+            'last': <String, Object?>{
+              'inputTokens': 26672,
+              'cachedInputTokens': 14720,
+              'outputTokens': 1051,
+              'reasoningOutputTokens': 532,
+              'totalTokens': 27723,
+            },
+            'modelContextWindow': 258400,
+          },
+        });
+        await Future<void>.delayed(Duration.zero);
+
+        final usageEvent = events.whereType<AgentTokenUsageEvent>().single;
+        expect(usageEvent.sessionId, 'thread-1');
+        expect(usageEvent.turnId, 'turn-live');
+        expect(usageEvent.tokenUsage.inputTokens, 41910);
+        expect(usageEvent.tokenUsage.cachedInputTokens, 19712);
+        expect(usageEvent.tokenUsage.outputTokens, 1552);
+        expect(usageEvent.tokenUsage.reasoningOutputTokens, 780);
+        expect(usageEvent.tokenUsage.totalTokens, 43462);
+        expect(usageEvent.tokenUsage.lastInputTokens, 26672);
+        expect(usageEvent.tokenUsage.lastCachedInputTokens, 14720);
+        expect(usageEvent.tokenUsage.lastOutputTokens, 1051);
+        expect(usageEvent.tokenUsage.lastReasoningOutputTokens, 532);
+        expect(usageEvent.tokenUsage.lastTotalTokens, 27723);
+        expect(usageEvent.tokenUsage.modelContextWindow, 258400);
+      },
+    );
+
+    test('parses error notifications with nested TurnError payloads', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+      await provider.initialize();
+
+      final events = <AgentEvent>[];
+      final sub = provider.events.listen(events.add);
+      addTearDown(sub.cancel);
+
+      // 当前协议结构：错误信息在嵌套的 TurnError 对象里。
+      peer.emitNotification('error', <String, Object?>{
+        'threadId': 'thread-1',
+        'turnId': 'turn-live',
+        'willRetry': true,
+        'error': <String, Object?>{
+          'message': 'Context window exceeded',
+          'additionalDetails': 'Try compacting the thread',
+          'codexErrorInfo': 'contextWindowExceeded',
+        },
+      });
+      // 对象变体的 codexErrorInfo：取唯一键名作为错误码。
+      peer.emitNotification('error', <String, Object?>{
+        'threadId': 'thread-1',
+        'turnId': 'turn-live',
+        'willRetry': false,
+        'error': <String, Object?>{
+          'message': 'Connection failed',
+          'codexErrorInfo': <String, Object?>{
+            'httpConnectionFailed': <String, Object?>{'httpStatusCode': 502},
+          },
+        },
+      });
+      await Future<void>.delayed(Duration.zero);
+
+      final errors = events.whereType<AgentErrorEvent>().toList();
+      expect(errors, hasLength(2));
+      expect(errors[0].message, 'Context window exceeded');
+      expect(errors[0].details, 'Try compacting the thread');
+      expect(errors[0].code, 'contextWindowExceeded');
+      expect(errors[0].willRetry, isTrue);
+      expect(errors[0].sessionId, 'thread-1');
+      expect(errors[0].turnId, 'turn-live');
+      expect(errors[1].message, 'Connection failed');
+      expect(errors[1].code, 'httpConnectionFailed');
+      expect(errors[1].willRetry, isFalse);
+    });
+
+    test(
+      'parses turn/completed terminal status, error, and duration',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+        await provider.initialize();
+
+        final events = <AgentEvent>[];
+        final sub = provider.events.listen(events.add);
+        addTearDown(sub.cancel);
+
+        peer.emitNotification('turn/completed', <String, Object?>{
+          'threadId': 'thread-1',
+          'turn': <String, Object?>{
+            'id': 'turn-failed',
+            'status': 'failed',
+            'durationMs': 5250,
+            'items': <Object?>[],
+            'error': <String, Object?>{
+              'message': 'Model provider rejected the request',
+              'codexErrorInfo': 'badRequest',
+            },
+          },
+        });
+        peer.emitNotification('turn/completed', <String, Object?>{
+          'threadId': 'thread-1',
+          'turn': <String, Object?>{
+            'id': 'turn-interrupted',
+            'status': 'interrupted',
+            'items': <Object?>[],
+          },
+        });
+        peer.emitNotification('turn/completed', <String, Object?>{
+          'threadId': 'thread-1',
+          'turn': <String, Object?>{
+            'id': 'turn-ok',
+            'status': 'completed',
+            'items': <Object?>[],
+          },
+        });
+        await Future<void>.delayed(Duration.zero);
+
+        final completed = events.whereType<AgentTurnCompletedEvent>().toList();
+        expect(completed, hasLength(3));
+        expect(completed[0].turnId, 'turn-failed');
+        expect(completed[0].status, AgentHistoryTurnStatus.failed);
+        expect(
+          completed[0].errorMessage,
+          'Model provider rejected the request',
+        );
+        expect(completed[0].duration, const Duration(milliseconds: 5250));
+        expect(completed[1].turnId, 'turn-interrupted');
+        expect(completed[1].status, AgentHistoryTurnStatus.interrupted);
+        expect(completed[1].errorMessage, isNull);
+        expect(completed[2].turnId, 'turn-ok');
+        expect(completed[2].status, AgentHistoryTurnStatus.completed);
+      },
+    );
+
+    test('keeps legacy flat error payloads readable', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+      await provider.initialize();
+
+      final events = <AgentEvent>[];
+      final sub = provider.events.listen(events.add);
+      addTearDown(sub.cancel);
+
+      peer.emitNotification('error', <String, Object?>{
+        'threadId': 'thread-1',
+        'message': 'Legacy failure',
+        'details': 'Old-style details',
+      });
+      await Future<void>.delayed(Duration.zero);
+
+      final error = events.whereType<AgentErrorEvent>().single;
+      expect(error.message, 'Legacy failure');
+      expect(error.details, 'Old-style details');
+      expect(error.code, isNull);
+      expect(error.willRetry, isNull);
+    });
+
+    test('reads configWarning summary field as the message', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+      await provider.initialize();
+
+      final events = <AgentEvent>[];
+      final sub = provider.events.listen(events.add);
+      addTearDown(sub.cancel);
+
+      peer.emitNotification('configWarning', <String, Object?>{
+        'summary': 'Unknown config key `modle`',
+        'details': 'Did you mean `model`?',
+        'path': '/Users/dev/.codex/config.toml',
+      });
+      await Future<void>.delayed(Duration.zero);
+
+      final warning = events.whereType<AgentErrorEvent>().single;
+      expect(warning.message, 'Unknown config key `modle`');
+      expect(warning.details, 'Did you mean `model`?');
+    });
+
+    test(
       'parses item_completed plan payloads from local session jsonl',
       () async {
         final peer = _FakeJsonRpcPeer();
@@ -1310,7 +1735,9 @@ void main() {
       expect(turnStartIndex, isNot(-1));
       final params = peer.requestParams[turnStartIndex] as Map<String, Object?>;
       expect(params['model'], 'gpt-5.4-mini');
-      expect(params['reasoningEffort'], 'high');
+      // 协议参数名是 `effort`,不是旧的 `reasoningEffort`。
+      expect(params['effort'], 'high');
+      expect(params.containsKey('reasoningEffort'), isFalse);
       expect(params['serviceTier'], 'priority');
     });
 
@@ -1334,7 +1761,7 @@ void main() {
       final turnStartIndex = peer.requestMethods.indexOf('turn/start');
       final params = peer.requestParams[turnStartIndex] as Map<String, Object?>;
       expect(params['model'], 'gpt-5.5');
-      expect(params.containsKey('reasoningEffort'), isFalse);
+      expect(params.containsKey('effort'), isFalse);
       expect(params.containsKey('serviceTier'), isFalse);
     });
   });
@@ -1367,6 +1794,7 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
   final List<Object?> requestParams = <Object?>[];
   final List<String> notificationsSent = <String>[];
   final Map<Object, Object?> responses = <Object, Object?>{};
+  final Map<Object, JsonRpcError> errorResponses = <Object, JsonRpcError>{};
   final Completer<void>? _startCompleter;
   int startCalls = 0;
 
@@ -1543,6 +1971,10 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
     Object? result,
     JsonRpcError? error,
   }) async {
+    if (error != null) {
+      errorResponses[id] = error;
+      return;
+    }
     responses[id] = result;
   }
 

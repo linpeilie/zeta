@@ -15,7 +15,8 @@
 ## 2. 当前技术栈
 
 - Flutter + Dart。
-- Material 3 深色紧凑主题。
+- `shadcn_ui` + 自建设计 token（「Graphite 石墨蓝」深浅双主题，规范见
+  `.cursor/skills/zeta-design-system/SKILL.md`）。
 - `multi_split_view` 用于三栏可调整布局。
 - `flutter_treeview` 用于文件树。
 - `window_manager` 用于桌面窗口体验（隐藏原生标题栏、自定义标题栏）。

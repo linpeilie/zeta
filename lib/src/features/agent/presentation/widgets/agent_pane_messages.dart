@@ -128,22 +128,17 @@ class _AgentTurnDivider extends StatelessWidget {
   }
 
   String? _turnLabel(AgentConversationTurnGroup group) {
-    final duration = group.duration;
-    final durationText = _formatDuration(duration);
-    final status = group.status;
-    if (durationText == null && status == null) {
-      return null;
-    }
-    if (durationText != null && status == AgentHistoryTurnStatus.running) {
-      return 'Running';
-    }
-    return durationText ??
-        switch (status) {
-          AgentHistoryTurnStatus.running => 'Running',
-          AgentHistoryTurnStatus.completed => 'Completed',
-          AgentHistoryTurnStatus.unknown => null,
-          null => null,
-        };
+    final durationText = _formatDuration(group.duration);
+    return switch (group.status) {
+      AgentHistoryTurnStatus.running => 'Running',
+      // 中断/失败终态优先展示状态词，有耗时再附加。
+      AgentHistoryTurnStatus.interrupted =>
+        durationText == null ? 'Interrupted' : 'Interrupted · $durationText',
+      AgentHistoryTurnStatus.failed =>
+        durationText == null ? 'Failed' : 'Failed · $durationText',
+      AgentHistoryTurnStatus.completed => durationText ?? 'Completed',
+      AgentHistoryTurnStatus.unknown || null => durationText,
+    };
   }
 }
 
@@ -168,9 +163,7 @@ class _AgentBubbleMessage extends StatelessWidget {
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: isUser ? colors.primaryMuted : colors.surfaceElevated,
-              borderRadius: const BorderRadius.all(
-                Radius.circular(IdeSpacing.space8),
-              ),
+              borderRadius: IdeRadius.allMedium,
               border: Border.all(
                 color: isUser
                     ? colors.accent.withValues(alpha: 0.22)
@@ -426,9 +419,7 @@ class _AgentPlanMessageCard extends StatelessWidget {
               bodyPadding: const EdgeInsets.only(top: IdeSpacing.space10),
               backgroundColor: colors.surfaceElevated,
               borderColor: colors.border,
-              borderRadius: const BorderRadius.all(
-                Radius.circular(IdeSpacing.space16),
-              ),
+              borderRadius: IdeRadius.allComposer,
               hoverBackgroundColor: colors.border.withValues(alpha: 0.08),
               semanticLabel: expanded ? '收起计划' : '展开计划',
               body: Padding(

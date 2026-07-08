@@ -96,6 +96,30 @@ class CodexAppServerAgentProvider implements AgentProvider {
   @override
   final AgentProviderConfig config;
 
+  /// initialize 时请求服务端屏蔽的通知(协议要求精确 method 名)。
+  ///
+  /// 只列近期路线图之外(P4~P5)且不消费的通知,减少 stdio 流量与解析开销：
+  /// 实时语音、远程控制、插件生态、Windows 沙箱与安全审计元数据。
+  /// Phase 1~3 计划消费的通知(reasoning/plan/diff、account、mcp、skills 等)
+  /// 不在此列;适配对应功能时若列表有交集需同步移除。
+  static const List<String> _optedOutNotificationMethods = <String>[
+    'thread/realtime/closed',
+    'thread/realtime/error',
+    'thread/realtime/itemAdded',
+    'thread/realtime/outputAudio/delta',
+    'thread/realtime/sdp',
+    'thread/realtime/started',
+    'thread/realtime/transcript/delta',
+    'thread/realtime/transcript/done',
+    'remoteControl/status/changed',
+    'app/list/updated',
+    'windows/worldWritableWarning',
+    'windowsSandbox/setupCompleted',
+    'model/safetyBuffering/updated',
+    'model/verification',
+    'turn/moderationMetadata',
+  ];
+
   @override
   Stream<AgentEvent> get events => _events.stream;
 
@@ -143,6 +167,16 @@ class CodexAppServerAgentProvider implements AgentProvider {
             'name': 'zeta',
             'title': 'Zeta IDE',
             'version': '0.1.0',
+          },
+          // 显式声明协商能力，避免依赖服务端默认值的隐式行为。
+          'capabilities': <String, Object?>{
+            // 不接收实验性 API 方法与字段；动态工具等能力落地时再开启。
+            'experimentalApi': false,
+            // 不参与 attestation/generate 流程（A5 已对误发请求兜底拒绝）。
+            'requestAttestation': false,
+            // 表单式 elicitation 尚无渲染能力（见计划 3.8），暂不允许。
+            'mcpServerOpenaiFormElicitation': false,
+            'optOutNotificationMethods': _optedOutNotificationMethods,
           },
         },
       );
@@ -405,10 +439,13 @@ class CodexAppServerAgentProvider implements AgentProvider {
       return;
     }
     if (_isErrorNotification(notification.method)) {
-      _log.warning(
-        'Codex ${notification.method}: '
-        '${_string(notification.params['message']) ?? 'No message'}',
-      );
+      // `error` 通知的消息在嵌套的 TurnError 里，`configWarning` 用 summary。
+      final message =
+          _string(notification.params['message']) ??
+          _string(_map(notification.params['error'])['message']) ??
+          _string(notification.params['summary']) ??
+          'No message';
+      _log.warning('Codex ${notification.method}: $message');
     }
 
     final mapping = _notificationMapper.map(
@@ -447,6 +484,29 @@ class CodexAppServerAgentProvider implements AgentProvider {
 
   /// 将服务端审批请求委托给审批映射器，再由 provider 保存待处理状态。
   void _handleServerRequest(JsonRpcRequest request) {
+    // 未知或不支持的请求立即回 JSON-RPC error，不进 UI；伪造 `{}`/null
+    // 成功应答会违反响应 schema，可能让服务端 turn 永久卡住。
+    final rejection = _approvalMapper.rejectionFor(request);
+    if (rejection != null) {
+      _log.warning(
+        'Declining unsupported Codex server request ${request.method}: '
+        '${rejection.message}',
+      );
+      unawaited(
+        _peer.sendResponse(request.id, error: rejection).catchError((
+          Object error,
+          StackTrace stackTrace,
+        ) {
+          _log.warning(
+            'Failed to reject Codex server request ${request.method}',
+            error,
+            stackTrace,
+          );
+        }),
+      );
+      return;
+    }
+
     final mapped = _approvalMapper.mapRequest(request);
     _pendingApprovals[mapped.pendingApproval.id] = mapped.pendingApproval;
     _events.add(mapped.event);

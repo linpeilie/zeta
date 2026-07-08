@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'app_theme.dart';
 import 'ide_colors.dart';
+import 'ide_effects.dart';
 import 'ide_motion.dart';
 import 'ide_spacing.dart';
 import 'ide_text_styles.dart';
@@ -62,8 +62,7 @@ class IdeCollapsibleCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final radius =
-        borderRadius ?? const BorderRadius.all(Radius.circular(idePanelRadius));
+    final radius = borderRadius ?? IdeRadius.allSmall;
     final header = PaneInteractiveSurface(
       key: headerKey,
       onPressed: canExpand ? onToggle : null,

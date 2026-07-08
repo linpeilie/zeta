@@ -7,7 +7,9 @@ import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_motion.dart';
+import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 
 /// 包裹主内容的窗口外框。
@@ -121,6 +123,7 @@ class _TitleBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
     final isMac = Platform.isMacOS;
     return Container(
       height: 28,
@@ -140,7 +143,9 @@ class _TitleBar extends StatelessWidget {
                     appTitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: colors.mutedText, fontSize: 12),
+                    style: textStyles.bodyMedium.copyWith(
+                      color: colors.textSecondary,
+                    ),
                   ),
                 ),
               ),
@@ -222,7 +227,7 @@ class _WindowMenuButtonState extends State<_WindowMenuButton> {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final shadTheme = ShadTheme.of(context);
+    final textStyles = IdeTextStyles.of(context);
     return ShadPopover(
       key: widget.menu.key,
       controller: _popoverController,
@@ -256,9 +261,8 @@ class _WindowMenuButtonState extends State<_WindowMenuButton> {
                   mainAxisAlignment: MainAxisAlignment.start,
                   child: Text(
                     item.label,
-                    style: TextStyle(
-                      color: shadTheme.colorScheme.foreground,
-                      fontSize: 12,
+                    style: textStyles.bodyMedium.copyWith(
+                      color: colors.textPrimary,
                     ),
                   ),
                 ),
@@ -275,7 +279,9 @@ class _WindowMenuButtonState extends State<_WindowMenuButton> {
               widget.menu.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: colors.mutedText, fontSize: 12),
+              style: textStyles.bodyMedium.copyWith(
+                color: colors.textSecondary,
+              ),
             ),
           ),
         ),
@@ -418,14 +424,9 @@ class _WindowButtonState extends State<_WindowButton> {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final isDark = ShadTheme.of(context).brightness == Brightness.dark;
-    final hoverColor = widget.isClose
-        ? const Color(0xFFE81123)
-        : (isDark ? const Color(0x19FFFFFF) : const Color(0x0F000000));
+    final hoverColor = widget.isClose ? colors.closeHover : colors.windowHover;
     final idleIcon = colors.windowIcon;
-    final hoverIcon = widget.isClose
-        ? Colors.white
-        : (isDark ? Colors.white : colors.textPrimary);
+    final hoverIcon = widget.isClose ? Colors.white : colors.textPrimary;
     return IdeTooltip(
       message: widget.tooltip,
       child: MouseRegion(
@@ -442,7 +443,7 @@ class _WindowButtonState extends State<_WindowButton> {
             margin: const EdgeInsets.symmetric(horizontal: 1),
             decoration: BoxDecoration(
               color: _hover ? hoverColor : Colors.transparent,
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: IdeRadius.allSmall,
             ),
             child: Icon(
               widget.icon,

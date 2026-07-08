@@ -244,34 +244,105 @@ class _CodexThreadHistoryReader {
   }
 
   AgentTokenUsage? _tokenUsageFromTurnPayload(Map<String, Object?> turn) {
-    final direct = _map(turn['tokenUsage']);
-    final nested = direct.isNotEmpty ? direct : _map(turn['token_usage']);
-    final total = nested.isNotEmpty ? nested : _map(turn['total_token_usage']);
+    final container = _map(turn['tokenUsage']).isNotEmpty
+        ? _map(turn['tokenUsage'])
+        : _map(turn['token_usage']);
+
+    // 当前协议：tokenUsage 内嵌 total/last 两个 breakdown。
+    final nestedTotal = _map(container['total']);
+    if (nestedTotal.isNotEmpty) {
+      final nestedLast = _map(container['last']);
+      return AgentTokenUsage(
+        inputTokens: _breakdownInt(nestedTotal, 'inputTokens', 'input_tokens'),
+        cachedInputTokens: _breakdownInt(
+          nestedTotal,
+          'cachedInputTokens',
+          'cached_input_tokens',
+        ),
+        outputTokens: _breakdownInt(
+          nestedTotal,
+          'outputTokens',
+          'output_tokens',
+        ),
+        reasoningOutputTokens: _breakdownInt(
+          nestedTotal,
+          'reasoningOutputTokens',
+          'reasoning_output_tokens',
+        ),
+        totalTokens: _breakdownInt(nestedTotal, 'totalTokens', 'total_tokens'),
+        lastInputTokens: _breakdownInt(
+          nestedLast,
+          'inputTokens',
+          'input_tokens',
+        ),
+        lastCachedInputTokens: _breakdownInt(
+          nestedLast,
+          'cachedInputTokens',
+          'cached_input_tokens',
+        ),
+        lastOutputTokens: _breakdownInt(
+          nestedLast,
+          'outputTokens',
+          'output_tokens',
+        ),
+        lastReasoningOutputTokens: _breakdownInt(
+          nestedLast,
+          'reasoningOutputTokens',
+          'reasoning_output_tokens',
+        ),
+        lastTotalTokens: _breakdownInt(
+          nestedLast,
+          'totalTokens',
+          'total_tokens',
+        ),
+        modelContextWindow: _breakdownInt(
+          container,
+          'modelContextWindow',
+          'model_context_window',
+        ),
+      );
+    }
+
+    // 旧结构：tokenUsage 本身就是 total breakdown 的平铺字段。
+    final total = container.isNotEmpty
+        ? container
+        : _map(turn['total_token_usage']);
     if (total.isEmpty) {
       return null;
     }
     final last = _map(turn['last_token_usage']);
     return AgentTokenUsage(
-      inputTokens:
-          _numberToInt(total['input_tokens']) ??
-          _numberToInt(total['inputTokens']),
-      cachedInputTokens:
-          _numberToInt(total['cached_input_tokens']) ??
-          _numberToInt(total['cachedInputTokens']),
-      outputTokens:
-          _numberToInt(total['output_tokens']) ??
-          _numberToInt(total['outputTokens']),
-      reasoningOutputTokens:
-          _numberToInt(total['reasoning_output_tokens']) ??
-          _numberToInt(total['reasoningOutputTokens']),
-      totalTokens:
-          _numberToInt(total['total_tokens']) ??
-          _numberToInt(total['totalTokens']),
-      lastInputTokens: _numberToInt(last['input_tokens']),
-      lastCachedInputTokens: _numberToInt(last['cached_input_tokens']),
-      lastOutputTokens: _numberToInt(last['output_tokens']),
-      lastReasoningOutputTokens: _numberToInt(last['reasoning_output_tokens']),
-      lastTotalTokens: _numberToInt(last['total_tokens']),
+      inputTokens: _breakdownInt(total, 'inputTokens', 'input_tokens'),
+      cachedInputTokens: _breakdownInt(
+        total,
+        'cachedInputTokens',
+        'cached_input_tokens',
+      ),
+      outputTokens: _breakdownInt(total, 'outputTokens', 'output_tokens'),
+      reasoningOutputTokens: _breakdownInt(
+        total,
+        'reasoningOutputTokens',
+        'reasoning_output_tokens',
+      ),
+      totalTokens: _breakdownInt(total, 'totalTokens', 'total_tokens'),
+      lastInputTokens: _breakdownInt(last, 'inputTokens', 'input_tokens'),
+      lastCachedInputTokens: _breakdownInt(
+        last,
+        'cachedInputTokens',
+        'cached_input_tokens',
+      ),
+      lastOutputTokens: _breakdownInt(last, 'outputTokens', 'output_tokens'),
+      lastReasoningOutputTokens: _breakdownInt(
+        last,
+        'reasoningOutputTokens',
+        'reasoning_output_tokens',
+      ),
+      lastTotalTokens: _breakdownInt(last, 'totalTokens', 'total_tokens'),
+      modelContextWindow: _breakdownInt(
+        turn,
+        'modelContextWindow',
+        'model_context_window',
+      ),
     );
   }
 }

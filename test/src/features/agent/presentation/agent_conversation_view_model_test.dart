@@ -855,6 +855,110 @@ void main() {
     });
 
     test(
+      'marks failed turns and shows the failure reason inside the turn',
+      () async {
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.sendMessage('hello');
+        provider.emit(
+          const AgentTurnCompletedEvent(
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+            status: AgentHistoryTurnStatus.failed,
+            errorMessage: 'Model provider rejected the request',
+            duration: Duration(seconds: 5),
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        final turn = viewModel.conversationTurns.singleWhere(
+          (turn) => turn.id == 'turn-1',
+        );
+        expect(turn.status, AgentHistoryTurnStatus.failed);
+        expect(turn.duration, const Duration(seconds: 5));
+        final failureTexts = turn.entries
+            .whereType<AgentMessageTimelineEntry>()
+            .map((entry) => entry.message.text)
+            .where((text) => text.contains('Turn failed'))
+            .toList();
+        expect(failureTexts, <String>[
+          'Turn failed: Model provider rejected the request',
+        ]);
+      },
+    );
+
+    test(
+      'does not repeat a failure reason already shown by an error event',
+      () async {
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.sendMessage('hello');
+        provider.emit(
+          const AgentErrorEvent(
+            message: 'Context window exceeded',
+            code: 'contextWindowExceeded',
+            willRetry: false,
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+        );
+        provider.emit(
+          const AgentTurnCompletedEvent(
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+            status: AgentHistoryTurnStatus.failed,
+            errorMessage: 'Context window exceeded',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        final errorTexts = viewModel.timelineEntries
+            .whereType<AgentMessageTimelineEntry>()
+            .map((entry) => entry.message.text)
+            .where((text) => text.contains('Context window exceeded'))
+            .toList();
+        expect(errorTexts, hasLength(1));
+        expect(errorTexts.single, isNot(contains('Turn failed')));
+
+        final turn = viewModel.conversationTurns.singleWhere(
+          (turn) => turn.id == 'turn-1',
+        );
+        expect(turn.status, AgentHistoryTurnStatus.failed);
+      },
+    );
+
+    test('marks interrupted turns without adding extra messages', () async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.sendMessage('hello');
+      provider.emit(
+        const AgentTurnCompletedEvent(
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          status: AgentHistoryTurnStatus.interrupted,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final turn = viewModel.conversationTurns.singleWhere(
+        (turn) => turn.id == 'turn-1',
+      );
+      expect(turn.status, AgentHistoryTurnStatus.interrupted);
+      final systemTexts = viewModel.timelineEntries
+          .whereType<AgentMessageTimelineEntry>()
+          .map((entry) => entry.message.text)
+          .where((text) => text.contains('Turn failed'))
+          .toList();
+      expect(systemTexts, isEmpty);
+    });
+
+    test(
       'exposes header token usage only while the active turn is running',
       () async {
         final provider = _FakeAgentProvider();

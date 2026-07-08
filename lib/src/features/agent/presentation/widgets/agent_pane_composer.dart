@@ -73,48 +73,28 @@ class _AgentComposer extends StatelessWidget {
       child: Builder(
         builder: (context) {
           final isFocused = Focus.of(context).hasFocus;
-          final isDark = ShadTheme.of(context).brightness == Brightness.dark;
+          final brightness = ShadTheme.of(context).brightness;
           final focusBorder = isFocused
               ? colors.accent.withValues(alpha: 0.64)
               : colors.border.withValues(alpha: 0.6);
           final shadow = isFocused
-              ? [
-                  BoxShadow(
-                    color: colors.accent.withValues(
-                      alpha: isDark ? 0.08 : 0.04,
-                    ),
-                    blurRadius: 16,
-                    spreadRadius: 1,
-                  ),
-                  const BoxShadow(
-                    color: Color(0x1F000000),
-                    blurRadius: 12,
-                    offset: Offset(0, 4),
-                  ),
-                ]
-              : const [
-                  BoxShadow(
-                    color: Color(0x12000000),
-                    blurRadius: 10,
-                    offset: Offset(0, 3),
-                  ),
-                ];
+              ? IdeEffects.composerFocusShadow(
+                  brightness,
+                  accent: colors.accent,
+                )
+              : IdeEffects.composerRestShadow(brightness);
 
           return AnimatedContainer(
             duration: IdeMotion.durationNormal,
             curve: IdeMotion.curveDefault,
             decoration: BoxDecoration(
-              borderRadius: const BorderRadius.all(
-                Radius.circular(IdeSpacing.space16),
-              ),
+              borderRadius: IdeRadius.allComposer,
               boxShadow: shadow,
             ),
             child: PanelCard(
               color: colors.panel,
               borderColor: focusBorder,
-              borderRadius: const BorderRadius.all(
-                Radius.circular(IdeSpacing.space16),
-              ),
+              borderRadius: IdeRadius.allComposer,
               showBorder: true,
               child: Padding(
                 padding: const EdgeInsets.only(
@@ -208,14 +188,17 @@ class _AgentComposer extends StatelessWidget {
                                     'agent-send-button-state',
                                   ),
                                   tooltip: 'Send',
+                                  // 可发送时使用实心 accent，作为界面最强的
+                                  // 行动锚点；不可发送时退回弱化中性底。
                                   backgroundColor: canSubmit
-                                      ? colors.accent.withValues(alpha: 0.16)
+                                      ? colors.accent
                                       : colors.border.withValues(alpha: 0.2),
                                   foregroundColor: canSubmit
-                                      ? colors.accent
+                                      ? Colors.white
                                       : colors.textSecondary.withValues(
                                           alpha: 0.72,
                                         ),
+                                  filled: canSubmit,
                                   buttonKey: const ValueKey(
                                     'agent-send-button',
                                   ),
@@ -436,6 +419,7 @@ class _ComposerActionButton extends StatelessWidget {
     required this.buttonKey,
     required this.icon,
     required this.onPressed,
+    this.filled = false,
     super.key,
   });
 
@@ -445,6 +429,9 @@ class _ComposerActionButton extends StatelessWidget {
   final Key buttonKey;
   final Widget icon;
   final VoidCallback? onPressed;
+
+  /// 实心样式：hover 时保持前景色不变，仅叠加白色提亮。
+  final bool filled;
 
   @override
   Widget build(BuildContext context) {
@@ -463,6 +450,10 @@ class _ComposerActionButton extends StatelessWidget {
             height: 32,
             padding: EdgeInsets.zero,
             foregroundColor: foregroundColor,
+            hoverForegroundColor: filled ? foregroundColor : null,
+            hoverBackgroundColor: filled
+                ? Colors.white.withValues(alpha: 0.14)
+                : null,
             icon: icon,
           ),
         ),

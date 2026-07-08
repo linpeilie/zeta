@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'app_theme.dart';
 import 'ide_colors.dart';
+import 'ide_effects.dart';
 import 'ide_motion.dart';
 import 'ide_spacing.dart';
 import 'pane_widgets.dart';
@@ -88,7 +88,7 @@ class _RailActionButton extends StatelessWidget {
             width: 32,
             height: 32,
             padding: EdgeInsets.zero,
-            borderRadius: BorderRadius.circular(idePanelRadius),
+            borderRadius: IdeRadius.allSmall,
             backgroundColor: Colors.transparent,
             selectedBackgroundColor: colors.primaryMuted,
             semanticLabel: action.semanticLabel,

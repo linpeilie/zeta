@@ -4,20 +4,24 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:zeta/src/core/constants/app_typography.dart';
 
 import 'ide_colors.dart';
+import 'ide_effects.dart';
 import 'ide_text_styles.dart';
 
-// 深色调色板常量：保留旧名以兼容历史代码与测试断言。运行时主题通过
-// [IdeColors] 扩展解析，深色实例 [IdeColors.dark] 直接复用这些常量值。
-const Color ideFrameColor = Color(0xFF171717);
-const Color ideSurfaceColor = Color(0xFF1F1F1F);
-const Color idePanelColor = Color(0xFF242424);
-const Color ideEditorColor = Color(0xFF191919);
-const Color ideBorderColor = Color(0xFF343434);
-const Color ideMutedTextColor = Color(0xFF9DA3A6);
-const Color ideAccentColor = Color(0xFF4FB286);
+// 「Graphite」深色调色板常量：保留旧名以兼容历史代码与测试断言。运行时主题
+// 通过 [IdeColors] 扩展解析，深色实例 [IdeColors.dark] 直接复用这些常量值。
+const Color ideFrameColor = Color(0xFF0A0A0B);
+const Color ideSurfaceColor = Color(0xFF18191B);
+const Color idePanelColor = Color(0xFF18191B);
+const Color ideEditorColor = Color(0xFF141517);
+const Color ideBorderColor = Color(0xFF2C2D31);
+const Color ideMutedTextColor = Color(0xFF9EA1A7);
+const Color ideAccentColor = Color(0xFF1B84FF);
 const Color ideWarningColor = Color(0xFFE6B450);
 
+@Deprecated('Use IdeSpacing.space8 instead.')
 const double idePanelGap = 8;
+
+@Deprecated('Use IdeRadius.small (or another IdeRadius tier) instead.')
 const double idePanelRadius = 6;
 
 @Deprecated('Use bundledCodeFontFamily or IdeTypography instead.')
@@ -91,36 +95,66 @@ ShadThemeData buildShadTheme({
   required String codeFontFamily,
 }) {
   final colors = _baseIdeColorsForBrightness(brightness);
+  final isDark = brightness == Brightness.dark;
+  // ghost 按钮 / option 行的 hover 背景与 PaneInteractiveSurface 保持一致。
+  final hoverBackground = colors.border.withValues(alpha: isDark ? 0.18 : 0.3);
   return ShadThemeData(
     brightness: brightness,
     colorScheme: shadColorSchemeFromIdeColors(colors, brightness: brightness),
-    radius: const BorderRadius.all(Radius.circular(idePanelRadius)),
+    radius: IdeRadius.allMedium,
     textTheme: IdeTextStyles.buildShadTextTheme(
       colors: colors,
       uiFontFamily: uiFontFamily,
       codeFontFamily: codeFontFamily,
     ),
+    ghostButtonTheme: ShadButtonTheme(
+      foregroundColor: colors.textSecondary,
+      hoverForegroundColor: colors.textPrimary,
+      hoverBackgroundColor: hoverBackground,
+      pressedBackgroundColor: colors.border.withValues(
+        alpha: isDark ? 0.28 : 0.4,
+      ),
+      pressedForegroundColor: colors.textPrimary,
+    ),
+    optionTheme: ShadOptionTheme(
+      radius: IdeRadius.allSmall,
+      hoveredBackgroundColor: hoverBackground,
+      selectedBackgroundColor: colors.primaryMuted,
+    ),
     popoverTheme: ShadPopoverTheme(
       decoration: ShadDecoration(
         color: colors.surfaceOverlay,
-        border: ShadBorder.all(color: colors.border, width: 1),
+        border: ShadBorder.all(
+          color: colors.border,
+          width: 1,
+          radius: IdeRadius.allLarge,
+        ),
+        shadows: IdeEffects.overlayShadow(brightness),
       ),
     ),
     primaryDialogTheme: ShadDialogTheme(
       backgroundColor: colors.surfaceOverlay,
       border: Border.all(color: colors.border),
+      radius: IdeRadius.allLarge,
+      shadows: IdeEffects.overlayShadow(brightness),
     ),
     alertDialogTheme: ShadDialogTheme(
       backgroundColor: colors.surfaceOverlay,
       border: Border.all(color: colors.border),
+      radius: IdeRadius.allLarge,
+      shadows: IdeEffects.overlayShadow(brightness),
     ),
     primaryToastTheme: ShadToastTheme(
       backgroundColor: colors.surfaceElevated,
       border: ShadBorder.all(color: colors.border, width: 1),
+      radius: IdeRadius.allMedium,
+      shadows: IdeEffects.overlayShadow(brightness),
     ),
     destructiveToastTheme: ShadToastTheme(
       backgroundColor: colors.surfaceElevated,
       border: ShadBorder.all(color: colors.border, width: 1),
+      radius: IdeRadius.allMedium,
+      shadows: IdeEffects.overlayShadow(brightness),
     ),
   );
 }

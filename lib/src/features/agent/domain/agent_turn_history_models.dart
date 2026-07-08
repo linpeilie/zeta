@@ -86,8 +86,9 @@ class AgentHistoryTurn {
 
 /// 一个 turn 的 token 消耗统计。
 ///
-/// 对应 Codex `event_msg.payload.type == 'token_count'` 中
-/// `info.total_token_usage` 的字段，UI 据此在回合分隔线上展示 token 成本。
+/// 实时来源是 Codex `thread/tokenUsage/updated` 通知（camelCase 字段），
+/// 历史来源是 JSONL `event_msg.payload.type == 'token_count'`（snake_case
+/// 字段）。UI 据此在回合分隔线上展示 token 成本。
 class AgentTokenUsage {
   const AgentTokenUsage({
     this.inputTokens,
@@ -100,6 +101,7 @@ class AgentTokenUsage {
     this.lastOutputTokens,
     this.lastReasoningOutputTokens,
     this.lastTotalTokens,
+    this.modelContextWindow,
   });
 
   /// 累计输入 token 数（含缓存命中前的全部输入）。
@@ -131,10 +133,16 @@ class AgentTokenUsage {
 
   /// 最近一次请求的总 token 数。
   final int? lastTotalTokens;
+
+  /// 当前模型上下文窗口大小；UI 可据此展示上下文占用比例。
+  final int? modelContextWindow;
 }
 
 /// 历史 turn 状态。
-enum AgentHistoryTurnStatus { unknown, running, completed }
+///
+/// `interrupted` 与 `failed` 是 Codex `turn/completed` 通知携带的终态，
+/// 与正常 `completed` 区分展示。
+enum AgentHistoryTurnStatus { unknown, running, completed, interrupted, failed }
 
 /// thread 历史时间线条目。
 sealed class AgentHistoryEntry {

@@ -43,11 +43,14 @@ class IdeTextStyles {
   final TextStyle codeSmall;
 
   /// 从当前上下文解析语义排版。
+  ///
+  /// 与 [IdeColors.of] 相同，必须监听 ShadTheme 变化，否则主题切换动画
+  /// 结束后组件仍持有旧亮度下的文字颜色。
   static IdeTextStyles of(
     BuildContext context, {
     String codeFontFamily = bundledCodeFontFamily,
   }) {
-    final shadTheme = ShadTheme.maybeOf(context, listen: false);
+    final shadTheme = ShadTheme.maybeOf(context);
     if (shadTheme != null) {
       return fromShadTheme(shadTheme, codeFontFamily: codeFontFamily);
     }

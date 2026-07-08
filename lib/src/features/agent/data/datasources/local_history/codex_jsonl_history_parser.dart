@@ -309,6 +309,7 @@ class _JsonlHistoryParser {
         lastUsage['reasoning_output_tokens'],
       ),
       lastTotalTokens: _numberToInt(lastUsage['total_tokens']),
+      modelContextWindow: modelContextWindow,
     );
     if (modelContextWindow != null) {
       turn.modelContextWindow = modelContextWindow;
