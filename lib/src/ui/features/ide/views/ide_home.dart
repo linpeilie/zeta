@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/menu_action_bridge.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
@@ -96,6 +98,7 @@ class _IdeHomeState extends State<IdeHome> {
   Widget build(BuildContext context) {
     final body = WindowFrame(
       enableNativeWindowFrame: widget.enableNativeWindowFrame,
+      menus: _windowMenus,
       child: Padding(
         padding: const EdgeInsets.all(idePanelGap),
         child: LayoutBuilder(
@@ -107,6 +110,31 @@ class _IdeHomeState extends State<IdeHome> {
     );
 
     return Scaffold(body: body);
+  }
+
+  List<WindowMenu> get _windowMenus {
+    if (!widget.enableNativeWindowFrame ||
+        !(Platform.isWindows || Platform.isLinux)) {
+      return const <WindowMenu>[];
+    }
+    return [
+      WindowMenu(
+        key: const ValueKey('window-menu-file'),
+        label: '文件',
+        items: [
+          WindowMenuItem(
+            key: const ValueKey('window-menu-open-project'),
+            label: '打开项目',
+            onPressed: _handleMenuOpenProject,
+          ),
+          WindowMenuItem(
+            key: const ValueKey('window-menu-exit'),
+            label: '退出',
+            onPressed: _handleMenuExit,
+          ),
+        ],
+      ),
+    ];
   }
 
   Widget _buildIdeLayout({required double maxWidth}) {
@@ -486,9 +514,13 @@ class _IdeHomeState extends State<IdeHome> {
     });
   }
 
-  /// 原生菜单「文件 - 打开项目」入口，与工具栏按钮一致。
+  /// 标题栏 / 原生菜单「文件 - 打开项目」入口，与工具栏按钮一致。
   void _handleMenuOpenProject() {
     _openProject();
+  }
+
+  void _handleMenuExit() {
+    unawaited(windowManager.close());
   }
 
   void _handleShellChanged() {

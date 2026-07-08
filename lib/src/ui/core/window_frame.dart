@@ -10,16 +10,43 @@ import 'package:zeta/src/ui/core/ide_colors.dart';
 /// 包裹主内容的窗口外框。
 ///
 /// 隐藏原生标题栏后由本组件提供自定义标题栏：macOS 下保留系统交通灯按钮并
-/// 提供拖拽区与标题；Windows/Linux 下额外绘制最小化/最大化/关闭按钮。
+/// 提供拖拽区与标题；Windows/Linux 下可承载 Flutter 菜单，并额外绘制最小化/
+/// 最大化/关闭按钮。
+@immutable
+class WindowMenu {
+  const WindowMenu({required this.label, required this.items, this.key});
+
+  final String label;
+  final List<WindowMenuItem> items;
+  final Key? key;
+}
+
+@immutable
+class WindowMenuItem {
+  const WindowMenuItem({required this.label, this.onPressed, this.key});
+
+  final String label;
+  final VoidCallback? onPressed;
+  final Key? key;
+}
+
 class WindowFrame extends StatelessWidget {
   const WindowFrame({
     required this.child,
     required this.enableNativeWindowFrame,
+    this.menus = const <WindowMenu>[],
+    this.showWindowControls = true,
     super.key,
   });
 
   final Widget child;
   final bool enableNativeWindowFrame;
+
+  /// 标题栏顶部菜单；菜单内容由上层 feature 决定。
+  final List<WindowMenu> menus;
+
+  /// 测试可关闭右侧窗口按钮，避免依赖 `window_manager` 平台通道。
+  final bool showWindowControls;
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +54,8 @@ class WindowFrame extends StatelessWidget {
     final showCustomTitleBar = enableNativeWindowFrame;
     final content = Column(
       children: [
-        if (showCustomTitleBar) const _TitleBar(),
+        if (showCustomTitleBar)
+          _TitleBar(menus: menus, showWindowControls: showWindowControls),
         Expanded(child: child),
       ],
     );
@@ -50,7 +78,10 @@ class WindowFrame extends StatelessWidget {
 }
 
 class _TitleBar extends StatelessWidget {
-  const _TitleBar();
+  const _TitleBar({required this.menus, required this.showWindowControls});
+
+  final List<WindowMenu> menus;
+  final bool showWindowControls;
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +94,7 @@ class _TitleBar extends StatelessWidget {
         children: [
           // macOS 下左侧让出交通灯按钮的空间，且不拦截点击。
           if (isMac) const SizedBox(width: 76),
+          if (menus.isNotEmpty) _WindowMenuBar(menus: menus),
           Expanded(
             child: DragToMoveArea(
               child: Padding(
@@ -79,8 +111,82 @@ class _TitleBar extends StatelessWidget {
               ),
             ),
           ),
-          if (!isMac) const _WindowButtons(),
+          if (!isMac && showWindowControls) const _WindowButtons(),
         ],
+      ),
+    );
+  }
+}
+
+class _WindowMenuBar extends StatelessWidget {
+  const _WindowMenuBar({required this.menus});
+
+  final List<WindowMenu> menus;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [for (final menu in menus) _WindowMenuButton(menu: menu)],
+      ),
+    );
+  }
+}
+
+class _WindowMenuButton extends StatelessWidget {
+  const _WindowMenuButton({required this.menu});
+
+  final WindowMenu menu;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    return PopupMenuButton<WindowMenuItem>(
+      key: menu.key,
+      tooltip: '',
+      padding: EdgeInsets.zero,
+      position: PopupMenuPosition.under,
+      color: colors.surface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 8,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: colors.border),
+      ),
+      onSelected: (item) => item.onPressed?.call(),
+      itemBuilder: (context) {
+        return [
+          for (final item in menu.items)
+            PopupMenuItem<WindowMenuItem>(
+              key: item.key,
+              value: item,
+              enabled: item.onPressed != null,
+              height: 32,
+              child: Text(
+                item.label,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+        ];
+      },
+      child: SizedBox(
+        height: 28,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Center(
+            child: Text(
+              menu.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: colors.mutedText, fontSize: 12),
+            ),
+          ),
+        ),
       ),
     );
   }
