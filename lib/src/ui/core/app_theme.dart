@@ -6,6 +6,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:zeta/src/core/constants/app_typography.dart';
 
 import 'ide_colors.dart';
+import 'ide_text_styles.dart';
 
 // 深色调色板常量：保留旧名以兼容历史代码与测试断言。运行时主题通过
 // [IdeColors] 扩展解析，深色实例 [IdeColors.dark] 直接复用这些常量值。
@@ -97,34 +98,32 @@ ShadThemeData buildShadTheme({
     brightness: brightness,
     colorScheme: shadColorSchemeFromIdeColors(colors, brightness: brightness),
     radius: const BorderRadius.all(Radius.circular(idePanelRadius)),
-    textTheme: ShadTextTheme(
-      family: uiFontFamily,
-      h4: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-      p: const TextStyle(fontSize: 12, height: 1.35),
-      small: const TextStyle(fontSize: 11, height: 1.3),
-      muted: const TextStyle(fontSize: 11, height: 1.3),
+    textTheme: IdeTextStyles.buildShadTextTheme(
+      colors: colors,
+      uiFontFamily: uiFontFamily,
+      codeFontFamily: codeFontFamily,
     ),
     // macOS 毛玻璃下主界面允许半透明，但弹层必须回到不透明表面，避免文字透底。
     popoverTheme: ShadPopoverTheme(
       decoration: ShadDecoration(
-        color: overlayColors.surface,
+        color: overlayColors.surfaceOverlay,
         border: ShadBorder.all(color: overlayColors.border, width: 1),
       ),
     ),
     primaryDialogTheme: ShadDialogTheme(
-      backgroundColor: overlayColors.panel,
+      backgroundColor: overlayColors.surfaceOverlay,
       border: Border.all(color: overlayColors.border),
     ),
     alertDialogTheme: ShadDialogTheme(
-      backgroundColor: overlayColors.panel,
+      backgroundColor: overlayColors.surfaceOverlay,
       border: Border.all(color: overlayColors.border),
     ),
     primaryToastTheme: ShadToastTheme(
-      backgroundColor: overlayColors.surface,
+      backgroundColor: overlayColors.surfaceElevated,
       border: ShadBorder.all(color: overlayColors.border, width: 1),
     ),
     destructiveToastTheme: ShadToastTheme(
-      backgroundColor: overlayColors.surface,
+      backgroundColor: overlayColors.surfaceElevated,
       border: ShadBorder.all(color: overlayColors.border, width: 1),
     ),
   );

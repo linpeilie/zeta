@@ -3,6 +3,9 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
+import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_spacing.dart';
+import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 
 class FileTreePane extends StatelessWidget {
@@ -45,7 +48,10 @@ class FileTreePane extends StatelessWidget {
           }
           final visibleNodes = _flattenVisibleNodes(nodes, expandedPaths);
           return ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            padding: const EdgeInsets.symmetric(
+              horizontal: IdeSpacing.space6,
+              vertical: IdeSpacing.space6,
+            ),
             itemCount: visibleNodes.length,
             itemBuilder: (context, index) {
               final visibleNode = visibleNodes[index];
@@ -116,8 +122,8 @@ class _FileTreeNodeTile extends StatelessWidget {
     super.key,
   });
 
-  static const double _rowHeight = 30;
-  static const double _indent = 14;
+  static const double _rowHeight = 28;
+  static const double _indent = IdeSpacing.space16;
 
   final WorkspaceNode node;
   final int depth;
@@ -128,18 +134,16 @@ class _FileTreeNodeTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shadTheme = ShadTheme.of(context);
-    final colorScheme = shadTheme.colorScheme;
-    final selectedBackground = colorScheme.accent.withValues(
-      alpha: shadTheme.brightness == Brightness.dark ? 0.2 : 0.12,
-    );
-    final hoverBackground = colorScheme.border.withValues(alpha: 0.14);
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    final selectedBackground = colors.primaryMuted;
+    final hoverBackground = colors.border.withValues(alpha: 0.14);
     final iconColor = selected
-        ? colorScheme.accent
+        ? colors.accent
         : node.isDirectory
-        ? colorScheme.primary.withValues(alpha: 0.82)
-        : colorScheme.mutedForeground;
-    final textColor = selected ? colorScheme.accent : null;
+        ? colors.accent.withValues(alpha: 0.82)
+        : colors.textSecondary;
+    final textColor = selected ? colors.accent : colors.textPrimary;
 
     return Padding(
       padding: EdgeInsets.only(left: depth * _indent),
@@ -147,7 +151,7 @@ class _FileTreeNodeTile extends StatelessWidget {
         key: ValueKey<String>('file-node-${node.name}'),
         onPressed: onTap,
         height: _rowHeight,
-        padding: const EdgeInsets.symmetric(horizontal: 6),
+        padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space6),
         selected: selected,
         selectedBackgroundColor: selectedBackground,
         hoverBackgroundColor: hoverBackground,
@@ -162,7 +166,7 @@ class _FileTreeNodeTile extends StatelessWidget {
                       width: 18,
                       height: 18,
                       padding: EdgeInsets.zero,
-                      foregroundColor: colorScheme.mutedForeground,
+                      foregroundColor: colors.textSecondary,
                       hoverBackgroundColor: hoverBackground,
                       icon: Icon(
                         expanded
@@ -179,13 +183,13 @@ class _FileTreeNodeTile extends StatelessWidget {
               size: 15,
               color: iconColor,
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: IdeSpacing.space6),
             Expanded(
               child: Text(
                 node.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: shadTheme.textTheme.small.copyWith(
+                style: textStyles.bodySmall.copyWith(
                   color: textColor,
                   fontWeight: node.isDirectory
                       ? FontWeight.w600

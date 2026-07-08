@@ -41,38 +41,41 @@ class _AgentTurnDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
     final label = _turnLabel(turn);
     final tokenLabel = _tokenUsageLabel(turn.tokenUsage);
     final tokenTooltip = _tokenUsageTooltip(turn.tokenUsage);
     final showTokens = tokenLabel != null;
     final hasMeta = label != null || showTokens;
     return Padding(
-      padding: const EdgeInsets.only(top: 18, bottom: 10),
+      padding: const EdgeInsets.only(
+        top: IdeSpacing.space16,
+        bottom: IdeSpacing.space10,
+      ),
       child: Row(
         children: [
           Expanded(
             child: ShadSeparator.horizontal(
               margin: EdgeInsets.zero,
               thickness: 1,
-              color: colors.border,
+              color: colors.borderSubtle,
             ),
           ),
           if (hasMeta) ...[
-            const SizedBox(width: 10),
+            const SizedBox(width: IdeSpacing.space10),
             Flexible(
               child: Align(
                 alignment: Alignment.center,
                 child: Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
+                  spacing: IdeSpacing.space8,
+                  runSpacing: IdeSpacing.space4,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     if (label != null)
                       Text(
                         label,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: colors.mutedText.withValues(alpha: 0.6),
+                        style: textStyles.caption.copyWith(
+                          color: colors.textSecondary.withValues(alpha: 0.72),
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -88,15 +91,16 @@ class _AgentTurnDivider extends StatelessWidget {
                               Icon(
                                 Icons.bolt_outlined,
                                 size: 12,
-                                color: colors.mutedText.withValues(alpha: 0.5),
+                                color: colors.textSecondary.withValues(
+                                  alpha: 0.56,
+                                ),
                               ),
-                              const SizedBox(width: 3),
+                              const SizedBox(width: IdeSpacing.space4),
                               Text(
                                 tokenLabel,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: colors.mutedText.withValues(
-                                    alpha: 0.6,
+                                style: textStyles.caption.copyWith(
+                                  color: colors.textSecondary.withValues(
+                                    alpha: 0.72,
                                   ),
                                 ),
                               ),
@@ -108,14 +112,14 @@ class _AgentTurnDivider extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: IdeSpacing.space10),
           ],
           if (hasMeta)
             Expanded(
               child: ShadSeparator.horizontal(
                 margin: EdgeInsets.zero,
                 thickness: 1,
-                color: colors.border,
+                color: colors.borderSubtle,
               ),
             ),
         ],
@@ -152,35 +156,35 @@ class _AgentBubbleMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
     final isUser = message.role == AgentMessageRole.user;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.only(bottom: IdeSpacing.space12),
       child: Align(
         alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: isUser
-                  ? colors.accent.withValues(alpha: 0.18)
-                  : colors.surface,
-              borderRadius: BorderRadius.circular(8),
+              color: isUser ? colors.primaryMuted : colors.surfaceElevated,
+              borderRadius: const BorderRadius.all(
+                Radius.circular(IdeSpacing.space8),
+              ),
+              border: Border.all(
+                color: isUser
+                    ? colors.accent.withValues(alpha: 0.22)
+                    : colors.borderSubtle,
+              ),
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: SelectableText(
-                      message.text,
-                      style: const TextStyle(height: 1.35),
-                    ),
-                  ),
-                ],
+              padding: IdeSpacing.inputContentPadding,
+              child: SelectableText(
+                message.text,
+                style: textStyles.bodyMedium.copyWith(
+                  height: 1.4,
+                  color: colors.textPrimary,
+                ),
               ),
             ),
           ),
@@ -274,6 +278,7 @@ class _AgentMarkdownMessageState extends State<_AgentMarkdownMessage> {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
     final markdown = widget.message.text;
     final useStreamingMarkdown = widget.useStreamingMarkdown;
     if (!widget.collapseHeavyContent || !_shouldCollapseMarkdown(markdown)) {
@@ -284,14 +289,14 @@ class _AgentMarkdownMessageState extends State<_AgentMarkdownMessage> {
       );
     }
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.only(bottom: IdeSpacing.space12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
           AnimatedSize(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
+            duration: IdeMotion.durationNormal,
+            curve: IdeMotion.curvePopup,
             alignment: Alignment.topCenter,
             child: _expanded
                 ? RepaintBoundary(
@@ -307,10 +312,9 @@ class _AgentMarkdownMessageState extends State<_AgentMarkdownMessage> {
                     ),
                     maxLines: 4,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
+                    style: textStyles.bodyMedium.copyWith(
                       height: 1.45,
-                      color: colors.mutedText.withValues(alpha: 0.86),
+                      color: colors.textSecondary.withValues(alpha: 0.88),
                     ),
                   ),
           ),
@@ -332,7 +336,7 @@ class _AgentMarkdownMessageState extends State<_AgentMarkdownMessage> {
                     : Icons.unfold_more_rounded,
                 size: 15,
               ),
-              textStyle: const TextStyle(fontSize: 11),
+              textStyle: textStyles.bodySmall,
               child: Text(_expanded ? '收起正文' : '展开正文'),
             ),
           ),
@@ -374,108 +378,62 @@ class _AgentPlanMessageCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.only(bottom: IdeSpacing.space12),
       child: ListenableBuilder(
         listenable: viewModel.expansionVersionListenable,
         builder: (context, _) {
           final expanded = viewModel.isPlanMessageExpanded(message.id);
           return RepaintBoundary(
-            child: DecoratedBox(
-              key: ValueKey<String>('agent-plan-card-${message.id}'),
-              decoration: BoxDecoration(
-                color: colors.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: colors.border),
+            child: IdeCollapsibleCard(
+              headerKey: ValueKey<String>('agent-plan-card-${message.id}'),
+              toggleKey: ValueKey<String>('agent-plan-toggle-${message.id}'),
+              bodyKey: ValueKey<String>('agent-plan-body-${message.id}'),
+              expanded: expanded,
+              onToggle: () => viewModel.togglePlanMessage(message.id),
+              leading: Icon(
+                Icons.checklist_rounded,
+                size: 16,
+                color: colors.textSecondary.withValues(alpha: 0.78),
               ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 12, 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.checklist_rounded,
-                          size: 16,
-                          color: colors.mutedText.withValues(alpha: 0.75),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            '计划',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: colors.mutedText.withValues(alpha: 0.85),
-                            ),
-                          ),
-                        ),
-                        IdeTooltip(
-                          message: expanded ? '收起计划' : '展开计划',
-                          child: ShadIconButton.ghost(
-                            key: ValueKey<String>(
-                              'agent-plan-toggle-${message.id}',
-                            ),
-                            onPressed: () =>
-                                viewModel.togglePlanMessage(message.id),
-                            width: 28,
-                            height: 28,
-                            padding: EdgeInsets.zero,
-                            foregroundColor: colors.mutedText.withValues(
-                              alpha: 0.72,
-                            ),
-                            icon: Icon(
-                              expanded
-                                  ? Icons.close_fullscreen_rounded
-                                  : Icons.open_in_full_rounded,
-                              size: 16,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    AnimatedSize(
-                      duration: const Duration(milliseconds: 180),
-                      curve: Curves.easeOutCubic,
-                      alignment: Alignment.topCenter,
-                      child: expanded
-                          ? RepaintBoundary(
-                              child: Padding(
-                                key: ValueKey<String>(
-                                  'agent-plan-body-${message.id}',
-                                ),
-                                padding: const EdgeInsets.only(right: 4),
-                                child: _AgentMarkdownBody(data: message.text),
-                              ),
-                            )
-                          : SizedBox(
-                              key: ValueKey<String>(
-                                'agent-plan-preview-${message.id}',
-                              ),
-                              height: 20,
-                              child: Align(
-                                alignment: Alignment.topLeft,
-                                child: Text(
-                                  _planPreviewText(message.text),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    height: 1.2,
-                                    color: colors.mutedText.withValues(
-                                      alpha: 0.72,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                    ),
-                  ],
+              titleWidget: Text(
+                '计划',
+                style: textStyles.titleLarge.copyWith(
+                  color: colors.textSecondary.withValues(alpha: 0.9),
                 ),
+              ),
+              summaryWidget: expanded
+                  ? null
+                  : SizedBox(
+                      key: ValueKey<String>('agent-plan-preview-${message.id}'),
+                      height: 20,
+                      child: Align(
+                        alignment: Alignment.topLeft,
+                        child: Text(
+                          _planPreviewText(message.text),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textStyles.bodyMedium.copyWith(
+                            height: 1.2,
+                            color: colors.textSecondary.withValues(alpha: 0.76),
+                          ),
+                        ),
+                      ),
+                    ),
+              padding: IdeSpacing.sectionPadding,
+              summaryPadding: const EdgeInsets.only(top: IdeSpacing.space10),
+              bodyPadding: const EdgeInsets.only(top: IdeSpacing.space10),
+              backgroundColor: colors.surfaceElevated,
+              borderColor: colors.border,
+              borderRadius: const BorderRadius.all(
+                Radius.circular(IdeSpacing.space16),
+              ),
+              hoverBackgroundColor: colors.border.withValues(alpha: 0.08),
+              semanticLabel: expanded ? '收起计划' : '展开计划',
+              body: Padding(
+                padding: const EdgeInsets.only(right: IdeSpacing.space4),
+                child: _AgentMarkdownBody(data: message.text),
               ),
             ),
           );

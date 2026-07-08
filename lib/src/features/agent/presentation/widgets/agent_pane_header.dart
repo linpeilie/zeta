@@ -8,9 +8,8 @@ class _AgentHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shadTheme = ShadTheme.of(context);
-    final colorScheme = shadTheme.colorScheme;
     final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
     final tokenUsage = viewModel.currentThreadTokenUsage;
     final tokenLabel = _tokenUsageLabel(tokenUsage);
     final tokenTooltip = _tokenUsageTooltip(tokenUsage);
@@ -31,10 +30,9 @@ class _AgentHeader extends StatelessWidget {
                       key: const ValueKey('agent-header-title'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: shadTheme.textTheme.h4.copyWith(
-                        fontSize: 13,
+                      style: textStyles.titleLarge.copyWith(
                         fontWeight: FontWeight.w700,
-                        color: colorScheme.foreground,
+                        color: colors.textPrimary,
                       ),
                     ),
                   ),
@@ -56,8 +54,7 @@ class _AgentHeader extends StatelessWidget {
                   key: const ValueKey('agent-thread-open-status'),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: shadTheme.textTheme.small.copyWith(
-                    fontSize: 11,
+                  style: textStyles.bodySmall.copyWith(
                     color:
                         viewModel.threadOpenPhase ==
                             AgentThreadOpenPhase.openFailed
@@ -87,8 +84,7 @@ class _AgentHeader extends StatelessWidget {
                   tokenLabel,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 10,
+                  style: textStyles.caption.copyWith(
                     color: colors.mutedText.withValues(alpha: 0.78),
                     fontWeight: FontWeight.w500,
                   ),

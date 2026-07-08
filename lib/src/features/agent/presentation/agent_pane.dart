@@ -8,7 +8,13 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/ui/core/ide_chip.dart';
+import 'package:zeta/src/ui/core/ide_collapsible_card.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_motion.dart';
+import 'package:zeta/src/ui/core/ide_spacing.dart';
+import 'package:zeta/src/ui/core/ide_status_card.dart';
+import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';

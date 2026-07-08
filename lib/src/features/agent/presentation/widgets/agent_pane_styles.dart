@@ -1,5 +1,43 @@
 part of '../agent_pane.dart';
 
+TextStyle _agentSummaryTextStyle(BuildContext context) {
+  final colors = IdeColors.of(context);
+  final textStyles = IdeTextStyles.of(context);
+  return textStyles.bodyMedium.copyWith(
+    fontWeight: FontWeight.w600,
+    color: colors.textSecondary.withValues(alpha: 0.9),
+  );
+}
+
+TextStyle _agentItemTextStyle(
+  BuildContext context, {
+  FontWeight fontWeight = FontWeight.w500,
+}) {
+  final colors = IdeColors.of(context);
+  final textStyles = IdeTextStyles.of(context);
+  return textStyles.bodyMedium.copyWith(
+    fontWeight: fontWeight,
+    color: colors.textSecondary.withValues(alpha: 0.88),
+  );
+}
+
+TextStyle _agentMetaTextStyle(
+  BuildContext context, {
+  double alpha = 0.68,
+  FontWeight fontWeight = FontWeight.w400,
+}) {
+  final colors = IdeColors.of(context);
+  final textStyles = IdeTextStyles.of(context);
+  return textStyles.bodySmall.copyWith(
+    fontWeight: fontWeight,
+    color: colors.textSecondary.withValues(alpha: alpha),
+  );
+}
+
+Color _agentHoverBackground(BuildContext context) {
+  return IdeColors.of(context).border.withValues(alpha: 0.12);
+}
+
 String _commandGroupSummary(AgentTimelineCommandGroup group) {
   final counts = <AgentToolKind, int>{};
   final order = <AgentToolKind>[];
@@ -56,9 +94,10 @@ String _markdownPreviewText(String markdown) {
 }
 
 InlineSpan _fileEditGroupSummarySpan(
+  BuildContext context,
   AgentTimelineFileEditGroup group,
-  IdeColors colors,
 ) {
+  final colors = IdeColors.of(context);
   final withStats = group.items.where(
     (item) => item.addedLines != null || item.removedLines != null,
   );
@@ -97,15 +136,16 @@ InlineSpan _fileEditGroupSummarySpan(
 }
 
 InlineSpan _fileEditLineStatsSpan(
+  BuildContext context,
   AgentTimelineFileEditItem item,
-  IdeColors colors,
 ) {
+  final colors = IdeColors.of(context);
+  final textStyles = IdeTextStyles.of(context);
   final added = item.addedLines ?? 0;
   final removed = item.removedLines ?? 0;
   return TextSpan(
-    style: TextStyle(
-      fontSize: 11,
-      color: colors.mutedText.withValues(alpha: 0.6),
+    style: textStyles.bodySmall.copyWith(
+      color: colors.textSecondary.withValues(alpha: 0.66),
       height: 1.45,
     ),
     children: <InlineSpan>[
@@ -186,17 +226,26 @@ Color _historyEventAccent(AgentHistoryEventKind kind, IdeColors colors) {
   return switch (kind) {
     AgentHistoryEventKind.permission ||
     AgentHistoryEventKind.warning => colors.warning,
-    AgentHistoryEventKind.search ||
-    AgentHistoryEventKind.system => colors.accent,
+    AgentHistoryEventKind.search || AgentHistoryEventKind.system => colors.info,
+  };
+}
+
+IdeStatusCardTone _historyEventTone(AgentHistoryEventKind kind) {
+  return switch (kind) {
+    AgentHistoryEventKind.permission => IdeStatusCardTone.warning,
+    AgentHistoryEventKind.warning => IdeStatusCardTone.error,
+    AgentHistoryEventKind.search => IdeStatusCardTone.info,
+    AgentHistoryEventKind.system => IdeStatusCardTone.info,
   };
 }
 
 MarkdownThemeData _agentMarkdownTheme(BuildContext context) {
   final colors = IdeColors.of(context);
-  final textColor = ShadTheme.of(context).colorScheme.foreground;
-  final base = DefaultTextStyle.of(
-    context,
-  ).style.copyWith(color: textColor, height: 1.42);
+  final textStyles = IdeTextStyles.of(context);
+  final base = textStyles.bodyMedium.copyWith(
+    color: colors.textPrimary,
+    height: 1.42,
+  );
   final codeStyle = _agentCodeTextStyle(context, baseStyle: base);
 
   return MarkdownThemeData.fallback(
@@ -204,50 +253,67 @@ MarkdownThemeData _agentMarkdownTheme(BuildContext context) {
     maxContentWidth: _agentContentMaxWidth,
   ).copyWith(
     padding: EdgeInsets.zero,
-    blockSpacing: 8,
-    listItemSpacing: 4,
+    blockSpacing: IdeSpacing.space8,
+    listItemSpacing: IdeSpacing.space4,
     bodyStyle: base,
-    quoteStyle: base.copyWith(color: colors.mutedText),
+    quoteStyle: textStyles.bodyMedium.copyWith(color: colors.textSecondary),
     linkStyle: base.copyWith(color: colors.accent, fontWeight: FontWeight.w600),
     inlineCodeStyle: codeStyle,
-    inlineCodeBackgroundColor: colors.mutedText.withValues(alpha: 0.16),
+    inlineCodeBackgroundColor: colors.surfaceElevated.withValues(alpha: 0.92),
     codeBlockStyle: codeStyle,
-    codeBlockPadding: const EdgeInsets.all(10),
-    codeBlockBackgroundColor: colors.surface,
-    codeBlockBorderRadius: BorderRadius.circular(6),
-    quotePadding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-    quoteBackgroundColor: colors.surface,
-    quoteBorderColor: colors.accent,
+    codeBlockPadding: IdeSpacing.cardPadding,
+    codeBlockBackgroundColor: colors.surfaceElevated,
+    codeBlockBorderRadius: const BorderRadius.all(
+      Radius.circular(IdeSpacing.space6),
+    ),
+    quotePadding: const EdgeInsets.fromLTRB(
+      IdeSpacing.space12,
+      IdeSpacing.space8,
+      IdeSpacing.space12,
+      IdeSpacing.space8,
+    ),
+    quoteBackgroundColor: colors.surfaceElevated.withValues(alpha: 0.82),
+    quoteBorderColor: colors.info,
     quoteBorderWidth: 3,
-    quoteBorderRadius: BorderRadius.circular(6),
-    tableHeaderStyle: base.copyWith(fontWeight: FontWeight.w700),
-    tableCellPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-    tableBorderColor: colors.border,
-    tableHeaderBackgroundColor: colors.surface,
+    quoteBorderRadius: const BorderRadius.all(
+      Radius.circular(IdeSpacing.space6),
+    ),
+    tableHeaderStyle: textStyles.titleSmall.copyWith(
+      fontWeight: FontWeight.w700,
+    ),
+    tableCellPadding: const EdgeInsets.symmetric(
+      horizontal: IdeSpacing.space8,
+      vertical: IdeSpacing.space6,
+    ),
+    tableBorderColor: colors.borderSubtle,
+    tableHeaderBackgroundColor: colors.surfaceElevated,
     tableRowBackgroundColor: Colors.transparent,
-    dividerColor: colors.border,
-    selectionColor: colors.accent.withValues(alpha: 0.24),
-    imagePlaceholderBackgroundColor: colors.surface,
-    heading1Style: base.copyWith(fontSize: 20, fontWeight: FontWeight.w700),
-    heading2Style: base.copyWith(fontSize: 17, fontWeight: FontWeight.w700),
-    heading3Style: base.copyWith(fontSize: 15, fontWeight: FontWeight.w700),
-    heading4Style: base.copyWith(fontWeight: FontWeight.w700),
-    heading5Style: base.copyWith(fontWeight: FontWeight.w700),
-    heading6Style: base.copyWith(fontWeight: FontWeight.w700),
+    dividerColor: colors.borderSubtle,
+    selectionColor: colors.primaryMuted,
+    imagePlaceholderBackgroundColor: colors.surfaceElevated,
+    heading1Style: textStyles.displayLarge.copyWith(
+      fontWeight: FontWeight.w700,
+    ),
+    heading2Style: textStyles.displaySmall.copyWith(
+      fontWeight: FontWeight.w700,
+    ),
+    heading3Style: textStyles.titleLarge.copyWith(fontWeight: FontWeight.w700),
+    heading4Style: textStyles.titleSmall.copyWith(fontWeight: FontWeight.w700),
+    heading5Style: textStyles.bodyMedium.copyWith(fontWeight: FontWeight.w700),
+    heading6Style: textStyles.bodyMedium.copyWith(fontWeight: FontWeight.w700),
     showHeading1Divider: false,
     showHeading2Divider: false,
   );
 }
 
 TextStyle _agentCodeTextStyle(BuildContext context, {TextStyle? baseStyle}) {
-  final textColor = ShadTheme.of(context).colorScheme.foreground;
+  final colors = IdeColors.of(context);
+  final textStyles = IdeTextStyles.of(context);
   final effectiveBase =
-      baseStyle ??
-      DefaultTextStyle.of(context).style.copyWith(color: textColor);
+      baseStyle ?? textStyles.codeSmall.copyWith(color: colors.textPrimary);
   return effectiveBase.copyWith(
-    color: textColor,
+    color: colors.textPrimary,
     fontFamily: IdeTypography.of(context).codeFontFamily,
-    fontSize: 11,
     height: 1.35,
     backgroundColor: Colors.transparent,
   );
@@ -255,9 +321,9 @@ TextStyle _agentCodeTextStyle(BuildContext context, {TextStyle? baseStyle}) {
 
 BoxDecoration _agentCodeBlockDecoration(IdeColors colors) {
   return BoxDecoration(
-    color: colors.surface,
-    borderRadius: BorderRadius.circular(6),
-    border: Border.all(color: colors.border),
+    color: colors.surfaceElevated,
+    borderRadius: const BorderRadius.all(Radius.circular(IdeSpacing.space6)),
+    border: Border.all(color: colors.borderSubtle),
   );
 }
 
@@ -266,15 +332,17 @@ Map<String, TextStyle> _agentHighlightTheme(BuildContext context) {
   final base = _agentCodeTextStyle(context);
   return <String, TextStyle>{
     'root': base,
-    'meta': base.copyWith(color: colors.mutedText.withValues(alpha: 0.9)),
-    'comment': base.copyWith(color: colors.mutedText.withValues(alpha: 0.72)),
+    'meta': base.copyWith(color: colors.textSecondary.withValues(alpha: 0.9)),
+    'comment': base.copyWith(
+      color: colors.textSecondary.withValues(alpha: 0.72),
+    ),
     'addition': base.copyWith(
-      color: colors.accent.withValues(alpha: 0.98),
-      backgroundColor: colors.accent.withValues(alpha: 0.12),
+      color: colors.success.withValues(alpha: 0.98),
+      backgroundColor: colors.success.withValues(alpha: 0.12),
     ),
     'deletion': base.copyWith(
-      color: colors.warning.withValues(alpha: 0.98),
-      backgroundColor: colors.warning.withValues(alpha: 0.1),
+      color: colors.error.withValues(alpha: 0.98),
+      backgroundColor: colors.error.withValues(alpha: 0.1),
     ),
     'emphasis': base.copyWith(fontStyle: FontStyle.italic),
     'strong': base.copyWith(fontWeight: FontWeight.w700),

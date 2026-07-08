@@ -234,6 +234,7 @@ class _AgentLoadOlderTurnsButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textStyles = IdeTextStyles.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Align(
@@ -245,7 +246,7 @@ class _AgentLoadOlderTurnsButton extends StatelessWidget {
           leading: loading
               ? const IdeLoadingIndicator(width: 16, height: 10, barHeight: 3)
               : const Icon(Icons.history_rounded, size: 15),
-          textStyle: const TextStyle(fontSize: 11),
+          textStyle: textStyles.bodySmall,
           child: Text(loading ? 'Loading older turns' : 'Load older turns'),
         ),
       ),

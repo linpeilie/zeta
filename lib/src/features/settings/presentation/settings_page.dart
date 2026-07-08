@@ -6,6 +6,9 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_spacing.dart';
+import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 
 enum SettingsSection { appearance }
@@ -79,20 +82,20 @@ class _SettingsNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shadTheme = ShadTheme.of(context);
-    final colorScheme = shadTheme.colorScheme;
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
     return PanelCard(
       key: const ValueKey('settings-nav-panel'),
       child: DecoratedBox(
-        decoration: BoxDecoration(color: colorScheme.popover),
+        decoration: BoxDecoration(color: colors.surfaceElevated),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Container(
               height: 44,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+              padding: IdeSpacing.horizontal8,
               decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: colorScheme.border)),
+                border: Border(bottom: BorderSide(color: colors.borderSubtle)),
               ),
               child: Row(
                 children: [
@@ -104,14 +107,14 @@ class _SettingsNavigation extends StatelessWidget {
                       width: 28,
                       height: 28,
                       padding: EdgeInsets.zero,
-                      foregroundColor: colorScheme.mutedForeground,
+                      foregroundColor: colors.textSecondary,
                       icon: const Icon(Icons.arrow_back_rounded, size: 18),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: IdeSpacing.space8),
                   Text(
                     '设置',
-                    style: shadTheme.textTheme.h4.copyWith(
+                    style: textStyles.displaySmall.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -120,7 +123,7 @@ class _SettingsNavigation extends StatelessWidget {
             ),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.all(8),
+                padding: IdeSpacing.all8,
                 children: [
                   _SettingsNavItem(
                     key: const ValueKey('settings-nav-appearance'),
@@ -186,7 +189,7 @@ class _AppearanceSettingsPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = ShadTheme.of(context).colorScheme;
+    final colors = IdeColors.of(context);
     return PanelCard(
       key: const ValueKey('settings-detail-panel'),
       child: Pane(
@@ -195,19 +198,19 @@ class _AppearanceSettingsPane extends StatelessWidget {
         trailing: Icon(
           Icons.palette_outlined,
           size: 16,
-          color: colorScheme.mutedForeground,
+          color: colors.textSecondary,
         ),
         child: ValueListenableBuilder<AppearanceSettings>(
           valueListenable: appearanceController.listenable,
           builder: (context, settings, _) {
-            final shadTheme = ShadTheme.of(context);
-            final colorScheme = shadTheme.colorScheme;
+            final textStyles = IdeTextStyles.of(context);
+            final colors = IdeColors.of(context);
             final selectedTab = _tabs.firstWhere(
               (tab) => tab.value == settings.themeMode,
               orElse: () => _tabs.first,
             );
             return SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+              padding: IdeSpacing.all16,
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 760),
@@ -216,18 +219,18 @@ class _AppearanceSettingsPane extends StatelessWidget {
                     children: [
                       Text(
                         '主题模式',
-                        style: shadTheme.textTheme.h4.copyWith(
+                        style: textStyles.displayLarge.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: IdeSpacing.space6),
                       Text(
                         '设置页会立即应用主题和字体切换，并保留到下次启动。',
-                        style: shadTheme.textTheme.small.copyWith(
-                          color: colorScheme.mutedForeground,
+                        style: textStyles.bodySmall.copyWith(
+                          color: colors.textSecondary,
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: IdeSpacing.space16),
                       _ThemeModeTabBar(
                         tabs: _tabs,
                         groupValue: settings.themeMode,
@@ -235,15 +238,15 @@ class _AppearanceSettingsPane extends StatelessWidget {
                           unawaited(appearanceController.setThemeMode(value));
                         },
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: IdeSpacing.space12),
                       Text(
                         selectedTab.description,
                         key: const ValueKey('settings-theme-description'),
-                        style: shadTheme.textTheme.small.copyWith(
-                          color: colorScheme.mutedForeground,
+                        style: textStyles.bodySmall.copyWith(
+                          color: colors.textSecondary,
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: IdeSpacing.space24),
                       _AppearanceSettingRow(
                         key: const ValueKey('settings-ui-font-row'),
                         label: '界面字体',
@@ -254,7 +257,7 @@ class _AppearanceSettingsPane extends StatelessWidget {
                           currentChoice: settings.uiFontChoice,
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: IdeSpacing.space12),
                       _AppearanceSettingRow(
                         key: const ValueKey('settings-code-font-row'),
                         label: '代码字体',
@@ -344,14 +347,13 @@ class _ThemeModeTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shadTheme = ShadTheme.of(context);
-    final colorScheme = shadTheme.colorScheme;
+    final colors = IdeColors.of(context);
     return DecoratedBox(
       key: const ValueKey('settings-theme-tabs'),
       decoration: BoxDecoration(
-        color: colorScheme.card,
-        borderRadius: BorderRadius.circular(idePanelRadius),
-        border: Border.all(color: colorScheme.border),
+        color: colors.surfaceElevated,
+        borderRadius: const BorderRadius.all(Radius.circular(idePanelRadius)),
+        border: Border.all(color: colors.border),
       ),
       child: Row(
         children: [
@@ -365,7 +367,7 @@ class _ThemeModeTabBar extends StatelessWidget {
               ),
             ),
             if (index < tabs.length - 1)
-              Container(width: 1, height: 40, color: colorScheme.border),
+              Container(width: 1, height: 40, color: colors.borderSubtle),
           ],
         ],
       ),
@@ -389,13 +391,13 @@ class _AppearanceSettingRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shadTheme = ShadTheme.of(context);
-    final colorScheme = shadTheme.colorScheme;
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
     return PaneInteractiveSurface(
       onPressed: onTap,
-      padding: const EdgeInsets.all(12),
-      borderColor: colorScheme.border,
-      hoverBackgroundColor: colorScheme.border.withValues(alpha: 0.12),
+      padding: IdeSpacing.all12,
+      borderColor: colors.border,
+      hoverBackgroundColor: colors.border.withValues(alpha: 0.12),
       child: Row(
         children: [
           Expanded(
@@ -404,21 +406,21 @@ class _AppearanceSettingRow extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: shadTheme.textTheme.h4.copyWith(
+                  style: textStyles.displaySmall.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: IdeSpacing.space4),
                 Text(
                   description,
-                  style: shadTheme.textTheme.small.copyWith(
-                    color: colorScheme.mutedForeground,
+                  style: textStyles.bodySmall.copyWith(
+                    color: colors.textSecondary,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: IdeSpacing.space16),
           Flexible(
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -428,17 +430,17 @@ class _AppearanceSettingRow extends StatelessWidget {
                     value,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: shadTheme.textTheme.p.copyWith(
-                      color: colorScheme.primary,
+                    style: textStyles.bodyMedium.copyWith(
+                      color: colors.accent,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: IdeSpacing.space8),
                 Icon(
                   Icons.expand_more_rounded,
                   size: 18,
-                  color: colorScheme.mutedForeground,
+                  color: colors.textSecondary,
                 ),
               ],
             ),
@@ -465,34 +467,30 @@ class _SettingsNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shadTheme = ShadTheme.of(context);
-    final colorScheme = shadTheme.colorScheme;
-    final activeBackground = colorScheme.primary.withValues(
-      alpha: shadTheme.brightness == Brightness.dark ? 0.18 : 0.1,
-    );
-    final foreground = active
-        ? colorScheme.primaryForeground
-        : colorScheme.mutedForeground;
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    final activeBackground = colors.primaryMuted;
+    final foreground = active ? colors.accent : colors.textSecondary;
     return PaneInteractiveSurface(
       onPressed: onTap,
       selected: active,
       height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: IdeSpacing.horizontal12,
       selectedBackgroundColor: activeBackground,
-      selectedBorderColor: colorScheme.primary,
+      selectedBorderColor: colors.accent,
       hoverBackgroundColor: active
           ? activeBackground
-          : colorScheme.border.withValues(alpha: 0.12),
+          : colors.border.withValues(alpha: 0.12),
       child: Row(
         children: [
           Icon(icon, size: 18, color: foreground),
-          const SizedBox(width: 10),
+          const SizedBox(width: IdeSpacing.space10),
           Expanded(
             child: Text(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: shadTheme.textTheme.p.copyWith(
+              style: textStyles.bodyMedium.copyWith(
                 color: foreground,
                 fontWeight: active ? FontWeight.w700 : FontWeight.w500,
               ),
@@ -518,13 +516,9 @@ class _ThemeModeTabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shadTheme = ShadTheme.of(context);
-    final colorScheme = shadTheme.colorScheme;
-    final background = selected
-        ? colorScheme.primary.withValues(
-            alpha: shadTheme.brightness == Brightness.dark ? 0.16 : 0.08,
-          )
-        : colorScheme.card;
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    final background = selected ? colors.primaryMuted : colors.surfaceElevated;
     return PaneInteractiveSurface(
       onPressed: onPressed,
       selected: selected,
@@ -533,7 +527,7 @@ class _ThemeModeTabButton extends StatelessWidget {
       backgroundColor: background,
       hoverBackgroundColor: selected
           ? background
-          : colorScheme.border.withValues(alpha: 0.12),
+          : colors.border.withValues(alpha: 0.12),
       semanticLabel: tab.title,
       child: Semantics(
         selected: selected,
@@ -545,14 +539,12 @@ class _ThemeModeTabButton extends StatelessWidget {
               tab.title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: shadTheme.textTheme.h4.copyWith(
-                color: selected
-                    ? colorScheme.primaryForeground
-                    : colorScheme.mutedForeground,
+              style: textStyles.titleSmall.copyWith(
+                color: selected ? colors.accent : colors.textSecondary,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: IdeSpacing.space4),
             if (selected)
               Container(
                 key: ValueKey<String>(
@@ -561,8 +553,8 @@ class _ThemeModeTabButton extends StatelessWidget {
                 width: 20,
                 height: 2,
                 decoration: BoxDecoration(
-                  color: colorScheme.primary,
-                  borderRadius: BorderRadius.circular(99),
+                  color: colors.accent,
+                  borderRadius: const BorderRadius.all(Radius.circular(99)),
                 ),
               )
             else
@@ -629,8 +621,8 @@ class _FontChoiceDialogState extends State<_FontChoiceDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final shadTheme = ShadTheme.of(context);
-    final colorScheme = shadTheme.colorScheme;
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
     return ShadDialog(
       key: const ValueKey('settings-font-picker-dialog'),
       title: Text(widget.title),
@@ -675,8 +667,8 @@ class _FontChoiceDialogState extends State<_FontChoiceDialog> {
                     return Center(
                       child: Text(
                         '字体列表加载失败。',
-                        style: shadTheme.textTheme.small.copyWith(
-                          color: colorScheme.mutedForeground,
+                        style: textStyles.bodySmall.copyWith(
+                          color: colors.textSecondary,
                         ),
                       ),
                     );
@@ -691,8 +683,8 @@ class _FontChoiceDialogState extends State<_FontChoiceDialog> {
                     return Center(
                       child: Text(
                         '没有匹配的字体。',
-                        style: shadTheme.textTheme.small.copyWith(
-                          color: colorScheme.mutedForeground,
+                        style: textStyles.bodySmall.copyWith(
+                          color: colors.textSecondary,
                         ),
                       ),
                     );
@@ -715,22 +707,23 @@ class _FontChoiceDialogState extends State<_FontChoiceDialog> {
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         backgroundColor: selected
-                            ? colorScheme.primary.withValues(alpha: 0.14)
+                            ? colors.primaryMuted
                             : Colors.transparent,
                         hoverBackgroundColor: selected
-                            ? colorScheme.primary.withValues(alpha: 0.18)
+                            ? colors.primaryMuted.withValues(alpha: 0.18)
                             : null,
                         trailing: selected
                             ? Icon(
                                 Icons.check_rounded,
                                 size: 18,
-                                color: colorScheme.primary,
+                                color: colors.accent,
                               )
                             : null,
                         child: Text(
                           _fontChoiceLabel(choice),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
+                          style: textStyles.bodyMedium,
                         ),
                       );
                     },

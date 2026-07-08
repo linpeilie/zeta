@@ -7,6 +7,10 @@ import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_context_menu.dart';
+import 'package:zeta/src/ui/core/ide_motion.dart';
+import 'package:zeta/src/ui/core/ide_spacing.dart';
+import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 
 typedef ProjectThreadSelected =
@@ -57,7 +61,7 @@ class ProjectListPane extends StatelessWidget {
       child: projects.isEmpty
           ? const EmptyState(text: 'No folder opened')
           : ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 6),
+              padding: IdeSpacing.vertical6,
               itemCount: projects.length,
               itemBuilder: (context, index) {
                 final path = projects[index];
@@ -118,7 +122,7 @@ class _ProjectTile extends StatefulWidget {
 class _ProjectTileState extends State<_ProjectTile> {
   static const double _actionHitSize = 18;
   static const double _actionIconSize = 16;
-  static const double _actionIconGap = 6;
+  static const double _actionIconGap = IdeSpacing.space6;
 
   bool _hovered = false;
   bool _focused = false;
@@ -172,14 +176,15 @@ class _ProjectTileState extends State<_ProjectTile> {
 
   @override
   Widget build(BuildContext context) {
-    final shadTheme = ShadTheme.of(context);
-    final colorScheme = shadTheme.colorScheme;
-    final selectedBackground = colorScheme.primary.withValues(
-      alpha: shadTheme.brightness == Brightness.dark ? 0.16 : 0.1,
-    );
-    final hoverBackground = colorScheme.border.withValues(alpha: 0.12);
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    final selectedBackground = colors.primaryMuted;
+    final hoverBackground = colors.border.withValues(alpha: 0.12);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(
+        horizontal: IdeSpacing.space6,
+        vertical: IdeSpacing.space2,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -187,7 +192,10 @@ class _ProjectTileState extends State<_ProjectTile> {
             key: ValueKey<String>('project-tile-${widget.path}'),
             onPressed: widget.onTap,
             selected: widget.selected,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+            padding: const EdgeInsets.symmetric(
+              horizontal: IdeSpacing.space8,
+              vertical: 7,
+            ),
             selectedBackgroundColor: selectedBackground,
             hoverBackgroundColor: hoverBackground,
             onHoverChanged: (value) {
@@ -207,24 +215,22 @@ class _ProjectTileState extends State<_ProjectTile> {
                       ? Icons.folder_open_rounded
                       : Icons.folder_rounded,
                   size: 16,
-                  color: widget.selected
-                      ? colorScheme.primary
-                      : colorScheme.mutedForeground,
+                  color: widget.selected ? colors.accent : colors.textSecondary,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: IdeSpacing.space8),
                 Expanded(
                   child: Text(
                     fileName(widget.path),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: shadTheme.textTheme.p.copyWith(
+                    style: textStyles.bodyMedium.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
                 AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 140),
-                  switchInCurve: Curves.easeOut,
+                  duration: IdeMotion.durationNormal,
+                  switchInCurve: IdeMotion.curveDefault,
                   switchOutCurve: Curves.easeIn,
                   child: SizedBox(
                     key: ValueKey<String>(
@@ -249,7 +255,7 @@ class _ProjectTileState extends State<_ProjectTile> {
                                   width: _actionHitSize,
                                   height: _actionHitSize,
                                   padding: EdgeInsets.zero,
-                                  foregroundColor: colorScheme.mutedForeground,
+                                  foregroundColor: colors.textSecondary,
                                   hoverBackgroundColor: hoverBackground,
                                   icon: Icon(
                                     widget.threadState.isExpanded
@@ -279,7 +285,7 @@ class _ProjectTileState extends State<_ProjectTile> {
                                         'project-tile-more-${widget.path}',
                                       ),
                                       size: _actionIconSize,
-                                      color: colorScheme.mutedForeground,
+                                      color: colors.textSecondary,
                                     ),
                                   ),
                                 ),
@@ -295,7 +301,7 @@ class _ProjectTileState extends State<_ProjectTile> {
                                   width: _actionHitSize,
                                   height: _actionHitSize,
                                   padding: EdgeInsets.zero,
-                                  foregroundColor: colorScheme.mutedForeground,
+                                  foregroundColor: colors.textSecondary,
                                   hoverBackgroundColor: hoverBackground,
                                   icon: const Icon(
                                     Icons.edit_outlined,
@@ -313,55 +319,43 @@ class _ProjectTileState extends State<_ProjectTile> {
           ),
           if (_moreMenuController.isOpen)
             Padding(
-              padding: const EdgeInsets.only(top: 4, right: 6),
+              padding: const EdgeInsets.only(
+                top: IdeSpacing.space4,
+                right: IdeSpacing.space6,
+              ),
               child: Align(
                 alignment: Alignment.centerRight,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: colorScheme.popover,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: colorScheme.border),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.12),
-                        blurRadius: 16,
-                        offset: const Offset(0, 6),
+                child: IdeContextMenu(
+                  actions: [
+                    IdeContextMenuAction(
+                      key: ValueKey<String>(
+                        'project-tile-refresh-threads-${widget.path}',
                       ),
-                    ],
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minWidth: 156),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _buildMenuActionButton(
-                            value: _ProjectTileMenuAction.refreshThreads,
-                            key: ValueKey<String>(
-                              'project-tile-refresh-threads-${widget.path}',
-                            ),
-                            label: '刷新会话',
-                          ),
-                          _buildMenuActionButton(
-                            value: _ProjectTileMenuAction.openProjectLocation,
-                            key: ValueKey<String>(
-                              'project-tile-open-location-${widget.path}',
-                            ),
-                            label: _openProjectLocationLabel(),
-                          ),
-                          _buildMenuActionButton(
-                            value: _ProjectTileMenuAction.removeProject,
-                            key: ValueKey<String>(
-                              'project-tile-remove-${widget.path}',
-                            ),
-                            label: '移除',
-                          ),
-                        ],
+                      label: '刷新会话',
+                      onPressed: () => _handleMenuAction(
+                        _ProjectTileMenuAction.refreshThreads,
                       ),
                     ),
-                  ),
+                    IdeContextMenuAction(
+                      key: ValueKey<String>(
+                        'project-tile-open-location-${widget.path}',
+                      ),
+                      label: _openProjectLocationLabel(),
+                      onPressed: () => _handleMenuAction(
+                        _ProjectTileMenuAction.openProjectLocation,
+                      ),
+                    ),
+                    IdeContextMenuAction(
+                      key: ValueKey<String>(
+                        'project-tile-remove-${widget.path}',
+                      ),
+                      label: '移除',
+                      destructive: true,
+                      onPressed: () => _handleMenuAction(
+                        _ProjectTileMenuAction.removeProject,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -375,22 +369,6 @@ class _ProjectTileState extends State<_ProjectTile> {
             ),
         ],
       ),
-    );
-  }
-
-  Widget _buildMenuActionButton({
-    required _ProjectTileMenuAction value,
-    required Key key,
-    required String label,
-  }) {
-    return ShadButton.ghost(
-      key: key,
-      onPressed: () => _handleMenuAction(value),
-      width: double.infinity,
-      height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      mainAxisAlignment: MainAxisAlignment.start,
-      child: Text(label, style: const TextStyle(fontSize: 12, height: 1.1)),
     );
   }
 }
@@ -460,8 +438,7 @@ class _ThreadTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final shadTheme = ShadTheme.of(context);
-    final colorScheme = shadTheme.colorScheme;
+    final textStyles = IdeTextStyles.of(context);
     final isRunning = thread.status == AgentThreadRuntimeStatus.active;
     final lastActiveLabel = _relativeThreadTime(
       thread.lastActiveAt,
@@ -473,32 +450,35 @@ class _ThreadTile extends StatelessWidget {
         key: ValueKey<String>('project-thread-$projectPath-${thread.id}'),
         onPressed: onTap,
         selected: selected,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        borderRadius: BorderRadius.circular(5),
-        selectedBackgroundColor: colorScheme.primary.withValues(
-          alpha: shadTheme.brightness == Brightness.dark ? 0.14 : 0.08,
+        padding: const EdgeInsets.symmetric(
+          horizontal: IdeSpacing.space8,
+          vertical: IdeSpacing.space6,
         ),
-        hoverBackgroundColor: colorScheme.border.withValues(alpha: 0.12),
+        borderRadius: const BorderRadius.all(
+          Radius.circular(IdeSpacing.space6),
+        ),
+        selectedBackgroundColor: colors.primaryMuted,
+        hoverBackgroundColor: colors.border.withValues(alpha: 0.12),
         child: Row(
           children: [
             Icon(
               _threadIcon(thread.status),
               size: 14,
-              color: selected ? colors.accent : colors.mutedText,
+              color: selected ? colors.accent : colors.textSecondary,
             ),
-            const SizedBox(width: 7),
+            const SizedBox(width: IdeSpacing.space8),
             Expanded(
               child: Text(
                 thread.displayName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: shadTheme.textTheme.small.copyWith(
+                style: textStyles.bodySmall.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
               ),
             ),
             if (isRunning) ...[
-              const SizedBox(width: 8),
+              const SizedBox(width: IdeSpacing.space8),
               Icon(
                 Icons.autorenew_rounded,
                 key: ValueKey<String>(
@@ -512,7 +492,7 @@ class _ThreadTile extends StatelessWidget {
               Text(
                 lastActiveLabel,
                 maxLines: 1,
-                style: TextStyle(color: colors.mutedText, fontSize: 10),
+                style: textStyles.caption.copyWith(color: colors.textSecondary),
               ),
             ],
           ],
@@ -529,16 +509,18 @@ class _ThreadListMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: IdeSpacing.space8,
+        vertical: IdeSpacing.space6,
+      ),
       child: Align(
         alignment: Alignment.centerLeft,
         child: Text(
           text,
-          style: TextStyle(
-            color: IdeColors.of(context).mutedText,
-            fontSize: 11,
-          ),
+          style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
         ),
       ),
     );
@@ -552,8 +534,13 @@ class _ThreadErrorRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+      padding: const EdgeInsets.symmetric(
+        horizontal: IdeSpacing.space4,
+        vertical: IdeSpacing.space4,
+      ),
       child: Row(
         children: [
           Expanded(
@@ -561,10 +548,7 @@ class _ThreadErrorRow extends StatelessWidget {
               'Could not load threads',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: IdeColors.of(context).mutedText,
-                fontSize: 11,
-              ),
+              style: textStyles.bodySmall.copyWith(color: colors.error),
             ),
           ),
           IdeTooltip(
@@ -595,6 +579,7 @@ class _LoadMoreThreadsButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textStyles = IdeTextStyles.of(context);
     return Align(
       alignment: Alignment.centerLeft,
       child: ShadButton.ghost(
@@ -604,7 +589,7 @@ class _LoadMoreThreadsButton extends StatelessWidget {
         leading: loading
             ? const IdeLoadingIndicator(width: 16, height: 10, barHeight: 3)
             : const Icon(Icons.more_horiz_rounded, size: 15),
-        textStyle: const TextStyle(fontSize: 11),
+        textStyle: textStyles.bodySmall,
         child: Text(loading ? 'Loading' : 'Load more'),
       ),
     );

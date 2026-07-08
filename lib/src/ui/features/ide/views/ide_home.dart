@@ -16,7 +16,10 @@ import 'package:zeta/src/features/settings/presentation/settings_page.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/workspace/presentation/file_tree_pane.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/ui/core/ide_activity_rail.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_resize_handle.dart';
+import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/window_frame.dart';
 import 'package:zeta/src/ui/features/ide/views/project_list_pane.dart';
@@ -195,31 +198,35 @@ class _IdeHomeState extends State<IdeHome> {
       children: [
         SizedBox(
           width: _activityRailWidth,
-          child: _ActivityRail(
-            top: _ActionIcon(
-              key: const ValueKey('left-projects-action'),
-              icon: Icons.account_tree_rounded,
-              tooltip: 'Projects',
-              semanticLabel: 'Toggle projects panel',
-              active: _leftTopVisible,
-              onPressed: () {
-                setState(() {
-                  _leftTopVisible = !_leftTopVisible;
-                });
-              },
-            ),
-            bottom: _ActionIcon(
-              key: const ValueKey('left-context-action'),
-              icon: Icons.data_object_rounded,
-              tooltip: 'Context',
-              semanticLabel: 'Toggle context panel',
-              active: _leftBottomVisible,
-              onPressed: () {
-                setState(() {
-                  _leftBottomVisible = !_leftBottomVisible;
-                });
-              },
-            ),
+          child: IdeActivityRail(
+            leadingActions: [
+              IdeRailAction(
+                key: const ValueKey('left-projects-action'),
+                icon: Icons.account_tree_rounded,
+                tooltip: 'Projects',
+                semanticLabel: 'Toggle projects panel',
+                active: _leftTopVisible,
+                onPressed: () {
+                  setState(() {
+                    _leftTopVisible = !_leftTopVisible;
+                  });
+                },
+              ),
+            ],
+            trailingActions: [
+              IdeRailAction(
+                key: const ValueKey('left-context-action'),
+                icon: Icons.data_object_rounded,
+                tooltip: 'Context',
+                semanticLabel: 'Toggle context panel',
+                active: _leftBottomVisible,
+                onPressed: () {
+                  setState(() {
+                    _leftBottomVisible = !_leftBottomVisible;
+                  });
+                },
+              ),
+            ],
           ),
         ),
         const SizedBox(width: idePanelGap),
@@ -246,8 +253,10 @@ class _IdeHomeState extends State<IdeHome> {
               ),
             ),
           ),
-          _HorizontalResizeHandle(
+          IdeResizeHandle(
             key: const ValueKey('left-width-resize-handle'),
+            axis: IdeResizeHandleAxis.horizontal,
+            semanticLabel: 'Resize left panel width',
             onDragUpdate: (details) {
               setState(() {
                 _leftPanelWidth = (_leftPanelWidth + details.delta.dx).clamp(
@@ -259,15 +268,18 @@ class _IdeHomeState extends State<IdeHome> {
           ),
         ],
         Expanded(
-          child: _RoundedPanel(
+          child: PanelCard(
             key: const ValueKey('agent-pane-host'),
             color: colors.editor,
+            showBorder: false,
             child: AgentPane(viewModel: _shellController.agentViewModel),
           ),
         ),
         if (!useRightOverlay && rightPanelVisible) ...[
-          _HorizontalResizeHandle(
+          IdeResizeHandle(
             key: const ValueKey('right-width-resize-handle'),
+            axis: IdeResizeHandleAxis.horizontal,
+            semanticLabel: 'Resize right panel width',
             onDragUpdate: (details) {
               setState(() {
                 _rightPanelWidth = (_rightPanelWidth - details.delta.dx).clamp(
@@ -286,27 +298,31 @@ class _IdeHomeState extends State<IdeHome> {
         const SizedBox(width: idePanelGap),
         SizedBox(
           width: _activityRailWidth,
-          child: _ActivityRail(
-            top: _ActionIcon(
-              key: const ValueKey('right-files-action'),
-              icon: Icons.folder_rounded,
-              tooltip: 'Files',
-              semanticLabel: 'Toggle files panel',
-              active: _rightTopVisible,
-              onPressed: () {
-                _toggleRightPanel(isTop: true, useOverlay: useRightOverlay);
-              },
-            ),
-            bottom: _ActionIcon(
-              key: const ValueKey('right-tools-action'),
-              icon: Icons.build_circle_rounded,
-              tooltip: 'Tools',
-              semanticLabel: 'Toggle tools panel',
-              active: _rightBottomVisible,
-              onPressed: () {
-                _toggleRightPanel(isTop: false, useOverlay: useRightOverlay);
-              },
-            ),
+          child: IdeActivityRail(
+            leadingActions: [
+              IdeRailAction(
+                key: const ValueKey('right-files-action'),
+                icon: Icons.folder_rounded,
+                tooltip: 'Files',
+                semanticLabel: 'Toggle files panel',
+                active: _rightTopVisible,
+                onPressed: () {
+                  _toggleRightPanel(isTop: true, useOverlay: useRightOverlay);
+                },
+              ),
+            ],
+            trailingActions: [
+              IdeRailAction(
+                key: const ValueKey('right-tools-action'),
+                icon: Icons.build_circle_rounded,
+                tooltip: 'Tools',
+                semanticLabel: 'Toggle tools panel',
+                active: _rightBottomVisible,
+                onPressed: () {
+                  _toggleRightPanel(isTop: false, useOverlay: useRightOverlay);
+                },
+              ),
+            ],
           ),
         ),
       ],
@@ -337,7 +353,7 @@ class _IdeHomeState extends State<IdeHome> {
           width: overlayWidth,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(IdeSpacing.space8),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.34),
@@ -413,8 +429,9 @@ class _IdeHomeState extends State<IdeHome> {
   }
 
   Widget _buildProjectsPanel() {
-    return _RoundedPanel(
+    return PanelCard(
       key: const ValueKey('projects-panel-card'),
+      showBorder: false,
       child: ProjectListPane(
         projects: _shellController.projects,
         activeProject: _shellController.activeProjectPath,
@@ -448,8 +465,9 @@ class _IdeHomeState extends State<IdeHome> {
   }
 
   Widget _buildFilesPanel() {
-    return _RoundedPanel(
+    return PanelCard(
       key: const ValueKey('files-panel-card'),
+      showBorder: false,
       child: FileTreePane(
         nodes: _shellController.workspaceTree,
         expandedPaths: _shellController.expandedDirectoryPaths,
@@ -490,8 +508,9 @@ class _IdeHomeState extends State<IdeHome> {
     required String message,
   }) {
     final colors = IdeColors.of(context);
-    return _RoundedPanel(
+    return PanelCard(
       key: key,
+      showBorder: false,
       child: Pane(
         title: title,
         trailing: Icon(icon, size: 16, color: colors.mutedText),
@@ -612,105 +631,11 @@ class _IdeHomeState extends State<IdeHome> {
 
 enum _IdeHomePage { home, settings }
 
-class _RoundedPanel extends StatelessWidget {
-  const _RoundedPanel({required this.child, super.key, this.color});
-
-  final Widget child;
-
-  /// 面板背景色；为 null 时按当前主题解析为 panel 色。
-  final Color? color;
-
-  @override
-  Widget build(BuildContext context) {
-    final shadTheme = ShadTheme.of(context);
-    final resolved = resolvePanelSurfaceColor(
-      context,
-      baseColor: color ?? shadTheme.colorScheme.card,
-    );
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: resolved,
-        borderRadius: shadTheme.radius,
-      ),
-      child: child,
-    );
-  }
-}
-
 class _PanelWidths {
   const _PanelWidths({required this.left, required this.right});
 
   final double left;
   final double right;
-}
-
-class _ActivityRail extends StatelessWidget {
-  const _ActivityRail({required this.top, required this.bottom});
-
-  final Widget top;
-  final Widget bottom;
-
-  @override
-  Widget build(BuildContext context) {
-    return _RoundedPanel(
-      color: IdeColors.of(context).surface,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 1),
-        child: Column(children: [top, const Spacer(), bottom]),
-      ),
-    );
-  }
-}
-
-class _ActionIcon extends StatelessWidget {
-  const _ActionIcon({
-    required this.icon,
-    required this.tooltip,
-    required this.semanticLabel,
-    required this.active,
-    required this.onPressed,
-    super.key,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final String semanticLabel;
-  final bool active;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final shadTheme = ShadTheme.of(context);
-    final colorScheme = shadTheme.colorScheme;
-    final foreground = active
-        ? colorScheme.primaryForeground
-        : colorScheme.mutedForeground;
-    final activeBackground = colorScheme.primary.withValues(
-      alpha: shadTheme.brightness == Brightness.dark ? 0.18 : 0.1,
-    );
-    final hoverBackground = colorScheme.border.withValues(
-      alpha: shadTheme.brightness == Brightness.dark ? 0.18 : 0.3,
-    );
-    return IdeTooltip(
-      message: tooltip,
-      child: Semantics(
-        button: true,
-        selected: active,
-        label: semanticLabel,
-        child: ShadIconButton.ghost(
-          onPressed: onPressed,
-          width: 32,
-          height: 32,
-          padding: EdgeInsets.zero,
-          backgroundColor: active ? activeBackground : Colors.transparent,
-          hoverBackgroundColor: active ? activeBackground : hoverBackground,
-          foregroundColor: foreground,
-          icon: Icon(icon, size: 20),
-        ),
-      ),
-    );
-  }
 }
 
 class _ResizableColumn extends StatelessWidget {
@@ -752,8 +677,10 @@ class _ResizableColumn extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             SizedBox(height: topHeight, child: top),
-            _VerticalResizeHandle(
+            IdeResizeHandle(
               key: heightHandleKey,
+              axis: IdeResizeHandleAxis.vertical,
+              semanticLabel: 'Resize panel height',
               onDragUpdate: (details) {
                 onTopRatioChanged(
                   (topHeight + details.delta.dy) / resizableHeight,
@@ -764,48 +691,6 @@ class _ResizableColumn extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-class _HorizontalResizeHandle extends StatelessWidget {
-  const _HorizontalResizeHandle({required this.onDragUpdate, super.key});
-
-  final GestureDragUpdateCallback onDragUpdate;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.resizeLeftRight,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onHorizontalDragUpdate: onDragUpdate,
-        child: SizedBox(
-          width: idePanelGap,
-          child: ColoredBox(color: IdeColors.of(context).frame),
-        ),
-      ),
-    );
-  }
-}
-
-class _VerticalResizeHandle extends StatelessWidget {
-  const _VerticalResizeHandle({required this.onDragUpdate, super.key});
-
-  final GestureDragUpdateCallback onDragUpdate;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.resizeUpDown,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onVerticalDragUpdate: onDragUpdate,
-        child: SizedBox(
-          height: idePanelGap,
-          child: ColoredBox(color: IdeColors.of(context).frame),
-        ),
-      ),
     );
   }
 }

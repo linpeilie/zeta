@@ -55,10 +55,9 @@ class _AgentComposer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final shadTheme = ShadTheme.of(context);
-    final colorScheme = shadTheme.colorScheme;
-    final inputTextStyle = shadTheme.textTheme.p.copyWith(
-      color: colorScheme.foreground,
+    final textStyles = IdeTextStyles.of(context);
+    final inputTextStyle = textStyles.bodyMedium.copyWith(
+      color: colors.textPrimary,
     );
     final lineHeight =
         (inputTextStyle.fontSize ?? 12) * (inputTextStyle.height ?? 1.35);
@@ -70,21 +69,24 @@ class _AgentComposer extends StatelessWidget {
         threadOpenPhase == AgentThreadOpenPhase.idle &&
         isTurnRunning &&
         !hasDraft;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.panel,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: colors.border.withValues(alpha: 0.72)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x33000000),
-            blurRadius: 18,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
+    return PanelCard(
+      color: colors.panel,
+      borderColor: colors.border.withValues(alpha: 0.72),
+      borderRadius: const BorderRadius.all(Radius.circular(IdeSpacing.space16)),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x33000000),
+          blurRadius: 18,
+          offset: Offset(0, 8),
+        ),
+      ],
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 8, 8),
+        padding: const EdgeInsets.only(
+          left: IdeSpacing.space16,
+          top: IdeSpacing.space12,
+          right: IdeSpacing.space8,
+          bottom: IdeSpacing.space8,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -94,7 +96,9 @@ class _AgentComposer extends StatelessWidget {
               controller: controller,
               placeholder: Text(
                 'Message Agent',
-                style: shadTheme.textTheme.p.copyWith(color: colors.mutedText),
+                style: textStyles.bodyMedium.copyWith(
+                  color: colors.textTertiary,
+                ),
               ),
               style: inputTextStyle,
               decoration: ShadDecoration.none,
@@ -109,7 +113,7 @@ class _AgentComposer extends StatelessWidget {
                 }
               },
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: IdeSpacing.space6),
             // 下半部分：操作行，左侧放选择控件，右侧放发送按钮。
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -121,7 +125,7 @@ class _AgentComposer extends StatelessWidget {
                     onSelect: onSelectModel,
                   ),
                 if (showReasoningEffort && selectedModel != null) ...[
-                  const SizedBox(width: 6),
+                  const SizedBox(width: IdeSpacing.space6),
                   _ReasoningEffortButton(
                     efforts: selectedModel!.supportedReasoningEfforts,
                     selectedEffort: selectedReasoningEffort,
@@ -129,7 +133,7 @@ class _AgentComposer extends StatelessWidget {
                   ),
                 ],
                 if (showServiceTier && selectedModel != null) ...[
-                  const SizedBox(width: 6),
+                  const SizedBox(width: IdeSpacing.space6),
                   _ServiceTierButton(
                     tiers: selectedModel!.serviceTiers,
                     selectedTierId: selectedServiceTierId,
@@ -137,110 +141,48 @@ class _AgentComposer extends StatelessWidget {
                   ),
                 ],
                 const Spacer(),
-                if (showCancel)
-                  IdeTooltip(
-                    message: 'Cancel',
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: colors.border.withValues(alpha: 0.36),
-                        shape: BoxShape.circle,
-                      ),
-                      child: ClipOval(
-                        child: ShadIconButton.ghost(
-                          key: const ValueKey('agent-cancel-button'),
-                          onPressed: onCancel,
-                          width: 32,
-                          height: 32,
-                          padding: EdgeInsets.zero,
-                          foregroundColor: colors.mutedText,
+                AnimatedSwitcher(
+                  duration: IdeMotion.durationNormal,
+                  switchInCurve: IdeMotion.curveDefault,
+                  switchOutCurve: IdeMotion.curveDefault,
+                  layoutBuilder: (currentChild, previousChildren) =>
+                      currentChild ?? const SizedBox.shrink(),
+                  child: showCancel
+                      ? _ComposerActionButton(
+                          key: const ValueKey('agent-cancel-button-state'),
+                          tooltip: 'Cancel',
+                          backgroundColor: colors.border.withValues(
+                            alpha: 0.36,
+                          ),
+                          foregroundColor: colors.textSecondary,
+                          buttonKey: const ValueKey('agent-cancel-button'),
                           icon: const Icon(Icons.stop_rounded, size: 18),
-                        ),
-                      ),
-                    ),
-                  )
-                else if (showSend)
-                  IdeTooltip(
-                    message: 'Send',
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: canSubmit
-                            ? colors.accent.withValues(alpha: 0.18)
-                            : colors.border.withValues(alpha: 0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: ClipOval(
-                        child: ShadIconButton.ghost(
-                          key: const ValueKey('agent-send-button'),
-                          onPressed: canSubmit ? onSend : null,
-                          width: 32,
-                          height: 32,
-                          padding: EdgeInsets.zero,
+                          onPressed: onCancel,
+                        )
+                      : showSend
+                      ? _ComposerActionButton(
+                          key: const ValueKey('agent-send-button-state'),
+                          tooltip: 'Send',
+                          backgroundColor: canSubmit
+                              ? colors.primaryMuted
+                              : colors.border.withValues(alpha: 0.2),
                           foregroundColor: canSubmit
                               ? colors.accent
-                              : colors.mutedText.withValues(alpha: 0.72),
+                              : colors.textSecondary.withValues(alpha: 0.72),
+                          buttonKey: const ValueKey('agent-send-button'),
                           icon: const Icon(
                             Icons.arrow_upward_rounded,
                             size: 18,
                           ),
+                          onPressed: canSubmit ? onSend : null,
+                        )
+                      : const SizedBox(
+                          key: ValueKey('agent-send-unavailable-placeholder'),
+                          width: 40,
+                          height: 40,
                         ),
-                      ),
-                    ),
-                  )
-                else
-                  const SizedBox(
-                    key: ValueKey('agent-send-unavailable-placeholder'),
-                    width: 40,
-                    height: 40,
-                  ),
+                ),
               ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 选择控件通用的紧凑胶囊外观。
-class _SelectorChip extends StatelessWidget {
-  const _SelectorChip({required this.label, this.icon});
-
-  final String label;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = ShadTheme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.muted.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colorScheme.border.withValues(alpha: 0.6)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(icon, size: 12, color: colorScheme.mutedForeground),
-              const SizedBox(width: 4),
-            ],
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: colorScheme.mutedForeground.withValues(alpha: 0.9),
-              ),
-            ),
-            const SizedBox(width: 2),
-            Icon(
-              Icons.keyboard_arrow_down_rounded,
-              size: 12,
-              color: colorScheme.mutedForeground,
             ),
           ],
         ),
@@ -281,9 +223,9 @@ class _SelectorSelect<T extends Object> extends StatelessWidget {
         decoration: ShadDecoration.none,
         padding: EdgeInsets.zero,
         trailing: const SizedBox.shrink(),
-        placeholder: _SelectorChip(label: placeholderLabel, icon: icon),
+        placeholder: IdeChip(label: placeholderLabel, leadingIcon: icon),
         selectedOptionBuilder: (context, value) =>
-            _SelectorChip(label: labelBuilder(value), icon: icon),
+            IdeChip(label: labelBuilder(value), leadingIcon: icon),
         options: options,
         onChanged: (value) {
           if (value != null) {
@@ -325,7 +267,7 @@ class _ModelSelectorButton extends StatelessWidget {
             child: Text(
               model.displayName,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12),
+              style: IdeTextStyles.of(context).bodyMedium,
             ),
           ),
       ],
@@ -371,7 +313,7 @@ class _ReasoningEffortButton extends StatelessWidget {
             value: effort.effort,
             child: Text(
               effort.description ?? effort.effort,
-              style: const TextStyle(fontSize: 12),
+              style: IdeTextStyles.of(context).bodyMedium,
             ),
           ),
       ],
@@ -415,7 +357,7 @@ class _ServiceTierButton extends StatelessWidget {
           ShadOption<String>(
             key: ValueKey<String>('agent-service-tier-option-${tier.id}'),
             value: tier.id,
-            child: Text(tier.name, style: const TextStyle(fontSize: 12)),
+            child: Text(tier.name, style: IdeTextStyles.of(context).bodyMedium),
           ),
       ],
     );
@@ -428,5 +370,48 @@ class _ServiceTierButton extends StatelessWidget {
       }
     }
     return id;
+  }
+}
+
+class _ComposerActionButton extends StatelessWidget {
+  const _ComposerActionButton({
+    required this.tooltip,
+    required this.backgroundColor,
+    required this.foregroundColor,
+    required this.buttonKey,
+    required this.icon,
+    required this.onPressed,
+    super.key,
+  });
+
+  final String tooltip;
+  final Color backgroundColor;
+  final Color foregroundColor;
+  final Key buttonKey;
+  final Widget icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IdeTooltip(
+      message: tooltip,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          shape: BoxShape.circle,
+        ),
+        child: ClipOval(
+          child: ShadIconButton.ghost(
+            key: buttonKey,
+            onPressed: onPressed,
+            width: 32,
+            height: 32,
+            padding: EdgeInsets.zero,
+            foregroundColor: foregroundColor,
+            icon: icon,
+          ),
+        ),
+      ),
+    );
   }
 }

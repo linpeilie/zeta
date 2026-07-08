@@ -12,85 +12,37 @@ class _AgentCommandGroupCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final hoverBackground = ShadTheme.of(
-      context,
-    ).colorScheme.border.withValues(alpha: 0.12);
     return ListenableBuilder(
       listenable: viewModel.expansionVersionListenable,
       builder: (context, _) {
         final expanded = viewModel.isCommandGroupExpanded(group.id);
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: PaneInteractiveSurface(
-            key: ValueKey<String>('agent-command-group-header-${group.id}'),
-            onPressed: () => viewModel.toggleCommandGroup(group.id),
-            hoverBackgroundColor: hoverBackground,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.segment_rounded,
-                      size: 14,
-                      color: colors.accent.withValues(alpha: 0.7),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _commandGroupSummary(group),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: colors.mutedText.withValues(alpha: 0.9),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Icon(
-                      expanded
-                          ? Icons.keyboard_arrow_down_rounded
-                          : Icons.chevron_right_rounded,
-                      size: 16,
-                      color: colors.mutedText.withValues(alpha: 0.55),
-                    ),
-                  ],
-                ),
-                if (expanded)
-                  RepaintBoundary(
-                    child: Padding(
-                      key: ValueKey<String>(
-                        'agent-command-group-body-${group.id}',
-                      ),
-                      padding: const EdgeInsets.only(top: 8, left: 22),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          for (
-                            var index = 0;
-                            index < group.items.length;
-                            index++
-                          ) ...[
-                            if (index > 0) const SizedBox(height: 8),
-                            _AgentCommandGroupItemRow(item: group.items[index]),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
+        return IdeCollapsibleCard(
+          headerKey: ValueKey<String>('agent-command-group-header-${group.id}'),
+          bodyKey: ValueKey<String>('agent-command-group-body-${group.id}'),
+          expanded: expanded,
+          onToggle: () => viewModel.toggleCommandGroup(group.id),
+          title: _commandGroupSummary(group),
+          leading: Icon(
+            Icons.segment_rounded,
+            size: 14,
+            color: colors.accent.withValues(alpha: 0.7),
+          ),
+          margin: const EdgeInsets.only(bottom: IdeSpacing.space10),
+          bodyPadding: const EdgeInsets.only(
+            top: IdeSpacing.space8,
+            left: IdeSpacing.space20,
+          ),
+          hoverBackgroundColor: _agentHoverBackground(context),
+          semanticLabel: '命令组',
+          body: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var index = 0; index < group.items.length; index++) ...[
+                if (index > 0) const SizedBox(height: IdeSpacing.space8),
+                _AgentCommandGroupItemRow(item: group.items[index]),
               ],
-            ),
+            ],
           ),
         );
       },
@@ -105,18 +57,12 @@ class _AgentCommandGroupItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
     return Text(
       key: ValueKey<String>('agent-command-group-item-${item.id}'),
       item.title,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w500,
-        color: colors.mutedText.withValues(alpha: 0.88),
-        height: 1.35,
-      ),
+      style: _agentItemTextStyle(context),
     );
   }
 }
@@ -141,95 +87,54 @@ class _AgentFileEditGroupCardState extends State<_AgentFileEditGroupCard> {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final hoverBackground = ShadTheme.of(
-      context,
-    ).colorScheme.border.withValues(alpha: 0.12);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Column(
+    return IdeCollapsibleCard(
+      headerKey: ValueKey<String>(
+        'agent-file-edit-group-header-${widget.group.id}',
+      ),
+      bodyKey: ValueKey<String>(
+        'agent-file-edit-group-body-${widget.group.id}',
+      ),
+      expanded: _expanded,
+      onToggle: () {
+        setState(() {
+          _expanded = !_expanded;
+        });
+      },
+      leading: Icon(
+        Icons.edit_note_rounded,
+        size: 14,
+        color: colors.accent.withValues(alpha: 0.7),
+      ),
+      titleWidget: Text.rich(
+        key: ValueKey<String>(
+          'agent-file-edit-group-summary-${widget.group.id}',
+        ),
+        _fileEditGroupSummarySpan(context, widget.group),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: _agentSummaryTextStyle(context),
+      ),
+      margin: const EdgeInsets.only(bottom: IdeSpacing.space10),
+      bodyPadding: const EdgeInsets.only(
+        top: IdeSpacing.space8,
+        left: IdeSpacing.space20,
+      ),
+      hoverBackgroundColor: _agentHoverBackground(context),
+      semanticLabel: '文件编辑组',
+      body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          PaneInteractiveSurface(
-            key: ValueKey<String>(
-              'agent-file-edit-group-header-${widget.group.id}',
-            ),
-            onPressed: () {
-              setState(() {
-                _expanded = !_expanded;
-              });
-            },
-            hoverBackgroundColor: hoverBackground,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.edit_note_rounded,
-                  size: 14,
-                  color: colors.accent.withValues(alpha: 0.7),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text.rich(
-                        key: ValueKey<String>(
-                          'agent-file-edit-group-summary-${widget.group.id}',
-                        ),
-                        _fileEditGroupSummarySpan(widget.group, colors),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: colors.mutedText.withValues(alpha: 0.9),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Icon(
-                  _expanded
-                      ? Icons.keyboard_arrow_down_rounded
-                      : Icons.chevron_right_rounded,
-                  size: 16,
-                  color: colors.mutedText.withValues(alpha: 0.55),
-                ),
-              ],
-            ),
-          ),
-          if (_expanded)
-            RepaintBoundary(
-              child: Padding(
-                key: ValueKey<String>(
-                  'agent-file-edit-group-body-${widget.group.id}',
-                ),
-                padding: const EdgeInsets.only(top: 8, left: 22),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (
-                      var index = 0;
-                      index < widget.group.items.length;
-                      index++
-                    ) ...[
-                      if (index > 0) const SizedBox(height: 8),
-                      _AgentFileEditItemRow(
-                        key: ValueKey<String>(
-                          'agent-file-edit-item-${widget.group.items[index].id}',
-                        ),
-                        item: widget.group.items[index],
-                        viewModel: widget.viewModel,
-                      ),
-                    ],
-                  ],
-                ),
+          for (var index = 0; index < widget.group.items.length; index++) ...[
+            if (index > 0) const SizedBox(height: IdeSpacing.space8),
+            _AgentFileEditItemRow(
+              key: ValueKey<String>(
+                'agent-file-edit-item-${widget.group.items[index].id}',
               ),
+              item: widget.group.items[index],
+              viewModel: widget.viewModel,
             ),
+          ],
         ],
       ),
     );
@@ -248,93 +153,52 @@ class _AgentFileEditItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final hoverBackground = ShadTheme.of(
-      context,
-    ).colorScheme.border.withValues(alpha: 0.12);
     return ListenableBuilder(
       listenable: viewModel.expansionVersionListenable,
       builder: (context, _) {
         final expanded = viewModel.isFileEditItemExpanded(item.id);
         final canExpand = item.hasDetails;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            PaneInteractiveSurface(
-              key: ValueKey<String>('agent-file-edit-item-row-${item.id}'),
-              onPressed: canExpand
-                  ? () => viewModel.toggleFileEditItem(item.id)
-                  : null,
-              hoverBackgroundColor: hoverBackground,
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            item.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: colors.mutedText.withValues(alpha: 0.88),
-                              height: 1.35,
-                            ),
-                          ),
-                        ),
-                        if (item.addedLines != null ||
-                            item.removedLines != null) ...[
-                          const SizedBox(width: 12),
-                          Text.rich(
-                            key: ValueKey<String>(
-                              'agent-file-edit-item-line-stats-${item.id}',
-                            ),
-                            _fileEditLineStatsSpan(item, colors),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IdeTooltip(
-                    message: canExpand ? '查看详情' : '无详情可查看',
-                    child: SizedBox(
-                      key: ValueKey<String>(
-                        'agent-file-edit-item-toggle-${item.id}',
-                      ),
-                      width: 20,
-                      height: 20,
-                      child: Icon(
-                        expanded
-                            ? Icons.keyboard_arrow_down_rounded
-                            : Icons.chevron_right_rounded,
-                        size: 16,
-                        color: canExpand
-                            ? colors.mutedText.withValues(alpha: 0.55)
-                            : colors.mutedText.withValues(alpha: 0.25),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (expanded && item.details != null)
-              Padding(
-                key: ValueKey<String>(
-                  'agent-file-edit-item-details-${item.id}',
+        return IdeCollapsibleCard(
+          headerKey: ValueKey<String>('agent-file-edit-item-row-${item.id}'),
+          toggleKey: ValueKey<String>('agent-file-edit-item-toggle-${item.id}'),
+          bodyKey: ValueKey<String>('agent-file-edit-item-details-${item.id}'),
+          expanded: expanded,
+          canExpand: canExpand,
+          onToggle: canExpand
+              ? () => viewModel.toggleFileEditItem(item.id)
+              : () {},
+          hoverBackgroundColor: _agentHoverBackground(context),
+          padding: const EdgeInsets.symmetric(vertical: IdeSpacing.space2),
+          bodyPadding: const EdgeInsets.only(
+            top: IdeSpacing.space6,
+            right: IdeSpacing.space20,
+          ),
+          semanticLabel: canExpand ? '查看文件编辑详情' : '文件编辑详情',
+          titleWidget: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  item.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _agentItemTextStyle(context),
                 ),
-                padding: const EdgeInsets.only(top: 6, right: 28),
-                child: _AgentDiffDetails(item: item),
               ),
-          ],
+              if (item.addedLines != null || item.removedLines != null) ...[
+                const SizedBox(width: IdeSpacing.space12),
+                Text.rich(
+                  key: ValueKey<String>(
+                    'agent-file-edit-item-line-stats-${item.id}',
+                  ),
+                  _fileEditLineStatsSpan(context, item),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ],
+          ),
+          body: item.details == null ? null : _AgentDiffDetails(item: item),
         );
       },
     );
@@ -355,7 +219,7 @@ class _AgentDiffDetailsState extends State<_AgentDiffDetails> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
     final details = widget.item.details!;
     final shouldCollapse = _shouldPreviewCodeBlock(
       details,
@@ -375,18 +239,15 @@ class _AgentDiffDetailsState extends State<_AgentDiffDetails> {
         _AgentHighlightedCodeBlock(code: code, language: 'diff'),
         if (shouldCollapse)
           Padding(
-            padding: const EdgeInsets.only(top: 6),
+            padding: const EdgeInsets.only(top: IdeSpacing.space6),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   _showAll ? '已显示完整差异' : '已省略 $hiddenLines 行',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: colors.mutedText.withValues(alpha: 0.6),
-                  ),
+                  style: _agentMetaTextStyle(context),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: IdeSpacing.space8),
                 ShadButton.ghost(
                   key: ValueKey<String>(
                     'agent-file-edit-item-expand-all-${widget.item.id}',
@@ -397,7 +258,7 @@ class _AgentDiffDetailsState extends State<_AgentDiffDetails> {
                     });
                   },
                   size: ShadButtonSize.sm,
-                  textStyle: const TextStyle(fontSize: 11),
+                  textStyle: textStyles.bodySmall,
                   child: Text(_showAll ? '收起差异' : '展开全部'),
                 ),
               ],
@@ -424,12 +285,14 @@ class _AgentHighlightedCodeBlock extends StatelessWidget {
       child: DecoratedBox(
         decoration: _agentCodeBlockDecoration(colors),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: const BorderRadius.all(
+            Radius.circular(IdeSpacing.space6),
+          ),
           child: HighlightView(
             code,
             language: language,
             theme: _agentHighlightTheme(context),
-            padding: const EdgeInsets.all(10),
+            padding: IdeSpacing.cardPadding,
             textStyle: _agentCodeTextStyle(context),
           ),
         ),
@@ -450,79 +313,43 @@ class _AgentToolCallCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final hoverBackground = ShadTheme.of(
-      context,
-    ).colorScheme.border.withValues(alpha: 0.12);
     return ListenableBuilder(
       listenable: viewModel.expansionVersionListenable,
       builder: (context, _) {
         final canExpand =
             toolCall.content != null && toolCall.content!.isNotEmpty;
         final expanded = viewModel.isToolCallExpanded(toolCall.id);
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: PaneInteractiveSurface(
-            key: ValueKey<String>('agent-tool-header-${toolCall.id}'),
-            onPressed: canExpand
-                ? () => viewModel.toggleToolCall(toolCall.id)
-                : null,
-            hoverBackgroundColor: hoverBackground,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      _toolIcon(toolCall.kind),
-                      size: 14,
-                      color: colors.accent.withValues(alpha: 0.7),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        toolCall.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: colors.mutedText.withValues(alpha: 0.88),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Icon(
-                      expanded
-                          ? Icons.keyboard_arrow_down_rounded
-                          : Icons.chevron_right_rounded,
-                      size: 16,
-                      color: canExpand
-                          ? colors.mutedText.withValues(alpha: 0.55)
-                          : colors.mutedText.withValues(alpha: 0.25),
-                    ),
-                  ],
-                ),
-                if (expanded && toolCall.content != null)
-                  RepaintBoundary(
-                    child: Padding(
-                      key: ValueKey<String>('agent-tool-body-${toolCall.id}'),
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        toolCall.content!,
-                        style: TextStyle(
-                          color: colors.mutedText.withValues(alpha: 0.6),
-                          fontFamily: IdeTypography.of(context).codeFontFamily,
-                          fontSize: 11,
-                          height: 1.35,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+        return IdeCollapsibleCard(
+          headerKey: ValueKey<String>('agent-tool-header-${toolCall.id}'),
+          bodyKey: ValueKey<String>('agent-tool-body-${toolCall.id}'),
+          expanded: expanded,
+          canExpand: canExpand,
+          onToggle: canExpand
+              ? () => viewModel.toggleToolCall(toolCall.id)
+              : () {},
+          titleWidget: Text(
+            toolCall.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _agentItemTextStyle(context),
           ),
+          leading: Icon(
+            _toolIcon(toolCall.kind),
+            size: 14,
+            color: colors.accent.withValues(alpha: 0.7),
+          ),
+          margin: const EdgeInsets.only(bottom: IdeSpacing.space10),
+          bodyPadding: const EdgeInsets.only(top: IdeSpacing.space8),
+          hoverBackgroundColor: _agentHoverBackground(context),
+          semanticLabel: '工具调用',
+          body: toolCall.content == null
+              ? null
+              : SelectableText(
+                  toolCall.content!,
+                  style: _agentCodeTextStyle(context).copyWith(
+                    color: colors.textSecondary.withValues(alpha: 0.8),
+                  ),
+                ),
         );
       },
     );
@@ -546,86 +373,62 @@ class _AgentPermissionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: colors.warning.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: colors.warning.withValues(alpha: 0.35)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.verified_user_outlined,
-                    size: 16,
-                    color: colors.warning,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      request.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ],
+    final textStyles = IdeTextStyles.of(context);
+    return IdeStatusCard(
+      tone: IdeStatusCardTone.warning,
+      title: request.title,
+      leading: Icon(
+        Icons.verified_user_outlined,
+        size: 16,
+        color: colors.warning,
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (request.command != null)
+            Text(
+              request.command!,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: _agentCodeTextStyle(
+                context,
+              ).copyWith(color: colors.textSecondary.withValues(alpha: 0.78)),
+            ),
+          if (request.description != null)
+            Padding(
+              padding: EdgeInsets.only(
+                top: request.command == null ? 0 : IdeSpacing.space6,
               ),
-              if (request.command != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    request.command!,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    // 弱化命令显示：缩小字体并降低透明度
-                    style: TextStyle(
-                      color: colors.mutedText.withValues(alpha: 0.6),
-                      fontFamily: IdeTypography.of(context).codeFontFamily,
-                      fontSize: 11,
-                    ),
-                  ),
+              child: Text(
+                request.description!,
+                style: textStyles.bodyMedium.copyWith(
+                  color: colors.textSecondary,
                 ),
-              if (request.description != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    request.description!,
-                    style: TextStyle(color: colors.mutedText),
-                  ),
-                ),
-              const SizedBox(height: 10),
-              Wrap(
-                alignment: WrapAlignment.end,
-                spacing: 8,
-                runSpacing: 6,
-                children: [
-                  ShadButton.outline(
-                    key: ValueKey('agent-permission-deny-${request.id}'),
-                    onPressed: onDeny,
-                    size: ShadButtonSize.sm,
-                    leading: const Icon(Icons.close_rounded, size: 16),
-                    child: const Text('Deny'),
-                  ),
-                  ShadButton(
-                    key: ValueKey('agent-permission-approve-${request.id}'),
-                    onPressed: onApprove,
-                    size: ShadButtonSize.sm,
-                    leading: const Icon(Icons.check_rounded, size: 16),
-                    child: const Text('Approve'),
-                  ),
-                ],
               ),
-            ],
+            ),
+        ],
+      ),
+      footer: Wrap(
+        alignment: WrapAlignment.end,
+        spacing: IdeSpacing.space8,
+        runSpacing: IdeSpacing.space6,
+        children: [
+          ShadButton.outline(
+            key: ValueKey('agent-permission-deny-${request.id}'),
+            onPressed: onDeny,
+            size: ShadButtonSize.sm,
+            leading: const Icon(Icons.close_rounded, size: 16),
+            child: const Text('Deny'),
           ),
-        ),
+          ShadButton(
+            key: ValueKey('agent-permission-approve-${request.id}'),
+            onPressed: onApprove,
+            size: ShadButtonSize.sm,
+            leading: const Icon(Icons.check_rounded, size: 16),
+            child: const Text('Approve'),
+          ),
+        ],
       ),
     );
   }
@@ -639,70 +442,48 @@ class _AgentHistoryEventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    // request_user_input 携带结构化问答对时，优先渲染问答样式：
-    // 第一行问题，下一行回答。
     if (event.qaPairs != null && event.qaPairs!.isNotEmpty) {
-      return _AgentUserInputQaList(qaPairs: event.qaPairs!);
+      return _AgentUserInputQaList(
+        title: event.title,
+        description: event.description,
+        qaPairs: event.qaPairs!,
+      );
     }
 
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
     final accent = _historyEventAccent(event.kind, colors);
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: accent.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: accent.withValues(alpha: 0.26)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Icon(_historyEventIcon(event.kind), size: 16, color: accent),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      event.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ],
+    return IdeStatusCard(
+      tone: _historyEventTone(event.kind),
+      title: event.title,
+      leading: Icon(_historyEventIcon(event.kind), size: 16, color: accent),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (event.description != null)
+            Text(
+              event.description!,
+              style: textStyles.bodyMedium.copyWith(
+                color: colors.textSecondary,
               ),
-              if (event.description != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    event.description!,
-                    style: TextStyle(color: colors.mutedText),
-                  ),
-                ),
-              if (event.content != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    event.content!,
-                    maxLines: 5,
-                    overflow: TextOverflow.ellipsis,
-                    // 弱化历史事件正文：缩小字体并降低透明度
-                    style: TextStyle(
-                      color: colors.mutedText.withValues(alpha: 0.6),
-                      fontFamily: IdeTypography.of(context).codeFontFamily,
-                      fontSize: 11,
-                      height: 1.35,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
+            ),
+          if (event.content != null)
+            Padding(
+              padding: EdgeInsets.only(
+                top: event.description == null ? 0 : IdeSpacing.space8,
+              ),
+              child: Text(
+                event.content!,
+                maxLines: 5,
+                overflow: TextOverflow.ellipsis,
+                style: _agentCodeTextStyle(
+                  context,
+                ).copyWith(color: colors.textSecondary.withValues(alpha: 0.78)),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -713,21 +494,41 @@ class _AgentHistoryEventCard extends StatelessWidget {
 /// 每个问题占两行：第一行是问题文本，下一行是用户选择的回答；
 /// 回答未回填时展示占位符。整体弱化以突出 Agent 正文。
 class _AgentUserInputQaList extends StatelessWidget {
-  const _AgentUserInputQaList({required this.qaPairs});
+  const _AgentUserInputQaList({
+    required this.title,
+    required this.description,
+    required this.qaPairs,
+  });
 
+  final String title;
+  final String? description;
   final List<AgentUserInputQaPair> qaPairs;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    return IdeStatusCard(
+      tone: IdeStatusCardTone.info,
+      title: title,
+      leading: Icon(Icons.help_outline_rounded, size: 16, color: colors.info),
+      body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          for (int i = 0; i < qaPairs.length; i++) ...[
-            if (i > 0) const SizedBox(height: 10),
-            _AgentUserInputQaRow(pair: qaPairs[i]),
+          if (description != null && description!.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: IdeSpacing.space8),
+              child: Text(
+                description!,
+                style: textStyles.bodyMedium.copyWith(
+                  color: colors.textSecondary,
+                ),
+              ),
+            ),
+          for (var index = 0; index < qaPairs.length; index++) ...[
+            if (index > 0) const SizedBox(height: IdeSpacing.space10),
+            _AgentUserInputQaRow(pair: qaPairs[index]),
           ],
         ],
       ),
@@ -742,32 +543,17 @@ class _AgentUserInputQaRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
     final answerText = pair.answers.isEmpty ? '—' : pair.answers.join('、');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        // 第一行：问题
-        Text(
-          pair.question,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: colors.mutedText.withValues(alpha: 0.88),
-            height: 1.35,
-          ),
-        ),
-        // 下一行：回答
+        Text(pair.question, style: _agentItemTextStyle(context)),
         Padding(
-          padding: const EdgeInsets.only(top: 2),
+          padding: const EdgeInsets.only(top: IdeSpacing.space2),
           child: Text(
             answerText,
-            style: TextStyle(
-              fontSize: 11,
-              color: colors.mutedText.withValues(alpha: 0.6),
-              height: 1.35,
-            ),
+            style: _agentMetaTextStyle(context, alpha: 0.72),
           ),
         ),
       ],
