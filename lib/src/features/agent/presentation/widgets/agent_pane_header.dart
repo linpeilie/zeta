@@ -9,6 +9,7 @@ class _AgentHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = IdeColors.of(context);
     final tokenUsage = viewModel.currentThreadTokenUsage;
     final tokenLabel = _tokenUsageLabel(tokenUsage);
     final tokenTooltip = _tokenUsageTooltip(tokenUsage);
@@ -42,7 +43,7 @@ class _AgentHeader extends StatelessWidget {
                       Icons.autorenew_rounded,
                       key: const ValueKey('agent-header-running-icon'),
                       size: 15,
-                      color: ideAccentColor,
+                      color: colors.accent,
                     ),
                   ],
                 ],
@@ -59,8 +60,8 @@ class _AgentHeader extends StatelessWidget {
                     color:
                         viewModel.threadOpenPhase ==
                             AgentThreadOpenPhase.openFailed
-                        ? ideWarningColor
-                        : ideMutedTextColor.withValues(alpha: 0.82),
+                        ? colors.warning
+                        : colors.mutedText.withValues(alpha: 0.82),
                   ),
                 ),
               ],
@@ -78,7 +79,7 @@ class _AgentHeader extends StatelessWidget {
                 Icon(
                   Icons.bolt_outlined,
                   size: 12,
-                  color: ideMutedTextColor.withValues(alpha: 0.65),
+                  color: colors.mutedText.withValues(alpha: 0.65),
                 ),
                 const SizedBox(width: 3),
                 Text(
@@ -87,7 +88,7 @@ class _AgentHeader extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 10,
-                    color: ideMutedTextColor.withValues(alpha: 0.78),
+                    color: colors.mutedText.withValues(alpha: 0.78),
                     fontWeight: FontWeight.w500,
                   ),
                 ),

@@ -55,7 +55,10 @@ String _markdownPreviewText(String markdown) {
   return parts.isEmpty ? 'Markdown message' : parts.join('  ');
 }
 
-InlineSpan _fileEditGroupSummarySpan(AgentTimelineFileEditGroup group) {
+InlineSpan _fileEditGroupSummarySpan(
+  AgentTimelineFileEditGroup group,
+  IdeColors colors,
+) {
   final withStats = group.items.where(
     (item) => item.addedLines != null || item.removedLines != null,
   );
@@ -77,7 +80,7 @@ InlineSpan _fileEditGroupSummarySpan(AgentTimelineFileEditGroup group) {
       TextSpan(
         text: '+$addedLines',
         style: TextStyle(
-          color: ideAccentColor.withValues(alpha: 0.98),
+          color: colors.accent.withValues(alpha: 0.98),
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -85,7 +88,7 @@ InlineSpan _fileEditGroupSummarySpan(AgentTimelineFileEditGroup group) {
       TextSpan(
         text: '-$removedLines',
         style: TextStyle(
-          color: ideWarningColor.withValues(alpha: 0.98),
+          color: colors.warning.withValues(alpha: 0.98),
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -93,20 +96,23 @@ InlineSpan _fileEditGroupSummarySpan(AgentTimelineFileEditGroup group) {
   );
 }
 
-InlineSpan _fileEditLineStatsSpan(AgentTimelineFileEditItem item) {
+InlineSpan _fileEditLineStatsSpan(
+  AgentTimelineFileEditItem item,
+  IdeColors colors,
+) {
   final added = item.addedLines ?? 0;
   final removed = item.removedLines ?? 0;
   return TextSpan(
     style: TextStyle(
       fontSize: 11,
-      color: ideMutedTextColor.withValues(alpha: 0.6),
+      color: colors.mutedText.withValues(alpha: 0.6),
       height: 1.45,
     ),
     children: <InlineSpan>[
       TextSpan(
         text: '+$added',
         style: TextStyle(
-          color: ideAccentColor.withValues(alpha: 0.98),
+          color: colors.accent.withValues(alpha: 0.98),
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -114,7 +120,7 @@ InlineSpan _fileEditLineStatsSpan(AgentTimelineFileEditItem item) {
       TextSpan(
         text: '-$removed',
         style: TextStyle(
-          color: ideWarningColor.withValues(alpha: 0.98),
+          color: colors.warning.withValues(alpha: 0.98),
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -176,16 +182,17 @@ IconData _historyEventIcon(AgentHistoryEventKind kind) {
   };
 }
 
-Color _historyEventAccent(AgentHistoryEventKind kind) {
+Color _historyEventAccent(AgentHistoryEventKind kind, IdeColors colors) {
   return switch (kind) {
     AgentHistoryEventKind.permission ||
-    AgentHistoryEventKind.warning => ideWarningColor,
+    AgentHistoryEventKind.warning => colors.warning,
     AgentHistoryEventKind.search ||
-    AgentHistoryEventKind.system => ideAccentColor,
+    AgentHistoryEventKind.system => colors.accent,
   };
 }
 
 MarkdownThemeData _agentMarkdownTheme(BuildContext context) {
+  final colors = IdeColors.of(context);
   final textColor = Theme.of(context).colorScheme.onSurface;
   final base = DefaultTextStyle.of(
     context,
@@ -200,30 +207,27 @@ MarkdownThemeData _agentMarkdownTheme(BuildContext context) {
     blockSpacing: 8,
     listItemSpacing: 4,
     bodyStyle: base,
-    quoteStyle: base.copyWith(color: ideMutedTextColor),
-    linkStyle: base.copyWith(
-      color: ideAccentColor,
-      fontWeight: FontWeight.w600,
-    ),
+    quoteStyle: base.copyWith(color: colors.mutedText),
+    linkStyle: base.copyWith(color: colors.accent, fontWeight: FontWeight.w600),
     inlineCodeStyle: codeStyle,
-    inlineCodeBackgroundColor: ideMutedTextColor.withValues(alpha: 0.16),
+    inlineCodeBackgroundColor: colors.mutedText.withValues(alpha: 0.16),
     codeBlockStyle: codeStyle,
     codeBlockPadding: const EdgeInsets.all(10),
-    codeBlockBackgroundColor: ideSurfaceColor,
+    codeBlockBackgroundColor: colors.surface,
     codeBlockBorderRadius: BorderRadius.circular(6),
     quotePadding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-    quoteBackgroundColor: ideSurfaceColor,
-    quoteBorderColor: ideAccentColor,
+    quoteBackgroundColor: colors.surface,
+    quoteBorderColor: colors.accent,
     quoteBorderWidth: 3,
     quoteBorderRadius: BorderRadius.circular(6),
     tableHeaderStyle: base.copyWith(fontWeight: FontWeight.w700),
     tableCellPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-    tableBorderColor: ideBorderColor,
-    tableHeaderBackgroundColor: ideSurfaceColor,
+    tableBorderColor: colors.border,
+    tableHeaderBackgroundColor: colors.surface,
     tableRowBackgroundColor: Colors.transparent,
-    dividerColor: ideBorderColor,
-    selectionColor: ideAccentColor.withValues(alpha: 0.24),
-    imagePlaceholderBackgroundColor: ideSurfaceColor,
+    dividerColor: colors.border,
+    selectionColor: colors.accent.withValues(alpha: 0.24),
+    imagePlaceholderBackgroundColor: colors.surface,
     heading1Style: base.copyWith(fontSize: 20, fontWeight: FontWeight.w700),
     heading2Style: base.copyWith(fontSize: 17, fontWeight: FontWeight.w700),
     heading3Style: base.copyWith(fontSize: 15, fontWeight: FontWeight.w700),
@@ -250,27 +254,28 @@ TextStyle _agentCodeTextStyle(BuildContext context, {TextStyle? baseStyle}) {
   );
 }
 
-BoxDecoration _agentCodeBlockDecoration() {
+BoxDecoration _agentCodeBlockDecoration(IdeColors colors) {
   return BoxDecoration(
-    color: ideSurfaceColor,
+    color: colors.surface,
     borderRadius: BorderRadius.circular(6),
-    border: Border.all(color: ideBorderColor),
+    border: Border.all(color: colors.border),
   );
 }
 
 Map<String, TextStyle> _agentHighlightTheme(BuildContext context) {
+  final colors = IdeColors.of(context);
   final base = _agentCodeTextStyle(context);
   return <String, TextStyle>{
     'root': base,
-    'meta': base.copyWith(color: ideMutedTextColor.withValues(alpha: 0.9)),
-    'comment': base.copyWith(color: ideMutedTextColor.withValues(alpha: 0.72)),
+    'meta': base.copyWith(color: colors.mutedText.withValues(alpha: 0.9)),
+    'comment': base.copyWith(color: colors.mutedText.withValues(alpha: 0.72)),
     'addition': base.copyWith(
-      color: ideAccentColor.withValues(alpha: 0.98),
-      backgroundColor: ideAccentColor.withValues(alpha: 0.12),
+      color: colors.accent.withValues(alpha: 0.98),
+      backgroundColor: colors.accent.withValues(alpha: 0.12),
     ),
     'deletion': base.copyWith(
-      color: ideWarningColor.withValues(alpha: 0.98),
-      backgroundColor: ideWarningColor.withValues(alpha: 0.1),
+      color: colors.warning.withValues(alpha: 0.98),
+      backgroundColor: colors.warning.withValues(alpha: 0.1),
     ),
     'emphasis': base.copyWith(fontStyle: FontStyle.italic),
     'strong': base.copyWith(fontWeight: FontWeight.w700),

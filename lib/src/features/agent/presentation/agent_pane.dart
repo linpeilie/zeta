@@ -7,6 +7,7 @@ import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 
@@ -90,7 +91,7 @@ class _AgentPaneState extends State<AgentPane> {
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: ideFrameColor,
+      color: IdeColors.of(context).frame,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

@@ -40,6 +40,7 @@ class _AgentTurnDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     final label = _turnLabel(turn);
     final tokenLabel = _tokenUsageLabel(turn.tokenUsage);
     final tokenTooltip = _tokenUsageTooltip(turn.tokenUsage);
@@ -49,8 +50,8 @@ class _AgentTurnDivider extends StatelessWidget {
       padding: const EdgeInsets.only(top: 18, bottom: 10),
       child: Row(
         children: [
-          const Expanded(
-            child: Divider(height: 1, thickness: 1, color: ideBorderColor),
+          Expanded(
+            child: Divider(height: 1, thickness: 1, color: colors.border),
           ),
           if (hasMeta) ...[
             const SizedBox(width: 10),
@@ -67,7 +68,7 @@ class _AgentTurnDivider extends StatelessWidget {
                         label,
                         style: TextStyle(
                           fontSize: 11,
-                          color: ideMutedTextColor.withValues(alpha: 0.6),
+                          color: colors.mutedText.withValues(alpha: 0.6),
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -83,14 +84,14 @@ class _AgentTurnDivider extends StatelessWidget {
                               Icon(
                                 Icons.bolt_outlined,
                                 size: 12,
-                                color: ideMutedTextColor.withValues(alpha: 0.5),
+                                color: colors.mutedText.withValues(alpha: 0.5),
                               ),
                               const SizedBox(width: 3),
                               Text(
                                 tokenLabel,
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: ideMutedTextColor.withValues(
+                                  color: colors.mutedText.withValues(
                                     alpha: 0.6,
                                   ),
                                 ),
@@ -106,8 +107,8 @@ class _AgentTurnDivider extends StatelessWidget {
             const SizedBox(width: 10),
           ],
           if (hasMeta)
-            const Expanded(
-              child: Divider(height: 1, thickness: 1, color: ideBorderColor),
+            Expanded(
+              child: Divider(height: 1, thickness: 1, color: colors.border),
             ),
         ],
       ),
@@ -142,6 +143,7 @@ class _AgentBubbleMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     final isUser = message.role == AgentMessageRole.user;
 
     return Padding(
@@ -153,14 +155,9 @@ class _AgentBubbleMessage extends StatelessWidget {
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: isUser
-                  ? ideAccentColor.withValues(alpha: 0.18)
-                  : ideSurfaceColor,
+                  ? colors.accent.withValues(alpha: 0.18)
+                  : colors.surface,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: isUser
-                    ? ideAccentColor.withValues(alpha: 0.32)
-                    : ideBorderColor,
-              ),
             ),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -268,6 +265,7 @@ class _AgentMarkdownMessageState extends State<_AgentMarkdownMessage> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     final markdown = widget.message.text;
     final useStreamingMarkdown = widget.useStreamingMarkdown;
     if (!widget.collapseHeavyContent || !_shouldCollapseMarkdown(markdown)) {
@@ -304,7 +302,7 @@ class _AgentMarkdownMessageState extends State<_AgentMarkdownMessage> {
                     style: TextStyle(
                       fontSize: 12,
                       height: 1.45,
-                      color: ideMutedTextColor.withValues(alpha: 0.86),
+                      color: colors.mutedText.withValues(alpha: 0.86),
                     ),
                   ),
           ),
@@ -369,6 +367,7 @@ class _AgentPlanMessageCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: ListenableBuilder(
@@ -379,9 +378,9 @@ class _AgentPlanMessageCard extends StatelessWidget {
             child: DecoratedBox(
               key: ValueKey<String>('agent-plan-card-${message.id}'),
               decoration: BoxDecoration(
-                color: ideSurfaceColor,
+                color: colors.surface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: ideBorderColor),
+                border: Border.all(color: colors.border),
               ),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 12, 14),
@@ -395,7 +394,7 @@ class _AgentPlanMessageCard extends StatelessWidget {
                         Icon(
                           Icons.checklist_rounded,
                           size: 16,
-                          color: ideMutedTextColor.withValues(alpha: 0.75),
+                          color: colors.mutedText.withValues(alpha: 0.75),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -404,7 +403,7 @@ class _AgentPlanMessageCard extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: ideMutedTextColor.withValues(alpha: 0.85),
+                              color: colors.mutedText.withValues(alpha: 0.85),
                             ),
                           ),
                         ),
@@ -426,7 +425,7 @@ class _AgentPlanMessageCard extends StatelessWidget {
                                 ? Icons.close_fullscreen_rounded
                                 : Icons.open_in_full_rounded,
                             size: 16,
-                            color: ideMutedTextColor.withValues(alpha: 0.72),
+                            color: colors.mutedText.withValues(alpha: 0.72),
                           ),
                         ),
                       ],
@@ -460,7 +459,7 @@ class _AgentPlanMessageCard extends StatelessWidget {
                                   style: TextStyle(
                                     fontSize: 12,
                                     height: 1.2,
-                                    color: ideMutedTextColor.withValues(
+                                    color: colors.mutedText.withValues(
                                       alpha: 0.72,
                                     ),
                                   ),

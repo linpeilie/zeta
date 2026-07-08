@@ -11,6 +11,7 @@ import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/workspace/presentation/file_tree_pane.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/window_frame.dart';
 import 'package:zeta/src/ui/features/ide/views/project_list_pane.dart';
@@ -109,6 +110,7 @@ class _IdeHomeState extends State<IdeHome> {
   }
 
   Widget _buildIdeLayout({required double maxWidth}) {
+    final colors = IdeColors.of(context);
     final leftPanelVisible = _leftTopVisible || _leftBottomVisible;
     final rightPanelVisible = _rightTopVisible || _rightBottomVisible;
     final rightOverlayAvailableWidth =
@@ -192,7 +194,7 @@ class _IdeHomeState extends State<IdeHome> {
         Expanded(
           child: _RoundedPanel(
             key: const ValueKey('agent-pane-host'),
-            color: ideEditorColor,
+            color: colors.editor,
             child: AgentPane(viewModel: _shellController.agentViewModel),
           ),
         ),
@@ -418,11 +420,12 @@ class _IdeHomeState extends State<IdeHome> {
     required IconData icon,
     required String message,
   }) {
+    final colors = IdeColors.of(context);
     return _RoundedPanel(
       key: key,
       child: Pane(
         title: title,
-        trailing: Icon(icon, size: 16, color: ideMutedTextColor),
+        trailing: Icon(icon, size: 16, color: colors.mutedText),
         child: EmptyState(text: message),
       ),
     );
@@ -511,21 +514,20 @@ class _IdeHomeState extends State<IdeHome> {
 }
 
 class _RoundedPanel extends StatelessWidget {
-  const _RoundedPanel({
-    required this.child,
-    super.key,
-    this.color = idePanelColor,
-  });
+  const _RoundedPanel({required this.child, super.key, this.color});
 
   final Widget child;
-  final Color color;
+
+  /// 面板背景色；为 null 时按当前主题解析为 panel 色。
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
+    final resolved = color ?? IdeColors.of(context).panel;
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: color,
+        color: resolved,
         borderRadius: BorderRadius.circular(8),
       ),
       child: child,
@@ -549,7 +551,7 @@ class _ActivityRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _RoundedPanel(
-      color: ideSurfaceColor,
+      color: IdeColors.of(context).surface,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 1),
         child: Column(children: [top, const Spacer(), bottom]),
@@ -576,7 +578,8 @@ class _ActionIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final foreground = active ? Colors.white : ideMutedTextColor;
+    final colors = IdeColors.of(context);
+    final foreground = active ? colors.accentForeground : colors.mutedText;
     return Tooltip(
       message: tooltip,
       waitDuration: const Duration(milliseconds: 500),
@@ -673,9 +676,9 @@ class _HorizontalResizeHandle extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onHorizontalDragUpdate: onDragUpdate,
-        child: const SizedBox(
+        child: SizedBox(
           width: idePanelGap,
-          child: ColoredBox(color: ideFrameColor),
+          child: ColoredBox(color: IdeColors.of(context).frame),
         ),
       ),
     );
@@ -694,9 +697,9 @@ class _VerticalResizeHandle extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onVerticalDragUpdate: onDragUpdate,
-        child: const SizedBox(
+        child: SizedBox(
           height: idePanelGap,
-          child: ColoredBox(color: ideFrameColor),
+          child: ColoredBox(color: IdeColors.of(context).frame),
         ),
       ),
     );

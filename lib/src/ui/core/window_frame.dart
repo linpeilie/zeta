@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/app_constants.dart';
-import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/ui/core/ide_colors.dart';
 
 /// 包裹主内容的窗口外框。
 ///
@@ -23,6 +23,7 @@ class WindowFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     final showCustomTitleBar = enableNativeWindowFrame;
     final content = Column(
       children: [
@@ -32,16 +33,16 @@ class WindowFrame extends StatelessWidget {
     );
 
     if (!showCustomTitleBar) {
-      return ColoredBox(color: ideFrameColor, child: content);
+      return ColoredBox(color: colors.frame, child: content);
     }
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: ideFrameColor,
+        color: colors.frame,
         // macOS 下交通灯与圆角由系统负责；其他平台补一条细边框。
         border: Platform.isMacOS
             ? null
-            : Border.all(color: ideBorderColor, width: 1),
+            : Border.all(color: colors.border, width: 1),
       ),
       child: content,
     );
@@ -53,10 +54,11 @@ class _TitleBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     final isMac = Platform.isMacOS;
     return Container(
       height: 28,
-      color: ideFrameColor,
+      color: colors.frame,
       child: Row(
         children: [
           // macOS 下左侧让出交通灯按钮的空间，且不拦截点击。
@@ -71,10 +73,7 @@ class _TitleBar extends StatelessWidget {
                     appTitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: ideMutedTextColor,
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: colors.mutedText, fontSize: 12),
                   ),
                 ),
               ),
@@ -177,9 +176,16 @@ class _WindowButtonState extends State<_WindowButton> {
 
   @override
   Widget build(BuildContext context) {
-    final hoverColor = widget.isClose
-        ? const Color(0xFFD84E4E)
-        : const Color(0xFF303030);
+    final colors = IdeColors.of(context);
+    final hoverColor = widget.isClose ? colors.closeHover : colors.windowHover;
+    // 非关闭按钮悬停时，深色主题用白色高亮、浅色主题沿用深色图标，保证对比度；
+    // 关闭按钮恒为红色底配白图标。
+    final idleIcon = colors.windowIcon;
+    final hoverIcon = widget.isClose
+        ? Colors.white
+        : (Theme.of(context).brightness == Brightness.dark
+              ? Colors.white
+              : colors.windowIcon);
     return Tooltip(
       message: widget.tooltip,
       waitDuration: const Duration(milliseconds: 500),
@@ -196,7 +202,7 @@ class _WindowButtonState extends State<_WindowButton> {
             child: Icon(
               widget.icon,
               size: 14,
-              color: _hover ? Colors.white : const Color(0xFFB8B8B8),
+              color: _hover ? hoverIcon : idleIcon,
             ),
           ),
         ),

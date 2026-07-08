@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
-import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 
 typedef ProjectThreadSelected =
@@ -196,6 +196,7 @@ class _ProjectTileState extends State<_ProjectTile> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       child: Column(
@@ -203,7 +204,7 @@ class _ProjectTileState extends State<_ProjectTile> {
         children: [
           Material(
             color: widget.selected
-                ? ideAccentColor.withValues(alpha: 0.16)
+                ? colors.accent.withValues(alpha: 0.16)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(6),
             child: MouseRegion(
@@ -241,8 +242,8 @@ class _ProjectTileState extends State<_ProjectTile> {
                               : Icons.folder_rounded,
                           size: 16,
                           color: widget.selected
-                              ? ideAccentColor
-                              : ideMutedTextColor,
+                              ? colors.accent
+                              : colors.mutedText,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -434,6 +435,7 @@ class _ThreadTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     final isRunning = thread.status == AgentThreadRuntimeStatus.active;
     final lastActiveLabel = _relativeThreadTime(
       thread.lastActiveAt,
@@ -443,7 +445,7 @@ class _ThreadTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 1),
       child: Material(
         color: selected
-            ? ideAccentColor.withValues(alpha: 0.12)
+            ? colors.accent.withValues(alpha: 0.12)
             : Colors.transparent,
         borderRadius: BorderRadius.circular(5),
         child: InkWell(
@@ -457,7 +459,7 @@ class _ThreadTile extends StatelessWidget {
                 Icon(
                   _threadIcon(thread.status),
                   size: 14,
-                  color: selected ? ideAccentColor : ideMutedTextColor,
+                  color: selected ? colors.accent : colors.mutedText,
                 ),
                 const SizedBox(width: 7),
                 Expanded(
@@ -479,17 +481,14 @@ class _ThreadTile extends StatelessWidget {
                       'project-thread-running-icon-$projectPath-${thread.id}',
                     ),
                     size: 14,
-                    color: ideAccentColor,
+                    color: colors.accent,
                   ),
                 ] else if (lastActiveLabel != null) ...[
                   const SizedBox(width: 8),
                   Text(
                     lastActiveLabel,
                     maxLines: 1,
-                    style: const TextStyle(
-                      color: ideMutedTextColor,
-                      fontSize: 10,
-                    ),
+                    style: TextStyle(color: colors.mutedText, fontSize: 10),
                   ),
                 ],
               ],
@@ -514,7 +513,10 @@ class _ThreadListMessage extends StatelessWidget {
         alignment: Alignment.centerLeft,
         child: Text(
           text,
-          style: const TextStyle(color: ideMutedTextColor, fontSize: 11),
+          style: TextStyle(
+            color: IdeColors.of(context).mutedText,
+            fontSize: 11,
+          ),
         ),
       ),
     );
@@ -532,12 +534,15 @@ class _ThreadErrorRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
       child: Row(
         children: [
-          const Expanded(
+          Expanded(
             child: Text(
               'Could not load threads',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: ideMutedTextColor, fontSize: 11),
+              style: TextStyle(
+                color: IdeColors.of(context).mutedText,
+                fontSize: 11,
+              ),
             ),
           ),
           Tooltip(

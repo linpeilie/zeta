@@ -11,6 +11,7 @@ class _AgentCommandGroupCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     return ListenableBuilder(
       listenable: viewModel.expansionVersionListenable,
       builder: (context, _) {
@@ -30,7 +31,7 @@ class _AgentCommandGroupCard extends StatelessWidget {
                     Icon(
                       Icons.segment_rounded,
                       size: 14,
-                      color: ideAccentColor.withValues(alpha: 0.7),
+                      color: colors.accent.withValues(alpha: 0.7),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -45,7 +46,7 @@ class _AgentCommandGroupCard extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: ideMutedTextColor.withValues(alpha: 0.9),
+                              color: colors.mutedText.withValues(alpha: 0.9),
                             ),
                           ),
                         ],
@@ -57,7 +58,7 @@ class _AgentCommandGroupCard extends StatelessWidget {
                           ? Icons.keyboard_arrow_down_rounded
                           : Icons.chevron_right_rounded,
                       size: 16,
-                      color: ideMutedTextColor.withValues(alpha: 0.55),
+                      color: colors.mutedText.withValues(alpha: 0.55),
                     ),
                   ],
                 ),
@@ -100,6 +101,7 @@ class _AgentCommandGroupItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     return Text(
       key: ValueKey<String>('agent-command-group-item-${item.id}'),
       item.title,
@@ -108,7 +110,7 @@ class _AgentCommandGroupItemRow extends StatelessWidget {
       style: TextStyle(
         fontSize: 12,
         fontWeight: FontWeight.w500,
-        color: ideMutedTextColor.withValues(alpha: 0.88),
+        color: colors.mutedText.withValues(alpha: 0.88),
         height: 1.35,
       ),
     );
@@ -134,6 +136,7 @@ class _AgentFileEditGroupCardState extends State<_AgentFileEditGroupCard> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Column(
@@ -155,7 +158,7 @@ class _AgentFileEditGroupCardState extends State<_AgentFileEditGroupCard> {
                 Icon(
                   Icons.edit_note_rounded,
                   size: 14,
-                  color: ideAccentColor.withValues(alpha: 0.7),
+                  color: colors.accent.withValues(alpha: 0.7),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -167,13 +170,13 @@ class _AgentFileEditGroupCardState extends State<_AgentFileEditGroupCard> {
                         key: ValueKey<String>(
                           'agent-file-edit-group-summary-${widget.group.id}',
                         ),
-                        _fileEditGroupSummarySpan(widget.group),
+                        _fileEditGroupSummarySpan(widget.group, colors),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: ideMutedTextColor.withValues(alpha: 0.9),
+                          color: colors.mutedText.withValues(alpha: 0.9),
                         ),
                       ),
                     ],
@@ -185,7 +188,7 @@ class _AgentFileEditGroupCardState extends State<_AgentFileEditGroupCard> {
                       ? Icons.keyboard_arrow_down_rounded
                       : Icons.chevron_right_rounded,
                   size: 16,
-                  color: ideMutedTextColor.withValues(alpha: 0.55),
+                  color: colors.mutedText.withValues(alpha: 0.55),
                 ),
               ],
             ),
@@ -237,6 +240,7 @@ class _AgentFileEditItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     return ListenableBuilder(
       listenable: viewModel.expansionVersionListenable,
       builder: (context, _) {
@@ -268,9 +272,7 @@ class _AgentFileEditItemRow extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w500,
-                                color: ideMutedTextColor.withValues(
-                                  alpha: 0.88,
-                                ),
+                                color: colors.mutedText.withValues(alpha: 0.88),
                                 height: 1.35,
                               ),
                             ),
@@ -282,7 +284,7 @@ class _AgentFileEditItemRow extends StatelessWidget {
                               key: ValueKey<String>(
                                 'agent-file-edit-item-line-stats-${item.id}',
                               ),
-                              _fileEditLineStatsSpan(item),
+                              _fileEditLineStatsSpan(item, colors),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -305,8 +307,8 @@ class _AgentFileEditItemRow extends StatelessWidget {
                               : Icons.chevron_right_rounded,
                           size: 16,
                           color: canExpand
-                              ? ideMutedTextColor.withValues(alpha: 0.55)
-                              : ideMutedTextColor.withValues(alpha: 0.25),
+                              ? colors.mutedText.withValues(alpha: 0.55)
+                              : colors.mutedText.withValues(alpha: 0.25),
                         ),
                       ),
                     ),
@@ -343,6 +345,7 @@ class _AgentDiffDetailsState extends State<_AgentDiffDetails> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     final details = widget.item.details!;
     final shouldCollapse = _shouldPreviewCodeBlock(
       details,
@@ -370,7 +373,7 @@ class _AgentDiffDetailsState extends State<_AgentDiffDetails> {
                   _showAll ? '已显示完整差异' : '已省略 $hiddenLines 行',
                   style: TextStyle(
                     fontSize: 11,
-                    color: ideMutedTextColor.withValues(alpha: 0.6),
+                    color: colors.mutedText.withValues(alpha: 0.6),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -410,9 +413,10 @@ class _AgentHighlightedCodeBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     return RepaintBoundary(
       child: DecoratedBox(
-        decoration: _agentCodeBlockDecoration(),
+        decoration: _agentCodeBlockDecoration(colors),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(6),
           child: HighlightView(
@@ -439,6 +443,7 @@ class _AgentToolCallCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     return ListenableBuilder(
       listenable: viewModel.expansionVersionListenable,
       builder: (context, _) {
@@ -462,7 +467,7 @@ class _AgentToolCallCard extends StatelessWidget {
                     Icon(
                       _toolIcon(toolCall.kind),
                       size: 14,
-                      color: ideAccentColor.withValues(alpha: 0.7),
+                      color: colors.accent.withValues(alpha: 0.7),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -473,7 +478,7 @@ class _AgentToolCallCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
-                          color: ideMutedTextColor.withValues(alpha: 0.88),
+                          color: colors.mutedText.withValues(alpha: 0.88),
                         ),
                       ),
                     ),
@@ -484,8 +489,8 @@ class _AgentToolCallCard extends StatelessWidget {
                           : Icons.chevron_right_rounded,
                       size: 16,
                       color: canExpand
-                          ? ideMutedTextColor.withValues(alpha: 0.55)
-                          : ideMutedTextColor.withValues(alpha: 0.25),
+                          ? colors.mutedText.withValues(alpha: 0.55)
+                          : colors.mutedText.withValues(alpha: 0.25),
                     ),
                   ],
                 ),
@@ -497,7 +502,7 @@ class _AgentToolCallCard extends StatelessWidget {
                       child: Text(
                         toolCall.content!,
                         style: TextStyle(
-                          color: ideMutedTextColor.withValues(alpha: 0.6),
+                          color: colors.mutedText.withValues(alpha: 0.6),
                           fontFamily: ideFontFamily,
                           fontSize: 11,
                           height: 1.35,
@@ -530,13 +535,14 @@ class _AgentPermissionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: ideWarningColor.withValues(alpha: 0.08),
+          color: colors.warning.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: ideWarningColor.withValues(alpha: 0.35)),
+          border: Border.all(color: colors.warning.withValues(alpha: 0.35)),
         ),
         child: Padding(
           padding: const EdgeInsets.all(10),
@@ -546,10 +552,10 @@ class _AgentPermissionCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.verified_user_outlined,
                     size: 16,
-                    color: ideWarningColor,
+                    color: colors.warning,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -571,7 +577,7 @@ class _AgentPermissionCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     // 弱化命令显示：缩小字体并降低透明度
                     style: TextStyle(
-                      color: ideMutedTextColor.withValues(alpha: 0.6),
+                      color: colors.mutedText.withValues(alpha: 0.6),
                       fontFamily: ideFontFamily,
                       fontSize: 11,
                     ),
@@ -582,7 +588,7 @@ class _AgentPermissionCard extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
                     request.description!,
-                    style: const TextStyle(color: ideMutedTextColor),
+                    style: TextStyle(color: colors.mutedText),
                   ),
                 ),
               const SizedBox(height: 10),
@@ -621,13 +627,14 @@ class _AgentHistoryEventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     // request_user_input 携带结构化问答对时，优先渲染问答样式：
     // 第一行问题，下一行回答。
     if (event.qaPairs != null && event.qaPairs!.isNotEmpty) {
       return _AgentUserInputQaList(qaPairs: event.qaPairs!);
     }
 
-    final accent = _historyEventAccent(event.kind);
+    final accent = _historyEventAccent(event.kind, colors);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -662,7 +669,7 @@ class _AgentHistoryEventCard extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
                     event.description!,
-                    style: const TextStyle(color: ideMutedTextColor),
+                    style: TextStyle(color: colors.mutedText),
                   ),
                 ),
               if (event.content != null)
@@ -674,7 +681,7 @@ class _AgentHistoryEventCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     // 弱化历史事件正文：缩小字体并降低透明度
                     style: TextStyle(
-                      color: ideMutedTextColor.withValues(alpha: 0.6),
+                      color: colors.mutedText.withValues(alpha: 0.6),
                       fontFamily: ideFontFamily,
                       fontSize: 11,
                       height: 1.35,
@@ -723,6 +730,7 @@ class _AgentUserInputQaRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     final answerText = pair.answers.isEmpty ? '—' : pair.answers.join('、');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -734,7 +742,7 @@ class _AgentUserInputQaRow extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w500,
-            color: ideMutedTextColor.withValues(alpha: 0.88),
+            color: colors.mutedText.withValues(alpha: 0.88),
             height: 1.35,
           ),
         ),
@@ -745,7 +753,7 @@ class _AgentUserInputQaRow extends StatelessWidget {
             answerText,
             style: TextStyle(
               fontSize: 11,
-              color: ideMutedTextColor.withValues(alpha: 0.6),
+              color: colors.mutedText.withValues(alpha: 0.6),
               height: 1.35,
             ),
           ),

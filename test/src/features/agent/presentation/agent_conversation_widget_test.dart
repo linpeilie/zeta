@@ -703,6 +703,11 @@ void main() {
   testWidgets(
     'renders file edits in a separate file edit group with file-level details',
     (tester) async {
+      // 该测试断言深色主题下的具体颜色；固定系统亮度为 dark，使「跟随系统」
+      // 的默认主题解析为深色，与历史断言一致。
+      tester.view.platformBrightness = Brightness.dark;
+      addTearDown(tester.view.resetPlatformBrightness);
+
       final session = MemorySessionStore();
       final directory = Directory.systemTemp.createTempSync('zeta_test_');
       tempDirectories.add(directory);

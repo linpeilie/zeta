@@ -54,6 +54,7 @@ class _AgentComposer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     final hasDraft = controller.text.trim().isNotEmpty;
     final showSend =
         threadOpenPhase == AgentThreadOpenPhase.idle &&
@@ -64,9 +65,9 @@ class _AgentComposer extends StatelessWidget {
         !hasDraft;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: idePanelColor,
+        color: colors.panel,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: ideBorderColor.withValues(alpha: 0.72)),
+        border: Border.all(color: colors.border.withValues(alpha: 0.72)),
         boxShadow: const [
           BoxShadow(
             color: Color(0x33000000),
@@ -93,9 +94,9 @@ class _AgentComposer extends StatelessWidget {
                   onSend();
                 }
               },
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'Message Agent',
-                hintStyle: TextStyle(color: ideMutedTextColor),
+                hintStyle: TextStyle(color: colors.mutedText),
                 border: InputBorder.none,
                 isDense: true,
                 contentPadding: EdgeInsets.zero,
@@ -134,7 +135,7 @@ class _AgentComposer extends StatelessWidget {
                     message: 'Cancel',
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: ideBorderColor.withValues(alpha: 0.36),
+                        color: colors.border.withValues(alpha: 0.36),
                         shape: BoxShape.circle,
                       ),
                       child: IconButton(
@@ -150,8 +151,8 @@ class _AgentComposer extends StatelessWidget {
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         color: canSubmit
-                            ? ideAccentColor.withValues(alpha: 0.18)
-                            : ideBorderColor.withValues(alpha: 0.2),
+                            ? colors.accent.withValues(alpha: 0.18)
+                            : colors.border.withValues(alpha: 0.2),
                         shape: BoxShape.circle,
                       ),
                       child: IconButton(
@@ -185,11 +186,12 @@ class _SelectorChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: ideBorderColor.withValues(alpha: 0.18),
+        color: colors.border.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: ideBorderColor.withValues(alpha: 0.4)),
+        border: Border.all(color: colors.border.withValues(alpha: 0.4)),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
@@ -197,7 +199,7 @@ class _SelectorChip extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
-              Icon(icon, size: 12, color: ideMutedTextColor),
+              Icon(icon, size: 12, color: colors.mutedText),
               const SizedBox(width: 4),
             ],
             Text(
@@ -207,14 +209,14 @@ class _SelectorChip extends StatelessWidget {
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
-                color: ideMutedTextColor.withValues(alpha: 0.9),
+                color: colors.mutedText.withValues(alpha: 0.9),
               ),
             ),
             const SizedBox(width: 2),
             Icon(
               Icons.keyboard_arrow_down_rounded,
               size: 12,
-              color: ideMutedTextColor,
+              color: colors.mutedText,
             ),
           ],
         ),
@@ -257,7 +259,7 @@ class _ModelSelectorButton extends StatelessWidget {
                       ? Icon(
                           Icons.check_rounded,
                           size: 14,
-                          color: ideAccentColor,
+                          color: IdeColors.of(context).accent,
                         )
                       : const SizedBox(),
                 ),
@@ -315,7 +317,7 @@ class _ReasoningEffortButton extends StatelessWidget {
                       ? Icon(
                           Icons.check_rounded,
                           size: 14,
-                          color: ideAccentColor,
+                          color: IdeColors.of(context).accent,
                         )
                       : const SizedBox(),
                 ),
@@ -370,7 +372,7 @@ class _ServiceTierButton extends StatelessWidget {
                       ? Icon(
                           Icons.check_rounded,
                           size: 14,
-                          color: ideAccentColor,
+                          color: IdeColors.of(context).accent,
                         )
                       : const SizedBox(),
                 ),

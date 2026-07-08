@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_treeview/flutter_treeview.dart' as tree;
 
 import 'package:zeta/src/core/utils/path_utils.dart';
-import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/features/workspace/presentation/file_node_data.dart';
 
@@ -58,7 +58,7 @@ class FileTreePane extends StatelessWidget {
                 selected: selected,
               );
             },
-            theme: const tree.TreeViewTheme(
+            theme: tree.TreeViewTheme(
               dense: true,
               iconPadding: 5,
               levelPadding: 14,
@@ -66,14 +66,17 @@ class FileTreePane extends StatelessWidget {
               horizontalSpacing: 4,
               labelOverflow: TextOverflow.ellipsis,
               parentLabelOverflow: TextOverflow.ellipsis,
-              iconTheme: IconThemeData(size: 15, color: ideMutedTextColor),
+              iconTheme: IconThemeData(
+                size: 15,
+                color: IdeColors.of(context).mutedText,
+              ),
               expanderTheme: tree.ExpanderThemeData(
-                color: ideMutedTextColor,
+                color: IdeColors.of(context).mutedText,
                 size: 18,
                 type: tree.ExpanderType.chevron,
               ),
-              labelStyle: TextStyle(fontSize: 12),
-              parentLabelStyle: TextStyle(
+              labelStyle: const TextStyle(fontSize: 12),
+              parentLabelStyle: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
@@ -98,6 +101,7 @@ class _FileTreeNodeLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     return SizedBox(
       key: ValueKey('file-node-$label'),
       child: Padding(
@@ -108,10 +112,10 @@ class _FileTreeNodeLabel extends StatelessWidget {
               isDirectory ? Icons.folder_rounded : Icons.description_outlined,
               size: 15,
               color: selected
-                  ? ideAccentColor
+                  ? colors.accent
                   : isDirectory
-                  ? ideWarningColor
-                  : ideMutedTextColor,
+                  ? colors.warning
+                  : colors.mutedText,
             ),
             const SizedBox(width: 6),
             Expanded(
@@ -120,7 +124,7 @@ class _FileTreeNodeLabel extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: selected ? Colors.white : null,
+                  color: selected ? colors.accentForeground : null,
                   fontSize: 12,
                   fontWeight: isDirectory ? FontWeight.w600 : FontWeight.w400,
                 ),

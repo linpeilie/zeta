@@ -1,23 +1,27 @@
 import 'package:flutter/material.dart';
 
 import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/ui/core/ide_colors.dart';
 
 class PanelCard extends StatelessWidget {
-  const PanelCard({required this.child, super.key, this.color = idePanelColor});
+  const PanelCard({required this.child, super.key, this.color});
 
   final Widget child;
-  final Color color;
+
+  /// 面板背景色；为 null 时按当前主题解析。
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: color,
+        color: color ?? colors.panel,
         borderRadius: BorderRadius.circular(idePanelRadius),
       ),
       foregroundDecoration: BoxDecoration(
-        border: Border.all(color: ideBorderColor),
+        border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(idePanelRadius),
       ),
       child: child,
@@ -43,8 +47,9 @@ class Pane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     return DecoratedBox(
-      decoration: const BoxDecoration(color: idePanelColor),
+      decoration: BoxDecoration(color: colors.panel),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -71,8 +76,8 @@ class Pane extends StatelessWidget {
                               subtitle!,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: ideMutedTextColor,
+                              style: TextStyle(
+                                color: colors.mutedText,
                                 fontSize: 10,
                               ),
                             ),
@@ -97,13 +102,14 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Text(
           text,
           textAlign: TextAlign.center,
-          style: const TextStyle(color: ideMutedTextColor, fontSize: 12),
+          style: TextStyle(color: colors.mutedText, fontSize: 12),
         ),
       ),
     );
