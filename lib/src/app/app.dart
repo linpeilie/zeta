@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -110,7 +109,6 @@ class MainAppState extends State<MainApp> {
             codeFontFamily: settings.codeFontFamily,
           ),
           themeMode: settings.themeMode,
-          backgroundColor: Platform.isMacOS ? Colors.transparent : null,
           home: IdeCodeFontScope(
             codeFontFamily: settings.codeFontFamily,
             child: ShadSonner(

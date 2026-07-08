@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:macos_window_utils/macos/ns_visual_effect_view_material.dart';
 import 'package:macos_window_utils/window_manipulator.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -17,11 +16,9 @@ Future<void> bootstrapDesktopWindow() async {
   // 背景色，避免浅色系统下出现深色闪烁。
   final systemBrightness =
       WidgetsBinding.instance.platformDispatcher.platformBrightness;
-  final frameColor = Platform.isMacOS
-      ? Colors.transparent
-      : (systemBrightness == Brightness.dark
-            ? IdeColors.dark.frame
-            : IdeColors.light.frame);
+  final frameColor = systemBrightness == Brightness.dark
+      ? IdeColors.dark.frame
+      : IdeColors.light.frame;
   final options = WindowOptions(
     size: const Size(1280, 800),
     minimumSize: const Size(900, 560),
@@ -38,13 +35,11 @@ Future<void> bootstrapDesktopWindow() async {
 
   await windowManager.waitUntilReadyToShow(options, () async {
     if (Platform.isMacOS) {
-      await WindowManipulator.setWindowBackgroundColorToClear();
-      await WindowManipulator.makeTitlebarTransparent();
-      await WindowManipulator.addEmptyMaskImage();
-      await WindowManipulator.disableShadow();
+      // 保留全尺寸内容区与隐藏原生标题，由 Flutter 自绘不透明标题栏；
+      // 不再启用透明背景与 NSVisualEffectView 毛玻璃。
       await WindowManipulator.enableFullSizeContentView();
       await WindowManipulator.hideTitle();
-      await WindowManipulator.setMaterial(NSVisualEffectViewMaterial.sidebar);
+      await WindowManipulator.makeTitlebarTransparent();
     }
     await windowManager.show();
     await windowManager.focus();

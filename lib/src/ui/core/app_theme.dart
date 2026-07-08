@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -92,8 +90,7 @@ ShadThemeData buildShadTheme({
   String? uiFontFamily,
   required String codeFontFamily,
 }) {
-  final colors = _platformIdeColorsForBrightness(brightness);
-  final overlayColors = _baseIdeColorsForBrightness(brightness);
+  final colors = _baseIdeColorsForBrightness(brightness);
   return ShadThemeData(
     brightness: brightness,
     colorScheme: shadColorSchemeFromIdeColors(colors, brightness: brightness),
@@ -103,48 +100,31 @@ ShadThemeData buildShadTheme({
       uiFontFamily: uiFontFamily,
       codeFontFamily: codeFontFamily,
     ),
-    // macOS 毛玻璃下主界面允许半透明，但弹层必须回到不透明表面，避免文字透底。
     popoverTheme: ShadPopoverTheme(
       decoration: ShadDecoration(
-        color: overlayColors.surfaceOverlay,
-        border: ShadBorder.all(color: overlayColors.border, width: 1),
+        color: colors.surfaceOverlay,
+        border: ShadBorder.all(color: colors.border, width: 1),
       ),
     ),
     primaryDialogTheme: ShadDialogTheme(
-      backgroundColor: overlayColors.surfaceOverlay,
-      border: Border.all(color: overlayColors.border),
+      backgroundColor: colors.surfaceOverlay,
+      border: Border.all(color: colors.border),
     ),
     alertDialogTheme: ShadDialogTheme(
-      backgroundColor: overlayColors.surfaceOverlay,
-      border: Border.all(color: overlayColors.border),
+      backgroundColor: colors.surfaceOverlay,
+      border: Border.all(color: colors.border),
     ),
     primaryToastTheme: ShadToastTheme(
-      backgroundColor: overlayColors.surfaceElevated,
-      border: ShadBorder.all(color: overlayColors.border, width: 1),
+      backgroundColor: colors.surfaceElevated,
+      border: ShadBorder.all(color: colors.border, width: 1),
     ),
     destructiveToastTheme: ShadToastTheme(
-      backgroundColor: overlayColors.surfaceElevated,
-      border: ShadBorder.all(color: overlayColors.border, width: 1),
+      backgroundColor: colors.surfaceElevated,
+      border: ShadBorder.all(color: colors.border, width: 1),
     ),
   );
 }
 
 IdeColors _baseIdeColorsForBrightness(Brightness brightness) {
   return brightness == Brightness.dark ? IdeColors.dark : IdeColors.light;
-}
-
-IdeColors _platformIdeColorsForBrightness(Brightness brightness) {
-  final colors = _baseIdeColorsForBrightness(brightness);
-  if (!Platform.isMacOS) {
-    return colors;
-  }
-
-  final isDark = brightness == Brightness.dark;
-  return colors.copyWith(
-    frame: colors.frame.withValues(alpha: isDark ? 0.72 : 0.8),
-    surface: colors.surface.withValues(alpha: isDark ? 0.78 : 0.9),
-    panel: colors.panel.withValues(alpha: isDark ? 0.68 : 0.84),
-    editor: colors.editor.withValues(alpha: isDark ? 0.64 : 0.8),
-    border: colors.border.withValues(alpha: isDark ? 0.92 : 0.78),
-  );
 }
