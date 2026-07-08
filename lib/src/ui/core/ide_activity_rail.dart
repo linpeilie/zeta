@@ -33,19 +33,17 @@ class IdeActivityRail extends StatelessWidget {
     required this.leadingActions,
     super.key,
     this.trailingActions = const <IdeRailAction>[],
-    this.backgroundColor,
   });
 
   final List<IdeRailAction> leadingActions;
   final List<IdeRailAction> trailingActions;
-  final Color? backgroundColor;
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
     return PanelCard(
-      color: backgroundColor ?? colors.surface,
+      color: Colors.transparent,
       showBorder: false,
+      boxShadow: const [],
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: IdeSpacing.space2 / 2),
         child: Column(
