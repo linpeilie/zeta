@@ -69,123 +69,178 @@ class _AgentComposer extends StatelessWidget {
         threadOpenPhase == AgentThreadOpenPhase.idle &&
         isTurnRunning &&
         !hasDraft;
-    return PanelCard(
-      color: colors.panel,
-      borderColor: colors.border.withValues(alpha: 0.72),
-      borderRadius: const BorderRadius.all(Radius.circular(IdeSpacing.space16)),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x33000000),
-          blurRadius: 18,
-          offset: Offset(0, 8),
-        ),
-      ],
-      child: Padding(
-        padding: const EdgeInsets.only(
-          left: IdeSpacing.space16,
-          top: IdeSpacing.space12,
-          right: IdeSpacing.space8,
-          bottom: IdeSpacing.space8,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ShadTextarea(
-              key: const ValueKey('agent-message-input'),
-              controller: controller,
-              placeholder: Text(
-                'Message Agent',
-                style: textStyles.bodyMedium.copyWith(
-                  color: colors.textTertiary,
+    return Focus(
+      child: Builder(
+        builder: (context) {
+          final isFocused = Focus.of(context).hasFocus;
+          final isDark = ShadTheme.of(context).brightness == Brightness.dark;
+          final focusBorder = isFocused
+              ? colors.accent.withValues(alpha: 0.64)
+              : colors.border.withValues(alpha: 0.6);
+          final shadow = isFocused
+              ? [
+                  BoxShadow(
+                    color: colors.accent.withValues(
+                      alpha: isDark ? 0.08 : 0.04,
+                    ),
+                    blurRadius: 16,
+                    spreadRadius: 1,
+                  ),
+                  const BoxShadow(
+                    color: Color(0x1F000000),
+                    blurRadius: 12,
+                    offset: Offset(0, 4),
+                  ),
+                ]
+              : const [
+                  BoxShadow(
+                    color: Color(0x12000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 3),
+                  ),
+                ];
+
+          return AnimatedContainer(
+            duration: IdeMotion.durationNormal,
+            curve: IdeMotion.curveDefault,
+            decoration: BoxDecoration(
+              borderRadius: const BorderRadius.all(
+                Radius.circular(IdeSpacing.space16),
+              ),
+              boxShadow: shadow,
+            ),
+            child: PanelCard(
+              color: colors.panel,
+              borderColor: focusBorder,
+              borderRadius: const BorderRadius.all(
+                Radius.circular(IdeSpacing.space16),
+              ),
+              showBorder: true,
+              child: Padding(
+                padding: const EdgeInsets.only(
+                  left: IdeSpacing.space16,
+                  top: IdeSpacing.space12,
+                  right: IdeSpacing.space8,
+                  bottom: IdeSpacing.space8,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ShadTextarea(
+                      key: const ValueKey('agent-message-input'),
+                      controller: controller,
+                      placeholder: Text(
+                        'Message Agent',
+                        style: textStyles.bodyMedium.copyWith(
+                          color: colors.textTertiary,
+                        ),
+                      ),
+                      style: inputTextStyle,
+                      decoration: ShadDecoration.none,
+                      padding: EdgeInsets.zero,
+                      inputPadding: EdgeInsets.zero,
+                      minHeight: lineHeight * 3,
+                      maxHeight: lineHeight * 10,
+                      resizable: false,
+                      onSubmitted: (_) {
+                        if (canSubmit) {
+                          onSend();
+                        }
+                      },
+                    ),
+                    const SizedBox(height: IdeSpacing.space6),
+                    // 下半部分：操作行，左侧放选择控件，右侧放发送按钮。
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        if (models.isNotEmpty)
+                          _ModelSelectorButton(
+                            models: models,
+                            selectedModel: selectedModel,
+                            onSelect: onSelectModel,
+                          ),
+                        if (showReasoningEffort && selectedModel != null) ...[
+                          const SizedBox(width: IdeSpacing.space6),
+                          _ReasoningEffortButton(
+                            efforts: selectedModel!.supportedReasoningEfforts,
+                            selectedEffort: selectedReasoningEffort,
+                            onSelect: onSelectReasoningEffort,
+                          ),
+                        ],
+                        if (showServiceTier && selectedModel != null) ...[
+                          const SizedBox(width: IdeSpacing.space6),
+                          _ServiceTierButton(
+                            tiers: selectedModel!.serviceTiers,
+                            selectedTierId: selectedServiceTierId,
+                            onSelect: onSelectServiceTier,
+                          ),
+                        ],
+                        const Spacer(),
+                        AnimatedSwitcher(
+                          duration: IdeMotion.durationNormal,
+                          switchInCurve: IdeMotion.curveDefault,
+                          switchOutCurve: IdeMotion.curveDefault,
+                          layoutBuilder: (currentChild, previousChildren) =>
+                              currentChild ?? const SizedBox.shrink(),
+                          child: showCancel
+                              ? _ComposerActionButton(
+                                  key: const ValueKey(
+                                    'agent-cancel-button-state',
+                                  ),
+                                  tooltip: 'Cancel',
+                                  backgroundColor: colors.border.withValues(
+                                    alpha: 0.36,
+                                  ),
+                                  foregroundColor: colors.textSecondary,
+                                  buttonKey: const ValueKey(
+                                    'agent-cancel-button',
+                                  ),
+                                  icon: const Icon(
+                                    Icons.stop_rounded,
+                                    size: 18,
+                                  ),
+                                  onPressed: onCancel,
+                                )
+                              : showSend
+                              ? _ComposerActionButton(
+                                  key: const ValueKey(
+                                    'agent-send-button-state',
+                                  ),
+                                  tooltip: 'Send',
+                                  backgroundColor: canSubmit
+                                      ? colors.accent.withValues(alpha: 0.16)
+                                      : colors.border.withValues(alpha: 0.2),
+                                  foregroundColor: canSubmit
+                                      ? colors.accent
+                                      : colors.textSecondary.withValues(
+                                          alpha: 0.72,
+                                        ),
+                                  buttonKey: const ValueKey(
+                                    'agent-send-button',
+                                  ),
+                                  icon: const Icon(
+                                    Icons.arrow_upward_rounded,
+                                    size: 18,
+                                  ),
+                                  onPressed: canSubmit ? onSend : null,
+                                )
+                              : const SizedBox(
+                                  key: ValueKey(
+                                    'agent-send-unavailable-placeholder',
+                                  ),
+                                  width: 40,
+                                  height: 40,
+                                ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-              style: inputTextStyle,
-              decoration: ShadDecoration.none,
-              padding: EdgeInsets.zero,
-              inputPadding: EdgeInsets.zero,
-              minHeight: lineHeight * 3,
-              maxHeight: lineHeight * 10,
-              resizable: false,
-              onSubmitted: (_) {
-                if (canSubmit) {
-                  onSend();
-                }
-              },
             ),
-            const SizedBox(height: IdeSpacing.space6),
-            // 下半部分：操作行，左侧放选择控件，右侧放发送按钮。
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                if (models.isNotEmpty)
-                  _ModelSelectorButton(
-                    models: models,
-                    selectedModel: selectedModel,
-                    onSelect: onSelectModel,
-                  ),
-                if (showReasoningEffort && selectedModel != null) ...[
-                  const SizedBox(width: IdeSpacing.space6),
-                  _ReasoningEffortButton(
-                    efforts: selectedModel!.supportedReasoningEfforts,
-                    selectedEffort: selectedReasoningEffort,
-                    onSelect: onSelectReasoningEffort,
-                  ),
-                ],
-                if (showServiceTier && selectedModel != null) ...[
-                  const SizedBox(width: IdeSpacing.space6),
-                  _ServiceTierButton(
-                    tiers: selectedModel!.serviceTiers,
-                    selectedTierId: selectedServiceTierId,
-                    onSelect: onSelectServiceTier,
-                  ),
-                ],
-                const Spacer(),
-                AnimatedSwitcher(
-                  duration: IdeMotion.durationNormal,
-                  switchInCurve: IdeMotion.curveDefault,
-                  switchOutCurve: IdeMotion.curveDefault,
-                  layoutBuilder: (currentChild, previousChildren) =>
-                      currentChild ?? const SizedBox.shrink(),
-                  child: showCancel
-                      ? _ComposerActionButton(
-                          key: const ValueKey('agent-cancel-button-state'),
-                          tooltip: 'Cancel',
-                          backgroundColor: colors.border.withValues(
-                            alpha: 0.36,
-                          ),
-                          foregroundColor: colors.textSecondary,
-                          buttonKey: const ValueKey('agent-cancel-button'),
-                          icon: const Icon(Icons.stop_rounded, size: 18),
-                          onPressed: onCancel,
-                        )
-                      : showSend
-                      ? _ComposerActionButton(
-                          key: const ValueKey('agent-send-button-state'),
-                          tooltip: 'Send',
-                          backgroundColor: canSubmit
-                              ? colors.primaryMuted
-                              : colors.border.withValues(alpha: 0.2),
-                          foregroundColor: canSubmit
-                              ? colors.accent
-                              : colors.textSecondary.withValues(alpha: 0.72),
-                          buttonKey: const ValueKey('agent-send-button'),
-                          icon: const Icon(
-                            Icons.arrow_upward_rounded,
-                            size: 18,
-                          ),
-                          onPressed: canSubmit ? onSend : null,
-                        )
-                      : const SizedBox(
-                          key: ValueKey('agent-send-unavailable-placeholder'),
-                          width: 40,
-                          height: 40,
-                        ),
-                ),
-              ],
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

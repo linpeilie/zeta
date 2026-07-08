@@ -7,6 +7,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_motion.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 
 /// 包裹主内容的窗口外框。
@@ -417,15 +418,14 @@ class _WindowButtonState extends State<_WindowButton> {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final hoverColor = widget.isClose ? colors.closeHover : colors.windowHover;
-    // 非关闭按钮悬停时，深色主题用白色高亮、浅色主题沿用深色图标，保证对比度；
-    // 关闭按钮恒为红色底配白图标。
+    final isDark = ShadTheme.of(context).brightness == Brightness.dark;
+    final hoverColor = widget.isClose
+        ? const Color(0xFFE81123)
+        : (isDark ? const Color(0x19FFFFFF) : const Color(0x0F000000));
     final idleIcon = colors.windowIcon;
     final hoverIcon = widget.isClose
         ? Colors.white
-        : (ShadTheme.of(context).brightness == Brightness.dark
-              ? Colors.white
-              : colors.windowIcon);
+        : (isDark ? Colors.white : colors.textPrimary);
     return IdeTooltip(
       message: widget.tooltip,
       child: MouseRegion(
@@ -433,14 +433,20 @@ class _WindowButtonState extends State<_WindowButton> {
         onExit: (_) => setState(() => _hover = false),
         child: GestureDetector(
           onTap: widget.onPressed,
-          child: Container(
-            width: 40,
-            height: 32,
+          child: AnimatedContainer(
+            duration: IdeMotion.durationFast,
+            curve: IdeMotion.curveDefault,
+            width: 38,
+            height: 24,
             alignment: Alignment.center,
-            color: _hover ? hoverColor : Colors.transparent,
+            margin: const EdgeInsets.symmetric(horizontal: 1),
+            decoration: BoxDecoration(
+              color: _hover ? hoverColor : Colors.transparent,
+              borderRadius: BorderRadius.circular(4),
+            ),
             child: Icon(
               widget.icon,
-              size: 14,
+              size: 13,
               color: _hover ? hoverIcon : idleIcon,
             ),
           ),

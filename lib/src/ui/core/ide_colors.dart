@@ -3,22 +3,10 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'app_theme.dart';
 
-const _lightForegroundColor = Color(0xFF111827);
-const _darkForegroundColor = Color(0xFFE8E8E8);
-const _darkSurfaceElevatedColor = Color(0xFF222222);
-const _lightSurfaceElevatedColor = Color(0xFFFBFBFC);
-const _darkSurfaceOverlayColor = Color(0xFF282828);
-const _lightSurfaceOverlayColor = Color(0xFFFFFFFF);
-const _darkBorderSubtleColor = Color(0xFF252525);
-const _lightBorderSubtleColor = Color(0xFFECEEF2);
 const _darkTextTertiaryColor = Color(0xFF6B7280);
 const _lightTextTertiaryColor = Color(0xFF9CA3AF);
-const _darkErrorColor = Color(0xFFE06C75);
-const _lightErrorColor = Color(0xFFDC2626);
 const _darkInfoColor = Color(0xFF5B9BD5);
 const _lightInfoColor = Color(0xFF2B7AC5);
-const _darkPrimaryMutedColor = Color(0x2E4FB286);
-const _lightPrimaryMutedColor = Color(0x1A1E9E58);
 const _darkWindowHoverColor = Color(0xFF303030);
 const _lightWindowHoverColor = Color(0xFFEAECEF);
 const _darkWindowIconColor = Color(0xFFB8B8B8);
@@ -146,56 +134,56 @@ class IdeColors extends ThemeExtension<IdeColors> {
   /// 关闭按钮的悬停背景（两个主题共用红色）。
   final Color closeHover;
 
-  /// 深色调色板：沿用旧版 const 颜色，保证历史外观与测试断言不变。
+  /// 深色调色板：采用高端 Zed-Nord 风格，带有些许冷灰蓝调，降低眼睛疲劳。
   static const IdeColors dark = IdeColors(
-    frame: ideFrameColor,
-    surface: ideSurfaceColor,
-    surfaceElevated: _darkSurfaceElevatedColor,
-    surfaceOverlay: _darkSurfaceOverlayColor,
-    panel: idePanelColor,
-    editor: ideEditorColor,
-    border: ideBorderColor,
-    borderSubtle: _darkBorderSubtleColor,
-    mutedText: ideMutedTextColor,
-    textPrimary: _darkForegroundColor,
-    textSecondary: ideMutedTextColor,
-    textTertiary: _darkTextTertiaryColor,
+    frame: Color(0xFF0C0D0E),
+    surface: Color(0xFF16181C),
+    surfaceElevated: Color(0xFF1F2227),
+    surfaceOverlay: Color(0xFF26292F),
+    panel: Color(0xFF16181C),
+    editor: Color(0xFF111214),
+    border: Color(0xFF24272D),
+    borderSubtle: Color(0xFF1A1C20),
+    mutedText: Color(0xFF8C95A0),
+    textPrimary: Color(0xFFECEFF4),
+    textSecondary: Color(0xFF8C95A0),
+    textTertiary: Color(0xFF5C6370),
     accent: ideAccentColor,
-    primaryMuted: _darkPrimaryMutedColor,
+    primaryMuted: Color(0x224FB286),
     warning: ideWarningColor,
-    error: _darkErrorColor,
-    success: ideAccentColor,
-    info: _darkInfoColor,
+    error: Color(0xFFEF5350),
+    success: Color(0xFF43A047),
+    info: Color(0xFF42A5F5),
     accentForeground: Colors.white,
-    windowHover: _darkWindowHoverColor,
-    windowIcon: _darkWindowIconColor,
+    windowHover: Color(0xFF24272D),
+    windowIcon: Color(0xFFADB5BD),
     closeHover: _sharedCloseHoverColor,
   );
 
-  /// 浅色调色板：现代扁平风，以接近白的浅灰为底，低饱和绿作为强调色，
-  /// 警告色加深为琥珀色以保证白底对比度。
+  /// 浅色调色板：现代扁平风，以非常轻盈温润的灰白为底，低饱和绿作为强调色，
+  /// 拥有极高雅的对比度和舒适度。
   static const IdeColors light = IdeColors(
-    frame: Color(0xFFF5F6F8),
+    frame: Color(0xFFF8F9FA),
     surface: Color(0xFFFFFFFF),
-    surfaceElevated: _lightSurfaceElevatedColor,
-    surfaceOverlay: _lightSurfaceOverlayColor,
+    surfaceElevated: Color(0xFFF1F3F5),
+    surfaceOverlay: Color(0xFFFFFFFF),
     panel: Color(0xFFFFFFFF),
-    editor: Color(0xFFFBFBFC),
-    border: Color(0xFFE4E6EB),
-    borderSubtle: _lightBorderSubtleColor,
-    mutedText: Color(0xFF6B7280),
-    textPrimary: _lightForegroundColor,
-    textSecondary: Color(0xFF6B7280),
-    textTertiary: _lightTextTertiaryColor,
+    editor: Color(0xFFFAFBFC),
+    border: Color(0xFFE9ECEF),
+    borderSubtle: Color(0xFFF1F3F5),
+    mutedText: Color(0xFF6C757D),
+    textPrimary: Color(0xFF212529),
+    textSecondary: Color(0xFF495057),
+    textTertiary: Color(0xFF868E96),
     accent: Color(0xFF1E9E58),
-    primaryMuted: _lightPrimaryMutedColor,
-    warning: Color(0xFFB45309),
-    error: _lightErrorColor,
+    primaryMuted: Color(0x1F1E9E58),
+    warning: Color(0xFFD97706),
+    error: Color(0xFFE63946),
     success: Color(0xFF1E9E58),
-    info: _lightInfoColor,
+    info: Color(0xFF0077B6),
     accentForeground: Color(0xFF1E9E58),
-    windowHover: _lightWindowHoverColor,
-    windowIcon: _lightWindowIconColor,
+    windowHover: Color(0xFFE9ECEF),
+    windowIcon: Color(0xFF495057),
     closeHover: _sharedCloseHoverColor,
   );
 

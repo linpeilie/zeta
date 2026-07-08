@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_theme.dart';
 import 'ide_colors.dart';
+import 'ide_motion.dart';
 import 'ide_spacing.dart';
 import 'pane_widgets.dart';
 
@@ -77,19 +78,40 @@ class _RailActionButton extends StatelessWidget {
 
     return IdeTooltip(
       message: action.tooltip,
-      child: PaneInteractiveSurface(
-        key: action.key,
-        onPressed: action.enabled ? action.onPressed : null,
-        selected: action.active,
-        enabled: action.enabled,
-        width: 32,
-        height: 32,
-        padding: EdgeInsets.zero,
-        borderRadius: BorderRadius.circular(idePanelRadius),
-        backgroundColor: Colors.transparent,
-        selectedBackgroundColor: colors.primaryMuted,
-        semanticLabel: action.semanticLabel,
-        child: Icon(action.icon, size: 20, color: iconColor),
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          PaneInteractiveSurface(
+            key: action.key,
+            onPressed: action.enabled ? action.onPressed : null,
+            selected: action.active,
+            enabled: action.enabled,
+            width: 32,
+            height: 32,
+            padding: EdgeInsets.zero,
+            borderRadius: BorderRadius.circular(idePanelRadius),
+            backgroundColor: Colors.transparent,
+            selectedBackgroundColor: colors.primaryMuted,
+            semanticLabel: action.semanticLabel,
+            child: Icon(action.icon, size: 19, color: iconColor),
+          ),
+          Positioned(
+            left: -2,
+            child: AnimatedContainer(
+              duration: IdeMotion.durationNormal,
+              curve: IdeMotion.curveDefault,
+              width: 3,
+              height: action.active ? 16 : 0,
+              decoration: BoxDecoration(
+                color: colors.accent,
+                borderRadius: const BorderRadius.horizontal(
+                  right: Radius.circular(2),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

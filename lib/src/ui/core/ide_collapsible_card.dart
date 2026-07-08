@@ -97,14 +97,17 @@ class IdeCollapsibleCard extends StatelessWidget {
             key: toggleKey,
             width: 20,
             height: 20,
-            child: Icon(
-              expanded
-                  ? Icons.keyboard_arrow_down_rounded
-                  : Icons.chevron_right_rounded,
-              size: 16,
-              color: canExpand
-                  ? colors.textSecondary.withValues(alpha: 0.55)
-                  : colors.textSecondary.withValues(alpha: 0.25),
+            child: AnimatedRotation(
+              turns: expanded ? 0.25 : 0.0,
+              duration: IdeMotion.durationNormal,
+              curve: IdeMotion.curveDefault,
+              child: Icon(
+                Icons.chevron_right_rounded,
+                size: 16,
+                color: canExpand
+                    ? colors.textSecondary.withValues(alpha: 0.55)
+                    : colors.textSecondary.withValues(alpha: 0.25),
+              ),
             ),
           ),
         ],

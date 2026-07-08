@@ -35,12 +35,15 @@ class IdeChip extends StatelessWidget {
         : selected
         ? colors.accentForeground
         : colors.textSecondary;
+    final pillRadius = BorderRadius.circular(100);
+    final isDark = colors.frame.computeLuminance() < 0.5;
+
     final background = selected
         ? colors.primaryMuted
-        : colors.surfaceElevated.withValues(alpha: 0.72);
+        : (isDark ? const Color(0x1F2B303B) : const Color(0x0C000000));
     final borderColor = selected
-        ? colors.accent.withValues(alpha: 0.3)
-        : colors.border.withValues(alpha: 0.6);
+        ? colors.accent.withValues(alpha: 0.4)
+        : colors.border.withValues(alpha: 0.5);
     final content = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -53,7 +56,8 @@ class IdeChip extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: textStyles.bodySmall.copyWith(
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w600,
+            fontSize: 10.5,
             color: foreground.withValues(alpha: enabled ? 0.9 : 1),
           ),
         ),
@@ -68,13 +72,13 @@ class IdeChip extends StatelessWidget {
       return DecoratedBox(
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(IdeSpacing.space8),
+          borderRadius: pillRadius,
           border: Border.all(color: borderColor),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(
-            horizontal: IdeSpacing.space8,
-            vertical: 5,
+            horizontal: IdeSpacing.space10,
+            vertical: 4,
           ),
           child: content,
         ),
@@ -88,10 +92,10 @@ class IdeChip extends StatelessWidget {
       button: true,
       semanticLabel: semanticLabel,
       padding: const EdgeInsets.symmetric(
-        horizontal: IdeSpacing.space8,
-        vertical: 5,
+        horizontal: IdeSpacing.space10,
+        vertical: 4,
       ),
-      borderRadius: BorderRadius.circular(IdeSpacing.space8),
+      borderRadius: pillRadius,
       backgroundColor: background,
       selectedBackgroundColor: background,
       borderColor: borderColor,

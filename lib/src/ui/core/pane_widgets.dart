@@ -295,12 +295,22 @@ class PanelCard extends StatelessWidget {
       context,
       baseColor: color ?? shadTheme.colorScheme.card,
     );
+    final isDark = shadTheme.brightness == Brightness.dark;
+    final defaultBoxShadow =
+        boxShadow ??
+        [
+          BoxShadow(
+            color: isDark ? const Color(0x1F000000) : const Color(0x06000000),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ];
     return Container(
       clipBehavior: clipBehavior,
       decoration: BoxDecoration(
         color: surfaceColor,
         borderRadius: resolvedRadius,
-        boxShadow: boxShadow,
+        boxShadow: defaultBoxShadow,
       ),
       foregroundDecoration: showBorder
           ? BoxDecoration(
@@ -335,6 +345,8 @@ class Pane extends StatelessWidget {
   Widget build(BuildContext context) {
     final shadTheme = ShadTheme.of(context);
     final textStyles = IdeTextStyles.of(context);
+    final isDark = shadTheme.brightness == Brightness.dark;
+    final trailingWidget = trailing;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: resolvePanelSurfaceColor(
@@ -347,9 +359,19 @@ class Pane extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            height: 36,
+            height: 38,
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: resolvePanelBorderColor(
+                    context,
+                  ).withValues(alpha: 0.6),
+                  width: 1,
+                ),
+              ),
+            ),
             padding: const EdgeInsets.only(
-              left: IdeSpacing.space10,
+              left: IdeSpacing.space12,
               right: IdeSpacing.space6,
             ),
             child: Row(
@@ -367,6 +389,10 @@ class Pane extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: textStyles.titleSmall.copyWith(
                               fontWeight: FontWeight.w700,
+                              letterSpacing: 0.2,
+                              color: isDark
+                                  ? const Color(0xFFF1F3F5)
+                                  : const Color(0xFF1F2937),
                             ),
                           ),
                           if (subtitle != null)
@@ -381,7 +407,7 @@ class Pane extends StatelessWidget {
                         ],
                       ),
                 ),
-                ?trailing,
+                if (trailingWidget case final Widget w) w,
               ],
             ),
           ),

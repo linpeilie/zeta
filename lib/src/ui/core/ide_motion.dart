@@ -10,6 +10,6 @@ abstract final class IdeMotion {
   static const Duration normal = durationNormal;
   static const Duration slow = durationSlow;
 
-  static const Curve curveDefault = Curves.easeOut;
-  static const Curve curvePopup = Curves.easeOutCubic;
+  static const Curve curveDefault = Curves.easeInOutCubic;
+  static const Curve curvePopup = Curves.easeOutQuint;
 }
