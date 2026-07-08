@@ -10,13 +10,13 @@ import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
+import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/workspace/presentation/file_tree_pane.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
-import 'package:zeta/src/ui/core/theme_mode_controller.dart';
 import 'package:zeta/src/ui/core/window_frame.dart';
 import 'package:zeta/src/ui/features/ide/views/project_list_pane.dart';
 
@@ -32,7 +32,7 @@ class IdeHome extends StatefulWidget {
     required this.agentProviderFactory,
     required this.agentProviderConfigStore,
     required this.projectLocationOpener,
-    required this.themeModeController,
+    required this.appearanceController,
     this.showWindowControls = true,
     super.key,
   });
@@ -43,7 +43,7 @@ class IdeHome extends StatefulWidget {
   final AgentProviderFactory agentProviderFactory;
   final AgentProviderConfigStore agentProviderConfigStore;
   final ProjectLocationOpener projectLocationOpener;
-  final ThemeModeController themeModeController;
+  final AppearanceSettingsController appearanceController;
   final bool showWindowControls;
 
   @override
@@ -78,6 +78,7 @@ class _IdeHomeState extends State<IdeHome> {
   @override
   void initState() {
     super.initState();
+    unawaited(widget.appearanceController.load());
     _shellController = IdeShellController(
       directoryPicker: widget.directoryPicker,
       sessionStore: widget.sessionStore,
@@ -137,7 +138,7 @@ class _IdeHomeState extends State<IdeHome> {
       _IdeHomePage.settings => SettingsPage(
         key: const ValueKey('settings-page'),
         activeSection: _settingsSection,
-        themeModeController: widget.themeModeController,
+        appearanceController: widget.appearanceController,
         onBackPressed: _closeSettingsPage,
         onSectionSelected: (section) {
           setState(() {

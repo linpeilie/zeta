@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:zeta/src/core/constants/app_typography.dart';
+
 import 'ide_colors.dart';
 
 // 深色调色板常量：保留旧名以兼容历史代码与测试断言。运行时主题通过
@@ -15,14 +17,46 @@ const Color ideWarningColor = Color(0xFFE6B450);
 
 const double idePanelGap = 8;
 const double idePanelRadius = 6;
-const String ideFontFamily = 'JetBrainsMono';
+
+@Deprecated('Use bundledCodeFontFamily or IdeTypography instead.')
+const String ideFontFamily = bundledCodeFontFamily;
+
+/// 暴露 IDE 内专用排版信息，例如代码字体。
+@immutable
+class IdeTypography extends ThemeExtension<IdeTypography> {
+  const IdeTypography({required this.codeFontFamily});
+
+  final String codeFontFamily;
+
+  static IdeTypography of(BuildContext context) {
+    return Theme.of(context).extension<IdeTypography>() ??
+        const IdeTypography(codeFontFamily: bundledCodeFontFamily);
+  }
+
+  @override
+  IdeTypography copyWith({String? codeFontFamily}) {
+    return IdeTypography(codeFontFamily: codeFontFamily ?? this.codeFontFamily);
+  }
+
+  @override
+  IdeTypography lerp(covariant ThemeExtension<IdeTypography>? other, double t) {
+    if (other is! IdeTypography) {
+      return this;
+    }
+    return t < 0.5 ? this : other;
+  }
+}
 
 /// 根据亮度构建 IDE 主题。
 ///
 /// 将 [IdeColors] 浅色/深色调色板注册为 [ThemeExtension]，组件通过
 /// [IdeColors.of] 在运行时取色；这样 [MaterialApp] 的 `theme`/`darkTheme`/
 /// `themeMode` 三者配合即可实现跟随系统或手动切换。
-ThemeData buildIdeTheme({required Brightness brightness}) {
+ThemeData buildIdeTheme({
+  required Brightness brightness,
+  String? uiFontFamily,
+  required String codeFontFamily,
+}) {
   final colors = brightness == Brightness.dark
       ? IdeColors.dark
       : IdeColors.light;
@@ -34,7 +68,7 @@ ThemeData buildIdeTheme({required Brightness brightness}) {
   return ThemeData(
     useMaterial3: true,
     brightness: brightness,
-    fontFamily: ideFontFamily,
+    fontFamily: uiFontFamily,
     colorScheme: colorScheme.copyWith(
       surface: colors.surface,
       primary: colors.accent,
@@ -42,7 +76,10 @@ ThemeData buildIdeTheme({required Brightness brightness}) {
     ),
     scaffoldBackgroundColor: colors.frame,
     visualDensity: VisualDensity.compact,
-    extensions: <ThemeExtension<dynamic>>[colors],
+    extensions: <ThemeExtension<dynamic>>[
+      colors,
+      IdeTypography(codeFontFamily: codeFontFamily),
+    ],
     iconButtonTheme: IconButtonThemeData(
       style: IconButton.styleFrom(
         fixedSize: const Size(30, 30),
@@ -62,4 +99,11 @@ ThemeData buildIdeTheme({required Brightness brightness}) {
 /// 旧入口，等价于 [buildIdeTheme] 的深色版本。
 ///
 /// 保留给已有测试与过渡代码使用；新代码请直接使用 [buildIdeTheme]。
-ThemeData buildCompactTheme() => buildIdeTheme(brightness: Brightness.dark);
+ThemeData buildCompactTheme({
+  String? uiFontFamily,
+  String codeFontFamily = bundledCodeFontFamily,
+}) => buildIdeTheme(
+  brightness: Brightness.dark,
+  uiFontFamily: uiFontFamily,
+  codeFontFamily: codeFontFamily,
+);

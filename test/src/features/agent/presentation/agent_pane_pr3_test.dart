@@ -364,114 +364,128 @@ void main() {
       },
     );
 
-    testWidgets(
-      'uses app theme font family for markdown, approval command, and history events',
-      (tester) async {
-        final provider = _FakeAgentProvider(
-          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
-            'thread-fonts': AgentThreadHistorySnapshot(
-              threadId: 'thread-fonts',
-              turns: <AgentHistoryTurn>[
-                AgentHistoryTurn(
-                  id: 'turn-fonts-1',
-                  status: AgentHistoryTurnStatus.running,
-                  entries: <AgentHistoryEntry>[
-                    const AgentHistoryMessageEntry(
-                      id: 'history-user-fonts-1',
-                      role: AgentMessageRole.user,
-                      text: 'Check fonts',
-                    ),
-                    const AgentHistoryMessageEntry(
-                      id: 'history-markdown-fonts-1',
-                      role: AgentMessageRole.agent,
-                      text:
-                          'Paragraph text for font check.\n\n```dart\nconst answer = 42;\n```',
-                    ),
-                    const AgentHistoryEventEntry(
-                      id: 'history-event-fonts-1',
-                      kind: AgentHistoryEventKind.system,
-                      title: 'Search query',
-                      content: 'site:zeta.dev fonts',
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          },
-        );
-        final viewModel = _createViewModel(provider);
-        addTearDown(provider.dispose);
-        addTearDown(viewModel.dispose);
+    testWidgets('uses ui font for正文 and code font for code-like content', (
+      tester,
+    ) async {
+      final provider = _FakeAgentProvider(
+        historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+          'thread-fonts': AgentThreadHistorySnapshot(
+            threadId: 'thread-fonts',
+            turns: <AgentHistoryTurn>[
+              AgentHistoryTurn(
+                id: 'turn-fonts-1',
+                status: AgentHistoryTurnStatus.running,
+                entries: <AgentHistoryEntry>[
+                  const AgentHistoryMessageEntry(
+                    id: 'history-user-fonts-1',
+                    role: AgentMessageRole.user,
+                    text: 'Check fonts',
+                  ),
+                  const AgentHistoryMessageEntry(
+                    id: 'history-markdown-fonts-1',
+                    role: AgentMessageRole.agent,
+                    text:
+                        'Paragraph text for font check.\n\n```dart\nconst answer = 42;\n```',
+                  ),
+                  const AgentHistoryEventEntry(
+                    id: 'history-event-fonts-1',
+                    kind: AgentHistoryEventKind.system,
+                    title: 'Search query',
+                    content: 'site:zeta.dev fonts',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        },
+      );
+      final viewModel = _createViewModel(provider);
+      addTearDown(provider.dispose);
+      addTearDown(viewModel.dispose);
 
-        await tester.pumpWidget(_TestApp(viewModel: viewModel));
-        await viewModel.switchThread(
-          _thread(id: 'thread-fonts', title: 'Font thread'),
-        );
-        await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        _TestApp(
+          viewModel: viewModel,
+          uiFontFamily: 'UiFont',
+          codeFontFamily: 'CodeFont',
+        ),
+      );
+      await viewModel.switchThread(
+        _thread(id: 'thread-fonts', title: 'Font thread'),
+      );
+      await tester.pumpAndSettle();
 
-        final markdownParagraphFinder = find.textContaining(
+      final markdownParagraphFinder = find.textContaining(
+        'Paragraph text for font check.',
+        findRichText: true,
+      );
+      expect(markdownParagraphFinder, findsOneWidget);
+      expect(
+        _fontFamilyForRenderedText(
+          tester,
+          markdownParagraphFinder,
           'Paragraph text for font check.',
-          findRichText: true,
-        );
-        expect(markdownParagraphFinder, findsOneWidget);
-        expect(
-          _fontFamilyForRenderedText(
-            tester,
-            markdownParagraphFinder,
-            'Paragraph text for font check.',
+        ),
+        'UiFont',
+      );
+
+      final markdownCodeFinder = find.textContaining(
+        'answer',
+        findRichText: true,
+      );
+      expect(markdownCodeFinder, findsOneWidget);
+      expect(
+        _fontFamilyForRenderedText(tester, markdownCodeFinder, 'answer'),
+        'CodeFont',
+      );
+
+      provider.emitEvent(
+        const AgentPermissionRequestedEvent(
+          AgentPermissionRequest(
+            id: 'permission-fonts-1',
+            title: 'Run command',
+            kind: AgentPermissionKind.commandExecution,
+            command: 'tool output line',
           ),
-          ideFontFamily,
-        );
+        ),
+      );
+      await tester.pumpAndSettle();
 
-        final markdownCodeFinder = find.textContaining(
-          'answer',
-          findRichText: true,
-        );
-        expect(markdownCodeFinder, findsOneWidget);
-        expect(
-          _fontFamilyForRenderedText(tester, markdownCodeFinder, 'answer'),
-          ideFontFamily,
-        );
+      final permissionCommandFinder = find.text('tool output line');
+      expect(permissionCommandFinder, findsOneWidget);
+      expect(
+        tester.widget<Text>(permissionCommandFinder).style?.fontFamily,
+        'CodeFont',
+      );
 
-        provider.emitEvent(
-          const AgentPermissionRequestedEvent(
-            AgentPermissionRequest(
-              id: 'permission-fonts-1',
-              title: 'Run command',
-              kind: AgentPermissionKind.commandExecution,
-              command: 'tool output line',
-            ),
-          ),
-        );
-        await tester.pumpAndSettle();
-
-        final permissionCommandFinder = find.text('tool output line');
-        expect(permissionCommandFinder, findsOneWidget);
-        expect(
-          tester.widget<Text>(permissionCommandFinder).style?.fontFamily,
-          ideFontFamily,
-        );
-
-        final historyEventContentFinder = find.text('site:zeta.dev fonts');
-        expect(historyEventContentFinder, findsOneWidget);
-        expect(
-          tester.widget<Text>(historyEventContentFinder).style?.fontFamily,
-          ideFontFamily,
-        );
-      },
-    );
+      final historyEventContentFinder = find.text('site:zeta.dev fonts');
+      expect(historyEventContentFinder, findsOneWidget);
+      expect(
+        tester.widget<Text>(historyEventContentFinder).style?.fontFamily,
+        'CodeFont',
+      );
+    });
   });
 }
 
 class _TestApp extends StatelessWidget {
-  const _TestApp({required this.viewModel});
+  const _TestApp({
+    required this.viewModel,
+    this.uiFontFamily,
+    this.codeFontFamily = 'CodeFont',
+  });
 
   final AgentConversationViewModel viewModel;
+  final String? uiFontFamily;
+  final String codeFontFamily;
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      theme: buildCompactTheme(),
+      theme: buildCompactTheme(
+        uiFontFamily: uiFontFamily,
+        codeFontFamily: codeFontFamily,
+      ),
       home: Scaffold(body: AgentPane(viewModel: viewModel)),
     );
   }

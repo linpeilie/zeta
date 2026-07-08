@@ -503,7 +503,7 @@ class _AgentToolCallCard extends StatelessWidget {
                         toolCall.content!,
                         style: TextStyle(
                           color: colors.mutedText.withValues(alpha: 0.6),
-                          fontFamily: ideFontFamily,
+                          fontFamily: IdeTypography.of(context).codeFontFamily,
                           fontSize: 11,
                           height: 1.35,
                         ),
@@ -578,7 +578,7 @@ class _AgentPermissionCard extends StatelessWidget {
                     // 弱化命令显示：缩小字体并降低透明度
                     style: TextStyle(
                       color: colors.mutedText.withValues(alpha: 0.6),
-                      fontFamily: ideFontFamily,
+                      fontFamily: IdeTypography.of(context).codeFontFamily,
                       fontSize: 11,
                     ),
                   ),
@@ -682,7 +682,7 @@ class _AgentHistoryEventCard extends StatelessWidget {
                     // 弱化历史事件正文：缩小字体并降低透明度
                     style: TextStyle(
                       color: colors.mutedText.withValues(alpha: 0.6),
-                      fontFamily: ideFontFamily,
+                      fontFamily: IdeTypography.of(context).codeFontFamily,
                       fontSize: 11,
                       height: 1.35,
                     ),

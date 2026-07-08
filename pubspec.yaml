@@ -17,6 +17,7 @@ dependencies:
   mixin_markdown_widget: 0.3.1
   multi_split_view: ^3.6.2
   shared_preferences: ^2.5.5
+  system_fonts: ^1.0.1
   window_manager: ^0.5.1
 
 dev_dependencies:
