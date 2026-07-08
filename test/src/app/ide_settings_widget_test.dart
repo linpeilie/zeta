@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
@@ -282,30 +283,33 @@ Future<void> _pumpIdeWithSettings(
     ValueListenableBuilder<AppearanceSettings>(
       valueListenable: appearanceController.listenable,
       builder: (context, settings, _) {
-        return MaterialApp(
-          theme: buildIdeTheme(
+        return ShadApp(
+          theme: buildShadTheme(
             brightness: Brightness.light,
             uiFontFamily: settings.uiFontFamily,
             codeFontFamily: settings.codeFontFamily,
           ),
-          darkTheme: buildIdeTheme(
+          darkTheme: buildShadTheme(
             brightness: Brightness.dark,
             uiFontFamily: settings.uiFontFamily,
             codeFontFamily: settings.codeFontFamily,
           ),
           themeMode: settings.themeMode,
-          home: IdeHome(
-            directoryPicker: () async => null,
-            enableNativeWindowFrame: true,
-            showWindowControls: false,
-            sessionStore: CallbackIdeSessionStore(
-              loadJson: session.load,
-              saveJson: session.save,
+          home: IdeCodeFontScope(
+            codeFontFamily: settings.codeFontFamily,
+            child: IdeHome(
+              directoryPicker: () async => null,
+              enableNativeWindowFrame: true,
+              showWindowControls: false,
+              sessionStore: CallbackIdeSessionStore(
+                loadJson: session.load,
+                saveJson: session.save,
+              ),
+              agentProviderFactory: FakeAgentProviderFactory(provider),
+              agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+              projectLocationOpener: (_) async {},
+              appearanceController: appearanceController,
             ),
-            agentProviderFactory: FakeAgentProviderFactory(provider),
-            agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-            projectLocationOpener: (_) async {},
-            appearanceController: appearanceController,
           ),
         );
       },

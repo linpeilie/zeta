@@ -30,4 +30,73 @@ class WorkspaceNode {
 
   /// 是否为目录节点。
   bool get isDirectory => type == WorkspaceNodeType.directory;
+
+  /// 复制节点并替换指定字段，供文件树交互更新局部状态时复用。
+  WorkspaceNode copyWith({
+    bool? childrenLoaded,
+    List<WorkspaceNode>? children,
+  }) {
+    return WorkspaceNode(
+      path: path,
+      name: name,
+      type: type,
+      childrenLoaded: childrenLoaded ?? this.childrenLoaded,
+      children: children ?? this.children,
+    );
+  }
+
+  /// 在树中按绝对路径查找节点。
+  static WorkspaceNode? findByPath(Iterable<WorkspaceNode> nodes, String path) {
+    for (final node in nodes) {
+      if (node.path == path) {
+        return node;
+      }
+      final nested = findByPath(node.children, path);
+      if (nested != null) {
+        return nested;
+      }
+    }
+    return null;
+  }
+
+  /// 以不可变方式更新树中的单个节点；未命中时返回原列表。
+  static List<WorkspaceNode> updateNode(
+    List<WorkspaceNode> nodes,
+    String path,
+    WorkspaceNode Function(WorkspaceNode node) transform,
+  ) {
+    final result = _mapNodes(nodes, path, transform);
+    return result.$2 ? result.$1 : nodes;
+  }
+
+  static (List<WorkspaceNode>, bool) _mapNodes(
+    List<WorkspaceNode> nodes,
+    String path,
+    WorkspaceNode Function(WorkspaceNode node) transform,
+  ) {
+    var updated = false;
+    final nextNodes = <WorkspaceNode>[];
+    for (final node in nodes) {
+      if (node.path == path) {
+        nextNodes.add(transform(node));
+        updated = true;
+        continue;
+      }
+      if (node.children.isEmpty) {
+        nextNodes.add(node);
+        continue;
+      }
+      final nested = _mapNodes(node.children, path, transform);
+      if (!nested.$2) {
+        nextNodes.add(node);
+        continue;
+      }
+      nextNodes.add(node.copyWith(children: nested.$1));
+      updated = true;
+    }
+    if (!updated) {
+      return (nodes, false);
+    }
+    return (List<WorkspaceNode>.unmodifiable(nextNodes), true);
+  }
 }

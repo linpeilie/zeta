@@ -507,17 +507,21 @@ void main() {
 
     final mouse = await hoverProjectTile(tester, directory.path);
     addTearDown(mouse.removePointer);
-    await tester.tap(
-      find.byKey(ValueKey<String>('project-tile-more-menu-${directory.path}')),
-    );
+    tester
+        .widget<GestureDetector>(
+          find.byKey(
+            ValueKey<String>('project-tile-more-menu-${directory.path}'),
+          ),
+        )
+        .onTap
+        ?.call();
     await tester.pumpAndSettle();
 
-    final dynamic openLocationItemState = tester.state(
+    await tester.tap(
       find.byKey(
         ValueKey<String>('project-tile-open-location-${directory.path}'),
       ),
     );
-    openLocationItemState.handleTap();
     await tester.pumpAndSettle();
 
     expect(openedPaths, <String>[directory.path]);
@@ -578,17 +582,21 @@ void main() {
 
     final mouse = await hoverProjectTile(tester, directory.path);
     addTearDown(mouse.removePointer);
-    await tester.tap(
-      find.byKey(ValueKey<String>('project-tile-more-menu-${directory.path}')),
-    );
+    tester
+        .widget<GestureDetector>(
+          find.byKey(
+            ValueKey<String>('project-tile-more-menu-${directory.path}'),
+          ),
+        )
+        .onTap
+        ?.call();
     await tester.pumpAndSettle();
 
-    final dynamic refreshItemState = tester.state(
+    await tester.tap(
       find.byKey(
         ValueKey<String>('project-tile-refresh-threads-${directory.path}'),
       ),
     );
-    refreshItemState.handleTap();
     await tester.pumpAndSettle();
 
     expect(provider.listQueries, hasLength(2));
@@ -673,10 +681,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final dynamic removeItemState = tester.state(
+      await tester.tap(
         find.byKey(ValueKey<String>('project-tile-remove-${directory.path}')),
       );
-      removeItemState.handleTap();
       await tester.pumpAndSettle();
 
       expect(

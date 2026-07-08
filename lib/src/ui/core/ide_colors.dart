@@ -1,6 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'app_theme.dart';
+
+const _lightForegroundColor = Color(0xFF111827);
+const _darkForegroundColor = Color(0xFFE8E8E8);
+const _darkWindowHoverColor = Color(0xFF303030);
+const _lightWindowHoverColor = Color(0xFFEAECEF);
+const _darkWindowIconColor = Color(0xFFB8B8B8);
+const _lightWindowIconColor = Color(0xFF4B5563);
+const _sharedCloseHoverColor = Color(0xFFD84E4E);
 
 /// IDE 主题专用调色板。
 ///
@@ -96,11 +105,21 @@ class IdeColors extends ThemeExtension<IdeColors> {
 
   /// 从 [context] 取出当前主题下的 [IdeColors]。
   ///
-  /// 必须在已注册该扩展的 [ThemeData] 子树中调用；缺失时回退到 [dark]，
-  /// 以避免在测试或未配置场景下抛异常。
+  /// 运行时优先从 [ShadTheme] 解析；仅在旧测试或兼容场景下回退到
+  /// Material ThemeExtension。
   static IdeColors of(BuildContext context) {
-    final colors = Theme.of(context).extension<IdeColors>();
-    return colors ?? dark;
+    final shadTheme = ShadTheme.maybeOf(context, listen: false);
+    if (shadTheme != null) {
+      return ideColorsFromShadTheme(shadTheme);
+    }
+
+    final materialTheme = Theme.of(context);
+    final colors = materialTheme.extension<IdeColors>();
+    if (colors != null) {
+      return colors;
+    }
+
+    return materialTheme.brightness == Brightness.light ? light : dark;
   }
 
   @override
@@ -158,4 +177,95 @@ class IdeColors extends ThemeExtension<IdeColors> {
       closeHover: Color.lerp(closeHover, other.closeHover, t)!,
     );
   }
+}
+
+/// 将旧的 [IdeColors] 语义映射到 shadcn 颜色系统。
+ShadColorScheme shadColorSchemeFromIdeColors(
+  IdeColors colors, {
+  required Brightness brightness,
+}) {
+  final foreground = _foregroundForBrightness(brightness);
+  return ShadColorScheme(
+    background: colors.frame,
+    foreground: foreground,
+    card: colors.surface,
+    cardForeground: foreground,
+    popover: colors.panel,
+    popoverForeground: foreground,
+    primary: colors.accent,
+    primaryForeground: colors.accentForeground,
+    secondary: colors.surface,
+    secondaryForeground: foreground,
+    muted: colors.editor,
+    mutedForeground: colors.mutedText,
+    accent: colors.accent,
+    accentForeground: colors.accentForeground,
+    destructive: colors.warning,
+    destructiveForeground: Colors.white,
+    border: colors.border,
+    input: colors.border,
+    ring: colors.accent,
+    selection: colors.accent.withValues(
+      alpha: brightness == Brightness.dark ? 0.18 : 0.14,
+    ),
+    custom: <String, Color>{
+      'frame': colors.frame,
+      'surface': colors.surface,
+      'panel': colors.panel,
+      'editor': colors.editor,
+      'warning': colors.warning,
+      'windowHover': colors.windowHover,
+      'windowIcon': colors.windowIcon,
+      'closeHover': colors.closeHover,
+    },
+  );
+}
+
+/// 从 [ShadThemeData] 中提取等价的 [IdeColors]。
+IdeColors ideColorsFromShadTheme(ShadThemeData theme) {
+  return ideColorsFromShadColorScheme(
+    theme.colorScheme,
+    brightness: theme.brightness,
+  );
+}
+
+/// 从 [ShadColorScheme] 中提取等价的 [IdeColors]。
+IdeColors ideColorsFromShadColorScheme(
+  ShadColorScheme scheme, {
+  required Brightness brightness,
+}) {
+  return IdeColors(
+    frame: scheme.custom['frame'] ?? scheme.background,
+    surface: scheme.custom['surface'] ?? scheme.card,
+    panel: scheme.custom['panel'] ?? scheme.popover,
+    editor: scheme.custom['editor'] ?? scheme.muted,
+    border: scheme.border,
+    mutedText: scheme.mutedForeground,
+    accent: scheme.primary,
+    warning: scheme.custom['warning'] ?? scheme.destructive,
+    accentForeground: scheme.accentForeground,
+    windowHover:
+        scheme.custom['windowHover'] ?? _windowHoverForBrightness(brightness),
+    windowIcon:
+        scheme.custom['windowIcon'] ?? _windowIconForBrightness(brightness),
+    closeHover: scheme.custom['closeHover'] ?? _sharedCloseHoverColor,
+  );
+}
+
+Color _foregroundForBrightness(Brightness brightness) {
+  return brightness == Brightness.dark
+      ? _darkForegroundColor
+      : _lightForegroundColor;
+}
+
+Color _windowHoverForBrightness(Brightness brightness) {
+  return brightness == Brightness.dark
+      ? _darkWindowHoverColor
+      : _lightWindowHoverColor;
+}
+
+Color _windowIconForBrightness(Brightness brightness) {
+  return brightness == Brightness.dark
+      ? _darkWindowIconColor
+      : _lightWindowIconColor;
 }

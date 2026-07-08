@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:macos_window_utils/macos/ns_visual_effect_view_material.dart';
+import 'package:macos_window_utils/window_manipulator.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/app_constants.dart';
@@ -13,9 +17,11 @@ Future<void> bootstrapDesktopWindow() async {
   // 背景色，避免浅色系统下出现深色闪烁。
   final systemBrightness =
       WidgetsBinding.instance.platformDispatcher.platformBrightness;
-  final frameColor = systemBrightness == Brightness.dark
-      ? IdeColors.dark.frame
-      : IdeColors.light.frame;
+  final frameColor = Platform.isMacOS
+      ? Colors.transparent
+      : (systemBrightness == Brightness.dark
+            ? IdeColors.dark.frame
+            : IdeColors.light.frame);
   final options = WindowOptions(
     size: const Size(1280, 800),
     minimumSize: const Size(900, 560),
@@ -26,7 +32,20 @@ Future<void> bootstrapDesktopWindow() async {
     backgroundColor: frameColor,
   );
 
+  if (Platform.isMacOS) {
+    await WindowManipulator.initialize(enableWindowDelegate: true);
+  }
+
   await windowManager.waitUntilReadyToShow(options, () async {
+    if (Platform.isMacOS) {
+      await WindowManipulator.setWindowBackgroundColorToClear();
+      await WindowManipulator.makeTitlebarTransparent();
+      await WindowManipulator.addEmptyMaskImage();
+      await WindowManipulator.disableShadow();
+      await WindowManipulator.enableFullSizeContentView();
+      await WindowManipulator.hideTitle();
+      await WindowManipulator.setMaterial(NSVisualEffectViewMaterial.sidebar);
+    }
     await windowManager.show();
     await windowManager.focus();
   });

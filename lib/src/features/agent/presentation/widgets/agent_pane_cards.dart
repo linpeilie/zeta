@@ -12,15 +12,19 @@ class _AgentCommandGroupCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
+    final hoverBackground = ShadTheme.of(
+      context,
+    ).colorScheme.border.withValues(alpha: 0.12);
     return ListenableBuilder(
       listenable: viewModel.expansionVersionListenable,
       builder: (context, _) {
         final expanded = viewModel.isCommandGroupExpanded(group.id);
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
-          child: InkWell(
+          child: PaneInteractiveSurface(
             key: ValueKey<String>('agent-command-group-header-${group.id}'),
-            onTap: () => viewModel.toggleCommandGroup(group.id),
+            onPressed: () => viewModel.toggleCommandGroup(group.id),
+            hoverBackgroundColor: hoverBackground,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
@@ -137,21 +141,25 @@ class _AgentFileEditGroupCardState extends State<_AgentFileEditGroupCard> {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
+    final hoverBackground = ShadTheme.of(
+      context,
+    ).colorScheme.border.withValues(alpha: 0.12);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          InkWell(
+          PaneInteractiveSurface(
             key: ValueKey<String>(
               'agent-file-edit-group-header-${widget.group.id}',
             ),
-            onTap: () {
+            onPressed: () {
               setState(() {
                 _expanded = !_expanded;
               });
             },
+            hoverBackgroundColor: hoverBackground,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -241,6 +249,9 @@ class _AgentFileEditItemRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
+    final hoverBackground = ShadTheme.of(
+      context,
+    ).colorScheme.border.withValues(alpha: 0.12);
     return ListenableBuilder(
       listenable: viewModel.expansionVersionListenable,
       builder: (context, _) {
@@ -250,70 +261,69 @@ class _AgentFileEditItemRow extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
-            InkWell(
+            PaneInteractiveSurface(
               key: ValueKey<String>('agent-file-edit-item-row-${item.id}'),
-              onTap: canExpand
+              onPressed: canExpand
                   ? () => viewModel.toggleFileEditItem(item.id)
                   : null,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              item.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: colors.mutedText.withValues(alpha: 0.88),
-                                height: 1.35,
-                              ),
+              hoverBackgroundColor: hoverBackground,
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            item.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: colors.mutedText.withValues(alpha: 0.88),
+                              height: 1.35,
                             ),
                           ),
-                          if (item.addedLines != null ||
-                              item.removedLines != null) ...[
-                            const SizedBox(width: 12),
-                            Text.rich(
-                              key: ValueKey<String>(
-                                'agent-file-edit-item-line-stats-${item.id}',
-                              ),
-                              _fileEditLineStatsSpan(item, colors),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                        ),
+                        if (item.addedLines != null ||
+                            item.removedLines != null) ...[
+                          const SizedBox(width: 12),
+                          Text.rich(
+                            key: ValueKey<String>(
+                              'agent-file-edit-item-line-stats-${item.id}',
                             ),
-                          ],
+                            _fileEditLineStatsSpan(item, colors),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IdeTooltip(
+                    message: canExpand ? '查看详情' : '无详情可查看',
+                    child: SizedBox(
+                      key: ValueKey<String>(
+                        'agent-file-edit-item-toggle-${item.id}',
+                      ),
+                      width: 20,
+                      height: 20,
+                      child: Icon(
+                        expanded
+                            ? Icons.keyboard_arrow_down_rounded
+                            : Icons.chevron_right_rounded,
+                        size: 16,
+                        color: canExpand
+                            ? colors.mutedText.withValues(alpha: 0.55)
+                            : colors.mutedText.withValues(alpha: 0.25),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Tooltip(
-                      message: canExpand ? '查看详情' : '无详情可查看',
-                      child: SizedBox(
-                        key: ValueKey<String>(
-                          'agent-file-edit-item-toggle-${item.id}',
-                        ),
-                        width: 20,
-                        height: 20,
-                        child: Icon(
-                          expanded
-                              ? Icons.keyboard_arrow_down_rounded
-                              : Icons.chevron_right_rounded,
-                          size: 16,
-                          color: canExpand
-                              ? colors.mutedText.withValues(alpha: 0.55)
-                              : colors.mutedText.withValues(alpha: 0.25),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
             if (expanded && item.details != null)
@@ -377,7 +387,7 @@ class _AgentDiffDetailsState extends State<_AgentDiffDetails> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                TextButton(
+                ShadButton.ghost(
                   key: ValueKey<String>(
                     'agent-file-edit-item-expand-all-${widget.item.id}',
                   ),
@@ -386,12 +396,8 @@ class _AgentDiffDetailsState extends State<_AgentDiffDetails> {
                       _showAll = !_showAll;
                     });
                   },
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    minimumSize: const Size(0, 28),
-                    textStyle: const TextStyle(fontSize: 11),
-                  ),
+                  size: ShadButtonSize.sm,
+                  textStyle: const TextStyle(fontSize: 11),
                   child: Text(_showAll ? '收起差异' : '展开全部'),
                 ),
               ],
@@ -444,6 +450,9 @@ class _AgentToolCallCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
+    final hoverBackground = ShadTheme.of(
+      context,
+    ).colorScheme.border.withValues(alpha: 0.12);
     return ListenableBuilder(
       listenable: viewModel.expansionVersionListenable,
       builder: (context, _) {
@@ -452,11 +461,12 @@ class _AgentToolCallCard extends StatelessWidget {
         final expanded = viewModel.isToolCallExpanded(toolCall.id);
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
-          child: InkWell(
+          child: PaneInteractiveSurface(
             key: ValueKey<String>('agent-tool-header-${toolCall.id}'),
-            onTap: canExpand
+            onPressed: canExpand
                 ? () => viewModel.toggleToolCall(toolCall.id)
                 : null,
+            hoverBackgroundColor: hoverBackground,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
@@ -597,17 +607,19 @@ class _AgentPermissionCard extends StatelessWidget {
                 spacing: 8,
                 runSpacing: 6,
                 children: [
-                  TextButton.icon(
+                  ShadButton.outline(
                     key: ValueKey('agent-permission-deny-${request.id}'),
                     onPressed: onDeny,
-                    icon: const Icon(Icons.close_rounded, size: 16),
-                    label: const Text('Deny'),
+                    size: ShadButtonSize.sm,
+                    leading: const Icon(Icons.close_rounded, size: 16),
+                    child: const Text('Deny'),
                   ),
-                  FilledButton.icon(
+                  ShadButton(
                     key: ValueKey('agent-permission-approve-${request.id}'),
                     onPressed: onApprove,
-                    icon: const Icon(Icons.check_rounded, size: 16),
-                    label: const Text('Approve'),
+                    size: ShadButtonSize.sm,
+                    leading: const Icon(Icons.check_rounded, size: 16),
+                    child: const Text('Approve'),
                   ),
                 ],
               ),

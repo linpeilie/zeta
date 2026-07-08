@@ -21,12 +21,12 @@ abstract class AppearanceSettingsStore {
 class SharedPreferencesAppearanceSettingsStore
     implements AppearanceSettingsStore {
   SharedPreferencesAppearanceSettingsStore({
-    SharedPreferencesAsync? preferences,
+    this.preferences,
     this.readString,
     this.writeString,
-  }) : _preferences = preferences;
+  });
 
-  final SharedPreferencesAsync? _preferences;
+  final SharedPreferencesAsync? preferences;
   final Future<String?> Function(String key)? readString;
   final Future<void> Function(String key, String value)? writeString;
 
@@ -51,7 +51,7 @@ class SharedPreferencesAppearanceSettingsStore
     if (customRead != null) {
       return customRead(key);
     }
-    return (_preferences ?? SharedPreferencesAsync()).getString(key);
+    return (preferences ?? SharedPreferencesAsync()).getString(key);
   }
 
   Future<void> _write(String key, String value) {
@@ -59,7 +59,7 @@ class SharedPreferencesAppearanceSettingsStore
     if (customWrite != null) {
       return customWrite(key, value);
     }
-    return (_preferences ?? SharedPreferencesAsync()).setString(key, value);
+    return (preferences ?? SharedPreferencesAsync()).setString(key, value);
   }
 }
 

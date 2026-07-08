@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_treeview/flutter_treeview.dart' as tree;
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:zeta/src/core/utils/path_utils.dart';
-import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
-import 'package:zeta/src/features/workspace/presentation/file_node_data.dart';
 
 class FileTreePane extends StatelessWidget {
   const FileTreePane({
-    required this.controller,
+    required this.nodes,
+    required this.expandedPaths,
+    required this.selectedPath,
     required this.projectPath,
     required this.isLoading,
     required this.onNodeTap,
@@ -16,7 +17,9 @@ class FileTreePane extends StatelessWidget {
     super.key,
   });
 
-  final tree.TreeViewController controller;
+  final List<WorkspaceNode> nodes;
+  final Set<String> expandedPaths;
+  final String? selectedPath;
   final String? projectPath;
   final bool isLoading;
   final ValueChanged<String> onNodeTap;
@@ -33,54 +36,36 @@ class FileTreePane extends StatelessWidget {
       child: Builder(
         builder: (context) {
           if (isLoading) {
-            return const Center(
-              child: SizedBox.square(
-                dimension: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
+            return Center(
+              child: IdeLoadingIndicator(width: 24, height: 12, barHeight: 4),
             );
           }
-          if (controller.children.isEmpty) {
+          if (nodes.isEmpty) {
             return const EmptyState(text: 'No file tree');
           }
-          return tree.TreeView(
-            controller: controller,
-            allowParentSelect: true,
-            supportParentDoubleTap: false,
-            onNodeTap: onNodeTap,
-            onExpansionChanged: onExpansionChanged,
-            nodeBuilder: (context, node) {
-              final data = node.data as FileNodeData?;
-              final selected = controller.selectedKey == node.key;
-              return _FileTreeNodeLabel(
-                label: node.label,
-                isDirectory: data?.isDirectory ?? node.isParent,
-                selected: selected,
+          final visibleNodes = _flattenVisibleNodes(nodes, expandedPaths);
+          return ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            itemCount: visibleNodes.length,
+            itemBuilder: (context, index) {
+              final visibleNode = visibleNodes[index];
+              return _FileTreeNodeTile(
+                key: ValueKey<String>(
+                  'file-node-path-${visibleNode.node.path}',
+                ),
+                node: visibleNode.node,
+                depth: visibleNode.depth,
+                expanded: visibleNode.expanded,
+                selected: selectedPath == visibleNode.node.path,
+                onTap: () => onNodeTap(visibleNode.node.path),
+                onToggleExpansion: visibleNode.node.isDirectory
+                    ? () => onExpansionChanged(
+                        visibleNode.node.path,
+                        !visibleNode.expanded,
+                      )
+                    : null,
               );
             },
-            theme: tree.TreeViewTheme(
-              dense: true,
-              iconPadding: 5,
-              levelPadding: 14,
-              verticalSpacing: 0,
-              horizontalSpacing: 4,
-              labelOverflow: TextOverflow.ellipsis,
-              parentLabelOverflow: TextOverflow.ellipsis,
-              iconTheme: IconThemeData(
-                size: 15,
-                color: IdeColors.of(context).mutedText,
-              ),
-              expanderTheme: tree.ExpanderThemeData(
-                color: IdeColors.of(context).mutedText,
-                size: 18,
-                type: tree.ExpanderType.chevron,
-              ),
-              labelStyle: const TextStyle(fontSize: 12),
-              parentLabelStyle: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
           );
         },
       ),
@@ -88,45 +73,123 @@ class FileTreePane extends StatelessWidget {
   }
 }
 
-class _FileTreeNodeLabel extends StatelessWidget {
-  const _FileTreeNodeLabel({
-    required this.label,
-    required this.isDirectory,
-    required this.selected,
+List<_VisibleWorkspaceNode> _flattenVisibleNodes(
+  Iterable<WorkspaceNode> nodes,
+  Set<String> expandedPaths, {
+  int depth = 0,
+}) {
+  final visibleNodes = <_VisibleWorkspaceNode>[];
+  for (final node in nodes) {
+    final expanded = node.isDirectory && expandedPaths.contains(node.path);
+    visibleNodes.add(
+      _VisibleWorkspaceNode(node: node, depth: depth, expanded: expanded),
+    );
+    if (expanded && node.children.isNotEmpty) {
+      visibleNodes.addAll(
+        _flattenVisibleNodes(node.children, expandedPaths, depth: depth + 1),
+      );
+    }
+  }
+  return visibleNodes;
+}
+
+class _VisibleWorkspaceNode {
+  const _VisibleWorkspaceNode({
+    required this.node,
+    required this.depth,
+    required this.expanded,
   });
 
-  final String label;
-  final bool isDirectory;
+  final WorkspaceNode node;
+  final int depth;
+  final bool expanded;
+}
+
+class _FileTreeNodeTile extends StatelessWidget {
+  const _FileTreeNodeTile({
+    required this.node,
+    required this.depth,
+    required this.expanded,
+    required this.selected,
+    required this.onTap,
+    required this.onToggleExpansion,
+    super.key,
+  });
+
+  static const double _rowHeight = 30;
+  static const double _indent = 14;
+
+  final WorkspaceNode node;
+  final int depth;
+  final bool expanded;
   final bool selected;
+  final VoidCallback onTap;
+  final VoidCallback? onToggleExpansion;
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    return SizedBox(
-      key: ValueKey('file-node-$label'),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 2),
+    final shadTheme = ShadTheme.of(context);
+    final colorScheme = shadTheme.colorScheme;
+    final selectedBackground = colorScheme.accent.withValues(
+      alpha: shadTheme.brightness == Brightness.dark ? 0.2 : 0.12,
+    );
+    final hoverBackground = colorScheme.border.withValues(alpha: 0.14);
+    final iconColor = selected
+        ? colorScheme.accent
+        : node.isDirectory
+        ? colorScheme.primary.withValues(alpha: 0.82)
+        : colorScheme.mutedForeground;
+    final textColor = selected ? colorScheme.accent : null;
+
+    return Padding(
+      padding: EdgeInsets.only(left: depth * _indent),
+      child: PaneInteractiveSurface(
+        key: ValueKey<String>('file-node-${node.name}'),
+        onPressed: onTap,
+        height: _rowHeight,
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        selected: selected,
+        selectedBackgroundColor: selectedBackground,
+        hoverBackgroundColor: hoverBackground,
         child: Row(
           children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: node.isDirectory
+                  ? ShadIconButton.ghost(
+                      onPressed: onToggleExpansion,
+                      width: 18,
+                      height: 18,
+                      padding: EdgeInsets.zero,
+                      foregroundColor: colorScheme.mutedForeground,
+                      hoverBackgroundColor: hoverBackground,
+                      icon: Icon(
+                        expanded
+                            ? LucideIcons.chevronDown
+                            : LucideIcons.chevronRight,
+                        size: 14,
+                      ),
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 2),
             Icon(
-              isDirectory ? Icons.folder_rounded : Icons.description_outlined,
+              node.isDirectory ? LucideIcons.folder : LucideIcons.file,
               size: 15,
-              color: selected
-                  ? colors.accent
-                  : isDirectory
-                  ? colors.warning
-                  : colors.mutedText,
+              color: iconColor,
             ),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                label,
+                node.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: selected ? colors.accentForeground : null,
-                  fontSize: 12,
-                  fontWeight: isDirectory ? FontWeight.w600 : FontWeight.w400,
+                style: shadTheme.textTheme.small.copyWith(
+                  color: textColor,
+                  fontWeight: node.isDirectory
+                      ? FontWeight.w600
+                      : FontWeight.w400,
                 ),
               ),
             ),

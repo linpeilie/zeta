@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_treeview/flutter_treeview.dart' as tree;
 
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
@@ -19,8 +18,8 @@ import 'package:zeta/src/features/project_threads/application/project_threads_co
 import 'package:zeta/src/features/project_threads/application/project_threads_session_snapshot_codec.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/project_threads/presentation/project_threads_view_model.dart';
-import 'package:zeta/src/features/workspace/presentation/file_node_data.dart';
-import 'package:zeta/src/features/workspace/presentation/tree_view_file_node_mapper.dart';
+import 'package:zeta/src/features/workspace/application/workspace_tree_builder.dart';
+import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 import 'package:zeta/src/app/app_constants.dart';
 
@@ -73,11 +72,13 @@ class IdeShellController extends ChangeNotifier {
   late final ProjectThreadsController projectThreadsController;
   final ProjectThreadsViewModel projectThreadsViewModel;
 
-  tree.TreeViewController _treeController = tree.TreeViewController();
+  List<WorkspaceNode> _workspaceTree = const <WorkspaceNode>[];
+  Set<String> _expandedDirectoryPaths = <String>{};
   final List<String> _projects = <String>[];
   final Map<String, String> _agentThreadIdsByProject = <String, String>{};
   String? _projectPath;
   String? _currentFilePath;
+  String? _selectedTreePath;
   bool _isLoadingProject = false;
   bool _isDisposed = false;
 
@@ -85,7 +86,13 @@ class IdeShellController extends ChangeNotifier {
 
   String? get activeProjectPath => _projectPath;
 
-  tree.TreeViewController get treeController => _treeController;
+  List<WorkspaceNode> get workspaceTree =>
+      List<WorkspaceNode>.unmodifiable(_workspaceTree);
+
+  Set<String> get expandedDirectoryPaths =>
+      Set<String>.unmodifiable(_expandedDirectoryPaths);
+
+  String? get selectedTreePath => _selectedTreePath;
 
   bool get isLoadingProject => _isLoadingProject;
 
@@ -201,37 +208,30 @@ class IdeShellController extends ChangeNotifier {
   }
 
   void handleTreeExpansionChanged(String key, bool expanded) {
-    final node = _treeController.getNode<FileNodeData>(key);
-    if (node == null) {
+    final node = _findTreeNode(key);
+    if (node == null || !node.isDirectory) {
       return;
     }
-    final updatedNode = _nodeWithExpansion(node, expanded);
-    _treeController = _treeController
-        .withUpdateNode<FileNodeData>(key, updatedNode)
-        .copyWith(selectedKey: _treeController.selectedKey);
+    _setDirectoryExpanded(key, expanded);
     _notifyStateChanged();
     _requestSessionSave();
   }
 
   void handleTreeNodeTap(String key) {
-    final node = _treeController.getNode<FileNodeData>(key);
-    final data = node?.data;
-    if (node == null || data == null) {
+    final node = _findTreeNode(key);
+    if (node == null) {
       return;
     }
 
-    if (data.isDirectory) {
-      final updatedNode = _nodeWithExpansion(node, !node.expanded);
-      _treeController = _treeController
-          .withUpdateNode<FileNodeData>(key, updatedNode)
-          .copyWith(selectedKey: key);
+    _selectedTreePath = key;
+    if (node.isDirectory) {
+      _setDirectoryExpanded(key, !_expandedDirectoryPaths.contains(key));
       _notifyStateChanged();
       _requestSessionSave();
       return;
     }
 
-    _treeController = _treeController.copyWith(selectedKey: key);
-    _currentFilePath = data.path;
+    _currentFilePath = node.path;
     _syncAgentWorkspace();
     _notifyStateChanged();
     _requestSessionSave();
@@ -255,14 +255,16 @@ class IdeShellController extends ChangeNotifier {
         return;
       }
 
-      final projectChildren = buildDirectoryChildren(directory);
+      final projectChildren = buildWorkspaceDirectoryChildren(directory);
       if (_isDisposed) {
         return;
       }
 
       _projectPath = path;
       _currentFilePath = null;
-      _treeController = tree.TreeViewController(children: projectChildren);
+      _selectedTreePath = null;
+      _expandedDirectoryPaths = <String>{};
+      _workspaceTree = projectChildren;
       if (!_projects.contains(path)) {
         _projects.insert(0, path);
       }
@@ -313,20 +315,21 @@ class IdeShellController extends ChangeNotifier {
       return;
     }
 
-    var treeController = tree.TreeViewController();
+    var tree = const <WorkspaceNode>[];
+    var selectedTreePath = session.selectedTreeKey;
     if (session.activeProjectPath != null) {
       // 文件树按需加载，只恢复用户已经展开过的目录。
-      final projectChildren = buildDirectoryChildren(
+      final projectChildren = buildWorkspaceDirectoryChildren(
         Directory(session.activeProjectPath!),
         expandedPaths: session.expandedDirectoryPaths,
       );
-      treeController = tree.TreeViewController(children: projectChildren);
+      tree = projectChildren;
 
-      final selectedTreeKey = session.selectedTreeKey;
-      if (selectedTreeKey != null &&
-          selectedTreeKey != session.activeProjectPath &&
-          treeController.getNode<FileNodeData>(selectedTreeKey) != null) {
-        treeController = treeController.copyWith(selectedKey: selectedTreeKey);
+      if (selectedTreePath == session.activeProjectPath) {
+        selectedTreePath = null;
+      } else if (selectedTreePath != null &&
+          WorkspaceNode.findByPath(projectChildren, selectedTreePath) == null) {
+        selectedTreePath = null;
       }
     }
 
@@ -334,8 +337,10 @@ class IdeShellController extends ChangeNotifier {
       ..clear()
       ..addAll(session.projectPaths);
     _projectPath = session.activeProjectPath;
-    _treeController = treeController;
+    _workspaceTree = tree;
+    _expandedDirectoryPaths = Set<String>.from(session.expandedDirectoryPaths);
     _currentFilePath = session.currentFilePath;
+    _selectedTreePath = selectedTreePath;
     _agentThreadIdsByProject
       ..clear()
       ..addAll(session.agentThreadIdsByProject);
@@ -358,16 +363,34 @@ class IdeShellController extends ChangeNotifier {
     _notifyStateChanged();
   }
 
-  tree.Node<FileNodeData> _nodeWithExpansion(
-    tree.Node<FileNodeData> node,
-    bool expanded,
-  ) {
-    final data = node.data;
-    if (expanded && data != null && data.isDirectory && !data.childrenLoaded) {
-      // 首次展开目录时才读取下一层，避免打开项目时递归扫描整个仓库。
-      return buildDirectoryNode(Directory(data.path), expanded: true);
+  void _setDirectoryExpanded(String path, bool expanded) {
+    if (expanded) {
+      _expandedDirectoryPaths = <String>{..._expandedDirectoryPaths, path};
+      _workspaceTree = WorkspaceNode.updateNode(
+        _workspaceTree,
+        path,
+        _loadDirectoryChildrenIfNeeded,
+      );
+      return;
     }
-    return node.copyWith(expanded: expanded);
+
+    final nextExpandedPaths = <String>{..._expandedDirectoryPaths};
+    nextExpandedPaths.remove(path);
+    _expandedDirectoryPaths = nextExpandedPaths;
+  }
+
+  WorkspaceNode _loadDirectoryChildrenIfNeeded(WorkspaceNode node) {
+    if (!node.isDirectory || node.childrenLoaded) {
+      return node;
+    }
+    // 首次展开目录时才读取下一层，避免打开项目时递归扫描整个仓库。
+    return node.copyWith(
+      childrenLoaded: true,
+      children: buildWorkspaceDirectoryChildren(
+        Directory(node.path),
+        expandedPaths: _expandedDirectoryPaths,
+      ),
+    );
   }
 
   void _requestSessionSave() {
@@ -377,7 +400,9 @@ class IdeShellController extends ChangeNotifier {
   void _clearActiveWorkspace() {
     _projectPath = null;
     _currentFilePath = null;
-    _treeController = tree.TreeViewController();
+    _selectedTreePath = null;
+    _expandedDirectoryPaths = <String>{};
+    _workspaceTree = const <WorkspaceNode>[];
     _syncAgentWorkspace();
     _requestSessionSave();
     _notifyStateChanged();
@@ -388,8 +413,8 @@ class IdeShellController extends ChangeNotifier {
       projectPaths: _projects,
       activeProjectPath: _projectPath,
       currentFilePath: _currentFilePath,
-      expandedDirectoryPaths: _expandedDirectoryPaths(),
-      selectedTreeKey: _treeController.selectedKey,
+      expandedDirectoryPaths: _currentExpandedDirectoryPaths(),
+      selectedTreeKey: _selectedTreePath,
       activeAgentProviderId: agentViewModel.activeProviderId,
       agentThreadIdsByProject: _agentThreadIdsByProject,
       projectThreadsSessionSnapshot: projectThreadsController.sessionSnapshot,
@@ -398,21 +423,12 @@ class IdeShellController extends ChangeNotifier {
     );
   }
 
-  Set<String> _expandedDirectoryPaths() {
-    final paths = <String>{};
+  Set<String> _currentExpandedDirectoryPaths() {
+    return Set<String>.unmodifiable(_expandedDirectoryPaths);
+  }
 
-    void visit(List<tree.Node> nodes) {
-      for (final node in nodes) {
-        final data = node.data as FileNodeData?;
-        if ((data?.isDirectory ?? node.isParent) && node.expanded) {
-          paths.add(node.key);
-        }
-        visit(node.children);
-      }
-    }
-
-    visit(_treeController.children);
-    return paths;
+  WorkspaceNode? _findTreeNode(String path) {
+    return WorkspaceNode.findByPath(_workspaceTree, path);
   }
 
   void _syncAgentWorkspace() {

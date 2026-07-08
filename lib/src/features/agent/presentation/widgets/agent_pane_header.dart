@@ -8,7 +8,8 @@ class _AgentHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final shadTheme = ShadTheme.of(context);
+    final colorScheme = shadTheme.colorScheme;
     final colors = IdeColors.of(context);
     final tokenUsage = viewModel.currentThreadTokenUsage;
     final tokenLabel = _tokenUsageLabel(tokenUsage);
@@ -30,10 +31,10 @@ class _AgentHeader extends StatelessWidget {
                       key: const ValueKey('agent-header-title'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall?.copyWith(
+                      style: shadTheme.textTheme.h4.copyWith(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: theme.colorScheme.onSurface,
+                        color: colorScheme.foreground,
                       ),
                     ),
                   ),
@@ -55,7 +56,7 @@ class _AgentHeader extends StatelessWidget {
                   key: const ValueKey('agent-thread-open-status'),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
+                  style: shadTheme.textTheme.small.copyWith(
                     fontSize: 11,
                     color:
                         viewModel.threadOpenPhase ==
@@ -70,7 +71,7 @@ class _AgentHeader extends StatelessWidget {
         ),
         if (tokenLabel != null) ...[
           const SizedBox(width: 8),
-          Tooltip(
+          IdeTooltip(
             message: tokenTooltip,
             child: Row(
               key: const ValueKey('agent-header-token'),

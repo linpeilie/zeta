@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:zeta/src/core/constants/app_typography.dart';
 
@@ -21,6 +24,33 @@ const double idePanelRadius = 6;
 @Deprecated('Use bundledCodeFontFamily or IdeTypography instead.')
 const String ideFontFamily = bundledCodeFontFamily;
 
+/// 运行时代码字体作用域。
+///
+/// 运行时 UI 不再依赖 Material ThemeExtension 传递代码字体，改为通过这个
+/// scope 在 app 根部下发；测试也可直接复用它。
+class IdeCodeFontScope extends InheritedWidget {
+  const IdeCodeFontScope({
+    required this.codeFontFamily,
+    required super.child,
+    super.key,
+  });
+
+  final String codeFontFamily;
+
+  static IdeCodeFontScope? maybeOf(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<IdeCodeFontScope>();
+  }
+
+  static String? maybeCodeFontFamilyOf(BuildContext context) {
+    return maybeOf(context)?.codeFontFamily;
+  }
+
+  @override
+  bool updateShouldNotify(covariant IdeCodeFontScope oldWidget) {
+    return oldWidget.codeFontFamily != codeFontFamily;
+  }
+}
+
 /// 暴露 IDE 内专用排版信息，例如代码字体。
 @immutable
 class IdeTypography extends ThemeExtension<IdeTypography> {
@@ -29,7 +59,15 @@ class IdeTypography extends ThemeExtension<IdeTypography> {
   final String codeFontFamily;
 
   static IdeTypography of(BuildContext context) {
-    return Theme.of(context).extension<IdeTypography>() ??
+    final runtimeCodeFontFamily = IdeCodeFontScope.maybeCodeFontFamilyOf(
+      context,
+    );
+    if (runtimeCodeFontFamily != null) {
+      return IdeTypography(codeFontFamily: runtimeCodeFontFamily);
+    }
+
+    final legacyTypography = Theme.of(context).extension<IdeTypography>();
+    return legacyTypography ??
         const IdeTypography(codeFontFamily: bundledCodeFontFamily);
   }
 
@@ -47,63 +85,67 @@ class IdeTypography extends ThemeExtension<IdeTypography> {
   }
 }
 
-/// 根据亮度构建 IDE 主题。
-///
-/// 将 [IdeColors] 浅色/深色调色板注册为 [ThemeExtension]，组件通过
-/// [IdeColors.of] 在运行时取色；这样 [MaterialApp] 的 `theme`/`darkTheme`/
-/// `themeMode` 三者配合即可实现跟随系统或手动切换。
-ThemeData buildIdeTheme({
+/// 根据亮度构建 shadcn 主题。
+ShadThemeData buildShadTheme({
   required Brightness brightness,
   String? uiFontFamily,
   required String codeFontFamily,
 }) {
-  final colors = brightness == Brightness.dark
-      ? IdeColors.dark
-      : IdeColors.light;
-  final colorScheme = ColorScheme.fromSeed(
-    seedColor: colors.accent,
+  final colors = _platformIdeColorsForBrightness(brightness);
+  final overlayColors = _baseIdeColorsForBrightness(brightness);
+  return ShadThemeData(
     brightness: brightness,
-  );
-
-  return ThemeData(
-    useMaterial3: true,
-    brightness: brightness,
-    fontFamily: uiFontFamily,
-    colorScheme: colorScheme.copyWith(
-      surface: colors.surface,
-      primary: colors.accent,
-      secondary: colors.warning,
+    colorScheme: shadColorSchemeFromIdeColors(colors, brightness: brightness),
+    radius: const BorderRadius.all(Radius.circular(idePanelRadius)),
+    textTheme: ShadTextTheme(
+      family: uiFontFamily,
+      h4: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      p: const TextStyle(fontSize: 12, height: 1.35),
+      small: const TextStyle(fontSize: 11, height: 1.3),
+      muted: const TextStyle(fontSize: 11, height: 1.3),
     ),
-    scaffoldBackgroundColor: colors.frame,
-    visualDensity: VisualDensity.compact,
-    extensions: <ThemeExtension<dynamic>>[
-      colors,
-      IdeTypography(codeFontFamily: codeFontFamily),
-    ],
-    iconButtonTheme: IconButtonThemeData(
-      style: IconButton.styleFrom(
-        fixedSize: const Size(30, 30),
-        minimumSize: const Size(30, 30),
-        padding: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+    // macOS 毛玻璃下主界面允许半透明，但弹层必须回到不透明表面，避免文字透底。
+    popoverTheme: ShadPopoverTheme(
+      decoration: ShadDecoration(
+        color: overlayColors.surface,
+        border: ShadBorder.all(color: overlayColors.border, width: 1),
       ),
     ),
-    textTheme: const TextTheme(
-      bodyMedium: TextStyle(fontSize: 12),
-      bodySmall: TextStyle(fontSize: 11),
-      titleSmall: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+    primaryDialogTheme: ShadDialogTheme(
+      backgroundColor: overlayColors.panel,
+      border: Border.all(color: overlayColors.border),
+    ),
+    alertDialogTheme: ShadDialogTheme(
+      backgroundColor: overlayColors.panel,
+      border: Border.all(color: overlayColors.border),
+    ),
+    primaryToastTheme: ShadToastTheme(
+      backgroundColor: overlayColors.surface,
+      border: ShadBorder.all(color: overlayColors.border, width: 1),
+    ),
+    destructiveToastTheme: ShadToastTheme(
+      backgroundColor: overlayColors.surface,
+      border: ShadBorder.all(color: overlayColors.border, width: 1),
     ),
   );
 }
 
-/// 旧入口，等价于 [buildIdeTheme] 的深色版本。
-///
-/// 保留给已有测试与过渡代码使用；新代码请直接使用 [buildIdeTheme]。
-ThemeData buildCompactTheme({
-  String? uiFontFamily,
-  String codeFontFamily = bundledCodeFontFamily,
-}) => buildIdeTheme(
-  brightness: Brightness.dark,
-  uiFontFamily: uiFontFamily,
-  codeFontFamily: codeFontFamily,
-);
+IdeColors _baseIdeColorsForBrightness(Brightness brightness) {
+  return brightness == Brightness.dark ? IdeColors.dark : IdeColors.light;
+}
+
+IdeColors _platformIdeColorsForBrightness(Brightness brightness) {
+  final colors = _baseIdeColorsForBrightness(brightness);
+  if (!Platform.isMacOS) {
+    return colors;
+  }
+
+  final isDark = brightness == Brightness.dark;
+  return colors.copyWith(
+    frame: colors.frame.withValues(alpha: isDark ? 0.72 : 0.8),
+    surface: colors.surface.withValues(alpha: isDark ? 0.78 : 0.9),
+    panel: colors.panel.withValues(alpha: isDark ? 0.68 : 0.84),
+    editor: colors.editor.withValues(alpha: isDark ? 0.64 : 0.8),
+    border: colors.border.withValues(alpha: isDark ? 0.92 : 0.78),
+  );
+}

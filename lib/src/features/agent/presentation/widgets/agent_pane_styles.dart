@@ -193,7 +193,7 @@ Color _historyEventAccent(AgentHistoryEventKind kind, IdeColors colors) {
 
 MarkdownThemeData _agentMarkdownTheme(BuildContext context) {
   final colors = IdeColors.of(context);
-  final textColor = Theme.of(context).colorScheme.onSurface;
+  final textColor = ShadTheme.of(context).colorScheme.foreground;
   final base = DefaultTextStyle.of(
     context,
   ).style.copyWith(color: textColor, height: 1.42);
@@ -240,13 +240,12 @@ MarkdownThemeData _agentMarkdownTheme(BuildContext context) {
 }
 
 TextStyle _agentCodeTextStyle(BuildContext context, {TextStyle? baseStyle}) {
+  final textColor = ShadTheme.of(context).colorScheme.foreground;
   final effectiveBase =
       baseStyle ??
-      DefaultTextStyle.of(
-        context,
-      ).style.copyWith(color: Theme.of(context).colorScheme.onSurface);
+      DefaultTextStyle.of(context).style.copyWith(color: textColor);
   return effectiveBase.copyWith(
-    color: Theme.of(context).colorScheme.onSurface,
+    color: textColor,
     fontFamily: IdeTypography.of(context).codeFontFamily,
     fontSize: 11,
     height: 1.35,

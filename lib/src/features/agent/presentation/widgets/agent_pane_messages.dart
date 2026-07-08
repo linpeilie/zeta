@@ -51,7 +51,11 @@ class _AgentTurnDivider extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Divider(height: 1, thickness: 1, color: colors.border),
+            child: ShadSeparator.horizontal(
+              margin: EdgeInsets.zero,
+              thickness: 1,
+              color: colors.border,
+            ),
           ),
           if (hasMeta) ...[
             const SizedBox(width: 10),
@@ -73,7 +77,7 @@ class _AgentTurnDivider extends StatelessWidget {
                         ),
                       ),
                     if (showTokens)
-                      Tooltip(
+                      IdeTooltip(
                         message: tokenTooltip,
                         child: FittedBox(
                           fit: BoxFit.scaleDown,
@@ -108,7 +112,11 @@ class _AgentTurnDivider extends StatelessWidget {
           ],
           if (hasMeta)
             Expanded(
-              child: Divider(height: 1, thickness: 1, color: colors.border),
+              child: ShadSeparator.horizontal(
+                margin: EdgeInsets.zero,
+                thickness: 1,
+                color: colors.border,
+              ),
             ),
         ],
       ),
@@ -308,7 +316,7 @@ class _AgentMarkdownMessageState extends State<_AgentMarkdownMessage> {
           ),
           Align(
             alignment: Alignment.centerLeft,
-            child: TextButton.icon(
+            child: ShadButton.ghost(
               key: ValueKey<String>(
                 'agent-markdown-toggle-${widget.message.id}',
               ),
@@ -317,17 +325,15 @@ class _AgentMarkdownMessageState extends State<_AgentMarkdownMessage> {
                   _expanded = !_expanded;
                 });
               },
-              icon: Icon(
+              size: ShadButtonSize.sm,
+              leading: Icon(
                 _expanded
                     ? Icons.unfold_less_rounded
                     : Icons.unfold_more_rounded,
                 size: 15,
               ),
-              label: Text(_expanded ? '收起正文' : '展开正文'),
-              style: TextButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-                textStyle: const TextStyle(fontSize: 11),
-              ),
+              textStyle: const TextStyle(fontSize: 11),
+              child: Text(_expanded ? '收起正文' : '展开正文'),
             ),
           ),
         ],
@@ -407,25 +413,26 @@ class _AgentPlanMessageCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        IconButton(
-                          key: ValueKey<String>(
-                            'agent-plan-toggle-${message.id}',
-                          ),
-                          tooltip: expanded ? '收起计划' : '展开计划',
-                          onPressed: () =>
-                              viewModel.togglePlanMessage(message.id),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints.tightFor(
+                        IdeTooltip(
+                          message: expanded ? '收起计划' : '展开计划',
+                          child: ShadIconButton.ghost(
+                            key: ValueKey<String>(
+                              'agent-plan-toggle-${message.id}',
+                            ),
+                            onPressed: () =>
+                                viewModel.togglePlanMessage(message.id),
                             width: 28,
                             height: 28,
-                          ),
-                          visualDensity: VisualDensity.compact,
-                          icon: Icon(
-                            expanded
-                                ? Icons.close_fullscreen_rounded
-                                : Icons.open_in_full_rounded,
-                            size: 16,
-                            color: colors.mutedText.withValues(alpha: 0.72),
+                            padding: EdgeInsets.zero,
+                            foregroundColor: colors.mutedText.withValues(
+                              alpha: 0.72,
+                            ),
+                            icon: Icon(
+                              expanded
+                                  ? Icons.close_fullscreen_rounded
+                                  : Icons.open_in_full_rounded,
+                              size: 16,
+                            ),
                           ),
                         ),
                       ],

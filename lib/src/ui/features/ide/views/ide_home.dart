@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/menu_action_bridge.dart';
@@ -72,6 +73,7 @@ class _IdeHomeState extends State<IdeHome> {
   double _rightPanelWidth = _initialPanelWidth;
   double _leftTopRatio = _initialPanelRatio;
   double _rightTopRatio = _initialPanelRatio;
+  Object? _statusToastId;
   _IdeHomePage _page = _IdeHomePage.home;
   SettingsSection _settingsSection = SettingsSection.appearance;
 
@@ -125,7 +127,7 @@ class _IdeHomeState extends State<IdeHome> {
       ),
     );
 
-    return Scaffold(body: body);
+    return body;
   }
 
   Widget _buildPageBody() {
@@ -449,7 +451,9 @@ class _IdeHomeState extends State<IdeHome> {
     return _RoundedPanel(
       key: const ValueKey('files-panel-card'),
       child: FileTreePane(
-        controller: _shellController.treeController,
+        nodes: _shellController.workspaceTree,
+        expandedPaths: _shellController.expandedDirectoryPaths,
+        selectedPath: _shellController.selectedTreePath,
         projectPath: _shellController.activeProjectPath,
         isLoading: _shellController.isLoadingProject,
         onNodeTap: _shellController.handleTreeNodeTap,
@@ -570,15 +574,20 @@ class _IdeHomeState extends State<IdeHome> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    final sonner = ShadSonner.maybeOf(context);
+    if (sonner == null) {
+      return;
+    }
+    final previousToastId = _statusToastId;
+    if (previousToastId != null) {
+      unawaited(sonner.hide(previousToastId));
+    }
+    _statusToastId = sonner.show(
+      ShadToast(
+        description: Text(message),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   void _openSettingsPage() {
@@ -613,12 +622,16 @@ class _RoundedPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resolved = color ?? IdeColors.of(context).panel;
+    final shadTheme = ShadTheme.of(context);
+    final resolved = resolvePanelSurfaceColor(
+      context,
+      baseColor: color ?? shadTheme.colorScheme.card,
+    );
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: resolved,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: shadTheme.radius,
       ),
       child: child,
     );
@@ -668,31 +681,32 @@ class _ActionIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final foreground = active ? colors.accentForeground : colors.mutedText;
-    return Tooltip(
+    final shadTheme = ShadTheme.of(context);
+    final colorScheme = shadTheme.colorScheme;
+    final foreground = active
+        ? colorScheme.primaryForeground
+        : colorScheme.mutedForeground;
+    final activeBackground = colorScheme.primary.withValues(
+      alpha: shadTheme.brightness == Brightness.dark ? 0.18 : 0.1,
+    );
+    final hoverBackground = colorScheme.border.withValues(
+      alpha: shadTheme.brightness == Brightness.dark ? 0.18 : 0.3,
+    );
+    return IdeTooltip(
       message: tooltip,
-      waitDuration: const Duration(milliseconds: 500),
       child: Semantics(
         button: true,
         selected: active,
         label: semanticLabel,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onPressed,
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              width: 32,
-              height: 32,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Icon(icon, size: 20, color: foreground),
-            ),
-          ),
+        child: ShadIconButton.ghost(
+          onPressed: onPressed,
+          width: 32,
+          height: 32,
+          padding: EdgeInsets.zero,
+          backgroundColor: active ? activeBackground : Colors.transparent,
+          hoverBackgroundColor: active ? activeBackground : hoverBackground,
+          foregroundColor: foreground,
+          icon: Icon(icon, size: 20),
         ),
       ),
     );

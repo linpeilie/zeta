@@ -238,20 +238,15 @@ class _AgentLoadOlderTurnsButton extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       child: Align(
         alignment: Alignment.centerLeft,
-        child: TextButton.icon(
+        child: ShadButton.ghost(
           key: const ValueKey('agent-load-older-turns-button'),
           onPressed: loading ? null : onPressed,
-          icon: loading
-              ? const SizedBox.square(
-                  dimension: 12,
-                  child: CircularProgressIndicator(strokeWidth: 1.5),
-                )
+          size: ShadButtonSize.sm,
+          leading: loading
+              ? const IdeLoadingIndicator(width: 16, height: 10, barHeight: 3)
               : const Icon(Icons.history_rounded, size: 15),
-          label: Text(loading ? 'Loading older turns' : 'Load older turns'),
-          style: TextButton.styleFrom(
-            visualDensity: VisualDensity.compact,
-            textStyle: const TextStyle(fontSize: 11),
-          ),
+          textStyle: const TextStyle(fontSize: 11),
+          child: Text(loading ? 'Loading older turns' : 'Load older turns'),
         ),
       ),
     );

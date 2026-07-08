@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -43,10 +44,13 @@ class ProjectListPane extends StatelessWidget {
   Widget build(BuildContext context) {
     return Pane(
       title: 'Projects',
-      trailing: Tooltip(
+      trailing: IdeTooltip(
         message: 'Open folder',
-        child: IconButton(
+        child: ShadIconButton.ghost(
           onPressed: onOpenProject,
+          width: 30,
+          height: 30,
+          padding: EdgeInsets.zero,
           icon: const Icon(Icons.create_new_folder_outlined, size: 17),
         ),
       ),
@@ -115,70 +119,44 @@ class _ProjectTileState extends State<_ProjectTile> {
   static const double _actionHitSize = 18;
   static const double _actionIconSize = 16;
   static const double _actionIconGap = 6;
-  static const double _menuItemHeight = 32;
-  static const EdgeInsets _menuItemPadding = EdgeInsets.symmetric(
-    horizontal: 12,
-  );
 
   bool _hovered = false;
   bool _focused = false;
-  bool _menuOpen = false;
-  final GlobalKey _moreMenuAnchorKey = GlobalKey();
+  late final ShadPopoverController _moreMenuController;
 
-  bool get _showActions => _hovered || _focused || _menuOpen;
+  bool get _showActions => _hovered || _focused || _moreMenuController.isOpen;
 
-  Future<void> _showMoreMenu() async {
-    final anchorContext = _moreMenuAnchorKey.currentContext;
-    if (anchorContext == null) {
+  @override
+  void initState() {
+    super.initState();
+    _moreMenuController = ShadPopoverController();
+    _moreMenuController.addListener(_handleMenuVisibilityChanged);
+  }
+
+  @override
+  void dispose() {
+    _moreMenuController
+      ..removeListener(_handleMenuVisibilityChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleMenuVisibilityChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _toggleMoreMenu() {
+    if (_moreMenuController.isOpen) {
+      _moreMenuController.hide();
       return;
     }
-    final button = anchorContext.findRenderObject()! as RenderBox;
-    final overlay =
-        Overlay.of(context).context.findRenderObject()! as RenderBox;
-    final topLeft = button.localToGlobal(Offset.zero, ancestor: overlay);
-    final bottomRight = button.localToGlobal(
-      Offset(button.size.width, button.size.height),
-      ancestor: overlay,
-    );
+    _moreMenuController.show();
+  }
 
-    setState(() {
-      _menuOpen = true;
-    });
-
-    // 手动弹出菜单，避免 PopupMenuButton 的默认最小点击尺寸把项目行撑高。
-    final selected = await showMenu<_ProjectTileMenuAction>(
-      context: context,
-      position: RelativeRect.fromRect(
-        Rect.fromPoints(topLeft, bottomRight),
-        Offset.zero & overlay.size,
-      ),
-      items: <PopupMenuEntry<_ProjectTileMenuAction>>[
-        _buildMenuItem(
-          value: _ProjectTileMenuAction.refreshThreads,
-          key: ValueKey<String>('project-tile-refresh-threads-${widget.path}'),
-          label: '刷新会话',
-        ),
-        _buildMenuItem(
-          value: _ProjectTileMenuAction.openProjectLocation,
-          key: ValueKey<String>('project-tile-open-location-${widget.path}'),
-          label: _openProjectLocationLabel(),
-        ),
-        _buildMenuItem(
-          value: _ProjectTileMenuAction.removeProject,
-          key: ValueKey<String>('project-tile-remove-${widget.path}'),
-          label: '移除',
-        ),
-      ],
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _menuOpen = false;
-    });
-
+  void _handleMenuAction(_ProjectTileMenuAction selected) {
+    _moreMenuController.hide();
     switch (selected) {
       case _ProjectTileMenuAction.refreshThreads:
         widget.onRetryThreads();
@@ -189,160 +167,204 @@ class _ProjectTileState extends State<_ProjectTile> {
       case _ProjectTileMenuAction.removeProject:
         widget.onRemoveProject();
         break;
-      case null:
-        break;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
+    final shadTheme = ShadTheme.of(context);
+    final colorScheme = shadTheme.colorScheme;
+    final selectedBackground = colorScheme.primary.withValues(
+      alpha: shadTheme.brightness == Brightness.dark ? 0.16 : 0.1,
+    );
+    final hoverBackground = colorScheme.border.withValues(alpha: 0.12);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Material(
-            color: widget.selected
-                ? colors.accent.withValues(alpha: 0.16)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              onEnter: (_) {
-                setState(() {
-                  _hovered = true;
-                });
-              },
-              onExit: (_) {
-                setState(() {
-                  _hovered = false;
-                });
-              },
-              child: FocusableActionDetector(
-                onShowFocusHighlight: (value) {
-                  setState(() {
-                    _focused = value;
-                  });
-                },
-                child: InkWell(
-                  key: ValueKey<String>('project-tile-${widget.path}'),
-                  onTap: widget.onTap,
-                  borderRadius: BorderRadius.circular(6),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 7,
+          PaneInteractiveSurface(
+            key: ValueKey<String>('project-tile-${widget.path}'),
+            onPressed: widget.onTap,
+            selected: widget.selected,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+            selectedBackgroundColor: selectedBackground,
+            hoverBackgroundColor: hoverBackground,
+            onHoverChanged: (value) {
+              setState(() {
+                _hovered = value;
+              });
+            },
+            onFocusChanged: (value) {
+              setState(() {
+                _focused = value;
+              });
+            },
+            child: Row(
+              children: [
+                Icon(
+                  widget.selected
+                      ? Icons.folder_open_rounded
+                      : Icons.folder_rounded,
+                  size: 16,
+                  color: widget.selected
+                      ? colorScheme.primary
+                      : colorScheme.mutedForeground,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    fileName(widget.path),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: shadTheme.textTheme.p.copyWith(
+                      fontWeight: FontWeight.w600,
                     ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          widget.selected
-                              ? Icons.folder_open_rounded
-                              : Icons.folder_rounded,
-                          size: 16,
-                          color: widget.selected
-                              ? colors.accent
-                              : colors.mutedText,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            fileName(widget.path),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 140),
-                          switchInCurve: Curves.easeOut,
-                          switchOutCurve: Curves.easeIn,
-                          child: SizedBox(
+                  ),
+                ),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 140),
+                  switchInCurve: Curves.easeOut,
+                  switchOutCurve: Curves.easeIn,
+                  child: SizedBox(
+                    key: ValueKey<String>(
+                      _showActions
+                          ? 'project-tile-actions-${widget.path}'
+                          : 'project-tile-actions-hidden-${widget.path}',
+                    ),
+                    height: _actionHitSize,
+                    child: _showActions
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IdeTooltip(
+                                message: widget.threadState.isExpanded
+                                    ? 'Collapse threads'
+                                    : 'Expand threads',
+                                child: ShadIconButton.ghost(
+                                  key: ValueKey<String>(
+                                    'project-tile-expand-icon-${widget.path}',
+                                  ),
+                                  onPressed: widget.onTap,
+                                  width: _actionHitSize,
+                                  height: _actionHitSize,
+                                  padding: EdgeInsets.zero,
+                                  foregroundColor: colorScheme.mutedForeground,
+                                  hoverBackgroundColor: hoverBackground,
+                                  icon: Icon(
+                                    widget.threadState.isExpanded
+                                        ? Icons.keyboard_arrow_down_rounded
+                                        : Icons.chevron_right_rounded,
+                                    size: _actionIconSize,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: _actionIconGap),
+                              IdeTooltip(
+                                message: 'More',
+                                child: GestureDetector(
+                                  key: ValueKey<String>(
+                                    'project-tile-more-menu-${widget.path}',
+                                  ),
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: _toggleMoreMenu,
+                                  child: Container(
+                                    width: _actionHitSize,
+                                    height: _actionHitSize,
+                                    color: Colors.transparent,
+                                    alignment: Alignment.center,
+                                    child: Icon(
+                                      Icons.more_horiz_rounded,
+                                      key: ValueKey<String>(
+                                        'project-tile-more-${widget.path}',
+                                      ),
+                                      size: _actionIconSize,
+                                      color: colorScheme.mutedForeground,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: _actionIconGap),
+                              IdeTooltip(
+                                message: 'New thread',
+                                child: ShadIconButton.ghost(
+                                  key: ValueKey<String>(
+                                    'project-tile-new-thread-${widget.path}',
+                                  ),
+                                  onPressed: widget.onNewThread,
+                                  width: _actionHitSize,
+                                  height: _actionHitSize,
+                                  padding: EdgeInsets.zero,
+                                  foregroundColor: colorScheme.mutedForeground,
+                                  hoverBackgroundColor: hoverBackground,
+                                  icon: const Icon(
+                                    Icons.edit_outlined,
+                                    size: _actionIconSize,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          )
+                        : const SizedBox(width: 0),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_moreMenuController.isOpen)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, right: 6),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colorScheme.popover,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: colorScheme.border),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minWidth: 156),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildMenuActionButton(
+                            value: _ProjectTileMenuAction.refreshThreads,
                             key: ValueKey<String>(
-                              _showActions
-                                  ? 'project-tile-actions-${widget.path}'
-                                  : 'project-tile-actions-hidden-${widget.path}',
+                              'project-tile-refresh-threads-${widget.path}',
                             ),
-                            height: _actionHitSize,
-                            child: _showActions
-                                ? Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Tooltip(
-                                        message: widget.threadState.isExpanded
-                                            ? 'Collapse threads'
-                                            : 'Expand threads',
-                                        child: GestureDetector(
-                                          key: ValueKey<String>(
-                                            'project-tile-expand-icon-${widget.path}',
-                                          ),
-                                          behavior: HitTestBehavior.opaque,
-                                          onTap: widget.onTap,
-                                          child: SizedBox.square(
-                                            dimension: _actionHitSize,
-                                            child: Icon(
-                                              widget.threadState.isExpanded
-                                                  ? Icons
-                                                        .keyboard_arrow_down_rounded
-                                                  : Icons.chevron_right_rounded,
-                                              size: _actionIconSize,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: _actionIconGap),
-                                      Tooltip(
-                                        message: 'More',
-                                        child: GestureDetector(
-                                          key: ValueKey<String>(
-                                            'project-tile-more-menu-${widget.path}',
-                                          ),
-                                          onTap: _showMoreMenu,
-                                          behavior: HitTestBehavior.opaque,
-                                          child: SizedBox.square(
-                                            key: ValueKey<String>(
-                                              'project-tile-more-${widget.path}',
-                                            ),
-                                            dimension: _actionHitSize,
-                                            child: Icon(
-                                              Icons.more_horiz_rounded,
-                                              key: _moreMenuAnchorKey,
-                                              size: _actionIconSize,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: _actionIconGap),
-                                      Tooltip(
-                                        message: 'New thread',
-                                        child: GestureDetector(
-                                          key: ValueKey<String>(
-                                            'project-tile-new-thread-${widget.path}',
-                                          ),
-                                          behavior: HitTestBehavior.opaque,
-                                          onTap: widget.onNewThread,
-                                          child: SizedBox.square(
-                                            dimension: _actionHitSize,
-                                            child: const Icon(
-                                              Icons.edit_outlined,
-                                              size: _actionIconSize,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  )
-                                : const SizedBox(width: 0),
+                            label: '刷新会话',
                           ),
-                        ),
-                      ],
+                          _buildMenuActionButton(
+                            value: _ProjectTileMenuAction.openProjectLocation,
+                            key: ValueKey<String>(
+                              'project-tile-open-location-${widget.path}',
+                            ),
+                            label: _openProjectLocationLabel(),
+                          ),
+                          _buildMenuActionButton(
+                            value: _ProjectTileMenuAction.removeProject,
+                            key: ValueKey<String>(
+                              'project-tile-remove-${widget.path}',
+                            ),
+                            label: '移除',
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
           if (widget.threadState.isExpanded)
             _ProjectThreadList(
               projectPath: widget.path,
@@ -356,16 +378,18 @@ class _ProjectTileState extends State<_ProjectTile> {
     );
   }
 
-  PopupMenuItem<_ProjectTileMenuAction> _buildMenuItem({
+  Widget _buildMenuActionButton({
     required _ProjectTileMenuAction value,
     required Key key,
     required String label,
   }) {
-    return PopupMenuItem<_ProjectTileMenuAction>(
+    return ShadButton.ghost(
       key: key,
-      value: value,
-      height: _menuItemHeight,
-      padding: _menuItemPadding,
+      onPressed: () => _handleMenuAction(value),
+      width: double.infinity,
+      height: 32,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      mainAxisAlignment: MainAxisAlignment.start,
       child: Text(label, style: const TextStyle(fontSize: 12, height: 1.1)),
     );
   }
@@ -436,6 +460,8 @@ class _ThreadTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
+    final shadTheme = ShadTheme.of(context);
+    final colorScheme = shadTheme.colorScheme;
     final isRunning = thread.status == AgentThreadRuntimeStatus.active;
     final lastActiveLabel = _relativeThreadTime(
       thread.lastActiveAt,
@@ -443,57 +469,53 @@ class _ThreadTile extends StatelessWidget {
     );
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 1),
-      child: Material(
-        color: selected
-            ? colors.accent.withValues(alpha: 0.12)
-            : Colors.transparent,
+      child: PaneInteractiveSurface(
+        key: ValueKey<String>('project-thread-$projectPath-${thread.id}'),
+        onPressed: onTap,
+        selected: selected,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         borderRadius: BorderRadius.circular(5),
-        child: InkWell(
-          key: ValueKey<String>('project-thread-$projectPath-${thread.id}'),
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(5),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: Row(
-              children: [
-                Icon(
-                  _threadIcon(thread.status),
-                  size: 14,
-                  color: selected ? colors.accent : colors.mutedText,
-                ),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Text(
-                    thread.displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                if (isRunning) ...[
-                  const SizedBox(width: 8),
-                  Icon(
-                    Icons.autorenew_rounded,
-                    key: ValueKey<String>(
-                      'project-thread-running-icon-$projectPath-${thread.id}',
-                    ),
-                    size: 14,
-                    color: colors.accent,
-                  ),
-                ] else if (lastActiveLabel != null) ...[
-                  const SizedBox(width: 8),
-                  Text(
-                    lastActiveLabel,
-                    maxLines: 1,
-                    style: TextStyle(color: colors.mutedText, fontSize: 10),
-                  ),
-                ],
-              ],
+        selectedBackgroundColor: colorScheme.primary.withValues(
+          alpha: shadTheme.brightness == Brightness.dark ? 0.14 : 0.08,
+        ),
+        hoverBackgroundColor: colorScheme.border.withValues(alpha: 0.12),
+        child: Row(
+          children: [
+            Icon(
+              _threadIcon(thread.status),
+              size: 14,
+              color: selected ? colors.accent : colors.mutedText,
             ),
-          ),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Text(
+                thread.displayName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: shadTheme.textTheme.small.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (isRunning) ...[
+              const SizedBox(width: 8),
+              Icon(
+                Icons.autorenew_rounded,
+                key: ValueKey<String>(
+                  'project-thread-running-icon-$projectPath-${thread.id}',
+                ),
+                size: 14,
+                color: colors.accent,
+              ),
+            ] else if (lastActiveLabel != null) ...[
+              const SizedBox(width: 8),
+              Text(
+                lastActiveLabel,
+                maxLines: 1,
+                style: TextStyle(color: colors.mutedText, fontSize: 10),
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -545,13 +567,15 @@ class _ThreadErrorRow extends StatelessWidget {
               ),
             ),
           ),
-          Tooltip(
+          IdeTooltip(
             message: 'Retry',
-            child: IconButton(
+            child: ShadIconButton.ghost(
               key: const ValueKey<String>('project-thread-retry-button'),
               onPressed: onRetry,
+              width: 28,
+              height: 28,
+              padding: EdgeInsets.zero,
               icon: const Icon(Icons.refresh_rounded, size: 15),
-              visualDensity: VisualDensity.compact,
             ),
           ),
         ],
@@ -573,20 +597,15 @@ class _LoadMoreThreadsButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerLeft,
-      child: TextButton.icon(
+      child: ShadButton.ghost(
         key: const ValueKey<String>('project-thread-load-more-button'),
         onPressed: loading ? null : onPressed,
-        icon: loading
-            ? const SizedBox.square(
-                dimension: 12,
-                child: CircularProgressIndicator(strokeWidth: 1.5),
-              )
+        size: ShadButtonSize.sm,
+        leading: loading
+            ? const IdeLoadingIndicator(width: 16, height: 10, barHeight: 3)
             : const Icon(Icons.more_horiz_rounded, size: 15),
-        label: Text(loading ? 'Loading' : 'Load more'),
-        style: TextButton.styleFrom(
-          visualDensity: VisualDensity.compact,
-          textStyle: const TextStyle(fontSize: 11),
-        ),
+        textStyle: const TextStyle(fontSize: 11),
+        child: Text(loading ? 'Loading' : 'Load more'),
       ),
     );
   }

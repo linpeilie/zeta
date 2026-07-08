@@ -55,6 +55,13 @@ class _AgentComposer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
+    final shadTheme = ShadTheme.of(context);
+    final colorScheme = shadTheme.colorScheme;
+    final inputTextStyle = shadTheme.textTheme.p.copyWith(
+      color: colorScheme.foreground,
+    );
+    final lineHeight =
+        (inputTextStyle.fontSize ?? 12) * (inputTextStyle.height ?? 1.35);
     final hasDraft = controller.text.trim().isNotEmpty;
     final showSend =
         threadOpenPhase == AgentThreadOpenPhase.idle &&
@@ -82,25 +89,25 @@ class _AgentComposer extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 上半部分：多行输入框，默认 3 行，最高 10 行，去掉自带边框。
-            TextField(
+            ShadTextarea(
               key: const ValueKey('agent-message-input'),
               controller: controller,
-              minLines: 3,
-              maxLines: 10,
-              textInputAction: TextInputAction.send,
+              placeholder: Text(
+                'Message Agent',
+                style: shadTheme.textTheme.p.copyWith(color: colors.mutedText),
+              ),
+              style: inputTextStyle,
+              decoration: ShadDecoration.none,
+              padding: EdgeInsets.zero,
+              inputPadding: EdgeInsets.zero,
+              minHeight: lineHeight * 3,
+              maxHeight: lineHeight * 10,
+              resizable: false,
               onSubmitted: (_) {
                 if (canSubmit) {
                   onSend();
                 }
               },
-              decoration: InputDecoration(
-                hintText: 'Message Agent',
-                hintStyle: TextStyle(color: colors.mutedText),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.zero,
-              ),
             ),
             const SizedBox(height: 6),
             // 下半部分：操作行，左侧放选择控件，右侧放发送按钮。
@@ -131,22 +138,28 @@ class _AgentComposer extends StatelessWidget {
                 ],
                 const Spacer(),
                 if (showCancel)
-                  Tooltip(
+                  IdeTooltip(
                     message: 'Cancel',
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         color: colors.border.withValues(alpha: 0.36),
                         shape: BoxShape.circle,
                       ),
-                      child: IconButton(
-                        key: const ValueKey('agent-cancel-button'),
-                        onPressed: onCancel,
-                        icon: const Icon(Icons.stop_rounded, size: 18),
+                      child: ClipOval(
+                        child: ShadIconButton.ghost(
+                          key: const ValueKey('agent-cancel-button'),
+                          onPressed: onCancel,
+                          width: 32,
+                          height: 32,
+                          padding: EdgeInsets.zero,
+                          foregroundColor: colors.mutedText,
+                          icon: const Icon(Icons.stop_rounded, size: 18),
+                        ),
                       ),
                     ),
                   )
                 else if (showSend)
-                  Tooltip(
+                  IdeTooltip(
                     message: 'Send',
                     child: DecoratedBox(
                       decoration: BoxDecoration(
@@ -155,10 +168,21 @@ class _AgentComposer extends StatelessWidget {
                             : colors.border.withValues(alpha: 0.2),
                         shape: BoxShape.circle,
                       ),
-                      child: IconButton(
-                        key: const ValueKey('agent-send-button'),
-                        onPressed: canSubmit ? onSend : null,
-                        icon: const Icon(Icons.arrow_upward_rounded, size: 18),
+                      child: ClipOval(
+                        child: ShadIconButton.ghost(
+                          key: const ValueKey('agent-send-button'),
+                          onPressed: canSubmit ? onSend : null,
+                          width: 32,
+                          height: 32,
+                          padding: EdgeInsets.zero,
+                          foregroundColor: canSubmit
+                              ? colors.accent
+                              : colors.mutedText.withValues(alpha: 0.72),
+                          icon: const Icon(
+                            Icons.arrow_upward_rounded,
+                            size: 18,
+                          ),
+                        ),
                       ),
                     ),
                   )
@@ -186,12 +210,12 @@ class _SelectorChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
+    final colorScheme = ShadTheme.of(context).colorScheme;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: colors.border.withValues(alpha: 0.18),
+        color: colorScheme.muted.withValues(alpha: 0.72),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colors.border.withValues(alpha: 0.4)),
+        border: Border.all(color: colorScheme.border.withValues(alpha: 0.6)),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
@@ -199,7 +223,7 @@ class _SelectorChip extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
-              Icon(icon, size: 12, color: colors.mutedText),
+              Icon(icon, size: 12, color: colorScheme.mutedForeground),
               const SizedBox(width: 4),
             ],
             Text(
@@ -209,17 +233,63 @@ class _SelectorChip extends StatelessWidget {
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
-                color: colors.mutedText.withValues(alpha: 0.9),
+                color: colorScheme.mutedForeground.withValues(alpha: 0.9),
               ),
             ),
             const SizedBox(width: 2),
             Icon(
               Icons.keyboard_arrow_down_rounded,
               size: 12,
-              color: colors.mutedText,
+              color: colorScheme.mutedForeground,
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SelectorSelect<T extends Object> extends StatelessWidget {
+  const _SelectorSelect({
+    required this.selectorKey,
+    required this.tooltip,
+    required this.placeholderLabel,
+    required this.icon,
+    required this.initialValue,
+    required this.labelBuilder,
+    required this.options,
+    required this.onChanged,
+  });
+
+  final Key selectorKey;
+  final String tooltip;
+  final String placeholderLabel;
+  final IconData icon;
+  final T? initialValue;
+  final String Function(T value) labelBuilder;
+  final Iterable<Widget> options;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return IdeTooltip(
+      message: tooltip,
+      child: ShadSelect<T>(
+        key: selectorKey,
+        initialValue: initialValue,
+        minWidth: 0,
+        decoration: ShadDecoration.none,
+        padding: EdgeInsets.zero,
+        trailing: const SizedBox.shrink(),
+        placeholder: _SelectorChip(label: placeholderLabel, icon: icon),
+        selectedOptionBuilder: (context, value) =>
+            _SelectorChip(label: labelBuilder(value), icon: icon),
+        options: options,
+        onChanged: (value) {
+          if (value != null) {
+            onChanged(value);
+          }
+        },
       ),
     );
   }
@@ -239,47 +309,36 @@ class _ModelSelectorButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      key: const ValueKey('agent-model-selector'),
+    return _SelectorSelect<String>(
+      selectorKey: const ValueKey('agent-model-selector'),
       tooltip: 'Select model',
-      onSelected: onSelect,
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(),
-      itemBuilder: (context) => [
+      placeholderLabel: 'Model',
+      icon: Icons.auto_awesome_outlined,
+      initialValue: selectedModel?.id,
+      labelBuilder: _modelLabel,
+      onChanged: onSelect,
+      options: [
         for (final model in models)
-          PopupMenuItem<String>(
+          ShadOption<String>(
+            key: ValueKey<String>('agent-model-option-${model.id}'),
             value: model.id,
-            height: 32,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  width: 16,
-                  child: model.id == selectedModel?.id
-                      ? Icon(
-                          Icons.check_rounded,
-                          size: 14,
-                          color: IdeColors.of(context).accent,
-                        )
-                      : const SizedBox(),
-                ),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    model.displayName,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ),
-              ],
+            child: Text(
+              model.displayName,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12),
             ),
           ),
       ],
-      child: _SelectorChip(
-        label: selectedModel?.displayName ?? 'Model',
-        icon: Icons.auto_awesome_outlined,
-      ),
     );
+  }
+
+  String _modelLabel(String modelId) {
+    for (final model in models) {
+      if (model.id == modelId) {
+        return model.displayName;
+      }
+    }
+    return selectedModel?.displayName ?? modelId;
   }
 }
 
@@ -297,44 +356,35 @@ class _ReasoningEffortButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<String?>(
-      key: const ValueKey('agent-reasoning-effort-selector'),
+    return _SelectorSelect<String>(
+      selectorKey: const ValueKey('agent-reasoning-effort-selector'),
       tooltip: 'Reasoning effort',
-      onSelected: onSelect,
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(),
-      itemBuilder: (context) => [
+      placeholderLabel: 'Think',
+      icon: Icons.psychology_alt_outlined,
+      initialValue: selectedEffort,
+      labelBuilder: _effortLabel,
+      onChanged: (value) => onSelect(value),
+      options: [
         for (final effort in efforts)
-          PopupMenuItem<String?>(
+          ShadOption<String>(
+            key: ValueKey<String>('agent-reasoning-option-${effort.effort}'),
             value: effort.effort,
-            height: 32,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  width: 16,
-                  child: effort.effort == selectedEffort
-                      ? Icon(
-                          Icons.check_rounded,
-                          size: 14,
-                          color: IdeColors.of(context).accent,
-                        )
-                      : const SizedBox(),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  effort.description ?? effort.effort,
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ],
+            child: Text(
+              effort.description ?? effort.effort,
+              style: const TextStyle(fontSize: 12),
             ),
           ),
       ],
-      child: _SelectorChip(
-        label: selectedEffort ?? 'Think',
-        icon: Icons.psychology_alt_outlined,
-      ),
     );
+  }
+
+  String _effortLabel(String effortValue) {
+    for (final effort in efforts) {
+      if (effort.effort == effortValue) {
+        return effort.description ?? effort.effort;
+      }
+    }
+    return selectedEffort ?? effortValue;
   }
 }
 
@@ -352,53 +402,31 @@ class _ServiceTierButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<String?>(
-      key: const ValueKey('agent-service-tier-selector'),
+    return _SelectorSelect<String>(
+      selectorKey: const ValueKey('agent-service-tier-selector'),
       tooltip: 'Service tier',
-      onSelected: onSelect,
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(),
-      itemBuilder: (context) => [
+      placeholderLabel: 'Speed',
+      icon: Icons.speed_rounded,
+      initialValue: selectedTierId,
+      labelBuilder: _tierLabel,
+      onChanged: (value) => onSelect(value),
+      options: [
         for (final tier in tiers)
-          PopupMenuItem<String?>(
+          ShadOption<String>(
+            key: ValueKey<String>('agent-service-tier-option-${tier.id}'),
             value: tier.id,
-            height: 32,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  width: 16,
-                  child: tier.id == selectedTierId
-                      ? Icon(
-                          Icons.check_rounded,
-                          size: 14,
-                          color: IdeColors.of(context).accent,
-                        )
-                      : const SizedBox(),
-                ),
-                const SizedBox(width: 6),
-                Text(tier.name, style: const TextStyle(fontSize: 12)),
-              ],
-            ),
+            child: Text(tier.name, style: const TextStyle(fontSize: 12)),
           ),
       ],
-      child: _SelectorChip(
-        label: _selectedTierName() ?? 'Speed',
-        icon: Icons.speed_rounded,
-      ),
     );
   }
 
-  String? _selectedTierName() {
-    final id = selectedTierId;
-    if (id == null) {
-      return null;
-    }
+  String _tierLabel(String id) {
     for (final tier in tiers) {
       if (tier.id == id) {
         return tier.name;
       }
     }
-    return null;
+    return id;
   }
 }

@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
+import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/data/default_agent_provider_factory.dart';
@@ -14,7 +17,6 @@ import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
-import 'package:zeta/src/app/app_constants.dart';
 
 /// 应用根组件。
 ///
@@ -94,33 +96,39 @@ class MainAppState extends State<MainApp> {
     return ValueListenableBuilder<AppearanceSettings>(
       valueListenable: _appearanceController.listenable,
       builder: (context, settings, _) {
-        return MaterialApp(
+        return ShadApp(
           debugShowCheckedModeBanner: false,
           title: appTitle,
-          theme: buildIdeTheme(
+          theme: buildShadTheme(
             brightness: Brightness.light,
             uiFontFamily: settings.uiFontFamily,
             codeFontFamily: settings.codeFontFamily,
           ),
-          darkTheme: buildIdeTheme(
+          darkTheme: buildShadTheme(
             brightness: Brightness.dark,
             uiFontFamily: settings.uiFontFamily,
             codeFontFamily: settings.codeFontFamily,
           ),
           themeMode: settings.themeMode,
-          home: IdeHome(
-            directoryPicker: widget.directoryPicker ?? getDirectoryPath,
-            enableNativeWindowFrame: widget.enableNativeWindowFrame,
-            sessionStore: _createSessionStore(),
-            agentProviderFactory:
-                widget.agentProviderFactory ??
-                const DefaultAgentProviderFactory(),
-            agentProviderConfigStore:
-                widget.agentProviderConfigStore ??
-                _createAgentProviderConfigStore(),
-            projectLocationOpener:
-                widget.projectLocationOpener ?? openPathInSystemFileManager,
-            appearanceController: _appearanceController,
+          backgroundColor: Platform.isMacOS ? Colors.transparent : null,
+          home: IdeCodeFontScope(
+            codeFontFamily: settings.codeFontFamily,
+            child: ShadSonner(
+              child: IdeHome(
+                directoryPicker: widget.directoryPicker ?? getDirectoryPath,
+                enableNativeWindowFrame: widget.enableNativeWindowFrame,
+                sessionStore: _createSessionStore(),
+                agentProviderFactory:
+                    widget.agentProviderFactory ??
+                    const DefaultAgentProviderFactory(),
+                agentProviderConfigStore:
+                    widget.agentProviderConfigStore ??
+                    _createAgentProviderConfigStore(),
+                projectLocationOpener:
+                    widget.projectLocationOpener ?? openPathInSystemFileManager,
+                appearanceController: _appearanceController,
+              ),
+            ),
           ),
         );
       },

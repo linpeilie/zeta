@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/pane_widgets.dart';
 
 /// 包裹主内容的窗口外框。
 ///
@@ -155,7 +157,10 @@ class _TitleBar extends StatelessWidget {
                   for (final action in titleBarActions)
                     Padding(
                       padding: const EdgeInsets.only(left: 4),
-                      child: _TitleBarActionButton(action: action),
+                      child: _TitleBarActionButton(
+                        key: action.key,
+                        action: action,
+                      ),
                     ),
                 ],
               ),
@@ -184,44 +189,81 @@ class _WindowMenuBar extends StatelessWidget {
   }
 }
 
-class _WindowMenuButton extends StatelessWidget {
+class _WindowMenuButton extends StatefulWidget {
   const _WindowMenuButton({required this.menu});
 
   final WindowMenu menu;
 
   @override
+  State<_WindowMenuButton> createState() => _WindowMenuButtonState();
+}
+
+class _WindowMenuButtonState extends State<_WindowMenuButton> {
+  late final ShadPopoverController _popoverController;
+
+  @override
+  void initState() {
+    super.initState();
+    _popoverController = ShadPopoverController();
+  }
+
+  @override
+  void dispose() {
+    _popoverController.dispose();
+    super.dispose();
+  }
+
+  void _handleMenuItemPressed(WindowMenuItem item) {
+    _popoverController.hide();
+    item.onPressed?.call();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    return PopupMenuButton<WindowMenuItem>(
-      key: menu.key,
-      tooltip: '',
-      padding: EdgeInsets.zero,
-      position: PopupMenuPosition.under,
-      color: colors.surface,
-      surfaceTintColor: Colors.transparent,
-      elevation: 8,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: colors.border),
+    final shadTheme = ShadTheme.of(context);
+    return ShadPopover(
+      key: widget.menu.key,
+      controller: _popoverController,
+      padding: const EdgeInsets.all(4),
+      anchor: const ShadAnchorAuto(
+        offset: Offset(0, 4),
+        targetAnchor: Alignment.bottomLeft,
+        followerAnchor: Alignment.topLeft,
+        fallback: ShadAnchorAuto(
+          offset: Offset(0, -4),
+          targetAnchor: Alignment.topLeft,
+          followerAnchor: Alignment.bottomLeft,
+        ),
       ),
-      onSelected: (item) => item.onPressed?.call(),
-      itemBuilder: (context) {
-        return [
-          for (final item in menu.items)
-            PopupMenuItem<WindowMenuItem>(
-              key: item.key,
-              value: item,
-              enabled: item.onPressed != null,
-              height: 32,
-              child: Text(
-                item.label,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface,
-                  fontSize: 12,
+      popover: (context) {
+        return ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 160),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final item in widget.menu.items)
+                ShadButton.ghost(
+                  key: item.key,
+                  onPressed: item.onPressed == null
+                      ? null
+                      : () => _handleMenuItemPressed(item),
+                  width: double.infinity,
+                  height: 32,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  child: Text(
+                    item.label,
+                    style: TextStyle(
+                      color: shadTheme.colorScheme.foreground,
+                      fontSize: 12,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-        ];
+            ],
+          ),
+        );
       },
       child: SizedBox(
         height: 28,
@@ -229,7 +271,7 @@ class _WindowMenuButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 10),
           child: Center(
             child: Text(
-              menu.label,
+              widget.menu.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(color: colors.mutedText, fontSize: 12),
@@ -309,42 +351,42 @@ class _WindowButtonsState extends State<_WindowButtons> with WindowListener {
 }
 
 class _TitleBarActionButton extends StatelessWidget {
-  const _TitleBarActionButton({required this.action});
+  const _TitleBarActionButton({required this.action, super.key});
 
   final WindowTitleBarAction action;
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final activeBackground = colors.accent.withValues(
-      alpha: Theme.of(context).brightness == Brightness.dark ? 0.22 : 0.12,
+    final shadTheme = ShadTheme.of(context);
+    final colorScheme = shadTheme.colorScheme;
+    final activeBackground = colorScheme.primary.withValues(
+      alpha: shadTheme.brightness == Brightness.dark ? 0.22 : 0.12,
     );
-    final activeForeground = colors.accentForeground;
-    final foreground = action.active ? activeForeground : colors.mutedText;
-    return Tooltip(
+    final hoverBackground = colorScheme.border.withValues(
+      alpha: shadTheme.brightness == Brightness.dark ? 0.18 : 0.3,
+    );
+    final foreground = action.active
+        ? colorScheme.primaryForeground
+        : colorScheme.mutedForeground;
+    return IdeTooltip(
       message: action.tooltip,
-      waitDuration: const Duration(milliseconds: 500),
       child: Semantics(
         button: true,
         selected: action.active,
         label: action.semanticLabel,
-        child: Material(
-          key: action.key,
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: action.onPressed,
-            borderRadius: BorderRadius.circular(6),
-            hoverColor: action.active ? activeBackground : colors.windowHover,
-            child: Ink(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: action.active ? activeBackground : Colors.transparent,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Icon(action.icon, size: 16, color: foreground),
-            ),
-          ),
+        child: ShadIconButton.ghost(
+          onPressed: action.onPressed,
+          width: 28,
+          height: 28,
+          padding: EdgeInsets.zero,
+          backgroundColor: action.active
+              ? activeBackground
+              : Colors.transparent,
+          hoverBackgroundColor: action.active
+              ? activeBackground
+              : hoverBackground,
+          foregroundColor: foreground,
+          icon: Icon(action.icon, size: 16),
         ),
       ),
     );
@@ -381,12 +423,11 @@ class _WindowButtonState extends State<_WindowButton> {
     final idleIcon = colors.windowIcon;
     final hoverIcon = widget.isClose
         ? Colors.white
-        : (Theme.of(context).brightness == Brightness.dark
+        : (ShadTheme.of(context).brightness == Brightness.dark
               ? Colors.white
               : colors.windowIcon);
-    return Tooltip(
+    return IdeTooltip(
       message: widget.tooltip,
-      waitDuration: const Duration(milliseconds: 500),
       child: MouseRegion(
         onEnter: (_) => setState(() => _hover = true),
         onExit: (_) => setState(() => _hover = false),
