@@ -30,11 +30,31 @@ class WindowMenuItem {
   final Key? key;
 }
 
+@immutable
+class WindowTitleBarAction {
+  const WindowTitleBarAction({
+    required this.icon,
+    required this.tooltip,
+    required this.semanticLabel,
+    required this.onPressed,
+    this.key,
+    this.active = false,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final String semanticLabel;
+  final VoidCallback onPressed;
+  final Key? key;
+  final bool active;
+}
+
 class WindowFrame extends StatelessWidget {
   const WindowFrame({
     required this.child,
     required this.enableNativeWindowFrame,
     this.menus = const <WindowMenu>[],
+    this.titleBarActions = const <WindowTitleBarAction>[],
     this.showWindowControls = true,
     super.key,
   });
@@ -44,6 +64,9 @@ class WindowFrame extends StatelessWidget {
 
   /// 标题栏顶部菜单；菜单内容由上层 feature 决定。
   final List<WindowMenu> menus;
+
+  /// 标题栏右侧动作按钮；由上层 feature 注入具体行为。
+  final List<WindowTitleBarAction> titleBarActions;
 
   /// 测试可关闭右侧窗口按钮，避免依赖 `window_manager` 平台通道。
   final bool showWindowControls;
@@ -55,7 +78,11 @@ class WindowFrame extends StatelessWidget {
     final content = Column(
       children: [
         if (showCustomTitleBar)
-          _TitleBar(menus: menus, showWindowControls: showWindowControls),
+          _TitleBar(
+            menus: menus,
+            titleBarActions: titleBarActions,
+            showWindowControls: showWindowControls,
+          ),
         Expanded(child: child),
       ],
     );
@@ -78,9 +105,14 @@ class WindowFrame extends StatelessWidget {
 }
 
 class _TitleBar extends StatelessWidget {
-  const _TitleBar({required this.menus, required this.showWindowControls});
+  const _TitleBar({
+    required this.menus,
+    required this.titleBarActions,
+    required this.showWindowControls,
+  });
 
   final List<WindowMenu> menus;
+  final List<WindowTitleBarAction> titleBarActions;
   final bool showWindowControls;
 
   @override
@@ -111,6 +143,23 @@ class _TitleBar extends StatelessWidget {
               ),
             ),
           ),
+          if (titleBarActions.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(
+                left: 4,
+                right: !isMac && showWindowControls ? 2 : 6,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final action in titleBarActions)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4),
+                      child: _TitleBarActionButton(action: action),
+                    ),
+                ],
+              ),
+            ),
           if (!isMac && showWindowControls) const _WindowButtons(),
         ],
       ),
@@ -255,6 +304,49 @@ class _WindowButtonsState extends State<_WindowButtons> with WindowListener {
           onPressed: () => windowManager.close(),
         ),
       ],
+    );
+  }
+}
+
+class _TitleBarActionButton extends StatelessWidget {
+  const _TitleBarActionButton({required this.action});
+
+  final WindowTitleBarAction action;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final activeBackground = colors.accent.withValues(
+      alpha: Theme.of(context).brightness == Brightness.dark ? 0.22 : 0.12,
+    );
+    final activeForeground = colors.accentForeground;
+    final foreground = action.active ? activeForeground : colors.mutedText;
+    return Tooltip(
+      message: action.tooltip,
+      waitDuration: const Duration(milliseconds: 500),
+      child: Semantics(
+        button: true,
+        selected: action.active,
+        label: action.semanticLabel,
+        child: Material(
+          key: action.key,
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: action.onPressed,
+            borderRadius: BorderRadius.circular(6),
+            hoverColor: action.active ? activeBackground : colors.windowHover,
+            child: Ink(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: action.active ? activeBackground : Colors.transparent,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(action.icon, size: 16, color: foreground),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -8,11 +8,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// [setMode] 切换；UI 通过 [listenable] 订阅变化后交给 [MaterialApp] 的
 /// `themeMode`。
 class ThemeModeController extends ChangeNotifier {
-  ThemeModeController({this._preferences});
+  ThemeModeController({this.preferences});
 
   static const String _storageKey = 'zeta.theme.mode.v1';
 
-  final SharedPreferencesAsync? _preferences;
+  final SharedPreferencesAsync? preferences;
 
   ThemeMode _mode = ThemeMode.system;
 
@@ -28,14 +28,14 @@ class ThemeModeController extends ChangeNotifier {
 
   /// 从持久化存储加载已保存的偏好；缺失或损坏时回退到 [ThemeMode.system]。
   ///
-  /// 未配置 [_preferences]（测试场景）时直接保留内存默认值，避免触碰真实
+  /// 未配置 [preferences]（测试场景）时直接保留内存默认值，避免触碰真实
   /// shared_preferences。
   Future<void> load() async {
-    final preferences = _preferences;
-    if (preferences == null) {
+    final store = preferences;
+    if (store == null) {
       return;
     }
-    final raw = await preferences.getString(_storageKey);
+    final raw = await store.getString(_storageKey);
     _setMode(_parseMode(raw), notify: false);
   }
 
@@ -45,11 +45,11 @@ class ThemeModeController extends ChangeNotifier {
       return;
     }
     _setMode(mode, notify: true);
-    final preferences = _preferences;
-    if (preferences == null) {
+    final store = preferences;
+    if (store == null) {
       return;
     }
-    await preferences.setString(_storageKey, _encodeMode(mode));
+    await store.setString(_storageKey, _encodeMode(mode));
   }
 
   void _setMode(ThemeMode mode, {required bool notify}) {

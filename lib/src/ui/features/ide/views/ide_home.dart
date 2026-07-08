@@ -10,11 +10,13 @@ import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
+import 'package:zeta/src/features/settings/presentation/settings_page.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/workspace/presentation/file_tree_pane.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
+import 'package:zeta/src/ui/core/theme_mode_controller.dart';
 import 'package:zeta/src/ui/core/window_frame.dart';
 import 'package:zeta/src/ui/features/ide/views/project_list_pane.dart';
 
@@ -30,6 +32,8 @@ class IdeHome extends StatefulWidget {
     required this.agentProviderFactory,
     required this.agentProviderConfigStore,
     required this.projectLocationOpener,
+    required this.themeModeController,
+    this.showWindowControls = true,
     super.key,
   });
 
@@ -39,6 +43,8 @@ class IdeHome extends StatefulWidget {
   final AgentProviderFactory agentProviderFactory;
   final AgentProviderConfigStore agentProviderConfigStore;
   final ProjectLocationOpener projectLocationOpener;
+  final ThemeModeController themeModeController;
+  final bool showWindowControls;
 
   @override
   State<IdeHome> createState() => _IdeHomeState();
@@ -59,13 +65,15 @@ class _IdeHomeState extends State<IdeHome> {
 
   bool _leftTopVisible = true;
   bool _leftBottomVisible = false;
-  bool _rightTopVisible = false;
+  bool _rightTopVisible = true;
   bool _rightBottomVisible = false;
   bool _rightOverlayOpen = false;
   double _leftPanelWidth = _initialPanelWidth;
   double _rightPanelWidth = _initialPanelWidth;
   double _leftTopRatio = _initialPanelRatio;
   double _rightTopRatio = _initialPanelRatio;
+  _IdeHomePage _page = _IdeHomePage.home;
+  SettingsSection _settingsSection = SettingsSection.appearance;
 
   @override
   void initState() {
@@ -99,17 +107,45 @@ class _IdeHomeState extends State<IdeHome> {
     final body = WindowFrame(
       enableNativeWindowFrame: widget.enableNativeWindowFrame,
       menus: _windowMenus,
+      titleBarActions: <WindowTitleBarAction>[
+        WindowTitleBarAction(
+          key: const ValueKey('titlebar-settings-action'),
+          icon: Icons.settings_rounded,
+          tooltip: 'Settings',
+          semanticLabel: 'Open settings page',
+          active: _page == _IdeHomePage.settings,
+          onPressed: _openSettingsPage,
+        ),
+      ],
+      showWindowControls: widget.showWindowControls,
       child: Padding(
         padding: const EdgeInsets.all(idePanelGap),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return _buildIdeLayout(maxWidth: constraints.maxWidth);
-          },
-        ),
+        child: _buildPageBody(),
       ),
     );
 
     return Scaffold(body: body);
+  }
+
+  Widget _buildPageBody() {
+    return switch (_page) {
+      _IdeHomePage.home => LayoutBuilder(
+        builder: (context, constraints) {
+          return _buildIdeLayout(maxWidth: constraints.maxWidth);
+        },
+      ),
+      _IdeHomePage.settings => SettingsPage(
+        key: const ValueKey('settings-page'),
+        activeSection: _settingsSection,
+        themeModeController: widget.themeModeController,
+        onBackPressed: _closeSettingsPage,
+        onSectionSelected: (section) {
+          setState(() {
+            _settingsSection = section;
+          });
+        },
+      ),
+    };
   }
 
   List<WindowMenu> get _windowMenus {
@@ -543,7 +579,28 @@ class _IdeHomeState extends State<IdeHome> {
         ),
       );
   }
+
+  void _openSettingsPage() {
+    if (_page == _IdeHomePage.settings) {
+      return;
+    }
+    setState(() {
+      _page = _IdeHomePage.settings;
+      _settingsSection = SettingsSection.appearance;
+    });
+  }
+
+  void _closeSettingsPage() {
+    if (_page == _IdeHomePage.home) {
+      return;
+    }
+    setState(() {
+      _page = _IdeHomePage.home;
+    });
+  }
 }
+
+enum _IdeHomePage { home, settings }
 
 class _RoundedPanel extends StatelessWidget {
   const _RoundedPanel({required this.child, super.key, this.color});

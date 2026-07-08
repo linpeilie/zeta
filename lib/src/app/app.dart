@@ -112,6 +112,7 @@ class MainAppState extends State<MainApp> {
                 _createAgentProviderConfigStore(),
             projectLocationOpener:
                 widget.projectLocationOpener ?? openPathInSystemFileManager,
+            themeModeController: _themeModeController,
           ),
         );
       },
