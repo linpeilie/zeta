@@ -95,31 +95,34 @@ class MainAppState extends State<MainApp> {
     return ValueListenableBuilder<AppearanceSettings>(
       valueListenable: _appearanceController.listenable,
       builder: (context, settings, _) {
+        final lightIdeTheme = buildIdeThemeData(
+          brightness: Brightness.light,
+          uiFontFamily: settings.uiFontFamily,
+          codeFontFamily: settings.codeFontFamily,
+        );
+        final darkIdeTheme = buildIdeThemeData(
+          brightness: Brightness.dark,
+          uiFontFamily: settings.uiFontFamily,
+          codeFontFamily: settings.codeFontFamily,
+        );
         final materialBrightness = resolveBrightnessForThemeMode(
           settings.themeMode,
         );
-        return sf.ShadcnApp(
-          debugShowCheckedModeBanner: false,
-          title: appTitle,
-          theme: buildShadcnTheme(
-            brightness: Brightness.light,
-            uiFontFamily: settings.uiFontFamily,
-            codeFontFamily: settings.codeFontFamily,
-          ),
-          darkTheme: buildShadcnTheme(
-            brightness: Brightness.dark,
-            uiFontFamily: settings.uiFontFamily,
-            codeFontFamily: settings.codeFontFamily,
-          ),
-          materialTheme: buildMaterialTheme(
-            brightness: materialBrightness,
-            uiFontFamily: settings.uiFontFamily,
-            codeFontFamily: settings.codeFontFamily,
-          ),
-          themeMode: resolveShadcnThemeMode(settings.themeMode),
-          home: IdeCodeFontScope(
-            codeFontFamily: settings.codeFontFamily,
-            child: IdeHome(
+        final materialIdeTheme = materialBrightness == Brightness.dark
+            ? darkIdeTheme
+            : lightIdeTheme;
+        return IdeThemeScope(
+          themeMode: settings.themeMode,
+          lightTheme: lightIdeTheme,
+          darkTheme: darkIdeTheme,
+          child: sf.ShadcnApp(
+            debugShowCheckedModeBanner: false,
+            title: appTitle,
+            theme: buildShadcnTheme(lightIdeTheme),
+            darkTheme: buildShadcnTheme(darkIdeTheme),
+            materialTheme: buildMaterialTheme(materialIdeTheme),
+            themeMode: resolveShadcnThemeMode(settings.themeMode),
+            home: IdeHome(
               directoryPicker: widget.directoryPicker ?? getDirectoryPath,
               enableNativeWindowFrame: widget.enableNativeWindowFrame,
               sessionStore: _createSessionStore(),

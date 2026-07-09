@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/core/constants/app_typography.dart';
 
@@ -32,21 +31,14 @@ class IdeTextStyles {
   final TextStyle codeSmall;
 
   /// 从当前上下文解析语义排版。
-  ///
-  /// 运行时不再依赖旧 `ShadTheme`，优先从当前根主题拿到 UI 字体，再通过
-  /// [IdeTypography] / [IdeCodeFontScope] 解析代码字体。
   static IdeTextStyles of(BuildContext context, {String? codeFontFamily}) {
-    final shadcnTheme = context
-        .dependOnInheritedWidgetOfExactType<sf.Theme>()
-        ?.data;
-    final materialTheme = Theme.of(context);
+    final ideTheme = IdeThemeScope.of(context);
     return resolve(
-      colors: IdeColors.of(context),
-      uiFontFamily:
-          materialTheme.textTheme.bodyMedium?.fontFamily ??
-          shadcnTheme?.typography.sans.fontFamily,
-      codeFontFamily:
-          codeFontFamily ?? IdeTypography.of(context).codeFontFamily,
+      colors: ideTheme.colors,
+      uiFontFamily: ideTheme.uiFontFamily,
+      codeFontFamily: codeFontFamily == null || codeFontFamily.isEmpty
+          ? ideTheme.codeFontFamily
+          : codeFontFamily,
     );
   }
 

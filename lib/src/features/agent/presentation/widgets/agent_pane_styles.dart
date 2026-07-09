@@ -314,7 +314,7 @@ TextStyle _agentCodeTextStyle(BuildContext context, {TextStyle? baseStyle}) {
       baseStyle ?? textStyles.codeSmall.copyWith(color: colors.textPrimary);
   return effectiveBase.copyWith(
     color: colors.textPrimary,
-    fontFamily: IdeTypography.of(context).codeFontFamily,
+    fontFamily: textStyles.codeSmall.fontFamily,
     height: 1.35,
     backgroundColor: Colors.transparent,
   );

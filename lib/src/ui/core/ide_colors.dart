@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'app_theme.dart';
 
@@ -7,11 +6,11 @@ const _sharedCloseHoverColor = Color(0xFFE5484D);
 
 /// IDE 主题专用调色板。
 ///
-/// 通过 [ThemeExtension] 注册到 [ThemeData]，配合 [IdeColors.of] 在运行时
-/// 根据 [Brightness] 解析颜色，从而支持浅色/深色/跟随系统切换。深色调色板沿用
-/// 顶层 const 颜色（如 [ideAccentColor]），以保证旧测试与历史外观一致。
+/// 这组颜色完全由 Graphite token 定义，并通过 [IdeThemeScope] 在运行时解析。
+/// 深色调色板沿用顶层 const 颜色（如 [ideAccentColor]），以保证旧测试与历史
+/// 外观一致。
 @immutable
-class IdeColors extends ThemeExtension<IdeColors> {
+class IdeColors {
   const IdeColors({
     required this.frame,
     required this.surface,
@@ -159,27 +158,10 @@ class IdeColors extends ThemeExtension<IdeColors> {
   );
 
   /// 从 [context] 取出当前主题下的 [IdeColors]。
-  ///
-  /// 运行时优先从 `sf.Theme` 解析亮度；仅在旧测试或兼容场景下回退到 Material
-  /// ThemeExtension。
   static IdeColors of(BuildContext context) {
-    final shadcnTheme = context
-        .dependOnInheritedWidgetOfExactType<sf.Theme>()
-        ?.data;
-    if (shadcnTheme != null) {
-      return shadcnTheme.brightness == Brightness.light ? light : dark;
-    }
-
-    final materialTheme = Theme.of(context);
-    final colors = materialTheme.extension<IdeColors>();
-    if (colors != null) {
-      return colors;
-    }
-
-    return materialTheme.brightness == Brightness.light ? light : dark;
+    return IdeThemeScope.of(context).colors;
   }
 
-  @override
   IdeColors copyWith({
     Color? frame,
     Color? surface,
@@ -233,11 +215,7 @@ class IdeColors extends ThemeExtension<IdeColors> {
     );
   }
 
-  @override
-  IdeColors lerp(ThemeExtension<IdeColors>? other, double t) {
-    if (other is! IdeColors) {
-      return this;
-    }
+  IdeColors lerp(IdeColors other, double t) {
     return IdeColors(
       frame: Color.lerp(frame, other.frame, t)!,
       surface: Color.lerp(surface, other.surface, t)!,

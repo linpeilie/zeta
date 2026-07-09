@@ -484,26 +484,26 @@ class _TestApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return sf.ShadcnApp(
-      theme: buildShadcnTheme(
-        brightness: Brightness.light,
-        uiFontFamily: uiFontFamily,
-        codeFontFamily: codeFontFamily,
-      ),
-      darkTheme: buildShadcnTheme(
-        brightness: Brightness.dark,
-        uiFontFamily: uiFontFamily,
-        codeFontFamily: codeFontFamily,
-      ),
-      materialTheme: buildMaterialTheme(
-        brightness: Brightness.dark,
-        uiFontFamily: uiFontFamily,
-        codeFontFamily: codeFontFamily,
-      ),
-      themeMode: sf.ThemeMode.dark,
-      home: IdeCodeFontScope(
-        codeFontFamily: codeFontFamily,
-        child: Scaffold(body: AgentPane(viewModel: viewModel)),
+    final lightIdeTheme = buildIdeThemeData(
+      brightness: Brightness.light,
+      uiFontFamily: uiFontFamily,
+      codeFontFamily: codeFontFamily,
+    );
+    final darkIdeTheme = buildIdeThemeData(
+      brightness: Brightness.dark,
+      uiFontFamily: uiFontFamily,
+      codeFontFamily: codeFontFamily,
+    );
+    return IdeThemeScope(
+      themeMode: ThemeMode.dark,
+      lightTheme: lightIdeTheme,
+      darkTheme: darkIdeTheme,
+      child: sf.ShadcnApp(
+        theme: buildShadcnTheme(lightIdeTheme),
+        darkTheme: buildShadcnTheme(darkIdeTheme),
+        materialTheme: buildMaterialTheme(darkIdeTheme),
+        themeMode: sf.ThemeMode.dark,
+        home: Scaffold(body: AgentPane(viewModel: viewModel)),
       ),
     );
   }

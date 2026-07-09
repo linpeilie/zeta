@@ -6,7 +6,7 @@ import 'package:zeta/src/core/constants/app_typography.dart';
 import 'ide_colors.dart';
 
 // 「Graphite」深色调色板常量：保留旧名以兼容历史代码与测试断言。运行时主题
-// 通过 [IdeColors] 解析，深色实例 [IdeColors.dark] 直接复用这些常量值。
+// 通过 [IdeThemeScope] 解析，深色实例 [IdeColors.dark] 直接复用这些常量值。
 const Color ideFrameColor = Color(0xFF0A0A0B);
 const Color ideSurfaceColor = Color(0xFF18191B);
 const Color idePanelColor = Color(0xFF18191B);
@@ -22,77 +22,91 @@ const double idePanelGap = 8;
 @Deprecated('Use IdeRadius.small (or another IdeRadius tier) instead.')
 const double idePanelRadius = 6;
 
-@Deprecated('Use bundledCodeFontFamily or IdeTypography instead.')
+@Deprecated('Use bundledCodeFontFamily or IdeThemeData.codeFontFamily instead.')
 const String ideFontFamily = bundledCodeFontFamily;
 
-/// 运行时代码字体作用域。
+/// Graphite 运行时主题真源。
 ///
-/// 运行时 UI 不再依赖第三方主题对象传递代码字体，改为通过这个 scope 在 app 根部
-/// 下发；测试也可直接复用它。
-class IdeCodeFontScope extends InheritedWidget {
-  const IdeCodeFontScope({
+/// 这层只持有项目自己的语义 token 与字体选择；第三方主题对象由它投影生成，
+/// 但不再反向成为 token 来源。
+@immutable
+class IdeThemeData {
+  const IdeThemeData({
+    required this.brightness,
+    required this.colors,
+    this.uiFontFamily,
     required this.codeFontFamily,
+  });
+
+  final Brightness brightness;
+  final IdeColors colors;
+  final String? uiFontFamily;
+  final String codeFontFamily;
+}
+
+/// 在应用根部提供 Graphite light/dark token，并在运行时解析当前有效主题。
+class IdeThemeScope extends InheritedWidget {
+  const IdeThemeScope({
+    required this.themeMode,
+    required this.lightTheme,
+    required this.darkTheme,
     required super.child,
     super.key,
   });
 
-  final String codeFontFamily;
+  final ThemeMode themeMode;
+  final IdeThemeData lightTheme;
+  final IdeThemeData darkTheme;
 
-  static IdeCodeFontScope? maybeOf(BuildContext context) {
-    return context.dependOnInheritedWidgetOfExactType<IdeCodeFontScope>();
+  static IdeThemeScope? maybeOf(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<IdeThemeScope>();
   }
 
-  static String? maybeCodeFontFamilyOf(BuildContext context) {
-    return maybeOf(context)?.codeFontFamily;
+  static IdeThemeData of(BuildContext context) {
+    final scope = maybeOf(context);
+    if (scope == null) {
+      throw FlutterError.fromParts(<DiagnosticsNode>[
+        ErrorSummary('IdeThemeScope is missing.'),
+        ErrorDescription(
+          'Graphite token access requires IdeThemeScope above this context.',
+        ),
+      ]);
+    }
+    return scope.resolveFor(context);
   }
 
-  @override
-  bool updateShouldNotify(covariant IdeCodeFontScope oldWidget) {
-    return oldWidget.codeFontFamily != codeFontFamily;
-  }
-}
-
-/// 暴露 IDE 内专用排版信息，例如代码字体。
-@immutable
-class IdeTypography extends ThemeExtension<IdeTypography> {
-  const IdeTypography({required this.codeFontFamily});
-
-  final String codeFontFamily;
-
-  static IdeTypography of(BuildContext context) {
-    final runtimeCodeFontFamily = IdeCodeFontScope.maybeCodeFontFamilyOf(
-      context,
+  IdeThemeData resolveFor(BuildContext context) {
+    final platformBrightness =
+        MediaQuery.maybeOf(context)?.platformBrightness ??
+        WidgetsBinding.instance.platformDispatcher.platformBrightness;
+    final resolvedBrightness = resolveBrightnessForThemeMode(
+      themeMode,
+      platformBrightness: platformBrightness,
     );
-    if (runtimeCodeFontFamily != null) {
-      return IdeTypography(codeFontFamily: runtimeCodeFontFamily);
-    }
-
-    final legacyTypography = Theme.of(context).extension<IdeTypography>();
-    return legacyTypography ??
-        const IdeTypography(codeFontFamily: bundledCodeFontFamily);
+    return resolvedBrightness == Brightness.dark ? darkTheme : lightTheme;
   }
 
   @override
-  IdeTypography copyWith({String? codeFontFamily}) {
-    return IdeTypography(codeFontFamily: codeFontFamily ?? this.codeFontFamily);
-  }
-
-  @override
-  IdeTypography lerp(covariant ThemeExtension<IdeTypography>? other, double t) {
-    if (other is! IdeTypography) {
-      return this;
-    }
-    return t < 0.5 ? this : other;
+  bool updateShouldNotify(covariant IdeThemeScope oldWidget) {
+    return themeMode != oldWidget.themeMode ||
+        lightTheme != oldWidget.lightTheme ||
+        darkTheme != oldWidget.darkTheme;
   }
 }
 
-/// 解析当前 ThemeMode 对应的物理亮度，用于旧 Material theme / extension 的兜底。
-Brightness resolveBrightnessForThemeMode(ThemeMode themeMode) {
+/// 解析当前 ThemeMode 对应的物理亮度；`system` 分支允许显式注入平台亮度，
+/// 以便 app 根与 scope 共享同一套决策。
+Brightness resolveBrightnessForThemeMode(
+  ThemeMode themeMode, {
+  Brightness? platformBrightness,
+}) {
+  final fallbackBrightness =
+      platformBrightness ??
+      WidgetsBinding.instance.platformDispatcher.platformBrightness;
   return switch (themeMode) {
     ThemeMode.light => Brightness.light,
     ThemeMode.dark => Brightness.dark,
-    ThemeMode.system =>
-      WidgetsBinding.instance.platformDispatcher.platformBrightness,
+    ThemeMode.system => fallbackBrightness,
   };
 }
 
@@ -105,35 +119,38 @@ sf.ThemeMode resolveShadcnThemeMode(ThemeMode themeMode) {
   };
 }
 
-/// 根据亮度构建 `shadcn_flutter` 根主题。
-sf.ThemeData buildShadcnTheme({
+/// 构建 Graphite light/dark 主题数据；这是项目语义 token 的唯一装配入口。
+IdeThemeData buildIdeThemeData({
   required Brightness brightness,
   String? uiFontFamily,
   required String codeFontFamily,
 }) {
-  final colors = _baseIdeColorsForBrightness(brightness);
+  return IdeThemeData(
+    brightness: brightness,
+    colors: _baseIdeColorsForBrightness(brightness),
+    uiFontFamily: _normalizeFontFamily(uiFontFamily),
+    codeFontFamily:
+        _normalizeFontFamily(codeFontFamily) ?? bundledCodeFontFamily,
+  );
+}
+
+/// 将项目主题投影到 `shadcn_flutter` 根主题。
+sf.ThemeData buildShadcnTheme(IdeThemeData ideTheme) {
   return sf.ThemeData(
-    colorScheme: shadcnColorSchemeFromIdeColors(colors, brightness: brightness),
-    typography: _buildShadcnTypography(
-      uiFontFamily: uiFontFamily,
-      codeFontFamily: codeFontFamily,
-    ),
-    // Graphite 的精确圆角仍由 IdeRadius 驱动，这里只给第三方组件一个中性基准。
+    colorScheme: _buildShadcnColorScheme(ideTheme),
+    typography: _buildShadcnTypography(ideTheme),
+    // Graphite 的精确圆角继续由 IdeRadius 驱动，这里只给第三方组件一个中性基准。
     radius: 2 / 3,
     density: sf.Density.defaultDensity,
     scaling: 1,
   );
 }
 
-/// 为现有 Material widget / ThemeExtension 提供最小主题承载。
-ThemeData buildMaterialTheme({
-  required Brightness brightness,
-  String? uiFontFamily,
-  required String codeFontFamily,
-}) {
-  final colors = _baseIdeColorsForBrightness(brightness);
+/// 为仍在使用 Material widget 的区域提供最小主题投影。
+ThemeData buildMaterialTheme(IdeThemeData ideTheme) {
+  final colors = ideTheme.colors;
   final baseTheme = ThemeData(
-    brightness: brightness,
+    brightness: ideTheme.brightness,
     useMaterial3: true,
     scaffoldBackgroundColor: colors.frame,
     canvasColor: colors.surface,
@@ -143,14 +160,10 @@ ThemeData buildMaterialTheme({
   );
   return baseTheme.copyWith(
     textTheme: baseTheme.textTheme.apply(
-      fontFamily: uiFontFamily,
+      fontFamily: ideTheme.uiFontFamily,
       bodyColor: colors.textPrimary,
       displayColor: colors.textPrimary,
     ),
-    extensions: <ThemeExtension<dynamic>>[
-      colors,
-      IdeTypography(codeFontFamily: codeFontFamily),
-    ],
   );
 }
 
@@ -158,12 +171,10 @@ IdeColors _baseIdeColorsForBrightness(Brightness brightness) {
   return brightness == Brightness.dark ? IdeColors.dark : IdeColors.light;
 }
 
-sf.ColorScheme shadcnColorSchemeFromIdeColors(
-  IdeColors colors, {
-  required Brightness brightness,
-}) {
+sf.ColorScheme _buildShadcnColorScheme(IdeThemeData ideTheme) {
+  final colors = ideTheme.colors;
   return sf.ColorScheme(
-    brightness: brightness,
+    brightness: ideTheme.brightness,
     background: colors.frame,
     foreground: colors.textPrimary,
     card: colors.surface,
@@ -191,11 +202,10 @@ sf.ColorScheme shadcnColorSchemeFromIdeColors(
   );
 }
 
-sf.Typography _buildShadcnTypography({
-  String? uiFontFamily,
-  required String codeFontFamily,
-}) {
+sf.Typography _buildShadcnTypography(IdeThemeData ideTheme) {
   const base = sf.Typography.geist();
+  final uiFontFamily = ideTheme.uiFontFamily;
+  final codeFontFamily = ideTheme.codeFontFamily;
   return base.copyWith(
     sans: () => _overrideFontFamily(base.sans, uiFontFamily),
     mono: () => _overrideFontFamily(base.mono, codeFontFamily),
@@ -236,8 +246,17 @@ sf.Typography _buildShadcnTypography({
   );
 }
 
+String? _normalizeFontFamily(String? fontFamily) {
+  if (fontFamily == null) {
+    return null;
+  }
+  final trimmed = fontFamily.trim();
+  return trimmed.isEmpty ? null : trimmed;
+}
+
 TextStyle _overrideFontFamily(TextStyle style, String? fontFamily) {
-  if (fontFamily == null || fontFamily.isEmpty) {
+  final normalizedFontFamily = _normalizeFontFamily(fontFamily);
+  if (normalizedFontFamily == null) {
     return style;
   }
   return TextStyle(
@@ -263,7 +282,7 @@ TextStyle _overrideFontFamily(TextStyle style, String? fontFamily) {
     decorationStyle: style.decorationStyle,
     decorationThickness: style.decorationThickness,
     debugLabel: style.debugLabel,
-    fontFamily: fontFamily,
+    fontFamily: normalizedFontFamily,
     fontFamilyFallback: style.fontFamilyFallback,
     package: null,
     overflow: style.overflow,
