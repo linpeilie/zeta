@@ -124,17 +124,10 @@ class _AgentComposer extends StatelessWidget {
       },
       child: Builder(
         builder: (context) {
-          final isFocused = Focus.of(context).hasFocus;
           final brightness = sf.Theme.of(context).brightness;
-          final focusBorder = isFocused
-              ? colors.accent.withValues(alpha: 0.64)
-              : colors.border.withValues(alpha: 0.6);
-          final shadow = isFocused
-              ? IdeEffects.composerFocusShadow(
-                  brightness,
-                  accent: colors.accent,
-                )
-              : IdeEffects.composerRestShadow(brightness);
+          // 输入区与卡片同色、焦点不加边框高亮，视觉上融为一体。
+          final cardBorder = colors.border.withValues(alpha: 0.6);
+          final shadow = IdeEffects.composerRestShadow(brightness);
 
           return AnimatedContainer(
             duration: IdeMotion.durationNormal,
@@ -145,7 +138,7 @@ class _AgentComposer extends StatelessWidget {
             ),
             child: PanelCard(
               color: colors.panel,
-              borderColor: focusBorder,
+              borderColor: cardBorder,
               borderRadius: IdeRadius.allComposer,
               showBorder: true,
               child: Padding(
@@ -176,31 +169,45 @@ class _AgentComposer extends StatelessWidget {
                             // find.byKey 命中两个 widget。
                             return KeyedSubtree(
                               key: const ValueKey('agent-message-input'),
-                              child: sf.TextArea(
-                                controller: controller,
-                                placeholder: Text(
-                                  'Message Agent',
-                                  style: textStyles.bodyMedium.copyWith(
-                                    color: colors.textTertiary,
+                              // 关掉 TextArea 默认 FocusOutline，避免焦点环割裂卡片。
+                              child: sf.ComponentTheme<sf.FocusOutlineTheme>(
+                                data: const sf.FocusOutlineTheme(
+                                  border: Border.fromBorderSide(
+                                    BorderSide.none,
                                   ),
                                 ),
-                                style: inputTextStyle,
-                                padding: EdgeInsets.zero,
-                                border: Border.all(color: Colors.transparent),
-                                borderRadius: BorderRadius.zero,
-                                initialHeight: _textAreaHeight(
-                                  controller.text,
-                                  lineHeight,
-                                  minTextAreaHeight,
-                                  maxTextAreaHeight,
+                                child: sf.TextArea(
+                                  controller: controller,
+                                  placeholder: Text(
+                                    'Message Agent',
+                                    style: textStyles.bodyMedium.copyWith(
+                                      color: colors.textTertiary,
+                                    ),
+                                  ),
+                                  style: inputTextStyle,
+                                  padding: EdgeInsets.zero,
+                                  // 显式 decoration：底色跟 PanelCard 一致，无独立边框。
+                                  decoration: BoxDecoration(
+                                    color: colors.panel,
+                                    border: const Border.fromBorderSide(
+                                      BorderSide.none,
+                                    ),
+                                    borderRadius: BorderRadius.zero,
+                                  ),
+                                  initialHeight: _textAreaHeight(
+                                    controller.text,
+                                    lineHeight,
+                                    minTextAreaHeight,
+                                    maxTextAreaHeight,
+                                  ),
+                                  minHeight: minTextAreaHeight,
+                                  maxHeight: maxTextAreaHeight,
+                                  onSubmitted: (_) {
+                                    if (canSubmit) {
+                                      onSend();
+                                    }
+                                  },
                                 ),
-                                minHeight: minTextAreaHeight,
-                                maxHeight: maxTextAreaHeight,
-                                onSubmitted: (_) {
-                                  if (canSubmit) {
-                                    onSend();
-                                  }
-                                },
                               ),
                             );
                           },
