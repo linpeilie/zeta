@@ -72,6 +72,7 @@ void main() {
                 cachedInputTokens: 19712,
                 outputTokens: 2332,
                 totalTokens: 43462,
+                modelContextWindow: 200000,
               ),
             ),
           ],

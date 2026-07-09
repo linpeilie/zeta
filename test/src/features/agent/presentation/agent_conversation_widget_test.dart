@@ -11,6 +11,7 @@ import 'package:zeta/src/features/agent/presentation/agent_conversation_view_mod
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 
 import '../../../testing/ide_test_harness.dart';
@@ -1206,7 +1207,13 @@ void main() {
     expect(find.text('2'), findsOneWidget);
     expect(find.text('Codex CLI'), findsOneWidget);
     expect(find.text('200,000'), findsOneWidget);
-    expect(find.text('130'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('agent-context-panel')),
+        matching: find.text('130'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('2024-01-15 10:30'), findsOneWidget);
     expect(find.text('2024-06-20 14:05'), findsOneWidget);
 
@@ -1238,7 +1245,7 @@ void main() {
     expect(find.byKey(const ValueKey('agent-context-panel')), findsNothing);
   });
 
-  testWidgets('shows live header token usage while a turn is running', (
+  testWidgets('shows last token usage in header and composer while running', (
     tester,
   ) async {
     final session = MemorySessionStore();
@@ -1250,6 +1257,11 @@ void main() {
         cachedInputTokens: 200,
         outputTokens: 350,
         totalTokens: 1300,
+        lastInputTokens: 900,
+        lastCachedInputTokens: 180,
+        lastOutputTokens: 320,
+        lastTotalTokens: 1200,
+        modelContextWindow: 2000,
       ),
     );
 
@@ -1280,10 +1292,38 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('agent-header-token')),
-        matching: find.text('1.3k tokens'),
+        matching: find.textContaining('%'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('agent-header-token')),
+        matching: find.text('1.2k tokens'),
       ),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const ValueKey('agent-composer-token-usage')),
+      findsOneWidget,
+    );
+    final progress = tester.widget<CircularProgressIndicator>(
+      find.byKey(const ValueKey('agent-composer-token-progress')),
+    );
+    expect(progress.value, closeTo(0.6, 0.001));
+
+    final tooltip = tester.widget<IdeTooltip>(
+      find.ancestor(
+        of: find.byKey(const ValueKey('agent-composer-token-usage')),
+        matching: find.byType(IdeTooltip),
+      ),
+    );
+    expect(tooltip.message, contains('Usage: 60%'));
+    expect(tooltip.message, contains('Used: 1,200'));
+    expect(tooltip.message, contains('Total: 2,000'));
+    expect(tooltip.message, contains('input_tokens: 900'));
+    expect(tooltip.message, contains('output_tokens: 320'));
+    expect(tooltip.message, contains('cached_input_tokens: 180'));
   });
 
   testWidgets(
@@ -1394,6 +1434,11 @@ void main() {
         cachedInputTokens: 1200,
         outputTokens: 820,
         totalTokens: 3840,
+        lastInputTokens: 1800,
+        lastCachedInputTokens: 760,
+        lastOutputTokens: 540,
+        lastTotalTokens: 2340,
+        modelContextWindow: 4000,
       ),
     );
 

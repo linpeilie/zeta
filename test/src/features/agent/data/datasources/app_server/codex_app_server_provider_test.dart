@@ -2104,7 +2104,7 @@ void main() {
         expect(usageEvent.tokenUsage.lastInputTokens, 26672);
         expect(usageEvent.tokenUsage.lastCachedInputTokens, 14720);
         expect(usageEvent.tokenUsage.lastOutputTokens, 1583);
-        
+
         expect(usageEvent.tokenUsage.lastTotalTokens, 27723);
         expect(usageEvent.tokenUsage.modelContextWindow, 258400);
       },

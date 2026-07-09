@@ -10,6 +10,7 @@ class _AgentComposer extends StatelessWidget {
     required this.canSubmit,
     required this.isTurnRunning,
     required this.threadOpenPhase,
+    required this.currentWindowTokenUsage,
     required this.draftImagePaths,
     required this.onAttachImages,
     required this.onRemoveImage,
@@ -38,6 +39,7 @@ class _AgentComposer extends StatelessWidget {
   final bool canSubmit;
   final bool isTurnRunning;
   final AgentThreadOpenPhase threadOpenPhase;
+  final AgentTokenUsage? currentWindowTokenUsage;
   final List<String> draftImagePaths;
   final VoidCallback onAttachImages;
   final ValueChanged<String> onRemoveImage;
@@ -106,6 +108,12 @@ class _AgentComposer extends StatelessWidget {
         threadOpenPhase == AgentThreadOpenPhase.idle &&
         isTurnRunning &&
         !hasDraft;
+    final contextWindowTokenTooltip = _contextWindowTokenUsageTooltip(
+      currentWindowTokenUsage,
+    );
+    final contextWindowTokenProgress = _contextWindowTokenUsageProgressValue(
+      currentWindowTokenUsage,
+    );
     return Focus(
       onKeyEvent: (node, event) {
         if (event is! KeyDownEvent) {
@@ -293,6 +301,23 @@ class _AgentComposer extends StatelessWidget {
                           ),
                         ],
                         const Spacer(),
+                        if (contextWindowTokenProgress != null)
+                          Flexible(
+                            fit: FlexFit.loose,
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                  left: IdeSpacing.space8,
+                                  right: IdeSpacing.space8,
+                                ),
+                                child: _ComposerContextWindowUsage(
+                                  tooltip: contextWindowTokenTooltip,
+                                  progress: contextWindowTokenProgress,
+                                ),
+                              ),
+                            ),
+                          ),
                         AnimatedSwitcher(
                           duration: IdeMotion.durationNormal,
                           switchInCurve: IdeMotion.curveDefault,
@@ -314,7 +339,7 @@ class _AgentComposer extends StatelessWidget {
                                   ),
                                   icon: const Icon(
                                     Icons.stop_rounded,
-                                    size: 18,
+                                    size: 22,
                                   ),
                                   onPressed: onCancel,
                                 )
@@ -340,7 +365,7 @@ class _AgentComposer extends StatelessWidget {
                                   ),
                                   icon: const Icon(
                                     Icons.arrow_upward_rounded,
-                                    size: 18,
+                                    size: 22,
                                   ),
                                   onPressed: canSubmit ? onSend : null,
                                 )
@@ -431,6 +456,49 @@ class _AgentComposer extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _ComposerContextWindowUsage extends StatelessWidget {
+  const _ComposerContextWindowUsage({
+    required this.tooltip,
+    required this.progress,
+  });
+
+  final String tooltip;
+  final double progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final progressColor =
+        progress >= AgentConversationViewModel.contextCompactThreshold
+        ? colors.warning
+        : colors.accent;
+    return IdeTooltip(
+      message: tooltip,
+      child: Semantics(
+        label: 'Context window token usage',
+        value: '${(progress * 100).round()}%',
+        child: Row(
+          key: const ValueKey('agent-composer-token-usage'),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(
+                key: const ValueKey('agent-composer-token-progress'),
+                value: progress,
+                strokeWidth: 2.2,
+                backgroundColor: colors.border.withValues(alpha: 0.32),
+                valueColor: AlwaysStoppedAnimation<Color>(progressColor),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

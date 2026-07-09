@@ -298,9 +298,13 @@ class AgentConversationViewModel extends ChangeNotifier {
   AgentTokenUsage? get currentThreadTokenUsage =>
       _timeline.currentThreadTokenUsage;
 
-  /// 当前上下文窗口占用比例（0~1）；缺少窗口大小时为空。
+  /// 当前 thread 最近一次请求的 token 用量。
+  AgentTokenUsage? get currentThreadLastTokenUsage =>
+      _timeline.currentThreadLastTokenUsage;
+
+  /// 当前上下文窗口占用比例（0~1）；基于最近一次请求的 token 用量计算。
   double? get contextWindowUsageRatio {
-    final usage = currentThreadTokenUsage;
+    final usage = currentThreadLastTokenUsage;
     final total = usage?.totalTokens;
     final window = usage?.modelContextWindow;
     if (total == null || window == null || window <= 0) {

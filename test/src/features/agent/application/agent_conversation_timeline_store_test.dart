@@ -72,6 +72,11 @@ void main() {
                 cachedInputTokens: 500,
                 outputTokens: 330,
                 totalTokens: 2250,
+                lastInputTokens: 800,
+                lastCachedInputTokens: 150,
+                lastOutputTokens: 240,
+                lastTotalTokens: 1040,
+                modelContextWindow: 4000,
               ),
             ),
           ],
@@ -99,6 +104,11 @@ void main() {
             cachedInputTokens: 200,
             outputTokens: 350,
             totalTokens: 1300,
+            lastInputTokens: 920,
+            lastCachedInputTokens: 180,
+            lastOutputTokens: 320,
+            lastTotalTokens: 1240,
+            modelContextWindow: 2000,
           ),
         ),
       );
@@ -112,6 +122,12 @@ void main() {
       expect(store.currentThreadTokenUsage!.cachedInputTokens, 700);
       expect(store.currentThreadTokenUsage!.outputTokens, 680);
       expect(store.currentThreadTokenUsage!.totalTokens, 3550);
+      expect(store.currentThreadLastTokenUsage, isNotNull);
+      expect(store.currentThreadLastTokenUsage!.inputTokens, 920);
+      expect(store.currentThreadLastTokenUsage!.cachedInputTokens, 180);
+      expect(store.currentThreadLastTokenUsage!.outputTokens, 320);
+      expect(store.currentThreadLastTokenUsage!.totalTokens, 1240);
+      expect(store.currentThreadLastTokenUsage!.modelContextWindow, 2000);
 
       store.completeLiveTurnGroup('turn-live');
       store.syncLiveTurnBinding();
@@ -119,6 +135,7 @@ void main() {
       expect(store.liveTurnState, isNull);
       expect(store.currentTurnTokenUsage, isNull);
       expect(store.currentThreadTokenUsage!.totalTokens, 3550);
+      expect(store.currentThreadLastTokenUsage!.totalTokens, 1240);
     });
 
     test('removePermissionRequest drops pending card and timeline entry', () {

@@ -390,6 +390,52 @@ String? _tokenUsageLabel(AgentTokenUsage? usage) {
   return '${_compactTokenCount(total)} tokens';
 }
 
+/// 当前上下文窗口 token 用量短标签；缺少窗口大小时不展示。
+String? _contextWindowTokenUsageLabel(AgentTokenUsage? usage) {
+  final total = usage?.totalTokens;
+  final window = usage?.modelContextWindow;
+  if (total == null || total <= 0 || window == null || window <= 0) {
+    return null;
+  }
+  return '${_compactTokenCount(total)} tokens';
+}
+
+double? _contextWindowTokenUsageProgressValue(AgentTokenUsage? usage) {
+  final total = usage?.totalTokens;
+  final window = usage?.modelContextWindow;
+  if (total == null || total <= 0 || window == null || window <= 0) {
+    return null;
+  }
+  return (total / window).clamp(0.0, 1.0);
+}
+
+/// 当前上下文窗口 token 用量的悬停明细。
+String _contextWindowTokenUsageTooltip(AgentTokenUsage? usage) {
+  final total = usage?.totalTokens;
+  final window = usage?.modelContextWindow;
+  if (total == null || total <= 0 || window == null || window <= 0) {
+    return '';
+  }
+  final percent = ((total / window) * 100).round();
+  final parts = <String>[
+    'Usage: $percent%',
+    'Used: ${_formatTokenCount(total)}',
+    'Total: ${_formatTokenCount(window)}',
+  ];
+  if (usage?.inputTokens != null) {
+    parts.add('input_tokens: ${_formatTokenCount(usage!.inputTokens!)}');
+  }
+  if (usage?.outputTokens != null) {
+    parts.add('output_tokens: ${_formatTokenCount(usage!.outputTokens!)}');
+  }
+  if (usage?.cachedInputTokens != null) {
+    parts.add(
+      'cached_input_tokens: ${_formatTokenCount(usage!.cachedInputTokens!)}',
+    );
+  }
+  return parts.join('\n');
+}
+
 /// 悬停时展示的 token 明细，含输入/缓存/输出/推理分项。
 String _tokenUsageTooltip(AgentTokenUsage? usage) {
   if (usage == null) {

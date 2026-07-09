@@ -169,6 +169,31 @@ class AgentConversationTimelineStore {
     );
   }
 
+  /// 当前 thread 最近一次请求的 token 用量。
+  ///
+  /// 优先使用最新 turn 上报的 `last_*` breakdown；若 provider 没有拆分
+  /// `last_token_usage`，则回退到该 turn 的普通 token breakdown。
+  AgentTokenUsage? get currentThreadLastTokenUsage {
+    final usage = _latestAvailableTurnTokenUsage();
+    if (usage == null) {
+      return null;
+    }
+    final normalized = AgentTokenUsage(
+      inputTokens: usage.lastInputTokens ?? usage.inputTokens,
+      cachedInputTokens: usage.lastCachedInputTokens ?? usage.cachedInputTokens,
+      outputTokens: usage.lastOutputTokens ?? usage.outputTokens,
+      totalTokens: usage.lastTotalTokens ?? usage.totalTokens,
+      modelContextWindow: usage.modelContextWindow,
+    );
+    if (normalized.inputTokens == null &&
+        normalized.cachedInputTokens == null &&
+        normalized.outputTokens == null &&
+        normalized.totalTokens == null) {
+      return null;
+    }
+    return normalized;
+  }
+
   bool get isTurnRunning => selectedRunningTurnId != null;
 
   String? get selectedRunningTurnId => _selectedRunningTurnId();
@@ -187,6 +212,22 @@ class AgentConversationTimelineStore {
 
   bool isFileEditItemExpanded(String fileEditItemId) {
     return _expandedFileEditItemIds.contains(fileEditItemId);
+  }
+
+  AgentTokenUsage? _latestAvailableTurnTokenUsage() {
+    for (final turnId in _liveTurnOrder.reversed) {
+      final usage = _turnGroups[turnId]?.tokenUsage;
+      if (usage != null) {
+        return usage;
+      }
+    }
+    for (final turnId in _historicalTurnOrder.reversed) {
+      final usage = _turnGroups[turnId]?.tokenUsage;
+      if (usage != null) {
+        return usage;
+      }
+    }
+    return null;
   }
 
   bool hasTurn(String turnId) {

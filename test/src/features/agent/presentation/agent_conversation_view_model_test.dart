@@ -22,6 +22,7 @@ void main() {
       );
       expect(viewModel.currentTurnTokenUsage, isNull);
       expect(viewModel.currentThreadTokenUsage, isNull);
+      expect(viewModel.currentThreadLastTokenUsage, isNull);
     });
 
     test('loads history for a selected thread without resuming', () async {
@@ -1579,6 +1580,11 @@ void main() {
               cachedInputTokens: 200,
               outputTokens: 350,
               totalTokens: 1300,
+              lastInputTokens: 920,
+              lastCachedInputTokens: 180,
+              lastOutputTokens: 320,
+              lastTotalTokens: 1240,
+              modelContextWindow: 2000,
             ),
           ),
         );
@@ -1586,6 +1592,8 @@ void main() {
 
         expect(viewModel.currentTurnTokenUsage, isNotNull);
         expect(viewModel.currentTurnTokenUsage!.totalTokens, 1300);
+        expect(viewModel.currentThreadLastTokenUsage, isNotNull);
+        expect(viewModel.currentThreadLastTokenUsage!.totalTokens, 1240);
 
         provider.emit(
           const AgentTurnCompletedEvent(
@@ -1598,6 +1606,7 @@ void main() {
         expect(viewModel.currentTurnTokenUsage, isNull);
         expect(viewModel.currentThreadTokenUsage, isNotNull);
         expect(viewModel.currentThreadTokenUsage!.totalTokens, 1300);
+        expect(viewModel.currentThreadLastTokenUsage!.totalTokens, 1240);
       },
     );
 
@@ -1623,6 +1632,11 @@ void main() {
                     cachedInputTokens: 500,
                     outputTokens: 330,
                     totalTokens: 2250,
+                    lastInputTokens: 800,
+                    lastCachedInputTokens: 150,
+                    lastOutputTokens: 240,
+                    lastTotalTokens: 1040,
+                    modelContextWindow: 4000,
                   ),
                 ),
               ],
@@ -1642,6 +1656,11 @@ void main() {
               cachedInputTokens: 200,
               outputTokens: 350,
               totalTokens: 1300,
+              lastInputTokens: 920,
+              lastCachedInputTokens: 180,
+              lastOutputTokens: 320,
+              lastTotalTokens: 1240,
+              modelContextWindow: 2000,
             ),
           ),
         );
@@ -1652,6 +1671,12 @@ void main() {
         expect(viewModel.currentThreadTokenUsage!.cachedInputTokens, 700);
         expect(viewModel.currentThreadTokenUsage!.outputTokens, 680);
         expect(viewModel.currentThreadTokenUsage!.totalTokens, 3550);
+        expect(viewModel.currentThreadLastTokenUsage, isNotNull);
+        expect(viewModel.currentThreadLastTokenUsage!.inputTokens, 920);
+        expect(viewModel.currentThreadLastTokenUsage!.cachedInputTokens, 180);
+        expect(viewModel.currentThreadLastTokenUsage!.outputTokens, 320);
+        expect(viewModel.currentThreadLastTokenUsage!.totalTokens, 1240);
+        expect(viewModel.currentThreadLastTokenUsage!.modelContextWindow, 2000);
       },
     );
 
@@ -1664,7 +1689,8 @@ void main() {
               id: 'turn-1',
               status: AgentHistoryTurnStatus.completed,
               tokenUsage: const AgentTokenUsage(
-                totalTokens: 900,
+                totalTokens: 4000,
+                lastTotalTokens: 900,
                 modelContextWindow: 1000,
               ),
               entries: const <AgentHistoryEntry>[
@@ -1693,6 +1719,8 @@ void main() {
         ),
       );
 
+      expect(viewModel.currentThreadLastTokenUsage, isNotNull);
+      expect(viewModel.currentThreadLastTokenUsage!.totalTokens, 900);
       expect(viewModel.contextWindowUsageRatio, closeTo(0.9, 0.001));
       expect(viewModel.shouldOfferContextCompact, isTrue);
       expect(viewModel.canEditLastUserMessage, isTrue);

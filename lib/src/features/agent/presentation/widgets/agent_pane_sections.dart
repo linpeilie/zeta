@@ -213,6 +213,8 @@ class _AgentComposerSection extends StatelessWidget {
                   canSubmit: canSend && viewModel.canSubmitMessage,
                   isTurnRunning: viewModel.isTurnRunning,
                   threadOpenPhase: viewModel.threadOpenPhase,
+                  currentWindowTokenUsage:
+                      viewModel.currentThreadLastTokenUsage,
                   draftImagePaths: draftImagePaths,
                   onAttachImages: onAttachImages,
                   onRemoveImage: onRemoveImage,

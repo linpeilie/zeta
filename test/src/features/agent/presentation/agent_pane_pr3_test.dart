@@ -509,7 +509,8 @@ void main() {
       expect(find.text('GPT-5.5'), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('agent-model-selector')));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(
         find.byKey(const ValueKey('agent-model-option-gpt-5.4-mini')),
@@ -518,7 +519,8 @@ void main() {
       await tester.tap(
         find.byKey(const ValueKey('agent-model-option-gpt-5.4-mini')),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(viewModel.selectedModelId, 'gpt-5.4-mini');
       expect(find.text('GPT-5.4-Mini'), findsOneWidget);
