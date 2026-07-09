@@ -171,32 +171,37 @@ class _AgentComposer extends StatelessWidget {
                         ListenableBuilder(
                           listenable: controller,
                           builder: (context, _) {
-                            return sf.TextArea(
+                            // key 挂在外层：sf.TextArea.copyWith 会把同一 key
+                            // 传给内部 TextField，直接挂在 TextArea 上会导致测试
+                            // find.byKey 命中两个 widget。
+                            return KeyedSubtree(
                               key: const ValueKey('agent-message-input'),
-                              controller: controller,
-                              placeholder: Text(
-                                'Message Agent',
-                                style: textStyles.bodyMedium.copyWith(
-                                  color: colors.textTertiary,
+                              child: sf.TextArea(
+                                controller: controller,
+                                placeholder: Text(
+                                  'Message Agent',
+                                  style: textStyles.bodyMedium.copyWith(
+                                    color: colors.textTertiary,
+                                  ),
                                 ),
+                                style: inputTextStyle,
+                                padding: EdgeInsets.zero,
+                                border: Border.all(color: Colors.transparent),
+                                borderRadius: BorderRadius.zero,
+                                initialHeight: _textAreaHeight(
+                                  controller.text,
+                                  lineHeight,
+                                  minTextAreaHeight,
+                                  maxTextAreaHeight,
+                                ),
+                                minHeight: minTextAreaHeight,
+                                maxHeight: maxTextAreaHeight,
+                                onSubmitted: (_) {
+                                  if (canSubmit) {
+                                    onSend();
+                                  }
+                                },
                               ),
-                              style: inputTextStyle,
-                              padding: EdgeInsets.zero,
-                              border: Border.all(color: Colors.transparent),
-                              borderRadius: BorderRadius.zero,
-                              initialHeight: _textAreaHeight(
-                                controller.text,
-                                lineHeight,
-                                minTextAreaHeight,
-                                maxTextAreaHeight,
-                              ),
-                              minHeight: minTextAreaHeight,
-                              maxHeight: maxTextAreaHeight,
-                              onSubmitted: (_) {
-                                if (canSubmit) {
-                                  onSend();
-                                }
-                              },
                             );
                           },
                         ),

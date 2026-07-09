@@ -46,11 +46,12 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
     await tester.runAsync(waitForIo);
-    await tester.pump();
+    await tester.pumpAndSettle();
+    await _openFilesPanel(tester);
 
     await tester.tap(find.byKey(fileNodeKey('sample.txt')));
     await tester.runAsync(waitForIo);
-    await tester.pump();
+    await tester.pumpAndSettle();
     await pumpSessionSave(tester);
 
     expect(session.value, isNotNull);
@@ -68,7 +69,8 @@ void main() {
       ),
     );
     await tester.runAsync(waitForIo);
-    await tester.pump();
+    await tester.pumpAndSettle();
+    await _openFilesPanel(tester);
 
     expect(find.text('sample.txt'), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-context-chip')), findsNothing);
@@ -100,7 +102,8 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
     await tester.runAsync(waitForIo);
-    await tester.pump();
+    await tester.pumpAndSettle();
+    await _openFilesPanel(tester);
 
     expect(find.text('main.dart'), findsNothing);
 
@@ -121,7 +124,8 @@ void main() {
       ),
     );
     await tester.runAsync(waitForIo);
-    await tester.pump();
+    await tester.pumpAndSettle();
+    await _openFilesPanel(tester);
 
     expect(find.text('lib'), findsOneWidget);
     expect(find.text('main.dart'), findsOneWidget);
@@ -159,7 +163,8 @@ void main() {
         ),
       );
       await tester.runAsync(waitForIo);
-      await tester.pump();
+      await tester.pumpAndSettle();
+      await _openFilesPanel(tester);
 
       expect(find.byKey(fileNodeKey(fileName(directory.path))), findsNothing);
       expect(find.text('sample.txt'), findsOneWidget);
@@ -187,7 +192,8 @@ void main() {
       ),
     );
     await tester.runAsync(waitForIo);
-    await tester.pump();
+    await tester.pumpAndSettle();
+    await _openFilesPanel(tester);
 
     expect(find.text('No folder opened'), findsOneWidget);
     expect(find.text('No file tree'), findsOneWidget);
@@ -230,7 +236,8 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
       await tester.runAsync(waitForIo);
-      await tester.pump();
+      await tester.pumpAndSettle();
+      await _openFilesPanel(tester);
 
       expect(find.text('chosen.txt'), findsOneWidget);
       expect(find.text('restored.txt'), findsNothing);
@@ -242,13 +249,19 @@ void main() {
         ),
       );
       await tester.runAsync(waitForIo);
-      await tester.pump();
+      await tester.pumpAndSettle();
       await pumpSessionSave(tester);
 
       expect(find.text('chosen.txt'), findsOneWidget);
       expect(find.text('restored.txt'), findsNothing);
     },
   );
+}
+
+Future<void> _openFilesPanel(WidgetTester tester) async {
+  // 右侧 Files 面板默认关闭，测试需先打开才能断言文件树内容。
+  await tester.tap(find.byKey(const ValueKey('right-files-action')));
+  await tester.pumpAndSettle();
 }
 
 void _useWideWindow(WidgetTester tester) {
