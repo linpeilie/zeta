@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
@@ -86,14 +86,16 @@ class _SettingsNavigation extends StatelessWidget {
                 children: [
                   IdeTooltip(
                     message: '返回主界面',
-                    child: ShadIconButton.ghost(
+                    child: sf.IconButton.ghost(
                       key: const ValueKey('settings-back-button'),
                       onPressed: onBackPressed,
-                      width: 28,
-                      height: 28,
-                      padding: EdgeInsets.zero,
-                      foregroundColor: colors.textSecondary,
-                      icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                      size: sf.ButtonSize.small,
+                      density: sf.ButtonDensity.iconDense,
+                      icon: Icon(
+                        Icons.arrow_back_rounded,
+                        size: 18,
+                        color: colors.textSecondary,
+                      ),
                     ),
                   ),
                   const SizedBox(width: IdeSpacing.space8),
@@ -532,7 +534,7 @@ Future<AppearanceFontChoice?> _showFontPicker({
   required Future<List<AppearanceFontChoice>> choicesFuture,
   required AppearanceFontChoice selectedChoice,
 }) {
-  return showShadDialog<AppearanceFontChoice>(
+  return showDialog<AppearanceFontChoice>(
     context: context,
     builder: (context) {
       return _FontChoiceDialog(
@@ -582,115 +584,141 @@ class _FontChoiceDialogState extends State<_FontChoiceDialog> {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    return ShadDialog(
+    // 字体选择不是纯确认弹窗：在 AlertDialog 壳内自建搜索 + 列表布局。
+    // 关闭按钮放在 title 行，避免 AlertDialog.trailing 被强制套 iconXLarge。
+    return sf.AlertDialog(
       key: const ValueKey('settings-font-picker-dialog'),
-      title: Text(widget.title),
-      closeIconData: Icons.close_rounded,
-      constraints: const BoxConstraints(maxWidth: 560, maxHeight: 520),
-      scrollable: false,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      child: SizedBox(
+      title: Row(
+        children: [
+          Expanded(child: Text(widget.title)),
+          sf.IconButton.ghost(
+            onPressed: () => Navigator.of(context).pop(),
+            size: sf.ButtonSize.small,
+            density: sf.ButtonDensity.iconDense,
+            icon: Icon(
+              Icons.close_rounded,
+              size: 18,
+              color: colors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+      content: SizedBox(
         width: 528,
         height: 420,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ShadInput(
-              key: const ValueKey('settings-font-search-field'),
-              controller: _searchController,
-              autofocus: true,
-              onChanged: (value) {
-                setState(() {
-                  _query = value;
-                });
-              },
-              placeholder: Text(widget.searchHint),
-              leading: const Icon(Icons.search_rounded, size: 18),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: FutureBuilder<List<AppearanceFontChoice>>(
-                future: widget.choicesFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState != ConnectionState.done) {
-                    return Center(
-                      child: IdeLoadingIndicator(
-                        key: ValueKey('settings-font-picker-loading'),
-                        width: 28,
-                        height: 12,
-                        barHeight: 4,
-                      ),
-                    );
-                  }
-                  if (snapshot.hasError) {
-                    return Center(
-                      child: Text(
-                        '字体列表加载失败。',
-                        style: textStyles.bodySmall.copyWith(
-                          color: colors.textSecondary,
-                        ),
-                      ),
-                    );
-                  }
-
-                  final choices =
-                      snapshot.data ?? const <AppearanceFontChoice>[];
-                  final filtered = choices
-                      .where((choice) => _matchesFontQuery(choice, _query))
-                      .toList(growable: false);
-                  if (filtered.isEmpty) {
-                    return Center(
-                      child: Text(
-                        '没有匹配的字体。',
-                        style: textStyles.bodySmall.copyWith(
-                          color: colors.textSecondary,
-                        ),
-                      ),
-                    );
-                  }
-
-                  return ListView.builder(
-                    key: const ValueKey('settings-font-picker-list'),
-                    itemCount: filtered.length,
-                    itemBuilder: (context, index) {
-                      final choice = filtered[index];
-                      final selected = choice == widget.selectedChoice;
-                      return ShadButton.ghost(
-                        key: ValueKey<String>(
-                          'settings-font-option-${choice.stableId}',
-                        ),
-                        onPressed: () => Navigator.of(context).pop(choice),
-                        width: double.infinity,
-                        height: 36,
-                        expands: true,
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        backgroundColor: selected
-                            ? colors.primaryMuted
-                            : Colors.transparent,
-                        hoverBackgroundColor: selected
-                            ? colors.primaryMuted.withValues(alpha: 0.18)
-                            : null,
-                        trailing: selected
-                            ? Icon(
-                                Icons.check_rounded,
-                                size: 18,
-                                color: colors.accent,
-                              )
-                            : null,
-                        child: Text(
-                          _fontChoiceLabel(choice),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: textStyles.bodyMedium,
+        child: DefaultTextStyle.merge(
+          style: textStyles.bodyMedium.copyWith(color: colors.textPrimary),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              sf.TextField(
+                key: const ValueKey('settings-font-search-field'),
+                controller: _searchController,
+                autofocus: true,
+                onChanged: (value) {
+                  setState(() {
+                    _query = value;
+                  });
+                },
+                placeholder: Text(widget.searchHint),
+                features: const [
+                  sf.InputFeature.leading(Icon(Icons.search_rounded, size: 18)),
+                ],
+              ),
+              const SizedBox(height: IdeSpacing.space12),
+              Expanded(
+                child: FutureBuilder<List<AppearanceFontChoice>>(
+                  future: widget.choicesFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState != ConnectionState.done) {
+                      return const Center(
+                        child: IdeLoadingIndicator(
+                          key: ValueKey('settings-font-picker-loading'),
+                          width: 28,
+                          height: 12,
+                          barHeight: 4,
                         ),
                       );
-                    },
-                  );
-                },
+                    }
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Text(
+                          '字体列表加载失败。',
+                          style: textStyles.bodySmall.copyWith(
+                            color: colors.textSecondary,
+                          ),
+                        ),
+                      );
+                    }
+
+                    final choices =
+                        snapshot.data ?? const <AppearanceFontChoice>[];
+                    final filtered = choices
+                        .where((choice) => _matchesFontQuery(choice, _query))
+                        .toList(growable: false);
+                    if (filtered.isEmpty) {
+                      return Center(
+                        child: Text(
+                          '没有匹配的字体。',
+                          style: textStyles.bodySmall.copyWith(
+                            color: colors.textSecondary,
+                          ),
+                        ),
+                      );
+                    }
+
+                    return ListView.builder(
+                      key: const ValueKey('settings-font-picker-list'),
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) {
+                        final choice = filtered[index];
+                        final selected = choice == widget.selectedChoice;
+                        final optionStyle =
+                            sf.ButtonStyle.ghost(
+                              size: sf.ButtonSize.normal,
+                              density: sf.ButtonDensity.dense,
+                            ).withBackgroundColor(
+                              color: selected
+                                  ? colors.primaryMuted
+                                  : Colors.transparent,
+                              hoverColor: selected
+                                  ? colors.primaryMuted.withValues(alpha: 0.18)
+                                  : colors.border.withValues(alpha: 0.12),
+                            );
+                        return SizedBox(
+                          width: double.infinity,
+                          height: 36,
+                          child: sf.Button(
+                            key: ValueKey<String>(
+                              'settings-font-option-${choice.stableId}',
+                            ),
+                            onPressed: () => Navigator.of(context).pop(choice),
+                            style: optionStyle,
+                            alignment: Alignment.centerLeft,
+                            trailing: selected
+                                ? Icon(
+                                    Icons.check_rounded,
+                                    size: 18,
+                                    color: colors.accent,
+                                  )
+                                : null,
+                            child: Text(
+                              _fontChoiceLabel(choice),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: textStyles.bodyMedium.copyWith(
+                                color: colors.textPrimary,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -714,14 +742,33 @@ String _fontChoiceLabel(AppearanceFontChoice choice) {
 }
 
 void _showFontSelectionError(BuildContext context, String message) {
-  final sonner = ShadSonner.maybeOf(context);
-  if (sonner == null) {
-    return;
-  }
-  sonner.show(
-    ShadToast.destructive(
-      description: Text(message),
-      duration: const Duration(seconds: 3),
-    ),
+  // 阶段 4B 先用 sf.showToast 落地；统一 IDE toast helper 留给阶段 4D。
+  final colors = IdeColors.of(context);
+  final textStyles = IdeTextStyles.of(context);
+  sf.showToast(
+    context: context,
+    location: sf.ToastLocation.bottomRight,
+    showDuration: const Duration(seconds: 3),
+    builder: (context, overlay) {
+      return sf.SurfaceCard(
+        child: sf.Basic(
+          title: Text(
+            message,
+            style: textStyles.bodySmall.copyWith(color: colors.error),
+          ),
+          trailing: sf.IconButton.ghost(
+            onPressed: overlay.close,
+            size: sf.ButtonSize.small,
+            density: sf.ButtonDensity.iconDense,
+            icon: Icon(
+              Icons.close_rounded,
+              size: 16,
+              color: colors.textSecondary,
+            ),
+          ),
+          trailingAlignment: Alignment.center,
+        ),
+      );
+    },
   );
 }

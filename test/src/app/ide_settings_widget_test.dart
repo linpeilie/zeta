@@ -1,33 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
+import 'package:zeta/src/features/settings/presentation/settings_page.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_choice_card.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
-
-import '../testing/ide_test_harness.dart';
 
 void main() {
-  testWidgets('title bar settings action opens settings page', (tester) async {
-    await _pumpIdeWithSettings(tester);
+  testWidgets('settings page renders navigation and appearance detail', (
+    tester,
+  ) async {
+    await _pumpSettingsPage(tester);
 
-    expect(
-      find.byKey(const ValueKey('titlebar-settings-action')),
-      findsOneWidget,
-    );
-    expect(find.byKey(const ValueKey('settings-page')), findsNothing);
-
-    await tester.tap(find.byKey(const ValueKey('titlebar-settings-action')));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const ValueKey('settings-page')), findsOneWidget);
     expect(find.byKey(const ValueKey('settings-nav-panel')), findsOneWidget);
     expect(find.byKey(const ValueKey('settings-detail-panel')), findsOneWidget);
     expect(find.byKey(const ValueKey('settings-back-button')), findsOneWidget);
@@ -44,25 +32,19 @@ void main() {
     expect(find.text('外观'), findsNWidgets(2));
   });
 
-  testWidgets('returning from settings preserves ide panel state', (
-    tester,
-  ) async {
-    await _pumpIdeWithSettings(tester);
-
-    await tester.tap(find.byKey(const ValueKey('left-projects-action')));
-    await tester.pump();
-    expect(find.byKey(const ValueKey('projects-panel-card')), findsNothing);
-
-    await tester.tap(find.byKey(const ValueKey('titlebar-settings-action')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('settings-page')), findsOneWidget);
+  testWidgets('settings back button invokes onBackPressed', (tester) async {
+    var backPressed = false;
+    await _pumpSettingsPage(
+      tester,
+      onBackPressed: () {
+        backPressed = true;
+      },
+    );
 
     await tester.tap(find.byKey(const ValueKey('settings-back-button')));
-    await tester.pumpAndSettle();
+    await tester.pump();
 
-    expect(find.byKey(const ValueKey('settings-page')), findsNothing);
-    expect(find.byKey(const ValueKey('projects-panel-card')), findsNothing);
-    expect(find.byKey(const ValueKey('agent-pane-host')), findsOneWidget);
+    expect(backPressed, isTrue);
   });
 
   testWidgets('theme selection updates controller and selected option', (
@@ -72,15 +54,12 @@ void main() {
       store: MemoryAppearanceSettingsStore(),
       fontCatalog: const _FakeSystemFontCatalogService(),
     );
-    await _pumpIdeWithSettings(tester, controller: controller);
+    await _pumpSettingsPage(tester, controller: controller);
 
     // 回归断言：标题文字必须随主题切换重建为当前调色板的 textPrimary，
     // 防止 token 访问器在根主题切换后残留旧主题颜色（深浅混杂）。
     Color? headingColor() =>
         tester.widget<Text>(find.text('主题模式')).style?.color;
-
-    await tester.tap(find.byKey(const ValueKey('titlebar-settings-action')));
-    await tester.pumpAndSettle();
 
     expect(controller.settings.themeMode, ThemeMode.system);
     expect(
@@ -135,10 +114,7 @@ void main() {
         loadableFonts: <String>{'Maple UI', 'Source Han Sans', 'Cascadia Mono'},
       ),
     );
-    await _pumpIdeWithSettings(tester, controller: controller);
-
-    await tester.tap(find.byKey(const ValueKey('titlebar-settings-action')));
-    await tester.pumpAndSettle();
+    await _pumpSettingsPage(tester, controller: controller);
 
     await tester.tap(find.text('界面字体'));
     await tester.pumpAndSettle();
@@ -207,10 +183,7 @@ void main() {
           },
         ),
       );
-      await _pumpIdeWithSettings(tester, controller: controller);
-
-      await tester.tap(find.byKey(const ValueKey('titlebar-settings-action')));
-      await tester.pumpAndSettle();
+      await _pumpSettingsPage(tester, controller: controller);
 
       await tester.tap(find.text('代码字体'));
       await tester.pumpAndSettle();
@@ -274,9 +247,10 @@ void main() {
   );
 }
 
-Future<void> _pumpIdeWithSettings(
+Future<void> _pumpSettingsPage(
   WidgetTester tester, {
   AppearanceSettingsController? controller,
+  VoidCallback? onBackPressed,
   Size size = const Size(1400, 900),
 }) async {
   tester.view
@@ -296,9 +270,6 @@ Future<void> _pumpIdeWithSettings(
       );
   addTearDown(appearanceController.dispose);
   await appearanceController.load();
-
-  final session = MemorySessionStore();
-  final provider = FakeAgentProvider();
 
   await tester.pumpWidget(
     ValueListenableBuilder<AppearanceSettings>(
@@ -329,18 +300,13 @@ Future<void> _pumpIdeWithSettings(
             darkTheme: buildShadcnTheme(darkIdeTheme),
             materialTheme: buildMaterialTheme(materialIdeTheme),
             themeMode: resolveShadcnThemeMode(settings.themeMode),
-            home: IdeHome(
-              directoryPicker: () async => null,
-              enableNativeWindowFrame: true,
-              showWindowControls: false,
-              sessionStore: CallbackIdeSessionStore(
-                loadJson: session.load,
-                saveJson: session.save,
+            home: Scaffold(
+              body: SettingsPage(
+                activeSection: SettingsSection.appearance,
+                appearanceController: appearanceController,
+                onBackPressed: onBackPressed ?? () {},
+                onSectionSelected: (_) {},
               ),
-              agentProviderFactory: FakeAgentProviderFactory(provider),
-              agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-              projectLocationOpener: (_) async {},
-              appearanceController: appearanceController,
             ),
           ),
         );
