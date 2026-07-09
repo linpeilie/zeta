@@ -8,6 +8,7 @@
 ## 0. 文档定位
 
 - 本文档是当前项目“将 `shadcn_ui` 替换为 `shadcn_flutter`”的唯一执行计划。
+- 阶段 0 的实际原型验证结论与已修正假设，见：`plan/shadcn_flutter_preflight_validation.md`。
 - `plan/shadcn_migration_plan.md` 是“从 Material 迁移到 `shadcn_ui`”的历史文档，不适用于本次目标，应保留为历史记录但不再作为当前迁移基线。
 - 本计划默认在单独分支中完成全部改造，直到最后一轮验证通过后再合并；主线不经历“新旧两套 UI 库并存”的阶段。
 
