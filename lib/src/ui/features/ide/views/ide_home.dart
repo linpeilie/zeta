@@ -200,6 +200,7 @@ class _IdeHomeState extends State<IdeHome> {
         SizedBox(
           width: _activityRailWidth,
           child: IdeActivityRail(
+            indicatorSide: IdeActivityRailIndicatorSide.right,
             leadingActions: [
               IdeRailAction(
                 key: const ValueKey('left-projects-action'),

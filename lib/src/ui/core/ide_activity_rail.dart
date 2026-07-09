@@ -33,10 +33,14 @@ class IdeActivityRail extends StatelessWidget {
     required this.leadingActions,
     super.key,
     this.trailingActions = const <IdeRailAction>[],
+    this.indicatorSide = IdeActivityRailIndicatorSide.left,
   });
 
   final List<IdeRailAction> leadingActions;
   final List<IdeRailAction> trailingActions;
+
+  /// 选中态指示条位置：左侧栏靠右、右侧栏靠左，贴近内容区。
+  final IdeActivityRailIndicatorSide indicatorSide;
 
   @override
   Widget build(BuildContext context) {
@@ -49,10 +53,10 @@ class IdeActivityRail extends StatelessWidget {
         child: Column(
           children: [
             for (final action in leadingActions)
-              _RailActionButton(action: action),
+              _RailActionButton(action: action, indicatorSide: indicatorSide),
             if (trailingActions.isNotEmpty) const Spacer(),
             for (final action in trailingActions)
-              _RailActionButton(action: action),
+              _RailActionButton(action: action, indicatorSide: indicatorSide),
           ],
         ),
       ),
@@ -60,10 +64,14 @@ class IdeActivityRail extends StatelessWidget {
   }
 }
 
+/// 活动栏选中指示条相对按钮的水平位置。
+enum IdeActivityRailIndicatorSide { left, right }
+
 class _RailActionButton extends StatelessWidget {
-  const _RailActionButton({required this.action});
+  const _RailActionButton({required this.action, required this.indicatorSide});
 
   final IdeRailAction action;
+  final IdeActivityRailIndicatorSide indicatorSide;
 
   @override
   Widget build(BuildContext context) {
@@ -73,6 +81,7 @@ class _RailActionButton extends StatelessWidget {
         : action.active
         ? colors.accentForeground
         : colors.textSecondary;
+    final indicatorOnLeft = indicatorSide == IdeActivityRailIndicatorSide.left;
 
     return IdeTooltip(
       message: action.tooltip,
@@ -95,7 +104,8 @@ class _RailActionButton extends StatelessWidget {
             child: Icon(action.icon, size: 19, color: iconColor),
           ),
           Positioned(
-            left: -2,
+            left: indicatorOnLeft ? -2 : null,
+            right: indicatorOnLeft ? null : -2,
             child: AnimatedContainer(
               duration: IdeMotion.durationNormal,
               curve: IdeMotion.curveDefault,
@@ -103,8 +113,13 @@ class _RailActionButton extends StatelessWidget {
               height: action.active ? 16 : 0,
               decoration: BoxDecoration(
                 color: colors.accent,
-                borderRadius: const BorderRadius.horizontal(
-                  right: Radius.circular(2),
+                borderRadius: BorderRadius.horizontal(
+                  left: indicatorOnLeft
+                      ? Radius.zero
+                      : const Radius.circular(2),
+                  right: indicatorOnLeft
+                      ? const Radius.circular(2)
+                      : Radius.zero,
                 ),
               ),
             ),
