@@ -572,14 +572,16 @@ void main() {
     await tester.tap(
       find.byKey(ValueKey<String>('project-tile-more-menu-${directory.path}')),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     await tester.tap(
       find.byKey(
         ValueKey<String>('project-tile-open-location-${directory.path}'),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(openedPaths, <String>[directory.path]);
   });
@@ -642,14 +644,16 @@ void main() {
     await tester.tap(
       find.byKey(ValueKey<String>('project-tile-more-menu-${directory.path}')),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     await tester.tap(
       find.byKey(
         ValueKey<String>('project-tile-refresh-threads-${directory.path}'),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(provider.listQueries, hasLength(2));
     expect(provider.listQueries.last.projectPath, directory.path);
@@ -731,12 +735,14 @@ void main() {
           ValueKey<String>('project-tile-more-menu-${directory.path}'),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       await tester.tap(
         find.byKey(ValueKey<String>('project-tile-remove-${directory.path}')),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(
         find.byKey(ValueKey<String>('project-tile-${directory.path}')),
@@ -793,7 +799,8 @@ void main() {
         ValueKey<String>('project-thread-more-menu-${directory.path}-thread-a'),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(
       find.byKey(
@@ -813,7 +820,8 @@ void main() {
         ValueKey<String>('project-thread-rename-${directory.path}-thread-a'),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     final dialogFinder = find.byKey(
       ValueKey<String>(
@@ -827,7 +835,8 @@ void main() {
       'Renamed thread',
     );
     await tester.tap(find.text('确认'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(provider.renamedThreads, hasLength(1));
     expect(provider.renamedThreads.single.threadId, 'thread-a');

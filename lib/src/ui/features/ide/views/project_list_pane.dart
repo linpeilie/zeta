@@ -12,6 +12,7 @@ import 'package:zeta/src/ui/core/ide_context_menu.dart';
 import 'package:zeta/src/ui/core/ide_dialog.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_motion.dart';
+import 'package:zeta/src/ui/core/ide_popover.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
@@ -159,29 +160,105 @@ class _ProjectTileState extends State<_ProjectTile> {
   static const double _actionIconSize = 16;
   static const double _actionIconGap = IdeSpacing.space6;
 
+  final GlobalKey _moreButtonKey = GlobalKey();
+  IdePopoverHandle<void>? _popoverEntry;
   bool _hovered = false;
   bool _focused = false;
   bool _menuOpen = false;
 
   bool get _showActions => _hovered || _focused || _menuOpen;
 
+  @override
+  void dispose() {
+    _popoverEntry?.dismiss();
+    _popoverEntry = null;
+    super.dispose();
+  }
+
   void _toggleMoreMenu() {
+    if (_menuOpen) {
+      _dismissMoreMenu();
+      return;
+    }
+    _showMoreMenu();
+  }
+
+  void _showMoreMenu() {
+    if (_popoverEntry != null) {
+      return;
+    }
+    // 锚到 more 按钮所在行，避免展开 thread 列表后菜单落到整块项目下方。
+    final anchorContext = _moreButtonKey.currentContext ?? context;
     setState(() {
-      _menuOpen = !_menuOpen;
+      _menuOpen = true;
+    });
+    final entry = showIdePopover<void>(
+      context: anchorContext,
+      alignment: Alignment.topRight,
+      anchorAlignment: Alignment.bottomRight,
+      offset: const Offset(0, 4),
+      modal: false,
+      builder: (context) {
+        return ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 100, maxWidth: 140),
+          child: IdeContextMenu(
+            actions: [
+              IdeContextMenuAction(
+                key: ValueKey<String>(
+                  'project-tile-refresh-threads-${widget.path}',
+                ),
+                label: '刷新会话',
+                onPressed: () =>
+                    _handleMenuAction(_ProjectTileMenuAction.refreshThreads),
+              ),
+              IdeContextMenuAction(
+                key: ValueKey<String>(
+                  'project-tile-open-location-${widget.path}',
+                ),
+                label: _openProjectLocationLabel(),
+                onPressed: () => _handleMenuAction(
+                  _ProjectTileMenuAction.openProjectLocation,
+                ),
+              ),
+              IdeContextMenuAction(
+                key: ValueKey<String>('project-tile-remove-${widget.path}'),
+                label: '移除',
+                destructive: true,
+                onPressed: () =>
+                    _handleMenuAction(_ProjectTileMenuAction.removeProject),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    _popoverEntry = entry;
+    entry.future.whenComplete(() {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        if (identical(_popoverEntry, entry)) {
+          _popoverEntry = null;
+        }
+        _menuOpen = false;
+      });
     });
   }
 
-  void _closeMoreMenu() {
-    if (!_menuOpen) {
+  void _dismissMoreMenu() {
+    final entry = _popoverEntry;
+    if (entry == null) {
       return;
     }
+    _popoverEntry = null;
     setState(() {
       _menuOpen = false;
     });
+    entry.dismiss();
   }
 
   void _handleMenuAction(_ProjectTileMenuAction selected) {
-    _closeMoreMenu();
     switch (selected) {
       case _ProjectTileMenuAction.refreshThreads:
         widget.onRetryThreads();
@@ -283,22 +360,27 @@ class _ProjectTileState extends State<_ProjectTile> {
                                 ),
                               ),
                               const SizedBox(width: _actionIconGap),
-                              IdeTooltip(
-                                message: 'More',
-                                child: sf.IconButton.ghost(
-                                  key: ValueKey<String>(
-                                    'project-tile-more-menu-${widget.path}',
-                                  ),
-                                  onPressed: _toggleMoreMenu,
-                                  size: sf.ButtonSize.xSmall,
-                                  density: sf.ButtonDensity.iconDense,
-                                  icon: Icon(
-                                    Icons.more_horiz_rounded,
+                              KeyedSubtree(
+                                key: _moreButtonKey,
+                                child: IdeTooltip(
+                                  message: '更多',
+                                  child: sf.IconButton.ghost(
                                     key: ValueKey<String>(
-                                      'project-tile-more-${widget.path}',
+                                      'project-tile-more-menu-${widget.path}',
                                     ),
-                                    size: _actionIconSize,
-                                    color: colors.textSecondary,
+                                    onPressed: _toggleMoreMenu,
+                                    size: sf.ButtonSize.xSmall,
+                                    density: sf.ButtonDensity.iconDense,
+                                    icon: Icon(
+                                      Icons.more_horiz_rounded,
+                                      key: ValueKey<String>(
+                                        'project-tile-more-${widget.path}',
+                                      ),
+                                      size: _actionIconSize,
+                                      color: _menuOpen
+                                          ? colors.textPrimary
+                                          : colors.textSecondary,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -327,49 +409,6 @@ class _ProjectTileState extends State<_ProjectTile> {
               ],
             ),
           ),
-          if (_menuOpen)
-            Padding(
-              padding: const EdgeInsets.only(
-                top: IdeSpacing.space4,
-                right: IdeSpacing.space6,
-              ),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: IdeContextMenu(
-                  closeOnActivate: false,
-                  actions: [
-                    IdeContextMenuAction(
-                      key: ValueKey<String>(
-                        'project-tile-refresh-threads-${widget.path}',
-                      ),
-                      label: '刷新会话',
-                      onPressed: () => _handleMenuAction(
-                        _ProjectTileMenuAction.refreshThreads,
-                      ),
-                    ),
-                    IdeContextMenuAction(
-                      key: ValueKey<String>(
-                        'project-tile-open-location-${widget.path}',
-                      ),
-                      label: _openProjectLocationLabel(),
-                      onPressed: () => _handleMenuAction(
-                        _ProjectTileMenuAction.openProjectLocation,
-                      ),
-                    ),
-                    IdeContextMenuAction(
-                      key: ValueKey<String>(
-                        'project-tile-remove-${widget.path}',
-                      ),
-                      label: '移除',
-                      destructive: true,
-                      onPressed: () => _handleMenuAction(
-                        _ProjectTileMenuAction.removeProject,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
           if (widget.threadState.isExpanded)
             _ProjectThreadList(
               projectPath: widget.path,
@@ -491,29 +530,122 @@ class _ThreadTileState extends State<_ThreadTile> {
   static const double _actionHitSize = 18;
   static const double _actionIconSize = 14;
 
+  IdePopoverHandle<void>? _popoverEntry;
   bool _hovered = false;
   bool _focused = false;
   bool _menuOpen = false;
 
   bool get _showActions => _hovered || _focused || _menuOpen;
 
-  void _toggleMoreMenu() {
-    setState(() {
-      _menuOpen = !_menuOpen;
-    });
+  @override
+  void dispose() {
+    _popoverEntry?.dismiss();
+    _popoverEntry = null;
+    super.dispose();
   }
 
-  void _closeMoreMenu() {
-    if (!_menuOpen) {
+  void _toggleMoreMenu() {
+    if (_menuOpen) {
+      _dismissMoreMenu();
+      return;
+    }
+    _showMoreMenu();
+  }
+
+  void _showMoreMenu() {
+    if (_popoverEntry != null) {
       return;
     }
     setState(() {
-      _menuOpen = false;
+      _menuOpen = true;
+    });
+    final thread = widget.thread;
+    final entry = showIdePopover<void>(
+      context: context,
+      alignment: Alignment.topRight,
+      anchorAlignment: Alignment.bottomRight,
+      offset: const Offset(0, 4),
+      modal: false,
+      builder: (context) {
+        return ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 80, maxWidth: 120),
+          child: IdeContextMenu(
+            actions: [
+              IdeContextMenuAction(
+                key: ValueKey<String>(
+                  'project-thread-rename-${widget.projectPath}-${thread.id}',
+                ),
+                label: '重命名',
+                onPressed: () =>
+                    _handleMenuAction(_ThreadTileMenuAction.rename),
+              ),
+              if (widget.archivedView)
+                IdeContextMenuAction(
+                  key: ValueKey<String>(
+                    'project-thread-unarchive-${widget.projectPath}-${thread.id}',
+                  ),
+                  label: '取消归档',
+                  onPressed: () =>
+                      _handleMenuAction(_ThreadTileMenuAction.unarchive),
+                )
+              else
+                IdeContextMenuAction(
+                  key: ValueKey<String>(
+                    'project-thread-archive-${widget.projectPath}-${thread.id}',
+                  ),
+                  label: '归档',
+                  onPressed: () =>
+                      _handleMenuAction(_ThreadTileMenuAction.archive),
+                ),
+              IdeContextMenuAction(
+                key: ValueKey<String>(
+                  'project-thread-fork-${widget.projectPath}-${thread.id}',
+                ),
+                label: '分叉',
+                onPressed: () => _handleMenuAction(_ThreadTileMenuAction.fork),
+              ),
+              IdeContextMenuAction(
+                key: ValueKey<String>(
+                  'project-thread-delete-${widget.projectPath}-${thread.id}',
+                ),
+                label: '删除',
+                destructive: true,
+                dividerAbove: true,
+                onPressed: () =>
+                    _handleMenuAction(_ThreadTileMenuAction.delete),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    _popoverEntry = entry;
+    entry.future.whenComplete(() {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        if (identical(_popoverEntry, entry)) {
+          _popoverEntry = null;
+        }
+        _menuOpen = false;
+      });
     });
   }
 
+  void _dismissMoreMenu() {
+    final entry = _popoverEntry;
+    if (entry == null) {
+      return;
+    }
+    _popoverEntry = null;
+    setState(() {
+      _menuOpen = false;
+    });
+    entry.dismiss();
+  }
+
   Future<void> _showRenameDialog() async {
-    _closeMoreMenu();
     final controller = TextEditingController(text: widget.thread.displayName);
     final name = await showIdeDialog<String>(
       context: context,
@@ -554,7 +686,6 @@ class _ThreadTileState extends State<_ThreadTile> {
   }
 
   Future<void> _showDeleteDialog() async {
-    _closeMoreMenu();
     final confirmed = await showIdeDialog<bool>(
       context: context,
       builder: (dialogContext) {
@@ -587,15 +718,12 @@ class _ThreadTileState extends State<_ThreadTile> {
         unawaited(_showRenameDialog());
         return;
       case _ThreadTileMenuAction.archive:
-        _closeMoreMenu();
         widget.onArchiveThread(widget.thread);
         return;
       case _ThreadTileMenuAction.unarchive:
-        _closeMoreMenu();
         widget.onUnarchiveThread(widget.thread);
         return;
       case _ThreadTileMenuAction.fork:
-        _closeMoreMenu();
         widget.onForkThread(widget.thread);
         return;
       case _ThreadTileMenuAction.delete:
@@ -723,7 +851,9 @@ class _ThreadTileState extends State<_ThreadTile> {
                               icon: Icon(
                                 Icons.more_horiz_rounded,
                                 size: _actionIconSize,
-                                color: colors.textSecondary,
+                                color: _menuOpen
+                                    ? colors.textPrimary
+                                    : colors.textSecondary,
                               ),
                             ),
                           ),
@@ -734,66 +864,6 @@ class _ThreadTileState extends State<_ThreadTile> {
               ],
             ),
           ),
-          if (_menuOpen)
-            Padding(
-              padding: const EdgeInsets.only(
-                top: IdeSpacing.space2,
-                left: IdeSpacing.space8,
-                right: IdeSpacing.space4,
-              ),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: IdeContextMenu(
-                  closeOnActivate: false,
-                  actions: [
-                    IdeContextMenuAction(
-                      key: ValueKey<String>(
-                        'project-thread-rename-${widget.projectPath}-${thread.id}',
-                      ),
-                      label: '重命名',
-                      onPressed: () =>
-                          _handleMenuAction(_ThreadTileMenuAction.rename),
-                    ),
-                    if (widget.archivedView)
-                      IdeContextMenuAction(
-                        key: ValueKey<String>(
-                          'project-thread-unarchive-${widget.projectPath}-${thread.id}',
-                        ),
-                        label: '取消归档',
-                        onPressed: () =>
-                            _handleMenuAction(_ThreadTileMenuAction.unarchive),
-                      )
-                    else
-                      IdeContextMenuAction(
-                        key: ValueKey<String>(
-                          'project-thread-archive-${widget.projectPath}-${thread.id}',
-                        ),
-                        label: '归档',
-                        onPressed: () =>
-                            _handleMenuAction(_ThreadTileMenuAction.archive),
-                      ),
-                    IdeContextMenuAction(
-                      key: ValueKey<String>(
-                        'project-thread-fork-${widget.projectPath}-${thread.id}',
-                      ),
-                      label: '分叉',
-                      onPressed: () =>
-                          _handleMenuAction(_ThreadTileMenuAction.fork),
-                    ),
-                    IdeContextMenuAction(
-                      key: ValueKey<String>(
-                        'project-thread-delete-${widget.projectPath}-${thread.id}',
-                      ),
-                      label: '删除',
-                      destructive: true,
-                      dividerAbove: true,
-                      onPressed: () =>
-                          _handleMenuAction(_ThreadTileMenuAction.delete),
-                    ),
-                  ],
-                ),
-              ),
-            ),
         ],
       ),
     );
