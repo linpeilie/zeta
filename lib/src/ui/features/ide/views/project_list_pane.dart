@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -79,11 +79,10 @@ class ProjectListPane extends StatelessWidget {
       title: 'Projects',
       trailing: IdeTooltip(
         message: 'Open folder',
-        child: ShadIconButton.ghost(
+        child: sf.IconButton.ghost(
           onPressed: onOpenProject,
-          width: 30,
-          height: 30,
-          padding: EdgeInsets.zero,
+          size: sf.ButtonSize.small,
+          density: sf.ButtonDensity.iconDense,
           icon: const Icon(Icons.create_new_folder_outlined, size: 17),
         ),
       ),
@@ -180,41 +179,27 @@ class _ProjectTileState extends State<_ProjectTile> {
 
   bool _hovered = false;
   bool _focused = false;
-  late final ShadPopoverController _moreMenuController;
+  bool _menuOpen = false;
 
-  bool get _showActions => _hovered || _focused || _moreMenuController.isOpen;
-
-  @override
-  void initState() {
-    super.initState();
-    _moreMenuController = ShadPopoverController();
-    _moreMenuController.addListener(_handleMenuVisibilityChanged);
-  }
-
-  @override
-  void dispose() {
-    _moreMenuController
-      ..removeListener(_handleMenuVisibilityChanged)
-      ..dispose();
-    super.dispose();
-  }
-
-  void _handleMenuVisibilityChanged() {
-    if (mounted) {
-      setState(() {});
-    }
-  }
+  bool get _showActions => _hovered || _focused || _menuOpen;
 
   void _toggleMoreMenu() {
-    if (_moreMenuController.isOpen) {
-      _moreMenuController.hide();
+    setState(() {
+      _menuOpen = !_menuOpen;
+    });
+  }
+
+  void _closeMoreMenu() {
+    if (!_menuOpen) {
       return;
     }
-    _moreMenuController.show();
+    setState(() {
+      _menuOpen = false;
+    });
   }
 
   void _handleMenuAction(_ProjectTileMenuAction selected) {
-    _moreMenuController.hide();
+    _closeMoreMenu();
     switch (selected) {
       case _ProjectTileMenuAction.refreshThreads:
         widget.onRetryThreads();
@@ -299,62 +284,52 @@ class _ProjectTileState extends State<_ProjectTile> {
                                 message: widget.threadState.isExpanded
                                     ? 'Collapse threads'
                                     : 'Expand threads',
-                                child: ShadIconButton.ghost(
+                                child: sf.IconButton.ghost(
                                   key: ValueKey<String>(
                                     'project-tile-expand-icon-${widget.path}',
                                   ),
                                   onPressed: widget.onTap,
-                                  width: _actionHitSize,
-                                  height: _actionHitSize,
-                                  padding: EdgeInsets.zero,
-                                  foregroundColor: colors.textSecondary,
-                                  hoverBackgroundColor: hoverBackground,
+                                  size: sf.ButtonSize.xSmall,
+                                  density: sf.ButtonDensity.iconDense,
                                   icon: Icon(
                                     widget.threadState.isExpanded
                                         ? Icons.keyboard_arrow_down_rounded
                                         : Icons.chevron_right_rounded,
                                     size: _actionIconSize,
+                                    color: colors.textSecondary,
                                   ),
                                 ),
                               ),
                               const SizedBox(width: _actionIconGap),
                               IdeTooltip(
                                 message: 'More',
-                                child: GestureDetector(
+                                child: sf.IconButton.ghost(
                                   key: ValueKey<String>(
                                     'project-tile-more-menu-${widget.path}',
                                   ),
-                                  behavior: HitTestBehavior.opaque,
-                                  onTap: _toggleMoreMenu,
-                                  child: Container(
-                                    width: _actionHitSize,
-                                    height: _actionHitSize,
-                                    color: Colors.transparent,
-                                    alignment: Alignment.center,
-                                    child: Icon(
-                                      Icons.more_horiz_rounded,
-                                      key: ValueKey<String>(
-                                        'project-tile-more-${widget.path}',
-                                      ),
-                                      size: _actionIconSize,
-                                      color: colors.textSecondary,
+                                  onPressed: _toggleMoreMenu,
+                                  size: sf.ButtonSize.xSmall,
+                                  density: sf.ButtonDensity.iconDense,
+                                  icon: Icon(
+                                    Icons.more_horiz_rounded,
+                                    key: ValueKey<String>(
+                                      'project-tile-more-${widget.path}',
                                     ),
+                                    size: _actionIconSize,
+                                    color: colors.textSecondary,
                                   ),
                                 ),
                               ),
                               const SizedBox(width: _actionIconGap),
                               IdeTooltip(
                                 message: 'New thread',
-                                child: ShadIconButton.ghost(
+                                child: sf.IconButton.ghost(
                                   key: ValueKey<String>(
                                     'project-tile-new-thread-${widget.path}',
                                   ),
                                   onPressed: widget.onNewThread,
-                                  width: _actionHitSize,
-                                  height: _actionHitSize,
-                                  padding: EdgeInsets.zero,
-                                  foregroundColor: colors.textSecondary,
-                                  hoverBackgroundColor: hoverBackground,
+                                  size: sf.ButtonSize.xSmall,
+                                  density: sf.ButtonDensity.iconDense,
                                   icon: const Icon(
                                     Icons.edit_outlined,
                                     size: _actionIconSize,
@@ -370,7 +345,7 @@ class _ProjectTileState extends State<_ProjectTile> {
               ],
             ),
           ),
-          if (_moreMenuController.isOpen)
+          if (_menuOpen)
             Padding(
               padding: const EdgeInsets.only(
                 top: IdeSpacing.space4,
@@ -379,6 +354,7 @@ class _ProjectTileState extends State<_ProjectTile> {
               child: Align(
                 alignment: Alignment.centerRight,
                 child: IdeContextMenu(
+                  closeOnActivate: false,
                   actions: [
                     IdeContextMenuAction(
                       key: ValueKey<String>(
@@ -503,14 +479,16 @@ class _ProjectThreadListState extends State<_ProjectThreadList> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ShadInput(
+            sf.TextField(
               key: ValueKey<String>(
                 'project-thread-search-${widget.projectPath}',
               ),
               controller: _searchController,
               onChanged: widget.onSearchTermChanged,
               placeholder: const Text('搜索会话'),
-              leading: const Icon(Icons.search_rounded, size: 16),
+              features: const [
+                sf.InputFeature.leading(Icon(Icons.search_rounded, size: 16)),
+              ],
             ),
             const SizedBox(height: IdeSpacing.space6),
             Wrap(
@@ -617,70 +595,58 @@ class _ThreadTileState extends State<_ThreadTile> {
 
   bool _hovered = false;
   bool _focused = false;
-  late final ShadPopoverController _moreMenuController;
+  bool _menuOpen = false;
 
-  bool get _showActions => _hovered || _focused || _moreMenuController.isOpen;
-
-  @override
-  void initState() {
-    super.initState();
-    _moreMenuController = ShadPopoverController();
-    _moreMenuController.addListener(_handleMenuVisibilityChanged);
-  }
-
-  @override
-  void dispose() {
-    _moreMenuController
-      ..removeListener(_handleMenuVisibilityChanged)
-      ..dispose();
-    super.dispose();
-  }
-
-  void _handleMenuVisibilityChanged() {
-    if (mounted) {
-      setState(() {});
-    }
-  }
+  bool get _showActions => _hovered || _focused || _menuOpen;
 
   void _toggleMoreMenu() {
-    if (_moreMenuController.isOpen) {
-      _moreMenuController.hide();
+    setState(() {
+      _menuOpen = !_menuOpen;
+    });
+  }
+
+  void _closeMoreMenu() {
+    if (!_menuOpen) {
       return;
     }
-    _moreMenuController.show();
+    setState(() {
+      _menuOpen = false;
+    });
   }
 
   Future<void> _showRenameDialog() async {
-    _moreMenuController.hide();
+    _closeMoreMenu();
     final controller = TextEditingController(text: widget.thread.displayName);
-    final name = await showShadDialog<String>(
+    final name = await showDialog<String>(
       context: context,
       builder: (dialogContext) {
-        return ShadDialog(
+        return sf.AlertDialog(
           key: ValueKey<String>(
             'project-thread-rename-dialog-${widget.projectPath}-${widget.thread.id}',
           ),
           title: const Text('重命名'),
-          closeIconData: Icons.close_rounded,
+          content: SizedBox(
+            width: 320,
+            child: sf.TextField(
+              controller: controller,
+              autofocus: true,
+              onSubmitted: (value) {
+                Navigator.of(dialogContext).pop(value.trim());
+              },
+            ),
+          ),
           actions: [
-            ShadButton.outline(
+            sf.OutlineButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text('取消'),
             ),
-            ShadButton(
+            sf.PrimaryButton(
               onPressed: () {
                 Navigator.of(dialogContext).pop(controller.text.trim());
               },
               child: const Text('确认'),
             ),
           ],
-          child: ShadInput(
-            controller: controller,
-            autofocus: true,
-            onSubmitted: (value) {
-              Navigator.of(dialogContext).pop(value.trim());
-            },
-          ),
         );
       },
     );
@@ -692,22 +658,22 @@ class _ThreadTileState extends State<_ThreadTile> {
   }
 
   Future<void> _showDeleteDialog() async {
-    _moreMenuController.hide();
-    final confirmed = await showShadDialog<bool>(
+    _closeMoreMenu();
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
-        return ShadDialog.alert(
+        return sf.AlertDialog(
           key: ValueKey<String>(
             'project-thread-delete-dialog-${widget.projectPath}-${widget.thread.id}',
           ),
           title: const Text('删除会话'),
-          description: const Text('此操作不可撤销，将永久删除该会话。'),
+          content: const Text('此操作不可撤销，将永久删除该会话。'),
           actions: [
-            ShadButton.outline(
+            sf.OutlineButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('取消'),
             ),
-            ShadButton.destructive(
+            sf.DestructiveButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('删除'),
             ),
@@ -726,15 +692,15 @@ class _ThreadTileState extends State<_ThreadTile> {
         unawaited(_showRenameDialog());
         return;
       case _ThreadTileMenuAction.archive:
-        _moreMenuController.hide();
+        _closeMoreMenu();
         widget.onArchiveThread(widget.thread);
         return;
       case _ThreadTileMenuAction.unarchive:
-        _moreMenuController.hide();
+        _closeMoreMenu();
         widget.onUnarchiveThread(widget.thread);
         return;
       case _ThreadTileMenuAction.fork:
-        _moreMenuController.hide();
+        _closeMoreMenu();
         widget.onForkThread(widget.thread);
         return;
       case _ThreadTileMenuAction.delete:
@@ -852,22 +818,17 @@ class _ThreadTileState extends State<_ThreadTile> {
                           height: _actionHitSize,
                           child: IdeTooltip(
                             message: '更多',
-                            child: GestureDetector(
+                            child: sf.IconButton.ghost(
                               key: ValueKey<String>(
                                 'project-thread-more-menu-${widget.projectPath}-${thread.id}',
                               ),
-                              behavior: HitTestBehavior.opaque,
-                              onTap: _toggleMoreMenu,
-                              child: Container(
-                                width: _actionHitSize,
-                                height: _actionHitSize,
-                                color: Colors.transparent,
-                                alignment: Alignment.center,
-                                child: Icon(
-                                  Icons.more_horiz_rounded,
-                                  size: _actionIconSize,
-                                  color: colors.textSecondary,
-                                ),
+                              onPressed: _toggleMoreMenu,
+                              size: sf.ButtonSize.xSmall,
+                              density: sf.ButtonDensity.iconDense,
+                              icon: Icon(
+                                Icons.more_horiz_rounded,
+                                size: _actionIconSize,
+                                color: colors.textSecondary,
                               ),
                             ),
                           ),
@@ -878,7 +839,7 @@ class _ThreadTileState extends State<_ThreadTile> {
               ],
             ),
           ),
-          if (_moreMenuController.isOpen)
+          if (_menuOpen)
             Padding(
               padding: const EdgeInsets.only(
                 top: IdeSpacing.space2,
@@ -888,6 +849,7 @@ class _ThreadTileState extends State<_ThreadTile> {
               child: Align(
                 alignment: Alignment.centerRight,
                 child: IdeContextMenu(
+                  closeOnActivate: false,
                   actions: [
                     IdeContextMenuAction(
                       key: ValueKey<String>(
@@ -994,12 +956,11 @@ class _ThreadErrorRow extends StatelessWidget {
           ),
           IdeTooltip(
             message: 'Retry',
-            child: ShadIconButton.ghost(
+            child: sf.IconButton.ghost(
               key: const ValueKey<String>('project-thread-retry-button'),
               onPressed: onRetry,
-              width: 28,
-              height: 28,
-              padding: EdgeInsets.zero,
+              size: sf.ButtonSize.small,
+              density: sf.ButtonDensity.iconDense,
               icon: const Icon(Icons.refresh_rounded, size: 15),
             ),
           ),
@@ -1023,15 +984,18 @@ class _LoadMoreThreadsButton extends StatelessWidget {
     final textStyles = IdeTextStyles.of(context);
     return Align(
       alignment: Alignment.centerLeft,
-      child: ShadButton.ghost(
+      child: sf.GhostButton(
         key: const ValueKey<String>('project-thread-load-more-button'),
         onPressed: loading ? null : onPressed,
-        size: ShadButtonSize.sm,
+        size: sf.ButtonSize.small,
+        density: sf.ButtonDensity.dense,
         leading: loading
             ? const IdeLoadingIndicator(width: 16, height: 10, barHeight: 3)
             : const Icon(Icons.more_horiz_rounded, size: 15),
-        textStyle: textStyles.bodySmall,
-        child: Text(loading ? 'Loading' : 'Load more'),
+        child: Text(
+          loading ? 'Loading' : 'Load more',
+          style: textStyles.bodySmall,
+        ),
       ),
     );
   }

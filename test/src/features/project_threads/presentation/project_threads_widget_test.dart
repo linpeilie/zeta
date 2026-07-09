@@ -569,14 +569,9 @@ void main() {
 
     final mouse = await hoverProjectTile(tester, directory.path);
     addTearDown(mouse.removePointer);
-    tester
-        .widget<GestureDetector>(
-          find.byKey(
-            ValueKey<String>('project-tile-more-menu-${directory.path}'),
-          ),
-        )
-        .onTap
-        ?.call();
+    await tester.tap(
+      find.byKey(ValueKey<String>('project-tile-more-menu-${directory.path}')),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(
@@ -644,14 +639,9 @@ void main() {
 
     final mouse = await hoverProjectTile(tester, directory.path);
     addTearDown(mouse.removePointer);
-    tester
-        .widget<GestureDetector>(
-          find.byKey(
-            ValueKey<String>('project-tile-more-menu-${directory.path}'),
-          ),
-        )
-        .onTap
-        ?.call();
+    await tester.tap(
+      find.byKey(ValueKey<String>('project-tile-more-menu-${directory.path}')),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(

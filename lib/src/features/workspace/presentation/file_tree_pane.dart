@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
@@ -161,25 +161,25 @@ class _FileTreeNodeTile extends StatelessWidget {
               width: 18,
               height: 18,
               child: node.isDirectory
-                  ? ShadIconButton.ghost(
+                  ? sf.IconButton.ghost(
                       onPressed: onToggleExpansion,
-                      width: 18,
-                      height: 18,
-                      padding: EdgeInsets.zero,
-                      foregroundColor: colors.textSecondary,
-                      hoverBackgroundColor: hoverBackground,
+                      size: sf.ButtonSize.xSmall,
+                      density: sf.ButtonDensity.iconDense,
                       icon: Icon(
                         expanded
-                            ? LucideIcons.chevronDown
-                            : LucideIcons.chevronRight,
+                            ? Icons.keyboard_arrow_down_rounded
+                            : Icons.chevron_right_rounded,
                         size: 14,
+                        color: colors.textSecondary,
                       ),
                     )
                   : null,
             ),
             const SizedBox(width: 2),
             Icon(
-              node.isDirectory ? LucideIcons.folder : LucideIcons.file,
+              node.isDirectory
+                  ? Icons.folder_rounded
+                  : Icons.insert_drive_file_outlined,
               size: 15,
               color: iconColor,
             ),
