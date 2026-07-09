@@ -2,11 +2,12 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_context_menu.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_motion.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
@@ -205,84 +206,107 @@ class _WindowMenuButton extends StatefulWidget {
 }
 
 class _WindowMenuButtonState extends State<_WindowMenuButton> {
-  late final ShadPopoverController _popoverController;
-
-  @override
-  void initState() {
-    super.initState();
-    _popoverController = ShadPopoverController();
-  }
+  sf.OverlayCompleter<dynamic>? _popoverEntry;
+  bool _menuOpen = false;
 
   @override
   void dispose() {
-    _popoverController.dispose();
+    _popoverEntry?.remove();
+    _popoverEntry = null;
     super.dispose();
   }
 
-  void _handleMenuItemPressed(WindowMenuItem item) {
-    _popoverController.hide();
-    item.onPressed?.call();
+  void _toggleMenu() {
+    if (_menuOpen) {
+      _dismissMenu();
+      return;
+    }
+    _showMenu();
+  }
+
+  void _showMenu() {
+    if (_popoverEntry != null) {
+      return;
+    }
+    setState(() {
+      _menuOpen = true;
+    });
+    final entry = sf.showPopover(
+      context: context,
+      alignment: Alignment.topLeft,
+      anchorAlignment: Alignment.bottomLeft,
+      offset: const Offset(0, 4),
+      modal: false,
+      builder: (context) {
+        return ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 160),
+          child: IdeContextMenu(
+            actions: [
+              for (final item in widget.menu.items)
+                IdeContextMenuAction(
+                  key: item.key,
+                  label: item.label,
+                  enabled: item.onPressed != null,
+                  onPressed: item.onPressed ?? () {},
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    _popoverEntry = entry;
+    entry.future.whenComplete(() {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        if (identical(_popoverEntry, entry)) {
+          _popoverEntry = null;
+        }
+        _menuOpen = false;
+      });
+    });
+  }
+
+  void _dismissMenu() {
+    final entry = _popoverEntry;
+    if (entry == null) {
+      return;
+    }
+    _popoverEntry = null;
+    setState(() {
+      _menuOpen = false;
+    });
+    entry.remove();
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    return ShadPopover(
+    final theme = sf.Theme.of(context);
+    final hoverBackground = colors.border.withValues(
+      alpha: theme.brightness == Brightness.dark ? 0.18 : 0.3,
+    );
+    final selectedBackground = colors.border.withValues(
+      alpha: theme.brightness == Brightness.dark ? 0.26 : 0.38,
+    );
+    return PaneInteractiveSurface(
       key: widget.menu.key,
-      controller: _popoverController,
-      padding: const EdgeInsets.all(4),
-      anchor: const ShadAnchorAuto(
-        offset: Offset(0, 4),
-        targetAnchor: Alignment.bottomLeft,
-        followerAnchor: Alignment.topLeft,
-        fallback: ShadAnchorAuto(
-          offset: Offset(0, -4),
-          targetAnchor: Alignment.topLeft,
-          followerAnchor: Alignment.bottomLeft,
-        ),
-      ),
-      popover: (context) {
-        return ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 160),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final item in widget.menu.items)
-                ShadButton.ghost(
-                  key: item.key,
-                  onPressed: item.onPressed == null
-                      ? null
-                      : () => _handleMenuItemPressed(item),
-                  width: double.infinity,
-                  height: 32,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  child: Text(
-                    item.label,
-                    style: textStyles.bodyMedium.copyWith(
-                      color: colors.textPrimary,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        );
-      },
-      child: SizedBox(
-        height: 28,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Center(
-            child: Text(
-              widget.menu.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: textStyles.bodyMedium.copyWith(
-                color: colors.textSecondary,
-              ),
-            ),
+      onPressed: _toggleMenu,
+      selected: _menuOpen,
+      height: 24,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      borderRadius: IdeRadius.allSmall,
+      hoverBackgroundColor: hoverBackground,
+      selectedBackgroundColor: selectedBackground,
+      child: Center(
+        child: Text(
+          widget.menu.label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: textStyles.bodyMedium.copyWith(
+            color: _menuOpen ? colors.textPrimary : colors.textSecondary,
           ),
         ),
       ),
@@ -364,37 +388,36 @@ class _TitleBarActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shadTheme = ShadTheme.of(context);
-    final colorScheme = shadTheme.colorScheme;
+    final theme = sf.Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final activeBackground = colorScheme.primary.withValues(
-      alpha: shadTheme.brightness == Brightness.dark ? 0.22 : 0.12,
+      alpha: theme.brightness == Brightness.dark ? 0.22 : 0.12,
     );
     final hoverBackground = colorScheme.border.withValues(
-      alpha: shadTheme.brightness == Brightness.dark ? 0.18 : 0.3,
+      alpha: theme.brightness == Brightness.dark ? 0.18 : 0.3,
     );
     final foreground = action.active
         ? colorScheme.primaryForeground
         : colorScheme.mutedForeground;
     return IdeTooltip(
       message: action.tooltip,
-      child: Semantics(
-        button: true,
+      child: PaneInteractiveSurface(
+        onPressed: action.onPressed,
         selected: action.active,
-        label: action.semanticLabel,
-        child: ShadIconButton.ghost(
-          onPressed: action.onPressed,
-          width: 28,
-          height: 28,
-          padding: EdgeInsets.zero,
-          backgroundColor: action.active
-              ? activeBackground
-              : Colors.transparent,
-          hoverBackgroundColor: action.active
-              ? activeBackground
-              : hoverBackground,
-          foregroundColor: foreground,
-          icon: Icon(action.icon, size: 16),
-        ),
+        button: true,
+        semanticLabel: action.semanticLabel,
+        width: 28,
+        height: 28,
+        padding: EdgeInsets.zero,
+        borderRadius: IdeRadius.allSmall,
+        hoverBackgroundColor: action.active
+            ? activeBackground
+            : hoverBackground,
+        pressedBackgroundColor: action.active
+            ? activeBackground
+            : hoverBackground,
+        selectedBackgroundColor: activeBackground,
+        child: Icon(action.icon, size: 16, color: foreground),
       ),
     );
   }

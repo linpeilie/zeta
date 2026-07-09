@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'ide_colors.dart';
 import 'ide_effects.dart';
@@ -32,15 +32,21 @@ class IdeContextMenuAction {
 
 /// 统一 IDE 上下文菜单容器与菜单项样式。
 class IdeContextMenu extends StatelessWidget {
-  const IdeContextMenu({required this.actions, super.key, this.minWidth = 156});
+  const IdeContextMenu({
+    required this.actions,
+    super.key,
+    this.minWidth = 156,
+    this.closeOnActivate = true,
+  });
 
   final List<IdeContextMenuAction> actions;
   final double minWidth;
+  final bool closeOnActivate;
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final brightness = ShadTheme.of(context).brightness;
+    final brightness = sf.Theme.of(context).brightness;
     return RepaintBoundary(
       child: PanelCard(
         color: colors.surfaceOverlay,
@@ -66,7 +72,10 @@ class IdeContextMenu extends StatelessWidget {
                         color: colors.borderSubtle,
                       ),
                     ),
-                  _ContextMenuActionButton(action: actions[index]),
+                  _ContextMenuActionButton(
+                    action: actions[index],
+                    closeOnActivate: closeOnActivate,
+                  ),
                 ],
               ],
             ),
@@ -78,9 +87,13 @@ class IdeContextMenu extends StatelessWidget {
 }
 
 class _ContextMenuActionButton extends StatelessWidget {
-  const _ContextMenuActionButton({required this.action});
+  const _ContextMenuActionButton({
+    required this.action,
+    required this.closeOnActivate,
+  });
 
   final IdeContextMenuAction action;
+  final bool closeOnActivate;
 
   @override
   Widget build(BuildContext context) {
@@ -94,7 +107,15 @@ class _ContextMenuActionButton extends StatelessWidget {
 
     return PaneInteractiveSurface(
       key: action.key,
-      onPressed: action.enabled ? action.onPressed : null,
+      onPressed: action.enabled
+          ? () {
+              if (!closeOnActivate) {
+                action.onPressed();
+                return;
+              }
+              sf.closeOverlay(context).whenComplete(action.onPressed);
+            }
+          : null,
       enabled: action.enabled,
       height: 32,
       button: true,

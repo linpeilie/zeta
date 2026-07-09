@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'ide_colors.dart';
 import 'ide_effects.dart';
@@ -19,7 +19,7 @@ Color resolveMutedForegroundColor(BuildContext context) {
   return IdeColors.of(context).textSecondary;
 }
 
-/// 统一 runtime 中的 shad 风格 tooltip。
+/// 统一 runtime 中的紧凑 tooltip。
 class IdeTooltip extends StatelessWidget {
   const IdeTooltip({
     required this.message,
@@ -37,10 +37,24 @@ class IdeTooltip extends StatelessWidget {
     if (message.trim().isEmpty) {
       return child;
     }
-    return ShadTooltip(
-      waitDuration: waitDuration,
-      builder: (context) =>
-          Text(message, style: ShadTheme.of(context).textTheme.small),
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    return sf.Tooltip(
+      waitDuration: waitDuration ?? const Duration(milliseconds: 500),
+      tooltip: (context) => sf.TooltipContainer(
+        backgroundColor: colors.surfaceOverlay,
+        borderRadius: IdeRadius.allSmall,
+        surfaceOpacity: 1,
+        surfaceBlur: 0,
+        child: Text(
+          message,
+          style: textStyles.bodySmall.copyWith(
+            color: colors.textPrimary,
+            fontWeight: FontWeight.w500,
+            height: 1.15,
+          ),
+        ),
+      ),
       child: child,
     );
   }
@@ -66,19 +80,25 @@ class IdeLoadingIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = ShadTheme.of(context).colorScheme;
+    final theme = sf.Theme.of(context);
     final radius = BorderRadius.circular(barHeight);
-    return SizedBox(
-      width: width,
-      height: height,
-      child: Center(
-        child: ShadProgress(
-          minHeight: barHeight,
-          semanticsLabel: semanticsLabel,
-          backgroundColor: colorScheme.secondary.withValues(alpha: 0.78),
-          color: colorScheme.primary,
-          borderRadius: radius,
-          innerBorderRadius: radius,
+    return Semantics(
+      label: semanticsLabel,
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: Center(
+          child: sf.ComponentTheme<sf.ProgressTheme>(
+            data: sf.ProgressTheme(
+              minHeight: barHeight,
+              borderRadius: radius,
+              color: theme.colorScheme.primary,
+              backgroundColor: theme.colorScheme.secondary.withValues(
+                alpha: 0.78,
+              ),
+            ),
+            child: const sf.Progress(),
+          ),
         ),
       ),
     );
@@ -177,29 +197,29 @@ class _PaneInteractiveSurfaceState extends State<PaneInteractiveSurface> {
 
   @override
   Widget build(BuildContext context) {
-    final shadTheme = ShadTheme.of(context);
-    final colorScheme = shadTheme.colorScheme;
+    final theme = sf.Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final colors = IdeColors.of(context);
     final radius = widget.borderRadius ?? IdeRadius.allSmall;
     final baseBackground = widget.backgroundColor ?? Colors.transparent;
     final hoverBackground =
         widget.hoverBackgroundColor ??
         colors.border.withValues(
-          alpha: shadTheme.brightness == Brightness.dark ? 0.18 : 0.3,
+          alpha: theme.brightness == Brightness.dark ? 0.18 : 0.3,
         );
     final pressedBackground =
         widget.pressedBackgroundColor ??
         colors.border.withValues(
-          alpha: shadTheme.brightness == Brightness.dark ? 0.28 : 0.4,
+          alpha: theme.brightness == Brightness.dark ? 0.28 : 0.4,
         );
     final selectedBackground =
         widget.selectedBackgroundColor ?? colors.primaryMuted;
     final resolvedBackground = switch ((_pressed, _hovered, widget.selected)) {
       (true, _, true) => colorScheme.primary.withValues(
-        alpha: shadTheme.brightness == Brightness.dark ? 0.24 : 0.16,
+        alpha: theme.brightness == Brightness.dark ? 0.24 : 0.16,
       ),
       (false, true, true) => colorScheme.primary.withValues(
-        alpha: shadTheme.brightness == Brightness.dark ? 0.22 : 0.14,
+        alpha: theme.brightness == Brightness.dark ? 0.22 : 0.14,
       ),
       (_, _, true) => selectedBackground,
       (true, _, false) => pressedBackground,
@@ -287,14 +307,14 @@ class PanelCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shadTheme = ShadTheme.of(context);
-    final resolvedRadius = borderRadius ?? shadTheme.radius;
+    final theme = sf.Theme.of(context);
+    final resolvedRadius = borderRadius ?? IdeRadius.allMedium;
     final surfaceColor = resolvePanelSurfaceColor(
       context,
-      baseColor: color ?? shadTheme.colorScheme.card,
+      baseColor: color ?? theme.colorScheme.card,
     );
     final defaultBoxShadow =
-        boxShadow ?? IdeEffects.panelShadow(shadTheme.brightness);
+        boxShadow ?? IdeEffects.panelShadow(theme.brightness);
     return Container(
       clipBehavior: clipBehavior,
       decoration: BoxDecoration(
@@ -333,17 +353,18 @@ class Pane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shadTheme = ShadTheme.of(context);
+    final theme = sf.Theme.of(context);
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final trailingWidget = trailing;
+    const borderRadius = IdeRadius.allMedium;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: resolvePanelSurfaceColor(
           context,
-          baseColor: shadTheme.colorScheme.card,
+          baseColor: theme.colorScheme.card,
         ),
-        borderRadius: shadTheme.radius,
+        borderRadius: borderRadius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

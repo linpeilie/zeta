@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'ide_colors.dart';
 import 'ide_effects.dart';
@@ -8,6 +8,9 @@ import 'ide_text_styles.dart';
 import 'pane_widgets.dart';
 
 /// 统一 IDE 紧凑胶囊标签 / 选择器。
+///
+/// 这里继续保留项目自绘，而不直接改用 `sf.Chip`，以维持 Graphite 当前
+/// 的紧凑密度、边框层次与选择态表现。
 class IdeChip extends StatelessWidget {
   const IdeChip({
     required this.label,
@@ -32,13 +35,14 @@ class IdeChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
+    final theme = sf.Theme.of(context);
     final foreground = !enabled
         ? colors.textTertiary
         : selected
         ? colors.accentForeground
         : colors.textSecondary;
     const pillRadius = IdeRadius.pill;
-    final isDark = ShadTheme.of(context).brightness == Brightness.dark;
+    final isDark = theme.brightness == Brightness.dark;
 
     final background = selected
         ? colors.primaryMuted
