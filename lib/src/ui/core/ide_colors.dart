@@ -7,8 +7,8 @@ const _sharedCloseHoverColor = Color(0xFFE5484D);
 /// IDE 主题专用调色板。
 ///
 /// 这组颜色完全由 Graphite token 定义，并通过 [IdeThemeScope] 在运行时解析。
-/// 深色调色板沿用顶层 const 颜色（如 [ideAccentColor]），以保证旧测试与历史
-/// 外观一致。
+/// 深色调色板中的 accent / warning 直接复用顶层真值常量（[ideAccentColor] /
+/// [ideWarningColor]）。
 @immutable
 class IdeColors {
   const IdeColors({

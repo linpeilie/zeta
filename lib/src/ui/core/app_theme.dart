@@ -5,25 +5,10 @@ import 'package:zeta/src/core/constants/app_typography.dart';
 
 import 'ide_colors.dart';
 
-// 「Graphite」深色调色板常量：保留旧名以兼容历史代码与测试断言。运行时主题
-// 通过 [IdeThemeScope] 解析，深色实例 [IdeColors.dark] 直接复用这些常量值。
-const Color ideFrameColor = Color(0xFF0A0A0B);
-const Color ideSurfaceColor = Color(0xFF18191B);
-const Color idePanelColor = Color(0xFF18191B);
-const Color ideEditorColor = Color(0xFF141517);
-const Color ideBorderColor = Color(0xFF2C2D31);
-const Color ideMutedTextColor = Color(0xFF9EA1A7);
+/// Graphite 深色主题共享的真值常量。[IdeColors.dark] 直接复用，避免在多处
+/// 重复书写同一颜色字面量。
 const Color ideAccentColor = Color(0xFF1B84FF);
 const Color ideWarningColor = Color(0xFFE6B450);
-
-@Deprecated('Use IdeSpacing.space8 instead.')
-const double idePanelGap = 8;
-
-@Deprecated('Use IdeRadius.small (or another IdeRadius tier) instead.')
-const double idePanelRadius = 6;
-
-@Deprecated('Use bundledCodeFontFamily or IdeThemeData.codeFontFamily instead.')
-const String ideFontFamily = bundledCodeFontFamily;
 
 /// Graphite 运行时主题真源。
 ///
