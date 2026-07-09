@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -38,6 +39,15 @@ class CodexAppServerAgentProvider implements AgentProvider {
          modelId: config.selectedModel,
          reasoningEffort: config.selectedReasoningEffort,
          serviceTierId: config.selectedServiceTier,
+       ),
+       _permissionSelection = AgentPermissionSelection(
+         approvalPolicy:
+             config.selectedApprovalPolicy ??
+             AgentPermissionSelection.defaultApprovalPolicy,
+         sandboxPolicy:
+             config.selectedSandboxPolicy ??
+             AgentPermissionSelection.defaultSandboxPolicy,
+         permissionProfileId: config.selectedPermissionProfileId,
        ),
        _peer = peer ?? (peerFactory ?? _defaultPeerFactory)(config) {
     final threadHistoryReader = _CodexThreadHistoryReader();
@@ -76,6 +86,9 @@ class CodexAppServerAgentProvider implements AgentProvider {
   /// 用户在输入框选择的模型组合。
   AgentModelSelection _modelSelection;
 
+  /// 用户选择的审批/沙箱策略。
+  AgentPermissionSelection _permissionSelection;
+
   /// 缓存的模型列表，initialize 握手后自动拉取。
   AgentModelList? _modelList;
 
@@ -87,6 +100,12 @@ class CodexAppServerAgentProvider implements AgentProvider {
 
   /// 是否已调用 dispose，防止重复释放资源。
   bool _disposed = false;
+
+  /// 已记过 fine 日志的未匹配通知 method（按 method 去重，避免刷屏）。
+  final Set<String> _loggedUnmatchedNotificationMethods = <String>{};
+
+  /// 未匹配通知按 method 的累计次数（开发期诊断用，每次到达都递增）。
+  final Map<String, int> _unmatchedNotificationCounts = <String, int>{};
 
   StreamSubscription<JsonRpcNotification>? _notificationSubscription;
   StreamSubscription<JsonRpcRequest>? _serverRequestSubscription;
@@ -122,6 +141,13 @@ class CodexAppServerAgentProvider implements AgentProvider {
 
   @override
   Stream<AgentEvent> get events => _events.stream;
+
+  /// 开发诊断：未匹配服务端通知按 method 的累计次数。
+  ///
+  /// 首次见到某 method 会记一条 fine 日志；后续同名通知只递增计数。
+  @visibleForTesting
+  Map<String, int> get unmatchedNotificationCountsForTesting =>
+      Map<String, int>.unmodifiable(_unmatchedNotificationCounts);
 
   @override
   Future<void> initialize() async {
@@ -228,9 +254,16 @@ class CodexAppServerAgentProvider implements AgentProvider {
     await initialize();
     _log.fine('Starting Codex thread for provider ${config.id}');
 
+    final previousSessionId = _session?.id;
     final session = await _client.startSession(
       context: context,
-      previousSessionId: _session?.id,
+      permissionSelection: _permissionSelection,
+      previousSessionId: previousSessionId,
+    );
+    // 新建会话后取消旧 thread 订阅，避免后台通知继续到达。
+    await _unsubscribePreviousThreadIfNeeded(
+      previousSessionId: previousSessionId,
+      nextSessionId: session.id,
     );
     _session = session;
     _events.add(AgentSessionStartedEvent(session));
@@ -246,10 +279,17 @@ class CodexAppServerAgentProvider implements AgentProvider {
     await initialize();
     _log.fine('Resuming Codex thread $sessionId');
 
+    final previousSessionId = _session?.id;
     final session = await _client.resumeSession(
       sessionId,
       context: context,
-      previousSessionId: _session?.id,
+      permissionSelection: _permissionSelection,
+      previousSessionId: previousSessionId,
+    );
+    // resume 成功后再退订旧 thread，保证新会话已接管订阅。
+    await _unsubscribePreviousThreadIfNeeded(
+      previousSessionId: previousSessionId,
+      nextSessionId: session.id,
     );
     _session = session;
     _events.add(AgentSessionStartedEvent(session));
@@ -291,6 +331,31 @@ class CodexAppServerAgentProvider implements AgentProvider {
     );
   }
 
+  @override
+  void updatePermissionSelection(AgentPermissionSelection selection) {
+    _permissionSelection = selection;
+    _log.fine(
+      'Updated permission selection: approval=${selection.approvalPolicy} '
+      'sandbox=${selection.sandboxPolicy}',
+    );
+  }
+
+  @override
+  Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
+    await initialize();
+    return _client.listPermissionProfiles();
+  }
+
+  @override
+  Future<void> approveGuardianDeniedAction({
+    required String threadId,
+    required Object event,
+  }) async {
+    await initialize();
+    _log.info('Approving guardian-denied action for thread $threadId');
+    await _client.approveGuardianDeniedAction(threadId: threadId, event: event);
+  }
+
   /// 向 Codex app-server 发送 `model/list` 请求并缓存结果。
   Future<void> _fetchModelList() async {
     try {
@@ -317,12 +382,95 @@ class CodexAppServerAgentProvider implements AgentProvider {
   }
 
   @override
-  Future<AgentTurn> sendMessage({
-    required AgentSession session,
-    required String message,
+  Future<void> unsubscribeThread(String threadId) async {
+    if (threadId.isEmpty) {
+      return;
+    }
+    await initialize();
+    await _unsubscribeThreadBestEffort(threadId);
+  }
+
+  @override
+  Future<void> renameThread({
+    required String threadId,
+    required String name,
+  }) async {
+    await initialize();
+    await _client.renameThread(threadId: threadId, name: name);
+  }
+
+  @override
+  Future<void> archiveThread(String threadId) async {
+    await initialize();
+    await _client.archiveThread(threadId);
+  }
+
+  @override
+  Future<void> unarchiveThread(String threadId) async {
+    await initialize();
+    await _client.unarchiveThread(threadId);
+  }
+
+  @override
+  Future<void> deleteThread(String threadId) async {
+    await initialize();
+    await _client.deleteThread(threadId);
+    if (_session?.id == threadId) {
+      await _unsubscribeThreadBestEffort(threadId);
+      _session = null;
+    }
+  }
+
+  @override
+  Future<AgentSession> forkThread({
+    required String threadId,
     required AgentContext context,
   }) async {
     await initialize();
+    final previousSessionId = _session?.id;
+    final session = await _client.forkThread(
+      threadId: threadId,
+      context: context,
+      permissionSelection: _permissionSelection,
+      previousSessionId: previousSessionId,
+    );
+    await _unsubscribePreviousThreadIfNeeded(
+      previousSessionId: previousSessionId,
+      nextSessionId: session.id,
+    );
+    _session = session;
+    _events.add(AgentSessionStartedEvent(session));
+    _log.info('Forked Codex thread $threadId -> ${session.id}');
+    return session;
+  }
+
+  @override
+  Future<AgentThreadHistorySnapshot> rollbackThread({
+    required String threadId,
+    required int numTurns,
+  }) async {
+    await initialize();
+    _log.info('Rolling back Codex thread $threadId by $numTurns turn(s)');
+    return _client.rollbackThread(threadId: threadId, numTurns: numTurns);
+  }
+
+  @override
+  Future<void> compactThread(String threadId) async {
+    await initialize();
+    _log.info('Starting compact for Codex thread $threadId');
+    await _client.compactThread(threadId);
+  }
+
+  @override
+  Future<AgentTurn> sendMessage({
+    required AgentSession session,
+    required AgentContext context,
+    String? message,
+    List<AgentUserInput>? inputs,
+    String? clientUserMessageId,
+  }) async {
+    await initialize();
+    final resolvedInputs = _resolveUserInputs(message: message, inputs: inputs);
     _log.info('Starting Codex turn for thread ${session.id}');
     _emitStatus(
       const AgentProviderStatus(
@@ -333,9 +481,11 @@ class CodexAppServerAgentProvider implements AgentProvider {
 
     final turn = await _client.sendMessage(
       session: session,
-      message: message,
+      inputs: resolvedInputs,
       context: context,
       selection: _modelSelection,
+      permissionSelection: _permissionSelection,
+      clientUserMessageId: clientUserMessageId,
     );
     _markRunningTurn(session.id, turn.id);
     _events.add(AgentTurnStartedEvent(turn));
@@ -346,16 +496,37 @@ class CodexAppServerAgentProvider implements AgentProvider {
   @override
   Future<void> steerTurn({
     required AgentSession session,
-    required String message,
     required AgentContext context,
+    String? message,
+    List<AgentUserInput>? inputs,
+    String? clientUserMessageId,
   }) async {
     await initialize();
+    final resolvedInputs = _resolveUserInputs(message: message, inputs: inputs);
     _log.info('Steering Codex turn for thread ${session.id}');
     await _client.steerTurn(
       session: session,
-      message: message,
+      inputs: resolvedInputs,
       context: context,
+      clientUserMessageId: clientUserMessageId,
     );
+  }
+
+  /// 归一化发送载荷：优先 [inputs]，否则把 [message] 包成单条文本输入。
+  List<AgentUserInput> _resolveUserInputs({
+    String? message,
+    List<AgentUserInput>? inputs,
+  }) {
+    if (inputs != null && inputs.isNotEmpty) {
+      return List<AgentUserInput>.unmodifiable(inputs);
+    }
+    final text = message?.trim() ?? '';
+    if (text.isEmpty) {
+      throw ArgumentError('sendMessage/steerTurn requires message or inputs');
+    }
+    return List<AgentUserInput>.unmodifiable(<AgentUserInput>[
+      AgentUserInput.text(text),
+    ]);
   }
 
   @override
@@ -446,6 +617,22 @@ class CodexAppServerAgentProvider implements AgentProvider {
           _string(notification.params['summary']) ??
           'No message';
       _log.warning('Codex ${notification.method}: $message');
+    } else if (notification.method == 'deprecationNotice') {
+      // 弃用提示需可观测，便于升级适配层；UI 侧再做一次性展示。
+      final summary = _string(notification.params['summary']) ?? 'No summary';
+      final details = _string(notification.params['details']);
+      _log.warning(
+        'Codex deprecationNotice: $summary'
+        '${details == null ? '' : ' ($details)'}',
+      );
+    } else if (notification.method == 'model/rerouted') {
+      final fromModel = _string(notification.params['fromModel']);
+      final toModel = _string(notification.params['toModel']);
+      final reason = _string(notification.params['reason']);
+      _log.info(
+        'Codex model/rerouted: $fromModel → $toModel'
+        '${reason == null ? '' : ' ($reason)'}',
+      );
     }
 
     final mapping = _notificationMapper.map(
@@ -453,6 +640,13 @@ class CodexAppServerAgentProvider implements AgentProvider {
       runningTurnIdForSession: (threadId) =>
           _runningTurnIdsBySessionId[threadId],
     );
+
+    // 协议演进时未适配的通知：按 method 去重记 fine，并累计诊断计数。
+    final unmatchedMethod = mapping.unmatchedMethod;
+    if (unmatchedMethod != null) {
+      _recordUnmatchedNotification(unmatchedMethod);
+      return;
+    }
 
     final session = mapping.session;
     if (session != null) {
@@ -477,8 +671,46 @@ class CodexAppServerAgentProvider implements AgentProvider {
       }
     }
 
+    // 他端已解决审批：只清本地 pending，不再向服务端回写响应。
     for (final event in mapping.events) {
+      if (event is AgentPermissionResolvedEvent) {
+        final pending = _pendingApprovals.remove(event.requestId);
+        if (pending != null) {
+          _log.info(
+            'Codex server request ${event.requestId} resolved externally '
+            '(${pending.method}); dismissing local approval',
+          );
+        } else {
+          _log.fine(
+            'Codex server request ${event.requestId} resolved externally '
+            'with no local pending approval',
+          );
+        }
+      } else if (event is AgentThreadDeletedEvent ||
+          event is AgentThreadClosedEvent) {
+        // 线程关闭/删除：清本地会话与运行态，避免继续向已失效 thread 发请求。
+        final threadId = event is AgentThreadDeletedEvent
+            ? event.threadId
+            : (event as AgentThreadClosedEvent).threadId;
+        _runningTurnIdsBySessionId.remove(threadId);
+        if (_session?.id == threadId) {
+          _session = null;
+        }
+        unawaited(_unsubscribeThreadBestEffort(threadId));
+      }
       _events.add(event);
+    }
+  }
+
+  /// 记录未匹配通知：首次 method 打 fine 日志，之后只递增计数。
+  void _recordUnmatchedNotification(String method) {
+    _unmatchedNotificationCounts[method] =
+        (_unmatchedNotificationCounts[method] ?? 0) + 1;
+    if (_loggedUnmatchedNotificationMethods.add(method)) {
+      _log.fine(
+        'Ignoring unmatched Codex notification: $method '
+        '(further occurrences counted silently)',
+      );
     }
   }
 
@@ -536,6 +768,34 @@ class CodexAppServerAgentProvider implements AgentProvider {
   void _completeRunningTurn(String sessionId, String turnId) {
     if (_runningTurnIdsBySessionId[sessionId] == turnId) {
       _runningTurnIdsBySessionId.remove(sessionId);
+    }
+  }
+
+  /// 切换到不同 thread 时取消旧订阅；同 id 或空 id 跳过。
+  Future<void> _unsubscribePreviousThreadIfNeeded({
+    required String? previousSessionId,
+    required String nextSessionId,
+  }) async {
+    if (previousSessionId == null || previousSessionId == nextSessionId) {
+      return;
+    }
+    await _unsubscribeThreadBestEffort(previousSessionId);
+  }
+
+  /// best-effort 退订：失败只记日志，不阻断会话切换。
+  Future<void> _unsubscribeThreadBestEffort(String threadId) async {
+    try {
+      final status = await _client.unsubscribeThread(threadId);
+      _log.fine(
+        'Unsubscribed Codex thread $threadId'
+        '${status == null ? '' : ' (status=$status)'}',
+      );
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Could not unsubscribe Codex thread $threadId',
+        error,
+        stackTrace,
+      );
     }
   }
 

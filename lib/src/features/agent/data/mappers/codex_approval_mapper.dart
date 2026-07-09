@@ -72,6 +72,18 @@ class _CodexApprovalMapper {
       params: request.params,
     );
     final reason = _string(request.params['reason']);
+    final questions = request.method == 'item/tool/requestUserInput'
+        ? _userInputQaPairs(request.params)
+        : const <AgentUserInputQaPair>[];
+    final commandActions =
+        request.method == 'item/commandExecution/requestApproval' ||
+            request.method == 'execCommandApproval'
+        ? _commandActionSummaries(request.params['commandActions'])
+        : const <String>[];
+    final proposedAmendment =
+        request.method == 'item/commandExecution/requestApproval'
+        ? _stringList(request.params['proposedExecpolicyAmendment'])
+        : const <String>[];
     final event = AgentPermissionRequestedEvent(
       AgentPermissionRequest(
         id: id,
@@ -83,6 +95,9 @@ class _CodexApprovalMapper {
         sessionId: _string(request.params['threadId']),
         turnId: _string(request.params['turnId']),
         fileChanges: _map(request.params['fileChanges']),
+        questions: questions,
+        commandActions: commandActions,
+        proposedExecpolicyAmendment: proposedAmendment,
         raw: request.params,
       ),
     );
@@ -101,7 +116,7 @@ class _CodexApprovalMapper {
     final accepted = 'accept';
     return switch (pending.method) {
       'item/commandExecution/requestApproval' => <String, Object?>{
-        'decision': decision.approved ? accepted : declined,
+        'decision': _commandExecutionDecision(decision),
       },
       'item/fileChange/requestApproval' => <String, Object?>{
         'decision': decision.approved ? accepted : declined,
@@ -119,9 +134,11 @@ class _CodexApprovalMapper {
         'decision': decision.approved ? 'approved' : 'denied',
       },
       // ToolRequestUserInputResponse 的 answers 为必填且协议无拒绝变体；
-      // 表单收集 UI 落地前，同意/拒绝都只能回空答案。
+      // 同意时回传结构化答案，拒绝时回空 answers。
       'item/tool/requestUserInput' => <String, Object?>{
-        'answers': <String, Object?>{},
+        'answers': decision.approved
+            ? _encodeUserInputAnswers(decision.answers)
+            : <String, Object?>{},
       },
       // McpServerElicitationRequestResponse 要求 action 字段；
       // decline/cancel 无 content，accept 暂以空表单内容应答。
@@ -140,6 +157,47 @@ class _CodexApprovalMapper {
       // 避免返回 null 触碰严格 schema。
       _ => const <String, Object?>{},
     };
+  }
+
+  /// 编码 `ToolRequestUserInputResponse.answers`。
+  Map<String, Object?> _encodeUserInputAnswers(
+    Map<String, List<String>> answers,
+  ) {
+    final encoded = <String, Object?>{};
+    for (final entry in answers.entries) {
+      if (entry.key.isEmpty || entry.value.isEmpty) {
+        continue;
+      }
+      encoded[entry.key] = <String, Object?>{
+        'answers': List<String>.unmodifiable(entry.value),
+      };
+    }
+    return encoded;
+  }
+
+  /// 编码命令执行审批决策（含 session / execpolicy 变体）。
+  Object _commandExecutionDecision(AgentPermissionDecision decision) {
+    final kind = decision.commandDecision;
+    if (kind != null) {
+      return switch (kind) {
+        AgentCommandApprovalDecisionKind.accept => 'accept',
+        AgentCommandApprovalDecisionKind.acceptForSession => 'acceptForSession',
+        AgentCommandApprovalDecisionKind.acceptWithExecpolicyAmendment =>
+          <String, Object?>{
+            'acceptWithExecpolicyAmendment': <String, Object?>{
+              'execpolicy_amendment': List<String>.unmodifiable(
+                decision.execpolicyAmendment,
+              ),
+            },
+          },
+        AgentCommandApprovalDecisionKind.decline => 'decline',
+        AgentCommandApprovalDecisionKind.cancel => 'cancel',
+      };
+    }
+    if (decision.approved) {
+      return 'accept';
+    }
+    return decision.cancelTurn ? 'cancel' : 'decline';
   }
 }
 

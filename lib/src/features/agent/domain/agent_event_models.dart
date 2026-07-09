@@ -3,6 +3,7 @@ import 'package:zeta/src/features/agent/domain/agent_model_selection_models.dart
 import 'package:zeta/src/features/agent/domain/agent_permission_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_session_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_thread_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_tool_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_turn_history_models.dart';
 
@@ -25,6 +26,185 @@ class AgentSessionStartedEvent extends AgentEvent {
 
   /// 已创建或恢复的会话。
   final AgentSession session;
+}
+
+/// 线程运行状态变化。
+///
+/// 对应 Codex `thread/status/changed`；UI 据此更新状态胶囊与列表指示。
+class AgentThreadStatusChangedEvent extends AgentEvent {
+  const AgentThreadStatusChangedEvent({
+    required this.threadId,
+    required this.status,
+    this.waitingOnApproval = false,
+    this.waitingOnUserInput = false,
+    this.raw = const <String, Object?>{},
+  });
+
+  /// 状态变化的线程 id。
+  final String threadId;
+
+  /// 归一化后的运行状态。
+  final AgentThreadRuntimeStatus status;
+
+  /// 是否在等待用户审批。
+  final bool waitingOnApproval;
+
+  /// 是否在等待用户输入。
+  final bool waitingOnUserInput;
+
+  /// 原始通知 payload。
+  final Map<String, Object?> raw;
+}
+
+/// 线程标题已更新（`thread/name/updated`）。
+class AgentThreadNameUpdatedEvent extends AgentEvent {
+  const AgentThreadNameUpdatedEvent({
+    required this.threadId,
+    this.threadName,
+    this.raw = const <String, Object?>{},
+  });
+
+  /// 线程 id。
+  final String threadId;
+
+  /// 新标题；为空表示清除自定义标题。
+  final String? threadName;
+
+  /// 原始通知 payload。
+  final Map<String, Object?> raw;
+}
+
+/// 线程已归档（`thread/archived`）。
+class AgentThreadArchivedEvent extends AgentEvent {
+  const AgentThreadArchivedEvent({
+    required this.threadId,
+    this.raw = const <String, Object?>{},
+  });
+
+  /// 线程 id。
+  final String threadId;
+
+  /// 原始通知 payload。
+  final Map<String, Object?> raw;
+}
+
+/// 线程已取消归档（`thread/unarchived`）。
+class AgentThreadUnarchivedEvent extends AgentEvent {
+  const AgentThreadUnarchivedEvent({
+    required this.threadId,
+    this.raw = const <String, Object?>{},
+  });
+
+  /// 线程 id。
+  final String threadId;
+
+  /// 原始通知 payload。
+  final Map<String, Object?> raw;
+}
+
+/// 线程已删除（`thread/deleted`）。
+class AgentThreadDeletedEvent extends AgentEvent {
+  const AgentThreadDeletedEvent({
+    required this.threadId,
+    this.raw = const <String, Object?>{},
+  });
+
+  /// 线程 id。
+  final String threadId;
+
+  /// 原始通知 payload。
+  final Map<String, Object?> raw;
+}
+
+/// 线程已关闭（`thread/closed`）。
+///
+/// 客户端应释放本地运行态并 best-effort 取消订阅。
+class AgentThreadClosedEvent extends AgentEvent {
+  const AgentThreadClosedEvent({
+    required this.threadId,
+    this.raw = const <String, Object?>{},
+  });
+
+  /// 线程 id。
+  final String threadId;
+
+  /// 原始通知 payload。
+  final Map<String, Object?> raw;
+}
+
+/// 上下文压缩已完成通知（`thread/compacted`，协议已 deprecated）。
+///
+/// 主 UI 仍以 `contextCompaction` item 为准；本事件用于清除 compact 进行中标志。
+class AgentThreadCompactedEvent extends AgentEvent {
+  const AgentThreadCompactedEvent({
+    required this.threadId,
+    this.turnId,
+    this.raw = const <String, Object?>{},
+  });
+
+  /// 线程 id。
+  final String threadId;
+
+  /// 可选回合 id。
+  final String? turnId;
+
+  /// 原始通知 payload。
+  final Map<String, Object?> raw;
+}
+
+/// 线程设置已变更（`thread/settings/updated`）。
+class AgentThreadSettingsUpdatedEvent extends AgentEvent {
+  const AgentThreadSettingsUpdatedEvent({
+    required this.threadId,
+    this.model,
+    this.approvalPolicy,
+    this.sandboxPolicy,
+    this.activePermissionProfileId,
+    this.raw = const <String, Object?>{},
+  });
+
+  /// 线程 id。
+  final String threadId;
+
+  /// 服务端当前生效的模型 id（若有）。
+  final String? model;
+
+  /// 审批策略字符串变体（若有）。
+  final String? approvalPolicy;
+
+  /// 沙箱策略域内标识（readOnly/workspaceWrite/dangerFullAccess）。
+  final String? sandboxPolicy;
+
+  /// 当前生效的 permission profile id。
+  final String? activePermissionProfileId;
+
+  /// 原始通知 payload（含完整 `threadSettings`）。
+  final Map<String, Object?> raw;
+}
+
+/// Guardian 自动审批评审状态（`item/autoApprovalReview/*`）。
+class AgentAutoApprovalReviewEvent extends AgentEvent {
+  const AgentAutoApprovalReviewEvent({
+    required this.threadId,
+    required this.turnId,
+    required this.reviewId,
+    required this.status,
+    this.rationale,
+    this.riskLevel,
+    this.targetItemId,
+    this.raw = const <String, Object?>{},
+  });
+
+  final String threadId;
+  final String turnId;
+  final String reviewId;
+
+  /// inProgress / approved / denied / timedOut / aborted
+  final String status;
+  final String? rationale;
+  final String? riskLevel;
+  final String? targetItemId;
+  final Map<String, Object?> raw;
 }
 
 /// 新回合已开始。
@@ -132,6 +312,55 @@ class AgentMessageDeltaEvent extends AgentEvent {
   final String? turnId;
 }
 
+/// Reasoning item 的流式增量种类。
+///
+/// 对应 Codex `item/reasoning/*` 三类通知：
+/// - [text]：原始推理文本 delta（`item/reasoning/textDelta`）
+/// - [summaryText]：面向用户的摘要 delta（`item/reasoning/summaryTextDelta`）
+/// - [summaryPart]：摘要新分段边界（`item/reasoning/summaryPartAdded`，无文本）
+enum AgentReasoningDeltaKind { text, summaryText, summaryPart }
+
+/// Reasoning item 的流式增量。
+///
+/// Timeline 将其聚合到 `AgentToolKind.think` 卡片；优先展示摘要流，
+/// 若本回合未收到摘要则回退到原始推理文本。
+class AgentReasoningDeltaEvent extends AgentEvent {
+  const AgentReasoningDeltaEvent({
+    required this.itemId,
+    required this.kind,
+    this.delta = '',
+    this.contentIndex,
+    this.summaryIndex,
+    this.sessionId,
+    this.turnId,
+    this.raw = const <String, Object?>{},
+  });
+
+  /// Reasoning item id，用于合并同一思考卡片的多个 delta。
+  final String itemId;
+
+  /// 增量种类。
+  final AgentReasoningDeltaKind kind;
+
+  /// 本次增量文本；[summaryPart] 通常为空。
+  final String delta;
+
+  /// `textDelta` 的 content 分段下标。
+  final int? contentIndex;
+
+  /// `summaryTextDelta` / `summaryPartAdded` 的 summary 分段下标。
+  final int? summaryIndex;
+
+  /// 可选会话 id。
+  final String? sessionId;
+
+  /// 可选回合 id。
+  final String? turnId;
+
+  /// 原始通知 payload。
+  final Map<String, Object?> raw;
+}
+
 /// Agent 消息 metadata 或最终文本更新。
 class AgentMessageUpdatedEvent extends AgentEvent {
   const AgentMessageUpdatedEvent({
@@ -192,6 +421,30 @@ class AgentPlanUpdatedEvent extends AgentEvent {
   final String? turnId;
 }
 
+/// 回合级聚合 diff 更新。
+///
+/// 对应 Codex `turn/diff/updated`：携带本回合全部文件改动的最新 unified diff。
+class AgentTurnDiffEvent extends AgentEvent {
+  const AgentTurnDiffEvent({
+    required this.sessionId,
+    required this.turnId,
+    required this.diff,
+    this.raw = const <String, Object?>{},
+  });
+
+  /// 所属会话 id。
+  final String sessionId;
+
+  /// 所属回合 id。
+  final String turnId;
+
+  /// 最新聚合 unified diff；空字符串表示本回合暂无改动。
+  final String diff;
+
+  /// 原始通知 payload。
+  final Map<String, Object?> raw;
+}
+
 /// 工具调用新增或更新。
 class AgentToolCallEvent extends AgentEvent {
   const AgentToolCallEvent(this.toolCall);
@@ -206,6 +459,99 @@ class AgentPermissionRequestedEvent extends AgentEvent {
 
   /// 等待用户处理的审批请求。
   final AgentPermissionRequest request;
+}
+
+/// 服务端审批请求已被他端解决，本端应撤销对应审批卡片。
+///
+/// 对应 Codex `serverRequest/resolved`（多客户端 / daemon 场景）。
+class AgentPermissionResolvedEvent extends AgentEvent {
+  const AgentPermissionResolvedEvent({
+    required this.requestId,
+    required this.threadId,
+    this.raw = const <String, Object?>{},
+  });
+
+  /// 被解决的 JSON-RPC 请求 id，与 [AgentPermissionRequest.id] 对齐。
+  final String requestId;
+
+  /// 所属线程 id。
+  final String threadId;
+
+  /// 原始通知 payload。
+  final Map<String, Object?> raw;
+}
+
+/// 服务端将本回合模型改道到另一模型。
+///
+/// 对应 Codex `model/rerouted`；UI 插入系统事件并在头栏提示。
+class AgentModelReroutedEvent extends AgentEvent {
+  const AgentModelReroutedEvent({
+    required this.threadId,
+    required this.turnId,
+    required this.fromModel,
+    required this.toModel,
+    required this.reason,
+    this.raw = const <String, Object?>{},
+  });
+
+  /// 所属线程 id。
+  final String threadId;
+
+  /// 所属回合 id。
+  final String turnId;
+
+  /// 改道前的模型 id。
+  final String fromModel;
+
+  /// 改道后的模型 id。
+  final String toModel;
+
+  /// 改道原因（协议枚举字符串，如 `highRiskCyberActivity`）。
+  final String reason;
+
+  /// 原始通知 payload。
+  final Map<String, Object?> raw;
+}
+
+/// Codex API / 适配层弃用提示。
+///
+/// 对应 `deprecationNotice`；应记日志并在 UI 一次性展示，提示升级适配层。
+class AgentDeprecationNoticeEvent extends AgentEvent {
+  const AgentDeprecationNoticeEvent({
+    required this.summary,
+    this.details,
+    this.raw = const <String, Object?>{},
+  });
+
+  /// 弃用概要。
+  final String summary;
+
+  /// 可选迁移说明或细节。
+  final String? details;
+
+  /// 原始通知 payload。
+  final Map<String, Object?> raw;
+}
+
+/// ThreadItem 中的系统类条目（评审模式、压缩、hook、sleep 等）。
+///
+/// 对应 `item/started` / `item/completed` 中不宜做成工具卡的类型；
+/// UI 以 [AgentHistoryEventEntry] 渲染为系统/搜索类状态卡。
+class AgentSystemItemEvent extends AgentEvent {
+  const AgentSystemItemEvent({
+    required this.entry,
+    this.sessionId,
+    this.turnId,
+  });
+
+  /// 可直接插入时间线的历史事件条目。
+  final AgentHistoryEventEntry entry;
+
+  /// 可选会话 id。
+  final String? sessionId;
+
+  /// 可选回合 id。
+  final String? turnId;
 }
 
 /// 协议错误、stderr 或 provider 运行错误。

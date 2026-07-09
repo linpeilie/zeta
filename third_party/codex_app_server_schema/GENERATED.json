@@ -1,0 +1,9 @@
+{
+  "codexCliVersion": "0.142.5",
+  "generatedAt": "2026-07-09T01:19:32Z",
+  "command": "C:\\Users\\linpl\\AppData\\Local\\Programs\\OpenAI\\Codex\\bin\\codex.exe app-server generate-json-schema --out <dir>",
+  "experimental": false,
+  "excludedNondeterministicFiles": [
+    "codex_app_server_protocol.v2.schemas.json"
+  ]
+}

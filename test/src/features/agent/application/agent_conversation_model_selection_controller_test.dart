@@ -5,6 +5,8 @@ import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
+import '../../../testing/agent_provider_stub_base.dart';
+
 void main() {
   group('AgentConversationModelSelectionController', () {
     test('reconciles invalid config selection to provider defaults', () async {
@@ -90,7 +92,9 @@ const AgentModelList _modelList = AgentModelList(
   ],
 );
 
-class _FakeAgentProvider implements AgentProvider {
+class _FakeAgentProvider
+    with AgentProviderThreadLifecycleStub
+    implements AgentProvider {
   AgentModelSelection? runtimeSelection;
 
   @override
@@ -126,6 +130,20 @@ class _FakeAgentProvider implements AgentProvider {
   }
 
   @override
+  void updatePermissionSelection(AgentPermissionSelection selection) {}
+
+  @override
+  Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
+    return const <AgentPermissionProfileSummary>[];
+  }
+
+  @override
+  Future<void> approveGuardianDeniedAction({
+    required String threadId,
+    required Object event,
+  }) async {}
+
+  @override
   Future<AgentThreadHistorySnapshot> readThreadHistory({
     required String threadId,
     String? sessionPath,
@@ -135,6 +153,9 @@ class _FakeAgentProvider implements AgentProvider {
       turns: <AgentHistoryTurn>[],
     );
   }
+
+  @override
+  Future<void> unsubscribeThread(String threadId) async {}
 
   @override
   Future<AgentSession> startSession({required AgentContext context}) async {
@@ -155,8 +176,10 @@ class _FakeAgentProvider implements AgentProvider {
   @override
   Future<AgentTurn> sendMessage({
     required AgentSession session,
-    required String message,
     required AgentContext context,
+    String? message,
+    List<AgentUserInput>? inputs,
+    String? clientUserMessageId,
   }) async {
     return const AgentTurn(id: 'turn-1', sessionId: 'thread-1');
   }
@@ -164,8 +187,10 @@ class _FakeAgentProvider implements AgentProvider {
   @override
   Future<void> steerTurn({
     required AgentSession session,
-    required String message,
     required AgentContext context,
+    String? message,
+    List<AgentUserInput>? inputs,
+    String? clientUserMessageId,
   }) async {}
 
   @override

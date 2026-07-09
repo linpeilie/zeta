@@ -12,7 +12,7 @@ void main() {
     expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-pane-host')), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-panel-card')), findsNothing);
-    expect(find.byKey(const ValueKey('files-panel-card')), findsOneWidget);
+    expect(find.byKey(const ValueKey('files-panel-card')), findsNothing);
     expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
     expect(find.byKey(const ValueKey('tools-panel-card')), findsNothing);
     expect(find.byKey(const ValueKey('left-projects-action')), findsOneWidget);
@@ -23,7 +23,7 @@ void main() {
     expect(find.byKey(const ValueKey('agent-header-title')), findsOneWidget);
     expect(headerTitleText(tester), 'New thread');
     expect(find.text('Agent'), findsNothing);
-    expect(find.text('Files'), findsOneWidget);
+    expect(find.text('Files'), findsNothing);
     expect(find.text('No folder opened'), findsOneWidget);
     expect(find.text('No file context'), findsNothing);
     expect(find.text('No tools running'), findsNothing);
@@ -62,10 +62,11 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('right-files-action')));
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('right-activity-panel')), findsNothing);
+    expect(find.byKey(const ValueKey('files-panel-card')), findsOneWidget);
+    expect(find.byKey(const ValueKey('right-activity-panel')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('right-width-resize-handle')),
-      findsNothing,
+      findsOneWidget,
     );
 
     await tester.tap(find.byKey(const ValueKey('right-tools-action')));
@@ -77,13 +78,19 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('right-tools-action')));
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('right-activity-panel')), findsNothing);
+    expect(find.byKey(const ValueKey('files-panel-card')), findsOneWidget);
+    expect(find.byKey(const ValueKey('tools-panel-card')), findsNothing);
+    expect(find.byKey(const ValueKey('right-activity-panel')), findsOneWidget);
   });
 
   testWidgets('horizontal resize handles clamp side widths', (tester) async {
     await _pumpIde(tester);
 
     expect(_widthOf(tester, 'left-activity-panel'), 260);
+
+    await tester.tap(find.byKey(const ValueKey('right-files-action')));
+    await tester.pump();
+
     expect(_widthOf(tester, 'right-activity-panel'), 260);
 
     await tester.drag(

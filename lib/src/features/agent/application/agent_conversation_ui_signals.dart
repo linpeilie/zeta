@@ -29,6 +29,7 @@ class AgentConversationUiSignals {
   bool _streamNeedsLiveFlush = false;
   bool _streamNeedsHeaderFlush = false;
   bool _streamNeedsAutoScroll = false;
+  bool _streamNeedsExpansionFlush = false;
 
   int get autoScrollTick => _autoScrollTickNotifier.value;
 
@@ -89,13 +90,18 @@ class AgentConversationUiSignals {
     _onLegacyNotify();
   }
 
-  void scheduleStreamFlush({bool header = false, bool autoScroll = false}) {
+  void scheduleStreamFlush({
+    bool header = false,
+    bool autoScroll = false,
+    bool expansion = false,
+  }) {
     if (_isDisposed()) {
       return;
     }
     _streamNeedsLiveFlush = true;
     _streamNeedsHeaderFlush = _streamNeedsHeaderFlush || header;
     _streamNeedsAutoScroll = _streamNeedsAutoScroll || autoScroll;
+    _streamNeedsExpansionFlush = _streamNeedsExpansionFlush || expansion;
     _streamFlushTimer ??= Timer(
       const Duration(milliseconds: 16),
       flushPendingStreamChangesNow,
@@ -121,17 +127,19 @@ class AgentConversationUiSignals {
     final scheduledLiveFlush = _streamNeedsLiveFlush;
     final scheduledHeaderFlush = _streamNeedsHeaderFlush;
     final scheduledAutoScroll = _streamNeedsAutoScroll;
+    final scheduledExpansionFlush = _streamNeedsExpansionFlush;
     _streamFlushTimer?.cancel();
     _streamFlushTimer = null;
     _streamNeedsLiveFlush = false;
     _streamNeedsHeaderFlush = false;
     _streamNeedsAutoScroll = false;
+    _streamNeedsExpansionFlush = false;
     publish(
       history: history,
       syncLiveTurn: syncLiveTurn,
       header: header || scheduledHeaderFlush,
       composer: composer,
-      expansion: expansion,
+      expansion: expansion || scheduledExpansionFlush,
       liveTurn: liveTurn || scheduledLiveFlush,
       autoScroll: autoScroll || scheduledAutoScroll,
     );

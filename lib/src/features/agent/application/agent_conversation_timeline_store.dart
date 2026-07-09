@@ -45,6 +45,10 @@ class AgentConversationTimelineStore {
   final Map<String, AgentConversationTurnState> _turnGroups =
       <String, AgentConversationTurnState>{};
   final Map<String, int> _messageIndexesByProviderId = <String, int>{};
+
+  /// reasoning itemId → 摘要/原文双缓冲，供流式 delta 聚合。
+  final Map<String, _ReasoningStreamBuffers> _reasoningBuffersByItemId =
+      <String, _ReasoningStreamBuffers>{};
   final Set<String> _expandedToolCallIds = <String>{};
   final Set<String> _expandedPlanMessageIds = <String>{};
   final Set<String> _expandedCommandGroupIds = <String>{};
@@ -129,6 +133,7 @@ class AgentConversationTimelineStore {
     int? outputTokens;
     int? reasoningOutputTokens;
     int? totalTokens;
+    int? modelContextWindow;
 
     for (final turn in _turnGroups.values) {
       if (turn.isStandby) {
@@ -149,6 +154,8 @@ class AgentConversationTimelineStore {
         usage.reasoningOutputTokens,
       );
       totalTokens = _sumOptionalInt(totalTokens, usage.totalTokens);
+      // 上下文窗口取最近非空值（各 turn 通常一致）。
+      modelContextWindow = usage.modelContextWindow ?? modelContextWindow;
     }
 
     if (inputTokens == null &&
@@ -165,6 +172,7 @@ class AgentConversationTimelineStore {
       outputTokens: outputTokens,
       reasoningOutputTokens: reasoningOutputTokens,
       totalTokens: totalTokens,
+      modelContextWindow: modelContextWindow,
     );
   }
 
@@ -231,6 +239,8 @@ class AgentConversationTimelineStore {
 
   /// 新回合启动前，先创建一个临时分组承载用户消息与后续增量。
   String startPendingLiveTurn() {
+    // 用户已开始真实对话，移除初始 Ready 占位文案。
+    _dismissWelcomeMessage();
     final pendingTurnId = 'pending-${DateTime.now().microsecondsSinceEpoch}';
     _pendingTurnGroupId = pendingTurnId;
     currentTurnGroupId = pendingTurnId;
@@ -280,6 +290,7 @@ class AgentConversationTimelineStore {
     _turnGroups.clear();
     _liveTurnNotifier.value = null;
     _messageIndexesByProviderId.clear();
+    _reasoningBuffersByItemId.clear();
     _expandedToolCallIds.clear();
     _expandedPlanMessageIds.clear();
     _expandedCommandGroupIds.clear();
@@ -335,6 +346,7 @@ class AgentConversationTimelineStore {
                 phase: entry.phase,
                 status: entry.status,
                 duration: entry.duration,
+                localImagePaths: entry.localImagePaths,
                 raw: entry.raw,
               ),
             );
@@ -353,12 +365,37 @@ class AgentConversationTimelineStore {
   }
 
   String addConversationMessage(AgentConversationMessage message) {
-    _messages.add(message);
+    final existingIndex = _messages.indexWhere((item) => item.id == message.id);
+    if (existingIndex != -1) {
+      _messages[existingIndex] = message;
+    } else {
+      _messages.add(message);
+    }
     return appendTimelineEntry(AgentMessageTimelineEntry(message: message));
+  }
+
+  /// 插入系统/警告类历史事件卡片（模型改道、弃用提示等）。
+  String addHistoryEvent(AgentHistoryEventEntry event) {
+    return appendTimelineEntry(AgentHistoryEventTimelineEntry(event: event));
   }
 
   /// 追加时间线条目，并打上当前 turn 分组 id。
   String appendTimelineEntry(AgentTimelineEntry entry) {
+    // 任意真实内容进入时间线后，不再保留 Ready 占位。
+    if (!_isWelcomeTimelineEntry(entry)) {
+      _dismissWelcomeMessage();
+    }
+    // 同 id 条目已存在时替换，避免 Windows 时钟精度不足导致重复 key。
+    final existingIndex = _timelineEntries.indexWhere(
+      (item) => item.id == entry.id,
+    );
+    if (existingIndex != -1) {
+      _timelineEntries[existingIndex] = entry;
+      final turnId = _timelineEntryTurnIds[existingIndex];
+      _turnIdsByTimelineEntryId[entry.id] = turnId;
+      _turnGroups[turnId]?.replaceEntry(entry);
+      return turnId;
+    }
     final turnId = currentTurnGroupId ?? standbyTurnId;
     _timelineEntries.add(entry);
     _timelineEntryTurnIds.add(turnId);
@@ -409,6 +446,53 @@ class AgentConversationTimelineStore {
     return appendTimelineEntry(AgentPermissionTimelineEntry(request: request));
   }
 
+  /// 插入或更新回合级聚合 diff。
+  ///
+  /// 同一 `turnId` 只保留一条；空 diff 时移除已有条目。
+  void upsertTurnDiff(AgentTurnDiffEvent event) {
+    final entryId = 'turn-diff-${event.turnId}';
+    final trimmed = event.diff.trim();
+    if (trimmed.isEmpty) {
+      _removeTimelineEntryById(entryId);
+      return;
+    }
+
+    final entry = AgentTurnDiffTimelineEntry(
+      turnId: event.turnId,
+      sessionId: event.sessionId,
+      diff: event.diff,
+      raw: event.raw,
+    );
+    final index = _timelineEntries.indexWhere((item) => item.id == entryId);
+    if (index != -1) {
+      _timelineEntries[index] = entry;
+      final turnId = _timelineEntryTurnIds[index];
+      _turnGroups[turnId]?.replaceEntry(entry);
+      return;
+    }
+
+    // 优先挂到通知指定的 turn 分组；若不存在则落到当前活跃分组。
+    final previousCurrent = currentTurnGroupId;
+    if (_turnGroups.containsKey(event.turnId)) {
+      currentTurnGroupId = event.turnId;
+    }
+    appendTimelineEntry(entry);
+    currentTurnGroupId = previousCurrent;
+  }
+
+  void _removeTimelineEntryById(String entryId) {
+    final index = _timelineEntries.indexWhere((item) => item.id == entryId);
+    if (index == -1) {
+      return;
+    }
+    final entry = _timelineEntries[index];
+    final turnId = _timelineEntryTurnIds[index];
+    _timelineEntries.removeAt(index);
+    _timelineEntryTurnIds.removeAt(index);
+    _turnIdsByTimelineEntryId.remove(entry.id);
+    _turnGroups[turnId]?.removeEntry(entry.id);
+  }
+
   void removePermissionRequest(String requestId) {
     _permissionRequests.removeWhere((item) => item.id == requestId);
     var index = 0;
@@ -430,6 +514,7 @@ class AgentConversationTimelineStore {
   /// 合并流式消息增量。
   ///
   /// 同一个 provider messageId 首次出现时创建气泡，后续 delta 追加到同一条消息。
+  /// `item/plan/delta` 会带上 `type: plan`，首次创建时自动展开计划卡。
   void appendMessageDelta(AgentMessageDeltaEvent event) {
     final existingIndex = _messageIndexesByProviderId[event.messageId];
     final kind = _messageKindFromRaw(role: event.role, raw: event.raw);
@@ -447,9 +532,16 @@ class AgentConversationTimelineStore {
           raw: event.raw,
         ),
       );
+      if (kind == AgentConversationMessageKind.plan && event.delta.isNotEmpty) {
+        _expandedPlanMessageIds.add(event.messageId);
+      }
       return;
     }
     final existing = _messages[existingIndex];
+    final wasEmptyPlan =
+        existing.isPlan &&
+        existing.text.trim().isEmpty &&
+        event.delta.isNotEmpty;
     final updated = existing.copyWith(
       text: '${existing.text}${event.delta}',
       kind: kind == AgentConversationMessageKind.plan ? kind : existing.kind,
@@ -460,6 +552,12 @@ class AgentConversationTimelineStore {
     );
     _messages[existingIndex] = updated;
     replaceTimelineMessage(updated);
+    if (wasEmptyPlan ||
+        (kind == AgentConversationMessageKind.plan &&
+            !existing.isPlan &&
+            event.delta.isNotEmpty)) {
+      _expandedPlanMessageIds.add(event.messageId);
+    }
   }
 
   /// 用 completed item 通知更新已有消息 metadata。
@@ -534,14 +632,217 @@ class AgentConversationTimelineStore {
 
   /// 插入或更新工具卡片。
   void upsertToolCall(AgentToolCall toolCall) {
+    // item/completed 携带完整 reasoning 正文时，用其重置缓冲，避免后续
+    // 迟到的 delta 基于过期片段继续拼接。
+    if (toolCall.kind == AgentToolKind.think) {
+      final content = toolCall.content ?? '';
+      if (content.isNotEmpty) {
+        _reasoningBuffersByItemId[toolCall.id] = _ReasoningStreamBuffers(
+          summary: StringBuffer(content),
+          text: StringBuffer(),
+          hasSummary: true,
+        );
+      }
+    }
+
     final index = _toolCalls.indexWhere((item) => item.id == toolCall.id);
     if (index == -1) {
       _toolCalls.add(toolCall);
       appendTimelineEntry(AgentToolTimelineEntry(toolCall: toolCall));
+      // MCP 进度先于 item/started 到达时，有内容则自动展开便于观察。
+      if (_isToolProgressAppend(toolCall) &&
+          toolCall.content != null &&
+          toolCall.content!.isNotEmpty) {
+        _expandedToolCallIds.add(toolCall.id);
+      }
       return;
     }
-    _toolCalls[index] = toolCall;
+
+    final existing = _toolCalls[index];
+    final merged = _mergeToolCallUpdate(existing, toolCall);
+    _toolCalls[index] = merged;
+    replaceTimelineTool(merged);
+    // 进度消息到达时展开卡片，便于观察 MCP 工具执行过程。
+    if (_isToolProgressAppend(toolCall) &&
+        merged.content != null &&
+        merged.content!.isNotEmpty) {
+      _expandedToolCallIds.add(toolCall.id);
+    }
+  }
+
+  /// 合并同 id 工具卡更新：进度追加 content，空 content 不冲掉已有正文。
+  AgentToolCall _mergeToolCallUpdate(
+    AgentToolCall existing,
+    AgentToolCall incoming,
+  ) {
+    final progressAppend = _isToolProgressAppend(incoming);
+    final incomingContent = incoming.content;
+    final existingContent = existing.content;
+
+    final String? content;
+    if (progressAppend) {
+      content = _appendToolProgressContent(existingContent, incomingContent);
+    } else if ((incomingContent == null || incomingContent.isEmpty) &&
+        existingContent != null &&
+        existingContent.isNotEmpty) {
+      // item/started 或空完成态不要冲掉已聚合的进度 / reasoning delta。
+      content = existingContent;
+    } else {
+      content = incomingContent;
+    }
+
+    final keepExistingTitle =
+        progressAppend ||
+        (_isGenericProgressToolTitle(incoming.title) &&
+            !_isGenericProgressToolTitle(existing.title));
+    final keepExistingKind =
+        progressAppend && existing.kind != AgentToolKind.other;
+
+    return AgentToolCall(
+      id: incoming.id,
+      title: keepExistingTitle ? existing.title : incoming.title,
+      kind: keepExistingKind ? existing.kind : incoming.kind,
+      status: incoming.status,
+      content: content,
+      locations: incoming.locations.isNotEmpty
+          ? incoming.locations
+          : existing.locations,
+      sessionId: incoming.sessionId ?? existing.sessionId,
+      turnId: incoming.turnId ?? existing.turnId,
+      rawInput: incoming.rawInput.isNotEmpty
+          ? incoming.rawInput
+          : existing.rawInput,
+      rawOutput: incoming.rawOutput.isNotEmpty
+          ? incoming.rawOutput
+          : existing.rawOutput,
+      raw: incoming.raw.isNotEmpty ? incoming.raw : existing.raw,
+    );
+  }
+
+  /// MCP `item/mcpToolCall/progress` 等进度通知：content 按行追加。
+  bool _isToolProgressAppend(AgentToolCall toolCall) {
+    return toolCall.raw['_progressAppend'] == true;
+  }
+
+  bool _isGenericProgressToolTitle(String title) {
+    return switch (title) {
+      'MCP tool' ||
+      'File change' ||
+      'Command output' ||
+      'Tool progress' => true,
+      _ => false,
+    };
+  }
+
+  String? _appendToolProgressContent(String? existing, String? incoming) {
+    if (incoming == null || incoming.isEmpty) {
+      return existing;
+    }
+    if (existing == null || existing.isEmpty) {
+      return incoming;
+    }
+    // 去重：同一进度消息重复下发时不追加。
+    if (existing == incoming ||
+        existing.endsWith('\n$incoming') ||
+        existing.endsWith(incoming)) {
+      return existing;
+    }
+    return '$existing\n$incoming';
+  }
+
+  /// 聚合 reasoning 流式增量到「思考」工具卡片。
+  ///
+  /// 优先展示摘要流（`summaryText`）；若本 item 尚未收到摘要，则回退到
+  /// 原始推理文本（`text`）。`summaryPart` 仅在已有摘要内容时插入分段换行。
+  /// 首次出现时自动展开卡片，便于实时观看思考过程。
+  void appendReasoningDelta(AgentReasoningDeltaEvent event) {
+    final existingIndex = _toolCalls.indexWhere(
+      (item) => item.id == event.itemId,
+    );
+    final existing = existingIndex == -1 ? null : _toolCalls[existingIndex];
+    final buffers = _reasoningBuffersFor(event.itemId, existing: existing);
+    final previousDisplay = buffers.displayText;
+
+    switch (event.kind) {
+      case AgentReasoningDeltaKind.text:
+        if (event.delta.isEmpty) {
+          return;
+        }
+        buffers.text.write(event.delta);
+      case AgentReasoningDeltaKind.summaryText:
+        if (event.delta.isEmpty) {
+          return;
+        }
+        buffers.hasSummary = true;
+        buffers.summary.write(event.delta);
+      case AgentReasoningDeltaKind.summaryPart:
+        buffers.hasSummary = true;
+        if (buffers.summary.isNotEmpty &&
+            !buffers.summary.toString().endsWith('\n\n')) {
+          buffers.summary.write('\n\n');
+        }
+    }
+
+    final displayText = buffers.displayText;
+    if (displayText == previousDisplay && existing != null) {
+      return;
+    }
+
+    final toolCall = AgentToolCall(
+      id: event.itemId,
+      title: existing?.title ?? '思考',
+      kind: AgentToolKind.think,
+      status: existing?.status == AgentToolStatus.completed
+          ? AgentToolStatus.completed
+          : AgentToolStatus.inProgress,
+      content: displayText.isEmpty ? null : displayText,
+      locations: existing?.locations ?? const <String>[],
+      sessionId: event.sessionId ?? existing?.sessionId,
+      turnId: event.turnId ?? existing?.turnId,
+      rawInput: existing?.rawInput ?? const <String, Object?>{},
+      rawOutput: existing?.rawOutput ?? const <String, Object?>{},
+      raw: event.raw.isEmpty
+          ? (existing?.raw ?? const <String, Object?>{})
+          : event.raw,
+    );
+
+    if (existingIndex == -1) {
+      _toolCalls.add(toolCall);
+      appendTimelineEntry(AgentToolTimelineEntry(toolCall: toolCall));
+      // 流式思考首次出现时自动展开，完成后仍可由用户折叠。
+      if (displayText.isNotEmpty) {
+        _expandedToolCallIds.add(event.itemId);
+      }
+      return;
+    }
+
+    _toolCalls[existingIndex] = toolCall;
     replaceTimelineTool(toolCall);
+    if (displayText.isNotEmpty && previousDisplay.isEmpty) {
+      _expandedToolCallIds.add(event.itemId);
+    }
+  }
+
+  /// 读取或初始化某个 reasoning item 的文本缓冲。
+  _ReasoningStreamBuffers _reasoningBuffersFor(
+    String itemId, {
+    AgentToolCall? existing,
+  }) {
+    final cached = _reasoningBuffersByItemId[itemId];
+    if (cached != null) {
+      return cached;
+    }
+
+    // item/started|completed 可能先于 delta 到达；用已有 content 作为摘要种子，
+    // 避免后续 summary delta 覆盖掉 completed 已写入的全文。
+    final seed = existing?.content ?? '';
+    final buffers = _ReasoningStreamBuffers(
+      summary: StringBuffer(seed),
+      text: StringBuffer(),
+      hasSummary: seed.isNotEmpty,
+    );
+    _reasoningBuffersByItemId[itemId] = buffers;
+    return buffers;
   }
 
   /// turn 真正启动时，把 sendMessage 建立的临时分组重命名为真实 turn id，
@@ -665,6 +966,23 @@ class AgentConversationTimelineStore {
     );
     standbyGroup.appendEntry(_timelineEntries.single);
     _turnIdsByTimelineEntryId[_timelineEntries.single.id] = standbyTurnId;
+  }
+
+  /// 会话已有实质内容时移除 Ready 占位，避免与真实消息并存。
+  void _dismissWelcomeMessage() {
+    final messageIndex = _messages.indexWhere(
+      (message) => message.id == welcomeMessage.id,
+    );
+    if (messageIndex == -1) {
+      return;
+    }
+    _messages.removeAt(messageIndex);
+    _removeTimelineEntryById('message-${welcomeMessage.id}');
+  }
+
+  bool _isWelcomeTimelineEntry(AgentTimelineEntry entry) {
+    return entry is AgentMessageTimelineEntry &&
+        entry.message.id == welcomeMessage.id;
   }
 
   void _renameTurnGroup(String oldId, String newId) {
@@ -909,6 +1227,7 @@ class AgentConversationMessage {
     this.phase,
     this.status,
     this.duration,
+    this.localImagePaths = const <String>[],
     this.raw = const <String, Object?>{},
   });
 
@@ -919,6 +1238,9 @@ class AgentConversationMessage {
   final AgentMessagePhase? phase;
   final AgentMessageStatus? status;
   final Duration? duration;
+
+  /// 本条消息附带的本地图片路径（发送时预览 / 历史回填）。
+  final List<String> localImagePaths;
   final Map<String, Object?> raw;
 
   bool get isPlan => kind == AgentConversationMessageKind.plan;
@@ -936,6 +1258,7 @@ class AgentConversationMessage {
     AgentMessagePhase? phase,
     AgentMessageStatus? status,
     Duration? duration,
+    List<String>? localImagePaths,
     Map<String, Object?>? raw,
   }) {
     return AgentConversationMessage(
@@ -946,6 +1269,7 @@ class AgentConversationMessage {
       phase: phase ?? this.phase,
       status: status ?? this.status,
       duration: duration ?? this.duration,
+      localImagePaths: localImagePaths ?? this.localImagePaths,
       raw: raw ?? this.raw,
     );
   }
@@ -992,6 +1316,30 @@ class AgentHistoryEventTimelineEntry extends AgentTimelineEntry {
     : super(id: 'history-event-${event.id}');
 
   final AgentHistoryEventEntry event;
+}
+
+/// 时间线回合级聚合 diff 条目。
+///
+/// 由 `turn/diff/updated` 驱动；UI 层解析为文件编辑组复用 diff 渲染。
+class AgentTurnDiffTimelineEntry extends AgentTimelineEntry {
+  AgentTurnDiffTimelineEntry({
+    required this.turnId,
+    required this.diff,
+    this.sessionId,
+    this.raw = const <String, Object?>{},
+  }) : super(id: 'turn-diff-$turnId');
+
+  /// 所属回合 id。
+  final String turnId;
+
+  /// 所属会话 id。
+  final String? sessionId;
+
+  /// 最新聚合 unified diff。
+  final String diff;
+
+  /// 原始通知 payload。
+  final Map<String, Object?> raw;
 }
 
 /// Agent 面板按 turn 聚合后的分组，供 UI 分回合渲染。
@@ -1048,7 +1396,12 @@ class AgentConversationTurnState extends ChangeNotifier {
   bool get isRunning => _status == AgentHistoryTurnStatus.running;
 
   void appendEntry(AgentTimelineEntry entry) {
-    _entries.add(entry);
+    final existingIndex = _entries.indexWhere((item) => item.id == entry.id);
+    if (existingIndex != -1) {
+      _entries[existingIndex] = entry;
+    } else {
+      _entries.add(entry);
+    }
     _dirty = true;
   }
 
@@ -1115,5 +1468,26 @@ class AgentConversationTurnState extends ChangeNotifier {
       duration: _duration,
       tokenUsage: _tokenUsage,
     );
+  }
+}
+
+/// Reasoning 流式双缓冲：摘要优先，原文兜底。
+class _ReasoningStreamBuffers {
+  _ReasoningStreamBuffers({
+    required this.summary,
+    required this.text,
+    required this.hasSummary,
+  });
+
+  final StringBuffer summary;
+  final StringBuffer text;
+  bool hasSummary;
+
+  /// 有摘要时只展示摘要；否则展示原始推理文本。
+  String get displayText {
+    if (hasSummary && summary.isNotEmpty) {
+      return summary.toString();
+    }
+    return text.toString();
   }
 }

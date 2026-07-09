@@ -109,13 +109,17 @@ InlineSpan _fileEditGroupSummarySpan(
     0,
     (sum, item) => sum + (item.removedLines ?? 0),
   );
+  // 回合级聚合 diff 用固定标题，与单次 fileChange 工具卡区分。
+  final label = group.id.startsWith('turn-diff-group-')
+      ? '本回合改动'
+      : '${group.items.length} 个文件';
   if (addedLines == 0 && removedLines == 0) {
-    return TextSpan(text: '${group.items.length} 个文件');
+    return TextSpan(text: label);
   }
   // 增删行数沿用 diff 语义色：新增为 success、删除为 error。
   return TextSpan(
     children: <InlineSpan>[
-      TextSpan(text: '${group.items.length} 个文件'),
+      TextSpan(text: label),
       const TextSpan(text: ' · '),
       TextSpan(
         text: '+$addedLines',
@@ -367,15 +371,21 @@ String? _threadOpenStatusText(AgentConversationViewModel viewModel) {
     AgentThreadOpenPhase.loadingHistory => 'Loading thread history...',
     AgentThreadOpenPhase.openFailed =>
       'Thread open failed. Click this thread again to retry.',
-    AgentThreadOpenPhase.idle => null,
+    // 打开成功时，头栏可展示模型改道等非阻塞系统提示。
+    AgentThreadOpenPhase.idle => viewModel.systemNoticeLabel,
   };
 }
 
-/// token 用量短标签，例如 "1.2k tokens"。
+/// token 用量短标签；有上下文窗口时展示占用比例。
 String? _tokenUsageLabel(AgentTokenUsage? usage) {
   final total = usage?.totalTokens;
   if (total == null || total <= 0) {
     return null;
+  }
+  final window = usage?.modelContextWindow;
+  if (window != null && window > 0) {
+    final percent = ((total / window) * 100).clamp(0, 999).round();
+    return '${_compactTokenCount(total)} / ${_compactTokenCount(window)} · $percent%';
   }
   return '${_compactTokenCount(total)} tokens';
 }
@@ -388,6 +398,11 @@ String _tokenUsageTooltip(AgentTokenUsage? usage) {
   final parts = <String>[];
   if (usage.totalTokens != null) {
     parts.add('Total: ${_formatTokenCount(usage.totalTokens!)}');
+  }
+  if (usage.modelContextWindow != null) {
+    parts.add(
+      'Context window: ${_formatTokenCount(usage.modelContextWindow!)}',
+    );
   }
   if (usage.inputTokens != null) {
     parts.add('Input: ${_formatTokenCount(usage.inputTokens!)}');

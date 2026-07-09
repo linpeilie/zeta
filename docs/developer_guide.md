@@ -1,6 +1,6 @@
 # 开发者文档
 
-最后更新：2026-07-07
+最后更新：2026-07-09
 
 ## 1. 项目简介
 
@@ -11,6 +11,8 @@ Zeta 是一个 Flutter Desktop 项目，当前支持 macOS、Linux 和 Windows �
 - Flutter SDK，需兼容 `pubspec.yaml` 中的 Dart SDK 约束 `^3.12.2`。
 - 支持 Flutter desktop 的本地开发环境。
 - 如需运行默认 Agent provider，需要本机可执行 `codex app-server --stdio`。
+- Codex 适配层按 pinned schema 开发；协议版本与升级流程见
+  [Codex app-server 协议版本锁定](./codex_app_server_protocol.md)。
 
 ## 3. 常用命令
 
@@ -22,7 +24,24 @@ flutter test
 flutter run -d macos
 ```
 
-Linux 或 Windows 开发时，将最后一条命令的设备改为对应桌面设备。
+重新导出 Codex app-server JSON Schema（协议升级 / 审计时）：
+
+```sh
+# macOS / Linux / Git Bash
+./tool/gen_codex_schema.sh
+
+# Windows PowerShell
+./tool/gen_codex_schema.ps1
+```
+
+对真实 `codex app-server --stdio` 做 Phase 1 冒烟（需本机 pinned `0.142.x`）：
+
+```sh
+python tool/smoke_codex_app_server.py
+# 可选：python tool/smoke_codex_app_server.py --codex-bin "C:\...\codex.exe" --timeout 180
+```
+
+Linux 或 Windows 开发时，将 `flutter run` 的设备改为对应桌面设备。
 
 ## 4. 目录结构
 
@@ -55,7 +74,9 @@ lib/
       features/ide/
 test/
 docs/
+tool/
 third_party/
+  codex_app_server_schema/
 linux/
 macos/
 windows/
@@ -72,6 +93,8 @@ windows/
 - `lib/src/ui/core`：主题、窗口框架、pane、panel、empty state 和状态标签等共享 UI 原语。
 - `lib/src/ui/features/ide`：IDE shell 视图、项目列表 pane 和 active provider controller。
 - `test/src`：app、core、feature 各层的单元测试和 widget 测试。
+- `tool/`：仓库维护脚本（含 Codex schema 导出）。
+- `third_party/codex_app_server_schema/`：pinned Codex app-server JSON Schema 快照。
 
 ## 5. 开发流程
 
@@ -106,6 +129,11 @@ windows/
 5. 添加单元测试覆盖初始化、session、turn、权限请求和错误映射。
 
 注意：默认策略应保持保守，不自动授权命令执行或文件写入。
+
+修改 Codex 适配层前，先对照
+[`third_party/codex_app_server_schema`](../third_party/codex_app_server_schema/)
+与 [协议版本锁定文档](./codex_app_server_protocol.md)；升级 CLI 时先
+`./tool/gen_codex_schema.sh --diff`（或 PowerShell `-Diff`）再改代码。
 
 ## 8. UI 开发指南
 
@@ -149,6 +177,8 @@ codex app-server --stdio
 ```
 
 如果命令不存在或协议变更，应用会显示 provider 不可用或错误状态。
+协议字段变更时，按 [协议版本锁定文档](./codex_app_server_protocol.md)
+重新导出 schema 并 diff，再更新适配层。
 
 ### 会话恢复后项目消失
 

@@ -26,7 +26,7 @@ class _AgentMessageEntry extends StatelessWidget {
         useStreamingMarkdown: useStreamingMarkdown,
       );
     }
-    return _AgentBubbleMessage(message: message);
+    return _AgentBubbleMessage(message: message, viewModel: viewModel);
   }
 }
 
@@ -144,15 +144,23 @@ class _AgentTurnDivider extends StatelessWidget {
 
 /// 用户或系统消息仍然使用紧凑气泡。
 class _AgentBubbleMessage extends StatelessWidget {
-  const _AgentBubbleMessage({required this.message});
+  const _AgentBubbleMessage({required this.message, required this.viewModel});
 
   final AgentConversationMessage message;
+  final AgentConversationViewModel viewModel;
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final isUser = message.role == AgentMessageRole.user;
+    final hasText = message.text.trim().isNotEmpty;
+    final imagePaths = message.localImagePaths;
+    final canEdit =
+        isUser &&
+        hasText &&
+        viewModel.canEditLastUserMessage &&
+        viewModel.lastEditableUserMessageId == message.id;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: IdeSpacing.space12),
@@ -160,30 +168,127 @@ class _AgentBubbleMessage extends StatelessWidget {
         alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: isUser ? colors.primaryMuted : colors.surfaceElevated,
-              borderRadius: IdeRadius.allMedium,
-              border: Border.all(
-                color: isUser
-                    ? colors.accent.withValues(alpha: 0.22)
-                    : colors.borderSubtle,
-              ),
-            ),
-            child: Padding(
-              padding: IdeSpacing.inputContentPadding,
-              child: SelectableText(
-                message.text,
-                style: textStyles.bodyMedium.copyWith(
-                  height: 1.4,
-                  color: colors.textPrimary,
+          child: Column(
+            crossAxisAlignment: isUser
+                ? CrossAxisAlignment.end
+                : CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: isUser ? colors.primaryMuted : colors.surfaceElevated,
+                  borderRadius: IdeRadius.allMedium,
+                  border: Border.all(
+                    color: isUser
+                        ? colors.accent.withValues(alpha: 0.22)
+                        : colors.borderSubtle,
+                  ),
+                ),
+                child: Padding(
+                  padding: IdeSpacing.inputContentPadding,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (imagePaths.isNotEmpty) ...[
+                        Wrap(
+                          spacing: IdeSpacing.space8,
+                          runSpacing: IdeSpacing.space8,
+                          children: [
+                            for (final path in imagePaths)
+                              ClipRRect(
+                                borderRadius: IdeRadius.allSmall,
+                                child: Image.file(
+                                  File(path),
+                                  key: ValueKey<String>(
+                                    'agent-message-image-${message.id}-$path',
+                                  ),
+                                  width: 120,
+                                  height: 120,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: colors.surfaceElevated,
+                                      borderRadius: IdeRadius.allSmall,
+                                    ),
+                                    child: SizedBox(
+                                      width: 120,
+                                      height: 120,
+                                      child: Center(
+                                        child: Icon(
+                                          Icons.broken_image_outlined,
+                                          size: 20,
+                                          color: colors.textTertiary,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        if (hasText) const SizedBox(height: IdeSpacing.space8),
+                      ],
+                      if (hasText)
+                        SelectableText(
+                          message.text,
+                          style: textStyles.bodyMedium.copyWith(
+                            height: 1.4,
+                            color: colors.textPrimary,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
-            ),
+              if (canEdit) ...[
+                const SizedBox(height: IdeSpacing.space4),
+                ShadButton.ghost(
+                  key: ValueKey<String>('agent-edit-retry-${message.id}'),
+                  size: ShadButtonSize.sm,
+                  onPressed: () {
+                    unawaited(_showEditRetryDialog(context));
+                  },
+                  child: const Text('编辑并重试'),
+                ),
+              ],
+            ],
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _showEditRetryDialog(BuildContext context) async {
+    final controller = TextEditingController(text: message.text);
+    final confirmed = await showShadDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return ShadDialog(
+          title: const Text('编辑并重试'),
+          description: const Text('将回滚上一回合后重新发送。不会还原 Agent 已写入的本地文件改动。'),
+          actions: [
+            ShadButton.outline(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            ShadButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('发送'),
+            ),
+          ],
+          child: ShadInput(
+            controller: controller,
+            placeholder: const Text('编辑消息…'),
+          ),
+        );
+      },
+    );
+    final text = controller.text;
+    controller.dispose();
+    if (confirmed == true && text.trim().isNotEmpty) {
+      await viewModel.editLastUserMessageAndRetry(text);
+    }
   }
 }
 

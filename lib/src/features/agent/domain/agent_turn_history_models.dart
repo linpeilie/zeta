@@ -167,6 +167,7 @@ class AgentHistoryMessageEntry extends AgentHistoryEntry {
     this.phase,
     this.status,
     this.duration,
+    this.localImagePaths = const <String>[],
     super.raw,
   });
 
@@ -184,6 +185,9 @@ class AgentHistoryMessageEntry extends AgentHistoryEntry {
 
   /// provider 上报或根据 started/completed 时间计算出的耗时。
   final Duration? duration;
+
+  /// 用户消息中的本地图片路径（来自 `localImage` 输入项）。
+  final List<String> localImagePaths;
 }
 
 /// 历史工具调用条目。
@@ -209,6 +213,8 @@ class AgentUserInputQaPair {
     this.header,
     this.options = const <String>[],
     this.answers = const <String>[],
+    this.isOther = false,
+    this.isSecret = false,
   });
 
   /// 问题 id，用于匹配 `function_call_output` 中的答案。
@@ -225,6 +231,12 @@ class AgentUserInputQaPair {
 
   /// 用户选择的答案标签列表；在收到 output 前为空。
   final List<String> answers;
+
+  /// 是否允许自由文本（协议 `isOther`）。
+  final bool isOther;
+
+  /// 是否应按密文输入（协议 `isSecret`）。
+  final bool isSecret;
 }
 
 /// 非消息/非工具的历史事件条目。

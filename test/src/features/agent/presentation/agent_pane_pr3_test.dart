@@ -12,6 +12,8 @@ import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 
+import '../../../testing/agent_provider_stub_base.dart';
+
 void main() {
   group('AgentPane PR3', () {
     testWidgets(
@@ -622,7 +624,9 @@ class _FakeAgentProviderFactory implements AgentProviderFactory {
   AgentProvider create(AgentProviderConfig config) => provider;
 }
 
-class _FakeAgentProvider implements AgentProvider {
+class _FakeAgentProvider
+    with AgentProviderThreadLifecycleStub
+    implements AgentProvider {
   _FakeAgentProvider({
     Map<String, AgentThreadHistorySnapshot> historySnapshotsByThread =
         const <String, AgentThreadHistorySnapshot>{},
@@ -685,6 +689,20 @@ class _FakeAgentProvider implements AgentProvider {
   void updateModelSelection(AgentModelSelection selection) {}
 
   @override
+  void updatePermissionSelection(AgentPermissionSelection selection) {}
+
+  @override
+  Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
+    return const <AgentPermissionProfileSummary>[];
+  }
+
+  @override
+  Future<void> approveGuardianDeniedAction({
+    required String threadId,
+    required Object event,
+  }) async {}
+
+  @override
   Future<AgentThreadHistorySnapshot> readThreadHistory({
     required String threadId,
     String? sessionPath,
@@ -697,10 +715,15 @@ class _FakeAgentProvider implements AgentProvider {
   }
 
   @override
+  Future<void> unsubscribeThread(String threadId) async {}
+
+  @override
   Future<AgentTurn> sendMessage({
     required AgentSession session,
-    required String message,
     required AgentContext context,
+    String? message,
+    List<AgentUserInput>? inputs,
+    String? clientUserMessageId,
   }) async {
     return AgentTurn(id: 'turn-1', sessionId: session.id);
   }
@@ -708,8 +731,10 @@ class _FakeAgentProvider implements AgentProvider {
   @override
   Future<void> steerTurn({
     required AgentSession session,
-    required String message,
     required AgentContext context,
+    String? message,
+    List<AgentUserInput>? inputs,
+    String? clientUserMessageId,
   }) async {}
 
   @override

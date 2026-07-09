@@ -20,6 +20,109 @@ class _CodexNotificationMapper {
           session: session,
           events: <AgentEvent>[AgentSessionStartedEvent(session)],
         );
+      case 'thread/status/changed':
+        final threadId = _string(notification.params['threadId']);
+        final statusMap = _map(notification.params['status']);
+        if (threadId == null || statusMap.isEmpty) {
+          return const _NotificationMapping();
+        }
+        final flags = _threadActiveFlags(statusMap);
+        return _NotificationMapping(
+          events: <AgentEvent>[
+            AgentThreadStatusChangedEvent(
+              threadId: threadId,
+              status: _threadRuntimeStatus(statusMap),
+              waitingOnApproval: flags.waitingOnApproval,
+              waitingOnUserInput: flags.waitingOnUserInput,
+              raw: notification.params,
+            ),
+          ],
+        );
+      case 'thread/name/updated':
+        final threadId = _string(notification.params['threadId']);
+        if (threadId == null) {
+          return const _NotificationMapping();
+        }
+        return _NotificationMapping(
+          events: <AgentEvent>[
+            AgentThreadNameUpdatedEvent(
+              threadId: threadId,
+              threadName: _string(notification.params['threadName']),
+              raw: notification.params,
+            ),
+          ],
+        );
+      case 'thread/archived':
+        return _threadIdEventMapping(
+          notification,
+          (threadId) => AgentThreadArchivedEvent(
+            threadId: threadId,
+            raw: notification.params,
+          ),
+        );
+      case 'thread/unarchived':
+        return _threadIdEventMapping(
+          notification,
+          (threadId) => AgentThreadUnarchivedEvent(
+            threadId: threadId,
+            raw: notification.params,
+          ),
+        );
+      case 'thread/deleted':
+        return _threadIdEventMapping(
+          notification,
+          (threadId) => AgentThreadDeletedEvent(
+            threadId: threadId,
+            raw: notification.params,
+          ),
+        );
+      case 'thread/closed':
+        return _threadIdEventMapping(
+          notification,
+          (threadId) => AgentThreadClosedEvent(
+            threadId: threadId,
+            raw: notification.params,
+          ),
+        );
+      case 'thread/compacted':
+        final threadId = _string(notification.params['threadId']);
+        if (threadId == null) {
+          return const _NotificationMapping();
+        }
+        return _NotificationMapping(
+          events: <AgentEvent>[
+            AgentThreadCompactedEvent(
+              threadId: threadId,
+              turnId: _string(notification.params['turnId']),
+              raw: notification.params,
+            ),
+          ],
+        );
+      case 'thread/settings/updated':
+        final threadId = _string(notification.params['threadId']);
+        if (threadId == null) {
+          return const _NotificationMapping();
+        }
+        final settings = _map(notification.params['threadSettings']);
+        final approvalRaw = settings['approvalPolicy'];
+        final approvalPolicy = approvalRaw is String ? approvalRaw : null;
+        final sandboxPolicy =
+            AgentPermissionSelection.sandboxPolicyFromProtocol(
+              settings['sandboxPolicy'] ?? settings['sandbox'],
+            );
+        final activeProfile = _map(settings['activePermissionProfile']);
+        return _NotificationMapping(
+          events: <AgentEvent>[
+            AgentThreadSettingsUpdatedEvent(
+              threadId: threadId,
+              model: _string(settings['model']),
+              approvalPolicy: approvalPolicy,
+              sandboxPolicy: sandboxPolicy,
+              activePermissionProfileId: _string(activeProfile['id']),
+              raw: notification.params,
+            ),
+          ],
+        );
       case 'turn/started':
         final turn = _turnFromNotification(notification.params);
         if (turn == null) {
@@ -79,6 +182,44 @@ class _CodexNotificationMapper {
             ),
           ],
         );
+      // Reasoning 三通知：原始推理文本 / 摘要文本 / 摘要分段边界。
+      case 'item/reasoning/textDelta':
+        return _reasoningDeltaMapping(
+          notification,
+          kind: AgentReasoningDeltaKind.text,
+        );
+      case 'item/reasoning/summaryTextDelta':
+        return _reasoningDeltaMapping(
+          notification,
+          kind: AgentReasoningDeltaKind.summaryText,
+        );
+      case 'item/reasoning/summaryPartAdded':
+        return _reasoningDeltaMapping(
+          notification,
+          kind: AgentReasoningDeltaKind.summaryPart,
+          requireDelta: false,
+        );
+      // Plan item 文本流；completed item 仍是权威全文（拼接 delta 可能不一致）。
+      case 'item/plan/delta':
+        final delta = _string(notification.params['delta']);
+        final itemId = _string(notification.params['itemId']);
+        if (delta == null || itemId == null) {
+          return const _NotificationMapping();
+        }
+        return _NotificationMapping(
+          events: <AgentEvent>[
+            AgentMessageDeltaEvent(
+              messageId: itemId,
+              delta: delta,
+              role: AgentMessageRole.agent,
+              status: AgentMessageStatus.streaming,
+              // 注入 type=plan，让 timeline 走计划卡片而非普通气泡。
+              raw: <String, Object?>{...notification.params, 'type': 'plan'},
+              sessionId: _string(notification.params['threadId']),
+              turnId: _string(notification.params['turnId']),
+            ),
+          ],
+        );
       case 'turn/plan/updated':
         return _NotificationMapping(
           events: <AgentEvent>[
@@ -89,11 +230,33 @@ class _CodexNotificationMapper {
             ),
           ],
         );
+      // 回合级聚合 unified diff；每次通知携带最新全文，非增量拼接。
+      case 'turn/diff/updated':
+        final threadId = _string(notification.params['threadId']);
+        final turnId = _string(notification.params['turnId']);
+        final diff = notification.params['diff'];
+        if (threadId == null || turnId == null || diff is! String) {
+          return const _NotificationMapping();
+        }
+        return _NotificationMapping(
+          events: <AgentEvent>[
+            AgentTurnDiffEvent(
+              sessionId: threadId,
+              turnId: turnId,
+              diff: diff,
+              raw: notification.params,
+            ),
+          ],
+        );
       case 'item/started':
       case 'item/completed':
         final messageUpdate = _messageUpdateFromItemNotification(notification);
         if (messageUpdate != null) {
           return _NotificationMapping(events: <AgentEvent>[messageUpdate]);
+        }
+        final systemItem = _systemItemFromItemNotification(notification);
+        if (systemItem != null) {
+          return _NotificationMapping(events: <AgentEvent>[systemItem]);
         }
         final toolCall = _toolCallFromItemNotification(notification);
         if (toolCall == null) {
@@ -106,6 +269,8 @@ class _CodexNotificationMapper {
       case 'command/exec/outputDelta':
       case 'item/fileChange/outputDelta':
       case 'item/fileChange/patchUpdated':
+      // MCP 工具进度消息；timeline 会追加到对应 item 的工具卡 content。
+      case 'item/mcpToolCall/progress':
         final toolCall = _toolCallFromProgressNotification(notification);
         if (toolCall == null) {
           return const _NotificationMapping();
@@ -136,6 +301,63 @@ class _CodexNotificationMapper {
             ),
           ],
         );
+      // 他端已应答该服务端请求；本端清掉待审批状态并关闭审批卡。
+      case 'serverRequest/resolved':
+        final requestId = _requestIdString(notification.params['requestId']);
+        final threadId = _string(notification.params['threadId']);
+        if (requestId == null || threadId == null) {
+          return const _NotificationMapping();
+        }
+        return _NotificationMapping(
+          events: <AgentEvent>[
+            AgentPermissionResolvedEvent(
+              requestId: requestId,
+              threadId: threadId,
+              raw: notification.params,
+            ),
+          ],
+        );
+      // 服务端将本回合模型改道；UI 插入系统事件并在头栏提示。
+      case 'model/rerouted':
+        final threadId = _string(notification.params['threadId']);
+        final turnId = _string(notification.params['turnId']);
+        final fromModel = _string(notification.params['fromModel']);
+        final toModel = _string(notification.params['toModel']);
+        final reason = _string(notification.params['reason']);
+        if (threadId == null ||
+            turnId == null ||
+            fromModel == null ||
+            toModel == null ||
+            reason == null) {
+          return const _NotificationMapping();
+        }
+        return _NotificationMapping(
+          events: <AgentEvent>[
+            AgentModelReroutedEvent(
+              threadId: threadId,
+              turnId: turnId,
+              fromModel: fromModel,
+              toModel: toModel,
+              reason: reason,
+              raw: notification.params,
+            ),
+          ],
+        );
+      // API 弃用提示；UI 按 summary 去重一次性展示。
+      case 'deprecationNotice':
+        final summary = _string(notification.params['summary']);
+        if (summary == null) {
+          return const _NotificationMapping();
+        }
+        return _NotificationMapping(
+          events: <AgentEvent>[
+            AgentDeprecationNoticeEvent(
+              summary: summary,
+              details: _string(notification.params['details']),
+              raw: notification.params,
+            ),
+          ],
+        );
       case 'error':
         return _NotificationMapping(
           events: <AgentEvent>[_errorEventFromNotification(notification)],
@@ -158,8 +380,37 @@ class _CodexNotificationMapper {
             ),
           ],
         );
+      case 'item/autoApprovalReview/started':
+      case 'item/autoApprovalReview/completed':
+        final threadId = _string(notification.params['threadId']);
+        final turnId = _string(notification.params['turnId']);
+        final reviewId = _string(notification.params['reviewId']);
+        if (threadId == null || turnId == null || reviewId == null) {
+          return const _NotificationMapping();
+        }
+        final review = _map(notification.params['review']);
+        final status =
+            _string(review['status']) ??
+            (notification.method.endsWith('/started')
+                ? 'inProgress'
+                : 'approved');
+        return _NotificationMapping(
+          events: <AgentEvent>[
+            AgentAutoApprovalReviewEvent(
+              threadId: threadId,
+              turnId: turnId,
+              reviewId: reviewId,
+              status: status,
+              rationale: _string(review['rationale']),
+              riskLevel: _string(review['riskLevel']),
+              targetItemId: _string(notification.params['targetItemId']),
+              raw: notification.params,
+            ),
+          ],
+        );
       default:
-        return const _NotificationMapping();
+        // 未识别的通知不产生事件；由 provider 记 fine 日志并累计诊断计数。
+        return _NotificationMapping(unmatchedMethod: notification.method);
     }
   }
 
@@ -261,32 +512,87 @@ class _CodexNotificationMapper {
     }).toList();
   }
 
+  /// 将仅含 `threadId` 的生命周期通知映射为对应事件。
+  _NotificationMapping _threadIdEventMapping(
+    JsonRpcNotification notification,
+    AgentEvent Function(String threadId) build,
+  ) {
+    final threadId = _string(notification.params['threadId']);
+    if (threadId == null) {
+      return const _NotificationMapping();
+    }
+    return _NotificationMapping(events: <AgentEvent>[build(threadId)]);
+  }
+
+  /// 将 `item/reasoning/*` 通知映射为 [AgentReasoningDeltaEvent]。
+  ///
+  /// [requireDelta] 为 true 时缺少 `delta`/`itemId` 则丢弃；
+  /// `summaryPartAdded` 无文本，仅要求 `itemId`。
+  _NotificationMapping _reasoningDeltaMapping(
+    JsonRpcNotification notification, {
+    required AgentReasoningDeltaKind kind,
+    bool requireDelta = true,
+  }) {
+    final itemId = _string(notification.params['itemId']);
+    final delta = _string(notification.params['delta']) ?? '';
+    if (itemId == null || (requireDelta && delta.isEmpty)) {
+      return const _NotificationMapping();
+    }
+    return _NotificationMapping(
+      events: <AgentEvent>[
+        AgentReasoningDeltaEvent(
+          itemId: itemId,
+          kind: kind,
+          delta: delta,
+          contentIndex: _numberToInt(notification.params['contentIndex']),
+          summaryIndex: _numberToInt(notification.params['summaryIndex']),
+          sessionId: _string(notification.params['threadId']),
+          turnId: _string(notification.params['turnId']),
+          raw: notification.params,
+        ),
+      ],
+    );
+  }
+
   AgentToolCall? _toolCallFromItemNotification(
     JsonRpcNotification notification,
   ) {
     final item = _map(notification.params['item']);
-    final normalizedType = _normalizedAgentItemType(_string(item['type']));
-    if (normalizedType == 'agentmessage' || normalizedType == 'plan') {
-      return null;
-    }
     final id = _string(item['id']) ?? _string(notification.params['itemId']);
     if (id == null) {
       return null;
     }
-    return AgentToolCall(
+    final status = _historyToolStatus(_string(item['status']));
+    return _toolCallFromThreadItem(
+      item,
       id: id,
-      title: _toolTitle(item),
-      kind: _toolKind(_string(item['kind']) ?? _string(item['type'])),
+      // started 一律视为进行中；completed 再按 item.status 细分失败/取消。
       status: notification.method == 'item/completed'
-          ? AgentToolStatus.completed
+          ? status
           : AgentToolStatus.inProgress,
-      content: _string(item['text']) ?? _string(item['command']),
-      locations: _locations(item),
       sessionId: _string(notification.params['threadId']),
       turnId: _string(notification.params['turnId']),
-      rawInput: _map(item['rawInput']),
-      rawOutput: _map(item['rawOutput']),
       raw: notification.params,
+    );
+  }
+
+  /// 评审 / 压缩 / hook / sleep / 子代理等系统类 ThreadItem。
+  AgentSystemItemEvent? _systemItemFromItemNotification(
+    JsonRpcNotification notification,
+  ) {
+    final item = _map(notification.params['item']);
+    final id = _string(item['id']) ?? _string(notification.params['itemId']);
+    if (id == null) {
+      return null;
+    }
+    final entry = _systemHistoryEventFromThreadItem(item, id: id);
+    if (entry == null) {
+      return null;
+    }
+    return AgentSystemItemEvent(
+      entry: entry,
+      sessionId: _string(notification.params['threadId']),
+      turnId: _string(notification.params['turnId']),
     );
   }
 
@@ -327,14 +633,35 @@ class _CodexNotificationMapper {
   AgentToolCall? _toolCallFromProgressNotification(
     JsonRpcNotification notification,
   ) {
+    final method = notification.method;
+    // MCP 进度通知必填 itemId + message；缺一则丢弃，避免生成无归属卡片。
+    if (method == 'item/mcpToolCall/progress') {
+      final itemId = _string(notification.params['itemId']);
+      final message = _string(notification.params['message']);
+      if (itemId == null || message == null) {
+        return null;
+      }
+      return AgentToolCall(
+        id: itemId,
+        title: _progressTitle(method),
+        kind: AgentToolKind.other,
+        status: AgentToolStatus.inProgress,
+        content: message,
+        sessionId: _string(notification.params['threadId']),
+        turnId: _string(notification.params['turnId']),
+        // 标记进度追加，供 timeline 合并时保留既有标题并追加 content。
+        raw: <String, Object?>{...notification.params, '_progressAppend': true},
+      );
+    }
+
     final id =
         _string(notification.params['itemId']) ??
         _string(notification.params['toolCallId']) ??
-        notification.method;
+        method;
     return AgentToolCall(
       id: id,
-      title: _progressTitle(notification.method),
-      kind: notification.method.contains('fileChange')
+      title: _progressTitle(method),
+      kind: method.contains('fileChange')
           ? AgentToolKind.edit
           : AgentToolKind.execute,
       status: AgentToolStatus.inProgress,
@@ -427,12 +754,16 @@ class _NotificationMapping {
     this.startedTurn,
     this.completedTurn,
     this.events = const <AgentEvent>[],
+    this.unmatchedMethod,
   });
 
   final AgentSession? session;
   final AgentTurn? startedTurn;
   final _CompletedTurn? completedTurn;
   final List<AgentEvent> events;
+
+  /// 非空表示该方法未进入任何已知 case，供 provider 做可观测性记录。
+  final String? unmatchedMethod;
 }
 
 class _CompletedTurn {

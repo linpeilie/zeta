@@ -11,6 +11,9 @@ import 'package:zeta/src/features/project_threads/application/project_threads_se
 
 final _log = loggerFor('zeta.project_threads.controller');
 
+/// 搜索输入防抖时长。
+const Duration projectThreadSearchDebounce = Duration(milliseconds: 300);
+
 /// Project Threads 模块的应用层协调器。
 ///
 /// 分页、恢复、缓存快照和 provider 交互都收敛到这里，页面层只触发动作并读取
@@ -26,10 +29,14 @@ class ProjectThreadsController {
 
   final Map<String, int> _loadTokens = <String, int>{};
   final Map<String, String> _projectPathByThreadId = <String, String>{};
+  final Map<String, Timer> _searchDebounceTimers = <String, Timer>{};
 
   AgentProvider? _provider;
   StreamSubscription<AgentEvent>? _providerEventSubscription;
   bool _disposed = false;
+
+  /// 当前会话因删除/归档/关闭而被清空时回调（projectPath, threadId）。
+  void Function(String projectPath, String threadId)? onActiveThreadCleared;
 
   ProjectThreadListState stateFor(String projectPath) {
     return viewModel.stateFor(projectPath);
@@ -78,6 +85,7 @@ class ProjectThreadsController {
     viewModel.retainProjects(projectPaths);
     for (final path in removed) {
       _loadTokens.remove(path);
+      _searchDebounceTimers.remove(path)?.cancel();
     }
     _projectPathByThreadId.removeWhere(
       (_, projectPath) => removed.contains(projectPath),
@@ -92,6 +100,51 @@ class ProjectThreadsController {
     if (next.isExpanded && !next.hasLoaded) {
       await loadInitial(projectPath);
     }
+  }
+
+  /// 切换活动/已归档视图并重新加载。
+  Future<void> setArchivedView({
+    required String projectPath,
+    required bool archived,
+  }) async {
+    final current = stateFor(projectPath);
+    if (current.archived == archived) {
+      return;
+    }
+    viewModel.setStateFor(
+      projectPath,
+      current.copyWith(
+        archived: archived,
+        hasLoaded: false,
+        threads: const <AgentThreadSummary>[],
+        nextCursor: null,
+        selectedThreadId: null,
+      ),
+    );
+    await loadInitial(projectPath);
+  }
+
+  /// 更新搜索词；防抖后重新加载首屏。
+  void setSearchTerm({
+    required String projectPath,
+    required String searchTerm,
+  }) {
+    final current = stateFor(projectPath);
+    if (current.searchTerm == searchTerm) {
+      return;
+    }
+    viewModel.setStateFor(
+      projectPath,
+      current.copyWith(searchTerm: searchTerm),
+    );
+    _searchDebounceTimers.remove(projectPath)?.cancel();
+    _searchDebounceTimers[projectPath] = Timer(projectThreadSearchDebounce, () {
+      _searchDebounceTimers.remove(projectPath);
+      if (_disposed) {
+        return;
+      }
+      unawaited(loadInitial(projectPath));
+    });
   }
 
   /// 重新加载首屏，保留旧缓存直到新数据返回。
@@ -141,6 +194,110 @@ class ProjectThreadsController {
     _registerThreadMapping(projectPath, threadId);
   }
 
+  /// 重命名 thread；乐观更新标题，以 `thread/name/updated` 为准。
+  Future<void> renameThread({
+    required String projectPath,
+    required String threadId,
+    required String name,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    viewModel.updateThreadTitle(
+      projectPath: projectPath,
+      threadId: threadId,
+      title: trimmed,
+    );
+    final provider = await _ensureProviderEventSubscription();
+    if (provider == null) {
+      return;
+    }
+    await provider.renameThread(threadId: threadId, name: trimmed);
+  }
+
+  /// 归档 thread。
+  Future<void> archiveThread({
+    required String projectPath,
+    required String threadId,
+  }) async {
+    final provider = await _ensureProviderEventSubscription();
+    if (provider == null) {
+      return;
+    }
+    await provider.archiveThread(threadId);
+    _removeThreadFromList(
+      projectPath: projectPath,
+      threadId: threadId,
+      notifyCleared: true,
+    );
+  }
+
+  /// 取消归档 thread。
+  Future<void> unarchiveThread({
+    required String projectPath,
+    required String threadId,
+  }) async {
+    final provider = await _ensureProviderEventSubscription();
+    if (provider == null) {
+      return;
+    }
+    await provider.unarchiveThread(threadId);
+    _removeThreadFromList(
+      projectPath: projectPath,
+      threadId: threadId,
+      notifyCleared: true,
+    );
+  }
+
+  /// 永久删除 thread。
+  Future<void> deleteThread({
+    required String projectPath,
+    required String threadId,
+  }) async {
+    final provider = await _ensureProviderEventSubscription();
+    if (provider == null) {
+      return;
+    }
+    await provider.deleteThread(threadId);
+    _removeThreadFromList(
+      projectPath: projectPath,
+      threadId: threadId,
+      notifyCleared: true,
+    );
+  }
+
+  /// 分叉 thread，返回新会话；调用方负责切换 Agent 面板。
+  Future<AgentSession?> forkThread({
+    required String projectPath,
+    required String threadId,
+  }) async {
+    final provider = await _ensureProviderEventSubscription();
+    if (provider == null) {
+      return null;
+    }
+    final session = await provider.forkThread(
+      threadId: threadId,
+      context: AgentContext(projectPath: projectPath),
+    );
+    _registerThreadMapping(projectPath, session.id);
+    viewModel.prependThread(
+      projectPath: projectPath,
+      thread: AgentThreadSummary(
+        id: session.id,
+        providerId: session.providerId,
+        projectPath: projectPath,
+        title: session.title,
+        preview: session.title ?? '',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        status: AgentThreadRuntimeStatus.idle,
+      ),
+    );
+    selectThreadId(projectPath, session.id);
+    return session;
+  }
+
   void dispose() {
     if (_disposed) {
       return;
@@ -149,6 +306,10 @@ class ProjectThreadsController {
     _provider = null;
     _loadTokens.clear();
     _projectPathByThreadId.clear();
+    for (final timer in _searchDebounceTimers.values) {
+      timer.cancel();
+    }
+    _searchDebounceTimers.clear();
     final subscription = _providerEventSubscription;
     _providerEventSubscription = null;
     unawaited(subscription?.cancel());
@@ -181,11 +342,14 @@ class ProjectThreadsController {
       if (provider == null) {
         return;
       }
+      final searchTerm = current.searchTerm.trim();
       final page = await provider.listThreads(
         query: AgentThreadListQuery(
           projectPath: projectPath,
           limit: limit,
           cursor: cursor,
+          archived: current.archived,
+          searchTerm: searchTerm.isEmpty ? null : searchTerm,
         ),
       );
       if (_loadTokens[projectPath] != token) {
@@ -258,8 +422,87 @@ class ProjectThreadsController {
         _setThreadRunning(event.turn.sessionId, isRunning: true);
       case AgentTurnCompletedEvent():
         _setThreadRunning(event.sessionId, isRunning: false);
+      case AgentThreadStatusChangedEvent():
+        _applyThreadStatusChanged(event);
+      case AgentThreadNameUpdatedEvent():
+        _applyThreadNameUpdated(event);
+      case AgentThreadArchivedEvent():
+        _applyThreadRemoved(event.threadId, notifyCleared: true);
+      case AgentThreadUnarchivedEvent():
+        _applyThreadRemoved(event.threadId, notifyCleared: true);
+      case AgentThreadDeletedEvent():
+        _applyThreadRemoved(event.threadId, notifyCleared: true);
+      case AgentThreadClosedEvent():
+        _setThreadRunning(event.threadId, isRunning: false);
+        _applyThreadClosed(event.threadId);
       default:
         return;
+    }
+  }
+
+  void _applyThreadStatusChanged(AgentThreadStatusChangedEvent event) {
+    final projectPath = _projectPathByThreadId[event.threadId];
+    if (projectPath == null) {
+      return;
+    }
+    viewModel.updateThreadRuntimeStatus(
+      projectPath: projectPath,
+      threadId: event.threadId,
+      status: event.status,
+      waitingOnApproval: event.waitingOnApproval,
+      waitingOnUserInput: event.waitingOnUserInput,
+    );
+  }
+
+  void _applyThreadNameUpdated(AgentThreadNameUpdatedEvent event) {
+    final projectPath = _projectPathByThreadId[event.threadId];
+    if (projectPath == null) {
+      return;
+    }
+    viewModel.updateThreadTitle(
+      projectPath: projectPath,
+      threadId: event.threadId,
+      title: event.threadName,
+    );
+  }
+
+  void _applyThreadRemoved(String threadId, {required bool notifyCleared}) {
+    final projectPath = _projectPathByThreadId[threadId];
+    if (projectPath == null) {
+      return;
+    }
+    _removeThreadFromList(
+      projectPath: projectPath,
+      threadId: threadId,
+      notifyCleared: notifyCleared,
+    );
+  }
+
+  void _applyThreadClosed(String threadId) {
+    final projectPath = _projectPathByThreadId[threadId];
+    if (projectPath == null) {
+      return;
+    }
+    final current = stateFor(projectPath);
+    final nextRunning = Set<String>.from(current.runningThreadIds)
+      ..remove(threadId);
+    if (nextRunning.length != current.runningThreadIds.length) {
+      viewModel.setRunningThreadIds(projectPath, nextRunning);
+    }
+  }
+
+  void _removeThreadFromList({
+    required String projectPath,
+    required String threadId,
+    required bool notifyCleared,
+  }) {
+    final cleared = viewModel.removeThread(
+      projectPath: projectPath,
+      threadId: threadId,
+    );
+    _projectPathByThreadId.remove(threadId);
+    if (cleared && notifyCleared) {
+      onActiveThreadCleared?.call(projectPath, threadId);
     }
   }
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
+import 'package:zeta/src/ui/core/ide_chip.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_context_menu.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
@@ -15,6 +17,18 @@ import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 
 typedef ProjectThreadSelected =
+    void Function(String projectPath, AgentThreadSummary thread);
+
+typedef ProjectThreadSearchChanged =
+    void Function(String projectPath, String searchTerm);
+
+typedef ProjectThreadArchivedViewChanged =
+    void Function(String projectPath, bool archived);
+
+typedef ProjectThreadRenamed =
+    void Function(String projectPath, String threadId, String name);
+
+typedef ProjectThreadAction =
     void Function(String projectPath, AgentThreadSummary thread);
 
 class ProjectListPane extends StatelessWidget {
@@ -30,6 +44,13 @@ class ProjectListPane extends StatelessWidget {
     required this.onNewThread,
     required this.onOpenProjectLocation,
     required this.onRemoveProject,
+    required this.onSearchTermChanged,
+    required this.onArchivedViewChanged,
+    required this.onRenameThread,
+    required this.onArchiveThread,
+    required this.onUnarchiveThread,
+    required this.onDeleteThread,
+    required this.onForkThread,
     super.key,
   });
 
@@ -44,6 +65,13 @@ class ProjectListPane extends StatelessWidget {
   final ValueChanged<String> onNewThread;
   final ValueChanged<String> onOpenProjectLocation;
   final ValueChanged<String> onRemoveProject;
+  final ProjectThreadSearchChanged onSearchTermChanged;
+  final ProjectThreadArchivedViewChanged onArchivedViewChanged;
+  final ProjectThreadRenamed onRenameThread;
+  final ProjectThreadAction onArchiveThread;
+  final ProjectThreadAction onUnarchiveThread;
+  final ProjectThreadAction onDeleteThread;
+  final ProjectThreadAction onForkThread;
 
   @override
   Widget build(BuildContext context) {
@@ -78,6 +106,17 @@ class ProjectListPane extends StatelessWidget {
                   onNewThread: () => onNewThread(path),
                   onOpenProjectLocation: () => onOpenProjectLocation(path),
                   onRemoveProject: () => onRemoveProject(path),
+                  onSearchTermChanged: (searchTerm) =>
+                      onSearchTermChanged(path, searchTerm),
+                  onArchivedViewChanged: (archived) =>
+                      onArchivedViewChanged(path, archived),
+                  onRenameThread: (threadId, name) =>
+                      onRenameThread(path, threadId, name),
+                  onArchiveThread: (thread) => onArchiveThread(path, thread),
+                  onUnarchiveThread: (thread) =>
+                      onUnarchiveThread(path, thread),
+                  onDeleteThread: (thread) => onDeleteThread(path, thread),
+                  onForkThread: (thread) => onForkThread(path, thread),
                 );
               },
             ),
@@ -103,6 +142,13 @@ class _ProjectTile extends StatefulWidget {
     required this.onNewThread,
     required this.onOpenProjectLocation,
     required this.onRemoveProject,
+    required this.onSearchTermChanged,
+    required this.onArchivedViewChanged,
+    required this.onRenameThread,
+    required this.onArchiveThread,
+    required this.onUnarchiveThread,
+    required this.onDeleteThread,
+    required this.onForkThread,
   });
 
   final String path;
@@ -115,6 +161,13 @@ class _ProjectTile extends StatefulWidget {
   final VoidCallback onNewThread;
   final VoidCallback onOpenProjectLocation;
   final VoidCallback onRemoveProject;
+  final ValueChanged<String> onSearchTermChanged;
+  final ValueChanged<bool> onArchivedViewChanged;
+  final void Function(String threadId, String name) onRenameThread;
+  final ValueChanged<AgentThreadSummary> onArchiveThread;
+  final ValueChanged<AgentThreadSummary> onUnarchiveThread;
+  final ValueChanged<AgentThreadSummary> onDeleteThread;
+  final ValueChanged<AgentThreadSummary> onForkThread;
 
   @override
   State<_ProjectTile> createState() => _ProjectTileState();
@@ -229,19 +282,17 @@ class _ProjectTileState extends State<_ProjectTile> {
                     ),
                   ),
                 ),
-                AnimatedSwitcher(
+                AnimatedSize(
                   duration: IdeMotion.durationNormal,
-                  switchInCurve: IdeMotion.curveDefault,
-                  switchOutCurve: Curves.easeIn,
-                  child: SizedBox(
-                    key: ValueKey<String>(
-                      _showActions
-                          ? 'project-tile-actions-${widget.path}'
-                          : 'project-tile-actions-hidden-${widget.path}',
-                    ),
-                    height: _actionHitSize,
-                    child: _showActions
-                        ? Row(
+                  curve: IdeMotion.curveDefault,
+                  alignment: Alignment.centerRight,
+                  child: _showActions
+                      ? SizedBox(
+                          key: ValueKey<String>(
+                            'project-tile-actions-${widget.path}',
+                          ),
+                          height: _actionHitSize,
+                          child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               IdeTooltip(
@@ -311,9 +362,10 @@ class _ProjectTileState extends State<_ProjectTile> {
                                 ),
                               ),
                             ],
-                          )
-                        : const SizedBox(width: 0),
-                  ),
+                          ),
+                        )
+                      // 用 AnimatedSize 直接收展，避免 AnimatedSwitcher 在快速切换时堆叠旧 child。
+                      : const SizedBox(width: 0, height: _actionHitSize),
                 ),
               ],
             ),
@@ -367,6 +419,13 @@ class _ProjectTileState extends State<_ProjectTile> {
               onSelectThread: widget.onSelectThread,
               onLoadMoreThreads: widget.onLoadMoreThreads,
               onRetryThreads: widget.onRetryThreads,
+              onSearchTermChanged: widget.onSearchTermChanged,
+              onArchivedViewChanged: widget.onArchivedViewChanged,
+              onRenameThread: widget.onRenameThread,
+              onArchiveThread: widget.onArchiveThread,
+              onUnarchiveThread: widget.onUnarchiveThread,
+              onDeleteThread: widget.onDeleteThread,
+              onForkThread: widget.onForkThread,
             ),
         ],
       ),
@@ -374,13 +433,20 @@ class _ProjectTileState extends State<_ProjectTile> {
   }
 }
 
-class _ProjectThreadList extends StatelessWidget {
+class _ProjectThreadList extends StatefulWidget {
   const _ProjectThreadList({
     required this.projectPath,
     required this.state,
     required this.onSelectThread,
     required this.onLoadMoreThreads,
     required this.onRetryThreads,
+    required this.onSearchTermChanged,
+    required this.onArchivedViewChanged,
+    required this.onRenameThread,
+    required this.onArchiveThread,
+    required this.onUnarchiveThread,
+    required this.onDeleteThread,
+    required this.onForkThread,
   });
 
   final String projectPath;
@@ -388,31 +454,122 @@ class _ProjectThreadList extends StatelessWidget {
   final ProjectThreadSelected onSelectThread;
   final VoidCallback onLoadMoreThreads;
   final VoidCallback onRetryThreads;
+  final ValueChanged<String> onSearchTermChanged;
+  final ValueChanged<bool> onArchivedViewChanged;
+  final void Function(String threadId, String name) onRenameThread;
+  final ValueChanged<AgentThreadSummary> onArchiveThread;
+  final ValueChanged<AgentThreadSummary> onUnarchiveThread;
+  final ValueChanged<AgentThreadSummary> onDeleteThread;
+  final ValueChanged<AgentThreadSummary> onForkThread;
+
+  @override
+  State<_ProjectThreadList> createState() => _ProjectThreadListState();
+}
+
+class _ProjectThreadListState extends State<_ProjectThreadList> {
+  late final TextEditingController _searchController;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController(text: widget.state.searchTerm);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProjectThreadList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.state.searchTerm != _searchController.text) {
+      _searchController.text = widget.state.searchTerm;
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final state = widget.state;
+    final emptyMessage = state.archived ? 'No archived threads' : 'No threads';
     final children = <Widget>[
+      Padding(
+        padding: const EdgeInsets.only(
+          left: IdeSpacing.space4,
+          right: IdeSpacing.space4,
+          bottom: IdeSpacing.space6,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ShadInput(
+              key: ValueKey<String>(
+                'project-thread-search-${widget.projectPath}',
+              ),
+              controller: _searchController,
+              onChanged: widget.onSearchTermChanged,
+              placeholder: const Text('搜索会话'),
+              leading: const Icon(Icons.search_rounded, size: 16),
+            ),
+            const SizedBox(height: IdeSpacing.space6),
+            Wrap(
+              spacing: IdeSpacing.space6,
+              runSpacing: IdeSpacing.space4,
+              children: [
+                IdeChip(
+                  key: ValueKey<String>(
+                    'project-thread-active-filter-${widget.projectPath}',
+                  ),
+                  label: '活动',
+                  selected: !state.archived,
+                  trailingIcon: null,
+                  onPressed: () => widget.onArchivedViewChanged(false),
+                ),
+                IdeChip(
+                  key: ValueKey<String>(
+                    'project-thread-archived-filter-${widget.projectPath}',
+                  ),
+                  label: '已归档',
+                  selected: state.archived,
+                  trailingIcon: null,
+                  onPressed: () => widget.onArchivedViewChanged(true),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
       for (final thread in state.threads)
         _ThreadTile(
-          projectPath: projectPath,
-          thread: state.runningThreadIds.contains(thread.id)
+          projectPath: widget.projectPath,
+          thread:
+              state.runningThreadIds.contains(thread.id) &&
+                  thread.status != AgentThreadRuntimeStatus.active
               ? thread.copyWith(status: AgentThreadRuntimeStatus.active)
               : thread,
           selected: thread.id == state.selectedThreadId,
-          onTap: () => onSelectThread(projectPath, thread),
+          archivedView: state.archived,
+          onTap: () => widget.onSelectThread(widget.projectPath, thread),
+          onRenameThread: widget.onRenameThread,
+          onArchiveThread: widget.onArchiveThread,
+          onUnarchiveThread: widget.onUnarchiveThread,
+          onDeleteThread: widget.onDeleteThread,
+          onForkThread: widget.onForkThread,
         ),
       if (state.isLoadingInitial && state.threads.isEmpty)
         const _ThreadListMessage(text: 'Loading threads...'),
-      if (state.errorMessage != null) _ThreadErrorRow(onRetry: onRetryThreads),
+      if (state.errorMessage != null)
+        _ThreadErrorRow(onRetry: widget.onRetryThreads),
       if (state.hasLoaded &&
           state.threads.isEmpty &&
           !state.isLoadingInitial &&
           state.errorMessage == null)
-        const _ThreadListMessage(text: 'No threads'),
+        _ThreadListMessage(text: emptyMessage),
       if (state.hasMore)
         _LoadMoreThreadsButton(
           loading: state.isLoadingMore,
-          onPressed: onLoadMoreThreads,
+          onPressed: widget.onLoadMoreThreads,
         ),
     ];
 
@@ -423,79 +580,364 @@ class _ProjectThreadList extends StatelessWidget {
   }
 }
 
-class _ThreadTile extends StatelessWidget {
+enum _ThreadTileMenuAction { rename, archive, unarchive, fork, delete }
+
+class _ThreadTile extends StatefulWidget {
   const _ThreadTile({
     required this.projectPath,
     required this.thread,
     required this.selected,
+    required this.archivedView,
     required this.onTap,
+    required this.onRenameThread,
+    required this.onArchiveThread,
+    required this.onUnarchiveThread,
+    required this.onDeleteThread,
+    required this.onForkThread,
   });
 
   final String projectPath;
   final AgentThreadSummary thread;
   final bool selected;
+  final bool archivedView;
   final VoidCallback onTap;
+  final void Function(String threadId, String name) onRenameThread;
+  final ValueChanged<AgentThreadSummary> onArchiveThread;
+  final ValueChanged<AgentThreadSummary> onUnarchiveThread;
+  final ValueChanged<AgentThreadSummary> onDeleteThread;
+  final ValueChanged<AgentThreadSummary> onForkThread;
+
+  @override
+  State<_ThreadTile> createState() => _ThreadTileState();
+}
+
+class _ThreadTileState extends State<_ThreadTile> {
+  static const double _actionHitSize = 18;
+  static const double _actionIconSize = 14;
+
+  bool _hovered = false;
+  bool _focused = false;
+  late final ShadPopoverController _moreMenuController;
+
+  bool get _showActions => _hovered || _focused || _moreMenuController.isOpen;
+
+  @override
+  void initState() {
+    super.initState();
+    _moreMenuController = ShadPopoverController();
+    _moreMenuController.addListener(_handleMenuVisibilityChanged);
+  }
+
+  @override
+  void dispose() {
+    _moreMenuController
+      ..removeListener(_handleMenuVisibilityChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleMenuVisibilityChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _toggleMoreMenu() {
+    if (_moreMenuController.isOpen) {
+      _moreMenuController.hide();
+      return;
+    }
+    _moreMenuController.show();
+  }
+
+  Future<void> _showRenameDialog() async {
+    _moreMenuController.hide();
+    final controller = TextEditingController(text: widget.thread.displayName);
+    final name = await showShadDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return ShadDialog(
+          key: ValueKey<String>(
+            'project-thread-rename-dialog-${widget.projectPath}-${widget.thread.id}',
+          ),
+          title: const Text('重命名'),
+          closeIconData: Icons.close_rounded,
+          actions: [
+            ShadButton.outline(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('取消'),
+            ),
+            ShadButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(controller.text.trim());
+              },
+              child: const Text('确认'),
+            ),
+          ],
+          child: ShadInput(
+            controller: controller,
+            autofocus: true,
+            onSubmitted: (value) {
+              Navigator.of(dialogContext).pop(value.trim());
+            },
+          ),
+        );
+      },
+    );
+    controller.dispose();
+    if (!mounted || name == null || name.isEmpty) {
+      return;
+    }
+    widget.onRenameThread(widget.thread.id, name);
+  }
+
+  Future<void> _showDeleteDialog() async {
+    _moreMenuController.hide();
+    final confirmed = await showShadDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return ShadDialog.alert(
+          key: ValueKey<String>(
+            'project-thread-delete-dialog-${widget.projectPath}-${widget.thread.id}',
+          ),
+          title: const Text('删除会话'),
+          description: const Text('此操作不可撤销，将永久删除该会话。'),
+          actions: [
+            ShadButton.outline(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            ShadButton.destructive(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('删除'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed == true && mounted) {
+      widget.onDeleteThread(widget.thread);
+    }
+  }
+
+  void _handleMenuAction(_ThreadTileMenuAction action) {
+    switch (action) {
+      case _ThreadTileMenuAction.rename:
+        unawaited(_showRenameDialog());
+        return;
+      case _ThreadTileMenuAction.archive:
+        _moreMenuController.hide();
+        widget.onArchiveThread(widget.thread);
+        return;
+      case _ThreadTileMenuAction.unarchive:
+        _moreMenuController.hide();
+        widget.onUnarchiveThread(widget.thread);
+        return;
+      case _ThreadTileMenuAction.fork:
+        _moreMenuController.hide();
+        widget.onForkThread(widget.thread);
+        return;
+      case _ThreadTileMenuAction.delete:
+        unawaited(_showDeleteDialog());
+        return;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final isRunning = thread.status == AgentThreadRuntimeStatus.active;
+    final hoverBackground = colors.border.withValues(alpha: 0.12);
+    final thread = widget.thread;
+    final isBusy = thread.isBusy;
+    final waitingLabel = thread.waitingOnApproval
+        ? '等待审批'
+        : thread.waitingOnUserInput
+        ? '等待输入'
+        : null;
     final lastActiveLabel = _relativeThreadTime(
       thread.lastActiveAt,
       DateTime.now(),
     );
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 1),
-      child: PaneInteractiveSurface(
-        key: ValueKey<String>('project-thread-$projectPath-${thread.id}'),
-        onPressed: onTap,
-        selected: selected,
-        padding: const EdgeInsets.symmetric(
-          horizontal: IdeSpacing.space8,
-          vertical: IdeSpacing.space6,
-        ),
-        borderRadius: IdeRadius.allSmall,
-        selectedBackgroundColor: colors.primaryMuted,
-        hoverBackgroundColor: colors.border.withValues(alpha: 0.12),
-        child: Row(
-          children: [
-            Icon(
-              _threadIcon(thread.status),
-              size: 14,
-              color: selected ? colors.accent : colors.textSecondary,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          PaneInteractiveSurface(
+            key: ValueKey<String>(
+              'project-thread-${widget.projectPath}-${thread.id}',
             ),
-            const SizedBox(width: IdeSpacing.space8),
-            Expanded(
-              child: Text(
-                thread.displayName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: textStyles.bodySmall.copyWith(
-                  fontWeight: FontWeight.w600,
+            onPressed: widget.onTap,
+            selected: widget.selected,
+            padding: const EdgeInsets.symmetric(
+              horizontal: IdeSpacing.space8,
+              vertical: IdeSpacing.space6,
+            ),
+            borderRadius: IdeRadius.allSmall,
+            selectedBackgroundColor: colors.primaryMuted,
+            hoverBackgroundColor: hoverBackground,
+            onHoverChanged: (value) {
+              setState(() {
+                _hovered = value;
+              });
+            },
+            onFocusChanged: (value) {
+              setState(() {
+                _focused = value;
+              });
+            },
+            child: Row(
+              children: [
+                Icon(
+                  _threadIcon(thread.status),
+                  size: 14,
+                  color: widget.selected ? colors.accent : colors.textSecondary,
+                ),
+                const SizedBox(width: IdeSpacing.space8),
+                Expanded(
+                  child: Text(
+                    thread.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textStyles.bodySmall.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (waitingLabel != null) ...[
+                  const SizedBox(width: IdeSpacing.space8),
+                  Text(
+                    waitingLabel,
+                    key: ValueKey<String>(
+                      'project-thread-waiting-${widget.projectPath}-${thread.id}',
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textStyles.caption.copyWith(
+                      color: colors.warning,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ] else if (isBusy) ...[
+                  const SizedBox(width: IdeSpacing.space8),
+                  Icon(
+                    Icons.autorenew_rounded,
+                    key: ValueKey<String>(
+                      'project-thread-running-icon-${widget.projectPath}-${thread.id}',
+                    ),
+                    size: 14,
+                    color: colors.accent,
+                  ),
+                ] else if (lastActiveLabel != null) ...[
+                  const SizedBox(width: IdeSpacing.space8),
+                  Text(
+                    lastActiveLabel,
+                    maxLines: 1,
+                    style: textStyles.caption.copyWith(
+                      color: colors.textSecondary,
+                    ),
+                  ),
+                ],
+                AnimatedSize(
+                  duration: IdeMotion.durationNormal,
+                  curve: IdeMotion.curveDefault,
+                  alignment: Alignment.centerRight,
+                  child: _showActions
+                      ? SizedBox(
+                          key: ValueKey<String>(
+                            'project-thread-actions-${widget.projectPath}-${thread.id}',
+                          ),
+                          width: _actionHitSize,
+                          height: _actionHitSize,
+                          child: IdeTooltip(
+                            message: '更多',
+                            child: GestureDetector(
+                              key: ValueKey<String>(
+                                'project-thread-more-menu-${widget.projectPath}-${thread.id}',
+                              ),
+                              behavior: HitTestBehavior.opaque,
+                              onTap: _toggleMoreMenu,
+                              child: Container(
+                                width: _actionHitSize,
+                                height: _actionHitSize,
+                                color: Colors.transparent,
+                                alignment: Alignment.center,
+                                child: Icon(
+                                  Icons.more_horiz_rounded,
+                                  size: _actionIconSize,
+                                  color: colors.textSecondary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
+                      // 用 AnimatedSize 直接收展，避免 AnimatedSwitcher 在快速切换时堆叠旧 child。
+                      : const SizedBox(width: 0, height: _actionHitSize),
+                ),
+              ],
+            ),
+          ),
+          if (_moreMenuController.isOpen)
+            Padding(
+              padding: const EdgeInsets.only(
+                top: IdeSpacing.space2,
+                left: IdeSpacing.space8,
+                right: IdeSpacing.space4,
+              ),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: IdeContextMenu(
+                  actions: [
+                    IdeContextMenuAction(
+                      key: ValueKey<String>(
+                        'project-thread-rename-${widget.projectPath}-${thread.id}',
+                      ),
+                      label: '重命名',
+                      onPressed: () =>
+                          _handleMenuAction(_ThreadTileMenuAction.rename),
+                    ),
+                    if (widget.archivedView)
+                      IdeContextMenuAction(
+                        key: ValueKey<String>(
+                          'project-thread-unarchive-${widget.projectPath}-${thread.id}',
+                        ),
+                        label: '取消归档',
+                        onPressed: () =>
+                            _handleMenuAction(_ThreadTileMenuAction.unarchive),
+                      )
+                    else
+                      IdeContextMenuAction(
+                        key: ValueKey<String>(
+                          'project-thread-archive-${widget.projectPath}-${thread.id}',
+                        ),
+                        label: '归档',
+                        onPressed: () =>
+                            _handleMenuAction(_ThreadTileMenuAction.archive),
+                      ),
+                    IdeContextMenuAction(
+                      key: ValueKey<String>(
+                        'project-thread-fork-${widget.projectPath}-${thread.id}',
+                      ),
+                      label: '分叉',
+                      onPressed: () =>
+                          _handleMenuAction(_ThreadTileMenuAction.fork),
+                    ),
+                    IdeContextMenuAction(
+                      key: ValueKey<String>(
+                        'project-thread-delete-${widget.projectPath}-${thread.id}',
+                      ),
+                      label: '删除',
+                      destructive: true,
+                      dividerAbove: true,
+                      onPressed: () =>
+                          _handleMenuAction(_ThreadTileMenuAction.delete),
+                    ),
+                  ],
                 ),
               ),
             ),
-            if (isRunning) ...[
-              const SizedBox(width: IdeSpacing.space8),
-              Icon(
-                Icons.autorenew_rounded,
-                key: ValueKey<String>(
-                  'project-thread-running-icon-$projectPath-${thread.id}',
-                ),
-                size: 14,
-                color: colors.accent,
-              ),
-            ] else if (lastActiveLabel != null) ...[
-              const SizedBox(width: 8),
-              Text(
-                lastActiveLabel,
-                maxLines: 1,
-                style: textStyles.caption.copyWith(color: colors.textSecondary),
-              ),
-            ],
-          ],
-        ),
+        ],
       ),
     );
   }

@@ -51,11 +51,13 @@ class IdeShellController extends ChangeNotifier {
        ) {
     agentViewModel = AgentConversationViewModel(
       providerController: agentProviderController,
+      workspaceFilesProvider: () => _workspaceTree,
     );
     projectThreadsController = ProjectThreadsController(
       providerController: agentProviderController,
       viewModel: projectThreadsViewModel,
     );
+    projectThreadsController.onActiveThreadCleared = _handleActiveThreadCleared;
     agentViewModel.addListener(_handleAgentChanged);
     projectThreadsViewModel.addListener(_handleProjectThreadsChanged);
     unawaited(agentViewModel.loadSettings());
@@ -125,6 +127,95 @@ class IdeShellController extends ChangeNotifier {
 
   Future<void> retryThreads(String projectPath) {
     return projectThreadsController.loadInitial(projectPath);
+  }
+
+  Future<void> setThreadArchivedView(String projectPath, bool archived) {
+    return projectThreadsController.setArchivedView(
+      projectPath: projectPath,
+      archived: archived,
+    );
+  }
+
+  void setThreadSearchTerm(String projectPath, String searchTerm) {
+    projectThreadsController.setSearchTerm(
+      projectPath: projectPath,
+      searchTerm: searchTerm,
+    );
+  }
+
+  Future<void> renameProjectThread(
+    String projectPath,
+    String threadId,
+    String name,
+  ) {
+    return projectThreadsController.renameThread(
+      projectPath: projectPath,
+      threadId: threadId,
+      name: name,
+    );
+  }
+
+  Future<void> archiveProjectThread(
+    String projectPath,
+    AgentThreadSummary thread,
+  ) {
+    return projectThreadsController.archiveThread(
+      projectPath: projectPath,
+      threadId: thread.id,
+    );
+  }
+
+  Future<void> unarchiveProjectThread(
+    String projectPath,
+    AgentThreadSummary thread,
+  ) {
+    return projectThreadsController.unarchiveThread(
+      projectPath: projectPath,
+      threadId: thread.id,
+    );
+  }
+
+  Future<void> deleteProjectThread(
+    String projectPath,
+    AgentThreadSummary thread,
+  ) {
+    return projectThreadsController.deleteThread(
+      projectPath: projectPath,
+      threadId: thread.id,
+    );
+  }
+
+  Future<void> forkProjectThread(
+    String projectPath,
+    AgentThreadSummary thread,
+  ) async {
+    final session = await projectThreadsController.forkThread(
+      projectPath: projectPath,
+      threadId: thread.id,
+    );
+    if (session == null) {
+      return;
+    }
+
+    final state = projectThreadsController.stateFor(projectPath);
+    AgentThreadSummary? forkedThread;
+    for (final candidate in state.threads) {
+      if (candidate.id == session.id) {
+        forkedThread = candidate;
+        break;
+      }
+    }
+    forkedThread ??= AgentThreadSummary(
+      id: session.id,
+      providerId: session.providerId,
+      projectPath: projectPath,
+      title: session.title,
+      preview: session.title ?? '',
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+      status: AgentThreadRuntimeStatus.idle,
+    );
+    await selectProjectThread(projectPath, forkedThread);
   }
 
   Future<void> startNewThreadForProject(String projectPath) async {
@@ -474,6 +565,21 @@ class IdeShellController extends ChangeNotifier {
   void _handleProjectThreadsChanged() {
     _notifyStateChanged();
     _requestSessionSave();
+  }
+
+  void _handleActiveThreadCleared(String projectPath, String threadId) {
+    if (_agentThreadIdsByProject[projectPath] == threadId) {
+      _agentThreadIdsByProject.remove(projectPath);
+    }
+    if (projectPath == _projectPath) {
+      agentViewModel.updateWorkspace(
+        projectPath: projectPath,
+        contextFilePath: _currentFilePath,
+        resetConversation: true,
+      );
+    }
+    _requestSessionSave();
+    _notifyStateChanged();
   }
 
   void _notifyStateChanged() {

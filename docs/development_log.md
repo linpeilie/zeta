@@ -1,5 +1,30 @@
 # 开发记录
 
+## 2026-07-09
+
+### Codex app-server Phase 1 收尾
+
+- Phase 1（核心流式体验）在适配计划中全部完成：reasoning / plan 流、回合
+  diff、线程 waiting 状态、`serverRequest/resolved`、MCP 进度、模型改道与
+  弃用提示、18 种 ThreadItem、`thread/unsubscribe`、本地图片输入。
+- 同步刷新 `plan/codex_app_server_adaptation_plan.md` 顶部协议覆盖表与 §1
+  已适配清单；更新 `docs/design_document.md` Agent 设计节。
+- 真实 app-server 冒烟（`tool/smoke_codex_app_server.py`，CLI `0.142.5`）
+  17/17 通过：`initialize`/`model/list`/`thread/start`、`turn/start` 接受
+  `text`+`localImage` 且 item 通知可见图片、`thread/status/changed`、
+  `thread/tokenUsage/updated`（`modelContextWindow=258400`）、agent 消息流、
+  `turn/interrupt`→`interrupted`、`thread/unsubscribe`。本轮短回复未触发
+  reasoning/plan/`turn/diff`（脚本记为 optional）；他端解决审批需双客户端，
+  未在单进程冒烟中覆盖。
+- 下一阶段：Phase 2（thread 管理与审批深化）。
+
+### Codex app-server 协议同步机制
+
+- 新增 `tool/gen_codex_schema.sh` 与 `tool/gen_codex_schema.ps1`，从本机 Codex CLI 导出 JSON Schema。
+- 将 pinned 快照提交到 `third_party/codex_app_server_schema/`（当前 `0.142.5`），并排除键序不稳定的 v2 聚合文件。
+- 新增 `docs/codex_app_server_protocol.md`，记录 pin 版本、再生命令与升级 diff 流程；同步开发者文档、设计文档与工程规范入口。
+- Phase 0（协议对齐审计）在适配计划中全部完成。
+
 ## 2026-07-07
 
 ### 提炼重构后工程规范

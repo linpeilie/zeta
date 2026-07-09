@@ -123,6 +123,7 @@ class _CodexThreadHistoryReader {
         id: id,
         role: AgentMessageRole.user,
         text: _userInputText(item['content']),
+        localImagePaths: _userInputLocalImagePaths(item['content']),
         raw: item,
       ),
       'agentmessage' => _historyMessage(
@@ -141,78 +142,22 @@ class _CodexThreadHistoryReader {
         status: AgentMessageStatus.completed,
         raw: item,
       ),
-      'reasoning' => _historyTool(
-        AgentToolCall(
-          id: id,
-          title: 'Reasoning',
-          kind: AgentToolKind.think,
-          status: AgentToolStatus.completed,
-          content:
-              _joinedStrings(item['summary']) ??
-              _joinedStrings(item['content']),
-          raw: item,
-        ),
-      ),
-      'commandexecution' => _historyTool(
-        AgentToolCall(
-          id: id,
-          title: _string(item['command']) ?? 'Command',
-          kind: AgentToolKind.execute,
-          status: _historyToolStatus(_string(item['status'])),
-          content:
-              _string(item['aggregatedOutput']) ?? _string(item['command']),
-          locations: _singleLocation(_string(item['cwd'])),
-          raw: item,
-        ),
-      ),
-      'filechange' => _historyTool(
-        AgentToolCall(
-          id: id,
-          title: 'File change',
-          kind: AgentToolKind.edit,
-          status: _historyToolStatus(_string(item['status'])),
-          content: _joinedStrings(_fileChangeLocations(item['changes'])),
-          locations: _fileChangeLocations(item['changes']),
-          raw: item,
-        ),
-      ),
-      'mcptoolcall' => _historyTool(
-        AgentToolCall(
-          id: id,
-          title: _toolPathTitle(
-            prefix: 'MCP',
-            first: _string(item['server']),
-            second: _string(item['tool']),
-          ),
-          kind: AgentToolKind.other,
-          status: _historyToolStatus(_string(item['status'])),
-          content:
-              _string(_map(item['error'])['message']) ??
-              _joinedContentItems(item['result']) ??
-              _objectPreview(item['arguments']),
-          rawInput: _map(item['arguments']),
-          rawOutput: _map(item['result']),
-          raw: item,
-        ),
-      ),
-      'dynamictoolcall' => _historyTool(
-        AgentToolCall(
-          id: id,
-          title: _toolPathTitle(
-            first: _string(item['namespace']),
-            second: _string(item['tool']),
-          ),
-          kind: AgentToolKind.other,
-          status: _historyToolStatus(_string(item['status'])),
-          content:
-              _joinedContentItems(item['contentItems']) ??
-              _objectPreview(item['arguments']),
-          rawInput: _map(item['arguments']),
-          raw: item,
-        ),
-      ),
-      _ => null,
+      final type when _isSystemThreadItemType(type) =>
+        _systemHistoryEventFromThreadItem(item, id: id),
+      _ => _historyToolEntryFromThreadItem(item, id: id),
     };
+  }
+
+  AgentHistoryToolEntry? _historyToolEntryFromThreadItem(
+    Map<String, Object?> item, {
+    required String id,
+  }) {
+    final toolCall = _toolCallFromThreadItem(
+      item,
+      id: id,
+      status: _historyToolStatus(_string(item['status'])),
+    );
+    return toolCall == null ? null : _historyTool(toolCall);
   }
 
   AgentHistoryMessageEntry? _historyMessage({
@@ -222,10 +167,12 @@ class _CodexThreadHistoryReader {
     AgentMessagePhase? phase,
     AgentMessageStatus? status,
     Duration? duration,
+    List<String> localImagePaths = const <String>[],
     required Map<String, Object?> raw,
   }) {
-    final trimmed = text?.trim();
-    if (trimmed == null || trimmed.isEmpty) {
+    final trimmed = text?.trim() ?? '';
+    // 允许纯图片用户消息：无文本但有本地图片路径时仍保留条目。
+    if (trimmed.isEmpty && localImagePaths.isEmpty) {
       return null;
     }
     return AgentHistoryMessageEntry(
@@ -235,6 +182,7 @@ class _CodexThreadHistoryReader {
       phase: phase,
       status: status,
       duration: duration,
+      localImagePaths: List<String>.unmodifiable(localImagePaths),
       raw: raw,
     );
   }

@@ -37,6 +37,9 @@ class AgentProviderConfig {
     this.selectedModel,
     this.selectedReasoningEffort,
     this.selectedServiceTier,
+    this.selectedApprovalPolicy,
+    this.selectedSandboxPolicy,
+    this.selectedPermissionProfileId,
     this.enabled = true,
     this.extra = const <String, Object?>{},
   });
@@ -71,6 +74,15 @@ class AgentProviderConfig {
   /// 用户选择的服务档位 id（如 priority）。
   final String? selectedServiceTier;
 
+  /// 用户选择的审批策略（`AskForApproval` 字符串变体）。
+  final String? selectedApprovalPolicy;
+
+  /// 用户选择的沙箱策略（域内 camelCase）。
+  final String? selectedSandboxPolicy;
+
+  /// 用户选择的 permission profile id（可选）。
+  final String? selectedPermissionProfileId;
+
   /// 是否在配置列表中启用。
   final bool enabled;
 
@@ -100,6 +112,9 @@ class AgentProviderConfig {
     String? selectedModel,
     String? selectedReasoningEffort,
     String? selectedServiceTier,
+    String? selectedApprovalPolicy,
+    String? selectedSandboxPolicy,
+    String? selectedPermissionProfileId,
     bool? enabled,
     Map<String, Object?>? extra,
   }) {
@@ -115,6 +130,12 @@ class AgentProviderConfig {
       selectedReasoningEffort:
           selectedReasoningEffort ?? this.selectedReasoningEffort,
       selectedServiceTier: selectedServiceTier ?? this.selectedServiceTier,
+      selectedApprovalPolicy:
+          selectedApprovalPolicy ?? this.selectedApprovalPolicy,
+      selectedSandboxPolicy:
+          selectedSandboxPolicy ?? this.selectedSandboxPolicy,
+      selectedPermissionProfileId:
+          selectedPermissionProfileId ?? this.selectedPermissionProfileId,
       enabled: enabled ?? this.enabled,
       extra: extra ?? this.extra,
     );
@@ -132,6 +153,9 @@ class AgentProviderConfig {
       'selectedModel': selectedModel,
       'selectedReasoningEffort': selectedReasoningEffort,
       'selectedServiceTier': selectedServiceTier,
+      'selectedApprovalPolicy': selectedApprovalPolicy,
+      'selectedSandboxPolicy': selectedSandboxPolicy,
+      'selectedPermissionProfileId': selectedPermissionProfileId,
       'enabled': enabled,
       'extra': extra,
     };
@@ -170,6 +194,13 @@ class AgentProviderConfig {
         map['selectedReasoningEffort'],
       ),
       selectedServiceTier: decodeOptionalString(map['selectedServiceTier']),
+      selectedApprovalPolicy: decodeOptionalString(
+        map['selectedApprovalPolicy'],
+      ),
+      selectedSandboxPolicy: decodeOptionalString(map['selectedSandboxPolicy']),
+      selectedPermissionProfileId: decodeOptionalString(
+        map['selectedPermissionProfileId'],
+      ),
       enabled: map['enabled'] is bool ? map['enabled'] as bool : true,
       extra: decodeObjectMap(map['extra']),
     );

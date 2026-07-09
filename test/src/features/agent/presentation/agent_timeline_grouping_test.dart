@@ -245,6 +245,41 @@ void main() {
       expect(group.group.items.single.hasDetails, isFalse);
     });
 
+    test('renders turn-level unified diff as a file edit group', () {
+      const diff =
+          'diff --git a/lib/a.dart b/lib/a.dart\n'
+          '--- a/lib/a.dart\n'
+          '+++ b/lib/a.dart\n'
+          '@@ -1 +1 @@\n'
+          '-old\n'
+          '+new\n'
+          'diff --git a/lib/b.dart b/lib/b.dart\n'
+          '--- a/lib/b.dart\n'
+          '+++ b/lib/b.dart\n'
+          '@@ -1 +1,2 @@\n'
+          ' keep\n'
+          '+added\n';
+      final blocks = buildAgentTimelineRenderBlocks(
+        turnId: 'turn-a',
+        entries: <AgentTimelineEntry>[
+          AgentTurnDiffTimelineEntry(turnId: 'turn-a', diff: diff),
+        ],
+      );
+
+      expect(blocks, hasLength(1));
+      expect(blocks.single, isA<AgentTimelineFileEditGroupRenderBlock>());
+      final group = blocks.single as AgentTimelineFileEditGroupRenderBlock;
+      expect(group.group.id, 'turn-diff-group-turn-a');
+      expect(group.group.items, hasLength(2));
+      expect(group.group.items[0].title, 'a.dart');
+      expect(group.group.items[0].addedLines, 1);
+      expect(group.group.items[0].removedLines, 1);
+      expect(group.group.items[0].hasDetails, isTrue);
+      expect(group.group.items[1].title, 'b.dart');
+      expect(group.group.items[1].addedLines, 1);
+      expect(group.group.items[1].removedLines, 0);
+    });
+
     test('skips web search entries that do not contain a concrete query', () {
       final blocks = buildAgentTimelineRenderBlocks(
         turnId: 'turn-a',
@@ -269,6 +304,22 @@ void main() {
         'Run tests',
         'Read file',
       ]);
+    });
+
+    test('dedupes entries that share the same timeline id', () {
+      final blocks = buildAgentTimelineRenderBlocks(
+        turnId: 'turn-a',
+        entries: <AgentTimelineEntry>[
+          _messageEntry(id: 'error-same', text: 'first'),
+          _messageEntry(id: 'error-same', text: 'second'),
+        ],
+      );
+
+      expect(blocks, hasLength(1));
+      final block = blocks.single as AgentTimelineEntryRenderBlock;
+      expect(block.id, 'message-error-same');
+      final entry = block.entry as AgentMessageTimelineEntry;
+      expect(entry.message.text, 'first');
     });
   });
 }

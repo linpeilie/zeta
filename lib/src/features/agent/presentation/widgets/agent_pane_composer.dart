@@ -10,6 +10,10 @@ class _AgentComposer extends StatelessWidget {
     required this.canSubmit,
     required this.isTurnRunning,
     required this.threadOpenPhase,
+    required this.draftImagePaths,
+    required this.onAttachImages,
+    required this.onRemoveImage,
+    required this.onPasteImages,
     required this.onSend,
     required this.onCancel,
     required this.models,
@@ -18,15 +22,26 @@ class _AgentComposer extends StatelessWidget {
     required this.selectedServiceTierId,
     required this.showReasoningEffort,
     required this.showServiceTier,
+    required this.showPermissionPolicy,
+    required this.permissionPolicyLabel,
+    required this.permissionPresets,
+    required this.selectedPermissionPresetId,
     required this.onSelectModel,
     required this.onSelectReasoningEffort,
     required this.onSelectServiceTier,
+    required this.onSelectPermissionPreset,
+    required this.mentionCandidates,
+    required this.onInsertMention,
   });
 
   final TextEditingController controller;
   final bool canSubmit;
   final bool isTurnRunning;
   final AgentThreadOpenPhase threadOpenPhase;
+  final List<String> draftImagePaths;
+  final VoidCallback onAttachImages;
+  final ValueChanged<String> onRemoveImage;
+  final Future<bool> Function() onPasteImages;
   final VoidCallback onSend;
   final VoidCallback onCancel;
 
@@ -48,9 +63,28 @@ class _AgentComposer extends StatelessWidget {
   /// 是否显示速率按钮。
   final bool showServiceTier;
 
+  /// 是否显示审批/沙箱策略按钮。
+  final bool showPermissionPolicy;
+
+  /// 策略按钮展示文案。
+  final String permissionPolicyLabel;
+
+  /// 可选策略预设。
+  final List<AgentPermissionPreset> permissionPresets;
+
+  /// 当前匹配的预设 id。
+  final String? selectedPermissionPresetId;
+
   final ValueChanged<String> onSelectModel;
   final ValueChanged<String?> onSelectReasoningEffort;
   final ValueChanged<String?> onSelectServiceTier;
+  final ValueChanged<AgentPermissionPreset> onSelectPermissionPreset;
+
+  /// @mention 候选文件查询。
+  final List<WorkspaceNode> Function({String query}) mentionCandidates;
+
+  /// 选中 mention 文件后的回调。
+  final ValueChanged<WorkspaceNode> onInsertMention;
 
   @override
   Widget build(BuildContext context) {
@@ -61,7 +95,8 @@ class _AgentComposer extends StatelessWidget {
     );
     final lineHeight =
         (inputTextStyle.fontSize ?? 12) * (inputTextStyle.height ?? 1.35);
-    final hasDraft = controller.text.trim().isNotEmpty;
+    final hasDraft =
+        controller.text.trim().isNotEmpty || draftImagePaths.isNotEmpty;
     final showSend =
         threadOpenPhase == AgentThreadOpenPhase.idle &&
         (!isTurnRunning || hasDraft);
@@ -70,6 +105,21 @@ class _AgentComposer extends StatelessWidget {
         isTurnRunning &&
         !hasDraft;
     return Focus(
+      onKeyEvent: (node, event) {
+        if (event is! KeyDownEvent) {
+          return KeyEventResult.ignored;
+        }
+        final isPaste =
+            (HardwareKeyboard.instance.isControlPressed ||
+                HardwareKeyboard.instance.isMetaPressed) &&
+            event.logicalKey == LogicalKeyboardKey.keyV;
+        if (!isPaste) {
+          return KeyEventResult.ignored;
+        }
+        // 拦截默认粘贴：优先图片，否则手动插入文本，避免图文重复粘贴。
+        onPasteImages();
+        return KeyEventResult.handled;
+      },
       child: Builder(
         builder: (context) {
           final isFocused = Focus.of(context).hasFocus;
@@ -107,6 +157,13 @@ class _AgentComposer extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (draftImagePaths.isNotEmpty) ...[
+                      _ComposerImageDraftStrip(
+                        paths: draftImagePaths,
+                        onRemove: onRemoveImage,
+                      ),
+                      const SizedBox(height: IdeSpacing.space8),
+                    ],
                     ShadTextarea(
                       key: const ValueKey('agent-message-input'),
                       controller: controller,
@@ -134,6 +191,35 @@ class _AgentComposer extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
+                        IdeTooltip(
+                          message: 'Mention file',
+                          child: ShadIconButton.ghost(
+                            key: const ValueKey('agent-mention-file-button'),
+                            onPressed: () => _showMentionPicker(context),
+                            width: 28,
+                            height: 28,
+                            padding: EdgeInsets.zero,
+                            foregroundColor: colors.textSecondary,
+                            icon: const Icon(
+                              Icons.alternate_email_rounded,
+                              size: 16,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: IdeSpacing.space4),
+                        IdeTooltip(
+                          message: 'Attach image',
+                          child: ShadIconButton.ghost(
+                            key: const ValueKey('agent-attach-image-button'),
+                            onPressed: onAttachImages,
+                            width: 28,
+                            height: 28,
+                            padding: EdgeInsets.zero,
+                            foregroundColor: colors.textSecondary,
+                            icon: const Icon(Icons.image_outlined, size: 16),
+                          ),
+                        ),
+                        const SizedBox(width: IdeSpacing.space4),
                         if (models.isNotEmpty)
                           _ModelSelectorButton(
                             models: models,
@@ -154,6 +240,15 @@ class _AgentComposer extends StatelessWidget {
                             tiers: selectedModel!.serviceTiers,
                             selectedTierId: selectedServiceTierId,
                             onSelect: onSelectServiceTier,
+                          ),
+                        ],
+                        if (showPermissionPolicy) ...[
+                          const SizedBox(width: IdeSpacing.space6),
+                          _PermissionPolicyButton(
+                            label: permissionPolicyLabel,
+                            presets: permissionPresets,
+                            selectedPresetId: selectedPermissionPresetId,
+                            onSelect: onSelectPermissionPreset,
                           ),
                         ],
                         const Spacer(),
@@ -222,6 +317,134 @@ class _AgentComposer extends StatelessWidget {
                 ),
               ),
             ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _showMentionPicker(BuildContext context) async {
+    final files = mentionCandidates();
+    if (files.isEmpty) {
+      return;
+    }
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    await showShadDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return ShadDialog(
+          title: const Text('Mention file'),
+          child: SizedBox(
+            width: 360,
+            height: 280,
+            child: ListView.builder(
+              itemCount: files.length,
+              itemBuilder: (context, index) {
+                final file = files[index];
+                return PaneInteractiveSurface(
+                  key: ValueKey('agent-mention-option-${file.path}'),
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                    onInsertMention(file);
+                  },
+                  child: Padding(
+                    padding: IdeSpacing.all8,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          file.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textStyles.bodyMedium.copyWith(
+                            color: colors.textPrimary,
+                          ),
+                        ),
+                        Text(
+                          file.path,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textStyles.bodySmall.copyWith(
+                            color: colors.textTertiary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// 输入框上方的本地图片草稿缩略图条。
+class _ComposerImageDraftStrip extends StatelessWidget {
+  const _ComposerImageDraftStrip({required this.paths, required this.onRemove});
+
+  final List<String> paths;
+  final ValueChanged<String> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    return SizedBox(
+      height: 64,
+      child: ListView.separated(
+        key: const ValueKey('agent-composer-image-drafts'),
+        scrollDirection: Axis.horizontal,
+        itemCount: paths.length,
+        separatorBuilder: (_, _) => const SizedBox(width: IdeSpacing.space8),
+        itemBuilder: (context, index) {
+          final path = paths[index];
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              ClipRRect(
+                borderRadius: IdeRadius.allSmall,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colors.surfaceElevated,
+                    border: Border.all(color: colors.borderSubtle),
+                    borderRadius: IdeRadius.allSmall,
+                  ),
+                  child: Image.file(
+                    File(path),
+                    key: ValueKey<String>('agent-composer-image-$path'),
+                    width: 64,
+                    height: 64,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => SizedBox(
+                      width: 64,
+                      height: 64,
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        size: 18,
+                        color: colors.textTertiary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: -4,
+                right: -4,
+                child: ShadIconButton.ghost(
+                  key: ValueKey<String>('agent-composer-remove-image-$path'),
+                  onPressed: () => onRemove(path),
+                  width: 20,
+                  height: 20,
+                  padding: EdgeInsets.zero,
+                  foregroundColor: colors.textSecondary,
+                  hoverBackgroundColor: colors.surfaceOverlay,
+                  icon: const Icon(Icons.close_rounded, size: 12),
+                ),
+              ),
+            ],
           );
         },
       ),
@@ -408,6 +631,59 @@ class _ServiceTierButton extends StatelessWidget {
       }
     }
     return id;
+  }
+}
+
+/// 审批/沙箱策略预设选择按钮。
+class _PermissionPolicyButton extends StatelessWidget {
+  const _PermissionPolicyButton({
+    required this.label,
+    required this.presets,
+    required this.selectedPresetId,
+    required this.onSelect,
+  });
+
+  final String label;
+  final List<AgentPermissionPreset> presets;
+  final String? selectedPresetId;
+  final ValueChanged<AgentPermissionPreset> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SelectorSelect<String>(
+      selectorKey: const ValueKey('agent-permission-policy-selector'),
+      tooltip: 'Approval & sandbox',
+      placeholderLabel: label,
+      icon: Icons.shield_outlined,
+      initialValue: selectedPresetId,
+      labelBuilder: (id) {
+        for (final preset in presets) {
+          if (preset.id == id) {
+            return preset.label;
+          }
+        }
+        return label;
+      },
+      onChanged: (value) {
+        for (final preset in presets) {
+          if (preset.id == value) {
+            onSelect(preset);
+            return;
+          }
+        }
+      },
+      options: [
+        for (final preset in presets)
+          ShadOption<String>(
+            key: ValueKey<String>('agent-permission-preset-${preset.id}'),
+            value: preset.id,
+            child: Text(
+              preset.label,
+              style: IdeTextStyles.of(context).bodyMedium,
+            ),
+          ),
+      ],
+    );
   }
 }
 

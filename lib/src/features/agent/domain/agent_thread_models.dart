@@ -3,6 +3,9 @@ import 'package:zeta/src/features/agent/domain/agent_model_codec.dart';
 const Object agentThreadSummaryUnset = Object();
 
 /// Agent thread 当前运行状态。
+///
+/// 对应 Codex `ThreadStatus.type`；`active` 时还可携带
+/// [AgentThreadSummary.waitingOnApproval] / [waitingOnUserInput]。
 enum AgentThreadRuntimeStatus { notLoaded, idle, active, systemError, unknown }
 
 /// 项目列表中展示的 thread 摘要。
@@ -21,6 +24,8 @@ class AgentThreadSummary {
     this.title,
     this.sessionPath,
     this.recencyAt,
+    this.waitingOnApproval = false,
+    this.waitingOnUserInput = false,
     this.raw = const <String, Object?>{},
   });
 
@@ -54,8 +59,20 @@ class AgentThreadSummary {
   /// 运行状态摘要。
   final AgentThreadRuntimeStatus status;
 
+  /// 是否在等待用户审批（仅 `active` 时有意义）。
+  final bool waitingOnApproval;
+
+  /// 是否在等待用户输入（仅 `active` 时有意义）。
+  final bool waitingOnUserInput;
+
   /// 原始 provider payload，便于调试和未来补齐字段。
   final Map<String, Object?> raw;
+
+  /// 线程是否处于可感知的“忙碌/等待”态（列表运行指示器用）。
+  bool get isBusy =>
+      status == AgentThreadRuntimeStatus.active ||
+      waitingOnApproval ||
+      waitingOnUserInput;
 
   /// UI 展示名称。
   String get displayName {
@@ -87,6 +104,8 @@ class AgentThreadSummary {
     DateTime? updatedAt,
     Object? recencyAt = agentThreadSummaryUnset,
     AgentThreadRuntimeStatus? status,
+    bool? waitingOnApproval,
+    bool? waitingOnUserInput,
     Map<String, Object?>? raw,
   }) {
     return AgentThreadSummary(
@@ -106,6 +125,8 @@ class AgentThreadSummary {
           ? this.recencyAt
           : recencyAt as DateTime?,
       status: status ?? this.status,
+      waitingOnApproval: waitingOnApproval ?? this.waitingOnApproval,
+      waitingOnUserInput: waitingOnUserInput ?? this.waitingOnUserInput,
       raw: raw ?? this.raw,
     );
   }
@@ -122,6 +143,8 @@ class AgentThreadSummary {
       'updatedAt': updatedAt.millisecondsSinceEpoch,
       'recencyAt': recencyAt?.millisecondsSinceEpoch,
       'status': status.name,
+      'waitingOnApproval': waitingOnApproval,
+      'waitingOnUserInput': waitingOnUserInput,
       'raw': raw,
     };
   }
@@ -160,6 +183,8 @@ class AgentThreadSummary {
       updatedAt: updatedAt,
       recencyAt: decodeDateTimeFromMilliseconds(map['recencyAt']),
       status: _threadRuntimeStatus(map['status']),
+      waitingOnApproval: map['waitingOnApproval'] == true,
+      waitingOnUserInput: map['waitingOnUserInput'] == true,
       raw: raw,
     );
   }
@@ -171,6 +196,8 @@ class AgentThreadListQuery {
     required this.projectPath,
     required this.limit,
     this.cursor,
+    this.archived = false,
+    this.searchTerm,
   });
 
   /// 用 provider cwd 精确匹配项目。
@@ -181,6 +208,12 @@ class AgentThreadListQuery {
 
   /// provider 返回的不透明分页游标。
   final String? cursor;
+
+  /// 是否只返回已归档线程；`false` 为活动线程（默认）。
+  final bool archived;
+
+  /// 可选标题子串搜索（对应协议 `searchTerm`）。
+  final String? searchTerm;
 }
 
 /// thread 分页结果。

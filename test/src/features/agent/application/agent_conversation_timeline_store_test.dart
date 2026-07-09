@@ -123,6 +123,161 @@ void main() {
       expect(store.currentTurnTokenUsage, isNull);
       expect(store.currentThreadTokenUsage!.totalTokens, 3550);
     });
+
+    test('removePermissionRequest drops pending card and timeline entry', () {
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+
+      store.startPendingLiveTurn();
+      store.beginLiveTurnGroup(
+        const AgentTurn(id: 'turn-1', sessionId: 'thread-1'),
+      );
+      store.addPermissionRequest(
+        const AgentPermissionRequest(
+          id: 'approval-1',
+          title: 'Run command',
+          kind: AgentPermissionKind.commandExecution,
+          command: 'flutter test',
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      );
+
+      expect(store.permissionRequests, hasLength(1));
+      expect(
+        store.timelineEntries.whereType<AgentPermissionTimelineEntry>(),
+        hasLength(1),
+      );
+
+      store.removePermissionRequest('approval-1');
+
+      expect(store.permissionRequests, isEmpty);
+      expect(
+        store.timelineEntries.whereType<AgentPermissionTimelineEntry>(),
+        isEmpty,
+      );
+    });
+
+    test('appends MCP tool progress onto existing tool card content', () {
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+
+      store.startPendingLiveTurn();
+      store.beginLiveTurnGroup(
+        const AgentTurn(id: 'turn-1', sessionId: 'thread-1'),
+      );
+      store.upsertToolCall(
+        const AgentToolCall(
+          id: 'mcp-1',
+          title: 'MCP · docs · search',
+          kind: AgentToolKind.search,
+          status: AgentToolStatus.inProgress,
+          content: 'query: zeta',
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      );
+      store.upsertToolCall(
+        const AgentToolCall(
+          id: 'mcp-1',
+          title: 'MCP tool',
+          kind: AgentToolKind.other,
+          status: AgentToolStatus.inProgress,
+          content: 'Fetching resources…',
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          raw: <String, Object?>{'_progressAppend': true},
+        ),
+      );
+      store.upsertToolCall(
+        const AgentToolCall(
+          id: 'mcp-1',
+          title: 'MCP tool',
+          kind: AgentToolKind.other,
+          status: AgentToolStatus.inProgress,
+          content: 'Parsing results…',
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          raw: <String, Object?>{'_progressAppend': true},
+        ),
+      );
+
+      final tool = store.toolCalls.single;
+      expect(tool.title, 'MCP · docs · search');
+      expect(tool.kind, AgentToolKind.search);
+      expect(
+        tool.content,
+        'query: zeta\nFetching resources…\nParsing results…',
+      );
+      expect(store.isToolCallExpanded('mcp-1'), isTrue);
+    });
+
+    test(
+      'dismisses welcome message once real conversation content arrives',
+      () {
+        final store = AgentConversationTimelineStore();
+        addTearDown(store.dispose);
+
+        expect(
+          store.messages.map((message) => message.id),
+          contains(AgentConversationTimelineStore.welcomeMessage.id),
+        );
+
+        store.startPendingLiveTurn();
+        store.addConversationMessage(
+          const AgentConversationMessage(
+            id: 'user-1',
+            role: AgentMessageRole.user,
+            text: 'hello',
+          ),
+        );
+        store.syncLiveTurnBinding();
+
+        expect(
+          store.messages.map((message) => message.id),
+          isNot(contains(AgentConversationTimelineStore.welcomeMessage.id)),
+        );
+        expect(
+          store.conversationTurns.map((turn) => turn.id).toList(),
+          isNot(contains(AgentConversationTimelineStore.standbyTurnId)),
+        );
+        expect(store.conversationTurns, hasLength(1));
+        expect(store.conversationTurns.single.isStandby, isFalse);
+      },
+    );
+
+    test('replaces same-id timeline entries instead of duplicating them', () {
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+
+      store.startPendingLiveTurn();
+      store.beginLiveTurnGroup(
+        const AgentTurn(id: 'turn-1', sessionId: 'thread-1'),
+      );
+      store.addConversationMessage(
+        const AgentConversationMessage(
+          id: 'error-same',
+          role: AgentMessageRole.system,
+          text: 'first',
+        ),
+      );
+      store.addConversationMessage(
+        const AgentConversationMessage(
+          id: 'error-same',
+          role: AgentMessageRole.system,
+          text: 'second',
+        ),
+      );
+      store.syncLiveTurnBinding();
+
+      final errorEntries = store.timelineEntries
+          .whereType<AgentMessageTimelineEntry>()
+          .where((entry) => entry.message.id == 'error-same')
+          .toList();
+      expect(errorEntries, hasLength(1));
+      expect(errorEntries.single.message.text, 'second');
+      expect(store.liveTurnState!.entries, hasLength(1));
+    });
   });
 }
 

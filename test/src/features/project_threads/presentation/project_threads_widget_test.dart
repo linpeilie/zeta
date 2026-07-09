@@ -381,6 +381,68 @@ void main() {
     );
   });
 
+  testWidgets('does not duplicate keys when thread actions toggle quickly', (
+    tester,
+  ) async {
+    final session = MemorySessionStore();
+    final directory = Directory.systemTemp.createTempSync('zeta_test_');
+    tempDirectories.add(directory);
+    File(
+      '${directory.path}${Platform.pathSeparator}sample.txt',
+    ).writeAsStringSync('hello from zeta');
+
+    final provider = FakeAgentProvider(
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[
+            agentThread(
+              id: 'thread-a',
+              projectPath: directory.path,
+              title: 'Hover thread',
+            ),
+          ],
+          nextCursor: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        directoryPicker: () async => directory.path,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await tester.runAsync(waitForIo);
+    await tester.pumpAndSettle();
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: Offset.zero);
+    await tester.pump();
+
+    final threadFinder = find.byKey(
+      ValueKey<String>('project-thread-${directory.path}-thread-a'),
+    );
+
+    await mouse.moveTo(tester.getCenter(threadFinder));
+    await tester.pump(const Duration(milliseconds: 40));
+    expect(tester.takeException(), isNull);
+
+    await mouse.moveTo(Offset.zero);
+    await tester.pump(const Duration(milliseconds: 40));
+    expect(tester.takeException(), isNull);
+
+    await mouse.moveTo(tester.getCenter(threadFinder));
+    await tester.pump(const Duration(milliseconds: 40));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('starts a blank new thread from the project action', (
     tester,
   ) async {

@@ -17,6 +17,8 @@ class ProjectThreadListState {
     this.nextCursor,
     this.errorMessage,
     this.selectedThreadId,
+    this.archived = false,
+    this.searchTerm = '',
   });
 
   /// 项目下 thread 列表是否展开。
@@ -46,6 +48,12 @@ class ProjectThreadListState {
   /// 当前项目选中的 thread id。
   final String? selectedThreadId;
 
+  /// 是否显示已归档线程（对应 `thread/list` 的 `archived`）。
+  final bool archived;
+
+  /// 标题搜索词（对应协议 `searchTerm`）。
+  final String searchTerm;
+
   bool get hasMore => nextCursor != null;
 
   ProjectThreadListState copyWith({
@@ -58,6 +66,8 @@ class ProjectThreadListState {
     Object? nextCursor = projectThreadUnset,
     Object? errorMessage = projectThreadUnset,
     Object? selectedThreadId = projectThreadUnset,
+    bool? archived,
+    String? searchTerm,
   }) {
     return ProjectThreadListState(
       isExpanded: isExpanded ?? this.isExpanded,
@@ -77,6 +87,8 @@ class ProjectThreadListState {
       selectedThreadId: identical(selectedThreadId, projectThreadUnset)
           ? this.selectedThreadId
           : selectedThreadId as String?,
+      archived: archived ?? this.archived,
+      searchTerm: searchTerm ?? this.searchTerm,
     );
   }
 }

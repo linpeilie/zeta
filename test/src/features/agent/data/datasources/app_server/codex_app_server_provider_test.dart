@@ -64,6 +64,13 @@ void main() {
       expect(optOut, isNot(contains('thread/tokenUsage/updated')));
       expect(optOut, isNot(contains('turn/completed')));
       expect(optOut, isNot(contains('item/reasoning/textDelta')));
+      expect(optOut, isNot(contains('item/plan/delta')));
+      expect(optOut, isNot(contains('turn/diff/updated')));
+      expect(optOut, isNot(contains('thread/status/changed')));
+      expect(optOut, isNot(contains('serverRequest/resolved')));
+      expect(optOut, isNot(contains('item/mcpToolCall/progress')));
+      expect(optOut, isNot(contains('model/rerouted')));
+      expect(optOut, isNot(contains('deprecationNotice')));
       expect(optOut, isNot(contains('account/rateLimits/updated')));
       await provider.dispose();
     });
@@ -117,6 +124,83 @@ void main() {
       await subscription.cancel();
       await provider.dispose();
     });
+
+    test(
+      'maps reasoning stream notifications to AgentReasoningDeltaEvent',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+
+        await provider.initialize();
+        peer.emitNotification('item/reasoning/textDelta', <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'itemId': 'reasoning-1',
+          'contentIndex': 0,
+          'delta': 'raw thought',
+        });
+        peer.emitNotification(
+          'item/reasoning/summaryTextDelta',
+          <String, Object?>{
+            'threadId': 'thread-1',
+            'turnId': 'turn-1',
+            'itemId': 'reasoning-1',
+            'summaryIndex': 0,
+            'delta': 'summary A',
+          },
+        );
+        peer.emitNotification(
+          'item/reasoning/summaryPartAdded',
+          <String, Object?>{
+            'threadId': 'thread-1',
+            'turnId': 'turn-1',
+            'itemId': 'reasoning-1',
+            'summaryIndex': 1,
+          },
+        );
+        peer.emitNotification('item/started', <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'item': <String, Object?>{
+            'id': 'reasoning-1',
+            'type': 'reasoning',
+            'summary': <Map<String, Object?>>[
+              <String, Object?>{
+                'type': 'summary_text',
+                'text': 'final summary',
+              },
+            ],
+          },
+        });
+        await Future<void>.delayed(Duration.zero);
+
+        final deltas = events.whereType<AgentReasoningDeltaEvent>().toList();
+        expect(deltas, hasLength(3));
+        expect(deltas[0].kind, AgentReasoningDeltaKind.text);
+        expect(deltas[0].delta, 'raw thought');
+        expect(deltas[0].contentIndex, 0);
+        expect(deltas[1].kind, AgentReasoningDeltaKind.summaryText);
+        expect(deltas[1].delta, 'summary A');
+        expect(deltas[1].summaryIndex, 0);
+        expect(deltas[2].kind, AgentReasoningDeltaKind.summaryPart);
+        expect(deltas[2].delta, isEmpty);
+        expect(deltas[2].summaryIndex, 1);
+
+        final tool = events.whereType<AgentToolCallEvent>().single.toolCall;
+        expect(tool.id, 'reasoning-1');
+        expect(tool.kind, AgentToolKind.think);
+        expect(tool.title, '思考');
+        expect(tool.content, 'final summary');
+
+        await subscription.cancel();
+        await provider.dispose();
+      },
+    );
 
     test('does not log realtime notifications and server requests', () async {
       final records = <LogRecord>[];
@@ -175,6 +259,73 @@ void main() {
     });
 
     test(
+      'logs unmatched notifications once and counts further occurrences',
+      () async {
+        final records = <LogRecord>[];
+        await resetAppLoggingForTesting();
+        configureAppLogging(level: Level.ALL, sink: records.add);
+        addTearDown(resetAppLoggingForTesting);
+
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+        addTearDown(subscription.cancel);
+
+        await provider.initialize();
+        await Future<void>.delayed(Duration.zero);
+        events.clear();
+        records.clear();
+
+        peer.emitNotification('account/updated', <String, Object?>{
+          'account': <String, Object?>{'type': 'chatgpt'},
+        });
+        peer.emitNotification('account/updated', <String, Object?>{
+          'account': <String, Object?>{'type': 'apiKey'},
+        });
+        peer.emitNotification('skills/changed', <String, Object?>{
+          'skills': <Object?>[],
+        });
+        await Future<void>.delayed(Duration.zero);
+
+        final unmatchedFineMessages = records
+            .where(
+              (record) =>
+                  record.loggerName == 'zeta.agent.codex_app_server' &&
+                  record.level == Level.FINE &&
+                  record.message.contains(
+                    'Ignoring unmatched Codex notification',
+                  ),
+            )
+            .map((record) => record.message)
+            .toList();
+
+        expect(events, isEmpty);
+        expect(unmatchedFineMessages, hasLength(2));
+        expect(
+          unmatchedFineMessages.singleWhere(
+            (message) => message.contains('account/updated'),
+          ),
+          contains('account/updated'),
+        );
+        expect(
+          unmatchedFineMessages.singleWhere(
+            (message) => message.contains('skills/changed'),
+          ),
+          contains('skills/changed'),
+        );
+        expect(provider.unmatchedNotificationCountsForTesting, <String, int>{
+          'account/updated': 2,
+          'skills/changed': 1,
+        });
+      },
+    );
+
+    test(
       'ignores mcpServer/startupStatus/updated notifications for logs and events',
       () async {
         final records = <LogRecord>[];
@@ -218,6 +369,7 @@ void main() {
           ),
           isEmpty,
         );
+        expect(provider.unmatchedNotificationCountsForTesting, isEmpty);
       },
     );
 
@@ -269,6 +421,347 @@ void main() {
         await provider.dispose();
       },
     );
+
+    test('maps item/plan/delta into streaming plan message deltas', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+
+      await provider.initialize();
+      peer.emitNotification('item/plan/delta', <String, Object?>{
+        'threadId': 'thread-1',
+        'turnId': 'turn-1',
+        'itemId': 'plan-1',
+        'delta': '# Plan\n',
+      });
+      peer.emitNotification('item/plan/delta', <String, Object?>{
+        'threadId': 'thread-1',
+        'turnId': 'turn-1',
+        'itemId': 'plan-1',
+        'delta': '- Step one',
+      });
+      await Future<void>.delayed(Duration.zero);
+
+      final deltas = events.whereType<AgentMessageDeltaEvent>().toList();
+      expect(deltas, hasLength(2));
+      expect(deltas[0].messageId, 'plan-1');
+      expect(deltas[0].delta, '# Plan\n');
+      expect(deltas[0].status, AgentMessageStatus.streaming);
+      expect(deltas[0].raw['type'], 'plan');
+      expect(deltas[0].sessionId, 'thread-1');
+      expect(deltas[0].turnId, 'turn-1');
+      expect(deltas[1].delta, '- Step one');
+
+      await subscription.cancel();
+      await provider.dispose();
+    });
+
+    test('maps turn/diff/updated into AgentTurnDiffEvent', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+
+      await provider.initialize();
+      peer.emitNotification('turn/diff/updated', <String, Object?>{
+        'threadId': 'thread-1',
+        'turnId': 'turn-1',
+        'diff':
+            'diff --git a/lib/a.dart b/lib/a.dart\n'
+            '--- a/lib/a.dart\n'
+            '+++ b/lib/a.dart\n'
+            '@@ -1 +1 @@\n'
+            '-old\n'
+            '+new\n',
+      });
+      await Future<void>.delayed(Duration.zero);
+
+      final event = events.whereType<AgentTurnDiffEvent>().single;
+      expect(event.sessionId, 'thread-1');
+      expect(event.turnId, 'turn-1');
+      expect(event.diff, contains('lib/a.dart'));
+      expect(event.diff, contains('+new'));
+
+      await subscription.cancel();
+      await provider.dispose();
+    });
+
+    test('maps thread/status/changed with active waiting flags', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+
+      await provider.initialize();
+      peer.emitNotification('thread/status/changed', <String, Object?>{
+        'threadId': 'thread-1',
+        'status': <String, Object?>{
+          'type': 'active',
+          'activeFlags': <String>['waitingOnApproval', 'waitingOnUserInput'],
+        },
+      });
+      peer.emitNotification('thread/status/changed', <String, Object?>{
+        'threadId': 'thread-1',
+        'status': <String, Object?>{'type': 'idle'},
+      });
+      await Future<void>.delayed(Duration.zero);
+
+      final statusEvents = events
+          .whereType<AgentThreadStatusChangedEvent>()
+          .toList();
+      expect(statusEvents, hasLength(2));
+      expect(statusEvents[0].threadId, 'thread-1');
+      expect(statusEvents[0].status, AgentThreadRuntimeStatus.active);
+      expect(statusEvents[0].waitingOnApproval, isTrue);
+      expect(statusEvents[0].waitingOnUserInput, isTrue);
+      expect(statusEvents[1].status, AgentThreadRuntimeStatus.idle);
+      expect(statusEvents[1].waitingOnApproval, isFalse);
+      expect(statusEvents[1].waitingOnUserInput, isFalse);
+
+      await subscription.cancel();
+      await provider.dispose();
+    });
+
+    test(
+      'maps item/mcpToolCall/progress into AgentToolCallEvent progress append',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+
+        await provider.initialize();
+        peer.emitNotification('item/mcpToolCall/progress', <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'itemId': 'mcp-1',
+          'message': 'Fetching resources…',
+        });
+        await Future<void>.delayed(Duration.zero);
+
+        final toolEvent = events.whereType<AgentToolCallEvent>().single;
+        expect(toolEvent.toolCall.id, 'mcp-1');
+        expect(toolEvent.toolCall.title, 'MCP tool');
+        expect(toolEvent.toolCall.kind, AgentToolKind.other);
+        expect(toolEvent.toolCall.status, AgentToolStatus.inProgress);
+        expect(toolEvent.toolCall.content, 'Fetching resources…');
+        expect(toolEvent.toolCall.sessionId, 'thread-1');
+        expect(toolEvent.toolCall.turnId, 'turn-1');
+        expect(toolEvent.toolCall.raw['_progressAppend'], isTrue);
+
+        await subscription.cancel();
+        await provider.dispose();
+      },
+    );
+
+    test(
+      'maps remaining ThreadItem types from item/started and item/completed',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+
+        await provider.initialize();
+        peer.emitNotification('item/started', <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'item': <String, Object?>{
+            'id': 'search-1',
+            'type': 'webSearch',
+            'query': 'codex app-server',
+            'action': <String, Object?>{
+              'type': 'openPage',
+              'url': 'https://example.com/docs',
+            },
+          },
+        });
+        peer.emitNotification('item/started', <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'item': <String, Object?>{
+            'id': 'image-view-1',
+            'type': 'imageView',
+            'path': '/tmp/preview.png',
+          },
+        });
+        peer.emitNotification('item/completed', <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'item': <String, Object?>{
+            'id': 'image-gen-1',
+            'type': 'imageGeneration',
+            'status': 'completed',
+            'result': 'generated',
+            'savedPath': '/tmp/out.png',
+          },
+        });
+        peer.emitNotification('item/started', <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'item': <String, Object?>{
+            'id': 'collab-1',
+            'type': 'collabAgentToolCall',
+            'tool': 'spawnAgent',
+            'status': 'inProgress',
+            'senderThreadId': 'thread-1',
+            'receiverThreadIds': <String>['thread-child'],
+            'agentsStates': <String, Object?>{},
+            'prompt': 'Investigate auth',
+          },
+        });
+        peer.emitNotification('item/started', <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'item': <String, Object?>{
+            'id': 'review-1',
+            'type': 'enteredReviewMode',
+            'review': 'Review uncommitted changes',
+          },
+        });
+        peer.emitNotification('item/completed', <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'item': <String, Object?>{
+            'id': 'compact-1',
+            'type': 'contextCompaction',
+          },
+        });
+        peer.emitNotification('item/started', <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'item': <String, Object?>{
+            'id': 'hook-1',
+            'type': 'hookPrompt',
+            'fragments': <Object?>[
+              <String, Object?>{
+                'hookRunId': 'run-1',
+                'text': 'Pre-commit checks',
+              },
+            ],
+          },
+        });
+        peer.emitNotification('item/started', <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'item': <String, Object?>{
+            'id': 'sleep-1',
+            'type': 'sleep',
+            'durationMs': 1500,
+          },
+        });
+        peer.emitNotification('item/started', <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'item': <String, Object?>{
+            'id': 'sub-1',
+            'type': 'subAgentActivity',
+            'agentPath': 'worker/auth',
+            'agentThreadId': 'thread-child',
+            'kind': 'started',
+          },
+        });
+        await Future<void>.delayed(Duration.zero);
+
+        final tools = events.whereType<AgentToolCallEvent>().toList();
+        expect(tools, hasLength(4));
+        expect(tools[0].toolCall.kind, AgentToolKind.search);
+        expect(tools[0].toolCall.title, 'Web 搜索');
+        expect(tools[0].toolCall.content, 'https://example.com/docs');
+        expect(tools[1].toolCall.kind, AgentToolKind.read);
+        expect(tools[1].toolCall.content, '/tmp/preview.png');
+        expect(tools[2].toolCall.kind, AgentToolKind.fetch);
+        expect(tools[2].toolCall.status, AgentToolStatus.completed);
+        expect(tools[2].toolCall.locations, <String>['/tmp/out.png']);
+        expect(tools[3].toolCall.title, '协作: spawnAgent');
+        expect(tools[3].toolCall.content, 'Investigate auth');
+
+        final systemItems = events.whereType<AgentSystemItemEvent>().toList();
+        expect(systemItems, hasLength(5));
+        expect(systemItems[0].entry.title, '进入评审模式');
+        expect(systemItems[0].entry.description, 'Review uncommitted changes');
+        expect(systemItems[1].entry.title, '上下文已压缩');
+        expect(systemItems[2].entry.title, 'Hook 提示');
+        expect(systemItems[2].entry.content, 'Pre-commit checks');
+        expect(systemItems[3].entry.title, '等待中');
+        expect(systemItems[3].entry.description, '休眠 1 秒');
+        expect(systemItems[4].entry.title, '子代理活动');
+        expect(systemItems[4].entry.description, '已启动 · worker/auth');
+
+        await subscription.cancel();
+        await provider.dispose();
+      },
+    );
+
+    test('maps model/rerouted into AgentModelReroutedEvent', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+
+      await provider.initialize();
+      peer.emitNotification('model/rerouted', <String, Object?>{
+        'threadId': 'thread-1',
+        'turnId': 'turn-1',
+        'fromModel': 'gpt-5.4',
+        'toModel': 'gpt-5.5',
+        'reason': 'highRiskCyberActivity',
+      });
+      await Future<void>.delayed(Duration.zero);
+
+      final event = events.whereType<AgentModelReroutedEvent>().single;
+      expect(event.threadId, 'thread-1');
+      expect(event.turnId, 'turn-1');
+      expect(event.fromModel, 'gpt-5.4');
+      expect(event.toModel, 'gpt-5.5');
+      expect(event.reason, 'highRiskCyberActivity');
+
+      await subscription.cancel();
+      await provider.dispose();
+    });
+
+    test('maps deprecationNotice into AgentDeprecationNoticeEvent', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+
+      await provider.initialize();
+      peer.emitNotification('deprecationNotice', <String, Object?>{
+        'summary': 'turn/tokenCount is deprecated',
+        'details': 'Use thread/tokenUsage/updated instead.',
+      });
+      await Future<void>.delayed(Duration.zero);
+
+      final event = events.whereType<AgentDeprecationNoticeEvent>().single;
+      expect(event.summary, 'turn/tokenCount is deprecated');
+      expect(event.details, 'Use thread/tokenUsage/updated instead.');
+
+      await subscription.cancel();
+      await provider.dispose();
+    });
 
     test('maps completed plan items into message updates', () async {
       final peer = _FakeJsonRpcPeer();
@@ -326,6 +819,15 @@ void main() {
             'itemId': 'item-1',
             'command': 'dart format .',
             'startedAtMs': 1,
+            'commandActions': <Object?>[
+              <String, Object?>{
+                'type': 'read',
+                'command': 'cat',
+                'name': 'README.md',
+                'path': '/repo/README.md',
+              },
+            ],
+            'proposedExecpolicyAmendment': <Object?>['prefix:dart'],
           },
         );
 
@@ -334,17 +836,80 @@ void main() {
         expect(approval.request.command, 'dart format .');
         expect(approval.request.sessionId, 'thread-1');
         expect(approval.request.turnId, 'turn-1');
+        expect(approval.request.commandActions, isNotEmpty);
+        expect(approval.request.proposedExecpolicyAmendment, <String>[
+          'prefix:dart',
+        ]);
 
         await provider.respondToPermission(
           AgentPermissionDecision(
             requestId: approval.request.id,
             approved: true,
+            commandDecision:
+                AgentCommandApprovalDecisionKind.acceptWithExecpolicyAmendment,
+            execpolicyAmendment: approval.request.proposedExecpolicyAmendment,
           ),
         );
 
         expect(peer.responses['approval-1'], <String, Object?>{
-          'decision': 'accept',
+          'decision': <String, Object?>{
+            'acceptWithExecpolicyAmendment': <String, Object?>{
+              'execpolicy_amendment': <String>['prefix:dart'],
+            },
+          },
         });
+        await provider.dispose();
+      },
+    );
+
+    test(
+      'clears pending approval on serverRequest/resolved without responding',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+
+        await provider.initialize();
+        peer.emitServerRequest(
+          id: 42,
+          method: 'item/commandExecution/requestApproval',
+          params: <String, Object?>{
+            'threadId': 'thread-1',
+            'turnId': 'turn-1',
+            'command': 'flutter test',
+          },
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        final requested = events
+            .whereType<AgentPermissionRequestedEvent>()
+            .single;
+        expect(requested.request.id, '42');
+
+        peer.emitNotification('serverRequest/resolved', <String, Object?>{
+          'requestId': 42,
+          'threadId': 'thread-1',
+        });
+        await Future<void>.delayed(Duration.zero);
+
+        final resolved = events
+            .whereType<AgentPermissionResolvedEvent>()
+            .single;
+        expect(resolved.requestId, '42');
+        expect(resolved.threadId, 'thread-1');
+
+        // 他端已解决：本端不应再向服务端回写审批响应。
+        await provider.respondToPermission(
+          AgentPermissionDecision(requestId: '42', approved: true),
+        );
+        expect(peer.responses.containsKey(42), isFalse);
+        expect(peer.responses.containsKey('42'), isFalse);
+
+        await subscription.cancel();
         await provider.dispose();
       },
     );
@@ -416,7 +981,30 @@ void main() {
             'threadId': 'thread-1',
             'turnId': 'turn-1',
             'itemId': 'item-1',
-            'questions': <Object?>[],
+            'questions': <Object?>[
+              <String, Object?>{
+                'id': 'q1',
+                'header': 'Destination',
+                'question': 'Where should logs go?',
+                'options': <Object?>[
+                  <String, Object?>{
+                    'label': 'stdout',
+                    'description': 'Print to stdout',
+                  },
+                  <String, Object?>{
+                    'label': 'file',
+                    'description': 'Write to a file',
+                  },
+                ],
+                'isOther': true,
+              },
+              <String, Object?>{
+                'id': 'q2',
+                'header': 'Secret',
+                'question': 'API token?',
+                'isSecret': true,
+              },
+            ],
           },
         );
         peer.emitServerRequest(
@@ -436,11 +1024,23 @@ void main() {
             .toList();
         expect(requests, hasLength(2));
         expect(requests.first.request.kind, AgentPermissionKind.userInput);
+        expect(requests.first.request.questions, hasLength(2));
+        expect(requests.first.request.questions.first.questionId, 'q1');
+        expect(requests.first.request.questions.first.options, <String>[
+          'stdout',
+          'file',
+        ]);
+        expect(requests.first.request.questions.first.isOther, isTrue);
+        expect(requests.first.request.questions[1].isSecret, isTrue);
 
         await provider.respondToPermission(
           AgentPermissionDecision(
             requestId: requests[0].request.id,
             approved: true,
+            answers: const <String, List<String>>{
+              'q1': <String>['stdout'],
+              'q2': <String>['secret-token'],
+            },
           ),
         );
         await provider.respondToPermission(
@@ -450,9 +1050,15 @@ void main() {
           ),
         );
 
-        // answers 为必填字段；表单 UI 落地前同意/拒绝都回空答案。
         expect(peer.responses['input-1'], <String, Object?>{
-          'answers': <String, Object?>{},
+          'answers': <String, Object?>{
+            'q1': <String, Object?>{
+              'answers': <String>['stdout'],
+            },
+            'q2': <String, Object?>{
+              'answers': <String>['secret-token'],
+            },
+          },
         });
         expect(peer.responses['input-2'], <String, Object?>{
           'answers': <String, Object?>{},
@@ -564,6 +1170,154 @@ void main() {
       await provider.dispose();
     });
 
+    test('lists archived threads with searchTerm', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+
+      await provider.listThreads(
+        query: const AgentThreadListQuery(
+          projectPath: '/repo',
+          limit: 5,
+          archived: true,
+          searchTerm: 'refactor',
+        ),
+      );
+
+      expect(peer.requestParams.last, <String, Object?>{
+        'cwd': '/repo',
+        'limit': 5,
+        'sortKey': 'recency_at',
+        'sortDirection': 'desc',
+        'archived': true,
+        'searchTerm': 'refactor',
+      });
+      await provider.dispose();
+    });
+
+    test('thread lifecycle RPCs and notifications', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+      await provider.initialize();
+
+      await provider.renameThread(threadId: 'thread-1', name: 'New title');
+      await provider.archiveThread('thread-1');
+      await provider.unarchiveThread('thread-1');
+      await provider.compactThread('thread-1');
+      await provider.deleteThread('thread-1');
+
+      expect(
+        peer.requestMethods.where(
+          (method) =>
+              method == 'thread/name/set' ||
+              method == 'thread/archive' ||
+              method == 'thread/unarchive' ||
+              method == 'thread/compact/start' ||
+              method == 'thread/delete',
+        ),
+        <String>[
+          'thread/name/set',
+          'thread/archive',
+          'thread/unarchive',
+          'thread/compact/start',
+          'thread/delete',
+        ],
+      );
+
+      peer.emitNotification('thread/name/updated', <String, Object?>{
+        'threadId': 'thread-1',
+        'threadName': 'Renamed',
+      });
+      peer.emitNotification('thread/archived', <String, Object?>{
+        'threadId': 'thread-1',
+      });
+      peer.emitNotification('thread/unarchived', <String, Object?>{
+        'threadId': 'thread-2',
+      });
+      peer.emitNotification('thread/deleted', <String, Object?>{
+        'threadId': 'thread-3',
+      });
+      peer.emitNotification('thread/closed', <String, Object?>{
+        'threadId': 'thread-4',
+      });
+      peer.emitNotification('thread/compacted', <String, Object?>{
+        'threadId': 'thread-5',
+        'turnId': 'turn-1',
+      });
+      peer.emitNotification('thread/settings/updated', <String, Object?>{
+        'threadId': 'thread-6',
+        'threadSettings': <String, Object?>{'model': 'gpt-5.5'},
+      });
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        events.whereType<AgentThreadNameUpdatedEvent>().single.threadName,
+        'Renamed',
+      );
+      expect(
+        events.whereType<AgentThreadArchivedEvent>().single.threadId,
+        'thread-1',
+      );
+      expect(
+        events.whereType<AgentThreadUnarchivedEvent>().single.threadId,
+        'thread-2',
+      );
+      expect(
+        events.whereType<AgentThreadDeletedEvent>().single.threadId,
+        'thread-3',
+      );
+      expect(
+        events.whereType<AgentThreadClosedEvent>().single.threadId,
+        'thread-4',
+      );
+      expect(
+        events.whereType<AgentThreadCompactedEvent>().single.threadId,
+        'thread-5',
+      );
+      expect(
+        events.whereType<AgentThreadSettingsUpdatedEvent>().single.model,
+        'gpt-5.5',
+      );
+
+      await subscription.cancel();
+      await provider.dispose();
+    });
+
+    test('fork and rollback return session and history', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+
+      final session = await provider.forkThread(
+        threadId: 'thread-1',
+        context: const AgentContext(projectPath: '/repo'),
+      );
+      expect(session.id, isNotEmpty);
+      expect(peer.requestMethods, contains('thread/fork'));
+
+      final history = await provider.rollbackThread(
+        threadId: 'thread-1',
+        numTurns: 1,
+      );
+      expect(history.threadId, 'thread-1');
+      expect(peer.requestMethods, contains('thread/rollback'));
+      expect(peer.requestParams.last, <String, Object?>{
+        'threadId': 'thread-1',
+        'numTurns': 1,
+      });
+
+      await provider.dispose();
+    });
+
     test('reads thread history with turns and maps items', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
@@ -584,12 +1338,12 @@ void main() {
         'itemsView': 'full',
       });
       expect(history.threadId, 'thread-1');
-      expect(_historyEntries(history), hasLength(5));
+      expect(_historyEntries(history), hasLength(8));
       expect(history.turns.map((turn) => turn.id), <String>['turn-1']);
       expect(history.currentTurn?.id, 'turn-1');
 
       final turn = _historyTurn(history, 'turn-1');
-      expect(turn.entries, hasLength(5));
+      expect(turn.entries, hasLength(8));
       expect(turn.status, AgentHistoryTurnStatus.completed);
       expect(turn.startedAt, DateTime.parse('2026-07-04T06:00:00.000Z'));
       expect(turn.completedAt, DateTime.parse('2026-07-04T06:00:03.000Z'));
@@ -603,6 +1357,7 @@ void main() {
           _historyEntries(history)[0] as AgentHistoryMessageEntry;
       expect(userMessage.role, AgentMessageRole.user);
       expect(userMessage.text, 'Hello Agent');
+      expect(userMessage.localImagePaths, <String>['/tmp/hello.png']);
 
       final agentMessage =
           _historyEntries(history)[1] as AgentHistoryMessageEntry;
@@ -626,6 +1381,20 @@ void main() {
       final fileChange = _historyEntries(history)[4] as AgentHistoryToolEntry;
       expect(fileChange.toolCall.kind, AgentToolKind.edit);
       expect(fileChange.toolCall.locations, <String>['lib/main.dart']);
+
+      final webSearch = _historyEntries(history)[5] as AgentHistoryToolEntry;
+      expect(webSearch.toolCall.kind, AgentToolKind.search);
+      expect(webSearch.toolCall.title, 'Web 搜索');
+      expect(webSearch.toolCall.content, 'zeta design system');
+
+      final review = _historyEntries(history)[6] as AgentHistoryEventEntry;
+      expect(review.kind, AgentHistoryEventKind.system);
+      expect(review.title, '进入评审模式');
+      expect(review.description, 'Review branch diff');
+
+      final compact = _historyEntries(history)[7] as AgentHistoryEventEntry;
+      expect(compact.kind, AgentHistoryEventKind.system);
+      expect(compact.title, '上下文已压缩');
       await provider.dispose();
     });
 
@@ -1164,7 +1933,7 @@ void main() {
         'model/list',
         'thread/read',
       ]);
-      expect(_historyEntries(history), hasLength(5));
+      expect(_historyEntries(history), hasLength(8));
       await provider.dispose();
     });
 
@@ -1660,6 +2429,12 @@ void main() {
           '"http/request failed: error sending request for url '
           '(http://127.0.0.1:64342/stream)")))',
         );
+        peer.emitStderr(
+          '[2m2026-07-09T03:10:26.498446Z[0m [31mERROR[0m '
+          '[2mrmcp::transport::worker[0m [2m:[0m worker quit with fatal: '
+          'Transport channel closed, when UnexpectedServerResponse('
+          '"HTTP 404: 404 Not Found")',
+        );
         await Future<void>.delayed(Duration.zero);
 
         expect(events.whereType<AgentErrorEvent>(), isEmpty);
@@ -1704,6 +2479,303 @@ void main() {
         peer.requestMethods.where((method) => method == 'model/list'),
         hasLength(1),
       );
+    });
+
+    test('unsubscribes previous thread when starting a new session', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+
+      await provider.startSession(
+        context: const AgentContext(projectPath: '/repo'),
+      );
+      await provider.startSession(
+        context: const AgentContext(projectPath: '/repo'),
+      );
+
+      expect(peer.requestMethods, contains('thread/unsubscribe'));
+      final unsubscribeIndex = peer.requestMethods.indexOf(
+        'thread/unsubscribe',
+      );
+      expect(
+        unsubscribeIndex,
+        greaterThan(peer.requestMethods.indexOf('thread/start')),
+      );
+      final params =
+          peer.requestParams[unsubscribeIndex]! as Map<String, Object?>;
+      expect(params['threadId'], 'thread-1');
+    });
+
+    test(
+      'unsubscribes previous thread when resuming a different session',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+
+        await provider.startSession(
+          context: const AgentContext(projectPath: '/repo'),
+        );
+        await provider.resumeSession(
+          'thread-2',
+          context: const AgentContext(projectPath: '/repo'),
+        );
+
+        expect(
+          peer.requestMethods,
+          containsAll(<String>[
+            'thread/start',
+            'thread/resume',
+            'thread/unsubscribe',
+          ]),
+        );
+        final unsubscribeIndex = peer.requestMethods.indexOf(
+          'thread/unsubscribe',
+        );
+        final resumeIndex = peer.requestMethods.indexOf('thread/resume');
+        expect(unsubscribeIndex, greaterThan(resumeIndex));
+        final params =
+            peer.requestParams[unsubscribeIndex]! as Map<String, Object?>;
+        expect(params['threadId'], 'thread-1');
+      },
+    );
+
+    test('unsubscribeThread sends thread/unsubscribe', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+
+      await provider.unsubscribeThread('thread-9');
+
+      expect(peer.requestMethods, contains('thread/unsubscribe'));
+      final unsubscribeIndex = peer.requestMethods.indexOf(
+        'thread/unsubscribe',
+      );
+      final params =
+          peer.requestParams[unsubscribeIndex]! as Map<String, Object?>;
+      expect(params['threadId'], 'thread-9');
+    });
+
+    test('does not unsubscribe when resuming the same session id', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+
+      await provider.startSession(
+        context: const AgentContext(projectPath: '/repo'),
+      );
+      await provider.resumeSession(
+        'thread-1',
+        context: const AgentContext(projectPath: '/repo'),
+      );
+
+      expect(peer.requestMethods, isNot(contains('thread/unsubscribe')));
+    });
+
+    test('encodes localImage inputs in turn/start', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+
+      final session = await provider.startSession(
+        context: const AgentContext(projectPath: '/repo'),
+      );
+      await provider.sendMessage(
+        session: session,
+        inputs: const <AgentUserInput>[
+          AgentUserInput.text('describe this'),
+          AgentUserInput.localImage(path: r'D:\tmp\shot.png'),
+        ],
+        context: const AgentContext(projectPath: '/repo'),
+      );
+
+      final turnStartIndex = peer.requestMethods.indexOf('turn/start');
+      expect(turnStartIndex, isNot(-1));
+      final params =
+          peer.requestParams[turnStartIndex]! as Map<String, Object?>;
+      expect(params['input'], <Object?>[
+        <String, Object?>{'type': 'text', 'text': 'describe this'},
+        <String, Object?>{'type': 'localImage', 'path': r'D:\tmp\shot.png'},
+      ]);
+    });
+
+    test(
+      'turn/start carries permission selection and clientUserMessageId',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+
+        provider.updatePermissionSelection(
+          const AgentPermissionSelection(
+            approvalPolicy: 'never',
+            sandboxPolicy: 'dangerFullAccess',
+          ),
+        );
+
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: '/repo'),
+        );
+        final threadStartIndex = peer.requestMethods.indexOf('thread/start');
+        expect(threadStartIndex, isNot(-1));
+        final threadParams =
+            peer.requestParams[threadStartIndex]! as Map<String, Object?>;
+        expect(threadParams['approvalPolicy'], 'never');
+        expect(threadParams['sandbox'], 'danger-full-access');
+
+        await provider.sendMessage(
+          session: session,
+          message: 'hello',
+          context: const AgentContext(projectPath: '/repo'),
+          clientUserMessageId: 'client-msg-1',
+        );
+
+        final turnStartIndex = peer.requestMethods.indexOf('turn/start');
+        expect(turnStartIndex, isNot(-1));
+        final params =
+            peer.requestParams[turnStartIndex]! as Map<String, Object?>;
+        expect(params['approvalPolicy'], 'never');
+        expect(params['sandboxPolicy'], <String, Object?>{
+          'type': 'dangerFullAccess',
+        });
+        expect(params['clientUserMessageId'], 'client-msg-1');
+      },
+    );
+
+    test('encodes mention inputs in turn/start', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+
+      final session = await provider.startSession(
+        context: const AgentContext(projectPath: '/repo'),
+      );
+      await provider.sendMessage(
+        session: session,
+        inputs: const <AgentUserInput>[
+          AgentUserInput.text(
+            'look at @main.dart',
+            textElements: <AgentTextElement>[
+              AgentTextElement(start: 8, end: 17, placeholder: 'main.dart'),
+            ],
+          ),
+          AgentUserInput.mention(
+            name: 'main.dart',
+            path: '/repo/lib/main.dart',
+          ),
+        ],
+        context: const AgentContext(projectPath: '/repo'),
+      );
+
+      final turnStartIndex = peer.requestMethods.indexOf('turn/start');
+      final params =
+          peer.requestParams[turnStartIndex]! as Map<String, Object?>;
+      expect(params['input'], <Object?>[
+        <String, Object?>{
+          'type': 'text',
+          'text': 'look at @main.dart',
+          'text_elements': <Object?>[
+            <String, Object?>{
+              'byteRange': <int>[8, 17],
+              'placeholder': 'main.dart',
+            },
+          ],
+        },
+        <String, Object?>{
+          'type': 'mention',
+          'name': 'main.dart',
+          'path': '/repo/lib/main.dart',
+        },
+      ]);
+    });
+
+    test('maps autoApprovalReview notifications', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+
+      await provider.initialize();
+      peer.emitNotification(
+        'item/autoApprovalReview/started',
+        <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'reviewId': 'review-1',
+          'startedAtMs': 1,
+          'action': <String, Object?>{
+            'type': 'command',
+            'command': 'ls',
+            'cwd': '/repo',
+            'source': 'shell',
+          },
+          'review': <String, Object?>{'status': 'inProgress'},
+        },
+      );
+      peer.emitNotification(
+        'item/autoApprovalReview/completed',
+        <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'reviewId': 'review-1',
+          'startedAtMs': 1,
+          'completedAtMs': 2,
+          'decisionSource': 'agent',
+          'action': <String, Object?>{
+            'type': 'command',
+            'command': 'ls',
+            'cwd': '/repo',
+            'source': 'shell',
+          },
+          'review': <String, Object?>{
+            'status': 'denied',
+            'rationale': 'risky',
+            'riskLevel': 'high',
+          },
+        },
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final reviews = events.whereType<AgentAutoApprovalReviewEvent>().toList();
+      expect(reviews, hasLength(2));
+      expect(reviews.first.status, 'inProgress');
+      expect(reviews.last.status, 'denied');
+      expect(reviews.last.rationale, 'risky');
+
+      await provider.approveGuardianDeniedAction(
+        threadId: 'thread-1',
+        event: reviews.last.raw,
+      );
+      expect(
+        peer.requestMethods,
+        contains('thread/approveGuardianDeniedAction'),
+      );
+      await subscription.cancel();
     });
 
     test('updateModelSelection overrides turn/start params', () async {
@@ -1797,6 +2869,7 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
   final Map<Object, JsonRpcError> errorResponses = <Object, JsonRpcError>{};
   final Completer<void>? _startCompleter;
   int startCalls = 0;
+  int _threadStartCount = 0;
 
   @override
   Stream<JsonRpcNotification> get notifications => _notifications.stream;
@@ -1824,10 +2897,64 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
   }) async {
     requestMethods.add(method);
     requestParams.add(params);
+    final paramsMap = params is Map<String, Object?>
+        ? params
+        : const <String, Object?>{};
     return switch (method) {
       'initialize' => <String, Object?>{'ok': true},
-      'thread/start' => <String, Object?>{
-        'thread': <String, Object?>{'id': 'thread-1'},
+      'thread/start' => () {
+        _threadStartCount += 1;
+        return <String, Object?>{
+          'thread': <String, Object?>{'id': 'thread-$_threadStartCount'},
+        };
+      }(),
+      'thread/resume' => <String, Object?>{
+        'thread': <String, Object?>{'id': paramsMap['threadId'] ?? 'thread-1'},
+      },
+      'thread/unsubscribe' => <String, Object?>{'status': 'unsubscribed'},
+      'thread/name/set' => <String, Object?>{},
+      'thread/archive' => <String, Object?>{},
+      'thread/unarchive' => <String, Object?>{},
+      'thread/delete' => <String, Object?>{},
+      'thread/compact/start' => <String, Object?>{},
+      'thread/approveGuardianDeniedAction' => <String, Object?>{},
+      'permissionProfile/list' => <String, Object?>{
+        'data': <Object?>[
+          <String, Object?>{
+            'id': ':workspace',
+            'allowed': true,
+            'description': 'Workspace write',
+          },
+        ],
+      },
+      'thread/fork' => <String, Object?>{
+        'thread': <String, Object?>{
+          'id': 'forked-thread',
+          'name': 'Forked',
+          'cwd': paramsMap['cwd'] ?? '/repo',
+          'preview': 'Forked',
+          'createdAt': 100,
+          'updatedAt': 120,
+          'status': <String, Object?>{'type': 'idle'},
+          'turns': <Object?>[],
+        },
+        'approvalPolicy': 'on-request',
+        'approvalsReviewer': 'user',
+        'cwd': paramsMap['cwd'] ?? '/repo',
+        'model': 'gpt-5.5',
+        'modelProvider': 'openai',
+        'sandbox': 'workspace-write',
+      },
+      'thread/rollback' => <String, Object?>{
+        'thread': <String, Object?>{
+          'id': paramsMap['threadId'] ?? 'thread-1',
+          'cwd': '/repo',
+          'preview': 'Rolled back',
+          'createdAt': 100,
+          'updatedAt': 120,
+          'status': <String, Object?>{'type': 'idle'},
+          'turns': <Object?>[],
+        },
       },
       'thread/list' => <String, Object?>{
         'data': <Object?>[
@@ -1864,6 +2991,10 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
                   'id': 'user-1',
                   'content': <Object?>[
                     <String, Object?>{'type': 'text', 'text': 'Hello Agent'},
+                    <String, Object?>{
+                      'type': 'localImage',
+                      'path': '/tmp/hello.png',
+                    },
                   ],
                 },
                 <String, Object?>{
@@ -1897,6 +3028,20 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
                       'kind': 'update',
                     },
                   ],
+                },
+                <String, Object?>{
+                  'type': 'webSearch',
+                  'id': 'search-1',
+                  'query': 'zeta design system',
+                },
+                <String, Object?>{
+                  'type': 'enteredReviewMode',
+                  'id': 'review-enter-1',
+                  'review': 'Review branch diff',
+                },
+                <String, Object?>{
+                  'type': 'contextCompaction',
+                  'id': 'compact-1',
                 },
               ],
             },

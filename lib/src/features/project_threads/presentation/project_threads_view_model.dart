@@ -2,6 +2,7 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 
+import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 
 /// Project Threads 列表的纯状态容器。
@@ -78,6 +79,104 @@ class ProjectThreadsViewModel extends ChangeNotifier {
       projectPath,
       (current) => current.copyWith(runningThreadIds: runningThreadIds),
     );
+  }
+
+  /// 用实时状态通知更新列表中某条 thread 的运行态与等待标志。
+  void updateThreadRuntimeStatus({
+    required String projectPath,
+    required String threadId,
+    required AgentThreadRuntimeStatus status,
+    required bool waitingOnApproval,
+    required bool waitingOnUserInput,
+  }) {
+    updateState(projectPath, (current) {
+      final index = current.threads.indexWhere(
+        (thread) => thread.id == threadId,
+      );
+      if (index == -1) {
+        return current;
+      }
+      final threads = List<AgentThreadSummary>.of(current.threads);
+      threads[index] = threads[index].copyWith(
+        status: status,
+        waitingOnApproval: waitingOnApproval,
+        waitingOnUserInput: waitingOnUserInput,
+      );
+      final nextRunning = Set<String>.from(current.runningThreadIds);
+      if (status == AgentThreadRuntimeStatus.active) {
+        nextRunning.add(threadId);
+      } else {
+        nextRunning.remove(threadId);
+      }
+      return current.copyWith(
+        threads: List<AgentThreadSummary>.unmodifiable(threads),
+        runningThreadIds: nextRunning,
+      );
+    });
+  }
+
+  /// 更新列表中某条 thread 的标题。
+  void updateThreadTitle({
+    required String projectPath,
+    required String threadId,
+    required String? title,
+  }) {
+    updateState(projectPath, (current) {
+      final index = current.threads.indexWhere(
+        (thread) => thread.id == threadId,
+      );
+      if (index == -1) {
+        return current;
+      }
+      final threads = List<AgentThreadSummary>.of(current.threads);
+      threads[index] = threads[index].copyWith(title: title);
+      return current.copyWith(
+        threads: List<AgentThreadSummary>.unmodifiable(threads),
+      );
+    });
+  }
+
+  /// 从列表移除 thread；若正被选中则清空选中。
+  ///
+  /// 返回是否清除了选中态。
+  bool removeThread({required String projectPath, required String threadId}) {
+    var clearedSelection = false;
+    updateState(projectPath, (current) {
+      final threads = current.threads
+          .where((thread) => thread.id != threadId)
+          .toList(growable: false);
+      if (threads.length == current.threads.length) {
+        return current;
+      }
+      final nextRunning = Set<String>.from(current.runningThreadIds)
+        ..remove(threadId);
+      final selectedCleared = current.selectedThreadId == threadId;
+      clearedSelection = selectedCleared;
+      return current.copyWith(
+        threads: List<AgentThreadSummary>.unmodifiable(threads),
+        runningThreadIds: nextRunning,
+        selectedThreadId: selectedCleared ? null : current.selectedThreadId,
+      );
+    });
+    return clearedSelection;
+  }
+
+  /// 将 thread 插入列表头部（若尚不存在）。
+  void prependThread({
+    required String projectPath,
+    required AgentThreadSummary thread,
+  }) {
+    updateState(projectPath, (current) {
+      if (current.threads.any((item) => item.id == thread.id)) {
+        return current;
+      }
+      return current.copyWith(
+        threads: List<AgentThreadSummary>.unmodifiable(<AgentThreadSummary>[
+          thread,
+          ...current.threads,
+        ]),
+      );
+    });
   }
 
   @override

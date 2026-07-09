@@ -6,6 +6,9 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
+
+import '../../../testing/agent_provider_stub_base.dart';
 
 void main() {
   group('AgentConversationViewModel', () {
@@ -228,8 +231,66 @@ void main() {
         ),
         isNot(contains('Thread one history')),
       );
-      expect(provider.calls, <String>['read:thread-1', 'read:thread-2']);
+      expect(provider.calls, <String>[
+        'read:thread-1',
+        'unsubscribe:thread-1',
+        'read:thread-2',
+      ]);
+      expect(provider.unsubscribedThreads, <String>['thread-1']);
     });
+
+    test(
+      'switchThread does not unsubscribe when selecting the same thread',
+      () async {
+        final provider = _FakeAgentProvider(
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'thread-1': _historySnapshot(
+              threadId: 'thread-1',
+              userText: 'Same thread',
+            ),
+          },
+        );
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.switchThread(_thread(id: 'thread-1'));
+        await viewModel.switchThread(_thread(id: 'thread-1'));
+
+        expect(provider.unsubscribedThreads, isEmpty);
+        expect(provider.calls, <String>['read:thread-1', 'read:thread-1']);
+      },
+    );
+
+    test(
+      'updateWorkspace unsubscribes previous thread on project change',
+      () async {
+        final provider = _FakeAgentProvider(
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'thread-1': _historySnapshot(
+              threadId: 'thread-1',
+              userText: 'Leaving project',
+            ),
+          },
+        );
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        viewModel.updateWorkspace(
+          projectPath: '/repo-a',
+          contextFilePath: null,
+        );
+        await viewModel.switchThread(_thread(id: 'thread-1'));
+        expect(provider.unsubscribedThreads, isEmpty);
+
+        viewModel.updateWorkspace(
+          projectPath: '/repo-b',
+          contextFilePath: null,
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(provider.unsubscribedThreads, <String>['thread-1']);
+      },
+    );
 
     test('running selected thread resumes and steers on first send', () async {
       final provider = _FakeAgentProvider(
@@ -272,6 +333,54 @@ void main() {
         ),
         contains('hello while running'),
       );
+    });
+
+    test(
+      'sendMessage includes localImage inputs and timeline previews',
+      () async {
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
+        await viewModel.sendMessage(
+          'look at this',
+          localImagePaths: const <String>[r'D:\tmp\a.png', r'D:\tmp\b.png'],
+        );
+
+        expect(provider.calls, contains('send:thread-1'));
+        expect(provider.calls, contains('image:D:\\tmp\\a.png'));
+        expect(provider.calls, contains('image:D:\\tmp\\b.png'));
+        final userMessage = viewModel.timelineEntries
+            .whereType<AgentMessageTimelineEntry>()
+            .map((entry) => entry.message)
+            .firstWhere((message) => message.role == AgentMessageRole.user);
+        expect(userMessage.text, 'look at this');
+        expect(userMessage.localImagePaths, <String>[
+          r'D:\tmp\a.png',
+          r'D:\tmp\b.png',
+        ]);
+      },
+    );
+
+    test('sendMessage allows image-only payloads', () async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
+      await viewModel.sendMessage(
+        '   ',
+        localImagePaths: const <String>[r'D:\tmp\only.png'],
+      );
+
+      expect(provider.calls, contains('image:D:\\tmp\\only.png'));
+      final userMessage = viewModel.timelineEntries
+          .whereType<AgentMessageTimelineEntry>()
+          .map((entry) => entry.message)
+          .firstWhere((message) => message.role == AgentMessageRole.user);
+      expect(userMessage.text, isEmpty);
+      expect(userMessage.localImagePaths, <String>[r'D:\tmp\only.png']);
     });
 
     test(
@@ -399,6 +508,460 @@ void main() {
         expect(message.duration, const Duration(seconds: 5));
       },
     );
+
+    test('streams reasoning deltas into an expanded think card', () async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.sendMessage('hello');
+      provider.emit(
+        const AgentReasoningDeltaEvent(
+          itemId: 'reasoning-1',
+          kind: AgentReasoningDeltaKind.text,
+          delta: 'raw-a',
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      );
+      provider.emit(
+        const AgentReasoningDeltaEvent(
+          itemId: 'reasoning-1',
+          kind: AgentReasoningDeltaKind.text,
+          delta: 'raw-b',
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 24));
+
+      var think = viewModel.timelineEntries
+          .whereType<AgentToolTimelineEntry>()
+          .single
+          .toolCall;
+      expect(think.kind, AgentToolKind.think);
+      expect(think.title, '思考');
+      expect(think.content, 'raw-araw-b');
+      expect(think.status, AgentToolStatus.inProgress);
+      expect(viewModel.isToolCallExpanded('reasoning-1'), isTrue);
+
+      // 摘要到达后优先展示摘要，不再拼接原文。
+      provider.emit(
+        const AgentReasoningDeltaEvent(
+          itemId: 'reasoning-1',
+          kind: AgentReasoningDeltaKind.summaryText,
+          delta: 'sum-1',
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      );
+      provider.emit(
+        const AgentReasoningDeltaEvent(
+          itemId: 'reasoning-1',
+          kind: AgentReasoningDeltaKind.summaryPart,
+          summaryIndex: 1,
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      );
+      provider.emit(
+        const AgentReasoningDeltaEvent(
+          itemId: 'reasoning-1',
+          kind: AgentReasoningDeltaKind.summaryText,
+          delta: 'sum-2',
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 24));
+
+      think = viewModel.timelineEntries
+          .whereType<AgentToolTimelineEntry>()
+          .single
+          .toolCall;
+      expect(think.content, 'sum-1\n\nsum-2');
+
+      // completed 带完整正文时覆盖流式缓冲。
+      provider.emit(
+        const AgentToolCallEvent(
+          AgentToolCall(
+            id: 'reasoning-1',
+            title: '思考',
+            kind: AgentToolKind.think,
+            status: AgentToolStatus.completed,
+            content: 'final summary',
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      think = viewModel.timelineEntries
+          .whereType<AgentToolTimelineEntry>()
+          .single
+          .toolCall;
+      expect(think.status, AgentToolStatus.completed);
+      expect(think.content, 'final summary');
+    });
+
+    test('streams plan deltas into an expanded plan card', () async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.sendMessage('hello');
+      provider.emit(
+        const AgentMessageDeltaEvent(
+          messageId: 'plan-1',
+          delta: '# Plan\n',
+          role: AgentMessageRole.agent,
+          status: AgentMessageStatus.streaming,
+          raw: <String, Object?>{'type': 'plan'},
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      );
+      provider.emit(
+        const AgentMessageDeltaEvent(
+          messageId: 'plan-1',
+          delta: '- Step one',
+          role: AgentMessageRole.agent,
+          status: AgentMessageStatus.streaming,
+          raw: <String, Object?>{'type': 'plan'},
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 24));
+
+      final plan = viewModel.timelineEntries
+          .whereType<AgentMessageTimelineEntry>()
+          .map((entry) => entry.message)
+          .firstWhere((message) => message.id == 'plan-1');
+      expect(plan.kind, AgentConversationMessageKind.plan);
+      expect(plan.text, '# Plan\n- Step one');
+      expect(viewModel.isPlanMessageExpanded(plan.id), isTrue);
+
+      // completed item 用权威全文覆盖拼接结果。
+      provider.emit(
+        const AgentMessageUpdatedEvent(
+          messageId: 'plan-1',
+          text: '# Final Plan\n\n- Step one\n- Step two',
+          role: AgentMessageRole.agent,
+          status: AgentMessageStatus.completed,
+          raw: <String, Object?>{'type': 'plan'},
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final completed = viewModel.timelineEntries
+          .whereType<AgentMessageTimelineEntry>()
+          .map((entry) => entry.message)
+          .firstWhere((message) => message.id == 'plan-1');
+      expect(completed.text, '# Final Plan\n\n- Step one\n- Step two');
+      expect(completed.status, AgentMessageStatus.completed);
+      expect(completed.kind, AgentConversationMessageKind.plan);
+    });
+
+    test('upserts turn-level aggregated diff into the live timeline', () async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.sendMessage('hello');
+      provider.emit(
+        const AgentTurnDiffEvent(
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          diff:
+              'diff --git a/lib/a.dart b/lib/a.dart\n'
+              '--- a/lib/a.dart\n'
+              '+++ b/lib/a.dart\n'
+              '@@ -1 +1 @@\n'
+              '-old\n'
+              '+new\n'
+              'diff --git a/lib/b.dart b/lib/b.dart\n'
+              '--- a/lib/b.dart\n'
+              '+++ b/lib/b.dart\n'
+              '@@ -1 +1,2 @@\n'
+              ' keep\n'
+              '+added\n',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final entry = viewModel.timelineEntries
+          .whereType<AgentTurnDiffTimelineEntry>()
+          .single;
+      expect(entry.turnId, 'turn-1');
+      expect(entry.diff, contains('lib/a.dart'));
+      expect(entry.diff, contains('lib/b.dart'));
+
+      // 同一 turn 的后续通知覆盖全文，不追加第二条。
+      provider.emit(
+        const AgentTurnDiffEvent(
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          diff:
+              'diff --git a/lib/a.dart b/lib/a.dart\n'
+              '--- a/lib/a.dart\n'
+              '+++ b/lib/a.dart\n'
+              '@@ -1 +1 @@\n'
+              '-old\n'
+              '+newer\n',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        viewModel.timelineEntries.whereType<AgentTurnDiffTimelineEntry>(),
+        hasLength(1),
+      );
+      expect(
+        viewModel.timelineEntries
+            .whereType<AgentTurnDiffTimelineEntry>()
+            .single
+            .diff,
+        contains('+newer'),
+      );
+
+      // 空 diff 移除条目。
+      provider.emit(
+        const AgentTurnDiffEvent(
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          diff: '',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        viewModel.timelineEntries.whereType<AgentTurnDiffTimelineEntry>(),
+        isEmpty,
+      );
+    });
+
+    test('exposes waiting status capsule from thread/status/changed', () async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.sendMessage('hello');
+      provider.emit(
+        const AgentThreadStatusChangedEvent(
+          threadId: 'thread-1',
+          status: AgentThreadRuntimeStatus.active,
+          waitingOnApproval: true,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(viewModel.threadWaitingOnApproval, isTrue);
+      expect(viewModel.threadStatusCapsuleLabel, '等待审批');
+      expect(viewModel.showRunningIndicator, isFalse);
+
+      provider.emit(
+        const AgentThreadStatusChangedEvent(
+          threadId: 'thread-1',
+          status: AgentThreadRuntimeStatus.active,
+          waitingOnUserInput: true,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(viewModel.threadStatusCapsuleLabel, '等待输入');
+
+      provider.emit(
+        const AgentThreadStatusChangedEvent(
+          threadId: 'thread-1',
+          status: AgentThreadRuntimeStatus.idle,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(viewModel.threadWaitingOnApproval, isFalse);
+      expect(viewModel.threadWaitingOnUserInput, isFalse);
+      expect(viewModel.threadStatusCapsuleLabel, isNull);
+    });
+
+    test(
+      'dismisses approval card when serverRequest/resolved arrives',
+      () async {
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.sendMessage('hello');
+        provider.emit(
+          const AgentPermissionRequestedEvent(
+            AgentPermissionRequest(
+              id: 'approval-1',
+              title: 'Run command',
+              kind: AgentPermissionKind.commandExecution,
+              command: 'flutter test',
+              sessionId: 'thread-1',
+              turnId: 'turn-1',
+            ),
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(viewModel.permissionRequests.map((item) => item.id), <String>[
+          'approval-1',
+        ]);
+        expect(
+          viewModel.timelineEntries.whereType<AgentPermissionTimelineEntry>(),
+          hasLength(1),
+        );
+
+        provider.emit(
+          const AgentPermissionResolvedEvent(
+            requestId: 'approval-1',
+            threadId: 'thread-1',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(viewModel.permissionRequests, isEmpty);
+        expect(
+          viewModel.timelineEntries.whereType<AgentPermissionTimelineEntry>(),
+          isEmpty,
+        );
+      },
+    );
+
+    test('appends MCP tool progress onto the matching tool card', () async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.sendMessage('hello');
+      provider.emit(
+        const AgentToolCallEvent(
+          AgentToolCall(
+            id: 'mcp-1',
+            title: 'MCP · docs · search',
+            kind: AgentToolKind.search,
+            status: AgentToolStatus.inProgress,
+            content: 'query: zeta',
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+        ),
+      );
+      provider.emit(
+        const AgentToolCallEvent(
+          AgentToolCall(
+            id: 'mcp-1',
+            title: 'MCP tool',
+            kind: AgentToolKind.other,
+            status: AgentToolStatus.inProgress,
+            content: 'Fetching resources…',
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+            raw: <String, Object?>{'_progressAppend': true},
+          ),
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+
+      final tool = viewModel.toolCalls.single;
+      expect(tool.title, 'MCP · docs · search');
+      expect(tool.kind, AgentToolKind.search);
+      expect(tool.content, 'query: zeta\nFetching resources…');
+      expect(viewModel.isToolCallExpanded('mcp-1'), isTrue);
+    });
+
+    test('shows model reroute system event and header notice', () async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.sendMessage('hello');
+      provider.emit(
+        const AgentModelReroutedEvent(
+          threadId: 'thread-1',
+          turnId: 'turn-1',
+          fromModel: 'gpt-5.4',
+          toModel: 'gpt-5.5',
+          reason: 'highRiskCyberActivity',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(viewModel.systemNoticeLabel, '已改道至 gpt-5.5');
+      final event = viewModel.timelineEntries
+          .whereType<AgentHistoryEventTimelineEntry>()
+          .single
+          .event;
+      expect(event.kind, AgentHistoryEventKind.system);
+      expect(event.title, '模型已改道');
+      expect(event.description, 'gpt-5.4 → gpt-5.5');
+      expect(event.content, '原因：高风险网络活动策略');
+
+      provider.emit(
+        const AgentTurnCompletedEvent(sessionId: 'thread-1', turnId: 'turn-1'),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(viewModel.systemNoticeLabel, isNull);
+    });
+
+    test('shows deprecation notice once per summary', () async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.sendMessage('hello');
+      const notice = AgentDeprecationNoticeEvent(
+        summary: 'turn/tokenCount is deprecated',
+        details: 'Use thread/tokenUsage/updated instead.',
+      );
+      provider.emit(notice);
+      provider.emit(notice);
+      await Future<void>.delayed(Duration.zero);
+
+      final events = viewModel.timelineEntries
+          .whereType<AgentHistoryEventTimelineEntry>()
+          .map((entry) => entry.event)
+          .toList();
+      expect(events, hasLength(1));
+      expect(events.single.kind, AgentHistoryEventKind.warning);
+      expect(events.single.title, '适配层弃用提示');
+      expect(events.single.description, 'turn/tokenCount is deprecated');
+      expect(
+        events.single.content,
+        contains('Use thread/tokenUsage/updated instead.'),
+      );
+      expect(events.single.content, contains('请升级 Codex 适配层'));
+    });
+
+    test('renders system ThreadItem events on the timeline', () async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.sendMessage('hello');
+      provider.emit(
+        const AgentSystemItemEvent(
+          entry: AgentHistoryEventEntry(
+            id: 'compact-1',
+            kind: AgentHistoryEventKind.system,
+            title: '上下文已压缩',
+            description: '会话上下文已压缩以腾出窗口空间。',
+          ),
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final event = viewModel.timelineEntries
+          .whereType<AgentHistoryEventTimelineEntry>()
+          .single
+          .event;
+      expect(event.id, 'compact-1');
+      expect(event.title, '上下文已压缩');
+    });
 
     test(
       'stores plan updates as plan messages instead of tool calls',
@@ -812,10 +1375,9 @@ void main() {
         await Future<void>.delayed(Duration.zero);
 
         final turns = viewModel.conversationTurns;
-        // standby（welcome）+ 一个 live 回合。
-        expect(turns, hasLength(2));
-        expect(turns.first.isStandby, isTrue);
-        final liveTurn = turns.last;
+        // 发送后 Ready 占位已移除，只剩一个 live 回合。
+        expect(turns, hasLength(1));
+        final liveTurn = turns.single;
         expect(liveTurn.isStandby, isFalse);
         expect(liveTurn.status, AgentHistoryTurnStatus.running);
         final texts = liveTurn.entries
@@ -823,6 +1385,12 @@ void main() {
             .map((entry) => entry.message.text)
             .toList();
         expect(texts, containsAll(<String>['hello', 'Streaming reply']));
+        expect(
+          viewModel.timelineEntries.whereType<AgentMessageTimelineEntry>().map(
+            (entry) => entry.message.id,
+          ),
+          isNot(contains('welcome')),
+        );
       },
     );
 
@@ -930,6 +1498,47 @@ void main() {
         expect(turn.status, AgentHistoryTurnStatus.failed);
       },
     );
+
+    test('keeps unique ids for consecutive error events', () async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.sendMessage('hello');
+      provider.emit(
+        const AgentErrorEvent(
+          message: 'Codex stderr',
+          details: 'first',
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      );
+      provider.emit(
+        const AgentErrorEvent(
+          message: 'Codex stderr',
+          details: 'second',
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final errorEntries = viewModel.timelineEntries
+          .whereType<AgentMessageTimelineEntry>()
+          .where((entry) => entry.message.id.startsWith('error-'))
+          .toList();
+      expect(errorEntries, hasLength(2));
+      expect(errorEntries[0].message.id, isNot(errorEntries[1].message.id));
+      expect(errorEntries.map((entry) => entry.id).toSet(), hasLength(2));
+
+      final blocks = buildAgentTimelineRenderBlocks(
+        turnId: 'turn-1',
+        entries: viewModel.conversationTurns
+            .singleWhere((turn) => turn.id == 'turn-1')
+            .entries,
+      );
+      expect(blocks.map((block) => block.id).toSet(), hasLength(blocks.length));
+    });
 
     test('marks interrupted turns without adding extra messages', () async {
       final provider = _FakeAgentProvider();
@@ -1052,6 +1661,103 @@ void main() {
         expect(viewModel.currentThreadTokenUsage!.totalTokens, 3550);
       },
     );
+
+    test('offers compact when context window usage is high', () async {
+      final provider = _FakeAgentProvider(
+        historySnapshot: AgentThreadHistorySnapshot(
+          threadId: 'thread-1',
+          turns: <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-1',
+              status: AgentHistoryTurnStatus.completed,
+              tokenUsage: const AgentTokenUsage(
+                totalTokens: 900,
+                modelContextWindow: 1000,
+              ),
+              entries: const <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'user-1',
+                  role: AgentMessageRole.user,
+                  text: 'hello',
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.switchThread(
+        AgentThreadSummary(
+          id: 'thread-1',
+          providerId: defaultAgentProviderId,
+          projectPath: '/repo',
+          preview: 'hello',
+          createdAt: DateTime(2026),
+          updatedAt: DateTime(2026),
+          status: AgentThreadRuntimeStatus.idle,
+        ),
+      );
+
+      expect(viewModel.contextWindowUsageRatio, closeTo(0.9, 0.001));
+      expect(viewModel.shouldOfferContextCompact, isTrue);
+      expect(viewModel.canEditLastUserMessage, isTrue);
+
+      await viewModel.compactCurrentThread();
+      expect(provider.calls, contains('compact:thread-1'));
+      expect(viewModel.isCompacting, isTrue);
+
+      provider.emit(
+        const AgentThreadCompactedEvent(threadId: 'thread-1', turnId: 'turn-1'),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(viewModel.isCompacting, isFalse);
+    });
+
+    test('edit last user message rolls back then resends', () async {
+      final provider =
+          _FakeAgentProvider(
+              historySnapshot: AgentThreadHistorySnapshot(
+                threadId: 'thread-1',
+                turns: <AgentHistoryTurn>[
+                  const AgentHistoryTurn(
+                    id: 'turn-1',
+                    status: AgentHistoryTurnStatus.completed,
+                    entries: <AgentHistoryEntry>[
+                      AgentHistoryMessageEntry(
+                        id: 'user-1',
+                        role: AgentMessageRole.user,
+                        text: 'old prompt',
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            )
+            ..rollbackResult = const AgentThreadHistorySnapshot(
+              threadId: 'thread-1',
+              turns: <AgentHistoryTurn>[],
+            );
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.switchThread(
+        AgentThreadSummary(
+          id: 'thread-1',
+          providerId: defaultAgentProviderId,
+          projectPath: '/repo',
+          preview: 'old prompt',
+          createdAt: DateTime(2026),
+          updatedAt: DateTime(2026),
+          status: AgentThreadRuntimeStatus.idle,
+        ),
+      );
+      await viewModel.editLastUserMessageAndRetry('new prompt');
+
+      expect(provider.calls, contains('rollback:thread-1:1'));
+      expect(provider.calls, contains('send:thread-1'));
+    });
 
     test('handles model list event and reconciles default selection', () async {
       final provider = _FakeAgentProvider();
@@ -1234,7 +1940,9 @@ class _FakeAgentProviderFactory implements AgentProviderFactory {
   AgentProvider create(AgentProviderConfig config) => provider;
 }
 
-class _FakeAgentProvider implements AgentProvider {
+class _FakeAgentProvider
+    with AgentProviderThreadLifecycleStub
+    implements AgentProvider {
   _FakeAgentProvider({
     this.failHistory = false,
     this.failResume = false,
@@ -1267,6 +1975,7 @@ class _FakeAgentProvider implements AgentProvider {
   final Map<String, Completer<AgentSession>> _resumeCompleters;
   final List<String> calls = <String>[];
   final List<String?> readSessionPaths = <String?>[];
+  final List<String> unsubscribedThreads = <String>[];
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
 
@@ -1301,6 +2010,20 @@ class _FakeAgentProvider implements AgentProvider {
   void updateModelSelection(AgentModelSelection selection) {}
 
   @override
+  void updatePermissionSelection(AgentPermissionSelection selection) {}
+
+  @override
+  Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
+    return const <AgentPermissionProfileSummary>[];
+  }
+
+  @override
+  Future<void> approveGuardianDeniedAction({
+    required String threadId,
+    required Object event,
+  }) async {}
+
+  @override
   Future<AgentThreadHistorySnapshot> readThreadHistory({
     required String threadId,
     String? sessionPath,
@@ -1311,6 +2034,12 @@ class _FakeAgentProvider implements AgentProvider {
       throw StateError('history failed');
     }
     return _historySnapshotsByThread[threadId] ?? _defaultHistorySnapshot;
+  }
+
+  @override
+  Future<void> unsubscribeThread(String threadId) async {
+    calls.add('unsubscribe:$threadId');
+    unsubscribedThreads.add(threadId);
   }
 
   @override
@@ -1346,18 +2075,29 @@ class _FakeAgentProvider implements AgentProvider {
   @override
   Future<AgentTurn> sendMessage({
     required AgentSession session,
-    required String message,
     required AgentContext context,
+    String? message,
+    List<AgentUserInput>? inputs,
+    String? clientUserMessageId,
   }) async {
+    final resolved =
+        inputs ?? <AgentUserInput>[AgentUserInput.text(message ?? '')];
     calls.add('send:${session.id}');
+    for (final input in resolved) {
+      if (input is AgentLocalImageUserInput) {
+        calls.add('image:${input.path}');
+      }
+    }
     return AgentTurn(id: 'turn-1', sessionId: session.id);
   }
 
   @override
   Future<void> steerTurn({
     required AgentSession session,
-    required String message,
     required AgentContext context,
+    String? message,
+    List<AgentUserInput>? inputs,
+    String? clientUserMessageId,
   }) async {
     calls.add('steer:${session.id}');
   }
@@ -1369,6 +2109,30 @@ class _FakeAgentProvider implements AgentProvider {
 
   @override
   Future<void> respondToPermission(AgentPermissionDecision decision) async {}
+
+  @override
+  Future<AgentThreadHistorySnapshot> rollbackThread({
+    required String threadId,
+    required int numTurns,
+  }) async {
+    calls.add('rollback:$threadId:$numTurns');
+    return super.rollbackThread(threadId: threadId, numTurns: numTurns);
+  }
+
+  @override
+  Future<AgentSession> forkThread({
+    required String threadId,
+    required AgentContext context,
+  }) async {
+    calls.add('fork:$threadId');
+    return super.forkThread(threadId: threadId, context: context);
+  }
+
+  @override
+  Future<void> compactThread(String threadId) async {
+    calls.add('compact:$threadId');
+    return super.compactThread(threadId);
+  }
 
   @override
   Future<void> dispose() async {

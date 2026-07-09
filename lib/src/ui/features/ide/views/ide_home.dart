@@ -69,7 +69,7 @@ class _IdeHomeState extends State<IdeHome> {
 
   bool _leftTopVisible = true;
   bool _leftBottomVisible = false;
-  bool _rightTopVisible = true;
+  bool _rightTopVisible = false;
   bool _rightBottomVisible = false;
   bool _rightOverlayOpen = false;
   double _leftPanelWidth = _initialPanelWidth;
@@ -455,6 +455,33 @@ class _IdeHomeState extends State<IdeHome> {
         },
         onRemoveProject: (projectPath) {
           unawaited(_shellController.removeProject(projectPath));
+        },
+        onSearchTermChanged: (projectPath, searchTerm) {
+          _shellController.setThreadSearchTerm(projectPath, searchTerm);
+        },
+        onArchivedViewChanged: (projectPath, archived) {
+          unawaited(
+            _shellController.setThreadArchivedView(projectPath, archived),
+          );
+        },
+        onRenameThread: (projectPath, threadId, name) {
+          unawaited(
+            _shellController.renameProjectThread(projectPath, threadId, name),
+          );
+        },
+        onArchiveThread: (projectPath, thread) {
+          unawaited(_shellController.archiveProjectThread(projectPath, thread));
+        },
+        onUnarchiveThread: (projectPath, thread) {
+          unawaited(
+            _shellController.unarchiveProjectThread(projectPath, thread),
+          );
+        },
+        onDeleteThread: (projectPath, thread) {
+          unawaited(_shellController.deleteProjectThread(projectPath, thread));
+        },
+        onForkThread: (projectPath, thread) {
+          unawaited(_shellController.forkProjectThread(projectPath, thread));
         },
       ),
     );

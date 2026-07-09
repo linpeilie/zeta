@@ -22,6 +22,20 @@ String? _string(Object? value) {
   return null;
 }
 
+/// 将 JSON-RPC `RequestId`（string | int）规范为与审批卡片 id 一致的字符串。
+///
+/// 审批映射用 `'${request.id}'` 生成 [AgentPermissionRequest.id]；
+/// `serverRequest/resolved` 的 `requestId` 需用同一规则对齐。
+String? _requestIdString(Object? value) {
+  if (value is String && value.isNotEmpty) {
+    return value;
+  }
+  if (value is int) {
+    return '$value';
+  }
+  return null;
+}
+
 bool _isErrorNotification(String method) {
   return switch (method) {
     'error' || 'warning' || 'guardianWarning' || 'configWarning' => true,
@@ -29,32 +43,72 @@ bool _isErrorNotification(String method) {
   };
 }
 
-/// 本地 MCP 软件未启动时，Codex/mrmcp 会持续向 stderr 写 transport worker
-/// 断开日志；这类日志不影响 thread 本身，避免刷进用户可见的 Agent 时间线。
+/// 本地 MCP 软件未启动或端点 404 时，Codex/rmcp 会向 stderr 写 transport
+/// worker 断开日志；这类日志不影响 thread 本身，避免刷进用户可见时间线。
+///
+/// 同时兼容历史 `mrmcp::` 与当前 `rmcp::` 模块路径，以及带 ANSI 着色的行。
 bool _isIgnorableMcpTransportStderr(String line) {
-  if (!line.contains('mrmcp::transport::worker')) {
-    return false;
-  }
-  if (!line.contains('127.0.0.1')) {
+  final isTransportWorker =
+      line.contains('rmcp::transport::worker') ||
+      line.contains('mrmcp::transport::worker');
+  if (!isTransportWorker) {
     return false;
   }
   return line.contains('Transport channel closed') ||
       line.contains('http/request failed') ||
+      line.contains('UnexpectedServerResponse') ||
+      line.contains('HTTP 404') ||
       line.contains('/stream') ||
       line.contains('/mcp');
 }
 
 /// 从 Codex item 中挑选最适合 UI 展示的标题。
 String _toolTitle(Map<String, Object?> item) {
-  return _string(item['title']) ??
-      _string(item['name']) ??
-      _string(item['command']) ??
-      _string(item['type']) ??
-      'Tool call';
+  final normalizedType = _normalizedAgentItemType(_string(item['type']));
+  return switch (normalizedType) {
+    'reasoning' => '思考',
+    'websearch' => 'Web 搜索',
+    'imageview' => '查看图片',
+    'imagegeneration' => '生成图片',
+    'collabagenttoolcall' => _toolPathTitle(
+      prefix: '协作',
+      first: _string(item['tool']),
+    ),
+    'mcptoolcall' => _toolPathTitle(
+      prefix: 'MCP',
+      first: _string(item['server']),
+      second: _string(item['tool']),
+    ),
+    'dynamictoolcall' => _toolPathTitle(
+      first: _string(item['namespace']),
+      second: _string(item['tool']),
+    ),
+    'commandexecution' => _string(item['command']) ?? 'Command',
+    'filechange' => 'File change',
+    _ =>
+      _string(item['title']) ??
+          _string(item['name']) ??
+          _string(item['command']) ??
+          _string(item['query']) ??
+          _string(item['type']) ??
+          'Tool call',
+  };
+}
+
+/// 从 reasoning item 提取可展示正文。
+///
+/// 协议里 `summary` / `content` 是 `{ type, text }` 对象数组，优先用摘要。
+String? _reasoningItemContent(Map<String, Object?> item) {
+  return _joinedContentItems(item['summary']) ??
+      _joinedContentItems(item['content']) ??
+      _string(item['text']);
 }
 
 /// 根据进度通知方法名生成标题。
 String _progressTitle(String method) {
+  if (method.contains('mcpToolCall')) {
+    return 'MCP tool';
+  }
   if (method.contains('fileChange')) {
     return 'File change';
   }
@@ -66,19 +120,242 @@ String _progressTitle(String method) {
 
 /// 将 Codex 工具类型映射到统一工具分类。
 AgentToolKind _toolKind(String? value) {
-  return switch (value) {
-    'read' => AgentToolKind.read,
-    'edit' => AgentToolKind.edit,
+  final normalized = _normalizedAgentItemType(value) ?? value;
+  return switch (normalized) {
+    'read' || 'imageview' => AgentToolKind.read,
+    'edit' || 'filechange' => AgentToolKind.edit,
     'delete' => AgentToolKind.delete,
     'move' => AgentToolKind.move,
-    'search' => AgentToolKind.search,
+    'search' || 'websearch' => AgentToolKind.search,
     'execute' ||
     'command_execution' ||
-    'commandExecution' => AgentToolKind.execute,
+    'commandexecution' => AgentToolKind.execute,
     'think' || 'reasoning' => AgentToolKind.think,
-    'fetch' => AgentToolKind.fetch,
+    'fetch' || 'imagegeneration' => AgentToolKind.fetch,
+    'mcptoolcall' ||
+    'dynamictoolcall' ||
+    'collabagenttoolcall' => AgentToolKind.other,
     _ => AgentToolKind.other,
   };
+}
+
+/// 是否为应渲染为系统事件卡（而非工具卡）的 ThreadItem。
+bool _isSystemThreadItemType(String? normalizedType) {
+  return switch (normalizedType) {
+    'enteredreviewmode' ||
+    'exitedreviewmode' ||
+    'contextcompaction' ||
+    'hookprompt' ||
+    'sleep' ||
+    'subagentactivity' => true,
+    _ => false,
+  };
+}
+
+/// 是否为实时路径应忽略的 ThreadItem（用户消息由本地发送路径负责）。
+bool _isIgnoredLiveThreadItemType(String? normalizedType) {
+  return normalizedType == 'usermessage';
+}
+
+/// 从 ThreadItem 提取工具卡正文。
+String? _toolContentFromThreadItem(Map<String, Object?> item) {
+  final normalizedType = _normalizedAgentItemType(_string(item['type']));
+  return switch (normalizedType) {
+    'reasoning' => _reasoningItemContent(item),
+    'commandexecution' =>
+      _string(item['aggregatedOutput']) ?? _string(item['command']),
+    'filechange' => _joinedStrings(_fileChangeLocations(item['changes'])),
+    'mcptoolcall' =>
+      _string(_map(item['error'])['message']) ??
+          _joinedContentItems(item['result']) ??
+          _objectPreview(item['arguments']),
+    'dynamictoolcall' =>
+      _joinedContentItems(item['contentItems']) ??
+          _objectPreview(item['arguments']),
+    'websearch' =>
+      _webSearchActionPreview(item['action']) ?? _string(item['query']),
+    'imageview' => _string(item['path']),
+    'imagegeneration' =>
+      _string(item['result']) ??
+          _string(item['savedPath']) ??
+          _string(item['revisedPrompt']),
+    'collabagenttoolcall' =>
+      _string(item['prompt']) ?? _joinedStrings(item['receiverThreadIds']),
+    _ =>
+      _string(item['text']) ??
+          _string(item['command']) ??
+          _string(item['query']) ??
+          _string(item['path']),
+  };
+}
+
+/// 从 ThreadItem 提取涉及路径。
+List<String> _toolLocationsFromThreadItem(Map<String, Object?> item) {
+  final normalizedType = _normalizedAgentItemType(_string(item['type']));
+  return switch (normalizedType) {
+    'commandexecution' => _singleLocation(_string(item['cwd'])),
+    'filechange' => _fileChangeLocations(item['changes']),
+    'imageview' => _singleLocation(_string(item['path'])),
+    'imagegeneration' => _singleLocation(_string(item['savedPath'])),
+    'collabagenttoolcall' => _singleLocation(_string(item['senderThreadId'])),
+    _ => _locations(item),
+  };
+}
+
+/// 将系统类 ThreadItem 映射为历史事件条目。
+AgentHistoryEventEntry? _systemHistoryEventFromThreadItem(
+  Map<String, Object?> item, {
+  required String id,
+}) {
+  final normalizedType = _normalizedAgentItemType(_string(item['type']));
+  return switch (normalizedType) {
+    'enteredreviewmode' => AgentHistoryEventEntry(
+      id: id,
+      kind: AgentHistoryEventKind.system,
+      title: '进入评审模式',
+      description: _string(item['review']),
+      raw: item,
+    ),
+    'exitedreviewmode' => AgentHistoryEventEntry(
+      id: id,
+      kind: AgentHistoryEventKind.system,
+      title: '退出评审模式',
+      description: _string(item['review']),
+      raw: item,
+    ),
+    'contextcompaction' => AgentHistoryEventEntry(
+      id: id,
+      kind: AgentHistoryEventKind.system,
+      title: '上下文已压缩',
+      description: '会话上下文已压缩以腾出窗口空间。',
+      raw: item,
+    ),
+    'hookprompt' => AgentHistoryEventEntry(
+      id: id,
+      kind: AgentHistoryEventKind.system,
+      title: 'Hook 提示',
+      content: _hookPromptFragmentsText(item['fragments']),
+      raw: item,
+    ),
+    'sleep' => AgentHistoryEventEntry(
+      id: id,
+      kind: AgentHistoryEventKind.system,
+      title: '等待中',
+      description: _sleepDurationLabel(item['durationMs']),
+      raw: item,
+    ),
+    'subagentactivity' => AgentHistoryEventEntry(
+      id: id,
+      kind: AgentHistoryEventKind.system,
+      title: '子代理活动',
+      description: _subAgentActivityLabel(
+        kind: _string(item['kind']),
+        agentPath: _string(item['agentPath']),
+      ),
+      content: _string(item['agentThreadId']),
+      raw: item,
+    ),
+    _ => null,
+  };
+}
+
+String? _hookPromptFragmentsText(Object? value) {
+  if (value is! List) {
+    return null;
+  }
+  final parts = <String>[];
+  for (final fragmentValue in value) {
+    final fragment = _map(fragmentValue);
+    final text = _string(fragment['text']);
+    if (text != null) {
+      parts.add(text);
+    }
+  }
+  return parts.isEmpty ? null : parts.join('\n');
+}
+
+String? _sleepDurationLabel(Object? durationMs) {
+  final duration = _durationFromMilliseconds(durationMs);
+  if (duration == null) {
+    return null;
+  }
+  if (duration.inMinutes >= 1) {
+    final seconds = duration.inSeconds % 60;
+    return seconds == 0
+        ? '休眠 ${duration.inMinutes} 分钟'
+        : '休眠 ${duration.inMinutes} 分 $seconds 秒';
+  }
+  return '休眠 ${duration.inSeconds} 秒';
+}
+
+String _subAgentActivityLabel({String? kind, String? agentPath}) {
+  final kindLabel = switch (kind) {
+    'started' => '已启动',
+    'interacted' => '已交互',
+    'interrupted' => '已中断',
+    _ => kind ?? '更新',
+  };
+  if (agentPath == null || agentPath.isEmpty) {
+    return kindLabel;
+  }
+  return '$kindLabel · $agentPath';
+}
+
+String? _webSearchActionPreview(Object? value) {
+  final action = _map(value);
+  if (action.isEmpty) {
+    return null;
+  }
+  final type = _string(action['type']);
+  return switch (type) {
+    'search' => _string(action['query']) ?? _joinedStrings(action['queries']),
+    'openPage' => _string(action['url']),
+    'findInPage' => () {
+      final parts = <String>[
+        ?_string(action['url']),
+        ?_string(action['pattern']),
+      ];
+      return parts.isEmpty ? null : parts.join(' · ');
+    }(),
+    _ => _objectPreview(action),
+  };
+}
+
+/// 将 ThreadItem 映射为工具卡；系统类 / 消息类返回 null。
+AgentToolCall? _toolCallFromThreadItem(
+  Map<String, Object?> item, {
+  required String id,
+  required AgentToolStatus status,
+  String? sessionId,
+  String? turnId,
+  Map<String, Object?> raw = const <String, Object?>{},
+}) {
+  final normalizedType = _normalizedAgentItemType(_string(item['type']));
+  if (normalizedType == null ||
+      normalizedType == 'agentmessage' ||
+      normalizedType == 'plan' ||
+      _isIgnoredLiveThreadItemType(normalizedType) ||
+      _isSystemThreadItemType(normalizedType)) {
+    return null;
+  }
+
+  return AgentToolCall(
+    id: id,
+    title: _toolTitle(item),
+    kind: _toolKind(_string(item['type'])),
+    status: status,
+    content: _toolContentFromThreadItem(item),
+    locations: _toolLocationsFromThreadItem(item),
+    sessionId: sessionId,
+    turnId: turnId,
+    rawInput: _map(item['arguments']).isNotEmpty
+        ? _map(item['arguments'])
+        : _map(item['rawInput']),
+    rawOutput: _map(item['result']).isNotEmpty
+        ? _map(item['result'])
+        : _map(item['rawOutput']),
+    raw: raw.isEmpty ? item : raw,
+  );
 }
 
 /// 从 item 中提取文件位置。
@@ -97,6 +374,9 @@ List<String> _locations(Map<String, Object?> item) {
 }
 
 /// 将用户输入数组转成历史消息文本。
+///
+/// 本地/远程图片不写入文本（由 [_userInputLocalImagePaths] 单独提取），
+/// 避免气泡里再叠一层 `[Image: path]` 占位。
 String? _userInputText(Object? value) {
   if (value is! List<Object?>) {
     return _string(value);
@@ -113,11 +393,9 @@ String? _userInputText(Object? value) {
           parts.add(text);
         }
       case 'image':
-        final url = _string(item['url']);
-        parts.add(url == null ? '[Image]' : '[Image: $url]');
       case 'localImage':
-        final path = _string(item['path']);
-        parts.add(path == null ? '[Image]' : '[Image: $path]');
+        // 图片走独立路径字段，不拼进文本。
+        break;
       case 'skill':
       case 'mention':
         final name = _string(item['name']) ?? _string(item['id']);
@@ -133,6 +411,25 @@ String? _userInputText(Object? value) {
   }
 
   return parts.isEmpty ? null : parts.join('\n');
+}
+
+/// 从用户输入数组提取本地图片路径。
+List<String> _userInputLocalImagePaths(Object? value) {
+  if (value is! List<Object?>) {
+    return const <String>[];
+  }
+  final paths = <String>[];
+  for (final itemValue in value) {
+    final item = _map(itemValue);
+    if (_string(item['type']) != 'localImage') {
+      continue;
+    }
+    final path = _string(item['path']);
+    if (path != null && path.isNotEmpty) {
+      paths.add(path);
+    }
+  }
+  return List<String>.unmodifiable(paths);
 }
 
 /// 宽容拼接字符串数组。
@@ -153,10 +450,13 @@ String? _joinedStrings(Object? value) {
 }
 
 /// 从工具返回内容里挑选一段适合卡片预览的文本。
+///
+/// 兼容 `List` / `List<Map>` 等 jsonDecode 常见形态（不用 `List<Object?>`
+/// 精确匹配，避免因 List 不变性漏解析）。
 String? _joinedContentItems(Object? value) {
   final map = _map(value);
   final content = map.isEmpty ? value : map['content'];
-  if (content is List<Object?>) {
+  if (content is List) {
     final parts = <String>[];
     for (final itemValue in content) {
       if (itemValue is String) {
@@ -637,10 +937,72 @@ List<AgentUserInputQaPair> _userInputQaPairs(Map<String, Object?> arguments) {
         question: text,
         header: header,
         options: List<String>.unmodifiable(options),
+        isOther: question['isOther'] == true,
+        isSecret: question['isSecret'] == true,
       ),
     );
   }
   return List<AgentUserInputQaPair>.unmodifiable(pairs);
+}
+
+/// 将 `commandActions` 解析为面向 UI 的短语义标签。
+List<String> _commandActionSummaries(Object? rawActions) {
+  if (rawActions is! List<Object?>) {
+    return const <String>[];
+  }
+  final summaries = <String>[];
+  for (final value in rawActions) {
+    final action = _map(value);
+    final type = _string(action['type']);
+    final summary = switch (type) {
+      'read' => () {
+        final name = _string(action['name']);
+        final path = _string(action['path']);
+        if (name != null && path != null) {
+          return 'Read $name ($path)';
+        }
+        return name != null
+            ? 'Read $name'
+            : (path != null ? 'Read $path' : 'Read');
+      }(),
+      'listFiles' => () {
+        final path = _string(action['path']);
+        return path != null ? 'List files in $path' : 'List files';
+      }(),
+      'search' => () {
+        final query = _string(action['query']);
+        final path = _string(action['path']);
+        if (query != null && path != null) {
+          return 'Search "$query" in $path';
+        }
+        if (query != null) {
+          return 'Search "$query"';
+        }
+        return path != null ? 'Search in $path' : 'Search';
+      }(),
+      'unknown' => _string(action['command']) ?? 'Unknown command',
+      _ => _string(action['command']) ?? type,
+    };
+    if (summary != null && summary.trim().isNotEmpty) {
+      summaries.add(summary.trim());
+    }
+  }
+  return List<String>.unmodifiable(summaries);
+}
+
+/// 解析 `proposedExecpolicyAmendment` 字符串列表。
+List<String> _stringList(Object? value) {
+  if (value is! List<Object?>) {
+    return const <String>[];
+  }
+  final items = <String>[];
+  for (final entry in value) {
+    final text = _trimmedText(_string(entry));
+    if (text != null) {
+      items.add(text);
+    }
+  }
+  return List<String>.unmodifiable(items);
 }
 
 /// 从 `request_user_input` 的 output 中提取“问题 id -> 已选答案标签”的映射。
@@ -714,6 +1076,8 @@ List<AgentUserInputQaPair> _mergeUserInputQaPairsWithAnswers(
         header: pair.header,
         options: pair.options,
         answers: answers,
+        isOther: pair.isOther,
+        isSecret: pair.isSecret,
       );
     }),
   );
@@ -735,7 +1099,9 @@ bool _sameUserInputQaPairs(
     final b = right[index];
     if (a.questionId != b.questionId ||
         a.question != b.question ||
-        a.header != b.header) {
+        a.header != b.header ||
+        a.isOther != b.isOther ||
+        a.isSecret != b.isSecret) {
       return false;
     }
     if (a.options.length != b.options.length ||
@@ -944,4 +1310,28 @@ AgentThreadRuntimeStatus _threadRuntimeStatus(Map<String, Object?> status) {
     'systemError' => AgentThreadRuntimeStatus.systemError,
     _ => AgentThreadRuntimeStatus.unknown,
   };
+}
+
+/// 从 Codex `ThreadStatus.activeFlags` 解析等待标志。
+({bool waitingOnApproval, bool waitingOnUserInput}) _threadActiveFlags(
+  Map<String, Object?> status,
+) {
+  final flags = status['activeFlags'];
+  if (flags is! List) {
+    return (waitingOnApproval: false, waitingOnUserInput: false);
+  }
+  var waitingOnApproval = false;
+  var waitingOnUserInput = false;
+  for (final flag in flags) {
+    final name = _string(flag);
+    if (name == 'waitingOnApproval') {
+      waitingOnApproval = true;
+    } else if (name == 'waitingOnUserInput') {
+      waitingOnUserInput = true;
+    }
+  }
+  return (
+    waitingOnApproval: waitingOnApproval,
+    waitingOnUserInput: waitingOnUserInput,
+  );
 }

@@ -27,11 +27,12 @@ class _CodexAppServerClient {
 
   Future<AgentSession> startSession({
     required AgentContext context,
+    required AgentPermissionSelection permissionSelection,
     String? previousSessionId,
   }) async {
     final result = await _peer.sendRequest(
       'thread/start',
-      params: _threadParams(context),
+      params: _threadParams(context, permissionSelection),
     );
     return _sessionFromThreadStartResult(
       result,
@@ -42,13 +43,14 @@ class _CodexAppServerClient {
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
+    required AgentPermissionSelection permissionSelection,
     String? previousSessionId,
   }) async {
     final result = await _peer.sendRequest(
       'thread/resume',
       params: <String, Object?>{
         'threadId': sessionId,
-        ..._threadParams(context),
+        ..._threadParams(context, permissionSelection),
       },
     );
     return _sessionFromThreadStartResult(
@@ -61,6 +63,7 @@ class _CodexAppServerClient {
   Future<AgentThreadPage> listThreads({
     required AgentThreadListQuery query,
   }) async {
+    final searchTerm = query.searchTerm?.trim();
     final result = await _peer.sendRequest(
       'thread/list',
       params: <String, Object?>{
@@ -69,7 +72,9 @@ class _CodexAppServerClient {
         if (query.cursor != null) 'cursor': query.cursor,
         'sortKey': 'recency_at',
         'sortDirection': 'desc',
-        'archived': false,
+        'archived': query.archived,
+        if (searchTerm != null && searchTerm.isNotEmpty)
+          'searchTerm': searchTerm,
       },
     );
     return _threadPageFromResult(result, query.projectPath);
@@ -96,27 +101,103 @@ class _CodexAppServerClient {
     return _threadHistoryReader.threadHistoryFromReadResult(result, threadId);
   }
 
+  /// 取消 thread 通知订阅；返回协议 status（未加载/未订阅/已取消）。
+  Future<String?> unsubscribeThread(String threadId) async {
+    final result = await _peer.sendRequest(
+      'thread/unsubscribe',
+      params: <String, Object?>{'threadId': threadId},
+    );
+    return _string(_map(result)['status']);
+  }
+
+  Future<void> renameThread({required String threadId, required String name}) {
+    return _peer.sendRequest(
+      'thread/name/set',
+      params: <String, Object?>{'threadId': threadId, 'name': name},
+    );
+  }
+
+  Future<void> archiveThread(String threadId) {
+    return _peer.sendRequest(
+      'thread/archive',
+      params: <String, Object?>{'threadId': threadId},
+    );
+  }
+
+  Future<void> unarchiveThread(String threadId) {
+    return _peer.sendRequest(
+      'thread/unarchive',
+      params: <String, Object?>{'threadId': threadId},
+    );
+  }
+
+  Future<void> deleteThread(String threadId) {
+    return _peer.sendRequest(
+      'thread/delete',
+      params: <String, Object?>{'threadId': threadId},
+    );
+  }
+
+  Future<AgentSession> forkThread({
+    required String threadId,
+    required AgentContext context,
+    required AgentPermissionSelection permissionSelection,
+    String? previousSessionId,
+  }) async {
+    final result = await _peer.sendRequest(
+      'thread/fork',
+      params: <String, Object?>{
+        'threadId': threadId,
+        ..._threadParams(context, permissionSelection),
+      },
+    );
+    return _sessionFromThreadStartResult(
+      result,
+      previousSessionId: previousSessionId,
+    );
+  }
+
+  Future<AgentThreadHistorySnapshot> rollbackThread({
+    required String threadId,
+    required int numTurns,
+  }) async {
+    final result = await _peer.sendRequest(
+      'thread/rollback',
+      params: <String, Object?>{'threadId': threadId, 'numTurns': numTurns},
+    );
+    return _threadHistoryReader.threadHistoryFromReadResult(result, threadId);
+  }
+
+  Future<void> compactThread(String threadId) {
+    return _peer.sendRequest(
+      'thread/compact/start',
+      params: <String, Object?>{'threadId': threadId},
+    );
+  }
+
   Future<AgentTurn> sendMessage({
     required AgentSession session,
-    required String message,
+    required List<AgentUserInput> inputs,
     required AgentContext context,
     required AgentModelSelection selection,
+    required AgentPermissionSelection permissionSelection,
+    String? clientUserMessageId,
   }) async {
     final model = selection.modelId ?? _config.defaultModel;
     final result = await _peer.sendRequest(
       'turn/start',
       params: <String, Object?>{
         'threadId': session.id,
-        'input': <Object?>[
-          <String, Object?>{'type': 'text', 'text': message},
-        ],
+        'input': _encodeUserInputs(inputs),
         if (context.projectPath != null) 'cwd': context.projectPath,
         'model': ?model,
         // 协议字段名是 `effort`(TurnStartParams），域模型内仍叫
         // reasoningEffort；`summary`（推理摘要模式）暂无 UI 来源，不发送。
         'effort': ?selection.reasoningEffort,
         'serviceTier': ?selection.serviceTierId,
-        'approvalPolicy': 'on-request',
+        'approvalPolicy': permissionSelection.approvalPolicy,
+        'sandboxPolicy': permissionSelection.toTurnSandboxPolicy(),
+        'clientUserMessageId': ?clientUserMessageId,
       },
     );
     return _turnFromResult(result, session.id);
@@ -124,19 +205,52 @@ class _CodexAppServerClient {
 
   Future<void> steerTurn({
     required AgentSession session,
-    required String message,
+    required List<AgentUserInput> inputs,
     required AgentContext context,
+    String? clientUserMessageId,
   }) {
     return _peer.sendRequest(
       'turn/steer',
       params: <String, Object?>{
         'threadId': session.id,
-        'input': <Object?>[
-          <String, Object?>{'type': 'text', 'text': message},
-        ],
+        'input': _encodeUserInputs(inputs),
         if (context.projectPath != null) 'cwd': context.projectPath,
+        'clientUserMessageId': ?clientUserMessageId,
       },
     );
+  }
+
+  /// 将领域输入项编码为协议 `UserInput[]`。
+  List<Object?> _encodeUserInputs(List<AgentUserInput> inputs) {
+    return <Object?>[
+      for (final input in inputs)
+        switch (input) {
+          AgentTextUserInput(:final text, :final textElements) =>
+            <String, Object?>{
+              'type': 'text',
+              'text': text,
+              if (textElements.isNotEmpty)
+                'text_elements': <Object?>[
+                  for (final element in textElements)
+                    <String, Object?>{
+                      'byteRange': <int>[element.start, element.end],
+                      'placeholder': ?element.placeholder,
+                    },
+                ],
+            },
+          AgentLocalImageUserInput(:final path, :final detail) =>
+            <String, Object?>{
+              'type': 'localImage',
+              'path': path,
+              'detail': ?detail,
+            },
+          AgentMentionUserInput(:final name, :final path) => <String, Object?>{
+            'type': 'mention',
+            'name': name,
+            'path': path,
+          },
+        },
+    ];
   }
 
   Future<void> cancelTurn(AgentTurn turn) {
@@ -146,11 +260,57 @@ class _CodexAppServerClient {
     );
   }
 
-  Map<String, Object?> _threadParams(AgentContext context) {
+  Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
+    try {
+      final result = await _peer.sendRequest(
+        'permissionProfile/list',
+        params: const <String, Object?>{},
+      );
+      final map = _map(result);
+      final data = map['data'];
+      if (data is! List<Object?>) {
+        return const <AgentPermissionProfileSummary>[];
+      }
+      final profiles = <AgentPermissionProfileSummary>[];
+      for (final item in data) {
+        final entry = _map(item);
+        final id = _string(entry['id']);
+        if (id == null) {
+          continue;
+        }
+        profiles.add(
+          AgentPermissionProfileSummary(
+            id: id,
+            allowed: entry['allowed'] != false,
+            description: _string(entry['description']),
+          ),
+        );
+      }
+      return List<AgentPermissionProfileSummary>.unmodifiable(profiles);
+    } catch (_) {
+      return const <AgentPermissionProfileSummary>[];
+    }
+  }
+
+  Future<void> approveGuardianDeniedAction({
+    required String threadId,
+    required Object event,
+  }) {
+    return _peer.sendRequest(
+      'thread/approveGuardianDeniedAction',
+      params: <String, Object?>{'threadId': threadId, 'event': event},
+    );
+  }
+
+  Map<String, Object?> _threadParams(
+    AgentContext context,
+    AgentPermissionSelection permissionSelection,
+  ) {
     return <String, Object?>{
       if (context.projectPath != null) 'cwd': context.projectPath,
       if (_config.defaultModel != null) 'model': _config.defaultModel,
-      'approvalPolicy': 'on-request',
+      'approvalPolicy': permissionSelection.approvalPolicy,
+      'sandbox': permissionSelection.toThreadSandboxMode(),
     };
   }
 
@@ -203,6 +363,8 @@ class _CodexAppServerClient {
     }
 
     final now = DateTime.now();
+    final statusMap = _map(thread['status']);
+    final flags = _threadActiveFlags(statusMap);
     return AgentThreadSummary(
       id: id,
       providerId: _config.id,
@@ -213,7 +375,9 @@ class _CodexAppServerClient {
       createdAt: _unixSecondsToDateTime(thread['createdAt']) ?? now,
       updatedAt: _unixSecondsToDateTime(thread['updatedAt']) ?? now,
       recencyAt: _unixSecondsToDateTime(thread['recencyAt']),
-      status: _threadRuntimeStatus(_map(thread['status'])),
+      status: _threadRuntimeStatus(statusMap),
+      waitingOnApproval: flags.waitingOnApproval,
+      waitingOnUserInput: flags.waitingOnUserInput,
       raw: thread,
     );
   }

@@ -1,31 +1,31 @@
 # Codex app-server 适配清单与适配计划
 
-最后更新:2026-07-08
+最后更新:2026-07-09
 
 ## 0. 文档目的与协议基准
 
 本文档回答一个问题:**当前 `features/agent` 适配层相对 Codex app-server 完整协议,还有哪些功能没有适配,以及按什么顺序补齐。**
 
-- 协议基准:本机 `codex-cli 0.142.3`,通过 `codex app-server generate-json-schema --out <dir>` 导出的官方 JSON Schema(`ClientRequest` / `ClientNotification` / `ServerNotification` / `ServerRequest` 四个联合类型 + v2 逐方法 schema)。
+- 协议基准:本机 pinned `codex-cli 0.142.5`(审计最初对照 `0.142.3`;仓库快照以可复现的 `0.142.5` 为准),通过 `tool/gen_codex_schema.*` 调用 `codex app-server generate-json-schema --out <dir>` 导出并提交到 `third_party/codex_app_server_schema/`(`ClientRequest` / `ClientNotification` / `ServerNotification` / `ServerRequest` 四个联合类型 + v2 逐方法 schema)。详见 `docs/codex_app_server_protocol.md`。
 - 代码基准:`lib/src/features/agent/` 下的 Codex 适配层,入口为
   `data/datasources/app_server/codex_app_server_agent_provider.dart`(library,
   通过 `part` 聚合 client、mapper、parser)。
-- 协议规模 vs 当前覆盖:
+- 协议规模 vs 当前覆盖(Phase 0+1 完成后):
 
-| 协议面 | 协议总数 | 已适配 | 部分适配/漂移 | 未适配 |
+| 协议面 | 协议总数 | 已适配 | 部分适配 | 未适配 |
 | --- | --- | --- | --- | --- |
-| 客户端请求(client → server,带 id) | 87 | 6 | 3(`thread/list`、`turn/start`、`initialize` 参数不完整) | 78 |
+| 客户端请求(client → server,带 id) | 87 | 19 | 1(`turn/start` 已用 text/localImage/mention + 策略/幂等;skill/image URL 等未用) | 67 |
 | 客户端通知(client → server) | 1 | 1 | 0 | 0 |
-| 服务端通知(server → client) | 68 | 11 | 5(`error`、`turn/completed`、`item/started`、`item/completed` 结构消费不全;`mcpServer/startupStatus/updated` 被显式忽略) | 52 |
-| 服务端请求(server → client,需应答) | 10 | 5 | 3(`item/tool/requestUserInput`、`mcpServer/elicitation/request` 默认应答;`item/tool/call` 走危险兜底) | 2 |
+| 服务端通知(server → client) | 68 | 35 | 1(`mcpServer/startupStatus/updated` 仍显式忽略,Phase 3 启用) | 32 |
+| 服务端请求(server → client,需应答) | 10 | 6 | 1(`mcpServer/elicitation/request` 默认应答,表单 UI 见 Phase 3.8) | 3(`item/tool/call`、`account/chatgptAuthTokens/refresh`、`attestation/generate` 回 `-32601`) |
 
-> 注意:适配层还在监听 3 个当前协议中**已不存在**的通知名(`turn/tokenCount`、`item/tokenCount`、`tokenCount`),详见第 2 节审计项。
+> 说明:mapper 仍保留 3 个已失效通知名(`turn/tokenCount`、`item/tokenCount`、`tokenCount`)作容错;主路径已切到 `thread/tokenUsage/updated`(A1)。未匹配通知记 fine 日志(A7),不再静默丢弃。
 
 ---
 
 ## 1. 已适配能力清单(现状)
 
-### 1.1 客户端请求(9 个)
+### 1.1 客户端请求(19 个)
 
 | 方法 | 位置 | 备注 |
 | --- | --- | --- |
@@ -33,23 +33,32 @@
 | `model/list` | `codex_app_server_client.dart` | 握手后自动拉取并缓存 |
 | `thread/start` | 同上 | 仅传 `cwd`/`model`/`approvalPolicy: on-request` |
 | `thread/resume` | 同上 | 同上 |
-| `thread/list` | 同上 | 固定 `archived: false`,未用 `searchTerm`/`modelProviders` |
-| `thread/read` | 同上 | 作为本地 JSONL 解析失败后的 fallback |
-| `turn/start` | 同上 | 仅 `text` 输入;推理力度按协议字段 `effort` 发送(A4 已修复) |
-| `turn/steer` | 同上 | 运行中追加指令 |
+| `thread/list` | 同上 | 支持 `archived` / `searchTerm`;未用 `modelProviders`(Phase 3+) |
+| `thread/read` | 同上 | 作为本地 JSONL 解析失败后的 fallback;18 种 ThreadItem 已覆盖 |
+| `thread/unsubscribe` | 同上 | 切换/`start`/`resume`/项目切换时 best-effort 取消旧订阅(1.9) |
+| `thread/name/set` | 同上 | 列表重命名(2.1) |
+| `thread/archive` / `thread/unarchive` | 同上 | 列表归档视图(2.1) |
+| `thread/delete` | 同上 | 删除确认后调用(2.1) |
+| `thread/fork` | 同上 | 列表/头栏分叉(2.1/2.4) |
+| `thread/rollback` | 同上 | 编辑上一条消息重试(2.4) |
+| `thread/compact/start` | 同上 | 上下文占用提示条(2.5) |
+| `permissionProfile/list` | 同上 | 审批/沙箱预设选择器(2.7) |
+| `thread/approveGuardianDeniedAction` | 同上 | Guardian 拒绝后人工放行(2.9) |
+| `turn/start` | 同上 | `text`/`localImage`/`mention`+`text_elements`;`effort`/`approvalPolicy`/`sandboxPolicy`/`clientUserMessageId`(2.7/2.10) |
+| `turn/steer` | 同上 | 运行中追加指令(同样支持 `inputs` + `clientUserMessageId`) |
 | `turn/interrupt` | 同上 | 取消回合 |
 
-### 1.2 服务端通知(显式处理 16 个 case,其中 3 个为失效方法名)
+### 1.2 服务端通知(显式处理 29 个 case,其中 3 个为失效方法名容错)
 
-已映射:`thread/started`、`turn/started`、`turn/completed`、`item/agentMessage/delta`、`turn/plan/updated`、`item/started`、`item/completed`、`item/commandExecution/outputDelta`、`command/exec/outputDelta`、`item/fileChange/outputDelta`、`item/fileChange/patchUpdated`、`error`、`warning`、`guardianWarning`、`configWarning`;显式忽略:`mcpServer/startupStatus/updated`;其余 **default 分支静默丢弃**。
+已映射:`thread/started`、`thread/status/changed`、`thread/tokenUsage/updated`、`thread/name/updated`、`thread/archived`、`thread/unarchived`、`thread/deleted`、`thread/closed`、`thread/compacted`、`thread/settings/updated`、`turn/started`、`turn/completed`、`item/agentMessage/delta`、`item/reasoning/textDelta`、`item/reasoning/summaryTextDelta`、`item/reasoning/summaryPartAdded`、`item/plan/delta`、`turn/plan/updated`、`turn/diff/updated`、`item/started`、`item/completed`、`item/commandExecution/outputDelta`、`command/exec/outputDelta`、`item/fileChange/outputDelta`、`item/fileChange/patchUpdated`、`item/mcpToolCall/progress`、`item/autoApprovalReview/started`、`item/autoApprovalReview/completed`、`serverRequest/resolved`、`model/rerouted`、`deprecationNotice`、`error`、`warning`、`guardianWarning`、`configWarning`;容错旧名:`turn/tokenCount`、`item/tokenCount`、`tokenCount`;显式忽略:`mcpServer/startupStatus/updated`;其余 **default 分支记 fine 日志**(A7)。
 
-### 1.3 服务端请求(审批,5 个显式 + 泛化 fallback)
+### 1.3 服务端请求(审批,5 个显式 + 用户输入表单 + 降级/拒绝)
 
-`item/commandExecution/requestApproval`、`item/fileChange/requestApproval`、`item/permissions/requestApproval`、`execCommandApproval`(legacy)、`applyPatchApproval`(legacy)已完整走 UI 审批;`item/tool/requestUserInput`、`mcpServer/elicitation/request` 走"默认应答"降级(空答案 / action 变体,表单 UI 见 3.8);`item/tool/call`、`account/chatgptAuthTokens/refresh`、`attestation/generate` 与其余未知方法立即回 `-32601` JSON-RPC error(A5 已完成)。
+`item/commandExecution/requestApproval`、`item/fileChange/requestApproval`、`item/permissions/requestApproval`、`execCommandApproval`(legacy)、`applyPatchApproval`(legacy)已完整走 UI 审批(命令审批含 `commandActions`/`acceptForSession`/`acceptWithExecpolicyAmendment`,2.8);`item/tool/requestUserInput` 渲染问题表单并回传结构化 `answers`(2.6);`mcpServer/elicitation/request` 仍走默认应答(表单 UI 见 Phase 3.8);`item/tool/call`、`account/chatgptAuthTokens/refresh`、`attestation/generate` 与其余未知方法立即回 `-32601` JSON-RPC error(A5 已完成)。
 
 ### 1.4 本地 JSONL 历史
 
-`codex_jsonl_history_parser.dart` 已解析 `session_meta`/`event_msg`/`turn_context`/`response_item` 主要子类型,`thread/read` 的 turn item 已覆盖 `userMessage`/`agentMessage`/`plan`/`reasoning`/`commandExecution`/`fileChange`/`mcpToolCall`/`dynamicToolCall`。
+`codex_jsonl_history_parser.dart` 已解析 `session_meta`/`event_msg`/`turn_context`/`response_item` 主要子类型;`thread/read` 的 turn item 已覆盖协议 18 种 ThreadItem(工具卡 + 系统事件 + 消息/计划/推理)。
 
 ---
 
@@ -106,10 +115,15 @@
   - 已用真实 app-server(0.142.3)验证:完整 capabilities 握手成功;`capabilities`/`optOutNotificationMethods` 传非法类型报反序列化错误(字段被识别);功能对比实验确认 opt-out 后 `remoteControl/status/changed`、`thread/started` 等通知不再下发。
   - 测试:新增 `declares client capabilities during initialize`,断言三个布尔能力与 opt-out 清单,并守护已消费通知(`thread/tokenUsage/updated`、`turn/completed` 等)不得出现在清单中。
 
-### A7. 未匹配通知静默丢弃,无可观测性
+### A7. 未匹配通知静默丢弃,无可观测性 —— ✅ 已完成(2026-07-09)
 
-- default 分支直接丢弃,协议演进时无法感知遗漏。
+- 现状:default 分支直接丢弃,协议演进时无法感知遗漏。
 - 修复:对未匹配 method 记 `fine` 级日志(带 method 名去重),开发期可开启"未知通知计数"诊断。
+- 实施记录:
+  - `_NotificationMapping` 增加 `unmatchedMethod`;mapper default 分支返回该方法名,不再与"已识别但无事件"的空映射混淆。
+  - provider `_handleNotification` 对未匹配通知调用 `_recordUnmatchedNotification`:首次 method 记 `Ignoring unmatched Codex notification: <method>` fine 日志,后续同名只递增 `_unmatchedNotificationCounts`;测试通过 `unmatchedNotificationCountsForTesting` 读取。
+  - 显式忽略的 `mcpServer/startupStatus/updated` 仍走 `_shouldIgnoreNotification`,不计入未匹配诊断。
+  - 测试:新增 `logs unmatched notifications once and counts further occurrences`;既有 mcp 忽略用例断言诊断计数为空。
 
 ---
 
@@ -122,17 +136,17 @@
 
 | 能力 | 协议方法/通知 | 结构要点 | 建议落点与做法 | 优先级 |
 | --- | --- | --- | --- | --- |
-| 实时推理流(思考过程) | `item/reasoning/textDelta`、`item/reasoning/summaryTextDelta`、`item/reasoning/summaryPartAdded` | `{ threadId, turnId, itemId, delta }`;summary 分段 | 新增 `AgentReasoningDeltaEvent`;timeline store 将 delta 聚合到 reasoning 卡片(现在 reasoning 只有历史回放,实时全丢) | P1 |
-| Plan 文本流式 | `item/plan/delta` | plan item 的增量文本 | 复用消息 delta 通道,`plan` item 支持流式渲染 | P1 |
-| Turn 级聚合 diff | `turn/diff/updated` | `{ threadId, turnId, diff }` 全 turn 统一 diff | 新增 `AgentTurnDiffEvent`;Agent pane 增加"本回合改动"折叠 diff 视图 | P1 |
-| 线程运行状态细化 | `thread/status/changed` | `ThreadStatus = notLoaded/idle/active{waitingOnApproval, waitingOnUserInput}/systemError` | 映射到 `AgentThreadRuntimeStatus`(已有枚举,补 waiting 标志);状态胶囊展示"等待审批/等待输入" | P1 |
-| 审批请求被他端解决 | `serverRequest/resolved` | `{ requestId, threadId }` | provider 移除 `_pendingApprovals[requestId]` 并发事件让 UI 关闭审批卡(多客户端/daemon 场景必备) | P1 |
-| MCP 工具进度 | `item/mcpToolCall/progress` | 进度消息 | 更新对应工具卡片 content | P1 |
-| 模型改道提醒 | `model/rerouted` | 模型被服务端切换 | 以系统事件插入时间线 + 状态栏提示 | P1 |
-| 弃用警告 | `deprecationNotice` | API 弃用信息 | 记日志 + 一次性系统提示,提示升级适配层 | P1 |
-| item 类型全覆盖 | `item/started` / `item/completed` 中的 `ThreadItem` | 协议共 18 种:已识别 8 种;缺 `webSearch`、`imageGeneration`、`imageView`、`collabAgentToolCall`、`subAgentActivity`、`enteredReviewMode`、`exitedReviewMode`、`contextCompaction`、`hookPrompt`、`sleep` | 扩展 `_normalizedAgentItemType` 与 `_toolKind`;`webSearch → AgentToolKind.search`、`imageGeneration/imageView → fetch/other`、review/compaction → 系统事件条目 | P1 |
+| 实时推理流(思考过程) ✅ | `item/reasoning/textDelta`、`item/reasoning/summaryTextDelta`、`item/reasoning/summaryPartAdded` | `{ threadId, turnId, itemId, delta }`;summary 分段 | 已新增 `AgentReasoningDeltaEvent`;timeline 聚合到「思考」卡片(摘要优先,原文兜底,首次自动展开) | P1 |
+| Plan 文本流式 ✅ | `item/plan/delta` | plan item 的增量文本 | 已复用 `AgentMessageDeltaEvent` 通道(raw 注入 `type: plan`)，timeline 流式渲染计划卡并自动展开；`item/completed` 仍以权威全文覆盖 | P1 |
+| Turn 级聚合 diff ✅ | `turn/diff/updated` | `{ threadId, turnId, diff }` 全 turn 统一 diff | 已新增 `AgentTurnDiffEvent` + `AgentTurnDiffTimelineEntry`;grouping 解析 unified diff 复用文件编辑组卡片,标题为「本回合改动」 | P1 |
+| 线程运行状态细化 ✅ | `thread/status/changed` | `ThreadStatus = notLoaded/idle/active{waitingOnApproval, waitingOnUserInput}/systemError` | 已映射到 `AgentThreadStatusChangedEvent`;`AgentThreadSummary` 补 waiting 标志;Agent 头状态胶囊展示「等待审批/等待输入」,列表同步 | P1 |
+| 审批请求被他端解决 ✅ | `serverRequest/resolved` | `{ requestId, threadId }` | 已新增 `AgentPermissionResolvedEvent`；provider 清 `_pendingApprovals` 且不回写响应；timeline 撤销审批卡 | P1 |
+| MCP 工具进度 ✅ | `item/mcpToolCall/progress` | `{ itemId, message, threadId, turnId }` | 已映射为带 `_progressAppend` 的 `AgentToolCallEvent`；timeline 按行追加 content、保留既有标题/kind 并自动展开 | P1 |
+| 模型改道提醒 ✅ | `model/rerouted` | `{ threadId, turnId, fromModel, toModel, reason }` | 已新增 `AgentModelReroutedEvent`；时间线系统事件卡 + 头栏「已改道至 …」提示(回合结束清除) | P1 |
+| 弃用警告 ✅ | `deprecationNotice` | `{ summary, details? }` | 已新增 `AgentDeprecationNoticeEvent`；provider warning 日志 + 按 summary 去重的一次性警告卡 | P1 |
+| item 类型全覆盖 ✅ | `item/started` / `item/completed` 中的 `ThreadItem` | 协议 18 种已覆盖:工具卡(`webSearch`/`imageView`/`imageGeneration`/`collabAgentToolCall` 等)+系统事件(`enteredReviewMode`/`exitedReviewMode`/`contextCompaction`/`hookPrompt`/`sleep`/`subAgentActivity`);`thread/read` 同步 | P1 |
 | 命令输出终端交互 | `item/commandExecution/terminalInteraction` | 命令要求终端交互 | 至少映射为工具卡片提示"命令等待终端输入",配合 P4 终端能力完善 | P2 |
-| 自动审批评审指示 | `item/autoApprovalReview/started` / `completed` | guardian 自动评审状态 | 审批卡片显示"自动评审中/结果" | P2 |
+| 自动审批评审指示 ✅ | `item/autoApprovalReview/started` / `completed` | guardian 自动评审状态 | 审批卡片显示自动评审中/结果;拒绝可放行(2.9) | P2 |
 
 ### 3.2 输入能力(多模态与富输入,P1~P2)
 
@@ -140,19 +154,19 @@
 
 | 输入类型 | 协议结构 | 建议做法 | 优先级 |
 | --- | --- | --- | --- |
-| `localImage` | `{ type: localImage, path, detail? }` | 输入框支持粘贴/拖拽图片,落盘临时文件后随 turn 发送 | P1 |
+| `localImage` ✅ | `{ type: localImage, path, detail? }` | 输入框支持粘贴/选图,落盘临时文件后随 turn 发送(1.10) | P1 |
 | `image` | `{ type: image, url, detail? }` | 支持粘贴远程图片 URL | P2 |
-| `mention` | `{ type: mention, name, path }` | @文件引用;可先用本地文件树实现选择器,后续接 `fuzzyFileSearch` | P2 |
+| `mention` ✅ | `{ type: mention, name, path }` | @文件引用;composer 本地文件选择器(2.10) | P2 |
 | `skill` | `{ type: skill, name, path }` | 依赖 `skills/list`(见 3.8) | P4 |
-| `text.text_elements` | 文本内嵌特殊 span(mention 渲染元数据) | 与 mention 一起做 | P2 |
+| `text.text_elements` ✅ | 文本内嵌特殊 span(mention 渲染元数据) | 与 mention 一起发送(2.10) | P2 |
 
 `turn/start` 其余未用参数:
 
 | 参数 | 用途 | 优先级 |
 | --- | --- | --- |
 | `effort` / `summary` | 推理力度与推理摘要模式覆盖(A4 修复后自然获得) | P0 |
-| `clientUserMessageId` | 客户端幂等 id,防重发 | P2 |
-| `sandboxPolicy` / `approvalPolicy` | 每回合沙箱/审批策略(UI 提供模式切换:只读/工作区可写/全权限) | P2 |
+| `clientUserMessageId` ✅ | 客户端幂等 id,防重发 | P2 |
+| `sandboxPolicy` / `approvalPolicy` ✅ | 每回合沙箱/审批策略(composer 预设选择器) | P2 |
 | `personality` | 回复风格 | P4 |
 | `outputSchema` | 最后一条消息的 JSON Schema 约束(自动化场景) | P4 |
 | `approvalsReviewer` | 审批评审者(guardian 集成) | P4 |
@@ -173,21 +187,21 @@
 | 压缩上下文 | `thread/compact/start { threadId }` | `thread/compacted` | 上下文接近上限时(配合 A1 的 `modelContextWindow`)提示一键压缩 | P2 |
 | 设置变更同步 | — | `thread/settings/updated` | 服务端/他端修改 model、approvalPolicy 后同步 UI 选择器 | P2 |
 | 线程被关闭 | — | `thread/closed` | 释放本地运行状态 | P2 |
-| 取消订阅 | `thread/unsubscribe { threadId }` | — | 切换会话时取消旧订阅,减少无关通知(当前切换后旧 thread 通知仍会到达) | P1 |
+| 取消订阅 ✅ | `thread/unsubscribe { threadId }` | — | 切换/`start`/`resume`/项目切换时 best-effort 取消旧订阅 | P1 |
 | 已加载线程列表 | `thread/loaded/list` | — | daemon/多窗口场景查询服务端已加载线程 | P3 |
 | 元数据更新 | `thread/metadata/update` | — | 写入自定义元数据 | P3 |
 | 列表增强 | `thread/list` 的 `searchTerm`、`archived`、`modelProviders`、`useStateDbOnly` | — | thread 面板搜索框、归档筛选 | P2 |
-| Guardian 放行 | `thread/approveGuardianDeniedAction` | — | guardian 拒绝后的人工放行入口 | P3 |
+| Guardian 放行 ✅ | `thread/approveGuardianDeniedAction` | — | guardian 拒绝后的人工放行入口(2.9) | P3 |
 
 ### 3.4 审批与用户输入深化(P2)
 
 | 能力 | 协议 | 现状与差距 | 优先级 |
 | --- | --- | --- | --- |
-| 结构化用户提问表单 | `item/tool/requestUserInput`(服务端请求) | 现在直接回默认空答案;协议里有 questions 列表(id/header/question/options),应渲染成表单卡片并回传答案 | P2 |
+| 结构化用户提问表单 ✅ | `item/tool/requestUserInput`(服务端请求) | 表单卡片 + 结构化 answers 回传(2.6) | P2 |
 | MCP elicitation 表单 | `mcpServer/elicitation/request` | 同上,协议携带 JSON Schema 表单定义(`requestedSchema`),需动态表单渲染 | P3 |
-| 审批策略预设 | `permissionProfile/list` | 未接;可用来渲染标准的审批/沙箱组合选择器(与 codex TUI 一致) | P2 |
-| 细粒度审批策略 | `AskForApproval` 的 `granular` 变体 | 当前只发 `on-request` 字符串;granular 支持 mcp_elicitations/rules/sandbox_approval/skill_approval 独立开关 | P4 |
-| 命令审批的完整上下文 | `CommandExecutionRequestApprovalParams` | 协议含 `commandActions`(解析后的命令语义)、`proposedExecpolicyAmendment`(建议的白名单规则,回应时可带 `execpolicy_amendment` 持久化"总是允许") | P2 |
+| 审批策略预设 ✅ | `permissionProfile/list` | composer 预设选择器 + turn/thread 携带策略(2.7) | P2 |
+| 细粒度审批策略 | `AskForApproval` 的 `granular` 变体 | 当前发字符串变体;granular 支持 mcp_elicitations/rules/sandbox_approval/skill_approval 独立开关 | P4 |
+| 命令审批的完整上下文 ✅ | `CommandExecutionRequestApprovalParams` | 展示 `commandActions`;支持 `acceptForSession`/`acceptWithExecpolicyAmendment`(2.8) | P2 |
 
 ### 3.5 账户与认证(P3)
 
@@ -289,8 +303,8 @@
 | 0.4 ✅ | `turn/start` 参数 `reasoningEffort` → `effort`,补发 `summary`(可选)(已完成:改发 `effort` 并经真实 app-server 验证;`summary` 暂无 UI 来源,不发送) | `codex_app_server_client.dart` |
 | 0.5 ✅ | 未知服务端请求返回 JSON-RPC error 而非 `{}`/`null`;`item/tool/call`、`account/chatgptAuthTokens/refresh` 显式结构化拒绝(已完成:`rejectionFor` 分类 + `-32601` 应答,顺带修复 requestUserInput/elicitation 响应结构;transport 的 `sendResponse(error:)` 原生支持,无需改动) | `codex_approval_mapper.dart`、`codex_app_server_agent_provider.dart` |
 | 0.6 ✅ | `initialize` 声明 capabilities;`optOutNotificationMethods` 屏蔽 `thread/realtime/*` 等(已完成:显式声明三个布尔能力为 false + 15 个 P4~P5 通知 opt-out,经真实 app-server 验证通知确实被抑制) | provider |
-| 0.7 | 未匹配通知记录日志(去重);新增开发诊断计数 | provider |
-| 0.8 | 建立协议同步机制:`tool/` 下加脚本调用 `codex app-server generate-json-schema`,在 `docs/` 记录 pinned codex 版本;协议升级时 diff schema | 新增 `tool/gen_codex_schema.sh` + 文档 |
+| 0.7 ✅ | 未匹配通知记录日志(去重);新增开发诊断计数(已完成:mapper 标记 `unmatchedMethod`,provider 按 method 去重 fine 日志 + 累计计数,含单测) | provider / `codex_notification_mapper.dart` |
+| 0.8 ✅ | 建立协议同步机制:`tool/` 下加脚本调用 `codex app-server generate-json-schema`,在 `docs/` 记录 pinned codex 版本;协议升级时 diff schema(已完成:`tool/gen_codex_schema.sh` + `.ps1`,快照 `third_party/codex_app_server_schema` pin `0.142.5`,文档 `docs/codex_app_server_protocol.md`;排除键序不稳定的 v2 聚合文件) | `tool/gen_codex_schema.*` + `docs/codex_app_server_protocol.md` + `third_party/codex_app_server_schema/` |
 
 验收标准:真实 `codex app-server` 冒烟(发一条消息)可看到 token 用量更新;人为断网可看到带错误码的错误卡片;`turn/interrupt` 后时间线显示"已中断";全部现有测试通过 + 新增 fixture 测试。
 
@@ -300,33 +314,35 @@
 
 | # | 任务 | 落点 |
 | --- | --- | --- |
-| 1.1 | reasoning 三通知 → `AgentReasoningDeltaEvent`;timeline"思考中"卡片流式展开 | mapper、domain、timeline store、agent pane |
-| 1.2 | `item/plan/delta` 流式 plan | 同上 |
-| 1.3 | `turn/diff/updated` → 回合级 diff 视图 | 新 `AgentTurnDiffEvent`;复用现有 diff 渲染组件 |
-| 1.4 | `thread/status/changed` → 状态胶囊(等待审批/等待输入) | mapper、`agent_thread_models.dart`、状态胶囊组件 |
-| 1.5 | `serverRequest/resolved` → 自动撤销审批卡片 | provider(`_pendingApprovals` 清理)+ 新事件 + timeline store |
-| 1.6 | `item/mcpToolCall/progress` 工具卡进度 | mapper |
-| 1.7 | `model/rerouted`、`deprecationNotice` 系统提示 | mapper + 系统事件条目 |
-| 1.8 | `item/started|completed` 覆盖全部 18 种 ThreadItem(webSearch/imageGeneration/review/compaction 等) | `codex_app_server_helpers.dart`(类型归一化、工具分类)+ 历史 reader 同步 |
-| 1.9 | 切换会话时调用 `thread/unsubscribe` | client、provider、view model |
-| 1.10 | 输入框支持本地图片(`localImage`)发送 | `AgentProvider.sendMessage` 签名扩展(输入项列表)、client、composer UI |
+| 1.1 ✅ | reasoning 三通知 → `AgentReasoningDeltaEvent`;timeline"思考中"卡片流式展开(已完成 2026-07-09: 映射 `textDelta`/`summaryTextDelta`/`summaryPartAdded`;timeline 摘要优先聚合并自动展开; `item/started|completed` 与 `thread/read` 同步提取 summary/content) | mapper、domain、timeline store、agent pane |
+| 1.2 ✅ | `item/plan/delta` 流式 plan(已完成 2026-07-09: 映射为带 `type:plan` 的 `AgentMessageDeltaEvent`;timeline 聚合到计划卡并自动展开;completed item 覆盖权威全文) | 同上 |
+| 1.3 ✅ | `turn/diff/updated` → 回合级 diff 视图(已完成 2026-07-09: `AgentTurnDiffEvent` + timeline 条目;按 `diff --git` 拆文件并复用文件编辑组渲染) | 新 `AgentTurnDiffEvent`;复用现有 diff 渲染组件 |
+| 1.4 ✅ | `thread/status/changed` → 状态胶囊(等待审批/等待输入)(已完成 2026-07-09: 解析 activeFlags;头胶囊 + 列表 waiting 文案;非 active 清除等待标志) | mapper、`agent_thread_models.dart`、状态胶囊组件 |
+| 1.5 ✅ | `serverRequest/resolved` → 自动撤销审批卡片(已完成 2026-07-09: 映射 `AgentPermissionResolvedEvent`；provider 清 pending 不回写；ViewModel/timeline 移除审批卡；含 int/string requestId 对齐与单测) | provider(`_pendingApprovals` 清理)+ 新事件 + timeline store |
+| 1.6 ✅ | `item/mcpToolCall/progress` 工具卡进度(已完成 2026-07-09: 映射进度消息；timeline 追加 content 且不覆盖 item 标题；缺 itemId/message 丢弃；含单测) | mapper + timeline store |
+| 1.7 ✅ | `model/rerouted`、`deprecationNotice` 系统提示(已完成 2026-07-09: 两事件映射；改道插系统卡+头栏提示；弃用 warning 日志+按 summary 去重展示；含单测) | mapper + 系统事件条目 |
+| 1.8 ✅ | `item/started|completed` 覆盖全部 18 种 ThreadItem(已完成 2026-07-09: helpers 统一映射工具卡/系统事件;`AgentSystemItemEvent`;`thread/read` 同步;含单测) | `codex_app_server_helpers.dart`(类型归一化、工具分类)+ 历史 reader 同步 |
+| 1.9 ✅ | 切换会话时调用 `thread/unsubscribe`(已完成 2026-07-09: `AgentProvider.unsubscribeThread`;`start`/`resume` 换会话后退订旧 thread;`switchThread`/`updateWorkspace` best-effort 退订;含单测) | client、provider、view model |
+| 1.10 ✅ | 输入框支持本地图片(`localImage`)发送(已完成 2026-07-09: `AgentUserInput` + `sendMessage`/`steerTurn` inputs;`file_selector` 选图 + `pasteboard` 粘贴落盘;composer 草稿预览;时间线气泡展示;含单测) | `AgentProvider.sendMessage` 签名扩展(输入项列表)、client、composer UI |
 
 验收标准:真实会话中可见流式思考、流式 plan、回合 diff;审批在另一客户端处理后本端卡片自动消失;粘贴图片可发送并出现在历史里。
+
+冒烟记录(2026-07-09,`tool/smoke_codex_app_server.py`,CLI `0.142.5`):17/17 通过。已验证 handshake、`turn/start` 接受 `text`+`localImage`(item 通知可见)、`thread/status/changed`、`thread/tokenUsage/updated`(`modelContextWindow`)、agent 消息流、`turn/interrupt`→`interrupted`、`thread/unsubscribe`。本轮短回复未触发 reasoning/plan/`turn/diff`(脚本记 optional);他端解决审批需双客户端,未覆盖。
 
 ### Phase 2:Thread 管理与审批深化(约 2 周)
 
 | # | 任务 | 落点 |
 | --- | --- | --- |
-| 2.1 | `AgentProvider` 接口扩展:rename/archive/unarchive/delete/fork/rollback/compact | `agent_provider.dart` + client + provider |
-| 2.2 | thread 列表右键菜单与归档视图(`thread/list archived:true`、`searchTerm` 搜索框) | `project_threads` feature + agent feature |
-| 2.3 | 配套通知(`thread/archived|unarchived|deleted|closed|name/updated|compacted|settings/updated`)→ 列表与会话状态同步 | mapper + threads controller |
-| 2.4 | 基于 `thread/rollback` + `thread/fork` 实现"编辑消息重试 / 从此处分叉" | conversation view model + UI |
-| 2.5 | 上下文用量接近 `modelContextWindow` 时提示 `thread/compact/start` | timeline store + 状态条 |
-| 2.6 | `item/tool/requestUserInput` 表单卡片(问题列表 + 选项 + 自由文本),答案结构化回传 | approval mapper(响应编码)、新表单组件 |
-| 2.7 | `permissionProfile/list` 驱动审批/沙箱预设选择器;`turn/start` 携带所选 `approvalPolicy`/`sandboxPolicy` | client、model selection controller 同级新 controller、composer 设置弹层 |
-| 2.8 | 命令审批卡片增强:展示 `commandActions` 语义、支持 `execpolicy_amendment`("总是允许此命令") | approval mapper、审批卡片 |
-| 2.9 | `item/autoApprovalReview/*` 指示器;`thread/approveGuardianDeniedAction` 放行入口 | mapper + UI |
-| 2.10 | `clientUserMessageId` 幂等、mention 输入(`mention` + `text_elements`,选择器先用本地文件树) | client、composer |
+| 2.1 ✅ | `AgentProvider` 接口扩展:rename/archive/unarchive/delete/fork/rollback/compact | `agent_provider.dart` + client + provider |
+| 2.2 ✅ | thread 列表右键菜单与归档视图(`thread/list archived:true`、`searchTerm` 搜索框) | `project_threads` feature + agent feature |
+| 2.3 ✅ | 配套通知(`thread/archived|unarchived|deleted|closed|name/updated|compacted|settings/updated`)→ 列表与会话状态同步 | mapper + threads controller |
+| 2.4 ✅ | 基于 `thread/rollback` + `thread/fork` 实现"编辑消息重试 / 从此处分叉" | conversation view model + UI |
+| 2.5 ✅ | 上下文用量接近 `modelContextWindow` 时提示 `thread/compact/start` | timeline store + 状态条 |
+| 2.6 ✅ | `item/tool/requestUserInput` 表单卡片(问题列表 + 选项 + 自由文本),答案结构化回传(已完成 2026-07-09: questions 解析/`answers` 编码;可交互表单卡;Deny 回空答案) | approval mapper、permission 模型、`_AgentPermissionCard` |
+| 2.7 ✅ | `permissionProfile/list` 驱动审批/沙箱预设选择器;`turn/start`/`thread/start` 携带所选策略;`thread/settings/updated` 同步(已完成 2026-07-09) | client、`AgentPermissionSelection` controller、composer 策略按钮 |
+| 2.8 ✅ | 命令审批卡片增强:展示 `commandActions` 语义、支持 `acceptForSession`/`acceptWithExecpolicyAmendment`(已完成 2026-07-09) | approval mapper、审批卡片 |
+| 2.9 ✅ | `item/autoApprovalReview/*` 指示器;`thread/approveGuardianDeniedAction` 放行入口(已完成 2026-07-09) | mapper + UI |
+| 2.10 ✅ | `clientUserMessageId` 幂等、mention 输入(`mention` + `text_elements`,本地文件选择器)(已完成 2026-07-09) | client、composer、`AgentUserInput` |
 
 验收标准:可在 UI 完成重命名/归档/删除/分叉/回滚全流程;`request_user_input` 出表单且回答被模型接收;审批模式切换后新 turn 生效。
 
@@ -366,7 +382,7 @@
 
 ## 5. 横切工程事项
 
-1. **协议版本锁定**:适配层按 `codex-cli 0.142.3` schema 开发;`tool/gen_codex_schema.sh` 输出纳入 review 流程,升级 codex 时先 diff schema 再动代码。
+1. **协议版本锁定**:适配层按 pinned `codex-cli 0.142.5` schema 开发(见 `third_party/codex_app_server_schema/PINNED_VERSION`);`tool/gen_codex_schema.sh` / `.ps1` 输出纳入 review 流程,升级 codex 时先 `--diff`/`-Diff` 再动代码。流程见 `docs/codex_app_server_protocol.md`。
 2. **domain 事件演进**:新增事件一律走 `agent_event_models.dart` 的 sealed 层次,禁止在 presentation 里读 raw 协议字段;raw payload 仅存 `raw` 字段用于诊断。
 3. **测试策略**:
    - 每个新通知/请求映射:fixture JSON → mapper 单测(Arrange-Act-Assert);

@@ -1,6 +1,6 @@
 # 设计文档
 
-最后更新：2026-07-08
+最后更新：2026-07-09
 
 ## 1. 设计目标
 
@@ -53,7 +53,7 @@ AgentConversationViewModel
 ### 三栏工作台
 
 - Projects：展示已打开项目、当前项目状态和项目下的 Agent threads。
-- Agent：展示上下文栏、状态胶囊、消息时间线、工具调用卡片、审批卡片和输入区。
+- Agent：展示上下文栏、状态胶囊、流式消息/思考/计划时间线、回合 diff、工具与审批卡片、本地图片输入区。
 - Files：展示当前项目文件树，目录按需展开，文件选择只更新 Agent 上下文。
 
 ### 主题与设计系统
@@ -82,13 +82,12 @@ AgentConversationViewModel
 
 `AgentProvider` 是 UI 与具体 Agent CLI 之间的稳定接口，负责：
 
-- 初始化 provider。
-- 创建和恢复 session。
-- 列出项目 threads。
-- 读取 thread 历史。
-- 发送、追加和取消 turn。
-- 响应权限请求。
-- 推送状态、消息、工具调用和审批事件。
+- 初始化 provider（含 capabilities / 通知 opt-out）。
+- 创建和恢复 session；切换会话时 best-effort `unsubscribeThread`。
+- 列出项目 threads、读取 thread 历史。
+- 发送、追加和取消 turn（`sendMessage` / `steerTurn` 支持多输入项）。
+- 响应权限请求；他端已解决的审批通过事件撤销本地卡片。
+- 推送状态、消息、推理/计划流、工具调用、回合 diff、审批与系统提示事件。
 
 ### 默认 provider
 
@@ -98,16 +97,41 @@ AgentConversationViewModel
 codex app-server --stdio
 ```
 
-Codex provider 通过 JSON-RPC stdio 通信，把 `thread/*`、`turn/*` 和 `item/*` 事件转换为领域层事件。UI 不直接处理 Codex 原始协议。
+Codex provider 通过 JSON-RPC stdio 通信，把 `thread/*`、`turn/*` 和 `item/*`
+事件转换为领域层 `AgentEvent`。UI 不直接处理 Codex 原始协议。
+
+协议基准锁定在 `third_party/codex_app_server_schema`（由
+`tool/gen_codex_schema.sh` / `.ps1` 从本机 Codex CLI 导出）。当前 pin 与
+升级流程见 [Codex app-server 协议版本锁定](./codex_app_server_protocol.md)；
+功能缺口与分阶段适配见
+[`plan/codex_app_server_adaptation_plan.md`](../plan/codex_app_server_adaptation_plan.md)。
+
+**适配进度（截至 Phase 2 核心 2.1–2.5）：** Phase 0 完成协议对齐；Phase 1
+完成核心流式体验；Phase 2 核心完成 thread 生命周期管理（重命名/归档/删除/
+分叉/回滚/压缩）、列表搜索与归档视图、配套通知同步，以及上下文占用提示。
+审批表单、permissionProfile、mention 等（2.6–2.10）仍待后续切片。
+
+### 当前已落地的对话体验
+
+- 流式推理（思考卡，摘要优先）与流式 plan 卡。
+- 回合级聚合 diff（「本回合改动」）。
+- 线程状态胶囊：等待审批 / 等待输入；列表侧同步 waiting 标志。
+- 模型改道、弃用通知等系统提示；token 用量含 `modelContextWindow` 占用比例。
+- 18 种 ThreadItem 在实时路径与 `thread/read` / JSONL 历史中一致映射。
+- 输入区支持本地图片（选图 / 粘贴落盘）随 turn 发送，时间线气泡预览。
+- Thread 列表：搜索、活动/归档切换、右键重命名/归档/删除/分叉。
+- 编辑上一条用户消息（`thread/rollback` + 重发）；头栏分叉与上下文压缩入口。
 
 ### 上下文策略
 
-当前 V1 只传递：
+当前仍只自动传递：
 
 - 当前项目路径。
 - 当前文件路径。
 
-系统不会自动读取文件内容，也不会自动授权命令或文件写入。默认审批策略为 `on-request`。
+系统不会自动读取文件内容，也不会自动授权命令或文件写入。默认审批策略为
+`on-request`。用户可在输入区附加本地图片；`@mention` / 远程图片 / skill
+注入等富输入见适配计划 Phase 2.10 / Phase 4。
 
 ## 6. 会话状态设计
 
@@ -160,7 +184,8 @@ IDE 会话状态目前版本为 2，持久化内容包括：
 
 ## 10. 演进方向
 
-- 增加 provider 配置管理界面。
+- Codex 适配 Phase 2：thread 重命名/归档/删除/分叉/回滚/压缩，以及审批表单与策略预设（见适配计划）。
+- 增加 provider 配置管理界面（与 Phase 3 账户/配置能力对齐）。
 - 增加文件内容预览或编辑器能力。
 - 增加 Agent 执行审计记录。
 - 支持更多 Agent provider。

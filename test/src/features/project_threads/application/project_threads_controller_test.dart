@@ -11,6 +11,8 @@ import 'package:zeta/src/features/project_threads/domain/project_threads_session
 import 'package:zeta/src/features/project_threads/presentation/project_threads_view_model.dart';
 import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 
+import '../../../testing/agent_provider_stub_base.dart';
+
 void main() {
   group('ProjectThreadsController', () {
     test(
@@ -119,6 +121,45 @@ void main() {
       },
     );
 
+    test('applies thread/status/changed waiting flags to list state', () async {
+      final provider = _FakeAgentProvider(
+        pages: <AgentThreadPage>[_page(_threads(1), nextCursor: null)],
+      );
+      final controller = _createController(provider);
+
+      controller.activateProject('/repo');
+      await _flushAsync();
+
+      provider.emit(
+        const AgentThreadStatusChangedEvent(
+          threadId: 'thread-0',
+          status: AgentThreadRuntimeStatus.active,
+          waitingOnApproval: true,
+        ),
+      );
+      await _flushAsync();
+
+      final waiting = controller.stateFor('/repo').threads.single;
+      expect(waiting.status, AgentThreadRuntimeStatus.active);
+      expect(waiting.waitingOnApproval, isTrue);
+      expect(controller.stateFor('/repo').runningThreadIds, <String>{
+        'thread-0',
+      });
+
+      provider.emit(
+        const AgentThreadStatusChangedEvent(
+          threadId: 'thread-0',
+          status: AgentThreadRuntimeStatus.idle,
+        ),
+      );
+      await _flushAsync();
+
+      final idle = controller.stateFor('/repo').threads.single;
+      expect(idle.status, AgentThreadRuntimeStatus.idle);
+      expect(idle.waitingOnApproval, isFalse);
+      expect(controller.stateFor('/repo').runningThreadIds, isEmpty);
+    });
+
     test(
       'ignores duplicate loads while a project is already loading',
       () async {
@@ -181,6 +222,76 @@ void main() {
       expect(plan.states['/other']?.isExpanded, isTrue);
       expect(plan.projectsToLoad, <String>['/repo', '/other']);
     });
+
+    test('passes archived and searchTerm to listThreads', () async {
+      final provider = _FakeAgentProvider(
+        pages: <AgentThreadPage>[_page(_threads(1), nextCursor: null)],
+      );
+      final controller = _createController(provider);
+
+      controller.activateProject('/repo');
+      await _flushAsync();
+      await controller.setArchivedView(projectPath: '/repo', archived: true);
+      await _flushAsync();
+
+      expect(provider.listQueries.last.archived, isTrue);
+      expect(controller.stateFor('/repo').archived, isTrue);
+
+      controller.setSearchTerm(projectPath: '/repo', searchTerm: 'foo');
+      await Future<void>.delayed(projectThreadSearchDebounce);
+      await _flushAsync();
+
+      expect(provider.listQueries.last.searchTerm, 'foo');
+      expect(controller.stateFor('/repo').searchTerm, 'foo');
+    });
+
+    test('renames thread and applies name updated event', () async {
+      final provider = _FakeAgentProvider(
+        pages: <AgentThreadPage>[_page(_threads(1), nextCursor: null)],
+      );
+      final controller = _createController(provider);
+      controller.activateProject('/repo');
+      await _flushAsync();
+
+      await controller.renameThread(
+        projectPath: '/repo',
+        threadId: 'thread-0',
+        name: 'Renamed',
+      );
+      expect(provider.renamedThreads.single.name, 'Renamed');
+      expect(controller.stateFor('/repo').threads.single.title, 'Renamed');
+
+      provider.emit(
+        const AgentThreadNameUpdatedEvent(
+          threadId: 'thread-0',
+          threadName: 'From server',
+        ),
+      );
+      await _flushAsync();
+      expect(controller.stateFor('/repo').threads.single.title, 'From server');
+    });
+
+    test('removes archived thread and notifies active clear', () async {
+      final provider = _FakeAgentProvider(
+        pages: <AgentThreadPage>[_page(_threads(1), nextCursor: null)],
+      );
+      final cleared = <(String, String)>[];
+      final controller = _createController(provider);
+      controller.onActiveThreadCleared = (projectPath, threadId) {
+        cleared.add((projectPath, threadId));
+      };
+      controller.activateProject('/repo');
+      await _flushAsync();
+      controller.selectThreadId('/repo', 'thread-0');
+
+      await controller.archiveThread(
+        projectPath: '/repo',
+        threadId: 'thread-0',
+      );
+      expect(provider.archivedThreads, <String>['thread-0']);
+      expect(controller.stateFor('/repo').threads, isEmpty);
+      expect(cleared, <(String, String)>[('/repo', 'thread-0')]);
+    });
   });
 }
 
@@ -236,7 +347,9 @@ class _FakeAgentProviderFactory implements AgentProviderFactory {
   AgentProvider create(AgentProviderConfig config) => provider;
 }
 
-class _FakeAgentProvider implements AgentProvider {
+class _FakeAgentProvider
+    with AgentProviderThreadLifecycleStub
+    implements AgentProvider {
   _FakeAgentProvider({required List<AgentThreadPage> pages})
     : _pages = List<AgentThreadPage>.from(pages);
 
@@ -284,6 +397,9 @@ class _FakeAgentProvider implements AgentProvider {
   }
 
   @override
+  Future<void> unsubscribeThread(String threadId) async {}
+
+  @override
   Future<AgentSession> startSession({required AgentContext context}) async {
     return const AgentSession(
       id: 'thread-0',
@@ -302,8 +418,10 @@ class _FakeAgentProvider implements AgentProvider {
   @override
   Future<AgentTurn> sendMessage({
     required AgentSession session,
-    required String message,
     required AgentContext context,
+    String? message,
+    List<AgentUserInput>? inputs,
+    String? clientUserMessageId,
   }) async {
     return AgentTurn(id: 'turn-1', sessionId: session.id);
   }
@@ -311,8 +429,10 @@ class _FakeAgentProvider implements AgentProvider {
   @override
   Future<void> steerTurn({
     required AgentSession session,
-    required String message,
     required AgentContext context,
+    String? message,
+    List<AgentUserInput>? inputs,
+    String? clientUserMessageId,
   }) async {}
 
   @override
@@ -328,6 +448,20 @@ class _FakeAgentProvider implements AgentProvider {
 
   @override
   void updateModelSelection(AgentModelSelection selection) {}
+
+  @override
+  void updatePermissionSelection(AgentPermissionSelection selection) {}
+
+  @override
+  Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
+    return const <AgentPermissionProfileSummary>[];
+  }
+
+  @override
+  Future<void> approveGuardianDeniedAction({
+    required String threadId,
+    required Object event,
+  }) async {}
 
   @override
   Future<void> respondToPermission(AgentPermissionDecision decision) async {}

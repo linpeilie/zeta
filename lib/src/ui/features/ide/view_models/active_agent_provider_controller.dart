@@ -68,6 +68,34 @@ class ActiveAgentProviderController extends ChangeNotifier {
     _notify();
   }
 
+  /// 持久化审批/沙箱策略选择。
+  Future<void> persistPermissionSelection(
+    AgentPermissionSelection selection,
+  ) async {
+    final providerId = _settings.activeProvider.id;
+    final updatedProviders = _settings.providers.map((provider) {
+      if (provider.id != providerId) {
+        return provider;
+      }
+      return provider.copyWith(
+        selectedApprovalPolicy: selection.approvalPolicy,
+        selectedSandboxPolicy: selection.sandboxPolicy,
+        selectedPermissionProfileId: selection.permissionProfileId,
+      );
+    }).toList();
+    _settings = AgentProviderSettings(
+      providers: List<AgentProviderConfig>.unmodifiable(updatedProviders),
+      activeProviderId: providerId,
+    );
+    try {
+      await configStore.save(_settings);
+      _log.fine('Persisted permission selection for provider $providerId');
+    } catch (error, stackTrace) {
+      _log.warning('Could not persist permission selection', error, stackTrace);
+    }
+    _notify();
+  }
+
   /// 加载全局 provider 设置。
   Future<AgentProviderSettings> loadSettings() {
     final existing = _settingsFuture;

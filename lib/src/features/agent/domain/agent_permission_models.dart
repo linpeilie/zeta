@@ -1,3 +1,5 @@
+import 'package:zeta/src/features/agent/domain/agent_turn_history_models.dart';
+
 /// Agent 向用户请求审批或输入的中立分类。
 enum AgentPermissionKind {
   commandExecution,
@@ -5,6 +7,24 @@ enum AgentPermissionKind {
   permissions,
   userInput,
   other,
+}
+
+/// 命令执行审批的决策变体（对应协议 `CommandExecutionApprovalDecision`）。
+enum AgentCommandApprovalDecisionKind {
+  /// 同意本次命令。
+  accept,
+
+  /// 同意且本会话内同类命令不再提示。
+  acceptForSession,
+
+  /// 同意并持久化 execpolicy 白名单修正。
+  acceptWithExecpolicyAmendment,
+
+  /// 拒绝，回合继续。
+  decline,
+
+  /// 拒绝并中断回合。
+  cancel,
 }
 
 /// Provider 发出的审批或输入请求。
@@ -21,6 +41,9 @@ class AgentPermissionRequest {
     this.sessionId,
     this.turnId,
     this.fileChanges = const <String, Object?>{},
+    this.questions = const <AgentUserInputQaPair>[],
+    this.commandActions = const <String>[],
+    this.proposedExecpolicyAmendment = const <String>[],
     this.raw = const <String, Object?>{},
   });
 
@@ -51,6 +74,15 @@ class AgentPermissionRequest {
   /// 文件变更审批中的变更摘要。
   final Map<String, Object?> fileChanges;
 
+  /// `item/tool/requestUserInput` 的问题列表。
+  final List<AgentUserInputQaPair> questions;
+
+  /// 命令语义摘要（由 `commandActions` 解析而来）。
+  final List<String> commandActions;
+
+  /// 服务端建议的 execpolicy 白名单修正。
+  final List<String> proposedExecpolicyAmendment;
+
   /// 原始审批请求 payload。
   final Map<String, Object?> raw;
 }
@@ -62,12 +94,15 @@ class AgentPermissionDecision {
     required this.approved,
     this.cancelTurn = false,
     this.message,
+    this.answers = const <String, List<String>>{},
+    this.commandDecision,
+    this.execpolicyAmendment = const <String>[],
   });
 
   /// 对应 [AgentPermissionRequest.id]。
   final String requestId;
 
-  /// 是否同意。
+  /// 是否同意（非命令类审批 / 兼容路径）。
   final bool approved;
 
   /// 拒绝时是否同时取消当前 turn。
@@ -75,4 +110,13 @@ class AgentPermissionDecision {
 
   /// 可选的人类说明，预留给支持文本反馈的 provider。
   final String? message;
+
+  /// `requestUserInput` 的结构化答案：questionId → 选中标签或自由文本。
+  final Map<String, List<String>> answers;
+
+  /// 命令执行审批的显式决策变体；为 null 时回退到 [approved]/[cancelTurn]。
+  final AgentCommandApprovalDecisionKind? commandDecision;
+
+  /// 与 [AgentCommandApprovalDecisionKind.acceptWithExecpolicyAmendment] 配套的修正列表。
+  final List<String> execpolicyAmendment;
 }

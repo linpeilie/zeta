@@ -144,9 +144,29 @@ class _AgentTurnSection extends StatelessWidget {
       ),
       AgentPermissionTimelineEntry(:final request) => _AgentPermissionCard(
         request: request,
-        onApprove: () => viewModel.respondToPermission(request, approved: true),
-        onDeny: () => viewModel.respondToPermission(request, approved: false),
+        autoReview: viewModel.autoReviewForTurn(request.turnId),
+        onApproveGuardian: viewModel.latestDeniedAutoReview != null
+            ? viewModel.approveGuardianDeniedAction
+            : null,
+        onRespond:
+            ({
+              required bool approved,
+              bool cancelTurn = false,
+              Map<String, List<String>> answers =
+                  const <String, List<String>>{},
+              AgentCommandApprovalDecisionKind? commandDecision,
+              List<String> execpolicyAmendment = const <String>[],
+            }) => viewModel.respondToPermission(
+              request,
+              approved: approved,
+              cancelTurn: cancelTurn,
+              answers: answers,
+              commandDecision: commandDecision,
+              execpolicyAmendment: execpolicyAmendment,
+            ),
       ),
+      // 正常路径会在 grouping 中转成文件编辑组；此处仅作兜底。
+      AgentTurnDiffTimelineEntry() => const SizedBox.shrink(),
       AgentHistoryEventTimelineEntry(:final event) => _AgentHistoryEventCard(
         event: event,
       ),
@@ -159,13 +179,23 @@ class _AgentComposerSection extends StatelessWidget {
     required this.viewModel,
     required this.inputController,
     required this.canSendListenable,
+    required this.draftImagePaths,
+    required this.onAttachImages,
+    required this.onRemoveImage,
+    required this.onPasteImages,
     required this.onSend,
+    required this.onInsertMention,
   });
 
   final AgentConversationViewModel viewModel;
   final TextEditingController inputController;
   final ValueListenable<bool> canSendListenable;
+  final List<String> draftImagePaths;
+  final VoidCallback onAttachImages;
+  final ValueChanged<String> onRemoveImage;
+  final Future<bool> Function() onPasteImages;
   final VoidCallback onSend;
+  final ValueChanged<WorkspaceNode> onInsertMention;
 
   @override
   Widget build(BuildContext context) {
@@ -183,6 +213,10 @@ class _AgentComposerSection extends StatelessWidget {
                   canSubmit: canSend && viewModel.canSubmitMessage,
                   isTurnRunning: viewModel.isTurnRunning,
                   threadOpenPhase: viewModel.threadOpenPhase,
+                  draftImagePaths: draftImagePaths,
+                  onAttachImages: onAttachImages,
+                  onRemoveImage: onRemoveImage,
+                  onPasteImages: onPasteImages,
                   onSend: onSend,
                   onCancel: viewModel.cancelActiveTurn,
                   models: viewModel.models,
@@ -191,11 +225,19 @@ class _AgentComposerSection extends StatelessWidget {
                   selectedServiceTierId: viewModel.selectedServiceTierId,
                   showReasoningEffort: viewModel.showReasoningEffort,
                   showServiceTier: viewModel.showServiceTier,
+                  showPermissionPolicy: viewModel.showPermissionPolicy,
+                  permissionPolicyLabel: viewModel.permissionPolicyLabel,
+                  permissionPresets: AgentPermissionSelection.presets,
+                  selectedPermissionPresetId:
+                      viewModel.permissionSelection.matchedPresetId,
                   onSelectModel: (modelId) => viewModel.selectModel(modelId),
                   onSelectReasoningEffort: (effort) =>
                       viewModel.selectReasoningEffort(effort),
                   onSelectServiceTier: (tierId) =>
                       viewModel.selectServiceTier(tierId),
+                  onSelectPermissionPreset: viewModel.selectPermissionPreset,
+                  mentionCandidates: viewModel.mentionCandidateFiles,
+                  onInsertMention: onInsertMention,
                 );
               },
             );

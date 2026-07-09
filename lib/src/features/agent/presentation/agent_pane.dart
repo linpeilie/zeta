@@ -1,12 +1,18 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
+import 'package:pasteboard/pasteboard.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_chip.dart';
 import 'package:zeta/src/ui/core/ide_collapsible_card.dart';
@@ -50,10 +56,17 @@ class AgentPane extends StatefulWidget {
 
 class _AgentPaneState extends State<AgentPane> {
   static const double _autoScrollBottomThreshold = 48;
+  static const XTypeGroup _imageTypeGroup = XTypeGroup(
+    label: 'Images',
+    extensions: <String>['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'],
+  );
 
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ValueNotifier<bool> _canSendNotifier = ValueNotifier<bool>(false);
+  final List<String> _draftImagePaths = <String>[];
+  final List<({String name, String path})> _draftMentions =
+      <({String name, String path})>[];
   bool _stickToBottom = true;
   late int _lastAutoScrollTick;
 
@@ -152,7 +165,12 @@ class _AgentPaneState extends State<AgentPane> {
             viewModel: widget.viewModel,
             inputController: _inputController,
             canSendListenable: _canSendNotifier,
+            draftImagePaths: List<String>.unmodifiable(_draftImagePaths),
+            onAttachImages: _pickImages,
+            onRemoveImage: _removeDraftImage,
+            onPasteImages: _pasteImagesFromClipboard,
             onSend: _sendMessage,
+            onInsertMention: _insertMention,
           ),
         ],
       ),
@@ -175,11 +193,113 @@ class _AgentPaneState extends State<AgentPane> {
   }
 
   void _handleInputChanged() {
-    final canSend = _inputController.text.trim().isNotEmpty;
+    _syncCanSend();
+  }
+
+  void _syncCanSend() {
+    final canSend =
+        _inputController.text.trim().isNotEmpty || _draftImagePaths.isNotEmpty;
     if (canSend == _canSendNotifier.value) {
       return;
     }
     _canSendNotifier.value = canSend;
+  }
+
+  Future<void> _pickImages() async {
+    final files = await openFiles(
+      acceptedTypeGroups: <XTypeGroup>[_imageTypeGroup],
+    );
+    if (files.isEmpty || !mounted) {
+      return;
+    }
+    _addDraftImages(files.map((file) => file.path));
+  }
+
+  /// Ctrl/Cmd+V：优先粘贴剪贴板图片；无图时回退插入纯文本。
+  Future<bool> _pasteImagesFromClipboard() async {
+    final imageBytes = await Pasteboard.image;
+    if (imageBytes != null && imageBytes.isNotEmpty) {
+      final path = await _persistClipboardImage(imageBytes);
+      if (!mounted) {
+        return true;
+      }
+      _addDraftImages(<String>[path]);
+      return true;
+    }
+
+    final files = await Pasteboard.files();
+    final imagePaths = files.where(_looksLikeImagePath).toList(growable: false);
+    if (imagePaths.isNotEmpty) {
+      if (!mounted) {
+        return true;
+      }
+      _addDraftImages(imagePaths);
+      return true;
+    }
+
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text;
+    if (text == null || text.isEmpty || !mounted) {
+      return false;
+    }
+    final selection = _inputController.selection;
+    final value = _inputController.text;
+    final start = selection.isValid ? selection.start : value.length;
+    final end = selection.isValid ? selection.end : value.length;
+    final next = value.replaceRange(start, end, text);
+    _inputController.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: start + text.length),
+    );
+    return true;
+  }
+
+  void _addDraftImages(Iterable<String> paths) {
+    var changed = false;
+    for (final path in paths) {
+      final trimmed = path.trim();
+      if (trimmed.isEmpty || _draftImagePaths.contains(trimmed)) {
+        continue;
+      }
+      _draftImagePaths.add(trimmed);
+      changed = true;
+    }
+    if (!changed) {
+      return;
+    }
+    setState(() {});
+    _syncCanSend();
+  }
+
+  void _removeDraftImage(String path) {
+    if (!_draftImagePaths.remove(path)) {
+      return;
+    }
+    setState(() {});
+    _syncCanSend();
+  }
+
+  Future<String> _persistClipboardImage(Uint8List bytes) async {
+    final root = Directory(
+      '${Directory.systemTemp.path}${Platform.pathSeparator}zeta-agent-images',
+    );
+    await root.create(recursive: true);
+    final file = File(
+      '${root.path}${Platform.pathSeparator}'
+      'paste-${DateTime.now().microsecondsSinceEpoch}.png',
+    );
+    await file.writeAsBytes(bytes, flush: true);
+    return file.path;
+  }
+
+  bool _looksLikeImagePath(String path) {
+    final lower = path.toLowerCase();
+    return lower.endsWith('.png') ||
+        lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.gif') ||
+        lower.endsWith('.webp') ||
+        lower.endsWith('.bmp');
   }
 
   void _loadOlderTurns() {
@@ -214,11 +334,61 @@ class _AgentPaneState extends State<AgentPane> {
       return;
     }
     final text = _inputController.text;
-    if (text.trim().isEmpty) {
+    final images = List<String>.from(_draftImagePaths);
+    final mentions = List<({String name, String path})>.from(_draftMentions);
+    if (text.trim().isEmpty && images.isEmpty && mentions.isEmpty) {
       return;
     }
     _inputController.clear();
-    widget.viewModel.sendMessage(text);
+    if (_draftImagePaths.isNotEmpty || _draftMentions.isNotEmpty) {
+      setState(() {
+        _draftImagePaths.clear();
+        _draftMentions.clear();
+      });
+    }
+    _syncCanSend();
+    widget.viewModel.sendMessage(
+      text,
+      localImagePaths: images,
+      mentions: mentions,
+    );
+  }
+
+  /// 从工作区文件列表插入 @mention。
+  void _insertMention(WorkspaceNode file) {
+    final mention = (name: file.name, path: file.path);
+    final text = _inputController.text;
+    final selection = _inputController.selection;
+    final atIndex = text.lastIndexOf(
+      '@',
+      selection.start > 0 ? selection.start - 1 : 0,
+    );
+    String nextText;
+    int cursor;
+    if (atIndex >= 0 &&
+        (atIndex == 0 || text[atIndex - 1].trim().isEmpty) &&
+        !text
+            .substring(atIndex + 1, selection.start.clamp(0, text.length))
+            .contains(' ')) {
+      // 替换当前 @query 片段。
+      nextText =
+          '${text.substring(0, atIndex)}@${file.name} ${text.substring(selection.start.clamp(0, text.length))}';
+      cursor = atIndex + file.name.length + 2;
+    } else {
+      final insertAt = selection.start.clamp(0, text.length);
+      nextText =
+          '${text.substring(0, insertAt)}@${file.name} ${text.substring(insertAt)}';
+      cursor = insertAt + file.name.length + 2;
+    }
+    _inputController
+      ..text = nextText
+      ..selection = TextSelection.collapsed(offset: cursor);
+    setState(() {
+      if (!_draftMentions.any((item) => item.path == file.path)) {
+        _draftMentions.add(mention);
+      }
+    });
+    _syncCanSend();
   }
 
   void _handleAutoScrollTickChanged() {

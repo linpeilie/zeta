@@ -133,6 +133,7 @@ List<AgentTimelineRenderBlock> buildAgentTimelineRenderBlocks({
 }) {
   final blocks = <AgentTimelineRenderBlock>[];
   final pendingOperations = <_PendingOperation>[];
+  final seenEntryIds = <String>{};
   _AgentTimelineOperationGroupKind? pendingKind;
 
   void flushPendingOperations() {
@@ -185,9 +186,32 @@ List<AgentTimelineRenderBlock> buildAgentTimelineRenderBlocks({
     if (_shouldSkipTimelineEntry(entry)) {
       continue;
     }
+    // 同 id 条目只渲染一次，避免 Flutter Duplicate keys。
+    if (!seenEntryIds.add(entry.id)) {
+      continue;
+    }
 
     final operation = _pendingOperationFromEntry(entry);
     if (operation == null) {
+      // 回合级聚合 diff 直接渲染为文件编辑组，复用现有 diff 卡片。
+      if (entry is AgentTurnDiffTimelineEntry) {
+        flushPendingOperations();
+        final items = _fileEditItemsFromUnifiedDiff(
+          toolCallId: entry.id,
+          unifiedDiff: entry.diff,
+        );
+        if (items.isNotEmpty) {
+          blocks.add(
+            AgentTimelineFileEditGroupRenderBlock(
+              group: AgentTimelineFileEditGroup(
+                id: 'turn-diff-group-$turnId',
+                items: items,
+              ),
+            ),
+          );
+        }
+        continue;
+      }
       flushPendingOperations();
       blocks.add(AgentTimelineEntryRenderBlock(entry: entry));
       continue;
@@ -328,6 +352,127 @@ List<_FileEditChange> _fileEditChangesFromToolCall(AgentToolCall toolCall) {
     );
   }
   return List<_FileEditChange>.unmodifiable(fileChanges);
+}
+
+/// 将回合级聚合 unified diff 拆成按文件的编辑项。
+List<AgentTimelineFileEditItem> _fileEditItemsFromUnifiedDiff({
+  required String toolCallId,
+  required String unifiedDiff,
+}) {
+  final changes = _fileEditChangesFromUnifiedDiff(unifiedDiff);
+  if (changes.isEmpty) {
+    final lineStats = _unifiedDiffLineStats(unifiedDiff);
+    return <AgentTimelineFileEditItem>[
+      AgentTimelineFileEditItem(
+        id: 'turn-diff-$toolCallId',
+        toolCallId: toolCallId,
+        filePath: '本回合改动',
+        title: '本回合改动',
+        addedLines: lineStats?.addedLines,
+        removedLines: lineStats?.removedLines,
+        details: unifiedDiff.trim().isEmpty ? null : unifiedDiff,
+      ),
+    ];
+  }
+
+  return <AgentTimelineFileEditItem>[
+    for (final change in changes)
+      AgentTimelineFileEditItem(
+        id: 'turn-diff-$toolCallId-${change.filePath}',
+        toolCallId: toolCallId,
+        filePath: change.filePath,
+        title: _fileEditItemTitle(change.filePath),
+        addedLines: change.addedLines,
+        removedLines: change.removedLines,
+        details: change.unifiedDiff,
+      ),
+  ];
+}
+
+/// 按 `diff --git` / `+++` 头拆分多文件 unified diff。
+List<_FileEditChange> _fileEditChangesFromUnifiedDiff(String unifiedDiff) {
+  final lines = const LineSplitter().convert(unifiedDiff);
+  if (lines.isEmpty) {
+    return const <_FileEditChange>[];
+  }
+
+  final fileChanges = <_FileEditChange>[];
+  String? currentPath;
+  final currentLines = <String>[];
+
+  void flush() {
+    final path = currentPath;
+    if (path == null || currentLines.isEmpty) {
+      currentLines.clear();
+      return;
+    }
+    final chunk = currentLines.join('\n');
+    final lineStats = _unifiedDiffLineStats(chunk);
+    fileChanges.add(
+      _FileEditChange(
+        filePath: path,
+        unifiedDiff: chunk,
+        addedLines: lineStats?.addedLines,
+        removedLines: lineStats?.removedLines,
+      ),
+    );
+    currentLines.clear();
+  }
+
+  for (final line in lines) {
+    final gitPath = _pathFromDiffGitHeader(line);
+    if (gitPath != null) {
+      flush();
+      currentPath = gitPath;
+      currentLines.add(line);
+      continue;
+    }
+
+    final plusPath = _pathFromDiffPlusHeader(line);
+    if (plusPath != null && currentPath == null) {
+      currentPath = plusPath;
+    }
+    currentLines.add(line);
+  }
+  flush();
+
+  return List<_FileEditChange>.unmodifiable(fileChanges);
+}
+
+String? _pathFromDiffGitHeader(String line) {
+  // diff --git a/path b/path
+  if (!line.startsWith('diff --git ')) {
+    return null;
+  }
+  final parts = line.substring('diff --git '.length).split(' ');
+  if (parts.length < 2) {
+    return null;
+  }
+  final bPath = parts.last;
+  if (bPath.startsWith('b/')) {
+    return bPath.substring(2);
+  }
+  return bPath;
+}
+
+String? _pathFromDiffPlusHeader(String line) {
+  // +++ b/path 或 +++ path
+  if (!line.startsWith('+++ ')) {
+    return null;
+  }
+  var path = line.substring(4).trim();
+  if (path == '/dev/null') {
+    return null;
+  }
+  // 去掉可选的时间戳后缀。
+  final tab = path.indexOf('\t');
+  if (tab != -1) {
+    path = path.substring(0, tab);
+  }
+  if (path.startsWith('b/')) {
+    return path.substring(2);
+  }
+  return path;
 }
 
 List<String> _fallbackFilePathsFromToolCall(AgentToolCall toolCall) {

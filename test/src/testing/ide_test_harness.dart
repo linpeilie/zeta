@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 
+import 'agent_provider_stub_base.dart';
+
 ValueKey<String> fileNodeKey(String label) {
   return ValueKey<String>('file-node-$label');
 }
@@ -101,7 +103,9 @@ class FakeAgentProviderFactory implements AgentProviderFactory {
   AgentProvider create(AgentProviderConfig config) => provider;
 }
 
-class FakeAgentProvider implements AgentProvider {
+class FakeAgentProvider
+    with AgentProviderThreadLifecycleStub
+    implements AgentProvider {
   FakeAgentProvider({
     this.emitToolAndApproval = false,
     this.emitCompletedCommentary = false,
@@ -132,11 +136,14 @@ class FakeAgentProvider implements AgentProvider {
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
   final List<String> sentMessages = <String>[];
+  final List<List<AgentUserInput>> sentInputs = <List<AgentUserInput>>[];
   final List<String> steeredMessages = <String>[];
+  final List<List<AgentUserInput>> steeredInputs = <List<AgentUserInput>>[];
   final List<AgentThreadListQuery> listQueries = <AgentThreadListQuery>[];
   final List<String> readHistories = <String>[];
   final List<String?> readHistorySessionPaths = <String?>[];
   final List<String> resumedSessions = <String>[];
+  final List<String> unsubscribedThreads = <String>[];
   final List<String> approvedRequests = <String>[];
   final List<String> deniedRequests = <String>[];
   final List<String> cancelledTurns = <String>[];
@@ -213,12 +220,25 @@ class FakeAgentProvider implements AgentProvider {
   }
 
   @override
+  Future<void> unsubscribeThread(String threadId) async {
+    unsubscribedThreads.add(threadId);
+  }
+
+  @override
   Future<AgentTurn> sendMessage({
     required AgentSession session,
-    required String message,
     required AgentContext context,
+    String? message,
+    List<AgentUserInput>? inputs,
+    String? clientUserMessageId,
   }) async {
-    sentMessages.add(message);
+    final resolved = _resolveInputs(message: message, inputs: inputs);
+    sentInputs.add(resolved);
+    final text = resolved
+        .whereType<AgentTextUserInput>()
+        .map((item) => item.text)
+        .join('\n');
+    sentMessages.add(text);
     final turn = AgentTurn(id: 'turn-1', sessionId: session.id);
     _events
       ..add(AgentTurnStartedEvent(turn))
@@ -294,10 +314,31 @@ class FakeAgentProvider implements AgentProvider {
   @override
   Future<void> steerTurn({
     required AgentSession session,
-    required String message,
     required AgentContext context,
+    String? message,
+    List<AgentUserInput>? inputs,
+    String? clientUserMessageId,
   }) async {
-    steeredMessages.add(message);
+    final resolved = _resolveInputs(message: message, inputs: inputs);
+    steeredInputs.add(resolved);
+    steeredMessages.add(
+      resolved
+          .whereType<AgentTextUserInput>()
+          .map((item) => item.text)
+          .join('\n'),
+    );
+  }
+
+  List<AgentUserInput> _resolveInputs({
+    String? message,
+    List<AgentUserInput>? inputs,
+  }) {
+    if (inputs != null && inputs.isNotEmpty) {
+      return List<AgentUserInput>.unmodifiable(inputs);
+    }
+    return List<AgentUserInput>.unmodifiable(<AgentUserInput>[
+      AgentUserInput.text(message ?? ''),
+    ]);
   }
 
   @override
@@ -318,6 +359,20 @@ class FakeAgentProvider implements AgentProvider {
 
   @override
   void updateModelSelection(AgentModelSelection selection) {}
+
+  @override
+  void updatePermissionSelection(AgentPermissionSelection selection) {}
+
+  @override
+  Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
+    return const <AgentPermissionProfileSummary>[];
+  }
+
+  @override
+  Future<void> approveGuardianDeniedAction({
+    required String threadId,
+    required Object event,
+  }) async {}
 
   @override
   Future<void> respondToPermission(AgentPermissionDecision decision) async {

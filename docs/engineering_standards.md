@@ -1,6 +1,6 @@
 # 工程规范
 
-最后更新：2026-07-07
+最后更新：2026-07-09
 
 本文从当前 `lib/` 重构后的代码结构中提炼长期遵循的工程规范。它补充根目录 `AGENTS.md`，用于指导后续功能开发、重构和评审。
 
@@ -84,6 +84,9 @@ main -> app -> presentation/application -> domain
 - 新 provider 应先评估 `AgentProvider` 接口，不足时扩展领域接口，再在 data 层实现具体协议。
 - mapper 文件负责字段兼容、默认值和协议名称转换；不要在 widget 中写散落的 JSON key。
 - 默认审批策略保持保守，不自动授权命令执行或文件写入。
+- Codex app-server 协议以 `third_party/codex_app_server_schema` 的 pinned
+  快照为准；升级 CLI 时先用 `tool/gen_codex_schema.*` 导出并 diff，再改
+  适配层。流程见 `docs/codex_app_server_protocol.md`。
 
 ## 5. 持久化与恢复
 
