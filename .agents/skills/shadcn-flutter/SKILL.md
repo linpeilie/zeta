@@ -184,3 +184,13 @@ Shadcn Flutter features over 100+ high-quality components. Below are the core ca
 2. **Lean on Extensions**: Use `.h1()`, `.p()`, `.iconSmall()` etc., instead of manually configuring `TextStyle` or `size`.
 3. **Density Matters**: Use `DensityContainer` or `theme.density` to ensure spacing is consistent across platform-specific densities.
 
+## Zeta Project Conventions
+
+本仓库已从 `shadcn_ui` 切换到 `shadcn_flutter: 0.0.52`。在 Zeta 中使用本库时遵守：
+
+- 一律 `import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;`，避免与 Flutter Material 同名类型冲突。
+- Graphite 语义 token 真源是 `IdeThemeScope` / `IdeColors` / `IdeTextStyles`；`sf.ThemeData` 只是投影层。
+- feature 页面优先复用 `lib/src/ui/core` primitives（`Pane`、`PanelCard`、`IdeChip`、`IdeContextMenu`、`showIdeToast` 等），不要散落大量 `sf.*` 细节。
+- 通知统一走 `showIdeToast`；弹窗用 `showDialog` + `sf.AlertDialog`；菜单/选择器用 `sf.showPopover` / `SelectPopup`。
+- 禁止再引入 `package:shadcn_ui/shadcn_ui.dart`、`showShadDialog` 或旧 `Shad*` API。
+

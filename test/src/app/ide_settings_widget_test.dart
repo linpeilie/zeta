@@ -245,6 +245,42 @@ void main() {
       expect(find.text('Cascadia Mono'), findsOneWidget);
     },
   );
+
+  testWidgets('font picker shows toast when selected font cannot load', (
+    tester,
+  ) async {
+    final controller = AppearanceSettingsController(
+      store: MemoryAppearanceSettingsStore(),
+      fontCatalog: const _FakeSystemFontCatalogService(
+        uiFonts: <String>['Broken UI'],
+        // 列表可见，但 ensureFontLoaded 拒绝加载，触发错误 toast。
+        loadableFonts: <String>{},
+      ),
+    );
+    await _pumpSettingsPage(tester, controller: controller);
+
+    await tester.tap(find.text('界面字体'));
+    await tester.pumpAndSettle();
+
+    final dialogFinder = find.byKey(
+      const ValueKey('settings-font-picker-dialog'),
+    );
+    await tester.tap(
+      find.descendant(of: dialogFinder, matching: find.text('Broken UI')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('无法加载所选界面字体。'), findsOneWidget);
+    expect(
+      controller.settings.uiFontChoice,
+      isNot(const AppearanceFontChoice.system('Broken UI')),
+    );
+
+    // toast 有自动关闭 timer，显式推进时间避免 pending timer。
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(milliseconds: 600));
+  });
 }
 
 Future<void> _pumpSettingsPage(
@@ -300,8 +336,8 @@ Future<void> _pumpSettingsPage(
             darkTheme: buildShadcnTheme(darkIdeTheme),
             materialTheme: buildMaterialTheme(materialIdeTheme),
             themeMode: resolveShadcnThemeMode(settings.themeMode),
-            home: Scaffold(
-              body: SettingsPage(
+            home: sf.Scaffold(
+              child: SettingsPage(
                 activeSection: SettingsSection.appearance,
                 appearanceController: appearanceController,
                 onBackPressed: onBackPressed ?? () {},

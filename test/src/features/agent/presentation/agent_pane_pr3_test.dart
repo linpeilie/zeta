@@ -468,6 +468,65 @@ void main() {
         'CodeFont',
       );
     });
+
+    testWidgets('model selector opens options and updates selection', (
+      tester,
+    ) async {
+      final provider = _FakeAgentProvider(
+        models: const AgentModelList(
+          models: <AgentModelInfo>[
+            AgentModelInfo(
+              id: 'gpt-5.5',
+              model: 'gpt-5.5',
+              displayName: 'GPT-5.5',
+              isDefault: true,
+              supportedReasoningEfforts: <AgentModelReasoningEffort>[
+                AgentModelReasoningEffort(effort: 'medium'),
+              ],
+              defaultReasoningEffort: 'medium',
+            ),
+            AgentModelInfo(
+              id: 'gpt-5.4-mini',
+              model: 'gpt-5.4-mini',
+              displayName: 'GPT-5.4-Mini',
+              supportedReasoningEfforts: <AgentModelReasoningEffort>[
+                AgentModelReasoningEffort(effort: 'low'),
+              ],
+              defaultReasoningEffort: 'low',
+            ),
+          ],
+        ),
+      );
+      final viewModel = _createViewModel(provider);
+      await viewModel.loadModels();
+      await tester.pumpWidget(_TestApp(viewModel: viewModel));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('agent-model-selector')),
+        findsOneWidget,
+      );
+      expect(find.text('GPT-5.5'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('agent-model-selector')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('agent-model-option-gpt-5.4-mini')),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('agent-model-option-gpt-5.4-mini')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(viewModel.selectedModelId, 'gpt-5.4-mini');
+      expect(find.text('GPT-5.4-Mini'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('agent-model-option-gpt-5.4-mini')),
+        findsNothing,
+      );
+    });
   });
 }
 
@@ -503,7 +562,7 @@ class _TestApp extends StatelessWidget {
         darkTheme: buildShadcnTheme(darkIdeTheme),
         materialTheme: buildMaterialTheme(darkIdeTheme),
         themeMode: sf.ThemeMode.dark,
-        home: Scaffold(body: AgentPane(viewModel: viewModel)),
+        home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
       ),
     );
   }
@@ -635,11 +694,13 @@ class _FakeAgentProvider
   _FakeAgentProvider({
     Map<String, AgentThreadHistorySnapshot> historySnapshotsByThread =
         const <String, AgentThreadHistorySnapshot>{},
+    this.models = const AgentModelList(models: <AgentModelInfo>[]),
   }) : _historySnapshotsByThread = Map<String, AgentThreadHistorySnapshot>.from(
          historySnapshotsByThread,
        );
 
   final Map<String, AgentThreadHistorySnapshot> _historySnapshotsByThread;
+  final AgentModelList models;
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
 
@@ -687,7 +748,7 @@ class _FakeAgentProvider
     int limit = 20,
     bool includeHidden = false,
   }) async {
-    return const AgentModelList(models: <AgentModelInfo>[]);
+    return models;
   }
 
   @override

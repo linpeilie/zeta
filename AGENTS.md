@@ -81,12 +81,21 @@ changes in this repository.
 
 ## UI, Layout, And Accessibility
 
-- Theming is built on `shadcn_ui` plus design tokens in `lib/src/ui/core/`:
+- Theming is built on `shadcn_flutter` plus design tokens in `lib/src/ui/core/`:
   `IdeColors`, `IdeRadius`/`IdeEffects`, `IdeSpacing`, `IdeTextStyles`, and
-  `IdeMotion`. Do not use Material `ThemeData`/`ColorScheme.fromSeed` styling,
+  `IdeMotion`. Graphite tokens are the semantic source of truth via
+  `IdeThemeScope`; `sf.ThemeData` is only a projection for third-party widgets.
+  Do not use Material `ThemeData`/`ColorScheme.fromSeed` styling,
   raw `Color(0x...)` values, hand-written `BoxShadow` lists, or ad-hoc
   `BorderRadius.circular(...)` in feature code.
-- Resolve brightness only through `ShadTheme.of(context).brightness`.
+- Import `shadcn_flutter` only as `sf`
+  (`import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;`). Never use bare
+  `Shad*` APIs from the removed `shadcn_ui` package.
+- Resolve brightness through `IdeThemeScope.of(context).brightness` or
+  `sf.Theme.of(context).brightness`. Prefer `IdeColors.of(context)` /
+  `IdeTextStyles.of(context)` for semantic tokens.
+- Use `showIdeToast` from `lib/src/ui/core/ide_toast.dart` for IDE notifications;
+  do not call `sf.showToast` ad hoc from feature pages.
 - Build responsive layouts that work on desktop-sized windows as well as narrow
   viewports.
 - Use `LayoutBuilder`, `Flexible`, `Expanded`, `Wrap`, scroll views, and builder

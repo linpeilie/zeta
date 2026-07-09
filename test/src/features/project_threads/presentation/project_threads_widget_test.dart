@@ -747,6 +747,93 @@ void main() {
       expect(find.text('Previously asked question'), findsNothing);
     },
   );
+
+  testWidgets('renames a project thread from the more menu', (tester) async {
+    final session = MemorySessionStore();
+    final directory = Directory.systemTemp.createTempSync('zeta_test_');
+    tempDirectories.add(directory);
+    File(
+      '${directory.path}${Platform.pathSeparator}sample.txt',
+    ).writeAsStringSync('hello from zeta');
+
+    final provider = FakeAgentProvider(
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[
+            agentThread(
+              id: 'thread-a',
+              projectPath: directory.path,
+              title: 'Menu thread',
+            ),
+          ],
+          nextCursor: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        directoryPicker: () async => directory.path,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await tester.runAsync(waitForIo);
+    await tester.pumpAndSettle();
+
+    final mouse = await hoverThreadTile(tester, directory.path, 'thread-a');
+    addTearDown(mouse.removePointer);
+    await tester.tap(
+      find.byKey(
+        ValueKey<String>('project-thread-more-menu-${directory.path}-thread-a'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(
+        ValueKey<String>('project-thread-rename-${directory.path}-thread-a'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        ValueKey<String>('project-thread-archive-${directory.path}-thread-a'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(
+        ValueKey<String>('project-thread-rename-${directory.path}-thread-a'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final dialogFinder = find.byKey(
+      ValueKey<String>(
+        'project-thread-rename-dialog-${directory.path}-thread-a',
+      ),
+    );
+    expect(dialogFinder, findsOneWidget);
+
+    await tester.enterText(
+      find.descendant(of: dialogFinder, matching: find.byType(EditableText)),
+      'Renamed thread',
+    );
+    await tester.tap(find.text('确认'));
+    await tester.pumpAndSettle();
+
+    expect(provider.renamedThreads, hasLength(1));
+    expect(provider.renamedThreads.single.threadId, 'thread-a');
+    expect(provider.renamedThreads.single.name, 'Renamed thread');
+    expect(find.text('Renamed thread'), findsOneWidget);
+  });
 }
 
 Future<TestGesture> hoverProjectTile(
@@ -758,6 +845,23 @@ Future<TestGesture> hoverProjectTile(
   await tester.pump();
   await gesture.moveTo(
     tester.getCenter(find.byKey(ValueKey<String>('project-tile-$projectPath'))),
+  );
+  await tester.pumpAndSettle();
+  return gesture;
+}
+
+Future<TestGesture> hoverThreadTile(
+  WidgetTester tester,
+  String projectPath,
+  String threadId,
+) async {
+  final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+  await gesture.addPointer(location: Offset.zero);
+  await tester.pump();
+  await gesture.moveTo(
+    tester.getCenter(
+      find.byKey(ValueKey<String>('project-thread-$projectPath-$threadId')),
+    ),
   );
   await tester.pumpAndSettle();
   return gesture;

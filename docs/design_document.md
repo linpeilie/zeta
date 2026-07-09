@@ -68,9 +68,12 @@ AgentConversationViewModel
   `IdeRadius`/`IdeEffects`（圆角四档 6/8/12/16、阴影预设与 scrim）、
   `IdeSpacing`（4px 基准间距）、`IdeTextStyles`（语义字号）、
   `IdeMotion`（动效）。
-- 主题装配通过 `buildShadTheme` 把 `IdeColors` 映射到 shadcn_ui 的
-  `ShadThemeData`，ghost 按钮/option/弹层/对话框的 hover 与阴影在主题层
-  统一，业务代码禁止硬编码颜色、圆角和阴影。
+- Graphite token 通过 `IdeThemeScope` / `IdeThemeData` 成为运行时真源；
+  `buildShadcnTheme` 只把项目 token 投影到 `shadcn_flutter` 的 `sf.ThemeData`，
+  不再反向从第三方 theme 回读语义色。
+- 第三方组件统一 `import ... as sf;`；业务页面优先消费 `ui/core` primitives
+  （`Pane` / `PanelCard` / `IdeChip` / `IdeContextMenu` / `showIdeToast` 等）。
+- 业务代码禁止硬编码颜色、圆角和阴影。
 - 面板圆角 8、间距紧凑，适合桌面工具密度。
 
 ## 5. Agent 设计
