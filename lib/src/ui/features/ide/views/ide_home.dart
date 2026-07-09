@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/menu_action_bridge.dart';
@@ -20,6 +20,7 @@ import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_resize_handle.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
+import 'package:zeta/src/ui/core/ide_toast.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/window_frame.dart';
 import 'package:zeta/src/ui/features/ide/views/project_list_pane.dart';
@@ -76,7 +77,7 @@ class _IdeHomeState extends State<IdeHome> {
   double _rightPanelWidth = _initialPanelWidth;
   double _leftTopRatio = _initialPanelRatio;
   double _rightTopRatio = _initialPanelRatio;
-  Object? _statusToastId;
+  sf.ToastOverlay? _statusToast;
   _IdeHomePage _page = _IdeHomePage.home;
   SettingsSection _settingsSection = SettingsSection.appearance;
 
@@ -334,7 +335,7 @@ class _IdeHomeState extends State<IdeHome> {
 
     final overlayWidth = _rightPanelWidth.clamp(_minPanelWidth, _maxPanelWidth);
     final rightInset = _activityRailWidth + IdeSpacing.space8;
-    final brightness = ShadTheme.of(context).brightness;
+    final brightness = sf.Theme.of(context).brightness;
     return Stack(
       children: [
         content,
@@ -616,19 +617,12 @@ class _IdeHomeState extends State<IdeHome> {
     if (!mounted) {
       return;
     }
-    final sonner = ShadSonner.maybeOf(context);
-    if (sonner == null) {
-      return;
-    }
-    final previousToastId = _statusToastId;
-    if (previousToastId != null) {
-      unawaited(sonner.hide(previousToastId));
-    }
-    _statusToastId = sonner.show(
-      ShadToast(
-        description: Text(message),
-        duration: const Duration(seconds: 2),
-      ),
+    // 连续状态提示只保留最新一条，避免右下角堆叠。
+    _statusToast?.close();
+    _statusToast = showIdeToast(
+      context,
+      message: message,
+      showDuration: const Duration(seconds: 2),
     );
   }
 

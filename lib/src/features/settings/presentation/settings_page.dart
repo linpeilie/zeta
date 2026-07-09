@@ -9,6 +9,7 @@ import 'package:zeta/src/ui/core/ide_choice_card.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
+import 'package:zeta/src/ui/core/ide_toast.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 
 enum SettingsSection { appearance }
@@ -742,33 +743,10 @@ String _fontChoiceLabel(AppearanceFontChoice choice) {
 }
 
 void _showFontSelectionError(BuildContext context, String message) {
-  // 阶段 4B 先用 sf.showToast 落地；统一 IDE toast helper 留给阶段 4D。
-  final colors = IdeColors.of(context);
-  final textStyles = IdeTextStyles.of(context);
-  sf.showToast(
-    context: context,
-    location: sf.ToastLocation.bottomRight,
+  showIdeToast(
+    context,
+    message: message,
+    tone: IdeToastTone.error,
     showDuration: const Duration(seconds: 3),
-    builder: (context, overlay) {
-      return sf.SurfaceCard(
-        child: sf.Basic(
-          title: Text(
-            message,
-            style: textStyles.bodySmall.copyWith(color: colors.error),
-          ),
-          trailing: sf.IconButton.ghost(
-            onPressed: overlay.close,
-            size: sf.ButtonSize.small,
-            density: sf.ButtonDensity.iconDense,
-            icon: Icon(
-              Icons.close_rounded,
-              size: 16,
-              color: colors.textSecondary,
-            ),
-          ),
-          trailingAlignment: Alignment.center,
-        ),
-      );
-    },
   );
 }
