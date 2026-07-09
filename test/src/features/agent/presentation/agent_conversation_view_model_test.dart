@@ -1715,6 +1715,55 @@ void main() {
       expect(viewModel.isCompacting, isFalse);
     });
 
+    test('renames the current thread and applies name updated event', () async {
+      final provider = _FakeAgentProvider(
+        historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+          'thread-1': AgentThreadHistorySnapshot(
+            threadId: 'thread-1',
+            turns: <AgentHistoryTurn>[
+              AgentHistoryTurn(
+                id: 'turn-1',
+                tokenUsage: const AgentTokenUsage(
+                  totalTokens: 90000,
+                  modelContextWindow: 100000,
+                ),
+                entries: const <AgentHistoryEntry>[
+                  AgentHistoryMessageEntry(
+                    id: 'user-1',
+                    role: AgentMessageRole.user,
+                    text: 'hello',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        },
+      );
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.switchThread(
+        AgentThreadSummary(
+          id: 'thread-1',
+          providerId: defaultAgentProviderId,
+          projectPath: '/repo',
+          title: 'Original',
+          preview: 'hello',
+          createdAt: DateTime(2026),
+          updatedAt: DateTime(2026),
+          status: AgentThreadRuntimeStatus.idle,
+        ),
+      );
+      expect(viewModel.currentThreadTitle, 'Original');
+
+      await viewModel.renameCurrentThread('Renamed title');
+      expect(provider.calls, contains('rename:thread-1:Renamed title'));
+      expect(viewModel.currentThreadTitle, 'Renamed title');
+
+      await Future<void>.delayed(Duration.zero);
+      expect(viewModel.currentThreadTitle, 'Renamed title');
+    });
+
     test('edit last user message rolls back then resends', () async {
       final provider =
           _FakeAgentProvider(
@@ -2132,6 +2181,18 @@ class _FakeAgentProvider
   Future<void> compactThread(String threadId) async {
     calls.add('compact:$threadId');
     return super.compactThread(threadId);
+  }
+
+  @override
+  Future<void> renameThread({
+    required String threadId,
+    required String name,
+  }) async {
+    calls.add('rename:$threadId:$name');
+    await super.renameThread(threadId: threadId, name: name);
+    _events.add(
+      AgentThreadNameUpdatedEvent(threadId: threadId, threadName: name),
+    );
   }
 
   @override

@@ -7,6 +7,7 @@ import 'package:zeta/src/features/settings/application/appearance_settings_contr
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/ui/core/ide_choice_card.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_dialog.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/ide_toast.dart';
@@ -535,7 +536,7 @@ Future<AppearanceFontChoice?> _showFontPicker({
   required Future<List<AppearanceFontChoice>> choicesFuture,
   required AppearanceFontChoice selectedChoice,
 }) {
-  return showDialog<AppearanceFontChoice>(
+  return showIdeDialog<AppearanceFontChoice>(
     context: context,
     builder: (context) {
       return _FontChoiceDialog(
@@ -587,7 +588,7 @@ class _FontChoiceDialogState extends State<_FontChoiceDialog> {
     final textStyles = IdeTextStyles.of(context);
     // 字体选择不是纯确认弹窗：在 AlertDialog 壳内自建搜索 + 列表布局。
     // 关闭按钮放在 title 行，避免 AlertDialog.trailing 被强制套 iconXLarge。
-    return sf.AlertDialog(
+    return IdeDialog(
       key: const ValueKey('settings-font-picker-dialog'),
       title: Row(
         children: [

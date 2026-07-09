@@ -10,6 +10,7 @@ import 'package:zeta/src/features/project_threads/domain/project_thread_list_sta
 import 'package:zeta/src/ui/core/ide_chip.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_context_menu.dart';
+import 'package:zeta/src/ui/core/ide_dialog.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_motion.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
@@ -617,10 +618,10 @@ class _ThreadTileState extends State<_ThreadTile> {
   Future<void> _showRenameDialog() async {
     _closeMoreMenu();
     final controller = TextEditingController(text: widget.thread.displayName);
-    final name = await showDialog<String>(
+    final name = await showIdeDialog<String>(
       context: context,
       builder: (dialogContext) {
-        return sf.AlertDialog(
+        return IdeDialog(
           key: ValueKey<String>(
             'project-thread-rename-dialog-${widget.projectPath}-${widget.thread.id}',
           ),
@@ -636,15 +637,13 @@ class _ThreadTileState extends State<_ThreadTile> {
             ),
           ),
           actions: [
-            sf.OutlineButton(
+            IdeDialogAction.cancel(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('取消'),
             ),
-            sf.PrimaryButton(
+            IdeDialogAction.confirm(
               onPressed: () {
                 Navigator.of(dialogContext).pop(controller.text.trim());
               },
-              child: const Text('确认'),
             ),
           ],
         );
@@ -659,23 +658,22 @@ class _ThreadTileState extends State<_ThreadTile> {
 
   Future<void> _showDeleteDialog() async {
     _closeMoreMenu();
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showIdeDialog<bool>(
       context: context,
       builder: (dialogContext) {
-        return sf.AlertDialog(
+        return IdeDialog(
           key: ValueKey<String>(
             'project-thread-delete-dialog-${widget.projectPath}-${widget.thread.id}',
           ),
           title: const Text('删除会话'),
           content: const Text('此操作不可撤销，将永久删除该会话。'),
           actions: [
-            sf.OutlineButton(
+            IdeDialogAction.cancel(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
             ),
-            sf.DestructiveButton(
+            IdeDialogAction.destructive(
+              label: '删除',
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('删除'),
             ),
           ],
         );

@@ -128,6 +128,8 @@ sf.ThemeData buildShadcnTheme(IdeThemeData ideTheme) {
     radius: 2 / 3,
     density: sf.Density.defaultDensity,
     scaling: 1,
+    // Desktop IDE：固定桌面 platform，避免测试默认 android 时 popover 走 sheet。
+    platform: TargetPlatform.windows,
   );
 }
 

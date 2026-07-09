@@ -383,10 +383,10 @@ class _AgentComposer extends StatelessWidget {
     }
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    await showDialog<void>(
+    await showIdeDialog<void>(
       context: context,
       builder: (dialogContext) {
-        return sf.AlertDialog(
+        return IdeDialog(
           title: const Text('Mention file'),
           content: SizedBox(
             width: 360,

@@ -261,10 +261,10 @@ class _AgentBubbleMessage extends StatelessWidget {
 
   Future<void> _showEditRetryDialog(BuildContext context) async {
     final controller = TextEditingController(text: message.text);
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showIdeDialog<bool>(
       context: context,
       builder: (dialogContext) {
-        return sf.AlertDialog(
+        return IdeDialog(
           title: const Text('编辑并重试'),
           content: SizedBox(
             width: 360,
@@ -283,13 +283,12 @@ class _AgentBubbleMessage extends StatelessWidget {
             ),
           ),
           actions: [
-            sf.OutlineButton(
+            IdeDialogAction.cancel(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
             ),
-            sf.PrimaryButton(
+            IdeDialogAction.confirm(
+              label: '发送',
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('发送'),
             ),
           ],
         );

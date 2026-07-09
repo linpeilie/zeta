@@ -225,6 +225,17 @@ class FakeAgentProvider
   }
 
   @override
+  Future<void> renameThread({
+    required String threadId,
+    required String name,
+  }) async {
+    await super.renameThread(threadId: threadId, name: name);
+    _events.add(
+      AgentThreadNameUpdatedEvent(threadId: threadId, threadName: name),
+    );
+  }
+
+  @override
   Future<AgentTurn> sendMessage({
     required AgentSession session,
     required AgentContext context,

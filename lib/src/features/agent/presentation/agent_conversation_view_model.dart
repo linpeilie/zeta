@@ -885,6 +885,32 @@ class AgentConversationViewModel extends ChangeNotifier {
     }
   }
 
+  /// 重命名当前 thread；先乐观更新标题，再以 `thread/name/updated` 为准。
+  Future<void> renameCurrentThread(String name) async {
+    final trimmed = name.trim();
+    final threadId = sessionId;
+    if (trimmed.isEmpty || threadId == null) {
+      return;
+    }
+    if (trimmed == _currentThreadTitle) {
+      return;
+    }
+    final previousTitle = _currentThreadTitle;
+    _currentThreadTitle = trimmed;
+    _publishUiChanges(header: true);
+    try {
+      final provider = await _ensureProvider();
+      await provider.renameThread(threadId: threadId, name: trimmed);
+    } catch (error, stackTrace) {
+      if (sessionId == threadId && _currentThreadTitle == trimmed) {
+        _currentThreadTitle = previousTitle;
+        _publishUiChanges(header: true);
+      }
+      _log.warning('Could not rename thread $threadId', error, stackTrace);
+      _markError('Could not rename thread', details: error.toString());
+    }
+  }
+
   @override
   void dispose() {
     _disposed = true;

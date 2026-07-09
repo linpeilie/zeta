@@ -16,6 +16,8 @@ import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/ui/core/ide_chip.dart';
 import 'package:zeta/src/ui/core/ide_collapsible_card.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_context_menu.dart';
+import 'package:zeta/src/ui/core/ide_dialog.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_motion.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';

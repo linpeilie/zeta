@@ -1,6 +1,6 @@
 part of '../agent_pane.dart';
 
-/// thread 详情头部：左侧标题 + 运行图标，右侧 token 用量与压缩/分叉操作。
+/// thread 详情头部：左侧标题 + 运行图标，右侧 token、分叉与更多菜单。
 class _AgentHeader extends StatelessWidget {
   const _AgentHeader({required this.viewModel});
 
@@ -141,6 +141,8 @@ class _AgentHeader extends StatelessWidget {
                 ),
               ),
             ],
+            const SizedBox(width: IdeSpacing.space4),
+            _AgentHeaderMoreButton(viewModel: viewModel),
           ],
         ),
         if (offerCompact || viewModel.isCompacting) ...[
@@ -148,6 +150,166 @@ class _AgentHeader extends StatelessWidget {
           _AgentCompactBanner(viewModel: viewModel),
         ],
       ],
+    );
+  }
+}
+
+/// 标题栏右侧「更多」菜单：重命名 / 归档 / 上下文。
+class _AgentHeaderMoreButton extends StatefulWidget {
+  const _AgentHeaderMoreButton({required this.viewModel});
+
+  final AgentConversationViewModel viewModel;
+
+  @override
+  State<_AgentHeaderMoreButton> createState() => _AgentHeaderMoreButtonState();
+}
+
+class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
+  sf.OverlayCompleter<dynamic>? _popoverEntry;
+  bool _menuOpen = false;
+
+  @override
+  void dispose() {
+    _popoverEntry?.remove();
+    _popoverEntry = null;
+    super.dispose();
+  }
+
+  void _toggleMenu() {
+    if (_menuOpen) {
+      _dismissMenu();
+      return;
+    }
+    _showMenu();
+  }
+
+  void _showMenu() {
+    if (_popoverEntry != null) {
+      return;
+    }
+    setState(() {
+      _menuOpen = true;
+    });
+    final canRename = widget.viewModel.sessionId != null;
+    final entry = sf.showPopover(
+      context: context,
+      alignment: Alignment.topRight,
+      anchorAlignment: Alignment.bottomRight,
+      offset: const Offset(0, 4),
+      modal: false,
+      builder: (context) {
+        return ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 100, maxWidth: 120),
+          child: IdeContextMenu(
+            actions: [
+              IdeContextMenuAction(
+                key: const ValueKey('agent-header-menu-rename'),
+                label: '重命名',
+                leadingIcon: Icons.drive_file_rename_outline_rounded,
+                enabled: canRename,
+                onPressed: () {
+                  unawaited(_showRenameDialog());
+                },
+              ),
+              IdeContextMenuAction(
+                key: const ValueKey('agent-header-menu-archive'),
+                label: '归档',
+                leadingIcon: Icons.archive_outlined,
+                onPressed: () {},
+              ),
+              IdeContextMenuAction(
+                key: const ValueKey('agent-header-menu-context'),
+                label: '上下文',
+                leadingIcon: Icons.account_tree_outlined,
+                onPressed: () {},
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    _popoverEntry = entry;
+    entry.future.whenComplete(() {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        if (identical(_popoverEntry, entry)) {
+          _popoverEntry = null;
+        }
+        _menuOpen = false;
+      });
+    });
+  }
+
+  void _dismissMenu() {
+    final entry = _popoverEntry;
+    if (entry == null) {
+      return;
+    }
+    _popoverEntry = null;
+    setState(() {
+      _menuOpen = false;
+    });
+    entry.remove();
+  }
+
+  Future<void> _showRenameDialog() async {
+    final controller = TextEditingController(
+      text: widget.viewModel.currentThreadTitle,
+    );
+    final name = await showIdeDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return IdeDialog(
+          key: const ValueKey('agent-header-rename-dialog'),
+          title: const Text('重命名'),
+          content: SizedBox(
+            width: 320,
+            child: sf.TextField(
+              controller: controller,
+              autofocus: true,
+              onSubmitted: (value) {
+                Navigator.of(dialogContext).pop(value.trim());
+              },
+            ),
+          ),
+          actions: [
+            IdeDialogAction.cancel(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+            ),
+            IdeDialogAction.confirm(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(controller.text.trim());
+              },
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+    if (!mounted || name == null || name.isEmpty) {
+      return;
+    }
+    await widget.viewModel.renameCurrentThread(name);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    return IdeTooltip(
+      message: '更多',
+      child: sf.IconButton.ghost(
+        key: const ValueKey('agent-header-more'),
+        onPressed: _toggleMenu,
+        size: sf.ButtonSize.small,
+        density: sf.ButtonDensity.iconDense,
+        icon: Icon(
+          Icons.more_horiz_rounded,
+          size: 15,
+          color: _menuOpen ? colors.textPrimary : colors.textSecondary,
+        ),
+      ),
     );
   }
 }

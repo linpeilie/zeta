@@ -3,10 +3,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/main.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
+import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 
 import '../../../testing/ide_test_harness.dart';
 
@@ -1002,6 +1007,84 @@ void main() {
       ),
       findsNothing,
     );
+  });
+
+  testWidgets('renames the current thread from the header more menu', (
+    tester,
+  ) async {
+    final provider = FakeAgentProvider();
+    final controller = ActiveAgentProviderController(
+      providerFactory: FakeAgentProviderFactory(provider),
+      configStore: MemoryAgentProviderConfigStore(),
+    );
+    addTearDown(controller.dispose);
+    final viewModel = AgentConversationViewModel(
+      providerController: controller,
+    );
+    addTearDown(viewModel.dispose);
+    viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
+    await viewModel.switchThread(
+      agentThread(
+        id: 'thread-a',
+        projectPath: '/repo',
+        title: 'Original title',
+      ),
+    );
+
+    final lightIdeTheme = buildIdeThemeData(
+      brightness: Brightness.light,
+      codeFontFamily: 'CodeFont',
+    );
+    final darkIdeTheme = buildIdeThemeData(
+      brightness: Brightness.dark,
+      codeFontFamily: 'CodeFont',
+    );
+    await tester.pumpWidget(
+      IdeThemeScope(
+        themeMode: ThemeMode.dark,
+        lightTheme: lightIdeTheme,
+        darkTheme: darkIdeTheme,
+        child: sf.ShadcnApp(
+          theme: buildShadcnTheme(lightIdeTheme),
+          darkTheme: buildShadcnTheme(darkIdeTheme),
+          materialTheme: buildMaterialTheme(darkIdeTheme),
+          themeMode: sf.ThemeMode.dark,
+          home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(headerTitleText(tester), 'Original title');
+
+    await tester.tap(find.byKey(const ValueKey('agent-header-more')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(
+      find.byKey(const ValueKey('agent-header-menu-rename')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('agent-header-menu-rename')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final dialogFinder = find.byKey(
+      const ValueKey('agent-header-rename-dialog'),
+    );
+    expect(dialogFinder, findsOneWidget);
+
+    await tester.enterText(
+      find.descendant(of: dialogFinder, matching: find.byType(EditableText)),
+      'Renamed from header',
+    );
+    await tester.tap(find.text('确认'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(provider.renamedThreads, hasLength(1));
+    expect(provider.renamedThreads.single.threadId, 'thread-a');
+    expect(provider.renamedThreads.single.name, 'Renamed from header');
+    expect(headerTitleText(tester), 'Renamed from header');
   });
 
   testWidgets('shows live header token usage while a turn is running', (
