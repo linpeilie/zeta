@@ -297,16 +297,16 @@ class _JsonlHistoryParser {
     turn.tokenUsage = AgentTokenUsage(
       inputTokens: _numberToInt(totalUsage['input_tokens']),
       cachedInputTokens: _numberToInt(totalUsage['cached_input_tokens']),
-      outputTokens: _numberToInt(totalUsage['output_tokens']),
-      reasoningOutputTokens: _numberToInt(
-        totalUsage['reasoning_output_tokens'],
+      outputTokens: AgentTokenUsage.mergeOutputTokens(
+        _numberToInt(totalUsage['output_tokens']),
+        _numberToInt(totalUsage['reasoning_output_tokens']),
       ),
       totalTokens: _numberToInt(totalUsage['total_tokens']),
       lastInputTokens: _numberToInt(lastUsage['input_tokens']),
       lastCachedInputTokens: _numberToInt(lastUsage['cached_input_tokens']),
-      lastOutputTokens: _numberToInt(lastUsage['output_tokens']),
-      lastReasoningOutputTokens: _numberToInt(
-        lastUsage['reasoning_output_tokens'],
+      lastOutputTokens: AgentTokenUsage.mergeOutputTokens(
+        _numberToInt(lastUsage['output_tokens']),
+        _numberToInt(lastUsage['reasoning_output_tokens']),
       ),
       lastTotalTokens: _numberToInt(lastUsage['total_tokens']),
       modelContextWindow: modelContextWindow,

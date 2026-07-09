@@ -70,8 +70,7 @@ void main() {
               tokenUsage: const AgentTokenUsage(
                 inputTokens: 41910,
                 cachedInputTokens: 19712,
-                outputTokens: 1552,
-                reasoningOutputTokens: 780,
+                outputTokens: 2332,
                 totalTokens: 43462,
               ),
             ),

@@ -1087,6 +1087,157 @@ void main() {
     expect(headerTitleText(tester), 'Renamed from header');
   });
 
+  testWidgets('opens the context details panel from the header more menu', (
+    tester,
+  ) async {
+    final createdAt = DateTime(2024, 1, 15, 10, 30);
+    final lastActiveAt = DateTime(2024, 6, 20, 14, 5);
+    final provider = FakeAgentProvider(
+      threadHistories: <String, AgentThreadHistorySnapshot>{
+        'thread-ctx': AgentThreadHistorySnapshot(
+          threadId: 'thread-ctx',
+          turns: <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-1',
+              status: AgentHistoryTurnStatus.completed,
+              modelContextWindow: 200000,
+              tokenUsage: const AgentTokenUsage(
+                inputTokens: 100,
+                cachedInputTokens: 20,
+                outputTokens: 30,
+                totalTokens: 130,
+                modelContextWindow: 200000,
+              ),
+              entries: <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'msg-user-1',
+                  role: AgentMessageRole.user,
+                  text: 'Hello',
+                  raw: <String, Object?>{
+                    'type': 'response_item',
+                    'timestamp': 1700000000,
+                    'marker': 'ctx-user-raw',
+                  },
+                ),
+                AgentHistoryMessageEntry(
+                  id: 'msg-agent-1',
+                  role: AgentMessageRole.agent,
+                  text: 'Hi there',
+                  raw: <String, Object?>{
+                    'type': 'event_msg',
+                    'timestamp': 1700000005,
+                    'marker': 'ctx-agent-raw',
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+      },
+    );
+    final controller = ActiveAgentProviderController(
+      providerFactory: FakeAgentProviderFactory(provider),
+      configStore: MemoryAgentProviderConfigStore(),
+    );
+    addTearDown(controller.dispose);
+    final viewModel = AgentConversationViewModel(
+      providerController: controller,
+    );
+    addTearDown(viewModel.dispose);
+    viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
+    await viewModel.switchThread(
+      AgentThreadSummary(
+        id: 'thread-ctx',
+        providerId: defaultAgentProviderId,
+        projectPath: '/repo',
+        title: 'Context thread',
+        preview: 'Context thread',
+        sessionPath: '/repo/thread-ctx.jsonl',
+        createdAt: createdAt,
+        updatedAt: lastActiveAt,
+        recencyAt: lastActiveAt,
+        status: AgentThreadRuntimeStatus.idle,
+      ),
+    );
+
+    final lightIdeTheme = buildIdeThemeData(
+      brightness: Brightness.light,
+      codeFontFamily: 'CodeFont',
+    );
+    final darkIdeTheme = buildIdeThemeData(
+      brightness: Brightness.dark,
+      codeFontFamily: 'CodeFont',
+    );
+    await tester.pumpWidget(
+      IdeThemeScope(
+        themeMode: ThemeMode.dark,
+        lightTheme: lightIdeTheme,
+        darkTheme: darkIdeTheme,
+        child: sf.ShadcnApp(
+          theme: buildShadcnTheme(lightIdeTheme),
+          darkTheme: buildShadcnTheme(darkIdeTheme),
+          materialTheme: buildMaterialTheme(darkIdeTheme),
+          themeMode: sf.ThemeMode.dark,
+          home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // 默认隐藏。
+    expect(find.byKey(const ValueKey('agent-context-panel')), findsNothing);
+
+    // 通过头栏「更多」菜单的「上下文」项打开面板。
+    await tester.tap(find.byKey(const ValueKey('agent-header-more')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(
+      find.byKey(const ValueKey('agent-header-menu-context')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('agent-header-menu-context')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const ValueKey('agent-context-panel')), findsOneWidget);
+
+    // 概览信息：会话名称、消息数、提供商、token 与时间。
+    expect(find.text('Context thread'), findsWidgets);
+    expect(find.text('2'), findsOneWidget);
+    expect(find.text('Codex CLI'), findsOneWidget);
+    expect(find.text('200,000'), findsOneWidget);
+    expect(find.text('130'), findsOneWidget);
+    expect(find.text('2024-01-15 10:30'), findsOneWidget);
+    expect(find.text('2024-06-20 14:05'), findsOneWidget);
+
+    // 原始消息列表：ID 与角色。
+    expect(find.text('msg-user-1'), findsOneWidget);
+    expect(find.text('用户'), findsOneWidget);
+    expect(find.text('msg-agent-1'), findsOneWidget);
+    expect(find.text('助手'), findsOneWidget);
+
+    // 折叠态下不渲染 raw 原文区。
+    expect(
+      find.byKey(const ValueKey('agent-context-raw-body-msg-user-1')),
+      findsNothing,
+    );
+    // 展开后渲染 raw 原文区。
+    await tester.tap(
+      find.byKey(const ValueKey('agent-context-raw-msg-user-1')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('agent-context-raw-body-msg-user-1')),
+      findsOneWidget,
+    );
+
+    // 关闭按钮收起面板。
+    await tester.tap(find.byKey(const ValueKey('agent-context-panel-close')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const ValueKey('agent-context-panel')), findsNothing);
+  });
+
   testWidgets('shows live header token usage while a turn is running', (
     tester,
   ) async {
@@ -1097,8 +1248,7 @@ void main() {
       tokenUsageDuringTurn: const AgentTokenUsage(
         inputTokens: 1000,
         cachedInputTokens: 200,
-        outputTokens: 300,
-        reasoningOutputTokens: 50,
+        outputTokens: 350,
         totalTokens: 1300,
       ),
     );
@@ -1242,8 +1392,7 @@ void main() {
       tokenUsageDuringTurn: const AgentTokenUsage(
         inputTokens: 3200,
         cachedInputTokens: 1200,
-        outputTokens: 640,
-        reasoningOutputTokens: 180,
+        outputTokens: 820,
         totalTokens: 3840,
       ),
     );

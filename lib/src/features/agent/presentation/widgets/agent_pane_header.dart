@@ -221,7 +221,9 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
                 key: const ValueKey('agent-header-menu-context'),
                 label: '上下文',
                 leadingIcon: Icons.account_tree_outlined,
-                onPressed: () {},
+                onPressed: () {
+                  widget.viewModel.toggleContextPanel();
+                },
               ),
             ],
           ),

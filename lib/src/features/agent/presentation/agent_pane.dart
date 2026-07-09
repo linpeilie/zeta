@@ -30,6 +30,7 @@ import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dar
 
 part 'widgets/agent_pane_cards.dart';
 part 'widgets/agent_pane_composer.dart';
+part 'widgets/agent_pane_context_panel.dart';
 part 'widgets/agent_pane_header.dart';
 part 'widgets/agent_pane_messages.dart';
 part 'widgets/agent_pane_sections.dart';
@@ -116,63 +117,80 @@ class _AgentPaneState extends State<AgentPane> {
   Widget build(BuildContext context) {
     return ColoredBox(
       color: IdeColors.of(context).frame,
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _AgentContentAlign(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
-              child: ListenableBuilder(
-                listenable: widget.viewModel.headerVersionListenable,
-                builder: (context, _) {
-                  return _AgentHeader(viewModel: widget.viewModel);
-                },
-              ),
-            ),
-          ),
           Expanded(
-            // 对话、工具调用和审批卡片共用一个滚动流，模拟 Agent 面板的时间线。
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: _agentContentMaxWidth,
-                ),
-                child: SingleChildScrollView(
-                  key: const ValueKey('agent-message-list'),
-                  controller: _scrollController,
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                  // turn 卡片高度差异很大；改用精确内容高度滚动，避免
-                  // SliverList 在滚动过程中重估 maxScrollExtent 导致滚动条跳动。
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _AgentHistoryTurnsSection(
-                        viewModel: widget.viewModel,
-                        onLoadOlder: _loadOlderTurns,
-                        buildTurnSection: _buildTurnSection,
-                      ),
-                      _AgentLiveTurnSection(
-                        viewModel: widget.viewModel,
-                        hasLeadingTurn: () => _hasHistoryOrStandbyTurns,
-                        buildTurnSection: _buildTurnSection,
-                      ),
-                    ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _AgentContentAlign(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                    child: ListenableBuilder(
+                      listenable: widget.viewModel.headerVersionListenable,
+                      builder: (context, _) {
+                        return _AgentHeader(viewModel: widget.viewModel);
+                      },
+                    ),
                   ),
                 ),
-              ),
+                Expanded(
+                  // 对话、工具调用和审批卡片共用一个滚动流，模拟 Agent 面板的时间线。
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: _agentContentMaxWidth,
+                      ),
+                      child: SingleChildScrollView(
+                        key: const ValueKey('agent-message-list'),
+                        controller: _scrollController,
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                        // turn 卡片高度差异很大；改用精确内容高度滚动，避免
+                        // SliverList 在滚动过程中重估 maxScrollExtent 导致滚动条跳动。
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _AgentHistoryTurnsSection(
+                              viewModel: widget.viewModel,
+                              onLoadOlder: _loadOlderTurns,
+                              buildTurnSection: _buildTurnSection,
+                            ),
+                            _AgentLiveTurnSection(
+                              viewModel: widget.viewModel,
+                              hasLeadingTurn: () => _hasHistoryOrStandbyTurns,
+                              buildTurnSection: _buildTurnSection,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                _AgentComposerSection(
+                  viewModel: widget.viewModel,
+                  inputController: _inputController,
+                  canSendListenable: _canSendNotifier,
+                  draftImagePaths: List<String>.unmodifiable(_draftImagePaths),
+                  onAttachImages: _pickImages,
+                  onRemoveImage: _removeDraftImage,
+                  onPasteImages: _pasteImagesFromClipboard,
+                  onSend: _sendMessage,
+                  onInsertMention: _insertMention,
+                ),
+              ],
             ),
           ),
-          _AgentComposerSection(
-            viewModel: widget.viewModel,
-            inputController: _inputController,
-            canSendListenable: _canSendNotifier,
-            draftImagePaths: List<String>.unmodifiable(_draftImagePaths),
-            onAttachImages: _pickImages,
-            onRemoveImage: _removeDraftImage,
-            onPasteImages: _pasteImagesFromClipboard,
-            onSend: _sendMessage,
-            onInsertMention: _insertMention,
+          // 头栏「上下文」菜单触发的详情面板，默认隐藏。
+          ValueListenableBuilder<bool>(
+            valueListenable: widget.viewModel.contextPanelVisible,
+            builder: (context, visible, _) {
+              if (!visible) {
+                return const SizedBox.shrink();
+              }
+              return _AgentContextPanel(viewModel: widget.viewModel);
+            },
           ),
         ],
       ),

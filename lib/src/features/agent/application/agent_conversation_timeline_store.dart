@@ -131,7 +131,6 @@ class AgentConversationTimelineStore {
     int? inputTokens;
     int? cachedInputTokens;
     int? outputTokens;
-    int? reasoningOutputTokens;
     int? totalTokens;
     int? modelContextWindow;
 
@@ -149,10 +148,6 @@ class AgentConversationTimelineStore {
         usage.cachedInputTokens,
       );
       outputTokens = _sumOptionalInt(outputTokens, usage.outputTokens);
-      reasoningOutputTokens = _sumOptionalInt(
-        reasoningOutputTokens,
-        usage.reasoningOutputTokens,
-      );
       totalTokens = _sumOptionalInt(totalTokens, usage.totalTokens);
       // 上下文窗口取最近非空值（各 turn 通常一致）。
       modelContextWindow = usage.modelContextWindow ?? modelContextWindow;
@@ -161,7 +156,6 @@ class AgentConversationTimelineStore {
     if (inputTokens == null &&
         cachedInputTokens == null &&
         outputTokens == null &&
-        reasoningOutputTokens == null &&
         totalTokens == null) {
       return null;
     }
@@ -170,7 +164,6 @@ class AgentConversationTimelineStore {
       inputTokens: inputTokens,
       cachedInputTokens: cachedInputTokens,
       outputTokens: outputTokens,
-      reasoningOutputTokens: reasoningOutputTokens,
       totalTokens: totalTokens,
       modelContextWindow: modelContextWindow,
     );

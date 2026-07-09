@@ -1039,8 +1039,7 @@ void main() {
                 tokenUsage: const AgentTokenUsage(
                   inputTokens: 41910,
                   cachedInputTokens: 19712,
-                  outputTokens: 1552,
-                  reasoningOutputTokens: 780,
+                  outputTokens: 2332,
                   totalTokens: 43462,
                 ),
               ),
@@ -1075,7 +1074,7 @@ void main() {
       expect(turns.first.tokenUsage, isNotNull);
       expect(turns.first.tokenUsage!.totalTokens, 43462);
       expect(turns.first.tokenUsage!.inputTokens, 41910);
-      expect(turns.first.tokenUsage!.outputTokens, 1552);
+      expect(turns.first.tokenUsage!.outputTokens, 2332);
       expect(turns[1].tokenUsage, isNull);
       expect(viewModel.currentThreadTokenUsage, isNotNull);
       expect(viewModel.currentThreadTokenUsage!.totalTokens, 43462);
@@ -1405,8 +1404,7 @@ void main() {
           tokenUsage: AgentTokenUsage(
             inputTokens: 1000,
             cachedInputTokens: 200,
-            outputTokens: 300,
-            reasoningOutputTokens: 50,
+            outputTokens: 350,
             totalTokens: 1300,
           ),
         ),
@@ -1418,8 +1416,7 @@ void main() {
       expect(liveTurn.tokenUsage!.totalTokens, 1300);
       expect(liveTurn.tokenUsage!.inputTokens, 1000);
       expect(liveTurn.tokenUsage!.cachedInputTokens, 200);
-      expect(liveTurn.tokenUsage!.outputTokens, 300);
-      expect(liveTurn.tokenUsage!.reasoningOutputTokens, 50);
+      expect(liveTurn.tokenUsage!.outputTokens, 350);
     });
 
     test(
@@ -1580,8 +1577,7 @@ void main() {
             tokenUsage: AgentTokenUsage(
               inputTokens: 1000,
               cachedInputTokens: 200,
-              outputTokens: 300,
-              reasoningOutputTokens: 50,
+              outputTokens: 350,
               totalTokens: 1300,
             ),
           ),
@@ -1625,8 +1621,7 @@ void main() {
                   tokenUsage: AgentTokenUsage(
                     inputTokens: 2000,
                     cachedInputTokens: 500,
-                    outputTokens: 250,
-                    reasoningOutputTokens: 80,
+                    outputTokens: 330,
                     totalTokens: 2250,
                   ),
                 ),
@@ -1645,8 +1640,7 @@ void main() {
             tokenUsage: AgentTokenUsage(
               inputTokens: 1000,
               cachedInputTokens: 200,
-              outputTokens: 300,
-              reasoningOutputTokens: 50,
+              outputTokens: 350,
               totalTokens: 1300,
             ),
           ),
@@ -1656,8 +1650,7 @@ void main() {
         expect(viewModel.currentThreadTokenUsage, isNotNull);
         expect(viewModel.currentThreadTokenUsage!.inputTokens, 3000);
         expect(viewModel.currentThreadTokenUsage!.cachedInputTokens, 700);
-        expect(viewModel.currentThreadTokenUsage!.outputTokens, 550);
-        expect(viewModel.currentThreadTokenUsage!.reasoningOutputTokens, 130);
+        expect(viewModel.currentThreadTokenUsage!.outputTokens, 680);
         expect(viewModel.currentThreadTokenUsage!.totalTokens, 3550);
       },
     );

@@ -89,20 +89,29 @@ class AgentHistoryTurn {
 /// 实时来源是 Codex `thread/tokenUsage/updated` 通知（camelCase 字段），
 /// 历史来源是 JSONL `event_msg.payload.type == 'token_count'`（snake_case
 /// 字段）。UI 据此在回合分隔线上展示 token 成本。
+///
+/// Codex 的 `reasoning_output_tokens` 在解析时并入 [outputTokens]，
+/// 模型层不再单独暴露推理 token 字段。
 class AgentTokenUsage {
   const AgentTokenUsage({
     this.inputTokens,
     this.cachedInputTokens,
     this.outputTokens,
-    this.reasoningOutputTokens,
     this.totalTokens,
     this.lastInputTokens,
     this.lastCachedInputTokens,
     this.lastOutputTokens,
-    this.lastReasoningOutputTokens,
     this.lastTotalTokens,
     this.modelContextWindow,
   });
+
+  /// 将 Codex 的 output + reasoning_output 合并为单一输出 token 数。
+  static int? mergeOutputTokens(int? outputTokens, int? reasoningOutputTokens) {
+    if (outputTokens == null && reasoningOutputTokens == null) {
+      return null;
+    }
+    return (outputTokens ?? 0) + (reasoningOutputTokens ?? 0);
+  }
 
   /// 累计输入 token 数（含缓存命中前的全部输入）。
   final int? inputTokens;
@@ -110,11 +119,8 @@ class AgentTokenUsage {
   /// 累计缓存命中的输入 token 数。
   final int? cachedInputTokens;
 
-  /// 累计输出 token 数。
+  /// 累计输出 token 数（已含 reasoning_output_tokens）。
   final int? outputTokens;
-
-  /// 累计推理输出 token 数。
-  final int? reasoningOutputTokens;
 
   /// 累计总 token 数。
   final int? totalTokens;
@@ -125,11 +131,8 @@ class AgentTokenUsage {
   /// 最近一次请求缓存命中的输入 token 数。
   final int? lastCachedInputTokens;
 
-  /// 最近一次请求的输出 token 数。
+  /// 最近一次请求的输出 token 数（已含 reasoning_output_tokens）。
   final int? lastOutputTokens;
-
-  /// 最近一次请求的推理输出 token 数。
-  final int? lastReasoningOutputTokens;
 
   /// 最近一次请求的总 token 数。
   final int? lastTotalTokens;

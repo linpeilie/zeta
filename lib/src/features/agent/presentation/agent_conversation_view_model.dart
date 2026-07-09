@@ -86,6 +86,15 @@ class AgentConversationViewModel extends ChangeNotifier {
   /// 是否正在执行上下文压缩。
   bool _isCompacting = false;
 
+  /// 上下文详情面板是否展开（头栏「上下文」菜单触发）。
+  final ValueNotifier<bool> contextPanelVisible = ValueNotifier<bool>(false);
+
+  /// 当前线程的创建时间；仅从恢复的 thread 摘要填充，新会话为空。
+  DateTime? _threadCreatedAt;
+
+  /// 当前线程的最后活跃时间；优先取摘要的 recency，否则 updatedAt。
+  DateTime? _threadLastActiveAt;
+
   /// 本会话已展示过的弃用 summary，避免重复刷屏。
   final Set<String> _shownDeprecationSummaries = <String>{};
 
@@ -309,6 +318,22 @@ class AgentConversationViewModel extends ChangeNotifier {
   /// 是否正在压缩上下文。
   bool get isCompacting => _isCompacting;
 
+  /// 当前线程的创建时间；新会话无摘要时为空。
+  DateTime? get threadCreatedAt => _threadCreatedAt;
+
+  /// 当前线程的最后活跃时间；新会话无摘要时为空。
+  DateTime? get threadLastActiveAt => _threadLastActiveAt;
+
+  /// 切换上下文详情面板的展开状态。
+  void toggleContextPanel() {
+    contextPanelVisible.value = !contextPanelVisible.value;
+  }
+
+  /// 关闭上下文详情面板。
+  void hideContextPanel() {
+    contextPanelVisible.value = false;
+  }
+
   /// 空闲且末尾存在用户消息时可编辑重试。
   bool get canEditLastUserMessage {
     if (!canSubmitMessage || isTurnRunning || _isCompacting) {
@@ -497,6 +522,9 @@ class AgentConversationViewModel extends ChangeNotifier {
       _status = const AgentProviderStatus.idle();
       _clearThreadRuntimeStatus();
       _modelRerouteNotice = null;
+      _threadCreatedAt = null;
+      _threadLastActiveAt = null;
+      contextPanelVisible.value = false;
       _timeline.resetToWelcomeState();
       if (previousThreadId != null && previousThreadId != restoredSessionId) {
         final provider = _provider;
@@ -670,6 +698,8 @@ class AgentConversationViewModel extends ChangeNotifier {
     _requiresResumedSelectedThread = true;
     _threadOpenPhase = AgentThreadOpenPhase.loadingHistory;
     _currentThreadTitle = thread.displayName;
+    _threadCreatedAt = thread.createdAt;
+    _threadLastActiveAt = thread.lastActiveAt;
     _applyThreadRuntimeStatus(
       status: thread.status,
       waitingOnApproval: thread.waitingOnApproval,
@@ -915,6 +945,7 @@ class AgentConversationViewModel extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _uiSignals.dispose();
+    contextPanelVisible.dispose();
     unawaited(_eventSubscription?.cancel());
     _timeline.dispose();
     super.dispose();

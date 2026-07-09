@@ -70,8 +70,7 @@ void main() {
               tokenUsage: AgentTokenUsage(
                 inputTokens: 2000,
                 cachedInputTokens: 500,
-                outputTokens: 250,
-                reasoningOutputTokens: 80,
+                outputTokens: 330,
                 totalTokens: 2250,
               ),
             ),
@@ -98,8 +97,7 @@ void main() {
           tokenUsage: AgentTokenUsage(
             inputTokens: 1000,
             cachedInputTokens: 200,
-            outputTokens: 300,
-            reasoningOutputTokens: 50,
+            outputTokens: 350,
             totalTokens: 1300,
           ),
         ),
@@ -112,8 +110,7 @@ void main() {
       expect(store.currentThreadTokenUsage, isNotNull);
       expect(store.currentThreadTokenUsage!.inputTokens, 3000);
       expect(store.currentThreadTokenUsage!.cachedInputTokens, 700);
-      expect(store.currentThreadTokenUsage!.outputTokens, 550);
-      expect(store.currentThreadTokenUsage!.reasoningOutputTokens, 130);
+      expect(store.currentThreadTokenUsage!.outputTokens, 680);
       expect(store.currentThreadTokenUsage!.totalTokens, 3550);
 
       store.completeLiveTurnGroup('turn-live');

@@ -207,15 +207,13 @@ class _CodexThreadHistoryReader {
           'cachedInputTokens',
           'cached_input_tokens',
         ),
-        outputTokens: _breakdownInt(
-          nestedTotal,
-          'outputTokens',
-          'output_tokens',
-        ),
-        reasoningOutputTokens: _breakdownInt(
-          nestedTotal,
-          'reasoningOutputTokens',
-          'reasoning_output_tokens',
+        outputTokens: AgentTokenUsage.mergeOutputTokens(
+          _breakdownInt(nestedTotal, 'outputTokens', 'output_tokens'),
+          _breakdownInt(
+            nestedTotal,
+            'reasoningOutputTokens',
+            'reasoning_output_tokens',
+          ),
         ),
         totalTokens: _breakdownInt(nestedTotal, 'totalTokens', 'total_tokens'),
         lastInputTokens: _breakdownInt(
@@ -228,15 +226,13 @@ class _CodexThreadHistoryReader {
           'cachedInputTokens',
           'cached_input_tokens',
         ),
-        lastOutputTokens: _breakdownInt(
-          nestedLast,
-          'outputTokens',
-          'output_tokens',
-        ),
-        lastReasoningOutputTokens: _breakdownInt(
-          nestedLast,
-          'reasoningOutputTokens',
-          'reasoning_output_tokens',
+        lastOutputTokens: AgentTokenUsage.mergeOutputTokens(
+          _breakdownInt(nestedLast, 'outputTokens', 'output_tokens'),
+          _breakdownInt(
+            nestedLast,
+            'reasoningOutputTokens',
+            'reasoning_output_tokens',
+          ),
         ),
         lastTotalTokens: _breakdownInt(
           nestedLast,
@@ -266,11 +262,13 @@ class _CodexThreadHistoryReader {
         'cachedInputTokens',
         'cached_input_tokens',
       ),
-      outputTokens: _breakdownInt(total, 'outputTokens', 'output_tokens'),
-      reasoningOutputTokens: _breakdownInt(
-        total,
-        'reasoningOutputTokens',
-        'reasoning_output_tokens',
+      outputTokens: AgentTokenUsage.mergeOutputTokens(
+        _breakdownInt(total, 'outputTokens', 'output_tokens'),
+        _breakdownInt(
+          total,
+          'reasoningOutputTokens',
+          'reasoning_output_tokens',
+        ),
       ),
       totalTokens: _breakdownInt(total, 'totalTokens', 'total_tokens'),
       lastInputTokens: _breakdownInt(last, 'inputTokens', 'input_tokens'),
@@ -279,11 +277,9 @@ class _CodexThreadHistoryReader {
         'cachedInputTokens',
         'cached_input_tokens',
       ),
-      lastOutputTokens: _breakdownInt(last, 'outputTokens', 'output_tokens'),
-      lastReasoningOutputTokens: _breakdownInt(
-        last,
-        'reasoningOutputTokens',
-        'reasoning_output_tokens',
+      lastOutputTokens: AgentTokenUsage.mergeOutputTokens(
+        _breakdownInt(last, 'outputTokens', 'output_tokens'),
+        _breakdownInt(last, 'reasoningOutputTokens', 'reasoning_output_tokens'),
       ),
       lastTotalTokens: _breakdownInt(last, 'totalTokens', 'total_tokens'),
       modelContextWindow: _breakdownInt(

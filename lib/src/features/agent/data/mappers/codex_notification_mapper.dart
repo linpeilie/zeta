@@ -708,11 +708,13 @@ class _CodexNotificationMapper {
         'cachedInputTokens',
         'cached_input_tokens',
       ),
-      outputTokens: _breakdownInt(total, 'outputTokens', 'output_tokens'),
-      reasoningOutputTokens: _breakdownInt(
-        total,
-        'reasoningOutputTokens',
-        'reasoning_output_tokens',
+      outputTokens: AgentTokenUsage.mergeOutputTokens(
+        _breakdownInt(total, 'outputTokens', 'output_tokens'),
+        _breakdownInt(
+          total,
+          'reasoningOutputTokens',
+          'reasoning_output_tokens',
+        ),
       ),
       totalTokens: _breakdownInt(total, 'totalTokens', 'total_tokens'),
       lastInputTokens: _breakdownInt(last, 'inputTokens', 'input_tokens'),
@@ -721,11 +723,9 @@ class _CodexNotificationMapper {
         'cachedInputTokens',
         'cached_input_tokens',
       ),
-      lastOutputTokens: _breakdownInt(last, 'outputTokens', 'output_tokens'),
-      lastReasoningOutputTokens: _breakdownInt(
-        last,
-        'reasoningOutputTokens',
-        'reasoning_output_tokens',
+      lastOutputTokens: AgentTokenUsage.mergeOutputTokens(
+        _breakdownInt(last, 'outputTokens', 'output_tokens'),
+        _breakdownInt(last, 'reasoningOutputTokens', 'reasoning_output_tokens'),
       ),
       lastTotalTokens: _breakdownInt(last, 'totalTokens', 'total_tokens'),
       modelContextWindow: _breakdownInt(

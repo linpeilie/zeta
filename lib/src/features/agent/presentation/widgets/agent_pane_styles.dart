@@ -413,9 +413,6 @@ String _tokenUsageTooltip(AgentTokenUsage? usage) {
   if (usage.outputTokens != null) {
     parts.add('Output: ${_formatTokenCount(usage.outputTokens!)}');
   }
-  if (usage.reasoningOutputTokens != null) {
-    parts.add('Reasoning: ${_formatTokenCount(usage.reasoningOutputTokens!)}');
-  }
   return parts.isEmpty ? '' : parts.join('\n');
 }
 
