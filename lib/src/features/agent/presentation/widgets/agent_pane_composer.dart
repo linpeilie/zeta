@@ -532,11 +532,11 @@ class _SelectorSelect<T extends Object> extends StatefulWidget {
 }
 
 class _SelectorSelectState<T extends Object> extends State<_SelectorSelect<T>> {
-  sf.OverlayCompleter<T?>? _popoverEntry;
+  IdePopoverHandle<void>? _popoverEntry;
 
   @override
   void dispose() {
-    _popoverEntry?.remove();
+    _popoverEntry?.dismiss();
     super.dispose();
   }
 
@@ -552,11 +552,11 @@ class _SelectorSelectState<T extends Object> extends State<_SelectorSelect<T>> {
     if (_popoverEntry != null || widget.options.isEmpty) {
       return;
     }
-    final entry = sf.showPopover<T?>(
+    final entry = showIdePopover<void>(
       context: context,
       alignment: Alignment.topLeft,
       anchorAlignment: Alignment.bottomLeft,
-      widthConstraint: sf.PopoverConstraint.intrinsic,
+      widthConstraint: IdePopoverConstraint.intrinsic,
       offset: const Offset(0, 6),
       builder: (context) {
         return ConstrainedBox(
@@ -601,7 +601,7 @@ class _SelectorSelectState<T extends Object> extends State<_SelectorSelect<T>> {
     }
     _popoverEntry = null;
     setState(() {});
-    entry.remove();
+    entry.dismiss();
   }
 
   @override

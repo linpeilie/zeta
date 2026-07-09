@@ -165,12 +165,12 @@ class _AgentHeaderMoreButton extends StatefulWidget {
 }
 
 class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
-  sf.OverlayCompleter<dynamic>? _popoverEntry;
+  IdePopoverHandle<void>? _popoverEntry;
   bool _menuOpen = false;
 
   @override
   void dispose() {
-    _popoverEntry?.remove();
+    _popoverEntry?.dismiss();
     _popoverEntry = null;
     super.dispose();
   }
@@ -191,7 +191,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
       _menuOpen = true;
     });
     final canRename = widget.viewModel.sessionId != null;
-    final entry = sf.showPopover(
+    final entry = showIdePopover<void>(
       context: context,
       alignment: Alignment.topRight,
       anchorAlignment: Alignment.bottomRight,
@@ -251,7 +251,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
     setState(() {
       _menuOpen = false;
     });
-    entry.remove();
+    entry.dismiss();
   }
 
   Future<void> _showRenameDialog() async {

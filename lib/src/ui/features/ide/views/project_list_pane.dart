@@ -7,7 +7,6 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
-import 'package:zeta/src/ui/core/ide_chip.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_context_menu.dart';
 import 'package:zeta/src/ui/core/ide_dialog.dart';
@@ -19,12 +18,6 @@ import 'package:zeta/src/ui/core/pane_widgets.dart';
 
 typedef ProjectThreadSelected =
     void Function(String projectPath, AgentThreadSummary thread);
-
-typedef ProjectThreadSearchChanged =
-    void Function(String projectPath, String searchTerm);
-
-typedef ProjectThreadArchivedViewChanged =
-    void Function(String projectPath, bool archived);
 
 typedef ProjectThreadRenamed =
     void Function(String projectPath, String threadId, String name);
@@ -45,8 +38,6 @@ class ProjectListPane extends StatelessWidget {
     required this.onNewThread,
     required this.onOpenProjectLocation,
     required this.onRemoveProject,
-    required this.onSearchTermChanged,
-    required this.onArchivedViewChanged,
     required this.onRenameThread,
     required this.onArchiveThread,
     required this.onUnarchiveThread,
@@ -66,8 +57,6 @@ class ProjectListPane extends StatelessWidget {
   final ValueChanged<String> onNewThread;
   final ValueChanged<String> onOpenProjectLocation;
   final ValueChanged<String> onRemoveProject;
-  final ProjectThreadSearchChanged onSearchTermChanged;
-  final ProjectThreadArchivedViewChanged onArchivedViewChanged;
   final ProjectThreadRenamed onRenameThread;
   final ProjectThreadAction onArchiveThread;
   final ProjectThreadAction onUnarchiveThread;
@@ -106,10 +95,6 @@ class ProjectListPane extends StatelessWidget {
                   onNewThread: () => onNewThread(path),
                   onOpenProjectLocation: () => onOpenProjectLocation(path),
                   onRemoveProject: () => onRemoveProject(path),
-                  onSearchTermChanged: (searchTerm) =>
-                      onSearchTermChanged(path, searchTerm),
-                  onArchivedViewChanged: (archived) =>
-                      onArchivedViewChanged(path, archived),
                   onRenameThread: (threadId, name) =>
                       onRenameThread(path, threadId, name),
                   onArchiveThread: (thread) => onArchiveThread(path, thread),
@@ -142,8 +127,6 @@ class _ProjectTile extends StatefulWidget {
     required this.onNewThread,
     required this.onOpenProjectLocation,
     required this.onRemoveProject,
-    required this.onSearchTermChanged,
-    required this.onArchivedViewChanged,
     required this.onRenameThread,
     required this.onArchiveThread,
     required this.onUnarchiveThread,
@@ -161,8 +144,6 @@ class _ProjectTile extends StatefulWidget {
   final VoidCallback onNewThread;
   final VoidCallback onOpenProjectLocation;
   final VoidCallback onRemoveProject;
-  final ValueChanged<String> onSearchTermChanged;
-  final ValueChanged<bool> onArchivedViewChanged;
   final void Function(String threadId, String name) onRenameThread;
   final ValueChanged<AgentThreadSummary> onArchiveThread;
   final ValueChanged<AgentThreadSummary> onUnarchiveThread;
@@ -396,8 +377,6 @@ class _ProjectTileState extends State<_ProjectTile> {
               onSelectThread: widget.onSelectThread,
               onLoadMoreThreads: widget.onLoadMoreThreads,
               onRetryThreads: widget.onRetryThreads,
-              onSearchTermChanged: widget.onSearchTermChanged,
-              onArchivedViewChanged: widget.onArchivedViewChanged,
               onRenameThread: widget.onRenameThread,
               onArchiveThread: widget.onArchiveThread,
               onUnarchiveThread: widget.onUnarchiveThread,
@@ -410,15 +389,13 @@ class _ProjectTileState extends State<_ProjectTile> {
   }
 }
 
-class _ProjectThreadList extends StatefulWidget {
+class _ProjectThreadList extends StatelessWidget {
   const _ProjectThreadList({
     required this.projectPath,
     required this.state,
     required this.onSelectThread,
     required this.onLoadMoreThreads,
     required this.onRetryThreads,
-    required this.onSearchTermChanged,
-    required this.onArchivedViewChanged,
     required this.onRenameThread,
     required this.onArchiveThread,
     required this.onUnarchiveThread,
@@ -431,8 +408,6 @@ class _ProjectThreadList extends StatefulWidget {
   final ProjectThreadSelected onSelectThread;
   final VoidCallback onLoadMoreThreads;
   final VoidCallback onRetryThreads;
-  final ValueChanged<String> onSearchTermChanged;
-  final ValueChanged<bool> onArchivedViewChanged;
   final void Function(String threadId, String name) onRenameThread;
   final ValueChanged<AgentThreadSummary> onArchiveThread;
   final ValueChanged<AgentThreadSummary> onUnarchiveThread;
@@ -440,88 +415,11 @@ class _ProjectThreadList extends StatefulWidget {
   final ValueChanged<AgentThreadSummary> onForkThread;
 
   @override
-  State<_ProjectThreadList> createState() => _ProjectThreadListState();
-}
-
-class _ProjectThreadListState extends State<_ProjectThreadList> {
-  late final TextEditingController _searchController;
-
-  @override
-  void initState() {
-    super.initState();
-    _searchController = TextEditingController(text: widget.state.searchTerm);
-  }
-
-  @override
-  void didUpdateWidget(covariant _ProjectThreadList oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.state.searchTerm != _searchController.text) {
-      _searchController.text = widget.state.searchTerm;
-    }
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final state = widget.state;
-    final emptyMessage = state.archived ? 'No archived threads' : 'No threads';
     final children = <Widget>[
-      Padding(
-        padding: const EdgeInsets.only(
-          left: IdeSpacing.space4,
-          right: IdeSpacing.space4,
-          bottom: IdeSpacing.space6,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            sf.TextField(
-              key: ValueKey<String>(
-                'project-thread-search-${widget.projectPath}',
-              ),
-              controller: _searchController,
-              onChanged: widget.onSearchTermChanged,
-              placeholder: const Text('搜索会话'),
-              features: const [
-                sf.InputFeature.leading(Icon(Icons.search_rounded, size: 16)),
-              ],
-            ),
-            const SizedBox(height: IdeSpacing.space6),
-            Wrap(
-              spacing: IdeSpacing.space6,
-              runSpacing: IdeSpacing.space4,
-              children: [
-                IdeChip(
-                  key: ValueKey<String>(
-                    'project-thread-active-filter-${widget.projectPath}',
-                  ),
-                  label: '活动',
-                  selected: !state.archived,
-                  trailingIcon: null,
-                  onPressed: () => widget.onArchivedViewChanged(false),
-                ),
-                IdeChip(
-                  key: ValueKey<String>(
-                    'project-thread-archived-filter-${widget.projectPath}',
-                  ),
-                  label: '已归档',
-                  selected: state.archived,
-                  trailingIcon: null,
-                  onPressed: () => widget.onArchivedViewChanged(true),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
       for (final thread in state.threads)
         _ThreadTile(
-          projectPath: widget.projectPath,
+          projectPath: projectPath,
           thread:
               state.runningThreadIds.contains(thread.id) &&
                   thread.status != AgentThreadRuntimeStatus.active
@@ -529,26 +427,25 @@ class _ProjectThreadListState extends State<_ProjectThreadList> {
               : thread,
           selected: thread.id == state.selectedThreadId,
           archivedView: state.archived,
-          onTap: () => widget.onSelectThread(widget.projectPath, thread),
-          onRenameThread: widget.onRenameThread,
-          onArchiveThread: widget.onArchiveThread,
-          onUnarchiveThread: widget.onUnarchiveThread,
-          onDeleteThread: widget.onDeleteThread,
-          onForkThread: widget.onForkThread,
+          onTap: () => onSelectThread(projectPath, thread),
+          onRenameThread: onRenameThread,
+          onArchiveThread: onArchiveThread,
+          onUnarchiveThread: onUnarchiveThread,
+          onDeleteThread: onDeleteThread,
+          onForkThread: onForkThread,
         ),
       if (state.isLoadingInitial && state.threads.isEmpty)
         const _ThreadListMessage(text: 'Loading threads...'),
-      if (state.errorMessage != null)
-        _ThreadErrorRow(onRetry: widget.onRetryThreads),
+      if (state.errorMessage != null) _ThreadErrorRow(onRetry: onRetryThreads),
       if (state.hasLoaded &&
           state.threads.isEmpty &&
           !state.isLoadingInitial &&
           state.errorMessage == null)
-        _ThreadListMessage(text: emptyMessage),
+        const _ThreadListMessage(text: 'No threads'),
       if (state.hasMore)
         _LoadMoreThreadsButton(
           loading: state.isLoadingMore,
-          onPressed: widget.onLoadMoreThreads,
+          onPressed: onLoadMoreThreads,
         ),
     ];
 

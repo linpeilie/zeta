@@ -457,14 +457,6 @@ class _IdeHomeState extends State<IdeHome> {
         onRemoveProject: (projectPath) {
           unawaited(_shellController.removeProject(projectPath));
         },
-        onSearchTermChanged: (projectPath, searchTerm) {
-          _shellController.setThreadSearchTerm(projectPath, searchTerm);
-        },
-        onArchivedViewChanged: (projectPath, archived) {
-          unawaited(
-            _shellController.setThreadArchivedView(projectPath, archived),
-          );
-        },
         onRenameThread: (projectPath, threadId, name) {
           unawaited(
             _shellController.renameProjectThread(projectPath, threadId, name),

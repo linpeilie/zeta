@@ -129,20 +129,6 @@ class IdeShellController extends ChangeNotifier {
     return projectThreadsController.loadInitial(projectPath);
   }
 
-  Future<void> setThreadArchivedView(String projectPath, bool archived) {
-    return projectThreadsController.setArchivedView(
-      projectPath: projectPath,
-      archived: archived,
-    );
-  }
-
-  void setThreadSearchTerm(String projectPath, String searchTerm) {
-    projectThreadsController.setSearchTerm(
-      projectPath: projectPath,
-      searchTerm: searchTerm,
-    );
-  }
-
   Future<void> renameProjectThread(
     String projectPath,
     String threadId,

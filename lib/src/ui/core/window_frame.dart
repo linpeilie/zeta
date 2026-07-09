@@ -10,6 +10,7 @@ import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_context_menu.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_motion.dart';
+import 'package:zeta/src/ui/core/ide_popover.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 
@@ -206,12 +207,12 @@ class _WindowMenuButton extends StatefulWidget {
 }
 
 class _WindowMenuButtonState extends State<_WindowMenuButton> {
-  sf.OverlayCompleter<dynamic>? _popoverEntry;
+  IdePopoverHandle<void>? _popoverEntry;
   bool _menuOpen = false;
 
   @override
   void dispose() {
-    _popoverEntry?.remove();
+    _popoverEntry?.dismiss();
     _popoverEntry = null;
     super.dispose();
   }
@@ -231,7 +232,7 @@ class _WindowMenuButtonState extends State<_WindowMenuButton> {
     setState(() {
       _menuOpen = true;
     });
-    final entry = sf.showPopover(
+    final entry = showIdePopover<void>(
       context: context,
       alignment: Alignment.topLeft,
       anchorAlignment: Alignment.bottomLeft,
@@ -277,7 +278,7 @@ class _WindowMenuButtonState extends State<_WindowMenuButton> {
     setState(() {
       _menuOpen = false;
     });
-    entry.remove();
+    entry.dismiss();
   }
 
   @override
