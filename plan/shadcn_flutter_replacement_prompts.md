@@ -6,7 +6,7 @@
 - 每次开新会话时，先给对应阶段 prompt，不要把所有阶段一次性塞进同一个会话。
 - 每个 prompt 都默认代理需要先读：
   - `AGENTS.md`
-  - `.cursor/skills/zeta-design-system/SKILL.md`
+  - `.agents/skills/shadcn-flutter`
   - `plan/shadcn_flutter_replacement_plan.md`
 - 每个 prompt 都默认：
   - 使用 CodeGraph 先理解代码
@@ -23,7 +23,7 @@
 
 开始前先完整阅读以下文件：
 1. AGENTS.md
-2. .cursor/skills/zeta-design-system/SKILL.md
+2. .agents/skills/shadcn-flutter
 3. plan/shadcn_flutter_replacement_plan.md
 
 严格遵守这些约束：
@@ -64,7 +64,7 @@
 
 开始前先完整阅读：
 1. AGENTS.md
-2. .cursor/skills/zeta-design-system/SKILL.md
+2. .agents/skills/shadcn-flutter
 3. plan/shadcn_flutter_replacement_plan.md
 4. plan/shadcn_flutter_replacement_prompts.md
 
@@ -113,7 +113,7 @@
 
 开始前先完整阅读：
 1. AGENTS.md
-2. .cursor/skills/zeta-design-system/SKILL.md
+2. .agents/skills/shadcn-flutter
 3. plan/shadcn_flutter_replacement_plan.md
 4. plan/shadcn_flutter_replacement_prompts.md
 
@@ -159,7 +159,7 @@
 
 开始前先完整阅读：
 1. AGENTS.md
-2. .cursor/skills/zeta-design-system/SKILL.md
+2. .agents/skills/shadcn-flutter
 3. plan/shadcn_flutter_replacement_plan.md
 4. plan/shadcn_flutter_replacement_prompts.md
 
@@ -209,7 +209,7 @@
 
 开始前先完整阅读：
 1. AGENTS.md
-2. .cursor/skills/zeta-design-system/SKILL.md
+2. .agents/skills/shadcn-flutter
 3. plan/shadcn_flutter_replacement_plan.md
 4. plan/shadcn_flutter_replacement_prompts.md
 
@@ -256,7 +256,7 @@
 
 开始前先完整阅读：
 1. AGENTS.md
-2. .cursor/skills/zeta-design-system/SKILL.md
+2. .agents/skills/shadcn-flutter
 3. plan/shadcn_flutter_replacement_plan.md
 4. plan/shadcn_flutter_replacement_prompts.md
 
@@ -297,7 +297,7 @@
 
 开始前先完整阅读：
 1. AGENTS.md
-2. .cursor/skills/zeta-design-system/SKILL.md
+2. .agents/skills/shadcn-flutter
 3. plan/shadcn_flutter_replacement_plan.md
 4. plan/shadcn_flutter_replacement_prompts.md
 
@@ -354,7 +354,7 @@
 
 开始前先完整阅读：
 1. AGENTS.md
-2. .cursor/skills/zeta-design-system/SKILL.md
+2. .agents/skills/shadcn-flutter
 3. plan/shadcn_flutter_replacement_plan.md
 4. plan/shadcn_flutter_replacement_prompts.md
 
@@ -389,7 +389,7 @@
 
 开始前先完整阅读：
 1. AGENTS.md
-2. .cursor/skills/zeta-design-system/SKILL.md
+2. .agents/skills/shadcn-flutter
 3. plan/shadcn_flutter_replacement_plan.md
 4. plan/shadcn_flutter_replacement_prompts.md
 
@@ -405,7 +405,7 @@
 
 重点文档：
 - AGENTS.md
-- .cursor/skills/zeta-design-system/SKILL.md
+- .agents/skills/shadcn-flutter
 - docs/engineering_standards.md
 - docs/developer_guide.md
 - docs/design_document.md
@@ -440,7 +440,7 @@
 
 开始前先完整阅读：
 1. AGENTS.md
-2. .cursor/skills/zeta-design-system/SKILL.md
+2. .agents/skills/shadcn-flutter
 3. plan/shadcn_flutter_replacement_plan.md
 4. plan/shadcn_flutter_replacement_prompts.md
 
@@ -488,7 +488,7 @@
 
 开始前先完整阅读：
 1. AGENTS.md
-2. .cursor/skills/zeta-design-system/SKILL.md
+2. .agents/skills/shadcn-flutter
 3. plan/shadcn_flutter_replacement_plan.md
 4. plan/shadcn_flutter_replacement_prompts.md
 5. git diff
