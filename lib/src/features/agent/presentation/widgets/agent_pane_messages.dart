@@ -55,8 +55,8 @@ class _AgentTurnDivider extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: ShadSeparator.horizontal(
-              margin: EdgeInsets.zero,
+            child: sf.Divider(
+              padding: EdgeInsets.zero,
               thickness: 1,
               color: colors.borderSubtle,
             ),
@@ -116,8 +116,8 @@ class _AgentTurnDivider extends StatelessWidget {
           ],
           if (hasMeta)
             Expanded(
-              child: ShadSeparator.horizontal(
-                margin: EdgeInsets.zero,
+              child: sf.Divider(
+                padding: EdgeInsets.zero,
                 thickness: 1,
                 color: colors.borderSubtle,
               ),
@@ -243,13 +243,13 @@ class _AgentBubbleMessage extends StatelessWidget {
               ),
               if (canEdit) ...[
                 const SizedBox(height: IdeSpacing.space4),
-                ShadButton.ghost(
+                sf.GhostButton(
                   key: ValueKey<String>('agent-edit-retry-${message.id}'),
-                  size: ShadButtonSize.sm,
+                  size: sf.ButtonSize.small,
                   onPressed: () {
                     unawaited(_showEditRetryDialog(context));
                   },
-                  child: const Text('编辑并重试'),
+                  child: Text('编辑并重试', style: textStyles.bodySmall),
                 ),
               ],
             ],
@@ -261,26 +261,37 @@ class _AgentBubbleMessage extends StatelessWidget {
 
   Future<void> _showEditRetryDialog(BuildContext context) async {
     final controller = TextEditingController(text: message.text);
-    final confirmed = await showShadDialog<bool>(
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
-        return ShadDialog(
+        return sf.AlertDialog(
           title: const Text('编辑并重试'),
-          description: const Text('将回滚上一回合后重新发送。不会还原 Agent 已写入的本地文件改动。'),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('将回滚上一回合后重新发送。不会还原 Agent 已写入的本地文件改动。'),
+                const SizedBox(height: IdeSpacing.space12),
+                sf.TextField(
+                  controller: controller,
+                  autofocus: true,
+                  placeholder: const Text('编辑消息…'),
+                ),
+              ],
+            ),
+          ),
           actions: [
-            ShadButton.outline(
+            sf.OutlineButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('取消'),
             ),
-            ShadButton(
+            sf.PrimaryButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('发送'),
             ),
           ],
-          child: ShadInput(
-            controller: controller,
-            placeholder: const Text('编辑消息…'),
-          ),
         );
       },
     );
@@ -418,7 +429,7 @@ class _AgentMarkdownMessageState extends State<_AgentMarkdownMessage> {
           ),
           Align(
             alignment: Alignment.centerLeft,
-            child: ShadButton.ghost(
+            child: sf.GhostButton(
               key: ValueKey<String>(
                 'agent-markdown-toggle-${widget.message.id}',
               ),
@@ -427,15 +438,17 @@ class _AgentMarkdownMessageState extends State<_AgentMarkdownMessage> {
                   _expanded = !_expanded;
                 });
               },
-              size: ShadButtonSize.sm,
+              size: sf.ButtonSize.small,
               leading: Icon(
                 _expanded
                     ? Icons.unfold_less_rounded
                     : Icons.unfold_more_rounded,
                 size: 15,
               ),
-              textStyle: textStyles.bodySmall,
-              child: Text(_expanded ? '收起正文' : '展开正文'),
+              child: Text(
+                _expanded ? '收起正文' : '展开正文',
+                style: textStyles.bodySmall,
+              ),
             ),
           ),
         ],

@@ -248,7 +248,7 @@ class _AgentDiffDetailsState extends State<_AgentDiffDetails> {
                   style: _agentMetaTextStyle(context),
                 ),
                 const SizedBox(width: IdeSpacing.space8),
-                ShadButton.ghost(
+                sf.GhostButton(
                   key: ValueKey<String>(
                     'agent-file-edit-item-expand-all-${widget.item.id}',
                   ),
@@ -257,9 +257,11 @@ class _AgentDiffDetailsState extends State<_AgentDiffDetails> {
                       _showAll = !_showAll;
                     });
                   },
-                  size: ShadButtonSize.sm,
-                  textStyle: textStyles.bodySmall,
-                  child: Text(_showAll ? '收起差异' : '展开全部'),
+                  size: sf.ButtonSize.small,
+                  child: Text(
+                    _showAll ? '收起差异' : '展开全部',
+                    style: textStyles.bodySmall,
+                  ),
                 ),
               ],
             ),
@@ -495,7 +497,7 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
         spacing: IdeSpacing.space8,
         runSpacing: IdeSpacing.space6,
         children: [
-          ShadButton.outline(
+          sf.OutlineButton(
             key: ValueKey('agent-permission-deny-${request.id}'),
             onPressed: () => widget.onRespond(
               approved: false,
@@ -504,23 +506,23 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
                   ? AgentCommandApprovalDecisionKind.decline
                   : null,
             ),
-            size: ShadButtonSize.sm,
+            size: sf.ButtonSize.small,
             leading: const Icon(Icons.close_rounded, size: 16),
             child: const Text('Deny'),
           ),
           if (request.kind == AgentPermissionKind.commandExecution) ...[
-            ShadButton.outline(
+            sf.OutlineButton(
               key: ValueKey('agent-permission-session-${request.id}'),
               onPressed: () => widget.onRespond(
                 approved: true,
                 commandDecision:
                     AgentCommandApprovalDecisionKind.acceptForSession,
               ),
-              size: ShadButtonSize.sm,
+              size: sf.ButtonSize.small,
               child: const Text('Allow for session'),
             ),
             if (hasAmendment)
-              ShadButton.outline(
+              sf.OutlineButton(
                 key: ValueKey('agent-permission-always-${request.id}'),
                 onPressed: () => widget.onRespond(
                   approved: true,
@@ -528,19 +530,19 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
                       .acceptWithExecpolicyAmendment,
                   execpolicyAmendment: request.proposedExecpolicyAmendment,
                 ),
-                size: ShadButtonSize.sm,
+                size: sf.ButtonSize.small,
                 child: const Text('Always allow'),
               ),
           ],
           if (widget.autoReview?.status == 'denied' &&
               widget.onApproveGuardian != null)
-            ShadButton.outline(
+            sf.OutlineButton(
               key: ValueKey('agent-permission-guardian-override-${request.id}'),
               onPressed: widget.onApproveGuardian,
-              size: ShadButtonSize.sm,
+              size: sf.ButtonSize.small,
               child: const Text('Override guardian'),
             ),
-          ShadButton(
+          sf.PrimaryButton(
             key: ValueKey('agent-permission-approve-${request.id}'),
             onPressed: () => widget.onRespond(
               approved: true,
@@ -549,7 +551,7 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
                   ? AgentCommandApprovalDecisionKind.accept
                   : null,
             ),
-            size: ShadButtonSize.sm,
+            size: sf.ButtonSize.small,
             leading: const Icon(Icons.check_rounded, size: 16),
             child: const Text('Approve'),
           ),
@@ -595,17 +597,17 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
         spacing: IdeSpacing.space8,
         runSpacing: IdeSpacing.space6,
         children: [
-          ShadButton.outline(
+          sf.OutlineButton(
             key: ValueKey('agent-permission-deny-${request.id}'),
             onPressed: () => widget.onRespond(approved: false),
-            size: ShadButtonSize.sm,
+            size: sf.ButtonSize.small,
             leading: const Icon(Icons.close_rounded, size: 16),
             child: const Text('Skip'),
           ),
-          ShadButton(
+          sf.PrimaryButton(
             key: ValueKey('agent-permission-approve-${request.id}'),
             onPressed: _submitUserInput,
-            size: ShadButtonSize.sm,
+            size: sf.ButtonSize.small,
             leading: const Icon(Icons.check_rounded, size: 16),
             child: const Text('Submit'),
           ),
@@ -656,7 +658,7 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
         ],
         if (otherController != null) ...[
           const SizedBox(height: IdeSpacing.space6),
-          ShadInput(
+          sf.TextField(
             key: ValueKey(
               'agent-user-input-other-${request.id}-${question.questionId}',
             ),

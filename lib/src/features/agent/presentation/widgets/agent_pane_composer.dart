@@ -95,6 +95,8 @@ class _AgentComposer extends StatelessWidget {
     );
     final lineHeight =
         (inputTextStyle.fontSize ?? 12) * (inputTextStyle.height ?? 1.35);
+    final minTextAreaHeight = lineHeight * 3;
+    final maxTextAreaHeight = lineHeight * 10;
     final hasDraft =
         controller.text.trim().isNotEmpty || draftImagePaths.isNotEmpty;
     final showSend =
@@ -123,7 +125,7 @@ class _AgentComposer extends StatelessWidget {
       child: Builder(
         builder: (context) {
           final isFocused = Focus.of(context).hasFocus;
-          final brightness = ShadTheme.of(context).brightness;
+          final brightness = sf.Theme.of(context).brightness;
           final focusBorder = isFocused
               ? colors.accent.withValues(alpha: 0.64)
               : colors.border.withValues(alpha: 0.6);
@@ -164,27 +166,53 @@ class _AgentComposer extends StatelessWidget {
                       ),
                       const SizedBox(height: IdeSpacing.space8),
                     ],
-                    ShadTextarea(
-                      key: const ValueKey('agent-message-input'),
-                      controller: controller,
-                      placeholder: Text(
-                        'Message Agent',
-                        style: textStyles.bodyMedium.copyWith(
-                          color: colors.textTertiary,
+                    Stack(
+                      children: [
+                        ListenableBuilder(
+                          listenable: controller,
+                          builder: (context, _) {
+                            return sf.TextArea(
+                              key: const ValueKey('agent-message-input'),
+                              controller: controller,
+                              placeholder: Text(
+                                'Message Agent',
+                                style: textStyles.bodyMedium.copyWith(
+                                  color: colors.textTertiary,
+                                ),
+                              ),
+                              style: inputTextStyle,
+                              padding: EdgeInsets.zero,
+                              border: Border.all(color: Colors.transparent),
+                              borderRadius: BorderRadius.zero,
+                              initialHeight: _textAreaHeight(
+                                controller.text,
+                                lineHeight,
+                                minTextAreaHeight,
+                                maxTextAreaHeight,
+                              ),
+                              minHeight: minTextAreaHeight,
+                              maxHeight: maxTextAreaHeight,
+                              onSubmitted: (_) {
+                                if (canSubmit) {
+                                  onSend();
+                                }
+                              },
+                            );
+                          },
                         ),
-                      ),
-                      style: inputTextStyle,
-                      decoration: ShadDecoration.none,
-                      padding: EdgeInsets.zero,
-                      inputPadding: EdgeInsets.zero,
-                      minHeight: lineHeight * 3,
-                      maxHeight: lineHeight * 10,
-                      resizable: false,
-                      onSubmitted: (_) {
-                        if (canSubmit) {
-                          onSend();
-                        }
-                      },
+                        // `sf.TextArea` 当前总会绘制右下拖拽角；composer 不支持手动缩放，
+                        // 这里用面板底色遮掉，避免视觉回归。
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: IgnorePointer(
+                            child: ColoredBox(
+                              color: colors.panel,
+                              child: const SizedBox(width: 12, height: 12),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: IdeSpacing.space6),
                     // 下半部分：操作行，左侧放选择控件，右侧放发送按钮。
@@ -193,30 +221,31 @@ class _AgentComposer extends StatelessWidget {
                       children: [
                         IdeTooltip(
                           message: 'Mention file',
-                          child: ShadIconButton.ghost(
+                          child: sf.IconButton.ghost(
                             key: const ValueKey('agent-mention-file-button'),
                             onPressed: () => _showMentionPicker(context),
-                            width: 28,
-                            height: 28,
-                            padding: EdgeInsets.zero,
-                            foregroundColor: colors.textSecondary,
-                            icon: const Icon(
+                            size: sf.ButtonSize.small,
+                            density: sf.ButtonDensity.iconDense,
+                            icon: Icon(
                               Icons.alternate_email_rounded,
                               size: 16,
+                              color: colors.textSecondary,
                             ),
                           ),
                         ),
                         const SizedBox(width: IdeSpacing.space4),
                         IdeTooltip(
                           message: 'Attach image',
-                          child: ShadIconButton.ghost(
+                          child: sf.IconButton.ghost(
                             key: const ValueKey('agent-attach-image-button'),
                             onPressed: onAttachImages,
-                            width: 28,
-                            height: 28,
-                            padding: EdgeInsets.zero,
-                            foregroundColor: colors.textSecondary,
-                            icon: const Icon(Icons.image_outlined, size: 16),
+                            size: sf.ButtonSize.small,
+                            density: sf.ButtonDensity.iconDense,
+                            icon: Icon(
+                              Icons.image_outlined,
+                              size: 16,
+                              color: colors.textSecondary,
+                            ),
                           ),
                         ),
                         const SizedBox(width: IdeSpacing.space4),
@@ -323,6 +352,18 @@ class _AgentComposer extends StatelessWidget {
     );
   }
 
+  double _textAreaHeight(
+    String text,
+    double lineHeight,
+    double minHeight,
+    double maxHeight,
+  ) {
+    final lineCount = text.trim().isEmpty ? 3 : LineSplitter.split(text).length;
+    final visibleLines = lineCount.clamp(3, 10);
+    final desiredHeight = (visibleLines * lineHeight) + 8;
+    return desiredHeight.clamp(minHeight, maxHeight).toDouble();
+  }
+
   Future<void> _showMentionPicker(BuildContext context) async {
     final files = mentionCandidates();
     if (files.isEmpty) {
@@ -330,12 +371,12 @@ class _AgentComposer extends StatelessWidget {
     }
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    await showShadDialog<void>(
+    await showDialog<void>(
       context: context,
       builder: (dialogContext) {
-        return ShadDialog(
+        return sf.AlertDialog(
           title: const Text('Mention file'),
-          child: SizedBox(
+          content: SizedBox(
             width: 360,
             height: 280,
             child: ListView.builder(
@@ -433,15 +474,16 @@ class _ComposerImageDraftStrip extends StatelessWidget {
               Positioned(
                 top: -4,
                 right: -4,
-                child: ShadIconButton.ghost(
+                child: sf.IconButton.ghost(
                   key: ValueKey<String>('agent-composer-remove-image-$path'),
                   onPressed: () => onRemove(path),
-                  width: 20,
-                  height: 20,
-                  padding: EdgeInsets.zero,
-                  foregroundColor: colors.textSecondary,
-                  hoverBackgroundColor: colors.surfaceOverlay,
-                  icon: const Icon(Icons.close_rounded, size: 12),
+                  size: sf.ButtonSize.xSmall,
+                  density: sf.ButtonDensity.iconDense,
+                  icon: Icon(
+                    Icons.close_rounded,
+                    size: 12,
+                    color: colors.textSecondary,
+                  ),
                 ),
               ),
             ],
@@ -452,13 +494,13 @@ class _ComposerImageDraftStrip extends StatelessWidget {
   }
 }
 
-class _SelectorSelect<T extends Object> extends StatelessWidget {
+class _SelectorSelect<T extends Object> extends StatefulWidget {
   const _SelectorSelect({
     required this.selectorKey,
     required this.tooltip,
     required this.placeholderLabel,
     required this.icon,
-    required this.initialValue,
+    required this.value,
     required this.labelBuilder,
     required this.options,
     required this.onChanged,
@@ -468,31 +510,103 @@ class _SelectorSelect<T extends Object> extends StatelessWidget {
   final String tooltip;
   final String placeholderLabel;
   final IconData icon;
-  final T? initialValue;
+  final T? value;
   final String Function(T value) labelBuilder;
-  final Iterable<Widget> options;
+  final List<Widget> options;
   final ValueChanged<T> onChanged;
 
   @override
+  State<_SelectorSelect<T>> createState() => _SelectorSelectState<T>();
+}
+
+class _SelectorSelectState<T extends Object> extends State<_SelectorSelect<T>> {
+  sf.OverlayCompleter<T?>? _popoverEntry;
+
+  @override
+  void dispose() {
+    _popoverEntry?.remove();
+    super.dispose();
+  }
+
+  void _toggleMenu() {
+    if (_popoverEntry != null) {
+      _dismissMenu();
+      return;
+    }
+    _showMenu();
+  }
+
+  void _showMenu() {
+    if (_popoverEntry != null || widget.options.isEmpty) {
+      return;
+    }
+    final entry = sf.showPopover<T?>(
+      context: context,
+      alignment: Alignment.topLeft,
+      anchorAlignment: Alignment.bottomLeft,
+      widthConstraint: sf.PopoverConstraint.intrinsic,
+      offset: const Offset(0, 6),
+      builder: (context) {
+        return ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 280, maxHeight: 320),
+          child: sf.Data.inherit(
+            data: sf.SelectData(
+              autoClose: true,
+              hasSelection: widget.value != null,
+              enabled: true,
+              isSelected: (value) => value == widget.value,
+              onChanged: (value, selected) {
+                if (!selected || value is! T) {
+                  return false;
+                }
+                widget.onChanged(value);
+                return true;
+              },
+            ),
+            child: sf.SelectPopup.noVirtualization(
+              items: sf.SelectItemList(children: widget.options),
+            ),
+          ),
+        );
+      },
+    );
+    _popoverEntry = entry;
+    setState(() {});
+    entry.future.whenComplete(() {
+      if (!mounted || !identical(_popoverEntry, entry)) {
+        return;
+      }
+      setState(() {
+        _popoverEntry = null;
+      });
+    });
+  }
+
+  void _dismissMenu() {
+    final entry = _popoverEntry;
+    if (entry == null) {
+      return;
+    }
+    _popoverEntry = null;
+    setState(() {});
+    entry.remove();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final label = widget.value == null
+        ? widget.placeholderLabel
+        : widget.labelBuilder(widget.value as T);
     return IdeTooltip(
-      message: tooltip,
-      child: ShadSelect<T>(
-        key: selectorKey,
-        initialValue: initialValue,
-        minWidth: 0,
-        decoration: ShadDecoration.none,
-        padding: EdgeInsets.zero,
-        trailing: const SizedBox.shrink(),
-        placeholder: IdeChip(label: placeholderLabel, leadingIcon: icon),
-        selectedOptionBuilder: (context, value) =>
-            IdeChip(label: labelBuilder(value), leadingIcon: icon),
-        options: options,
-        onChanged: (value) {
-          if (value != null) {
-            onChanged(value);
-          }
-        },
+      message: widget.tooltip,
+      child: IdeChip(
+        key: widget.selectorKey,
+        label: label,
+        leadingIcon: widget.icon,
+        selected: _popoverEntry != null,
+        enabled: widget.options.isNotEmpty,
+        onPressed: _toggleMenu,
+        semanticLabel: widget.tooltip,
       ),
     );
   }
@@ -517,12 +631,12 @@ class _ModelSelectorButton extends StatelessWidget {
       tooltip: 'Select model',
       placeholderLabel: 'Model',
       icon: Icons.auto_awesome_outlined,
-      initialValue: selectedModel?.id,
+      value: selectedModel?.id,
       labelBuilder: _modelLabel,
       onChanged: onSelect,
       options: [
         for (final model in models)
-          ShadOption<String>(
+          sf.SelectItemButton<String>(
             key: ValueKey<String>('agent-model-option-${model.id}'),
             value: model.id,
             child: Text(
@@ -564,12 +678,12 @@ class _ReasoningEffortButton extends StatelessWidget {
       tooltip: 'Reasoning effort',
       placeholderLabel: 'Think',
       icon: Icons.psychology_alt_outlined,
-      initialValue: selectedEffort,
+      value: selectedEffort,
       labelBuilder: _effortLabel,
       onChanged: (value) => onSelect(value),
       options: [
         for (final effort in efforts)
-          ShadOption<String>(
+          sf.SelectItemButton<String>(
             key: ValueKey<String>('agent-reasoning-option-${effort.effort}'),
             value: effort.effort,
             child: Text(
@@ -610,12 +724,12 @@ class _ServiceTierButton extends StatelessWidget {
       tooltip: 'Service tier',
       placeholderLabel: 'Speed',
       icon: Icons.speed_rounded,
-      initialValue: selectedTierId,
+      value: selectedTierId,
       labelBuilder: _tierLabel,
       onChanged: (value) => onSelect(value),
       options: [
         for (final tier in tiers)
-          ShadOption<String>(
+          sf.SelectItemButton<String>(
             key: ValueKey<String>('agent-service-tier-option-${tier.id}'),
             value: tier.id,
             child: Text(tier.name, style: IdeTextStyles.of(context).bodyMedium),
@@ -655,7 +769,7 @@ class _PermissionPolicyButton extends StatelessWidget {
       tooltip: 'Approval & sandbox',
       placeholderLabel: label,
       icon: Icons.shield_outlined,
-      initialValue: selectedPresetId,
+      value: selectedPresetId,
       labelBuilder: (id) {
         for (final preset in presets) {
           if (preset.id == id) {
@@ -674,7 +788,7 @@ class _PermissionPolicyButton extends StatelessWidget {
       },
       options: [
         for (final preset in presets)
-          ShadOption<String>(
+          sf.SelectItemButton<String>(
             key: ValueKey<String>('agent-permission-preset-${preset.id}'),
             value: preset.id,
             child: Text(
@@ -719,18 +833,17 @@ class _ComposerActionButton extends StatelessWidget {
           shape: BoxShape.circle,
         ),
         child: ClipOval(
-          child: ShadIconButton.ghost(
+          child: sf.IconButton.ghost(
             key: buttonKey,
             onPressed: onPressed,
-            width: 32,
-            height: 32,
-            padding: EdgeInsets.zero,
-            foregroundColor: foregroundColor,
-            hoverForegroundColor: filled ? foregroundColor : null,
-            hoverBackgroundColor: filled
-                ? Colors.white.withValues(alpha: 0.14)
-                : null,
-            icon: icon,
+            size: sf.ButtonSize.small,
+            density: sf.ButtonDensity.iconDense,
+            shape: sf.ButtonShape.circle,
+            disableTransition: filled,
+            icon: IconTheme.merge(
+              data: IconThemeData(color: foregroundColor),
+              child: icon,
+            ),
           ),
         ),
       ),

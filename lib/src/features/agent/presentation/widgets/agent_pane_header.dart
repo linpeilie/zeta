@@ -99,14 +99,13 @@ class _AgentHeader extends StatelessWidget {
               const SizedBox(width: IdeSpacing.space4),
               IdeTooltip(
                 message: '分叉当前会话',
-                child: ShadIconButton.ghost(
+                child: sf.IconButton.ghost(
                   key: const ValueKey('agent-header-fork'),
                   onPressed: () {
                     unawaited(viewModel.forkCurrentThread());
                   },
-                  width: 28,
-                  height: 28,
-                  padding: EdgeInsets.zero,
+                  size: sf.ButtonSize.small,
+                  density: sf.ButtonDensity.iconDense,
                   icon: Icon(
                     Icons.call_split_rounded,
                     size: 15,
@@ -189,15 +188,18 @@ class _AgentCompactBanner extends StatelessWidget {
               ),
             ),
             const SizedBox(width: IdeSpacing.space8),
-            ShadButton.outline(
+            sf.OutlineButton(
               key: const ValueKey('agent-compact-button'),
-              size: ShadButtonSize.sm,
+              size: sf.ButtonSize.small,
               onPressed: compacting || viewModel.isTurnRunning
                   ? null
                   : () {
                       unawaited(viewModel.compactCurrentThread());
                     },
-              child: Text(compacting ? '压缩中' : '压缩上下文'),
+              child: Text(
+                compacting ? '压缩中' : '压缩上下文',
+                style: textStyles.bodySmall,
+              ),
             ),
           ],
         ),
