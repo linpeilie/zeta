@@ -58,9 +58,6 @@ AgentConversationViewModel
 
 ### 主题与设计系统
 
-当前使用「Graphite 石墨蓝」视觉身份，深浅双主题（跟随系统/浅色/深色
-三种模式），细节规范见 `.cursor/skills/zeta-design-system/SKILL.md`：
-
 - 深色「Graphite Night」：中性石墨框架底 `#0A0A0B`，面板 `#18191B`，
   强调色蔚蓝 `#1B84FF`，selected 行用 accent 半透明铺底。
 - 浅色「Graphite Day」：中性浅灰底 `#EEEFF1`，白色面板，

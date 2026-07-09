@@ -1,21 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/core/constants/app_typography.dart';
 
+import 'app_theme.dart';
 import 'ide_colors.dart';
-
-abstract final class _IdeTextStyleCustomKeys {
-  static const displayLarge = 'displayLarge';
-  static const displaySmall = 'displaySmall';
-  static const titleLarge = 'titleLarge';
-  static const titleSmall = 'titleSmall';
-  static const bodyMedium = 'bodyMedium';
-  static const bodySmall = 'bodySmall';
-  static const caption = 'caption';
-  static const codeMedium = 'codeMedium';
-  static const codeSmall = 'codeSmall';
-}
 
 /// IDE 设计系统排版 token。
 @immutable
@@ -44,22 +33,20 @@ class IdeTextStyles {
 
   /// 从当前上下文解析语义排版。
   ///
-  /// 与 [IdeColors.of] 相同，必须监听 ShadTheme 变化，否则主题切换动画
-  /// 结束后组件仍持有旧亮度下的文字颜色。
-  static IdeTextStyles of(
-    BuildContext context, {
-    String codeFontFamily = bundledCodeFontFamily,
-  }) {
-    final shadTheme = ShadTheme.maybeOf(context);
-    if (shadTheme != null) {
-      return fromShadTheme(shadTheme, codeFontFamily: codeFontFamily);
-    }
-
+  /// 运行时不再依赖旧 `ShadTheme`，优先从当前根主题拿到 UI 字体，再通过
+  /// [IdeTypography] / [IdeCodeFontScope] 解析代码字体。
+  static IdeTextStyles of(BuildContext context, {String? codeFontFamily}) {
+    final shadcnTheme = context
+        .dependOnInheritedWidgetOfExactType<sf.Theme>()
+        ?.data;
     final materialTheme = Theme.of(context);
     return resolve(
       colors: IdeColors.of(context),
-      uiFontFamily: materialTheme.textTheme.bodyMedium?.fontFamily,
-      codeFontFamily: codeFontFamily,
+      uiFontFamily:
+          materialTheme.textTheme.bodyMedium?.fontFamily ??
+          shadcnTheme?.typography.sans.fontFamily,
+      codeFontFamily:
+          codeFontFamily ?? IdeTypography.of(context).codeFontFamily,
     );
   }
 
@@ -133,69 +120,6 @@ class IdeTextStyles {
         height: 1.35,
         fontWeight: FontWeight.w400,
       ),
-    );
-  }
-
-  /// 从 [ShadThemeData] 中恢复 IDE 语义排版。
-  static IdeTextStyles fromShadTheme(
-    ShadThemeData theme, {
-    String codeFontFamily = bundledCodeFontFamily,
-  }) {
-    final fallback = resolve(
-      colors: ideColorsFromShadTheme(theme),
-      uiFontFamily: theme.textTheme.family,
-      codeFontFamily: codeFontFamily,
-    );
-    final custom = theme.textTheme.custom;
-    return IdeTextStyles(
-      displayLarge:
-          custom[_IdeTextStyleCustomKeys.displayLarge] ?? fallback.displayLarge,
-      displaySmall:
-          custom[_IdeTextStyleCustomKeys.displaySmall] ?? fallback.displaySmall,
-      titleLarge:
-          custom[_IdeTextStyleCustomKeys.titleLarge] ?? fallback.titleLarge,
-      titleSmall:
-          custom[_IdeTextStyleCustomKeys.titleSmall] ?? fallback.titleSmall,
-      bodyMedium:
-          custom[_IdeTextStyleCustomKeys.bodyMedium] ?? fallback.bodyMedium,
-      bodySmall:
-          custom[_IdeTextStyleCustomKeys.bodySmall] ?? fallback.bodySmall,
-      caption: custom[_IdeTextStyleCustomKeys.caption] ?? fallback.caption,
-      codeMedium:
-          custom[_IdeTextStyleCustomKeys.codeMedium] ?? fallback.codeMedium,
-      codeSmall:
-          custom[_IdeTextStyleCustomKeys.codeSmall] ?? fallback.codeSmall,
-    );
-  }
-
-  /// 构建可直接注入 [ShadThemeData] 的排版主题。
-  static ShadTextTheme buildShadTextTheme({
-    required IdeColors colors,
-    String? uiFontFamily,
-    String codeFontFamily = bundledCodeFontFamily,
-  }) {
-    final styles = resolve(
-      colors: colors,
-      uiFontFamily: uiFontFamily,
-      codeFontFamily: codeFontFamily,
-    );
-    return ShadTextTheme(
-      family: uiFontFamily,
-      h4: styles.titleSmall,
-      p: styles.bodyMedium,
-      small: styles.bodySmall,
-      muted: styles.bodySmall.copyWith(color: colors.textSecondary),
-      custom: <String, TextStyle>{
-        _IdeTextStyleCustomKeys.displayLarge: styles.displayLarge,
-        _IdeTextStyleCustomKeys.displaySmall: styles.displaySmall,
-        _IdeTextStyleCustomKeys.titleLarge: styles.titleLarge,
-        _IdeTextStyleCustomKeys.titleSmall: styles.titleSmall,
-        _IdeTextStyleCustomKeys.bodyMedium: styles.bodyMedium,
-        _IdeTextStyleCustomKeys.bodySmall: styles.bodySmall,
-        _IdeTextStyleCustomKeys.caption: styles.caption,
-        _IdeTextStyleCustomKeys.codeMedium: styles.codeMedium,
-        _IdeTextStyleCustomKeys.codeSmall: styles.codeSmall,
-      },
     );
   }
 }

@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/core/constants/app_typography.dart';
 
 import 'ide_colors.dart';
-import 'ide_effects.dart';
-import 'ide_text_styles.dart';
 
 // 「Graphite」深色调色板常量：保留旧名以兼容历史代码与测试断言。运行时主题
-// 通过 [IdeColors] 扩展解析，深色实例 [IdeColors.dark] 直接复用这些常量值。
+// 通过 [IdeColors] 解析，深色实例 [IdeColors.dark] 直接复用这些常量值。
 const Color ideFrameColor = Color(0xFF0A0A0B);
 const Color ideSurfaceColor = Color(0xFF18191B);
 const Color idePanelColor = Color(0xFF18191B);
@@ -29,8 +27,8 @@ const String ideFontFamily = bundledCodeFontFamily;
 
 /// 运行时代码字体作用域。
 ///
-/// 运行时 UI 不再依赖 Material ThemeExtension 传递代码字体，改为通过这个
-/// scope 在 app 根部下发；测试也可直接复用它。
+/// 运行时 UI 不再依赖第三方主题对象传递代码字体，改为通过这个 scope 在 app 根部
+/// 下发；测试也可直接复用它。
 class IdeCodeFontScope extends InheritedWidget {
   const IdeCodeFontScope({
     required this.codeFontFamily,
@@ -88,77 +86,186 @@ class IdeTypography extends ThemeExtension<IdeTypography> {
   }
 }
 
-/// 根据亮度构建 shadcn 主题。
-ShadThemeData buildShadTheme({
+/// 解析当前 ThemeMode 对应的物理亮度，用于旧 Material theme / extension 的兜底。
+Brightness resolveBrightnessForThemeMode(ThemeMode themeMode) {
+  return switch (themeMode) {
+    ThemeMode.light => Brightness.light,
+    ThemeMode.dark => Brightness.dark,
+    ThemeMode.system =>
+      WidgetsBinding.instance.platformDispatcher.platformBrightness,
+  };
+}
+
+/// 将 Flutter Material 的 ThemeMode 显式映射到 `shadcn_flutter`。
+sf.ThemeMode resolveShadcnThemeMode(ThemeMode themeMode) {
+  return switch (themeMode) {
+    ThemeMode.light => sf.ThemeMode.light,
+    ThemeMode.dark => sf.ThemeMode.dark,
+    ThemeMode.system => sf.ThemeMode.system,
+  };
+}
+
+/// 根据亮度构建 `shadcn_flutter` 根主题。
+sf.ThemeData buildShadcnTheme({
   required Brightness brightness,
   String? uiFontFamily,
   required String codeFontFamily,
 }) {
   final colors = _baseIdeColorsForBrightness(brightness);
-  final isDark = brightness == Brightness.dark;
-  // ghost 按钮 / option 行的 hover 背景与 PaneInteractiveSurface 保持一致。
-  final hoverBackground = colors.border.withValues(alpha: isDark ? 0.18 : 0.3);
-  return ShadThemeData(
-    brightness: brightness,
-    colorScheme: shadColorSchemeFromIdeColors(colors, brightness: brightness),
-    radius: IdeRadius.allMedium,
-    textTheme: IdeTextStyles.buildShadTextTheme(
-      colors: colors,
+  return sf.ThemeData(
+    colorScheme: shadcnColorSchemeFromIdeColors(colors, brightness: brightness),
+    typography: _buildShadcnTypography(
       uiFontFamily: uiFontFamily,
       codeFontFamily: codeFontFamily,
     ),
-    ghostButtonTheme: ShadButtonTheme(
-      foregroundColor: colors.textSecondary,
-      hoverForegroundColor: colors.textPrimary,
-      hoverBackgroundColor: hoverBackground,
-      pressedBackgroundColor: colors.border.withValues(
-        alpha: isDark ? 0.28 : 0.4,
-      ),
-      pressedForegroundColor: colors.textPrimary,
+    // Graphite 的精确圆角仍由 IdeRadius 驱动，这里只给第三方组件一个中性基准。
+    radius: 2 / 3,
+    density: sf.Density.defaultDensity,
+    scaling: 1,
+  );
+}
+
+/// 为现有 Material widget / ThemeExtension 提供最小主题承载。
+ThemeData buildMaterialTheme({
+  required Brightness brightness,
+  String? uiFontFamily,
+  required String codeFontFamily,
+}) {
+  final colors = _baseIdeColorsForBrightness(brightness);
+  final baseTheme = ThemeData(
+    brightness: brightness,
+    useMaterial3: true,
+    scaffoldBackgroundColor: colors.frame,
+    canvasColor: colors.surface,
+    cardColor: colors.surface,
+    dividerColor: colors.border,
+    iconTheme: IconThemeData(color: colors.textSecondary),
+  );
+  return baseTheme.copyWith(
+    textTheme: baseTheme.textTheme.apply(
+      fontFamily: uiFontFamily,
+      bodyColor: colors.textPrimary,
+      displayColor: colors.textPrimary,
     ),
-    optionTheme: ShadOptionTheme(
-      radius: IdeRadius.allSmall,
-      hoveredBackgroundColor: hoverBackground,
-      selectedBackgroundColor: colors.primaryMuted,
-    ),
-    popoverTheme: ShadPopoverTheme(
-      decoration: ShadDecoration(
-        color: colors.surfaceOverlay,
-        border: ShadBorder.all(
-          color: colors.border,
-          width: 1,
-          radius: IdeRadius.allLarge,
-        ),
-        shadows: IdeEffects.overlayShadow(brightness),
-      ),
-    ),
-    primaryDialogTheme: ShadDialogTheme(
-      backgroundColor: colors.surfaceOverlay,
-      border: Border.all(color: colors.border),
-      radius: IdeRadius.allLarge,
-      shadows: IdeEffects.overlayShadow(brightness),
-    ),
-    alertDialogTheme: ShadDialogTheme(
-      backgroundColor: colors.surfaceOverlay,
-      border: Border.all(color: colors.border),
-      radius: IdeRadius.allLarge,
-      shadows: IdeEffects.overlayShadow(brightness),
-    ),
-    primaryToastTheme: ShadToastTheme(
-      backgroundColor: colors.surfaceElevated,
-      border: ShadBorder.all(color: colors.border, width: 1),
-      radius: IdeRadius.allMedium,
-      shadows: IdeEffects.overlayShadow(brightness),
-    ),
-    destructiveToastTheme: ShadToastTheme(
-      backgroundColor: colors.surfaceElevated,
-      border: ShadBorder.all(color: colors.border, width: 1),
-      radius: IdeRadius.allMedium,
-      shadows: IdeEffects.overlayShadow(brightness),
-    ),
+    extensions: <ThemeExtension<dynamic>>[
+      colors,
+      IdeTypography(codeFontFamily: codeFontFamily),
+    ],
   );
 }
 
 IdeColors _baseIdeColorsForBrightness(Brightness brightness) {
   return brightness == Brightness.dark ? IdeColors.dark : IdeColors.light;
+}
+
+sf.ColorScheme shadcnColorSchemeFromIdeColors(
+  IdeColors colors, {
+  required Brightness brightness,
+}) {
+  return sf.ColorScheme(
+    brightness: brightness,
+    background: colors.frame,
+    foreground: colors.textPrimary,
+    card: colors.surface,
+    cardForeground: colors.textPrimary,
+    popover: colors.surfaceOverlay,
+    popoverForeground: colors.textPrimary,
+    primary: colors.accent,
+    primaryForeground: colors.accentForeground,
+    secondary: colors.surfaceElevated,
+    secondaryForeground: colors.textPrimary,
+    muted: colors.surfaceElevated,
+    mutedForeground: colors.textSecondary,
+    accent: colors.primaryMuted,
+    accentForeground: colors.textPrimary,
+    destructive: colors.error,
+    destructiveForeground: Colors.white,
+    border: colors.border,
+    input: colors.borderSubtle,
+    ring: colors.accent,
+    chart1: colors.accent,
+    chart2: colors.info,
+    chart3: colors.warning,
+    chart4: colors.success,
+    chart5: colors.error,
+  );
+}
+
+sf.Typography _buildShadcnTypography({
+  String? uiFontFamily,
+  required String codeFontFamily,
+}) {
+  const base = sf.Typography.geist();
+  return base.copyWith(
+    sans: () => _overrideFontFamily(base.sans, uiFontFamily),
+    mono: () => _overrideFontFamily(base.mono, codeFontFamily),
+    xSmall: () => _overrideFontFamily(base.xSmall, uiFontFamily),
+    small: () => _overrideFontFamily(base.small, uiFontFamily),
+    base: () => _overrideFontFamily(base.base, uiFontFamily),
+    large: () => _overrideFontFamily(base.large, uiFontFamily),
+    xLarge: () => _overrideFontFamily(base.xLarge, uiFontFamily),
+    x2Large: () => _overrideFontFamily(base.x2Large, uiFontFamily),
+    x3Large: () => _overrideFontFamily(base.x3Large, uiFontFamily),
+    x4Large: () => _overrideFontFamily(base.x4Large, uiFontFamily),
+    x5Large: () => _overrideFontFamily(base.x5Large, uiFontFamily),
+    x6Large: () => _overrideFontFamily(base.x6Large, uiFontFamily),
+    x7Large: () => _overrideFontFamily(base.x7Large, uiFontFamily),
+    x8Large: () => _overrideFontFamily(base.x8Large, uiFontFamily),
+    x9Large: () => _overrideFontFamily(base.x9Large, uiFontFamily),
+    thin: () => _overrideFontFamily(base.thin, uiFontFamily),
+    light: () => _overrideFontFamily(base.light, uiFontFamily),
+    extraLight: () => _overrideFontFamily(base.extraLight, uiFontFamily),
+    normal: () => _overrideFontFamily(base.normal, uiFontFamily),
+    medium: () => _overrideFontFamily(base.medium, uiFontFamily),
+    semiBold: () => _overrideFontFamily(base.semiBold, uiFontFamily),
+    bold: () => _overrideFontFamily(base.bold, uiFontFamily),
+    extraBold: () => _overrideFontFamily(base.extraBold, uiFontFamily),
+    black: () => _overrideFontFamily(base.black, uiFontFamily),
+    italic: () => _overrideFontFamily(base.italic, uiFontFamily),
+    h1: () => _overrideFontFamily(base.h1, uiFontFamily),
+    h2: () => _overrideFontFamily(base.h2, uiFontFamily),
+    h3: () => _overrideFontFamily(base.h3, uiFontFamily),
+    h4: () => _overrideFontFamily(base.h4, uiFontFamily),
+    p: () => _overrideFontFamily(base.p, uiFontFamily),
+    blockQuote: () => _overrideFontFamily(base.blockQuote, uiFontFamily),
+    inlineCode: () => _overrideFontFamily(base.inlineCode, codeFontFamily),
+    lead: () => _overrideFontFamily(base.lead, uiFontFamily),
+    textLarge: () => _overrideFontFamily(base.textLarge, uiFontFamily),
+    textSmall: () => _overrideFontFamily(base.textSmall, uiFontFamily),
+    textMuted: () => _overrideFontFamily(base.textMuted, uiFontFamily),
+  );
+}
+
+TextStyle _overrideFontFamily(TextStyle style, String? fontFamily) {
+  if (fontFamily == null || fontFamily.isEmpty) {
+    return style;
+  }
+  return TextStyle(
+    inherit: style.inherit,
+    color: style.color,
+    backgroundColor: style.backgroundColor,
+    fontSize: style.fontSize,
+    fontWeight: style.fontWeight,
+    fontStyle: style.fontStyle,
+    letterSpacing: style.letterSpacing,
+    wordSpacing: style.wordSpacing,
+    textBaseline: style.textBaseline,
+    height: style.height,
+    leadingDistribution: style.leadingDistribution,
+    locale: style.locale,
+    foreground: style.foreground,
+    background: style.background,
+    shadows: style.shadows,
+    fontFeatures: style.fontFeatures,
+    fontVariations: style.fontVariations,
+    decoration: style.decoration,
+    decorationColor: style.decorationColor,
+    decorationStyle: style.decorationStyle,
+    decorationThickness: style.decorationThickness,
+    debugLabel: style.debugLabel,
+    fontFamily: fontFamily,
+    fontFamilyFallback: style.fontFamilyFallback,
+    package: null,
+    overflow: style.overflow,
+  );
 }

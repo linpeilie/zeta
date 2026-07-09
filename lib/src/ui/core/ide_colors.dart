@@ -1,39 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'app_theme.dart';
 
-const _darkTextTertiaryColor = Color(0xFF63666C);
-const _lightTextTertiaryColor = Color(0xFF8F929B);
-const _darkInfoColor = Color(0xFF55A8F5);
-const _lightInfoColor = Color(0xFF1173CF);
-const _darkWindowHoverColor = Color(0xFF2A2B2E);
-const _lightWindowHoverColor = Color(0xFFE1E2E6);
-const _darkWindowIconColor = Color(0xFFA6A9AE);
-const _lightWindowIconColor = Color(0xFF5B5E66);
 const _sharedCloseHoverColor = Color(0xFFE5484D);
-
-abstract final class _IdeColorSchemeCustomKeys {
-  static const frame = 'frame';
-  static const surface = 'surface';
-  static const surfaceElevated = 'surfaceElevated';
-  static const surfaceOverlay = 'surfaceOverlay';
-  static const panel = 'panel';
-  static const editor = 'editor';
-  static const borderSubtle = 'borderSubtle';
-  static const mutedText = 'mutedText';
-  static const textPrimary = 'textPrimary';
-  static const textSecondary = 'textSecondary';
-  static const textTertiary = 'textTertiary';
-  static const warning = 'warning';
-  static const error = 'error';
-  static const success = 'success';
-  static const info = 'info';
-  static const primaryMuted = 'primaryMuted';
-  static const windowHover = 'windowHover';
-  static const windowIcon = 'windowIcon';
-  static const closeHover = 'closeHover';
-}
 
 /// IDE 主题专用调色板。
 ///
@@ -190,16 +160,14 @@ class IdeColors extends ThemeExtension<IdeColors> {
 
   /// 从 [context] 取出当前主题下的 [IdeColors]。
   ///
-  /// 运行时优先从 [ShadTheme] 解析；仅在旧测试或兼容场景下回退到
-  /// Material ThemeExtension。
-  ///
-  /// 必须注册 InheritedWidget 依赖（listen: true）：主题切换由
-  /// ShadAnimatedTheme 渐变驱动，若不监听，组件只会捕获动画起点的旧配色，
-  /// 导致浅色模式下残留深色文字/边框。
+  /// 运行时优先从 `sf.Theme` 解析亮度；仅在旧测试或兼容场景下回退到 Material
+  /// ThemeExtension。
   static IdeColors of(BuildContext context) {
-    final shadTheme = ShadTheme.maybeOf(context);
-    if (shadTheme != null) {
-      return ideColorsFromShadTheme(shadTheme);
+    final shadcnTheme = context
+        .dependOnInheritedWidgetOfExactType<sf.Theme>()
+        ?.data;
+    if (shadcnTheme != null) {
+      return shadcnTheme.brightness == Brightness.light ? light : dark;
     }
 
     final materialTheme = Theme.of(context);
@@ -299,144 +267,4 @@ class IdeColors extends ThemeExtension<IdeColors> {
       closeHover: Color.lerp(closeHover, other.closeHover, t)!,
     );
   }
-}
-
-/// 将 [IdeColors] 语义映射到 shadcn 颜色系统，并通过 custom 透传扩展 token。
-ShadColorScheme shadColorSchemeFromIdeColors(
-  IdeColors colors, {
-  required Brightness brightness,
-}) {
-  return ShadColorScheme(
-    background: colors.frame,
-    foreground: colors.textPrimary,
-    card: colors.surface,
-    cardForeground: colors.textPrimary,
-    popover: colors.surfaceOverlay,
-    popoverForeground: colors.textPrimary,
-    primary: colors.accent,
-    primaryForeground: colors.accentForeground,
-    secondary: colors.surfaceElevated,
-    secondaryForeground: colors.textPrimary,
-    muted: colors.surfaceElevated,
-    mutedForeground: colors.textSecondary,
-    // shadcn 语义中 accent 是 hover/选中行的弱化表面色（ghost 按钮、
-    // option hover 等都取它），品牌强调色统一走 primary。
-    accent: colors.surfaceElevated,
-    accentForeground: colors.textPrimary,
-    destructive: colors.error,
-    destructiveForeground: Colors.white,
-    border: colors.border,
-    input: colors.borderSubtle,
-    ring: colors.accent,
-    selection: colors.primaryMuted,
-    custom: <String, Color>{
-      _IdeColorSchemeCustomKeys.frame: colors.frame,
-      _IdeColorSchemeCustomKeys.surface: colors.surface,
-      _IdeColorSchemeCustomKeys.surfaceElevated: colors.surfaceElevated,
-      _IdeColorSchemeCustomKeys.surfaceOverlay: colors.surfaceOverlay,
-      _IdeColorSchemeCustomKeys.panel: colors.panel,
-      _IdeColorSchemeCustomKeys.editor: colors.editor,
-      _IdeColorSchemeCustomKeys.borderSubtle: colors.borderSubtle,
-      _IdeColorSchemeCustomKeys.mutedText: colors.mutedText,
-      _IdeColorSchemeCustomKeys.textPrimary: colors.textPrimary,
-      _IdeColorSchemeCustomKeys.textSecondary: colors.textSecondary,
-      _IdeColorSchemeCustomKeys.textTertiary: colors.textTertiary,
-      _IdeColorSchemeCustomKeys.warning: colors.warning,
-      _IdeColorSchemeCustomKeys.error: colors.error,
-      _IdeColorSchemeCustomKeys.success: colors.success,
-      _IdeColorSchemeCustomKeys.info: colors.info,
-      _IdeColorSchemeCustomKeys.primaryMuted: colors.primaryMuted,
-      _IdeColorSchemeCustomKeys.windowHover: colors.windowHover,
-      _IdeColorSchemeCustomKeys.windowIcon: colors.windowIcon,
-      _IdeColorSchemeCustomKeys.closeHover: colors.closeHover,
-    },
-  );
-}
-
-/// 从 [ShadThemeData] 中提取等价的 [IdeColors]。
-IdeColors ideColorsFromShadTheme(ShadThemeData theme) {
-  return ideColorsFromShadColorScheme(
-    theme.colorScheme,
-    brightness: theme.brightness,
-  );
-}
-
-/// 从 [ShadColorScheme] 中提取等价的 [IdeColors]。
-IdeColors ideColorsFromShadColorScheme(
-  ShadColorScheme scheme, {
-  required Brightness brightness,
-}) {
-  final custom = scheme.custom;
-  final surfaceElevated =
-      custom[_IdeColorSchemeCustomKeys.surfaceElevated] ?? scheme.muted;
-  final surfaceOverlay =
-      custom[_IdeColorSchemeCustomKeys.surfaceOverlay] ?? scheme.popover;
-  final textSecondary =
-      custom[_IdeColorSchemeCustomKeys.textSecondary] ?? scheme.mutedForeground;
-  return IdeColors(
-    frame: custom[_IdeColorSchemeCustomKeys.frame] ?? scheme.background,
-    surface: custom[_IdeColorSchemeCustomKeys.surface] ?? scheme.card,
-    surfaceElevated: surfaceElevated,
-    surfaceOverlay: surfaceOverlay,
-    panel: custom[_IdeColorSchemeCustomKeys.panel] ?? surfaceElevated,
-    editor: custom[_IdeColorSchemeCustomKeys.editor] ?? surfaceElevated,
-    border: scheme.border,
-    borderSubtle:
-        custom[_IdeColorSchemeCustomKeys.borderSubtle] ?? scheme.input,
-    mutedText: custom[_IdeColorSchemeCustomKeys.mutedText] ?? textSecondary,
-    textPrimary:
-        custom[_IdeColorSchemeCustomKeys.textPrimary] ?? scheme.foreground,
-    textSecondary: textSecondary,
-    textTertiary:
-        custom[_IdeColorSchemeCustomKeys.textTertiary] ??
-        _textTertiaryForBrightness(brightness),
-    accent: scheme.primary,
-    primaryMuted:
-        custom[_IdeColorSchemeCustomKeys.primaryMuted] ?? scheme.selection,
-    warning:
-        custom[_IdeColorSchemeCustomKeys.warning] ??
-        _warningForBrightness(brightness),
-    error: custom[_IdeColorSchemeCustomKeys.error] ?? scheme.destructive,
-    success: custom[_IdeColorSchemeCustomKeys.success] ?? scheme.primary,
-    info:
-        custom[_IdeColorSchemeCustomKeys.info] ??
-        _infoForBrightness(brightness),
-    accentForeground: scheme.primaryForeground,
-    windowHover:
-        custom[_IdeColorSchemeCustomKeys.windowHover] ??
-        _windowHoverForBrightness(brightness),
-    windowIcon:
-        custom[_IdeColorSchemeCustomKeys.windowIcon] ??
-        _windowIconForBrightness(brightness),
-    closeHover:
-        custom[_IdeColorSchemeCustomKeys.closeHover] ?? _sharedCloseHoverColor,
-  );
-}
-
-Color _infoForBrightness(Brightness brightness) {
-  return brightness == Brightness.dark ? _darkInfoColor : _lightInfoColor;
-}
-
-Color _textTertiaryForBrightness(Brightness brightness) {
-  return brightness == Brightness.dark
-      ? _darkTextTertiaryColor
-      : _lightTextTertiaryColor;
-}
-
-Color _warningForBrightness(Brightness brightness) {
-  return brightness == Brightness.dark
-      ? ideWarningColor
-      : IdeColors.light.warning;
-}
-
-Color _windowHoverForBrightness(Brightness brightness) {
-  return brightness == Brightness.dark
-      ? _darkWindowHoverColor
-      : _lightWindowHoverColor;
-}
-
-Color _windowIconForBrightness(Brightness brightness) {
-  return brightness == Brightness.dark
-      ? _darkWindowIconColor
-      : _lightWindowIconColor;
 }

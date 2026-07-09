@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
@@ -75,7 +75,7 @@ void main() {
     await _pumpIdeWithSettings(tester, controller: controller);
 
     // 回归断言：标题文字必须随主题切换重建为当前调色板的 textPrimary，
-    // 防止 token 访问器不监听 ShadTheme 时残留旧主题颜色（深浅混杂）。
+    // 防止 token 访问器在根主题切换后残留旧主题颜色（深浅混杂）。
     Color? headingColor() =>
         tester.widget<Text>(find.text('主题模式')).style?.color;
 
@@ -304,18 +304,26 @@ Future<void> _pumpIdeWithSettings(
     ValueListenableBuilder<AppearanceSettings>(
       valueListenable: appearanceController.listenable,
       builder: (context, settings, _) {
-        return ShadApp(
-          theme: buildShadTheme(
+        final materialBrightness = resolveBrightnessForThemeMode(
+          settings.themeMode,
+        );
+        return sf.ShadcnApp(
+          theme: buildShadcnTheme(
             brightness: Brightness.light,
             uiFontFamily: settings.uiFontFamily,
             codeFontFamily: settings.codeFontFamily,
           ),
-          darkTheme: buildShadTheme(
+          darkTheme: buildShadcnTheme(
             brightness: Brightness.dark,
             uiFontFamily: settings.uiFontFamily,
             codeFontFamily: settings.codeFontFamily,
           ),
-          themeMode: settings.themeMode,
+          materialTheme: buildMaterialTheme(
+            brightness: materialBrightness,
+            uiFontFamily: settings.uiFontFamily,
+            codeFontFamily: settings.codeFontFamily,
+          ),
+          themeMode: resolveShadcnThemeMode(settings.themeMode),
           home: IdeCodeFontScope(
             codeFontFamily: settings.codeFontFamily,
             child: IdeHome(

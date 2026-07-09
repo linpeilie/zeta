@@ -81,9 +81,6 @@ changes in this repository.
 
 ## UI, Layout, And Accessibility
 
-- Before writing or changing any UI, read and follow the project design system
-  skill at `.cursor/skills/zeta-design-system/SKILL.md` (the "Graphite"
-  identity).
 - Theming is built on `shadcn_ui` plus design tokens in `lib/src/ui/core/`:
   `IdeColors`, `IdeRadius`/`IdeEffects`, `IdeSpacing`, `IdeTextStyles`, and
   `IdeMotion`. Do not use Material `ThemeData`/`ColorScheme.fromSeed` styling,

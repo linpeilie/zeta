@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -484,18 +484,23 @@ class _TestApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ShadApp(
-      theme: buildShadTheme(
+    return sf.ShadcnApp(
+      theme: buildShadcnTheme(
         brightness: Brightness.light,
         uiFontFamily: uiFontFamily,
         codeFontFamily: codeFontFamily,
       ),
-      darkTheme: buildShadTheme(
+      darkTheme: buildShadcnTheme(
         brightness: Brightness.dark,
         uiFontFamily: uiFontFamily,
         codeFontFamily: codeFontFamily,
       ),
-      themeMode: ThemeMode.dark,
+      materialTheme: buildMaterialTheme(
+        brightness: Brightness.dark,
+        uiFontFamily: uiFontFamily,
+        codeFontFamily: codeFontFamily,
+      ),
+      themeMode: sf.ThemeMode.dark,
       home: IdeCodeFontScope(
         codeFontFamily: codeFontFamily,
         child: Scaffold(body: AgentPane(viewModel: viewModel)),

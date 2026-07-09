@@ -614,7 +614,6 @@ rg -n "package:shadcn_ui/shadcn_ui.dart|showShadDialog|\\bShad[A-Z]" lib test
 必须同步更新：
 
 - `AGENTS.md`
-- `.cursor/skills/zeta-design-system/SKILL.md`
 - `docs/engineering_standards.md`
 - `docs/developer_guide.md`
 - `docs/design_document.md`

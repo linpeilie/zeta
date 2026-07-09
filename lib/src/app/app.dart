@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
@@ -95,37 +95,43 @@ class MainAppState extends State<MainApp> {
     return ValueListenableBuilder<AppearanceSettings>(
       valueListenable: _appearanceController.listenable,
       builder: (context, settings, _) {
-        return ShadApp(
+        final materialBrightness = resolveBrightnessForThemeMode(
+          settings.themeMode,
+        );
+        return sf.ShadcnApp(
           debugShowCheckedModeBanner: false,
           title: appTitle,
-          theme: buildShadTheme(
+          theme: buildShadcnTheme(
             brightness: Brightness.light,
             uiFontFamily: settings.uiFontFamily,
             codeFontFamily: settings.codeFontFamily,
           ),
-          darkTheme: buildShadTheme(
+          darkTheme: buildShadcnTheme(
             brightness: Brightness.dark,
             uiFontFamily: settings.uiFontFamily,
             codeFontFamily: settings.codeFontFamily,
           ),
-          themeMode: settings.themeMode,
+          materialTheme: buildMaterialTheme(
+            brightness: materialBrightness,
+            uiFontFamily: settings.uiFontFamily,
+            codeFontFamily: settings.codeFontFamily,
+          ),
+          themeMode: resolveShadcnThemeMode(settings.themeMode),
           home: IdeCodeFontScope(
             codeFontFamily: settings.codeFontFamily,
-            child: ShadSonner(
-              child: IdeHome(
-                directoryPicker: widget.directoryPicker ?? getDirectoryPath,
-                enableNativeWindowFrame: widget.enableNativeWindowFrame,
-                sessionStore: _createSessionStore(),
-                agentProviderFactory:
-                    widget.agentProviderFactory ??
-                    const DefaultAgentProviderFactory(),
-                agentProviderConfigStore:
-                    widget.agentProviderConfigStore ??
-                    _createAgentProviderConfigStore(),
-                projectLocationOpener:
-                    widget.projectLocationOpener ?? openPathInSystemFileManager,
-                appearanceController: _appearanceController,
-              ),
+            child: IdeHome(
+              directoryPicker: widget.directoryPicker ?? getDirectoryPath,
+              enableNativeWindowFrame: widget.enableNativeWindowFrame,
+              sessionStore: _createSessionStore(),
+              agentProviderFactory:
+                  widget.agentProviderFactory ??
+                  const DefaultAgentProviderFactory(),
+              agentProviderConfigStore:
+                  widget.agentProviderConfigStore ??
+                  _createAgentProviderConfigStore(),
+              projectLocationOpener:
+                  widget.projectLocationOpener ?? openPathInSystemFileManager,
+              appearanceController: _appearanceController,
             ),
           ),
         );
