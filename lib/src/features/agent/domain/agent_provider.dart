@@ -13,7 +13,7 @@ abstract class AgentProvider {
 
   /// 初始化 provider。
   ///
-  /// 对 Codex V1 来说，这一步会启动 `codex app-server --stdio` 并发送
+  /// 对 Codex V1 来说，这一步会启动 `codex app-server`（默认 stdio）并发送
   /// JSON-RPC `initialize`。
   Future<void> initialize();
 

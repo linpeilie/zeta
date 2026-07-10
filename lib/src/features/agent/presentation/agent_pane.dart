@@ -170,17 +170,27 @@ class _AgentPaneState extends State<AgentPane> {
                     ),
                   ),
                 ),
-                _AgentComposerSection(
-                  viewModel: widget.viewModel,
-                  inputController: _inputController,
-                  composerFocusNode: _composerFocusNode,
-                  canSendListenable: _canSendNotifier,
-                  draftImagePaths: List<String>.unmodifiable(_draftImagePaths),
-                  onAttachImages: _pickImages,
-                  onRemoveImage: _removeDraftImage,
-                  onPasteImages: _pasteImagesFromClipboard,
-                  onSend: _sendMessage,
-                  onInsertMention: _insertMention,
+                ListenableBuilder(
+                  listenable: widget.viewModel.composerVersionListenable,
+                  builder: (context, _) {
+                    if (widget.viewModel.isReadOnly) {
+                      return const _AgentReadOnlyNotice();
+                    }
+                    return _AgentComposerSection(
+                      viewModel: widget.viewModel,
+                      inputController: _inputController,
+                      composerFocusNode: _composerFocusNode,
+                      canSendListenable: _canSendNotifier,
+                      draftImagePaths: List<String>.unmodifiable(
+                        _draftImagePaths,
+                      ),
+                      onAttachImages: _pickImages,
+                      onRemoveImage: _removeDraftImage,
+                      onPasteImages: _pasteImagesFromClipboard,
+                      onSend: _sendMessage,
+                      onInsertMention: _insertMention,
+                    );
+                  },
                 ),
               ],
             ),
@@ -454,5 +464,30 @@ class _AgentPaneState extends State<AgentPane> {
         curve: Curves.easeOut,
       );
     });
+  }
+}
+
+class _AgentReadOnlyNotice extends StatelessWidget {
+  const _AgentReadOnlyNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyles = IdeTextStyles.of(context);
+    final colors = IdeColors.of(context);
+    return _AgentContentAlign(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        child: IdeStatusCard(
+          key: const ValueKey('agent-read-only-notice'),
+          tone: IdeStatusCardTone.warning,
+          title: '此会话为只读模式',
+          margin: EdgeInsets.zero,
+          body: Text(
+            '该会话所属的 Agent 已被禁用。你仍可查看历史数据，但不能继续发送消息。',
+            style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
+          ),
+        ),
+      ),
+    );
   }
 }

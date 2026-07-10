@@ -9,7 +9,11 @@ import 'package:zeta/src/app/menu_action_bridge.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
+import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart';
+import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
@@ -68,6 +72,7 @@ class _IdeHomeState extends State<IdeHome> {
   static const double _maxPanelRatio = 0.9;
 
   late final IdeShellController _shellController;
+  late final AgentManagementController _agentManagementController;
 
   bool _leftTopVisible = true;
   bool _leftBottomVisible = false;
@@ -95,6 +100,14 @@ class _IdeHomeState extends State<IdeHome> {
       projectLocationOpener: widget.projectLocationOpener,
       statusReporter: _showStatus,
     )..addListener(_handleShellChanged);
+    _agentManagementController = AgentManagementController(
+      repository: CodexAgentManagementRepository(
+        providerFactory: widget.agentProviderFactory,
+      ),
+      providerController: _shellController.agentProviderController,
+      runtimeStateProvider: _managementRuntimeState,
+      runtimeListenable: _shellController.agentViewModel,
+    );
     // 生产环境注册原生菜单的「打开项目」回调，与工具栏按钮走同一逻辑。
     if (widget.enableNativeWindowFrame) {
       MenuActionBridge.instance.setOpenProject(_handleMenuOpenProject);
@@ -107,6 +120,7 @@ class _IdeHomeState extends State<IdeHome> {
       MenuActionBridge.instance.setOpenProject(null);
     }
     _shellController.removeListener(_handleShellChanged);
+    _agentManagementController.dispose();
     _shellController.dispose();
     super.dispose();
   }
@@ -147,6 +161,7 @@ class _IdeHomeState extends State<IdeHome> {
         key: const ValueKey('settings-page'),
         activeSection: _settingsSection,
         appearanceController: widget.appearanceController,
+        agentManagementController: _agentManagementController,
         onBackPressed: _closeSettingsPage,
         onSectionSelected: (section) {
           setState(() {
@@ -720,6 +735,17 @@ class _IdeHomeState extends State<IdeHome> {
       message: message,
       showDuration: const Duration(seconds: 2),
     );
+  }
+
+  AgentRuntimeState _managementRuntimeState() {
+    return switch (_shellController.agentViewModel.status.state) {
+      AgentProviderConnectionState.idle => AgentRuntimeState.notRunning,
+      AgentProviderConnectionState.connecting => AgentRuntimeState.starting,
+      AgentProviderConnectionState.ready => AgentRuntimeState.idle,
+      AgentProviderConnectionState.running => AgentRuntimeState.running,
+      AgentProviderConnectionState.unavailable => AgentRuntimeState.unavailable,
+      AgentProviderConnectionState.error => AgentRuntimeState.error,
+    };
   }
 
   void _openSettingsPage() {

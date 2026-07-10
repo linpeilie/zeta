@@ -134,6 +134,9 @@ class IdeShellController extends ChangeNotifier {
     String threadId,
     String name,
   ) {
+    if (!_canMutateAgentHistory()) {
+      return Future<void>.value();
+    }
     return projectThreadsController.renameThread(
       projectPath: projectPath,
       threadId: threadId,
@@ -145,6 +148,9 @@ class IdeShellController extends ChangeNotifier {
     String projectPath,
     AgentThreadSummary thread,
   ) {
+    if (!_canMutateAgentHistory()) {
+      return Future<void>.value();
+    }
     return projectThreadsController.archiveThread(
       projectPath: projectPath,
       threadId: thread.id,
@@ -155,6 +161,9 @@ class IdeShellController extends ChangeNotifier {
     String projectPath,
     AgentThreadSummary thread,
   ) {
+    if (!_canMutateAgentHistory()) {
+      return Future<void>.value();
+    }
     return projectThreadsController.unarchiveThread(
       projectPath: projectPath,
       threadId: thread.id,
@@ -165,6 +174,9 @@ class IdeShellController extends ChangeNotifier {
     String projectPath,
     AgentThreadSummary thread,
   ) {
+    if (!_canMutateAgentHistory()) {
+      return Future<void>.value();
+    }
     return projectThreadsController.deleteThread(
       projectPath: projectPath,
       threadId: thread.id,
@@ -175,6 +187,9 @@ class IdeShellController extends ChangeNotifier {
     String projectPath,
     AgentThreadSummary thread,
   ) async {
+    if (!_canMutateAgentHistory()) {
+      return;
+    }
     final session = await projectThreadsController.forkThread(
       projectPath: projectPath,
       threadId: thread.id,
@@ -205,6 +220,9 @@ class IdeShellController extends ChangeNotifier {
   }
 
   Future<void> startNewThreadForProject(String projectPath) async {
+    if (!_canMutateAgentHistory()) {
+      return;
+    }
     _sessionCoordinator.cancelPendingRestore();
     if (projectPath != _projectPath) {
       await _loadProject(projectPath, activateThreads: false);
@@ -566,6 +584,14 @@ class IdeShellController extends ChangeNotifier {
     }
     _requestSessionSave();
     _notifyStateChanged();
+  }
+
+  bool _canMutateAgentHistory() {
+    if (agentProviderController.activeProviderConfig.enabled) {
+      return true;
+    }
+    _statusReporter?.call('Codex 已禁用；历史会话当前为只读模式。');
+    return false;
   }
 
   void _notifyStateChanged() {

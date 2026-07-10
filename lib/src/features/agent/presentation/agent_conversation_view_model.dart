@@ -46,6 +46,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       onLegacyNotify: _notifyLegacyListeners,
       isDisposed: () => _disposed,
     );
+    providerController.addListener(_handleProviderSettingsChanged);
   }
 
   static const String defaultThreadTitle = 'New thread';
@@ -68,6 +69,7 @@ class AgentConversationViewModel extends ChangeNotifier {
   String? _contextFilePath;
 
   String? _restoredSessionId;
+  String? _selectedProviderId;
   AgentThreadOpenPhase _threadOpenPhase = AgentThreadOpenPhase.idle;
   bool _requiresResumedSelectedThread = false;
   bool _settingsLoaded = false;
@@ -284,6 +286,13 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   String? get sessionId => _session?.id ?? _restoredSessionId;
 
+  /// 当前会话所属 provider 被禁用后，历史仍可读但禁止任何写操作。
+  bool get isReadOnly {
+    final providerId =
+        _session?.providerId ?? _selectedProviderId ?? activeProviderId;
+    return !providerController.isProviderEnabled(providerId);
+  }
+
   String get currentThreadTitle => _currentThreadTitle;
 
   bool get showRunningIndicator =>
@@ -356,7 +365,8 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   bool get isRunning => isTurnRunning;
 
-  bool get canSubmitMessage => _threadOpenPhase == AgentThreadOpenPhase.idle;
+  bool get canSubmitMessage =>
+      _threadOpenPhase == AgentThreadOpenPhase.idle && !isReadOnly;
 
   bool isToolCallExpanded(String toolCallId) {
     return _timeline.isToolCallExpanded(toolCallId);
@@ -520,6 +530,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       _threadSwitchToken += 1;
       _session = null;
       _restoredSessionId = restoredSessionId;
+      _selectedProviderId = restoredSessionId == null ? null : activeProviderId;
       _threadOpenPhase = AgentThreadOpenPhase.idle;
       _requiresResumedSelectedThread = false;
       _currentThreadTitle = defaultThreadTitle;
@@ -546,6 +557,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     }
     if (restoredSessionId != null) {
       _restoredSessionId = restoredSessionId;
+      _selectedProviderId ??= activeProviderId;
       _threadOpenPhase = AgentThreadOpenPhase.idle;
       _requiresResumedSelectedThread = false;
     }
@@ -699,6 +711,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     _flushPendingStreamChangesNow();
     _session = null;
     _restoredSessionId = thread.id;
+    _selectedProviderId = thread.providerId;
     _requiresResumedSelectedThread = true;
     _threadOpenPhase = AgentThreadOpenPhase.loadingHistory;
     _currentThreadTitle = thread.displayName;
@@ -903,7 +916,7 @@ class AgentConversationViewModel extends ChangeNotifier {
   /// 启动上下文压缩。
   Future<void> compactCurrentThread() async {
     final threadId = sessionId;
-    if (threadId == null || _isCompacting || isTurnRunning) {
+    if (threadId == null || _isCompacting || isTurnRunning || isReadOnly) {
       return;
     }
     _isCompacting = true;
@@ -923,7 +936,7 @@ class AgentConversationViewModel extends ChangeNotifier {
   Future<void> renameCurrentThread(String name) async {
     final trimmed = name.trim();
     final threadId = sessionId;
-    if (trimmed.isEmpty || threadId == null) {
+    if (trimmed.isEmpty || threadId == null || isReadOnly) {
       return;
     }
     if (trimmed == _currentThreadTitle) {
@@ -948,11 +961,19 @@ class AgentConversationViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    providerController.removeListener(_handleProviderSettingsChanged);
     _uiSignals.dispose();
     contextPanelVisible.dispose();
     unawaited(_eventSubscription?.cancel());
     _timeline.dispose();
     super.dispose();
+  }
+
+  void _handleProviderSettingsChanged() {
+    if (_disposed) {
+      return;
+    }
+    _publishUiChanges(header: true, composer: true);
   }
 
   Future<AgentProvider> _ensureProvider() async {

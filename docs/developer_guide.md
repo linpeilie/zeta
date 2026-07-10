@@ -1,6 +1,6 @@
 # 开发者文档
 
-最后更新：2026-07-09
+最后更新：2026-07-10
 
 ## 1. 项目简介
 
@@ -10,7 +10,8 @@ Zeta 是一个 Flutter Desktop 项目，当前支持 macOS、Linux 和 Windows �
 
 - Flutter SDK，需兼容 `pubspec.yaml` 中的 Dart SDK 约束 `^3.12.2`。
 - 支持 Flutter desktop 的本地开发环境。
-- 如需运行默认 Agent provider，需要本机可执行 `codex app-server --stdio`。
+- 如需运行默认 Agent provider，需要本机可执行 `codex app-server`；未指定
+  `--listen` 时使用 stdio。
 - Codex 适配层按 pinned schema 开发；协议版本与升级流程见
   [Codex app-server 协议版本锁定](./codex_app_server_protocol.md)。
 
@@ -57,6 +58,11 @@ lib/
         data/
         domain/
         presentation/
+      agent_management/
+        application/
+        data/
+        domain/
+        presentation/
       ide_session/
         application/
         data/
@@ -87,6 +93,8 @@ windows/
 - `lib/src/app`：应用装配、窗口启动、菜单桥接、shell controller 和常量。
 - `lib/src/core`：日志、路径工具等跨功能基础设施。
 - `lib/src/features/agent`：Agent provider 抽象、Codex data source、事件映射、对话状态和 Agent pane。
+- `lib/src/features/agent_management`：Codex CLI 检测、在线版本查询、账号/模型诊断、
+  TOML 配置安全编辑、磁盘日志读取和 Agent 管理页面。
 - `lib/src/features/ide_session`：IDE 会话模型、状态构建、恢复协调和持久化。
 - `lib/src/features/project_threads`：项目 thread 列表状态、恢复快照、分页控制器和 view model。
 - `lib/src/features/workspace`：工作区目录规则、文件树构建、文件节点映射和 file tree pane。
@@ -130,6 +138,12 @@ windows/
 
 注意：默认策略应保持保守，不自动授权命令执行或文件写入。
 
+Agent 管理适配与会话 provider 适配保持分层：管理 data 层可以执行 `--version`、
+`login status` 和 app-server `initialize` / `model/list` 等无计费探测，但不得通过
+真实模型 turn 做自动连接测试。配置文件保存必须走
+`CodexAgentManagementRepository` 的校验、冲突检测、备份和临时文件替换流程；
+日志必须在 data 层脱敏后再交给 presentation。
+
 修改 Codex 适配层前，先对照
 [`third_party/codex_app_server_schema`](../third_party/codex_app_server_schema/)
 与 [协议版本锁定文档](./codex_app_server_protocol.md)；升级 CLI 时先
@@ -146,6 +160,9 @@ windows/
   `IdeThemeScope` / `IdeColors.of(context)` / `IdeTextStyles.of(context)` 读取。
 - 通知反馈使用 `showIdeToast`（`lib/src/ui/core/ide_toast.dart`）。
 - 不要再引入已移除的 `shadcn_ui` 或任何旧 `Shad*` API。
+- Agent 管理位于设置页；桌面宽度使用表格信息密度，窄窗口改为卡片和上下布局。
+- 被禁用 Agent 的历史会话只读：允许加载和查看历史，但隐藏输入区，并阻止新建、
+  分叉、重命名、归档和删除等写操作。
 
 ## 9. 会话和持久化
 
@@ -177,7 +194,7 @@ windows/
 确认本机可以直接运行：
 
 ```sh
-codex app-server --stdio
+codex app-server
 ```
 
 如果命令不存在或协议变更，应用会显示 provider 不可用或错误状态。

@@ -1,6 +1,6 @@
 # 设计文档
 
-最后更新：2026-07-09
+最后更新：2026-07-10
 
 ## 1. 设计目标
 
@@ -13,6 +13,8 @@ Zeta 的设计目标是让 Flutter UI、Agent provider、会话持久化和本�
 - app：应用根组件、窗口启动、应用常量。
 - core：日志等跨层基础能力。
 - features/agent：Agent provider 抽象、Codex app-server、JSON-RPC stdio、历史解析、事件映射、对话 view model 和 Agent pane。
+- features/agent_management：Agent CLI 检测、版本与账号诊断、模型读取、配置安全编辑、
+  CLI 磁盘日志读取和管理页面。
 - features/ide_session：会话状态、版本化持久化、恢复计划和恢复协调。
 - features/project_threads：项目 thread 快照、列表状态、分页控制器和 presentation view model。
 - features/workspace：文件树规则、树构建、文件节点映射和文件 pane。
@@ -31,6 +33,8 @@ main()
       -> ProjectListPane
       -> AgentPane
       -> FileTreePane
+      -> SettingsPage
+        -> AgentManagementPage
 
 IdeShellController
   -> IdeSessionStore
@@ -45,7 +49,13 @@ AgentConversationViewModel
   -> AgentProvider
     -> CodexAppServerAgentProvider
       -> JsonRpcPeer
-        -> codex app-server --stdio
+        -> codex app-server（默认 stdio）
+
+AgentManagementController
+  -> CodexAgentManagementRepository
+    -> codex --version / login status
+    -> AgentProvider initialize / model/list
+    -> config.toml / Codex 磁盘日志
 ```
 
 ## 4. UI 设计
@@ -55,6 +65,15 @@ AgentConversationViewModel
 - Projects：展示已打开项目、当前项目状态和项目下的 Agent threads。
 - Agent：展示上下文栏、状态胶囊、流式消息/思考/计划时间线、回合 diff、工具与审批卡片、本地图片输入区。
 - Files：展示当前项目文件树，目录按需展开，文件选择只更新 Agent 上下文。
+
+### Agent 管理
+
+- 设置页提供 Agent 列表和独立详情，列表状态、搜索与筛选在返回时保留。
+- 第一阶段只内置 Codex；未安装时仍在“全部支持”中展示，但不提供应用内安装。
+- 详情包含基础诊断、模型、TOML 配置和磁盘日志；桌面端双栏，窄窗口上下排列。
+- 连接测试只执行版本、账号、initialize 与 `model/list`，不会创建计费 turn。
+- 禁用 Codex 后不再允许创建可写会话；既有会话仍可读取历史，输入区隐藏并显示
+  只读提示。
 
 ### 主题与设计系统
 
@@ -94,11 +113,21 @@ AgentConversationViewModel
 当前默认 provider 为 Codex CLI：
 
 ```text
-codex app-server --stdio
+codex app-server
 ```
 
 Codex provider 通过 JSON-RPC stdio 通信，把 `thread/*`、`turn/*` 和 `item/*`
 事件转换为领域层 `AgentEvent`。UI 不直接处理 Codex 原始协议。
+
+### 管理适配
+
+`AgentManagementController` 负责管理页异步编排，并复用
+`ActiveAgentProviderController` 的全局 provider 配置。`CodexAgentManagementRepository`
+负责 PATH/常见目录定位、版本与账号命令、npm 最新版本、无计费 provider 探测、
+TOML 校验与安全替换，以及 Codex 自身日志的尾部读取和脱敏。
+
+检测摘要和真实 CLI 路径保存在 provider `extra` 中；项目 thread 仍只保存稳定的
+`providerId`。管理 feature 不解析 thread/turn 原始协议，也不替代现有 provider。
 
 协议基准锁定在 `third_party/codex_app_server_schema`（由
 `tool/gen_codex_schema.sh` / `.ps1` 从本机 Codex CLI 导出）。当前 pin 与
@@ -168,6 +197,9 @@ IDE 会话状态目前版本为 2，持久化内容包括：
 - 目录读取失败通过日志和短提示反馈，不中断当前工作区。
 - 会话恢复失败会清理恢复状态并继续启动。
 - Agent provider 启动失败、协议失败或进程异常会转换为 UI 状态和错误消息。
+- Agent 管理错误附带统一失败阶段、原始摘要和建议操作；单个检测步骤失败不会丢弃
+  已成功获得的版本、路径或日志信息。
+- 配置保存会检测外部修改、拒绝符号链接、创建备份并以同目录临时文件替换。
 
 ## 9. 测试策略
 
@@ -177,6 +209,7 @@ IDE 会话状态目前版本为 2，持久化内容包括：
 - JSON-RPC stdio transport。
 - Codex provider 事件映射。
 - AgentConversationViewModel 状态机。
+- Agent 管理的版本比较、配置校验/冲突/备份、日志脱敏和禁用只读联动。
 - ProjectThreadsController 和 ProjectThreadsViewModel 的分页、缓存、选择和错误状态分工。
 - App 或关键 Pane 的 widget 行为。
 
@@ -185,7 +218,7 @@ IDE 会话状态目前版本为 2，持久化内容包括：
 ## 10. 演进方向
 
 - Codex 适配 Phase 2：thread 重命名/归档/删除/分叉/回滚/压缩，以及审批表单与策略预设（见适配计划）。
-- 增加 provider 配置管理界面（与 Phase 3 账户/配置能力对齐）。
+- 扩展 Agent 管理适配到更多 provider，并为不同 CLI 增加稳定的账号/日志策略。
 - 增加文件内容预览或编辑器能力。
 - 增加 Agent 执行审计记录。
 - 支持更多 Agent provider。

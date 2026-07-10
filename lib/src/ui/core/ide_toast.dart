@@ -14,6 +14,9 @@ enum IdeToastTone {
 
   /// 错误或失败反馈。
   error,
+
+  /// 成功完成反馈。
+  success,
 }
 
 /// 基于 `shadcn_flutter` 的统一 IDE toast 入口。
@@ -66,6 +69,7 @@ class _IdeToastCard extends StatelessWidget {
     final messageColor = switch (tone) {
       IdeToastTone.info => colors.textPrimary,
       IdeToastTone.error => colors.error,
+      IdeToastTone.success => colors.success,
     };
 
     return Semantics(

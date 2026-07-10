@@ -16,10 +16,7 @@ void main() {
 
       expect(settings.activeProvider.id, defaultAgentProviderId);
       expect(settings.activeProvider.command, 'codex');
-      expect(settings.activeProvider.arguments, <String>[
-        'app-server',
-        '--stdio',
-      ]);
+      expect(settings.activeProvider.arguments, <String>['app-server']);
     });
 
     test('saves provider settings as versioned JSON', () async {

@@ -1,6 +1,6 @@
 # 工程规范
 
-最后更新：2026-07-09
+最后更新：2026-07-10
 
 本文从当前 `lib/` 重构后的代码结构中提炼长期遵循的工程规范。它补充根目录 `AGENTS.md`，用于指导后续功能开发、重构和评审。
 
@@ -16,6 +16,11 @@ lib/
     core/
     features/
       agent/
+        application/
+        data/
+        domain/
+        presentation/
+      agent_management/
         application/
         data/
         domain/
@@ -45,6 +50,8 @@ lib/
 - `features/<feature>/data` 放外部协议、存储、datasource、mapper 和 codec。
 - `features/<feature>/presentation` 放 feature 私有 view model、pane、widget 和 UI 分组逻辑。
 - `ui/core` 放跨 feature 可复用的主题、窗口框架、pane、panel 和状态展示组件。
+- `agent_management` 负责 CLI 检测、版本/账号/模型诊断、配置文件安全写入、
+  磁盘日志读取与管理页面；它复用 `agent` 的 provider 抽象，不复制会话协议实现。
 
 新增代码优先进入对应 feature 内部。除非是跨 feature 的基础能力，否则不要新增宽泛的顶层 `data`、`domain` 或 `ui` 目录。
 
@@ -97,6 +104,9 @@ main -> app -> presentation/application -> domain
 - 启动恢复失败不能阻断应用进入主界面。
 - provider 全局配置和项目级 session/thread 状态必须分开存储。
 - 路径不存在、目录不可读、权限失败等文件系统异常应转换为可理解状态或日志。
+- Agent 配置保存必须先校验语法、检测外部修改、写入同目录临时文件并保留原文件
+  备份；不得直接覆盖符号链接或在失败后破坏原配置。
+- Agent 日志在进入 UI 前完成凭证与用户目录脱敏。
 
 ## 6. UI 与交互
 

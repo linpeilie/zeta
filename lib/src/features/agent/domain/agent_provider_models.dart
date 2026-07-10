@@ -22,7 +22,7 @@ const String defaultAgentProviderId = 'codex';
 
 /// 一个可启动的 Agent provider 定义。
 ///
-/// 该对象保存全局配置，例如 `codex app-server --stdio` 的命令、参数、环境变量和
+/// 该对象保存全局配置，例如 `codex app-server` 的命令、参数、环境变量和
 /// 默认模型。会话只保存选中的 provider id 与 thread metadata，避免把全局定义
 /// 复制到每个项目状态里。
 class AgentProviderConfig {
@@ -97,7 +97,7 @@ class AgentProviderConfig {
     displayName: 'Codex CLI',
     kind: AgentProviderKind.codexAppServer,
     command: 'codex',
-    arguments: <String>['app-server', '--stdio'],
+    arguments: <String>['app-server'],
   );
 
   /// 复制配置并覆盖部分字段，主要用于持久化用户在输入框中的模型选择。

@@ -5,6 +5,8 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
+import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
 import 'package:zeta/src/ui/core/ide_choice_card.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_dialog.dart';
@@ -13,21 +15,31 @@ import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/ide_toast.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 
-enum SettingsSection { appearance }
+enum SettingsSection { appearance, agents }
 
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends StatefulWidget {
   const SettingsPage({
     required this.activeSection,
     required this.appearanceController,
     required this.onBackPressed,
     required this.onSectionSelected,
+    this.agentManagementController,
     super.key,
   });
 
   final SettingsSection activeSection;
   final AppearanceSettingsController appearanceController;
+  final AgentManagementController? agentManagementController;
   final VoidCallback onBackPressed;
   final ValueChanged<SettingsSection> onSectionSelected;
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  final GlobalKey<AgentManagementPageState> _agentManagementKey =
+      GlobalKey<AgentManagementPageState>();
 
   static const double _navigationWidth = 240;
 
@@ -39,20 +51,46 @@ class SettingsPage extends StatelessWidget {
         SizedBox(
           width: _navigationWidth,
           child: _SettingsNavigation(
-            activeSection: activeSection,
-            onBackPressed: onBackPressed,
-            onSectionSelected: onSectionSelected,
+            activeSection: widget.activeSection,
+            showAgentManagement: widget.agentManagementController != null,
+            onBackPressed: () {
+              unawaited(_handleBackPressed());
+            },
+            onSectionSelected: (section) {
+              unawaited(_handleSectionSelected(section));
+            },
           ),
         ),
         const SizedBox(width: IdeSpacing.space8),
         Expanded(
           child: _SettingsDetailPane(
-            activeSection: activeSection,
-            appearanceController: appearanceController,
+            activeSection: widget.activeSection,
+            appearanceController: widget.appearanceController,
+            agentManagementController: widget.agentManagementController,
+            agentManagementKey: _agentManagementKey,
           ),
         ),
       ],
     );
+  }
+
+  Future<void> _handleBackPressed() async {
+    if (widget.activeSection == SettingsSection.agents &&
+        !(await _agentManagementKey.currentState?.confirmCanLeave() ?? true)) {
+      return;
+    }
+    widget.onBackPressed();
+  }
+
+  Future<void> _handleSectionSelected(SettingsSection section) async {
+    if (section == widget.activeSection) {
+      return;
+    }
+    if (widget.activeSection == SettingsSection.agents &&
+        !(await _agentManagementKey.currentState?.confirmCanLeave() ?? true)) {
+      return;
+    }
+    widget.onSectionSelected(section);
   }
 }
 
@@ -61,11 +99,13 @@ class _SettingsNavigation extends StatelessWidget {
     required this.activeSection,
     required this.onBackPressed,
     required this.onSectionSelected,
+    required this.showAgentManagement,
   });
 
   final SettingsSection activeSection;
   final VoidCallback onBackPressed;
   final ValueChanged<SettingsSection> onSectionSelected;
+  final bool showAgentManagement;
 
   @override
   Widget build(BuildContext context) {
@@ -121,6 +161,16 @@ class _SettingsNavigation extends StatelessWidget {
                     active: activeSection == SettingsSection.appearance,
                     onTap: () => onSectionSelected(SettingsSection.appearance),
                   ),
+                  if (showAgentManagement) ...[
+                    const SizedBox(height: IdeSpacing.space4),
+                    _SettingsNavItem(
+                      key: const ValueKey('settings-nav-agents'),
+                      label: 'Agent 管理',
+                      icon: Icons.smart_toy_outlined,
+                      active: activeSection == SettingsSection.agents,
+                      onTap: () => onSectionSelected(SettingsSection.agents),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -135,10 +185,14 @@ class _SettingsDetailPane extends StatelessWidget {
   const _SettingsDetailPane({
     required this.activeSection,
     required this.appearanceController,
+    required this.agentManagementController,
+    required this.agentManagementKey,
   });
 
   final SettingsSection activeSection;
   final AppearanceSettingsController appearanceController;
+  final AgentManagementController? agentManagementController;
+  final GlobalKey<AgentManagementPageState> agentManagementKey;
 
   @override
   Widget build(BuildContext context) {
@@ -146,6 +200,13 @@ class _SettingsDetailPane extends StatelessWidget {
       SettingsSection.appearance => _AppearanceSettingsPane(
         appearanceController: appearanceController,
       ),
+      SettingsSection.agents =>
+        agentManagementController == null
+            ? const PanelCard(child: EmptyState(text: 'Agent 管理服务不可用。'))
+            : AgentManagementPage(
+                key: agentManagementKey,
+                controller: agentManagementController!,
+              ),
     };
   }
 }

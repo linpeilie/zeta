@@ -40,6 +40,68 @@ class ActiveAgentProviderController extends ChangeNotifier {
   /// 当前 active provider 的配置。
   AgentProviderConfig get activeProviderConfig => _settings.activeProvider;
 
+  /// 指定 provider 是否允许创建新的可写会话。
+  bool isProviderEnabled(String providerId) {
+    for (final provider in _settings.providers) {
+      if (provider.id == providerId) {
+        return provider.enabled;
+      }
+    }
+    return false;
+  }
+
+  /// 更新一个 provider 的全局配置，并按需重建运行实例。
+  Future<void> updateProviderConfig(
+    AgentProviderConfig updated, {
+    bool restartProvider = false,
+  }) async {
+    await loadSettings();
+    final providers = <AgentProviderConfig>[
+      for (final provider in _settings.providers)
+        if (provider.id == updated.id) updated else provider,
+    ];
+    if (!providers.any((provider) => provider.id == updated.id)) {
+      providers.add(updated);
+    }
+    _settings = AgentProviderSettings(
+      providers: List<AgentProviderConfig>.unmodifiable(providers),
+      activeProviderId: _settings.activeProviderId,
+    );
+
+    if (restartProvider) {
+      final creating = _providerFuture;
+      if (creating != null) {
+        try {
+          await creating;
+        } catch (_) {
+          // 创建失败也要继续落盘新配置，下一次启动会使用更新后的值。
+        }
+      }
+      final existing = _provider;
+      _provider = null;
+      await existing?.dispose();
+    }
+
+    await configStore.save(_settings);
+    _notify();
+  }
+
+  /// 启用或禁用 provider；禁用时终止当前运行实例。
+  Future<void> setProviderEnabled(String providerId, bool enabled) async {
+    await loadSettings();
+    final current = _settings.providers.firstWhere(
+      (provider) => provider.id == providerId,
+      orElse: () => AgentProviderConfig.defaultCodex,
+    );
+    if (current.enabled == enabled) {
+      return;
+    }
+    await updateProviderConfig(
+      current.copyWith(enabled: enabled),
+      restartProvider: !enabled,
+    );
+  }
+
   /// 持久化用户在输入框选择的模型组合到 active provider 配置。
   ///
   /// 写入 configStore 并同步内存中的 settings，下次创建 provider 时会读取。
