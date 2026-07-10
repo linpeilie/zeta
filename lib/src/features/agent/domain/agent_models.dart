@@ -12,4 +12,5 @@ export 'package:zeta/src/features/agent/domain/agent_session_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_thread_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_tool_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_turn_history_models.dart';
+export 'package:zeta/src/features/agent/domain/agent_usage_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_user_input_models.dart';

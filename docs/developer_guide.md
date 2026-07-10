@@ -97,6 +97,8 @@ windows/
   TOML 配置安全编辑、磁盘日志读取和 Agent 管理页面。
 - `lib/src/features/ide_session`：IDE 会话模型、状态构建、恢复协调和持久化。
 - `lib/src/features/project_threads`：项目 thread 列表状态、恢复快照、分页控制器和 view model。
+- `lib/src/features/usage_statistics`：Codex 全局历史读取、版本化派生索引、统计聚合
+  controller、响应式统计页面和任务详情抽屉。
 - `lib/src/features/workspace`：工作区目录规则、文件树构建、文件节点映射和 file tree pane。
 - `lib/src/ui/core`：主题、窗口框架、pane、panel、empty state 和状态标签等共享 UI 原语。
 - `lib/src/ui/features/ide`：IDE shell 视图、项目列表 pane 和 active provider controller。
@@ -163,6 +165,19 @@ Agent 管理适配与会话 provider 适配保持分层：管理 data 层可以�
 - Agent 管理位于设置页；桌面宽度使用表格信息密度，窄窗口改为卡片和上下布局。
 - 被禁用 Agent 的历史会话只读：允许加载和查看历史，但隐藏输入区，并阻止新建、
   分叉、重命名、归档和删除等写操作。
+- 使用统计是标题栏全局页面，不属于设置分区。统计表格在窄窗口保留横向滚动，
+  分析区按可用宽度从双栏切换为单栏。
+
+### 使用统计开发约束
+
+- 新 provider 的套餐读取实现 `AgentUsageQuotaProvider` 可选能力；不要为不支持套餐的
+  provider 在通用 `AgentProvider` 上制造强制实现。
+- 调用统计依赖中立 `AgentUsageRecord`，provider 原始 JSON key 只允许出现在 data 层。
+- Codex `token_count` 是 thread 累计值，写入 turn 记录前必须相对上一 turn 做非负差分。
+- `UsageStatisticsIndexStore` 的 JSON 必须保持版本化和宽容读取；索引损坏时从 provider
+  历史重建，不得阻断页面或应用启动。
+- 派生索引禁止保存 Prompt、回复、工具输出、session JSONL 路径和原始错误文本。
+- 历史 TTFT 缺失时保持 `null`；UI 显示“数据不足”和有效样本数，禁止用总耗时冒充。
 
 ## 9. 会话和持久化
 

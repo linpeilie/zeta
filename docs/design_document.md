@@ -17,6 +17,8 @@ Zeta 的设计目标是让 Flutter UI、Agent provider、会话持久化和本�
   CLI 磁盘日志读取和管理页面。
 - features/ide_session：会话状态、版本化持久化、恢复计划和恢复协调。
 - features/project_threads：项目 thread 快照、列表状态、分页控制器和 presentation view model。
+- features/usage_statistics：跨项目调用记录、统计口径、Codex 历史索引、套餐限额与
+  使用统计页面。
 - features/workspace：文件树规则、树构建、文件节点映射和文件 pane。
 - ui/core：窗口框架、主题、通用面板和共享 UI primitives。
 - ui/features/ide：IDE shell 视图和 provider 选择相关 view model。
@@ -35,6 +37,7 @@ main()
       -> FileTreePane
       -> SettingsPage
         -> AgentManagementPage
+      -> UsageStatisticsPage
 
 IdeShellController
   -> IdeSessionStore
@@ -56,6 +59,14 @@ AgentManagementController
     -> codex --version / login status
     -> AgentProvider initialize / model/list
     -> config.toml / Codex 磁盘日志
+
+UsageStatisticsController
+  -> UsageStatisticsRepository
+    -> CodexUsageStatisticsRepository
+      -> AgentProvider thread/list + thread/read
+      -> 本地 Codex JSONL 历史
+      -> account/rateLimits/read
+      -> 版本化派生统计索引
 ```
 
 ## 4. UI 设计
@@ -74,6 +85,22 @@ AgentManagementController
 - 连接测试只执行版本、账号、initialize 与 `model/list`，不会创建计费 turn。
 - 禁用 Codex 后不再允许创建可写会话；既有会话仍可读取历史，输入区隐藏并显示
   只读提示。
+
+### 使用统计
+
+- 标题栏提供与设置同级的全局入口；页面支持时间、项目、Agent 和模型筛选。
+- 一次 Codex turn 计为一次调用；`completed` 为成功，`failed` 与 `interrupted`
+  为失败，运行中和未知状态不进入成功率分母。
+- 默认统计 CLI、VS Code、`codex exec` 和 Zeta app-server 发起的根 thread，包含
+  已归档 thread，排除子 Agent 以避免重复计数。
+- 历史 TTFT 只使用 Codex 明确返回的 `time_to_first_token_ms`；缺失样本不做
+  近似，并在页面标明有效样本数。
+- 套餐仅展示 `account/rateLimits/read` 实际返回的套餐类型、百分比窗口、重置时间
+  与可选余额，不推算绝对 Token 总额度或到期日。
+- 宽屏使用双栏分析区，窄窗口切换为单栏；表格可横向滚动，任务详情使用自适应
+  侧边/底部抽屉。
+- `UsageStatisticsIndexStore` 只持久化 thread/turn ID、时间、项目、模型、状态、
+  时延、Token 和错误分类，不保存 Prompt、回复正文、session 文件路径或原始错误文本。
 
 ### 主题与设计系统
 

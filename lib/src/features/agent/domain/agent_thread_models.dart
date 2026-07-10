@@ -198,10 +198,11 @@ class AgentThreadListQuery {
     this.cursor,
     this.archived = false,
     this.searchTerm,
+    this.sourceKinds = const <String>[],
   });
 
-  /// 用 provider cwd 精确匹配项目。
-  final String projectPath;
+  /// 用 provider cwd 精确匹配项目；为空时跨项目读取。
+  final String? projectPath;
 
   /// 单页请求数量。
   final int limit;
@@ -214,6 +215,9 @@ class AgentThreadListQuery {
 
   /// 可选标题子串搜索（对应协议 `searchTerm`）。
   final String? searchTerm;
+
+  /// provider 原生来源类型过滤；空列表表示使用 provider 默认范围。
+  final List<String> sourceKinds;
 }
 
 /// thread 分页结果。

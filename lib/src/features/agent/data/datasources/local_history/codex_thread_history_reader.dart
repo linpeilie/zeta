@@ -78,6 +78,7 @@ class _CodexThreadHistoryReader {
         final completedAt = _dateTimeFromAny(
           turn['completedAt'] ?? turn['completedAtMs'],
         );
+        final error = _map(turn['error']);
         final historyTurn = AgentHistoryTurn(
           id: turnId,
           entries: List<AgentHistoryEntry>.unmodifiable(turnEntries),
@@ -94,6 +95,8 @@ class _CodexThreadHistoryReader {
               _string(turn['collaborationMode']) ??
               _string(turn['collaboration_mode']),
           tokenUsage: _tokenUsageFromTurnPayload(turn),
+          errorMessage: _string(error['message']),
+          errorCode: _codexErrorCode(error['codexErrorInfo']),
           raw: turn,
         );
         turns.add(historyTurn);
@@ -107,6 +110,14 @@ class _CodexThreadHistoryReader {
       currentTurn: currentTurn,
       raw: map,
     );
+  }
+
+  String? _codexErrorCode(Object? value) {
+    if (value is String) {
+      return value;
+    }
+    final map = _map(value);
+    return map.isEmpty ? null : map.keys.first;
   }
 
   AgentHistoryEntry? _historyEntryFromItem(

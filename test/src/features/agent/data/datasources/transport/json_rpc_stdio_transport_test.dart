@@ -151,6 +151,42 @@ void main() {
       await transport.close();
     });
 
+    test('keeps streams open after malformed UTF-8 output', () async {
+      final transport = JsonRpcStdioTransport(
+        command: 'fake-json-rpc-server',
+        processStarter: _fakeProcessStarter((process, message) {
+          process
+            ..writeRawStdoutBytes(<int>[
+              ...utf8.encode('{"method":"server/notice","params":{"text":"'),
+              0xd6,
+              0xd0,
+              ...utf8.encode('"}}\n'),
+            ])
+            ..writeRawStderrBytes(<int>[
+              ...utf8.encode('diagnostic: '),
+              0xd6,
+              0xd0,
+              0x0a,
+            ])
+            ..writeStdout(<String, Object?>{
+              'id': message['id'],
+              'result': <String, Object?>{'ok': true},
+            });
+        }),
+      );
+
+      await transport.start();
+      final notificationFuture = transport.notifications.first;
+      final stderrFuture = transport.stderrLines.first;
+
+      final result = await transport.sendRequest('ping');
+
+      expect(result, <String, Object?>{'ok': true});
+      expect((await notificationFuture).params['text'], contains('\ufffd'));
+      expect(await stderrFuture, contains('\ufffd'));
+      await transport.close();
+    });
+
     test('handles server requests and client responses', () async {
       Object? pendingClientRequestId;
       final transport = JsonRpcStdioTransport(
@@ -316,9 +352,21 @@ class _FakeJsonRpcProcess implements Process {
     }
   }
 
+  void writeRawStdoutBytes(List<int> bytes) {
+    if (!_stdoutBytes.isClosed) {
+      _stdoutBytes.add(bytes);
+    }
+  }
+
   void writeStderr(String line) {
     if (!_stderrBytes.isClosed) {
       _stderrBytes.add(utf8.encode('$line\n'));
+    }
+  }
+
+  void writeRawStderrBytes(List<int> bytes) {
+    if (!_stderrBytes.isClosed) {
+      _stderrBytes.add(bytes);
     }
   }
 

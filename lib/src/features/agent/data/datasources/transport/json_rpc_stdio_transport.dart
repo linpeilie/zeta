@@ -239,13 +239,17 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
     _process = process;
     _log.info('JSON-RPC process started with pid ${process.pid}');
 
+    // Windows 启动器和本地化诊断偶尔会夹带非 UTF-8 字节。若使用严格
+    // 解码，单个受损字符会终止整条订阅，进而让子进程因管道断开退出。
+    // 这里仅替换无法解码的字符；损坏 JSON 结构仍由 _handleStdoutLine 报错。
+    const processOutputDecoder = Utf8Decoder(allowMalformed: true);
     // stdout 是协议通道；stderr 只作为诊断信息上报，不参与 JSON-RPC 匹配。
     process.stdout
-        .transform(utf8.decoder)
+        .transform(processOutputDecoder)
         .transform(const LineSplitter())
         .listen(_handleStdoutLine, onError: _handleStreamError);
     process.stderr
-        .transform(utf8.decoder)
+        .transform(processOutputDecoder)
         .transform(const LineSplitter())
         .listen(_handleStderrLine, onError: _handleStreamError);
     unawaited(_watchExit(process));

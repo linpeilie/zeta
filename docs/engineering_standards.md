@@ -89,6 +89,8 @@ main -> app -> presentation/application -> domain
 - UI 只消费 `AgentEvent`、`AgentThreadSummary`、`AgentPermissionRequest`、`AgentToolCall` 等中立模型。
 - Codex app-server 的 JSON-RPC、通知、审批 payload 和历史 JSONL 解析必须留在 agent data 层。
 - 新 provider 应先评估 `AgentProvider` 接口，不足时扩展领域接口，再在 data 层实现具体协议。
+- 非所有 provider 都具备的账号能力使用可选接口（例如
+  `AgentUsageQuotaProvider`），不要扩大 `AgentProvider` 的必选实现面。
 - mapper 文件负责字段兼容、默认值和协议名称转换；不要在 widget 中写散落的 JSON key。
 - 默认审批策略保持保守，不自动授权命令执行或文件写入。
 - Codex app-server 协议以 `third_party/codex_app_server_schema` 的 pinned
@@ -107,6 +109,8 @@ main -> app -> presentation/application -> domain
 - Agent 配置保存必须先校验语法、检测外部修改、写入同目录临时文件并保留原文件
   备份；不得直接覆盖符号链接或在失败后破坏原配置。
 - Agent 日志在进入 UI 前完成凭证与用户目录脱敏。
+- 使用统计派生索引只保存聚合所需元数据；禁止写入 Prompt、回复正文、工具输出、
+  session 文件路径和原始错误文本。索引必须版本化并支持损坏后重建。
 
 ## 6. UI 与交互
 
@@ -124,6 +128,8 @@ Zeta 是桌面工具，不是营销页。界面应紧凑、克制、可扫描。
 - 重复的交互行应使用稳定 `ValueKey`，方便测试和状态保持。
 - 流式消息、语法高亮代码块、diff 明细等高频或重绘成本高的区域应使用 `RepaintBoundary`。
 - 桌面布局优先用 `Expanded`、`Flexible`、`LayoutBuilder`、scroll view 和固定高度工具栏避免溢出。
+- 统计页等宽数据面板在宽屏可双栏排列，窄屏必须回退为单栏；宽表格使用受限的
+  横向滚动，不得挤压文本到不可读宽度。
 
 ## 7. 文件系统与工作区
 

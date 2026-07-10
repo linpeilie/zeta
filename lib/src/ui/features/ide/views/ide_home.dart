@@ -17,6 +17,10 @@ import 'package:zeta/src/features/agent_management/domain/agent_management_model
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
+import 'package:zeta/src/features/usage_statistics/application/usage_statistics_controller.dart';
+import 'package:zeta/src/features/usage_statistics/data/codex_usage_statistics_repository.dart';
+import 'package:zeta/src/features/usage_statistics/data/usage_statistics_index_store.dart';
+import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_page.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/workspace/presentation/file_tree_pane.dart';
 import 'package:zeta/src/ui/core/ide_activity_rail.dart';
@@ -73,6 +77,7 @@ class _IdeHomeState extends State<IdeHome> {
 
   late final IdeShellController _shellController;
   late final AgentManagementController _agentManagementController;
+  late final UsageStatisticsController _usageStatisticsController;
 
   bool _leftTopVisible = true;
   bool _leftBottomVisible = false;
@@ -108,6 +113,12 @@ class _IdeHomeState extends State<IdeHome> {
       runtimeStateProvider: _managementRuntimeState,
       runtimeListenable: _shellController.agentViewModel,
     );
+    _usageStatisticsController = UsageStatisticsController(
+      repository: CodexUsageStatisticsRepository(
+        providerLoader: _shellController.agentProviderController.activeProvider,
+        indexStore: const SharedPreferencesUsageStatisticsIndexStore(),
+      ),
+    );
     // 生产环境注册原生菜单的「打开项目」回调，与工具栏按钮走同一逻辑。
     if (widget.enableNativeWindowFrame) {
       MenuActionBridge.instance.setOpenProject(_handleMenuOpenProject);
@@ -120,6 +131,7 @@ class _IdeHomeState extends State<IdeHome> {
       MenuActionBridge.instance.setOpenProject(null);
     }
     _shellController.removeListener(_handleShellChanged);
+    _usageStatisticsController.dispose();
     _agentManagementController.dispose();
     _shellController.dispose();
     super.dispose();
@@ -131,6 +143,14 @@ class _IdeHomeState extends State<IdeHome> {
       enableNativeWindowFrame: widget.enableNativeWindowFrame,
       menus: _windowMenus,
       titleBarActions: <WindowTitleBarAction>[
+        WindowTitleBarAction(
+          key: const ValueKey('titlebar-usage-statistics-action'),
+          icon: Icons.query_stats_rounded,
+          tooltip: 'Usage statistics',
+          semanticLabel: 'Open usage statistics page',
+          active: _page == _IdeHomePage.usageStatistics,
+          onPressed: _openUsageStatisticsPage,
+        ),
         WindowTitleBarAction(
           key: const ValueKey('titlebar-settings-action'),
           icon: Icons.settings_rounded,
@@ -168,6 +188,11 @@ class _IdeHomeState extends State<IdeHome> {
             _settingsSection = section;
           });
         },
+      ),
+      _IdeHomePage.usageStatistics => UsageStatisticsPage(
+        controller: _usageStatisticsController,
+        onBackPressed: _closeUsageStatisticsPage,
+        onOpenAgentManagement: _openAgentManagementFromUsage,
       ),
     };
   }
@@ -758,6 +783,31 @@ class _IdeHomeState extends State<IdeHome> {
     });
   }
 
+  void _openUsageStatisticsPage() {
+    if (_page == _IdeHomePage.usageStatistics) {
+      return;
+    }
+    setState(() {
+      _page = _IdeHomePage.usageStatistics;
+    });
+  }
+
+  void _closeUsageStatisticsPage() {
+    if (_page != _IdeHomePage.usageStatistics) {
+      return;
+    }
+    setState(() {
+      _page = _IdeHomePage.home;
+    });
+  }
+
+  void _openAgentManagementFromUsage() {
+    setState(() {
+      _page = _IdeHomePage.settings;
+      _settingsSection = SettingsSection.agents;
+    });
+  }
+
   void _closeSettingsPage() {
     if (_page == _IdeHomePage.home) {
       return;
@@ -768,7 +818,7 @@ class _IdeHomeState extends State<IdeHome> {
   }
 }
 
-enum _IdeHomePage { home, settings }
+enum _IdeHomePage { home, settings, usageStatistics }
 
 class _PanelWidths {
   const _PanelWidths({required this.left, required this.right});

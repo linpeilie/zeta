@@ -138,6 +138,9 @@ class _JsonlHistoryParser {
       case 'task_complete':
         _consumeTaskComplete(payload, raw: raw);
         return;
+      case 'turn_aborted':
+        _consumeTurnAborted(payload, raw: raw);
+        return;
       case 'user_message':
         final text = _trimmedText(_jsonlUserMessageText(payload));
         if (text == null) {
@@ -260,6 +263,26 @@ class _JsonlHistoryParser {
           _durationFromMilliseconds(payload['time_to_first_token_ms']) ??
           turn.timeToFirstToken;
     turn.raw['taskComplete'] = payload;
+  }
+
+  void _consumeTurnAborted(
+    Map<String, Object?> payload, {
+    required Map<String, Object?> raw,
+  }) {
+    final turn = _currentTurn();
+    if (turn == null) {
+      return;
+    }
+    turn
+      ..status = AgentHistoryTurnStatus.interrupted
+      ..completedAt =
+          _dateTimeFromAny(payload['completed_at']) ??
+          _dateTimeFromAny(raw['timestamp']) ??
+          turn.completedAt
+      ..duration =
+          _durationFromMilliseconds(payload['duration_ms']) ?? turn.duration
+      ..errorMessage = _string(payload['reason']) ?? '用户取消';
+    turn.raw['turnAborted'] = payload;
   }
 
   void _consumeTurnContext(
@@ -788,6 +811,8 @@ class _JsonlTurnBuilder {
   int? modelContextWindow;
   String? collaborationMode;
   AgentTokenUsage? tokenUsage;
+  String? errorMessage;
+  String? errorCode;
   final Map<String, Object?> raw = <String, Object?>{};
 
   AgentHistoryTurn build(List<AgentHistoryEntry> entries) {
@@ -808,6 +833,8 @@ class _JsonlTurnBuilder {
       modelContextWindow: modelContextWindow,
       collaborationMode: collaborationMode,
       tokenUsage: tokenUsage,
+      errorMessage: errorMessage,
+      errorCode: errorCode,
       raw: Map<String, Object?>.unmodifiable(raw),
     );
   }

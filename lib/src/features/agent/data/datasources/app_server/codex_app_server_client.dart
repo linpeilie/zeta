@@ -67,17 +67,92 @@ class _CodexAppServerClient {
     final result = await _peer.sendRequest(
       'thread/list',
       params: <String, Object?>{
-        'cwd': query.projectPath,
+        'cwd': ?query.projectPath,
         'limit': query.limit,
         if (query.cursor != null) 'cursor': query.cursor,
-        'sortKey': 'recency_at',
+        'sortKey': 'updated_at',
         'sortDirection': 'desc',
         'archived': query.archived,
+        if (query.sourceKinds.isNotEmpty) 'sourceKinds': query.sourceKinds,
         if (searchTerm != null && searchTerm.isNotEmpty)
           'searchTerm': searchTerm,
       },
     );
-    return _threadPageFromResult(result, query.projectPath);
+    return _threadPageFromResult(result, query.projectPath ?? '');
+  }
+
+  Future<AgentUsageQuotaSnapshot?> readUsageQuota() async {
+    final result = await _peer.sendRequest(
+      'account/rateLimits/read',
+      params: const <String, Object?>{},
+    );
+    final response = _map(result);
+    final rateLimits = _map(response['rateLimits']);
+    if (rateLimits.isEmpty) {
+      return null;
+    }
+
+    final limitName = _string(rateLimits['limitName']);
+    final windows = <AgentUsageWindow>[];
+    _appendUsageWindow(
+      windows,
+      value: rateLimits['primary'],
+      fallbackLabel: limitName ?? '主要额度',
+    );
+    _appendUsageWindow(
+      windows,
+      value: rateLimits['secondary'],
+      fallbackLabel: '补充额度',
+    );
+    final creditsMap = _map(rateLimits['credits']);
+    final credits = creditsMap.isEmpty
+        ? null
+        : AgentUsageCredits(
+            hasCredits: creditsMap['hasCredits'] == true,
+            unlimited: creditsMap['unlimited'] == true,
+            balance: _string(creditsMap['balance']),
+          );
+    if (windows.isEmpty && credits == null) {
+      return null;
+    }
+    return AgentUsageQuotaSnapshot(
+      providerId: _config.id,
+      providerName: _config.displayName,
+      planType: _string(rateLimits['planType']),
+      limitName: limitName,
+      windows: List<AgentUsageWindow>.unmodifiable(windows),
+      credits: credits,
+      reachedReason: _string(rateLimits['rateLimitReachedType']),
+    );
+  }
+
+  void _appendUsageWindow(
+    List<AgentUsageWindow> target, {
+    required Object? value,
+    required String fallbackLabel,
+  }) {
+    final window = _map(value);
+    final usedPercent = _numberToInt(window['usedPercent']);
+    if (usedPercent == null) {
+      return;
+    }
+    final resetsAtSeconds = _numberToInt(window['resetsAt']);
+    final durationMinutes = _numberToInt(window['windowDurationMins']);
+    target.add(
+      AgentUsageWindow(
+        label: fallbackLabel,
+        usedPercent: usedPercent.clamp(0, 100),
+        resetsAt: resetsAtSeconds == null
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(
+                resetsAtSeconds * Duration.millisecondsPerSecond,
+                isUtc: true,
+              ).toLocal(),
+        windowDuration: durationMinutes == null
+            ? null
+            : Duration(minutes: durationMinutes),
+      ),
+    );
   }
 
   Future<AgentThreadHistorySnapshot> readThreadHistory({

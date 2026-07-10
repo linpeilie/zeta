@@ -2,29 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-
-/// 可安全执行的 CLI 命令描述。
-class ResolvedCliCommand {
-  const ResolvedCliCommand({
-    required this.displayPath,
-    required this.executable,
-    this.prefixArguments = const <String>[],
-  });
-
-  /// 用户看到的真实 CLI 文件路径。
-  final String displayPath;
-
-  /// 传给 [Process.start] 的启动器。
-  final String executable;
-
-  /// Windows 脚本包装器所需的固定参数。
-  final List<String> prefixArguments;
-
-  List<String> argumentsFor(List<String> arguments) {
-    return <String>[...prefixArguments, ...arguments];
-  }
-}
+import 'package:zeta/src/features/agent/data/codex_cli_locator.dart';
 
 /// CLI 子进程执行结果。
 class CliProcessResult {
@@ -100,130 +78,6 @@ class CliProcessRunner {
   }
 }
 
-/// 在已保存路径、PATH 与常见安装目录中定位 Codex CLI。
-class CodexCliLocator {
-  const CodexCliLocator();
-
-  /// 校验用户选择的文件并转换为可执行启动器。
-  Future<ResolvedCliCommand?> resolvePath(String path) async {
-    final type = await FileSystemEntity.type(path, followLinks: true);
-    if (type != FileSystemEntityType.file) {
-      return null;
-    }
-    return _resolveLauncher(path);
-  }
-
-  Future<ResolvedCliCommand?> locate(AgentProviderConfig config) async {
-    final candidates = <String>[
-      if (config.extra['cliPath'] case final String path) path,
-      if (_looksLikePath(config.command)) config.command,
-      ..._pathCandidates(),
-      ..._commonCandidates(),
-    ];
-    final seen = <String>{};
-    for (final raw in candidates) {
-      final path = raw.trim();
-      if (path.isEmpty) {
-        continue;
-      }
-      final normalized = Platform.isWindows ? path.toLowerCase() : path;
-      if (!seen.add(normalized)) {
-        continue;
-      }
-      final type = await FileSystemEntity.type(path, followLinks: true);
-      if (type == FileSystemEntityType.file) {
-        return _resolveLauncher(path);
-      }
-    }
-    return null;
-  }
-
-  Iterable<String> _pathCandidates() sync* {
-    final rawPath = Platform.environment['PATH'] ?? '';
-    if (rawPath.isEmpty) {
-      return;
-    }
-    final names = Platform.isWindows
-        ? const <String>['codex.exe', 'codex.ps1', 'codex.cmd', 'codex.bat']
-        : const <String>['codex'];
-    for (final directory in rawPath.split(Platform.isWindows ? ';' : ':')) {
-      final trimmed = directory.trim().replaceAll('"', '');
-      if (trimmed.isEmpty) {
-        continue;
-      }
-      for (final name in names) {
-        yield _join(trimmed, name);
-      }
-    }
-  }
-
-  Iterable<String> _commonCandidates() sync* {
-    final home = _userHome;
-    if (Platform.isWindows) {
-      final appData = Platform.environment['APPDATA'];
-      final localAppData = Platform.environment['LOCALAPPDATA'];
-      if (appData != null) {
-        yield _join(_join(appData, 'npm'), 'codex.ps1');
-        yield _join(_join(appData, 'npm'), 'codex.cmd');
-      }
-      if (localAppData != null) {
-        yield _join(
-          _join(_join(localAppData, 'Programs'), 'codex'),
-          'codex.exe',
-        );
-      }
-      if (home != null) {
-        yield _join(_join(_join(home, '.local'), 'bin'), 'codex.exe');
-      }
-      return;
-    }
-
-    if (home != null) {
-      yield _join(_join(_join(home, '.local'), 'bin'), 'codex');
-      yield _join(_join(_join(home, '.npm-global'), 'bin'), 'codex');
-    }
-    yield '/usr/local/bin/codex';
-    yield '/opt/homebrew/bin/codex';
-    yield '/usr/bin/codex';
-  }
-
-  ResolvedCliCommand _resolveLauncher(String path) {
-    if (!Platform.isWindows) {
-      return ResolvedCliCommand(displayPath: path, executable: path);
-    }
-    final lower = path.toLowerCase();
-    if (lower.endsWith('.ps1')) {
-      final windowsRoot = Platform.environment['SystemRoot'] ?? r'C:\Windows';
-      final powerShell = _join(
-        _join(
-          _join(_join(windowsRoot, 'System32'), 'WindowsPowerShell'),
-          'v1.0',
-        ),
-        'powershell.exe',
-      );
-      return ResolvedCliCommand(
-        displayPath: path,
-        executable: powerShell,
-        prefixArguments: <String>[
-          '-NoLogo',
-          '-NoProfile',
-          '-NonInteractive',
-          '-File',
-          path,
-        ],
-      );
-    }
-    if (lower.endsWith('.cmd') || lower.endsWith('.bat')) {
-      return ResolvedCliCommand(
-        displayPath: path,
-        executable: 'cmd.exe',
-        prefixArguments: <String>['/d', '/s', '/c', path],
-      );
-    }
-    return ResolvedCliCommand(displayPath: path, executable: path);
-  }
-}
-
 class _CappedTextBuffer {
   _CappedTextBuffer(this.maxCharacters);
 
@@ -244,19 +98,4 @@ class _CappedTextBuffer {
   }
 
   String get value => _buffer.toString();
-}
-
-bool _looksLikePath(String value) {
-  return value.contains('/') || value.contains('\\') || File(value).isAbsolute;
-}
-
-String? get _userHome {
-  return Platform.environment[Platform.isWindows ? 'USERPROFILE' : 'HOME'];
-}
-
-String _join(String parent, String child) {
-  if (parent.endsWith(Platform.pathSeparator)) {
-    return '$parent$child';
-  }
-  return '$parent${Platform.pathSeparator}$child';
 }

@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:toml/toml.dart';
 
+import 'package:zeta/src/features/agent/data/codex_cli_locator.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent_management/data/cli_process_runner.dart';

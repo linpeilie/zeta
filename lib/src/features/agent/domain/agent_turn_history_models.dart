@@ -41,6 +41,8 @@ class AgentHistoryTurn {
     this.modelContextWindow,
     this.collaborationMode,
     this.tokenUsage,
+    this.errorMessage,
+    this.errorCode,
     this.raw = const <String, Object?>{},
   });
 
@@ -79,6 +81,12 @@ class AgentHistoryTurn {
 
   /// 该 turn 的 token 消耗统计，来自 `token_count` 事件。
   final AgentTokenUsage? tokenUsage;
+
+  /// provider 上报的终态错误或中断原因。
+  final String? errorMessage;
+
+  /// provider 稳定错误码；用于错误分类和下一步操作提示。
+  final String? errorCode;
 
   /// 原始 turn 相关 payload 摘要。
   final Map<String, Object?> raw;

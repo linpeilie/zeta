@@ -125,6 +125,47 @@ void main() {
       await provider.dispose();
     });
 
+    test('maps local turn_aborted into an interrupted history turn', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      final sessionFile = await _writeJsonlFile(<Object?>[
+        <String, Object?>{
+          'timestamp': '2026-07-04T06:00:00.000Z',
+          'type': 'event_msg',
+          'payload': <String, Object?>{
+            'type': 'task_started',
+            'turn_id': 'turn-aborted',
+            'started_at': '2026-07-04T06:00:00.000Z',
+          },
+        },
+        <String, Object?>{
+          'timestamp': '2026-07-04T06:00:02.000Z',
+          'type': 'event_msg',
+          'payload': <String, Object?>{
+            'type': 'turn_aborted',
+            'turn_id': 'turn-aborted',
+            'completed_at': '2026-07-04T06:00:02.000Z',
+            'duration_ms': 2000,
+            'reason': 'user_cancelled',
+          },
+        },
+      ]);
+      addTearDown(() => sessionFile.parent.delete(recursive: true));
+
+      final history = await provider.readThreadHistory(
+        threadId: 'thread-aborted',
+        sessionPath: sessionFile.path,
+      );
+
+      expect(history.turns.single.status, AgentHistoryTurnStatus.interrupted);
+      expect(history.turns.single.duration, const Duration(seconds: 2));
+      expect(history.turns.single.errorMessage, 'user_cancelled');
+      await provider.dispose();
+    });
+
     test(
       'maps reasoning stream notifications to AgentReasoningDeltaEvent',
       () async {
@@ -1153,7 +1194,7 @@ void main() {
         'cwd': '/repo',
         'limit': 5,
         'cursor': 'cursor-1',
-        'sortKey': 'recency_at',
+        'sortKey': 'updated_at',
         'sortDirection': 'desc',
         'archived': false,
       });
@@ -1189,11 +1230,56 @@ void main() {
       expect(peer.requestParams.last, <String, Object?>{
         'cwd': '/repo',
         'limit': 5,
-        'sortKey': 'recency_at',
+        'sortKey': 'updated_at',
         'sortDirection': 'desc',
         'archived': true,
         'searchTerm': 'refactor',
       });
+      await provider.dispose();
+    });
+
+    test('lists cross-project root threads by source kind', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+
+      await provider.listThreads(
+        query: const AgentThreadListQuery(
+          projectPath: null,
+          limit: 100,
+          sourceKinds: <String>['cli', 'vscode', 'exec', 'appServer'],
+        ),
+      );
+
+      expect(peer.requestParams.last, <String, Object?>{
+        'limit': 100,
+        'sortKey': 'updated_at',
+        'sortDirection': 'desc',
+        'archived': false,
+        'sourceKinds': <String>['cli', 'vscode', 'exec', 'appServer'],
+      });
+      await provider.dispose();
+    });
+
+    test('reads Codex plan and rate-limit windows', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+
+      final quota = await provider.readUsageQuota();
+
+      expect(peer.requestMethods.last, 'account/rateLimits/read');
+      expect(quota, isNotNull);
+      expect(quota!.planType, 'plus');
+      expect(quota.windows, hasLength(2));
+      expect(quota.windows.first.usedPercent, 36);
+      expect(quota.windows.first.resetsAt, isNotNull);
+      expect(quota.credits?.unlimited, isFalse);
+      expect(quota.credits?.balance, '12.50');
       await provider.dispose();
     });
 
@@ -3043,6 +3129,27 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
               ],
             },
           ],
+        },
+      },
+      'account/rateLimits/read' => <String, Object?>{
+        'rateLimits': <String, Object?>{
+          'planType': 'plus',
+          'limitName': 'Codex',
+          'primary': <String, Object?>{
+            'usedPercent': 36,
+            'resetsAt': 1783785600,
+            'windowDurationMins': 300,
+          },
+          'secondary': <String, Object?>{
+            'usedPercent': 72,
+            'resetsAt': 1784246400,
+            'windowDurationMins': 10080,
+          },
+          'credits': <String, Object?>{
+            'hasCredits': true,
+            'unlimited': false,
+            'balance': '12.50',
+          },
         },
       },
       'turn/start' => <String, Object?>{

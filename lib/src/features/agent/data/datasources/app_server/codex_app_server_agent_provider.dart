@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/data/datasources/app_server/codex_process_starter.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -25,7 +26,8 @@ typedef JsonRpcPeerFactory = JsonRpcPeer Function(AgentProviderConfig config);
 ///
 /// 该类现在只负责生命周期、状态协同与事件分发，具体的 JSON-RPC 请求、
 /// 通知映射、审批映射与历史解析已经拆分到独立模块。
-class CodexAppServerAgentProvider implements AgentProvider {
+class CodexAppServerAgentProvider
+    implements AgentProvider, AgentUsageQuotaProvider {
   /// 创建 Codex app-server provider 实例。
   ///
   /// [config] 包含命令、参数、环境变量等 provider 配置。
@@ -307,6 +309,12 @@ class CodexAppServerAgentProvider implements AgentProvider {
       'limit=${query.limit} cursor=${query.cursor}',
     );
     return _client.listThreads(query: query);
+  }
+
+  @override
+  Future<AgentUsageQuotaSnapshot?> readUsageQuota() async {
+    await initialize();
+    return _client.readUsageQuota();
   }
 
   @override
@@ -813,5 +821,6 @@ JsonRpcPeer _defaultPeerFactory(AgentProviderConfig config) {
     command: config.command,
     arguments: config.arguments,
     environment: config.environment,
+    processStarter: codexProcessStarter(config),
   );
 }
