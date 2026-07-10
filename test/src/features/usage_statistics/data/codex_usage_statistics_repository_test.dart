@@ -68,6 +68,33 @@ void main() {
     );
     expect(UsageStatisticsIndexSnapshot.tryDecode('bad').threads, isEmpty);
   });
+
+  test('repairs second-based timestamps written by an older index', () {
+    final record = AgentUsageRecord.tryDecode(<String, Object?>{
+      'threadId': 'thread-legacy',
+      'turnId': 'turn-legacy',
+      'providerId': 'codex',
+      'providerName': 'Codex CLI',
+      'projectPath': r'C:\work\zeta',
+      'sourceKind': 'cli',
+      'startedAt': 1783144800,
+      'completedAt': 1783144803,
+      'durationMs': 3000,
+      'status': 'completed',
+      'tokens': <String, Object?>{'totalTokens': 42},
+    });
+
+    expect(record, isNotNull);
+    expect(
+      record!.startedAt.toUtc(),
+      DateTime.parse('2026-07-04T06:00:00.000Z'),
+    );
+    expect(
+      record.completedAt?.toUtc(),
+      DateTime.parse('2026-07-04T06:00:03.000Z'),
+    );
+    expect(record.toJson()['startedAt'], 1783144800000);
+  });
 }
 
 class _UsageProvider

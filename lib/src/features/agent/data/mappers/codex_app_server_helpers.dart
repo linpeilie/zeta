@@ -1248,16 +1248,21 @@ int? _breakdownInt(
   return _numberToInt(source[camelKey]) ?? _numberToInt(source[snakeKey]);
 }
 
-/// 从多种格式中解析 DateTime：ISO 8601 字符串或毫秒时间戳。
+/// 从多种格式中解析 DateTime：ISO 8601 字符串、Unix 秒或毫秒时间戳。
 DateTime? _dateTimeFromAny(Object? value) {
   if (value is String) {
     return DateTime.tryParse(value);
   }
-  final milliseconds = _numberToInt(value);
-  if (milliseconds == null) {
+  final timestamp = _numberToInt(value);
+  if (timestamp == null) {
     return null;
   }
-  return DateTime.fromMillisecondsSinceEpoch(milliseconds);
+  // Codex Turn.startedAt/completedAt 与 JSONL task_* 时间均为 Unix 秒；
+  // 仍兼容旧测试或其他 provider 返回的毫秒值。
+  final milliseconds = timestamp.abs() < 1000000000000
+      ? timestamp * Duration.millisecondsPerSecond
+      : timestamp;
+  return DateTime.fromMillisecondsSinceEpoch(milliseconds, isUtc: true);
 }
 
 /// 从毫秒值创建 Duration，负值或 null 返回 null。

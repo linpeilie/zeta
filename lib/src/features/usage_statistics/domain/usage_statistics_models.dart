@@ -271,14 +271,14 @@ class AgentUsageRecord {
     final providerName = _text(map['providerName']);
     final projectPath = _text(map['projectPath']);
     final sourceKind = _text(map['sourceKind']);
-    final startedAtMs = _int(map['startedAt']);
+    final startedAt = _dateTime(map['startedAt']);
     if (threadId == null ||
         turnId == null ||
         providerId == null ||
         providerName == null ||
         projectPath == null ||
         sourceKind == null ||
-        startedAtMs == null) {
+        startedAt == null) {
       return null;
     }
     return AgentUsageRecord(
@@ -288,7 +288,7 @@ class AgentUsageRecord {
       providerName: providerName,
       projectPath: projectPath,
       sourceKind: sourceKind,
-      startedAt: DateTime.fromMillisecondsSinceEpoch(startedAtMs),
+      startedAt: startedAt,
       completedAt: _dateTime(map['completedAt']),
       duration: _duration(map['durationMs']),
       timeToFirstToken: _duration(map['timeToFirstTokenMs']),
@@ -517,10 +517,16 @@ String? _text(Object? value) =>
     value is String && value.trim().isNotEmpty ? value.trim() : null;
 
 DateTime? _dateTime(Object? value) {
-  final milliseconds = _int(value);
-  return milliseconds == null
-      ? null
-      : DateTime.fromMillisecondsSinceEpoch(milliseconds);
+  final timestamp = _int(value);
+  if (timestamp == null) {
+    return null;
+  }
+  // V1 索引曾把 Codex 的 Unix 秒误当 DateTime 毫秒，继而写出 10 位时间戳。
+  // 读取时识别并修复，下一次保存会自然改写成标准 13 位毫秒值。
+  final milliseconds = timestamp.abs() < 1000000000000
+      ? timestamp * Duration.millisecondsPerSecond
+      : timestamp;
+  return DateTime.fromMillisecondsSinceEpoch(milliseconds, isUtc: true);
 }
 
 Duration? _duration(Object? value) {

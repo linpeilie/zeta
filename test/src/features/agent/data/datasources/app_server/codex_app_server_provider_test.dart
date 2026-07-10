@@ -138,7 +138,8 @@ void main() {
           'payload': <String, Object?>{
             'type': 'task_started',
             'turn_id': 'turn-aborted',
-            'started_at': '2026-07-04T06:00:00.000Z',
+            // Codex JSONL 与 app-server Turn 均使用 Unix 秒。
+            'started_at': 1783144800,
           },
         },
         <String, Object?>{
@@ -1505,7 +1506,7 @@ void main() {
           'payload': <String, Object?>{
             'type': 'task_started',
             'turn_id': 'turn-local',
-            'started_at': '2026-07-04T06:00:00.000Z',
+            'started_at': 1783144800,
             'model_context_window': 258400,
             'collaboration_mode_kind': 'Default',
           },
@@ -1593,7 +1594,7 @@ void main() {
           'payload': <String, Object?>{
             'type': 'task_complete',
             'turn_id': 'turn-local',
-            'completed_at': '2026-07-04T06:00:06.000Z',
+            'completed_at': 1783144806,
             'duration_ms': 6000,
             'time_to_first_token_ms': 350,
           },
@@ -3061,8 +3062,8 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
             <String, Object?>{
               'id': 'turn-1',
               'status': 'completed',
-              'startedAt': '2026-07-04T06:00:00.000Z',
-              'completedAt': '2026-07-04T06:00:03.000Z',
+              'startedAt': 1783144800,
+              'completedAt': 1783144803,
               'durationMs': 3000,
               'cwd': '/repo',
               'model': 'gpt-5',
