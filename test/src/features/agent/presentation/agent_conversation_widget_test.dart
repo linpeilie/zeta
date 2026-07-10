@@ -1206,7 +1206,7 @@ void main() {
     expect(find.text('Context thread'), findsWidgets);
     expect(find.text('2'), findsOneWidget);
     expect(find.text('Codex CLI'), findsOneWidget);
-    expect(find.text('200,000'), findsOneWidget);
+    expect(find.text('200k'), findsOneWidget);
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('agent-context-panel')),
@@ -1319,8 +1319,8 @@ void main() {
       ),
     );
     expect(tooltip.message, contains('Usage: 60%'));
-    expect(tooltip.message, contains('Used: 1,200'));
-    expect(tooltip.message, contains('Total: 2,000'));
+    expect(tooltip.message, contains('Used: 1.2k'));
+    expect(tooltip.message, contains('Total: 2k'));
     expect(tooltip.message, contains('input_tokens: 900'));
     expect(tooltip.message, contains('output_tokens: 320'));
     expect(tooltip.message, contains('cached_input_tokens: 180'));

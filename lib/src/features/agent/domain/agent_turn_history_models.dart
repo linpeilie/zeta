@@ -113,32 +113,106 @@ class AgentTokenUsage {
     return (outputTokens ?? 0) + (reasoningOutputTokens ?? 0);
   }
 
+  static const List<String> _displaySuffixes = <String>[
+    'k',
+    'm',
+    'g',
+    't',
+    'p',
+    'e',
+    'z',
+    'y',
+  ];
+
   /// 累计输入 token 数（含缓存命中前的全部输入）。
   final int? inputTokens;
+
+  /// 累计输入 token 数的展示值。
+  String? get displayInputTokens => _displayTokenCount(inputTokens);
 
   /// 累计缓存命中的输入 token 数。
   final int? cachedInputTokens;
 
+  /// 累计缓存命中的输入 token 数展示值。
+  String? get displayCachedInputTokens => _displayTokenCount(cachedInputTokens);
+
   /// 累计输出 token 数（已含 reasoning_output_tokens）。
   final int? outputTokens;
+
+  /// 累计输出 token 数展示值。
+  String? get displayOutputTokens => _displayTokenCount(outputTokens);
 
   /// 累计总 token 数。
   final int? totalTokens;
 
+  /// 累计总 token 数展示值。
+  String? get displayTotalTokens => _displayTokenCount(totalTokens);
+
   /// 最近一次请求的输入 token 数。
   final int? lastInputTokens;
+
+  /// 最近一次请求输入 token 数展示值。
+  String? get displayLastInputTokens => _displayTokenCount(lastInputTokens);
 
   /// 最近一次请求缓存命中的输入 token 数。
   final int? lastCachedInputTokens;
 
+  /// 最近一次请求缓存输入 token 数展示值。
+  String? get displayLastCachedInputTokens =>
+      _displayTokenCount(lastCachedInputTokens);
+
   /// 最近一次请求的输出 token 数（已含 reasoning_output_tokens）。
   final int? lastOutputTokens;
+
+  /// 最近一次请求输出 token 数展示值。
+  String? get displayLastOutputTokens => _displayTokenCount(lastOutputTokens);
 
   /// 最近一次请求的总 token 数。
   final int? lastTotalTokens;
 
+  /// 最近一次请求总 token 数展示值。
+  String? get displayLastTotalTokens => _displayTokenCount(lastTotalTokens);
+
   /// 当前模型上下文窗口大小；UI 可据此展示上下文占用比例。
   final int? modelContextWindow;
+
+  /// 模型上下文窗口大小展示值。
+  String? get displayModelContextWindow =>
+      _displayTokenCount(modelContextWindow);
+
+  static String? _displayTokenCount(int? tokens) {
+    if (tokens == null) {
+      return null;
+    }
+    if (tokens < 1000) {
+      return tokens.toString();
+    }
+
+    var value = tokens.toDouble();
+    var suffixIndex = -1;
+    while (value >= 1000 && suffixIndex + 1 < _displaySuffixes.length) {
+      value /= 1000;
+      suffixIndex += 1;
+    }
+
+    if (suffixIndex == -1) {
+      return tokens.toString();
+    }
+
+    while (true) {
+      final digits = value >= 100 ? 0 : 1;
+      final formattedValue = value.toStringAsFixed(digits);
+      final normalizedValue = formattedValue.endsWith('.0')
+          ? formattedValue.substring(0, formattedValue.length - 2)
+          : formattedValue;
+      final roundedValue = double.parse(normalizedValue);
+      if (roundedValue < 1000 || suffixIndex + 1 >= _displaySuffixes.length) {
+        return '$normalizedValue${_displaySuffixes[suffixIndex]}';
+      }
+      value = roundedValue / 1000;
+      suffixIndex += 1;
+    }
+  }
 }
 
 /// 历史 turn 状态。

@@ -60,11 +60,11 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
                           title: viewModel.currentThreadTitle,
                           messageCount: messages.length,
                           providerName: viewModel.activeProviderName,
-                          contextLimit: usage?.modelContextWindow,
-                          totalTokens: usage?.totalTokens,
-                          inputTokens: usage?.inputTokens,
-                          outputTokens: usage?.outputTokens,
-                          cachedTokens: usage?.cachedInputTokens,
+                          contextLimit: usage?.displayModelContextWindow,
+                          totalTokens: usage?.displayTotalTokens,
+                          inputTokens: usage?.displayInputTokens,
+                          outputTokens: usage?.displayOutputTokens,
+                          cachedTokens: usage?.displayCachedInputTokens,
                           createdAt: viewModel.threadCreatedAt,
                           lastActiveAt: viewModel.threadLastActiveAt,
                         ),
@@ -171,11 +171,11 @@ class _AgentContextSummaryCard extends StatelessWidget {
   final String title;
   final int messageCount;
   final String providerName;
-  final int? contextLimit;
-  final int? totalTokens;
-  final int? inputTokens;
-  final int? outputTokens;
-  final int? cachedTokens;
+  final String? contextLimit;
+  final String? totalTokens;
+  final String? inputTokens;
+  final String? outputTokens;
+  final String? cachedTokens;
   final DateTime? createdAt;
   final DateTime? lastActiveAt;
 
@@ -185,11 +185,11 @@ class _AgentContextSummaryCard extends StatelessWidget {
       _ContextSummaryRow('会话名称', title),
       _ContextSummaryRow('消息数', '$messageCount'),
       _ContextSummaryRow('提供商', providerName),
-      _ContextSummaryRow('上下文限制', _formatContextTokens(contextLimit)),
-      _ContextSummaryRow('总 Token', _formatContextTokens(totalTokens)),
-      _ContextSummaryRow('输入 Token', _formatContextTokens(inputTokens)),
-      _ContextSummaryRow('输出 Token', _formatContextTokens(outputTokens)),
-      _ContextSummaryRow('缓存 Token', _formatContextTokens(cachedTokens)),
+      _ContextSummaryRow('上下文限制', contextLimit ?? '—'),
+      _ContextSummaryRow('总 Token', totalTokens ?? '—'),
+      _ContextSummaryRow('输入 Token', inputTokens ?? '—'),
+      _ContextSummaryRow('输出 Token', outputTokens ?? '—'),
+      _ContextSummaryRow('缓存 Token', cachedTokens ?? '—'),
       _ContextSummaryRow('创建时间', _formatContextDateTime(createdAt)),
       _ContextSummaryRow('最后活跃时间', _formatContextDateTime(lastActiveAt)),
     ];
@@ -365,14 +365,6 @@ String _contextRoleLabel(AgentMessageRole role) {
     AgentMessageRole.agent => '助手',
     AgentMessageRole.system => '系统',
   };
-}
-
-/// token 数展示；缺失时返回占位符。
-String _formatContextTokens(int? tokens) {
-  if (tokens == null) {
-    return '—';
-  }
-  return _formatTokenCount(tokens);
 }
 
 /// 上下文面板内的日期时间格式化（yyyy-MM-dd HH:mm）；缺失时返回占位符。

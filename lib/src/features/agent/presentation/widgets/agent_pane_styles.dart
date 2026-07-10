@@ -382,12 +382,14 @@ String? _tokenUsageLabel(AgentTokenUsage? usage) {
   if (total == null || total <= 0) {
     return null;
   }
-  final window = usage?.modelContextWindow;
-  if (window != null && window > 0) {
+  final totalDisplay = usage!.displayTotalTokens!;
+  final window = usage.modelContextWindow;
+  final windowDisplay = usage.displayModelContextWindow;
+  if (window != null && window > 0 && windowDisplay != null) {
     final percent = ((total / window) * 100).clamp(0, 999).round();
-    return '${_compactTokenCount(total)} / ${_compactTokenCount(window)} · $percent%';
+    return '$totalDisplay / $windowDisplay · $percent%';
   }
-  return '${_compactTokenCount(total)} tokens';
+  return '$totalDisplay tokens';
 }
 
 /// 当前上下文窗口 token 用量短标签；缺少窗口大小时不展示。
@@ -397,7 +399,7 @@ String? _contextWindowTokenUsageLabel(AgentTokenUsage? usage) {
   if (total == null || total <= 0 || window == null || window <= 0) {
     return null;
   }
-  return '${_compactTokenCount(total)} tokens';
+  return '${usage!.displayTotalTokens!} tokens';
 }
 
 double? _contextWindowTokenUsageProgressValue(AgentTokenUsage? usage) {
@@ -416,22 +418,21 @@ String _contextWindowTokenUsageTooltip(AgentTokenUsage? usage) {
   if (total == null || total <= 0 || window == null || window <= 0) {
     return '';
   }
+  final tokenUsage = usage!;
   final percent = ((total / window) * 100).round();
   final parts = <String>[
     'Usage: $percent%',
-    'Used: ${_formatTokenCount(total)}',
-    'Total: ${_formatTokenCount(window)}',
+    'Used: ${tokenUsage.displayTotalTokens}',
+    'Total: ${tokenUsage.displayModelContextWindow}',
   ];
-  if (usage?.inputTokens != null) {
-    parts.add('input_tokens: ${_formatTokenCount(usage!.inputTokens!)}');
+  if (tokenUsage.displayInputTokens case final value?) {
+    parts.add('input_tokens: $value');
   }
-  if (usage?.outputTokens != null) {
-    parts.add('output_tokens: ${_formatTokenCount(usage!.outputTokens!)}');
+  if (tokenUsage.displayOutputTokens case final value?) {
+    parts.add('output_tokens: $value');
   }
-  if (usage?.cachedInputTokens != null) {
-    parts.add(
-      'cached_input_tokens: ${_formatTokenCount(usage!.cachedInputTokens!)}',
-    );
+  if (tokenUsage.displayCachedInputTokens case final value?) {
+    parts.add('cached_input_tokens: $value');
   }
   return parts.join('\n');
 }
@@ -442,48 +443,20 @@ String _tokenUsageTooltip(AgentTokenUsage? usage) {
     return '';
   }
   final parts = <String>[];
-  if (usage.totalTokens != null) {
-    parts.add('Total: ${_formatTokenCount(usage.totalTokens!)}');
+  if (usage.displayTotalTokens case final value?) {
+    parts.add('Total: $value');
   }
-  if (usage.modelContextWindow != null) {
-    parts.add(
-      'Context window: ${_formatTokenCount(usage.modelContextWindow!)}',
-    );
+  if (usage.displayModelContextWindow case final value?) {
+    parts.add('Context window: $value');
   }
-  if (usage.inputTokens != null) {
-    parts.add('Input: ${_formatTokenCount(usage.inputTokens!)}');
+  if (usage.displayInputTokens case final value?) {
+    parts.add('Input: $value');
   }
-  if (usage.cachedInputTokens != null) {
-    parts.add('Cached: ${_formatTokenCount(usage.cachedInputTokens!)}');
+  if (usage.displayCachedInputTokens case final value?) {
+    parts.add('Cached: $value');
   }
-  if (usage.outputTokens != null) {
-    parts.add('Output: ${_formatTokenCount(usage.outputTokens!)}');
+  if (usage.displayOutputTokens case final value?) {
+    parts.add('Output: $value');
   }
   return parts.isEmpty ? '' : parts.join('\n');
-}
-
-/// 紧凑形式的 token 数，例如 1234 -> "1.2k"、1234567 -> "1.2M"。
-String _compactTokenCount(int tokens) {
-  if (tokens >= 1000000) {
-    final millions = tokens / 1000000;
-    return '${millions.toStringAsFixed(millions >= 10 ? 0 : 1)}M';
-  }
-  if (tokens >= 1000) {
-    final thousands = tokens / 1000;
-    return '${thousands.toStringAsFixed(thousands >= 100 ? 0 : 1)}k';
-  }
-  return tokens.toString();
-}
-
-/// 完整数字形式的 token 数，带千位分隔。
-String _formatTokenCount(int tokens) {
-  final str = tokens.toString();
-  final buffer = StringBuffer();
-  for (var i = 0; i < str.length; i += 1) {
-    if (i > 0 && (str.length - i) % 3 == 0) {
-      buffer.write(',');
-    }
-    buffer.write(str[i]);
-  }
-  return buffer.toString();
 }
