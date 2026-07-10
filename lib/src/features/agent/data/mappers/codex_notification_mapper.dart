@@ -679,7 +679,8 @@ class _CodexNotificationMapper {
   ///
   /// - 当前协议 `thread/tokenUsage/updated`：
   ///   `{ tokenUsage: { total: {...}, last: {...}, modelContextWindow } }`，
-  ///   字段为 camelCase（`inputTokens` 等）。
+  ///   字段为 camelCase（`inputTokens` 等）。其中 `total` 是整个会话累计，
+  ///   不是单个 turn 的成本；时间线层会再差分出 turn 增量。
   /// - 旧版 `turn/tokenCount` 等：
   ///   `{ info: { total_token_usage: {...}, last_token_usage: {...} } }`，
   ///   字段为 snake_case（`input_tokens` 等）。

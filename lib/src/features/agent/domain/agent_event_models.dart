@@ -247,8 +247,9 @@ class AgentTurnCompletedEvent extends AgentEvent {
 
 /// 回合 token 用量更新。
 ///
-/// 对应 Codex `thread/tokenUsage/updated` 通知（旧版为 `turn/tokenCount`），
-/// UI 据此在回合分隔线展示 token 成本。
+/// 对应 Codex `thread/tokenUsage/updated` 通知（旧版为 `turn/tokenCount`）。
+/// [tokenUsage] 中的累计 breakdown（`totalTokens` 等）是整个会话用量；
+/// 时间线层会保存会话总量，并把 turn 用量差分后写入回合分隔线。
 class AgentTokenUsageEvent extends AgentEvent {
   const AgentTokenUsageEvent({
     required this.tokenUsage,

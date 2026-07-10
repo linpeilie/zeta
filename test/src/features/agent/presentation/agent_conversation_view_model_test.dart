@@ -1610,75 +1610,77 @@ void main() {
       },
     );
 
-    test(
-      'aggregates header token usage across history and live turns',
-      () async {
-        final provider = _FakeAgentProvider(
-          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
-            'thread-1': const AgentThreadHistorySnapshot(
-              threadId: 'thread-1',
-              turns: <AgentHistoryTurn>[
-                AgentHistoryTurn(
-                  id: 'turn-a',
-                  entries: <AgentHistoryEntry>[
-                    AgentHistoryMessageEntry(
-                      id: 'user-a',
-                      role: AgentMessageRole.user,
-                      text: 'Existing request',
-                    ),
-                  ],
-                  tokenUsage: AgentTokenUsage(
-                    inputTokens: 2000,
-                    cachedInputTokens: 500,
-                    outputTokens: 330,
-                    totalTokens: 2250,
-                    lastInputTokens: 800,
-                    lastCachedInputTokens: 150,
-                    lastOutputTokens: 240,
-                    lastTotalTokens: 1040,
-                    modelContextWindow: 4000,
+    test('keeps session token total and derives live turn deltas', () async {
+      final provider = _FakeAgentProvider(
+        historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+          'thread-1': const AgentThreadHistorySnapshot(
+            threadId: 'thread-1',
+            turns: <AgentHistoryTurn>[
+              AgentHistoryTurn(
+                id: 'turn-a',
+                entries: <AgentHistoryEntry>[
+                  AgentHistoryMessageEntry(
+                    id: 'user-a',
+                    role: AgentMessageRole.user,
+                    text: 'Existing request',
                   ),
+                ],
+                tokenUsage: AgentTokenUsage(
+                  inputTokens: 2000,
+                  cachedInputTokens: 500,
+                  outputTokens: 330,
+                  totalTokens: 2250,
+                  lastInputTokens: 800,
+                  lastCachedInputTokens: 150,
+                  lastOutputTokens: 240,
+                  lastTotalTokens: 1040,
+                  modelContextWindow: 4000,
                 ),
-              ],
-            ),
-          },
-        );
-        final viewModel = _createViewModel(provider);
-        addTearDown(viewModel.dispose);
-
-        await viewModel.switchThread(_thread());
-        await Future<void>.delayed(Duration.zero);
-        await viewModel.sendMessage('hello');
-        provider.emit(
-          const AgentTokenUsageEvent(
-            tokenUsage: AgentTokenUsage(
-              inputTokens: 1000,
-              cachedInputTokens: 200,
-              outputTokens: 350,
-              totalTokens: 1300,
-              lastInputTokens: 920,
-              lastCachedInputTokens: 180,
-              lastOutputTokens: 320,
-              lastTotalTokens: 1240,
-              modelContextWindow: 2000,
-            ),
+              ),
+            ],
           ),
-        );
-        await Future<void>.delayed(Duration.zero);
+        },
+      );
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
 
-        expect(viewModel.currentThreadTokenUsage, isNotNull);
-        expect(viewModel.currentThreadTokenUsage!.inputTokens, 3000);
-        expect(viewModel.currentThreadTokenUsage!.cachedInputTokens, 700);
-        expect(viewModel.currentThreadTokenUsage!.outputTokens, 680);
-        expect(viewModel.currentThreadTokenUsage!.totalTokens, 3550);
-        expect(viewModel.currentThreadLastTokenUsage, isNotNull);
-        expect(viewModel.currentThreadLastTokenUsage!.inputTokens, 920);
-        expect(viewModel.currentThreadLastTokenUsage!.cachedInputTokens, 180);
-        expect(viewModel.currentThreadLastTokenUsage!.outputTokens, 320);
-        expect(viewModel.currentThreadLastTokenUsage!.totalTokens, 1240);
-        expect(viewModel.currentThreadLastTokenUsage!.modelContextWindow, 2000);
-      },
-    );
+      await viewModel.switchThread(_thread());
+      await Future<void>.delayed(Duration.zero);
+      expect(viewModel.currentThreadTokenUsage!.totalTokens, 2250);
+
+      await viewModel.sendMessage('hello');
+      provider.emit(
+        const AgentTokenUsageEvent(
+          tokenUsage: AgentTokenUsage(
+            inputTokens: 3000,
+            cachedInputTokens: 700,
+            outputTokens: 680,
+            totalTokens: 3550,
+            lastInputTokens: 920,
+            lastCachedInputTokens: 180,
+            lastOutputTokens: 320,
+            lastTotalTokens: 1240,
+            modelContextWindow: 2000,
+          ),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(viewModel.currentTurnTokenUsage, isNotNull);
+      expect(viewModel.currentTurnTokenUsage!.totalTokens, 1300);
+      expect(viewModel.currentTurnTokenUsage!.inputTokens, 1000);
+      expect(viewModel.currentThreadTokenUsage, isNotNull);
+      expect(viewModel.currentThreadTokenUsage!.inputTokens, 3000);
+      expect(viewModel.currentThreadTokenUsage!.cachedInputTokens, 700);
+      expect(viewModel.currentThreadTokenUsage!.outputTokens, 680);
+      expect(viewModel.currentThreadTokenUsage!.totalTokens, 3550);
+      expect(viewModel.currentThreadLastTokenUsage, isNotNull);
+      expect(viewModel.currentThreadLastTokenUsage!.inputTokens, 920);
+      expect(viewModel.currentThreadLastTokenUsage!.cachedInputTokens, 180);
+      expect(viewModel.currentThreadLastTokenUsage!.outputTokens, 320);
+      expect(viewModel.currentThreadLastTokenUsage!.totalTokens, 1240);
+      expect(viewModel.currentThreadLastTokenUsage!.modelContextWindow, 2000);
+    });
 
     test('offers compact when context window usage is high', () async {
       final provider = _FakeAgentProvider(

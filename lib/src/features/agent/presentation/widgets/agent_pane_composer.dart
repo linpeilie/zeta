@@ -5,8 +5,11 @@ part of '../agent_pane.dart';
 /// 上半部分是多行输入框，下半部分是操作行：左侧放模型选择、思考按钮和速率按钮，
 /// 右侧放发送/取消按钮。provider 运行时发送按钮切换为取消按钮。
 class _AgentComposer extends StatelessWidget {
+  static const double _compactToolbarBreakpoint = 560;
+
   const _AgentComposer({
     required this.controller,
+    required this.focusNode,
     required this.canSubmit,
     required this.isTurnRunning,
     required this.threadOpenPhase,
@@ -36,6 +39,7 @@ class _AgentComposer extends StatelessWidget {
   });
 
   final TextEditingController controller;
+  final FocusNode focusNode;
   final bool canSubmit;
   final bool isTurnRunning;
   final AgentThreadOpenPhase threadOpenPhase;
@@ -114,6 +118,43 @@ class _AgentComposer extends StatelessWidget {
     final contextWindowTokenProgress = _contextWindowTokenUsageProgressValue(
       currentWindowTokenUsage,
     );
+    final selectorControls = <Widget>[
+      if (models.isNotEmpty)
+        _ModelSelectorButton(
+          models: models,
+          selectedModel: selectedModel,
+          onSelect: onSelectModel,
+        ),
+      if (showReasoningEffort && selectedModel != null) ...[
+        if (models.isNotEmpty) const SizedBox(width: IdeSpacing.space6),
+        _ReasoningEffortButton(
+          efforts: selectedModel!.supportedReasoningEfforts,
+          selectedEffort: selectedReasoningEffort,
+          onSelect: onSelectReasoningEffort,
+        ),
+      ],
+      if (showServiceTier && selectedModel != null) ...[
+        if (models.isNotEmpty || showReasoningEffort)
+          const SizedBox(width: IdeSpacing.space6),
+        _ServiceTierButton(
+          tiers: selectedModel!.serviceTiers,
+          selectedTierId: selectedServiceTierId,
+          onSelect: onSelectServiceTier,
+        ),
+      ],
+      if (showPermissionPolicy) ...[
+        if (models.isNotEmpty ||
+            (showReasoningEffort && selectedModel != null) ||
+            (showServiceTier && selectedModel != null))
+          const SizedBox(width: IdeSpacing.space6),
+        _PermissionPolicyButton(
+          label: permissionPolicyLabel,
+          presets: permissionPresets,
+          selectedPresetId: selectedPermissionPresetId,
+          onSelect: onSelectPermissionPreset,
+        ),
+      ],
+    ];
     return Focus(
       onKeyEvent: (node, event) {
         if (event is! KeyDownEvent) {
@@ -130,19 +171,26 @@ class _AgentComposer extends StatelessWidget {
         onPasteImages();
         return KeyEventResult.handled;
       },
-      child: Builder(
-        builder: (context) {
+      child: ListenableBuilder(
+        listenable: focusNode,
+        builder: (context, _) {
           final brightness = sf.Theme.of(context).brightness;
-          // 输入区与卡片同色、焦点不加边框高亮，视觉上融为一体。
-          final cardBorder = colors.border.withValues(alpha: 0.6);
-          final shadow = IdeEffects.composerRestShadow(brightness);
+          final isFocused = focusNode.hasFocus;
+          // 焦点是键盘状态而非高度：用无方向的 ring，而不是下坠投影。
+          final cardBorder = isFocused
+              ? colors.accent.withValues(alpha: 0.84)
+              : colors.border.withValues(alpha: 0.6);
+          final focusRing = isFocused
+              ? IdeEffects.focusRing(brightness, accent: colors.accent)
+              : const <BoxShadow>[];
 
           return AnimatedContainer(
+            key: const ValueKey('agent-composer-focus-ring'),
             duration: IdeMotion.durationNormal,
             curve: IdeMotion.curveDefault,
             decoration: BoxDecoration(
               borderRadius: IdeRadius.allComposer,
-              boxShadow: shadow,
+              boxShadow: focusRing,
             ),
             child: PanelCard(
               color: colors.panel,
@@ -186,6 +234,7 @@ class _AgentComposer extends StatelessWidget {
                                 ),
                                 child: sf.TextArea(
                                   controller: controller,
+                                  focusNode: focusNode,
                                   placeholder: Text(
                                     'Message Agent',
                                     style: textStyles.bodyMedium.copyWith(
@@ -235,149 +284,84 @@ class _AgentComposer extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: IdeSpacing.space6),
-                    // 下半部分：操作行，左侧放选择控件，右侧放发送按钮。
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        IdeTooltip(
-                          message: 'Mention file',
-                          child: sf.IconButton.ghost(
-                            key: const ValueKey('agent-mention-file-button'),
-                            onPressed: () => _showMentionPicker(context),
-                            size: sf.ButtonSize.small,
-                            density: sf.ButtonDensity.iconDense,
-                            icon: Icon(
-                              Icons.alternate_email_rounded,
-                              size: 16,
-                              color: colors.textSecondary,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: IdeSpacing.space4),
-                        IdeTooltip(
-                          message: 'Attach image',
-                          child: sf.IconButton.ghost(
-                            key: const ValueKey('agent-attach-image-button'),
-                            onPressed: onAttachImages,
-                            size: sf.ButtonSize.small,
-                            density: sf.ButtonDensity.iconDense,
-                            icon: Icon(
-                              Icons.image_outlined,
-                              size: 16,
-                              color: colors.textSecondary,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: IdeSpacing.space4),
-                        if (models.isNotEmpty)
-                          _ModelSelectorButton(
-                            models: models,
-                            selectedModel: selectedModel,
-                            onSelect: onSelectModel,
-                          ),
-                        if (showReasoningEffort && selectedModel != null) ...[
-                          const SizedBox(width: IdeSpacing.space6),
-                          _ReasoningEffortButton(
-                            efforts: selectedModel!.supportedReasoningEfforts,
-                            selectedEffort: selectedReasoningEffort,
-                            onSelect: onSelectReasoningEffort,
-                          ),
-                        ],
-                        if (showServiceTier && selectedModel != null) ...[
-                          const SizedBox(width: IdeSpacing.space6),
-                          _ServiceTierButton(
-                            tiers: selectedModel!.serviceTiers,
-                            selectedTierId: selectedServiceTierId,
-                            onSelect: onSelectServiceTier,
-                          ),
-                        ],
-                        if (showPermissionPolicy) ...[
-                          const SizedBox(width: IdeSpacing.space6),
-                          _PermissionPolicyButton(
-                            label: permissionPolicyLabel,
-                            presets: permissionPresets,
-                            selectedPresetId: selectedPermissionPresetId,
-                            onSelect: onSelectPermissionPreset,
-                          ),
-                        ],
-                        const Spacer(),
-                        if (contextWindowTokenProgress != null)
-                          Flexible(
-                            fit: FlexFit.loose,
-                            child: Align(
-                              alignment: Alignment.centerRight,
-                              child: Padding(
-                                padding: const EdgeInsets.only(
-                                  left: IdeSpacing.space8,
-                                  right: IdeSpacing.space8,
+                    // 宽窗保持一行工具栏；空间不足时，将低频选择器收进可横滑的第二行。
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final attachmentActions = _buildAttachmentActions(
+                          context,
+                        );
+                        final submitAction = _buildSubmitAction(
+                          context,
+                          showCancel: showCancel,
+                          showSend: showSend,
+                        );
+                        final tokenUsage = contextWindowTokenProgress == null
+                            ? null
+                            : Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: IdeSpacing.space8,
                                 ),
                                 child: _ComposerContextWindowUsage(
                                   tooltip: contextWindowTokenTooltip,
                                   progress: contextWindowTokenProgress,
                                 ),
-                              ),
+                              );
+                        final useCompactToolbar =
+                            constraints.maxWidth < _compactToolbarBreakpoint;
+
+                        if (useCompactToolbar) {
+                          return Column(
+                            key: const ValueKey(
+                              'agent-composer-compact-toolbar',
                             ),
-                          ),
-                        AnimatedSwitcher(
-                          duration: IdeMotion.durationNormal,
-                          switchInCurve: IdeMotion.curveDefault,
-                          switchOutCurve: IdeMotion.curveDefault,
-                          layoutBuilder: (currentChild, previousChildren) =>
-                              currentChild ?? const SizedBox.shrink(),
-                          child: showCancel
-                              ? _ComposerActionButton(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
+                                children: [
+                                  attachmentActions,
+                                  const Spacer(),
+                                  if (tokenUsage case final Widget usage) usage,
+                                  submitAction,
+                                ],
+                              ),
+                              if (selectorControls.isNotEmpty) ...[
+                                const SizedBox(height: IdeSpacing.space6),
+                                SingleChildScrollView(
                                   key: const ValueKey(
-                                    'agent-cancel-button-state',
+                                    'agent-composer-selector-scroll',
                                   ),
-                                  tooltip: 'Cancel',
-                                  backgroundColor: colors.border.withValues(
-                                    alpha: 0.36,
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: selectorControls,
                                   ),
-                                  foregroundColor: colors.textSecondary,
-                                  buttonKey: const ValueKey(
-                                    'agent-cancel-button',
-                                  ),
-                                  icon: const Icon(
-                                    Icons.stop_rounded,
-                                    size: 22,
-                                  ),
-                                  onPressed: onCancel,
-                                )
-                              : showSend
-                              ? _ComposerActionButton(
-                                  key: const ValueKey(
-                                    'agent-send-button-state',
-                                  ),
-                                  tooltip: 'Send',
-                                  // 可发送时使用实心 accent，作为界面最强的
-                                  // 行动锚点；不可发送时退回弱化中性底。
-                                  backgroundColor: canSubmit
-                                      ? colors.accent
-                                      : colors.border.withValues(alpha: 0.2),
-                                  foregroundColor: canSubmit
-                                      ? Colors.white
-                                      : colors.textSecondary.withValues(
-                                          alpha: 0.72,
-                                        ),
-                                  filled: canSubmit,
-                                  buttonKey: const ValueKey(
-                                    'agent-send-button',
-                                  ),
-                                  icon: const Icon(
-                                    Icons.arrow_upward_rounded,
-                                    size: 22,
-                                  ),
-                                  onPressed: canSubmit ? onSend : null,
-                                )
-                              : const SizedBox(
-                                  key: ValueKey(
-                                    'agent-send-unavailable-placeholder',
-                                  ),
-                                  width: 40,
-                                  height: 40,
                                 ),
-                        ),
-                      ],
+                              ],
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            attachmentActions,
+                            if (selectorControls.isNotEmpty) ...[
+                              const SizedBox(width: IdeSpacing.space4),
+                              ...selectorControls,
+                            ],
+                            const Spacer(),
+                            if (tokenUsage case final Widget usage)
+                              Flexible(
+                                fit: FlexFit.loose,
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: usage,
+                                ),
+                              ),
+                            submitAction,
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -386,6 +370,90 @@ class _AgentComposer extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+
+  Widget _buildAttachmentActions(BuildContext context) {
+    final colors = IdeColors.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IdeTooltip(
+          message: 'Mention file',
+          child: sf.IconButton.ghost(
+            key: const ValueKey('agent-mention-file-button'),
+            onPressed: () => _showMentionPicker(context),
+            size: sf.ButtonSize.small,
+            density: sf.ButtonDensity.iconDense,
+            icon: Icon(
+              Icons.alternate_email_rounded,
+              size: 16,
+              color: colors.textSecondary,
+            ),
+          ),
+        ),
+        const SizedBox(width: IdeSpacing.space4),
+        IdeTooltip(
+          message: 'Attach image',
+          child: sf.IconButton.ghost(
+            key: const ValueKey('agent-attach-image-button'),
+            onPressed: onAttachImages,
+            size: sf.ButtonSize.small,
+            density: sf.ButtonDensity.iconDense,
+            icon: Icon(
+              Icons.image_outlined,
+              size: 16,
+              color: colors.textSecondary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSubmitAction(
+    BuildContext context, {
+    required bool showCancel,
+    required bool showSend,
+  }) {
+    final colors = IdeColors.of(context);
+    return AnimatedSwitcher(
+      duration: IdeMotion.durationNormal,
+      switchInCurve: IdeMotion.curveDefault,
+      switchOutCurve: IdeMotion.curveDefault,
+      layoutBuilder: (currentChild, previousChildren) =>
+          currentChild ?? const SizedBox.shrink(),
+      child: showCancel
+          ? _ComposerActionButton(
+              key: const ValueKey('agent-cancel-button-state'),
+              tooltip: 'Cancel',
+              backgroundColor: colors.border.withValues(alpha: 0.36),
+              foregroundColor: colors.textSecondary,
+              buttonKey: const ValueKey('agent-cancel-button'),
+              icon: const Icon(Icons.stop_rounded, size: 22),
+              onPressed: onCancel,
+            )
+          : showSend
+          ? _ComposerActionButton(
+              key: const ValueKey('agent-send-button-state'),
+              tooltip: 'Send',
+              // 可发送时使用实心 accent，作为界面最强的行动锚点；不可发送时退回弱化中性底。
+              backgroundColor: canSubmit
+                  ? colors.accent
+                  : colors.border.withValues(alpha: 0.2),
+              foregroundColor: canSubmit
+                  ? Colors.white
+                  : colors.textSecondary.withValues(alpha: 0.72),
+              filled: canSubmit,
+              buttonKey: const ValueKey('agent-send-button'),
+              icon: const Icon(Icons.arrow_upward_rounded, size: 22),
+              onPressed: canSubmit ? onSend : null,
+            )
+          : const SizedBox(
+              key: ValueKey('agent-send-unavailable-placeholder'),
+              width: 40,
+              height: 40,
+            ),
     );
   }
 

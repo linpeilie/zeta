@@ -313,8 +313,8 @@ class PanelCard extends StatelessWidget {
       context,
       baseColor: color ?? theme.colorScheme.card,
     );
-    final defaultBoxShadow =
-        boxShadow ?? IdeEffects.panelShadow(theme.brightness);
+    // 同一平面的常规面板只靠表面色与边界建立分组；投影仅由浮层显式传入。
+    final defaultBoxShadow = boxShadow ?? const <BoxShadow>[];
     return Container(
       clipBehavior: clipBehavior,
       decoration: BoxDecoration(

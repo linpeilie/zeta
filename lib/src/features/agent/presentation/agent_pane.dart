@@ -65,6 +65,7 @@ class _AgentPaneState extends State<AgentPane> {
   );
 
   final TextEditingController _inputController = TextEditingController();
+  final FocusNode _composerFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
   final ValueNotifier<bool> _canSendNotifier = ValueNotifier<bool>(false);
   final List<String> _draftImagePaths = <String>[];
@@ -108,6 +109,7 @@ class _AgentPaneState extends State<AgentPane> {
     _inputController.removeListener(_handleInputChanged);
     _scrollController.removeListener(_handleScrollChanged);
     _inputController.dispose();
+    _composerFocusNode.dispose();
     _scrollController.dispose();
     _canSendNotifier.dispose();
     super.dispose();
@@ -171,6 +173,7 @@ class _AgentPaneState extends State<AgentPane> {
                 _AgentComposerSection(
                   viewModel: widget.viewModel,
                   inputController: _inputController,
+                  composerFocusNode: _composerFocusNode,
                   canSendListenable: _canSendNotifier,
                   draftImagePaths: List<String>.unmodifiable(_draftImagePaths),
                   onAttachImages: _pickImages,

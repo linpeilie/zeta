@@ -60,6 +60,9 @@ class AgentConversationTimelineStore {
   String? _pendingTurnGroupId;
   int _visibleHistoryStartIndex = 0;
 
+  /// 当前会话的累计 token 用量（直接来自 Codex `total` breakdown）。
+  AgentTokenUsage? _threadTokenUsage;
+
   List<AgentConversationMessage> get messages =>
       List<AgentConversationMessage>.unmodifiable(_messages);
 
@@ -117,7 +120,7 @@ class AgentConversationTimelineStore {
 
   String? get pendingTurnGroupId => _pendingTurnGroupId;
 
-  /// 当前 live turn 的 token 用量，用于标题栏的回合级展示。
+  /// 当前 live turn 的 token 用量（相对上一 turn 的增量）。
   AgentTokenUsage? get currentTurnTokenUsage {
     final runningTurnId = selectedRunningTurnId;
     if (runningTurnId == null) {
@@ -126,53 +129,13 @@ class AgentConversationTimelineStore {
     return _turnGroups[runningTurnId]?.tokenUsage;
   }
 
-  /// 当前 thread 下所有 turn 的累计 token 用量，用于标题栏右侧展示总成本。
-  AgentTokenUsage? get currentThreadTokenUsage {
-    int? inputTokens;
-    int? cachedInputTokens;
-    int? outputTokens;
-    int? totalTokens;
-    int? modelContextWindow;
-
-    for (final turn in _turnGroups.values) {
-      if (turn.isStandby) {
-        continue;
-      }
-      final usage = turn.tokenUsage;
-      if (usage == null) {
-        continue;
-      }
-      inputTokens = _sumOptionalInt(inputTokens, usage.inputTokens);
-      cachedInputTokens = _sumOptionalInt(
-        cachedInputTokens,
-        usage.cachedInputTokens,
-      );
-      outputTokens = _sumOptionalInt(outputTokens, usage.outputTokens);
-      totalTokens = _sumOptionalInt(totalTokens, usage.totalTokens);
-      // 上下文窗口取最近非空值（各 turn 通常一致）。
-      modelContextWindow = usage.modelContextWindow ?? modelContextWindow;
-    }
-
-    if (inputTokens == null &&
-        cachedInputTokens == null &&
-        outputTokens == null &&
-        totalTokens == null) {
-      return null;
-    }
-
-    return AgentTokenUsage(
-      inputTokens: inputTokens,
-      cachedInputTokens: cachedInputTokens,
-      outputTokens: outputTokens,
-      totalTokens: totalTokens,
-      modelContextWindow: modelContextWindow,
-    );
-  }
+  /// 当前 thread 的会话累计 token 用量，直接取自最新上报，不再对各 turn 求和。
+  AgentTokenUsage? get currentThreadTokenUsage => _threadTokenUsage;
 
   /// 当前 thread 最近一次请求的 token 用量。
   ///
   /// 优先使用最新 turn 上报的 `last_*` breakdown；若 provider 没有拆分
-  /// `last_token_usage`，则回退到该 turn 的普通 token breakdown。
+  /// `last_token_usage`，则回退到该 turn 的增量 breakdown。
   AgentTokenUsage? get currentThreadLastTokenUsage {
     final usage = _latestAvailableTurnTokenUsage();
     if (usage == null) {
@@ -183,7 +146,8 @@ class AgentConversationTimelineStore {
       cachedInputTokens: usage.lastCachedInputTokens ?? usage.cachedInputTokens,
       outputTokens: usage.lastOutputTokens ?? usage.outputTokens,
       totalTokens: usage.lastTotalTokens ?? usage.totalTokens,
-      modelContextWindow: usage.modelContextWindow,
+      modelContextWindow:
+          usage.modelContextWindow ?? _threadTokenUsage?.modelContextWindow,
     );
     if (normalized.inputTokens == null &&
         normalized.cachedInputTokens == null &&
@@ -332,6 +296,7 @@ class AgentConversationTimelineStore {
     currentTurnGroupId = null;
     _pendingTurnGroupId = null;
     _visibleHistoryStartIndex = 0;
+    _threadTokenUsage = null;
   }
 
   /// 清空当前对话，并恢复到仅包含 welcome 消息的初始待机态。
@@ -359,10 +324,21 @@ class AgentConversationTimelineStore {
       return;
     }
 
+    // 历史 JSONL 里每个 turn 的 tokenUsage.total 是会话累计；
+    // 注册时转成 turn 增量，并保留最新累计作为会话总量。
+    AgentTokenUsage? previousCumulative;
     String? runningTurnId;
     for (final turn in history.turns) {
       final isRunningTurn = turn.status == AgentHistoryTurnStatus.running;
-      _registerHistoryTurn(turn, asLive: isRunningTurn);
+      final cumulative = turn.tokenUsage;
+      final turnDelta = cumulative?.hasCumulativeBreakdown == true
+          ? cumulative!.deltaFrom(previousCumulative)
+          : cumulative;
+      if (cumulative?.hasCumulativeBreakdown == true) {
+        previousCumulative = cumulative;
+        _threadTokenUsage = cumulative;
+      }
+      _registerHistoryTurn(turn, asLive: isRunningTurn, tokenUsage: turnDelta);
       currentTurnGroupId = turn.id;
       if (isRunningTurn) {
         runningTurnId = turn.id;
@@ -949,9 +925,11 @@ class AgentConversationTimelineStore {
     currentTurnGroupId = null;
   }
 
-  /// 用 provider 上报的 token 用量更新对应回合分组的元数据。
+  /// 用 provider 上报的 token 用量更新会话总量与对应回合增量。
   ///
-  /// 优先按事件中的 turnId 定位分组；缺失时回退到当前运行回合。
+  /// Codex `total` 是整个会话累计：直接写入 [_threadTokenUsage]；
+  /// turn 上保存相对上一 turn 累计的差值。优先按事件中的 turnId 定位分组；
+  /// 缺失时回退到当前运行回合。
   void updateTurnTokenUsage(AgentTokenUsageEvent event) {
     final pendingId = _pendingTurnGroupId;
     if (event.turnId != null &&
@@ -970,12 +948,15 @@ class AgentConversationTimelineStore {
       isStandby: false,
       isHistorical: false,
     );
+    final previousCumulative = _previousTurnCumulativeUsage(turnId);
+    final turnDelta = event.tokenUsage.deltaFrom(previousCumulative);
+    _threadTokenUsage = event.tokenUsage;
     turnState.updateMetadata(
       status: turnState.status,
       startedAt: turnState.startedAt,
       completedAt: turnState.completedAt,
       duration: turnState.duration,
-      tokenUsage: event.tokenUsage,
+      tokenUsage: turnDelta,
     );
   }
 
@@ -1049,7 +1030,11 @@ class AgentConversationTimelineStore {
     }
   }
 
-  void _registerHistoryTurn(AgentHistoryTurn turn, {required bool asLive}) {
+  void _registerHistoryTurn(
+    AgentHistoryTurn turn, {
+    required bool asLive,
+    AgentTokenUsage? tokenUsage,
+  }) {
     _turnStateFor(
       turn.id,
       isStandby: false,
@@ -1059,8 +1044,30 @@ class AgentConversationTimelineStore {
       startedAt: turn.startedAt,
       completedAt: turn.completedAt,
       duration: turn.duration,
-      tokenUsage: turn.tokenUsage,
+      tokenUsage: tokenUsage ?? turn.tokenUsage,
     );
+  }
+
+  /// 计算 [turnId] 之前所有 turn 的累计用量，作为本 turn 差分的基线。
+  AgentTokenUsage? _previousTurnCumulativeUsage(String turnId) {
+    AgentTokenUsage? cumulative;
+    for (final orderedTurnId in _orderedTurnIds()) {
+      if (orderedTurnId == turnId) {
+        break;
+      }
+      final usage = _turnGroups[orderedTurnId]?.tokenUsage;
+      if (usage == null || !usage.hasCumulativeBreakdown) {
+        continue;
+      }
+      cumulative = cumulative == null ? usage : cumulative.addCumulative(usage);
+    }
+    return cumulative;
+  }
+
+  /// 历史 turn 在前、live turn 在后的稳定顺序。
+  Iterable<String> _orderedTurnIds() sync* {
+    yield* _historicalTurnOrder;
+    yield* _liveTurnOrder;
   }
 
   AgentConversationTurnState _turnStateFor(
@@ -1167,13 +1174,6 @@ class AgentConversationTimelineStore {
     }
     return null;
   }
-}
-
-int? _sumOptionalInt(int? left, int? right) {
-  if (right == null) {
-    return left;
-  }
-  return (left ?? 0) + right;
 }
 
 AgentConversationMessageKind _messageKindFromRaw({

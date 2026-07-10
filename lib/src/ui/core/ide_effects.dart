@@ -35,19 +35,6 @@ abstract final class IdeRadius {
 /// 阴影一律按亮度取预设,业务代码不允许手写 `BoxShadow`;
 /// 需要新档位时先在这里补充。
 abstract final class IdeEffects {
-  /// 面板卡片常驻投影(极轻,仅用于和 frame 区分层级)。
-  static List<BoxShadow> panelShadow(Brightness brightness) {
-    return [
-      BoxShadow(
-        color: brightness == Brightness.dark
-            ? const Color(0x33000000)
-            : const Color(0x0A101114),
-        blurRadius: 10,
-        offset: const Offset(0, 3),
-      ),
-    ];
-  }
-
   /// 弹出层(菜单 / popover / 窄窗浮层面板)投影。
   static List<BoxShadow> overlayShadow(Brightness brightness) {
     return [
@@ -61,38 +48,18 @@ abstract final class IdeEffects {
     ];
   }
 
-  /// Composer 输入面板静息投影。
-  static List<BoxShadow> composerRestShadow(Brightness brightness) {
-    return [
-      BoxShadow(
-        color: brightness == Brightness.dark
-            ? const Color(0x3D000000)
-            : const Color(0x14101114),
-        blurRadius: 10,
-        offset: const Offset(0, 3),
-      ),
-    ];
-  }
-
-  /// Composer 聚焦投影:强调色光晕 + 加深的下坠影。
-  static List<BoxShadow> composerFocusShadow(
+  /// 键盘焦点环：无方向、无高度语义，不能与浮层阴影混用。
+  static List<BoxShadow> focusRing(
     Brightness brightness, {
     required Color accent,
   }) {
     return [
       BoxShadow(
         color: accent.withValues(
-          alpha: brightness == Brightness.dark ? 0.10 : 0.05,
+          alpha: brightness == Brightness.dark ? 0.54 : 0.36,
         ),
-        blurRadius: 18,
-        spreadRadius: 1,
-      ),
-      BoxShadow(
-        color: brightness == Brightness.dark
-            ? const Color(0x4D000000)
-            : const Color(0x1F101114),
-        blurRadius: 14,
-        offset: const Offset(0, 5),
+        blurRadius: 0,
+        spreadRadius: 2,
       ),
     ];
   }

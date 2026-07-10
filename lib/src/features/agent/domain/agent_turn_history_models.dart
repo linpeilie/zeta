@@ -84,12 +84,17 @@ class AgentHistoryTurn {
   final Map<String, Object?> raw;
 }
 
-/// 一个 turn 的 token 消耗统计。
+/// Token 消耗统计。
 ///
 /// 实时来源是 Codex `thread/tokenUsage/updated` 通知（camelCase 字段），
 /// 历史来源是 JSONL `event_msg.payload.type == 'token_count'`（snake_case
-/// 字段）。UI 据此在回合分隔线上展示 token 成本。
+/// 字段）。
 ///
+/// Codex 上报的 `total` breakdown 是**整个会话的累计用量**。时间线层会：
+/// - 将会话累计直接保存在 thread 级状态；
+/// - 将单个 turn 的用量存为相对上一 turn 累计的增量（见 [deltaFrom]）。
+///
+/// `last*` 字段始终表示最近一次请求的用量，不做差分。
 /// Codex 的 `reasoning_output_tokens` 在解析时并入 [outputTokens]，
 /// 模型层不再单独暴露推理 token 字段。
 class AgentTokenUsage {
@@ -113,6 +118,63 @@ class AgentTokenUsage {
     return (outputTokens ?? 0) + (reasoningOutputTokens ?? 0);
   }
 
+  /// 相对 [baseline] 累计用量的本 turn 增量。
+  ///
+  /// [baseline] 为空时视为全 0（首个 turn）。`last*` 与上下文窗口保留当前值。
+  AgentTokenUsage deltaFrom(AgentTokenUsage? baseline) {
+    return AgentTokenUsage(
+      inputTokens: _nonNegativeDelta(inputTokens, baseline?.inputTokens),
+      cachedInputTokens: _nonNegativeDelta(
+        cachedInputTokens,
+        baseline?.cachedInputTokens,
+      ),
+      outputTokens: _nonNegativeDelta(outputTokens, baseline?.outputTokens),
+      totalTokens: _nonNegativeDelta(totalTokens, baseline?.totalTokens),
+      lastInputTokens: lastInputTokens,
+      lastCachedInputTokens: lastCachedInputTokens,
+      lastOutputTokens: lastOutputTokens,
+      lastTotalTokens: lastTotalTokens,
+      modelContextWindow: modelContextWindow,
+    );
+  }
+
+  /// 累加另一份用量的累计 breakdown（忽略 `last*`）。
+  AgentTokenUsage addCumulative(AgentTokenUsage other) {
+    return AgentTokenUsage(
+      inputTokens: _sumOptional(inputTokens, other.inputTokens),
+      cachedInputTokens: _sumOptional(
+        cachedInputTokens,
+        other.cachedInputTokens,
+      ),
+      outputTokens: _sumOptional(outputTokens, other.outputTokens),
+      totalTokens: _sumOptional(totalTokens, other.totalTokens),
+      modelContextWindow: other.modelContextWindow ?? modelContextWindow,
+    );
+  }
+
+  /// 是否包含任何累计 breakdown 数值。
+  bool get hasCumulativeBreakdown {
+    return inputTokens != null ||
+        cachedInputTokens != null ||
+        outputTokens != null ||
+        totalTokens != null;
+  }
+
+  static int? _nonNegativeDelta(int? current, int? baseline) {
+    if (current == null) {
+      return null;
+    }
+    final delta = current - (baseline ?? 0);
+    return delta < 0 ? 0 : delta;
+  }
+
+  static int? _sumOptional(int? left, int? right) {
+    if (left == null && right == null) {
+      return null;
+    }
+    return (left ?? 0) + (right ?? 0);
+  }
+
   static const List<String> _displaySuffixes = <String>[
     'k',
     'm',
@@ -124,28 +186,28 @@ class AgentTokenUsage {
     'y',
   ];
 
-  /// 累计输入 token 数（含缓存命中前的全部输入）。
+  /// 输入 token 数（会话累计或 turn 增量，取决于存放位置）。
   final int? inputTokens;
 
-  /// 累计输入 token 数的展示值。
+  /// 输入 token 数的展示值。
   String? get displayInputTokens => _displayTokenCount(inputTokens);
 
-  /// 累计缓存命中的输入 token 数。
+  /// 缓存命中的输入 token 数。
   final int? cachedInputTokens;
 
-  /// 累计缓存命中的输入 token 数展示值。
+  /// 缓存命中的输入 token 数展示值。
   String? get displayCachedInputTokens => _displayTokenCount(cachedInputTokens);
 
-  /// 累计输出 token 数（已含 reasoning_output_tokens）。
+  /// 输出 token 数（已含 reasoning_output_tokens）。
   final int? outputTokens;
 
-  /// 累计输出 token 数展示值。
+  /// 输出 token 数展示值。
   String? get displayOutputTokens => _displayTokenCount(outputTokens);
 
-  /// 累计总 token 数。
+  /// 总 token 数。
   final int? totalTokens;
 
-  /// 累计总 token 数展示值。
+  /// 总 token 数展示值。
   String? get displayTotalTokens => _displayTokenCount(totalTokens);
 
   /// 最近一次请求的输入 token 数。

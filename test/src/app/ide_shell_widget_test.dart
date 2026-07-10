@@ -179,6 +179,29 @@ void main() {
     expect(find.byKey(const ValueKey('right-activity-panel')), findsNothing);
     expect(find.byKey(const ValueKey('files-panel-card')), findsNothing);
   });
+
+  testWidgets('left panels use an overlay when the window is narrow', (
+    tester,
+  ) async {
+    await _pumpIde(tester, size: const Size(640, 900));
+
+    expect(find.byKey(const ValueKey('left-activity-panel')), findsNothing);
+    expect(find.byKey(const ValueKey('left-activity-overlay')), findsNothing);
+    expect(find.byKey(const ValueKey('projects-panel-card')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('left-projects-action')));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('left-activity-overlay')), findsOneWidget);
+    expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('left-overlay-scrim')));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('left-activity-overlay')), findsNothing);
+    expect(find.byKey(const ValueKey('agent-pane-host')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Future<void> _pumpIde(

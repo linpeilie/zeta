@@ -61,6 +61,7 @@ class _IdeHomeState extends State<IdeHome> {
   static const double _minPanelWidth = 200;
   static const double _maxPanelWidth = 400;
   static const double _minMainEditorWidth = 320;
+  static const double _leftOverlayBreakpoint = 720;
   static const double _rightOverlayBreakpoint = 1000;
   static const double _initialPanelRatio = 0.5;
   static const double _minPanelRatio = 0.1;
@@ -72,6 +73,7 @@ class _IdeHomeState extends State<IdeHome> {
   bool _leftBottomVisible = false;
   bool _rightTopVisible = false;
   bool _rightBottomVisible = false;
+  bool _leftOverlayOpen = false;
   bool _rightOverlayOpen = false;
   double _leftPanelWidth = _initialPanelWidth;
   double _rightPanelWidth = _initialPanelWidth;
@@ -184,13 +186,15 @@ class _IdeHomeState extends State<IdeHome> {
     final colors = IdeColors.of(context);
     final leftPanelVisible = _leftTopVisible || _leftBottomVisible;
     final rightPanelVisible = _rightTopVisible || _rightBottomVisible;
+    final useLeftOverlay = maxWidth < _leftOverlayBreakpoint;
     final rightOverlayAvailableWidth =
         maxWidth - _activityRailWidth - IdeSpacing.space8;
     final useRightOverlay =
         rightOverlayAvailableWidth < _rightOverlayBreakpoint;
+    final leftPanelInline = leftPanelVisible && !useLeftOverlay;
     final panelWidths = _effectivePanelWidths(
       maxWidth: maxWidth,
-      leftPanelVisible: leftPanelVisible,
+      leftPanelVisible: leftPanelInline,
       rightPanelVisible: !useRightOverlay && rightPanelVisible,
     );
 
@@ -207,11 +211,10 @@ class _IdeHomeState extends State<IdeHome> {
                 icon: Icons.account_tree_rounded,
                 tooltip: 'Projects',
                 semanticLabel: 'Toggle projects panel',
-                active: _leftTopVisible,
+                active:
+                    _leftTopVisible && (!useLeftOverlay || _leftOverlayOpen),
                 onPressed: () {
-                  setState(() {
-                    _leftTopVisible = !_leftTopVisible;
-                  });
+                  _toggleLeftPanel(isTop: true, useOverlay: useLeftOverlay);
                 },
               ),
             ],
@@ -221,39 +224,21 @@ class _IdeHomeState extends State<IdeHome> {
                 icon: Icons.data_object_rounded,
                 tooltip: 'Context',
                 semanticLabel: 'Toggle context panel',
-                active: _leftBottomVisible,
+                active:
+                    _leftBottomVisible && (!useLeftOverlay || _leftOverlayOpen),
                 onPressed: () {
-                  setState(() {
-                    _leftBottomVisible = !_leftBottomVisible;
-                  });
+                  _toggleLeftPanel(isTop: false, useOverlay: useLeftOverlay);
                 },
               ),
             ],
           ),
         ),
         const SizedBox(width: IdeSpacing.space8),
-        if (leftPanelVisible) ...[
+        if (leftPanelInline) ...[
           SizedBox(
             key: const ValueKey('left-activity-panel'),
             width: panelWidths.left,
-            child: _ResizableColumn(
-              topVisible: _leftTopVisible,
-              bottomVisible: _leftBottomVisible,
-              topRatio: _leftTopRatio,
-              onTopRatioChanged: (ratio) {
-                setState(() {
-                  _leftTopRatio = ratio.clamp(_minPanelRatio, _maxPanelRatio);
-                });
-              },
-              heightHandleKey: const ValueKey('left-height-resize-handle'),
-              top: _buildProjectsPanel(),
-              bottom: _buildPlaceholderPanel(
-                key: const ValueKey('context-panel-card'),
-                title: 'Context',
-                icon: Icons.hub_rounded,
-                message: 'No file context',
-              ),
-            ),
+            child: _buildLeftPanel(),
           ),
           IdeResizeHandle(
             key: const ValueKey('left-width-resize-handle'),
@@ -307,7 +292,8 @@ class _IdeHomeState extends State<IdeHome> {
                 icon: Icons.folder_rounded,
                 tooltip: 'Files',
                 semanticLabel: 'Toggle files panel',
-                active: _rightTopVisible,
+                active:
+                    _rightTopVisible && (!useRightOverlay || _rightOverlayOpen),
                 onPressed: () {
                   _toggleRightPanel(isTop: true, useOverlay: useRightOverlay);
                 },
@@ -319,7 +305,9 @@ class _IdeHomeState extends State<IdeHome> {
                 icon: Icons.build_circle_rounded,
                 tooltip: 'Tools',
                 semanticLabel: 'Toggle tools panel',
-                active: _rightBottomVisible,
+                active:
+                    _rightBottomVisible &&
+                    (!useRightOverlay || _rightOverlayOpen),
                 onPressed: () {
                   _toggleRightPanel(isTop: false, useOverlay: useRightOverlay);
                 },
@@ -330,39 +318,78 @@ class _IdeHomeState extends State<IdeHome> {
       ],
     );
 
-    if (!useRightOverlay || !_rightOverlayOpen || !rightPanelVisible) {
+    final showLeftOverlay =
+        useLeftOverlay && _leftOverlayOpen && leftPanelVisible;
+    final showRightOverlay =
+        useRightOverlay && _rightOverlayOpen && rightPanelVisible;
+    if (!showLeftOverlay && !showRightOverlay) {
       return content;
     }
 
-    final overlayWidth = _rightPanelWidth.clamp(_minPanelWidth, _maxPanelWidth);
+    final leftOverlayWidth = _leftPanelWidth.clamp(
+      _minPanelWidth,
+      _maxPanelWidth,
+    );
+    final rightOverlayWidth = _rightPanelWidth.clamp(
+      _minPanelWidth,
+      _maxPanelWidth,
+    );
+    final leftInset = _activityRailWidth + IdeSpacing.space8;
     final rightInset = _activityRailWidth + IdeSpacing.space8;
     final brightness = sf.Theme.of(context).brightness;
     return Stack(
       children: [
         content,
-        Positioned.fill(
-          right: rightInset,
-          child: GestureDetector(
-            key: const ValueKey('right-overlay-scrim'),
-            behavior: HitTestBehavior.translucent,
-            onTap: _closeRightOverlay,
-            child: ColoredBox(color: IdeEffects.scrim(brightness)),
-          ),
-        ),
-        Positioned(
-          key: const ValueKey('right-activity-overlay'),
-          top: 0,
-          right: rightInset,
-          bottom: 0,
-          width: overlayWidth,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: IdeRadius.allMedium,
-              boxShadow: IdeEffects.overlayShadow(brightness),
+        if (showLeftOverlay) ...[
+          Positioned.fill(
+            left: leftInset,
+            child: GestureDetector(
+              key: const ValueKey('left-overlay-scrim'),
+              behavior: HitTestBehavior.translucent,
+              onTap: _closeLeftOverlay,
+              child: ColoredBox(color: IdeEffects.scrim(brightness)),
             ),
-            child: _buildRightPanel(),
           ),
-        ),
+          Positioned(
+            key: const ValueKey('left-activity-overlay'),
+            top: 0,
+            left: leftInset,
+            bottom: 0,
+            width: leftOverlayWidth,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: IdeRadius.allMedium,
+                boxShadow: IdeEffects.overlayShadow(brightness),
+              ),
+              child: _buildLeftPanel(),
+            ),
+          ),
+        ],
+        if (showRightOverlay) ...[
+          Positioned.fill(
+            right: rightInset,
+            child: GestureDetector(
+              key: const ValueKey('right-overlay-scrim'),
+              behavior: HitTestBehavior.translucent,
+              onTap: _closeRightOverlay,
+              child: ColoredBox(color: IdeEffects.scrim(brightness)),
+            ),
+          ),
+          Positioned(
+            key: const ValueKey('right-activity-overlay'),
+            top: 0,
+            right: rightInset,
+            bottom: 0,
+            width: rightOverlayWidth,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: IdeRadius.allMedium,
+                boxShadow: IdeEffects.overlayShadow(brightness),
+              ),
+              child: _buildRightPanel(),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -481,6 +508,27 @@ class _IdeHomeState extends State<IdeHome> {
     );
   }
 
+  Widget _buildLeftPanel() {
+    return _ResizableColumn(
+      topVisible: _leftTopVisible,
+      bottomVisible: _leftBottomVisible,
+      topRatio: _leftTopRatio,
+      onTopRatioChanged: (ratio) {
+        setState(() {
+          _leftTopRatio = ratio.clamp(_minPanelRatio, _maxPanelRatio);
+        });
+      },
+      heightHandleKey: const ValueKey('left-height-resize-handle'),
+      top: _buildProjectsPanel(),
+      bottom: _buildPlaceholderPanel(
+        key: const ValueKey('context-panel-card'),
+        title: 'Context',
+        icon: Icons.hub_rounded,
+        message: 'No file context',
+      ),
+    );
+  }
+
   Widget _buildFilesPanel() {
     return PanelCard(
       key: const ValueKey('files-panel-card'),
@@ -540,6 +588,59 @@ class _IdeHomeState extends State<IdeHome> {
     unawaited(_shellController.openProject());
   }
 
+  void _toggleLeftPanel({required bool isTop, required bool useOverlay}) {
+    setState(() {
+      if (!useOverlay) {
+        if (isTop) {
+          _leftTopVisible = !_leftTopVisible;
+        } else {
+          _leftBottomVisible = !_leftBottomVisible;
+        }
+        return;
+      }
+
+      final currentlyVisible = isTop ? _leftTopVisible : _leftBottomVisible;
+      final otherVisible = isTop ? _leftBottomVisible : _leftTopVisible;
+      if (_leftOverlayOpen && currentlyVisible && !otherVisible) {
+        if (isTop) {
+          _leftTopVisible = false;
+        } else {
+          _leftBottomVisible = false;
+        }
+        _leftOverlayOpen = false;
+        return;
+      }
+
+      if (_leftOverlayOpen && currentlyVisible) {
+        if (isTop) {
+          _leftTopVisible = false;
+        } else {
+          _leftBottomVisible = false;
+        }
+        _leftOverlayOpen = _leftTopVisible || _leftBottomVisible;
+        return;
+      }
+
+      if (isTop) {
+        _leftTopVisible = true;
+      } else {
+        _leftBottomVisible = true;
+      }
+      _leftOverlayOpen = true;
+      // 小窗口一次只打开一个覆盖层，避免两个半透明遮罩叠加。
+      _rightOverlayOpen = false;
+    });
+  }
+
+  void _closeLeftOverlay() {
+    if (!_leftOverlayOpen) {
+      return;
+    }
+    setState(() {
+      _leftOverlayOpen = false;
+    });
+  }
+
   void _toggleRightPanel({required bool isTop, required bool useOverlay}) {
     setState(() {
       if (!useOverlay) {
@@ -579,6 +680,8 @@ class _IdeHomeState extends State<IdeHome> {
         _rightBottomVisible = true;
       }
       _rightOverlayOpen = true;
+      // 小窗口一次只打开一个覆盖层，避免两个半透明遮罩叠加。
+      _leftOverlayOpen = false;
     });
   }
 

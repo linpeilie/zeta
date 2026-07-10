@@ -50,7 +50,7 @@ void main() {
       ]);
     });
 
-    test('aggregates token usage across history and live turns', () {
+    test('stores session total and per-turn token deltas', () {
       final store = AgentConversationTimelineStore();
       addTearDown(store.dispose);
 
@@ -67,6 +67,7 @@ void main() {
                   text: 'Existing request',
                 ),
               ],
+              // 历史里的 total 是会话累计；首个 turn 的增量等于累计本身。
               tokenUsage: AgentTokenUsage(
                 inputTokens: 2000,
                 cachedInputTokens: 500,
@@ -84,6 +85,10 @@ void main() {
         _thread(),
       );
 
+      expect(store.currentThreadTokenUsage, isNotNull);
+      expect(store.currentThreadTokenUsage!.totalTokens, 2250);
+      expect(store.conversationTurns.single.tokenUsage!.totalTokens, 2250);
+
       store.startPendingLiveTurn();
       store.addConversationMessage(
         const AgentConversationMessage(
@@ -99,11 +104,12 @@ void main() {
         const AgentTokenUsageEvent(
           sessionId: 'thread-1',
           turnId: 'turn-live',
+          // Codex 上报的是整个会话累计，不是本 turn 成本。
           tokenUsage: AgentTokenUsage(
-            inputTokens: 1000,
-            cachedInputTokens: 200,
-            outputTokens: 350,
-            totalTokens: 1300,
+            inputTokens: 3000,
+            cachedInputTokens: 700,
+            outputTokens: 680,
+            totalTokens: 3550,
             lastInputTokens: 920,
             lastCachedInputTokens: 180,
             lastOutputTokens: 320,
@@ -116,6 +122,9 @@ void main() {
 
       expect(store.liveTurnState, isNotNull);
       expect(store.currentTurnTokenUsage, isNotNull);
+      expect(store.currentTurnTokenUsage!.inputTokens, 1000);
+      expect(store.currentTurnTokenUsage!.cachedInputTokens, 200);
+      expect(store.currentTurnTokenUsage!.outputTokens, 350);
       expect(store.currentTurnTokenUsage!.totalTokens, 1300);
       expect(store.currentThreadTokenUsage, isNotNull);
       expect(store.currentThreadTokenUsage!.inputTokens, 3000);
@@ -136,6 +145,63 @@ void main() {
       expect(store.currentTurnTokenUsage, isNull);
       expect(store.currentThreadTokenUsage!.totalTokens, 3550);
       expect(store.currentThreadLastTokenUsage!.totalTokens, 1240);
+    });
+
+    test('converts cumulative history token usage into per-turn deltas', () {
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+
+      store.applyHistorySnapshot(
+        const AgentThreadHistorySnapshot(
+          threadId: 'thread-1',
+          turns: <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-a',
+              entries: <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'user-a',
+                  role: AgentMessageRole.user,
+                  text: 'First',
+                ),
+              ],
+              tokenUsage: AgentTokenUsage(
+                inputTokens: 2000,
+                cachedInputTokens: 500,
+                outputTokens: 330,
+                totalTokens: 2250,
+              ),
+            ),
+            AgentHistoryTurn(
+              id: 'turn-b',
+              entries: <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'user-b',
+                  role: AgentMessageRole.user,
+                  text: 'Second',
+                ),
+              ],
+              tokenUsage: AgentTokenUsage(
+                inputTokens: 3000,
+                cachedInputTokens: 700,
+                outputTokens: 680,
+                totalTokens: 3550,
+              ),
+            ),
+          ],
+        ),
+        _thread(),
+      );
+
+      final turns = store.conversationTurns;
+      expect(turns, hasLength(2));
+      expect(turns[0].tokenUsage!.totalTokens, 2250);
+      expect(turns[0].tokenUsage!.inputTokens, 2000);
+      expect(turns[1].tokenUsage!.totalTokens, 1300);
+      expect(turns[1].tokenUsage!.inputTokens, 1000);
+      expect(turns[1].tokenUsage!.cachedInputTokens, 200);
+      expect(turns[1].tokenUsage!.outputTokens, 350);
+      expect(store.currentThreadTokenUsage!.totalTokens, 3550);
+      expect(store.currentThreadTokenUsage!.inputTokens, 3000);
     });
 
     test('removePermissionRequest drops pending card and timeline entry', () {

@@ -178,6 +178,7 @@ class _AgentComposerSection extends StatelessWidget {
   const _AgentComposerSection({
     required this.viewModel,
     required this.inputController,
+    required this.composerFocusNode,
     required this.canSendListenable,
     required this.draftImagePaths,
     required this.onAttachImages,
@@ -189,6 +190,7 @@ class _AgentComposerSection extends StatelessWidget {
 
   final AgentConversationViewModel viewModel;
   final TextEditingController inputController;
+  final FocusNode composerFocusNode;
   final ValueListenable<bool> canSendListenable;
   final List<String> draftImagePaths;
   final VoidCallback onAttachImages;
@@ -210,6 +212,7 @@ class _AgentComposerSection extends StatelessWidget {
               builder: (context, canSend, _) {
                 return _AgentComposer(
                   controller: inputController,
+                  focusNode: composerFocusNode,
                   canSubmit: canSend && viewModel.canSubmitMessage,
                   isTurnRunning: viewModel.isTurnRunning,
                   threadOpenPhase: viewModel.threadOpenPhase,
