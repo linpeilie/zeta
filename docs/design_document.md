@@ -12,7 +12,7 @@ Zeta 的设计目标是让 Flutter UI、Agent provider、会话持久化和本�
 
 - app：应用根组件、窗口启动、应用常量。
 - core：日志等跨层基础能力。
-- features/agent：Agent provider 抽象、Codex app-server、JSON-RPC stdio、历史解析、事件映射、对话 view model 和 Agent pane。
+- features/agent：Agent provider 抽象、Codex app-server、Grok ACP stdio、JSON-RPC stdio、历史解析、事件映射、对话 view model 和 Agent pane。
 - features/agent_management：Agent CLI 检测、版本与账号诊断、模型读取、配置安全编辑、
   CLI 磁盘日志读取和管理页面。
 - features/ide_session：会话状态、版本化持久化、恢复计划和恢复协调。
@@ -50,9 +50,9 @@ AgentConversationViewModel
   -> AgentConversationUiSignals
   -> AgentConversationModelSelectionController
   -> AgentProvider
-    -> CodexAppServerAgentProvider
+    -> CodexAppServerAgentProvider | GrokAcpAgentProvider
       -> JsonRpcPeer
-        -> codex app-server（默认 stdio）
+        -> codex app-server 或 grok agent stdio
 
 AgentManagementController
   -> CodexAgentManagementRepository

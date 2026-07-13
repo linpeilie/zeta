@@ -2,31 +2,60 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'package:zeta/src/features/agent/data/codex_cli_locator.dart'
+    show looksLikeCodexCliPath;
+import 'package:zeta/src/features/agent/data/grok_cli_locator.dart'
+    show looksLikeGrokCliPath;
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart';
+import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart'
+    show isNewerVersion;
+import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 
-/// Agent 管理页面的应用层协调器。
+/// Agent 管理页面的应用层协调器（支持多 Agent CLI）。
 class AgentManagementController extends ChangeNotifier {
   AgentManagementController({
-    required this.repository,
+    required Map<String, AgentCliManagementRepository> repositories,
     required this.providerController,
     this.runtimeStateProvider,
     this.runtimeListenable,
-  }) : _agent = ManagedAgent.codex(
-         enabled: providerController.activeProviderConfig.enabled,
-       ) {
+  }) : _repositories = Map<String, AgentCliManagementRepository>.unmodifiable(
+         repositories,
+       ),
+       _selectedAgentId = repositories.keys.isEmpty
+           ? defaultAgentProviderId
+           : repositories.keys.first,
+       _agents = <String, ManagedAgent>{
+         for (final entry in repositories.entries)
+           entry.key: ManagedAgent.forDefinition(
+             definition:
+                 AgentDefinition.byId(entry.key) ??
+                 AgentDefinition(
+                   id: entry.key,
+                   displayName: entry.key,
+                   vendor: 'Unknown',
+                   commandName: entry.key,
+                   protocol: 'unknown',
+                   transport: 'unknown',
+                   configFormat: 'unknown',
+                   defaultConfigRelativePath: '',
+                   npmPackage: '',
+                 ),
+             enabled: providerController.isProviderEnabled(entry.key),
+           ),
+       } {
     providerController.addListener(_handleProviderSettingsChanged);
     runtimeListenable?.addListener(refreshRuntimeState);
   }
 
-  final CodexAgentManagementRepository repository;
+  final Map<String, AgentCliManagementRepository> _repositories;
   final ActiveAgentProviderController providerController;
   final AgentRuntimeState Function()? runtimeStateProvider;
   final Listenable? runtimeListenable;
 
-  ManagedAgent _agent;
+  final Map<String, ManagedAgent> _agents;
+  String _selectedAgentId;
   AgentDetectionProgress? _detectionProgress;
   AgentConfigurationDocument? _configuration;
   List<AgentLogEntry> _logs = const <AgentLogEntry>[];
@@ -39,7 +68,41 @@ class AgentManagementController extends ChangeNotifier {
   bool _disposed = false;
   String? _operationError;
 
-  ManagedAgent get agent => _agent;
+  /// 全部受管 Agent 快照（定义顺序优先）。
+  List<ManagedAgent> get agents {
+    final ordered = <ManagedAgent>[];
+    for (final definition in AgentDefinition.all) {
+      final agent = _agents[definition.id];
+      if (agent != null) {
+        ordered.add(agent);
+      }
+    }
+    for (final entry in _agents.entries) {
+      if (!ordered.any((agent) => agent.definition.id == entry.key)) {
+        ordered.add(entry.value);
+      }
+    }
+    return List<ManagedAgent>.unmodifiable(ordered);
+  }
+
+  /// 详情页当前选中的 Agent。
+  ManagedAgent get agent =>
+      _agents[_selectedAgentId] ??
+      ManagedAgent.codex(
+        enabled: providerController.isProviderEnabled(defaultAgentProviderId),
+      );
+
+  String get selectedAgentId => _selectedAgentId;
+
+  /// 当前选中 Agent 的仓库（配置/日志/检测）。
+  AgentCliManagementRepository get repository {
+    final selected = _repositories[_selectedAgentId];
+    if (selected != null) {
+      return selected;
+    }
+    return _repositories.values.first;
+  }
+
   AgentDetectionProgress? get detectionProgress => _detectionProgress;
   AgentConfigurationDocument? get configuration => _configuration;
   List<AgentLogEntry> get logs => List<AgentLogEntry>.unmodifiable(_logs);
@@ -51,6 +114,18 @@ class AgentManagementController extends ChangeNotifier {
   bool get loadingLogs => _loadingLogs;
   String? get operationError => _operationError;
 
+  /// 切换详情页选中的 Agent。
+  void selectAgent(String agentId) {
+    if (!_repositories.containsKey(agentId) || _selectedAgentId == agentId) {
+      return;
+    }
+    _selectedAgentId = agentId;
+    _configuration = null;
+    _logs = const <AgentLogEntry>[];
+    _operationError = null;
+    _notify();
+  }
+
   /// 加载持久化 provider 配置和上一次检测摘要。
   Future<void> initialize({bool autoDetect = false}) async {
     if (_initialized) {
@@ -60,7 +135,14 @@ class AgentManagementController extends ChangeNotifier {
       return;
     }
     await providerController.loadSettings();
-    _restoreCachedAgent(providerController.activeProviderConfig);
+    for (final entry in _repositories.entries) {
+      final config = _configForAgent(entry.key);
+      _agents[entry.key] = _restoreCachedAgent(
+        agentId: entry.key,
+        config: config,
+        repository: entry.value,
+      );
+    }
     _initialized = true;
     _notify();
     if (autoDetect) {
@@ -68,7 +150,7 @@ class AgentManagementController extends ChangeNotifier {
     }
   }
 
-  /// 自动检测 Codex，并逐步更新 UI。
+  /// 自动检测全部已注册 Agent。
   Future<void> detect() async {
     if (_detecting) {
       return;
@@ -78,22 +160,43 @@ class AgentManagementController extends ChangeNotifier {
     _operationError = null;
     _notify();
     try {
-      final config = providerController.activeProviderConfig;
-      final detected = await repository.detect(
-        providerConfig: config,
-        enabled: config.enabled,
-        onProgress: (progress, partial) {
-          _detectionProgress = progress;
-          _agent = partial.copyWith(
-            runtimeState: _runtimeState(partial.enabled, partial.runtimeState),
-          );
-          _notify();
-        },
-      );
-      _agent = detected.copyWith(
-        runtimeState: _runtimeState(detected.enabled, detected.runtimeState),
-      );
-      await _persistDetectionSummary(config, detected);
+      final ids = _repositories.keys.toList(growable: false);
+      var index = 0;
+      for (final id in ids) {
+        index += 1;
+        final repo = _repositories[id]!;
+        final config = _configForAgent(id);
+        final detected = await repo.detect(
+          providerConfig: config,
+          enabled: config.enabled,
+          onProgress: (progress, partial) {
+            // 把单 Agent 进度映射到总进度文案。
+            _detectionProgress = AgentDetectionProgress(
+              completed: progress.completed,
+              total: progress.total,
+              message:
+                  '[$index/${ids.length}] ${partial.definition.displayName}: ${progress.message}',
+            );
+            _agents[id] = partial.copyWith(
+              runtimeState: _runtimeState(
+                id,
+                partial.enabled,
+                partial.runtimeState,
+              ),
+            );
+            _notify();
+          },
+        );
+        _agents[id] = detected.copyWith(
+          runtimeState: _runtimeState(
+            id,
+            detected.enabled,
+            detected.runtimeState,
+          ),
+        );
+        await _persistDetectionSummary(id, config, detected);
+      }
+      _detectionProgress = null;
     } catch (error) {
       _operationError = 'Agent 检测未能完成：$error';
     } finally {
@@ -102,42 +205,46 @@ class AgentManagementController extends ChangeNotifier {
     }
   }
 
-  /// 启用或禁用 Codex；禁用会终止当前 provider 实例。
+  /// 启用或禁用当前选中 Agent。
   Future<void> setEnabled(bool enabled) async {
-    if (_agent.enabled == enabled) {
+    final current = agent;
+    if (current.enabled == enabled) {
       return;
     }
     _operationError = null;
     try {
       await providerController.setProviderEnabled(
-        AgentDefinition.codex.id,
+        current.definition.id,
         enabled,
       );
-      _agent = _agent.copyWith(
+      _agents[current.definition.id] = current.copyWith(
         enabled: enabled,
         runtimeState: enabled
             ? AgentRuntimeState.notRunning
             : AgentRuntimeState.disabled,
       );
     } catch (error) {
-      _operationError = '无法${enabled ? '启用' : '禁用'} Codex：$error';
+      _operationError =
+          '无法${enabled ? '启用' : '禁用'} ${current.definition.displayName}：$error';
     }
     _notify();
   }
 
-  /// 保存用户选择的 CLI 文件，并立即重新检测。
+  /// 保存用户选择的 CLI 文件，并立即重新检测全部。
   Future<void> setExecutablePath(String path) async {
-    final current = providerController.activeProviderConfig;
-    final updated = await repository.providerConfigForPath(
+    final id = _selectedAgentId;
+    final repo = repository;
+    final current = _configForAgent(id);
+    final updated = await repo.providerConfigForPath(
       current: current,
       path: path,
-      timeoutSeconds: _agent.timeoutSeconds,
+      timeoutSeconds: agent.timeoutSeconds,
     );
     await providerController.updateProviderConfig(
       updated,
       restartProvider: true,
     );
-    _agent = _agent.copyWith(executablePath: path);
+    _agents[id] = agent.copyWith(executablePath: path);
     _notify();
     await detect();
   }
@@ -149,21 +256,22 @@ class AgentManagementController extends ChangeNotifier {
       _notify();
       return false;
     }
+    final id = _selectedAgentId;
     final updated = repository.providerConfigWithTimeout(
-      providerController.activeProviderConfig,
+      _configForAgent(id),
       seconds,
     );
     await providerController.updateProviderConfig(
       updated,
       restartProvider: true,
     );
-    _agent = _agent.copyWith(timeoutSeconds: seconds);
+    _agents[id] = agent.copyWith(timeoutSeconds: seconds);
     _operationError = null;
     _notify();
     return true;
   }
 
-  /// 执行 initialize + model/list 的无计费连接测试。
+  /// 执行 initialize + model list 的无计费连接测试。
   Future<AgentConnectionTestResult?> testConnection() async {
     if (_testing) {
       return null;
@@ -171,20 +279,22 @@ class AgentManagementController extends ChangeNotifier {
     _testing = true;
     _operationError = null;
     _notify();
+    final id = _selectedAgentId;
     try {
       final result = await repository.testConnection(
-        providerConfig: providerController.activeProviderConfig,
+        providerConfig: _configForAgent(id),
       );
-      _agent = _agent.copyWith(
+      final sourceLabel = id == grokAgentProviderId
+          ? 'Grok ACP'
+          : 'Codex app-server';
+      _agents[id] = agent.copyWith(
         connectionTest: result.$1,
         models: result.$2,
         modelsUpdatedAt: result.$2.isEmpty
-            ? _agent.modelsUpdatedAt
+            ? agent.modelsUpdatedAt
             : DateTime.now(),
-        modelSource: result.$2.isEmpty
-            ? _agent.modelSource
-            : 'Codex app-server',
-        runtimeState: !_agent.enabled
+        modelSource: result.$2.isEmpty ? agent.modelSource : sourceLabel,
+        runtimeState: !agent.enabled
             ? AgentRuntimeState.disabled
             : result.$1.success
             ? AgentRuntimeState.idle
@@ -203,7 +313,7 @@ class AgentManagementController extends ChangeNotifier {
     }
   }
 
-  /// 加载 Codex config.toml。
+  /// 加载当前选中 Agent 的配置文件。
   Future<AgentConfigurationDocument?> loadConfiguration() async {
     if (_loadingConfiguration) {
       return _configuration;
@@ -246,7 +356,7 @@ class AgentManagementController extends ChangeNotifier {
         overwriteExternalChanges: overwriteExternalChanges,
       );
       _configuration = result.document;
-      _agent = _agent.copyWith(
+      _agents[_selectedAgentId] = agent.copyWith(
         configExists: true,
         configModifiedAt: result.document.modifiedAt,
       );
@@ -257,7 +367,7 @@ class AgentManagementController extends ChangeNotifier {
     }
   }
 
-  /// 刷新 Codex 自身磁盘日志。
+  /// 刷新当前 Agent 磁盘日志。
   Future<List<AgentLogEntry>> loadLogs() async {
     if (_loadingLogs) {
       return logs;
@@ -268,7 +378,7 @@ class AgentManagementController extends ChangeNotifier {
     try {
       final paths = await repository.discoverLogPaths();
       _logs = await repository.readLogs(paths);
-      _agent = _agent.copyWith(logPaths: paths);
+      _agents[_selectedAgentId] = agent.copyWith(logPaths: paths);
       return logs;
     } catch (error) {
       _operationError = '运行日志读取失败：$error';
@@ -279,39 +389,53 @@ class AgentManagementController extends ChangeNotifier {
     }
   }
 
-  /// 同步当前对话 provider 的运行状态。
+  /// 同步对话 provider 运行状态到对应 Agent 行。
   void refreshRuntimeState() {
     if (_disposed) {
       return;
     }
-    final next = _runtimeState(_agent.enabled, _agent.runtimeState);
-    if (next == _agent.runtimeState) {
+    final activeId = providerController.activeProviderId;
+    final current = _agents[activeId];
+    if (current == null) {
       return;
     }
-    _agent = _agent.copyWith(runtimeState: next);
+    final next = _runtimeState(activeId, current.enabled, current.runtimeState);
+    if (next == current.runtimeState) {
+      return;
+    }
+    _agents[activeId] = current.copyWith(runtimeState: next);
     _notify();
   }
 
   Future<void> _persistDetectionSummary(
+    String agentId,
     AgentProviderConfig previous,
     ManagedAgent detected,
   ) async {
-    var updated = previous;
+    final repo = _repositories[agentId];
+    if (repo == null) {
+      return;
+    }
+    // 始终以 sanitize 后的配置为基底，避免交叉污染的 cliPath/command 写回。
+    var updated = _sanitizeProviderConfig(agentId, previous);
     final path = detected.executablePath;
-    if (path != null) {
-      updated = await repository.providerConfigForPath(
-        current: previous,
+    if (path != null && _pathBelongsToAgent(agentId, path)) {
+      updated = await repo.providerConfigForPath(
+        current: updated,
         path: path,
         timeoutSeconds: detected.timeoutSeconds,
       );
     }
+    // 强制 id，防止 copyWith 路径把配置写到错误 provider 槽位。
     updated = updated.copyWith(
+      id: agentId,
       extra: <String, Object?>{
         ...updated.extra,
         'detectedCurrentVersion': detected.currentVersion,
         'detectedLatestVersion': detected.latestVersion,
         'detectedAccountState': detected.accountState.name,
         'lastDetectedAt': detected.lastDetectedAt?.toIso8601String(),
+        if (path != null && _pathBelongsToAgent(agentId, path)) 'cliPath': path,
       },
     );
     final commandChanged =
@@ -319,38 +443,63 @@ class AgentManagementController extends ChangeNotifier {
         !listEquals(updated.arguments, previous.arguments);
     await providerController.updateProviderConfig(
       updated,
-      restartProvider: commandChanged,
+      restartProvider:
+          commandChanged && providerController.activeProviderId == agentId,
     );
   }
 
-  void _restoreCachedAgent(AgentProviderConfig config) {
-    final extra = config.extra;
+  ManagedAgent _restoreCachedAgent({
+    required String agentId,
+    required AgentProviderConfig config,
+    required AgentCliManagementRepository repository,
+  }) {
+    final sanitized = _sanitizeProviderConfig(agentId, config);
+    final extra = sanitized.extra;
     final accountName = extra['detectedAccountState'];
     final accountState = AgentAccountState.values.firstWhere(
       (state) => state.name == accountName,
       orElse: () => AgentAccountState.unknown,
     );
     final timeout = extra['timeoutSeconds'];
-    final executablePath = extra['cliPath'] is String
+    final rawPath = extra['cliPath'] is String
         ? extra['cliPath'] as String
         : null;
-    final currentVersion = extra['detectedCurrentVersion'] is String
-        ? extra['detectedCurrentVersion'] as String
+    // 交叉污染的路径不展示、不视为已安装。
+    final executablePath =
+        rawPath != null && _pathBelongsToAgent(agentId, rawPath)
+        ? rawPath
         : null;
-    final latestVersion = extra['detectedLatestVersion'] is String
-        ? extra['detectedLatestVersion'] as String
-        : null;
-    _agent = ManagedAgent.codex(enabled: config.enabled).copyWith(
+    final currentVersion = executablePath == null
+        ? null
+        : (extra['detectedCurrentVersion'] is String
+              ? extra['detectedCurrentVersion'] as String
+              : null);
+    final latestVersion = executablePath == null
+        ? null
+        : (extra['detectedLatestVersion'] is String
+              ? extra['detectedLatestVersion'] as String
+              : null);
+    final definition =
+        AgentDefinition.byId(agentId) ??
+        ManagedAgent.forDefinition(
+          definition: AgentDefinition.codex,
+          enabled: sanitized.enabled,
+        ).definition;
+
+    return ManagedAgent.forDefinition(
+      definition: definition,
+      enabled: sanitized.enabled,
+    ).copyWith(
       installationState: executablePath == null
           ? AgentInstallationState.unknown
           : AgentInstallationState.installed,
       executablePath: executablePath,
-      currentVersion: extra['detectedCurrentVersion'] is String
-          ? currentVersion
-          : null,
+      currentVersion: currentVersion,
       latestVersion: latestVersion,
       versionState: currentVersion == null || latestVersion == null
-          ? AgentVersionState.unknown
+          ? (currentVersion == null
+                ? AgentVersionState.unknown
+                : AgentVersionState.current)
           : isNewerVersion(latestVersion, currentVersion)
           ? AgentVersionState.updateAvailable
           : AgentVersionState.current,
@@ -361,9 +510,138 @@ class AgentManagementController extends ChangeNotifier {
     );
   }
 
-  AgentRuntimeState _runtimeState(bool enabled, AgentRuntimeState fallback) {
+  AgentProviderConfig _configForAgent(String agentId) {
+    for (final provider in providerController.settings.providers) {
+      if (provider.id == agentId) {
+        return _sanitizeProviderConfig(agentId, provider);
+      }
+    }
+    if (agentId == grokAgentProviderId) {
+      return AgentProviderConfig.defaultGrok;
+    }
+    return AgentProviderConfig.defaultCodex;
+  }
+
+  /// 纠正跨 provider 污染：错误的 kind / command / cliPath 会回落安全默认值。
+  AgentProviderConfig _sanitizeProviderConfig(
+    String agentId,
+    AgentProviderConfig config,
+  ) {
+    if (agentId == grokAgentProviderId) {
+      return _sanitizeGrokConfig(config);
+    }
+    if (agentId == defaultAgentProviderId) {
+      return _sanitizeCodexConfig(config);
+    }
+    return config.copyWith(id: agentId);
+  }
+
+  AgentProviderConfig _sanitizeGrokConfig(AgentProviderConfig config) {
+    final extra = Map<String, Object?>.from(config.extra);
+    final cliPath = extra['cliPath'] is String
+        ? extra['cliPath'] as String
+        : null;
+    final commandIsPath = _looksLikeFilePath(config.command);
+    final commandWrong = commandIsPath && !looksLikeGrokCliPath(config.command);
+    final cliPathWrong = cliPath != null && !looksLikeGrokCliPath(cliPath);
+    final kindWrong = config.kind != AgentProviderKind.acp;
+
+    if (cliPathWrong) {
+      extra.remove('cliPath');
+      extra.remove('detectedCurrentVersion');
+      extra.remove('detectedLatestVersion');
+    }
+
+    final needsDefaultCommand =
+        kindWrong ||
+        commandWrong ||
+        config.command.trim().isEmpty ||
+        (cliPathWrong && config.command == cliPath);
+
+    return config.copyWith(
+      id: grokAgentProviderId,
+      displayName: AgentProviderConfig.defaultGrok.displayName,
+      kind: AgentProviderKind.acp,
+      command: needsDefaultCommand
+          ? AgentProviderConfig.defaultGrok.command
+          : config.command,
+      arguments: kindWrong || needsDefaultCommand
+          ? AgentProviderConfig.defaultGrok.arguments
+          : config.arguments,
+      extra: extra,
+    );
+  }
+
+  AgentProviderConfig _sanitizeCodexConfig(AgentProviderConfig config) {
+    final extra = Map<String, Object?>.from(config.extra);
+    final cliPath = extra['cliPath'] is String
+        ? extra['cliPath'] as String
+        : null;
+    final commandIsPath = _looksLikeFilePath(config.command);
+    final commandWrong =
+        commandIsPath && !looksLikeCodexCliPath(config.command);
+    final cliPathWrong = cliPath != null && !looksLikeCodexCliPath(cliPath);
+    final kindWrong = config.kind != AgentProviderKind.codexAppServer;
+
+    if (cliPathWrong) {
+      extra.remove('cliPath');
+      extra.remove('detectedCurrentVersion');
+      extra.remove('detectedLatestVersion');
+    }
+
+    final needsDefaultCommand =
+        kindWrong ||
+        commandWrong ||
+        config.command.trim().isEmpty ||
+        (cliPathWrong && config.command == cliPath);
+
+    return config.copyWith(
+      id: defaultAgentProviderId,
+      displayName: AgentProviderConfig.defaultCodex.displayName,
+      kind: AgentProviderKind.codexAppServer,
+      command: needsDefaultCommand
+          ? AgentProviderConfig.defaultCodex.command
+          : config.command,
+      arguments: kindWrong || needsDefaultCommand
+          ? AgentProviderConfig.defaultCodex.arguments
+          : config.arguments,
+      extra: extra,
+    );
+  }
+
+  bool _pathBelongsToAgent(String agentId, String path) {
+    if (agentId == grokAgentProviderId) {
+      return looksLikeGrokCliPath(path);
+    }
+    if (agentId == defaultAgentProviderId) {
+      return looksLikeCodexCliPath(path);
+    }
+    return true;
+  }
+
+  bool _looksLikeFilePath(String value) {
+    return value.contains('/') ||
+        value.contains('\\') ||
+        value.contains(':') ||
+        value.endsWith('.exe') ||
+        value.endsWith('.cmd') ||
+        value.endsWith('.bat') ||
+        value.endsWith('.ps1');
+  }
+
+  AgentRuntimeState _runtimeState(
+    String agentId,
+    bool enabled,
+    AgentRuntimeState fallback,
+  ) {
     if (!enabled) {
       return AgentRuntimeState.disabled;
+    }
+    // 仅 active provider 映射 live 运行态。
+    if (agentId != providerController.activeProviderId) {
+      return fallback == AgentRuntimeState.disabled
+          ? AgentRuntimeState.notRunning
+          : fallback;
     }
     final live = runtimeStateProvider?.call();
     if (live == null || live == AgentRuntimeState.notRunning) {
@@ -378,21 +656,31 @@ class AgentManagementController extends ChangeNotifier {
     if (_disposed) {
       return;
     }
-    final config = providerController.activeProviderConfig;
-    final enabled = config.enabled;
-    final timeout = config.extra['timeoutSeconds'];
-    final timeoutSeconds = timeout is int ? timeout : 60;
-    if (_agent.enabled == enabled && _agent.timeoutSeconds == timeoutSeconds) {
-      return;
+    var changed = false;
+    for (final id in _repositories.keys) {
+      final config = _configForAgent(id);
+      final current = _agents[id];
+      if (current == null) {
+        continue;
+      }
+      final timeout = config.extra['timeoutSeconds'];
+      final timeoutSeconds = timeout is int ? timeout : 60;
+      if (current.enabled == config.enabled &&
+          current.timeoutSeconds == timeoutSeconds) {
+        continue;
+      }
+      _agents[id] = current.copyWith(
+        enabled: config.enabled,
+        timeoutSeconds: timeoutSeconds,
+        runtimeState: config.enabled
+            ? AgentRuntimeState.notRunning
+            : AgentRuntimeState.disabled,
+      );
+      changed = true;
     }
-    _agent = _agent.copyWith(
-      enabled: enabled,
-      timeoutSeconds: timeoutSeconds,
-      runtimeState: enabled
-          ? AgentRuntimeState.notRunning
-          : AgentRuntimeState.disabled,
-    );
-    _notify();
+    if (changed) {
+      _notify();
+    }
   }
 
   void _notify() {

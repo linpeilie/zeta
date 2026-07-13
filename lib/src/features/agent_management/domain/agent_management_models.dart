@@ -81,7 +81,7 @@ class AgentDefinition {
   final String defaultConfigRelativePath;
   final String npmPackage;
 
-  /// 第一阶段唯一支持的 Codex CLI 定义。
+  /// 内置 Codex CLI 定义。
   static const AgentDefinition codex = AgentDefinition(
     id: defaultAgentProviderId,
     displayName: 'Codex CLI',
@@ -93,6 +93,32 @@ class AgentDefinition {
     defaultConfigRelativePath: '.codex/config.toml',
     npmPackage: '@openai/codex',
   );
+
+  /// 内置 Grok CLI（ACP stdio）定义。
+  static const AgentDefinition grok = AgentDefinition(
+    id: grokAgentProviderId,
+    displayName: 'Grok CLI',
+    vendor: 'xAI',
+    commandName: 'grok',
+    protocol: 'ACP JSON-RPC',
+    transport: 'stdin / stdout',
+    configFormat: 'TOML',
+    defaultConfigRelativePath: '.grok/config.toml',
+    npmPackage: '',
+  );
+
+  /// 应用当前支持的全部 Agent 定义。
+  static const List<AgentDefinition> all = <AgentDefinition>[codex, grok];
+
+  /// 按 id 查找定义；未知 id 返回 null。
+  static AgentDefinition? byId(String id) {
+    for (final definition in all) {
+      if (definition.id == id) {
+        return definition;
+      }
+    }
+    return null;
+  }
 }
 
 /// 最近一次无计费连接测试结果。
@@ -215,8 +241,27 @@ class ManagedAgent {
   });
 
   factory ManagedAgent.codex({required bool enabled}) {
-    return ManagedAgent(
+    return ManagedAgent.forDefinition(
       definition: AgentDefinition.codex,
+      enabled: enabled,
+    );
+  }
+
+  /// Grok CLI 的初始空快照。
+  factory ManagedAgent.grok({required bool enabled}) {
+    return ManagedAgent.forDefinition(
+      definition: AgentDefinition.grok,
+      enabled: enabled,
+    );
+  }
+
+  /// 按定义创建初始空快照。
+  factory ManagedAgent.forDefinition({
+    required AgentDefinition definition,
+    required bool enabled,
+  }) {
+    return ManagedAgent(
+      definition: definition,
       installationState: AgentInstallationState.unknown,
       accountState: AgentAccountState.unknown,
       runtimeState: enabled

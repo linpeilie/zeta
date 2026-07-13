@@ -65,6 +65,41 @@ void main() {
     expect(find.byKey(const ValueKey('agent-read-only-notice')), findsNothing);
     expect(find.byKey(const ValueKey('agent-message-input')), findsOneWidget);
   });
+
+  testWidgets('disabling active Agent selects the remaining enabled provider', (
+    tester,
+  ) async {
+    // Arrange
+    final providerController = ActiveAgentProviderController(
+      providerFactory: FakeAgentProviderFactory(FakeAgentProvider()),
+      configStore: MemoryAgentProviderConfigStore(
+        const AgentProviderSettings(),
+      ),
+    );
+    final viewModel = AgentConversationViewModel(
+      providerController: providerController,
+    );
+    addTearDown(() {
+      viewModel.dispose();
+      providerController.dispose();
+    });
+    await viewModel.loadSettings();
+    viewModel.updateWorkspace(
+      projectPath: 'C:/workspace',
+      contextFilePath: null,
+    );
+    await _pumpAgentPane(tester, viewModel);
+
+    // Act
+    await providerController.setProviderEnabled(defaultAgentProviderId, false);
+    await tester.pump();
+
+    // Assert
+    expect(viewModel.activeProviderId, grokAgentProviderId);
+    expect(viewModel.activeProviderName, 'Grok CLI');
+    expect(find.byKey(const ValueKey('agent-read-only-notice')), findsNothing);
+    expect(find.byKey(const ValueKey('agent-message-input')), findsOneWidget);
+  });
 }
 
 Future<void> _pumpAgentPane(

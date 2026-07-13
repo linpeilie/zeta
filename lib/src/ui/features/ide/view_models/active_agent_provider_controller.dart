@@ -40,6 +40,13 @@ class ActiveAgentProviderController extends ChangeNotifier {
   /// 当前 active provider 的配置。
   AgentProviderConfig get activeProviderConfig => _settings.activeProvider;
 
+  /// 已启用的 provider 配置（用于跨 provider thread 列表等）。
+  List<AgentProviderConfig> get enabledProviders {
+    return List<AgentProviderConfig>.unmodifiable(
+      _settings.providers.where((provider) => provider.enabled),
+    );
+  }
+
   /// 指定 provider 是否允许创建新的可写会话。
   bool isProviderEnabled(String providerId) {
     for (final provider in _settings.providers) {
@@ -48,6 +55,35 @@ class ActiveAgentProviderController extends ChangeNotifier {
       }
     }
     return false;
+  }
+
+  /// 按 id 查找配置；不存在时返回 null。
+  AgentProviderConfig? providerConfigById(String providerId) {
+    for (final provider in _settings.providers) {
+      if (provider.id == providerId) {
+        return provider;
+      }
+    }
+    return null;
+  }
+
+  /// 打开指定配置的 provider 实例。
+  ///
+  /// 若与当前 active 相同则复用共享实例；否则创建**临时**实例，调用方在
+  /// [isSharedActiveProvider] 为 false 时必须 [AgentProvider.dispose]。
+  Future<AgentProvider> openProvider(AgentProviderConfig config) async {
+    await loadSettings();
+    final existing = _provider;
+    if (existing != null && existing.config.id == config.id) {
+      return existing;
+    }
+    _log.fine('Opening ephemeral Agent provider ${config.id}');
+    return providerFactory.create(config);
+  }
+
+  /// 是否为 [activeProvider] 持有的共享实例。
+  bool isSharedActiveProvider(AgentProvider provider) {
+    return identical(_provider, provider);
   }
 
   /// 更新一个 provider 的全局配置，并按需重建运行实例。
@@ -68,7 +104,9 @@ class ActiveAgentProviderController extends ChangeNotifier {
       activeProviderId: _settings.activeProviderId,
     );
 
-    if (restartProvider) {
+    final shouldRestartActiveProvider =
+        restartProvider && updated.id == _settings.activeProviderId;
+    if (shouldRestartActiveProvider) {
       final creating = _providerFuture;
       if (creating != null) {
         try {
@@ -100,6 +138,50 @@ class ActiveAgentProviderController extends ChangeNotifier {
       current.copyWith(enabled: enabled),
       restartProvider: !enabled,
     );
+    if (!enabled && _settings.activeProviderId == providerId) {
+      final fallback = _settings.providers.firstWhere(
+        (provider) => provider.enabled && provider.id != providerId,
+        orElse: () => current,
+      );
+      if (fallback.id != providerId) {
+        await setActiveProvider(fallback.id);
+      }
+    }
+  }
+
+  /// 切换当前 active provider，并重建运行实例。
+  Future<void> setActiveProvider(String providerId) async {
+    await loadSettings();
+    if (_settings.activeProviderId == providerId) {
+      return;
+    }
+    final exists = _settings.providers.any(
+      (provider) => provider.id == providerId,
+    );
+    if (!exists) {
+      throw ArgumentError.value(providerId, 'providerId', 'Unknown provider');
+    }
+    final enabled = isProviderEnabled(providerId);
+    if (!enabled) {
+      throw StateError('Provider $providerId is disabled');
+    }
+
+    final creating = _providerFuture;
+    if (creating != null) {
+      try {
+        await creating;
+      } catch (_) {
+        // 忽略创建失败，继续切换。
+      }
+    }
+    final existing = _provider;
+    _provider = null;
+    await existing?.dispose();
+
+    _settings = _settings.copyWith(activeProviderId: providerId);
+    await configStore.save(_settings);
+    _log.info('Switched active Agent provider to $providerId');
+    _notify();
   }
 
   /// 持久化用户在输入框选择的模型组合到 active provider 配置。

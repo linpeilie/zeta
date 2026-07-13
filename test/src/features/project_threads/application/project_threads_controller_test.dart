@@ -19,7 +19,8 @@ void main() {
       'restores expanded active project and loads first 5 threads',
       () async {
         final provider = _FakeAgentProvider(
-          pages: <AgentThreadPage>[_page(_threads(5), nextCursor: 'next')],
+          // 聚合后客户端分页：共 10 条时首屏 5 条，游标 agg:5。
+          pages: <AgentThreadPage>[_page(_threads(10), nextCursor: null)],
         );
         final controller = _createController(provider);
 
@@ -33,42 +34,55 @@ void main() {
         final state = controller.stateFor('/repo');
         expect(state.isExpanded, isTrue);
         expect(state.threads, hasLength(5));
-        expect(state.nextCursor, 'next');
+        expect(state.nextCursor, 'agg:5');
         expect(controller.stateFor('/other').isExpanded, isFalse);
-        expect(provider.listQueries.single.limit, projectThreadInitialLimit);
         expect(provider.listQueries.single.projectPath, '/repo');
       },
     );
 
-    test('loads more with page size 10 and appends unique threads', () async {
+    test(
+      'loads more with aggregate cursor and appends unique threads',
+      () async {
+        final provider = _FakeAgentProvider(
+          pages: <AgentThreadPage>[
+            // 首轮聚合拉取：先 5 条再 10 条，共 15 条缓存后客户端分页。
+            _page(_threads(5), nextCursor: 'next'),
+            _page(_threads(10, start: 5), nextCursor: null),
+            // loadMore 会重新聚合拉取。
+            _page(_threads(5), nextCursor: 'next'),
+            _page(_threads(10, start: 5), nextCursor: null),
+          ],
+        );
+        final controller = _createController(provider);
+
+        controller.activateProject('/repo');
+        await _flushAsync();
+        expect(controller.stateFor('/repo').threads, hasLength(5));
+        expect(controller.stateFor('/repo').nextCursor, 'agg:5');
+
+        await controller.loadMore('/repo');
+
+        expect(controller.stateFor('/repo').threads, hasLength(15));
+        expect(controller.stateFor('/repo').nextCursor, isNull);
+      },
+    );
+
+    test('keeps cached threads when reload fails', () async {
       final provider = _FakeAgentProvider(
         pages: <AgentThreadPage>[
-          _page(_threads(5), nextCursor: 'next'),
-          _page(_threads(10, start: 5), nextCursor: null),
+          _page(_threads(1), nextCursor: null),
+          // 失败路径通过 failNextList 抛错；此处不预置第二页。
         ],
       );
       final controller = _createController(provider);
 
       controller.activateProject('/repo');
       await _flushAsync();
-      await controller.loadMore('/repo');
-
-      expect(controller.stateFor('/repo').threads, hasLength(15));
-      expect(provider.listQueries.last.limit, projectThreadPageLimit);
-      expect(provider.listQueries.last.cursor, 'next');
-    });
-
-    test('keeps cached threads when reload fails', () async {
-      final provider = _FakeAgentProvider(
-        pages: <AgentThreadPage>[_page(_threads(1), nextCursor: null)],
-      );
-      final controller = _createController(provider);
-
-      controller.activateProject('/repo');
-      await _flushAsync();
+      expect(controller.stateFor('/repo').threads, hasLength(1));
 
       provider.failNextList = true;
       await controller.loadInitial('/repo');
+      await _flushAsync();
 
       final state = controller.stateFor('/repo');
       expect(state.threads, hasLength(1));
@@ -178,6 +192,49 @@ void main() {
         expect(provider.listQueries, hasLength(1));
       },
     );
+
+    test('merges threads from all enabled providers by recency', () async {
+      final codex = _FakeAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        pages: <AgentThreadPage>[
+          _page(<AgentThreadSummary>[
+            _thread(
+              id: 'codex-old',
+              providerId: defaultAgentProviderId,
+              updatedAt: DateTime.utc(2026, 1, 1),
+            ),
+          ], nextCursor: null),
+        ],
+      );
+      final grok = _FakeAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        pages: <AgentThreadPage>[
+          _page(<AgentThreadSummary>[
+            _thread(
+              id: 'grok-new',
+              providerId: grokAgentProviderId,
+              updatedAt: DateTime.utc(2026, 6, 1),
+            ),
+          ], nextCursor: null),
+        ],
+      );
+      final controller = _createMultiProviderController(
+        codex: codex,
+        grok: grok,
+      );
+
+      controller.activateProject('/repo');
+      await _flushAsync();
+
+      final ids = controller
+          .stateFor('/repo')
+          .threads
+          .map((thread) => thread.id)
+          .toList();
+      expect(ids, <String>['grok-new', 'codex-old']);
+      expect(codex.listQueries, isNotEmpty);
+      expect(grok.listQueries, isNotEmpty);
+    });
   });
 
   group('Project Threads session snapshot', () {
@@ -299,9 +356,39 @@ ProjectThreadsController _createController(
   _FakeAgentProvider provider, {
   ProjectThreadsViewModel? viewModel,
 }) {
+  // 单 provider 配置，避免默认 Codex+Grok 下同一 fake 被聚合调用两次。
   final controller = ActiveAgentProviderController(
     providerFactory: _FakeAgentProviderFactory(provider),
-    configStore: MemoryAgentProviderConfigStore(),
+    configStore: MemoryAgentProviderConfigStore(
+      AgentProviderSettings(
+        providers: <AgentProviderConfig>[provider.config],
+        activeProviderId: provider.config.id,
+      ),
+    ),
+  );
+  addTearDown(controller.dispose);
+  return ProjectThreadsController(
+    providerController: controller,
+    viewModel: viewModel,
+  );
+}
+
+ProjectThreadsController _createMultiProviderController({
+  required _FakeAgentProvider codex,
+  required _FakeAgentProvider grok,
+  ProjectThreadsViewModel? viewModel,
+}) {
+  final controller = ActiveAgentProviderController(
+    providerFactory: _MultiAgentProviderFactory(codex: codex, grok: grok),
+    configStore: MemoryAgentProviderConfigStore(
+      const AgentProviderSettings(
+        providers: <AgentProviderConfig>[
+          AgentProviderConfig.defaultCodex,
+          AgentProviderConfig.defaultGrok,
+        ],
+        activeProviderId: defaultAgentProviderId,
+      ),
+    ),
   );
   addTearDown(controller.dispose);
   return ProjectThreadsController(
@@ -320,17 +407,34 @@ AgentThreadPage _page(
 List<AgentThreadSummary> _threads(int count, {int start = 0}) {
   return <AgentThreadSummary>[
     for (var index = start; index < start + count; index += 1)
-      AgentThreadSummary(
+      _thread(
         id: 'thread-$index',
         providerId: defaultAgentProviderId,
-        projectPath: '/repo',
+        updatedAt: DateTime.fromMillisecondsSinceEpoch(index),
         title: 'Thread $index',
         preview: 'Preview $index',
-        createdAt: DateTime.fromMillisecondsSinceEpoch(index),
-        updatedAt: DateTime.fromMillisecondsSinceEpoch(index),
-        status: AgentThreadRuntimeStatus.idle,
       ),
   ];
+}
+
+AgentThreadSummary _thread({
+  required String id,
+  required String providerId,
+  required DateTime updatedAt,
+  String title = 'Thread',
+  String preview = 'Preview',
+}) {
+  return AgentThreadSummary(
+    id: id,
+    providerId: providerId,
+    projectPath: '/repo',
+    title: title,
+    preview: preview,
+    createdAt: updatedAt,
+    updatedAt: updatedAt,
+    recencyAt: updatedAt,
+    status: AgentThreadRuntimeStatus.idle,
+  );
 }
 
 Future<void> _flushAsync() async {
@@ -347,11 +451,28 @@ class _FakeAgentProviderFactory implements AgentProviderFactory {
   AgentProvider create(AgentProviderConfig config) => provider;
 }
 
+class _MultiAgentProviderFactory implements AgentProviderFactory {
+  const _MultiAgentProviderFactory({required this.codex, required this.grok});
+
+  final _FakeAgentProvider codex;
+  final _FakeAgentProvider grok;
+
+  @override
+  AgentProvider create(AgentProviderConfig config) {
+    return switch (config.id) {
+      grokAgentProviderId => grok,
+      _ => codex,
+    };
+  }
+}
+
 class _FakeAgentProvider
     with AgentProviderThreadLifecycleStub
     implements AgentProvider {
-  _FakeAgentProvider({required List<AgentThreadPage> pages})
-    : _pages = List<AgentThreadPage>.from(pages);
+  _FakeAgentProvider({
+    required List<AgentThreadPage> pages,
+    this.config = AgentProviderConfig.defaultCodex,
+  }) : _pages = List<AgentThreadPage>.from(pages);
 
   final List<AgentThreadPage> _pages;
   final List<AgentThreadListQuery> listQueries = <AgentThreadListQuery>[];
@@ -360,7 +481,7 @@ class _FakeAgentProvider
   bool failNextList = false;
 
   @override
-  AgentProviderConfig get config => AgentProviderConfig.defaultCodex;
+  final AgentProviderConfig config;
 
   @override
   Stream<AgentEvent> get events => _events.stream;

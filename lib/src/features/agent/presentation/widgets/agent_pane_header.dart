@@ -96,6 +96,10 @@ class _AgentHeader extends StatelessWidget {
                 ],
               ),
             ),
+            if (viewModel.availableProviders.length > 1) ...[
+              const SizedBox(width: IdeSpacing.space4),
+              _AgentProviderSwitcher(viewModel: viewModel),
+            ],
             if (canFork) ...[
               const SizedBox(width: IdeSpacing.space4),
               IdeTooltip(
@@ -151,6 +155,52 @@ class _AgentHeader extends StatelessWidget {
           _AgentCompactBanner(viewModel: viewModel),
         ],
       ],
+    );
+  }
+}
+
+/// 双 provider 切换：Codex / Grok 等已启用后端。
+class _AgentProviderSwitcher extends StatelessWidget {
+  const _AgentProviderSwitcher({required this.viewModel});
+
+  final AgentConversationViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final providers = viewModel.availableProviders;
+    final currentId = viewModel.activeProviderId;
+    return IdeTooltip(
+      message: '切换 Agent 提供商',
+      child: PopupMenuButton<String>(
+        key: const ValueKey('agent-header-provider-switcher'),
+        tooltip: '',
+        initialValue: currentId,
+        onSelected: (providerId) {
+          unawaited(viewModel.switchActiveProvider(providerId));
+        },
+        itemBuilder: (context) {
+          return [
+            for (final provider in providers)
+              PopupMenuItem<String>(
+                value: provider.id,
+                child: Text(
+                  provider.displayName,
+                  style: TextStyle(
+                    fontWeight: provider.id == currentId
+                        ? FontWeight.w600
+                        : FontWeight.w400,
+                  ),
+                ),
+              ),
+          ];
+        },
+        child: IdeChip(
+          label: viewModel.activeProviderName,
+          leadingIcon: Icons.smart_toy_outlined,
+          trailingIcon: Icons.expand_more_rounded,
+          semanticLabel: '当前 Agent：${viewModel.activeProviderName}',
+        ),
+      ),
     );
   }
 }

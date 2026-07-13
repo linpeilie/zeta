@@ -1205,7 +1205,14 @@ void main() {
     // 概览信息：会话名称、消息数、提供商、token 与时间。
     expect(find.text('Context thread'), findsWidgets);
     expect(find.text('2'), findsOneWidget);
-    expect(find.text('Codex CLI'), findsOneWidget);
+    // 头栏 provider 切换器与上下文面板都会展示提供商名，限定在面板内断言。
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('agent-context-panel')),
+        matching: find.text('Codex CLI'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('200k'), findsOneWidget);
     expect(
       find.descendant(

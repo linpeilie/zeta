@@ -1,0 +1,420 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/data/datasources/local_history/grok_chat_history_parser.dart';
+import 'package:zeta/src/features/agent/data/datasources/local_history/grok_updates_history_parser.dart';
+import 'package:zeta/src/features/agent/domain/agent_models.dart';
+
+final _log = loggerFor('zeta.agent.grok_session_history');
+
+/// 从 `~/.grok/sessions` 本地目录读取 Grok session 列表与历史。
+///
+/// Grok ACP 未实现 `session/list`，项目 thread 列表依赖本地存储扫描。
+/// 历史优先解析 `updates.jsonl`（与 session/load 回放同构），降级
+/// `chat_history.jsonl`。
+class GrokSessionHistoryReader {
+  GrokSessionHistoryReader({
+    this.grokHome,
+    this.homeResolver,
+    this.updatesParser = const GrokUpdatesHistoryParser(),
+    this.chatHistoryParser = const GrokChatHistoryParser(),
+  });
+
+  /// 测试可注入的 Grok 家目录。
+  final String? grokHome;
+
+  /// 测试可注入的用户 home 解析。
+  final String? Function()? homeResolver;
+
+  final GrokUpdatesHistoryParser updatesParser;
+  final GrokChatHistoryParser chatHistoryParser;
+
+  /// 解析 Grok 家目录：`GROK_HOME` > 注入路径 > `~/.grok`。
+  String resolveGrokHome({Map<String, String>? environment}) {
+    final env = environment ?? Platform.environment;
+    final fromEnv = env['GROK_HOME']?.trim();
+    if (fromEnv != null && fromEnv.isNotEmpty) {
+      return fromEnv;
+    }
+    final injected = grokHome?.trim();
+    if (injected != null && injected.isNotEmpty) {
+      return injected;
+    }
+    final home =
+        homeResolver?.call() ??
+        env[Platform.isWindows ? 'USERPROFILE' : 'HOME'];
+    if (home == null || home.isEmpty) {
+      return '.grok';
+    }
+    return '$home${Platform.pathSeparator}.grok';
+  }
+
+  /// 按项目路径列出本地 session 摘要。
+  Future<AgentThreadPage> listThreads({
+    required AgentThreadListQuery query,
+    required String providerId,
+    Map<String, String>? environment,
+  }) async {
+    final projectPath = query.projectPath?.trim() ?? '';
+    if (projectPath.isEmpty) {
+      return const AgentThreadPage(
+        threads: <AgentThreadSummary>[],
+        nextCursor: null,
+      );
+    }
+
+    final sessionsRoot = Directory(
+      '${resolveGrokHome(environment: environment)}'
+      '${Platform.pathSeparator}sessions',
+    );
+    if (!await sessionsRoot.exists()) {
+      return const AgentThreadPage(
+        threads: <AgentThreadSummary>[],
+        nextCursor: null,
+      );
+    }
+
+    final projectKey = _encodeProjectDirName(projectPath);
+    final projectDir = Directory(
+      '${sessionsRoot.path}${Platform.pathSeparator}$projectKey',
+    );
+
+    final summaries = <AgentThreadSummary>[];
+    if (await projectDir.exists()) {
+      await for (final entity in projectDir.list(followLinks: false)) {
+        if (entity is! Directory) {
+          continue;
+        }
+        final summary = await _readSessionSummary(
+          sessionDir: entity,
+          providerId: providerId,
+          projectPath: projectPath,
+        );
+        if (summary != null) {
+          summaries.add(summary);
+        }
+      }
+    }
+
+    // 兼容：某些 session 可能落在未编码的绝对路径目录名下。
+    if (summaries.isEmpty) {
+      await for (final entity in sessionsRoot.list(followLinks: false)) {
+        if (entity is! Directory) {
+          continue;
+        }
+        final name = _directoryBaseName(entity);
+        if (!_pathLooksLikeProject(name, projectPath)) {
+          continue;
+        }
+        await for (final child in entity.list(followLinks: false)) {
+          if (child is! Directory) {
+            continue;
+          }
+          final summary = await _readSessionSummary(
+            sessionDir: child,
+            providerId: providerId,
+            projectPath: projectPath,
+          );
+          if (summary != null) {
+            summaries.add(summary);
+          }
+        }
+      }
+    }
+
+    summaries.sort((a, b) {
+      final aTime = a.recencyAt ?? a.updatedAt;
+      final bTime = b.recencyAt ?? b.updatedAt;
+      return bTime.compareTo(aTime);
+    });
+
+    final limit = query.limit <= 0 ? 50 : query.limit;
+    final offset = _parseOffset(query.cursor);
+    final page = summaries.skip(offset).take(limit).toList(growable: false);
+    final nextOffset = offset + page.length;
+    final nextCursor = nextOffset < summaries.length ? '$nextOffset' : null;
+
+    return AgentThreadPage(
+      threads: List<AgentThreadSummary>.unmodifiable(page),
+      nextCursor: nextCursor,
+    );
+  }
+
+  /// 读取 thread 历史并映射为 UI 时间线可用的 turn 快照。
+  ///
+  /// 查找顺序：
+  /// 1. [sessionPath] 指向的 session 目录
+  /// 2. 按 [projectPath] + [threadId] 定位
+  /// 3. 递归扫描 sessions 根目录
+  ///
+  /// 内容优先级：`updates.jsonl` > `chat_history.jsonl`。
+  Future<AgentThreadHistorySnapshot> readThreadHistory({
+    required String threadId,
+    required String providerId,
+    String? projectPath,
+    String? sessionPath,
+    Map<String, String>? environment,
+  }) async {
+    final sessionDir = await _resolveSessionDirectory(
+      threadId: threadId,
+      projectPath: projectPath,
+      sessionPath: sessionPath,
+      environment: environment,
+    );
+    if (sessionDir == null) {
+      return AgentThreadHistorySnapshot(
+        threadId: threadId,
+        turns: const <AgentHistoryTurn>[],
+      );
+    }
+
+    final meta = <String, Object?>{
+      'sessionPath': sessionDir.path,
+      'providerId': providerId,
+    };
+
+    final updatesFile = File(
+      '${sessionDir.path}${Platform.pathSeparator}updates.jsonl',
+    );
+    if (await updatesFile.exists()) {
+      try {
+        final content = await updatesFile.readAsString();
+        final snapshot = updatesParser.parse(
+          threadId: threadId,
+          content: content,
+          raw: <String, Object?>{...meta, 'source': 'updates.jsonl'},
+        );
+        if (snapshot.turns.isNotEmpty) {
+          return snapshot;
+        }
+        _log.fine(
+          'updates.jsonl for $threadId produced empty turns; trying chat_history',
+        );
+      } catch (error, stackTrace) {
+        _log.warning(
+          'Could not parse updates.jsonl for $threadId',
+          error,
+          stackTrace,
+        );
+      }
+    }
+
+    final historyFile = File(
+      '${sessionDir.path}${Platform.pathSeparator}chat_history.jsonl',
+    );
+    if (await historyFile.exists()) {
+      try {
+        final content = await historyFile.readAsString();
+        return chatHistoryParser.parse(
+          threadId: threadId,
+          content: content,
+          raw: <String, Object?>{...meta, 'source': 'chat_history.jsonl'},
+        );
+      } catch (error, stackTrace) {
+        _log.warning(
+          'Could not parse chat_history.jsonl for $threadId',
+          error,
+          stackTrace,
+        );
+      }
+    }
+
+    return AgentThreadHistorySnapshot(
+      threadId: threadId,
+      turns: const <AgentHistoryTurn>[],
+      raw: meta,
+    );
+  }
+
+  Future<Directory?> _resolveSessionDirectory({
+    required String threadId,
+    String? projectPath,
+    String? sessionPath,
+    Map<String, String>? environment,
+  }) async {
+    final direct = sessionPath?.trim();
+    if (direct != null && direct.isNotEmpty) {
+      final asDir = Directory(direct);
+      if (await asDir.exists()) {
+        return asDir;
+      }
+      // sessionPath 有时指向文件；回退到父目录。
+      final parent = Directory(asDir.uri.resolve('.').toFilePath());
+      if (await parent.exists() && _directoryBaseName(parent) == threadId) {
+        return parent;
+      }
+      final fileParent = File(direct).parent;
+      if (await fileParent.exists()) {
+        return fileParent;
+      }
+    }
+    return _findSessionDirectory(
+      threadId: threadId,
+      projectPath: projectPath,
+      environment: environment,
+    );
+  }
+
+  Future<AgentThreadSummary?> _readSessionSummary({
+    required Directory sessionDir,
+    required String providerId,
+    required String projectPath,
+  }) async {
+    final id = _directoryBaseName(sessionDir);
+    // UUID 形态的 session 目录才纳入列表。
+    if (!_looksLikeSessionId(id)) {
+      return null;
+    }
+
+    final summaryFile = File(
+      '${sessionDir.path}${Platform.pathSeparator}summary.json',
+    );
+    Map<String, Object?> raw = const <String, Object?>{};
+    String? title;
+    String preview = '';
+    DateTime? createdAt;
+    DateTime? updatedAt;
+    DateTime? lastActiveAt;
+
+    if (await summaryFile.exists()) {
+      try {
+        final decoded = jsonDecode(await summaryFile.readAsString());
+        if (decoded is Map) {
+          raw = decoded.map(
+            (key, value) => MapEntry(key.toString(), value as Object?),
+          );
+          title =
+              raw['generated_title']?.toString() ??
+              raw['session_summary']?.toString();
+          preview = (raw['session_summary']?.toString() ?? title ?? '').trim();
+          createdAt = DateTime.tryParse(raw['created_at']?.toString() ?? '');
+          updatedAt = DateTime.tryParse(raw['updated_at']?.toString() ?? '');
+          lastActiveAt = DateTime.tryParse(
+            raw['last_active_at']?.toString() ?? '',
+          );
+          final info = raw['info'];
+          if (info is Map) {
+            final cwd = info['cwd']?.toString();
+            if (cwd != null &&
+                cwd.isNotEmpty &&
+                !_sameProjectPath(cwd, projectPath)) {
+              return null;
+            }
+          }
+        }
+      } catch (error, stackTrace) {
+        _log.fine(
+          'Could not parse Grok summary.json for $id',
+          error,
+          stackTrace,
+        );
+      }
+    }
+
+    final stat = await sessionDir.stat();
+    final fallbackTime = stat.modified;
+    return AgentThreadSummary(
+      id: id,
+      providerId: providerId,
+      projectPath: projectPath,
+      title: title?.trim().isEmpty == true ? null : title?.trim(),
+      sessionPath: sessionDir.path,
+      preview: preview.isEmpty ? id : preview,
+      createdAt: createdAt ?? fallbackTime,
+      updatedAt: updatedAt ?? lastActiveAt ?? fallbackTime,
+      recencyAt: lastActiveAt ?? updatedAt ?? fallbackTime,
+      status: AgentThreadRuntimeStatus.idle,
+      raw: raw,
+    );
+  }
+
+  Future<Directory?> _findSessionDirectory({
+    required String threadId,
+    String? projectPath,
+    Map<String, String>? environment,
+  }) async {
+    final sessionsRoot = Directory(
+      '${resolveGrokHome(environment: environment)}'
+      '${Platform.pathSeparator}sessions',
+    );
+    if (!await sessionsRoot.exists()) {
+      return null;
+    }
+
+    if (projectPath != null && projectPath.trim().isNotEmpty) {
+      final projectKey = _encodeProjectDirName(projectPath);
+      final candidate = Directory(
+        '${sessionsRoot.path}${Platform.pathSeparator}$projectKey'
+        '${Platform.pathSeparator}$threadId',
+      );
+      if (await candidate.exists()) {
+        return candidate;
+      }
+    }
+
+    await for (final entity in sessionsRoot.list(
+      recursive: true,
+      followLinks: false,
+    )) {
+      if (entity is! Directory) {
+        continue;
+      }
+      final name = _directoryBaseName(entity);
+      if (name == threadId) {
+        return entity;
+      }
+    }
+    return null;
+  }
+}
+
+/// Grok 用 percent-encoding 的路径作为 session 一级目录名。
+String _encodeProjectDirName(String projectPath) {
+  final normalized = projectPath.replaceAll('/', '\\');
+  return Uri.encodeComponent(normalized);
+}
+
+/// 取目录 basename；避免 Windows 上 `uri.pathSegments.last` 为空字符串。
+String _directoryBaseName(Directory directory) {
+  final path = directory.path;
+  final parts = path.split(RegExp(r'[\\/]+')).where((part) => part.isNotEmpty);
+  if (parts.isEmpty) {
+    return path;
+  }
+  return parts.last;
+}
+
+bool _pathLooksLikeProject(String encodedOrRaw, String projectPath) {
+  try {
+    final decoded = Uri.decodeComponent(encodedOrRaw);
+    return _sameProjectPath(decoded, projectPath) ||
+        _sameProjectPath(encodedOrRaw, projectPath);
+  } catch (_) {
+    return _sameProjectPath(encodedOrRaw, projectPath);
+  }
+}
+
+bool _sameProjectPath(String a, String b) {
+  final na = a.replaceAll('/', '\\').toLowerCase().trim();
+  final nb = b.replaceAll('/', '\\').toLowerCase().trim();
+  if (na == nb) {
+    return true;
+  }
+  final stripA = na.endsWith('\\') ? na.substring(0, na.length - 1) : na;
+  final stripB = nb.endsWith('\\') ? nb.substring(0, nb.length - 1) : nb;
+  return stripA == stripB;
+}
+
+bool _looksLikeSessionId(String value) {
+  return RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  ).hasMatch(value);
+}
+
+int _parseOffset(String? cursor) {
+  if (cursor == null || cursor.isEmpty) {
+    return 0;
+  }
+  return int.tryParse(cursor) ?? 0;
+}

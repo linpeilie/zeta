@@ -44,6 +44,13 @@ class AgentConversationModelSelectionController {
     provider.updateModelSelection(_modelSelection);
   }
 
+  /// 切换 provider 时解绑旧实例，并按新配置清空、恢复模型状态。
+  void resetForProvider(AgentProviderConfig config) {
+    _provider = null;
+    _modelList = null;
+    seedFromConfig(config);
+  }
+
   void seedFromConfig(AgentProviderConfig config) {
     _modelSelection = AgentModelSelection(
       modelId: config.selectedModel,

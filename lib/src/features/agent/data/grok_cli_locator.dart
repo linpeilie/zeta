@@ -1,32 +1,11 @@
 import 'dart:io';
 
+import 'package:zeta/src/features/agent/data/codex_cli_locator.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
-/// 可安全执行的 Codex CLI 命令描述。
-class ResolvedCliCommand {
-  const ResolvedCliCommand({
-    required this.displayPath,
-    required this.executable,
-    this.prefixArguments = const <String>[],
-  });
-
-  /// 用户看到的真实 CLI 文件路径。
-  final String displayPath;
-
-  /// 传给 [Process.start] 的启动器。
-  final String executable;
-
-  /// Windows 脚本包装器所需的固定参数。
-  final List<String> prefixArguments;
-
-  List<String> argumentsFor(List<String> arguments) {
-    return <String>[...prefixArguments, ...arguments];
-  }
-}
-
-/// 在已保存路径、PATH 与常见安装目录中定位 Codex CLI。
-class CodexCliLocator {
-  const CodexCliLocator({this.environment});
+/// 在已保存路径、PATH 与常见安装目录中定位 Grok CLI。
+class GrokCliLocator {
+  const GrokCliLocator({this.environment});
 
   /// 仅用于测试或宿主覆盖；默认使用当前进程环境。
   final Map<String, String>? environment;
@@ -35,9 +14,9 @@ class CodexCliLocator {
 
   /// 校验用户选择的文件并转换为可执行启动器。
   ///
-  /// 仅接受文件名像 `codex` 的路径，避免误用 Grok 等其它 CLI。
+  /// 仅接受文件名像 `grok` 的路径，避免误用 Codex 等其它 CLI。
   Future<ResolvedCliCommand?> resolvePath(String path) async {
-    if (!looksLikeCodexCliPath(path)) {
+    if (!looksLikeGrokCliPath(path)) {
       return null;
     }
     final type = await FileSystemEntity.type(path, followLinks: true);
@@ -49,7 +28,7 @@ class CodexCliLocator {
 
   /// 定位当前可用的 CLI，已保存路径失效时会继续自动探测。
   ///
-  /// 会跳过文件名不像 Codex 的候选（例如误写入的 Grok `cliPath`）。
+  /// 会跳过文件名不像 Grok 的候选（例如误写入的 Codex `cliPath`）。
   Future<ResolvedCliCommand?> locate(AgentProviderConfig config) async {
     final candidates = <String>[
       if (config.extra['cliPath'] case final String path) path,
@@ -63,7 +42,7 @@ class CodexCliLocator {
     final seen = <String>{};
     for (final raw in candidates) {
       final path = raw.trim();
-      if (path.isEmpty || !looksLikeCodexCliPath(path)) {
+      if (path.isEmpty || !looksLikeGrokCliPath(path)) {
         continue;
       }
       final normalized = Platform.isWindows ? path.toLowerCase() : path;
@@ -83,10 +62,9 @@ class CodexCliLocator {
     if (rawPath.isEmpty) {
       return;
     }
-    // cmd/bat 会直接继承子进程管道，优先于可能重编码输出的 PowerShell。
     final names = Platform.isWindows
-        ? const <String>['codex.exe', 'codex.cmd', 'codex.bat', 'codex.ps1']
-        : const <String>['codex'];
+        ? const <String>['grok.exe', 'grok.cmd', 'grok.bat', 'grok.ps1']
+        : const <String>['grok'];
     for (final directory in rawPath.split(Platform.isWindows ? ';' : ':')) {
       final trimmed = directory.trim().replaceAll('"', '');
       if (trimmed.isEmpty) {
@@ -100,40 +78,26 @@ class CodexCliLocator {
 
   Iterable<String> _commonCandidates() sync* {
     final home = _environment[Platform.isWindows ? 'USERPROFILE' : 'HOME'];
+    if (home == null) {
+      return;
+    }
+    // 官方安装默认放在 ~/.grok/bin
     if (Platform.isWindows) {
+      yield _join(_join(_join(home, '.grok'), 'bin'), 'grok.exe');
+      yield _join(_join(_join(home, '.local'), 'bin'), 'grok.exe');
       final appData = _environment['APPDATA'];
-      final localAppData = _environment['LOCALAPPDATA'];
-      if (localAppData != null) {
-        // Codex Desktop 安装的 CLI 优先使用原生 exe。
-        yield _join(
-          _join(
-            _join(_join(_join(localAppData, 'Programs'), 'OpenAI'), 'Codex'),
-            'bin',
-          ),
-          'codex.exe',
-        );
-        yield _join(
-          _join(_join(localAppData, 'Programs'), 'codex'),
-          'codex.exe',
-        );
-      }
-      if (home != null) {
-        yield _join(_join(_join(home, '.local'), 'bin'), 'codex.exe');
-      }
       if (appData != null) {
-        yield _join(_join(appData, 'npm'), 'codex.cmd');
-        yield _join(_join(appData, 'npm'), 'codex.ps1');
+        yield _join(_join(appData, 'npm'), 'grok.cmd');
+        yield _join(_join(appData, 'npm'), 'grok.ps1');
       }
       return;
     }
-
-    if (home != null) {
-      yield _join(_join(_join(home, '.local'), 'bin'), 'codex');
-      yield _join(_join(_join(home, '.npm-global'), 'bin'), 'codex');
-    }
-    yield '/usr/local/bin/codex';
-    yield '/opt/homebrew/bin/codex';
-    yield '/usr/bin/codex';
+    yield _join(_join(_join(home, '.grok'), 'bin'), 'grok');
+    yield _join(_join(_join(home, '.local'), 'bin'), 'grok');
+    yield _join(_join(_join(home, '.npm-global'), 'bin'), 'grok');
+    yield '/usr/local/bin/grok';
+    yield '/opt/homebrew/bin/grok';
+    yield '/usr/bin/grok';
   }
 
   ResolvedCliCommand _resolveLauncher(String path) {
@@ -196,10 +160,10 @@ bool _looksLikePath(String value) {
   return value.contains('/') || value.contains('\\') || File(value).isAbsolute;
 }
 
-/// 路径 basename 是否像 Codex CLI（`codex` / `codex.exe` 等）。
-bool looksLikeCodexCliPath(String path) {
+/// 路径 basename 是否像 Grok CLI（`grok` / `grok.exe` 等）。
+bool looksLikeGrokCliPath(String path) {
   final name = _cliBasename(path);
-  return name == 'codex' || name.startsWith('codex.');
+  return name == 'grok' || name.startsWith('grok.');
 }
 
 String _cliBasename(String path) {

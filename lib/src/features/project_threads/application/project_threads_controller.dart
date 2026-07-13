@@ -14,6 +14,12 @@ final _log = loggerFor('zeta.project_threads.controller');
 /// 搜索输入防抖时长。
 const Duration projectThreadSearchDebounce = Duration(milliseconds: 300);
 
+/// 聚合列表时每个 provider 最多拉取的 thread 条数上限。
+const int projectThreadPerProviderFetchCap = 50;
+
+/// 聚合分页游标前缀（客户端 offset）。
+const String _aggregateCursorPrefix = 'agg:';
+
 /// Project Threads 模块的应用层协调器。
 ///
 /// 分页、恢复、缓存快照和 provider 交互都收敛到这里，页面层只触发动作并读取
@@ -209,7 +215,10 @@ class ProjectThreadsController {
       threadId: threadId,
       title: trimmed,
     );
-    final provider = await _ensureProviderEventSubscription();
+    final provider = await _providerForThread(
+      projectPath: projectPath,
+      threadId: threadId,
+    );
     if (provider == null) {
       return;
     }
@@ -221,7 +230,10 @@ class ProjectThreadsController {
     required String projectPath,
     required String threadId,
   }) async {
-    final provider = await _ensureProviderEventSubscription();
+    final provider = await _providerForThread(
+      projectPath: projectPath,
+      threadId: threadId,
+    );
     if (provider == null) {
       return;
     }
@@ -238,7 +250,10 @@ class ProjectThreadsController {
     required String projectPath,
     required String threadId,
   }) async {
-    final provider = await _ensureProviderEventSubscription();
+    final provider = await _providerForThread(
+      projectPath: projectPath,
+      threadId: threadId,
+    );
     if (provider == null) {
       return;
     }
@@ -255,7 +270,10 @@ class ProjectThreadsController {
     required String projectPath,
     required String threadId,
   }) async {
-    final provider = await _ensureProviderEventSubscription();
+    final provider = await _providerForThread(
+      projectPath: projectPath,
+      threadId: threadId,
+    );
     if (provider == null) {
       return;
     }
@@ -272,7 +290,10 @@ class ProjectThreadsController {
     required String projectPath,
     required String threadId,
   }) async {
-    final provider = await _ensureProviderEventSubscription();
+    final provider = await _providerForThread(
+      projectPath: projectPath,
+      threadId: threadId,
+    );
     if (provider == null) {
       return null;
     }
@@ -338,25 +359,40 @@ class ProjectThreadsController {
     );
 
     try {
-      final provider = await _ensureProviderEventSubscription();
-      if (provider == null) {
+      // 保证 active provider 事件订阅仍在（运行中指示等）。
+      await _ensureProviderEventSubscription();
+      if (_disposed) {
         return;
       }
+
       final searchTerm = current.searchTerm.trim();
-      final page = await provider.listThreads(
-        query: AgentThreadListQuery(
-          projectPath: projectPath,
-          limit: limit,
-          cursor: cursor,
-          archived: current.archived,
-          searchTerm: searchTerm.isEmpty ? null : searchTerm,
-        ),
+      final page = await _listThreadsAcrossProviders(
+        projectPath: projectPath,
+        limit: limit,
+        cursor: cursor,
+        archived: current.archived,
+        searchTerm: searchTerm.isEmpty ? null : searchTerm,
       );
       if (_loadTokens[projectPath] != token) {
         return;
       }
 
       final latest = stateFor(projectPath);
+      // 全部 provider 失败时保留已有缓存，仅更新错误态。
+      if (page.threads.isEmpty &&
+          page.errorMessage != null &&
+          latest.threads.isNotEmpty) {
+        viewModel.setStateFor(
+          projectPath,
+          latest.copyWith(
+            isLoadingInitial: false,
+            isLoadingMore: false,
+            errorMessage: page.errorMessage,
+          ),
+        );
+        return;
+      }
+
       _registerThreadSummaries(projectPath, page.threads);
       final threads = append
           ? _appendUnique(latest.threads, page.threads)
@@ -369,7 +405,7 @@ class ProjectThreadsController {
           isLoadingMore: false,
           threads: List<AgentThreadSummary>.unmodifiable(threads),
           nextCursor: page.nextCursor,
-          errorMessage: null,
+          errorMessage: page.errorMessage,
         ),
       );
     } catch (error, stackTrace) {
@@ -393,6 +429,148 @@ class ProjectThreadsController {
     }
   }
 
+  /// 从所有已启用 provider 拉取 thread，按 recency 合并后做客户端分页。
+  Future<_AggregatedThreadPage> _listThreadsAcrossProviders({
+    required String projectPath,
+    required int limit,
+    required String? cursor,
+    required bool archived,
+    required String? searchTerm,
+  }) async {
+    await providerController.loadSettings();
+    final enabled = providerController.enabledProviders;
+    if (enabled.isEmpty) {
+      return const _AggregatedThreadPage(
+        threads: <AgentThreadSummary>[],
+        nextCursor: null,
+        errorMessage: 'No enabled Agent providers',
+      );
+    }
+
+    final merged = <AgentThreadSummary>[];
+    final failures = <String>[];
+
+    await Future.wait(
+      enabled.map((config) async {
+        AgentProvider? opened;
+        var shouldDispose = false;
+        try {
+          opened = await providerController.openProvider(config);
+          shouldDispose = !providerController.isSharedActiveProvider(opened);
+          final collected = await _collectProviderThreads(
+            provider: opened,
+            projectPath: projectPath,
+            archived: archived,
+            searchTerm: searchTerm,
+          );
+          merged.addAll(collected);
+        } catch (error, stackTrace) {
+          _log.warning(
+            'Could not list threads from ${config.id}',
+            error,
+            stackTrace,
+          );
+          failures.add(config.displayName);
+        } finally {
+          if (shouldDispose) {
+            await opened?.dispose();
+          }
+        }
+      }),
+    );
+
+    merged.sort(_compareThreadRecency);
+
+    final offset = appendOffsetFromCursor(cursor);
+    final pageThreads = merged.skip(offset).take(limit).toList(growable: false);
+    final nextOffset = offset + pageThreads.length;
+    final nextCursor = nextOffset < merged.length
+        ? '$_aggregateCursorPrefix$nextOffset'
+        : null;
+
+    String? errorMessage;
+    if (merged.isEmpty && failures.isNotEmpty) {
+      errorMessage = 'Could not load threads';
+    } else if (failures.isNotEmpty && pageThreads.isNotEmpty) {
+      // 部分 provider 失败时仍展示成功部分。
+      errorMessage = null;
+    }
+
+    return _AggregatedThreadPage(
+      threads: pageThreads,
+      nextCursor: nextCursor,
+      errorMessage: errorMessage,
+    );
+  }
+
+  /// 单个 provider 拉取至多 [projectThreadPerProviderFetchCap] 条。
+  Future<List<AgentThreadSummary>> _collectProviderThreads({
+    required AgentProvider provider,
+    required String projectPath,
+    required bool archived,
+    required String? searchTerm,
+  }) async {
+    final collected = <AgentThreadSummary>[];
+    String? pageCursor;
+    final seenIds = <String>{};
+
+    while (collected.length < projectThreadPerProviderFetchCap) {
+      final remaining = projectThreadPerProviderFetchCap - collected.length;
+      final pageLimit = remaining < projectThreadPageLimit
+          ? remaining
+          : projectThreadPageLimit;
+      final page = await provider.listThreads(
+        query: AgentThreadListQuery(
+          projectPath: projectPath,
+          limit: pageLimit,
+          cursor: pageCursor,
+          archived: archived,
+          searchTerm: searchTerm,
+        ),
+      );
+      if (page.threads.isEmpty) {
+        break;
+      }
+      for (final thread in page.threads) {
+        if (seenIds.add(thread.id)) {
+          collected.add(thread);
+        }
+      }
+      pageCursor = page.nextCursor;
+      if (pageCursor == null) {
+        break;
+      }
+    }
+    return collected;
+  }
+
+  /// 解析聚合游标；非法或空时从 0 开始。
+  static int appendOffsetFromCursor(String? cursor) {
+    if (cursor == null || cursor.isEmpty) {
+      return 0;
+    }
+    if (!cursor.startsWith(_aggregateCursorPrefix)) {
+      // 兼容旧单 provider 游标：聚合模式下视为首页。
+      return 0;
+    }
+    return int.tryParse(cursor.substring(_aggregateCursorPrefix.length)) ?? 0;
+  }
+
+  static int _compareThreadRecency(AgentThreadSummary a, AgentThreadSummary b) {
+    final aTime = a.recencyAt ?? a.updatedAt;
+    final bTime = b.recencyAt ?? b.updatedAt;
+    final byTime = bTime.compareTo(aTime);
+    if (byTime != 0) {
+      return byTime;
+    }
+    // 稳定次序：providerId 再 id。
+    final byProvider = a.providerId.compareTo(b.providerId);
+    if (byProvider != 0) {
+      return byProvider;
+    }
+    return a.id.compareTo(b.id);
+  }
+
   Future<AgentProvider?> _ensureProviderEventSubscription() async {
     if (_disposed) {
       return null;
@@ -414,6 +592,37 @@ class ProjectThreadsController {
       _clearAllRunningThreadIds();
     }
     return provider;
+  }
+
+  /// 解析 thread 所属 provider；必要时切换 active 以便后续写操作落到正确后端。
+  Future<AgentProvider?> _providerForThread({
+    required String projectPath,
+    required String threadId,
+  }) async {
+    final ownerId = _providerIdForThread(projectPath, threadId);
+    if (ownerId != null &&
+        ownerId != providerController.activeProviderId &&
+        providerController.isProviderEnabled(ownerId)) {
+      try {
+        await providerController.setActiveProvider(ownerId);
+      } catch (error, stackTrace) {
+        _log.warning(
+          'Could not switch active provider to $ownerId for thread $threadId',
+          error,
+          stackTrace,
+        );
+      }
+    }
+    return _ensureProviderEventSubscription();
+  }
+
+  String? _providerIdForThread(String projectPath, String threadId) {
+    for (final thread in stateFor(projectPath).threads) {
+      if (thread.id == threadId) {
+        return thread.providerId;
+      }
+    }
+    return null;
   }
 
   void _handleProviderEvent(AgentEvent event) {
@@ -567,4 +776,17 @@ class ProjectThreadsController {
         if (seen.add(thread.id)) thread,
     ];
   }
+}
+
+/// 跨 provider 聚合后的一页 thread。
+class _AggregatedThreadPage {
+  const _AggregatedThreadPage({
+    required this.threads,
+    required this.nextCursor,
+    this.errorMessage,
+  });
+
+  final List<AgentThreadSummary> threads;
+  final String? nextCursor;
+  final String? errorMessage;
 }

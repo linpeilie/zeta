@@ -1930,6 +1930,75 @@ void main() {
       expect(controller.activeProviderConfig.selectedModel, 'gpt-5.4-mini');
       expect(controller.activeProviderConfig.selectedReasoningEffort, 'low');
     });
+
+    test(
+      'switchActiveProvider reloads models and selection for the target',
+      () async {
+        // Arrange
+        final codexConfig = AgentProviderConfig.defaultCodex.copyWith(
+          selectedModel: 'gpt-5.5',
+        );
+        final grokConfig = AgentProviderConfig.defaultGrok.copyWith(
+          selectedModel: 'grok-4.5',
+        );
+        final codex = _FakeAgentProvider(
+          providerConfig: codexConfig,
+          availableModels: const AgentModelList(
+            models: <AgentModelInfo>[
+              AgentModelInfo(
+                id: 'gpt-5.5',
+                model: 'gpt-5.5',
+                displayName: 'GPT-5.5',
+                isDefault: true,
+              ),
+            ],
+          ),
+        );
+        final grok = _FakeAgentProvider(
+          providerConfig: grokConfig,
+          availableModels: const AgentModelList(
+            models: <AgentModelInfo>[
+              AgentModelInfo(
+                id: 'grok-4.5',
+                model: 'grok-4.5',
+                displayName: 'Grok 4.5',
+                isDefault: true,
+              ),
+            ],
+          ),
+        );
+        final controller = ActiveAgentProviderController(
+          providerFactory: _MultiFakeAgentProviderFactory(
+            <String, AgentProvider>{
+              defaultAgentProviderId: codex,
+              grokAgentProviderId: grok,
+            },
+          ),
+          configStore: MemoryAgentProviderConfigStore(
+            AgentProviderSettings(
+              providers: <AgentProviderConfig>[codexConfig, grokConfig],
+            ),
+          ),
+        );
+        addTearDown(controller.dispose);
+        final viewModel = AgentConversationViewModel(
+          providerController: controller,
+        );
+        addTearDown(viewModel.dispose);
+        viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
+        await viewModel.loadModels();
+        expect(viewModel.selectedModelId, 'gpt-5.5');
+
+        // Act
+        await viewModel.switchActiveProvider(grokAgentProviderId);
+
+        // Assert
+        expect(viewModel.models.map((model) => model.id), <String>['grok-4.5']);
+        expect(viewModel.selectedModelId, 'grok-4.5');
+        expect(grok.lastModelSelection?.modelId, 'grok-4.5');
+        expect(codex.disposed, isTrue);
+      },
+    );
   });
 }
 
@@ -2012,6 +2081,15 @@ class _FakeAgentProviderFactory implements AgentProviderFactory {
   AgentProvider create(AgentProviderConfig config) => provider;
 }
 
+class _MultiFakeAgentProviderFactory implements AgentProviderFactory {
+  const _MultiFakeAgentProviderFactory(this.providers);
+
+  final Map<String, AgentProvider> providers;
+
+  @override
+  AgentProvider create(AgentProviderConfig config) => providers[config.id]!;
+}
+
 class _FakeAgentProvider
     with AgentProviderThreadLifecycleStub
     implements AgentProvider {
@@ -2020,6 +2098,8 @@ class _FakeAgentProvider
     this.failResume = false,
     this.startSessionTitle,
     this.resumeSessionTitle,
+    this.providerConfig = AgentProviderConfig.defaultCodex,
+    this.availableModels = const AgentModelList(models: <AgentModelInfo>[]),
     AgentThreadHistorySnapshot? historySnapshot,
     Map<String, AgentThreadHistorySnapshot> historySnapshotsByThread =
         const <String, AgentThreadHistorySnapshot>{},
@@ -2042,6 +2122,8 @@ class _FakeAgentProvider
   final bool failResume;
   final String? startSessionTitle;
   final String? resumeSessionTitle;
+  final AgentProviderConfig providerConfig;
+  final AgentModelList availableModels;
   final AgentThreadHistorySnapshot _defaultHistorySnapshot;
   final Map<String, AgentThreadHistorySnapshot> _historySnapshotsByThread;
   final Map<String, Completer<AgentSession>> _resumeCompleters;
@@ -2050,9 +2132,11 @@ class _FakeAgentProvider
   final List<String> unsubscribedThreads = <String>[];
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
+  AgentModelSelection? lastModelSelection;
+  bool disposed = false;
 
   @override
-  AgentProviderConfig get config => AgentProviderConfig.defaultCodex;
+  AgentProviderConfig get config => providerConfig;
 
   @override
   Stream<AgentEvent> get events => _events.stream;
@@ -2075,11 +2159,13 @@ class _FakeAgentProvider
     int limit = 20,
     bool includeHidden = false,
   }) async {
-    return const AgentModelList(models: <AgentModelInfo>[]);
+    return availableModels;
   }
 
   @override
-  void updateModelSelection(AgentModelSelection selection) {}
+  void updateModelSelection(AgentModelSelection selection) {
+    lastModelSelection = selection;
+  }
 
   @override
   void updatePermissionSelection(AgentPermissionSelection selection) {}
@@ -2220,6 +2306,10 @@ class _FakeAgentProvider
 
   @override
   Future<void> dispose() async {
+    if (disposed) {
+      return;
+    }
+    disposed = true;
     await _events.close();
   }
 

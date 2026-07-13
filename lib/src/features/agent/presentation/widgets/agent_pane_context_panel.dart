@@ -18,8 +18,11 @@ class _AgentContextPanel extends StatefulWidget {
 }
 
 class _AgentContextPanelState extends State<_AgentContextPanel> {
-  /// 原始消息行展开态：按 messageId 记录，避免父级重建时丢失。
+  /// 原始消息行展开态：按条目 id 记录，避免父级重建时丢失。
   final Set<String> _expandedRawMessageIds = <String>{};
+
+  /// 默认开启：隐藏工具调用、审批、系统事件等非主对话条目。
+  bool _filterNonChatMessages = true;
 
   @override
   Widget build(BuildContext context) {
@@ -31,6 +34,10 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
         final colors = IdeColors.of(context);
         final usage = viewModel.currentThreadTokenUsage;
         final messages = viewModel.messages;
+        final rawItems = _buildContextRawItems(
+          timelineEntries: viewModel.timelineEntries,
+          filterNonChat: _filterNonChatMessages,
+        );
         return Container(
           key: const ValueKey('agent-context-panel'),
           width: _agentContextPanelWidth,
@@ -70,9 +77,15 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
                         ),
                         const SizedBox(height: IdeSpacing.space20),
                         _AgentContextRawMessageList(
-                          messages: messages,
+                          items: rawItems,
+                          filterNonChat: _filterNonChatMessages,
                           expandedIds: _expandedRawMessageIds,
                           onToggle: _toggleRawMessage,
+                          onFilterChanged: (value) {
+                            setState(() {
+                              _filterNonChatMessages = value;
+                            });
+                          },
                         ),
                       ],
                     ),
@@ -239,17 +252,21 @@ class _ContextSummaryRow {
   }
 }
 
-/// 原始消息列表：展示每条消息的 ID、角色与时间，可展开查看 raw 原文。
+/// 原始消息列表：标题右侧筛选项；默认过滤工具等非主对话条目。
 class _AgentContextRawMessageList extends StatelessWidget {
   const _AgentContextRawMessageList({
-    required this.messages,
+    required this.items,
+    required this.filterNonChat,
     required this.expandedIds,
     required this.onToggle,
+    required this.onFilterChanged,
   });
 
-  final List<AgentConversationMessage> messages;
+  final List<_ContextRawItem> items;
+  final bool filterNonChat;
   final Set<String> expandedIds;
   final void Function(String messageId) onToggle;
+  final ValueChanged<bool> onFilterChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -261,36 +278,63 @@ class _AgentContextRawMessageList extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: IdeSpacing.space8),
-          child: Text(
-            '原始消息',
-            style: textStyles.titleSmall.copyWith(
-              fontWeight: FontWeight.w700,
-              color: colors.textPrimary,
-            ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '原始消息',
+                  style: textStyles.titleSmall.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: colors.textPrimary,
+                  ),
+                ),
+              ),
+              IdeChip(
+                key: const ValueKey('agent-context-raw-filter'),
+                label: filterNonChat ? '仅对话' : '全部',
+                selected: filterNonChat,
+                trailingIcon: Icons.filter_list_rounded,
+                semanticLabel: filterNonChat
+                    ? '当前仅显示对话消息，点击显示全部'
+                    : '当前显示全部消息，点击仅显示对话',
+                onPressed: () => onFilterChanged(!filterNonChat),
+              ),
+            ],
           ),
         ),
-        for (var index = 0; index < messages.length; index += 1) ...[
-          if (index > 0) const SizedBox(height: IdeSpacing.space4),
-          _AgentContextRawMessageRow(
-            message: messages[index],
-            expanded: expandedIds.contains(messages[index].id),
-            onToggle: () => onToggle(messages[index].id),
-          ),
-        ],
+        if (items.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: IdeSpacing.space8),
+            child: Text(
+              filterNonChat ? '暂无对话消息' : '暂无原始消息',
+              style: textStyles.bodySmall.copyWith(
+                color: colors.textSecondary.withValues(alpha: 0.8),
+              ),
+            ),
+          )
+        else
+          for (var index = 0; index < items.length; index += 1) ...[
+            if (index > 0) const SizedBox(height: IdeSpacing.space4),
+            _AgentContextRawMessageRow(
+              item: items[index],
+              expanded: expandedIds.contains(items[index].id),
+              onToggle: () => onToggle(items[index].id),
+            ),
+          ],
       ],
     );
   }
 }
 
-/// 原始消息单行：ID + 角色 + 时间，展开后显示 raw 协议原文。
+/// 原始消息单行：ID + 类型 + 时间，展开后显示 raw 协议原文。
 class _AgentContextRawMessageRow extends StatelessWidget {
   const _AgentContextRawMessageRow({
-    required this.message,
+    required this.item,
     required this.expanded,
     required this.onToggle,
   });
 
-  final AgentConversationMessage message;
+  final _ContextRawItem item;
   final bool expanded;
   final VoidCallback onToggle;
 
@@ -298,10 +342,10 @@ class _AgentContextRawMessageRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final hasRaw = message.raw.isNotEmpty;
+    final hasRaw = item.raw.isNotEmpty;
     return IdeCollapsibleCard(
-      headerKey: ValueKey<String>('agent-context-raw-${message.id}'),
-      bodyKey: ValueKey<String>('agent-context-raw-body-${message.id}'),
+      headerKey: ValueKey<String>('agent-context-raw-${item.id}'),
+      bodyKey: ValueKey<String>('agent-context-raw-body-${item.id}'),
       expanded: expanded,
       canExpand: hasRaw,
       onToggle: onToggle,
@@ -313,7 +357,7 @@ class _AgentContextRawMessageRow extends StatelessWidget {
         children: [
           Expanded(
             child: Text(
-              message.id,
+              item.displayId,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: textStyles.codeSmall.copyWith(
@@ -323,7 +367,7 @@ class _AgentContextRawMessageRow extends StatelessWidget {
           ),
           const SizedBox(width: IdeSpacing.space8),
           Text(
-            _contextRoleLabel(message.role),
+            item.kindLabel,
             style: textStyles.caption.copyWith(
               color: colors.accent.withValues(alpha: 0.82),
               fontWeight: FontWeight.w600,
@@ -331,7 +375,7 @@ class _AgentContextRawMessageRow extends StatelessWidget {
           ),
           const SizedBox(width: IdeSpacing.space8),
           Text(
-            _extractRawTimestamp(message.raw),
+            _extractRawTimestamp(item.raw),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: textStyles.caption.copyWith(
@@ -345,7 +389,7 @@ class _AgentContextRawMessageRow extends StatelessWidget {
               constraints: const BoxConstraints(maxHeight: 360),
               child: SingleChildScrollView(
                 child: _AgentHighlightedCodeBlock(
-                  code: _prettyJson(message.raw),
+                  code: _prettyJson(item.raw),
                   language: 'json',
                 ),
               ),
@@ -358,12 +402,178 @@ class _AgentContextRawMessageRow extends StatelessWidget {
   }
 }
 
-/// 消息角色转为中文标签。
-String _contextRoleLabel(AgentMessageRole role) {
-  return switch (role) {
+/// 上下文面板「原始消息」统一条目。
+class _ContextRawItem {
+  const _ContextRawItem({
+    required this.id,
+    required this.displayId,
+    required this.kindLabel,
+    required this.raw,
+  });
+
+  /// 展开态与 ValueKey 使用的稳定 id。
+  final String id;
+
+  /// 列表中展示的 id 文案。
+  final String displayId;
+
+  /// 类型标签（用户 / 助手 / 工具 / …）。
+  final String kindLabel;
+
+  final Map<String, Object?> raw;
+}
+
+/// 从时间线构建原始消息列表；[filterNonChat] 为 true 时仅保留主对话。
+List<_ContextRawItem> _buildContextRawItems({
+  required List<AgentTimelineEntry> timelineEntries,
+  required bool filterNonChat,
+}) {
+  final items = <_ContextRawItem>[];
+  for (final entry in timelineEntries) {
+    switch (entry) {
+      case AgentMessageTimelineEntry(:final message):
+        if (filterNonChat && !_isMainConversationMessage(message)) {
+          continue;
+        }
+        items.add(
+          _ContextRawItem(
+            id: message.id,
+            displayId: message.id,
+            kindLabel: _contextMessageKindLabel(message),
+            raw: message.raw,
+          ),
+        );
+      case AgentToolTimelineEntry(:final toolCall):
+        if (filterNonChat) {
+          continue;
+        }
+        items.add(
+          _ContextRawItem(
+            id: toolCall.id,
+            displayId: toolCall.id,
+            kindLabel: _contextToolKindLabel(toolCall),
+            raw: _toolCallRawMap(toolCall),
+          ),
+        );
+      case AgentPermissionTimelineEntry(:final request):
+        if (filterNonChat) {
+          continue;
+        }
+        items.add(
+          _ContextRawItem(
+            id: request.id,
+            displayId: request.id,
+            kindLabel: '审批',
+            raw: request.raw.isNotEmpty
+                ? request.raw
+                : <String, Object?>{
+                    'id': request.id,
+                    'title': request.title,
+                    'kind': request.kind.name,
+                    'description': ?request.description,
+                    'command': ?request.command,
+                  },
+          ),
+        );
+      case AgentHistoryEventTimelineEntry(:final event):
+        if (filterNonChat) {
+          continue;
+        }
+        items.add(
+          _ContextRawItem(
+            id: event.id,
+            displayId: event.id,
+            kindLabel: _contextHistoryEventLabel(event),
+            raw: event.raw.isNotEmpty
+                ? event.raw
+                : <String, Object?>{
+                    'id': event.id,
+                    'kind': event.kind.name,
+                    'title': event.title,
+                    'description': ?event.description,
+                    'content': ?event.content,
+                  },
+          ),
+        );
+      case AgentTurnDiffTimelineEntry(:final turnId, :final diff, :final raw):
+        if (filterNonChat) {
+          continue;
+        }
+        items.add(
+          _ContextRawItem(
+            id: 'turn-diff-$turnId',
+            displayId: turnId,
+            kindLabel: 'Diff',
+            raw: raw.isNotEmpty
+                ? raw
+                : <String, Object?>{'turnId': turnId, 'diff': diff},
+          ),
+        );
+    }
+  }
+  return items;
+}
+
+/// 主对话：用户/助手普通消息（排除 welcome、计划、系统）。
+bool _isMainConversationMessage(AgentConversationMessage message) {
+  if (message.id == 'welcome' ||
+      message.id == AgentConversationTimelineStore.welcomeMessage.id) {
+    return false;
+  }
+  if (message.isPlan) {
+    return false;
+  }
+  return message.role == AgentMessageRole.user ||
+      message.role == AgentMessageRole.agent;
+}
+
+String _contextMessageKindLabel(AgentConversationMessage message) {
+  if (message.isPlan) {
+    return '计划';
+  }
+  return switch (message.role) {
     AgentMessageRole.user => '用户',
     AgentMessageRole.agent => '助手',
     AgentMessageRole.system => '系统',
+  };
+}
+
+String _contextToolKindLabel(AgentToolCall toolCall) {
+  return switch (toolCall.kind) {
+    AgentToolKind.think => '思考',
+    AgentToolKind.read => '读取',
+    AgentToolKind.edit => '编辑',
+    AgentToolKind.delete => '删除',
+    AgentToolKind.move => '移动',
+    AgentToolKind.search => '搜索',
+    AgentToolKind.execute => '执行',
+    AgentToolKind.fetch => '拉取',
+    AgentToolKind.other => '工具',
+  };
+}
+
+String _contextHistoryEventLabel(AgentHistoryEventEntry event) {
+  return switch (event.kind) {
+    AgentHistoryEventKind.permission => '审批',
+    AgentHistoryEventKind.warning => '警告',
+    AgentHistoryEventKind.search => '搜索',
+    AgentHistoryEventKind.system => '系统',
+  };
+}
+
+Map<String, Object?> _toolCallRawMap(AgentToolCall toolCall) {
+  if (toolCall.raw.isNotEmpty) {
+    return toolCall.raw;
+  }
+  return <String, Object?>{
+    'id': toolCall.id,
+    'title': toolCall.title,
+    'kind': toolCall.kind.name,
+    'status': toolCall.status.name,
+    'content': ?toolCall.content,
+    if (toolCall.locations.isNotEmpty) 'locations': toolCall.locations,
+    if (toolCall.rawInput.isNotEmpty) 'rawInput': toolCall.rawInput,
+    if (toolCall.rawOutput.isNotEmpty) 'rawOutput': toolCall.rawOutput,
   };
 }
 

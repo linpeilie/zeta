@@ -794,6 +794,22 @@ class _ThreadTileState extends State<_ThreadTile> {
                     ),
                   ),
                 ),
+                if (_providerShortLabel(thread.providerId)
+                    case final providerLabel?) ...[
+                  const SizedBox(width: IdeSpacing.space6),
+                  Text(
+                    providerLabel,
+                    key: ValueKey<String>(
+                      'project-thread-provider-${widget.projectPath}-${thread.id}',
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textStyles.caption.copyWith(
+                      color: colors.mutedText.withValues(alpha: 0.85),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
                 if (waitingLabel != null) ...[
                   const SizedBox(width: IdeSpacing.space8),
                   Text(
@@ -971,6 +987,19 @@ IconData _threadIcon(AgentThreadRuntimeStatus status) {
     AgentThreadRuntimeStatus.active => Icons.play_circle_outline_rounded,
     AgentThreadRuntimeStatus.systemError => Icons.error_outline_rounded,
     _ => Icons.chat_bubble_outline_rounded,
+  };
+}
+
+/// 项目 thread 行上的短 provider 标签；未知 id 回退显示原 id 截断。
+String? _providerShortLabel(String providerId) {
+  final trimmed = providerId.trim();
+  if (trimmed.isEmpty) {
+    return null;
+  }
+  return switch (trimmed) {
+    defaultAgentProviderId || 'codex' => 'Codex',
+    grokAgentProviderId || 'grok' => 'Grok',
+    _ => trimmed.length <= 10 ? trimmed : trimmed.substring(0, 10),
   };
 }
 

@@ -5,38 +5,60 @@ import 'dart:io';
 import 'package:toml/toml.dart';
 
 import 'package:zeta/src/features/agent/data/codex_cli_locator.dart';
+import 'package:zeta/src/features/agent/data/grok_cli_locator.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent_management/data/cli_process_runner.dart';
+import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart'
+    show isNewerVersion, maskSensitiveConfiguration, redactLogLine;
 import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 
-/// Codex CLI 的检测、配置与日志数据仓库。
-class CodexAgentManagementRepository implements AgentCliManagementRepository {
-  CodexAgentManagementRepository({
+/// 可注入的 CLI 执行函数（测试可替换）。
+typedef GrokCliProcessRun =
+    Future<CliProcessResult> Function(
+      ResolvedCliCommand command,
+      List<String> arguments, {
+      Duration timeout,
+      Map<String, String>? environment,
+    });
+
+/// Grok CLI 的检测、配置与日志数据仓库。
+class GrokAgentManagementRepository implements AgentCliManagementRepository {
+  GrokAgentManagementRepository({
     required this.providerFactory,
-    CliProcessRunner? processRunner,
-    CodexCliLocator? locator,
-    HttpClient Function()? httpClientFactory,
+    GrokCliProcessRun? processRunner,
+    GrokCliLocator? locator,
     DateTime Function()? now,
-    String Function()? codexHomeProvider,
-  }) : _processRunner = processRunner ?? const CliProcessRunner(),
-       _locator = locator ?? const CodexCliLocator(),
-       _httpClientFactory = httpClientFactory ?? HttpClient.new,
+    String Function()? grokHomeProvider,
+  }) : _processRunner =
+           processRunner ??
+           ((
+             command,
+             arguments, {
+             timeout = const Duration(seconds: 30),
+             environment,
+           }) {
+             return const CliProcessRunner().run(
+               command,
+               arguments,
+               timeout: timeout,
+               environment: environment,
+             );
+           }),
+       _locator = locator ?? const GrokCliLocator(),
        _now = now ?? DateTime.now,
-       _codexHomeProvider = codexHomeProvider ?? _defaultCodexHome;
+       _grokHomeProvider = grokHomeProvider ?? _defaultGrokHome;
 
   final AgentProviderFactory providerFactory;
-  final CliProcessRunner _processRunner;
-  final CodexCliLocator _locator;
-  final HttpClient Function() _httpClientFactory;
+  final GrokCliProcessRun _processRunner;
+  final GrokCliLocator _locator;
   final DateTime Function() _now;
-  final String Function() _codexHomeProvider;
+  final String Function() _grokHomeProvider;
 
   @override
-  String get agentId => AgentDefinition.codex.id;
+  String get agentId => AgentDefinition.grok.id;
 
-  /// 执行完整但不产生模型费用的 Codex 自动检测。
   @override
   Future<ManagedAgent> detect({
     required AgentProviderConfig providerConfig,
@@ -44,7 +66,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
     AgentDetectionProgressCallback? onProgress,
   }) async {
     const total = 8;
-    var current = ManagedAgent.codex(enabled: enabled).copyWith(
+    var current = ManagedAgent.grok(enabled: enabled).copyWith(
       installationState: AgentInstallationState.detecting,
       accountState: AgentAccountState.checking,
       versionState: AgentVersionState.checking,
@@ -63,7 +85,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
       );
     }
 
-    publish(0, '正在定位 Codex CLI');
+    publish(0, '正在定位 Grok CLI');
     final resolved = await _locator.locate(providerConfig);
     if (resolved == null) {
       final configInfo = await _configurationInfo();
@@ -77,10 +99,10 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
         logPaths: await discoverLogPaths(),
         lastDetectedAt: _now(),
         errorStage: AgentDiagnosticStage.fileDetection,
-        errorMessage: '未找到 Codex CLI',
-        suggestion: '请先安装 Codex CLI，或手动选择可执行文件。',
+        errorMessage: '未找到 Grok CLI',
+        suggestion: '请先安装 Grok CLI，或手动选择可执行文件。',
       );
-      publish(total, '未找到 Codex CLI');
+      publish(total, '未找到 Grok CLI');
       return current;
     }
 
@@ -95,7 +117,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
       errorDetails: null,
       suggestion: null,
     );
-    publish(1, '已找到 Codex CLI');
+    publish(1, '已找到 Grok CLI');
 
     final version = await _readVersion(resolved);
     current = current.copyWith(
@@ -111,41 +133,11 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
     );
     publish(2, '已检测当前版本');
 
-    final account = await _readAccountStatus(resolved);
-    current = current.copyWith(
-      accountState: account.state,
-      accountLabel: account.label,
-      errorStage: account.error == null
-          ? current.errorStage
-          : account.failureStage,
-      errorMessage: account.error ?? current.errorMessage,
-      errorDetails: account.details ?? current.errorDetails,
-      suggestion: account.error == null
-          ? current.suggestion
-          : account.suggestion,
+    final latest = await _latestVersion(resolved);
+    final versionState = _resolveVersionState(
+      currentVersion: version.version,
+      latest: latest,
     );
-    publish(3, '已检测账号状态');
-
-    final configInfo = await _configurationInfo();
-    current = current.copyWith(
-      configExists: configInfo.exists,
-      configModifiedAt: configInfo.modifiedAt,
-    );
-    publish(4, '已读取配置文件状态');
-
-    final logs = await discoverLogPaths();
-    current = current.copyWith(logPaths: logs);
-    publish(5, '已定位 Codex 日志');
-
-    final latest = await _latestVersion();
-    final versionState = switch ((version.version, latest.version)) {
-      (final String currentVersion, final String latestVersion) =>
-        isNewerVersion(latestVersion, currentVersion)
-            ? AgentVersionState.updateAvailable
-            : AgentVersionState.current,
-      _ when latest.error != null => AgentVersionState.checkFailed,
-      _ => AgentVersionState.unknown,
-    };
     current = current.copyWith(
       latestVersion: latest.version,
       versionState: versionState,
@@ -158,8 +150,37 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
       errorDetails: latest.error == null
           ? current.errorDetails
           : (current.errorDetails ?? latest.details),
+      suggestion: latest.error == null
+          ? current.suggestion
+          : (current.suggestion ?? '请检查网络后重新检测，或在终端运行 grok update --check。'),
     );
-    publish(6, '已检查最新版本');
+    publish(3, '已检查最新版本');
+
+    final account = await _readAccountStatus();
+    current = current.copyWith(
+      accountState: account.state,
+      accountLabel: account.label,
+      errorStage: account.error == null
+          ? current.errorStage
+          : account.failureStage,
+      errorMessage: account.error ?? current.errorMessage,
+      errorDetails: account.details ?? current.errorDetails,
+      suggestion: account.error == null
+          ? current.suggestion
+          : account.suggestion,
+    );
+    publish(4, '已检测账号状态');
+
+    final configInfo = await _configurationInfo();
+    current = current.copyWith(
+      configExists: configInfo.exists,
+      configModifiedAt: configInfo.modifiedAt,
+    );
+    publish(5, '已读取配置文件状态');
+
+    final logs = await discoverLogPaths();
+    current = current.copyWith(logPaths: logs);
+    publish(6, '已定位 Grok 日志');
 
     final effectiveConfig = _providerConfig(
       providerConfig,
@@ -173,7 +194,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
     current = current.copyWith(
       models: probe.models,
       modelsUpdatedAt: probe.models.isEmpty ? null : _now(),
-      modelSource: probe.models.isEmpty ? null : 'Codex app-server',
+      modelSource: probe.models.isEmpty ? null : 'Grok ACP',
       runtimeState: !enabled
           ? AgentRuntimeState.disabled
           : probe.success
@@ -184,16 +205,15 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
       errorDetails: probe.success ? current.errorDetails : probe.details,
       suggestion: probe.success
           ? current.suggestion
-          : '请检查 Codex 配置和账号状态后重新测试连接。',
+          : '请检查 Grok 登录态与配置后重新测试连接。',
     );
     publish(7, '已完成协议握手');
 
     current = current.copyWith(lastDetectedAt: _now());
-    publish(total, 'Codex 检测完成');
+    publish(total, 'Grok 检测完成');
     return current;
   }
 
-  /// 使用独立 provider 实例执行 initialize + model/list，不发送模型请求。
   @override
   Future<(AgentConnectionTestResult, List<AgentModelInfo>)> testConnection({
     required AgentProviderConfig providerConfig,
@@ -202,7 +222,6 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
     final stopwatch = Stopwatch()..start();
     final resolved = await _locator.locate(providerConfig);
     if (resolved == null) {
-      stopwatch.stop();
       return (
         AgentConnectionTestResult(
           success: false,
@@ -212,22 +231,19 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
           accountValid: false,
           protocolReady: false,
           failureStage: AgentDiagnosticStage.fileDetection,
-          message: '未找到 Codex CLI 可执行文件。',
+          message: '未找到 Grok CLI',
         ),
         const <AgentModelInfo>[],
       );
     }
 
-    final account = await _readAccountStatus(resolved);
-    final effectiveConfig = _providerConfig(
+    final account = await _readAccountStatus();
+    final effective = _providerConfig(
       providerConfig,
       resolved,
       timeoutSeconds: _timeoutSeconds(providerConfig),
     );
-    final probe = await _probeProvider(
-      effectiveConfig,
-      accountState: account.state,
-    );
+    final probe = await _probeProvider(effective, accountState: account.state);
     stopwatch.stop();
     return (
       AgentConnectionTestResult(
@@ -237,15 +253,14 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
         cliCallable: true,
         accountValid: account.state == AgentAccountState.loggedIn,
         protocolReady: probe.success,
-        failureStage: probe.failureStage,
-        message: probe.message,
+        failureStage: probe.success ? null : probe.failureStage,
+        message: probe.success ? 'Grok ACP 连接正常' : probe.message,
         rawErrorSummary: probe.details,
       ),
       probe.models,
     );
   }
 
-  /// 将用户选择的 CLI 文件转换为 provider 可持久化配置。
   @override
   Future<AgentProviderConfig> providerConfigForPath({
     required AgentProviderConfig current,
@@ -259,7 +274,6 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
     return _providerConfig(current, resolved, timeoutSeconds: timeoutSeconds);
   }
 
-  /// 更新只影响管理层的超时配置。
   @override
   AgentProviderConfig providerConfigWithTimeout(
     AgentProviderConfig current,
@@ -274,11 +288,8 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
   }
 
   @override
-  String get configPath {
-    return _join(_codexHomeProvider(), 'config.toml');
-  }
+  String get configPath => _join(_grokHomeProvider(), 'config.toml');
 
-  /// 加载 TOML 配置，并生成脱敏内容与外部修改签名。
   @override
   Future<AgentConfigurationDocument> readConfiguration() async {
     final file = File(configPath);
@@ -297,7 +308,6 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
     );
   }
 
-  /// 校验 TOML；返回 null 表示有效。
   @override
   String? validateConfiguration(String content) {
     try {
@@ -308,7 +318,6 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
     }
   }
 
-  /// 使用临时文件和备份保存配置，失败时保留原文件。
   @override
   Future<AgentConfigurationSaveResult> saveConfiguration({
     required AgentConfigurationDocument original,
@@ -382,28 +391,31 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
     );
   }
 
-  /// 查找 Codex 自身写入磁盘的文本日志。
   @override
   Future<List<String>> discoverLogPaths() async {
-    final root = _codexHomeProvider();
+    final root = _grokHomeProvider();
     final paths = <String>[];
-    final logDirectory = Directory(_join(root, 'log'));
-    if (await logDirectory.exists()) {
-      await for (final entity in logDirectory.list(followLinks: false)) {
-        if (entity is File && entity.path.toLowerCase().endsWith('.log')) {
+    final logsDir = Directory(_join(root, 'logs'));
+    if (await logsDir.exists()) {
+      await for (final entity in logsDir.list(
+        recursive: true,
+        followLinks: false,
+      )) {
+        if (entity is! File) {
+          continue;
+        }
+        final lower = entity.path.toLowerCase();
+        if (lower.endsWith('.jsonl') ||
+            lower.endsWith('.log') ||
+            lower.endsWith('.txt')) {
           paths.add(entity.path);
         }
       }
-    }
-    final sandboxLog = File(_join(root, 'sandbox.log'));
-    if (await sandboxLog.exists()) {
-      paths.add(sandboxLog.path);
     }
     paths.sort();
     return List<String>.unmodifiable(paths);
   }
 
-  /// 读取日志尾部并在进入 UI 前脱敏。
   @override
   Future<List<AgentLogEntry>> readLogs(
     List<String> paths, {
@@ -464,18 +476,19 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
 
   AgentProviderConfig _providerConfig(
     AgentProviderConfig current,
-    ResolvedCliCommand command, {
+    ResolvedCliCommand resolved, {
     required int timeoutSeconds,
   }) {
     return current.copyWith(
-      id: AgentDefinition.codex.id,
-      displayName: AgentDefinition.codex.displayName,
-      kind: AgentProviderKind.codexAppServer,
-      command: command.executable,
-      arguments: command.argumentsFor(const <String>['app-server']),
+      id: AgentDefinition.grok.id,
+      displayName: AgentDefinition.grok.displayName,
+      kind: AgentProviderKind.acp,
+      // 保留真实 CLI 路径与纯协议参数；进程启动器会按平台包装 cmd/PowerShell。
+      command: resolved.displayPath,
+      arguments: const <String>['agent', 'stdio'],
       extra: <String, Object?>{
         ...current.extra,
-        'cliPath': command.displayPath,
+        'cliPath': resolved.displayPath,
         'timeoutSeconds': timeoutSeconds,
       },
     );
@@ -491,68 +504,132 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
 
   Future<_VersionRead> _readVersion(ResolvedCliCommand command) async {
     try {
-      final result = await _processRunner.run(command, const <String>[
+      final result = await _processRunner(command, const <String>[
         '--version',
       ], timeout: const Duration(seconds: 10));
       final output = result.combinedOutput;
+      // 典型输出：grok 0.2.99 (b1b49ccb71)
       final match = RegExp(
+        r'\bgrok\s+(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)\b',
+        caseSensitive: false,
+      ).firstMatch(output);
+      final fallback = RegExp(
         r'\b(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)\b',
       ).firstMatch(output);
-      if (!result.succeeded || match == null) {
-        return _VersionRead(error: '无法识别 Codex CLI 版本。', details: output);
+      final version = match?.group(1) ?? fallback?.group(1);
+      if (!result.succeeded || version == null) {
+        return _VersionRead(error: '无法识别 Grok CLI 版本。', details: output);
       }
-      return _VersionRead(version: match.group(1));
+      return _VersionRead(version: version);
     } catch (error) {
-      return _VersionRead(error: 'Codex CLI 版本检测失败。', details: '$error');
+      return _VersionRead(error: 'Grok CLI 版本检测失败。', details: '$error');
     }
   }
 
-  Future<_AccountRead> _readAccountStatus(ResolvedCliCommand command) async {
+  /// 通过 `grok update --check --json` 查询线上最新版本（不安装）。
+  Future<_LatestVersionRead> _latestVersion(ResolvedCliCommand command) async {
     try {
-      final result = await _processRunner.run(command, const <String>[
-        'login',
-        'status',
-      ], timeout: const Duration(seconds: 15));
-      final output = result.combinedOutput;
-      final normalized = output.toLowerCase();
-      if (result.succeeded &&
-          (normalized.contains('logged in') ||
-              normalized.contains('authenticated'))) {
-        return const _AccountRead(
-          state: AgentAccountState.loggedIn,
-          label: '账号已登录',
+      final result = await _processRunner(command, const <String>[
+        'update',
+        '--check',
+        '--json',
+      ], timeout: const Duration(seconds: 20));
+      final payload = parseGrokUpdateCheckJson(result.combinedOutput);
+      if (payload == null) {
+        return _LatestVersionRead(
+          error: '无法解析版本检查结果。',
+          details: result.combinedOutput,
         );
       }
-      if (normalized.contains('not logged') ||
-          normalized.contains('login required')) {
+      if (payload.error != null && payload.error!.isNotEmpty) {
+        return _LatestVersionRead(error: '最新版本检查失败。', details: payload.error);
+      }
+      final latest = payload.latestVersion;
+      if (latest == null || latest.isEmpty) {
+        return const _LatestVersionRead(error: '版本服务未返回最新版本号。');
+      }
+      return _LatestVersionRead(
+        version: latest,
+        updateAvailable: payload.updateAvailable,
+      );
+    } catch (error) {
+      return _LatestVersionRead(error: '无法获取 Grok 最新版本。', details: '$error');
+    }
+  }
+
+  /// 综合本地版本、远端版本与 CLI 的 updateAvailable 标记。
+  AgentVersionState _resolveVersionState({
+    required String? currentVersion,
+    required _LatestVersionRead latest,
+  }) {
+    if (latest.error != null && latest.version == null) {
+      return AgentVersionState.checkFailed;
+    }
+    final latestVersion = latest.version;
+    if (currentVersion == null || latestVersion == null) {
+      return currentVersion == null
+          ? AgentVersionState.unknown
+          : AgentVersionState.current;
+    }
+    if (latest.updateAvailable == true) {
+      return AgentVersionState.updateAvailable;
+    }
+    if (isNewerVersion(latestVersion, currentVersion)) {
+      return AgentVersionState.updateAvailable;
+    }
+    return AgentVersionState.current;
+  }
+
+  /// 通过 `~/.grok/auth.json` 判断登录态（无独立 login status 子命令时的降级）。
+  Future<_AccountRead> _readAccountStatus() async {
+    try {
+      final authFile = File(_join(_grokHomeProvider(), 'auth.json'));
+      if (!await authFile.exists()) {
         return const _AccountRead(
           state: AgentAccountState.loggedOut,
-          error: 'Codex CLI 尚未登录。',
-          suggestion: '请在终端运行 codex login 后重新检测。',
+          error: 'Grok CLI 尚未登录。',
+          suggestion: '请在终端运行 grok login 后重新检测。',
           failureStage: AgentDiagnosticStage.accountAuthentication,
         );
       }
-      final configFailure =
-          normalized.contains('config.toml') ||
-          normalized.contains('configuration') ||
-          normalized.contains('unknown variant');
-      return _AccountRead(
+      final raw = await authFile.readAsString();
+      if (raw.trim().isEmpty || raw.trim() == '{}') {
+        return const _AccountRead(
+          state: AgentAccountState.loggedOut,
+          error: 'Grok 登录缓存为空。',
+          suggestion: '请在终端运行 grok login 后重新检测。',
+          failureStage: AgentDiagnosticStage.accountAuthentication,
+        );
+      }
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map && decoded.isNotEmpty) {
+          return const _AccountRead(
+            state: AgentAccountState.loggedIn,
+            label: '账号已登录',
+          );
+        }
+      } catch (_) {
+        // 非 JSON 但有内容：仍视为可能已登录。
+        if (raw.trim().length > 8) {
+          return const _AccountRead(
+            state: AgentAccountState.loggedIn,
+            label: '账号已登录',
+          );
+        }
+      }
+      return const _AccountRead(
         state: AgentAccountState.unavailable,
-        error: configFailure ? 'Codex 配置文件无法解析。' : '无法检测账号状态。',
-        details: output,
-        suggestion: configFailure
-            ? '请修复 config.toml 中提示的字段后重新检测。'
-            : '请在终端运行 codex login status 查看详细信息。',
-        failureStage: configFailure
-            ? AgentDiagnosticStage.configurationRead
-            : AgentDiagnosticStage.accountAuthentication,
+        error: '无法解析 Grok 登录缓存。',
+        suggestion: '请重新运行 grok login。',
+        failureStage: AgentDiagnosticStage.accountAuthentication,
       );
     } catch (error) {
       return _AccountRead(
         state: AgentAccountState.unavailable,
         error: '账号状态检测失败。',
         details: '$error',
-        suggestion: '请确认 Codex CLI 可以在终端中正常运行。',
+        suggestion: '请确认 Grok CLI 可以在终端中正常运行。',
         failureStage: AgentDiagnosticStage.accountAuthentication,
       );
     }
@@ -579,46 +656,11 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
         failureStage: accountState == AgentAccountState.loggedIn
             ? AgentDiagnosticStage.protocolHandshake
             : AgentDiagnosticStage.accountAuthentication,
-        message: 'Codex app-server 连接失败。',
+        message: 'Grok ACP 连接失败。',
         details: '$error',
       );
     } finally {
       await provider?.dispose();
-    }
-  }
-
-  Future<_LatestVersionRead> _latestVersion() async {
-    final client = _httpClientFactory();
-    try {
-      final uri = Uri.parse(
-        'https://registry.npmjs.org/@openai%2Fcodex/latest',
-      );
-      final request = await client
-          .getUrl(uri)
-          .timeout(const Duration(seconds: 10));
-      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      final response = await request.close().timeout(
-        const Duration(seconds: 10),
-      );
-      if (response.statusCode != HttpStatus.ok) {
-        return _LatestVersionRead(
-          error: '最新版本检查失败。',
-          details: 'HTTP ${response.statusCode}',
-        );
-      }
-      final body = await response
-          .transform(const Utf8Decoder())
-          .join()
-          .timeout(const Duration(seconds: 10));
-      final decoded = jsonDecode(body);
-      if (decoded is Map && decoded['version'] is String) {
-        return _LatestVersionRead(version: decoded['version'] as String);
-      }
-      return const _LatestVersionRead(error: '版本服务返回了未知格式。');
-    } catch (error) {
-      return _LatestVersionRead(error: '无法获取 Codex 最新版本。', details: '$error');
-    } finally {
-      client.close(force: true);
     }
   }
 
@@ -632,81 +674,17 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
   }
 }
 
-/// 比较常规语义化版本；无法解析时保守返回 false。
-bool isNewerVersion(String candidate, String current) {
-  List<int>? parse(String value) {
-    final core = value.split(RegExp(r'[-+]')).first;
-    final parts = core.split('.');
-    if (parts.length < 3) {
-      return null;
-    }
-    final numbers = parts.take(3).map(int.tryParse).toList();
-    if (numbers.any((number) => number == null)) {
-      return null;
-    }
-    return numbers.cast<int>();
-  }
-
-  final left = parse(candidate);
-  final right = parse(current);
-  if (left == null || right == null) {
-    return false;
-  }
-  for (var index = 0; index < 3; index++) {
-    if (left[index] != right[index]) {
-      return left[index] > right[index];
-    }
-  }
-  return false;
-}
-
-/// 默认遮挡常见敏感 TOML 字段的值。
-String maskSensitiveConfiguration(String content) {
-  final sensitive = RegExp(
-    r'^(\s*(?:api[_-]?key|token|secret|password|authorization|access[_-]?token|refresh[_-]?token)\s*=\s*)([^\r\n#]+)',
-    caseSensitive: false,
-    multiLine: true,
-  );
-  return content.replaceAllMapped(
-    sensitive,
-    (match) => '${match.group(1)}"••••••"',
-  );
-}
-
-/// 在日志进入 UI 前遮挡凭证、Authorization 值和用户目录。
-String redactLogLine(String line) {
-  var result = line
-      .replaceAll(
-        RegExp(r'bearer\s+[A-Za-z0-9._~+/-]+=*', caseSensitive: false),
-        'Bearer ••••••',
-      )
-      .replaceAll(RegExp(r'\bsk-[A-Za-z0-9_-]{12,}\b'), 'sk-••••••')
-      .replaceAllMapped(
-        RegExp(
-          r'(api[_-]?key|token|secret|password|authorization)(\s*[:=]\s*)[^\s,;]+',
-          caseSensitive: false,
-        ),
-        (match) => '${match.group(1)}${match.group(2)}••••••',
-      );
-  final home =
-      Platform.environment[Platform.isWindows ? 'USERPROFILE' : 'HOME'];
-  if (home != null && home.isNotEmpty) {
-    result = result.replaceAll(home, '~');
-  }
-  return result;
-}
-
-String _defaultCodexHome() {
-  final override = Platform.environment['CODEX_HOME'];
-  if (override != null && override.trim().isNotEmpty) {
-    return override;
+String _defaultGrokHome() {
+  final envHome = Platform.environment['GROK_HOME']?.trim();
+  if (envHome != null && envHome.isNotEmpty) {
+    return envHome;
   }
   final home =
       Platform.environment[Platform.isWindows ? 'USERPROFILE' : 'HOME'];
   if (home == null || home.isEmpty) {
-    return '.codex';
+    return '.grok';
   }
-  return _join(home, '.codex');
+  return _join(home, '.grok');
 }
 
 String _signature(String content, FileStat? stat) {
@@ -720,24 +698,26 @@ String _signature(String content, FileStat? stat) {
 
 AgentLogLevel _logLevel(String line) {
   final normalized = line.toLowerCase();
-  if (normalized.contains('error') || normalized.contains('fatal')) {
+  if (normalized.contains('error') || normalized.contains('"level":"error"')) {
     return AgentLogLevel.error;
   }
-  if (normalized.contains('warn')) {
+  if (normalized.contains('warn') || normalized.contains('"level":"warn"')) {
     return AgentLogLevel.warning;
   }
-  if (normalized.contains('debug') || normalized.contains('trace')) {
+  if (normalized.contains('debug') || normalized.contains('"level":"debug"')) {
     return AgentLogLevel.debug;
   }
   return AgentLogLevel.info;
 }
 
 DateTime? _timestamp(String line) {
-  final match = RegExp(r'(\d{4}-\d{2}-\d{2}[T ][0-9:.+-]+)').firstMatch(line);
-  if (match == null) {
-    return null;
+  final iso = RegExp(
+    r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?',
+  ).firstMatch(line);
+  if (iso != null) {
+    return DateTime.tryParse(iso.group(0)!);
   }
-  return DateTime.tryParse(match.group(1)!.replaceFirst(' ', 'T'));
+  return null;
 }
 
 String _join(String parent, String child) {
@@ -756,11 +736,82 @@ class _VersionRead {
 }
 
 class _LatestVersionRead {
-  const _LatestVersionRead({this.version, this.error, this.details});
+  const _LatestVersionRead({
+    this.version,
+    this.updateAvailable,
+    this.error,
+    this.details,
+  });
 
   final String? version;
+  final bool? updateAvailable;
   final String? error;
   final String? details;
+}
+
+/// `grok update --check --json` 的解析结果。
+class GrokUpdateCheckPayload {
+  const GrokUpdateCheckPayload({
+    this.currentVersion,
+    this.latestVersion,
+    this.updateAvailable,
+    this.error,
+    this.raw = const <String, Object?>{},
+  });
+
+  final String? currentVersion;
+  final String? latestVersion;
+  final bool? updateAvailable;
+  final String? error;
+  final Map<String, Object?> raw;
+}
+
+/// 解析 `grok update --check --json` 输出（允许前后夹杂日志行）。
+GrokUpdateCheckPayload? parseGrokUpdateCheckJson(String output) {
+  final trimmed = output.trim();
+  if (trimmed.isEmpty) {
+    return null;
+  }
+  final start = trimmed.indexOf('{');
+  final end = trimmed.lastIndexOf('}');
+  if (start < 0 || end <= start) {
+    return null;
+  }
+  try {
+    final decoded = jsonDecode(trimmed.substring(start, end + 1));
+    if (decoded is! Map) {
+      return null;
+    }
+    final map = decoded.map(
+      (key, value) => MapEntry(key.toString(), value as Object?),
+    );
+    final errorRaw = map['error'];
+    final errorText = errorRaw == null || errorRaw.toString() == 'null'
+        ? null
+        : errorRaw.toString().trim();
+    return GrokUpdateCheckPayload(
+      currentVersion: _semverCore(map['currentVersion']?.toString()),
+      latestVersion: _semverCore(map['latestVersion']?.toString()),
+      updateAvailable: map['updateAvailable'] is bool
+          ? map['updateAvailable'] as bool
+          : null,
+      error: errorText == null || errorText.isEmpty ? null : errorText,
+      raw: map,
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
+/// 提取语义版本核心段（去掉 git hash 等后缀）。
+String? _semverCore(String? value) {
+  if (value == null) {
+    return null;
+  }
+  final match = RegExp(
+    r'(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)',
+  ).firstMatch(value.trim());
+  return match?.group(1) ?? value.trim();
 }
 
 class _AccountRead {

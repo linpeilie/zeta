@@ -1,0 +1,428 @@
+import 'dart:async';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/features/agent/data/datasources/acp/grok_acp_agent_provider.dart';
+import 'package:zeta/src/features/agent/data/datasources/acp/grok_models_cli.dart';
+import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
+import 'package:zeta/src/features/agent/data/mappers/grok_acp_notification_mapper.dart';
+import 'package:zeta/src/features/agent/domain/agent_models.dart';
+
+void main() {
+  group('GrokAcpAgentProvider', () {
+    test('initializes, authenticates, and starts ACP sessions', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+
+      final session = await provider.startSession(
+        context: const AgentContext(projectPath: r'D:\repo\zeta'),
+      );
+
+      expect(session.id, 'sess-1');
+      expect(
+        peer.requestMethods,
+        containsAll(<String>['initialize', 'authenticate', 'session/new']),
+      );
+      final initParams = peer.requestParams.first! as Map<String, Object?>;
+      expect(initParams['protocolVersion'], 1);
+      final caps = initParams['clientCapabilities']! as Map<String, Object?>;
+      expect(caps['terminal'], isFalse);
+
+      await provider.dispose();
+    });
+
+    test('maps session/update chunks and tool calls to AgentEvents', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+
+      await provider.initialize();
+      peer.emitNotification('session/update', <String, Object?>{
+        'sessionId': 'sess-1',
+        'update': <String, Object?>{
+          'sessionUpdate': 'agent_message_chunk',
+          'messageId': 'msg-1',
+          'content': <String, Object?>{'type': 'text', 'text': 'Hello Grok'},
+        },
+      });
+      peer.emitNotification('session/update', <String, Object?>{
+        'sessionId': 'sess-1',
+        'update': <String, Object?>{
+          'sessionUpdate': 'tool_call',
+          'toolCallId': 'call-1',
+          'title': 'Read file',
+          'kind': 'read',
+          'status': 'completed',
+        },
+      });
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        events.whereType<AgentMessageDeltaEvent>().single.delta,
+        'Hello Grok',
+      );
+      expect(
+        events.whereType<AgentToolCallEvent>().single.toolCall.id,
+        'call-1',
+      );
+      expect(
+        events.whereType<AgentToolCallEvent>().single.toolCall.kind,
+        AgentToolKind.read,
+      );
+
+      await subscription.cancel();
+      await provider.dispose();
+    });
+
+    test('sends session/prompt and completes turn', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+
+      final session = await provider.startSession(
+        context: const AgentContext(projectPath: r'D:\repo\zeta'),
+      );
+      final turn = await provider.sendMessage(
+        session: session,
+        message: 'ping',
+        context: const AgentContext(projectPath: r'D:\repo\zeta'),
+      );
+
+      expect(turn.sessionId, session.id);
+      expect(peer.requestMethods, contains('session/prompt'));
+      final promptParams =
+          peer.requestParams[peer.requestMethods.indexOf('session/prompt')]!
+              as Map<String, Object?>;
+      final prompt = promptParams['prompt']! as List<Object?>;
+      expect(prompt.first, containsPair('text', 'ping'));
+
+      await provider.dispose();
+    });
+
+    test('suppresses session/load replay updates from live timeline', () async {
+      final peer = _FakeJsonRpcPeer()..loadSessionEmitsReplay = true;
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+
+      await provider.resumeSession(
+        'sess-replay',
+        context: const AgentContext(projectPath: r'D:\repo\zeta'),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(events.whereType<AgentMessageDeltaEvent>(), isEmpty);
+      expect(events.whereType<AgentSessionStartedEvent>(), isNotEmpty);
+      expect(peer.requestMethods, contains('session/load'));
+
+      await subscription.cancel();
+      await provider.dispose();
+    });
+
+    test('rejects resume when session/load is unsupported', () async {
+      // Arrange
+      final peer = _FakeJsonRpcPeer()..supportsLoadSession = false;
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+      await provider.initialize();
+
+      // Act / Assert
+      await expectLater(
+        provider.resumeSession(
+          'sess-existing',
+          context: const AgentContext(projectPath: '/repo'),
+        ),
+        throwsUnsupportedError,
+      );
+      expect(peer.requestMethods, isNot(contains('session/load')));
+
+      await provider.dispose();
+    });
+
+    test('responds to session/request_permission', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+
+      await provider.initialize();
+      peer.emitServerRequest(
+        id: 42,
+        method: 'session/request_permission',
+        params: <String, Object?>{
+          'sessionId': 'sess-1',
+          'toolCall': <String, Object?>{
+            'toolCallId': 'call-1',
+            'title': 'Run tests',
+          },
+          'options': <Object?>[
+            <String, Object?>{
+              'optionId': 'allow-once',
+              'name': 'Allow once',
+              'kind': 'allow_once',
+            },
+            <String, Object?>{
+              'optionId': 'reject-once',
+              'name': 'Reject',
+              'kind': 'reject_once',
+            },
+          ],
+        },
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final request = events.whereType<AgentPermissionRequestedEvent>().single;
+      expect(request.request.title, 'Run tests');
+
+      await provider.respondToPermission(
+        AgentPermissionDecision(requestId: request.request.id, approved: true),
+      );
+      expect(peer.responses, isNotEmpty);
+      final response = peer.responses.single;
+      expect(response['id'], 42);
+      final result = response['result']! as Map<String, Object?>;
+      final outcome = result['outcome']! as Map<String, Object?>;
+      expect(outcome['optionId'], 'allow-once');
+
+      await subscription.cancel();
+      await provider.dispose();
+    });
+  });
+
+  group('GrokAcpNotificationMapper', () {
+    const mapper = GrokAcpNotificationMapper();
+
+    test('maps agent_thought_chunk to reasoning delta', () {
+      final mapped = mapper.mapSessionUpdate(
+        params: <String, Object?>{
+          'sessionId': 's1',
+          'update': <String, Object?>{
+            'sessionUpdate': 'agent_thought_chunk',
+            'content': <String, Object?>{'type': 'text', 'text': 'thinking'},
+          },
+        },
+        runningTurnId: 't1',
+      );
+      final event = mapped.events.single as AgentReasoningDeltaEvent;
+      expect(event.delta, 'thinking');
+      expect(event.sessionId, 's1');
+      expect(event.turnId, 't1');
+    });
+
+    test('maps plan entries', () {
+      final mapped = mapper.mapSessionUpdate(
+        params: <String, Object?>{
+          'sessionId': 's1',
+          'update': <String, Object?>{
+            'sessionUpdate': 'plan',
+            'entries': <Object?>[
+              <String, Object?>{
+                'content': 'Step 1',
+                'status': 'pending',
+                'priority': 'high',
+              },
+            ],
+          },
+        },
+        runningTurnId: 't1',
+      );
+      final event = mapped.events.single as AgentPlanUpdatedEvent;
+      expect(event.entries.single.content, 'Step 1');
+    });
+  });
+
+  group('parseAcpModelsPayload / GrokModelsCli.parseModelsOutput', () {
+    test('parses ACP session models payload', () {
+      final list = parseAcpModelsPayload(<String, Object?>{
+        'currentModelId': 'grok-4.5',
+        'availableModels': <Object?>[
+          <String, Object?>{
+            'modelId': 'grok-4.5',
+            'name': 'Grok 4.5',
+            'description': 'frontier',
+            '_meta': <String, Object?>{
+              'supportsReasoningEffort': true,
+              'reasoningEffort': 'high',
+              'reasoningEfforts': <Object?>[
+                <String, Object?>{
+                  'id': 'high',
+                  'value': 'high',
+                  'description': 'Highest',
+                },
+              ],
+            },
+          },
+        ],
+      });
+      expect(list, isNotNull);
+      expect(list!.models.single.id, 'grok-4.5');
+      expect(list.models.single.isDefault, isTrue);
+      expect(list.models.single.supportedReasoningEfforts, isNotEmpty);
+    });
+
+    test('parses grok models CLI text', () {
+      const stdout = '''
+Default model: grok-4.5
+
+Available models:
+  * grok-4.5 (default)
+  - grok-composer-2.5-fast
+''';
+      final list = GrokModelsCli.parseModelsOutput(stdout);
+      expect(list.models, hasLength(2));
+      expect(list.models.first.isDefault, isTrue);
+      expect(list.models.last.id, 'grok-composer-2.5-fast');
+    });
+  });
+}
+
+class _FakeJsonRpcPeer implements JsonRpcPeer {
+  final _notifications = StreamController<JsonRpcNotification>.broadcast();
+  final _serverRequests = StreamController<JsonRpcRequest>.broadcast();
+  final _stderr = StreamController<String>.broadcast();
+  final _protocolErrors =
+      StreamController<JsonRpcProtocolException>.broadcast();
+
+  final requestMethods = <String>[];
+  final requestParams = <Object?>[];
+  final responses = <Map<String, Object?>>[];
+  final notificationsSent = <String>[];
+
+  /// 模拟 session/load 期间推送 isReplay 更新。
+  bool loadSessionEmitsReplay = false;
+
+  /// 模拟 initialize 返回的 session/load 能力。
+  bool supportsLoadSession = true;
+
+  @override
+  Stream<JsonRpcNotification> get notifications => _notifications.stream;
+
+  @override
+  Stream<JsonRpcRequest> get serverRequests => _serverRequests.stream;
+
+  @override
+  Stream<String> get stderrLines => _stderr.stream;
+
+  @override
+  Stream<JsonRpcProtocolException> get protocolErrors => _protocolErrors.stream;
+
+  @override
+  Future<void> start() async {}
+
+  @override
+  Future<Object?> sendRequest(
+    String method, {
+    Object? params,
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    requestMethods.add(method);
+    requestParams.add(params);
+    return switch (method) {
+      'initialize' => <String, Object?>{
+        'protocolVersion': 1,
+        'agentCapabilities': <String, Object?>{
+          'loadSession': supportsLoadSession,
+        },
+        'authMethods': <Object?>[
+          <String, Object?>{'id': 'cached_token', 'name': 'cached_token'},
+        ],
+      },
+      'authenticate' => <String, Object?>{'_meta': <String, Object?>{}},
+      'session/new' => <String, Object?>{
+        'sessionId': 'sess-1',
+        'models': <String, Object?>{
+          'currentModelId': 'grok-4.5',
+          'availableModels': <Object?>[
+            <String, Object?>{'modelId': 'grok-4.5', 'name': 'Grok 4.5'},
+          ],
+        },
+      },
+      'session/load' => () {
+        if (loadSessionEmitsReplay) {
+          // 在响应返回前同步发出回放通知（真实 Grok 行为）。
+          emitNotification('session/update', <String, Object?>{
+            'sessionId': 'sess-replay',
+            'update': <String, Object?>{
+              'sessionUpdate': 'agent_message_chunk',
+              'messageId': 'replay-msg',
+              'content': <String, Object?>{
+                'type': 'text',
+                'text': 'should not appear live',
+              },
+            },
+            '_meta': <String, Object?>{'isReplay': true},
+          });
+        }
+        return <String, Object?>{
+          'models': <String, Object?>{
+            'currentModelId': 'grok-4.5',
+            'availableModels': <Object?>[
+              <String, Object?>{'modelId': 'grok-4.5', 'name': 'Grok 4.5'},
+            ],
+          },
+        };
+      }(),
+      'session/prompt' => <String, Object?>{'stopReason': 'end_turn'},
+      'session/set_model' => <String, Object?>{},
+      _ => <String, Object?>{},
+    };
+  }
+
+  @override
+  void sendNotification(String method, {Object? params}) {
+    notificationsSent.add(method);
+  }
+
+  @override
+  Future<void> sendResponse(
+    Object id, {
+    Object? result,
+    JsonRpcError? error,
+  }) async {
+    responses.add(<String, Object?>{
+      'id': id,
+      'result': ?result,
+      if (error != null) 'error': error.toJson(),
+    });
+  }
+
+  @override
+  Future<void> close() async {
+    await _notifications.close();
+    await _serverRequests.close();
+    await _stderr.close();
+    await _protocolErrors.close();
+  }
+
+  void emitNotification(String method, Map<String, Object?> params) {
+    _notifications.add(
+      JsonRpcNotification(method: method, params: params, raw: params),
+    );
+  }
+
+  void emitServerRequest({
+    required Object id,
+    required String method,
+    required Map<String, Object?> params,
+  }) {
+    _serverRequests.add(
+      JsonRpcRequest(id: id, method: method, params: params, raw: params),
+    );
+  }
+}

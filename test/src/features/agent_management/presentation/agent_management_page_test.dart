@@ -8,6 +8,8 @@ import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
 import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart';
+import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
+import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_configuration_editor.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
@@ -161,7 +163,9 @@ class _ManagementHarness {
       codexHomeProvider: () => root.path,
     );
     final managementController = AgentManagementController(
-      repository: repository,
+      repositories: <String, AgentCliManagementRepository>{
+        AgentDefinition.codex.id: repository,
+      },
       providerController: providerController,
     );
     return _ManagementHarness(

@@ -17,6 +17,10 @@ void main() {
       expect(settings.activeProvider.id, defaultAgentProviderId);
       expect(settings.activeProvider.command, 'codex');
       expect(settings.activeProvider.arguments, <String>['app-server']);
+      expect(
+        settings.providers.map((provider) => provider.id),
+        containsAll(<String>[defaultAgentProviderId, grokAgentProviderId]),
+      );
     });
 
     test('saves provider settings as versioned JSON', () async {

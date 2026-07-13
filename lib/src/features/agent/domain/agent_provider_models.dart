@@ -20,6 +20,9 @@ enum AgentProviderConnectionState {
 /// 内置 Codex provider 的稳定配置 id。
 const String defaultAgentProviderId = 'codex';
 
+/// 内置 Grok ACP provider 的稳定配置 id。
+const String grokAgentProviderId = 'grok';
+
 /// 一个可启动的 Agent provider 定义。
 ///
 /// 该对象保存全局配置，例如 `codex app-server` 的命令、参数、环境变量和
@@ -98,6 +101,17 @@ class AgentProviderConfig {
     kind: AgentProviderKind.codexAppServer,
     command: 'codex',
     arguments: <String>['app-server'],
+  );
+
+  /// 默认 Grok CLI ACP stdio 配置。
+  ///
+  /// 启动 `grok agent stdio`，通过标准 ACP JSON-RPC 与 Zeta 对话。
+  static const AgentProviderConfig defaultGrok = AgentProviderConfig(
+    id: grokAgentProviderId,
+    displayName: 'Grok CLI',
+    kind: AgentProviderKind.acp,
+    command: 'grok',
+    arguments: <String>['agent', 'stdio'],
   );
 
   /// 复制配置并覆盖部分字段，主要用于持久化用户在输入框中的模型选择。
@@ -215,6 +229,7 @@ class AgentProviderSettings {
   const AgentProviderSettings({
     this.providers = const <AgentProviderConfig>[
       AgentProviderConfig.defaultCodex,
+      AgentProviderConfig.defaultGrok,
     ],
     this.activeProviderId = defaultAgentProviderId,
   });
@@ -233,6 +248,17 @@ class AgentProviderSettings {
     );
   }
 
+  /// 复制设置并覆盖部分字段。
+  AgentProviderSettings copyWith({
+    List<AgentProviderConfig>? providers,
+    String? activeProviderId,
+  }) {
+    return AgentProviderSettings(
+      providers: providers ?? this.providers,
+      activeProviderId: activeProviderId ?? this.activeProviderId,
+    );
+  }
+
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'version': 1,
@@ -244,13 +270,14 @@ class AgentProviderSettings {
   /// 读取版本化配置。
   ///
   /// 配置缺失、版本不匹配或内容损坏时都返回默认设置，保证 UI 启动不崩溃。
+  /// 旧配置若缺少内置 Grok 条目，会自动补齐以便双 provider 切换。
   static AgentProviderSettings tryDecode(Object? value) {
     final map = decodeObjectMap(value);
     if (map['version'] != 1) {
       return const AgentProviderSettings();
     }
 
-    final providers = _providerList(map['providers']);
+    final providers = _ensureBuiltinProviders(_providerList(map['providers']));
     final activeProviderId =
         decodeOptionalString(map['activeProviderId']) ?? defaultAgentProviderId;
 
@@ -269,7 +296,10 @@ class AgentProviderSettings {
 
   static List<AgentProviderConfig> _providerList(Object? value) {
     if (value is! List) {
-      return const <AgentProviderConfig>[AgentProviderConfig.defaultCodex];
+      return const <AgentProviderConfig>[
+        AgentProviderConfig.defaultCodex,
+        AgentProviderConfig.defaultGrok,
+      ];
     }
 
     final providers = <AgentProviderConfig>[];
@@ -281,6 +311,21 @@ class AgentProviderSettings {
       }
     }
     return providers;
+  }
+
+  /// 保证内置 Codex / Grok 始终出现在列表中（不覆盖用户已有同 id 配置）。
+  static List<AgentProviderConfig> _ensureBuiltinProviders(
+    List<AgentProviderConfig> providers,
+  ) {
+    final result = List<AgentProviderConfig>.from(providers);
+    final ids = result.map((provider) => provider.id).toSet();
+    if (!ids.contains(AgentProviderConfig.defaultCodex.id)) {
+      result.insert(0, AgentProviderConfig.defaultCodex);
+    }
+    if (!ids.contains(AgentProviderConfig.defaultGrok.id)) {
+      result.add(AgentProviderConfig.defaultGrok);
+    }
+    return result;
   }
 }
 

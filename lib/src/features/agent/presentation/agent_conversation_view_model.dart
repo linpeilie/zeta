@@ -218,7 +218,9 @@ class AgentConversationViewModel extends ChangeNotifier {
       _modelSelectionController.selectedServiceTierId;
 
   bool get showReasoningEffort {
-    if (activeProviderKind != AgentProviderKind.codexAppServer) {
+    // Codex 与 Grok ACP 在模型声明了 reasoning efforts 时都展示。
+    if (activeProviderKind != AgentProviderKind.codexAppServer &&
+        activeProviderKind != AgentProviderKind.acp) {
       return false;
     }
     return selectedModel?.supportedReasoningEfforts.isNotEmpty ?? false;
@@ -231,9 +233,49 @@ class AgentConversationViewModel extends ChangeNotifier {
     return selectedModel?.serviceTiers.isNotEmpty ?? false;
   }
 
-  /// Codex 会话显示审批/沙箱策略选择器。
+  /// Codex 会话显示审批/沙箱策略选择器；Grok ACP 走交互式 permission。
   bool get showPermissionPolicy =>
       activeProviderKind == AgentProviderKind.codexAppServer;
+
+  /// 可切换的全局 provider 列表（已启用）。
+  List<AgentProviderConfig> get availableProviders => providerController
+      .settings
+      .providers
+      .where((provider) => provider.enabled)
+      .toList(growable: false);
+
+  /// 切换 active provider（双后端共存）。
+  Future<void> switchActiveProvider(String providerId) async {
+    if (providerId == activeProviderId) {
+      return;
+    }
+    _flushPendingStreamChangesNow();
+    await providerController.setActiveProvider(providerId);
+    await _eventSubscription?.cancel();
+    _eventSubscription = null;
+    _provider = null;
+    final config = providerController.activeProviderConfig;
+    _modelSelectionController.resetForProvider(config);
+    _permissionSelectionController.resetForProvider(config);
+    // 切换后清空当前会话草稿，避免跨协议 thread id 混用。
+    _session = null;
+    _restoredSessionId = null;
+    _selectedProviderId = providerId;
+    _requiresResumedSelectedThread = false;
+    _timeline.clearConversation();
+    _modelRerouteNotice = null;
+    _status = AgentProviderStatus(
+      state: AgentProviderConnectionState.connecting,
+      message: 'Loading $activeProviderName',
+    );
+    _publishUiChanges(
+      history: true,
+      syncLiveTurn: true,
+      header: true,
+      composer: true,
+    );
+    await loadModels();
+  }
 
   AgentPermissionSelection get permissionSelection =>
       _permissionSelectionController.selection;
@@ -706,6 +748,24 @@ class AgentConversationViewModel extends ChangeNotifier {
   /// 切换到项目列表中选中的 thread。
   Future<void> switchThread(AgentThreadSummary thread) async {
     final switchToken = ++_threadSwitchToken;
+    // 跨 provider thread：先切 active backend，再加载历史。
+    if (thread.providerId != activeProviderId &&
+        availableProviders.any(
+          (provider) => provider.id == thread.providerId,
+        )) {
+      try {
+        await switchActiveProvider(thread.providerId);
+      } catch (error, stackTrace) {
+        _log.warning(
+          'Could not switch provider to ${thread.providerId} for thread ${thread.id}',
+          error,
+          stackTrace,
+        );
+      }
+      if (!_isCurrentSwitch(switchToken)) {
+        return;
+      }
+    }
     // 离开旧会话时先记下 id，切走后取消服务端订阅，减少无关通知。
     final previousThreadId = _selectedThreadId;
     _flushPendingStreamChangesNow();

@@ -13,6 +13,8 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
 import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart';
+import 'package:zeta/src/features/agent_management/data/grok_agent_management_repository.dart';
+import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
@@ -106,9 +108,14 @@ class _IdeHomeState extends State<IdeHome> {
       statusReporter: _showStatus,
     )..addListener(_handleShellChanged);
     _agentManagementController = AgentManagementController(
-      repository: CodexAgentManagementRepository(
-        providerFactory: widget.agentProviderFactory,
-      ),
+      repositories: <String, AgentCliManagementRepository>{
+        AgentDefinition.codex.id: CodexAgentManagementRepository(
+          providerFactory: widget.agentProviderFactory,
+        ),
+        AgentDefinition.grok.id: GrokAgentManagementRepository(
+          providerFactory: widget.agentProviderFactory,
+        ),
+      },
       providerController: _shellController.agentProviderController,
       runtimeStateProvider: _managementRuntimeState,
       runtimeListenable: _shellController.agentViewModel,

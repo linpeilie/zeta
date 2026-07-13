@@ -94,8 +94,10 @@ class AgentManagementPageState extends State<AgentManagementPage> {
     return ListenableBuilder(
       listenable: widget.controller,
       builder: (context, _) {
-        final agent = widget.controller.agent;
-        final visible = _matchesList(agent);
+        final allAgents = widget.controller.agents;
+        final visibleAgents = allAgents
+            .where(_matchesList)
+            .toList(growable: false);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -140,18 +142,26 @@ class AgentManagementPageState extends State<AgentManagementPage> {
                           ),
                         ),
                       ),
-                    _buildSummary(context, agent),
+                    _buildSummary(context, allAgents),
                     const SizedBox(height: IdeSpacing.space16),
                     _buildListToolbar(context),
                     const SizedBox(height: IdeSpacing.space12),
-                    if (visible)
-                      _AgentListRow(
-                        agent: agent,
-                        onOpen: _openDetail,
-                        onEnabledChanged: _setEnabled,
-                      )
+                    if (visibleAgents.isEmpty)
+                      _buildListEmptyState(context, allAgents)
                     else
-                      _buildListEmptyState(context, agent),
+                      ...visibleAgents.map(
+                        (agent) => Padding(
+                          padding: const EdgeInsets.only(
+                            bottom: IdeSpacing.space8,
+                          ),
+                          child: _AgentListRow(
+                            agent: agent,
+                            onOpen: () => _openDetail(agent.definition.id),
+                            onEnabledChanged: (enabled) =>
+                                _setEnabled(agent.definition.id, enabled),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -162,7 +172,15 @@ class AgentManagementPageState extends State<AgentManagementPage> {
     );
   }
 
-  Widget _buildSummary(BuildContext context, ManagedAgent agent) {
+  Widget _buildSummary(BuildContext context, List<ManagedAgent> agents) {
+    final installed = agents.where((agent) => agent.installed).length;
+    final enabled = agents
+        .where((agent) => agent.enabled && agent.installed)
+        .length;
+    final running = agents
+        .where((agent) => agent.runtimeState == AgentRuntimeState.running)
+        .length;
+    final attention = agents.where((agent) => agent.needsAttention).length;
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth >= 760
@@ -177,7 +195,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
             _SummaryBlock(
               width: width,
               label: '已安装',
-              value: agent.installed ? 1 : 0,
+              value: installed,
               icon: Icons.download_done_rounded,
               onPressed: () {
                 setState(() {
@@ -189,7 +207,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
             _SummaryBlock(
               width: width,
               label: '已启用',
-              value: agent.enabled && agent.installed ? 1 : 0,
+              value: enabled,
               icon: Icons.toggle_on_outlined,
               onPressed: () {
                 setState(() {
@@ -201,7 +219,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
             _SummaryBlock(
               width: width,
               label: '运行中',
-              value: agent.runtimeState == AgentRuntimeState.running ? 1 : 0,
+              value: running,
               icon: Icons.play_circle_outline_rounded,
               onPressed: () {
                 setState(() {
@@ -212,9 +230,9 @@ class AgentManagementPageState extends State<AgentManagementPage> {
             _SummaryBlock(
               width: width,
               label: '需要处理',
-              value: agent.needsAttention ? 1 : 0,
+              value: attention,
               icon: Icons.warning_amber_rounded,
-              warning: agent.needsAttention,
+              warning: attention > 0,
               onPressed: () {
                 setState(() {
                   _filter = _AgentListFilter.attention;
@@ -317,12 +335,13 @@ class AgentManagementPageState extends State<AgentManagementPage> {
     );
   }
 
-  Widget _buildListEmptyState(BuildContext context, ManagedAgent agent) {
+  Widget _buildListEmptyState(BuildContext context, List<ManagedAgent> agents) {
     final installedTab = _listTab == _AgentListTab.installed;
     final noQuery =
         _searchController.text.trim().isEmpty &&
         _filter == _AgentListFilter.all;
-    if (installedTab && !agent.installed && noQuery) {
+    final anyInstalled = agents.any((agent) => agent.installed);
+    if (installedTab && !anyInstalled && noQuery) {
       return _ActionEmptyState(
         icon: Icons.travel_explore_rounded,
         title: '暂未检测到已安装的 Agent CLI',
@@ -498,7 +517,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
             ),
             sf.OutlineButton(
               onPressed: agent.installed
-                  ? () => _setEnabled(!agent.enabled)
+                  ? () => _setEnabled(agent.definition.id, !agent.enabled)
                   : null,
               size: sf.ButtonSize.small,
               child: Text(agent.enabled ? '禁用 Agent' : '启用 Agent'),
@@ -640,7 +659,8 @@ class AgentManagementPageState extends State<AgentManagementPage> {
     };
   }
 
-  void _openDetail() {
+  void _openDetail(String agentId) {
+    widget.controller.selectAgent(agentId);
     _timeoutController.text = '${widget.controller.agent.timeoutSeconds}';
     setState(() {
       _view = _ManagementView.detail;
@@ -687,14 +707,15 @@ class AgentManagementPageState extends State<AgentManagementPage> {
     });
   }
 
-  Future<void> _setEnabled(bool enabled) async {
+  Future<void> _setEnabled(String agentId, bool enabled) async {
+    widget.controller.selectAgent(agentId);
     final agent = widget.controller.agent;
     if (!enabled && agent.runtimeState == AgentRuntimeState.running) {
       final confirmed = await showIdeDialog<bool>(
         context: context,
         barrierDismissible: false,
         builder: (context) => IdeDialog(
-          title: const Text('Codex CLI 当前正在运行'),
+          title: Text('${agent.definition.displayName} 当前正在运行'),
           content: const Text('禁用后将停止当前任务，已有会话会变为只读模式。'),
           actions: <IdeDialogAction>[
             IdeDialogAction.cancel(
@@ -966,11 +987,11 @@ class _AgentListRow extends StatelessWidget {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     return PaneInteractiveSurface(
-      key: const ValueKey('agent-row-codex'),
+      key: ValueKey('agent-row-${agent.definition.id}'),
       onPressed: onOpen,
       padding: IdeSpacing.all12,
       borderColor: colors.border,
-      semanticLabel: '查看 Codex CLI 详情',
+      semanticLabel: '查看 ${agent.definition.displayName} 详情',
       child: LayoutBuilder(
         builder: (context, constraints) {
           final identity = Row(

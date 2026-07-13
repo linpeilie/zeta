@@ -28,6 +28,13 @@ class AgentConversationPermissionSelectionController {
     provider.updatePermissionSelection(_selection);
   }
 
+  /// 切换 provider 时解绑旧实例，并恢复新 provider 的审批配置。
+  void resetForProvider(AgentProviderConfig config) {
+    _provider = null;
+    _profiles = const <AgentPermissionProfileSummary>[];
+    seedFromConfig(config);
+  }
+
   void seedFromConfig(AgentProviderConfig config) {
     _selection = AgentPermissionSelection(
       approvalPolicy:
