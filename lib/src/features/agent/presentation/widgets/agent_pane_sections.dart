@@ -120,11 +120,11 @@ class _AgentTurnSection extends StatelessWidget {
 
   Widget _buildTimelineEntry(AgentTimelineEntry entry) {
     final isLiveTurn = viewModel.liveTurnState?.id == turn.id;
-    final collapseHeavyContent = !isLiveTurn;
     return switch (entry) {
       AgentMessageTimelineEntry(:final message) => _AgentMessageEntry(
         message: message,
-        collapseHeavyContent: collapseHeavyContent,
+        // 历史与 live 的普通 Markdown 正文均不折叠；plan / 完成汇总等特殊卡自有样式。
+        collapseHeavyContent: false,
         useStreamingMarkdown: isLiveTurn,
         viewModel: viewModel,
       ),

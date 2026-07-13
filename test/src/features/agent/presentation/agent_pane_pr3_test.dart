@@ -17,7 +17,7 @@ import '../../../testing/agent_provider_stub_base.dart';
 void main() {
   group('AgentPane PR3', () {
     testWidgets(
-      'collapses heavy history markdown and expanding it keeps history version stable',
+      'renders heavy history markdown fully without collapse toggle',
       (tester) async {
         final viewModel = _createViewModel(
           _FakeAgentProvider(
@@ -56,42 +56,24 @@ void main() {
         );
         await tester.pumpAndSettle();
 
+        // 历史长文不再折叠：无预览/展开按钮，正文完整可见。
         expect(
           find.byKey(
             const ValueKey<String>('agent-markdown-preview-history-markdown-1'),
           ),
-          findsOneWidget,
-        );
-        expect(
-          find.byKey(
-            const ValueKey<String>('agent-markdown-body-history-markdown-1'),
-          ),
           findsNothing,
         );
         expect(
-          find.textContaining('Markdown line 16', findRichText: true),
-          findsNothing,
-        );
-
-        final historyVersion = viewModel.historyVersion;
-        await tester.tap(
           find.byKey(
             const ValueKey<String>('agent-markdown-toggle-history-markdown-1'),
           ),
-        );
-        await tester.pumpAndSettle();
-
-        expect(viewModel.historyVersion, historyVersion);
-        expect(
-          find.byKey(
-            const ValueKey<String>('agent-markdown-body-history-markdown-1'),
-          ),
-          findsOneWidget,
+          findsNothing,
         );
         expect(
           find.textContaining('Markdown line 16', findRichText: true),
           findsOneWidget,
         );
+        expect(find.text('展开正文'), findsNothing);
       },
     );
 
