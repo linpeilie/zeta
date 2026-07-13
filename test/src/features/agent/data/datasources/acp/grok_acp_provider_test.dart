@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_acp_agent_provider.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_models_cli.dart';
+import 'package:zeta/src/features/agent/data/datasources/local_history/grok_session_history_reader.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_acp_notification_mapper.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -32,6 +35,147 @@ void main() {
 
       await provider.dispose();
     });
+
+    test(
+      'polls summary.json after turn complete and emits name updated',
+      () async {
+        final tempRoot = await Directory.systemTemp.createTemp(
+          'zeta-grok-title-',
+        );
+        addTearDown(() async {
+          if (await tempRoot.exists()) {
+            await tempRoot.delete(recursive: true);
+          }
+        });
+
+        const projectPath = r'D:\repo\zeta';
+        final encoded = Uri.encodeComponent(projectPath.replaceAll('/', '\\'));
+        const sessionId = 'sess-1';
+        final sessionDir = Directory(
+          '${tempRoot.path}${Platform.pathSeparator}sessions'
+          '${Platform.pathSeparator}$encoded'
+          '${Platform.pathSeparator}$sessionId',
+        );
+        await sessionDir.create(recursive: true);
+        final summary = File(
+          '${sessionDir.path}${Platform.pathSeparator}summary.json',
+        );
+
+        final peer = _FakeJsonRpcPeer();
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+          sessionHistoryReader: GrokSessionHistoryReader(
+            grokHome: tempRoot.path,
+          ),
+          generatedTitlePollDelays: const <Duration>[
+            Duration.zero,
+            Duration(milliseconds: 20),
+            Duration(milliseconds: 20),
+          ],
+        );
+        addTearDown(provider.dispose);
+
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+        addTearDown(subscription.cancel);
+
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: projectPath),
+        );
+        expect(session.id, sessionId);
+
+        // turn 完成后 summary 尚无 generated_title；稍后异步写入（与真实 Grok 一致）。
+        unawaited(
+          Future<void>.delayed(const Duration(milliseconds: 15), () async {
+            await summary.writeAsString('''
+{
+  "info": {"id": "$sessionId", "cwd": ${jsonEncode(projectPath)}},
+  "session_summary": "User Asking What AI Model This Is",
+  "generated_title": "User Asking What AI Model This Is"
+}
+''');
+          }),
+        );
+
+        await provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: projectPath),
+          message: '你是什么模型？',
+        );
+
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+
+        final nameEvents = events.whereType<AgentThreadNameUpdatedEvent>();
+        expect(nameEvents, isNotEmpty);
+        expect(nameEvents.last.threadName, 'User Asking What AI Model This Is');
+      },
+    );
+
+    test(
+      'resolves generated_title from slash-encoded macOS session paths',
+      () async {
+        final tempRoot = await Directory.systemTemp.createTemp(
+          'zeta-grok-title-mac-',
+        );
+        addTearDown(() async {
+          if (await tempRoot.exists()) {
+            await tempRoot.delete(recursive: true);
+          }
+        });
+
+        // 与 ~/.grok/sessions/%2FUsers%2F... 一致：按 / 编码，而非旧逻辑的 \。
+        const projectPath = '/Users/linpeilie/Development/Workspace/zeta';
+        final encoded = Uri.encodeComponent(projectPath);
+        expect(encoded.startsWith('%2F'), isTrue);
+        const sessionId = 'sess-1';
+        final sessionDir = Directory(
+          '${tempRoot.path}${Platform.pathSeparator}sessions'
+          '${Platform.pathSeparator}$encoded'
+          '${Platform.pathSeparator}$sessionId',
+        );
+        await sessionDir.create(recursive: true);
+        await File(
+          '${sessionDir.path}${Platform.pathSeparator}summary.json',
+        ).writeAsString('''
+{
+  "info": {"id": "$sessionId", "cwd": ${jsonEncode(projectPath)}},
+  "generated_title": "User Asking What AI Model This Is"
+}
+''');
+
+        final peer = _FakeJsonRpcPeer();
+        // Fake peer 固定返回 sess-1；cwd 用 mac 路径。
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+          sessionHistoryReader: GrokSessionHistoryReader(
+            grokHome: tempRoot.path,
+          ),
+          generatedTitlePollDelays: const <Duration>[Duration.zero],
+        );
+        addTearDown(provider.dispose);
+
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+        addTearDown(subscription.cancel);
+
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: projectPath),
+        );
+        await provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: projectPath),
+          message: '你是什么模型',
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+
+        expect(
+          events.whereType<AgentThreadNameUpdatedEvent>().single.threadName,
+          'User Asking What AI Model This Is',
+        );
+      },
+    );
 
     test('maps session/update chunks and tool calls to AgentEvents', () async {
       final peer = _FakeJsonRpcPeer();

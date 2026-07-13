@@ -29,6 +29,7 @@ class GrokAcpAgentProvider implements AgentProvider {
     GrokSessionHistoryReader? sessionHistoryReader,
     GrokModelsCli? modelsCli,
     GrokAcpNotificationMapper? notificationMapper,
+    List<Duration>? generatedTitlePollDelays,
   }) : _modelSelection = AgentModelSelection(
          modelId: config.selectedModel ?? config.defaultModel,
          reasoningEffort: config.selectedReasoningEffort,
@@ -38,7 +39,9 @@ class GrokAcpAgentProvider implements AgentProvider {
            sessionHistoryReader ?? GrokSessionHistoryReader(),
        _modelsCli = modelsCli ?? const GrokModelsCli(),
        _notificationMapper =
-           notificationMapper ?? const GrokAcpNotificationMapper() {
+           notificationMapper ?? const GrokAcpNotificationMapper(),
+       _generatedTitlePollDelays =
+           generatedTitlePollDelays ?? _defaultGeneratedTitlePollDelays {
     // 在构造体中创建 peer，以便闭包捕获运行时模型选择。
     _peer =
         peer ??
@@ -49,6 +52,20 @@ class GrokAcpAgentProvider implements AgentProvider {
               reasoningEffortResolver: () => _modelSelection.reasoningEffort,
             )))(config);
   }
+
+  /// 首轮结束后轮询本地 `summary.json` 的间隔（Grok 异步写 generated_title）。
+  static const List<Duration> _defaultGeneratedTitlePollDelays = <Duration>[
+    Duration(seconds: 1),
+    Duration(seconds: 2),
+    Duration(seconds: 3),
+    Duration(seconds: 5),
+    Duration(seconds: 8),
+    Duration(seconds: 13),
+    Duration(seconds: 21),
+    Duration(seconds: 30),
+    Duration(seconds: 30),
+    Duration(seconds: 30),
+  ];
 
   /// 测试友好的 peer 工厂：可注入 [modelIdResolver]。
   static JsonRpcPeer createDefaultPeer(
@@ -72,6 +89,7 @@ class GrokAcpAgentProvider implements AgentProvider {
   final GrokSessionHistoryReader _sessionHistoryReader;
   final GrokModelsCli _modelsCli;
   final GrokAcpNotificationMapper _notificationMapper;
+  final List<Duration> _generatedTitlePollDelays;
 
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
@@ -85,6 +103,19 @@ class GrokAcpAgentProvider implements AgentProvider {
   /// 最近一次 turn id（含已完成），供 `session/prompt` 返回后迟到的
   /// `turn_completed` 通知仍能对齐本地 turn 分组。
   final Map<String, String> _lastTurnIdsBySessionId = <String, String>{};
+
+  /// sessionId → 工作目录，便于定位 `~/.grok/sessions/.../summary.json`。
+  final Map<String, String> _projectPathBySessionId = <String, String>{};
+
+  /// sessionId → 已解析的本地 session 目录，避免重复扫描。
+  final Map<String, String> _sessionPathBySessionId = <String, String>{};
+
+  /// 已向 UI 推送过的正式 generated_title，避免重复事件。
+  final Map<String, String> _emittedTitlesBySessionId = <String, String>{};
+
+  /// 标题轮询代数；切换会话或重新调度时递增以取消旧轮询。
+  final Map<String, int> _titlePollTokensBySessionId = <String, int>{};
+
   AgentModelSelection _modelSelection;
   AgentModelList? _modelList;
   bool _initialized = false;
@@ -286,6 +317,7 @@ class GrokAcpAgentProvider implements AgentProvider {
       raw: map,
     );
     _session = session;
+    _rememberProjectPath(sessionId, cwd);
     _events.add(AgentSessionStartedEvent(session));
     _log.info('Started Grok ACP session $sessionId');
     return session;
@@ -324,6 +356,11 @@ class GrokAcpAgentProvider implements AgentProvider {
           raw: map,
         );
         _session = session;
+        if (cwd != null && cwd.isNotEmpty) {
+          _rememberProjectPath(sessionId, cwd);
+        }
+        // 恢复已有会话时也可能已有 generated_title，主动同步一次。
+        _scheduleGeneratedTitlePoll(sessionId);
         _events.add(AgentSessionStartedEvent(session));
         _log.info('Loaded Grok ACP session $sessionId (replay suppressed)');
         return session;
@@ -570,6 +607,10 @@ class GrokAcpAgentProvider implements AgentProvider {
     String? clientUserMessageId,
   }) async {
     await initialize();
+    final cwd = context.projectPath?.trim();
+    if (cwd != null && cwd.isNotEmpty) {
+      _rememberProjectPath(session.id, cwd);
+    }
     final prompt = _buildPromptBlocks(
       message: message,
       inputs: inputs,
@@ -615,6 +656,8 @@ class GrokAcpAgentProvider implements AgentProvider {
             raw: map,
           ),
         );
+        // RPC 完成路径也可能是最终信号；启动本地标题轮询。
+        _scheduleGeneratedTitlePoll(session.id);
       }
       _emitStatus(
         AgentProviderStatus(
@@ -731,6 +774,11 @@ class GrokAcpAgentProvider implements AgentProvider {
       return;
     }
     _disposed = true;
+    // 递增所有 token 以停止进行中的标题轮询。
+    for (final sessionId in _titlePollTokensBySessionId.keys.toList()) {
+      _titlePollTokensBySessionId[sessionId] =
+          (_titlePollTokensBySessionId[sessionId] ?? 0) + 1;
+    }
     await _notificationSubscription?.cancel();
     await _serverRequestSubscription?.cancel();
     await _stderrSubscription?.cancel();
@@ -843,8 +891,103 @@ class GrokAcpAgentProvider implements AgentProvider {
         if (_runningTurnIdsBySessionId[sessionId] == event.turnId) {
           _runningTurnIdsBySessionId.remove(sessionId);
         }
+        // Grok 在 turn 后异步写 summary.generated_title，无 live 通知。
+        _scheduleGeneratedTitlePoll(sessionId);
         return;
       }
+    }
+  }
+
+  void _rememberProjectPath(String sessionId, String projectPath) {
+    final trimmed = projectPath.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    _projectPathBySessionId[sessionId] = trimmed;
+  }
+
+  /// 调度对 `summary.json` 的轮询；新调度会使旧轮询失效。
+  void _scheduleGeneratedTitlePoll(String sessionId) {
+    if (_disposed || sessionId.isEmpty) {
+      return;
+    }
+    final token = (_titlePollTokensBySessionId[sessionId] ?? 0) + 1;
+    _titlePollTokensBySessionId[sessionId] = token;
+    unawaited(_pollGeneratedTitle(sessionId: sessionId, token: token));
+  }
+
+  Future<void> _pollGeneratedTitle({
+    required String sessionId,
+    required int token,
+  }) async {
+    final delays = _generatedTitlePollDelays;
+    for (var index = 0; index < delays.length; index++) {
+      final delay = delays[index];
+      if (delay > Duration.zero) {
+        await Future<void>.delayed(delay);
+      }
+      if (_disposed || _titlePollTokensBySessionId[sessionId] != token) {
+        return;
+      }
+
+      final snapshot = await _sessionHistoryReader.readSessionTitleSnapshot(
+        threadId: sessionId,
+        projectPath: _projectPathBySessionId[sessionId],
+        sessionPath: _sessionPathBySessionId[sessionId],
+        environment: <String, String>{
+          ...Platform.environment,
+          ...config.environment,
+        },
+      );
+      if (_disposed || _titlePollTokensBySessionId[sessionId] != token) {
+        return;
+      }
+      final sessionPath = snapshot?.sessionPath?.trim();
+      if (sessionPath != null && sessionPath.isNotEmpty) {
+        _sessionPathBySessionId[sessionId] = sessionPath;
+      }
+
+      // 只认 generated_title 为自动改名终态，避免 session_summary / 临时文案抢先结束轮询。
+      final authoritative = snapshot?.authoritativeTitle?.trim();
+      if (authoritative != null && authoritative.isNotEmpty) {
+        if (_emittedTitlesBySessionId[sessionId] == authoritative) {
+          return;
+        }
+        _emittedTitlesBySessionId[sessionId] = authoritative;
+        _log.info(
+          'Grok session $sessionId generated_title ready: $authoritative',
+        );
+        _events.add(
+          AgentThreadNameUpdatedEvent(
+            threadId: sessionId,
+            threadName: authoritative,
+          ),
+        );
+        return;
+      }
+
+      // 最后一轮仍无 generated_title 时，才回退 session_summary（总好过一直停在临时标题）。
+      final isLastAttempt = index == delays.length - 1;
+      if (!isLastAttempt) {
+        continue;
+      }
+      final fallback = snapshot?.sessionSummary?.trim();
+      if (fallback == null || fallback.isEmpty) {
+        _log.fine(
+          'Grok session $sessionId title poll finished without generated_title',
+        );
+        return;
+      }
+      if (_emittedTitlesBySessionId[sessionId] == fallback) {
+        return;
+      }
+      _emittedTitlesBySessionId[sessionId] = fallback;
+      _log.fine(
+        'Grok session $sessionId falling back to session_summary: $fallback',
+      );
+      _events.add(
+        AgentThreadNameUpdatedEvent(threadId: sessionId, threadName: fallback),
+      );
     }
   }
 

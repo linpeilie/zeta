@@ -769,6 +769,13 @@ class AgentConversationViewModel extends ChangeNotifier {
         switchToken: switchToken,
         expectedThreadId: selectedThreadId,
       );
+      // 新会话在 Grok 异步 generated_title 出现前，先用首条用户消息作临时标题。
+      if (_isStillSelectedThread(switchToken, session.id) &&
+          _currentThreadTitle == defaultThreadTitle &&
+          trimmed.isNotEmpty) {
+        _applyThreadTitle(_provisionalThreadTitle(trimmed));
+        _publishUiChanges(header: true);
+      }
       _log.info('Sending Agent request with provider ${provider.config.id}');
       if (isNewTurn) {
         final turn = await provider.sendMessage(
@@ -1133,19 +1140,37 @@ class AgentConversationViewModel extends ChangeNotifier {
       return;
     }
     final previousTitle = _currentThreadTitle;
-    _currentThreadTitle = trimmed;
+    _applyThreadTitle(trimmed);
     _publishUiChanges(header: true);
     try {
       final provider = await _ensureProvider();
       await provider.renameThread(threadId: threadId, name: trimmed);
     } catch (error, stackTrace) {
       if (sessionId == threadId && _currentThreadTitle == trimmed) {
-        _currentThreadTitle = previousTitle;
+        _applyThreadTitle(previousTitle);
         _publishUiChanges(header: true);
       }
       _log.warning('Could not rename thread $threadId', error, stackTrace);
       _markError('Could not rename thread', details: error.toString());
     }
+  }
+
+  /// 从列表侧同步当前 thread 标题（刷新列表 / 服务端改名后保持详情头栏一致）。
+  ///
+  /// 仅当 [threadId] 仍是当前会话时生效；标题未变化时不触发刷新。
+  void syncThreadTitleIfCurrent(String threadId, String title) {
+    if (_disposed) {
+      return;
+    }
+    if (_selectedThreadId != threadId) {
+      return;
+    }
+    final trimmed = title.trim();
+    if (trimmed.isEmpty || trimmed == _currentThreadTitle) {
+      return;
+    }
+    _applyThreadTitle(trimmed);
+    _publishUiChanges(header: true);
   }
 
   @override
@@ -1359,7 +1384,8 @@ class AgentConversationViewModel extends ChangeNotifier {
         }
         final name = event.threadName?.trim();
         if (name != null && name.isNotEmpty) {
-          _currentThreadTitle = name;
+          // 服务端自动/手动改名后同步详情头栏与 session 缓存。
+          _applyThreadTitle(name);
         }
         _publishUiChanges(header: true);
       case AgentThreadArchivedEvent():
@@ -1922,7 +1948,33 @@ class AgentConversationViewModel extends ChangeNotifier {
     if (title == null || title.isEmpty) {
       return;
     }
+    _applyThreadTitle(title);
+  }
+
+  /// 更新当前详情标题，并在已绑定 session 时写回其 title 字段。
+  void _applyThreadTitle(String title) {
     _currentThreadTitle = title;
+    final session = _session;
+    if (session != null) {
+      _session = AgentSession(
+        id: session.id,
+        providerId: session.providerId,
+        title: title,
+        raw: session.raw,
+      );
+    }
+  }
+
+  /// 首条用户输入的临时展示标题（单行、限长，避免头栏被长 prompt 撑爆）。
+  static String _provisionalThreadTitle(String text) {
+    final singleLine = text
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .join(' ');
+    if (singleLine.length <= 48) {
+      return singleLine;
+    }
+    return '${singleLine.substring(0, 47)}…';
   }
 
   void _applyThreadRuntimeStatus({

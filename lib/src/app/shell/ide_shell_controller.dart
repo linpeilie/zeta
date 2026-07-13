@@ -609,13 +609,14 @@ class IdeShellController extends ChangeNotifier {
               thread.providerId == currentSession.providerId,
         );
     final mappingChanged = _agentThreadIdsByProject[projectPath] != sessionId;
-    if (!mappingChanged && hasProviderSummary) {
-      return;
-    }
 
     var selectedBySessionRegistration = false;
     if (currentSession != null && !hasProviderSummary) {
-      projectThreadsController.registerSession(projectPath, currentSession);
+      projectThreadsController.registerSession(
+        projectPath,
+        currentSession,
+        preview: _provisionalThreadPreview(),
+      );
       selectedBySessionRegistration = true;
     }
     if (mappingChanged) {
@@ -627,6 +628,22 @@ class IdeShellController extends ChangeNotifier {
       }
       _requestSessionSave();
     }
+    // 注意：不要把详情侧的临时首条消息标题回写为列表 title。
+    // 正式标题只应由 name/updated（Grok 为 summary.generated_title）驱动。
+  }
+
+  /// 从当前时间线取首条用户消息，作为新 thread 的临时列表 preview。
+  String? _provisionalThreadPreview() {
+    for (final message in agentViewModel.messages) {
+      if (message.role != AgentMessageRole.user) {
+        continue;
+      }
+      final text = message.text.trim();
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+    return null;
   }
 
   AgentThreadSummary? _threadSummaryFor(String projectPath, String threadId) {
@@ -640,8 +657,32 @@ class IdeShellController extends ChangeNotifier {
   }
 
   void _handleProjectThreadsChanged() {
+    // 列表标题可能因 thread/name/updated 或刷新而变化；详情头栏需同步。
+    _syncActiveThreadTitleFromList();
     _notifyStateChanged();
     _requestSessionSave();
+  }
+
+  /// 将当前会话在列表中的**正式**标题同步到 Agent 详情头栏。
+  ///
+  /// 仅使用 summary.title（generated_title / 手动重命名），不用 preview。
+  /// 这样刷新列表拿到正式标题后，停留在详情也能更新；又不会把首条
+  /// 用户消息 preview 误当成最终标题。
+  void _syncActiveThreadTitleFromList() {
+    final projectPath = _projectPath;
+    final sessionId = agentViewModel.sessionId;
+    if (projectPath == null || sessionId == null) {
+      return;
+    }
+    final summary = _threadSummaryFor(projectPath, sessionId);
+    if (summary == null) {
+      return;
+    }
+    final title = summary.title?.trim();
+    if (title == null || title.isEmpty) {
+      return;
+    }
+    agentViewModel.syncThreadTitleIfCurrent(sessionId, title);
   }
 
   void _handleActiveThreadCleared(String projectPath, String threadId) {

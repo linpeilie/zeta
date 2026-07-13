@@ -25,12 +25,12 @@
   },
   "format_version": 1,
   "latest_release": {
-    "etag": "W/\"549eaa301ecd54305244da065497c9f6c7a1187371c81a765aab334f728ae635\"",
-    "html_url": "https://github.com/openai/codex/releases/tag/rust-v0.144.1",
-    "published_at": "2026-07-09T23:02:40Z",
+    "etag": "W/\"cbc0c229eb6e9548a7e5da7fb41770aaf219b24f3bc893ee5dd5d15fa88476d5\"",
+    "html_url": "https://github.com/openai/codex/releases/tag/rust-v0.144.3",
+    "published_at": "2026-07-13T06:12:19Z",
     "source": "https://api.github.com/repos/openai/codex/releases/latest",
-    "tag_name": "rust-v0.144.1",
-    "updated_at": "2026-07-10T10:08:32.199274Z",
-    "version": "0.144.1"
+    "tag_name": "rust-v0.144.3",
+    "updated_at": "2026-07-13T13:53:04.954329Z",
+    "version": "0.144.3"
   }
 }

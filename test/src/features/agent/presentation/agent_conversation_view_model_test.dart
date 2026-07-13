@@ -103,6 +103,45 @@ void main() {
       expect(provider.calls, contains('start'));
     });
 
+    test(
+      'applies server name update while staying on a newly started thread',
+      () async {
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.sendMessage('hello from a new thread');
+        // 新会话在 generated_title 到来前使用首条用户消息作临时标题。
+        expect(viewModel.currentThreadTitle, 'hello from a new thread');
+        expect(viewModel.sessionId, 'thread-1');
+
+        provider.emit(
+          const AgentThreadNameUpdatedEvent(
+            threadId: 'thread-1',
+            threadName: 'Auto named title',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(viewModel.currentThreadTitle, 'Auto named title');
+        expect(viewModel.currentSession?.title, 'Auto named title');
+      },
+    );
+
+    test('syncThreadTitleIfCurrent updates only the active thread', () async {
+      final viewModel = _createViewModel(_FakeAgentProvider());
+      addTearDown(viewModel.dispose);
+
+      await viewModel.sendMessage('hello');
+      expect(viewModel.currentThreadTitle, 'hello');
+
+      viewModel.syncThreadTitleIfCurrent('other-thread', 'Ignored');
+      expect(viewModel.currentThreadTitle, 'hello');
+
+      viewModel.syncThreadTitleIfCurrent('thread-1', 'From list refresh');
+      expect(viewModel.currentThreadTitle, 'From list refresh');
+    });
+
     test('resets header title after project switch', () async {
       final provider = _FakeAgentProvider();
       final viewModel = _createViewModel(provider);

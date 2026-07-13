@@ -1010,6 +1010,65 @@ void main() {
     );
   });
 
+  testWidgets(
+    'updates header title when server renames a newly started thread',
+    (tester) async {
+      final provider = FakeAgentProvider();
+      final controller = ActiveAgentProviderController(
+        providerFactory: FakeAgentProviderFactory(provider),
+        configStore: MemoryAgentProviderConfigStore(),
+      );
+      addTearDown(controller.dispose);
+      final viewModel = AgentConversationViewModel(
+        providerController: controller,
+      );
+      addTearDown(viewModel.dispose);
+      viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
+
+      final lightIdeTheme = buildIdeThemeData(
+        brightness: Brightness.light,
+        codeFontFamily: 'CodeFont',
+      );
+      final darkIdeTheme = buildIdeThemeData(
+        brightness: Brightness.dark,
+        codeFontFamily: 'CodeFont',
+      );
+      await tester.pumpWidget(
+        IdeThemeScope(
+          themeMode: ThemeMode.dark,
+          lightTheme: lightIdeTheme,
+          darkTheme: darkIdeTheme,
+          child: sf.ShadcnApp(
+            theme: buildShadcnTheme(lightIdeTheme),
+            darkTheme: buildShadcnTheme(darkIdeTheme),
+            materialTheme: buildMaterialTheme(darkIdeTheme),
+            themeMode: sf.ThemeMode.dark,
+            home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(headerTitleText(tester), 'New thread');
+
+      await viewModel.sendMessage('Start a brand new conversation');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      // 新会话先显示首条用户消息，再被服务端/本地 generated_title 覆盖。
+      expect(headerTitleText(tester), 'Start a brand new conversation');
+
+      provider.emit(
+        const AgentThreadNameUpdatedEvent(
+          threadId: 'thread-1',
+          threadName: 'Brand new conversation',
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(headerTitleText(tester), 'Brand new conversation');
+    },
+  );
+
   testWidgets('renames the current thread from the header more menu', (
     tester,
   ) async {

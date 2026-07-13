@@ -75,13 +75,17 @@ class GrokSessionHistoryReader {
       );
     }
 
-    final projectKey = _encodeProjectDirName(projectPath);
-    final projectDir = Directory(
-      '${sessionsRoot.path}${Platform.pathSeparator}$projectKey',
-    );
-
     final summaries = <AgentThreadSummary>[];
-    if (await projectDir.exists()) {
+    final seenSessionIds = <String>{};
+
+    // 先按已知编码候选直接命中项目目录（Unix 用 %2F…，旧逻辑曾误用 %5C…）。
+    for (final projectKey in _projectDirNameCandidates(projectPath)) {
+      final projectDir = Directory(
+        '${sessionsRoot.path}${Platform.pathSeparator}$projectKey',
+      );
+      if (!await projectDir.exists()) {
+        continue;
+      }
       await for (final entity in projectDir.list(followLinks: false)) {
         if (entity is! Directory) {
           continue;
@@ -91,13 +95,16 @@ class GrokSessionHistoryReader {
           providerId: providerId,
           projectPath: projectPath,
         );
-        if (summary != null) {
+        if (summary != null && seenSessionIds.add(summary.id)) {
           summaries.add(summary);
         }
       }
+      if (summaries.isNotEmpty) {
+        break;
+      }
     }
 
-    // 兼容：某些 session 可能落在未编码的绝对路径目录名下。
+    // 兼容：扫描 sessions 根下任意项目目录名（编码差异 / 原始路径）。
     if (summaries.isEmpty) {
       await for (final entity in sessionsRoot.list(followLinks: false)) {
         if (entity is! Directory) {
@@ -116,7 +123,7 @@ class GrokSessionHistoryReader {
             providerId: providerId,
             projectPath: projectPath,
           );
-          if (summary != null) {
+          if (summary != null && seenSessionIds.add(summary.id)) {
             summaries.add(summary);
           }
         }
@@ -256,6 +263,94 @@ class GrokSessionHistoryReader {
     );
   }
 
+  /// 读取本地 `summary.json` 中的标题字段。
+  ///
+  /// Grok 会在首轮对话后异步写入 `generated_title` / `session_summary`，
+  /// ACP 协议本身不推送改名通知，因此 live UI 需要主动轮询该文件。
+  ///
+  /// live 自动改名应优先等待 [GrokSessionTitleSnapshot.generatedTitle]；
+  /// [sessionSummary] 可能更早出现或与首条用户消息混淆，不宜单独作为终态。
+  Future<GrokSessionTitleSnapshot?> readSessionTitleSnapshot({
+    required String threadId,
+    String? projectPath,
+    String? sessionPath,
+    Map<String, String>? environment,
+  }) async {
+    final resolved = await resolveSessionDirectory(
+      threadId: threadId,
+      projectPath: projectPath,
+      sessionPath: sessionPath,
+      environment: environment,
+    );
+    if (resolved == null) {
+      return null;
+    }
+    final summaryFile = File(
+      '${resolved.path}${Platform.pathSeparator}summary.json',
+    );
+    if (!await summaryFile.exists()) {
+      return GrokSessionTitleSnapshot(sessionPath: resolved.path);
+    }
+    try {
+      final decoded = jsonDecode(await summaryFile.readAsString());
+      if (decoded is! Map) {
+        return GrokSessionTitleSnapshot(sessionPath: resolved.path);
+      }
+      final raw = decoded.map(
+        (key, value) => MapEntry(key.toString(), value as Object?),
+      );
+      return GrokSessionTitleSnapshot(
+        sessionPath: resolved.path,
+        generatedTitle: _nonEmpty(raw['generated_title']?.toString()),
+        sessionSummary: _nonEmpty(raw['session_summary']?.toString()),
+      );
+    } catch (error, stackTrace) {
+      _log.fine(
+        'Could not read Grok title snapshot for $threadId',
+        error,
+        stackTrace,
+      );
+      return GrokSessionTitleSnapshot(sessionPath: resolved.path);
+    }
+  }
+
+  /// 读取展示标题；优先 `generated_title`。
+  Future<String?> readSessionDisplayTitle({
+    required String threadId,
+    String? projectPath,
+    String? sessionPath,
+    Map<String, String>? environment,
+  }) async {
+    final snapshot = await readSessionTitleSnapshot(
+      threadId: threadId,
+      projectPath: projectPath,
+      sessionPath: sessionPath,
+      environment: environment,
+    );
+    return snapshot?.displayTitle;
+  }
+
+  /// 解析 session 目录；[sessionPath] 优先，否则按项目路径候选与递归扫描。
+  Future<Directory?> resolveSessionDirectory({
+    required String threadId,
+    String? projectPath,
+    String? sessionPath,
+    Map<String, String>? environment,
+  }) async {
+    final explicitPath = sessionPath?.trim();
+    if (explicitPath != null && explicitPath.isNotEmpty) {
+      final dir = Directory(explicitPath);
+      if (await dir.exists()) {
+        return dir;
+      }
+    }
+    return _findSessionDirectory(
+      threadId: threadId,
+      projectPath: projectPath,
+      environment: environment,
+    );
+  }
+
   Future<AgentThreadSummary?> _readSessionSummary({
     required Directory sessionDir,
     required String providerId,
@@ -343,13 +438,14 @@ class GrokSessionHistoryReader {
     }
 
     if (projectPath != null && projectPath.trim().isNotEmpty) {
-      final projectKey = _encodeProjectDirName(projectPath);
-      final candidate = Directory(
-        '${sessionsRoot.path}${Platform.pathSeparator}$projectKey'
-        '${Platform.pathSeparator}$threadId',
-      );
-      if (await candidate.exists()) {
-        return candidate;
+      for (final projectKey in _projectDirNameCandidates(projectPath)) {
+        final candidate = Directory(
+          '${sessionsRoot.path}${Platform.pathSeparator}$projectKey'
+          '${Platform.pathSeparator}$threadId',
+        );
+        if (await candidate.exists()) {
+          return candidate;
+        }
       }
     }
 
@@ -369,10 +465,54 @@ class GrokSessionHistoryReader {
   }
 }
 
-/// Grok 用 percent-encoding 的路径作为 session 一级目录名。
-String _encodeProjectDirName(String projectPath) {
-  final normalized = projectPath.replaceAll('/', '\\');
-  return Uri.encodeComponent(normalized);
+/// 本地 summary 标题快照。
+class GrokSessionTitleSnapshot {
+  const GrokSessionTitleSnapshot({
+    this.sessionPath,
+    this.generatedTitle,
+    this.sessionSummary,
+  });
+
+  /// session 目录绝对路径（便于后续 watch / 直读）。
+  final String? sessionPath;
+
+  /// Grok 异步生成的正式标题。
+  final String? generatedTitle;
+
+  /// 会话摘要；可能与 generated_title 相同，也可能更早/更粗糙。
+  final String? sessionSummary;
+
+  /// live 自动改名应使用的终态标题。
+  String? get authoritativeTitle => generatedTitle;
+
+  /// 列表/展示回退链。
+  String? get displayTitle => generatedTitle ?? sessionSummary;
+}
+
+String? _nonEmpty(String? value) {
+  final cleaned = value?.trim();
+  if (cleaned == null || cleaned.isEmpty) {
+    return null;
+  }
+  return cleaned;
+}
+
+/// Grok session 项目目录名候选。
+///
+/// 实测 macOS 上 Grok 使用 `Uri.encodeComponent('/Users/...')` → `%2FUsers%2F...`；
+/// 旧代码误把 `/` 换成 `\` 再编码得到 `%5CUsers%5C...`，会导致直接路径命中失败。
+List<String> _projectDirNameCandidates(String projectPath) {
+  final trimmed = projectPath.trim();
+  if (trimmed.isEmpty) {
+    return const <String>[];
+  }
+  final withSlash = trimmed.replaceAll('\\', '/');
+  final withBackslash = trimmed.replaceAll('/', '\\');
+  return <String>{
+    Uri.encodeComponent(withSlash),
+    Uri.encodeComponent(withBackslash),
+    Uri.encodeComponent(trimmed),
+  }.toList(growable: false);
 }
 
 /// 取目录 basename；避免 Windows 上 `uri.pathSegments.last` 为空字符串。

@@ -52,6 +52,59 @@ void main() {
       expect(page.threads.single.id, sessionId);
       expect(page.threads.single.title, 'Token usage work');
       expect(page.threads.single.preview, 'Implement token usage');
+
+      final title = await reader.readSessionDisplayTitle(
+        threadId: sessionId,
+        projectPath: projectPath,
+      );
+      expect(title, 'Token usage work');
+
+      final snapshot = await reader.readSessionTitleSnapshot(
+        threadId: sessionId,
+        projectPath: projectPath,
+      );
+      expect(snapshot?.generatedTitle, 'Token usage work');
+      expect(snapshot?.sessionSummary, 'Implement token usage');
+      expect(snapshot?.authoritativeTitle, 'Token usage work');
+    });
+
+    test('finds sessions under slash-encoded Unix project dirs', () async {
+      final projectPath = '/Users/linpeilie/Development/Workspace/zeta';
+      final encoded = Uri.encodeComponent(projectPath);
+      expect(encoded, '%2FUsers%2Flinpeilie%2FDevelopment%2FWorkspace%2Fzeta');
+      final sessionId = '019f5bcb-e8c2-7191-a779-f2a40d9ee05a';
+      final sessionDir = Directory(
+        '${tempRoot.path}${Platform.pathSeparator}sessions'
+        '${Platform.pathSeparator}$encoded'
+        '${Platform.pathSeparator}$sessionId',
+      );
+      await sessionDir.create(recursive: true);
+      await File(
+        '${sessionDir.path}${Platform.pathSeparator}summary.json',
+      ).writeAsString('''
+{
+  "info": {"id": "$sessionId", "cwd": ${jsonQuote(projectPath)}},
+  "session_summary": "User Asking What AI Model This Is",
+  "generated_title": "User Asking What AI Model This Is",
+  "created_at": "2026-07-13T14:05:18.000Z",
+  "updated_at": "2026-07-13T14:05:34.000Z",
+  "last_active_at": "2026-07-13T14:05:31.000Z"
+}
+''');
+
+      final reader = GrokSessionHistoryReader(grokHome: tempRoot.path);
+      final page = await reader.listThreads(
+        query: AgentThreadListQuery(projectPath: projectPath, limit: 20),
+        providerId: 'grok',
+      );
+      expect(page.threads, hasLength(1));
+      expect(page.threads.single.title, 'User Asking What AI Model This Is');
+
+      final snapshot = await reader.readSessionTitleSnapshot(
+        threadId: sessionId,
+        projectPath: projectPath,
+      );
+      expect(snapshot?.generatedTitle, 'User Asking What AI Model This Is');
     });
 
     test('prefers updates.jsonl multi-turn history over chat_history', () async {

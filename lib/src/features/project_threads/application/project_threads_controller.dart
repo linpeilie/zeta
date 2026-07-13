@@ -203,8 +203,18 @@ class ProjectThreadsController {
   /// 登记 provider 已创建或恢复成功的 session，并立即缓存其 provider 归属。
   ///
   /// 这样新 thread 无需等待下一次列表刷新，也能以完整摘要参与会话持久化和恢复。
-  void registerSession(String projectPath, AgentSession session) {
+  ///
+  /// [preview] 可传入首条用户消息等临时摘要，避免列表在 generated_title
+  /// 写入前只能显示短 id。
+  void registerSession(
+    String projectPath,
+    AgentSession session, {
+    String? preview,
+  }) {
     _registerThreadMapping(projectPath, session.id);
+    final resolvedPreview = (preview ?? session.title ?? '').trim();
+    // title 只在 provider 已给出正式名时写入；首条用户消息只放 preview，
+    // 避免把临时文案写进 title 后挡住后续 generated_title 覆盖观感。
     viewModel.prependThread(
       projectPath: projectPath,
       thread: AgentThreadSummary(
@@ -212,14 +222,35 @@ class ProjectThreadsController {
         providerId: session.providerId,
         projectPath: projectPath,
         title: session.title,
-        preview: session.title ?? '',
+        preview: resolvedPreview,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
         status: AgentThreadRuntimeStatus.idle,
         raw: session.raw,
       ),
     );
+    if (session.title != null && session.title!.trim().isNotEmpty) {
+      viewModel.updateThreadTitle(
+        projectPath: projectPath,
+        threadId: session.id,
+        title: session.title,
+      );
+    }
     selectThreadId(projectPath, session.id);
+  }
+
+  /// 更新列表中某条 thread 的标题（供 shell 从详情侧回写）。
+  void updateThreadTitle({
+    required String projectPath,
+    required String threadId,
+    required String? title,
+  }) {
+    _registerThreadMapping(projectPath, threadId);
+    viewModel.updateThreadTitle(
+      projectPath: projectPath,
+      threadId: threadId,
+      title: title,
+    );
   }
 
   /// 重命名 thread；乐观更新标题，以 `thread/name/updated` 为准。
