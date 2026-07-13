@@ -2089,7 +2089,8 @@ void main() {
       expect(turn.tokenUsage, isNotNull);
       expect(turn.tokenUsage!.inputTokens, 41910);
       expect(turn.tokenUsage!.cachedInputTokens, 19712);
-      expect(turn.tokenUsage!.outputTokens, 2332);
+      expect(turn.tokenUsage!.outputTokens, 772);
+      expect(turn.tokenUsage!.reasoningOutputTokens, 780);
       expect(turn.tokenUsage!.totalTokens, 43462);
       expect(turn.tokenUsage!.lastInputTokens, 26672);
       expect(turn.tokenUsage!.lastTotalTokens, 27723);
@@ -2137,7 +2138,8 @@ void main() {
         expect(usageEvent.tokenUsage.totalTokens, 1300);
         expect(usageEvent.tokenUsage.inputTokens, 1000);
         expect(usageEvent.tokenUsage.cachedInputTokens, 200);
-        expect(usageEvent.tokenUsage.outputTokens, 350);
+        expect(usageEvent.tokenUsage.outputTokens, 250);
+        expect(usageEvent.tokenUsage.reasoningOutputTokens, 50);
         expect(usageEvent.tokenUsage.lastTotalTokens, 1300);
       },
     );
@@ -2186,11 +2188,13 @@ void main() {
         expect(usageEvent.turnId, 'turn-live');
         expect(usageEvent.tokenUsage.inputTokens, 41910);
         expect(usageEvent.tokenUsage.cachedInputTokens, 19712);
-        expect(usageEvent.tokenUsage.outputTokens, 2332);
+        expect(usageEvent.tokenUsage.outputTokens, 772);
+        expect(usageEvent.tokenUsage.reasoningOutputTokens, 780);
         expect(usageEvent.tokenUsage.totalTokens, 43462);
         expect(usageEvent.tokenUsage.lastInputTokens, 26672);
         expect(usageEvent.tokenUsage.lastCachedInputTokens, 14720);
-        expect(usageEvent.tokenUsage.lastOutputTokens, 1583);
+        expect(usageEvent.tokenUsage.lastOutputTokens, 519);
+        expect(usageEvent.tokenUsage.lastReasoningOutputTokens, 532);
 
         expect(usageEvent.tokenUsage.lastTotalTokens, 27723);
         expect(usageEvent.tokenUsage.modelContextWindow, 258400);

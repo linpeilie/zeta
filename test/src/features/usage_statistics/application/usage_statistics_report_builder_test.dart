@@ -47,6 +47,7 @@ void main() {
             ttft: const Duration(seconds: 2),
             inputTokens: 100,
             outputTokens: 40,
+            reasoningTokens: 10,
             totalTokens: 140,
           ),
           _record(
@@ -58,6 +59,7 @@ void main() {
             errorCategory: UsageErrorCategory.timeout,
             inputTokens: 80,
             outputTokens: 20,
+            reasoningTokens: 5,
             totalTokens: 100,
           ),
           _record(
@@ -102,6 +104,7 @@ void main() {
       expect(report.overview.averageResponse, const Duration(seconds: 2));
       expect(report.overview.responseSampleCount, 1);
       expect(report.overview.tokens.totalTokens, 240);
+      expect(report.overview.tokens.reasoningTokens, 15);
       expect(report.agentRanking.single.calls, 4);
       expect(report.projectRanking.map((entry) => entry.projectName), [
         'alpha',
@@ -168,6 +171,7 @@ AgentUsageRecord _record({
   Duration? ttft,
   int? inputTokens,
   int? outputTokens,
+  int? reasoningTokens,
   int? totalTokens,
   UsageErrorCategory? errorCategory,
   String model = 'gpt-5',
@@ -190,6 +194,7 @@ AgentUsageRecord _record({
     tokens: UsageTokenBreakdown(
       inputTokens: inputTokens,
       outputTokens: outputTokens,
+      reasoningTokens: reasoningTokens,
       totalTokens: totalTokens,
     ),
     errorCategory: errorCategory,

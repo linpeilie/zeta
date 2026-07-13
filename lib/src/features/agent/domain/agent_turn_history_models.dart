@@ -103,27 +103,33 @@ class AgentHistoryTurn {
 /// - 将单个 turn 的用量存为相对上一 turn 累计的增量（见 [deltaFrom]）。
 ///
 /// `last*` 字段始终表示最近一次请求的用量，不做差分。
-/// Codex 的 `reasoning_output_tokens` 在解析时并入 [outputTokens]，
-/// 模型层不再单独暴露推理 token 字段。
+/// Codex 的 `reasoning_output_tokens` 单独保存在 [reasoningOutputTokens]，
+/// 避免统计层把可见输出与推理消耗混为同一口径。
 class AgentTokenUsage {
   const AgentTokenUsage({
     this.inputTokens,
     this.cachedInputTokens,
     this.outputTokens,
+    this.reasoningOutputTokens,
     this.totalTokens,
     this.lastInputTokens,
     this.lastCachedInputTokens,
     this.lastOutputTokens,
+    this.lastReasoningOutputTokens,
     this.lastTotalTokens,
     this.modelContextWindow,
   });
 
-  /// 将 Codex 的 output + reasoning_output 合并为单一输出 token 数。
-  static int? mergeOutputTokens(int? outputTokens, int? reasoningOutputTokens) {
+  /// 将 Codex 的总输出拆出推理部分，得到用户可见输出 token。
+  static int? visibleOutputTokens(
+    int? outputTokens,
+    int? reasoningOutputTokens,
+  ) {
     if (outputTokens == null && reasoningOutputTokens == null) {
       return null;
     }
-    return (outputTokens ?? 0) + (reasoningOutputTokens ?? 0);
+    final visible = (outputTokens ?? 0) - (reasoningOutputTokens ?? 0);
+    return visible < 0 ? 0 : visible;
   }
 
   /// 相对 [baseline] 累计用量的本 turn 增量。
@@ -137,10 +143,15 @@ class AgentTokenUsage {
         baseline?.cachedInputTokens,
       ),
       outputTokens: _nonNegativeDelta(outputTokens, baseline?.outputTokens),
+      reasoningOutputTokens: _nonNegativeDelta(
+        reasoningOutputTokens,
+        baseline?.reasoningOutputTokens,
+      ),
       totalTokens: _nonNegativeDelta(totalTokens, baseline?.totalTokens),
       lastInputTokens: lastInputTokens,
       lastCachedInputTokens: lastCachedInputTokens,
       lastOutputTokens: lastOutputTokens,
+      lastReasoningOutputTokens: lastReasoningOutputTokens,
       lastTotalTokens: lastTotalTokens,
       modelContextWindow: modelContextWindow,
     );
@@ -155,6 +166,10 @@ class AgentTokenUsage {
         other.cachedInputTokens,
       ),
       outputTokens: _sumOptional(outputTokens, other.outputTokens),
+      reasoningOutputTokens: _sumOptional(
+        reasoningOutputTokens,
+        other.reasoningOutputTokens,
+      ),
       totalTokens: _sumOptional(totalTokens, other.totalTokens),
       modelContextWindow: other.modelContextWindow ?? modelContextWindow,
     );
@@ -165,6 +180,7 @@ class AgentTokenUsage {
     return inputTokens != null ||
         cachedInputTokens != null ||
         outputTokens != null ||
+        reasoningOutputTokens != null ||
         totalTokens != null;
   }
 
@@ -206,11 +222,18 @@ class AgentTokenUsage {
   /// 缓存命中的输入 token 数展示值。
   String? get displayCachedInputTokens => _displayTokenCount(cachedInputTokens);
 
-  /// 输出 token 数（已含 reasoning_output_tokens）。
+  /// 可见输出 token 数，不含推理 token。
   final int? outputTokens;
 
   /// 输出 token 数展示值。
   String? get displayOutputTokens => _displayTokenCount(outputTokens);
+
+  /// 推理输出 token 数。
+  final int? reasoningOutputTokens;
+
+  /// 推理输出 token 数展示值。
+  String? get displayReasoningOutputTokens =>
+      _displayTokenCount(reasoningOutputTokens);
 
   /// 总 token 数。
   final int? totalTokens;
@@ -231,11 +254,18 @@ class AgentTokenUsage {
   String? get displayLastCachedInputTokens =>
       _displayTokenCount(lastCachedInputTokens);
 
-  /// 最近一次请求的输出 token 数（已含 reasoning_output_tokens）。
+  /// 最近一次请求的可见输出 token 数。
   final int? lastOutputTokens;
 
   /// 最近一次请求输出 token 数展示值。
   String? get displayLastOutputTokens => _displayTokenCount(lastOutputTokens);
+
+  /// 最近一次请求的推理输出 token 数。
+  final int? lastReasoningOutputTokens;
+
+  /// 最近一次请求推理输出 token 数展示值。
+  String? get displayLastReasoningOutputTokens =>
+      _displayTokenCount(lastReasoningOutputTokens);
 
   /// 最近一次请求的总 token 数。
   final int? lastTotalTokens;

@@ -28,6 +28,7 @@ void main() {
     expect(find.text('Agent 使用排行'), findsOneWidget);
     expect(find.text('项目使用排行'), findsOneWidget);
     expect(find.text('Token 分析'), findsOneWidget);
+    expect(find.text('推理 100', findRichText: true), findsOneWidget);
     expect(find.text('ChatGPT Plus'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('usage-main-chart-calls')),
@@ -207,6 +208,7 @@ UsageStatisticsSourceSnapshot _source(DateTime now) {
           inputTokens: 1200,
           cachedInputTokens: 300,
           outputTokens: 400,
+          reasoningTokens: 100,
           totalTokens: 1600,
         ),
       ),

@@ -563,7 +563,8 @@ class _OverviewGrid extends StatelessWidget {
                   : '不支持',
               detail: overview.tokens.hasData
                   ? '输入 ${formatUsageCount(overview.tokens.inputTokens ?? 0)} · '
-                        '输出 ${formatUsageCount(overview.tokens.outputTokens ?? 0)}'
+                        '输出 ${formatUsageCount(overview.tokens.outputTokens ?? 0)} · '
+                        '推理 ${formatUsageCount(overview.tokens.reasoningTokens ?? 0)}'
                   : '当前 Agent 不支持 Token 统计',
               icon: Icons.data_usage_rounded,
             ),
@@ -826,6 +827,10 @@ class _TokenAnalysisSection extends StatelessWidget {
                     _InlineMetric(
                       label: '输出',
                       value: formatUsageCount(tokens.outputTokens ?? 0),
+                    ),
+                    _InlineMetric(
+                      label: '推理',
+                      value: formatUsageCount(tokens.reasoningTokens ?? 0),
                     ),
                   ],
                 ),
@@ -1517,7 +1522,9 @@ class _TaskDetailDrawer extends StatelessWidget {
                 ? '当前记录不支持 Token 统计'
                 : '${formatUsageCount(record.tokens.effectiveTotal!)} '
                       '（输入 ${formatUsageCount(record.tokens.inputTokens ?? 0)} / '
-                      '输出 ${formatUsageCount(record.tokens.outputTokens ?? 0)}）',
+                      '缓存 ${formatUsageCount(record.tokens.cachedInputTokens ?? 0)} / '
+                      '输出 ${formatUsageCount(record.tokens.outputTokens ?? 0)} / '
+                      '推理 ${formatUsageCount(record.tokens.reasoningTokens ?? 0)}）',
           ),
           _DetailRow(label: '状态', value: record.status.label),
           if (record.errorCategory case final category?) ...[

@@ -2,63 +2,21 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
+import 'package:zeta/src/features/agent/data/datasources/local_history/codex_usage_log_scanner.dart';
 
-const int usageStatisticsIndexVersion = 1;
-const String _usageStatisticsIndexKey = 'usage_statistics.index.v1';
-
-class UsageStatisticsIndexedThread {
-  const UsageStatisticsIndexedThread({
-    required this.threadId,
-    required this.updatedAt,
-    required this.records,
-  });
-
-  final String threadId;
-  final DateTime updatedAt;
-  final List<AgentUsageRecord> records;
-
-  Map<String, Object?> toJson() => <String, Object?>{
-    'threadId': threadId,
-    'updatedAt': updatedAt.millisecondsSinceEpoch,
-    'records': records.map((record) => record.toJson()).toList(),
-  };
-
-  static UsageStatisticsIndexedThread? tryDecode(Object? value) {
-    final map = _objectMap(value);
-    final threadId = _string(map['threadId']);
-    final updatedAtMs = _int(map['updatedAt']);
-    if (threadId == null || updatedAtMs == null) {
-      return null;
-    }
-    final records = <AgentUsageRecord>[];
-    final rawRecords = map['records'];
-    if (rawRecords is List) {
-      for (final rawRecord in rawRecords) {
-        final record = AgentUsageRecord.tryDecode(rawRecord);
-        if (record != null) {
-          records.add(record);
-        }
-      }
-    }
-    return UsageStatisticsIndexedThread(
-      threadId: threadId,
-      updatedAt: DateTime.fromMillisecondsSinceEpoch(updatedAtMs),
-      records: List<AgentUsageRecord>.unmodifiable(records),
-    );
-  }
-}
+const int usageStatisticsIndexVersion = 2;
+const String _usageStatisticsIndexKey = 'usage_statistics.index.v2';
 
 class UsageStatisticsIndexSnapshot {
   const UsageStatisticsIndexSnapshot({
-    this.threads = const <String, UsageStatisticsIndexedThread>{},
+    this.sessions = const <String, CodexUsageSessionSnapshot>{},
   });
 
-  final Map<String, UsageStatisticsIndexedThread> threads;
+  final Map<String, CodexUsageSessionSnapshot> sessions;
 
   Map<String, Object?> toJson() => <String, Object?>{
     'version': usageStatisticsIndexVersion,
-    'threads': threads.values.map((thread) => thread.toJson()).toList(),
+    'sessions': sessions.values.map((session) => session.toJson()).toList(),
   };
 
   static UsageStatisticsIndexSnapshot tryDecode(Object? value) {
@@ -66,18 +24,18 @@ class UsageStatisticsIndexSnapshot {
     if (_int(map['version']) != usageStatisticsIndexVersion) {
       return const UsageStatisticsIndexSnapshot();
     }
-    final threads = <String, UsageStatisticsIndexedThread>{};
-    final rawThreads = map['threads'];
-    if (rawThreads is List) {
-      for (final rawThread in rawThreads) {
-        final thread = UsageStatisticsIndexedThread.tryDecode(rawThread);
-        if (thread != null) {
-          threads[thread.threadId] = thread;
+    final sessions = <String, CodexUsageSessionSnapshot>{};
+    final rawSessions = map['sessions'];
+    if (rawSessions is List) {
+      for (final rawSession in rawSessions) {
+        final session = CodexUsageSessionSnapshot.tryDecode(rawSession);
+        if (session != null) {
+          sessions[session.sourcePath] = session;
         }
       }
     }
     return UsageStatisticsIndexSnapshot(
-      threads: Map<String, UsageStatisticsIndexedThread>.unmodifiable(threads),
+      sessions: Map<String, CodexUsageSessionSnapshot>.unmodifiable(sessions),
     );
   }
 }
@@ -138,9 +96,6 @@ Map<String, Object?> _objectMap(Object? value) {
   }
   return const <String, Object?>{};
 }
-
-String? _string(Object? value) =>
-    value is String && value.trim().isNotEmpty ? value.trim() : null;
 
 int? _int(Object? value) => switch (value) {
   int() => value,

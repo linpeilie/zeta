@@ -114,10 +114,12 @@ UsageTokenBreakdown _sumTokens(Iterable<AgentUsageRecord> records) {
   var hasInput = false;
   var hasCached = false;
   var hasOutput = false;
+  var hasReasoning = false;
   var hasTotal = false;
   var input = 0;
   var cached = 0;
   var output = 0;
+  var reasoning = 0;
   var total = 0;
   for (final record in records) {
     final tokens = record.tokens;
@@ -133,6 +135,10 @@ UsageTokenBreakdown _sumTokens(Iterable<AgentUsageRecord> records) {
       hasOutput = true;
       output += tokens.outputTokens!;
     }
+    if (tokens.reasoningTokens != null) {
+      hasReasoning = true;
+      reasoning += tokens.reasoningTokens!;
+    }
     final effectiveTotal = tokens.effectiveTotal;
     if (effectiveTotal != null) {
       hasTotal = true;
@@ -143,6 +149,7 @@ UsageTokenBreakdown _sumTokens(Iterable<AgentUsageRecord> records) {
     inputTokens: hasInput ? input : null,
     cachedInputTokens: hasCached ? cached : null,
     outputTokens: hasOutput ? output : null,
+    reasoningTokens: hasReasoning ? reasoning : null,
     totalTokens: hasTotal ? total : null,
   );
 }

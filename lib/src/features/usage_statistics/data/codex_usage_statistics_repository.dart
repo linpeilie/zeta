@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:zeta/src/features/agent/data/datasources/local_history/codex_usage_log_scanner.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_index_store.dart';
@@ -8,25 +10,25 @@ import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_repos
 
 typedef UsageAgentProviderLoader = Future<AgentProvider> Function();
 
-/// 基于 Codex app-server thread 历史和本地 JSONL 的使用统计数据源。
+/// 基于 Codex 本地 rollout JSONL 的使用统计数据源。
+///
+/// app-server 仅用于读取当前套餐额度；历史 token 不依赖 thread/list。
 class CodexUsageStatisticsRepository implements UsageStatisticsRepository {
   CodexUsageStatisticsRepository({
     required this.providerLoader,
     required this.indexStore,
+    this.scanner = const FileSystemCodexUsageLogScanner(),
+    Map<String, String>? environment,
+    this.homeDirectory,
     DateTime Function()? clock,
-  }) : _clock = clock ?? DateTime.now;
-
-  static const int _threadPageSize = 100;
-  static const int _historyReadConcurrency = 4;
-  static const List<String> _humanRootSourceKinds = <String>[
-    'cli',
-    'vscode',
-    'exec',
-    'appServer',
-  ];
+  }) : _environment = environment ?? Platform.environment,
+       _clock = clock ?? DateTime.now;
 
   final UsageAgentProviderLoader providerLoader;
   final UsageStatisticsIndexStore indexStore;
+  final CodexUsageLogScanner scanner;
+  final Map<String, String> _environment;
+  final String? homeDirectory;
   final DateTime Function() _clock;
 
   @override
@@ -36,63 +38,17 @@ class CodexUsageStatisticsRepository implements UsageStatisticsRepository {
   }) async {
     final provider = await providerLoader();
     final warnings = <String>[];
-    var index = await indexStore.load();
-    final summaries = await _listRelevantThreads(provider, earliest);
-    final nextThreads = <String, UsageStatisticsIndexedThread>{
-      ...index.threads,
-    };
-    final seenThreadIds = summaries.map((thread) => thread.id).toSet();
-    nextThreads.removeWhere(
-      (threadId, cached) =>
-          !cached.updatedAt.isBefore(earliest) &&
-          !seenThreadIds.contains(threadId),
+    final index = await indexStore.load();
+    final scan = await scanner.scan(
+      codexHome: _resolveCodexHome(provider),
+      cachedSessions: index.sessions,
+      forceRefresh: forceRefresh,
     );
-
-    final pendingReads = <AgentThreadSummary>[];
-    for (final summary in summaries) {
-      final cached = nextThreads[summary.id];
-      final unchanged =
-          !forceRefresh &&
-          cached != null &&
-          cached.updatedAt.isAtSameMomentAs(summary.updatedAt);
-      if (!unchanged) {
-        pendingReads.add(summary);
-      }
-    }
-
-    var failedThreadReads = 0;
-    for (
-      var offset = 0;
-      offset < pendingReads.length;
-      offset += _historyReadConcurrency
-    ) {
-      final end = (offset + _historyReadConcurrency).clamp(
-        0,
-        pendingReads.length,
-      );
-      final batch = pendingReads.sublist(offset, end);
-      final results = await Future.wait(
-        batch.map((summary) => _readThread(provider, summary)),
-      );
-      for (final result in results) {
-        if (result.thread != null) {
-          nextThreads[result.summary.id] = result.thread!;
-        } else {
-          failedThreadReads += 1;
-        }
-      }
-    }
-    if (failedThreadReads > 0) {
-      warnings.add('$failedThreadReads 个 Codex 会话读取失败，已保留可用缓存。');
-    }
-
-    index = UsageStatisticsIndexSnapshot(
-      threads: Map<String, UsageStatisticsIndexedThread>.unmodifiable(
-        nextThreads,
-      ),
-    );
+    warnings.addAll(scan.warnings);
     try {
-      await indexStore.save(index);
+      await indexStore.save(
+        UsageStatisticsIndexSnapshot(sessions: scan.sessions),
+      );
     } catch (_) {
       warnings.add('统计索引暂时无法保存，本次结果仍可正常查看。');
     }
@@ -107,10 +63,10 @@ class CodexUsageStatisticsRepository implements UsageStatisticsRepository {
     }
 
     final records =
-        nextThreads.values
-            .expand((thread) => thread.records)
-            .where((record) => !record.startedAt.isBefore(earliest))
-            .toList()
+        _recordsFromSessions(
+            provider,
+            scan.sessions.values,
+          ).where((record) => !record.startedAt.isBefore(earliest)).toList()
           ..sort((left, right) => right.startedAt.compareTo(left.startedAt));
     return UsageStatisticsSourceSnapshot(
       records: List<AgentUsageRecord>.unmodifiable(records),
@@ -120,136 +76,100 @@ class CodexUsageStatisticsRepository implements UsageStatisticsRepository {
     );
   }
 
-  Future<List<AgentThreadSummary>> _listRelevantThreads(
-    AgentProvider provider,
-    DateTime earliest,
-  ) async {
-    final byId = <String, AgentThreadSummary>{};
-    for (final archived in <bool>[false, true]) {
-      String? cursor;
-      var pageCount = 0;
-      do {
-        final page = await provider.listThreads(
-          query: AgentThreadListQuery(
-            projectPath: null,
-            limit: _threadPageSize,
-            cursor: cursor,
-            archived: archived,
-            sourceKinds: _humanRootSourceKinds,
-          ),
-        );
-        pageCount += 1;
-        for (final thread in page.threads) {
-          if (!thread.updatedAt.isBefore(earliest)) {
-            final previous = byId[thread.id];
-            if (previous == null ||
-                thread.updatedAt.isAfter(previous.updatedAt)) {
-              byId[thread.id] = thread;
-            }
-          }
-        }
-        final reachedOlderThreads =
-            page.threads.isNotEmpty &&
-            page.threads.last.updatedAt.isBefore(earliest);
-        cursor = reachedOlderThreads ? null : page.nextCursor;
-        // 防御异常 provider 重复返回游标导致无限循环。
-        if (pageCount >= 1000) {
-          cursor = null;
-        }
-      } while (cursor != null);
+  String _resolveCodexHome(AgentProvider provider) {
+    final configured = _nonEmpty(provider.config.environment['CODEX_HOME']);
+    if (configured != null) {
+      return configured;
     }
-    final result = byId.values.toList()
-      ..sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
-    return result;
+    final inherited = _nonEmpty(_environment['CODEX_HOME']);
+    if (inherited != null) {
+      return inherited;
+    }
+    final home =
+        _nonEmpty(homeDirectory) ??
+        _nonEmpty(_environment[Platform.isWindows ? 'USERPROFILE' : 'HOME']) ??
+        Directory.current.path;
+    return _joinPath(home, '.codex');
   }
 
-  Future<_ThreadReadResult> _readThread(
+  List<AgentUsageRecord> _recordsFromSessions(
     AgentProvider provider,
-    AgentThreadSummary summary,
-  ) async {
-    try {
-      final history = await provider.readThreadHistory(
-        threadId: summary.id,
-        sessionPath: summary.sessionPath,
-      );
-      return _ThreadReadResult(
-        summary: summary,
-        thread: UsageStatisticsIndexedThread(
-          threadId: summary.id,
-          updatedAt: summary.updatedAt,
-          records: _recordsFromHistory(provider, summary, history),
-        ),
-      );
-    } catch (_) {
-      return _ThreadReadResult(summary: summary);
-    }
-  }
-
-  List<AgentUsageRecord> _recordsFromHistory(
-    AgentProvider provider,
-    AgentThreadSummary summary,
-    AgentThreadHistorySnapshot history,
+    Iterable<CodexUsageSessionSnapshot> sessions,
   ) {
     final records = <AgentUsageRecord>[];
-    AgentTokenUsage? previousCumulative;
-    for (final turn in history.turns) {
-      final cumulative = turn.tokenUsage;
-      final turnTokens = cumulative?.hasCumulativeBreakdown == true
-          ? cumulative!.deltaFrom(previousCumulative)
-          : cumulative;
-      if (cumulative?.hasCumulativeBreakdown == true) {
-        previousCumulative = cumulative;
-      }
-      final startedAt =
-          turn.startedAt ??
-          turn.completedAt ??
-          (history.turns.length == 1 ? summary.createdAt : null);
-      if (startedAt == null) {
-        continue;
-      }
-      final status = _usageStatus(turn.status);
-      final errorCategory = _errorCategory(
-        status: status,
-        code: turn.errorCode,
-        message: turn.errorMessage,
-      );
-      records.add(
-        AgentUsageRecord(
-          threadId: summary.id,
-          turnId: turn.id,
-          providerId: provider.config.id,
-          providerName: provider.config.displayName,
-          projectPath: _nonEmpty(turn.cwd) ?? summary.projectPath,
-          sourceKind: _sourceKind(summary.raw['source']),
-          startedAt: startedAt,
-          completedAt: turn.completedAt,
-          duration:
-              turn.duration ?? _durationBetween(startedAt, turn.completedAt),
-          timeToFirstToken: turn.timeToFirstToken,
-          model: _nonEmpty(turn.model),
-          status: status,
-          tokens: UsageTokenBreakdown(
-            inputTokens: turnTokens?.inputTokens,
-            cachedInputTokens: turnTokens?.cachedInputTokens,
-            outputTokens: turnTokens?.outputTokens,
-            totalTokens: turnTokens?.totalTokens,
+    final seenSamples = <String>{};
+    final orderedSessions = sessions.toList()
+      ..sort((left, right) => left.createdAt.compareTo(right.createdAt));
+    for (final session in orderedSessions) {
+      for (final turn in session.turns) {
+        final acceptedSamples = turn.samples
+            .where((sample) => seenSamples.add(sample.deduplicationKey))
+            .toList();
+        final startedAt =
+            turn.startedAt ??
+            (acceptedSamples.isEmpty
+                ? null
+                : acceptedSamples.first.timestamp) ??
+            turn.completedAt ??
+            session.createdAt;
+        final status = _usageStatus(turn.status);
+        final tokens = acceptedSamples.isEmpty
+            ? const UsageTokenBreakdown()
+            : UsageTokenBreakdown(
+                inputTokens: _sum(
+                  acceptedSamples,
+                  (sample) => sample.inputTokens,
+                ),
+                cachedInputTokens: _sum(
+                  acceptedSamples,
+                  (sample) => sample.cachedInputTokens,
+                ),
+                outputTokens: _sum(
+                  acceptedSamples,
+                  (sample) => sample.outputTokens,
+                ),
+                reasoningTokens: _sum(
+                  acceptedSamples,
+                  (sample) => sample.reasoningTokens,
+                ),
+                totalTokens: _sum(
+                  acceptedSamples,
+                  (sample) => sample.totalTokens,
+                ),
+              );
+        records.add(
+          AgentUsageRecord(
+            threadId: session.threadId,
+            turnId: turn.id,
+            providerId: provider.config.id,
+            providerName: provider.config.displayName,
+            projectPath: _nonEmpty(turn.cwd) ?? session.projectPath,
+            sourceKind: session.sourceKind,
+            startedAt: startedAt,
+            completedAt: turn.completedAt,
+            duration: _durationBetween(startedAt, turn.completedAt),
+            model: _nonEmpty(turn.model),
+            status: status,
+            tokens: tokens,
+            errorCategory: _errorCategory(
+              status: status,
+              code: turn.errorCode,
+              message: turn.errorMessage,
+            ),
+            errorMessage: _nonEmpty(turn.errorMessage),
+            errorCode: _nonEmpty(turn.errorCode),
           ),
-          errorCategory: errorCategory,
-          errorMessage: _nonEmpty(turn.errorMessage),
-          errorCode: _nonEmpty(turn.errorCode),
-        ),
-      );
+        );
+      }
     }
     return List<AgentUsageRecord>.unmodifiable(records);
   }
 }
 
-class _ThreadReadResult {
-  const _ThreadReadResult({required this.summary, this.thread});
-
-  final AgentThreadSummary summary;
-  final UsageStatisticsIndexedThread? thread;
-}
+int _sum(
+  Iterable<CodexUsageSample> samples,
+  int Function(CodexUsageSample sample) select,
+) => samples.fold<int>(0, (total, sample) => total + select(sample));
 
 UsageTaskStatus _usageStatus(AgentHistoryTurnStatus status) => switch (status) {
   AgentHistoryTurnStatus.running => UsageTaskStatus.running,
@@ -299,25 +219,17 @@ UsageErrorCategory? _errorCategory({
   return UsageErrorCategory.other;
 }
 
-String _sourceKind(Object? source) {
-  if (source is String && source.trim().isNotEmpty) {
-    return source.trim();
-  }
-  if (source is Map) {
-    final type = source['type'];
-    if (type is String && type.trim().isNotEmpty) {
-      return type.trim();
-    }
-    if (source.length == 1) {
-      return source.keys.first.toString();
-    }
-  }
-  return 'unknown';
-}
-
 String? _nonEmpty(String? value) {
   final normalized = value?.trim();
   return normalized == null || normalized.isEmpty ? null : normalized;
+}
+
+String _joinPath(String parent, String child) {
+  final separator = Platform.pathSeparator;
+  final normalized = parent.endsWith('/') || parent.endsWith('\\')
+      ? parent.substring(0, parent.length - 1)
+      : parent;
+  return '$normalized$separator$child';
 }
 
 Duration? _durationBetween(DateTime startedAt, DateTime? completedAt) {

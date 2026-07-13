@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codex App-Server Docs"
+  short_description: "自动刷新并查证 Codex App-Server 官方文档、Schema 与客户端流程"
+  default_prompt: "Use $codex-app-server-docs to refresh its cache, verify the current Codex App-Server protocol, and apply it to this task."

@@ -153,34 +153,44 @@ class UsageTokenBreakdown {
     this.inputTokens,
     this.cachedInputTokens,
     this.outputTokens,
+    this.reasoningTokens,
     this.totalTokens,
   });
 
   final int? inputTokens;
   final int? cachedInputTokens;
   final int? outputTokens;
+  final int? reasoningTokens;
   final int? totalTokens;
 
   bool get hasData =>
       inputTokens != null ||
       cachedInputTokens != null ||
       outputTokens != null ||
+      reasoningTokens != null ||
       totalTokens != null;
 
   int? get effectiveTotal {
     if (totalTokens != null) {
       return totalTokens;
     }
-    if (inputTokens == null && outputTokens == null) {
+    if (inputTokens == null &&
+        cachedInputTokens == null &&
+        outputTokens == null &&
+        reasoningTokens == null) {
       return null;
     }
-    return (inputTokens ?? 0) + (outputTokens ?? 0);
+    return (inputTokens ?? 0) +
+        (cachedInputTokens ?? 0) +
+        (outputTokens ?? 0) +
+        (reasoningTokens ?? 0);
   }
 
   Map<String, Object?> toJson() => <String, Object?>{
     'inputTokens': inputTokens,
     'cachedInputTokens': cachedInputTokens,
     'outputTokens': outputTokens,
+    'reasoningTokens': reasoningTokens,
     'totalTokens': totalTokens,
   };
 
@@ -194,6 +204,7 @@ class UsageTokenBreakdown {
       inputTokens: _int(map['inputTokens']),
       cachedInputTokens: _int(map['cachedInputTokens']),
       outputTokens: _int(map['outputTokens']),
+      reasoningTokens: _int(map['reasoningTokens']),
       totalTokens: _int(map['totalTokens']),
     );
   }
