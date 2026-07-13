@@ -320,11 +320,16 @@ void main() {
       await tester.pump();
 
       expect(find.text('5m'), findsNothing);
+      final listRunning = find.byKey(
+        ValueKey<String>(
+          'project-thread-running-icon-${directory.path}-thread-a',
+        ),
+      );
+      expect(listRunning, findsOneWidget);
       expect(
-        find.byKey(
-          ValueKey<String>(
-            'project-thread-running-icon-${directory.path}-thread-a',
-          ),
+        find.descendant(
+          of: listRunning,
+          matching: find.byType(CircularProgressIndicator),
         ),
         findsOneWidget,
       );

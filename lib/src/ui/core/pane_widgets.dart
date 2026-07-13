@@ -105,6 +105,40 @@ class IdeLoadingIndicator extends StatelessWidget {
   }
 }
 
+/// 线程执行中的紧凑圆形进度指示（不定进度）。
+///
+/// 用于标题栏与 thread 列表等窄位布局，替代静态 `autorenew` 图标。
+class IdeBusySpinner extends StatelessWidget {
+  const IdeBusySpinner({
+    super.key,
+    this.size = 14,
+    this.strokeWidth = 2,
+    this.color,
+    this.semanticsLabel = 'Running',
+  });
+
+  final double size;
+  final double strokeWidth;
+  final Color? color;
+  final String semanticsLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    return Semantics(
+      label: semanticsLabel,
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: CircularProgressIndicator(
+          strokeWidth: strokeWidth,
+          color: color ?? colors.accent,
+        ),
+      ),
+    );
+  }
+}
+
 /// 非 Material 的交互表面。
 ///
 /// 用于文件树行、时间线折叠行等复杂组合场景，保留 hover/focus/pressed/

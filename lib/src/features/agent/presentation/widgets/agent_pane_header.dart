@@ -62,11 +62,11 @@ class _AgentHeader extends StatelessWidget {
                         ),
                       ] else if (viewModel.showRunningIndicator) ...[
                         const SizedBox(width: 6),
-                        Icon(
-                          Icons.autorenew_rounded,
-                          key: const ValueKey('agent-header-running-icon'),
-                          size: 15,
-                          color: colors.accent,
+                        const IdeBusySpinner(
+                          key: ValueKey('agent-header-running-icon'),
+                          size: 14,
+                          strokeWidth: 2,
+                          semanticsLabel: 'Thread running',
                         ),
                       ],
                     ],

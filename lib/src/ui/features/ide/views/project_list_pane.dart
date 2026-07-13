@@ -1148,13 +1148,13 @@ class _ThreadTileState extends State<_ThreadTile> {
                   ),
                 ] else if (isBusy) ...[
                   const SizedBox(width: IdeSpacing.space8),
-                  Icon(
-                    Icons.autorenew_rounded,
+                  IdeBusySpinner(
                     key: ValueKey<String>(
                       'project-thread-running-icon-${widget.projectPath}-${thread.id}',
                     ),
-                    size: 14,
-                    color: colors.accent,
+                    size: 12,
+                    strokeWidth: 1.8,
+                    semanticsLabel: 'Thread running',
                   ),
                 ] else if (lastActiveLabel != null) ...[
                   const SizedBox(width: IdeSpacing.space8),

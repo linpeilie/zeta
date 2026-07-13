@@ -1288,11 +1288,20 @@ void main() {
       );
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-      await tester.pumpAndSettle();
+      // 执行中 spinner 为无限动画，不能 pumpAndSettle。
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
 
       expect(headerTitleText(tester), 'Running thread');
       expect(
         find.byKey(const ValueKey('agent-header-running-icon')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('agent-header-running-icon')),
+          matching: find.byType(CircularProgressIndicator),
+        ),
         findsOneWidget,
       );
       expect(find.byKey(const ValueKey('agent-header-token')), findsOneWidget);
@@ -1390,17 +1399,31 @@ void main() {
       );
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-      await tester.pumpAndSettle();
+      // 执行中 spinner 为无限动画，不能 pumpAndSettle。
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
 
+      final headerRunning = find.byKey(
+        const ValueKey('agent-header-running-icon'),
+      );
+      final listRunning = find.byKey(
+        ValueKey<String>(
+          'project-thread-running-icon-${directory.path}-thread-a',
+        ),
+      );
+      expect(headerRunning, findsOneWidget);
+      expect(listRunning, findsOneWidget);
       expect(
-        find.byKey(const ValueKey('agent-header-running-icon')),
+        find.descendant(
+          of: headerRunning,
+          matching: find.byType(CircularProgressIndicator),
+        ),
         findsOneWidget,
       );
       expect(
-        find.byKey(
-          ValueKey<String>(
-            'project-thread-running-icon-${directory.path}-thread-a',
-          ),
+        find.descendant(
+          of: listRunning,
+          matching: find.byType(CircularProgressIndicator),
         ),
         findsOneWidget,
       );
@@ -1409,18 +1432,8 @@ void main() {
       await tester.pump();
       await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const ValueKey('agent-header-running-icon')),
-        findsNothing,
-      );
-      expect(
-        find.byKey(
-          ValueKey<String>(
-            'project-thread-running-icon-${directory.path}-thread-a',
-          ),
-        ),
-        findsNothing,
-      );
+      expect(headerRunning, findsNothing);
+      expect(listRunning, findsNothing);
     },
   );
 
