@@ -97,8 +97,8 @@ class ProjectListPane extends StatelessWidget {
                   onSelectThread: onSelectThread,
                   onLoadMoreThreads: () => onLoadMoreThreads(path),
                   onRetryThreads: () => onRetryThreads(path),
-                  onNewThread: () =>
-                      unawaited(_selectProviderAndCreateThread(context, path)),
+                  loadAvailableProviders: loadAvailableProviders,
+                  onNewThread: (providerId) => onNewThread(path, providerId),
                   onOpenProjectLocation: () => onOpenProjectLocation(path),
                   onRemoveProject: () => onRemoveProject(path),
                   onRenameThread: (threadId, name) =>
@@ -113,36 +113,20 @@ class ProjectListPane extends StatelessWidget {
             ),
     );
   }
-
-  Future<void> _selectProviderAndCreateThread(
-    BuildContext context,
-    String projectPath,
-  ) async {
-    final provider = await showIdeDialog<AgentProviderConfig>(
-      context: context,
-      builder: (context) => _AgentProviderSelectionDialog(
-        loadAvailableProviders: loadAvailableProviders,
-      ),
-    );
-    if (provider == null) {
-      return;
-    }
-    onNewThread(projectPath, provider.id);
-  }
 }
 
-class _AgentProviderSelectionDialog extends StatefulWidget {
-  const _AgentProviderSelectionDialog({required this.loadAvailableProviders});
+class _AgentProviderSelectionPopover extends StatefulWidget {
+  const _AgentProviderSelectionPopover({required this.loadAvailableProviders});
 
   final Future<List<AgentProviderConfig>> Function() loadAvailableProviders;
 
   @override
-  State<_AgentProviderSelectionDialog> createState() =>
-      _AgentProviderSelectionDialogState();
+  State<_AgentProviderSelectionPopover> createState() =>
+      _AgentProviderSelectionPopoverState();
 }
 
-class _AgentProviderSelectionDialogState
-    extends State<_AgentProviderSelectionDialog> {
+class _AgentProviderSelectionPopoverState
+    extends State<_AgentProviderSelectionPopover> {
   late final Future<List<AgentProviderConfig>> _providersFuture = widget
       .loadAvailableProviders();
   String? _selectedProviderId;
@@ -154,24 +138,56 @@ class _AgentProviderSelectionDialogState
       builder: (context, snapshot) {
         final providers = snapshot.data ?? const <AgentProviderConfig>[];
         final selectedProvider = _selectedProvider(providers);
-        return IdeDialog(
-          key: const ValueKey<String>('new-thread-provider-dialog'),
-          title: const Text('选择 Agent Provider'),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360, maxHeight: 360),
-            child: _buildContent(context, snapshot, providers),
+        final colors = IdeColors.of(context);
+        final textStyles = IdeTextStyles.of(context);
+        final brightness = sf.Theme.of(context).brightness;
+        return RepaintBoundary(
+          child: PanelCard(
+            key: const ValueKey<String>('new-thread-provider-popover'),
+            color: colors.surfaceOverlay,
+            borderRadius: IdeRadius.allLarge,
+            boxShadow: IdeEffects.overlayShadow(brightness),
+            child: SizedBox(
+              width: 300,
+              child: Padding(
+                padding: IdeSpacing.all12,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '选择 Agent Provider',
+                      style: textStyles.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: IdeSpacing.space10),
+                    _buildContent(context, snapshot, providers),
+                    const SizedBox(height: IdeSpacing.space12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        sf.OutlineButton(
+                          onPressed: () => sf.closeOverlay(context),
+                          size: sf.ButtonSize.small,
+                          child: const Text('取消'),
+                        ),
+                        const SizedBox(width: IdeSpacing.space8),
+                        sf.PrimaryButton(
+                          onPressed: selectedProvider == null
+                              ? null
+                              : () =>
+                                    sf.closeOverlay(context, selectedProvider),
+                          size: sf.ButtonSize.small,
+                          child: const Text('创建 Thread'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-          actions: <IdeDialogAction>[
-            IdeDialogAction.cancel(
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            IdeDialogAction.confirm(
-              label: '创建 Thread',
-              onPressed: selectedProvider == null
-                  ? null
-                  : () => Navigator.of(context).pop(selectedProvider),
-            ),
-          ],
         );
       },
     );
@@ -241,7 +257,8 @@ class _AgentProviderSelectionDialogState
             style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
           ),
         ),
-        Flexible(
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 220),
           child: ListView.separated(
             shrinkWrap: true,
             itemCount: providers.length,
@@ -358,6 +375,7 @@ class _ProjectTile extends StatefulWidget {
     required this.onSelectThread,
     required this.onLoadMoreThreads,
     required this.onRetryThreads,
+    required this.loadAvailableProviders,
     required this.onNewThread,
     required this.onOpenProjectLocation,
     required this.onRemoveProject,
@@ -375,7 +393,8 @@ class _ProjectTile extends StatefulWidget {
   final ProjectThreadSelected onSelectThread;
   final VoidCallback onLoadMoreThreads;
   final VoidCallback onRetryThreads;
-  final VoidCallback onNewThread;
+  final Future<List<AgentProviderConfig>> Function() loadAvailableProviders;
+  final ValueChanged<String> onNewThread;
   final VoidCallback onOpenProjectLocation;
   final VoidCallback onRemoveProject;
   final void Function(String threadId, String name) onRenameThread;
@@ -394,17 +413,23 @@ class _ProjectTileState extends State<_ProjectTile> {
   static const double _actionIconGap = IdeSpacing.space6;
 
   final GlobalKey _moreButtonKey = GlobalKey();
-  IdePopoverHandle<void>? _popoverEntry;
+  final GlobalKey _newThreadButtonKey = GlobalKey();
+  IdePopoverHandle<void>? _morePopoverEntry;
+  IdePopoverHandle<AgentProviderConfig?>? _newThreadPopoverEntry;
   bool _hovered = false;
   bool _focused = false;
   bool _menuOpen = false;
+  bool _newThreadPopoverOpen = false;
 
-  bool get _showActions => _hovered || _focused || _menuOpen;
+  bool get _showActions =>
+      _hovered || _focused || _menuOpen || _newThreadPopoverOpen;
 
   @override
   void dispose() {
-    _popoverEntry?.dismiss();
-    _popoverEntry = null;
+    _morePopoverEntry?.dismiss();
+    _morePopoverEntry = null;
+    _newThreadPopoverEntry?.dismiss();
+    _newThreadPopoverEntry = null;
     super.dispose();
   }
 
@@ -417,7 +442,8 @@ class _ProjectTileState extends State<_ProjectTile> {
   }
 
   void _showMoreMenu() {
-    if (_popoverEntry != null) {
+    _dismissNewThreadPopover();
+    if (_morePopoverEntry != null) {
       return;
     }
     // 锚到 more 按钮所在行，避免展开 thread 列表后菜单落到整块项目下方。
@@ -465,14 +491,14 @@ class _ProjectTileState extends State<_ProjectTile> {
         );
       },
     );
-    _popoverEntry = entry;
+    _morePopoverEntry = entry;
     entry.future.whenComplete(() {
       if (!mounted) {
         return;
       }
       setState(() {
-        if (identical(_popoverEntry, entry)) {
-          _popoverEntry = null;
+        if (identical(_morePopoverEntry, entry)) {
+          _morePopoverEntry = null;
         }
         _menuOpen = false;
       });
@@ -480,13 +506,73 @@ class _ProjectTileState extends State<_ProjectTile> {
   }
 
   void _dismissMoreMenu() {
-    final entry = _popoverEntry;
+    final entry = _morePopoverEntry;
     if (entry == null) {
       return;
     }
-    _popoverEntry = null;
+    _morePopoverEntry = null;
     setState(() {
       _menuOpen = false;
+    });
+    entry.dismiss();
+  }
+
+  void _toggleNewThreadPopover() {
+    if (_newThreadPopoverEntry != null) {
+      _dismissNewThreadPopover();
+      return;
+    }
+    _showNewThreadPopover();
+  }
+
+  void _showNewThreadPopover() {
+    _dismissMoreMenu();
+    if (_newThreadPopoverEntry != null) {
+      return;
+    }
+    final anchorContext = _newThreadButtonKey.currentContext ?? context;
+    setState(() {
+      _newThreadPopoverOpen = true;
+    });
+    final entry = showIdePopover<AgentProviderConfig?>(
+      context: anchorContext,
+      alignment: Alignment.topRight,
+      anchorAlignment: Alignment.bottomRight,
+      offset: const Offset(0, 4),
+      margin: IdeSpacing.all8,
+      builder: (context) => _AgentProviderSelectionPopover(
+        loadAvailableProviders: widget.loadAvailableProviders,
+      ),
+    );
+    _newThreadPopoverEntry = entry;
+    entry.future
+        .then((provider) {
+          if (!mounted || provider == null) {
+            return;
+          }
+          widget.onNewThread(provider.id);
+        })
+        .whenComplete(() {
+          if (!mounted) {
+            return;
+          }
+          setState(() {
+            if (identical(_newThreadPopoverEntry, entry)) {
+              _newThreadPopoverEntry = null;
+            }
+            _newThreadPopoverOpen = false;
+          });
+        });
+  }
+
+  void _dismissNewThreadPopover() {
+    final entry = _newThreadPopoverEntry;
+    if (entry == null) {
+      return;
+    }
+    _newThreadPopoverEntry = null;
+    setState(() {
+      _newThreadPopoverOpen = false;
     });
     entry.dismiss();
   }
@@ -618,18 +704,21 @@ class _ProjectTileState extends State<_ProjectTile> {
                                 ),
                               ),
                               const SizedBox(width: _actionIconGap),
-                              IdeTooltip(
-                                message: 'New thread',
-                                child: sf.IconButton.ghost(
-                                  key: ValueKey<String>(
-                                    'project-tile-new-thread-${widget.path}',
-                                  ),
-                                  onPressed: widget.onNewThread,
-                                  size: sf.ButtonSize.xSmall,
-                                  density: sf.ButtonDensity.iconDense,
-                                  icon: const Icon(
-                                    Icons.edit_outlined,
-                                    size: _actionIconSize,
+                              KeyedSubtree(
+                                key: _newThreadButtonKey,
+                                child: IdeTooltip(
+                                  message: 'New thread',
+                                  child: sf.IconButton.ghost(
+                                    key: ValueKey<String>(
+                                      'project-tile-new-thread-${widget.path}',
+                                    ),
+                                    onPressed: _toggleNewThreadPopover,
+                                    size: sf.ButtonSize.xSmall,
+                                    density: sf.ButtonDensity.iconDense,
+                                    icon: const Icon(
+                                      Icons.edit_outlined,
+                                      size: _actionIconSize,
+                                    ),
                                   ),
                                 ),
                               ),

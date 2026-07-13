@@ -555,11 +555,26 @@ void main() {
     await tester.tap(
       find.byKey(ValueKey<String>('project-tile-new-thread-${directory.path}')),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(
-      find.byKey(const ValueKey<String>('new-thread-provider-dialog')),
+      find.byKey(const ValueKey<String>('new-thread-provider-popover')),
       findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('new-thread-provider-dialog')),
+      findsNothing,
+    );
+    final newThreadButton = find.byKey(
+      ValueKey<String>('project-tile-new-thread-${directory.path}'),
+    );
+    final providerPopover = find.byKey(
+      const ValueKey<String>('new-thread-provider-popover'),
+    );
+    expect(
+      tester.getRect(providerPopover).top,
+      greaterThanOrEqualTo(tester.getRect(newThreadButton).bottom - 1),
     );
     expect(find.text('Codex CLI'), findsOneWidget);
     expect(find.text('Grok CLI'), findsOneWidget);
@@ -588,7 +603,8 @@ void main() {
     await tester.tap(
       find.byKey(ValueKey<String>('project-tile-new-thread-${directory.path}')),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     final reopenedCodexOption = find.byKey(
       const ValueKey<String>('new-thread-provider-option-codex'),
     );
