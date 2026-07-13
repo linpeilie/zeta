@@ -1245,86 +1245,88 @@ void main() {
     expect(find.byKey(const ValueKey('agent-context-panel')), findsNothing);
   });
 
-  testWidgets('shows last token usage in header and composer while running', (
-    tester,
-  ) async {
-    final session = MemorySessionStore();
-    final provider = FakeAgentProvider(
-      completeTurns: false,
-      sessionTitle: 'Running thread',
-      tokenUsageDuringTurn: const AgentTokenUsage(
-        inputTokens: 1000,
-        cachedInputTokens: 200,
-        outputTokens: 350,
-        totalTokens: 1300,
-        lastInputTokens: 900,
-        lastCachedInputTokens: 180,
-        lastOutputTokens: 320,
-        lastTotalTokens: 1200,
-        modelContextWindow: 2000,
-      ),
-    );
+  testWidgets(
+    'shows session total token usage in header and context window in composer while running',
+    (tester) async {
+      final session = MemorySessionStore();
+      final provider = FakeAgentProvider(
+        completeTurns: false,
+        sessionTitle: 'Running thread',
+        tokenUsageDuringTurn: const AgentTokenUsage(
+          inputTokens: 1000,
+          cachedInputTokens: 200,
+          outputTokens: 350,
+          totalTokens: 1300,
+          lastInputTokens: 900,
+          lastCachedInputTokens: 180,
+          lastOutputTokens: 320,
+          lastTotalTokens: 1200,
+          modelContextWindow: 2000,
+        ),
+      );
 
-    await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderFactory(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-      ),
-    );
+      await tester.pumpWidget(
+        MainApp(
+          enableNativeWindowFrame: false,
+          sessionLoader: session.load,
+          sessionSaver: session.save,
+          agentProviderFactory: FakeAgentProviderFactory(provider),
+          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        ),
+      );
 
-    await tester.enterText(
-      find.byKey(const ValueKey('agent-message-input')),
-      'Keep running',
-    );
-    await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-    await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('agent-message-input')),
+        'Keep running',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+      await tester.pumpAndSettle();
 
-    expect(headerTitleText(tester), 'Running thread');
-    expect(
-      find.byKey(const ValueKey('agent-header-running-icon')),
-      findsOneWidget,
-    );
-    expect(find.byKey(const ValueKey('agent-header-token')), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('agent-header-token')),
-        matching: find.textContaining('%'),
-      ),
-      findsNothing,
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('agent-header-token')),
-        matching: find.text('1.2k tokens'),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('agent-composer-token-usage')),
-      findsOneWidget,
-    );
-    final progress = tester.widget<CircularProgressIndicator>(
-      find.byKey(const ValueKey('agent-composer-token-progress')),
-    );
-    expect(progress.value, closeTo(0.6, 0.001));
+      expect(headerTitleText(tester), 'Running thread');
+      expect(
+        find.byKey(const ValueKey('agent-header-running-icon')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('agent-header-token')), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('agent-header-token')),
+          matching: find.textContaining('%'),
+        ),
+        findsNothing,
+      );
+      // 头栏展示会话累计 totalTokens（1300），与上下文面板「总 Token」一致。
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('agent-header-token')),
+          matching: find.text('1.3k tokens'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('agent-composer-token-usage')),
+        findsOneWidget,
+      );
+      final progress = tester.widget<CircularProgressIndicator>(
+        find.byKey(const ValueKey('agent-composer-token-progress')),
+      );
+      expect(progress.value, closeTo(0.6, 0.001));
 
-    final tooltip = tester.widget<IdeTooltip>(
-      find.ancestor(
-        of: find.byKey(const ValueKey('agent-composer-token-usage')),
-        matching: find.byType(IdeTooltip),
-      ),
-    );
-    expect(tooltip.message, contains('Usage: 60%'));
-    expect(tooltip.message, contains('Used: 1.2k'));
-    expect(tooltip.message, contains('Total: 2k'));
-    expect(tooltip.message, contains('input_tokens: 900'));
-    expect(tooltip.message, contains('output_tokens: 320'));
-    expect(tooltip.message, contains('cached_input_tokens: 180'));
-  });
+      final tooltip = tester.widget<IdeTooltip>(
+        find.ancestor(
+          of: find.byKey(const ValueKey('agent-composer-token-usage')),
+          matching: find.byType(IdeTooltip),
+        ),
+      );
+      expect(tooltip.message, contains('Usage: 60%'));
+      expect(tooltip.message, contains('Used: 1.2k'));
+      expect(tooltip.message, contains('Total: 2k'));
+      expect(tooltip.message, contains('input_tokens: 900'));
+      expect(tooltip.message, contains('output_tokens: 320'));
+      expect(tooltip.message, contains('cached_input_tokens: 180'));
+    },
+  );
 
   testWidgets(
     'shows running icons in both the header and project thread list for an active thread',

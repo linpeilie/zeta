@@ -392,11 +392,10 @@ String? _tokenUsageLabel(AgentTokenUsage? usage) {
   return '$totalDisplay tokens';
 }
 
-/// 当前上下文窗口 token 用量短标签；缺少窗口大小时不展示。
-String? _contextWindowTokenUsageLabel(AgentTokenUsage? usage) {
+/// 当前会话累计 token 总量短标签；与上下文面板「总 Token」一致。
+String? _threadTotalTokenUsageLabel(AgentTokenUsage? usage) {
   final total = usage?.totalTokens;
-  final window = usage?.modelContextWindow;
-  if (total == null || total <= 0 || window == null || window <= 0) {
+  if (total == null || total <= 0) {
     return null;
   }
   return '${usage!.displayTotalTokens!} tokens';

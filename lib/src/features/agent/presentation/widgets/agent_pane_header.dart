@@ -10,9 +10,10 @@ class _AgentHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final tokenUsage = viewModel.currentThreadLastTokenUsage;
-    final tokenLabel = _contextWindowTokenUsageLabel(tokenUsage);
-    final tokenTooltip = _contextWindowTokenUsageTooltip(tokenUsage);
+    // 与上下文面板「总 Token」同源：会话累计用量，而非最近一次上下文窗口占用。
+    final tokenUsage = viewModel.currentThreadTokenUsage;
+    final tokenLabel = _threadTotalTokenUsageLabel(tokenUsage);
+    final tokenTooltip = _tokenUsageTooltip(tokenUsage);
     final threadOpenStatusText = _threadOpenStatusText(viewModel);
     final offerCompact = viewModel.shouldOfferContextCompact;
     final canFork =
