@@ -2574,7 +2574,7 @@ void main() {
       },
     );
 
-    test('keeps non-MCP stderr visible as AgentErrorEvent', () async {
+    test('keeps non-MCP stderr diagnostic-only', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
         config: AgentProviderConfig.defaultCodex,
@@ -2586,12 +2586,14 @@ void main() {
       addTearDown(provider.dispose);
 
       await provider.initialize();
-      peer.emitStderr('Codex fatal: failed to initialize model provider');
+      peer
+        ..emitStderr(
+          '\u001b[31mERROR\u001b[0m codex_core::tools::router: Exit code: 1',
+        )
+        ..emitStderr('\u001b[31;1mGet-CimInstance: 拒绝访问\u001b[0m');
       await Future<void>.delayed(Duration.zero);
 
-      final error = events.whereType<AgentErrorEvent>().single;
-      expect(error.message, 'Codex stderr');
-      expect(error.details, 'Codex fatal: failed to initialize model provider');
+      expect(events.whereType<AgentErrorEvent>(), isEmpty);
     });
 
     test('listModels returns cached list without extra request', () async {

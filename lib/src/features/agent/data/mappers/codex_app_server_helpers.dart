@@ -43,25 +43,6 @@ bool _isErrorNotification(String method) {
   };
 }
 
-/// 本地 MCP 软件未启动或端点 404 时，Codex/rmcp 会向 stderr 写 transport
-/// worker 断开日志；这类日志不影响 thread 本身，避免刷进用户可见时间线。
-///
-/// 同时兼容历史 `mrmcp::` 与当前 `rmcp::` 模块路径，以及带 ANSI 着色的行。
-bool _isIgnorableMcpTransportStderr(String line) {
-  final isTransportWorker =
-      line.contains('rmcp::transport::worker') ||
-      line.contains('mrmcp::transport::worker');
-  if (!isTransportWorker) {
-    return false;
-  }
-  return line.contains('Transport channel closed') ||
-      line.contains('http/request failed') ||
-      line.contains('UnexpectedServerResponse') ||
-      line.contains('HTTP 404') ||
-      line.contains('/stream') ||
-      line.contains('/mcp');
-}
-
 /// 从 Codex item 中挑选最适合 UI 展示的标题。
 String _toolTitle(Map<String, Object?> item) {
   final normalizedType = _normalizedAgentItemType(_string(item['type']));

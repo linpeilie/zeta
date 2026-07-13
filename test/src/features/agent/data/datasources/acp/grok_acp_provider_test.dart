@@ -225,6 +225,60 @@ void main() {
       expect(event.turnId, 't1');
     });
 
+    test('ignores live user_message_chunk to avoid duplicate bubbles', () {
+      final mapped = mapper.mapSessionUpdate(
+        params: <String, Object?>{
+          'sessionId': 's1',
+          'update': <String, Object?>{
+            'sessionUpdate': 'user_message_chunk',
+            'content': <String, Object?>{
+              'type': 'text',
+              'text': 'review 未提交的代码',
+            },
+          },
+        },
+        runningTurnId: 't1',
+      );
+      expect(mapped.events, isEmpty);
+      expect(mapped.unmatchedKind, 'user_message_chunk');
+    });
+
+    test('maps PascalCase tool status Completed to completed', () {
+      final mapped = mapper.mapSessionUpdate(
+        params: <String, Object?>{
+          'sessionId': 's1',
+          'update': <String, Object?>{
+            'sessionUpdate': 'tool_call_update',
+            'toolCallId': 'call-1',
+            'title': 'Read file',
+            'kind': 'Read',
+            'status': 'Completed',
+          },
+        },
+        runningTurnId: 't1',
+      );
+      final tool = (mapped.events.single as AgentToolCallEvent).toolCall;
+      expect(tool.status, AgentToolStatus.completed);
+      expect(tool.kind, AgentToolKind.read);
+    });
+
+    test('maps session/update turn_completed', () {
+      final mapped = mapper.mapSessionUpdate(
+        params: <String, Object?>{
+          'sessionId': 's1',
+          'update': <String, Object?>{
+            'sessionUpdate': 'turn_completed',
+            'stopReason': 'end_turn',
+          },
+        },
+        runningTurnId: 't1',
+      );
+      final event = mapped.events.single as AgentTurnCompletedEvent;
+      expect(event.sessionId, 's1');
+      expect(event.turnId, 't1');
+      expect(event.status, AgentHistoryTurnStatus.completed);
+    });
+
     test('maps plan entries', () {
       final mapped = mapper.mapSessionUpdate(
         params: <String, Object?>{

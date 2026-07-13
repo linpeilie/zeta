@@ -32,18 +32,25 @@ class GrokAcpNotificationMapper {
     final turnId = runningTurnId;
 
     switch (kind) {
-      case 'agent_message_chunk':
       case 'user_message_chunk':
+        // 直播时间线已由 ViewModel 乐观插入用户消息；再映射会重复一条。
+        // 历史回放走本地 updates.jsonl 解析，不经过此 live mapper。
+        return const GrokAcpMappedUpdate(unmatchedKind: 'user_message_chunk');
+
+      case 'agent_message_chunk':
         final text = _contentText(update['content']);
         if (text == null || text.isEmpty) {
           return GrokAcpMappedUpdate(unmatchedKind: kind);
         }
-        final role = kind == 'user_message_chunk'
-            ? AgentMessageRole.user
-            : AgentMessageRole.agent;
-        final messageId =
-            update['messageId']?.toString() ??
-            'acp-$kind-${sessionId ?? 'unknown'}';
+        // Grok 流式 chunk 常无 messageId；按 turn/prompt 聚合，避免整会话共用
+        // 一个 id 导致后续 turn 文本追加到历史气泡。
+        final messageId = _stableStreamMessageId(
+          update: update,
+          params: params,
+          kind: kind,
+          sessionId: sessionId,
+          turnId: turnId,
+        );
         // Grok ACP 无 Codex final_answer 语义；不设 response phase，
         // 避免 UI 走「完成汇总」卡片样式。
         return GrokAcpMappedUpdate(
@@ -51,7 +58,7 @@ class GrokAcpNotificationMapper {
             AgentMessageDeltaEvent(
               messageId: messageId,
               delta: text,
-              role: role,
+              role: AgentMessageRole.agent,
               status: AgentMessageStatus.streaming,
               sessionId: sessionId,
               turnId: turnId,
@@ -62,9 +69,13 @@ class GrokAcpNotificationMapper {
 
       case 'agent_thought_chunk':
         final text = _contentText(update['content']) ?? '';
-        final itemId =
-            update['messageId']?.toString() ??
-            'acp-thought-${sessionId ?? 'unknown'}';
+        final itemId = _stableStreamMessageId(
+          update: update,
+          params: params,
+          kind: 'agent_thought_chunk',
+          sessionId: sessionId,
+          turnId: turnId,
+        );
         return GrokAcpMappedUpdate(
           events: <AgentEvent>[
             AgentReasoningDeltaEvent(
@@ -124,6 +135,14 @@ class GrokAcpNotificationMapper {
           ],
         );
 
+      case 'turn_completed':
+        // 标准 session/update 也会带 turn_completed（不仅 _x.ai 扩展）。
+        return _mapTurnCompleted(
+          params: params,
+          update: update,
+          runningTurnId: turnId,
+        );
+
       // 命令列表、模式切换等暂不驱动主时间线。
       case 'available_commands_update':
       case 'current_mode_update':
@@ -141,7 +160,6 @@ class GrokAcpNotificationMapper {
     required Map<String, Object?> params,
     required String? runningTurnId,
   }) {
-    final sessionId = params['sessionId']?.toString();
     final updateRaw = params['update'];
     if (updateRaw is! Map) {
       return const GrokAcpMappedUpdate(
@@ -155,13 +173,29 @@ class GrokAcpNotificationMapper {
     if (kind != 'turn_completed') {
       return GrokAcpMappedUpdate(unmatchedKind: kind);
     }
+    return _mapTurnCompleted(
+      params: params,
+      update: update,
+      runningTurnId: runningTurnId,
+    );
+  }
 
+  GrokAcpMappedUpdate _mapTurnCompleted({
+    required Map<String, Object?> params,
+    required Map<String, Object?> update,
+    required String? runningTurnId,
+  }) {
+    final sessionId = params['sessionId']?.toString();
+    final updateMeta = _asStringKeyedMap(update['_meta']);
+    final paramsMeta = _asStringKeyedMap(params['_meta']);
     final turnId =
         runningTurnId ??
+        updateMeta?['promptId']?.toString() ??
+        paramsMeta?['promptId']?.toString() ??
         update['prompt_id']?.toString() ??
         update['promptId']?.toString();
     if (sessionId == null || turnId == null) {
-      return GrokAcpMappedUpdate(unmatchedKind: kind);
+      return const GrokAcpMappedUpdate(unmatchedKind: 'turn_completed');
     }
 
     final stopReason =
@@ -204,6 +238,32 @@ class GrokAcpNotificationMapper {
     }
 
     return GrokAcpMappedUpdate(events: events);
+  }
+
+  /// 为无官方 messageId 的流式 chunk 生成按 turn 稳定的聚合 id。
+  ///
+  /// 优先 `messageId` → `promptId` → `runningTurnId` → session 级回退。
+  /// 同 turn 内的 chunk 共用 id 以便 delta 拼接；跨 turn 必须不同。
+  String _stableStreamMessageId({
+    required Map<String, Object?> update,
+    required Map<String, Object?> params,
+    required String kind,
+    required String? sessionId,
+    required String? turnId,
+  }) {
+    final explicit = update['messageId']?.toString();
+    if (explicit != null && explicit.isNotEmpty) {
+      return explicit;
+    }
+    final updateMeta = _asStringKeyedMap(update['_meta']);
+    final paramsMeta = _asStringKeyedMap(params['_meta']);
+    final promptId =
+        updateMeta?['promptId']?.toString() ??
+        paramsMeta?['promptId']?.toString() ??
+        update['promptId']?.toString() ??
+        update['prompt_id']?.toString();
+    final scope = promptId ?? turnId ?? sessionId ?? 'unknown';
+    return 'acp-$kind-$scope';
   }
 
   AgentToolCall? _mapToolCall({
@@ -288,7 +348,9 @@ class GrokAcpNotificationMapper {
   }
 
   AgentToolKind _mapToolKind(String? kind) {
-    return switch (kind) {
+    // Grok 偶发 PascalCase（Read/Execute）；统一小写再匹配。
+    final normalized = kind?.trim().toLowerCase();
+    return switch (normalized) {
       'read' => AgentToolKind.read,
       'edit' => AgentToolKind.edit,
       'delete' => AgentToolKind.delete,
@@ -302,12 +364,24 @@ class GrokAcpNotificationMapper {
   }
 
   AgentToolStatus _mapToolStatus(String? status) {
-    return switch (status) {
-      'pending' => AgentToolStatus.pending,
-      'in_progress' => AgentToolStatus.inProgress,
-      'completed' => AgentToolStatus.completed,
-      'failed' => AgentToolStatus.failed,
-      'cancelled' => AgentToolStatus.cancelled,
+    // Grok 工具状态常为 Completed/Pending/InProgress 等 PascalCase。
+    final normalized = status
+        ?.trim()
+        .toLowerCase()
+        .replaceAll('-', '_')
+        .replaceAll(' ', '_');
+    return switch (normalized) {
+      null || '' || 'pending' => AgentToolStatus.pending,
+      'inprogress' ||
+      'in_progress' ||
+      'running' ||
+      'started' => AgentToolStatus.inProgress,
+      'completed' ||
+      'complete' ||
+      'success' ||
+      'succeeded' => AgentToolStatus.completed,
+      'failed' || 'error' || 'errored' => AgentToolStatus.failed,
+      'cancelled' || 'canceled' => AgentToolStatus.cancelled,
       _ => AgentToolStatus.pending,
     };
   }
@@ -393,5 +467,12 @@ class GrokAcpNotificationMapper {
       return int.tryParse(value);
     }
     return null;
+  }
+
+  Map<String, Object?>? _asStringKeyedMap(Object? value) {
+    if (value is! Map) {
+      return null;
+    }
+    return value.map((key, item) => MapEntry(key.toString(), item as Object?));
   }
 }

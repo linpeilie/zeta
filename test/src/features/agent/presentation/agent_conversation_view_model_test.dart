@@ -1999,6 +1999,138 @@ void main() {
         expect(codex.disposed, isTrue);
       },
     );
+
+    test(
+      'opening a Grok thread resumes and sends via Grok, not Codex',
+      () async {
+        // Arrange：默认 active 为 Codex，打开 Grok 历史 thread 后应切换并 resume。
+        final codex = _FakeAgentProvider(
+          providerConfig: AgentProviderConfig.defaultCodex,
+        );
+        final grok = _FakeAgentProvider(
+          providerConfig: AgentProviderConfig.defaultGrok,
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'grok-sess-1': _historySnapshot(
+              threadId: 'grok-sess-1',
+              userText: 'previous question',
+              agentText: 'previous answer',
+            ),
+          },
+        );
+        final controller = ActiveAgentProviderController(
+          providerFactory: _MultiFakeAgentProviderFactory(
+            <String, AgentProvider>{
+              defaultAgentProviderId: codex,
+              grokAgentProviderId: grok,
+            },
+          ),
+          configStore: MemoryAgentProviderConfigStore(
+            const AgentProviderSettings(
+              providers: <AgentProviderConfig>[
+                AgentProviderConfig.defaultCodex,
+                AgentProviderConfig.defaultGrok,
+              ],
+            ),
+          ),
+        );
+        addTearDown(controller.dispose);
+        final viewModel = AgentConversationViewModel(
+          providerController: controller,
+        );
+        addTearDown(viewModel.dispose);
+        viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
+
+        // Act
+        await viewModel.switchThread(
+          AgentThreadSummary(
+            id: 'grok-sess-1',
+            providerId: grokAgentProviderId,
+            projectPath: '/repo',
+            title: 'Grok history',
+            sessionPath: '/home/.grok/sessions/grok-sess-1',
+            preview: 'previous question',
+            createdAt: DateTime.fromMillisecondsSinceEpoch(1),
+            updatedAt: DateTime.fromMillisecondsSinceEpoch(2),
+            status: AgentThreadRuntimeStatus.idle,
+          ),
+        );
+        // 选文件只更新上下文，不应清掉「必须 resume」约束。
+        viewModel.updateWorkspace(
+          projectPath: '/repo',
+          contextFilePath: '/repo/lib/main.dart',
+          restoredSessionId: 'grok-sess-1',
+        );
+        await viewModel.sendMessage('continue this Grok session');
+
+        // Assert
+        expect(viewModel.activeProviderId, grokAgentProviderId);
+        expect(viewModel.canSubmitMessage, isTrue);
+        expect(viewModel.requiresResumedSelectedThread, isFalse);
+        expect(viewModel.sessionId, 'grok-sess-1');
+        expect(codex.calls, isEmpty);
+        expect(
+          grok.calls,
+          containsAllInOrder(<String>[
+            'read:grok-sess-1',
+            'resume:grok-sess-1',
+            'send:grok-sess-1',
+          ]),
+        );
+        expect(grok.calls, isNot(contains('start')));
+      },
+    );
+
+    test(
+      'context-only workspace update keeps requiresResumed for open thread',
+      () async {
+        final provider = _FakeAgentProvider(
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'thread-1': _historySnapshot(
+              threadId: 'thread-1',
+              userText: 'hello',
+            ),
+          },
+        );
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.switchThread(_thread());
+        expect(viewModel.requiresResumedSelectedThread, isTrue);
+
+        viewModel.updateWorkspace(
+          projectPath: '/repo',
+          contextFilePath: '/repo/a.dart',
+          restoredSessionId: 'thread-1',
+        );
+
+        expect(viewModel.requiresResumedSelectedThread, isTrue);
+        expect(viewModel.sessionId, 'thread-1');
+      },
+    );
+
+    test(
+      'failed resume ends pending live turn so composer can recover',
+      () async {
+        final provider = _FakeAgentProvider(
+          failResume: true,
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'thread-1': _historySnapshot(
+              threadId: 'thread-1',
+              userText: 'history',
+            ),
+          },
+        );
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.switchThread(_thread());
+        await viewModel.sendMessage('try continue');
+
+        expect(viewModel.threadOpenPhase, AgentThreadOpenPhase.openFailed);
+        expect(viewModel.isTurnRunning, isFalse);
+        expect(viewModel.canSubmitMessage, isFalse);
+      },
+    );
   });
 }
 
@@ -2205,7 +2337,7 @@ class _FakeAgentProvider
     calls.add('start');
     return AgentSession(
       id: 'thread-1',
-      providerId: defaultAgentProviderId,
+      providerId: providerConfig.id,
       title: startSessionTitle,
     );
   }
@@ -2225,7 +2357,7 @@ class _FakeAgentProvider
     }
     return AgentSession(
       id: sessionId,
-      providerId: defaultAgentProviderId,
+      providerId: providerConfig.id,
       title: resumeSessionTitle,
     );
   }

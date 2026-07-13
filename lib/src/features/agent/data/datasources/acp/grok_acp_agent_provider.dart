@@ -836,30 +836,47 @@ class GrokAcpAgentProvider implements AgentProvider {
   }
 
   Future<void> _handleServerRequest(JsonRpcRequest request) async {
-    switch (request.method) {
-      case 'session/request_permission':
-        await _handlePermissionRequest(request);
-      case 'fs/read_text_file':
-        await _handleReadTextFile(request);
-      case 'fs/write_text_file':
+    try {
+      switch (request.method) {
+        case 'session/request_permission':
+          await _handlePermissionRequest(request);
+        case 'fs/read_text_file':
+          await _handleReadTextFile(request);
+        case 'fs/write_text_file':
+          await _peer.sendResponse(
+            request.id,
+            error: const JsonRpcError(
+              code: -32601,
+              message: 'fs/write_text_file is not supported by Zeta client',
+            ),
+          );
+        default:
+          _log.fine(
+            'Rejecting unsupported Grok server request ${request.method}',
+          );
+          await _peer.sendResponse(
+            request.id,
+            error: JsonRpcError(
+              code: -32601,
+              message: 'Method not supported: ${request.method}',
+            ),
+          );
+      }
+    } catch (error, stackTrace) {
+      // 服务端请求必须始终应答，否则 session/prompt 会一直挂起。
+      _log.warning(
+        'Grok server request ${request.method} failed',
+        error,
+        stackTrace,
+      );
+      try {
         await _peer.sendResponse(
           request.id,
-          error: const JsonRpcError(
-            code: -32601,
-            message: 'fs/write_text_file is not supported by Zeta client',
-          ),
+          error: JsonRpcError(code: -32000, message: error.toString()),
         );
-      default:
-        _log.fine(
-          'Rejecting unsupported Grok server request ${request.method}',
-        );
-        await _peer.sendResponse(
-          request.id,
-          error: JsonRpcError(
-            code: -32601,
-            message: 'Method not supported: ${request.method}',
-          ),
-        );
+      } catch (_) {
+        // 连接已断开时忽略二次失败。
+      }
     }
   }
 
@@ -906,6 +923,20 @@ class GrokAcpAgentProvider implements AgentProvider {
     );
     _pendingPermissions[requestKey] = pending;
 
+    _log.info(
+      'Grok permission requested: $title '
+      '(options: ${options.map((o) => o.optionId).join(', ')})',
+    );
+
+    // 无选项时无法交互批准，立即 cancelled，避免 prompt 永久挂起。
+    if (options.isEmpty) {
+      _log.warning(
+        'Grok permission $requestKey has no options; cancelling to unblock',
+      );
+      await _respondPermissionCancelled(pending);
+      return;
+    }
+
     _events.add(
       AgentPermissionRequestedEvent(
         AgentPermissionRequest(
@@ -921,10 +952,19 @@ class GrokAcpAgentProvider implements AgentProvider {
         ),
       ),
     );
+
+    // 更新状态文案，避免 UI 看起来像「无响应卡住」。
+    _emitStatus(
+      AgentProviderStatus(
+        state: AgentProviderConnectionState.running,
+        message: 'Waiting for approval: $title',
+      ),
+    );
   }
 
   Future<void> _handleReadTextFile(JsonRpcRequest request) async {
-    final path = request.params['path']?.toString();
+    final rawPath = request.params['path']?.toString();
+    final path = _normalizeClientFsPath(rawPath);
     if (path == null || path.isEmpty) {
       await _peer.sendResponse(
         request.id,
@@ -944,11 +984,15 @@ class GrokAcpAgentProvider implements AgentProvider {
       var text = await file.readAsString();
       final line = request.params['line'];
       final limit = request.params['limit'];
-      if (line is int || limit is int) {
+      final lineNum = line is int ? line : int.tryParse(line?.toString() ?? '');
+      final limitNum = limit is int
+          ? limit
+          : int.tryParse(limit?.toString() ?? '');
+      if (lineNum != null || limitNum != null) {
         final lines = const LineSplitter().convert(text);
-        final start = line is int && line > 0 ? line - 1 : 0;
-        final end = limit is int && limit > 0
-            ? (start + limit).clamp(0, lines.length)
+        final start = lineNum != null && lineNum > 0 ? lineNum - 1 : 0;
+        final end = limitNum != null && limitNum > 0
+            ? (start + limitNum).clamp(0, lines.length)
             : lines.length;
         text = lines.sublist(start.clamp(0, lines.length), end).join('\n');
       }
@@ -962,6 +1006,33 @@ class GrokAcpAgentProvider implements AgentProvider {
         error: JsonRpcError(code: -32000, message: error.toString()),
       );
     }
+  }
+
+  /// 规范化 ACP `fs/read_text_file` 路径（支持 `file:///` 与 Windows 盘符）。
+  String? _normalizeClientFsPath(String? raw) {
+    final trimmed = raw?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    var path = trimmed;
+    if (path.startsWith('file:')) {
+      final uri = Uri.tryParse(path);
+      if (uri != null && uri.scheme == 'file') {
+        // Windows: file:///D:/a/b → /D:/a/b → D:/a/b
+        path = uri.toFilePath(windows: Platform.isWindows);
+      } else {
+        path = path.replaceFirst(RegExp(r'^file:///?'), '');
+        if (Platform.isWindows && path.startsWith('/')) {
+          path = path.substring(1);
+        }
+      }
+    }
+    try {
+      path = Uri.decodeFull(path);
+    } catch (_) {
+      // 非百分号编码路径保持原样。
+    }
+    return path;
   }
 
   Future<void> _respondPermissionCancelled(

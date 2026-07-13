@@ -591,15 +591,10 @@ class CodexAppServerAgentProvider
       if (line.trim().isEmpty) {
         return;
       }
-      if (_isIgnorableMcpTransportStderr(line)) {
-        _log.fine(
-          'Ignoring local MCP transport stderr (${line.length} characters)',
-        );
-        return;
-      }
-
-      _log.warning('Codex stderr line received (${line.length} characters)');
-      _events.add(AgentErrorEvent(message: 'Codex stderr', details: line));
+      // stderr 是 app-server 的 tracing/诊断通道，其中也包含回合内工具失败的
+      // 日志。用户可见错误必须以 JSON-RPC `error`、`turn/completed` 或 item
+      // 事件为准，不能把每一行 stderr 拆成对话消息。
+      _log.fine('Codex stderr line received (${line.length} characters)');
     });
     _protocolErrorSubscription ??= _peer.protocolErrors.listen((error) {
       _log.warning('Codex protocol warning: ${error.message}', error.cause);

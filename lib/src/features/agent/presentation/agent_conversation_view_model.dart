@@ -556,6 +556,9 @@ class AgentConversationViewModel extends ChangeNotifier {
   ///
   /// 项目变更时清空内存中的 session/turn；如果恢复状态里带了 thread id，则保留到
   /// 第一次发送消息时再调用 provider resume。
+  ///
+  /// 仅更新当前文件路径时，不得清掉「已选中 thread 必须 resume」约束，
+  /// 否则 Grok 等会话在 `session/load` 失败时会误走 `startSession` 开新会话。
   void updateWorkspace({
     required String? projectPath,
     required String? contextFilePath,
@@ -597,7 +600,9 @@ class AgentConversationViewModel extends ChangeNotifier {
       );
       return;
     }
-    if (restoredSessionId != null) {
+    // 同项目下仅同步文件上下文：若 shell 带了 restoredSessionId，只在本地
+    // 尚无选中 thread 时写入，避免覆盖 switchThread 已锁定的 resume 目标。
+    if (restoredSessionId != null && _selectedThreadId == null) {
       _restoredSessionId = restoredSessionId;
       _selectedProviderId ??= activeProviderId;
       _threadOpenPhase = AgentThreadOpenPhase.idle;
@@ -668,7 +673,10 @@ class AgentConversationViewModel extends ChangeNotifier {
 
     try {
       await loadSettings();
-      final provider = await _ensureProvider();
+      // 已选中 thread 时必须落到该 thread 所属 provider，避免用 Codex 去 resume Grok id。
+      final provider = await _ensureProvider(
+        preferredProviderId: _selectedProviderId,
+      );
       final context = AgentContext(
         projectPath: _projectPath,
         filePath: _contextFilePath,
@@ -715,18 +723,21 @@ class AgentConversationViewModel extends ChangeNotifier {
       if (!_isStillSelectedThread(switchToken, selectedThreadId)) {
         return;
       }
+      _failPendingLiveTurn();
       _markUnavailable(error.message, details: error.toString());
     } on UnsupportedError catch (error, stackTrace) {
       _log.warning('Unsupported Agent provider', error, stackTrace);
       if (!_isStillSelectedThread(switchToken, selectedThreadId)) {
         return;
       }
+      _failPendingLiveTurn();
       _markError(error.message ?? 'Provider is not supported');
     } catch (error, stackTrace) {
       _log.warning('Agent request failed', error, stackTrace);
       if (!_isStillSelectedThread(switchToken, selectedThreadId)) {
         return;
       }
+      _failPendingLiveTurn();
       _markError('Agent request failed', details: error.toString());
     } finally {
       _timeline.clearPendingTurnGroupId();
@@ -749,18 +760,49 @@ class AgentConversationViewModel extends ChangeNotifier {
   Future<void> switchThread(AgentThreadSummary thread) async {
     final switchToken = ++_threadSwitchToken;
     // 跨 provider thread：先切 active backend，再加载历史。
-    if (thread.providerId != activeProviderId &&
-        availableProviders.any(
-          (provider) => provider.id == thread.providerId,
-        )) {
+    // 失败必须 fail-closed，禁止用错误 provider 读历史 / 后续 resume。
+    if (thread.providerId != activeProviderId) {
+      final canSwitch = availableProviders.any(
+        (provider) => provider.id == thread.providerId,
+      );
+      if (!canSwitch) {
+        _session = null;
+        _restoredSessionId = thread.id;
+        _selectedProviderId = thread.providerId;
+        _requiresResumedSelectedThread = true;
+        _threadOpenPhase = AgentThreadOpenPhase.openFailed;
+        _currentThreadTitle = thread.displayName;
+        _timeline.clearConversation();
+        _markError(
+          'Could not open thread',
+          details:
+              'Provider ${thread.providerId} is not enabled; history is read-only or unavailable.',
+        );
+        return;
+      }
       try {
         await switchActiveProvider(thread.providerId);
       } catch (error, stackTrace) {
+        if (!_isCurrentSwitch(switchToken)) {
+          return;
+        }
         _log.warning(
           'Could not switch provider to ${thread.providerId} for thread ${thread.id}',
           error,
           stackTrace,
         );
+        _session = null;
+        _restoredSessionId = thread.id;
+        _selectedProviderId = thread.providerId;
+        _requiresResumedSelectedThread = true;
+        _threadOpenPhase = AgentThreadOpenPhase.openFailed;
+        _currentThreadTitle = thread.displayName;
+        _timeline.clearConversation();
+        _markError(
+          'Could not switch Agent provider',
+          details: error.toString(),
+        );
+        return;
       }
       if (!_isCurrentSwitch(switchToken)) {
         return;
@@ -797,7 +839,9 @@ class AgentConversationViewModel extends ChangeNotifier {
 
     try {
       await loadSettings();
-      final provider = await _ensureProvider();
+      final provider = await _ensureProvider(
+        preferredProviderId: thread.providerId,
+      );
       if (previousThreadId != null && previousThreadId != thread.id) {
         // 不阻塞历史加载：退订失败只记日志。
         unawaited(_unsubscribeThreadBestEffort(provider, previousThreadId));
@@ -810,6 +854,10 @@ class AgentConversationViewModel extends ChangeNotifier {
         return;
       }
       _timeline.applyHistorySnapshot(history, thread);
+      // 再次锁定 resume：避免异步路径把 requiresResumed 清掉。
+      _restoredSessionId = thread.id;
+      _selectedProviderId = thread.providerId;
+      _requiresResumedSelectedThread = true;
       _threadOpenPhase = AgentThreadOpenPhase.idle;
       _status = AgentProviderStatus(
         state: AgentProviderConnectionState.ready,
@@ -1036,7 +1084,18 @@ class AgentConversationViewModel extends ChangeNotifier {
     _publishUiChanges(header: true, composer: true);
   }
 
-  Future<AgentProvider> _ensureProvider() async {
+  /// 确保拿到正确的共享 provider 实例。
+  ///
+  /// [preferredProviderId] 非空且与当前 active 不同时，会先切换 active（不清理
+  /// 时间线），再绑定事件流。用于「已打开 Grok thread 却仍挂在 Codex」等错位场景。
+  Future<AgentProvider> _ensureProvider({String? preferredProviderId}) async {
+    final targetId = preferredProviderId?.trim();
+    if (targetId != null &&
+        targetId.isNotEmpty &&
+        targetId != activeProviderId) {
+      await _bindActiveProviderWithoutClearingConversation(targetId);
+    }
+
     final provider = await providerController.activeProvider();
     if (identical(_provider, provider)) {
       return provider;
@@ -1049,6 +1108,57 @@ class AgentConversationViewModel extends ChangeNotifier {
     _permissionSelectionController.bindProvider(provider);
     _eventSubscription = provider.events.listen(_handleEvent);
     return provider;
+  }
+
+  /// 切换 active provider，但保留当前时间线与待 resume 的 thread id。
+  ///
+  /// 与 [switchActiveProvider] 不同：后者面向「用户主动换后端」会清空对话；
+  /// 本方法面向「已打开 thread 后纠偏到正确 backend」。
+  Future<void> _bindActiveProviderWithoutClearingConversation(
+    String providerId,
+  ) async {
+    if (providerId == activeProviderId) {
+      return;
+    }
+    final enabled = availableProviders.any(
+      (provider) => provider.id == providerId,
+    );
+    if (!enabled) {
+      throw StateError('Provider $providerId is not enabled');
+    }
+    _log.info(
+      'Rebinding active provider to $providerId without clearing conversation',
+    );
+    await providerController.setActiveProvider(providerId);
+    await _eventSubscription?.cancel();
+    _eventSubscription = null;
+    _provider = null;
+    // 旧 backend 上的 live session 不可复用。
+    _session = null;
+    final config = providerController.activeProviderConfig;
+    _modelSelectionController.resetForProvider(config);
+    _permissionSelectionController.resetForProvider(config);
+    _selectedProviderId ??= providerId;
+  }
+
+  /// 发送失败时结束本地 pending/running 回合，避免 UI 卡在 running 无法再发。
+  void _failPendingLiveTurn() {
+    final turnId =
+        _timeline.pendingTurnGroupId ?? _timeline.selectedRunningTurnId;
+    if (turnId == null) {
+      return;
+    }
+    _timeline.completeLiveTurnGroup(
+      turnId,
+      status: AgentHistoryTurnStatus.failed,
+    );
+    _timeline.clearPendingTurnGroupId();
+    _publishUiChanges(
+      history: true,
+      syncLiveTurn: true,
+      header: true,
+      composer: true,
+    );
   }
 
   Future<AgentSession> _ensureSession(
@@ -1318,7 +1428,16 @@ class AgentConversationViewModel extends ChangeNotifier {
           break;
         }
         _timeline.upsertToolCall(event.toolCall);
-        if (event.toolCall.status == AgentToolStatus.inProgress) {
+        // 工具进行中时更新状态文案（不强制 header 刷新，避免高频工具输出打断节流）。
+        if (event.toolCall.status == AgentToolStatus.inProgress ||
+            event.toolCall.status == AgentToolStatus.pending) {
+          final title = event.toolCall.title.trim();
+          if (title.isNotEmpty) {
+            _status = AgentProviderStatus(
+              state: AgentProviderConnectionState.running,
+              message: title.length > 80 ? '${title.substring(0, 80)}…' : title,
+            );
+          }
           _scheduleStreamFlush(autoScroll: true);
           break;
         }
