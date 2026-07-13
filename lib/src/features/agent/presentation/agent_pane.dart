@@ -41,8 +41,7 @@ const int _markdownCollapseLineThreshold = 12;
 const int _markdownCollapseLengthThreshold = 420;
 const int _diffPreviewLineCount = 24;
 
-typedef _TurnSectionBuilder =
-    Widget Function(AgentConversationTurnGroup turn, bool showDivider);
+typedef _TurnSectionBuilder = Widget Function(AgentConversationTurnGroup turn);
 
 /// 中间 Agent 面板。
 ///
@@ -161,7 +160,6 @@ class _AgentPaneState extends State<AgentPane> {
                             ),
                             _AgentLiveTurnSection(
                               viewModel: widget.viewModel,
-                              hasLeadingTurn: () => _hasHistoryOrStandbyTurns,
                               buildTurnSection: _buildTurnSection,
                             ),
                           ],
@@ -210,17 +208,10 @@ class _AgentPaneState extends State<AgentPane> {
     );
   }
 
-  bool get _hasHistoryOrStandbyTurns {
-    final standby = widget.viewModel.standbyTurnState;
-    return (standby?.entries.isNotEmpty ?? false) ||
-        widget.viewModel.visibleHistoryTurnStates.isNotEmpty;
-  }
-
-  Widget _buildTurnSection(AgentConversationTurnGroup turn, bool showDivider) {
+  Widget _buildTurnSection(AgentConversationTurnGroup turn) {
     return _AgentTurnSection(
       key: ValueKey<String>('turn-${turn.id}'),
       turn: turn,
-      showDivider: showDivider,
       viewModel: widget.viewModel,
     );
   }

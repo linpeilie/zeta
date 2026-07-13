@@ -28,12 +28,8 @@ class _AgentHistoryTurnsSection extends StatelessWidget {
             _AgentLoadOlderTurnsButton(onPressed: onLoadOlder, loading: false),
           );
         }
-        var hasRenderedTurn = false;
         for (final turn in turns) {
-          children.add(
-            buildTurnSection(turn, hasRenderedTurn && !turn.isStandby),
-          );
-          hasRenderedTurn = true;
+          children.add(buildTurnSection(turn));
         }
         return Column(
           key: const ValueKey('agent-history-turns-section'),
@@ -48,12 +44,10 @@ class _AgentHistoryTurnsSection extends StatelessWidget {
 class _AgentLiveTurnSection extends StatelessWidget {
   const _AgentLiveTurnSection({
     required this.viewModel,
-    required this.hasLeadingTurn,
     required this.buildTurnSection,
   });
 
   final AgentConversationViewModel viewModel;
-  final bool Function() hasLeadingTurn;
   final _TurnSectionBuilder buildTurnSection;
 
   @override
@@ -74,10 +68,7 @@ class _AgentLiveTurnSection extends StatelessWidget {
             final turn = turnState.snapshot();
             return KeyedSubtree(
               key: const ValueKey('agent-live-turn-section'),
-              child: buildTurnSection(
-                turn,
-                hasLeadingTurn() && !turn.isStandby,
-              ),
+              child: buildTurnSection(turn),
             );
           },
         );
@@ -89,13 +80,11 @@ class _AgentLiveTurnSection extends StatelessWidget {
 class _AgentTurnSection extends StatelessWidget {
   const _AgentTurnSection({
     required this.turn,
-    required this.showDivider,
     required this.viewModel,
     super.key,
   });
 
   final AgentConversationTurnGroup turn;
-  final bool showDivider;
   final AgentConversationViewModel viewModel;
 
   @override
@@ -108,12 +97,13 @@ class _AgentTurnSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        if (showDivider) _AgentTurnDivider(turn: turn),
         for (final block in renderBlocks)
           KeyedSubtree(
             key: ValueKey<String>('turn-block-${turn.id}-${block.id}'),
             child: _buildBlock(block),
           ),
+        // 每个非 standby turn 末尾展示耗时与本 turn token 用量。
+        if (!turn.isStandby) _AgentTurnFooter(turn: turn),
       ],
     );
   }

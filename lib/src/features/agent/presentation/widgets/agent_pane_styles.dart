@@ -376,20 +376,13 @@ String? _threadOpenStatusText(AgentConversationViewModel viewModel) {
   };
 }
 
-/// token 用量短标签；有上下文窗口时展示占用比例。
-String? _tokenUsageLabel(AgentTokenUsage? usage) {
+/// 单个 turn 的 token 用量短标签（turn 增量，不展示上下文窗口占比）。
+String? _turnTokenUsageLabel(AgentTokenUsage? usage) {
   final total = usage?.totalTokens;
   if (total == null || total <= 0) {
     return null;
   }
-  final totalDisplay = usage!.displayTotalTokens!;
-  final window = usage.modelContextWindow;
-  final windowDisplay = usage.displayModelContextWindow;
-  if (window != null && window > 0 && windowDisplay != null) {
-    final percent = ((total / window) * 100).clamp(0, 999).round();
-    return '$totalDisplay / $windowDisplay · $percent%';
-  }
-  return '$totalDisplay tokens';
+  return '${usage!.displayTotalTokens!} tokens';
 }
 
 /// 当前会话累计 token 总量短标签；与上下文面板「总 Token」一致。

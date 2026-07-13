@@ -40,11 +40,11 @@ class _AgentMessageEntry extends StatelessWidget {
   }
 }
 
-/// 回合之间的分隔线，附带可选的耗时/状态标签。
+/// 单个 turn 末尾的分割线：展示本回合耗时与 token 用量。
 ///
-/// 用于在按 turn 聚合的时间线中区分不同回合，保持 IDE 风格的紧凑观感。
-class _AgentTurnDivider extends StatelessWidget {
-  const _AgentTurnDivider({required this.turn});
+/// 无耗时且无 token 时不渲染，避免空行干扰时间线。
+class _AgentTurnFooter extends StatelessWidget {
+  const _AgentTurnFooter({required this.turn});
 
   final AgentConversationTurnGroup turn;
 
@@ -52,15 +52,18 @@ class _AgentTurnDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final label = _turnLabel(turn);
-    final tokenLabel = _tokenUsageLabel(turn.tokenUsage);
+    final durationLabel = _turnDurationLabel(turn);
+    final tokenLabel = _turnTokenUsageLabel(turn.tokenUsage);
     final tokenTooltip = _tokenUsageTooltip(turn.tokenUsage);
     final showTokens = tokenLabel != null;
-    final hasMeta = label != null || showTokens;
+    final hasMeta = durationLabel != null || showTokens;
+    if (!hasMeta) {
+      return const SizedBox.shrink();
+    }
     return Padding(
+      key: ValueKey<String>('agent-turn-footer-${turn.id}'),
       padding: const EdgeInsets.only(
-        top: IdeSpacing.space16,
-        bottom: IdeSpacing.space10,
+        bottom: IdeSpacing.space16,
       ),
       child: Row(
         children: [
@@ -71,85 +74,84 @@ class _AgentTurnDivider extends StatelessWidget {
               color: colors.borderSubtle,
             ),
           ),
-          if (hasMeta) ...[
-            const SizedBox(width: IdeSpacing.space10),
-            Flexible(
-              child: Align(
-                alignment: Alignment.center,
-                child: Wrap(
-                  spacing: IdeSpacing.space8,
-                  runSpacing: IdeSpacing.space4,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    if (label != null)
-                      Text(
-                        label,
-                        style: textStyles.caption.copyWith(
-                          color: colors.textSecondary.withValues(alpha: 0.72),
-                          fontWeight: FontWeight.w500,
-                        ),
+          const SizedBox(width: IdeSpacing.space10),
+          Flexible(
+            child: Align(
+              alignment: Alignment.center,
+              child: Wrap(
+                spacing: IdeSpacing.space8,
+                runSpacing: IdeSpacing.space4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (durationLabel != null)
+                    Text(
+                      durationLabel,
+                      style: textStyles.caption.copyWith(
+                        color: colors.textSecondary.withValues(alpha: 0.72),
+                        fontWeight: FontWeight.w500,
                       ),
-                    if (showTokens)
-                      IdeTooltip(
-                        message: tokenTooltip,
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.bolt_outlined,
-                                size: 12,
+                    ),
+                  if (showTokens)
+                    IdeTooltip(
+                      message: tokenTooltip,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.bolt_outlined,
+                              size: 12,
+                              color: colors.textSecondary.withValues(
+                                alpha: 0.56,
+                              ),
+                            ),
+                            const SizedBox(width: IdeSpacing.space4),
+                            Text(
+                              tokenLabel,
+                              style: textStyles.caption.copyWith(
                                 color: colors.textSecondary.withValues(
-                                  alpha: 0.56,
+                                  alpha: 0.72,
                                 ),
                               ),
-                              const SizedBox(width: IdeSpacing.space4),
-                              Text(
-                                tokenLabel,
-                                style: textStyles.caption.copyWith(
-                                  color: colors.textSecondary.withValues(
-                                    alpha: 0.72,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
             ),
-            const SizedBox(width: IdeSpacing.space10),
-          ],
-          if (hasMeta)
-            Expanded(
-              child: sf.Divider(
-                padding: EdgeInsets.zero,
-                thickness: 1,
-                color: colors.borderSubtle,
-              ),
+          ),
+          const SizedBox(width: IdeSpacing.space10),
+          Expanded(
+            child: sf.Divider(
+              padding: EdgeInsets.zero,
+              thickness: 1,
+              color: colors.borderSubtle,
             ),
+          ),
         ],
       ),
     );
   }
+}
 
-  String? _turnLabel(AgentConversationTurnGroup group) {
-    final durationText = _formatDuration(group.duration);
-    return switch (group.status) {
-      AgentHistoryTurnStatus.running => 'Running',
-      // 中断/失败终态优先展示状态词，有耗时再附加。
-      AgentHistoryTurnStatus.interrupted =>
-        durationText == null ? 'Interrupted' : 'Interrupted · $durationText',
-      AgentHistoryTurnStatus.failed =>
-        durationText == null ? 'Failed' : 'Failed · $durationText',
-      AgentHistoryTurnStatus.completed => durationText ?? 'Completed',
-      AgentHistoryTurnStatus.unknown || null => durationText,
-    };
-  }
+/// turn 末尾耗时/状态文案。
+String? _turnDurationLabel(AgentConversationTurnGroup group) {
+  final durationText = _formatDuration(group.duration);
+  return switch (group.status) {
+    AgentHistoryTurnStatus.running =>
+      durationText == null ? '进行中' : '进行中 · $durationText',
+    // 中断/失败终态优先展示状态词，有耗时再附加。
+    AgentHistoryTurnStatus.interrupted =>
+      durationText == null ? '已中断' : '已中断 · $durationText',
+    AgentHistoryTurnStatus.failed =>
+      durationText == null ? '失败' : '失败 · $durationText',
+    AgentHistoryTurnStatus.completed => durationText ?? '已完成',
+    AgentHistoryTurnStatus.unknown || null => durationText,
+  };
 }
 
 /// 用户或系统消息仍然使用紧凑气泡。

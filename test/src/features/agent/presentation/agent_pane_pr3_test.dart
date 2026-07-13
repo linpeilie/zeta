@@ -95,6 +95,65 @@ void main() {
       },
     );
 
+    testWidgets('renders end-of-turn footer with duration and token usage', (
+      tester,
+    ) async {
+      final viewModel = _createViewModel(
+        _FakeAgentProvider(
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'thread-footer': AgentThreadHistorySnapshot(
+              threadId: 'thread-footer',
+              turns: <AgentHistoryTurn>[
+                AgentHistoryTurn(
+                  id: 'turn-footer-1',
+                  status: AgentHistoryTurnStatus.completed,
+                  duration: const Duration(seconds: 95),
+                  tokenUsage: const AgentTokenUsage(
+                    inputTokens: 1000,
+                    outputTokens: 240,
+                    totalTokens: 1240,
+                  ),
+                  entries: const <AgentHistoryEntry>[
+                    AgentHistoryMessageEntry(
+                      id: 'history-user-footer-1',
+                      role: AgentMessageRole.user,
+                      text: 'Do the work',
+                    ),
+                    AgentHistoryMessageEntry(
+                      id: 'history-agent-footer-1',
+                      role: AgentMessageRole.agent,
+                      text: 'Done.',
+                      phase: AgentMessagePhase.response,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          },
+        ),
+      );
+      addTearDown(viewModel.dispose);
+
+      await tester.pumpWidget(_TestApp(viewModel: viewModel));
+      await viewModel.switchThread(
+        _thread(id: 'thread-footer', title: 'Footer turn'),
+      );
+      await tester.pumpAndSettle();
+
+      final footer = find.byKey(
+        const ValueKey<String>('agent-turn-footer-turn-footer-1'),
+      );
+      expect(footer, findsOneWidget);
+      expect(
+        find.descendant(of: footer, matching: find.text('1m 35s')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: footer, matching: find.text('1.2k tokens')),
+        findsOneWidget,
+      );
+    });
+
     testWidgets(
       'expands history plan card through view model state without bumping history version',
       (tester) async {
