@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:zeta/src/features/agent/data/datasources/local_history/grok_user_content_parser.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 /// 从 Grok `updates.jsonl` 重建多回合历史快照。
@@ -8,7 +9,7 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 /// `{"timestamp":...,"method":"session/update","params":{sessionId,update,_meta}}`
 ///
 /// 回合边界：
-/// - 新的 `user_message_chunk` 开启新 turn
+/// - 新的逻辑用户消息开启新 turn；同 `promptId` / `promptIndex` 的 chunk 合并
 /// - `turn_completed`（含 `_x.ai/session/update`）结束当前 turn
 /// - 无 user 时按 `promptId` 切换也可开启 turn
 class GrokUpdatesHistoryParser {
@@ -106,6 +107,15 @@ class GrokUpdatesHistoryParser {
       final eventId =
           paramsMeta['eventId']?.toString() ??
           updateMeta['eventId']?.toString();
+      final userPromptKey = _userPromptKey(
+        promptId: promptId,
+        promptIndex:
+            updateMeta['promptIndex'] ??
+            paramsMeta['promptIndex'] ??
+            update['prompt_index'] ??
+            update['promptIndex'],
+        messageId: update['messageId']?.toString(),
+      );
       // 事件时刻：优先 agentTimestampMs（毫秒），否则行级 timestamp（多为秒）。
       // turnStartMs 只用于校准 startedAt，不当作 completedAt。
       final eventAt =
@@ -115,8 +125,11 @@ class GrokUpdatesHistoryParser {
 
       switch (kind) {
         case 'user_message_chunk':
-          // 新用户消息开启新 turn；先收尾上一个。
-          if (current != null && current!.hasContent) {
+          // Grok 会把同一次 prompt 的文字和本地图片拆成多个 chunk。
+          // 只有逻辑 prompt 变化时才关闭上一 turn。
+          if (current != null &&
+              current!.hasContent &&
+              !current!.acceptsUserPrompt(userPromptKey)) {
             closeTurn(at: eventAt);
           }
           ensureTurn(
@@ -124,20 +137,20 @@ class GrokUpdatesHistoryParser {
             fallbackId: eventId ?? 'user-${turns.length}',
             at: eventAt,
           );
-          final text = _contentText(update['content']);
-          if (text != null && text.trim().isNotEmpty) {
+          current!.noteUserPrompt(userPromptKey);
+          final parsed = parseGrokUserContent(
+            _contentText(update['content']) ?? '',
+          );
+          if (parsed.text.isNotEmpty || parsed.localImagePaths.isNotEmpty) {
             final messageId =
                 update['messageId']?.toString() ??
                 eventId ??
                 'user-${current!.id}-${current!.entries.length}';
-            current!.addMessage(
-              AgentHistoryMessageEntry(
-                id: messageId,
-                role: AgentMessageRole.user,
-                text: text,
-                status: AgentMessageStatus.completed,
-                raw: update,
-              ),
+            current!.addOrMergeUserMessage(
+              id: messageId,
+              text: parsed.text,
+              localImagePaths: parsed.localImagePaths,
+              raw: update,
             );
           }
 
@@ -401,6 +414,8 @@ class _TurnBuilder {
   final List<AgentHistoryEntry> entries = <AgentHistoryEntry>[];
   final Map<String, int> _messageIndexById = <String, int>{};
   final Map<String, int> _toolIndexById = <String, int>{};
+  String? _userPromptKey;
+  int? _userMessageIndex;
   AgentHistoryTurnStatus status = AgentHistoryTurnStatus.completed;
   AgentTokenUsage? tokenUsage;
   String? errorMessage;
@@ -409,6 +424,16 @@ class _TurnBuilder {
   Duration? duration;
 
   bool get hasContent => entries.isNotEmpty;
+
+  bool acceptsUserPrompt(String? promptKey) {
+    return promptKey != null && promptKey == _userPromptKey;
+  }
+
+  void noteUserPrompt(String? promptKey) {
+    if (promptKey != null) {
+      _userPromptKey ??= promptKey;
+    }
+  }
 
   void preferId(String preferred) {
     if (preferred.isNotEmpty) {
@@ -443,6 +468,44 @@ class _TurnBuilder {
     }
     _messageIndexById[entry.id] = entries.length;
     entries.add(entry);
+  }
+
+  /// 合并同一次 Grok prompt 拆分出的文字块和本地图片块。
+  void addOrMergeUserMessage({
+    required String id,
+    required String text,
+    required List<String> localImagePaths,
+    required Map<String, Object?> raw,
+  }) {
+    final existingIndex = _userMessageIndex;
+    if (existingIndex != null) {
+      final existing = entries[existingIndex] as AgentHistoryMessageEntry;
+      final mergedPaths = <String>{
+        ...existing.localImagePaths,
+        ...localImagePaths,
+      };
+      entries[existingIndex] = AgentHistoryMessageEntry(
+        id: existing.id,
+        role: AgentMessageRole.user,
+        text: _mergeUserText(existing.text, text),
+        status: AgentMessageStatus.completed,
+        localImagePaths: List<String>.unmodifiable(mergedPaths),
+        raw: raw,
+      );
+      return;
+    }
+
+    _userMessageIndex = entries.length;
+    addMessage(
+      AgentHistoryMessageEntry(
+        id: id,
+        role: AgentMessageRole.user,
+        text: text,
+        status: AgentMessageStatus.completed,
+        localImagePaths: List<String>.unmodifiable(localImagePaths),
+        raw: raw,
+      ),
+    );
   }
 
   /// agent_message_chunk 可能是完整段落；同 id 合并文本。
@@ -556,6 +619,33 @@ Map<String, Object?>? _asMap(Object? value) {
     return null;
   }
   return value.map((key, item) => MapEntry(key.toString(), item as Object?));
+}
+
+String? _userPromptKey({
+  required String? promptId,
+  required Object? promptIndex,
+  required String? messageId,
+}) {
+  if (promptId != null && promptId.isNotEmpty) {
+    return 'id:$promptId';
+  }
+  if (promptIndex != null && promptIndex.toString().isNotEmpty) {
+    return 'index:$promptIndex';
+  }
+  if (messageId != null && messageId.isNotEmpty) {
+    return 'message:$messageId';
+  }
+  return null;
+}
+
+String _mergeUserText(String previous, String next) {
+  if (next.isEmpty || previous == next || previous.endsWith(next)) {
+    return previous;
+  }
+  if (previous.isEmpty || next.startsWith(previous)) {
+    return next;
+  }
+  return '$previous\n$next';
 }
 
 String? _contentText(Object? content) {

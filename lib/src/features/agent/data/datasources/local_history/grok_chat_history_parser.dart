@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:zeta/src/features/agent/data/datasources/local_history/grok_user_content_parser.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 /// 从 Grok `chat_history.jsonl` 降级重建多回合历史。
@@ -67,8 +68,10 @@ class GrokChatHistoryParser {
           if (_isSyntheticUserContext(text)) {
             continue;
           }
-          final userText = _extractUserQuery(text) ?? text.trim();
-          if (userText.isEmpty) {
+          final userContent = parseGrokUserContent(
+            _extractUserQuery(text) ?? text.trim(),
+          );
+          if (userContent.text.isEmpty && userContent.localImagePaths.isEmpty) {
             continue;
           }
           if (current != null && current!.hasContent) {
@@ -84,8 +87,9 @@ class GrokChatHistoryParser {
             AgentHistoryMessageEntry(
               id: 'grok-hist-user-$threadId-$lineNo',
               role: AgentMessageRole.user,
-              text: userText,
+              text: userContent.text,
               status: AgentMessageStatus.completed,
+              localImagePaths: userContent.localImagePaths,
               raw: map,
             ),
           );

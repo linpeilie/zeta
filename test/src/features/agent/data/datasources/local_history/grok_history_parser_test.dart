@@ -72,6 +72,40 @@ void main() {
       expect(plan.text, contains('Step A'));
       expect(plan.text, contains('Step B'));
     });
+
+    test('merges text and local image chunks from the same prompt', () {
+      const content = r'''
+{"timestamp":1000,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"fix this"},"_meta":{"promptIndex":1}},"_meta":{"eventId":"u1","agentTimestampMs":1000000}}}
+{"timestamp":1000,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"[local image: C:\\Users\\tester\\image.png]"},"_meta":{"promptIndex":1}},"_meta":{"eventId":"u2","agentTimestampMs":1000000}}}
+{"timestamp":1001,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"done"},"messageId":"a1","_meta":{"promptId":"p1"}},"_meta":{"eventId":"a1"}}}
+{"timestamp":1002,"method":"_x.ai/session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"turn_completed","prompt_id":"p1","stop_reason":"end_turn"},"_meta":{"eventId":"c1"}}}
+''';
+
+      final snapshot = parser.parse(threadId: 's1', content: content);
+
+      expect(snapshot.turns, hasLength(1));
+      final userMessages = snapshot.turns.single.entries
+          .whereType<AgentHistoryMessageEntry>()
+          .where((entry) => entry.role == AgentMessageRole.user)
+          .toList();
+      expect(userMessages, hasLength(1));
+      expect(userMessages.single.text, 'fix this');
+      expect(userMessages.single.localImagePaths, <String>[
+        r'C:\Users\tester\image.png',
+      ]);
+    });
+
+    test('keeps image-only user prompts', () {
+      const content = r'''
+{"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"[local image: /tmp/only.png]"},"_meta":{"promptIndex":2}},"_meta":{"eventId":"u1"}}}
+''';
+
+      final snapshot = parser.parse(threadId: 's1', content: content);
+      final user =
+          snapshot.turns.single.entries.single as AgentHistoryMessageEntry;
+      expect(user.text, isEmpty);
+      expect(user.localImagePaths, <String>['/tmp/only.png']);
+    });
   });
 
   group('GrokChatHistoryParser', () {
@@ -121,6 +155,20 @@ void main() {
           .whereType<AgentHistoryMessageEntry>()
           .first;
       expect(secondUser.text, 'second');
+    });
+
+    test('restores local image markers from fallback history', () {
+      const content = r'''
+{"type":"user","content":[{"type":"text","text":"<user_query>\ninspect this [local image: C:\\Users\\tester\\fallback.png]\n</user_query>"}],"prompt_index":0}
+{"type":"assistant","content":"done"}
+''';
+
+      final snapshot = parser.parse(threadId: 's1', content: content);
+      final user = snapshot.turns.single.entries
+          .whereType<AgentHistoryMessageEntry>()
+          .first;
+      expect(user.text, 'inspect this');
+      expect(user.localImagePaths, <String>[r'C:\Users\tester\fallback.png']);
     });
   });
 }

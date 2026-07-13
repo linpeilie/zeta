@@ -144,7 +144,10 @@ class _AgentTurnFooter extends StatelessWidget {
     }
     return Padding(
       key: ValueKey<String>('agent-turn-footer-${turn.id}'),
-      padding: const EdgeInsets.only(bottom: IdeSpacing.space16),
+      padding: const EdgeInsets.only(
+        top: IdeSpacing.space12,
+        bottom: IdeSpacing.space16,
+      ),
       child: Row(
         children: [
           Expanded(
@@ -653,44 +656,39 @@ class _AgentFinalAnswerCardState extends State<_AgentFinalAnswerCard> {
     final textStyles = IdeTextStyles.of(context);
     final markdown = widget.message.text;
     final useStreamingMarkdown = widget.useStreamingMarkdown;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: IdeSpacing.space12),
-      child: RepaintBoundary(
-        child: PanelCard(
-          key: ValueKey<String>('agent-final-answer-card-${widget.message.id}'),
-          color: colors.surfaceElevated,
-          borderColor: colors.border,
-          borderRadius: IdeRadius.allComposer,
-          child: Padding(
-            padding: IdeSpacing.sectionPadding,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.check_circle_outline_rounded,
-                      size: 16,
-                      color: colors.success.withValues(alpha: 0.9),
+    return RepaintBoundary(
+      child: PanelCard(
+        key: ValueKey<String>('agent-final-answer-card-${widget.message.id}'),
+        color: colors.surfaceElevated,
+        borderColor: colors.border,
+        borderRadius: IdeRadius.allComposer,
+        child: Padding(
+          padding: IdeSpacing.sectionPadding,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.check_circle_outline_rounded,
+                    size: 16,
+                    color: colors.success.withValues(alpha: 0.9),
+                  ),
+                  const SizedBox(width: IdeSpacing.space8),
+                  Text(
+                    '完成汇总',
+                    style: textStyles.titleLarge.copyWith(
+                      color: colors.textSecondary.withValues(alpha: 0.9),
                     ),
-                    const SizedBox(width: IdeSpacing.space8),
-                    Text(
-                      '完成汇总',
-                      style: textStyles.titleLarge.copyWith(
-                        color: colors.textSecondary.withValues(alpha: 0.9),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: IdeSpacing.space10),
-                useStreamingMarkdown
-                    ? _AgentMarkdownBody(
-                        controller: _ensureMarkdownController(),
-                      )
-                    : _AgentMarkdownBody(data: markdown),
-              ],
-            ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: IdeSpacing.space10),
+              useStreamingMarkdown
+                  ? _AgentMarkdownBody(controller: _ensureMarkdownController())
+                  : _AgentMarkdownBody(data: markdown),
+            ],
           ),
         ),
       ),
