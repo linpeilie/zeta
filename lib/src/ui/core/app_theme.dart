@@ -169,7 +169,9 @@ sf.ColorScheme _buildShadcnColorScheme(IdeThemeData ideTheme) {
     popover: colors.surfaceOverlay,
     popoverForeground: colors.textPrimary,
     primary: colors.accent,
-    primaryForeground: colors.accentForeground,
+    // 实心 primary 上的前景，必须用 onAccent；勿复用 accentForeground
+    // （浅色选中态强调色与 accent 同蓝，会导致 Primary 按钮蓝底蓝字）。
+    primaryForeground: colors.onAccent,
     secondary: colors.surfaceElevated,
     secondaryForeground: colors.textPrimary,
     muted: colors.surfaceElevated,

@@ -397,8 +397,11 @@ class _TitleBarActionButton extends StatelessWidget {
     final hoverBackground = colorScheme.border.withValues(
       alpha: theme.brightness == Brightness.dark ? 0.18 : 0.3,
     );
+    // active 落在淡化 primary 底上，用 accentForeground（选中强调色）；
+    // 不能用 primaryForeground/onAccent（实心 accent 上的白字）。
+    final colors = IdeColors.of(context);
     final foreground = action.active
-        ? colorScheme.primaryForeground
+        ? colors.accentForeground
         : colorScheme.mutedForeground;
     return IdeTooltip(
       message: action.tooltip,

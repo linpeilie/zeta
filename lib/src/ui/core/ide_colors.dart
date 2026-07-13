@@ -31,6 +31,7 @@ class IdeColors {
     required this.success,
     required this.info,
     required this.accentForeground,
+    required this.onAccent,
     required this.windowHover,
     required this.windowIcon,
     required this.closeHover,
@@ -90,9 +91,16 @@ class IdeColors {
   /// 信息色。
   final Color info;
 
-  /// 处于选中/激活态时前景图标的颜色。深色下为白；浅色下使用 [accent]，
-  /// 以便在浅底面板上保持可见。
+  /// 选中/激活态落在浅底或 [primaryMuted] 上时的前景色（图标/标签）。
+  ///
+  /// 深色下为白；浅色下使用 [accent]，以便在浅底面板上保持可见。
+  /// 不要用于实心 [accent] 填充上的文字——那种场景用 [onAccent]。
   final Color accentForeground;
+
+  /// 落在实心 [accent] 填充上的前景色（Primary 按钮文字/图标等）。
+  ///
+  /// 深浅主题均为高对比白色，与 [accentForeground]（选中态强调色）语义分离。
+  final Color onAccent;
 
   /// Windows/Linux 自绘窗口按钮的悬停背景。
   final Color windowHover;
@@ -125,6 +133,7 @@ class IdeColors {
     success: Color(0xFF4EC583),
     info: Color(0xFF55A8F5),
     accentForeground: Colors.white,
+    onAccent: Colors.white,
     windowHover: Color(0xFF2A2B2E),
     windowIcon: Color(0xFFA6A9AE),
     closeHover: _sharedCloseHoverColor,
@@ -152,6 +161,7 @@ class IdeColors {
     success: Color(0xFF178A50),
     info: Color(0xFF1173CF),
     accentForeground: Color(0xFF0B76D8),
+    onAccent: Colors.white,
     windowHover: Color(0xFFE1E2E6),
     windowIcon: Color(0xFF5B5E66),
     closeHover: _sharedCloseHoverColor,
@@ -182,6 +192,7 @@ class IdeColors {
     Color? success,
     Color? info,
     Color? accentForeground,
+    Color? onAccent,
     Color? windowHover,
     Color? windowIcon,
     Color? closeHover,
@@ -209,6 +220,7 @@ class IdeColors {
       success: success ?? this.success,
       info: info ?? this.info,
       accentForeground: accentForeground ?? this.accentForeground,
+      onAccent: onAccent ?? this.onAccent,
       windowHover: windowHover ?? this.windowHover,
       windowIcon: windowIcon ?? this.windowIcon,
       closeHover: closeHover ?? this.closeHover,
@@ -240,6 +252,7 @@ class IdeColors {
         other.accentForeground,
         t,
       )!,
+      onAccent: Color.lerp(onAccent, other.onAccent, t)!,
       windowHover: Color.lerp(windowHover, other.windowHover, t)!,
       windowIcon: Color.lerp(windowIcon, other.windowIcon, t)!,
       closeHover: Color.lerp(closeHover, other.closeHover, t)!,

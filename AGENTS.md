@@ -153,3 +153,19 @@ dart run build_runner build --delete-conflicting-outputs
   state management, networking, assets, or a formal feature/module structure.
 - Keep `docs/engineering_standards.md`, `docs/developer_guide.md`, and
   `docs/design_document.md` aligned when architecture boundaries change.
+
+## Git 提交信息
+每次你修改或更新完代码后，必须在回复的最后附加一个【Git 提交信息】模块。
+该模块要求如下：
+1. 使用标准化的 Conventional Commits 格式（如 feat:, fix:, docs:, refactor:, chore: 等）。
+2. 用一句简短的中文/英文概括主要修改（不超过 50 个字符）。
+3. 如果有必要，换行提供具体的修改点列表（Body）。
+4. 使用独立的代码块包裹，确保我可以一键复制直接用于 `git commit -m` 或 Git 提交面板。
+
+输出示例：
+### 📝 Git Commit Message
+```sh
+feat(auth): 优化登录接口的错误处理逻辑
+
+- 增加了对验证码过期的状态码拦截
+- 修复了前端重复提交请求的 bug
