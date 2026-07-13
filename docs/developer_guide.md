@@ -132,13 +132,19 @@ windows/
 
 新增 provider 时：
 
-1. 在领域层确认现有 `AgentProvider` 接口是否足够表达新 provider 能力。
-2. 在 data 层新增具体 provider 实现，不让 UI 直接依赖 provider 协议。
-3. 把 provider 原始事件映射成 `AgentEvent`、`AgentToolCall`、`AgentPermissionRequest`、`AgentThreadSummary` 等中立模型。
-4. 在 factory 中接入 provider kind。
-5. 添加单元测试覆盖初始化、session、turn、权限请求和错误映射。
+1. 在领域层确认现有 `AgentProvider` 接口是否足够，并定义初始化前可判断的静态
+   `AgentProviderCapabilities` 与 bootstrap policy。
+2. 在 data 层新增具体 provider 实现，不让 UI 直接依赖 provider 协议；握手后若能力
+   发生变化，应返回更精确的动态 capabilities。
+3. 把 provider 原始事件映射成 `AgentEvent`、`AgentToolCall`、
+   `AgentPermissionRequest`、`AgentThreadSummary`、`AgentSessionConfigOption` 等中立模型。
+4. ACP provider 优先复用 `AcpSessionUpdateMapper`、`AcpPermissionMapper` 和
+   `AcpContentCodec`；厂商通知单独留在薄适配层。
+5. 在 factory 中接入 provider kind。
+6. 添加单元测试覆盖初始化、session、turn、权限请求、capability gate 和错误映射。
 
 注意：默认策略应保持保守，不自动授权命令执行或文件写入。
+未支持操作必须 capability=false，并抛出 `UnsupportedError`；不得静默成功。
 
 Agent 管理适配与会话 provider 适配保持分层：管理 data 层可以执行 `--version`、
 `login status` 和 app-server `initialize` / `model/list` 等无计费探测，但不得通过
@@ -165,6 +171,8 @@ Agent 管理适配与会话 provider 适配保持分层：管理 data 层可以�
 - Agent 管理位于设置页；桌面宽度使用表格信息密度，窄窗口改为卡片和上下布局。
 - 被禁用 Agent 的历史会话只读：允许加载和查看历史，但隐藏输入区，并阻止新建、
   分叉、重命名、归档和删除等写操作。
+- Provider 的 thread 菜单、header、附件和选择器必须按 capabilities 渲染，不按
+  provider kind 或显示名称硬编码。
 - 使用统计是标题栏全局页面，不属于设置分区。统计表格在窄窗口保留横向滚动，
   分析区按可用宽度从双栏切换为单栏。
 

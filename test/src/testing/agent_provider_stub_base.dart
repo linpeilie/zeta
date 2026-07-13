@@ -6,6 +6,10 @@ import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 /// 与 `implements AgentProvider` 的 Fake 类一起 `with` 使用；
 /// 需要断言调用时，在具体 Fake 中 override 并记录参数即可。
 mixin AgentProviderThreadLifecycleStub {
+  /// 测试 fake 默认模拟能力完整的 Codex；专项测试可 override。
+  AgentProviderCapabilities get capabilities =>
+      AgentProviderCapabilities.codexAppServer;
+
   final List<({String threadId, String name})> renamedThreads =
       <({String threadId, String name})>[];
   final List<String> archivedThreads = <String>[];

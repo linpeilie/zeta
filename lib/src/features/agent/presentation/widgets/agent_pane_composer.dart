@@ -20,6 +20,9 @@ class _AgentComposer extends StatelessWidget {
     required this.onPasteImages,
     required this.onSend,
     required this.onCancel,
+    required this.showImageAttachment,
+    required this.showResourceMention,
+    required this.showModelSelection,
     required this.models,
     required this.selectedModel,
     required this.selectedReasoningEffort,
@@ -50,6 +53,9 @@ class _AgentComposer extends StatelessWidget {
   final Future<bool> Function() onPasteImages;
   final VoidCallback onSend;
   final VoidCallback onCancel;
+  final bool showImageAttachment;
+  final bool showResourceMention;
+  final bool showModelSelection;
 
   /// 可选模型列表。
   final List<AgentModelInfo> models;
@@ -107,11 +113,11 @@ class _AgentComposer extends StatelessWidget {
         controller.text.trim().isNotEmpty || draftImagePaths.isNotEmpty;
     final showSend =
         threadOpenPhase == AgentThreadOpenPhase.idle &&
-        (!isTurnRunning || hasDraft);
+        (!isTurnRunning || (hasDraft && canSubmit));
     final showCancel =
         threadOpenPhase == AgentThreadOpenPhase.idle &&
         isTurnRunning &&
-        !hasDraft;
+        !showSend;
     final contextWindowTokenTooltip = _contextWindowTokenUsageTooltip(
       currentWindowTokenUsage,
     );
@@ -119,7 +125,7 @@ class _AgentComposer extends StatelessWidget {
       currentWindowTokenUsage,
     );
     final selectorControls = <Widget>[
-      if (models.isNotEmpty)
+      if (showModelSelection && models.isNotEmpty)
         _ModelSelectorButton(
           models: models,
           selectedModel: selectedModel,
@@ -378,35 +384,38 @@ class _AgentComposer extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        IdeTooltip(
-          message: 'Mention file',
-          child: sf.IconButton.ghost(
-            key: const ValueKey('agent-mention-file-button'),
-            onPressed: () => _showMentionPicker(context),
-            size: sf.ButtonSize.small,
-            density: sf.ButtonDensity.iconDense,
-            icon: Icon(
-              Icons.alternate_email_rounded,
-              size: 16,
-              color: colors.textSecondary,
+        if (showResourceMention)
+          IdeTooltip(
+            message: 'Mention file',
+            child: sf.IconButton.ghost(
+              key: const ValueKey('agent-mention-file-button'),
+              onPressed: () => _showMentionPicker(context),
+              size: sf.ButtonSize.small,
+              density: sf.ButtonDensity.iconDense,
+              icon: Icon(
+                Icons.alternate_email_rounded,
+                size: 16,
+                color: colors.textSecondary,
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: IdeSpacing.space4),
-        IdeTooltip(
-          message: 'Attach image',
-          child: sf.IconButton.ghost(
-            key: const ValueKey('agent-attach-image-button'),
-            onPressed: onAttachImages,
-            size: sf.ButtonSize.small,
-            density: sf.ButtonDensity.iconDense,
-            icon: Icon(
-              Icons.image_outlined,
-              size: 16,
-              color: colors.textSecondary,
+        if (showResourceMention && showImageAttachment)
+          const SizedBox(width: IdeSpacing.space4),
+        if (showImageAttachment)
+          IdeTooltip(
+            message: 'Attach image',
+            child: sf.IconButton.ghost(
+              key: const ValueKey('agent-attach-image-button'),
+              onPressed: onAttachImages,
+              size: sf.ButtonSize.small,
+              density: sf.ButtonDensity.iconDense,
+              icon: Icon(
+                Icons.image_outlined,
+                size: 16,
+                color: colors.textSecondary,
+              ),
             ),
           ),
-        ),
       ],
     );
   }

@@ -230,6 +230,9 @@ class _AgentPaneState extends State<AgentPane> {
   }
 
   Future<void> _pickImages() async {
+    if (!widget.viewModel.canAttachImages) {
+      return;
+    }
     final files = await openFiles(
       acceptedTypeGroups: <XTypeGroup>[_imageTypeGroup],
     );
@@ -241,24 +244,28 @@ class _AgentPaneState extends State<AgentPane> {
 
   /// Ctrl/Cmd+V：优先粘贴剪贴板图片；无图时回退插入纯文本。
   Future<bool> _pasteImagesFromClipboard() async {
-    final imageBytes = await Pasteboard.image;
-    if (imageBytes != null && imageBytes.isNotEmpty) {
-      final path = await _persistClipboardImage(imageBytes);
-      if (!mounted) {
+    if (widget.viewModel.canAttachImages) {
+      final imageBytes = await Pasteboard.image;
+      if (imageBytes != null && imageBytes.isNotEmpty) {
+        final path = await _persistClipboardImage(imageBytes);
+        if (!mounted) {
+          return true;
+        }
+        _addDraftImages(<String>[path]);
         return true;
       }
-      _addDraftImages(<String>[path]);
-      return true;
-    }
 
-    final files = await Pasteboard.files();
-    final imagePaths = files.where(_looksLikeImagePath).toList(growable: false);
-    if (imagePaths.isNotEmpty) {
-      if (!mounted) {
+      final files = await Pasteboard.files();
+      final imagePaths = files
+          .where(_looksLikeImagePath)
+          .toList(growable: false);
+      if (imagePaths.isNotEmpty) {
+        if (!mounted) {
+          return true;
+        }
+        _addDraftImages(imagePaths);
         return true;
       }
-      _addDraftImages(imagePaths);
-      return true;
     }
 
     final data = await Clipboard.getData(Clipboard.kTextPlain);
@@ -380,6 +387,9 @@ class _AgentPaneState extends State<AgentPane> {
 
   /// 从工作区文件列表插入 @mention。
   void _insertMention(WorkspaceNode file) {
+    if (!widget.viewModel.canMentionResources) {
+      return;
+    }
     final mention = (name: file.name, path: file.path);
     final text = _inputController.text;
     final selection = _inputController.selection;

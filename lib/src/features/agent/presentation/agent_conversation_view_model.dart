@@ -207,6 +207,17 @@ class AgentConversationViewModel extends ChangeNotifier {
   AgentProviderKind get activeProviderKind =>
       providerController.activeProviderConfig.kind;
 
+  /// 当前 thread 所属 provider 的能力；未绑定实例时回退到 kind 的保守静态能力。
+  AgentProviderCapabilities get activeCapabilities {
+    final providerId =
+        _session?.providerId ?? _selectedProviderId ?? activeProviderId;
+    final provider = _provider;
+    if (provider != null && provider.config.id == providerId) {
+      return provider.capabilities;
+    }
+    return providerController.capabilitiesForProviderId(providerId);
+  }
+
   List<AgentModelInfo> get models => _modelSelectionController.models;
 
   AgentModelInfo? get selectedModel => _modelSelectionController.selectedModel;
@@ -220,24 +231,48 @@ class AgentConversationViewModel extends ChangeNotifier {
       _modelSelectionController.selectedServiceTierId;
 
   bool get showReasoningEffort {
-    // Codex 与 Grok ACP 在模型声明了 reasoning efforts 时都展示。
-    if (activeProviderKind != AgentProviderKind.codexAppServer &&
-        activeProviderKind != AgentProviderKind.acp) {
+    if (!activeCapabilities.supportsReasoningOptions) {
       return false;
     }
     return selectedModel?.supportedReasoningEfforts.isNotEmpty ?? false;
   }
 
   bool get showServiceTier {
-    if (activeProviderKind != AgentProviderKind.codexAppServer) {
+    if (!activeCapabilities.supportsServiceTierSelection) {
       return false;
     }
     return selectedModel?.serviceTiers.isNotEmpty ?? false;
   }
 
-  /// Codex 会话显示审批/沙箱策略选择器；Grok ACP 走交互式 permission。
+  /// Provider 支持会话级审批/沙箱策略时显示选择器。
   bool get showPermissionPolicy =>
-      activeProviderKind == AgentProviderKind.codexAppServer;
+      activeCapabilities.supportsPermissionPolicySelection;
+
+  /// Provider 支持模型切换时显示模型选择器。
+  bool get showModelSelection => activeCapabilities.supportsModelSelection;
+
+  bool get canAttachImages => activeCapabilities.supportsLocalImageInput;
+
+  bool get canMentionResources => activeCapabilities.supportsResourceInput;
+
+  bool get canRenameCurrentThread =>
+      sessionId != null && !isReadOnly && activeCapabilities.canRenameThread;
+
+  bool get canArchiveCurrentThread =>
+      sessionId != null && !isReadOnly && activeCapabilities.canArchiveThread;
+
+  bool get canForkCurrentThread =>
+      sessionId != null &&
+      canSubmitMessage &&
+      !isTurnRunning &&
+      activeCapabilities.canForkThread;
+
+  bool get canCompactCurrentThread =>
+      sessionId != null &&
+      !_isCompacting &&
+      !isTurnRunning &&
+      !isReadOnly &&
+      activeCapabilities.canCompactThread;
 
   /// 可切换的全局 provider 列表（已启用）。
   List<AgentProviderConfig> get availableProviders => providerController
@@ -428,7 +463,9 @@ class AgentConversationViewModel extends ChangeNotifier {
   /// 是否应展示「压缩上下文」入口。
   bool get shouldOfferContextCompact {
     final ratio = contextWindowUsageRatio;
-    return ratio != null && ratio >= contextCompactThreshold;
+    return activeCapabilities.canCompactThread &&
+        ratio != null &&
+        ratio >= contextCompactThreshold;
   }
 
   /// 是否正在压缩上下文。
@@ -452,7 +489,10 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   /// 空闲且末尾存在用户消息时可编辑重试。
   bool get canEditLastUserMessage {
-    if (!canSubmitMessage || isTurnRunning || _isCompacting) {
+    if (!activeCapabilities.canRollbackThread ||
+        !canSubmitMessage ||
+        isTurnRunning ||
+        _isCompacting) {
       return false;
     }
     return _lastEditableUserMessage() != null;
@@ -469,7 +509,10 @@ class AgentConversationViewModel extends ChangeNotifier {
   bool get isRunning => isTurnRunning;
 
   bool get canSubmitMessage =>
-      _threadOpenPhase == AgentThreadOpenPhase.idle && !isReadOnly;
+      _threadOpenPhase == AgentThreadOpenPhase.idle &&
+      !isReadOnly &&
+      activeCapabilities.canPrompt &&
+      (!isTurnRunning || activeCapabilities.canSteerTurn);
 
   bool isToolCallExpanded(String toolCallId) {
     return _timeline.isToolCallExpanded(toolCallId);
@@ -550,6 +593,17 @@ class AgentConversationViewModel extends ChangeNotifier {
     final config = providerController.activeProviderConfig;
     _modelSelectionController.seedFromConfig(config);
     _permissionSelectionController.seedFromConfig(config);
+    final capabilities = providerController.capabilitiesForProviderId(
+      config.id,
+    );
+    final hasWorkspace = _projectPath?.trim().isNotEmpty ?? false;
+    if (capabilities.bootstrapPolicy.requiresWorkspace && !hasWorkspace) {
+      _log.fine(
+        'Deferring ${config.displayName} preload until a workspace is ready',
+      );
+      _publishUiChanges(composer: true);
+      return;
+    }
     try {
       final provider = await _ensureProvider();
       await provider.initialize();
@@ -704,9 +758,14 @@ class AgentConversationViewModel extends ChangeNotifier {
   }) async {
     final trimmed = text.trim();
     final imagePaths = List<String>.unmodifiable(
-      localImagePaths.where((path) => path.trim().isNotEmpty),
+      canAttachImages
+          ? localImagePaths.where((path) => path.trim().isNotEmpty)
+          : const <String>[],
     );
-    if ((trimmed.isEmpty && imagePaths.isEmpty && mentions.isEmpty) ||
+    final resolvedMentions = canMentionResources
+        ? mentions
+        : const <({String name, String path})>[];
+    if ((trimmed.isEmpty && imagePaths.isEmpty && resolvedMentions.isEmpty) ||
         !canSubmitMessage) {
       return;
     }
@@ -721,7 +780,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     final inputs = _buildUserInputs(
       text: trimmed,
       localImagePaths: imagePaths,
-      mentions: mentions,
+      mentions: resolvedMentions,
     );
     final clientUserMessageId = _nextClientUserMessageId();
 
@@ -1074,7 +1133,7 @@ class AgentConversationViewModel extends ChangeNotifier {
   /// 分叉当前会话为新 thread，并切换到分叉结果。
   Future<AgentSession?> forkCurrentThread() async {
     final threadId = sessionId;
-    if (threadId == null || !canSubmitMessage || isTurnRunning) {
+    if (threadId == null || !canForkCurrentThread) {
       return null;
     }
     final switchToken = _threadSwitchToken;
@@ -1113,7 +1172,7 @@ class AgentConversationViewModel extends ChangeNotifier {
   /// 启动上下文压缩。
   Future<void> compactCurrentThread() async {
     final threadId = sessionId;
-    if (threadId == null || _isCompacting || isTurnRunning || isReadOnly) {
+    if (threadId == null || !canCompactCurrentThread) {
       return;
     }
     _isCompacting = true;
@@ -1133,7 +1192,7 @@ class AgentConversationViewModel extends ChangeNotifier {
   Future<void> renameCurrentThread(String name) async {
     final trimmed = name.trim();
     final threadId = sessionId;
-    if (trimmed.isEmpty || threadId == null || isReadOnly) {
+    if (trimmed.isEmpty || threadId == null || !canRenameCurrentThread) {
       return;
     }
     if (trimmed == _currentThreadTitle) {
@@ -1152,6 +1211,21 @@ class AgentConversationViewModel extends ChangeNotifier {
       }
       _log.warning('Could not rename thread $threadId', error, stackTrace);
       _markError('Could not rename thread', details: error.toString());
+    }
+  }
+
+  /// 归档当前 thread；事件订阅会负责同步左侧列表。
+  Future<void> archiveCurrentThread() async {
+    final threadId = sessionId;
+    if (threadId == null || !canArchiveCurrentThread) {
+      return;
+    }
+    try {
+      final provider = await _ensureProvider();
+      await provider.archiveThread(threadId);
+    } catch (error, stackTrace) {
+      _log.warning('Could not archive thread $threadId', error, stackTrace);
+      _markError('Could not archive thread', details: error.toString());
     }
   }
 

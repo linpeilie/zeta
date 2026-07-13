@@ -144,6 +144,10 @@ class CodexAppServerAgentProvider
   @override
   Stream<AgentEvent> get events => _events.stream;
 
+  @override
+  AgentProviderCapabilities get capabilities =>
+      AgentProviderCapabilities.codexAppServer;
+
   /// 开发诊断：未匹配服务端通知按 method 的累计次数。
   ///
   /// 首次见到某 method 会记一条 fine 日志；后续同名通知只递增计数。

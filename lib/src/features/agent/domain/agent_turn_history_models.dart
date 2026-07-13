@@ -383,17 +383,38 @@ class AgentHistoryToolEntry extends AgentHistoryEntry {
 /// 历史事件分类。
 enum AgentHistoryEventKind { permission, warning, search, system }
 
+/// 用户输入问题的结构化可选项。
+class AgentUserInputOption {
+  const AgentUserInputOption({
+    required this.id,
+    required this.label,
+    this.description,
+  });
+
+  /// 写回 provider 的稳定选项 id。
+  final String id;
+
+  /// UI 展示文案。
+  final String label;
+
+  /// 可选的补充说明。
+  final String? description;
+}
+
 /// 用户输入问答对。
 ///
-/// 对应 Codex `request_user_input` 工具调用中的单个问题及其回复。
-/// UI 据此渲染“第一行问题、下一行回答”的紧凑样式。
+/// 对应 provider 用户提问中的单个问题及其回复。
+/// [options] 保留旧配置和 Codex 历史兼容；新协议应优先填充带稳定 id 的
+/// [optionItems]，UI 通过 [resolvedOptions] 统一消费。
 class AgentUserInputQaPair {
   const AgentUserInputQaPair({
     required this.questionId,
     required this.question,
     this.header,
     this.options = const <String>[],
+    this.optionItems = const <AgentUserInputOption>[],
     this.answers = const <String>[],
+    this.allowMultiple = false,
     this.isOther = false,
     this.isSecret = false,
   });
@@ -410,8 +431,24 @@ class AgentUserInputQaPair {
   /// 可选项标签列表。
   final List<String> options;
 
-  /// 用户选择的答案标签列表；在收到 output 前为空。
+  /// 带协议稳定 id 的结构化选项。
+  final List<AgentUserInputOption> optionItems;
+
+  /// 统一的结构化选项视图；旧标签会以“id 等于 label”的形式兼容。
+  List<AgentUserInputOption> get resolvedOptions {
+    if (optionItems.isNotEmpty) {
+      return optionItems;
+    }
+    return List<AgentUserInputOption>.unmodifiable(
+      options.map((label) => AgentUserInputOption(id: label, label: label)),
+    );
+  }
+
+  /// 用户选择的稳定选项 id 或自由文本；在收到 output 前为空。
   final List<String> answers;
+
+  /// 是否允许同时选择多个选项。
+  final bool allowMultiple;
 
   /// 是否允许自由文本（协议 `isOther`）。
   final bool isOther;

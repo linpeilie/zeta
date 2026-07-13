@@ -958,6 +958,55 @@ void main() {
     expect(provider.renamedThreads.single.name, 'Renamed thread');
     expect(find.text('Renamed thread'), findsOneWidget);
   });
+
+  testWidgets('hides thread action menu when Grok lacks lifecycle support', (
+    tester,
+  ) async {
+    final session = MemorySessionStore();
+    final directory = Directory.systemTemp.createTempSync('zeta_test_');
+    tempDirectories.add(directory);
+    final provider = FakeAgentProvider(
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[
+            agentThread(
+              id: 'grok-thread',
+              projectPath: directory.path,
+              title: 'Grok thread',
+            ).copyWith(providerId: grokAgentProviderId),
+          ],
+          nextCursor: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        directoryPicker: () async => directory.path,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await tester.runAsync(waitForIo);
+    await tester.pumpAndSettle();
+
+    final mouse = await hoverThreadTile(tester, directory.path, 'grok-thread');
+    addTearDown(mouse.removePointer);
+
+    expect(
+      find.byKey(
+        ValueKey<String>(
+          'project-thread-more-menu-${directory.path}-grok-thread',
+        ),
+      ),
+      findsNothing,
+    );
+  });
 }
 
 MemoryAgentProviderConfigStore singleFakeProviderConfigStore() {

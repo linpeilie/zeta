@@ -67,6 +67,19 @@ class ActiveAgentProviderController extends ChangeNotifier {
     return null;
   }
 
+  /// 查询指定 provider 的能力；共享实例存在时优先返回握手后的动态能力。
+  AgentProviderCapabilities capabilitiesForProviderId(String providerId) {
+    final running = _provider;
+    if (running != null && running.config.id == providerId) {
+      return running.capabilities;
+    }
+    final config = providerConfigById(providerId);
+    if (config == null) {
+      return AgentProviderCapabilities.unsupported;
+    }
+    return AgentProviderCapabilities.defaultsFor(config.kind);
+  }
+
   /// 打开指定配置的 provider 实例。
   ///
   /// 若与当前 active 相同则复用共享实例；否则创建**临时**实例，调用方在

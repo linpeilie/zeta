@@ -278,7 +278,9 @@ void main() {
     await tester.tap(
       find.byKey(ValueKey<String>('project-thread-${directory.path}-thread-a')),
     );
-    await tester.pumpAndSettle();
+    // 该历史回合处于 running，界面会持续播放 spinner，不能等待所有动画结束。
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('History A'), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-cancel-button')), findsOneWidget);
 
@@ -362,7 +364,9 @@ void main() {
           ValueKey<String>('project-thread-${directory.path}-thread-a'),
         ),
       );
-      await tester.pumpAndSettle();
+      // 运行中的历史回合会持续播放 spinner，仅推进有限帧等待 thread 切换完成。
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byKey(const ValueKey('agent-cancel-button')), findsOneWidget);
       expect(find.byKey(const ValueKey('agent-send-button')), findsNothing);
@@ -377,7 +381,8 @@ void main() {
       expect(find.byKey(const ValueKey('agent-cancel-button')), findsNothing);
 
       await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(provider.resumedSessions, <String>['thread-a']);
       expect(provider.sentMessages, isEmpty);
@@ -506,7 +511,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(resumeAttempts, 2);
-      expect(headerTitleText(tester), 'Recovered thread');
+      // 项目线程列表中的正式标题优先于 resume 返回的临时 session 标题。
+      expect(headerTitleText(tester), 'Retryable thread');
       expect(provider.sentMessages, <String>['second try']);
     },
   );
@@ -705,6 +711,41 @@ void main() {
       );
     },
   );
+
+  testWidgets('composer hides image and policy controls for Grok', (
+    tester,
+  ) async {
+    final provider = FakeAgentProvider();
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        directoryPicker: () async => null,
+        sessionLoader: () async => null,
+        sessionSaver: (_) async {},
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(
+          const AgentProviderSettings(
+            providers: <AgentProviderConfig>[AgentProviderConfig.defaultGrok],
+            activeProviderId: grokAgentProviderId,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('agent-attach-image-button')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('agent-permission-policy-selector')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('agent-mention-file-button')),
+      findsOneWidget,
+    );
+  });
 
   testWidgets(
     'renders file edits in a separate file edit group with file-level details',
@@ -1560,7 +1601,9 @@ void main() {
     );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-    await tester.pumpAndSettle();
+    // 用例故意保持 turn 运行，spinner 不会 settle。
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.byKey(const ValueKey('agent-pane-host')), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-header-token')), findsOneWidget);
@@ -1808,7 +1851,13 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('agent-send-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Summarize the current work'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('agent-message-list')),
+        matching: find.text('Summarize the current work'),
+      ),
+      findsOneWidget,
+    );
     expect(
       find.textContaining('Fake response from provider', findRichText: true),
       findsOneWidget,
@@ -1876,7 +1925,7 @@ void main() {
     await tester.pump();
 
     await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-    await tester.pumpAndSettle();
+    await pumpLiveAgentUi(tester);
 
     final listFinder = find.byKey(const ValueKey('agent-message-list'));
     final controller = tester
@@ -1885,7 +1934,7 @@ void main() {
     expect(controller.position.maxScrollExtent, greaterThan(400));
 
     controller.jumpTo(0);
-    await tester.pumpAndSettle();
+    await pumpLiveAgentUi(tester);
     expect(controller.offset, 0);
 
     provider.emit(
@@ -1926,7 +1975,7 @@ void main() {
     );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-    await tester.pumpAndSettle();
+    await pumpLiveAgentUi(tester);
 
     provider.emit(
       const AgentToolCallEvent(
@@ -1939,7 +1988,7 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await pumpLiveAgentUi(tester);
 
     expect(find.text('1 次执行'), findsOneWidget);
     expect(find.text('Run tests'), findsNothing);
@@ -1955,7 +2004,7 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await pumpLiveAgentUi(tester);
 
     expect(find.text('1 次执行 · 1 次搜索'), findsOneWidget);
     expect(
@@ -1974,7 +2023,7 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await pumpLiveAgentUi(tester);
 
     expect(find.text('Run tests'), findsOneWidget);
     expect(find.text('Tool search'), findsOneWidget);
@@ -2006,7 +2055,7 @@ void main() {
     );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-    await tester.pumpAndSettle();
+    await pumpLiveAgentUi(tester);
 
     provider.emit(
       const AgentToolCallEvent(
@@ -2019,7 +2068,7 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await pumpLiveAgentUi(tester);
 
     expect(find.text('2 个文件', findRichText: true), findsOneWidget);
 
@@ -2038,7 +2087,7 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await pumpLiveAgentUi(tester);
 
     expect(find.text('2 个文件 · +2 / -1', findRichText: true), findsOneWidget);
     expect(
@@ -2060,7 +2109,7 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await pumpLiveAgentUi(tester);
 
     expect(find.text('1 次执行'), findsOneWidget);
 
@@ -2071,7 +2120,7 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await pumpLiveAgentUi(tester);
 
     expect(find.text('main.dart'), findsOneWidget);
     expect(find.text('README.md'), findsOneWidget);
@@ -2085,7 +2134,7 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await pumpLiveAgentUi(tester);
 
     expect(
       find.byKey(
@@ -2441,7 +2490,7 @@ void main() {
     );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-    await tester.pumpAndSettle();
+    await pumpLiveAgentUi(tester);
 
     expect(find.byKey(const ValueKey('agent-cancel-button')), findsOneWidget);
 
@@ -2477,4 +2526,10 @@ void main() {
 
     expect(find.textContaining('codex missing'), findsWidgets);
   });
+}
+
+/// 运行中 turn 会持续播放 spinner；只推进足够渲染状态的有限帧。
+Future<void> pumpLiveAgentUi(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
 }

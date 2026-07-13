@@ -111,7 +111,7 @@ class AgentPermissionDecision {
   /// 可选的人类说明，预留给支持文本反馈的 provider。
   final String? message;
 
-  /// `requestUserInput` 的结构化答案：questionId → 选中标签或自由文本。
+  /// 用户提问的结构化答案：questionId → 稳定选项 id 或自由文本。
   final Map<String, List<String>> answers;
 
   /// 命令执行审批的显式决策变体；为 null 时回退到 [approved]/[cancelTurn]。

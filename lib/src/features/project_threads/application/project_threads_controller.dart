@@ -263,11 +263,6 @@ class ProjectThreadsController {
     if (trimmed.isEmpty) {
       return;
     }
-    viewModel.updateThreadTitle(
-      projectPath: projectPath,
-      threadId: threadId,
-      title: trimmed,
-    );
     final provider = await _providerForThread(
       projectPath: projectPath,
       threadId: threadId,
@@ -275,6 +270,16 @@ class ProjectThreadsController {
     if (provider == null) {
       return;
     }
+    _requireCapability(
+      provider: provider,
+      supported: provider.capabilities.canRenameThread,
+      operation: 'rename threads',
+    );
+    viewModel.updateThreadTitle(
+      projectPath: projectPath,
+      threadId: threadId,
+      title: trimmed,
+    );
     await provider.renameThread(threadId: threadId, name: trimmed);
   }
 
@@ -290,6 +295,11 @@ class ProjectThreadsController {
     if (provider == null) {
       return;
     }
+    _requireCapability(
+      provider: provider,
+      supported: provider.capabilities.canArchiveThread,
+      operation: 'archive threads',
+    );
     await provider.archiveThread(threadId);
     _removeThreadFromList(
       projectPath: projectPath,
@@ -310,6 +320,11 @@ class ProjectThreadsController {
     if (provider == null) {
       return;
     }
+    _requireCapability(
+      provider: provider,
+      supported: provider.capabilities.canUnarchiveThread,
+      operation: 'unarchive threads',
+    );
     await provider.unarchiveThread(threadId);
     _removeThreadFromList(
       projectPath: projectPath,
@@ -330,6 +345,11 @@ class ProjectThreadsController {
     if (provider == null) {
       return;
     }
+    _requireCapability(
+      provider: provider,
+      supported: provider.capabilities.canDeleteThread,
+      operation: 'delete threads',
+    );
     await provider.deleteThread(threadId);
     _removeThreadFromList(
       projectPath: projectPath,
@@ -350,6 +370,11 @@ class ProjectThreadsController {
     if (provider == null) {
       return null;
     }
+    _requireCapability(
+      provider: provider,
+      supported: provider.capabilities.canForkThread,
+      operation: 'fork threads',
+    );
     final session = await provider.forkThread(
       threadId: threadId,
       context: AgentContext(projectPath: projectPath),
@@ -505,6 +530,12 @@ class ProjectThreadsController {
 
     await Future.wait(
       enabled.map((config) async {
+        final staticCapabilities = providerController.capabilitiesForProviderId(
+          config.id,
+        );
+        if (!staticCapabilities.canListThreads) {
+          return;
+        }
         AgentProvider? opened;
         var shouldDispose = false;
         try {
@@ -595,6 +626,18 @@ class ProjectThreadsController {
       }
     }
     return collected;
+  }
+
+  void _requireCapability({
+    required AgentProvider provider,
+    required bool supported,
+    required String operation,
+  }) {
+    if (!supported) {
+      throw UnsupportedError(
+        '${provider.config.displayName} does not support $operation',
+      );
+    }
   }
 
   /// 解析聚合游标；非法或空时从 0 开始。

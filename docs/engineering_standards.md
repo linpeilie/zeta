@@ -87,11 +87,18 @@ main -> app -> presentation/application -> domain
 `AgentProvider` 是 UI 与具体 Agent 实现之间的稳定边界。
 
 - UI 只消费 `AgentEvent`、`AgentThreadSummary`、`AgentPermissionRequest`、`AgentToolCall` 等中立模型。
+- 每个 provider 必须通过不可变 `AgentProviderCapabilities` 声明真实能力；presentation
+  隐藏不支持入口，application 和 data 层执行前仍要校验。禁止以静默 no-op 或语义不等价
+  的降级伪造 thread/turn 能力。
+- 启动时机由 `AgentProviderBootstrapPolicy` 描述；需要项目目录的 provider 不得在获得
+  workspace 前启动，也不得参与 eager model preload。
 - Codex app-server 的 JSON-RPC、通知、审批 payload 和历史 JSONL 解析必须留在 agent data 层。
 - 新 provider 应先评估 `AgentProvider` 接口，不足时扩展领域接口，再在 data 层实现具体协议。
 - 非所有 provider 都具备的账号能力使用可选接口（例如
   `AgentUsageQuotaProvider`），不要扩大 `AgentProvider` 的必选实现面。
 - mapper 文件负责字段兼容、默认值和协议名称转换；不要在 widget 中写散落的 JSON key。
+- 标准 ACP 的 session update、content block 和 permission option 优先复用公共 mapper；
+  厂商扩展保留在对应 adapter，不得污染 presentation。
 - 默认审批策略保持保守，不自动授权命令执行或文件写入。
 - Codex app-server 协议以 `third_party/codex_app_server_schema` 的 pinned
   快照为准；升级 CLI 时先用 `tool/gen_codex_schema.*` 导出并 diff，再改

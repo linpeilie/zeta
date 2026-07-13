@@ -16,10 +16,7 @@ class _AgentHeader extends StatelessWidget {
     final tokenTooltip = _tokenUsageTooltip(tokenUsage);
     final threadOpenStatusText = _threadOpenStatusText(viewModel);
     final offerCompact = viewModel.shouldOfferContextCompact;
-    final canFork =
-        viewModel.sessionId != null &&
-        viewModel.canSubmitMessage &&
-        !viewModel.isTurnRunning;
+    final canFork = viewModel.canForkCurrentThread;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
@@ -216,7 +213,8 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
     setState(() {
       _menuOpen = true;
     });
-    final canRename = widget.viewModel.sessionId != null;
+    final canRename = widget.viewModel.canRenameCurrentThread;
+    final canArchive = widget.viewModel.canArchiveCurrentThread;
     final entry = showIdePopover<void>(
       context: context,
       alignment: Alignment.topRight,
@@ -228,21 +226,24 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
           constraints: const BoxConstraints(minWidth: 100, maxWidth: 120),
           child: IdeContextMenu(
             actions: [
-              IdeContextMenuAction(
-                key: const ValueKey('agent-header-menu-rename'),
-                label: '重命名',
-                leadingIcon: Icons.drive_file_rename_outline_rounded,
-                enabled: canRename,
-                onPressed: () {
-                  unawaited(_showRenameDialog());
-                },
-              ),
-              IdeContextMenuAction(
-                key: const ValueKey('agent-header-menu-archive'),
-                label: '归档',
-                leadingIcon: Icons.archive_outlined,
-                onPressed: () {},
-              ),
+              if (canRename)
+                IdeContextMenuAction(
+                  key: const ValueKey('agent-header-menu-rename'),
+                  label: '重命名',
+                  leadingIcon: Icons.drive_file_rename_outline_rounded,
+                  onPressed: () {
+                    unawaited(_showRenameDialog());
+                  },
+                ),
+              if (canArchive)
+                IdeContextMenuAction(
+                  key: const ValueKey('agent-header-menu-archive'),
+                  label: '归档',
+                  leadingIcon: Icons.archive_outlined,
+                  onPressed: () {
+                    unawaited(widget.viewModel.archiveCurrentThread());
+                  },
+                ),
               IdeContextMenuAction(
                 key: const ValueKey('agent-header-menu-context'),
                 label: '上下文',

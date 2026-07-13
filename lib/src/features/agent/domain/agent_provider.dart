@@ -8,6 +8,9 @@ abstract class AgentProvider {
   /// 当前 provider 的启动和显示配置。
   AgentProviderConfig get config;
 
+  /// 当前 provider 的可用能力；握手后允许返回更精确的协商结果。
+  AgentProviderCapabilities get capabilities;
+
   /// provider 推送给 UI 的状态、消息、工具调用和审批事件。
   Stream<AgentEvent> get events;
 

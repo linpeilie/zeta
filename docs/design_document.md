@@ -128,16 +128,22 @@ UsageStatisticsController
 
 `AgentProvider` 是 UI 与具体 Agent CLI 之间的稳定接口，负责：
 
-- 初始化 provider（含 capabilities / 通知 opt-out）。
+- 通过 `AgentProviderCapabilities` 声明 session、history、turn、thread、input、
+  interaction、config、telemetry 和 bootstrap 能力。
+- 初始化 provider（含握手后的 capability 收敛 / 通知 opt-out）。
 - 创建和恢复 session；切换会话时 best-effort `unsubscribeThread`。
 - 列出项目 threads、读取 thread 历史。
 - 发送、追加和取消 turn（`sendMessage` / `steerTurn` 支持多输入项）。
 - 响应权限请求；他端已解决的审批通过事件撤销本地卡片。
 - 推送状态、消息、推理/计划流、工具调用、回合 diff、审批与系统提示事件。
 
+capability 采用保守声明：不支持的操作不进入 Project thread 菜单、Agent header 或
+composer，应用层误调用时抛出 `UnsupportedError`。`AgentProviderBootstrapPolicy`
+额外约束 provider 是否必须在 workspace 下启动、是否允许 eager model preload。
+
 ### 默认 provider
 
-当前默认 provider 为 Codex CLI：
+当前内置 provider 为 Codex CLI 与 Grok ACP；默认 active provider 仍为 Codex CLI：
 
 ```text
 codex app-server
@@ -145,6 +151,12 @@ codex app-server
 
 Codex provider 通过 JSON-RPC stdio 通信，把 `thread/*`、`turn/*` 和 `item/*`
 事件转换为领域层 `AgentEvent`。UI 不直接处理 Codex 原始协议。
+
+Grok provider 使用 ACP stdio、本地历史和 xAI 扩展。标准 ACP
+`session/update`、permission 和 content block 已分别下沉到
+`AcpSessionUpdateMapper`、`AcpPermissionMapper` 与 `AcpContentCodec`；
+`GrokAcpNotificationMapper` 只保留厂商扩展适配。session config option 与带稳定 id、
+可多选的用户问答选项使用中立领域模型，供后续 ACP provider 共用。
 
 ### 管理适配
 

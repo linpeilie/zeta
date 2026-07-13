@@ -37,6 +37,35 @@ void main() {
     });
 
     test(
+      'fails explicitly for unsupported thread lifecycle operations',
+      () async {
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: _FakeJsonRpcPeer(),
+        );
+        addTearDown(provider.dispose);
+
+        await expectLater(
+          provider.renameThread(threadId: 'session-1', name: 'New name'),
+          throwsA(isA<UnsupportedError>()),
+        );
+        await expectLater(
+          provider.archiveThread('session-1'),
+          throwsA(isA<UnsupportedError>()),
+        );
+        await expectLater(
+          provider.forkThread(
+            threadId: 'session-1',
+            context: const AgentContext(projectPath: '/repo'),
+          ),
+          throwsA(isA<UnsupportedError>()),
+        );
+        expect(provider.capabilities.canRenameThread, isFalse);
+        expect(provider.capabilities.canForkThread, isFalse);
+      },
+    );
+
+    test(
       'polls summary.json after turn complete and emits name updated',
       () async {
         final tempRoot = await Directory.systemTemp.createTemp(

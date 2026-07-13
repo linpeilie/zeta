@@ -213,7 +213,7 @@ void main() {
 
         await tester.pumpWidget(_TestApp(viewModel: viewModel));
         await viewModel.sendMessage('Stream markdown');
-        await tester.pumpAndSettle();
+        await _pumpLiveAgentUi(tester);
 
         provider.emitEvent(
           const AgentMessageDeltaEvent(
@@ -226,7 +226,7 @@ void main() {
             turnId: 'turn-1',
           ),
         );
-        await tester.pumpAndSettle();
+        await _pumpLiveAgentUi(tester);
 
         final liveSectionFinder = find.byKey(
           const ValueKey<String>('agent-live-turn-section'),
@@ -260,7 +260,7 @@ void main() {
             turnId: 'turn-1',
           ),
         );
-        await tester.pumpAndSettle();
+        await _pumpLiveAgentUi(tester);
 
         final updatedMarkdownWidget = _markdownWidgetUnder(
           tester,
@@ -284,7 +284,7 @@ void main() {
             turnId: 'turn-1',
           ),
         );
-        await tester.pumpAndSettle();
+        await _pumpLiveAgentUi(tester);
 
         final completedMarkdownWidget = _markdownWidgetUnder(
           tester,
@@ -303,6 +303,15 @@ void main() {
           find.textContaining('answer', findRichText: true),
           findsOneWidget,
         );
+
+        // 收尾 turn，避免 elapsed ticker 在测试销毁后仍保留周期定时器。
+        provider.emitEvent(
+          const AgentTurnCompletedEvent(
+            sessionId: 'session-1',
+            turnId: 'turn-1',
+          ),
+        );
+        await tester.pump();
       },
     );
 
@@ -457,7 +466,7 @@ void main() {
       await viewModel.switchThread(
         _thread(id: 'thread-fonts', title: 'Font thread'),
       );
-      await tester.pumpAndSettle();
+      await _pumpLiveAgentUi(tester);
 
       final markdownParagraphFinder = find.textContaining(
         'Paragraph text for font check.',
@@ -493,7 +502,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpLiveAgentUi(tester);
 
       final permissionCommandFinder = find.text('tool output line');
       expect(permissionCommandFinder, findsOneWidget);
@@ -508,6 +517,14 @@ void main() {
         tester.widget<Text>(historyEventContentFinder).style?.fontFamily,
         'CodeFont',
       );
+
+      provider.emitEvent(
+        const AgentTurnCompletedEvent(
+          sessionId: 'thread-fonts',
+          turnId: 'turn-fonts-1',
+        ),
+      );
+      await tester.pump();
     });
 
     testWidgets('model selector opens options and updates selection', (
@@ -569,6 +586,60 @@ void main() {
         find.byKey(const ValueKey('agent-model-option-gpt-5.4-mini')),
         findsNothing,
       );
+    });
+
+    testWidgets('user input supports stable option ids and multi-select', (
+      tester,
+    ) async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(provider.dispose);
+      addTearDown(viewModel.dispose);
+      await tester.pumpWidget(_TestApp(viewModel: viewModel));
+      await viewModel.loadModels();
+      await viewModel.switchThread(
+        _thread(id: 'thread-question', title: 'Question thread'),
+      );
+
+      provider.emitEvent(
+        const AgentPermissionRequestedEvent(
+          AgentPermissionRequest(
+            id: 'question-1',
+            title: 'Choose scope',
+            kind: AgentPermissionKind.userInput,
+            sessionId: 'thread-question',
+            questions: <AgentUserInputQaPair>[
+              AgentUserInputQaPair(
+                questionId: 'scope',
+                question: 'Select scopes',
+                allowMultiple: true,
+                optionItems: <AgentUserInputOption>[
+                  AgentUserInputOption(id: 'source', label: 'Source code'),
+                  AgentUserInputOption(id: 'tests', label: 'Tests'),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(
+        find.byKey(const ValueKey('agent-user-input-question-1-scope-source')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('agent-user-input-question-1-scope-tests')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('agent-permission-approve-question-1')),
+      );
+      await tester.pump();
+
+      expect(provider.permissionDecisions, hasLength(1));
+      expect(provider.permissionDecisions.single.answers['scope'], <String>[
+        'source',
+        'tests',
+      ]);
     });
   });
 }
@@ -746,6 +817,8 @@ class _FakeAgentProvider
   final AgentModelList models;
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
+  final List<AgentPermissionDecision> permissionDecisions =
+      <AgentPermissionDecision>[];
 
   void emitEvent(AgentEvent event) {
     _events.add(event);
@@ -850,10 +923,18 @@ class _FakeAgentProvider
   Future<void> cancelTurn(AgentTurn turn) async {}
 
   @override
-  Future<void> respondToPermission(AgentPermissionDecision decision) async {}
+  Future<void> respondToPermission(AgentPermissionDecision decision) async {
+    permissionDecisions.add(decision);
+  }
 
   @override
   Future<void> dispose() async {
     await _events.close();
   }
+}
+
+/// 运行中 turn 的 spinner 不会 settle，只推进流式内容渲染所需的有限帧。
+Future<void> _pumpLiveAgentUi(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
 }

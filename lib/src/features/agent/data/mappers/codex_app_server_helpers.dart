@@ -899,6 +899,7 @@ List<AgentUserInputQaPair> _userInputQaPairs(Map<String, Object?> arguments) {
     final header = _trimmedText(_string(question['header']));
     final text = _trimmedText(_string(question['question'])) ?? header ?? id;
     final options = <String>[];
+    final optionItems = <AgentUserInputOption>[];
     final opts = question['options'];
     if (opts is List<Object?>) {
       for (final optionValue in opts) {
@@ -906,6 +907,17 @@ List<AgentUserInputQaPair> _userInputQaPairs(Map<String, Object?> arguments) {
         final label = _trimmedText(_string(option['label']));
         if (label != null) {
           options.add(label);
+          optionItems.add(
+            AgentUserInputOption(
+              id:
+                  _trimmedText(
+                    _string(option['id']) ?? _string(option['value']),
+                  ) ??
+                  label,
+              label: label,
+              description: _trimmedText(_string(option['description'])),
+            ),
+          );
         }
       }
     }
@@ -918,6 +930,8 @@ List<AgentUserInputQaPair> _userInputQaPairs(Map<String, Object?> arguments) {
         question: text,
         header: header,
         options: List<String>.unmodifiable(options),
+        optionItems: List<AgentUserInputOption>.unmodifiable(optionItems),
+        allowMultiple: question['allowMultiple'] == true,
         isOther: question['isOther'] == true,
         isSecret: question['isSecret'] == true,
       ),
@@ -1056,7 +1070,9 @@ List<AgentUserInputQaPair> _mergeUserInputQaPairsWithAnswers(
         question: pair.question,
         header: pair.header,
         options: pair.options,
+        optionItems: pair.optionItems,
         answers: answers,
+        allowMultiple: pair.allowMultiple,
         isOther: pair.isOther,
         isSecret: pair.isSecret,
       );
@@ -1081,20 +1097,20 @@ bool _sameUserInputQaPairs(
     if (a.questionId != b.questionId ||
         a.question != b.question ||
         a.header != b.header ||
+        a.allowMultiple != b.allowMultiple ||
         a.isOther != b.isOther ||
         a.isSecret != b.isSecret) {
       return false;
     }
-    if (a.options.length != b.options.length ||
+    final aOptions = a.resolvedOptions;
+    final bOptions = b.resolvedOptions;
+    if (aOptions.length != bOptions.length ||
         a.answers.length != b.answers.length) {
       return false;
     }
-    for (
-      var optionIndex = 0;
-      optionIndex < a.options.length;
-      optionIndex += 1
-    ) {
-      if (a.options[optionIndex] != b.options[optionIndex]) {
+    for (var optionIndex = 0; optionIndex < aOptions.length; optionIndex += 1) {
+      if (aOptions[optionIndex].id != bOptions[optionIndex].id ||
+          aOptions[optionIndex].label != bOptions[optionIndex].label) {
         return false;
       }
     }

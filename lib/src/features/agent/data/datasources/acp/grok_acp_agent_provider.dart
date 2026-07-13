@@ -8,6 +8,8 @@ import 'package:zeta/src/features/agent/data/datasources/acp/grok_models_cli.dar
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_process_starter.dart';
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_session_history_reader.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
+import 'package:zeta/src/features/agent/data/mappers/acp_content_codec.dart';
+import 'package:zeta/src/features/agent/data/mappers/acp_permission_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_acp_notification_mapper.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -20,7 +22,7 @@ typedef JsonRpcPeerFactory = JsonRpcPeer Function(AgentProviderConfig config);
 /// Grok CLI ACP stdio provider。
 ///
 /// 启动 `grok agent stdio`，通过标准 ACP JSON-RPC 完成会话、流式回复与审批。
-/// 不支持的 Codex 专有能力（Guardian、permission profile 等）安全 no-op。
+/// 不支持的 Codex 专有能力通过 [capabilities] 关闭，并在误调用时明确失败。
 class GrokAcpAgentProvider implements AgentProvider {
   GrokAcpAgentProvider({
     required this.config,
@@ -143,6 +145,11 @@ class GrokAcpAgentProvider implements AgentProvider {
 
   @override
   Stream<AgentEvent> get events => _events.stream;
+
+  @override
+  AgentProviderCapabilities get capabilities => AgentProviderCapabilities
+      .grokAcp
+      .copyWith(canResumeSession: _loadSessionSupported);
 
   @override
   Future<void> initialize() async {
@@ -490,39 +497,22 @@ class GrokAcpAgentProvider implements AgentProvider {
     required String threadId,
     required String name,
   }) async {
-    _log.fine('Grok ACP renameThread is not supported; no-op ($threadId)');
+    throw UnsupportedError('Grok ACP does not support renaming threads');
   }
 
   @override
   Future<void> archiveThread(String threadId) async {
-    _log.fine('Grok ACP archiveThread is not supported; no-op ($threadId)');
+    throw UnsupportedError('Grok ACP does not support archiving threads');
   }
 
   @override
   Future<void> unarchiveThread(String threadId) async {
-    _log.fine('Grok ACP unarchiveThread is not supported; no-op ($threadId)');
+    throw UnsupportedError('Grok ACP does not support unarchiving threads');
   }
 
   @override
   Future<void> deleteThread(String threadId) async {
-    // 尝试标准/扩展删除；失败则 no-op。
-    try {
-      await _peer.sendRequest(
-        'session/delete',
-        params: <String, Object?>{'sessionId': threadId},
-        timeout: const Duration(seconds: 15),
-      );
-      if (_session?.id == threadId) {
-        _session = null;
-      }
-      _events.add(AgentThreadDeletedEvent(threadId: threadId));
-    } catch (error, stackTrace) {
-      _log.fine(
-        'session/delete unsupported or failed for $threadId',
-        error,
-        stackTrace,
-      );
-    }
+    throw UnsupportedError('Grok ACP does not support deleting threads');
   }
 
   @override
@@ -530,36 +520,7 @@ class GrokAcpAgentProvider implements AgentProvider {
     required String threadId,
     required AgentContext context,
   }) async {
-    try {
-      final result = await _peer.sendRequest(
-        'session/fork',
-        params: <String, Object?>{
-          'sessionId': threadId,
-          if (context.projectPath case final cwd?
-              when cwd.trim().isNotEmpty) ...{
-            'cwd': cwd,
-          },
-          'mcpServers': <Object?>[],
-        },
-        timeout: const Duration(seconds: 60),
-      );
-      final map = _asStringKeyedMap(result) ?? const <String, Object?>{};
-      final newId =
-          map['sessionId']?.toString() ?? map['newSessionId']?.toString();
-      if (newId != null && newId.isNotEmpty) {
-        final session = AgentSession(
-          id: newId,
-          providerId: config.id,
-          raw: map,
-        );
-        _session = session;
-        _events.add(AgentSessionStartedEvent(session));
-        return session;
-      }
-    } catch (error, stackTrace) {
-      _log.fine('session/fork failed; creating new session', error, stackTrace);
-    }
-    return startSession(context: context);
+    throw UnsupportedError('Grok ACP does not support forking threads');
   }
 
   @override
@@ -567,35 +528,12 @@ class GrokAcpAgentProvider implements AgentProvider {
     required String threadId,
     required int numTurns,
   }) async {
-    try {
-      await _peer.sendRequest(
-        'x.ai/rewind',
-        params: <String, Object?>{'sessionId': threadId, 'numTurns': numTurns},
-        timeout: const Duration(seconds: 30),
-      );
-    } catch (error, stackTrace) {
-      _log.fine('x.ai/rewind unsupported', error, stackTrace);
-    }
-    return readThreadHistory(threadId: threadId);
+    throw UnsupportedError('Grok ACP does not support rolling back threads');
   }
 
   @override
   Future<void> compactThread(String threadId) async {
-    // 通过 slash 命令 compact 触发（若 agent 支持 available command）。
-    try {
-      await _peer.sendRequest(
-        'session/prompt',
-        params: <String, Object?>{
-          'sessionId': threadId,
-          'prompt': <Object?>[
-            <String, Object?>{'type': 'text', 'text': '/compact'},
-          ],
-        },
-        timeout: const Duration(minutes: 5),
-      );
-    } catch (error, stackTrace) {
-      _log.fine('compact via /compact failed', error, stackTrace);
-    }
+    throw UnsupportedError('Grok ACP does not support compacting threads');
   }
 
   @override
@@ -611,10 +549,11 @@ class GrokAcpAgentProvider implements AgentProvider {
     if (cwd != null && cwd.isNotEmpty) {
       _rememberProjectPath(session.id, cwd);
     }
-    final prompt = _buildPromptBlocks(
+    final prompt = AcpContentCodec.buildPromptBlocks(
       message: message,
       inputs: inputs,
       context: context,
+      encodeLocalImagesAsPathText: true,
     );
     final turnId = _newTurnId();
     _runningTurnIdsBySessionId[session.id] = turnId;
@@ -708,15 +647,7 @@ class GrokAcpAgentProvider implements AgentProvider {
     List<AgentUserInput>? inputs,
     String? clientUserMessageId,
   }) async {
-    // ACP 无 steer；降级为新的 prompt（可能打断当前回合语义，仅作尽力）。
-    _log.fine('Grok ACP steerTurn falls back to session/prompt');
-    await sendMessage(
-      session: session,
-      context: context,
-      message: message,
-      inputs: inputs,
-      clientUserMessageId: clientUserMessageId,
-    );
+    throw UnsupportedError('Grok ACP does not support steering active turns');
   }
 
   @override
@@ -749,9 +680,9 @@ class GrokAcpAgentProvider implements AgentProvider {
       return;
     }
 
-    final optionId = decision.approved
-        ? pending.preferAllowOptionId()
-        : pending.preferRejectOptionId();
+    final optionId = pending.mapping.preferredOptionId(
+      approved: decision.approved,
+    );
     if (optionId == null) {
       await _respondPermissionCancelled(pending);
       return;
@@ -1064,53 +995,30 @@ class GrokAcpAgentProvider implements AgentProvider {
   Future<void> _handlePermissionRequest(JsonRpcRequest request) async {
     final params = request.params;
     final sessionId = params['sessionId']?.toString();
-    final options = <_AcpPermissionOption>[];
-    final rawOptions = params['options'];
-    if (rawOptions is List) {
-      for (final item in rawOptions) {
-        if (item is! Map) {
-          continue;
-        }
-        final map = item.map(
-          (key, value) => MapEntry(key.toString(), value as Object?),
-        );
-        final optionId = map['optionId']?.toString();
-        if (optionId == null || optionId.isEmpty) {
-          continue;
-        }
-        options.add(
-          _AcpPermissionOption(
-            optionId: optionId,
-            name: map['name']?.toString() ?? optionId,
-            kind: map['kind']?.toString() ?? '',
-          ),
-        );
-      }
-    }
-
-    final requestKey = request.id.toString();
-    final toolCall = params['toolCall'];
-    String title = 'Approve tool execution';
-    String? description;
-    if (toolCall is Map) {
-      title = toolCall['title']?.toString() ?? title;
-      description = toolCall['kind']?.toString();
-    }
+    final mapping = AcpPermissionMapper.mapRequest(
+      requestId: request.id,
+      params: params,
+      runningTurnId: sessionId == null
+          ? null
+          : _runningTurnIdsBySessionId[sessionId],
+    );
+    final requestKey = mapping.request.id;
+    final title = mapping.request.title;
 
     final pending = _PendingAcpPermission(
       requestId: request.id,
       requestKey: requestKey,
-      options: options,
+      mapping: mapping,
     );
     _pendingPermissions[requestKey] = pending;
 
     _log.info(
       'Grok permission requested: $title '
-      '(options: ${options.map((o) => o.optionId).join(', ')})',
+      '(options: ${mapping.options.map((o) => o.id).join(', ')})',
     );
 
     // 无选项时无法交互批准，立即 cancelled，避免 prompt 永久挂起。
-    if (options.isEmpty) {
+    if (mapping.options.isEmpty) {
       _log.warning(
         'Grok permission $requestKey has no options; cancelling to unblock',
       );
@@ -1118,21 +1026,7 @@ class GrokAcpAgentProvider implements AgentProvider {
       return;
     }
 
-    _events.add(
-      AgentPermissionRequestedEvent(
-        AgentPermissionRequest(
-          id: requestKey,
-          title: title,
-          kind: AgentPermissionKind.other,
-          description: description,
-          sessionId: sessionId,
-          turnId: sessionId == null
-              ? null
-              : _runningTurnIdsBySessionId[sessionId],
-          raw: params,
-        ),
-      ),
-    );
+    _events.add(AgentPermissionRequestedEvent(mapping.request));
 
     // 更新状态文案，避免 UI 看起来像「无响应卡住」。
     _emitStatus(
@@ -1266,53 +1160,6 @@ class GrokAcpAgentProvider implements AgentProvider {
     }
   }
 
-  List<Map<String, Object?>> _buildPromptBlocks({
-    String? message,
-    List<AgentUserInput>? inputs,
-    required AgentContext context,
-  }) {
-    final blocks = <Map<String, Object?>>[];
-    final resolved = <AgentUserInput>[
-      if (inputs != null && inputs.isNotEmpty)
-        ...inputs
-      else if ((message?.trim().isNotEmpty ?? false))
-        AgentUserInput.text(message!.trim()),
-    ];
-    if (resolved.isEmpty) {
-      throw ArgumentError('sendMessage requires message or inputs');
-    }
-
-    for (final input in resolved) {
-      switch (input) {
-        case AgentTextUserInput(:final text):
-          blocks.add(<String, Object?>{'type': 'text', 'text': text});
-        case AgentLocalImageUserInput(:final path):
-          // 当前 Grok promptCapabilities.image=false；附带路径提示。
-          blocks.add(<String, Object?>{
-            'type': 'text',
-            'text': '[local image: $path]',
-          });
-        case AgentMentionUserInput(:final name, :final path):
-          blocks.add(<String, Object?>{
-            'type': 'resource_link',
-            'uri': path.startsWith('file:') ? path : 'file:///$path',
-            'name': name,
-          });
-      }
-    }
-
-    // 附加当前文件上下文（embeddedContext 能力为 true）。
-    final filePath = context.filePath?.trim();
-    if (filePath != null && filePath.isNotEmpty) {
-      blocks.add(<String, Object?>{
-        'type': 'resource_link',
-        'uri': filePath.startsWith('file:') ? filePath : 'file:///$filePath',
-        'name': filePath.split(RegExp(r'[\\/]')).last,
-      });
-    }
-    return blocks;
-  }
-
   AgentHistoryTurnStatus _stopReasonToStatus(String stopReason) {
     final normalized = stopReason.toLowerCase();
     if (normalized.contains('cancel')) {
@@ -1361,45 +1208,10 @@ class _PendingAcpPermission {
   _PendingAcpPermission({
     required this.requestId,
     required this.requestKey,
-    required this.options,
+    required this.mapping,
   });
 
   final Object requestId;
   final String requestKey;
-  final List<_AcpPermissionOption> options;
-
-  String? preferAllowOptionId() {
-    for (final option in options) {
-      if (option.kind.contains('allow_once') || option.kind == 'allow_once') {
-        return option.optionId;
-      }
-    }
-    for (final option in options) {
-      if (option.kind.contains('allow')) {
-        return option.optionId;
-      }
-    }
-    return options.isEmpty ? null : options.first.optionId;
-  }
-
-  String? preferRejectOptionId() {
-    for (final option in options) {
-      if (option.kind.contains('reject')) {
-        return option.optionId;
-      }
-    }
-    return options.isEmpty ? null : options.last.optionId;
-  }
-}
-
-class _AcpPermissionOption {
-  const _AcpPermissionOption({
-    required this.optionId,
-    required this.name,
-    required this.kind,
-  });
-
-  final String optionId;
-  final String name;
-  final String kind;
+  final AcpPermissionMapping mapping;
 }

@@ -28,6 +28,9 @@ typedef ProjectThreadAction =
 
 typedef ProjectNewThread = void Function(String projectPath, String providerId);
 
+typedef AgentProviderCapabilitiesResolver =
+    AgentProviderCapabilities Function(String providerId);
+
 class ProjectListPane extends StatelessWidget {
   const ProjectListPane({
     required this.projects,
@@ -39,6 +42,7 @@ class ProjectListPane extends StatelessWidget {
     required this.onLoadMoreThreads,
     required this.onRetryThreads,
     required this.loadAvailableProviders,
+    required this.capabilitiesForProvider,
     required this.onNewThread,
     required this.onOpenProjectLocation,
     required this.onRemoveProject,
@@ -59,6 +63,7 @@ class ProjectListPane extends StatelessWidget {
   final ValueChanged<String> onLoadMoreThreads;
   final ValueChanged<String> onRetryThreads;
   final Future<List<AgentProviderConfig>> Function() loadAvailableProviders;
+  final AgentProviderCapabilitiesResolver capabilitiesForProvider;
   final ProjectNewThread onNewThread;
   final ValueChanged<String> onOpenProjectLocation;
   final ValueChanged<String> onRemoveProject;
@@ -98,6 +103,7 @@ class ProjectListPane extends StatelessWidget {
                   onLoadMoreThreads: () => onLoadMoreThreads(path),
                   onRetryThreads: () => onRetryThreads(path),
                   loadAvailableProviders: loadAvailableProviders,
+                  capabilitiesForProvider: capabilitiesForProvider,
                   onNewThread: (providerId) => onNewThread(path, providerId),
                   onOpenProjectLocation: () => onOpenProjectLocation(path),
                   onRemoveProject: () => onRemoveProject(path),
@@ -376,6 +382,7 @@ class _ProjectTile extends StatefulWidget {
     required this.onLoadMoreThreads,
     required this.onRetryThreads,
     required this.loadAvailableProviders,
+    required this.capabilitiesForProvider,
     required this.onNewThread,
     required this.onOpenProjectLocation,
     required this.onRemoveProject,
@@ -394,6 +401,7 @@ class _ProjectTile extends StatefulWidget {
   final VoidCallback onLoadMoreThreads;
   final VoidCallback onRetryThreads;
   final Future<List<AgentProviderConfig>> Function() loadAvailableProviders;
+  final AgentProviderCapabilitiesResolver capabilitiesForProvider;
   final ValueChanged<String> onNewThread;
   final VoidCallback onOpenProjectLocation;
   final VoidCallback onRemoveProject;
@@ -738,6 +746,7 @@ class _ProjectTileState extends State<_ProjectTile> {
               onSelectThread: widget.onSelectThread,
               onLoadMoreThreads: widget.onLoadMoreThreads,
               onRetryThreads: widget.onRetryThreads,
+              capabilitiesForProvider: widget.capabilitiesForProvider,
               onRenameThread: widget.onRenameThread,
               onArchiveThread: widget.onArchiveThread,
               onUnarchiveThread: widget.onUnarchiveThread,
@@ -757,6 +766,7 @@ class _ProjectThreadList extends StatelessWidget {
     required this.onSelectThread,
     required this.onLoadMoreThreads,
     required this.onRetryThreads,
+    required this.capabilitiesForProvider,
     required this.onRenameThread,
     required this.onArchiveThread,
     required this.onUnarchiveThread,
@@ -769,6 +779,7 @@ class _ProjectThreadList extends StatelessWidget {
   final ProjectThreadSelected onSelectThread;
   final VoidCallback onLoadMoreThreads;
   final VoidCallback onRetryThreads;
+  final AgentProviderCapabilitiesResolver capabilitiesForProvider;
   final void Function(String threadId, String name) onRenameThread;
   final ValueChanged<AgentThreadSummary> onArchiveThread;
   final ValueChanged<AgentThreadSummary> onUnarchiveThread;
@@ -788,6 +799,7 @@ class _ProjectThreadList extends StatelessWidget {
               : thread,
           selected: thread.id == state.selectedThreadId,
           archivedView: state.archived,
+          capabilities: capabilitiesForProvider(thread.providerId),
           onTap: () => onSelectThread(projectPath, thread),
           onRenameThread: onRenameThread,
           onArchiveThread: onArchiveThread,
@@ -825,6 +837,7 @@ class _ThreadTile extends StatefulWidget {
     required this.thread,
     required this.selected,
     required this.archivedView,
+    required this.capabilities,
     required this.onTap,
     required this.onRenameThread,
     required this.onArchiveThread,
@@ -837,6 +850,7 @@ class _ThreadTile extends StatefulWidget {
   final AgentThreadSummary thread;
   final bool selected;
   final bool archivedView;
+  final AgentProviderCapabilities capabilities;
   final VoidCallback onTap;
   final void Function(String threadId, String name) onRenameThread;
   final ValueChanged<AgentThreadSummary> onArchiveThread;
@@ -858,6 +872,16 @@ class _ThreadTileState extends State<_ThreadTile> {
   bool _menuOpen = false;
 
   bool get _showActions => _hovered || _focused || _menuOpen;
+
+  bool get _hasMenuActions {
+    final capabilities = widget.capabilities;
+    return capabilities.canRenameThread ||
+        (widget.archivedView
+            ? capabilities.canUnarchiveThread
+            : capabilities.canArchiveThread) ||
+        capabilities.canForkThread ||
+        capabilities.canDeleteThread;
+  }
 
   @override
   void dispose() {
@@ -893,15 +917,16 @@ class _ThreadTileState extends State<_ThreadTile> {
           constraints: const BoxConstraints(minWidth: 80, maxWidth: 120),
           child: IdeContextMenu(
             actions: [
-              IdeContextMenuAction(
-                key: ValueKey<String>(
-                  'project-thread-rename-${widget.projectPath}-${thread.id}',
+              if (widget.capabilities.canRenameThread)
+                IdeContextMenuAction(
+                  key: ValueKey<String>(
+                    'project-thread-rename-${widget.projectPath}-${thread.id}',
+                  ),
+                  label: '重命名',
+                  onPressed: () =>
+                      _handleMenuAction(_ThreadTileMenuAction.rename),
                 ),
-                label: '重命名',
-                onPressed: () =>
-                    _handleMenuAction(_ThreadTileMenuAction.rename),
-              ),
-              if (widget.archivedView)
+              if (widget.archivedView && widget.capabilities.canUnarchiveThread)
                 IdeContextMenuAction(
                   key: ValueKey<String>(
                     'project-thread-unarchive-${widget.projectPath}-${thread.id}',
@@ -910,7 +935,8 @@ class _ThreadTileState extends State<_ThreadTile> {
                   onPressed: () =>
                       _handleMenuAction(_ThreadTileMenuAction.unarchive),
                 )
-              else
+              else if (!widget.archivedView &&
+                  widget.capabilities.canArchiveThread)
                 IdeContextMenuAction(
                   key: ValueKey<String>(
                     'project-thread-archive-${widget.projectPath}-${thread.id}',
@@ -919,23 +945,26 @@ class _ThreadTileState extends State<_ThreadTile> {
                   onPressed: () =>
                       _handleMenuAction(_ThreadTileMenuAction.archive),
                 ),
-              IdeContextMenuAction(
-                key: ValueKey<String>(
-                  'project-thread-fork-${widget.projectPath}-${thread.id}',
+              if (widget.capabilities.canForkThread)
+                IdeContextMenuAction(
+                  key: ValueKey<String>(
+                    'project-thread-fork-${widget.projectPath}-${thread.id}',
+                  ),
+                  label: '分叉',
+                  onPressed: () =>
+                      _handleMenuAction(_ThreadTileMenuAction.fork),
                 ),
-                label: '分叉',
-                onPressed: () => _handleMenuAction(_ThreadTileMenuAction.fork),
-              ),
-              IdeContextMenuAction(
-                key: ValueKey<String>(
-                  'project-thread-delete-${widget.projectPath}-${thread.id}',
+              if (widget.capabilities.canDeleteThread)
+                IdeContextMenuAction(
+                  key: ValueKey<String>(
+                    'project-thread-delete-${widget.projectPath}-${thread.id}',
+                  ),
+                  label: '删除',
+                  destructive: true,
+                  dividerAbove: true,
+                  onPressed: () =>
+                      _handleMenuAction(_ThreadTileMenuAction.delete),
                 ),
-                label: '删除',
-                destructive: true,
-                dividerAbove: true,
-                onPressed: () =>
-                    _handleMenuAction(_ThreadTileMenuAction.delete),
-              ),
             ],
           ),
         );
@@ -1170,7 +1199,7 @@ class _ThreadTileState extends State<_ThreadTile> {
                   duration: IdeMotion.durationNormal,
                   curve: IdeMotion.curveDefault,
                   alignment: Alignment.centerRight,
-                  child: _showActions
+                  child: _showActions && _hasMenuActions
                       ? SizedBox(
                           key: ValueKey<String>(
                             'project-thread-actions-${widget.projectPath}-${thread.id}',

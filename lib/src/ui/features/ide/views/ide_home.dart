@@ -527,6 +527,8 @@ class _IdeHomeState extends State<IdeHome> {
           unawaited(_shellController.retryThreads(projectPath));
         },
         loadAvailableProviders: _loadAvailableAgentProviders,
+        capabilitiesForProvider:
+            _shellController.agentProviderController.capabilitiesForProviderId,
         onNewThread: (projectPath, providerId) {
           unawaited(
             _shellController.startNewThreadForProject(

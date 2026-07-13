@@ -451,7 +451,7 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
   void initState() {
     super.initState();
     for (final question in request.questions) {
-      if (question.isOther || question.options.isEmpty) {
+      if (question.isOther || question.resolvedOptions.isEmpty) {
         _otherControllers[question.questionId] = TextEditingController();
       }
     }
@@ -693,21 +693,21 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
             ),
           ),
         Text(question.question, style: _agentItemTextStyle(context)),
-        if (question.options.isNotEmpty) ...[
+        if (question.resolvedOptions.isNotEmpty) ...[
           const SizedBox(height: IdeSpacing.space6),
           Wrap(
             spacing: IdeSpacing.space6,
             runSpacing: IdeSpacing.space4,
             children: [
-              for (final option in question.options)
+              for (final option in question.resolvedOptions)
                 IdeChip(
                   key: ValueKey(
-                    'agent-user-input-${request.id}-${question.questionId}-$option',
+                    'agent-user-input-${request.id}-${question.questionId}-${option.id}',
                   ),
-                  label: option,
-                  selected: selected.contains(option),
+                  label: option.label,
+                  selected: selected.contains(option.id),
                   trailingIcon: null,
-                  onPressed: () => _toggleOption(question.questionId, option),
+                  onPressed: () => _toggleOption(question, option.id),
                 ),
             ],
           ),
@@ -731,19 +731,20 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
     );
   }
 
-  void _toggleOption(String questionId, String option) {
+  void _toggleOption(AgentUserInputQaPair question, String optionId) {
+    final questionId = question.questionId;
     setState(() {
       final current = List<String>.from(
         _answers[questionId] ?? const <String>[],
       );
-      // 单选：有选项时点选替换；再次点击取消。
-      if (current.contains(option)) {
-        current.remove(option);
+      if (current.contains(optionId)) {
+        current.remove(optionId);
       } else {
-        current
-          ..clear()
-          ..add(option);
-        _otherControllers[questionId]?.clear();
+        if (!question.allowMultiple) {
+          current.clear();
+          _otherControllers[questionId]?.clear();
+        }
+        current.add(optionId);
       }
       if (current.isEmpty) {
         _answers.remove(questionId);
