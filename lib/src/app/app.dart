@@ -31,6 +31,7 @@ class MainApp extends StatefulWidget {
     this.sessionSaver,
     this.agentProviderFactory,
     this.agentProviderConfigStore,
+    this.agentProviderAvailabilityLoader,
     this.projectLocationOpener,
     this.appearanceController,
   });
@@ -41,6 +42,7 @@ class MainApp extends StatefulWidget {
   final Future<void> Function(String value)? sessionSaver;
   final AgentProviderFactory? agentProviderFactory;
   final AgentProviderConfigStore? agentProviderConfigStore;
+  final AgentProviderAvailabilityLoader? agentProviderAvailabilityLoader;
   final ProjectLocationOpener? projectLocationOpener;
 
   /// 全局外观控制器。测试可注入内存版本以避免触碰 shared_preferences；
@@ -132,6 +134,8 @@ class MainAppState extends State<MainApp> {
               agentProviderConfigStore:
                   widget.agentProviderConfigStore ??
                   _createAgentProviderConfigStore(),
+              agentProviderAvailabilityLoader:
+                  widget.agentProviderAvailabilityLoader,
               projectLocationOpener:
                   widget.projectLocationOpener ?? openPathInSystemFileManager,
               appearanceController: _appearanceController,

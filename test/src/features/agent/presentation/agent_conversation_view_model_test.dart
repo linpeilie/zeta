@@ -293,6 +293,35 @@ void main() {
       },
     );
 
+    test('updateWorkspace rejects restored thread without provider', () {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      viewModel.updateWorkspace(
+        projectPath: '/repo',
+        contextFilePath: null,
+        restoredSessionId: 'orphan-thread',
+      );
+
+      expect(viewModel.sessionId, isNull);
+    });
+
+    test('updateWorkspace keeps restored thread with provider ownership', () {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      viewModel.updateWorkspace(
+        projectPath: '/repo',
+        contextFilePath: null,
+        restoredSessionId: 'thread-1',
+        restoredProviderId: defaultAgentProviderId,
+      );
+
+      expect(viewModel.sessionId, 'thread-1');
+    });
+
     test('running selected thread resumes and steers on first send', () async {
       final provider = _FakeAgentProvider(
         historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
@@ -2059,6 +2088,7 @@ void main() {
           projectPath: '/repo',
           contextFilePath: '/repo/lib/main.dart',
           restoredSessionId: 'grok-sess-1',
+          restoredProviderId: grokAgentProviderId,
         );
         await viewModel.sendMessage('continue this Grok session');
 
@@ -2101,6 +2131,7 @@ void main() {
           projectPath: '/repo',
           contextFilePath: '/repo/a.dart',
           restoredSessionId: 'thread-1',
+          restoredProviderId: defaultAgentProviderId,
         );
 
         expect(viewModel.requiresResumedSelectedThread, isTrue);

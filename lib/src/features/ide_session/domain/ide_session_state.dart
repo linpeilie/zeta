@@ -30,7 +30,8 @@ class IdeSessionState {
 
   /// 当前会话选择的 Agent provider。
   ///
-  /// 目前 UI 使用全局默认 provider；保留该字段是为了后续实现“会话选择”。
+  /// 用于恢复当前 composer 的 provider；每条 thread 的归属仍以摘要中的
+  /// `providerId` 为准。
   final String? activeAgentProviderId;
 
   /// 每个项目对应的最近 Agent thread id。

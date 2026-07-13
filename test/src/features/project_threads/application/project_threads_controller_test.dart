@@ -349,6 +349,33 @@ void main() {
       expect(controller.stateFor('/repo').threads, isEmpty);
       expect(cleared, <(String, String)>[('/repo', 'thread-0')]);
     });
+
+    test('caches provider ownership when a session is created', () {
+      final provider = _FakeAgentProvider(pages: const <AgentThreadPage>[]);
+      final controller = _createController(provider);
+
+      controller.registerSession(
+        '/repo',
+        const AgentSession(
+          id: 'new-thread',
+          providerId: grokAgentProviderId,
+          title: 'New Grok thread',
+        ),
+      );
+
+      final state = controller.stateFor('/repo');
+      expect(state.selectedThreadId, 'new-thread');
+      expect(state.threads, hasLength(1));
+      expect(state.threads.single.providerId, grokAgentProviderId);
+      expect(
+        controller
+            .sessionSnapshot
+            .cachedThreadsByProject['/repo']
+            ?.single
+            .providerId,
+        grokAgentProviderId,
+      );
+    });
   });
 }
 

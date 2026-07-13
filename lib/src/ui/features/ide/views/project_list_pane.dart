@@ -26,6 +26,8 @@ typedef ProjectThreadRenamed =
 typedef ProjectThreadAction =
     void Function(String projectPath, AgentThreadSummary thread);
 
+typedef ProjectNewThread = void Function(String projectPath, String providerId);
+
 class ProjectListPane extends StatelessWidget {
   const ProjectListPane({
     required this.projects,
@@ -36,6 +38,7 @@ class ProjectListPane extends StatelessWidget {
     required this.onSelectThread,
     required this.onLoadMoreThreads,
     required this.onRetryThreads,
+    required this.loadAvailableProviders,
     required this.onNewThread,
     required this.onOpenProjectLocation,
     required this.onRemoveProject,
@@ -55,7 +58,8 @@ class ProjectListPane extends StatelessWidget {
   final ProjectThreadSelected onSelectThread;
   final ValueChanged<String> onLoadMoreThreads;
   final ValueChanged<String> onRetryThreads;
-  final ValueChanged<String> onNewThread;
+  final Future<List<AgentProviderConfig>> Function() loadAvailableProviders;
+  final ProjectNewThread onNewThread;
   final ValueChanged<String> onOpenProjectLocation;
   final ValueChanged<String> onRemoveProject;
   final ProjectThreadRenamed onRenameThread;
@@ -93,7 +97,8 @@ class ProjectListPane extends StatelessWidget {
                   onSelectThread: onSelectThread,
                   onLoadMoreThreads: () => onLoadMoreThreads(path),
                   onRetryThreads: () => onRetryThreads(path),
-                  onNewThread: () => onNewThread(path),
+                  onNewThread: () =>
+                      unawaited(_selectProviderAndCreateThread(context, path)),
                   onOpenProjectLocation: () => onOpenProjectLocation(path),
                   onRemoveProject: () => onRemoveProject(path),
                   onRenameThread: (threadId, name) =>
@@ -107,6 +112,234 @@ class ProjectListPane extends StatelessWidget {
               },
             ),
     );
+  }
+
+  Future<void> _selectProviderAndCreateThread(
+    BuildContext context,
+    String projectPath,
+  ) async {
+    final provider = await showIdeDialog<AgentProviderConfig>(
+      context: context,
+      builder: (context) => _AgentProviderSelectionDialog(
+        loadAvailableProviders: loadAvailableProviders,
+      ),
+    );
+    if (provider == null) {
+      return;
+    }
+    onNewThread(projectPath, provider.id);
+  }
+}
+
+class _AgentProviderSelectionDialog extends StatefulWidget {
+  const _AgentProviderSelectionDialog({required this.loadAvailableProviders});
+
+  final Future<List<AgentProviderConfig>> Function() loadAvailableProviders;
+
+  @override
+  State<_AgentProviderSelectionDialog> createState() =>
+      _AgentProviderSelectionDialogState();
+}
+
+class _AgentProviderSelectionDialogState
+    extends State<_AgentProviderSelectionDialog> {
+  late final Future<List<AgentProviderConfig>> _providersFuture = widget
+      .loadAvailableProviders();
+  String? _selectedProviderId;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<AgentProviderConfig>>(
+      future: _providersFuture,
+      builder: (context, snapshot) {
+        final providers = snapshot.data ?? const <AgentProviderConfig>[];
+        final selectedProvider = _selectedProvider(providers);
+        return IdeDialog(
+          key: const ValueKey<String>('new-thread-provider-dialog'),
+          title: const Text('选择 Agent Provider'),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360, maxHeight: 360),
+            child: _buildContent(context, snapshot, providers),
+          ),
+          actions: <IdeDialogAction>[
+            IdeDialogAction.cancel(
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            IdeDialogAction.confirm(
+              label: '创建 Thread',
+              onPressed: selectedProvider == null
+                  ? null
+                  : () => Navigator.of(context).pop(selectedProvider),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildContent(
+    BuildContext context,
+    AsyncSnapshot<List<AgentProviderConfig>> snapshot,
+    List<AgentProviderConfig> providers,
+  ) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    if (snapshot.connectionState != ConnectionState.done) {
+      return Padding(
+        padding: IdeSpacing.all16,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: colors.accent,
+              ),
+            ),
+            const SizedBox(width: IdeSpacing.space10),
+            Flexible(
+              child: Text(
+                '正在加载 Agent…',
+                style: textStyles.bodySmall.copyWith(
+                  color: colors.textSecondary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    if (snapshot.hasError) {
+      return Padding(
+        padding: IdeSpacing.all16,
+        child: Text(
+          '无法加载 Agent：${snapshot.error}',
+          style: textStyles.bodySmall.copyWith(color: colors.error),
+        ),
+      );
+    }
+    if (providers.isEmpty) {
+      return Padding(
+        padding: IdeSpacing.all16,
+        child: Text(
+          '没有已启用且受支持的 Agent provider。请先在 Settings > Agents 中启用。',
+          style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
+        ),
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: IdeSpacing.space10),
+          child: Text(
+            '请选择用于创建新 thread 的 Agent。',
+            style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
+          ),
+        ),
+        Flexible(
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: providers.length,
+            separatorBuilder: (_, _) =>
+                const SizedBox(height: IdeSpacing.space6),
+            itemBuilder: (context, index) {
+              final provider = providers[index];
+              final selected = provider.id == _selectedProviderId;
+              return Semantics(
+                button: true,
+                selected: selected,
+                label: '使用 ${provider.displayName} 创建 thread',
+                child: PaneInteractiveSurface(
+                  key: ValueKey<String>(
+                    'new-thread-provider-option-${provider.id}',
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _selectedProviderId = provider.id;
+                    });
+                  },
+                  selected: selected,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: IdeSpacing.space12,
+                    vertical: IdeSpacing.space10,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _providerIcon(provider.kind),
+                        size: 18,
+                        color: selected ? colors.accent : colors.textSecondary,
+                      ),
+                      const SizedBox(width: IdeSpacing.space10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              provider.displayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: textStyles.bodyMedium.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              _providerKindLabel(provider.kind),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: textStyles.caption.copyWith(
+                                color: colors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (selected)
+                        Icon(
+                          Icons.check_rounded,
+                          size: 17,
+                          color: colors.accent,
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  AgentProviderConfig? _selectedProvider(List<AgentProviderConfig> providers) {
+    for (final provider in providers) {
+      if (provider.id == _selectedProviderId) {
+        return provider;
+      }
+    }
+    return null;
+  }
+
+  IconData _providerIcon(AgentProviderKind kind) {
+    return switch (kind) {
+      AgentProviderKind.codexAppServer => Icons.code_rounded,
+      AgentProviderKind.acp => Icons.smart_toy_outlined,
+      AgentProviderKind.claudeCode => Icons.terminal_rounded,
+    };
+  }
+
+  String _providerKindLabel(AgentProviderKind kind) {
+    return switch (kind) {
+      AgentProviderKind.codexAppServer => 'Codex app-server',
+      AgentProviderKind.acp => 'Agent Client Protocol',
+      AgentProviderKind.claudeCode => 'Claude Code CLI',
+    };
   }
 }
 

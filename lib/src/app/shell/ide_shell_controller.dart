@@ -219,11 +219,30 @@ class IdeShellController extends ChangeNotifier {
     await selectProjectThread(projectPath, forkedThread);
   }
 
-  Future<void> startNewThreadForProject(String projectPath) async {
-    if (!_canMutateAgentHistory()) {
+  Future<void> startNewThreadForProject(
+    String projectPath, {
+    required String providerId,
+  }) async {
+    await agentViewModel.loadSettings();
+    if (!_canMutateAgentHistory(providerId: providerId)) {
       return;
     }
     _sessionCoordinator.cancelPendingRestore();
+
+    if (providerId != agentViewModel.activeProviderId) {
+      try {
+        await agentViewModel.switchActiveProvider(providerId);
+      } catch (error, stackTrace) {
+        _log.warning(
+          'Could not select provider $providerId for a new thread',
+          error,
+          stackTrace,
+        );
+        _statusReporter?.call('Could not select Agent provider: $error');
+        return;
+      }
+    }
+
     if (projectPath != _projectPath) {
       await _loadProject(projectPath, activateThreads: false);
       if (_projectPath != projectPath) {
@@ -445,8 +464,18 @@ class IdeShellController extends ChangeNotifier {
       activeProjectPath: session.activeProjectPath,
       snapshot: projectThreadsSessionSnapshotFromIdeSessionState(session),
     );
-    for (final entry in _agentThreadIdsByProject.entries) {
-      projectThreadsController.registerThreadMapping(entry.key, entry.value);
+    for (final entry in _agentThreadIdsByProject.entries.toList()) {
+      final thread = _threadSummaryFor(entry.key, entry.value);
+      if (thread == null) {
+        // provider 归属只存在于完整摘要；缺失时不能猜测 active provider。
+        _log.warning(
+          'Discarding restored thread ${entry.value} without provider ownership',
+        );
+        _agentThreadIdsByProject.remove(entry.key);
+        projectThreadsController.clearSelectedThread(entry.key);
+        continue;
+      }
+      projectThreadsController.registerThreadMapping(entry.key, thread.id);
     }
     _syncAgentWorkspace();
     _log.info(
@@ -528,13 +557,26 @@ class IdeShellController extends ChangeNotifier {
 
   void _syncAgentWorkspace() {
     final projectPath = _projectPath;
-    final restoredSessionId = projectPath == null
+    var restoredSessionId = projectPath == null
         ? null
         : _agentThreadIdsByProject[projectPath];
-    if (projectPath != null && restoredSessionId != null) {
+    var restoredThread = projectPath == null || restoredSessionId == null
+        ? null
+        : _threadSummaryFor(projectPath, restoredSessionId);
+    if (projectPath != null &&
+        restoredSessionId != null &&
+        restoredThread == null) {
+      _log.warning(
+        'Discarding thread $restoredSessionId without provider ownership',
+      );
+      _agentThreadIdsByProject.remove(projectPath);
+      projectThreadsController.clearSelectedThread(projectPath);
+      restoredSessionId = null;
+    }
+    if (projectPath != null && restoredThread != null) {
       projectThreadsController.registerThreadMapping(
         projectPath,
-        restoredSessionId,
+        restoredThread.id,
       );
     }
     // Agent 上下文只传项目路径和当前文件路径；不会读取文件内容。
@@ -542,6 +584,7 @@ class IdeShellController extends ChangeNotifier {
       projectPath: projectPath,
       contextFilePath: _currentFilePath,
       restoredSessionId: restoredSessionId,
+      restoredProviderId: restoredThread?.providerId,
     );
     // 项目就绪后预加载模型列表，使输入框下方控件在发送前可用。
     if (projectPath != null) {
@@ -551,19 +594,49 @@ class IdeShellController extends ChangeNotifier {
 
   void _handleAgentChanged() {
     final projectPath = _projectPath;
+    final currentSession = agentViewModel.currentSession;
     final sessionId = agentViewModel.sessionId;
     if (projectPath == null || sessionId == null) {
       return;
     }
-    if (_agentThreadIdsByProject[projectPath] == sessionId) {
+
+    final state = projectThreadsController.stateFor(projectPath);
+    final hasProviderSummary =
+        currentSession == null ||
+        state.threads.any(
+          (thread) =>
+              thread.id == currentSession.id &&
+              thread.providerId == currentSession.providerId,
+        );
+    final mappingChanged = _agentThreadIdsByProject[projectPath] != sessionId;
+    if (!mappingChanged && hasProviderSummary) {
       return;
     }
 
-    // Agent 创建或恢复 thread 后，把 thread id 写回项目级映射。
-    _agentThreadIdsByProject[projectPath] = sessionId;
-    projectThreadsController.registerThreadMapping(projectPath, sessionId);
-    projectThreadsController.selectThreadId(projectPath, sessionId);
-    _requestSessionSave();
+    var selectedBySessionRegistration = false;
+    if (currentSession != null && !hasProviderSummary) {
+      projectThreadsController.registerSession(projectPath, currentSession);
+      selectedBySessionRegistration = true;
+    }
+    if (mappingChanged) {
+      // Agent 创建或恢复 thread 后，把 thread id 写回项目级映射。
+      _agentThreadIdsByProject[projectPath] = sessionId;
+      projectThreadsController.registerThreadMapping(projectPath, sessionId);
+      if (!selectedBySessionRegistration) {
+        projectThreadsController.selectThreadId(projectPath, sessionId);
+      }
+      _requestSessionSave();
+    }
+  }
+
+  AgentThreadSummary? _threadSummaryFor(String projectPath, String threadId) {
+    for (final thread
+        in projectThreadsController.stateFor(projectPath).threads) {
+      if (thread.id == threadId) {
+        return thread;
+      }
+    }
+    return null;
   }
 
   void _handleProjectThreadsChanged() {
@@ -586,11 +659,18 @@ class IdeShellController extends ChangeNotifier {
     _notifyStateChanged();
   }
 
-  bool _canMutateAgentHistory() {
-    if (agentProviderController.activeProviderConfig.enabled) {
+  bool _canMutateAgentHistory({String? providerId}) {
+    final targetProviderId =
+        providerId ?? agentProviderController.activeProviderConfig.id;
+    if (agentProviderController.isProviderEnabled(targetProviderId)) {
       return true;
     }
-    _statusReporter?.call('Codex 已禁用；历史会话当前为只读模式。');
+    final providerName =
+        agentProviderController
+            .providerConfigById(targetProviderId)
+            ?.displayName ??
+        targetProviderId;
+    _statusReporter?.call('$providerName 已禁用或不可用；无法修改会话。');
     return false;
   }
 

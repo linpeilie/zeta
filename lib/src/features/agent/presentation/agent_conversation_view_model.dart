@@ -328,6 +328,9 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   String? get sessionId => _session?.id ?? _restoredSessionId;
 
+  /// 已由 provider 创建或恢复成功的当前会话；草稿和待恢复状态返回 null。
+  AgentSession? get currentSession => _session;
+
   /// 当前会话所属 provider 被禁用后，历史仍可读但禁止任何写操作。
   bool get isReadOnly {
     final providerId =
@@ -555,7 +558,8 @@ class AgentConversationViewModel extends ChangeNotifier {
   /// 更新当前项目和文件上下文。
   ///
   /// 项目变更时清空内存中的 session/turn；如果恢复状态里带了 thread id，则保留到
-  /// 第一次发送消息时再调用 provider resume。
+  /// 第一次发送消息时再调用 provider resume。恢复 thread 时必须同时提供
+  /// [restoredProviderId]，禁止回退到当前 active provider 猜测归属。
   ///
   /// 仅更新当前文件路径时，不得清掉「已选中 thread 必须 resume」约束，
   /// 否则 Grok 等会话在 `session/load` 失败时会误走 `startSession` 开新会话。
@@ -563,9 +567,22 @@ class AgentConversationViewModel extends ChangeNotifier {
     required String? projectPath,
     required String? contextFilePath,
     String? restoredSessionId,
+    String? restoredProviderId,
     bool resetConversation = false,
   }) {
     final projectChanged = projectPath != _projectPath;
+    final normalizedProviderId = restoredProviderId?.trim();
+    final hasRestoredProvider =
+        normalizedProviderId != null && normalizedProviderId.isNotEmpty;
+    final canRestoreSession = restoredSessionId == null || hasRestoredProvider;
+    final effectiveRestoredSessionId = canRestoreSession
+        ? restoredSessionId
+        : null;
+    if (!canRestoreSession) {
+      _log.warning(
+        'Ignoring restored Agent session $restoredSessionId without provider ownership',
+      );
+    }
     _projectPath = projectPath;
     _contextFilePath = contextFilePath;
     if (projectChanged || resetConversation) {
@@ -574,8 +591,10 @@ class AgentConversationViewModel extends ChangeNotifier {
       _flushPendingStreamChangesNow();
       _threadSwitchToken += 1;
       _session = null;
-      _restoredSessionId = restoredSessionId;
-      _selectedProviderId = restoredSessionId == null ? null : activeProviderId;
+      _restoredSessionId = effectiveRestoredSessionId;
+      _selectedProviderId = effectiveRestoredSessionId == null
+          ? null
+          : normalizedProviderId;
       _threadOpenPhase = AgentThreadOpenPhase.idle;
       _requiresResumedSelectedThread = false;
       _currentThreadTitle = defaultThreadTitle;
@@ -586,7 +605,8 @@ class AgentConversationViewModel extends ChangeNotifier {
       _threadLastActiveAt = null;
       contextPanelVisible.value = false;
       _timeline.resetToWelcomeState();
-      if (previousThreadId != null && previousThreadId != restoredSessionId) {
+      if (previousThreadId != null &&
+          previousThreadId != effectiveRestoredSessionId) {
         final provider = _provider;
         if (provider != null) {
           unawaited(_unsubscribeThreadBestEffort(provider, previousThreadId));
@@ -602,9 +622,9 @@ class AgentConversationViewModel extends ChangeNotifier {
     }
     // 同项目下仅同步文件上下文：若 shell 带了 restoredSessionId，只在本地
     // 尚无选中 thread 时写入，避免覆盖 switchThread 已锁定的 resume 目标。
-    if (restoredSessionId != null && _selectedThreadId == null) {
-      _restoredSessionId = restoredSessionId;
-      _selectedProviderId ??= activeProviderId;
+    if (effectiveRestoredSessionId != null && _selectedThreadId == null) {
+      _restoredSessionId = effectiveRestoredSessionId;
+      _selectedProviderId = normalizedProviderId;
       _threadOpenPhase = AgentThreadOpenPhase.idle;
       _requiresResumedSelectedThread = false;
     }
@@ -1186,6 +1206,7 @@ class AgentConversationViewModel extends ChangeNotifier {
           _threadOpenPhase = AgentThreadOpenPhase.idle;
           _requiresResumedSelectedThread = false;
           _applySessionTitle(session);
+          _publishUiChanges(header: true, composer: true);
         }
         return session;
       } catch (error, stackTrace) {
@@ -1215,6 +1236,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       _threadOpenPhase = AgentThreadOpenPhase.idle;
       _requiresResumedSelectedThread = false;
       _applySessionTitle(session);
+      _publishUiChanges(header: true, composer: true);
     }
     return session;
   }

@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/main.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 
 import '../../../testing/ide_test_harness.dart';
 
@@ -31,6 +32,59 @@ void main() {
       '${directory.path}${Platform.pathSeparator}sample.txt',
     ).writeAsStringSync('hello from zeta');
     final now = DateTime.now();
+    final firstProviderPage = AgentThreadPage(
+      threads: <AgentThreadSummary>[
+        agentThread(
+          id: 'thread-a',
+          projectPath: directory.path,
+          title: 'Initial thread',
+          preview: 'Hidden preview text',
+          lastActiveAt: now.subtract(const Duration(minutes: 5)),
+        ),
+        agentThread(
+          id: 'thread-c',
+          projectPath: directory.path,
+          title: 'Dormant thread',
+          lastActiveAt: now.subtract(const Duration(days: 3)),
+        ),
+        agentThread(
+          id: 'thread-d',
+          projectPath: directory.path,
+          title: 'Recent thread D',
+          lastActiveAt: now.subtract(const Duration(minutes: 10)),
+        ),
+        agentThread(
+          id: 'thread-e',
+          projectPath: directory.path,
+          title: 'Recent thread E',
+          lastActiveAt: now.subtract(const Duration(minutes: 30)),
+        ),
+        agentThread(
+          id: 'thread-f',
+          projectPath: directory.path,
+          title: 'Recent thread F',
+          lastActiveAt: now.subtract(const Duration(hours: 1)),
+        ),
+        agentThread(
+          id: 'thread-g',
+          projectPath: directory.path,
+          title: 'Recent thread G',
+          lastActiveAt: now.subtract(const Duration(minutes: 90)),
+        ),
+      ],
+      nextCursor: 'next',
+    );
+    final secondProviderPage = AgentThreadPage(
+      threads: <AgentThreadSummary>[
+        agentThread(
+          id: 'thread-b',
+          projectPath: directory.path,
+          title: 'Older thread',
+          lastActiveAt: now.subtract(const Duration(hours: 2)),
+        ),
+      ],
+      nextCursor: null,
+    );
 
     final provider = FakeAgentProvider(
       threadHistories: <String, AgentThreadHistorySnapshot>{
@@ -79,35 +133,10 @@ void main() {
         ),
       },
       threadPages: <AgentThreadPage>[
-        AgentThreadPage(
-          threads: <AgentThreadSummary>[
-            agentThread(
-              id: 'thread-a',
-              projectPath: directory.path,
-              title: 'Initial thread',
-              preview: 'Hidden preview text',
-              lastActiveAt: now.subtract(const Duration(minutes: 5)),
-            ),
-            agentThread(
-              id: 'thread-c',
-              projectPath: directory.path,
-              title: 'Dormant thread',
-              lastActiveAt: now.subtract(const Duration(days: 3)),
-            ),
-          ],
-          nextCursor: 'next',
-        ),
-        AgentThreadPage(
-          threads: <AgentThreadSummary>[
-            agentThread(
-              id: 'thread-b',
-              projectPath: directory.path,
-              title: 'Older thread',
-              lastActiveAt: now.subtract(const Duration(hours: 2)),
-            ),
-          ],
-          nextCursor: null,
-        ),
+        firstProviderPage,
+        secondProviderPage,
+        firstProviderPage,
+        secondProviderPage,
       ],
     );
 
@@ -118,7 +147,7 @@ void main() {
         sessionLoader: session.load,
         sessionSaver: session.save,
         agentProviderFactory: FakeAgentProviderFactory(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        agentProviderConfigStore: singleFakeProviderConfigStore(),
       ),
     );
 
@@ -126,11 +155,13 @@ void main() {
     await tester.runAsync(waitForIo);
     await tester.pumpAndSettle();
 
-    expect(provider.listQueries.single.limit, 5);
+    expect(provider.listQueries, hasLength(2));
+    expect(provider.listQueries.first.limit, 10);
+    expect(provider.listQueries.last.cursor, 'next');
     expect(find.text('Initial thread'), findsOneWidget);
     expect(find.text('Hidden preview text'), findsNothing);
     expect(find.text('5m'), findsOneWidget);
-    expect(find.text('3d'), findsOneWidget);
+    expect(find.text('3d'), findsNothing);
     expect(
       find.byKey(ValueKey<String>('project-tile-new-thread-${directory.path}')),
       findsNothing,
@@ -177,6 +208,7 @@ void main() {
     expect(provider.listQueries.last.cursor, 'next');
     expect(find.text('Older thread'), findsOneWidget);
     expect(find.text('2h'), findsOneWidget);
+    expect(find.text('3d'), findsOneWidget);
 
     await tester.tap(
       find.byKey(ValueKey<String>('project-thread-${directory.path}-thread-a')),
@@ -498,6 +530,11 @@ void main() {
         sessionSaver: session.save,
         agentProviderFactory: FakeAgentProviderFactory(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        agentProviderAvailabilityLoader: () async =>
+            const <AgentProviderConfig>[
+              AgentProviderConfig.defaultCodex,
+              AgentProviderConfig.defaultGrok,
+            ],
       ),
     );
 
@@ -520,9 +557,66 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(
+      find.byKey(const ValueKey<String>('new-thread-provider-dialog')),
+      findsOneWidget,
+    );
+    expect(find.text('Codex CLI'), findsOneWidget);
+    expect(find.text('Grok CLI'), findsOneWidget);
+    expect(headerTitleText(tester), 'Initial thread');
+
+    final codexOption = find.byKey(
+      const ValueKey<String>('new-thread-provider-option-codex'),
+    );
+    await tester.tap(codexOption);
+    await tester.pump();
+    expect(
+      find.descendant(
+        of: codexOption,
+        matching: find.byIcon(Icons.check_rounded),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('创建 Thread'));
+    await tester.pumpAndSettle();
+
     expect(headerTitleText(tester), 'New thread');
     expect(find.text('Previously asked question'), findsNothing);
     expect(find.text('Historical answer'), findsNothing);
+
+    // 每次创建都重新选择，不沿用上一次的 Codex 选项。
+    await tester.tap(
+      find.byKey(ValueKey<String>('project-tile-new-thread-${directory.path}')),
+    );
+    await tester.pumpAndSettle();
+    final reopenedCodexOption = find.byKey(
+      const ValueKey<String>('new-thread-provider-option-codex'),
+    );
+    expect(
+      find.descendant(
+        of: reopenedCodexOption,
+        matching: find.byIcon(Icons.check_rounded),
+      ),
+      findsNothing,
+    );
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+
+    final input = find.byKey(const ValueKey<String>('agent-message-input'));
+    await tester.enterText(input, 'Create with selected provider');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey<String>('agent-send-button')));
+    await tester.pumpAndSettle();
+    expect(provider.sentMessages, contains('Create with selected provider'));
+    await pumpSessionSave(tester);
+
+    final savedState = IdeSessionState.tryDecode(session.value);
+    final savedThreads = savedState!.cachedThreadsByProject[directory.path]!;
+    expect(savedThreads.map((thread) => thread.id), contains('thread-1'));
+    final createdThread = savedThreads
+        .where((thread) => thread.id == 'thread-1')
+        .single;
+    expect(createdThread.providerId, defaultAgentProviderId);
   });
 
   testWidgets('opens the project location from the more menu', (tester) async {
@@ -628,7 +722,7 @@ void main() {
         sessionLoader: session.load,
         sessionSaver: session.save,
         agentProviderFactory: FakeAgentProviderFactory(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        agentProviderConfigStore: singleFakeProviderConfigStore(),
       ),
     );
 
@@ -657,7 +751,7 @@ void main() {
 
     expect(provider.listQueries, hasLength(2));
     expect(provider.listQueries.last.projectPath, directory.path);
-    expect(provider.listQueries.last.limit, 5);
+    expect(provider.listQueries.last.limit, 10);
     expect(provider.listQueries.last.cursor, isNull);
     expect(find.text('Initial thread'), findsNothing);
     expect(find.text('Refreshed thread'), findsOneWidget);
@@ -843,6 +937,15 @@ void main() {
     expect(provider.renamedThreads.single.name, 'Renamed thread');
     expect(find.text('Renamed thread'), findsOneWidget);
   });
+}
+
+MemoryAgentProviderConfigStore singleFakeProviderConfigStore() {
+  return MemoryAgentProviderConfigStore(
+    const AgentProviderSettings(
+      providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
+      activeProviderId: defaultAgentProviderId,
+    ),
+  );
 }
 
 Future<TestGesture> hoverProjectTile(

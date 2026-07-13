@@ -35,6 +35,9 @@ import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/window_frame.dart';
 import 'package:zeta/src/ui/features/ide/views/project_list_pane.dart';
 
+typedef AgentProviderAvailabilityLoader =
+    Future<List<AgentProviderConfig>> Function();
+
 /// IDE 主界面。
 ///
 /// 当前布局是左右图标栏、左右活动面板与中间 Agent 主编辑区组成的五列结构；
@@ -48,6 +51,7 @@ class IdeHome extends StatefulWidget {
     required this.agentProviderConfigStore,
     required this.projectLocationOpener,
     required this.appearanceController,
+    this.agentProviderAvailabilityLoader,
     this.showWindowControls = true,
     super.key,
   });
@@ -59,6 +63,7 @@ class IdeHome extends StatefulWidget {
   final AgentProviderConfigStore agentProviderConfigStore;
   final ProjectLocationOpener projectLocationOpener;
   final AppearanceSettingsController appearanceController;
+  final AgentProviderAvailabilityLoader? agentProviderAvailabilityLoader;
   final bool showWindowControls;
 
   @override
@@ -521,8 +526,14 @@ class _IdeHomeState extends State<IdeHome> {
         onRetryThreads: (projectPath) {
           unawaited(_shellController.retryThreads(projectPath));
         },
-        onNewThread: (projectPath) {
-          unawaited(_shellController.startNewThreadForProject(projectPath));
+        loadAvailableProviders: _loadAvailableAgentProviders,
+        onNewThread: (projectPath, providerId) {
+          unawaited(
+            _shellController.startNewThreadForProject(
+              projectPath,
+              providerId: providerId,
+            ),
+          );
         },
         onOpenProjectLocation: (projectPath) {
           unawaited(
@@ -633,6 +644,14 @@ class _IdeHomeState extends State<IdeHome> {
 
   void _openProject() {
     unawaited(_shellController.openProject());
+  }
+
+  Future<List<AgentProviderConfig>> _loadAvailableAgentProviders() async {
+    final injectedLoader = widget.agentProviderAvailabilityLoader;
+    if (injectedLoader != null) {
+      return injectedLoader();
+    }
+    return _agentManagementController.loadAvailableThreadProviders();
   }
 
   void _toggleLeftPanel({required bool isTop, required bool useOverlay}) {

@@ -114,6 +114,25 @@ class AgentManagementController extends ChangeNotifier {
   bool get loadingLogs => _loadingLogs;
   String? get operationError => _operationError;
 
+  /// 配置中已启用、且 Zeta 已实现 CLI 适配的 provider。
+  ///
+  /// 创建 thread 的选择器只判断产品是否支持该 provider，不执行安装、登录、
+  /// 版本、运行态或协议握手检测。真正启动失败时由会话创建流程报告错误。
+  List<AgentProviderConfig> get availableThreadProviders {
+    final supportedIds = _repositories.keys.toSet();
+    return List<AgentProviderConfig>.unmodifiable(
+      providerController.settings.providers.where(
+        (provider) => provider.enabled && supportedIds.contains(provider.id),
+      ),
+    );
+  }
+
+  /// 加载配置并返回创建新 thread 时可选择的 provider，不触发 Agent 检测。
+  Future<List<AgentProviderConfig>> loadAvailableThreadProviders() async {
+    await initialize();
+    return availableThreadProviders;
+  }
+
   /// 切换详情页选中的 Agent。
   void selectAgent(String agentId) {
     if (!_repositories.containsKey(agentId) || _selectedAgentId == agentId) {

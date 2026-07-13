@@ -200,6 +200,28 @@ class ProjectThreadsController {
     _registerThreadMapping(projectPath, threadId);
   }
 
+  /// 登记 provider 已创建或恢复成功的 session，并立即缓存其 provider 归属。
+  ///
+  /// 这样新 thread 无需等待下一次列表刷新，也能以完整摘要参与会话持久化和恢复。
+  void registerSession(String projectPath, AgentSession session) {
+    _registerThreadMapping(projectPath, session.id);
+    viewModel.prependThread(
+      projectPath: projectPath,
+      thread: AgentThreadSummary(
+        id: session.id,
+        providerId: session.providerId,
+        projectPath: projectPath,
+        title: session.title,
+        preview: session.title ?? '',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        status: AgentThreadRuntimeStatus.idle,
+        raw: session.raw,
+      ),
+    );
+    selectThreadId(projectPath, session.id);
+  }
+
   /// 重命名 thread；乐观更新标题，以 `thread/name/updated` 为准。
   Future<void> renameThread({
     required String projectPath,
