@@ -107,7 +107,7 @@ class _AgentTurnSection extends StatelessWidget {
         // 对话流内进行中状态（与 header 同源；Grok/Codex 通用）。
         if (isLiveRunning) _AgentLiveActivityStatus(viewModel: viewModel),
         // 每个非 standby turn 末尾展示耗时与本 turn token 用量。
-        if (!turn.isStandby) _AgentTurnFooter(turn: turn, viewModel: viewModel),
+        if (!turn.isStandby) _AgentTurnFooter(turn: turn),
       ],
     );
   }

@@ -81,6 +81,10 @@ class GrokAcpAgentProvider implements AgentProvider {
 
   AgentSession? _session;
   final Map<String, String> _runningTurnIdsBySessionId = <String, String>{};
+
+  /// 最近一次 turn id（含已完成），供 `session/prompt` 返回后迟到的
+  /// `turn_completed` 通知仍能对齐本地 turn 分组。
+  final Map<String, String> _lastTurnIdsBySessionId = <String, String>{};
   AgentModelSelection _modelSelection;
   AgentModelList? _modelList;
   bool _initialized = false;
@@ -573,6 +577,7 @@ class GrokAcpAgentProvider implements AgentProvider {
     );
     final turnId = _newTurnId();
     _runningTurnIdsBySessionId[session.id] = turnId;
+    _lastTurnIdsBySessionId[session.id] = turnId;
     final turn = AgentTurn(id: turnId, sessionId: session.id);
     _events.add(AgentTurnStartedEvent(turn));
     _emitStatus(
@@ -590,23 +595,27 @@ class GrokAcpAgentProvider implements AgentProvider {
         timeout: const Duration(hours: 2),
       );
       final map = _asStringKeyedMap(result) ?? const <String, Object?>{};
-      final stopReason =
-          map['stopReason']?.toString() ??
-          map['stop_reason']?.toString() ??
-          'end_turn';
-      final status = _stopReasonToStatus(stopReason);
-      _runningTurnIdsBySessionId.remove(session.id);
-      _events.add(
-        AgentTurnCompletedEvent(
-          sessionId: session.id,
-          turnId: turnId,
-          status: status,
-          errorMessage: status == AgentHistoryTurnStatus.failed
-              ? stopReason
-              : null,
-          raw: map,
-        ),
-      );
+      // 若 `_x.ai/session/update` turn_completed 已先完成，不再二次 complete
+      //（避免冲掉 usage/duration，也避免与迟到通知竞态）。
+      if (_runningTurnIdsBySessionId[session.id] == turnId) {
+        final stopReason =
+            map['stopReason']?.toString() ??
+            map['stop_reason']?.toString() ??
+            'end_turn';
+        final status = _stopReasonToStatus(stopReason);
+        _runningTurnIdsBySessionId.remove(session.id);
+        _events.add(
+          AgentTurnCompletedEvent(
+            sessionId: session.id,
+            turnId: turnId,
+            status: status,
+            errorMessage: status == AgentHistoryTurnStatus.failed
+                ? stopReason
+                : null,
+            raw: map,
+          ),
+        );
+      }
       _emitStatus(
         AgentProviderStatus(
           state: AgentProviderConnectionState.ready,
@@ -614,16 +623,21 @@ class GrokAcpAgentProvider implements AgentProvider {
         ),
       );
     } catch (error, stackTrace) {
-      _runningTurnIdsBySessionId.remove(session.id);
+      final stillRunning = _runningTurnIdsBySessionId[session.id] == turnId;
+      if (stillRunning) {
+        _runningTurnIdsBySessionId.remove(session.id);
+      }
       _log.warning('session/prompt failed', error, stackTrace);
-      _events.add(
-        AgentTurnCompletedEvent(
-          sessionId: session.id,
-          turnId: turnId,
-          status: AgentHistoryTurnStatus.failed,
-          errorMessage: error.toString(),
-        ),
-      );
+      if (stillRunning) {
+        _events.add(
+          AgentTurnCompletedEvent(
+            sessionId: session.id,
+            turnId: turnId,
+            status: AgentHistoryTurnStatus.failed,
+            errorMessage: error.toString(),
+          ),
+        );
+      }
       _events.add(
         AgentErrorEvent(
           message: 'Grok prompt failed',
@@ -763,24 +777,29 @@ class GrokAcpAgentProvider implements AgentProvider {
       final sessionId = params['sessionId']?.toString();
       final turnId = sessionId == null
           ? null
-          : _runningTurnIdsBySessionId[sessionId];
+          : _runningTurnIdsBySessionId[sessionId] ??
+                _lastTurnIdsBySessionId[sessionId];
       final mapped = _notificationMapper.mapSessionUpdate(
         params: params,
         runningTurnId: turnId,
       );
+      _noteTurnCompletedFromMapped(sessionId: sessionId, mapped: mapped);
       _emitMapped(mapped);
       return;
     }
 
     if (method == '_x.ai/session/update' || method == 'x.ai/session/update') {
       final sessionId = params['sessionId']?.toString();
+      // turn_completed 常在 session/prompt 返回后才到；用 lastTurnId 兜底对齐。
       final turnId = sessionId == null
           ? null
-          : _runningTurnIdsBySessionId[sessionId];
+          : _runningTurnIdsBySessionId[sessionId] ??
+                _lastTurnIdsBySessionId[sessionId];
       final mapped = _notificationMapper.mapXaiSessionUpdate(
         params: params,
         runningTurnId: turnId,
       );
+      _noteTurnCompletedFromMapped(sessionId: sessionId, mapped: mapped);
       _emitMapped(mapped);
       return;
     }
@@ -807,6 +826,25 @@ class GrokAcpAgentProvider implements AgentProvider {
         mapped.events.isEmpty &&
         _loggedUnmatched.add(unmatched)) {
       _log.fine('Unmatched Grok update kind: $unmatched');
+    }
+  }
+
+  /// 通知路径已完成回合时，清除 running 标记，避免 RPC 返回再 complete 一次。
+  void _noteTurnCompletedFromMapped({
+    required String? sessionId,
+    required GrokAcpMappedUpdate mapped,
+  }) {
+    if (sessionId == null) {
+      return;
+    }
+    for (final event in mapped.events) {
+      if (event is AgentTurnCompletedEvent) {
+        _lastTurnIdsBySessionId[sessionId] = event.turnId;
+        if (_runningTurnIdsBySessionId[sessionId] == event.turnId) {
+          _runningTurnIdsBySessionId.remove(sessionId);
+        }
+        return;
+      }
     }
   }
 

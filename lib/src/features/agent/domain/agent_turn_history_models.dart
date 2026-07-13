@@ -41,6 +41,7 @@ class AgentHistoryTurn {
     this.modelContextWindow,
     this.collaborationMode,
     this.tokenUsage,
+    this.tokenUsageIsSessionCumulative = true,
     this.errorMessage,
     this.errorCode,
     this.raw = const <String, Object?>{},
@@ -81,6 +82,9 @@ class AgentHistoryTurn {
 
   /// 该 turn 的 token 消耗统计，来自 `token_count` 事件。
   final AgentTokenUsage? tokenUsage;
+
+  /// 为 true 时 [tokenUsage] 是会话累计（Codex JSONL）；为 false 时为本回合绝对用量（Grok）。
+  final bool tokenUsageIsSessionCumulative;
 
   /// provider 上报的终态错误或中断原因。
   final String? errorMessage;

@@ -24,8 +24,9 @@ class GrokUpdatesHistoryParser {
     _TurnBuilder? current;
     final toolById = <String, AgentToolCall>{};
 
-    void ensureTurn({String? promptId, String? fallbackId}) {
+    void ensureTurn({String? promptId, String? fallbackId, DateTime? at}) {
       if (current != null) {
+        current!.noteTime(at);
         return;
       }
       final id =
@@ -34,13 +35,15 @@ class GrokUpdatesHistoryParser {
           'grok-turn-${turns.length + 1}-$threadId'.hashCode
               .toUnsigned(32)
               .toRadixString(16);
-      current = _TurnBuilder(id: id);
+      current = _TurnBuilder(id: id)..noteTime(at);
       turns.add(current!);
     }
 
     void closeTurn({
       AgentHistoryTurnStatus status = AgentHistoryTurnStatus.completed,
       AgentTokenUsage? usage,
+      Duration? duration,
+      DateTime? at,
       String? errorMessage,
     }) {
       final turn = current;
@@ -48,8 +51,18 @@ class GrokUpdatesHistoryParser {
         return;
       }
       turn.status = status;
+      turn.noteTime(at);
+      turn.completedAt ??= at;
       if (usage != null) {
         turn.tokenUsage = usage;
+      }
+      if (duration != null) {
+        turn.duration = duration;
+      } else if (turn.duration == null &&
+          turn.startedAt != null &&
+          turn.completedAt != null) {
+        final inferred = turn.completedAt!.difference(turn.startedAt!);
+        turn.duration = inferred.isNegative ? Duration.zero : inferred;
       }
       if (errorMessage != null) {
         turn.errorMessage = errorMessage;
@@ -93,16 +106,23 @@ class GrokUpdatesHistoryParser {
       final eventId =
           paramsMeta['eventId']?.toString() ??
           updateMeta['eventId']?.toString();
+      // 事件时刻：优先 agentTimestampMs（毫秒），否则行级 timestamp（多为秒）。
+      // turnStartMs 只用于校准 startedAt，不当作 completedAt。
+      final eventAt =
+          _dateTimeFromMs(updateMeta['agentTimestampMs']) ??
+          _dateTimeFromMs(paramsMeta['agentTimestampMs']) ??
+          _dateTimeFromTimestamp(root['timestamp']);
 
       switch (kind) {
         case 'user_message_chunk':
           // 新用户消息开启新 turn；先收尾上一个。
           if (current != null && current!.hasContent) {
-            closeTurn();
+            closeTurn(at: eventAt);
           }
           ensureTurn(
             promptId: promptId,
             fallbackId: eventId ?? 'user-${turns.length}',
+            at: eventAt,
           );
           final text = _contentText(update['content']);
           if (text != null && text.trim().isNotEmpty) {
@@ -122,11 +142,13 @@ class GrokUpdatesHistoryParser {
           }
 
         case 'agent_message_chunk':
-          ensureTurn(promptId: promptId, fallbackId: eventId);
+          ensureTurn(promptId: promptId, fallbackId: eventId, at: eventAt);
           // 回合边界只认 user_message / turn_completed；promptId 仅用于对齐 id。
           if (promptId != null && current != null) {
             current!.preferId(promptId);
           }
+          // 流式 chunk 的 turnStartMs 是整轮开始时刻，优先作 startedAt。
+          current?.noteTurnStartMs(updateMeta['turnStartMs']);
           final text = _contentText(update['content']);
           if (text == null || text.trim().isEmpty) {
             break;
@@ -142,10 +164,11 @@ class GrokUpdatesHistoryParser {
           );
 
         case 'agent_thought_chunk':
-          ensureTurn(promptId: promptId, fallbackId: eventId);
+          ensureTurn(promptId: promptId, fallbackId: eventId, at: eventAt);
           if (promptId != null && current != null) {
             current!.preferId(promptId);
           }
+          current?.noteTurnStartMs(updateMeta['turnStartMs']);
           final text = _contentText(update['content']) ?? '';
           if (text.trim().isEmpty) {
             break;
@@ -158,7 +181,7 @@ class GrokUpdatesHistoryParser {
 
         case 'tool_call':
         case 'tool_call_update':
-          ensureTurn(promptId: promptId, fallbackId: eventId);
+          ensureTurn(promptId: promptId, fallbackId: eventId, at: eventAt);
           if (promptId != null && current != null) {
             current!.preferId(promptId);
           }
@@ -171,7 +194,7 @@ class GrokUpdatesHistoryParser {
           current!.upsertTool(merged);
 
         case 'plan':
-          ensureTurn(promptId: promptId, fallbackId: eventId);
+          ensureTurn(promptId: promptId, fallbackId: eventId, at: eventAt);
           final planText = _planText(update['entries']);
           if (planText.isEmpty) {
             break;
@@ -195,6 +218,7 @@ class GrokUpdatesHistoryParser {
               'end_turn';
           final usageMap = _asMap(update['usage']);
           AgentTokenUsage? usage;
+          Duration? duration;
           if (usageMap != null) {
             usage = AgentTokenUsage(
               inputTokens: _asInt(usageMap['inputTokens']),
@@ -203,16 +227,23 @@ class GrokUpdatesHistoryParser {
               cachedInputTokens: _asInt(usageMap['cachedReadTokens']),
               reasoningOutputTokens: _asInt(usageMap['reasoningTokens']),
             );
+            final apiDurationMs = _asInt(usageMap['apiDurationMs']);
+            if (apiDurationMs != null && apiDurationMs >= 0) {
+              duration = Duration(milliseconds: apiDurationMs);
+            }
           }
           if (current == null) {
             ensureTurn(
               promptId: update['prompt_id']?.toString() ?? promptId,
               fallbackId: eventId,
+              at: eventAt,
             );
           }
           closeTurn(
             status: _stopReasonToStatus(stop),
             usage: usage,
+            duration: duration,
+            at: eventAt,
             errorMessage: _isFailedStop(stop) ? stop : null,
           );
 
@@ -373,12 +404,34 @@ class _TurnBuilder {
   AgentHistoryTurnStatus status = AgentHistoryTurnStatus.completed;
   AgentTokenUsage? tokenUsage;
   String? errorMessage;
+  DateTime? startedAt;
+  DateTime? completedAt;
+  Duration? duration;
 
   bool get hasContent => entries.isNotEmpty;
 
   void preferId(String preferred) {
     if (preferred.isNotEmpty) {
       id = preferred;
+    }
+  }
+
+  /// 记录事件时间；首次出现作为 [startedAt]。
+  void noteTime(DateTime? at) {
+    if (at == null) {
+      return;
+    }
+    startedAt ??= at;
+  }
+
+  /// 用流式 `_meta.turnStartMs` 校正回合真实开始时间（可早于首条 user chunk）。
+  void noteTurnStartMs(Object? value) {
+    final at = _dateTimeFromMs(value);
+    if (at == null) {
+      return;
+    }
+    if (startedAt == null || at.isBefore(startedAt!)) {
+      startedAt = at;
     }
   }
 
@@ -487,7 +540,12 @@ class _TurnBuilder {
       id: id,
       entries: List<AgentHistoryEntry>.unmodifiable(entries),
       status: status,
+      startedAt: startedAt,
+      completedAt: completedAt,
+      duration: duration,
       tokenUsage: tokenUsage,
+      // Grok turn_completed.usage 是本回合绝对用量，不是会话累计。
+      tokenUsageIsSessionCumulative: false,
       errorMessage: errorMessage,
     );
   }
@@ -563,4 +621,26 @@ int? _asInt(Object? value) {
     return int.tryParse(value);
   }
   return null;
+}
+
+/// 毫秒时间戳 → UTC DateTime。
+DateTime? _dateTimeFromMs(Object? value) {
+  final ms = _asInt(value);
+  if (ms == null || ms <= 0) {
+    return null;
+  }
+  return DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
+}
+
+/// Grok updates.jsonl 行级 `timestamp`：常见为 Unix 秒，偶发毫秒。
+DateTime? _dateTimeFromTimestamp(Object? value) {
+  final raw = _asInt(value);
+  if (raw == null || raw <= 0) {
+    return null;
+  }
+  // 10 位量级按秒，13 位按毫秒。
+  final ms = raw.abs() < 1000000000000
+      ? raw * Duration.millisecondsPerSecond
+      : raw;
+  return DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
 }

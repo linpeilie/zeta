@@ -116,6 +116,7 @@ class GrokAcpNotificationMapper {
         );
 
       case 'usage_update':
+        // ACP 上下文占用进度：按会话级累计处理，供 header/composer 使用。
         final used = _asInt(update['used']);
         if (used == null) {
           return GrokAcpMappedUpdate(unmatchedKind: kind);
@@ -125,6 +126,7 @@ class GrokAcpNotificationMapper {
             AgentTokenUsageEvent(
               sessionId: sessionId,
               turnId: turnId,
+              isSessionCumulative: true,
               tokenUsage: AgentTokenUsage(
                 totalTokens: used,
                 inputTokens: used,
@@ -188,6 +190,7 @@ class GrokAcpNotificationMapper {
     final sessionId = params['sessionId']?.toString();
     final updateMeta = _asStringKeyedMap(update['_meta']);
     final paramsMeta = _asStringKeyedMap(params['_meta']);
+    // 优先本地 running turn id（与 pending/live 分组一致）；否则用 Grok prompt_id。
     final turnId =
         runningTurnId ??
         updateMeta?['promptId']?.toString() ??
@@ -203,39 +206,50 @@ class GrokAcpNotificationMapper {
         update['stopReason']?.toString() ??
         'end_turn';
     final status = _stopReasonToStatus(stopReason);
-    final events = <AgentEvent>[
-      AgentTurnCompletedEvent(
-        sessionId: sessionId,
-        turnId: turnId,
-        status: status,
-        errorMessage: status == AgentHistoryTurnStatus.failed
-            ? stopReason
-            : null,
-        raw: update,
-      ),
-    ];
 
+    // Grok usage 是本回合绝对用量（非会话累计），并常带 apiDurationMs。
+    Duration? duration;
+    AgentTokenUsage? tokenUsage;
+    Map<String, Object?>? usageMap;
     final usage = update['usage'];
     if (usage is Map) {
-      final usageMap = usage.map(
+      usageMap = usage.map(
         (key, value) => MapEntry(key.toString(), value as Object?),
       );
-      final tokenUsage = AgentTokenUsage(
+      final apiDurationMs = _asInt(usageMap['apiDurationMs']);
+      if (apiDurationMs != null && apiDurationMs >= 0) {
+        duration = Duration(milliseconds: apiDurationMs);
+      }
+      tokenUsage = AgentTokenUsage(
         inputTokens: _asInt(usageMap['inputTokens']) ?? 0,
         outputTokens: _asInt(usageMap['outputTokens']) ?? 0,
         totalTokens: _asInt(usageMap['totalTokens']),
         cachedInputTokens: _asInt(usageMap['cachedReadTokens']),
         reasoningOutputTokens: _asInt(usageMap['reasoningTokens']),
       );
-      events.add(
+    }
+
+    // 先发 usage 再 complete，确保 complete 收尾时 turn 上已有 token（若 UI 只 flush 一次）。
+    final events = <AgentEvent>[
+      if (tokenUsage != null)
         AgentTokenUsageEvent(
           sessionId: sessionId,
           turnId: turnId,
+          isSessionCumulative: false,
           tokenUsage: tokenUsage,
-          raw: usageMap,
+          raw: usageMap ?? const <String, Object?>{},
         ),
-      );
-    }
+      AgentTurnCompletedEvent(
+        sessionId: sessionId,
+        turnId: turnId,
+        status: status,
+        duration: duration,
+        errorMessage: status == AgentHistoryTurnStatus.failed
+            ? stopReason
+            : null,
+        raw: update,
+      ),
+    ];
 
     return GrokAcpMappedUpdate(events: events);
   }

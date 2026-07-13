@@ -72,9 +72,13 @@ Duration? resolveAgentElapsed({
   return elapsed;
 }
 
-/// 紧凑时长文案：`12s` / `1m 5s`。
+/// 紧凑时长文案：`12s` / `1m 5s` / `0.4s`。
 ///
-/// [includeSubSecond] 为 true 时，不足 1 秒显示 `<1s`（live 活动条更即时）。
+/// 不足 1 秒时按 **0.1s 向上取整** 展示（最多一位小数），例如 1–100ms → `0.1s`，
+/// 101–200ms → `0.2s`，901–999ms → `1s`。
+///
+/// [includeSubSecond] 为 true 时，恰好 0 显示 `0s`（live 活动条刚启动）；
+/// 为 false 时 0 返回 null（终态无有效耗时不展示）。
 String? formatAgentDuration(
   Duration? duration, {
   bool includeSubSecond = false,
@@ -85,10 +89,19 @@ String? formatAgentDuration(
   if (duration.isNegative) {
     return null;
   }
-  final totalSeconds = duration.inSeconds;
-  if (totalSeconds <= 0) {
-    return includeSubSecond ? '<1s' : null;
+  final totalMs = duration.inMilliseconds;
+  if (totalMs <= 0) {
+    return includeSubSecond ? '0s' : null;
   }
+  // < 1s：ceil 到 0.1s 精度。
+  if (totalMs < Duration.millisecondsPerSecond) {
+    final tenths = (totalMs + 99) ~/ 100;
+    if (tenths >= 10) {
+      return '1s';
+    }
+    return '0.${tenths}s';
+  }
+  final totalSeconds = duration.inSeconds;
   final minutes = totalSeconds ~/ 60;
   final seconds = totalSeconds % 60;
   if (minutes > 0) {

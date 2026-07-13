@@ -119,30 +119,22 @@ class _AgentLiveActivityStatus extends StatelessWidget {
 
 /// 单个 turn 末尾的分割线：展示本回合耗时与 token 用量。
 ///
+/// 仅终态（完成/中断/失败）展示；进行中耗时已在 live 活动条展示，避免重复。
 /// 无耗时且无 token 时不渲染，避免空行干扰时间线。
 class _AgentTurnFooter extends StatelessWidget {
-  const _AgentTurnFooter({required this.turn, required this.viewModel});
+  const _AgentTurnFooter({required this.turn});
 
   final AgentConversationTurnGroup turn;
-  final AgentConversationViewModel viewModel;
 
   @override
   Widget build(BuildContext context) {
-    final isRunning = turn.status == AgentHistoryTurnStatus.running;
-    if (!isRunning) {
-      return _buildFooter(context, now: null);
+    // 进行中不展示底部「进行中 · 耗时」分隔线。
+    if (turn.status == AgentHistoryTurnStatus.running) {
+      return const SizedBox.shrink();
     }
-    // running 时订阅 1s ticker，使「进行中 · Xs」递增。
-    return ListenableBuilder(
-      listenable: viewModel.elapsedClockListenable,
-      builder: (context, _) => _buildFooter(context, now: viewModel.elapsedNow),
-    );
-  }
-
-  Widget _buildFooter(BuildContext context, {required DateTime? now}) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final durationLabel = _turnDurationLabel(turn, now: now);
+    final durationLabel = _turnDurationLabel(turn);
     final tokenLabel = _turnTokenUsageLabel(turn.tokenUsage);
     final tokenTooltip = _tokenUsageTooltip(turn.tokenUsage);
     final showTokens = tokenLabel != null;
@@ -226,21 +218,11 @@ class _AgentTurnFooter extends StatelessWidget {
   }
 }
 
-/// turn 末尾耗时/状态文案。
-///
-/// running 时优先用 [startedAt] 现算 elapsed（由 footer 外层 ticker 驱动刷新）。
-String? _turnDurationLabel(AgentConversationTurnGroup group, {DateTime? now}) {
-  final liveDuration = group.status == AgentHistoryTurnStatus.running
-      ? resolveAgentElapsed(
-          now: now ?? DateTime.now(),
-          startedAt: group.startedAt,
-          frozenDuration: group.duration,
-        )
-      : group.duration;
-  final durationText = _formatDuration(liveDuration);
+/// turn 末尾耗时/状态文案（仅终态 footer 使用；进行中不渲染 footer）。
+String? _turnDurationLabel(AgentConversationTurnGroup group) {
+  final durationText = _formatDuration(group.duration);
   return switch (group.status) {
-    AgentHistoryTurnStatus.running =>
-      durationText == null ? '进行中' : '进行中 · $durationText',
+    AgentHistoryTurnStatus.running => null,
     // 中断/失败终态优先展示状态词，有耗时再附加。
     AgentHistoryTurnStatus.interrupted =>
       durationText == null ? '已中断' : '已中断 · $durationText',

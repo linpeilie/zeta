@@ -1480,8 +1480,18 @@ class AgentConversationViewModel extends ChangeNotifier {
           break;
         }
         _timeline.updateTurnTokenUsage(event);
-        // header：会话总 token；composer：上下文窗口 CircularProgressIndicator。
-        _scheduleStreamFlush(header: true, composer: true);
+        // header：会话总 token；composer：上下文窗口；history/live：turn footer。
+        // Grok 的 usage 常在 turn 完成后才到，必须刷新历史区分隔线。
+        final usageTurnId = event.turnId;
+        final usageOnHistory =
+            usageTurnId != null && _timeline.isHistoryTurnId(usageTurnId);
+        _flushStreamChangesNow(
+          header: true,
+          composer: true,
+          history: usageOnHistory,
+          // 无 turnId 或仍在 live 区时刷新 live footer。
+          liveTurn: !usageOnHistory,
+        );
       case AgentMessageDeltaEvent():
         if (!_shouldHandleEventForCurrentThread(
           sessionId: event.sessionId,

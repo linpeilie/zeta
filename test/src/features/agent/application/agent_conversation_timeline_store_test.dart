@@ -262,6 +262,112 @@ void main() {
       expect(store.currentThreadTokenUsage!.inputTokens, 3000);
     });
 
+    test('keeps Grok per-turn absolute usage without cumulative delta', () {
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+
+      store.applyHistorySnapshot(
+        const AgentThreadHistorySnapshot(
+          threadId: 'thread-1',
+          turns: <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-a',
+              entries: <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'user-a',
+                  role: AgentMessageRole.user,
+                  text: 'First',
+                ),
+              ],
+              duration: Duration(seconds: 12),
+              tokenUsage: AgentTokenUsage(
+                inputTokens: 500,
+                outputTokens: 50,
+                totalTokens: 550,
+              ),
+              tokenUsageIsSessionCumulative: false,
+            ),
+            AgentHistoryTurn(
+              id: 'turn-b',
+              entries: <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'user-b',
+                  role: AgentMessageRole.user,
+                  text: 'Second',
+                ),
+              ],
+              duration: Duration(milliseconds: 4500),
+              tokenUsage: AgentTokenUsage(
+                inputTokens: 200,
+                outputTokens: 30,
+                totalTokens: 230,
+              ),
+              tokenUsageIsSessionCumulative: false,
+            ),
+          ],
+        ),
+        _thread(),
+      );
+
+      final turns = store.conversationTurns;
+      expect(turns, hasLength(2));
+      // 不得相对上一 turn 做差分（230 不能被 550 减成 0）。
+      expect(turns[0].tokenUsage!.totalTokens, 550);
+      expect(turns[1].tokenUsage!.totalTokens, 230);
+      expect(turns[0].duration, const Duration(seconds: 12));
+      expect(turns[1].duration, const Duration(milliseconds: 4500));
+      expect(store.currentThreadTokenUsage!.totalTokens, 780);
+    });
+
+    test(
+      'applies turn-absolute usage after complete without demoting history',
+      () {
+        final store = AgentConversationTimelineStore();
+        addTearDown(store.dispose);
+
+        store.startPendingLiveTurn();
+        store.beginLiveTurnGroup(
+          const AgentTurn(id: 'turn-live', sessionId: 'thread-1'),
+        );
+        store.addConversationMessage(
+          const AgentConversationMessage(
+            id: 'user-1',
+            role: AgentMessageRole.user,
+            text: 'hello',
+          ),
+        );
+        store.completeLiveTurnGroup(
+          'turn-live',
+          duration: const Duration(seconds: 3),
+        );
+        store.syncLiveTurnBinding();
+        expect(store.liveTurnState, isNull);
+        expect(store.isHistoryTurnId('turn-live'), isTrue);
+
+        store.updateTurnTokenUsage(
+          const AgentTokenUsageEvent(
+            sessionId: 'thread-1',
+            turnId: 'turn-live',
+            isSessionCumulative: false,
+            tokenUsage: AgentTokenUsage(
+              inputTokens: 80,
+              outputTokens: 20,
+              totalTokens: 100,
+            ),
+          ),
+        );
+
+        final completed = store.conversationTurns.singleWhere(
+          (turn) => turn.id == 'turn-live',
+        );
+        expect(completed.tokenUsage!.totalTokens, 100);
+        expect(completed.duration, const Duration(seconds: 3));
+        expect(store.isHistoryTurnId('turn-live'), isTrue);
+        expect(store.isLiveTurnId('turn-live'), isFalse);
+        expect(store.currentThreadTokenUsage!.totalTokens, 100);
+      },
+    );
+
     test('removePermissionRequest drops pending card and timeline entry', () {
       final store = AgentConversationTimelineStore();
       addTearDown(store.dispose);

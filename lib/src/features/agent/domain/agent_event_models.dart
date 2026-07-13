@@ -247,14 +247,21 @@ class AgentTurnCompletedEvent extends AgentEvent {
 
 /// 回合 token 用量更新。
 ///
-/// 对应 Codex `thread/tokenUsage/updated` 通知（旧版为 `turn/tokenCount`）。
-/// [tokenUsage] 中的累计 breakdown（`totalTokens` 等）是整个会话用量；
-/// 时间线层会保存会话总量，并把 turn 用量差分后写入回合分隔线。
+/// 对应 Codex `thread/tokenUsage/updated` 通知（旧版为 `turn/tokenCount`），
+/// 以及 Grok ACP `turn_completed.usage`。
+///
+/// 当 [isSessionCumulative] 为 true（Codex 默认）时，[tokenUsage] 的
+/// breakdown 是整个会话累计；时间线层保存会话总量，并把 turn 用量差分后
+/// 写入回合分隔线。
+///
+/// 当 [isSessionCumulative] 为 false（Grok）时，[tokenUsage] 是**本回合**
+/// 绝对用量，不得再相对上一 turn 做差分。
 class AgentTokenUsageEvent extends AgentEvent {
   const AgentTokenUsageEvent({
     required this.tokenUsage,
     this.sessionId,
     this.turnId,
+    this.isSessionCumulative = true,
     this.raw = const <String, Object?>{},
   });
 
@@ -266,6 +273,9 @@ class AgentTokenUsageEvent extends AgentEvent {
 
   /// 本次上报的 token 用量。
   final AgentTokenUsage tokenUsage;
+
+  /// 为 true 时 [tokenUsage] 是会话累计（Codex）；为 false 时为本回合绝对用量（Grok）。
+  final bool isSessionCumulative;
 
   /// 原始通知 payload。
   final Map<String, Object?> raw;

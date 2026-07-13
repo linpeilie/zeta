@@ -352,19 +352,28 @@ class AgentConversationTimelineStore {
       return;
     }
 
-    // 历史 JSONL 里每个 turn 的 tokenUsage.total 是会话累计；
-    // 注册时转成 turn 增量，并保留最新累计作为会话总量。
+    // Codex 历史：tokenUsage.total 是会话累计，注册时转成 turn 增量。
+    // Grok 历史：tokenUsage 已是本回合绝对用量，直接挂到 turn，并累加会话总量。
     AgentTokenUsage? previousCumulative;
     String? runningTurnId;
     for (final turn in history.turns) {
       final isRunningTurn = turn.status == AgentHistoryTurnStatus.running;
-      final cumulative = turn.tokenUsage;
-      final turnDelta = cumulative?.hasCumulativeBreakdown == true
-          ? cumulative!.deltaFrom(previousCumulative)
-          : cumulative;
-      if (cumulative?.hasCumulativeBreakdown == true) {
-        previousCumulative = cumulative;
-        _threadTokenUsage = cumulative;
+      final usage = turn.tokenUsage;
+      final AgentTokenUsage? turnDelta;
+      if (usage != null && usage.hasCumulativeBreakdown) {
+        if (turn.tokenUsageIsSessionCumulative) {
+          turnDelta = usage.deltaFrom(previousCumulative);
+          previousCumulative = usage;
+          _threadTokenUsage = usage;
+        } else {
+          turnDelta = usage;
+          previousCumulative = previousCumulative == null
+              ? usage
+              : previousCumulative.addCumulative(usage);
+          _threadTokenUsage = previousCumulative;
+        }
+      } else {
+        turnDelta = usage;
       }
       _registerHistoryTurn(turn, asLive: isRunningTurn, tokenUsage: turnDelta);
       currentTurnGroupId = turn.id;
@@ -1008,15 +1017,18 @@ class AgentConversationTimelineStore {
     final historyExpanded = _visibleHistoryStartIndex < oldDefaultStartIndex;
     final previousVisibleCount = oldHistoryLength - _visibleHistoryStartIndex;
     final completedAt = DateTime.now();
+    // 优先 provider 上报耗时（如 Grok apiDurationMs），其次已冻结值，最后本地估算。
+    final resolvedDuration =
+        duration ??
+        turnState.duration ??
+        (turnState.startedAt == null
+            ? null
+            : completedAt.difference(turnState.startedAt!));
     turnState.updateMetadata(
       status: status,
       startedAt: turnState.startedAt,
       completedAt: completedAt,
-      duration:
-          duration ??
-          (turnState.startedAt == null
-              ? null
-              : completedAt.difference(turnState.startedAt!)),
+      duration: resolvedDuration,
       tokenUsage: turnState.tokenUsage,
     );
     _freezeOpenToolDurations(completedAt);
@@ -1037,9 +1049,15 @@ class AgentConversationTimelineStore {
 
   /// 用 provider 上报的 token 用量更新会话总量与对应回合增量。
   ///
-  /// Codex `total` 是整个会话累计：直接写入 [_threadTokenUsage]；
-  /// turn 上保存相对上一 turn 累计的差值。优先按事件中的 turnId 定位分组；
-  /// 缺失时回退到当前运行回合。
+  /// Codex（[AgentTokenUsageEvent.isSessionCumulative] == true）：`total` 是
+  /// 整个会话累计，直接写入 [_threadTokenUsage]；turn 上保存相对上一 turn
+  /// 累计的差值。
+  ///
+  /// Grok（`isSessionCumulative == false`）：上报值即本回合绝对用量，直接
+  /// 写入 turn，并累加到会话总量。
+  ///
+  /// 优先按事件中的 turnId 定位分组；缺失时回退到当前运行回合。
+  /// 若目标 turn 已进历史区，原地更新元数据，不再把它 demote 回 live。
   void updateTurnTokenUsage(AgentTokenUsageEvent event) {
     final pendingId = _pendingTurnGroupId;
     if (event.turnId != null &&
@@ -1053,14 +1071,28 @@ class AgentConversationTimelineStore {
     if (turnId == null) {
       return;
     }
-    final turnState = _turnStateFor(
-      turnId,
-      isStandby: false,
-      isHistorical: false,
-    );
-    final previousCumulative = _previousTurnCumulativeUsage(turnId);
-    final turnDelta = event.tokenUsage.deltaFrom(previousCumulative);
-    _threadTokenUsage = event.tokenUsage;
+    final existing = _turnGroups[turnId];
+    final AgentConversationTurnState turnState;
+    if (existing != null) {
+      // 已存在（含已完成历史 turn）：只改元数据，保持 historical/live 归属。
+      turnState = existing;
+    } else {
+      turnState = _turnStateFor(turnId, isStandby: false, isHistorical: false);
+    }
+
+    final AgentTokenUsage turnDelta;
+    if (event.isSessionCumulative) {
+      final previousCumulative = _previousTurnCumulativeUsage(turnId);
+      turnDelta = event.tokenUsage.deltaFrom(previousCumulative);
+      _threadTokenUsage = event.tokenUsage;
+    } else {
+      // 本回合绝对用量：覆盖写入，避免同 turn 多次上报时差分错误。
+      turnDelta = event.tokenUsage;
+      final previousCumulative = _previousTurnCumulativeUsage(turnId);
+      _threadTokenUsage = previousCumulative == null
+          ? event.tokenUsage
+          : previousCumulative.addCumulative(event.tokenUsage);
+    }
     turnState.updateMetadata(
       status: turnState.status,
       startedAt: turnState.startedAt,

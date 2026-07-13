@@ -9,15 +9,15 @@ void main() {
 
     test('builds multi-turn history with tools and thoughts', () {
       const content = r'''
-{"timestamp":1,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"first question"}},"_meta":{"eventId":"e1"}}}
-{"timestamp":2,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"thinking..."},"_meta":{"promptId":"p1"}},"_meta":{"eventId":"e2"}}}
-{"timestamp":3,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"answer one"},"messageId":"m1","_meta":{"promptId":"p1"}},"_meta":{"eventId":"e3"}}}
-{"timestamp":4,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"tool_call","toolCallId":"t1","title":"Read file","kind":"read","status":"pending"},"_meta":{"eventId":"e4"}}}
-{"timestamp":5,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"tool_call_update","toolCallId":"t1","status":"completed","content":[{"type":"content","content":{"type":"text","text":"file body"}}]},"_meta":{"eventId":"e5"}}}
-{"timestamp":6,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"turn_completed","stop_reason":"end_turn","usage":{"inputTokens":10,"outputTokens":4,"totalTokens":14}},"_meta":{"eventId":"e6"}}}
-{"timestamp":7,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"second question"}},"_meta":{"eventId":"e7"}}}
-{"timestamp":8,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"answer two"},"messageId":"m2","_meta":{"promptId":"p2"}},"_meta":{"eventId":"e8"}}}
-{"timestamp":9,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"turn_completed","stop_reason":"cancelled"},"_meta":{"eventId":"e9"}}}
+{"timestamp":1000,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"first question"}},"_meta":{"eventId":"e1","agentTimestampMs":1000000}}}
+{"timestamp":1001,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"thinking..."},"_meta":{"promptId":"p1","turnStartMs":1000000}},"_meta":{"eventId":"e2"}}}
+{"timestamp":1002,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"answer one"},"messageId":"m1","_meta":{"promptId":"p1","turnStartMs":1000000}},"_meta":{"eventId":"e3"}}}
+{"timestamp":1003,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"tool_call","toolCallId":"t1","title":"Read file","kind":"read","status":"pending"},"_meta":{"eventId":"e4"}}}
+{"timestamp":1004,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"tool_call_update","toolCallId":"t1","status":"completed","content":[{"type":"content","content":{"type":"text","text":"file body"}}]},"_meta":{"eventId":"e5"}}}
+{"timestamp":1005,"method":"_x.ai/session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"turn_completed","prompt_id":"p1","stop_reason":"end_turn","usage":{"inputTokens":10,"outputTokens":4,"totalTokens":14,"apiDurationMs":2500}},"_meta":{"eventId":"e6","agentTimestampMs":1002500}}}
+{"timestamp":1006,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"second question"}},"_meta":{"eventId":"e7","agentTimestampMs":2000000}}}
+{"timestamp":1007,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"answer two"},"messageId":"m2","_meta":{"promptId":"p2"}},"_meta":{"eventId":"e8"}}}
+{"timestamp":1008,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"turn_completed","stop_reason":"cancelled"},"_meta":{"eventId":"e9","agentTimestampMs":2005000}}}
 ''';
 
       final snapshot = parser.parse(threadId: 's1', content: content);
@@ -26,6 +26,10 @@ void main() {
       final first = snapshot.turns[0];
       expect(first.status, AgentHistoryTurnStatus.completed);
       expect(first.tokenUsage?.totalTokens, 14);
+      expect(first.tokenUsageIsSessionCumulative, isFalse);
+      expect(first.duration, const Duration(milliseconds: 2500));
+      expect(first.startedAt, isNotNull);
+      expect(first.completedAt, isNotNull);
 
       final user = first.entries
           .whereType<AgentHistoryMessageEntry>()

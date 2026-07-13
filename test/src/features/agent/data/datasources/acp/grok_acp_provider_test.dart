@@ -279,6 +279,39 @@ void main() {
       expect(event.status, AgentHistoryTurnStatus.completed);
     });
 
+    test('maps turn_completed usage as turn-absolute with apiDurationMs', () {
+      final mapped = mapper.mapXaiSessionUpdate(
+        params: <String, Object?>{
+          'sessionId': 's1',
+          'update': <String, Object?>{
+            'sessionUpdate': 'turn_completed',
+            'prompt_id': 'prompt-1',
+            'stop_reason': 'end_turn',
+            'usage': <String, Object?>{
+              'inputTokens': 100,
+              'outputTokens': 20,
+              'totalTokens': 120,
+              'cachedReadTokens': 40,
+              'reasoningTokens': 5,
+              'apiDurationMs': 4500,
+            },
+          },
+        },
+        runningTurnId: 'local-turn-1',
+      );
+      expect(mapped.events, hasLength(2));
+      final usage = mapped.events[0] as AgentTokenUsageEvent;
+      expect(usage.turnId, 'local-turn-1');
+      expect(usage.isSessionCumulative, isFalse);
+      expect(usage.tokenUsage.totalTokens, 120);
+      expect(usage.tokenUsage.inputTokens, 100);
+      expect(usage.tokenUsage.cachedInputTokens, 40);
+      final completed = mapped.events[1] as AgentTurnCompletedEvent;
+      expect(completed.turnId, 'local-turn-1');
+      expect(completed.duration, const Duration(milliseconds: 4500));
+      expect(completed.status, AgentHistoryTurnStatus.completed);
+    });
+
     test('maps plan entries', () {
       final mapped = mapper.mapSessionUpdate(
         params: <String, Object?>{

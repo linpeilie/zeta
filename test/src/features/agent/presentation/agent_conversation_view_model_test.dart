@@ -1317,11 +1317,12 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 24));
 
         expect(viewModel.historyVersion, historyVersion);
-        expect(viewModel.headerVersion, headerVersion);
+        // 首次工具相位变化会刷新 header 状态文案；后续同工具输出合并为一次 live flush。
+        expect(viewModel.headerVersion, greaterThan(headerVersion));
         expect(viewModel.composerVersion, composerVersion);
         expect(viewModel.autoScrollTick, greaterThan(autoScrollTick));
         expect(historyNotifications, 0);
-        expect(headerNotifications, 0);
+        expect(headerNotifications, 1);
         expect(composerNotifications, 0);
         expect(liveNotifications, 1);
         expect(autoScrollNotifications, 1);
