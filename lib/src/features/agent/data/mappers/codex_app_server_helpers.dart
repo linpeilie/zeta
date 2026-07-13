@@ -1167,10 +1167,18 @@ String _humanizeIdentifier(String value) {
 }
 
 /// 将 provider 原始消息 phase 映射到领域枚举。
+///
+/// Codex 稳定 schema 的 [MessagePhase] 仅有 `commentary` / `final_answer`；
+/// 额外兼容历史别名 `response` / `answer` / `final`。
 AgentMessagePhase? _messagePhase(String? phase) {
   return switch (phase) {
     'commentary' => AgentMessagePhase.commentary,
-    'response' || 'answer' || 'final' => AgentMessagePhase.response,
+    // final_answer：回合终端汇总；response/answer/final 为历史别名。
+    'final_answer' ||
+    'finalanswer' ||
+    'response' ||
+    'answer' ||
+    'final' => AgentMessagePhase.response,
     null => null,
     _ => AgentMessagePhase.other,
   };

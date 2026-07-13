@@ -464,6 +464,51 @@ void main() {
       },
     );
 
+    test(
+      'maps agentMessage final_answer phase to AgentMessagePhase.response',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+
+        await provider.initialize();
+        peer.emitNotification('item/agentMessage/delta', <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'itemId': 'message-final',
+          'delta': 'Done summary',
+          'phase': 'final_answer',
+        });
+        peer.emitNotification('item/completed', <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'item': <String, Object?>{
+            'id': 'message-final',
+            'type': 'agentMessage',
+            'text': 'Done summary',
+            'phase': 'final_answer',
+            'status': 'completed',
+          },
+        });
+        await Future<void>.delayed(Duration.zero);
+
+        final delta = events.whereType<AgentMessageDeltaEvent>().single;
+        expect(delta.phase, AgentMessagePhase.response);
+
+        final update = events.whereType<AgentMessageUpdatedEvent>().single;
+        expect(update.messageId, 'message-final');
+        expect(update.phase, AgentMessagePhase.response);
+        expect(update.status, AgentMessageStatus.completed);
+
+        await subscription.cancel();
+        await provider.dispose();
+      },
+    );
+
     test('maps item/plan/delta into streaming plan message deltas', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(

@@ -2061,7 +2061,9 @@ void main() {
     );
   });
 
-  testWidgets('renders ordinary agent messages as Markdown', (tester) async {
+  testWidgets('renders final_answer agent messages as summary markdown cards', (
+    tester,
+  ) async {
     final session = MemorySessionStore();
     final provider = FakeAgentProvider(
       responseText:
@@ -2087,6 +2089,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
+      find.byKey(const ValueKey('agent-final-answer-card-message-1')),
+      findsOneWidget,
+    );
+    expect(find.text('完成汇总'), findsOneWidget);
+    expect(
       find.textContaining('First markdown item', findRichText: true),
       findsOneWidget,
     );
@@ -2106,6 +2113,44 @@ void main() {
     expect(markdownWidget.padding, EdgeInsets.zero);
     expect(markdownWidget.enableCopyFullDocumentShortcut, isFalse);
     expect(markdownWidget.showCopyAllInContextMenu, isFalse);
+  });
+
+  testWidgets('does not render final-answer card for commentary-only turns', (
+    tester,
+  ) async {
+    final session = MemorySessionStore();
+    final provider = FakeAgentProvider(
+      responseText: 'Only interim commentary',
+      emitCompletedCommentary: true,
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('agent-message-input')),
+      'Talk',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('完成汇总'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('agent-final-answer-card-message-1')),
+      findsNothing,
+    );
+    expect(
+      find.textContaining('Only interim commentary', findRichText: true),
+      findsOneWidget,
+    );
   });
 
   testWidgets('renders plan messages as collapsible markdown cards', (

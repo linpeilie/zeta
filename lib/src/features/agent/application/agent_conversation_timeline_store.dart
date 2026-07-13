@@ -1279,6 +1279,13 @@ class AgentConversationMessage {
 
   bool get isPlan => kind == AgentConversationMessageKind.plan;
 
+  /// 是否为 Agent 完成汇总（Codex `phase=final_answer` → [AgentMessagePhase.response]）。
+  bool get isFinalAnswer {
+    return role == AgentMessageRole.agent &&
+        phase == AgentMessagePhase.response &&
+        !isPlan;
+  }
+
   bool get isCompletedCommentary {
     return role == AgentMessageRole.agent &&
         phase == AgentMessagePhase.commentary &&

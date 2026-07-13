@@ -19,6 +19,16 @@ class _AgentMessageEntry extends StatelessWidget {
     if (message.isPlan) {
       return _AgentPlanMessageCard(message: message, viewModel: viewModel);
     }
+    // Codex phase=final_answer → 完成汇总卡片；无正文时不占位。
+    if (message.isFinalAnswer) {
+      if (message.text.trim().isEmpty) {
+        return const SizedBox.shrink();
+      }
+      return _AgentFinalAnswerCard(
+        message: message,
+        useStreamingMarkdown: useStreamingMarkdown,
+      );
+    }
     if (message.role == AgentMessageRole.agent) {
       return _AgentMarkdownMessage(
         message: message,
@@ -474,6 +484,135 @@ class _AgentMarkdownBody extends StatelessWidget {
       padding: EdgeInsets.zero,
       enableCopyFullDocumentShortcut: false,
       showCopyAllInContextMenu: false,
+    );
+  }
+}
+
+/// Agent 完成汇总卡片：对应 Codex `agent_message` + `phase=final_answer`。
+///
+/// 以固定卡片壳展示全文 Markdown（不做历史折叠），流式回合内仍可增量渲染。
+class _AgentFinalAnswerCard extends StatefulWidget {
+  const _AgentFinalAnswerCard({
+    required this.message,
+    required this.useStreamingMarkdown,
+  });
+
+  final AgentConversationMessage message;
+  final bool useStreamingMarkdown;
+
+  @override
+  State<_AgentFinalAnswerCard> createState() => _AgentFinalAnswerCardState();
+}
+
+class _AgentFinalAnswerCardState extends State<_AgentFinalAnswerCard> {
+  MarkdownController? _markdownController;
+  bool _streamCommitted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncMarkdownController();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AgentFinalAnswerCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.message.id != widget.message.id ||
+        oldWidget.useStreamingMarkdown != widget.useStreamingMarkdown) {
+      _disposeMarkdownController();
+    }
+    _syncMarkdownController();
+  }
+
+  @override
+  void dispose() {
+    _disposeMarkdownController();
+    super.dispose();
+  }
+
+  MarkdownController _ensureMarkdownController() {
+    return _markdownController ??= MarkdownController();
+  }
+
+  void _syncMarkdownController() {
+    if (!widget.useStreamingMarkdown) {
+      _disposeMarkdownController();
+      return;
+    }
+    final controller = _ensureMarkdownController();
+    final nextText = widget.message.text;
+    final currentText = controller.data;
+    if (nextText != currentText) {
+      if (nextText.startsWith(currentText)) {
+        controller.appendChunk(nextText.substring(currentText.length));
+      } else {
+        controller.setData(nextText);
+      }
+      _streamCommitted = false;
+    }
+
+    final isCompleted = widget.message.status == AgentMessageStatus.completed;
+    if (isCompleted && !_streamCommitted) {
+      controller.commitStream();
+      _streamCommitted = true;
+    } else if (!isCompleted) {
+      _streamCommitted = false;
+    }
+  }
+
+  void _disposeMarkdownController() {
+    _markdownController?.dispose();
+    _markdownController = null;
+    _streamCommitted = false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    final markdown = widget.message.text;
+    final useStreamingMarkdown = widget.useStreamingMarkdown;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: IdeSpacing.space12),
+      child: RepaintBoundary(
+        child: PanelCard(
+          key: ValueKey<String>('agent-final-answer-card-${widget.message.id}'),
+          color: colors.surfaceElevated,
+          borderColor: colors.border,
+          borderRadius: IdeRadius.allComposer,
+          child: Padding(
+            padding: IdeSpacing.sectionPadding,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.check_circle_outline_rounded,
+                      size: 16,
+                      color: colors.success.withValues(alpha: 0.9),
+                    ),
+                    const SizedBox(width: IdeSpacing.space8),
+                    Text(
+                      '完成汇总',
+                      style: textStyles.titleLarge.copyWith(
+                        color: colors.textSecondary.withValues(alpha: 0.9),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: IdeSpacing.space10),
+                useStreamingMarkdown
+                    ? _AgentMarkdownBody(
+                        controller: _ensureMarkdownController(),
+                      )
+                    : _AgentMarkdownBody(data: markdown),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
