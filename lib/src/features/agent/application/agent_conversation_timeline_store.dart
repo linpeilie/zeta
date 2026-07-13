@@ -63,6 +63,12 @@ class AgentConversationTimelineStore {
   /// 当前会话的累计 token 用量（直接来自 Codex `total` breakdown）。
   AgentTokenUsage? _threadTokenUsage;
 
+  /// 当前 live turn 主活动段；无 running turn 时为 idle。
+  AgentTurnActivitySnapshot _currentActivity = AgentTurnActivitySnapshot.idle;
+
+  /// 主活动段自上次读取后是否变化（供 ViewModel 决定是否刷新 header）。
+  bool _activityDirty = false;
+
   List<AgentConversationMessage> get messages =>
       List<AgentConversationMessage>.unmodifiable(_messages);
 
@@ -162,6 +168,25 @@ class AgentConversationTimelineStore {
 
   String? get selectedRunningTurnId => _selectedRunningTurnId();
 
+  /// 当前主活动段快照。
+  AgentTurnActivitySnapshot get currentActivity => _currentActivity;
+
+  /// 当前 running turn 的本地开始时间。
+  DateTime? get currentTurnStartedAt {
+    final turnId = selectedRunningTurnId;
+    if (turnId == null) {
+      return null;
+    }
+    return _turnGroups[turnId]?.startedAt;
+  }
+
+  /// 读取并清除活动段脏标记。
+  bool takeActivityDirty() {
+    final dirty = _activityDirty;
+    _activityDirty = false;
+    return dirty;
+  }
+
   bool isToolCallExpanded(String toolCallId) {
     return _expandedToolCallIds.contains(toolCallId);
   }
@@ -242,14 +267,16 @@ class AgentConversationTimelineStore {
     final pendingTurnId = 'pending-${DateTime.now().microsecondsSinceEpoch}';
     _pendingTurnGroupId = pendingTurnId;
     currentTurnGroupId = pendingTurnId;
+    final startedAt = DateTime.now();
     _turnStateFor(
       pendingTurnId,
       isStandby: false,
       isHistorical: false,
     ).updateMetadata(
       status: AgentHistoryTurnStatus.running,
-      startedAt: DateTime.now(),
+      startedAt: startedAt,
     );
+    _setActivity(AgentTurnActivityPhase.starting, turnStartedAt: startedAt);
     return pendingTurnId;
   }
 
@@ -297,6 +324,7 @@ class AgentConversationTimelineStore {
     _pendingTurnGroupId = null;
     _visibleHistoryStartIndex = 0;
     _threadTokenUsage = null;
+    _clearActivity();
   }
 
   /// 清空当前对话，并恢复到仅包含 welcome 消息的初始待机态。
@@ -545,6 +573,7 @@ class AgentConversationTimelineStore {
       if (kind == AgentConversationMessageKind.plan && event.delta.isNotEmpty) {
         _expandedPlanMessageIds.add(event.messageId);
       }
+      _noteRespondingActivity(event.role);
       return;
     }
     final existing = _messages[existingIndex];
@@ -568,6 +597,7 @@ class AgentConversationTimelineStore {
             event.delta.isNotEmpty)) {
       _expandedPlanMessageIds.add(event.messageId);
     }
+    _noteRespondingActivity(event.role);
   }
 
   /// 用 completed item 通知更新已有消息 metadata。
@@ -657,14 +687,16 @@ class AgentConversationTimelineStore {
 
     final index = _toolCalls.indexWhere((item) => item.id == toolCall.id);
     if (index == -1) {
-      _toolCalls.add(toolCall);
-      appendTimelineEntry(AgentToolTimelineEntry(toolCall: toolCall));
+      final stamped = _stampNewToolCall(toolCall);
+      _toolCalls.add(stamped);
+      appendTimelineEntry(AgentToolTimelineEntry(toolCall: stamped));
       // MCP 进度先于 item/started 到达时，有内容则自动展开便于观察。
-      if (_isToolProgressAppend(toolCall) &&
-          toolCall.content != null &&
-          toolCall.content!.isNotEmpty) {
-        _expandedToolCallIds.add(toolCall.id);
+      if (_isToolProgressAppend(stamped) &&
+          stamped.content != null &&
+          stamped.content!.isNotEmpty) {
+        _expandedToolCallIds.add(stamped.id);
       }
+      _noteToolActivity(stamped);
       return;
     }
 
@@ -678,9 +710,12 @@ class AgentConversationTimelineStore {
         merged.content!.isNotEmpty) {
       _expandedToolCallIds.add(toolCall.id);
     }
+    _noteToolActivity(merged);
   }
 
   /// 合并同 id 工具卡更新：进度追加 content，空 content 不冲掉已有正文。
+  ///
+  /// [startedAt] 只写一次；进入终态时冻结 [duration]。
   AgentToolCall _mergeToolCallUpdate(
     AgentToolCall existing,
     AgentToolCall incoming,
@@ -707,18 +742,43 @@ class AgentConversationTimelineStore {
             !_isGenericProgressToolTitle(existing.title));
     final keepExistingKind =
         progressAppend && existing.kind != AgentToolKind.other;
+    final kind = keepExistingKind ? existing.kind : incoming.kind;
+    final startedAt =
+        existing.startedAt ??
+        incoming.startedAt ??
+        (incoming.isActiveStatus || existing.isActiveStatus
+            ? DateTime.now()
+            : null);
+
+    var completedAt = existing.completedAt ?? incoming.completedAt;
+    var duration = existing.duration ?? incoming.duration;
+    final status = incoming.status;
+    final isTerminal =
+        status == AgentToolStatus.completed ||
+        status == AgentToolStatus.failed ||
+        status == AgentToolStatus.cancelled;
+    if (isTerminal && duration == null && startedAt != null) {
+      completedAt ??= DateTime.now();
+      duration = completedAt.difference(startedAt);
+      if (duration.isNegative) {
+        duration = Duration.zero;
+      }
+    }
 
     return AgentToolCall(
       id: incoming.id,
       title: keepExistingTitle ? existing.title : incoming.title,
-      kind: keepExistingKind ? existing.kind : incoming.kind,
-      status: incoming.status,
+      kind: kind,
+      status: status,
       content: content,
       locations: incoming.locations.isNotEmpty
           ? incoming.locations
           : existing.locations,
       sessionId: incoming.sessionId ?? existing.sessionId,
       turnId: incoming.turnId ?? existing.turnId,
+      startedAt: startedAt,
+      completedAt: completedAt,
+      duration: duration,
       rawInput: incoming.rawInput.isNotEmpty
           ? incoming.rawInput
           : existing.rawInput,
@@ -727,6 +787,27 @@ class AgentConversationTimelineStore {
           : existing.rawOutput,
       raw: incoming.raw.isNotEmpty ? incoming.raw : existing.raw,
     );
+  }
+
+  /// 首次出现的工具项：活跃态补本地 [startedAt]；终态可直接冻结 duration。
+  AgentToolCall _stampNewToolCall(AgentToolCall toolCall) {
+    final now = DateTime.now();
+    final startedAt =
+        toolCall.startedAt ?? (toolCall.isActiveStatus ? now : null);
+    if (toolCall.isTerminalStatus &&
+        toolCall.duration == null &&
+        startedAt != null) {
+      final completedAt = toolCall.completedAt ?? now;
+      return toolCall.copyWith(
+        startedAt: startedAt,
+        completedAt: completedAt,
+        duration: completedAt.difference(startedAt),
+      );
+    }
+    if (startedAt == null || toolCall.startedAt != null) {
+      return toolCall;
+    }
+    return toolCall.copyWith(startedAt: startedAt);
   }
 
   /// MCP `item/mcpToolCall/progress` 等进度通知：content 按行追加。
@@ -798,17 +879,23 @@ class AgentConversationTimelineStore {
       return;
     }
 
+    final now = DateTime.now();
+    final isCompleted = existing?.status == AgentToolStatus.completed;
+    final startedAt = existing?.startedAt ?? now;
     final toolCall = AgentToolCall(
       id: event.itemId,
       title: existing?.title ?? '思考',
       kind: AgentToolKind.think,
-      status: existing?.status == AgentToolStatus.completed
+      status: isCompleted
           ? AgentToolStatus.completed
           : AgentToolStatus.inProgress,
       content: displayText.isEmpty ? null : displayText,
       locations: existing?.locations ?? const <String>[],
       sessionId: event.sessionId ?? existing?.sessionId,
       turnId: event.turnId ?? existing?.turnId,
+      startedAt: startedAt,
+      completedAt: existing?.completedAt,
+      duration: existing?.duration,
       rawInput: existing?.rawInput ?? const <String, Object?>{},
       rawOutput: existing?.rawOutput ?? const <String, Object?>{},
       raw: event.raw.isEmpty
@@ -823,6 +910,7 @@ class AgentConversationTimelineStore {
       if (displayText.isNotEmpty) {
         _expandedToolCallIds.add(event.itemId);
       }
+      _noteToolActivity(toolCall);
       return;
     }
 
@@ -831,6 +919,7 @@ class AgentConversationTimelineStore {
     if (displayText.isNotEmpty && previousDisplay.isEmpty) {
       _expandedToolCallIds.add(event.itemId);
     }
+    _noteToolActivity(toolCall);
   }
 
   /// 读取或初始化某个 reasoning item 的文本缓冲。
@@ -869,13 +958,31 @@ class AgentConversationTimelineStore {
       isStandby: false,
       isHistorical: false,
     );
+    final startedAt = turnState.startedAt ?? DateTime.now();
     turnState.updateMetadata(
       status: AgentHistoryTurnStatus.running,
-      startedAt: turnState.startedAt ?? DateTime.now(),
+      startedAt: startedAt,
       completedAt: turnState.completedAt,
       duration: turnState.duration,
       tokenUsage: turnState.tokenUsage,
     );
+    // 若尚未进入思考/工具/回复，保持或进入 starting。
+    if (!_currentActivity.isActive ||
+        _currentActivity.phase == AgentTurnActivityPhase.starting) {
+      _setActivity(
+        AgentTurnActivityPhase.starting,
+        turnStartedAt: startedAt,
+        forceSegmentRestart: false,
+      );
+    } else {
+      _setActivity(
+        _currentActivity.phase,
+        label: _currentActivity.label,
+        primaryToolId: _currentActivity.primaryToolId,
+        turnStartedAt: startedAt,
+        forceSegmentRestart: false,
+      );
+    }
   }
 
   /// turn 结束时更新分组元数据；后续条目回到 standby 分组。
@@ -891,6 +998,7 @@ class AgentConversationTimelineStore {
     if (turnState == null) {
       currentTurnGroupId = null;
       _pendingTurnGroupId = null;
+      _clearActivity();
       return;
     }
     final oldHistoryLength = _historicalTurnOrder.length;
@@ -911,6 +1019,7 @@ class AgentConversationTimelineStore {
               : completedAt.difference(turnState.startedAt!)),
       tokenUsage: turnState.tokenUsage,
     );
+    _freezeOpenToolDurations(completedAt);
     _promoteTurnToHistorical(turnId);
     if (historyExpanded) {
       _visibleHistoryStartIndex = math.max(
@@ -923,6 +1032,7 @@ class AgentConversationTimelineStore {
       );
     }
     currentTurnGroupId = null;
+    _clearActivity();
   }
 
   /// 用 provider 上报的 token 用量更新会话总量与对应回合增量。
@@ -966,6 +1076,172 @@ class AgentConversationTimelineStore {
 
   bool isLiveTurnId(String turnId) {
     return _liveTurnOrder.contains(turnId) || currentTurnGroupId == turnId;
+  }
+
+  void _noteRespondingActivity(AgentMessageRole role) {
+    if (role != AgentMessageRole.agent || !isTurnRunning) {
+      return;
+    }
+    // 工具进行中时保持 tool 主相位，避免流式回复抢占命令计时展示。
+    if (_currentActivity.phase == AgentTurnActivityPhase.toolRunning) {
+      final toolId = _currentActivity.primaryToolId;
+      if (toolId != null) {
+        for (final tool in _toolCalls) {
+          if (tool.id == toolId && tool.isActiveStatus) {
+            return;
+          }
+        }
+      }
+    }
+    _setActivity(AgentTurnActivityPhase.responding);
+  }
+
+  void _noteToolActivity(AgentToolCall toolCall) {
+    if (!isTurnRunning) {
+      return;
+    }
+    if (toolCall.kind == AgentToolKind.think) {
+      if (toolCall.isActiveStatus || toolCall.duration == null) {
+        _setActivity(
+          AgentTurnActivityPhase.thinking,
+          primaryToolId: toolCall.id,
+        );
+      } else {
+        _fallbackActivityAfterToolSettled(toolCall.id);
+      }
+      return;
+    }
+    if (toolCall.isActiveStatus) {
+      final title = toolCall.title.trim();
+      _setActivity(
+        AgentTurnActivityPhase.toolRunning,
+        label: title.isEmpty ? null : title,
+        primaryToolId: toolCall.id,
+      );
+      return;
+    }
+    _fallbackActivityAfterToolSettled(toolCall.id);
+  }
+
+  /// 主工具结束后回退到其他活跃工具 / 思考 / 启动中。
+  void _fallbackActivityAfterToolSettled(String settledToolId) {
+    if (!isTurnRunning) {
+      _clearActivity();
+      return;
+    }
+    AgentToolCall? activeTool;
+    AgentToolCall? activeThink;
+    for (final tool in _toolCalls.reversed) {
+      if (!tool.isActiveStatus) {
+        continue;
+      }
+      if (tool.id == settledToolId) {
+        continue;
+      }
+      if (tool.kind == AgentToolKind.think) {
+        activeThink ??= tool;
+      } else {
+        activeTool ??= tool;
+      }
+      if (activeTool != null) {
+        break;
+      }
+    }
+    if (activeTool != null) {
+      final title = activeTool.title.trim();
+      _setActivity(
+        AgentTurnActivityPhase.toolRunning,
+        label: title.isEmpty ? null : title,
+        primaryToolId: activeTool.id,
+      );
+      return;
+    }
+    if (activeThink != null) {
+      _setActivity(
+        AgentTurnActivityPhase.thinking,
+        primaryToolId: activeThink.id,
+      );
+      return;
+    }
+    if (_currentActivity.phase == AgentTurnActivityPhase.responding) {
+      return;
+    }
+    _setActivity(AgentTurnActivityPhase.starting);
+  }
+
+  void _setActivity(
+    AgentTurnActivityPhase phase, {
+    String? label,
+    String? primaryToolId,
+    DateTime? turnStartedAt,
+    bool forceSegmentRestart = false,
+  }) {
+    final resolvedTurnStartedAt =
+        turnStartedAt ?? currentTurnStartedAt ?? _currentActivity.turnStartedAt;
+    final samePhase = _currentActivity.phase == phase;
+    final sameTool = _currentActivity.primaryToolId == primaryToolId;
+    final sameLabel = _currentActivity.label == label;
+    if (samePhase &&
+        sameTool &&
+        sameLabel &&
+        !forceSegmentRestart &&
+        _currentActivity.isActive) {
+      // 仅补齐 turnStartedAt。
+      if (_currentActivity.turnStartedAt == null &&
+          resolvedTurnStartedAt != null) {
+        _currentActivity = AgentTurnActivitySnapshot(
+          phase: phase,
+          label: label,
+          segmentStartedAt: _currentActivity.segmentStartedAt,
+          turnStartedAt: resolvedTurnStartedAt,
+          primaryToolId: primaryToolId,
+        );
+        _activityDirty = true;
+      }
+      return;
+    }
+    final now = DateTime.now();
+    final keepSegmentStart =
+        samePhase &&
+        sameTool &&
+        !forceSegmentRestart &&
+        _currentActivity.segmentStartedAt != null;
+    _currentActivity = AgentTurnActivitySnapshot(
+      phase: phase,
+      label: label,
+      segmentStartedAt: keepSegmentStart
+          ? _currentActivity.segmentStartedAt
+          : now,
+      turnStartedAt: resolvedTurnStartedAt,
+      primaryToolId: primaryToolId,
+    );
+    _activityDirty = true;
+  }
+
+  void _clearActivity() {
+    if (_currentActivity.phase == AgentTurnActivityPhase.idle &&
+        !_activityDirty) {
+      return;
+    }
+    _currentActivity = AgentTurnActivitySnapshot.idle;
+    _activityDirty = true;
+  }
+
+  /// turn 结束时冻结尚未写 duration 的工具项。
+  void _freezeOpenToolDurations(DateTime completedAt) {
+    for (var index = 0; index < _toolCalls.length; index += 1) {
+      final tool = _toolCalls[index];
+      if (tool.duration != null || tool.startedAt == null) {
+        continue;
+      }
+      final duration = completedAt.difference(tool.startedAt!);
+      final frozen = tool.copyWith(
+        completedAt: tool.completedAt ?? completedAt,
+        duration: duration.isNegative ? Duration.zero : duration,
+      );
+      _toolCalls[index] = frozen;
+      replaceTimelineTool(frozen);
+    }
   }
 
   void dispose() {

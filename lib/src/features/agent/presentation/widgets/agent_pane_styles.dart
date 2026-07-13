@@ -350,20 +350,52 @@ Map<String, TextStyle> _agentHighlightTheme(BuildContext context) {
   };
 }
 
-String? _formatDuration(Duration? duration) {
-  if (duration == null) {
-    return null;
+String? _formatDuration(Duration? duration, {bool includeSubSecond = false}) =>
+    formatAgentDuration(duration, includeSubSecond: includeSubSecond);
+
+/// 标题栏 / 对话流执行中文案：主 segment 时长 + turn 总时长。
+///
+/// 例：`思考中 · 24s · 共 1m 12s`、`启动中 · 共 3s`。
+String _headerRunningStatusText(
+  AgentConversationViewModel viewModel,
+  DateTime now,
+) {
+  final segmentLabel = viewModel.runningActivityLabel;
+  final segmentElapsed = _formatDuration(
+    viewModel.segmentElapsedAt(now),
+    includeSubSecond: true,
+  );
+  final turnElapsed = _formatDuration(
+    viewModel.turnElapsedAt(now),
+    includeSubSecond: true,
+  );
+  final parts = <String>[];
+  if (segmentLabel != null) {
+    if (segmentElapsed != null) {
+      parts.add('$segmentLabel · $segmentElapsed');
+    } else {
+      parts.add(segmentLabel);
+    }
   }
-  final totalSeconds = duration.inSeconds;
-  if (totalSeconds <= 0) {
-    return null;
+  if (turnElapsed != null) {
+    parts.add('共 $turnElapsed');
   }
-  final minutes = totalSeconds ~/ 60;
-  final seconds = totalSeconds % 60;
-  if (minutes > 0) {
-    return '${minutes}m ${seconds}s';
+  if (parts.isEmpty) {
+    return '运行中';
   }
-  return '${seconds}s';
+  return parts.join(' · ');
+}
+
+/// 工具/思考卡旁的耗时文案。
+String? _toolElapsedLabel(
+  AgentConversationViewModel viewModel,
+  AgentToolCall toolCall,
+  DateTime now,
+) {
+  final elapsed = viewModel.toolElapsedAt(toolCall, now);
+  // 进行中不足 1 秒也给即时反馈；终态仍隐藏 0 时长。
+  final live = toolCall.isActiveStatus && toolCall.duration == null;
+  return _formatDuration(elapsed, includeSubSecond: live);
 }
 
 String? _threadOpenStatusText(AgentConversationViewModel viewModel) {

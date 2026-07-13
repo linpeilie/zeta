@@ -147,6 +147,64 @@ void main() {
       expect(store.currentThreadLastTokenUsage!.totalTokens, 1240);
     });
 
+    test('stamps tool startedAt, tracks activity phase, freezes duration', () {
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+
+      store.startPendingLiveTurn();
+      expect(store.currentActivity.phase, AgentTurnActivityPhase.starting);
+      expect(store.currentTurnStartedAt, isNotNull);
+      expect(store.takeActivityDirty(), isTrue);
+
+      store.appendReasoningDelta(
+        const AgentReasoningDeltaEvent(
+          itemId: 'think-1',
+          kind: AgentReasoningDeltaKind.summaryText,
+          delta: 'planning',
+        ),
+      );
+      expect(store.currentActivity.phase, AgentTurnActivityPhase.thinking);
+      final think = store.toolCalls.singleWhere((t) => t.id == 'think-1');
+      expect(think.startedAt, isNotNull);
+      expect(think.duration, isNull);
+      expect(store.takeActivityDirty(), isTrue);
+
+      store.upsertToolCall(
+        const AgentToolCall(
+          id: 'cmd-1',
+          title: 'git status',
+          kind: AgentToolKind.execute,
+          status: AgentToolStatus.inProgress,
+        ),
+      );
+      expect(store.currentActivity.phase, AgentTurnActivityPhase.toolRunning);
+      expect(store.currentActivity.label, 'git status');
+      final cmd = store.toolCalls.singleWhere((t) => t.id == 'cmd-1');
+      expect(cmd.startedAt, isNotNull);
+      final cmdStartedAt = cmd.startedAt!;
+
+      store.upsertToolCall(
+        const AgentToolCall(
+          id: 'cmd-1',
+          title: 'git status',
+          kind: AgentToolKind.execute,
+          status: AgentToolStatus.completed,
+          content: 'ok',
+        ),
+      );
+      final completedCmd = store.toolCalls.singleWhere((t) => t.id == 'cmd-1');
+      expect(completedCmd.startedAt, cmdStartedAt);
+      expect(completedCmd.duration, isNotNull);
+      expect(completedCmd.duration!.inMilliseconds, greaterThanOrEqualTo(0));
+
+      final turnId = store.selectedRunningTurnId!;
+      store.completeLiveTurnGroup(turnId);
+      expect(store.currentActivity.phase, AgentTurnActivityPhase.idle);
+      expect(store.isTurnRunning, isFalse);
+      final frozenThink = store.toolCalls.singleWhere((t) => t.id == 'think-1');
+      expect(frozenThink.duration, isNotNull);
+    });
+
     test('converts cumulative history token usage into per-turn deltas', () {
       final store = AgentConversationTimelineStore();
       addTearDown(store.dispose);

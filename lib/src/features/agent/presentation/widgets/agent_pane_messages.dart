@@ -40,19 +40,109 @@ class _AgentMessageEntry extends StatelessWidget {
   }
 }
 
+/// 对话流内的进行中状态条（Codex 风格）。
+///
+/// 挂在 live turn 条目之后、footer 之前：展示主活动段 + 时长，
+/// 不依赖是否已有思考/工具卡（Grok 仅回复流时也可见）。
+class _AgentLiveActivityStatus extends StatelessWidget {
+  const _AgentLiveActivityStatus({required this.viewModel});
+
+  final AgentConversationViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: Listenable.merge(<Listenable>[
+        viewModel.elapsedClockListenable,
+        viewModel.headerVersionListenable,
+      ]),
+      builder: (context, _) {
+        if (!viewModel.isTurnRunning) {
+          return const SizedBox.shrink();
+        }
+        final colors = IdeColors.of(context);
+        final textStyles = IdeTextStyles.of(context);
+        final waitingLabel = viewModel.threadStatusCapsuleLabel;
+        final isWaiting = waitingLabel != null;
+        final statusText = isWaiting
+            ? waitingLabel
+            : _headerRunningStatusText(viewModel, viewModel.elapsedNow);
+        final accent = isWaiting ? colors.warning : colors.accent;
+        return Padding(
+          key: const ValueKey<String>('agent-live-activity-status'),
+          padding: const EdgeInsets.only(
+            bottom: IdeSpacing.space10,
+            top: IdeSpacing.space2,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (isWaiting)
+                Icon(
+                  viewModel.threadWaitingOnApproval
+                      ? Icons.verified_user_outlined
+                      : viewModel.threadWaitingOnUserInput
+                      ? Icons.edit_note_rounded
+                      : Icons.error_outline_rounded,
+                  size: 14,
+                  color: accent,
+                )
+              else
+                const IdeBusySpinner(
+                  key: ValueKey<String>('agent-live-activity-spinner'),
+                  size: 12,
+                  strokeWidth: 1.8,
+                  semanticsLabel: 'Turn running',
+                ),
+              const SizedBox(width: IdeSpacing.space8),
+              Expanded(
+                child: Text(
+                  statusText,
+                  key: const ValueKey<String>('agent-live-activity-label'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: textStyles.bodySmall.copyWith(
+                    color: isWaiting
+                        ? colors.warning
+                        : colors.textSecondary.withValues(alpha: 0.9),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 /// 单个 turn 末尾的分割线：展示本回合耗时与 token 用量。
 ///
 /// 无耗时且无 token 时不渲染，避免空行干扰时间线。
 class _AgentTurnFooter extends StatelessWidget {
-  const _AgentTurnFooter({required this.turn});
+  const _AgentTurnFooter({required this.turn, required this.viewModel});
 
   final AgentConversationTurnGroup turn;
+  final AgentConversationViewModel viewModel;
 
   @override
   Widget build(BuildContext context) {
+    final isRunning = turn.status == AgentHistoryTurnStatus.running;
+    if (!isRunning) {
+      return _buildFooter(context, now: null);
+    }
+    // running 时订阅 1s ticker，使「进行中 · Xs」递增。
+    return ListenableBuilder(
+      listenable: viewModel.elapsedClockListenable,
+      builder: (context, _) => _buildFooter(context, now: viewModel.elapsedNow),
+    );
+  }
+
+  Widget _buildFooter(BuildContext context, {required DateTime? now}) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final durationLabel = _turnDurationLabel(turn);
+    final durationLabel = _turnDurationLabel(turn, now: now);
     final tokenLabel = _turnTokenUsageLabel(turn.tokenUsage);
     final tokenTooltip = _tokenUsageTooltip(turn.tokenUsage);
     final showTokens = tokenLabel != null;
@@ -62,9 +152,7 @@ class _AgentTurnFooter extends StatelessWidget {
     }
     return Padding(
       key: ValueKey<String>('agent-turn-footer-${turn.id}'),
-      padding: const EdgeInsets.only(
-        bottom: IdeSpacing.space16,
-      ),
+      padding: const EdgeInsets.only(bottom: IdeSpacing.space16),
       child: Row(
         children: [
           Expanded(
@@ -139,8 +227,17 @@ class _AgentTurnFooter extends StatelessWidget {
 }
 
 /// turn 末尾耗时/状态文案。
-String? _turnDurationLabel(AgentConversationTurnGroup group) {
-  final durationText = _formatDuration(group.duration);
+///
+/// running 时优先用 [startedAt] 现算 elapsed（由 footer 外层 ticker 驱动刷新）。
+String? _turnDurationLabel(AgentConversationTurnGroup group, {DateTime? now}) {
+  final liveDuration = group.status == AgentHistoryTurnStatus.running
+      ? resolveAgentElapsed(
+          now: now ?? DateTime.now(),
+          startedAt: group.startedAt,
+          frozenDuration: group.duration,
+        )
+      : group.duration;
+  final durationText = _formatDuration(liveDuration);
   return switch (group.status) {
     AgentHistoryTurnStatus.running =>
       durationText == null ? '进行中' : '进行中 · $durationText',

@@ -68,6 +68,31 @@ class _AgentHeader extends StatelessWidget {
                           strokeWidth: 2,
                           semanticsLabel: 'Thread running',
                         ),
+                        const SizedBox(width: IdeSpacing.space6),
+                        Flexible(
+                          child: ListenableBuilder(
+                            listenable: viewModel.elapsedClockListenable,
+                            builder: (context, _) {
+                              return Text(
+                                _headerRunningStatusText(
+                                  viewModel,
+                                  viewModel.elapsedNow,
+                                ),
+                                key: const ValueKey(
+                                  'agent-header-running-status',
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: textStyles.caption.copyWith(
+                                  color: colors.mutedText.withValues(
+                                    alpha: 0.86,
+                                  ),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
                       ],
                     ],
                   ),

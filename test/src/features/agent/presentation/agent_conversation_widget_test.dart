@@ -1329,6 +1329,27 @@ void main() {
       );
       expect(progress.value, closeTo(0.6, 0.001));
 
+      // 对话流内进行中状态条（与 header 同源；fake provider 会先推 agent delta → 回复中）。
+      expect(
+        find.byKey(const ValueKey('agent-live-activity-status')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('agent-live-activity-label')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('agent-live-activity-status')),
+          matching: find.textContaining('回复中'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('agent-header-running-status')),
+        findsOneWidget,
+      );
+
       final tooltip = tester.widget<IdeTooltip>(
         find.ancestor(
           of: find.byKey(const ValueKey('agent-composer-token-usage')),

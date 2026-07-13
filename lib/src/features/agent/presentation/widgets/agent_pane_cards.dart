@@ -313,12 +313,26 @@ class _AgentToolCallCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    final needsElapsedTick =
+        toolCall.duration == null &&
+        toolCall.startedAt != null &&
+        toolCall.isActiveStatus;
+    final listenables = <Listenable>[viewModel.expansionVersionListenable];
+    if (needsElapsedTick) {
+      listenables.add(viewModel.elapsedClockListenable);
+    }
     return ListenableBuilder(
-      listenable: viewModel.expansionVersionListenable,
+      listenable: Listenable.merge(listenables),
       builder: (context, _) {
         final canExpand =
             toolCall.content != null && toolCall.content!.isNotEmpty;
         final expanded = viewModel.isToolCallExpanded(toolCall.id);
+        final elapsedLabel = _toolElapsedLabel(
+          viewModel,
+          toolCall,
+          viewModel.elapsedNow,
+        );
         return IdeCollapsibleCard(
           headerKey: ValueKey<String>('agent-tool-header-${toolCall.id}'),
           bodyKey: ValueKey<String>('agent-tool-body-${toolCall.id}'),
@@ -327,17 +341,40 @@ class _AgentToolCallCard extends StatelessWidget {
           onToggle: canExpand
               ? () => viewModel.toggleToolCall(toolCall.id)
               : () {},
-          titleWidget: Text(
-            toolCall.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: _agentItemTextStyle(context),
+          titleWidget: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _toolCardTitle(toolCall),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _agentItemTextStyle(context),
+                ),
+              ),
+              if (elapsedLabel != null) ...[
+                const SizedBox(width: IdeSpacing.space8),
+                Text(
+                  elapsedLabel,
+                  key: ValueKey<String>('agent-tool-elapsed-${toolCall.id}'),
+                  style: textStyles.caption.copyWith(
+                    color: colors.textTertiary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ],
           ),
-          leading: Icon(
-            _toolIcon(toolCall.kind),
-            size: 14,
-            color: colors.accent.withValues(alpha: 0.7),
-          ),
+          leading: toolCall.isActiveStatus
+              ? const IdeBusySpinner(
+                  size: 12,
+                  strokeWidth: 1.8,
+                  semanticsLabel: 'Tool running',
+                )
+              : Icon(
+                  _toolIcon(toolCall.kind),
+                  size: 14,
+                  color: colors.accent.withValues(alpha: 0.7),
+                ),
           margin: const EdgeInsets.only(bottom: IdeSpacing.space10),
           bodyPadding: const EdgeInsets.only(top: IdeSpacing.space8),
           hoverBackgroundColor: _agentHoverBackground(context),
@@ -354,6 +391,25 @@ class _AgentToolCallCard extends StatelessWidget {
       },
     );
   }
+}
+
+/// 思考/命令卡标题：进行中时用更明确的相位文案。
+String _toolCardTitle(AgentToolCall toolCall) {
+  if (!toolCall.isActiveStatus) {
+    return toolCall.title;
+  }
+  if (toolCall.kind == AgentToolKind.think) {
+    return '思考中';
+  }
+  final title = toolCall.title.trim();
+  if (title.isEmpty) {
+    return '执行中';
+  }
+  // 已是「执行中」前缀则不再重复。
+  if (title.startsWith('执行中') || title.startsWith('思考中')) {
+    return title;
+  }
+  return '执行中 · $title';
 }
 
 /// 审批卡片。

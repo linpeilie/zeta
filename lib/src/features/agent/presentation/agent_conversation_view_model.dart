@@ -11,6 +11,7 @@ import 'package:zeta/src/features/agent/application/agent_conversation_model_sel
 import 'package:zeta/src/features/agent/application/agent_conversation_permission_selection_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_ui_signals.dart';
+import 'package:zeta/src/features/agent/application/agent_elapsed_ticker.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 
@@ -60,6 +61,7 @@ class AgentConversationViewModel extends ChangeNotifier {
   final AgentConversationPermissionSelectionController
   _permissionSelectionController;
   late final AgentConversationUiSignals _uiSignals;
+  final AgentElapsedTicker _elapsedTicker = AgentElapsedTicker();
 
   AgentProvider? _provider;
   StreamSubscription<AgentEvent>? _eventSubscription;
@@ -343,6 +345,62 @@ class AgentConversationViewModel extends ChangeNotifier {
   bool get showRunningIndicator =>
       isTurnRunning && threadStatusCapsuleLabel == null;
 
+  /// 共享 1 秒时钟；header/卡片用其计算 live elapsed。
+  Listenable get elapsedClockListenable => _elapsedTicker;
+
+  /// 最近一次 tick 的本地时间。
+  DateTime get elapsedNow => _elapsedTicker.now;
+
+  /// 当前主活动段（思考/执行/回复等）。
+  AgentTurnActivitySnapshot get currentActivity => _timeline.currentActivity;
+
+  /// 当前 running turn 本地开始时间。
+  DateTime? get currentTurnStartedAt => _timeline.currentTurnStartedAt;
+
+  /// 标题栏主 segment 文案（不含时长）。
+  String? get runningActivityLabel =>
+      agentActivitySegmentLabel(currentActivity);
+
+  /// 当前 turn 总耗时（running 现算，结束后读 turn.duration）。
+  Duration? turnElapsedAt(DateTime now) {
+    final runningId = _timeline.selectedRunningTurnId;
+    if (runningId != null) {
+      return resolveAgentElapsed(
+        now: now,
+        startedAt: _timeline.currentTurnStartedAt,
+      );
+    }
+    final live = _timeline.liveTurnState;
+    if (live != null) {
+      return resolveAgentElapsed(
+        now: now,
+        startedAt: live.startedAt,
+        completedAt: live.completedAt,
+        frozenDuration: live.duration,
+      );
+    }
+    return null;
+  }
+
+  /// 当前主活动段耗时。
+  Duration? segmentElapsedAt(DateTime now) {
+    final activity = currentActivity;
+    if (!activity.isActive) {
+      return null;
+    }
+    return resolveAgentElapsed(now: now, startedAt: activity.segmentStartedAt);
+  }
+
+  /// 工具/思考卡耗时。
+  Duration? toolElapsedAt(AgentToolCall toolCall, DateTime now) {
+    return resolveAgentElapsed(
+      now: now,
+      startedAt: toolCall.startedAt,
+      completedAt: toolCall.completedAt,
+      frozenDuration: toolCall.duration,
+    );
+  }
+
   AgentThreadOpenPhase get threadOpenPhase => _threadOpenPhase;
 
   bool get requiresResumedSelectedThread => _requiresResumedSelectedThread;
@@ -605,6 +663,8 @@ class AgentConversationViewModel extends ChangeNotifier {
       _threadLastActiveAt = null;
       contextPanelVisible.value = false;
       _timeline.resetToWelcomeState();
+      _consumeActivityDirty();
+      _syncElapsedTicker();
       if (previousThreadId != null &&
           previousThreadId != effectiveRestoredSessionId) {
         final provider = _provider;
@@ -668,6 +728,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     final isNewTurn = runningTurnId == null;
     if (isNewTurn) {
       _timeline.startPendingLiveTurn();
+      _consumeActivityDirty();
     } else {
       _timeline.currentTurnGroupId = runningTurnId;
     }
@@ -683,6 +744,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       state: AgentProviderConnectionState.running,
       message: 'Agent is working',
     );
+    _syncElapsedTicker();
     _publishUiChanges(
       syncLiveTurn: true,
       liveTurn: true,
@@ -1090,12 +1152,27 @@ class AgentConversationViewModel extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     providerController.removeListener(_handleProviderSettingsChanged);
+    _elapsedTicker.dispose();
     _uiSignals.dispose();
     contextPanelVisible.dispose();
     unawaited(_eventSubscription?.cancel());
     _timeline.dispose();
     super.dispose();
   }
+
+  void _syncElapsedTicker() {
+    if (_disposed) {
+      return;
+    }
+    if (isTurnRunning) {
+      _elapsedTicker.start();
+    } else {
+      _elapsedTicker.stop();
+    }
+  }
+
+  /// 消费活动段脏标记；为 true 时应刷新 header。
+  bool _consumeActivityDirty() => _timeline.takeActivityDirty();
 
   void _handleProviderSettingsChanged() {
     if (_disposed) {
@@ -1173,6 +1250,8 @@ class AgentConversationViewModel extends ChangeNotifier {
       status: AgentHistoryTurnStatus.failed,
     );
     _timeline.clearPendingTurnGroupId();
+    _consumeActivityDirty();
+    _syncElapsedTicker();
     _publishUiChanges(
       history: true,
       syncLiveTurn: true,
@@ -1300,6 +1379,8 @@ class AgentConversationViewModel extends ChangeNotifier {
             status: AgentHistoryTurnStatus.interrupted,
           );
         }
+        _consumeActivityDirty();
+        _syncElapsedTicker();
         _publishUiChanges(
           history: true,
           syncLiveTurn: true,
@@ -1351,6 +1432,8 @@ class AgentConversationViewModel extends ChangeNotifier {
         }
         _lastShownErrorMessage = null;
         _timeline.beginLiveTurnGroup(event.turn);
+        _consumeActivityDirty();
+        _syncElapsedTicker();
         _flushStreamChangesNow(
           syncLiveTurn: true,
           liveTurn: true,
@@ -1380,6 +1463,8 @@ class AgentConversationViewModel extends ChangeNotifier {
             message: '$activeProviderName ready',
           );
         }
+        _consumeActivityDirty();
+        _syncElapsedTicker();
         _flushStreamChangesNow(
           history: true,
           syncLiveTurn: true,
@@ -1406,7 +1491,11 @@ class AgentConversationViewModel extends ChangeNotifier {
         }
         final isPlanDelta = _rawLooksLikePlan(event.raw);
         _timeline.appendMessageDelta(event);
-        _scheduleStreamFlush(autoScroll: true, expansion: isPlanDelta);
+        _scheduleStreamFlush(
+          header: _consumeActivityDirty(),
+          autoScroll: true,
+          expansion: isPlanDelta,
+        );
       case AgentReasoningDeltaEvent():
         if (!_shouldHandleEventForCurrentThread(
           sessionId: event.sessionId,
@@ -1415,7 +1504,11 @@ class AgentConversationViewModel extends ChangeNotifier {
           break;
         }
         _timeline.appendReasoningDelta(event);
-        _scheduleStreamFlush(autoScroll: true, expansion: true);
+        _scheduleStreamFlush(
+          header: _consumeActivityDirty(),
+          autoScroll: true,
+          expansion: true,
+        );
       case AgentMessageUpdatedEvent():
         if (!_shouldHandleEventForCurrentThread(
           sessionId: event.sessionId,
@@ -1451,7 +1544,8 @@ class AgentConversationViewModel extends ChangeNotifier {
           break;
         }
         _timeline.upsertToolCall(event.toolCall);
-        // 工具进行中时更新状态文案（不强制 header 刷新，避免高频工具输出打断节流）。
+        final activityChanged = _consumeActivityDirty();
+        // 工具进行中时更新状态文案；相位变化时刷新 header。
         if (event.toolCall.status == AgentToolStatus.inProgress ||
             event.toolCall.status == AgentToolStatus.pending) {
           final title = event.toolCall.title.trim();
@@ -1461,10 +1555,14 @@ class AgentConversationViewModel extends ChangeNotifier {
               message: title.length > 80 ? '${title.substring(0, 80)}…' : title,
             );
           }
-          _scheduleStreamFlush(autoScroll: true);
+          _scheduleStreamFlush(header: activityChanged, autoScroll: true);
           break;
         }
-        _flushStreamChangesNow(liveTurn: true, autoScroll: true);
+        _flushStreamChangesNow(
+          liveTurn: true,
+          header: activityChanged,
+          autoScroll: true,
+        );
       case AgentPermissionRequestedEvent():
         if (!_shouldHandleEventForCurrentThread(
           sessionId: event.request.sessionId,

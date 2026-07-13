@@ -1454,6 +1454,82 @@ void main() {
     });
 
     test(
+      'tracks activity segment and freezes tool elapsed on complete',
+      () async {
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.sendMessage('hello');
+        expect(
+          viewModel.currentActivity.phase,
+          AgentTurnActivityPhase.starting,
+        );
+        expect(viewModel.currentTurnStartedAt, isNotNull);
+        expect(viewModel.runningActivityLabel, '启动中');
+
+        provider.emit(
+          const AgentReasoningDeltaEvent(
+            itemId: 'think-1',
+            kind: AgentReasoningDeltaKind.summaryText,
+            delta: 'step one',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          viewModel.currentActivity.phase,
+          AgentTurnActivityPhase.thinking,
+        );
+        expect(viewModel.runningActivityLabel, '思考中');
+
+        provider.emit(
+          const AgentToolCallEvent(
+            AgentToolCall(
+              id: 'cmd-1',
+              title: 'npm test',
+              kind: AgentToolKind.execute,
+              status: AgentToolStatus.inProgress,
+            ),
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          viewModel.currentActivity.phase,
+          AgentTurnActivityPhase.toolRunning,
+        );
+        expect(viewModel.runningActivityLabel, contains('npm test'));
+
+        provider.emit(
+          const AgentToolCallEvent(
+            AgentToolCall(
+              id: 'cmd-1',
+              title: 'npm test',
+              kind: AgentToolKind.execute,
+              status: AgentToolStatus.completed,
+              content: 'ok',
+            ),
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        final cmd = viewModel.timelineEntries
+            .whereType<AgentToolTimelineEntry>()
+            .map((entry) => entry.toolCall)
+            .firstWhere((tool) => tool.id == 'cmd-1');
+        expect(cmd.duration, isNotNull);
+
+        provider.emit(
+          const AgentTurnCompletedEvent(
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(viewModel.currentActivity.phase, AgentTurnActivityPhase.idle);
+        expect(viewModel.isTurnRunning, isFalse);
+      },
+    );
+
+    test(
       'marks failed turns and shows the failure reason inside the turn',
       () async {
         final provider = _FakeAgentProvider();

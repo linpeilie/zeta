@@ -33,6 +33,8 @@ class AgentPlanEntry {
 /// Provider 上报的工具调用。
 ///
 /// [rawInput]、[rawOutput] 和 [raw] 保留原始协议字段，方便调试和后续补齐映射。
+/// [startedAt] / [completedAt] / [duration] 由客户端 timeline 维护，用于
+/// 进行中 elapsed 与终态冻结展示；mapper 通常不填写。
 class AgentToolCall {
   const AgentToolCall({
     required this.id,
@@ -43,6 +45,9 @@ class AgentToolCall {
     this.locations = const <String>[],
     this.sessionId,
     this.turnId,
+    this.startedAt,
+    this.completedAt,
+    this.duration,
     this.rawInput = const <String, Object?>{},
     this.rawOutput = const <String, Object?>{},
     this.raw = const <String, Object?>{},
@@ -72,6 +77,15 @@ class AgentToolCall {
   /// 可选回合 id，用于将实时事件路由到当前 turn。
   final String? turnId;
 
+  /// 本地观测到的开始时间（首次 pending/inProgress 或首条 reasoning）。
+  final DateTime? startedAt;
+
+  /// 本地观测到的结束时间。
+  final DateTime? completedAt;
+
+  /// 终态冻结耗时；进行中为 null，由 UI 用 [startedAt] 现算。
+  final Duration? duration;
+
   /// 原始输入 payload。
   final Map<String, Object?> rawInput;
 
@@ -80,4 +94,47 @@ class AgentToolCall {
 
   /// 完整原始事件 payload。
   final Map<String, Object?> raw;
+
+  bool get isTerminalStatus =>
+      status == AgentToolStatus.completed ||
+      status == AgentToolStatus.failed ||
+      status == AgentToolStatus.cancelled;
+
+  bool get isActiveStatus =>
+      status == AgentToolStatus.pending || status == AgentToolStatus.inProgress;
+
+  AgentToolCall copyWith({
+    String? id,
+    String? title,
+    AgentToolKind? kind,
+    AgentToolStatus? status,
+    String? content,
+    List<String>? locations,
+    String? sessionId,
+    String? turnId,
+    DateTime? startedAt,
+    DateTime? completedAt,
+    Duration? duration,
+    Map<String, Object?>? rawInput,
+    Map<String, Object?>? rawOutput,
+    Map<String, Object?>? raw,
+    bool clearContent = false,
+  }) {
+    return AgentToolCall(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      kind: kind ?? this.kind,
+      status: status ?? this.status,
+      content: clearContent ? null : (content ?? this.content),
+      locations: locations ?? this.locations,
+      sessionId: sessionId ?? this.sessionId,
+      turnId: turnId ?? this.turnId,
+      startedAt: startedAt ?? this.startedAt,
+      completedAt: completedAt ?? this.completedAt,
+      duration: duration ?? this.duration,
+      rawInput: rawInput ?? this.rawInput,
+      rawOutput: rawOutput ?? this.rawOutput,
+      raw: raw ?? this.raw,
+    );
+  }
 }

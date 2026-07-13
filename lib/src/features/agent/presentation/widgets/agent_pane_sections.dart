@@ -93,6 +93,8 @@ class _AgentTurnSection extends StatelessWidget {
       turnId: turn.id,
       entries: turn.entries,
     );
+    final isLiveRunning =
+        !turn.isStandby && turn.status == AgentHistoryTurnStatus.running;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
@@ -102,8 +104,10 @@ class _AgentTurnSection extends StatelessWidget {
             key: ValueKey<String>('turn-block-${turn.id}-${block.id}'),
             child: _buildBlock(block),
           ),
+        // 对话流内进行中状态（与 header 同源；Grok/Codex 通用）。
+        if (isLiveRunning) _AgentLiveActivityStatus(viewModel: viewModel),
         // 每个非 standby turn 末尾展示耗时与本 turn token 用量。
-        if (!turn.isStandby) _AgentTurnFooter(turn: turn),
+        if (!turn.isStandby) _AgentTurnFooter(turn: turn, viewModel: viewModel),
       ],
     );
   }
