@@ -28,6 +28,7 @@ class AgentConversationUiSignals {
   Timer? _streamFlushTimer;
   bool _streamNeedsLiveFlush = false;
   bool _streamNeedsHeaderFlush = false;
+  bool _streamNeedsComposerFlush = false;
   bool _streamNeedsAutoScroll = false;
   bool _streamNeedsExpansionFlush = false;
 
@@ -92,6 +93,7 @@ class AgentConversationUiSignals {
 
   void scheduleStreamFlush({
     bool header = false,
+    bool composer = false,
     bool autoScroll = false,
     bool expansion = false,
   }) {
@@ -100,6 +102,7 @@ class AgentConversationUiSignals {
     }
     _streamNeedsLiveFlush = true;
     _streamNeedsHeaderFlush = _streamNeedsHeaderFlush || header;
+    _streamNeedsComposerFlush = _streamNeedsComposerFlush || composer;
     _streamNeedsAutoScroll = _streamNeedsAutoScroll || autoScroll;
     _streamNeedsExpansionFlush = _streamNeedsExpansionFlush || expansion;
     _streamFlushTimer ??= Timer(
@@ -126,19 +129,21 @@ class AgentConversationUiSignals {
     }
     final scheduledLiveFlush = _streamNeedsLiveFlush;
     final scheduledHeaderFlush = _streamNeedsHeaderFlush;
+    final scheduledComposerFlush = _streamNeedsComposerFlush;
     final scheduledAutoScroll = _streamNeedsAutoScroll;
     final scheduledExpansionFlush = _streamNeedsExpansionFlush;
     _streamFlushTimer?.cancel();
     _streamFlushTimer = null;
     _streamNeedsLiveFlush = false;
     _streamNeedsHeaderFlush = false;
+    _streamNeedsComposerFlush = false;
     _streamNeedsAutoScroll = false;
     _streamNeedsExpansionFlush = false;
     publish(
       history: history,
       syncLiveTurn: syncLiveTurn,
       header: header || scheduledHeaderFlush,
-      composer: composer,
+      composer: composer || scheduledComposerFlush,
       expansion: expansion || scheduledExpansionFlush,
       liveTurn: liveTurn || scheduledLiveFlush,
       autoScroll: autoScroll || scheduledAutoScroll,

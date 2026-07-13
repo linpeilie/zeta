@@ -1395,7 +1395,8 @@ class AgentConversationViewModel extends ChangeNotifier {
           break;
         }
         _timeline.updateTurnTokenUsage(event);
-        _scheduleStreamFlush(header: true);
+        // header：会话总 token；composer：上下文窗口 CircularProgressIndicator。
+        _scheduleStreamFlush(header: true, composer: true);
       case AgentMessageDeltaEvent():
         if (!_shouldHandleEventForCurrentThread(
           sessionId: event.sessionId,
@@ -1862,11 +1863,13 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   void _scheduleStreamFlush({
     bool header = false,
+    bool composer = false,
     bool autoScroll = false,
     bool expansion = false,
   }) {
     _uiSignals.scheduleStreamFlush(
       header: header,
+      composer: composer,
       autoScroll: autoScroll,
       expansion: expansion,
     );

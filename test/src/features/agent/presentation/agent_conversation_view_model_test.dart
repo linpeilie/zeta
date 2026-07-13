@@ -1188,7 +1188,7 @@ void main() {
     });
 
     test(
-      'keeps history and composer notifiers stable during live streaming flushes',
+      'keeps history notifier stable while refreshing header and composer on token usage',
       () async {
         final provider = _FakeAgentProvider();
         final viewModel = _createViewModel(provider);
@@ -1235,17 +1235,21 @@ void main() {
               inputTokens: 1000,
               outputTokens: 300,
               totalTokens: 1300,
+              lastTotalTokens: 1200,
+              modelContextWindow: 2000,
             ),
           ),
         );
         await Future<void>.delayed(const Duration(milliseconds: 24));
 
+        // history 保持稳定；header（会话 token）与 composer（上下文进度环）需同步刷新。
         expect(viewModel.historyVersion, historyVersion);
-        expect(viewModel.composerVersion, composerVersion);
         expect(viewModel.headerVersion, greaterThan(headerVersion));
+        expect(viewModel.composerVersion, greaterThan(composerVersion));
+        expect(viewModel.currentThreadLastTokenUsage?.totalTokens, 1200);
         expect(historyNotifications, 0);
-        expect(composerNotifications, 0);
         expect(headerNotifications, 1);
+        expect(composerNotifications, 1);
         expect(liveNotifications, 1);
       },
     );
