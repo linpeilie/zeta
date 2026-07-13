@@ -58,12 +58,33 @@ class ProjectThreadsViewModel extends ChangeNotifier {
     _notify();
   }
 
-  /// 只更新选中 id，用于当前 Agent 会话创建后同步高亮。
+  /// 全局唯一选中：写入 [projectPath] 的 thread 高亮，并清除其他项目的选中态。
+  ///
+  /// 侧栏可能同时展开多个项目；选中样式必须跨项目互斥，避免多个 thread 同时高亮。
   void selectThreadId(String projectPath, String threadId) {
-    updateState(
-      projectPath,
-      (current) => current.copyWith(selectedThreadId: threadId),
-    );
+    var changed = false;
+
+    for (final path in _states.keys.toList(growable: false)) {
+      if (path == projectPath) {
+        continue;
+      }
+      final other = _states[path]!;
+      if (other.selectedThreadId != null) {
+        _states[path] = other.copyWith(selectedThreadId: null);
+        changed = true;
+      }
+    }
+
+    final current = stateFor(projectPath);
+    if (!_states.containsKey(projectPath) ||
+        current.selectedThreadId != threadId) {
+      _states[projectPath] = current.copyWith(selectedThreadId: threadId);
+      changed = true;
+    }
+
+    if (changed) {
+      _notify();
+    }
   }
 
   void clearSelectedThreadId(String projectPath) {

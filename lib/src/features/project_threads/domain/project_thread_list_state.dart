@@ -45,7 +45,9 @@ class ProjectThreadListState {
   /// 最近一次加载错误；保留已有 thread 缓存。
   final String? errorMessage;
 
-  /// 当前项目选中的 thread id。
+  /// 当前项目下被全局选中的 thread id。
+  ///
+  /// 运行时全局至多一个项目持有非空值；其它项目必须为 null，以保证侧栏只有一条选中样式。
   final String? selectedThreadId;
 
   /// 是否显示已归档线程（对应 `thread/list` 的 `archived`）。

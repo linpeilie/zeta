@@ -280,6 +280,39 @@ void main() {
       expect(plan.projectsToLoad, <String>['/repo', '/other']);
     });
 
+    test('restore plan keeps only one selected thread across projects', () {
+      final plan = buildProjectThreadsRestorePlan(
+        projectPaths: const <String>['/repo', '/other', '/third'],
+        activeProjectPath: '/other',
+        snapshot: const ProjectThreadsSessionSnapshot(
+          selectedThreadIdsByProject: <String, String>{
+            '/repo': 'thread-a',
+            '/other': 'thread-b',
+            '/third': 'thread-c',
+          },
+        ),
+      );
+
+      expect(plan.states['/other']?.selectedThreadId, 'thread-b');
+      expect(plan.states['/repo']?.selectedThreadId, isNull);
+      expect(plan.states['/third']?.selectedThreadId, isNull);
+    });
+
+    test('selectThreadId clears selection in other projects', () {
+      final provider = _FakeAgentProvider(pages: const <AgentThreadPage>[]);
+      final controller = _createController(provider);
+
+      controller.selectThreadId('/repo', 'thread-a');
+      controller.selectThreadId('/other', 'thread-b');
+
+      expect(controller.stateFor('/other').selectedThreadId, 'thread-b');
+      expect(controller.stateFor('/repo').selectedThreadId, isNull);
+
+      controller.selectThreadId('/repo', 'thread-c');
+      expect(controller.stateFor('/repo').selectedThreadId, 'thread-c');
+      expect(controller.stateFor('/other').selectedThreadId, isNull);
+    });
+
     test('passes archived and searchTerm to listThreads', () async {
       final provider = _FakeAgentProvider(
         pages: <AgentThreadPage>[_page(_threads(1), nextCursor: null)],

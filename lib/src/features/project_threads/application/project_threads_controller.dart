@@ -178,19 +178,19 @@ class ProjectThreadsController {
     );
   }
 
-  /// 选中某条 thread，并写入项目级选择状态。
+  /// 选中某条 thread，并写入全局唯一选择状态（跨项目互斥高亮）。
   void selectThread(String projectPath, AgentThreadSummary thread) {
     _registerThreadMapping(projectPath, thread.id);
     selectThreadId(projectPath, thread.id);
   }
 
-  /// 只更新选中 id，用于当前 Agent 会话创建后同步高亮。
+  /// 更新选中 id 并同步高亮；会清除其他项目的选中态。
   void selectThreadId(String projectPath, String threadId) {
     _registerThreadMapping(projectPath, threadId);
     viewModel.selectThreadId(projectPath, threadId);
   }
 
-  /// 清空当前项目的 thread 选中态，用于切换到全新的会话草稿。
+  /// 清空指定项目的 thread 选中态，用于切换到全新的会话草稿。
   void clearSelectedThread(String projectPath) {
     viewModel.clearSelectedThreadId(projectPath);
   }

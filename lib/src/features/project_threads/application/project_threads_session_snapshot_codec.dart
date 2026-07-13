@@ -71,8 +71,49 @@ ProjectThreadsRestorePlan buildProjectThreadsRestorePlan({
     }
   }
 
+  // 旧会话可能在多个项目上各存一条 selected；恢复时归一为全局唯一选中。
+  _retainSingleSelectedThread(
+    states: states,
+    preferredProjectPath: activeProjectPath,
+  );
+
   return ProjectThreadsRestorePlan(
     states: states,
     projectsToLoad: List<String>.unmodifiable(projectsToLoad),
   );
+}
+
+/// 保证 [states] 中至多一个项目保留 [ProjectThreadListState.selectedThreadId]。
+///
+/// 优先保留 [preferredProjectPath] 上的选中；否则保留 map 中第一条非空选中。
+void _retainSingleSelectedThread({
+  required Map<String, ProjectThreadListState> states,
+  required String? preferredProjectPath,
+}) {
+  String? owner;
+  if (preferredProjectPath != null &&
+      states[preferredProjectPath]?.selectedThreadId != null) {
+    owner = preferredProjectPath;
+  } else {
+    for (final entry in states.entries) {
+      if (entry.value.selectedThreadId != null) {
+        owner = entry.key;
+        break;
+      }
+    }
+  }
+
+  if (owner == null) {
+    return;
+  }
+
+  for (final path in states.keys.toList(growable: false)) {
+    if (path == owner) {
+      continue;
+    }
+    final state = states[path]!;
+    if (state.selectedThreadId != null) {
+      states[path] = state.copyWith(selectedThreadId: null);
+    }
+  }
 }
