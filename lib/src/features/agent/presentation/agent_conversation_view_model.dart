@@ -596,8 +596,16 @@ class AgentConversationViewModel extends ChangeNotifier {
     final capabilities = providerController.capabilitiesForProviderId(
       config.id,
     );
+    final bootstrapPolicy = capabilities.bootstrapPolicy;
+    if (!bootstrapPolicy.allowsEagerModelPreload) {
+      _log.fine(
+        'Deferring ${config.displayName} preload until session bootstrap',
+      );
+      _publishUiChanges(composer: true);
+      return;
+    }
     final hasWorkspace = _projectPath?.trim().isNotEmpty ?? false;
-    if (capabilities.bootstrapPolicy.requiresWorkspace && !hasWorkspace) {
+    if (bootstrapPolicy.requiresWorkspace && !hasWorkspace) {
       _log.fine(
         'Deferring ${config.displayName} preload until a workspace is ready',
       );

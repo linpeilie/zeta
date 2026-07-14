@@ -2027,6 +2027,51 @@ void main() {
       expect(viewModel.showServiceTier, isTrue);
     });
 
+    test(
+      'switchActiveProvider defers workspace-scoped Cursor initialization',
+      () async {
+        // Arrange
+        final cursorConfig = AgentProviderConfig.defaultCursor.copyWith(
+          enabled: true,
+        );
+        final codex = _FakeAgentProvider();
+        final cursor = _FakeAgentProvider(
+          providerConfig: cursorConfig,
+          declaredCapabilities: AgentProviderCapabilities.cursorAcp,
+        );
+        final controller = ActiveAgentProviderController(
+          providerFactory: _MultiFakeAgentProviderFactory(
+            <String, AgentProvider>{
+              defaultAgentProviderId: codex,
+              cursorAgentProviderId: cursor,
+            },
+          ),
+          configStore: MemoryAgentProviderConfigStore(
+            AgentProviderSettings(
+              providers: <AgentProviderConfig>[
+                AgentProviderConfig.defaultCodex,
+                cursorConfig,
+              ],
+            ),
+          ),
+        );
+        addTearDown(controller.dispose);
+        final viewModel = AgentConversationViewModel(
+          providerController: controller,
+        );
+        addTearDown(viewModel.dispose);
+        viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
+
+        // Act
+        await viewModel.loadModels();
+        await viewModel.switchActiveProvider(cursorAgentProviderId);
+
+        // Assert
+        expect(codex.initializeCalls, 1);
+        expect(cursor.initializeCalls, 0);
+      },
+    );
+
     test('selectModel updates selection and persists to config', () async {
       final provider = _FakeAgentProvider();
       final controller = ActiveAgentProviderController(
@@ -2384,6 +2429,7 @@ class _FakeAgentProvider
     this.resumeSessionTitle,
     this.providerConfig = AgentProviderConfig.defaultCodex,
     this.availableModels = const AgentModelList(models: <AgentModelInfo>[]),
+    this.declaredCapabilities = AgentProviderCapabilities.codexAppServer,
     AgentThreadHistorySnapshot? historySnapshot,
     Map<String, AgentThreadHistorySnapshot> historySnapshotsByThread =
         const <String, AgentThreadHistorySnapshot>{},
@@ -2408,6 +2454,7 @@ class _FakeAgentProvider
   final String? resumeSessionTitle;
   final AgentProviderConfig providerConfig;
   final AgentModelList availableModels;
+  final AgentProviderCapabilities declaredCapabilities;
   final AgentThreadHistorySnapshot _defaultHistorySnapshot;
   final Map<String, AgentThreadHistorySnapshot> _historySnapshotsByThread;
   final Map<String, Completer<AgentSession>> _resumeCompleters;
@@ -2419,15 +2466,21 @@ class _FakeAgentProvider
       StreamController<AgentEvent>.broadcast();
   AgentModelSelection? lastModelSelection;
   bool disposed = false;
+  int initializeCalls = 0;
 
   @override
   AgentProviderConfig get config => providerConfig;
 
   @override
+  AgentProviderCapabilities get capabilities => declaredCapabilities;
+
+  @override
   Stream<AgentEvent> get events => _events.stream;
 
   @override
-  Future<void> initialize() async {}
+  Future<void> initialize() async {
+    initializeCalls += 1;
+  }
 
   @override
   Future<AgentThreadPage> listThreads({

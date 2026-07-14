@@ -229,6 +229,14 @@ class IdeShellController extends ChangeNotifier {
     }
     _sessionCoordinator.cancelPendingRestore();
 
+    // Cursor 等 workspace-scoped provider 在切换时不能先于项目上下文初始化。
+    if (projectPath != _projectPath) {
+      await _loadProject(projectPath, activateThreads: false);
+      if (_projectPath != projectPath) {
+        return;
+      }
+    }
+
     if (providerId != agentViewModel.activeProviderId) {
       try {
         await agentViewModel.switchActiveProvider(providerId);
@@ -239,13 +247,6 @@ class IdeShellController extends ChangeNotifier {
           stackTrace,
         );
         _statusReporter?.call('Could not select Agent provider: $error');
-        return;
-      }
-    }
-
-    if (projectPath != _projectPath) {
-      await _loadProject(projectPath, activateThreads: false);
-      if (_projectPath != projectPath) {
         return;
       }
     }

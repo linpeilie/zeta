@@ -266,6 +266,48 @@ void main() {
       expect(codex.listQueries, isNotEmpty);
       expect(grok.listQueries, isNotEmpty);
     });
+
+    test('keeps an older Cursor thread visible on the first page', () async {
+      // Arrange：10 条较新的 Codex 会话不应把 Cursor 完全挤出首页。
+      final codex = _FakeAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        pages: <AgentThreadPage>[_page(_threads(10), nextCursor: null)],
+      );
+      final grok = _FakeAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        pages: <AgentThreadPage>[
+          _page(const <AgentThreadSummary>[], nextCursor: null),
+        ],
+      );
+      final cursor = _FakeAgentProvider(
+        config: AgentProviderConfig.defaultCursor.copyWith(enabled: true),
+        declaredCapabilities: AgentProviderCapabilities.cursorAcp,
+        pages: <AgentThreadPage>[
+          _page(<AgentThreadSummary>[
+            _thread(
+              id: 'cursor-old',
+              providerId: cursorAgentProviderId,
+              updatedAt: DateTime.fromMillisecondsSinceEpoch(-1),
+            ),
+          ], nextCursor: null),
+        ],
+      );
+      final controller = _createMultiProviderController(
+        codex: codex,
+        grok: grok,
+        cursor: cursor,
+      );
+
+      // Act
+      controller.activateProject('/repo');
+      await _flushAsync();
+
+      // Assert
+      final state = controller.stateFor('/repo');
+      expect(state.threads, hasLength(5));
+      expect(state.threads[1].id, 'cursor-old');
+      expect(state.nextCursor, 'agg:5');
+    });
   });
 
   group('Project Threads session snapshot', () {
@@ -467,15 +509,22 @@ ProjectThreadsController _createController(
 ProjectThreadsController _createMultiProviderController({
   required _FakeAgentProvider codex,
   required _FakeAgentProvider grok,
+  _FakeAgentProvider? cursor,
   ProjectThreadsViewModel? viewModel,
 }) {
   final controller = ActiveAgentProviderController(
-    providerFactory: _MultiAgentProviderFactory(codex: codex, grok: grok),
+    providerFactory: _MultiAgentProviderFactory(
+      codex: codex,
+      grok: grok,
+      cursor: cursor,
+    ),
     configStore: MemoryAgentProviderConfigStore(
-      const AgentProviderSettings(
+      AgentProviderSettings(
         providers: <AgentProviderConfig>[
           AgentProviderConfig.defaultCodex,
           AgentProviderConfig.defaultGrok,
+          if (cursor != null)
+            AgentProviderConfig.defaultCursor.copyWith(enabled: true),
         ],
         activeProviderId: defaultAgentProviderId,
       ),
@@ -543,15 +592,21 @@ class _FakeAgentProviderFactory implements AgentProviderFactory {
 }
 
 class _MultiAgentProviderFactory implements AgentProviderFactory {
-  const _MultiAgentProviderFactory({required this.codex, required this.grok});
+  const _MultiAgentProviderFactory({
+    required this.codex,
+    required this.grok,
+    this.cursor,
+  });
 
   final _FakeAgentProvider codex;
   final _FakeAgentProvider grok;
+  final _FakeAgentProvider? cursor;
 
   @override
   AgentProvider create(AgentProviderConfig config) {
     return switch (config.id) {
       grokAgentProviderId => grok,
+      cursorAgentProviderId => cursor ?? codex,
       _ => codex,
     };
   }

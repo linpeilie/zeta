@@ -391,6 +391,7 @@ void main() {
             'cwd': workspace,
             'title': 'Remote only',
             'updatedAt': '2026-07-14T02:00:00Z',
+            '_meta': <String, Object?>{'branch': 'feature/cursor'},
           },
         ],
       );
@@ -410,6 +411,57 @@ void main() {
       expect(page.threads, hasLength(2));
       expect(page.threads.first.title, 'Server title');
       expect(peer.requestMethods, contains('session/list'));
+      final indexed = await store.load();
+      expect(indexed.sessions, hasLength(2));
+      expect(indexed.find('shared-session')?.title, 'Server title');
+      expect(indexed.find('remote-session')?.title, 'Remote only');
+      expect(indexed.find('remote-session')?.metadata, <String, Object?>{
+        'branch': 'feature/cursor',
+      });
+    });
+
+    test('remote backfill preserves a newer local index entry', () async {
+      // Arrange
+      final workspace = normalizeCursorWorkspacePath(r'D:\repo\zeta')!;
+      final store = MemoryCursorSessionIndexStore(
+        CursorSessionIndexSnapshot(
+          sessions: <CursorSessionIndexEntry>[
+            _indexEntry(
+              id: 'shared-session',
+              workspace: workspace,
+              title: 'New local title',
+              updatedAt: DateTime.utc(2026, 7, 15),
+            ),
+          ],
+        ),
+      );
+      final peer = _FakeCursorPeer(
+        supportsList: true,
+        remoteSessions: <Map<String, Object?>>[
+          <String, Object?>{
+            'sessionId': 'shared-session',
+            'cwd': workspace,
+            'title': 'Stale remote title',
+            'updatedAt': '2026-07-14T03:00:00Z',
+          },
+        ],
+      );
+      final provider = CursorAcpAgentProvider(
+        config: AgentProviderConfig.defaultCursor,
+        peer: peer,
+        sessionIndexStore: store,
+      );
+      addTearDown(provider.dispose);
+
+      // Act
+      await provider.listThreads(
+        query: AgentThreadListQuery(projectPath: workspace, limit: 10),
+      );
+
+      // Assert
+      final indexed = (await store.load()).find('shared-session')!;
+      expect(indexed.title, 'New local title');
+      expect(indexed.updatedAt, DateTime.utc(2026, 7, 15));
     });
 
     test('captures load replay once and reuses it during resume', () async {

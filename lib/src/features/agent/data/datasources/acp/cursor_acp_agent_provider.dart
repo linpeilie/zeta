@@ -346,6 +346,9 @@ class CursorAcpAgentProvider
         if (cursorWorkspacePathsEqual(entry.workspacePath, workspace))
           entry.sessionId: entry.toThreadSummary(),
     };
+    final localCount = merged.length;
+    var remoteCount = 0;
+    var remoteSucceeded = false;
 
     // 远端列表是可选增强；定位、认证或 session/list 失败都不能遮蔽本地索引。
     try {
@@ -353,6 +356,12 @@ class CursorAcpAgentProvider
       await initialize();
       if (_supportsRemoteSessionList) {
         final remote = await _listRemoteSessions(workspace);
+        remoteCount = remote.length;
+        remoteSucceeded = true;
+        await _rememberRemoteSessionsBestEffort(
+          workspacePath: workspace,
+          sessions: remote,
+        );
         for (final summary in remote) {
           final local = merged[summary.id];
           merged[summary.id] = local == null
@@ -380,11 +389,20 @@ class CursorAcpAgentProvider
     final limit = query.limit <= 0 ? 50 : query.limit;
     final page = sessions.skip(offset).take(limit).toList(growable: false);
     final nextOffset = offset + page.length;
+    final nextCursor = nextOffset < sessions.length
+        ? '$_localListCursorPrefix$nextOffset'
+        : null;
+    _log.info(
+      'Listed Cursor sessions for $workspace '
+      'local=$localCount remote=$remoteCount '
+      'remoteSupported=$_supportsRemoteSessionList '
+      'remoteSucceeded=$remoteSucceeded merged=${merged.length} '
+      'matched=${sessions.length} offset=$offset page=${page.length} '
+      'next=${nextCursor != null}',
+    );
     return AgentThreadPage(
       threads: List<AgentThreadSummary>.unmodifiable(page),
-      nextCursor: nextOffset < sessions.length
-          ? '$_localListCursorPrefix$nextOffset'
-          : null,
+      nextCursor: nextCursor,
     );
   }
 
@@ -684,26 +702,36 @@ class CursorAcpAgentProvider
   Future<List<AgentThreadSummary>> _listRemoteSessions(String workspace) async {
     final sessions = <String, AgentThreadSummary>{};
     final seenCursors = <String>{};
+    var rawCount = 0;
+    var ignoredCount = 0;
+    var pageCount = 0;
+    var reachedLimit = false;
     String? cursor;
+    remotePages:
     for (var page = 0; page < _maxRemoteListPages; page += 1) {
       final result = await _requirePeer().sendRequest(
         'session/list',
         params: <String, Object?>{'cwd': workspace, 'cursor': ?cursor},
         timeout: _requestTimeout,
       );
+      pageCount = page + 1;
       final payload = _asMap(result) ?? const <String, Object?>{};
       final rawSessions = payload['sessions'];
       if (rawSessions is List) {
         for (final rawSession in rawSessions) {
+          rawCount += 1;
           final summary = _remoteThreadSummary(
             value: rawSession,
             expectedWorkspace: workspace,
           );
           if (summary != null) {
             sessions[summary.id] = summary;
+          } else {
+            ignoredCount += 1;
           }
           if (sessions.length >= _maxRemoteSessions) {
-            return sessions.values.toList(growable: false);
+            reachedLimit = true;
+            break remotePages;
           }
         }
       }
@@ -715,6 +743,11 @@ class CursorAcpAgentProvider
       }
       cursor = nextCursor;
     }
+    _log.info(
+      'Cursor session/list for $workspace pages=$pageCount '
+      'received=$rawCount accepted=${sessions.length} ignored=$ignoredCount '
+      'capped=$reachedLimit',
+    );
     return sessions.values.toList(growable: false);
   }
 
@@ -948,6 +981,61 @@ class CursorAcpAgentProvider
     } catch (error, stackTrace) {
       _log.warning(
         'Could not persist Cursor session index entry $sessionId',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  /// 把远端可见会话批量回填到最小索引，供 CLI 不可用或不再支持 list 时兜底。
+  Future<void> _rememberRemoteSessionsBestEffort({
+    required String workspacePath,
+    required List<AgentThreadSummary> sessions,
+  }) async {
+    if (sessions.isEmpty) {
+      return;
+    }
+    try {
+      await _sessionIndexStore.update((current) {
+        var next = current;
+        for (final session in sessions) {
+          final existing = next.find(session.id);
+          final remoteMetadata = _asMap(_asMap(session.raw)?['metadata']);
+          final updatedAt =
+              existing != null && existing.updatedAt.isAfter(session.updatedAt)
+              ? existing.updatedAt
+              : session.updatedAt;
+          final title =
+              existing == null ||
+                  !session.updatedAt.isBefore(existing.updatedAt)
+              ? session.title ?? existing?.title
+              : existing.title ?? session.title;
+          next = next.upsert(
+            CursorSessionIndexEntry(
+              sessionId: session.id,
+              providerId: config.id,
+              workspacePath: session.projectPath,
+              title: title,
+              createdAt: existing?.createdAt ?? session.createdAt,
+              updatedAt: updatedAt,
+              status: existing?.status ?? AgentThreadRuntimeStatus.idle,
+              metadata: <String, Object?>{
+                ...?existing?.metadata,
+                ...sanitizeCursorSessionMetadata(
+                  remoteMetadata ?? const <String, Object?>{},
+                ),
+              },
+            ),
+          );
+        }
+        return next;
+      });
+      _log.info(
+        'Backfilled ${sessions.length} Cursor sessions for $workspacePath',
+      );
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Could not backfill Cursor session index for $workspacePath',
         error,
         stackTrace,
       );

@@ -1367,6 +1367,7 @@ String? _providerShortLabel(String providerId) {
   return switch (trimmed) {
     defaultAgentProviderId || 'codex' => 'Codex',
     grokAgentProviderId || 'grok' => 'Grok',
+    cursorAgentProviderId || 'cursor' => 'Cursor',
     _ => trimmed.length <= 10 ? trimmed : trimmed.substring(0, 10),
   };
 }

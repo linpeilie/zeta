@@ -1003,6 +1003,15 @@ void main() {
     await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
     await tester.runAsync(waitForIo);
     await tester.pumpAndSettle();
+    expect(
+      find.byKey(
+        ValueKey<String>(
+          'project-thread-provider-${directory.path}-cursor-thread',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Cursor'), findsOneWidget);
     final mouse = await hoverThreadTile(
       tester,
       directory.path,
