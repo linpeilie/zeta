@@ -170,6 +170,9 @@ authenticate。Phase 2–4 已支持核心对话、权限响应与取消、本�
 `session/load` 历史恢复、动态 config options、legacy mode 回退，以及 Cursor 提问、计划、
 todo、子任务和图片状态扩展。阻塞请求在超时、turn cancel、workspace 切换、进程退出和
 provider dispose 时统一收尾；图片与 resource 入口只有握手明确声明 capability 后才开放。
+真实 CLI 发布门禁由 `tool/smoke_cursor_acp.py` 执行：默认临时 Git workspace、拒绝工具权限，
+验证握手、核心 turn、进程重启后的 replay 和取消。各平台/架构结果独立记录，自动化测试
+不能替代缺失的真实设备证据。
 
 ### 管理适配
 
@@ -263,6 +266,8 @@ IDE 会话状态目前版本为 2，持久化内容包括：
 - Codex provider 事件映射。
 - Cursor CLI 身份冲突、workspace peer 重建、session 索引与恢复、ACP 流式映射、动态配置、
   权限/提问/计划响应，以及超时、取消、dispose 和进程早退收尾。
+- Cursor 真实 CLI smoke 的中文/空格 workspace、包装器、重启恢复和拒绝权限路径；平台
+  证据矩阵见 `docs/cursor_acp_release_validation.md`。
 - AgentConversationViewModel 状态机。
 - Agent 管理的版本比较、配置校验/冲突/备份、日志脱敏和禁用只读联动。
 - ProjectThreadsController 和 ProjectThreadsViewModel 的分页、缓存、选择和错误状态分工。
@@ -273,7 +278,8 @@ IDE 会话状态目前版本为 2，持久化内容包括：
 ## 10. 演进方向
 
 - Codex 适配 Phase 2：thread 重命名/归档/删除/分叉/回滚/压缩，以及审批表单与策略预设（见适配计划）。
-- 完成 Cursor 配置安全编辑、脱敏诊断与 Beta 兼容告警。
+- 在 Windows、macOS、Linux/WSL 完成两个 Cursor CLI 版本的真实 smoke 后，再评估提升
+  Cursor Beta 的默认展示层级；provider 继续默认禁用。
 - 增加文件内容预览或编辑器能力。
 - 增加 Agent 执行审计记录。
 - 支持更多 Agent provider。

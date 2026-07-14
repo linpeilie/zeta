@@ -355,6 +355,12 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
       }
       await process.stdin.close();
       process.kill();
+      try {
+        await process.exitCode.timeout(const Duration(seconds: 5));
+      } on TimeoutException {
+        // 包装器或其子进程未及时退出时再升级为强制终止，避免长期占用 workspace。
+        process.kill(ProcessSignal.sigkill);
+      }
     }
     await _closeControllers();
   }

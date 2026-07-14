@@ -76,6 +76,64 @@ void main() {
       expect(resolved, isNull);
     });
 
+    test(
+      'locates Cursor in a restricted PATH without a home directory',
+      () async {
+        // Arrange
+        final restrictedPath = Directory(
+          '${tempDirectory.path}${Platform.pathSeparator}受限 PATH 空格',
+        );
+        await restrictedPath.create();
+        final cursorAgent = File(
+          '${restrictedPath.path}${Platform.pathSeparator}${_name('cursor-agent')}',
+        );
+        await cursorAgent.writeAsString('cursor');
+        final locator = CursorCliLocator(
+          environment: <String, String>{'PATH': restrictedPath.path},
+          identityProbe: (_) async =>
+              const CursorCliIdentity(productName: 'Cursor Agent'),
+        );
+
+        // Act
+        final resolved = await locator.locate(
+          AgentProviderConfig.defaultCursor,
+        );
+
+        // Assert
+        expect(resolved?.displayPath, cursorAgent.path);
+      },
+    );
+
+    test('skips a damaged configured candidate before probing PATH', () async {
+      // Arrange
+      final damagedCandidate = Directory(
+        '${tempDirectory.path}${Platform.pathSeparator}${_name('agent')}',
+      );
+      await damagedCandidate.create();
+      final cursorAgent = File(
+        '${tempDirectory.path}${Platform.pathSeparator}${_name('cursor-agent')}',
+      );
+      await cursorAgent.writeAsString('cursor');
+      final probed = <String>[];
+      final locator = CursorCliLocator(
+        environment: <String, String>{'PATH': tempDirectory.path},
+        identityProbe: (command) async {
+          probed.add(command.displayPath);
+          return const CursorCliIdentity(productName: 'Cursor Agent');
+        },
+      );
+      final config = AgentProviderConfig.defaultCursor.copyWith(
+        extra: <String, Object?>{'cliPath': damagedCandidate.path},
+      );
+
+      // Act
+      final resolved = await locator.locate(config);
+
+      // Assert
+      expect(resolved?.displayPath, cursorAgent.path);
+      expect(probed, isNot(contains(damagedCandidate.path)));
+    });
+
     test('normalizes protocol arguments to agent acp', () async {
       // Arrange
       final candidate = File(

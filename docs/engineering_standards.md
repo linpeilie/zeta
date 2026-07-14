@@ -1,6 +1,6 @@
 # 工程规范
 
-最后更新：2026-07-10
+最后更新：2026-07-14
 
 本文从当前 `lib/` 重构后的代码结构中提炼长期遵循的工程规范。它补充根目录 `AGENTS.md`，用于指导后续功能开发、重构和评审。
 
@@ -162,5 +162,8 @@ Zeta 是桌面工具，不是营销页。界面应紧凑、克制、可扫描。
 - provider datasource 和 transport 用 fake process、fake storage 或 callback 注入。
 - pane、timeline、file tree 等用户可见行为用 widget test。
 - 简单视觉调整可以只运行分析和相关 widget test，但行为变化必须补测试。
+- 外部 CLI 的自动化测试不能替代真实平台验收。Beta provider 发布前使用脱敏 smoke，分别
+  记录 OS/架构、CLI 版本、包装器类型和结果；没有设备或凭据时必须标记“待执行/阻塞”，
+  不得推断通过。真实 smoke 使用临时 workspace、最小权限和非破坏性 prompt。
 
 评审时优先检查依赖方向、协议泄漏、异步竞态、持久化兼容性、文件系统性能和 UI 溢出风险。

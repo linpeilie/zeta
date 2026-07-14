@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
@@ -6,6 +7,9 @@ import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdi
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 final _log = loggerFor('zeta.agent.cursor_process_starter');
+
+/// Windows 包装器进程树终止器；测试可注入，生产使用 `taskkill /T`。
+typedef CursorProcessTreeKiller = Future<bool> Function(int processId);
 
 /// 实际传给 [Process.start] 的 Cursor ACP 启动参数。
 class ResolvedCursorProcessCommand {
@@ -56,6 +60,7 @@ ProcessStarter cursorProcessStarter(
   AgentProviderConfig config, {
   CursorCliLocator? locator,
   ProcessStarter? delegate,
+  CursorProcessTreeKiller? windowsTreeKiller,
 }) {
   return (
     String _,
@@ -68,12 +73,19 @@ ProcessStarter cursorProcessStarter(
       'Using verified Cursor CLI ${command.displayPath} '
       '(${command.identity.version ?? 'unknown version'})',
     );
-    return (delegate ?? Process.start)(
+    final process = await (delegate ?? Process.start)(
       command.executable,
       command.arguments,
       workingDirectory: workingDirectory,
       environment: environment,
     );
+    if (Platform.isWindows && _isWindowsWrapper(command.displayPath)) {
+      return _WindowsCursorProcess(
+        process,
+        treeKiller: windowsTreeKiller ?? _killWindowsProcessTree,
+      );
+    }
+    return process;
   };
 }
 
@@ -85,4 +97,70 @@ List<String> _protocolArguments(List<String> configuredArguments) {
     return const <String>['acp'];
   }
   return <String>[...configuredArguments, 'acp'];
+}
+
+bool _isWindowsWrapper(String path) {
+  final lower = path.toLowerCase();
+  return lower.endsWith('.cmd') ||
+      lower.endsWith('.bat') ||
+      lower.endsWith('.ps1');
+}
+
+Future<bool> _killWindowsProcessTree(int processId) async {
+  try {
+    final result = await Process.run('taskkill.exe', <String>[
+      '/PID',
+      '$processId',
+      '/T',
+      '/F',
+    ]).timeout(const Duration(seconds: 5));
+    return result.exitCode == 0;
+  } catch (error, stackTrace) {
+    _log.warning(
+      'Could not terminate Cursor wrapper process tree',
+      error,
+      stackTrace,
+    );
+    return false;
+  }
+}
+
+/// Cursor 官方 Windows wrapper 会再启动 Node；只杀 wrapper 会留下占用 cwd 的子进程。
+class _WindowsCursorProcess implements Process {
+  _WindowsCursorProcess(this._delegate, {required this.treeKiller});
+
+  final Process _delegate;
+  final CursorProcessTreeKiller treeKiller;
+  bool _killStarted = false;
+
+  @override
+  int get pid => _delegate.pid;
+
+  @override
+  IOSink get stdin => _delegate.stdin;
+
+  @override
+  Stream<List<int>> get stdout => _delegate.stdout;
+
+  @override
+  Stream<List<int>> get stderr => _delegate.stderr;
+
+  @override
+  Future<int> get exitCode => _delegate.exitCode;
+
+  @override
+  bool kill([ProcessSignal signal = ProcessSignal.sigterm]) {
+    if (_killStarted) {
+      return true;
+    }
+    _killStarted = true;
+    unawaited(
+      treeKiller(pid).then((killed) {
+        if (!killed) {
+          _delegate.kill(signal);
+        }
+      }),
+    );
+    return true;
+  }
 }

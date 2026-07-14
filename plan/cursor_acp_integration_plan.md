@@ -1,6 +1,6 @@
 # Zeta 接入 Cursor Agent 的分析与分步落地方案
 
-> 状态：Phase 1–5 已完成；Phase 6 待实施
+> 状态：Phase 1–5 已完成；Phase 6 工程门禁已落地，macOS/Linux/WSL 真实证据待补
 >
 > 编制日期：2026-07-13
 >
@@ -634,6 +634,28 @@ Cursor session 使用双层来源：
 5. 编写用户安装、登录、启用、权限、MCP、排错和卸载说明。
 6. Beta 发布后观察协议未知事件计数、初始化失败率和 session/load 失败率，再决定默认展示
    层级；保持默认禁用，直到至少两个 Cursor CLI 版本通过回归。
+
+实际落地（2026-07-14）：
+
+- 新增 `tool/smoke_cursor_acp.py`：多信号定位 Cursor、默认使用中文/空格临时 Git workspace，
+  验证 initialize/authenticate、session/new、只读 prompt 流、进程重启后的 session/load replay、
+  cancel 与协商后的 list/delete；全部工具权限默认拒绝，输出只保留脱敏摘要。
+- smoke 首次运行发现 Windows 官方 `.cmd/.ps1` 包装器可能在单杀父进程后遗留 Node 子进程；
+  `cursorProcessStarter` 已为 Windows wrapper 增加 `taskkill /T` 进程树收尾，通用 JSON-RPC
+  transport 关闭时等待进程退出，并补充回归测试。
+- Cursor locator 新增无 HOME、受限 PATH、中文空格路径与损坏候选回归；既有同名 Grok
+  `agent` 冲突和 Windows wrapper 参数测试继续通过。
+- 新增用户安装/登录/启用/权限/MCP/排错/卸载指南与独立发布验收矩阵；工程规范、开发者
+  指南、设计文档、产品需求和项目记忆已同步当前 Cursor Beta 边界。
+- Windows x64 原生真实 smoke 已通过：2026-07-14，Cursor CLI
+  `2026.07.09-a3815c0`，`.cmd` 包装器，完整 10/10；覆盖中文/空格路径、15 条 prompt update、
+  3 条 replay update、cancel 与 session/list。该版本未声明 session/delete，按能力安全跳过。
+- `dart format .` 无额外改动，`flutter analyze` 无问题，全量 `flutter test` 416 项通过。
+- 当前机器未安装 WSL 发行版，也没有 macOS/Linux runner；这些平台及第二个 Cursor CLI
+  版本保持“待执行”，因此 Cursor 继续默认关闭的有限 Beta，不提升默认展示层级。
+
+当前判定：工程实现和本机 Windows 验收完成；完整跨平台退出标准尚未满足。发布记录不得把
+自动化覆盖替代为 macOS/Linux/WSL 的真实通过证据。
 
 退出标准：
 

@@ -1,6 +1,6 @@
 # 开发者文档
 
-最后更新：2026-07-10
+最后更新：2026-07-14
 
 ## 1. 项目简介
 
@@ -14,6 +14,8 @@ Zeta 是一个 Flutter Desktop 项目，当前支持 macOS、Linux 和 Windows �
   `--listen` 时使用 stdio。
 - Codex 适配层按 pinned schema 开发；协议版本与升级流程见
   [Codex app-server 协议版本锁定](./codex_app_server_protocol.md)。
+- 如需 Cursor Beta，需要支持 `agent acp` 的 Cursor CLI 和有效登录态；安装、启用与数据
+  边界见 [Cursor Agent 使用与排错指南](./cursor_agent_guide.md)。
 
 ## 3. 常用命令
 
@@ -41,6 +43,15 @@ flutter run -d macos
 python tool/smoke_codex_app_server.py
 # 可选：python tool/smoke_codex_app_server.py --codex-bin "C:\...\codex.exe" --timeout 180
 ```
+
+对真实 Cursor ACP 做保守冒烟（临时项目、默认拒绝工具权限）：
+
+```sh
+python tool/smoke_cursor_acp.py --handshake-only
+python tool/smoke_cursor_acp.py
+```
+
+跨平台发布状态与记录格式见 [Cursor ACP 发布验收](./cursor_acp_release_validation.md)。
 
 Linux 或 Windows 开发时，将 `flutter run` 的设备改为对应桌面设备。
 
@@ -104,7 +115,7 @@ windows/
 - `lib/src/ui/core`：主题、窗口框架、pane、panel、empty state 和状态标签等共享 UI 原语。
 - `lib/src/ui/features/ide`：IDE shell 视图、项目列表 pane 和 active provider controller。
 - `test/src`：app、core、feature 各层的单元测试和 widget 测试。
-- `tool/`：仓库维护脚本（含 Codex schema 导出）。
+- `tool/`：仓库维护脚本（含 Codex schema 导出与 Codex/Cursor 真实 CLI smoke）。
 - `third_party/codex_app_server_schema/`：pinned Codex app-server JSON Schema 快照。
 
 ## 5. 开发流程
@@ -244,6 +255,8 @@ codex app-server
 先在终端确认 `agent --version`、`agent help acp` 和 `agent status` 指向 Cursor，且账号已
 登录。若 PATH 中的 `agent` 实际来自 Grok 或其它产品，前往 Agent 管理页选择 Cursor CLI
 的绝对路径并重新检测；只有无计费 ACP 握手成功后，启用按钮才可用。
+完整安装、权限、MCP、诊断和卸载步骤见
+[Cursor Agent 使用与排错指南](./cursor_agent_guide.md)。
 
 ### 会话恢复后项目消失
 

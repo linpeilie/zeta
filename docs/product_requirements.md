@@ -1,6 +1,6 @@
 # 产品需求文档
 
-最后更新：2026-07-04
+最后更新：2026-07-14
 
 ## 1. 产品概述
 
@@ -24,7 +24,8 @@ Zeta 是一个基于 Flutter Desktop 的本地 AI IDE 壳层。它面向需要�
 - 提供一个稳定的三栏 IDE 工作台：Projects、Agent、Files。
 - 支持选择本地项目目录，并在右侧浏览项目文件树。
 - 支持将当前项目路径和选中文件路径作为 Agent 上下文传递给 provider。
-- 支持通过 Codex CLI app-server 创建、恢复和继续 Agent thread。
+- 支持通过 Codex CLI app-server、Grok ACP 和默认关闭的 Cursor ACP Beta 创建、恢复和继续
+  Agent thread，并按握手能力降级 UI。
 - 支持展示 Agent 消息、工具调用状态和权限审批卡片。
 - 支持持久化 IDE 会话状态，减少重启后的上下文丢失。
 
@@ -37,18 +38,24 @@ Zeta 是一个基于 Flutter Desktop 的本地 AI IDE 壳层。它面向需要�
 - 本地目录选择和文件树懒加载。
 - 忽略常见大目录：`.git`、`.dart_tool`、`build`、`node_modules` 等。
 - 使用 `shared_preferences` 保存 IDE 会话和 Agent provider 设置。
-- 内置 Codex CLI provider，默认命令为 `codex app-server --stdio`。
-- Agent 事件统一映射为领域模型，UI 不直接绑定 Codex 协议细节。
-- 支持 Agent thread 列表、历史读取、恢复、发送消息、追加 steer、取消回合和权限响应。
+- 内置 Codex CLI、Grok ACP 与 Cursor ACP provider；Codex 仍为默认 active provider，
+  Cursor 为默认关闭的 Beta。
+- Agent 管理页支持 CLI 身份、版本、账号、连接、配置和脱敏诊断；Cursor 同名 `agent`
+  必须经多信号身份校验。
+- Agent 事件统一映射为领域模型，UI 不直接绑定 Codex、xAI 或 Cursor 原始协议细节。
+- 支持 capability 驱动的 thread 列表、历史、恢复、发送、取消、权限和动态 session 配置；
+  不支持的 provider 操作不展示且不会静默成功。
+- Cursor session 在官方 list 能力缺失时使用仅含 id/workspace/title/time/status 的 Zeta
+  本地索引；prompt、回复、token 和完整 payload 不进入索引。
 
 ### 暂不包含
 
 - 内置代码编辑器。
 - 文件内容读取、编辑器内 diff 或保存流程。
-- 多 provider 配置管理界面。
 - 远程仓库、云同步或账号体系。
 - 完整插件系统。
 - 移动端适配。
+- Cursor Cloud Agent、Automations、自动安装/更新和私有本地数据解析。
 
 ## 6. 关键用户流程
 
@@ -74,6 +81,7 @@ Zeta 是一个基于 Flutter Desktop 的本地 AI IDE 壳层。它面向需要�
 3. 系统把用户请求和当前文件路径上下文发送给 provider。
 4. Agent 时间线展示用户消息、Agent 消息、工具卡片和审批卡片。
 5. 如 provider 请求审批，用户在卡片中批准或拒绝。
+6. Cursor 提问和计划审批使用独立卡片；取消、超时或 provider 退出时必须完成协议收尾。
 
 ### 恢复会话
 
@@ -88,13 +96,15 @@ Zeta 是一个基于 Flutter Desktop 的本地 AI IDE 壳层。它面向需要�
 - 文件树必须避免一次性递归扫描大型仓库。
 - Provider 协议差异应隔离在 data 层实现中，UI 只依赖领域接口。
 - Agent 默认审批策略应保持保守，不能自动授权命令或文件写入。
+- Cursor 默认禁用；Zeta 不保存 Cursor API key/token，也不读取 Cursor 私有日志或会话库。
+- Beta 发布前必须执行自动化门禁与各声明平台真实 CLI smoke；无设备/凭据不得推断通过。
 - UI 需要适配桌面窗口大小变化，避免文本和面板明显溢出。
 - 新增行为需要配套单元测试或 widget 测试，至少覆盖风险最高的状态转换。
 
 ## 8. 成功指标
 
 - 用户可以稳定打开本地项目并浏览文件树。
-- 用户可以针对当前项目向 Codex CLI 发起 Agent thread。
+- 用户可以针对当前项目向已启用且检测通过的 provider 发起 Agent thread。
 - Agent 状态、工具调用和审批请求能被清晰展示。
 - 应用重启后能恢复最近工作区上下文。
 - `flutter analyze` 和 `flutter test` 在主干保持通过。
@@ -102,7 +112,7 @@ Zeta 是一个基于 Flutter Desktop 的本地 AI IDE 壳层。它面向需要�
 ## 9. 开放问题
 
 - 是否需要内置文本编辑器，还是继续把 Zeta 定位为 Agent 协作面板？
-- 多 provider 配置是先做配置文件，还是先做 UI 管理？
+- Cursor Beta 在至少两个 CLI 版本和全部声明平台通过真实 smoke 后，是否提升默认展示层级？
 - Agent 是否需要读取选中文件内容，还是继续只传递路径上下文？
 - 权限审批是否需要持久化审计记录？
 - Thread 列表与项目列表是否需要搜索和归档能力？

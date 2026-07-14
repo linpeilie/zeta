@@ -1,6 +1,6 @@
 # 项目记忆
 
-最后更新：2026-07-09
+最后更新：2026-07-14
 
 本文记录跨任务应长期保留的项目事实、决策和约束。后续开发中，如果事实变化，应同步更新本文。
 
@@ -10,7 +10,7 @@
 - 类型：Flutter Desktop 本地应用。
 - 当前产品定位：本地 AI IDE 壳层，核心是项目上下文、Agent thread 和可审计对话时间线。
 - 入口文件：`lib/main.dart`。
-- 当前根 README 仍是 Flutter 默认模板文案，尚未反映真实产品定位。
+- 当前内置 Codex、Grok 与 Cursor Beta；Cursor 默认关闭，Codex 保持默认 active provider。
 
 ## 2. 当前技术栈
 
@@ -29,11 +29,13 @@
 
 - 保持轻量 feature-sliced 分层，不提前引入大型架构框架。
 - feature 内按 domain、application、data、presentation 拆分；新功能优先进入对应 feature。
-- UI 依赖 domain 层的 Agent 抽象，不直接处理 Codex 原始协议。
+- UI 依赖 domain 层的 Agent 抽象和 `AgentProviderCapabilities`，不直接处理 provider 原始协议。
 - data 层负责把 provider 协议映射成中立领域事件。
 - Agent 上下文当前只传项目路径和当前文件路径，不自动读取文件内容；用户可附加本地图片（`localImage`）。
 - 默认 Codex 审批策略保持 `on-request`，不自动授权命令或文件修改。
-- Codex 适配进度：Phase 0（协议对齐）与 Phase 1（核心流式体验）已完成；下一阶段为 Phase 2（thread 管理与审批深化）。详见 `plan/codex_app_server_adaptation_plan.md`。
+- Cursor ACP Phase 1–5 已完成；Phase 6 的自动化门禁、真实 smoke 工具与发布文档已落地，
+  真实平台矩阵仍必须逐设备记录。详见 `plan/cursor_acp_integration_plan.md` 与
+  `docs/cursor_acp_release_validation.md`。
 - 文件树采用懒加载，不递归扫描整个仓库。
 - 会话恢复必须宽容失败，不能阻断应用启动。
 
@@ -45,8 +47,10 @@
 - `AgentConversationViewModel` 对外暴露 Agent 面板状态，并委托 timeline store、UI signals、model selection controller 处理细分职责。
 - `ProjectThreadsController` 负责项目下 thread 分页、恢复、缓存快照、provider 交互和竞态隔离。
 - `ProjectThreadsViewModel` 是项目 thread 列表的纯状态容器。
-- `AgentProvider` 是 provider 能力接口（含 `unsubscribeThread`、多输入项 `sendMessage`/`steerTurn`）。
+- `AgentProvider` 是 provider 中立接口；capabilities 是 UI 和应用层操作入口的唯一事实来源。
 - `CodexAppServerAgentProvider` 是当前默认 provider 实现；协议 pin 见 `third_party/codex_app_server_schema`。
+- `CursorAcpAgentProvider` 使用 workspace-scoped peer、ACP v1、最小 session 索引和动态
+  config options；`CursorCliLocator` 必须跳过同名 Grok `agent`。
 - `JsonRpcPeer` 负责 stdio JSON-RPC 通信。
 - `IdeSessionState` 当前版本为 2。
 - Agent 时间线已消费流式 reasoning/plan、回合 diff、waiting 状态、系统提示与本地图片气泡。
@@ -75,6 +79,8 @@
   `tool/gen_codex_schema.* --diff` 对照 `third_party/codex_app_server_schema`
   （流程见 `docs/codex_app_server_protocol.md`）。
 - JSON-RPC stdio 的请求、通知和服务端 request 处理需要保持严格测试覆盖。
+- Cursor CLI 会自动更新且 `agent` 名称存在冲突；发布前使用 `tool/smoke_cursor_acp.py`
+  在各平台验证两个 CLI 版本，缺少真实证据时保持默认关闭 Beta。
 - 会话恢复涉及真实文件系统，路径不存在和权限失败必须被宽容处理。
 - Agent 运行中切换 thread 容易造成状态竞争，需要继续用 token 或状态检查隔离旧结果。
 - 文件树如果误改为递归扫描，会显著影响大型项目打开性能。
@@ -82,7 +88,7 @@
 ## 8. 待确认方向
 
 - 是否引入内置文件预览或编辑器。
-- 是否暴露 provider 管理 UI。
+- Cursor Beta 何时具备足够真实平台/版本证据，可以提升默认展示层级。
 - 是否支持多个项目并行 Agent session。
 - 是否需要审计和导出 Agent 执行记录。
 - 是否需要跨设备同步项目会话。
