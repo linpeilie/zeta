@@ -59,12 +59,22 @@ class _AgentCommandGroupItemRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       key: ValueKey<String>('agent-command-group-item-${item.id}'),
-      item.title,
+      _commandGroupItemTitle(item),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: _agentItemTextStyle(context),
     );
   }
+}
+
+/// 展开命令组后同时显示事件类型和具体标题，避免 Grok 事件退化成重复的「操作」。
+String _commandGroupItemTitle(AgentTimelineCommandGroupItem item) {
+  final kindLabel = _toolKindLabel(item.kind);
+  final title = item.title.trim();
+  if (title.isEmpty || title == kindLabel || title.startsWith('$kindLabel ·')) {
+    return title.isEmpty ? kindLabel : title;
+  }
+  return '$kindLabel · $title';
 }
 
 /// 文件编辑组折叠卡片。
@@ -395,21 +405,22 @@ class _AgentToolCallCard extends StatelessWidget {
 
 /// 思考/命令卡标题：进行中时用更明确的相位文案。
 String _toolCardTitle(AgentToolCall toolCall) {
+  // displayTitle 会把 call-... 合成成「类型 · 路径/命令」。
+  final resolved = toolCall.displayTitle.trim();
   if (!toolCall.isActiveStatus) {
-    return toolCall.title;
+    return resolved;
   }
   if (toolCall.kind == AgentToolKind.think) {
     return '思考中';
   }
-  final title = toolCall.title.trim();
-  if (title.isEmpty) {
+  if (resolved.isEmpty) {
     return '执行中';
   }
   // 已是「执行中」前缀则不再重复。
-  if (title.startsWith('执行中') || title.startsWith('思考中')) {
-    return title;
+  if (resolved.startsWith('执行中') || resolved.startsWith('思考中')) {
+    return resolved;
   }
-  return '执行中 · $title';
+  return '执行中 · $resolved';
 }
 
 /// 审批卡片。

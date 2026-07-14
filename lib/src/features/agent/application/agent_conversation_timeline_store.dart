@@ -776,12 +776,22 @@ class AgentConversationTimelineStore {
       content = incomingContent;
     }
 
+    // 后续 tool_call_update 常省略 title，mapper 可能填成 call- id 或泛化文案；
+    // 不要冲掉已有更具体的标题。
     final keepExistingTitle =
         progressAppend ||
-        (_isGenericProgressToolTitle(incoming.title) &&
-            !_isGenericProgressToolTitle(existing.title));
+        (isNonInformativeAgentToolCallTitle(
+              incoming.title,
+              toolCallId: incoming.id,
+            ) &&
+            !isNonInformativeAgentToolCallTitle(
+              existing.title,
+              toolCallId: existing.id,
+            ));
+    // 状态型 update 通常也会省略 kind；保留首次/详情更新已经确定的具体类型。
     final keepExistingKind =
-        progressAppend && existing.kind != AgentToolKind.other;
+        incoming.kind == AgentToolKind.other &&
+        existing.kind != AgentToolKind.other;
     final kind = keepExistingKind ? existing.kind : incoming.kind;
     final startedAt =
         existing.startedAt ??
@@ -853,16 +863,6 @@ class AgentConversationTimelineStore {
   /// MCP `item/mcpToolCall/progress` 等进度通知：content 按行追加。
   bool _isToolProgressAppend(AgentToolCall toolCall) {
     return toolCall.raw['_progressAppend'] == true;
-  }
-
-  bool _isGenericProgressToolTitle(String title) {
-    return switch (title) {
-      'MCP tool' ||
-      'File change' ||
-      'Command output' ||
-      'Tool progress' => true,
-      _ => false,
-    };
   }
 
   String? _appendToolProgressContent(String? existing, String? incoming) {
@@ -1175,7 +1175,7 @@ class AgentConversationTimelineStore {
       return;
     }
     if (toolCall.isActiveStatus) {
-      final title = toolCall.title.trim();
+      final title = toolCall.displayTitle.trim();
       _setActivity(
         AgentTurnActivityPhase.toolRunning,
         label: title.isEmpty ? null : title,

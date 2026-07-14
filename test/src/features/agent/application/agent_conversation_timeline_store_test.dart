@@ -546,6 +546,44 @@ void main() {
         isEmpty,
       );
     });
+
+    test('keeps concrete Grok metadata on status-only updates', () {
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+
+      store.startPendingLiveTurn();
+      store.beginLiveTurnGroup(
+        const AgentTurn(id: 'turn-1', sessionId: 'thread-1'),
+      );
+      store.upsertToolCall(
+        const AgentToolCall(
+          id: 'call-abc-0',
+          title: 'sessionUpdate',
+          kind: AgentToolKind.search,
+          status: AgentToolStatus.inProgress,
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          rawInput: <String, Object?>{'pattern': 'sessionUpdate'},
+        ),
+      );
+      store.upsertToolCall(
+        const AgentToolCall(
+          id: 'call-abc-0',
+          title: '操作',
+          kind: AgentToolKind.other,
+          status: AgentToolStatus.completed,
+          content: 'found 42 matches',
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      );
+
+      final tool = store.toolCalls.single;
+      expect(tool.title, 'sessionUpdate');
+      expect(tool.kind, AgentToolKind.search);
+      expect(tool.rawInput['pattern'], 'sessionUpdate');
+      expect(tool.content, 'found 42 matches');
+    });
   });
 }
 

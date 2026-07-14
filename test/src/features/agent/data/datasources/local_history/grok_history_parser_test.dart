@@ -50,6 +50,7 @@ void main() {
         (e) => e.toolCall.id == 't1',
       );
       expect(tool.toolCall.status, AgentToolStatus.completed);
+      expect(tool.toolCall.title, 'Read file');
       expect(tool.toolCall.content, contains('file body'));
 
       final second = snapshot.turns[1];
@@ -58,6 +59,26 @@ void main() {
         second.entries.whereType<AgentHistoryMessageEntry>().last.text,
         'answer two',
       );
+    });
+
+    test('keeps concrete Grok title across status-only updates', () {
+      const content = r'''
+{"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"find it"}},"_meta":{"eventId":"u1"}}}
+{"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"tool_call","toolCallId":"call-abc-0","title":"grep","rawInput":{"pattern":"sessionUpdate"}},"_meta":{"eventId":"t1"}}}
+{"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"tool_call_update","toolCallId":"call-abc-0","title":"sessionUpdate","kind":"search","rawInput":{"pattern":"sessionUpdate"}},"_meta":{"eventId":"t2"}}}
+{"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"tool_call_update","toolCallId":"call-abc-0","status":"completed","content":{"type":"content","content":{"type":"text","text":"found 42 matches"}}},"_meta":{"eventId":"t3"}}}
+''';
+
+      final snapshot = parser.parse(threadId: 's1', content: content);
+      final tool = snapshot.turns.single.entries
+          .whereType<AgentHistoryToolEntry>()
+          .single
+          .toolCall;
+
+      expect(tool.kind, AgentToolKind.search);
+      expect(tool.title, 'sessionUpdate');
+      expect(tool.displayTitle, 'sessionUpdate');
+      expect(tool.content, contains('found 42 matches'));
     });
 
     test('maps plan entries to plan messages', () {

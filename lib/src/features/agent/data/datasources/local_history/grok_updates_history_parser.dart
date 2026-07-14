@@ -291,18 +291,7 @@ class GrokUpdatesHistoryParser {
     if (id == null || id.isEmpty) {
       return null;
     }
-    final title = update['title']?.toString() ?? id;
-    final kind = switch (update['kind']?.toString()) {
-      'read' => AgentToolKind.read,
-      'edit' => AgentToolKind.edit,
-      'delete' => AgentToolKind.delete,
-      'move' => AgentToolKind.move,
-      'search' => AgentToolKind.search,
-      'execute' => AgentToolKind.execute,
-      'think' => AgentToolKind.think,
-      'fetch' => AgentToolKind.fetch,
-      _ => AgentToolKind.other,
-    };
+    final kind = parseAgentToolKind(update['kind']?.toString());
     final status = switch (update['status']?.toString()) {
       'pending' => AgentToolStatus.pending,
       'in_progress' => AgentToolStatus.inProgress,
@@ -324,6 +313,14 @@ class GrokUpdatesHistoryParser {
     }
     final rawInput = _asMap(update['rawInput']) ?? const <String, Object?>{};
     final rawOutput = _asMap(update['rawOutput']) ?? const <String, Object?>{};
+    final title = buildAgentToolCallDisplayTitle(
+      toolCallId: id,
+      title: update['title']?.toString(),
+      kind: kind,
+      kindRaw: update['kind']?.toString(),
+      locations: locations,
+      rawInput: rawInput,
+    );
     return AgentToolCall(
       id: id,
       title: title,
@@ -342,9 +339,19 @@ class GrokUpdatesHistoryParser {
     if (previous == null) {
       return next;
     }
+    final nextTitleNonInformative = isNonInformativeAgentToolCallTitle(
+      next.title,
+      toolCallId: next.id,
+    );
+    final previousTitleNonInformative = isNonInformativeAgentToolCallTitle(
+      previous.title,
+      toolCallId: previous.id,
+    );
     return AgentToolCall(
       id: next.id,
-      title: next.title.isNotEmpty ? next.title : previous.title,
+      title: nextTitleNonInformative && !previousTitleNonInformative
+          ? previous.title
+          : (next.title.isNotEmpty ? next.title : previous.title),
       kind: next.kind == AgentToolKind.other ? previous.kind : next.kind,
       status: next.status,
       content: (next.content != null && next.content!.isNotEmpty)

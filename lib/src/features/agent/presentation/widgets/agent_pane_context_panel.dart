@@ -579,7 +579,7 @@ Map<String, Object?> _toolCallRawMap(AgentToolCall toolCall) {
   }
   return <String, Object?>{
     'id': toolCall.id,
-    'title': toolCall.title,
+    'title': toolCall.displayTitle,
     'kind': toolCall.kind.name,
     'status': toolCall.status.name,
     'content': ?toolCall.content,

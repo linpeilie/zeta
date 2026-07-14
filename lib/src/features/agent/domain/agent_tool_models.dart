@@ -64,11 +64,22 @@ class AgentToolCall {
   /// 工具调用 id。
   final String id;
 
-  /// UI 展示标题。
+  /// Provider 原始/映射标题；可能是 opaque `call-...` id。
+  ///
+  /// UI 与活动条应优先使用 [displayTitle]。
   final String title;
 
   /// 中立工具分类。
   final AgentToolKind kind;
+
+  /// 面向用户的简短标题：优先可读 title，否则由类型 + 路径/命令合成。
+  String get displayTitle => buildAgentToolCallDisplayTitle(
+    toolCallId: id,
+    title: title,
+    kind: kind,
+    locations: locations,
+    rawInput: rawInput,
+  );
 
   /// 工具生命周期状态。
   final AgentToolStatus status;
@@ -145,4 +156,254 @@ class AgentToolCall {
       raw: raw ?? this.raw,
     );
   }
+}
+
+/// 判断工具标题是否为无信息的 opaque id（如 `call-abc123`）。
+///
+/// Grok 等 ACP agent 常省略 `title`，客户端若回退到 `toolCallId` 会把侧栏/
+/// 时间线刷成一串 call-...。
+bool isOpaqueAgentToolCallTitle(String title, {String? toolCallId}) {
+  final trimmed = title.trim();
+  if (trimmed.isEmpty) {
+    return true;
+  }
+  if (toolCallId != null && trimmed == toolCallId.trim()) {
+    return true;
+  }
+  final lower = trimmed.toLowerCase();
+  if (RegExp(r'^call[-_][0-9a-z]+$', caseSensitive: false).hasMatch(lower)) {
+    return true;
+  }
+  if (RegExp(
+    r'^(tool[_-]?call|tc)[-_]?[0-9a-z]+$',
+    caseSensitive: false,
+  ).hasMatch(lower)) {
+    return true;
+  }
+  // UUID / 长 hex 样式 id
+  if (RegExp(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    caseSensitive: false,
+  ).hasMatch(lower)) {
+    return true;
+  }
+  return false;
+}
+
+/// 判断工具标题是否缺少可识别的动作或目标。
+///
+/// ACP 的增量更新经常只携带状态；这些占位标题不能覆盖同一调用先前已经收到的
+/// 工具名、命令或查询。
+bool isNonInformativeAgentToolCallTitle(String title, {String? toolCallId}) {
+  if (isOpaqueAgentToolCallTitle(title, toolCallId: toolCallId)) {
+    return true;
+  }
+  return switch (title.trim().toLowerCase()) {
+    'tool call' ||
+    'mcp tool' ||
+    'file change' ||
+    'command output' ||
+    'tool progress' ||
+    '工具调用' ||
+    '操作' => true,
+    _ => false,
+  };
+}
+
+/// 工具类型的简短中文标签（时间线标题、活动条用）。
+String agentToolKindLabel(AgentToolKind kind) {
+  return switch (kind) {
+    AgentToolKind.read => '读取',
+    AgentToolKind.edit => '编辑',
+    AgentToolKind.delete => '删除',
+    AgentToolKind.move => '移动',
+    AgentToolKind.search => '搜索',
+    AgentToolKind.execute => '执行',
+    AgentToolKind.think => '思考',
+    AgentToolKind.fetch => '获取',
+    AgentToolKind.other => '操作',
+  };
+}
+
+/// 从 ACP kind 字符串解析 [AgentToolKind]（兼容 PascalCase）。
+AgentToolKind parseAgentToolKind(String? kind) {
+  final normalized = kind?.trim().toLowerCase();
+  return switch (normalized) {
+    'read' => AgentToolKind.read,
+    'edit' => AgentToolKind.edit,
+    'delete' => AgentToolKind.delete,
+    'move' => AgentToolKind.move,
+    'search' => AgentToolKind.search,
+    'execute' => AgentToolKind.execute,
+    'think' => AgentToolKind.think,
+    'fetch' => AgentToolKind.fetch,
+    _ => AgentToolKind.other,
+  };
+}
+
+/// 构建简短但具体的工具展示标题。
+///
+/// 优先级：
+/// 1. provider 给出的非 opaque [title]
+/// 2. `类型 · 路径/命令/查询`（来自 locations / rawInput）
+/// 3. 仅类型标签
+/// 4. 「操作」（绝不回退到 call- id）
+String buildAgentToolCallDisplayTitle({
+  required String toolCallId,
+  String? title,
+  AgentToolKind kind = AgentToolKind.other,
+  String? kindRaw,
+  List<String> locations = const <String>[],
+  Map<String, Object?> rawInput = const <String, Object?>{},
+}) {
+  final resolvedKind = kind != AgentToolKind.other
+      ? kind
+      : parseAgentToolKind(kindRaw);
+  final explicit = title?.trim();
+  if (explicit != null &&
+      explicit.isNotEmpty &&
+      !isNonInformativeAgentToolCallTitle(explicit, toolCallId: toolCallId)) {
+    return explicit;
+  }
+
+  final detail = _toolCallDetail(locations: locations, rawInput: rawInput);
+  final kindLabel = agentToolKindLabel(resolvedKind);
+
+  if (detail != null && detail.isNotEmpty) {
+    // other 类型时 detail 本身往往已足够（命令/路径）。
+    if (resolvedKind == AgentToolKind.other) {
+      return detail;
+    }
+    return '$kindLabel · $detail';
+  }
+  return kindLabel;
+}
+
+String? _toolCallDetail({
+  required List<String> locations,
+  required Map<String, Object?> rawInput,
+}) {
+  final fromInput = _detailFromRawInput(rawInput);
+  if (fromInput != null) {
+    return fromInput;
+  }
+  if (locations.isEmpty) {
+    return null;
+  }
+  return _shortenPath(locations.first);
+}
+
+String? _detailFromRawInput(Map<String, Object?> rawInput) {
+  if (rawInput.isEmpty) {
+    return null;
+  }
+
+  const preferredKeys = <String>[
+    'command',
+    'cmd',
+    'shell',
+    'script',
+    'query',
+    'pattern',
+    'search',
+    'url',
+    'uri',
+    'path',
+    'file',
+    'file_path',
+    'filePath',
+    'target',
+    'target_path',
+    'targetPath',
+    'name',
+    'tool',
+    'toolName',
+    'tool_name',
+    'description',
+  ];
+
+  for (final key in preferredKeys) {
+    final value = rawInput[key];
+    final text = _nonEmptyString(value);
+    if (text != null) {
+      return _isPathLikeKey(key) ? _shortenPath(text) : _shortenText(text);
+    }
+  }
+
+  // 常见嵌套：{ arguments: { path: ... } } 或 JSON 字符串参数。
+  final nested =
+      rawInput['arguments'] ?? rawInput['input'] ?? rawInput['params'];
+  if (nested is Map) {
+    final nestedMap = nested.map(
+      (key, value) => MapEntry(key.toString(), value as Object?),
+    );
+    final nestedDetail = _detailFromRawInput(nestedMap);
+    if (nestedDetail != null) {
+      return nestedDetail;
+    }
+  } else {
+    final nestedText = _nonEmptyString(nested);
+    if (nestedText != null) {
+      return _shortenText(nestedText);
+    }
+  }
+
+  return null;
+}
+
+bool _isPathLikeKey(String key) {
+  final lower = key.toLowerCase();
+  return lower.contains('path') || lower == 'file' || lower == 'target';
+}
+
+String? _nonEmptyString(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is String) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+  if (value is List) {
+    final parts = value
+        .map((item) => item?.toString().trim() ?? '')
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (parts.isEmpty) {
+      return null;
+    }
+    return parts.join(' ');
+  }
+  final text = value.toString().trim();
+  return text.isEmpty ? null : text;
+}
+
+String _shortenPath(String path) {
+  final normalized = path.replaceAll('\\', '/').trim();
+  if (normalized.isEmpty) {
+    return path;
+  }
+  final segments = normalized
+      .split('/')
+      .where((segment) => segment.isNotEmpty)
+      .toList(growable: false);
+  if (segments.isEmpty) {
+    return _shortenText(path);
+  }
+  if (segments.length == 1) {
+    return _shortenText(segments.single);
+  }
+  // 保留末两段，便于区分同名文件。
+  final tail = segments.length >= 2
+      ? '${segments[segments.length - 2]}/${segments.last}'
+      : segments.last;
+  return _shortenText(tail);
+}
+
+String _shortenText(String text, {int maxChars = 72}) {
+  final collapsed = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (collapsed.length <= maxChars) {
+    return collapsed;
+  }
+  return '${collapsed.substring(0, maxChars - 1)}…';
 }

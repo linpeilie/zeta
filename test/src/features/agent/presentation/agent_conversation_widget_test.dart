@@ -630,10 +630,13 @@ void main() {
                   AgentHistoryToolEntry(
                     toolCall: AgentToolCall(
                       id: 'history-tool-1',
-                      title: 'Run tests',
+                      title: 'call-abc123',
                       kind: AgentToolKind.execute,
                       status: AgentToolStatus.completed,
                       content: 'flutter test\nhidden log line',
+                      rawInput: const <String, Object?>{
+                        'command': 'flutter test',
+                      },
                     ),
                   ),
                   const AgentHistoryEventEntry(
@@ -685,7 +688,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('1 次执行 · 1 次搜索'), findsOneWidget);
-      expect(find.text('Run tests'), findsNothing);
+      expect(find.text('执行 · flutter test'), findsNothing);
       expect(find.text('OpenAI docs'), findsNothing);
       expect(find.text('hidden log line'), findsNothing);
       expect(find.text('Hidden result line'), findsNothing);
@@ -699,8 +702,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Run tests'), findsOneWidget);
-      expect(find.text('Web search · OpenAI docs'), findsOneWidget);
+      expect(find.text('执行 · flutter test'), findsOneWidget);
+      expect(find.text('搜索 · Web search · OpenAI docs'), findsOneWidget);
       expect(find.text('flutter test'), findsNothing);
       expect(find.text('OpenAI docs'), findsNothing);
       expect(find.text('hidden log line'), findsNothing);

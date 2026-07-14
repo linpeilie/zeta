@@ -254,7 +254,7 @@ _PendingOperation? _pendingOperationFromEntry(AgentTimelineEntry entry) {
       commandItem: AgentTimelineCommandGroupItem(
         id: entry.id,
         kind: toolCall.kind,
-        title: toolCall.title,
+        title: toolCall.displayTitle,
         entry: entry,
       ),
     ),
@@ -295,12 +295,13 @@ List<AgentTimelineFileEditItem> _fileEditItemsFromToolCall(
       ? toolCall.locations
       : _fallbackFilePathsFromToolCall(toolCall);
   if (filePaths.isEmpty) {
+    final fallbackTitle = toolCall.displayTitle;
     return <AgentTimelineFileEditItem>[
       AgentTimelineFileEditItem(
         id: 'file-edit-${toolCall.id}',
         toolCallId: toolCall.id,
-        filePath: toolCall.title,
-        title: _fileEditItemTitle(toolCall.title),
+        filePath: fallbackTitle,
+        title: _fileEditItemTitle(fallbackTitle),
       ),
     ];
   }

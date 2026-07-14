@@ -47,6 +47,57 @@ void main() {
       expect(event.isSessionCumulative, isTrue);
       expect(event.tokenUsage.totalTokens, 2048);
     });
+
+    test(
+      'synthesizes tool title when Grok omits title and only sends call id',
+      () {
+        final mapped = mapper.mapSessionUpdate(
+          params: <String, Object?>{
+            'sessionId': 'session-1',
+            'update': <String, Object?>{
+              'sessionUpdate': 'tool_call',
+              'toolCallId': 'call-abc123',
+              'kind': 'read',
+              'status': 'in_progress',
+              'locations': <Object?>[
+                <String, Object?>{'path': r'D:\repo\zeta\lib\src\app.dart'},
+              ],
+              'rawInput': <String, Object?>{
+                'path': r'D:\repo\zeta\lib\src\app.dart',
+              },
+            },
+          },
+          runningTurnId: 'turn-1',
+        );
+
+        final tool = (mapped.events.single as AgentToolCallEvent).toolCall;
+        expect(tool.id, 'call-abc123');
+        expect(tool.title, isNot(contains('call-abc123')));
+        expect(tool.title, '读取 · src/app.dart');
+        expect(tool.displayTitle, '读取 · src/app.dart');
+      },
+    );
+
+    test('keeps provider title when it is already human readable', () {
+      final mapped = mapper.mapSessionUpdate(
+        params: <String, Object?>{
+          'sessionId': 'session-1',
+          'update': <String, Object?>{
+            'sessionUpdate': 'tool_call_update',
+            'toolCallId': 'call-1',
+            'title': 'Read file',
+            'kind': 'Read',
+            'status': 'Completed',
+          },
+        },
+        runningTurnId: 'turn-1',
+      );
+
+      final tool = (mapped.events.single as AgentToolCallEvent).toolCall;
+      expect(tool.title, 'Read file');
+      expect(tool.kind, AgentToolKind.read);
+      expect(tool.status, AgentToolStatus.completed);
+    });
   });
 
   test('ACP content codec preserves text and resource blocks', () {

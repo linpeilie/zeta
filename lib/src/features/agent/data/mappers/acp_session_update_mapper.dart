@@ -269,7 +269,6 @@ class AcpSessionUpdateMapper {
     if (id == null || id.isEmpty) {
       return null;
     }
-    final title = update['title']?.toString() ?? id;
     final kind = _mapToolKind(update['kind']?.toString());
     final status = _mapToolStatus(update['status']?.toString());
     final content = AcpContentCodec.toolContentText(update['content']);
@@ -298,6 +297,16 @@ class AcpSessionUpdateMapper {
             (key, value) => MapEntry(key.toString(), value as Object?),
           )
         : const <String, Object?>{};
+
+    // 不要把 toolCallId（call-...）当标题；用类型 + 路径/命令合成可读文案。
+    final title = buildAgentToolCallDisplayTitle(
+      toolCallId: id,
+      title: update['title']?.toString(),
+      kind: kind,
+      kindRaw: update['kind']?.toString(),
+      locations: locations,
+      rawInput: rawInput,
+    );
 
     return AgentToolCall(
       id: id,
@@ -343,18 +352,7 @@ class AcpSessionUpdateMapper {
 
   AgentToolKind _mapToolKind(String? kind) {
     // 兼容 agent 使用 PascalCase（Read/Execute）；统一小写再匹配。
-    final normalized = kind?.trim().toLowerCase();
-    return switch (normalized) {
-      'read' => AgentToolKind.read,
-      'edit' => AgentToolKind.edit,
-      'delete' => AgentToolKind.delete,
-      'move' => AgentToolKind.move,
-      'search' => AgentToolKind.search,
-      'execute' => AgentToolKind.execute,
-      'think' => AgentToolKind.think,
-      'fetch' => AgentToolKind.fetch,
-      _ => AgentToolKind.other,
-    };
+    return parseAgentToolKind(kind);
   }
 
   AgentToolStatus _mapToolStatus(String? status) {

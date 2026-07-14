@@ -1740,7 +1740,7 @@ class AgentConversationViewModel extends ChangeNotifier {
         // 工具进行中时更新状态文案；相位变化时刷新 header。
         if (event.toolCall.status == AgentToolStatus.inProgress ||
             event.toolCall.status == AgentToolStatus.pending) {
-          final title = event.toolCall.title.trim();
+          final title = event.toolCall.displayTitle.trim();
           if (title.isNotEmpty) {
             _status = AgentProviderStatus(
               state: AgentProviderConnectionState.running,
