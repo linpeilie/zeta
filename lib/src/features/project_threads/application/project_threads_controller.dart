@@ -333,7 +333,7 @@ class ProjectThreadsController {
     );
   }
 
-  /// 永久删除 thread。
+  /// 删除 provider 端 thread；若只支持本地索引，则仅从 Zeta 列表移除。
   Future<void> deleteThread({
     required String projectPath,
     required String threadId,
@@ -345,12 +345,20 @@ class ProjectThreadsController {
     if (provider == null) {
       return;
     }
-    _requireCapability(
-      provider: provider,
-      supported: provider.capabilities.canDeleteThread,
-      operation: 'delete threads',
-    );
-    await provider.deleteThread(threadId);
+    if (provider.capabilities.canDeleteThread) {
+      await provider.deleteThread(threadId);
+    } else if (provider.capabilities.canRemoveThreadFromList &&
+        provider is AgentLocalThreadListProvider) {
+      await (provider as AgentLocalThreadListProvider).removeThreadFromList(
+        threadId,
+      );
+    } else {
+      _requireCapability(
+        provider: provider,
+        supported: false,
+        operation: 'delete or remove threads',
+      );
+    }
     _removeThreadFromList(
       projectPath: projectPath,
       threadId: threadId,

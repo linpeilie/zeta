@@ -997,6 +997,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       final history = await provider.readThreadHistory(
         threadId: thread.id,
         sessionPath: thread.sessionPath,
+        projectPath: thread.projectPath,
       );
       if (!_isCurrentSwitch(switchToken)) {
         return;

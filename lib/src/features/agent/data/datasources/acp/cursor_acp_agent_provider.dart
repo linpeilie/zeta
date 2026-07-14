@@ -4,7 +4,9 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/data/datasources/acp/acp_session_replay_collector.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/cursor_process_starter.dart';
+import 'package:zeta/src/features/agent/data/datasources/acp/cursor_session_index_store.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
 import 'package:zeta/src/features/agent/data/mappers/acp_permission_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/acp_session_update_mapper.dart';
@@ -20,18 +22,24 @@ typedef CursorJsonRpcPeerFactory =
 /// Cursor 官方 `agent acp` provider。
 ///
 /// 进程严格绑定单个工作区；切换工作区时会关闭旧 peer、取消挂起审批并重新握手。
-class CursorAcpAgentProvider implements AgentProvider {
+class CursorAcpAgentProvider
+    implements AgentProvider, AgentLocalThreadListProvider {
   CursorAcpAgentProvider({
     required this.config,
     JsonRpcPeer? peer,
     CursorJsonRpcPeerFactory? peerFactory,
     AcpSessionUpdateMapper? notificationMapper,
+    CursorSessionIndexStore? sessionIndexStore,
+    DateTime Function()? clock,
     String? initialWorkspace,
   }) : _injectedPeer = peer,
        _peerFactory = peerFactory ?? createDefaultPeer,
        _notificationMapper =
            notificationMapper ?? const AcpSessionUpdateMapper(),
-       _workspacePath = _normalizeWorkspace(initialWorkspace);
+       _sessionIndexStore =
+           sessionIndexStore ?? SharedPreferencesCursorSessionIndexStore(),
+       _clock = clock ?? DateTime.now,
+       _workspacePath = normalizeCursorWorkspacePath(initialWorkspace);
 
   /// 创建生产环境 stdio peer；子进程 cwd 与 ACP session cwd 使用同一路径。
   static JsonRpcPeer createDefaultPeer(
@@ -53,12 +61,21 @@ class CursorAcpAgentProvider implements AgentProvider {
   final JsonRpcPeer? _injectedPeer;
   final CursorJsonRpcPeerFactory _peerFactory;
   final AcpSessionUpdateMapper _notificationMapper;
+  final CursorSessionIndexStore _sessionIndexStore;
+  final DateTime Function() _clock;
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
   final Map<String, _PendingCursorPermission> _pendingPermissions =
       <String, _PendingCursorPermission>{};
   final Map<String, String> _runningTurnIdsBySessionId = <String, String>{};
   final Set<String> _loggedUnknownNotifications = <String>{};
+  final Map<String, AcpSessionReplayCollector> _replayCollectors =
+      <String, AcpSessionReplayCollector>{};
+  final Map<String, Future<_LoadedCursorSession>> _sessionLoadOperations =
+      <String, Future<_LoadedCursorSession>>{};
+  final Map<String, _LoadedCursorSession> _loadedSessions =
+      <String, _LoadedCursorSession>{};
+  final Map<String, String?> _sessionTitles = <String, String?>{};
   final Random _random = Random();
 
   JsonRpcPeer? _peer;
@@ -70,6 +87,8 @@ class CursorAcpAgentProvider implements AgentProvider {
   bool _disposed = false;
   bool _closingPeer = false;
   bool _usedInjectedPeer = false;
+  bool _supportsRemoteSessionList = false;
+  int _peerGeneration = 0;
 
   StreamSubscription<JsonRpcNotification>? _notificationSubscription;
   StreamSubscription<JsonRpcRequest>? _serverRequestSubscription;
@@ -185,9 +204,18 @@ class CursorAcpAgentProvider implements AgentProvider {
   void _applyNegotiatedCapabilities(Object? value) {
     final agentCapabilities = _asMap(value) ?? const <String, Object?>{};
     final prompt = _asMap(agentCapabilities['promptCapabilities']);
+    final sessionCapabilities = _asMap(
+      agentCapabilities['sessionCapabilities'],
+    );
+    final canLoadSession = agentCapabilities['loadSession'] == true;
+    _supportsRemoteSessionList =
+        sessionCapabilities?.containsKey('list') == true;
     _capabilities = AgentProviderCapabilities.cursorAcp.copyWith(
+      canResumeSession: canLoadSession,
+      canReadHistory: canLoadSession,
+      canDeleteThread: sessionCapabilities?.containsKey('delete') == true,
       supportsLocalImageInput: prompt?['image'] == true,
-      // Phase 2 只在 Agent 明确声明 embeddedContext 时开放 mention 入口。
+      // 只在 Agent 明确声明 embeddedContext 时开放 mention 入口。
       supportsResourceInput: prompt?['embeddedContext'] == true,
     );
   }
@@ -238,12 +266,26 @@ class CursorAcpAgentProvider implements AgentProvider {
       if (sessionId == null || sessionId.isEmpty) {
         throw StateError('Cursor ACP session/new 未返回 sessionId');
       }
+      final title = _optionalString(payload['title']);
       final session = AgentSession(
         id: sessionId,
         providerId: config.id,
+        title: title,
         raw: payload,
       );
       _session = session;
+      if (payload.containsKey('title')) {
+        _sessionTitles[sessionId] = title;
+      }
+      await _rememberSessionBestEffort(
+        sessionId: sessionId,
+        workspacePath: workspace,
+        title: title,
+        updateTitle: payload.containsKey('title'),
+        status: AgentThreadRuntimeStatus.idle,
+        metadata: _asMap(payload['_meta']),
+        createdAt: _clock(),
+      );
       _events.add(AgentSessionStartedEvent(session));
       _emitStatus(
         AgentProviderStatus(
@@ -264,14 +306,86 @@ class CursorAcpAgentProvider implements AgentProvider {
     String sessionId, {
     required AgentContext context,
   }) async {
-    throw UnsupportedError('Cursor session 恢复将在 Phase 3 接入');
+    final workspace = _requiredWorkspace(context);
+    final indexed = await _sessionIndexStore.load();
+    final indexedSession = indexed.find(sessionId);
+    if (indexedSession != null &&
+        !cursorWorkspacePathsEqual(indexedSession.workspacePath, workspace)) {
+      throw StateError('Cursor session 不属于当前工作区，已拒绝跨项目恢复');
+    }
+    final loaded = await _ensureSessionLoaded(
+      sessionId: sessionId,
+      workspace: workspace,
+    );
+    _session = loaded.session;
+    _events.add(AgentSessionStartedEvent(loaded.session));
+    return loaded.session;
   }
 
   @override
   Future<AgentThreadPage> listThreads({
     required AgentThreadListQuery query,
   }) async {
-    throw UnsupportedError('Cursor session 列表将在 Phase 3 接入');
+    if (query.archived) {
+      return const AgentThreadPage(
+        threads: <AgentThreadSummary>[],
+        nextCursor: null,
+      );
+    }
+    final workspace = normalizeCursorWorkspacePath(query.projectPath);
+    if (workspace == null) {
+      return const AgentThreadPage(
+        threads: <AgentThreadSummary>[],
+        nextCursor: null,
+      );
+    }
+
+    final localIndex = await _sessionIndexStore.load();
+    final merged = <String, AgentThreadSummary>{
+      for (final entry in localIndex.sessions)
+        if (cursorWorkspacePathsEqual(entry.workspacePath, workspace))
+          entry.sessionId: entry.toThreadSummary(),
+    };
+
+    // 远端列表是可选增强；定位、认证或 session/list 失败都不能遮蔽本地索引。
+    try {
+      await _prepareWorkspace(workspace);
+      await initialize();
+      if (_supportsRemoteSessionList) {
+        final remote = await _listRemoteSessions(workspace);
+        for (final summary in remote) {
+          final local = merged[summary.id];
+          merged[summary.id] = local == null
+              ? summary
+              : summary.copyWith(createdAt: local.createdAt);
+        }
+      }
+    } catch (error, stackTrace) {
+      _log.fine(
+        'Cursor remote session list unavailable; using local index',
+        error,
+        stackTrace,
+      );
+    }
+
+    final searchTerm = query.searchTerm?.trim().toLowerCase();
+    final sessions = merged.values.where((thread) {
+      if (searchTerm == null || searchTerm.isEmpty) {
+        return true;
+      }
+      return thread.id.toLowerCase().contains(searchTerm) ||
+          thread.displayName.toLowerCase().contains(searchTerm);
+    }).toList()..sort(_compareThreadRecency);
+    final offset = _cursorOffset(query.cursor);
+    final limit = query.limit <= 0 ? 50 : query.limit;
+    final page = sessions.skip(offset).take(limit).toList(growable: false);
+    final nextOffset = offset + page.length;
+    return AgentThreadPage(
+      threads: List<AgentThreadSummary>.unmodifiable(page),
+      nextCursor: nextOffset < sessions.length
+          ? '$_localListCursorPrefix$nextOffset'
+          : null,
+    );
   }
 
   @override
@@ -310,8 +424,27 @@ class CursorAcpAgentProvider implements AgentProvider {
   Future<AgentThreadHistorySnapshot> readThreadHistory({
     required String threadId,
     String? sessionPath,
+    String? projectPath,
   }) async {
-    throw UnsupportedError('Cursor session 历史将在 Phase 3 接入');
+    final index = await _sessionIndexStore.load();
+    final indexed = index.find(threadId);
+    final hintedWorkspace = normalizeCursorWorkspacePath(
+      projectPath ?? sessionPath,
+    );
+    if (indexed != null &&
+        hintedWorkspace != null &&
+        !cursorWorkspacePathsEqual(indexed.workspacePath, hintedWorkspace)) {
+      throw StateError('Cursor thread locator 与本地索引工作区不一致');
+    }
+    final workspace = indexed?.workspacePath ?? hintedWorkspace;
+    if (workspace == null) {
+      throw StateError('Cursor session 缺少工作区信息，无法安全加载历史');
+    }
+    final loaded = await _ensureSessionLoaded(
+      sessionId: threadId,
+      workspace: workspace,
+    );
+    return loaded.history;
   }
 
   @override
@@ -339,7 +472,27 @@ class CursorAcpAgentProvider implements AgentProvider {
 
   @override
   Future<void> deleteThread(String threadId) async {
-    throw UnsupportedError('Cursor ACP 未声明 session 删除能力');
+    final index = await _sessionIndexStore.load();
+    final workspace = index.find(threadId)?.workspacePath ?? _workspacePath;
+    if (workspace == null) {
+      throw StateError('Cursor session 缺少工作区信息，无法校验删除能力');
+    }
+    await _prepareWorkspace(workspace);
+    await initialize();
+    if (!capabilities.canDeleteThread) {
+      throw UnsupportedError('Cursor ACP 未声明 session/delete 能力');
+    }
+    await _requirePeer().sendRequest(
+      'session/delete',
+      params: <String, Object?>{'sessionId': threadId},
+      timeout: _requestTimeout,
+    );
+    await _removeIndexedSession(threadId, localOnly: false);
+  }
+
+  @override
+  Future<void> removeThreadFromList(String threadId) async {
+    await _removeIndexedSession(threadId, localOnly: true);
   }
 
   @override
@@ -372,7 +525,7 @@ class CursorAcpAgentProvider implements AgentProvider {
     String? clientUserMessageId,
   }) async {
     final workspace = _requiredWorkspace(context);
-    if (!_sameWorkspace(_workspacePath, workspace) ||
+    if (!cursorWorkspacePathsEqual(_workspacePath, workspace) ||
         _session?.id != session.id) {
       throw StateError('Cursor session 不属于当前工作区，请创建新的 Cursor thread');
     }
@@ -386,6 +539,11 @@ class CursorAcpAgentProvider implements AgentProvider {
     _runningTurnIdsBySessionId[session.id] = turnId;
     final turn = AgentTurn(id: turnId, sessionId: session.id);
     _events.add(AgentTurnStartedEvent(turn));
+    await _rememberSessionBestEffort(
+      sessionId: session.id,
+      workspacePath: workspace,
+      status: AgentThreadRuntimeStatus.active,
+    );
     _emitStatus(
       const AgentProviderStatus(
         state: AgentProviderConnectionState.running,
@@ -424,6 +582,11 @@ class CursorAcpAgentProvider implements AgentProvider {
           message: '${config.displayName} ready',
         ),
       );
+      await _rememberSessionBestEffort(
+        sessionId: session.id,
+        workspacePath: workspace,
+        status: AgentThreadRuntimeStatus.idle,
+      );
       return turn;
     } catch (error, stackTrace) {
       _log.warning('Cursor session/prompt failed', error, stackTrace);
@@ -437,6 +600,11 @@ class CursorAcpAgentProvider implements AgentProvider {
           ),
         );
       }
+      await _rememberSessionBestEffort(
+        sessionId: session.id,
+        workspacePath: workspace,
+        status: AgentThreadRuntimeStatus.systemError,
+      );
       _emitFailure('Cursor prompt 失败', error);
       rethrow;
     }
@@ -503,13 +671,307 @@ class CursorAcpAgentProvider implements AgentProvider {
   }
 
   Future<void> _prepareWorkspace(String workspace) async {
-    if (_sameWorkspace(_workspacePath, workspace)) {
+    if (cursorWorkspacePathsEqual(_workspacePath, workspace)) {
       return;
     }
     await _closeCurrentPeer();
     _workspacePath = workspace;
     _session = null;
     _capabilities = AgentProviderCapabilities.cursorAcp;
+    _supportsRemoteSessionList = false;
+  }
+
+  Future<List<AgentThreadSummary>> _listRemoteSessions(String workspace) async {
+    final sessions = <String, AgentThreadSummary>{};
+    final seenCursors = <String>{};
+    String? cursor;
+    for (var page = 0; page < _maxRemoteListPages; page += 1) {
+      final result = await _requirePeer().sendRequest(
+        'session/list',
+        params: <String, Object?>{'cwd': workspace, 'cursor': ?cursor},
+        timeout: _requestTimeout,
+      );
+      final payload = _asMap(result) ?? const <String, Object?>{};
+      final rawSessions = payload['sessions'];
+      if (rawSessions is List) {
+        for (final rawSession in rawSessions) {
+          final summary = _remoteThreadSummary(
+            value: rawSession,
+            expectedWorkspace: workspace,
+          );
+          if (summary != null) {
+            sessions[summary.id] = summary;
+          }
+          if (sessions.length >= _maxRemoteSessions) {
+            return sessions.values.toList(growable: false);
+          }
+        }
+      }
+      final nextCursor = _optionalString(payload['nextCursor']);
+      if (nextCursor == null ||
+          nextCursor.isEmpty ||
+          !seenCursors.add(nextCursor)) {
+        break;
+      }
+      cursor = nextCursor;
+    }
+    return sessions.values.toList(growable: false);
+  }
+
+  AgentThreadSummary? _remoteThreadSummary({
+    required Object? value,
+    required String expectedWorkspace,
+  }) {
+    final session = _asMap(value);
+    if (session == null) {
+      return null;
+    }
+    final sessionId = _optionalString(session['sessionId']);
+    final workspace = normalizeCursorWorkspacePath(session['cwd']?.toString());
+    if (sessionId == null ||
+        sessionId.isEmpty ||
+        workspace == null ||
+        !cursorWorkspacePathsEqual(workspace, expectedWorkspace)) {
+      return null;
+    }
+    final updatedAt = _decodeDateTime(session['updatedAt']) ?? _clock();
+    final metadata = sanitizeCursorSessionMetadata(
+      _asMap(session['_meta']) ?? const <String, Object?>{},
+    );
+    return AgentThreadSummary(
+      id: sessionId,
+      providerId: config.id,
+      projectPath: workspace,
+      title: _optionalString(session['title']),
+      sessionPath: workspace,
+      preview: '',
+      createdAt: updatedAt,
+      updatedAt: updatedAt,
+      recencyAt: updatedAt,
+      status: AgentThreadRuntimeStatus.idle,
+      raw: <String, Object?>{
+        'source': 'cursor-session-list',
+        if (metadata.isNotEmpty) 'metadata': metadata,
+      },
+    );
+  }
+
+  Future<_LoadedCursorSession> _ensureSessionLoaded({
+    required String sessionId,
+    required String workspace,
+  }) async {
+    await _prepareWorkspace(workspace);
+    await initialize();
+    if (!capabilities.canResumeSession || !capabilities.canReadHistory) {
+      throw UnsupportedError('当前 Cursor Agent 未声明 loadSession，无法恢复已有 session');
+    }
+    final cached = _loadedSessions[sessionId];
+    if (cached != null) {
+      _session = cached.session;
+      return cached;
+    }
+    final inFlight = _sessionLoadOperations[sessionId];
+    if (inFlight != null) {
+      return inFlight;
+    }
+    final operation = _loadSession(sessionId: sessionId, workspace: workspace);
+    _sessionLoadOperations[sessionId] = operation;
+    try {
+      return await operation;
+    } finally {
+      if (identical(_sessionLoadOperations[sessionId], operation)) {
+        _sessionLoadOperations.remove(sessionId);
+      }
+    }
+  }
+
+  Future<_LoadedCursorSession> _loadSession({
+    required String sessionId,
+    required String workspace,
+  }) async {
+    final peer = _requirePeer();
+    final generation = _peerGeneration;
+    final collector = AcpSessionReplayCollector(
+      threadId: sessionId,
+      mapper: _notificationMapper,
+    );
+    _replayCollectors[sessionId] = collector;
+    Object? result;
+    try {
+      result = await peer.sendRequest(
+        'session/load',
+        params: <String, Object?>{
+          'sessionId': sessionId,
+          'cwd': workspace,
+          'mcpServers': const <Object?>[],
+        },
+        timeout: const Duration(minutes: 2),
+      );
+    } finally {
+      if (identical(_replayCollectors[sessionId], collector)) {
+        _replayCollectors.remove(sessionId);
+      }
+    }
+    if (generation != _peerGeneration ||
+        !identical(peer, _peer) ||
+        !cursorWorkspacePathsEqual(workspace, _workspacePath)) {
+      throw StateError('Cursor workspace 已切换，本次 session/load 结果已失效');
+    }
+
+    final payload = _asMap(result) ?? const <String, Object?>{};
+    final index = await _sessionIndexStore.load();
+    final indexed = index.find(sessionId);
+    final payloadTitle = _optionalString(payload['title']);
+    final title = payload.containsKey('title')
+        ? payloadTitle
+        : _sessionTitles.containsKey(sessionId)
+        ? _sessionTitles[sessionId]
+        : indexed?.title;
+    final history = collector.build(
+      raw: <String, Object?>{
+        'source': 'cursor-session-load',
+        if (payload.isNotEmpty) 'response': payload,
+      },
+    );
+    final session = AgentSession(
+      id: sessionId,
+      providerId: config.id,
+      title: title,
+      raw: payload,
+    );
+    final loaded = _LoadedCursorSession(session: session, history: history);
+    _loadedSessions[sessionId] = loaded;
+    _session = session;
+    await _rememberSessionBestEffort(
+      sessionId: sessionId,
+      workspacePath: workspace,
+      title: title,
+      updateTitle:
+          payload.containsKey('title') ||
+          _sessionTitles.containsKey(sessionId) ||
+          indexed != null,
+      status: AgentThreadRuntimeStatus.idle,
+      metadata: _asMap(payload['_meta']),
+      createdAt: indexed?.createdAt,
+    );
+    _log.info('Loaded Cursor ACP session $sessionId with replay capture');
+    return loaded;
+  }
+
+  void _handleSessionInfoUpdate({
+    required String sessionId,
+    required Map<String, Object?> update,
+  }) {
+    final hasTitle = update.containsKey('title');
+    final title = _optionalString(update['title']);
+    if (hasTitle) {
+      _sessionTitles[sessionId] = title;
+      final loaded = _loadedSessions[sessionId];
+      if (loaded != null) {
+        _loadedSessions[sessionId] = _LoadedCursorSession(
+          session: AgentSession(
+            id: loaded.session.id,
+            providerId: loaded.session.providerId,
+            title: title,
+            raw: loaded.session.raw,
+          ),
+          history: loaded.history,
+        );
+      }
+      final current = _session;
+      if (current?.id == sessionId) {
+        _session = AgentSession(
+          id: current!.id,
+          providerId: current.providerId,
+          title: title,
+          raw: current.raw,
+        );
+      }
+      if (!_events.isClosed) {
+        _events.add(
+          AgentThreadNameUpdatedEvent(
+            threadId: sessionId,
+            threadName: title,
+            raw: update,
+          ),
+        );
+      }
+    }
+    final workspace = _workspacePath;
+    if (workspace == null) {
+      return;
+    }
+    unawaited(
+      _rememberSessionBestEffort(
+        sessionId: sessionId,
+        workspacePath: workspace,
+        title: title,
+        updateTitle: hasTitle,
+        updatedAt: _decodeDateTime(update['updatedAt']),
+        metadata: _asMap(update['_meta']),
+      ),
+    );
+  }
+
+  Future<void> _rememberSessionBestEffort({
+    required String sessionId,
+    required String workspacePath,
+    String? title,
+    bool updateTitle = false,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    AgentThreadRuntimeStatus? status,
+    Map<String, Object?>? metadata,
+  }) async {
+    try {
+      final now = (updatedAt ?? _clock()).toUtc();
+      await _sessionIndexStore.update((current) {
+        final existing = current.find(sessionId);
+        final mergedMetadata = <String, Object?>{
+          ...?existing?.metadata,
+          ...sanitizeCursorSessionMetadata(
+            metadata ?? const <String, Object?>{},
+          ),
+        };
+        final next = CursorSessionIndexEntry(
+          sessionId: sessionId,
+          providerId: config.id,
+          workspacePath: workspacePath,
+          title: updateTitle ? title : existing?.title,
+          createdAt: (existing?.createdAt ?? createdAt ?? now).toUtc(),
+          updatedAt: now,
+          status: status ?? existing?.status ?? AgentThreadRuntimeStatus.idle,
+          metadata: mergedMetadata,
+        );
+        return current.upsert(next);
+      });
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Could not persist Cursor session index entry $sessionId',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _removeIndexedSession(
+    String sessionId, {
+    required bool localOnly,
+  }) async {
+    await _sessionIndexStore.update((current) => current.remove(sessionId));
+    _loadedSessions.remove(sessionId);
+    _sessionTitles.remove(sessionId);
+    if (_session?.id == sessionId) {
+      _session = null;
+    }
+    if (!_events.isClosed) {
+      _events.add(
+        AgentThreadDeletedEvent(
+          threadId: sessionId,
+          raw: <String, Object?>{'localOnly': localOnly},
+        ),
+      );
+    }
   }
 
   JsonRpcPeer _createPeer(String workspace) {
@@ -555,6 +1017,18 @@ class CursorAcpAgentProvider implements AgentProvider {
       return;
     }
     final sessionId = notification.params['sessionId']?.toString();
+    final update = _asMap(notification.params['update']);
+    if (sessionId != null &&
+        update?['sessionUpdate']?.toString() == 'session_info_update') {
+      _handleSessionInfoUpdate(sessionId: sessionId, update: update!);
+    }
+    final replayCollector = sessionId == null
+        ? null
+        : _replayCollectors[sessionId];
+    if (replayCollector != null) {
+      replayCollector.record(notification.params);
+      return;
+    }
     final mapped = _notificationMapper.mapSessionUpdate(
       params: notification.params,
       runningTurnId: sessionId == null
@@ -710,9 +1184,15 @@ class CursorAcpAgentProvider implements AgentProvider {
   Future<void> _closeCurrentPeer() async {
     final peer = _peer;
     _peer = null;
+    _peerGeneration += 1;
     _initialized = false;
     _initializationOperation = null;
     _runningTurnIdsBySessionId.clear();
+    _replayCollectors.clear();
+    _sessionLoadOperations.clear();
+    _loadedSessions.clear();
+    _sessionTitles.clear();
+    _supportsRemoteSessionList = false;
     if (peer == null) {
       return;
     }
@@ -742,6 +1222,13 @@ class CursorAcpAgentProvider implements AgentProvider {
     _session = null;
     _pendingPermissions.clear();
     _runningTurnIdsBySessionId.clear();
+    _peerGeneration += 1;
+    _replayCollectors.clear();
+    _sessionLoadOperations.clear();
+    _loadedSessions.clear();
+    _sessionTitles.clear();
+    _supportsRemoteSessionList = false;
+    _capabilities = AgentProviderCapabilities.cursorAcp;
     _emitUnavailable('Cursor Agent 进程已意外退出');
   }
 
@@ -754,7 +1241,7 @@ class CursorAcpAgentProvider implements AgentProvider {
   }
 
   String _requiredWorkspace(AgentContext context) {
-    final workspace = _normalizeWorkspace(context.projectPath);
+    final workspace = normalizeCursorWorkspacePath(context.projectPath);
     if (workspace == null || workspace.isEmpty) {
       throw StateError('Cursor ACP session 需要项目工作区');
     }
@@ -833,26 +1320,47 @@ class _PendingCursorPermission {
   final AcpPermissionMapping mapping;
 }
 
-String? _normalizeWorkspace(String? value) {
-  final trimmed = value?.trim();
-  if (trimmed == null || trimmed.isEmpty) {
-    return null;
-  }
-  var normalized = Directory(trimmed).absolute.path;
-  while (normalized.length > 1 &&
-      (normalized.endsWith('/') || normalized.endsWith('\\'))) {
-    normalized = normalized.substring(0, normalized.length - 1);
-  }
-  return normalized;
+class _LoadedCursorSession {
+  const _LoadedCursorSession({required this.session, required this.history});
+
+  final AgentSession session;
+  final AgentThreadHistorySnapshot history;
 }
 
-bool _sameWorkspace(String? left, String? right) {
-  if (left == null || right == null) {
-    return left == right;
+const String _localListCursorPrefix = 'cursor-index:';
+const int _maxRemoteListPages = 20;
+const int _maxRemoteSessions = 500;
+
+int _cursorOffset(String? cursor) {
+  if (cursor == null || !cursor.startsWith(_localListCursorPrefix)) {
+    return 0;
   }
-  return Platform.isWindows
-      ? left.toLowerCase() == right.toLowerCase()
-      : left == right;
+  return int.tryParse(cursor.substring(_localListCursorPrefix.length)) ?? 0;
+}
+
+int _compareThreadRecency(AgentThreadSummary left, AgentThreadSummary right) {
+  final byTime = (right.recencyAt ?? right.updatedAt).compareTo(
+    left.recencyAt ?? left.updatedAt,
+  );
+  return byTime != 0 ? byTime : left.id.compareTo(right.id);
+}
+
+String? _optionalString(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  final text = value.toString().trim();
+  return text.isEmpty ? null : text;
+}
+
+DateTime? _decodeDateTime(Object? value) {
+  if (value is int) {
+    return DateTime.fromMillisecondsSinceEpoch(value, isUtc: true);
+  }
+  if (value is num) {
+    return DateTime.fromMillisecondsSinceEpoch(value.toInt(), isUtc: true);
+  }
+  return DateTime.tryParse(value?.toString() ?? '')?.toUtc();
 }
 
 Map<String, Object?>? _asMap(Object? value) {

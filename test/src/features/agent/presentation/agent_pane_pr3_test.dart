@@ -888,6 +888,7 @@ class _FakeAgentProvider
   Future<AgentThreadHistorySnapshot> readThreadHistory({
     required String threadId,
     String? sessionPath,
+    String? projectPath,
   }) async {
     return _historySnapshotsByThread[threadId] ??
         AgentThreadHistorySnapshot(

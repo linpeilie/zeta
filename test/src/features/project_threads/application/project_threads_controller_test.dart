@@ -90,6 +90,37 @@ void main() {
       expect(state.isLoadingInitial, isFalse);
     });
 
+    test('removes local-only provider thread without remote delete', () async {
+      // Arrange
+      final provider = _FakeAgentProvider(
+        config: AgentProviderConfig.defaultCursor.copyWith(enabled: true),
+        declaredCapabilities: AgentProviderCapabilities.cursorAcp,
+        pages: <AgentThreadPage>[
+          _page(<AgentThreadSummary>[
+            _thread(
+              id: 'cursor-local',
+              providerId: cursorAgentProviderId,
+              updatedAt: DateTime.utc(2026, 7, 14),
+            ),
+          ], nextCursor: null),
+        ],
+      );
+      final controller = _createController(provider);
+      controller.activateProject('/repo');
+      await _flushAsync();
+
+      // Act
+      await controller.deleteThread(
+        projectPath: '/repo',
+        threadId: 'cursor-local',
+      );
+
+      // Assert
+      expect(provider.removedLocalThreads, <String>['cursor-local']);
+      expect(provider.deletedThreads, isEmpty);
+      expect(controller.stateFor('/repo').threads, isEmpty);
+    });
+
     test(
       'tracks running thread ids from provider turn lifecycle events',
       () async {
@@ -528,10 +559,11 @@ class _MultiAgentProviderFactory implements AgentProviderFactory {
 
 class _FakeAgentProvider
     with AgentProviderThreadLifecycleStub
-    implements AgentProvider {
+    implements AgentProvider, AgentLocalThreadListProvider {
   _FakeAgentProvider({
     required List<AgentThreadPage> pages,
     this.config = AgentProviderConfig.defaultCodex,
+    this.declaredCapabilities = AgentProviderCapabilities.codexAppServer,
   }) : _pages = List<AgentThreadPage>.from(pages);
 
   final List<AgentThreadPage> _pages;
@@ -539,9 +571,15 @@ class _FakeAgentProvider
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
   bool failNextList = false;
+  final List<String> removedLocalThreads = <String>[];
 
   @override
   final AgentProviderConfig config;
+
+  final AgentProviderCapabilities declaredCapabilities;
+
+  @override
+  AgentProviderCapabilities get capabilities => declaredCapabilities;
 
   @override
   Stream<AgentEvent> get events => _events.stream;
@@ -570,6 +608,7 @@ class _FakeAgentProvider
   Future<AgentThreadHistorySnapshot> readThreadHistory({
     required String threadId,
     String? sessionPath,
+    String? projectPath,
   }) async {
     return AgentThreadHistorySnapshot(
       threadId: threadId,
@@ -646,6 +685,11 @@ class _FakeAgentProvider
 
   @override
   Future<void> respondToPermission(AgentPermissionDecision decision) async {}
+
+  @override
+  Future<void> removeThreadFromList(String threadId) async {
+    removedLocalThreads.add(threadId);
+  }
 
   @override
   Future<void> dispose() async {

@@ -249,6 +249,7 @@ class _UsageProvider
   Future<AgentThreadHistorySnapshot> readThreadHistory({
     required String threadId,
     String? sessionPath,
+    String? projectPath,
   }) => throw StateError('usage statistics must scan JSONL directly');
 
   @override

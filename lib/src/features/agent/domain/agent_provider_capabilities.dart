@@ -40,6 +40,7 @@ class AgentProviderCapabilities {
     this.canListThreads = false,
     this.canReadHistory = false,
     this.canDeleteThread = false,
+    this.canRemoveThreadFromList = false,
     this.canPrompt = false,
     this.canCancelTurn = false,
     this.canSteerTurn = false,
@@ -70,6 +71,9 @@ class AgentProviderCapabilities {
   final bool canListThreads;
   final bool canReadHistory;
   final bool canDeleteThread;
+
+  /// 是否可只移除 Zeta 本地列表记录，不影响 provider 端历史。
+  final bool canRemoveThreadFromList;
   final bool canPrompt;
   final bool canCancelTurn;
   final bool canSteerTurn;
@@ -100,6 +104,7 @@ class AgentProviderCapabilities {
     bool? canListThreads,
     bool? canReadHistory,
     bool? canDeleteThread,
+    bool? canRemoveThreadFromList,
     bool? canPrompt,
     bool? canCancelTurn,
     bool? canSteerTurn,
@@ -130,6 +135,8 @@ class AgentProviderCapabilities {
       canListThreads: canListThreads ?? this.canListThreads,
       canReadHistory: canReadHistory ?? this.canReadHistory,
       canDeleteThread: canDeleteThread ?? this.canDeleteThread,
+      canRemoveThreadFromList:
+          canRemoveThreadFromList ?? this.canRemoveThreadFromList,
       canPrompt: canPrompt ?? this.canPrompt,
       canCancelTurn: canCancelTurn ?? this.canCancelTurn,
       canSteerTurn: canSteerTurn ?? this.canSteerTurn,
@@ -214,12 +221,14 @@ class AgentProviderCapabilities {
     supportsUsage: true,
   );
 
-  /// Cursor ACP Phase 2 的静态能力。
+  /// Cursor ACP Phase 3 的静态能力。
   ///
-  /// 图片和资源输入必须等 initialize 明确协商后再动态开启；会话列表、历史与
-  /// 恢复属于后续阶段，此处保持关闭。
+  /// 本地最小索引始终可列出并移除；远端历史加载、删除、图片和资源输入必须等
+  /// initialize 明确协商后再动态开启。
   static const cursorAcp = AgentProviderCapabilities(
     canCreateSession: true,
+    canListThreads: true,
+    canRemoveThreadFromList: true,
     canPrompt: true,
     canCancelTurn: true,
     supportsPermissionRequests: true,

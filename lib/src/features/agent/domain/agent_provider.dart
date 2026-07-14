@@ -63,6 +63,7 @@ abstract class AgentProvider {
   Future<AgentThreadHistorySnapshot> readThreadHistory({
     required String threadId,
     String? sessionPath,
+    String? projectPath,
   });
 
   /// 取消对指定 thread 的服务端通知订阅。
@@ -134,6 +135,14 @@ abstract class AgentProvider {
 
   /// 释放进程、订阅和流。
   Future<void> dispose();
+}
+
+/// Provider 拥有本地会话索引时，可只移除客户端列表记录而不删除服务端历史。
+///
+/// 该操作与 [AgentProvider.deleteThread] 语义严格分离，UI 必须明确提示用户远端
+/// 会话仍然保留。
+abstract interface class AgentLocalThreadListProvider {
+  Future<void> removeThreadFromList(String threadId);
 }
 
 /// 根据 provider 配置创建具体实现。

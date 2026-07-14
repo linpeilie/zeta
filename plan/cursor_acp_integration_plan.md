@@ -1,6 +1,6 @@
 # Zeta 接入 Cursor Agent 的分析与分步落地方案
 
-> 状态：Phase 1–2 已完成；Phase 3–7 待实施
+> 状态：Phase 1–3 已完成；Phase 4–7 待实施
 >
 > 编制日期：2026-07-13
 >
@@ -496,7 +496,7 @@ Cursor session 使用双层来源：
 - Cursor 未安装、未登录、命令冲突都有可读错误；
 - Codex/Grok 无行为回归。
 
-### Phase 3：Session 列表、历史与恢复
+### Phase 3：Session 列表、历史与恢复（已完成，2026-07-14）
 
 目标：Cursor thread 可进入 Zeta 的项目列表和 IDE 恢复链路。
 
@@ -511,6 +511,27 @@ Cursor session 使用双层来源：
 7. `session/delete` 仅在 capability 存在时调用；否则只允许“从 Zeta 列表移除”，并明确
    不代表删除 Cursor 端历史。
 8. 搜索、分页、路径规范化、标题更新与 provider 归属加入测试。
+
+实际落地：
+
+- 已实现版本化 `CursorSessionIndexStore`：使用 shared preferences 保存最小索引，
+  宽容读取损坏/旧版/重复条目，并通过进程内串行 read-modify-write 避免并发丢更新；
+  metadata 只保留短标量并过滤 prompt、token、auth 等敏感字段。
+- Cursor 静态声明本地索引列表能力；握手后仅在
+  `sessionCapabilities.list/delete` 明确存在时调用远端方法。`session/list` 与本地索引
+  按 session id 去重、服务端 metadata 优先，并支持项目路径过滤、搜索和客户端分页。
+- 已新增标准 ACP `AcpSessionReplayCollector`，在 `session/load` 响应返回前隔离收集
+  user/agent message、thought、tool、plan、usage 和 turn 终态，生成有序 history snapshot，
+  replay 不进入 live timeline。
+- `readThreadHistory -> resumeSession` 共享 workspace-scoped loaded-session cache，同一 peer
+  内只执行一次 `session/load`；旧 IDE 快照即使缺少 session locator，也可用 thread 的
+  project path 恢复。直接发送前的 resume 同样先 load，失败时明确终止且不创建新 session。
+- `session_info_update` 会同步标题、更新时间、安全 metadata 和列表事件；prompt 生命周期
+  会更新索引的最后状态与活跃时间。
+- 未协商 `session/delete` 时只允许“仅从 Zeta 列表移除”，UI 明确区分本地移除和远端
+  删除；协商成功后才发送标准 `session/delete`。
+- 已补充索引兼容/并发、路径规范化、搜索分页、远端合并、回放顺序、单次 load cache、
+  fail-closed 恢复和删除分流测试；`flutter analyze` 无问题，完整 `flutter test` 共 384 项通过。
 
 退出标准：
 

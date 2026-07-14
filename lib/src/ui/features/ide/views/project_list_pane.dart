@@ -882,7 +882,8 @@ class _ThreadTileState extends State<_ThreadTile> {
             ? capabilities.canUnarchiveThread
             : capabilities.canArchiveThread) ||
         capabilities.canForkThread ||
-        capabilities.canDeleteThread;
+        capabilities.canDeleteThread ||
+        capabilities.canRemoveThreadFromList;
   }
 
   @override
@@ -916,7 +917,7 @@ class _ThreadTileState extends State<_ThreadTile> {
       modal: false,
       builder: (context) {
         return ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 80, maxWidth: 120),
+          constraints: const BoxConstraints(minWidth: 80, maxWidth: 200),
           child: IdeContextMenu(
             actions: [
               if (widget.capabilities.canRenameThread)
@@ -956,13 +957,16 @@ class _ThreadTileState extends State<_ThreadTile> {
                   onPressed: () =>
                       _handleMenuAction(_ThreadTileMenuAction.fork),
                 ),
-              if (widget.capabilities.canDeleteThread)
+              if (widget.capabilities.canDeleteThread ||
+                  widget.capabilities.canRemoveThreadFromList)
                 IdeContextMenuAction(
                   key: ValueKey<String>(
                     'project-thread-delete-${widget.projectPath}-${thread.id}',
                   ),
-                  label: '删除',
-                  destructive: true,
+                  label: widget.capabilities.canDeleteThread
+                      ? '删除'
+                      : '仅从 Zeta 列表移除',
+                  destructive: widget.capabilities.canDeleteThread,
                   dividerAbove: true,
                   onPressed: () =>
                       _handleMenuAction(_ThreadTileMenuAction.delete),
@@ -1039,6 +1043,7 @@ class _ThreadTileState extends State<_ThreadTile> {
   }
 
   Future<void> _showDeleteDialog() async {
+    final deletesProviderHistory = widget.capabilities.canDeleteThread;
     final confirmed = await showIdeDialog<bool>(
       context: context,
       builder: (dialogContext) {
@@ -1046,16 +1051,26 @@ class _ThreadTileState extends State<_ThreadTile> {
           key: ValueKey<String>(
             'project-thread-delete-dialog-${widget.projectPath}-${widget.thread.id}',
           ),
-          title: const Text('删除会话'),
-          content: const Text('此操作不可撤销，将永久删除该会话。'),
+          title: Text(deletesProviderHistory ? '删除会话' : '从列表移除会话'),
+          content: Text(
+            deletesProviderHistory
+                ? '此操作不可撤销，将永久删除该会话。'
+                : '只会移除 Zeta 的本地索引记录，Cursor 端历史仍会保留。',
+          ),
           actions: [
             IdeDialogAction.cancel(
               onPressed: () => Navigator.of(dialogContext).pop(false),
             ),
-            IdeDialogAction.destructive(
-              label: '删除',
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-            ),
+            if (deletesProviderHistory)
+              IdeDialogAction.destructive(
+                label: '删除',
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+              )
+            else
+              IdeDialogAction.confirm(
+                label: '移除',
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+              ),
           ],
         );
       },

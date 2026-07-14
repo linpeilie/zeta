@@ -41,7 +41,7 @@ void main() {
       expect(policy.allowsEagerModelPreload, isFalse);
     });
 
-    test('keeps Cursor conservative until ACP handshake', () {
+    test('exposes Cursor local index while gating remote capabilities', () {
       final capabilities = AgentProviderCapabilities.defaultsFor(
         AgentProviderKind.cursorAcp,
       );
@@ -49,7 +49,9 @@ void main() {
       expect(capabilities.canCreateSession, isTrue);
       expect(capabilities.canPrompt, isTrue);
       expect(capabilities.canCancelTurn, isTrue);
-      expect(capabilities.canListThreads, isFalse);
+      expect(capabilities.canListThreads, isTrue);
+      expect(capabilities.canRemoveThreadFromList, isTrue);
+      expect(capabilities.canDeleteThread, isFalse);
       expect(capabilities.canResumeSession, isFalse);
       expect(capabilities.supportsLocalImageInput, isFalse);
       expect(capabilities.supportsResourceInput, isFalse);

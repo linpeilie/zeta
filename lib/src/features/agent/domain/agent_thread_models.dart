@@ -41,7 +41,9 @@ class AgentThreadSummary {
   /// 用户可读标题；为空时 UI 会回退到 [preview] 或短 id。
   final String? title;
 
-  /// 本地 Codex session `jsonl` 路径。
+  /// Provider 恢复历史所需的可选 locator。
+  ///
+  /// Codex/Grok 通常保存本地 session 文件或目录；Cursor 使用 workspace 路径。
   final String? sessionPath;
 
   /// 通常是首条用户消息。

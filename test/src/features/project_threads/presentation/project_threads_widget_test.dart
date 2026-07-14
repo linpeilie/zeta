@@ -959,6 +959,90 @@ void main() {
     expect(find.text('Renamed thread'), findsOneWidget);
   });
 
+  testWidgets('labels Cursor local index removal without implying deletion', (
+    tester,
+  ) async {
+    // Arrange
+    final session = MemorySessionStore();
+    final directory = Directory.systemTemp.createTempSync('zeta_test_');
+    tempDirectories.add(directory);
+    final cursorConfig = AgentProviderConfig.defaultCursor.copyWith(
+      enabled: true,
+    );
+    final provider = FakeAgentProvider(
+      config: cursorConfig,
+      declaredCapabilities: AgentProviderCapabilities.cursorAcp,
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[
+            agentThread(
+              id: 'cursor-thread',
+              projectPath: directory.path,
+              title: 'Cursor thread',
+            ).copyWith(providerId: cursorAgentProviderId),
+          ],
+          nextCursor: null,
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        directoryPicker: () async => directory.path,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(
+          AgentProviderSettings(
+            providers: <AgentProviderConfig>[cursorConfig],
+            activeProviderId: cursorAgentProviderId,
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await tester.runAsync(waitForIo);
+    await tester.pumpAndSettle();
+    final mouse = await hoverThreadTile(
+      tester,
+      directory.path,
+      'cursor-thread',
+    );
+    addTearDown(mouse.removePointer);
+
+    // Act
+    await tester.tap(
+      find.byKey(
+        ValueKey<String>(
+          'project-thread-more-menu-${directory.path}-cursor-thread',
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // Assert
+    expect(find.text('仅从 Zeta 列表移除'), findsOneWidget);
+    expect(find.text('删除'), findsNothing);
+
+    await tester.tap(
+      find.byKey(
+        ValueKey<String>(
+          'project-thread-delete-${directory.path}-cursor-thread',
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.textContaining('Cursor 端历史仍会保留'), findsOneWidget);
+
+    await tester.tap(find.text('移除'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(provider.removedLocalThreads, <String>['cursor-thread']);
+    expect(find.text('Cursor thread'), findsNothing);
+  });
+
   testWidgets('hides thread action menu when Grok lacks lifecycle support', (
     tester,
   ) async {

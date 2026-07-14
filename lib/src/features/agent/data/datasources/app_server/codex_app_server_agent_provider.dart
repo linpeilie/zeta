@@ -384,6 +384,7 @@ class CodexAppServerAgentProvider
   Future<AgentThreadHistorySnapshot> readThreadHistory({
     required String threadId,
     String? sessionPath,
+    String? projectPath,
   }) async {
     await initialize();
     _log.fine('Reading Codex thread history $threadId');

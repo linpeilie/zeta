@@ -461,6 +461,7 @@ class GrokAcpAgentProvider implements AgentProvider {
   Future<AgentThreadHistorySnapshot> readThreadHistory({
     required String threadId,
     String? sessionPath,
+    String? projectPath,
   }) async {
     final cached = _historyCache[threadId];
     if (cached != null &&
@@ -474,7 +475,7 @@ class GrokAcpAgentProvider implements AgentProvider {
     final snapshot = await _sessionHistoryReader.readThreadHistory(
       threadId: threadId,
       providerId: config.id,
-      projectPath: null,
+      projectPath: projectPath,
       sessionPath: sessionPath,
       environment: <String, String>{
         ...Platform.environment,

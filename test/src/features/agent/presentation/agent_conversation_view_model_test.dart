@@ -42,6 +42,7 @@ void main() {
 
       expect(provider.calls, <String>['read:thread-1']);
       expect(provider.readSessionPaths, <String>['/repo/thread-1.jsonl']);
+      expect(provider.readProjectPaths, <String>['/repo']);
       expect(viewModel.status.state, AgentProviderConnectionState.ready);
       expect(viewModel.threadOpenPhase, AgentThreadOpenPhase.idle);
       expect(viewModel.isTurnRunning, isFalse);
@@ -2412,6 +2413,7 @@ class _FakeAgentProvider
   final Map<String, Completer<AgentSession>> _resumeCompleters;
   final List<String> calls = <String>[];
   final List<String?> readSessionPaths = <String?>[];
+  final List<String?> readProjectPaths = <String?>[];
   final List<String> unsubscribedThreads = <String>[];
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
@@ -2468,9 +2470,11 @@ class _FakeAgentProvider
   Future<AgentThreadHistorySnapshot> readThreadHistory({
     required String threadId,
     String? sessionPath,
+    String? projectPath,
   }) async {
     calls.add('read:$threadId');
     readSessionPaths.add(sessionPath);
+    readProjectPaths.add(projectPath);
     if (failHistory) {
       throw StateError('history failed');
     }

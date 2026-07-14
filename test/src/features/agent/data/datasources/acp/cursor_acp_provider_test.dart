@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/cursor_acp_agent_provider.dart';
+import 'package:zeta/src/features/agent/data/datasources/acp/cursor_session_index_store.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
@@ -12,6 +13,7 @@ void main() {
       final provider = CursorAcpAgentProvider(
         config: AgentProviderConfig.defaultCursor,
         peer: _FakeCursorPeer(),
+        sessionIndexStore: MemoryCursorSessionIndexStore(),
       );
       addTearDown(provider.dispose);
 
@@ -26,6 +28,7 @@ void main() {
       final provider = CursorAcpAgentProvider(
         config: AgentProviderConfig.defaultCursor,
         peer: peer,
+        sessionIndexStore: MemoryCursorSessionIndexStore(),
       );
       addTearDown(provider.dispose);
 
@@ -63,6 +66,7 @@ void main() {
       final provider = CursorAcpAgentProvider(
         config: AgentProviderConfig.defaultCursor,
         peer: peer,
+        sessionIndexStore: MemoryCursorSessionIndexStore(),
       );
       addTearDown(provider.dispose);
       final events = <AgentEvent>[];
@@ -111,6 +115,7 @@ void main() {
       final provider = CursorAcpAgentProvider(
         config: AgentProviderConfig.defaultCursor,
         peer: peer,
+        sessionIndexStore: MemoryCursorSessionIndexStore(),
       );
       addTearDown(provider.dispose);
       final events = <AgentEvent>[];
@@ -140,6 +145,7 @@ void main() {
       final provider = CursorAcpAgentProvider(
         config: AgentProviderConfig.defaultCursor,
         peer: peer,
+        sessionIndexStore: MemoryCursorSessionIndexStore(),
       );
       addTearDown(provider.dispose);
       await provider.startSession(
@@ -169,6 +175,7 @@ void main() {
           peers.add(peer);
           return peer;
         },
+        sessionIndexStore: MemoryCursorSessionIndexStore(),
       );
       addTearDown(provider.dispose);
 
@@ -194,6 +201,7 @@ void main() {
         final provider = CursorAcpAgentProvider(
           config: AgentProviderConfig.defaultCursor,
           peer: peer,
+          sessionIndexStore: MemoryCursorSessionIndexStore(),
         );
         addTearDown(provider.dispose);
         final session = await provider.startSession(
@@ -221,6 +229,7 @@ void main() {
       final provider = CursorAcpAgentProvider(
         config: AgentProviderConfig.defaultCursor,
         peer: peer,
+        sessionIndexStore: MemoryCursorSessionIndexStore(),
       );
       addTearDown(provider.dispose);
       final events = <AgentEvent>[];
@@ -246,6 +255,7 @@ void main() {
       final provider = CursorAcpAgentProvider(
         config: AgentProviderConfig.defaultCursor,
         peer: peer,
+        sessionIndexStore: MemoryCursorSessionIndexStore(),
       );
       addTearDown(provider.dispose);
       final events = <AgentEvent>[];
@@ -264,17 +274,337 @@ void main() {
       expect(status.state, AgentProviderConnectionState.error);
       expect(status.message, contains('session'));
     });
+
+    test('indexes new sessions and applies session info metadata', () async {
+      // Arrange
+      final store = MemoryCursorSessionIndexStore();
+      final peer = _FakeCursorPeer();
+      final provider = CursorAcpAgentProvider(
+        config: AgentProviderConfig.defaultCursor,
+        peer: peer,
+        sessionIndexStore: store,
+        clock: () => DateTime.utc(2026, 7, 14, 1),
+      );
+      addTearDown(provider.dispose);
+
+      // Act
+      await provider.startSession(
+        context: const AgentContext(projectPath: r'D:\repo\zeta'),
+      );
+      peer.emitUpdate(<String, Object?>{
+        'sessionUpdate': 'session_info_update',
+        'title': 'Cursor history',
+        'updatedAt': '2026-07-14T02:00:00Z',
+        '_meta': <String, Object?>{
+          'branch': 'main',
+          'promptText': 'must not persist',
+        },
+      });
+      await _flushAsync();
+
+      // Assert
+      final entry = (await store.load()).sessions.single;
+      expect(entry.sessionId, 'cursor-session-1');
+      expect(entry.title, 'Cursor history');
+      expect(entry.updatedAt, DateTime.utc(2026, 7, 14, 2));
+      expect(entry.metadata, <String, Object?>{'branch': 'main'});
+    });
+
+    test('lists paged local index when session/list is unavailable', () async {
+      // Arrange
+      final workspace = normalizeCursorWorkspacePath(r'D:\repo\zeta')!;
+      final store = MemoryCursorSessionIndexStore(
+        CursorSessionIndexSnapshot(
+          sessions: <CursorSessionIndexEntry>[
+            _indexEntry(
+              id: 'session-new',
+              workspace: workspace,
+              title: 'New thread',
+              updatedAt: DateTime.utc(2026, 7, 14, 2),
+            ),
+            _indexEntry(
+              id: 'session-old',
+              workspace: workspace,
+              title: 'Old thread',
+              updatedAt: DateTime.utc(2026, 7, 14, 1),
+            ),
+          ],
+        ),
+      );
+      final peer = _FakeCursorPeer();
+      final provider = CursorAcpAgentProvider(
+        config: AgentProviderConfig.defaultCursor,
+        peer: peer,
+        sessionIndexStore: store,
+      );
+      addTearDown(provider.dispose);
+
+      // Act
+      final first = await provider.listThreads(
+        query: const AgentThreadListQuery(
+          projectPath: r'D:\repo\zeta\',
+          limit: 1,
+        ),
+      );
+      final second = await provider.listThreads(
+        query: AgentThreadListQuery(
+          projectPath: r'D:\repo\zeta',
+          limit: 1,
+          cursor: first.nextCursor,
+          searchTerm: 'thread',
+        ),
+      );
+
+      // Assert
+      expect(first.threads.single.id, 'session-new');
+      expect(first.nextCursor, isNotNull);
+      expect(second.threads.single.id, 'session-old');
+      expect(peer.requestMethods, isNot(contains('session/list')));
+    });
+
+    test('merges session/list with server metadata taking priority', () async {
+      // Arrange
+      final workspace = normalizeCursorWorkspacePath(r'D:\repo\zeta')!;
+      final store = MemoryCursorSessionIndexStore(
+        CursorSessionIndexSnapshot(
+          sessions: <CursorSessionIndexEntry>[
+            _indexEntry(
+              id: 'shared-session',
+              workspace: workspace,
+              title: 'Local title',
+              updatedAt: DateTime.utc(2026, 7, 13),
+            ),
+          ],
+        ),
+      );
+      final peer = _FakeCursorPeer(
+        supportsList: true,
+        remoteSessions: <Map<String, Object?>>[
+          <String, Object?>{
+            'sessionId': 'shared-session',
+            'cwd': workspace,
+            'title': 'Server title',
+            'updatedAt': '2026-07-14T03:00:00Z',
+          },
+          <String, Object?>{
+            'sessionId': 'remote-session',
+            'cwd': workspace,
+            'title': 'Remote only',
+            'updatedAt': '2026-07-14T02:00:00Z',
+          },
+        ],
+      );
+      final provider = CursorAcpAgentProvider(
+        config: AgentProviderConfig.defaultCursor,
+        peer: peer,
+        sessionIndexStore: store,
+      );
+      addTearDown(provider.dispose);
+
+      // Act
+      final page = await provider.listThreads(
+        query: AgentThreadListQuery(projectPath: workspace, limit: 10),
+      );
+
+      // Assert
+      expect(page.threads, hasLength(2));
+      expect(page.threads.first.title, 'Server title');
+      expect(peer.requestMethods, contains('session/list'));
+    });
+
+    test('captures load replay once and reuses it during resume', () async {
+      // Arrange
+      final workspace = normalizeCursorWorkspacePath(r'D:\repo\zeta')!;
+      final store = MemoryCursorSessionIndexStore(
+        CursorSessionIndexSnapshot(
+          sessions: <CursorSessionIndexEntry>[
+            _indexEntry(
+              id: 'cursor-session-1',
+              workspace: workspace,
+              title: 'Existing',
+              updatedAt: DateTime.utc(2026, 7, 14),
+            ),
+          ],
+        ),
+      );
+      final peer = _FakeCursorPeer(
+        loadUpdates: <Map<String, Object?>>[
+          <String, Object?>{
+            'sessionUpdate': 'user_message_chunk',
+            'messageId': 'user-1',
+            'content': <String, Object?>{'type': 'text', 'text': 'Question'},
+            '_meta': <String, Object?>{'promptId': 'turn-1'},
+          },
+          <String, Object?>{
+            'sessionUpdate': 'agent_message_chunk',
+            'messageId': 'agent-1',
+            'content': <String, Object?>{'type': 'text', 'text': 'Answer'},
+            '_meta': <String, Object?>{'promptId': 'turn-1'},
+          },
+        ],
+      );
+      final provider = CursorAcpAgentProvider(
+        config: AgentProviderConfig.defaultCursor,
+        peer: peer,
+        sessionIndexStore: store,
+      );
+      addTearDown(provider.dispose);
+
+      // Act
+      final history = await provider.readThreadHistory(
+        threadId: 'cursor-session-1',
+        projectPath: workspace,
+      );
+      peer.emitUpdate(<String, Object?>{
+        'sessionUpdate': 'session_info_update',
+        'title': 'Updated after replay',
+      });
+      await _flushAsync();
+      final session = await provider.resumeSession(
+        'cursor-session-1',
+        context: AgentContext(projectPath: workspace),
+      );
+
+      // Assert
+      expect(history.turns, hasLength(1));
+      expect(history.turns.single.entries, hasLength(2));
+      expect(session.id, 'cursor-session-1');
+      expect(session.title, 'Updated after replay');
+      expect(
+        peer.requestMethods.where((method) => method == 'session/load'),
+        hasLength(1),
+      );
+    });
+
+    test(
+      'load failure is fail-closed and never creates a new session',
+      () async {
+        // Arrange
+        final workspace = normalizeCursorWorkspacePath(r'D:\repo\zeta')!;
+        final store = MemoryCursorSessionIndexStore(
+          CursorSessionIndexSnapshot(
+            sessions: <CursorSessionIndexEntry>[
+              _indexEntry(
+                id: 'cursor-session-1',
+                workspace: workspace,
+                updatedAt: DateTime.utc(2026, 7, 14),
+              ),
+            ],
+          ),
+        );
+        final peer = _FakeCursorPeer(sessionLoadFails: true);
+        final provider = CursorAcpAgentProvider(
+          config: AgentProviderConfig.defaultCursor,
+          peer: peer,
+          sessionIndexStore: store,
+        );
+        addTearDown(provider.dispose);
+
+        // Act / Assert
+        await expectLater(
+          provider.resumeSession(
+            'cursor-session-1',
+            context: AgentContext(projectPath: workspace),
+          ),
+          throwsA(isA<JsonRpcException>()),
+        );
+        expect(peer.requestMethods, contains('session/load'));
+        expect(peer.requestMethods, isNot(contains('session/new')));
+        expect((await store.load()).sessions, hasLength(1));
+      },
+    );
+
+    test('gates remote delete and supports local-only removal', () async {
+      // Arrange
+      final workspace = normalizeCursorWorkspacePath(r'D:\repo\zeta')!;
+      final remoteStore = MemoryCursorSessionIndexStore(
+        CursorSessionIndexSnapshot(
+          sessions: <CursorSessionIndexEntry>[
+            _indexEntry(
+              id: 'cursor-session-1',
+              workspace: workspace,
+              updatedAt: DateTime.utc(2026, 7, 14),
+            ),
+          ],
+        ),
+      );
+      final peer = _FakeCursorPeer(supportsDelete: true);
+      final provider = CursorAcpAgentProvider(
+        config: AgentProviderConfig.defaultCursor,
+        peer: peer,
+        sessionIndexStore: remoteStore,
+      );
+      addTearDown(provider.dispose);
+
+      // Act
+      await provider.deleteThread('cursor-session-1');
+
+      // Assert
+      expect(peer.requestMethods, contains('session/delete'));
+      expect((await remoteStore.load()).sessions, isEmpty);
+
+      final localStore = MemoryCursorSessionIndexStore(
+        CursorSessionIndexSnapshot(
+          sessions: <CursorSessionIndexEntry>[
+            _indexEntry(
+              id: 'local-only',
+              workspace: workspace,
+              updatedAt: DateTime.utc(2026, 7, 14),
+            ),
+          ],
+        ),
+      );
+      final localProvider = CursorAcpAgentProvider(
+        config: AgentProviderConfig.defaultCursor,
+        peer: _FakeCursorPeer(),
+        sessionIndexStore: localStore,
+      );
+      addTearDown(localProvider.dispose);
+      await localProvider.removeThreadFromList('local-only');
+      expect((await localStore.load()).sessions, isEmpty);
+    });
   });
+}
+
+Future<void> _flushAsync() async {
+  await Future<void>.delayed(Duration.zero);
+  await Future<void>.delayed(Duration.zero);
+}
+
+CursorSessionIndexEntry _indexEntry({
+  required String id,
+  required String workspace,
+  required DateTime updatedAt,
+  String? title,
+}) {
+  return CursorSessionIndexEntry(
+    sessionId: id,
+    providerId: cursorAgentProviderId,
+    workspacePath: workspace,
+    title: title,
+    createdAt: updatedAt,
+    updatedAt: updatedAt,
+  );
 }
 
 class _FakeCursorPeer implements JsonRpcPeer {
   _FakeCursorPeer({
     this.sessionId = 'cursor-session-1',
     this.sessionNewFails = false,
+    this.sessionLoadFails = false,
+    this.supportsList = false,
+    this.supportsDelete = false,
+    this.remoteSessions = const <Map<String, Object?>>[],
+    this.loadUpdates = const <Map<String, Object?>>[],
   });
 
   final String sessionId;
   final bool sessionNewFails;
+  final bool sessionLoadFails;
+  final bool supportsList;
+  final bool supportsDelete;
+  final List<Map<String, Object?>> remoteSessions;
+  final List<Map<String, Object?>> loadUpdates;
   final _notifications = StreamController<JsonRpcNotification>.broadcast();
   final _serverRequests = StreamController<JsonRpcRequest>.broadcast();
   final _stderr = StreamController<String>.broadcast();
@@ -310,8 +640,8 @@ class _FakeCursorPeer implements JsonRpcPeer {
   }) async {
     requestMethods.add(method);
     requestParams.add(params);
-    return switch (method) {
-      'initialize' => <String, Object?>{
+    if (method == 'initialize') {
+      return <String, Object?>{
         'protocolVersion': 1,
         'agentInfo': <String, Object?>{
           'name': 'cursor-agent',
@@ -319,25 +649,56 @@ class _FakeCursorPeer implements JsonRpcPeer {
           'version': '1.0.0',
         },
         'agentCapabilities': <String, Object?>{
+          'loadSession': true,
           'promptCapabilities': <String, Object?>{
             'image': false,
             'embeddedContext': false,
           },
+          if (supportsList || supportsDelete)
+            'sessionCapabilities': <String, Object?>{
+              if (supportsList) 'list': <String, Object?>{},
+              if (supportsDelete) 'delete': <String, Object?>{},
+            },
         },
         'authMethods': <Object?>[
           <String, Object?>{'id': 'cursor_login', 'name': 'Cursor Login'},
         ],
-      },
-      'authenticate' => <String, Object?>{},
-      'session/new' =>
-        sessionNewFails
-            ? throw const JsonRpcException(
-                JsonRpcError(code: -32000, message: 'session failed'),
-              )
-            : <String, Object?>{'sessionId': sessionId},
-      'session/prompt' => <String, Object?>{'stopReason': 'end_turn'},
-      _ => <String, Object?>{},
-    };
+      };
+    }
+    if (method == 'authenticate') {
+      return <String, Object?>{};
+    }
+    if (method == 'session/new') {
+      if (sessionNewFails) {
+        throw const JsonRpcException(
+          JsonRpcError(code: -32000, message: 'session failed'),
+        );
+      }
+      return <String, Object?>{'sessionId': sessionId};
+    }
+    if (method == 'session/load') {
+      if (sessionLoadFails) {
+        throw const JsonRpcException(
+          JsonRpcError(code: -32000, message: 'load failed'),
+        );
+      }
+      for (final update in loadUpdates) {
+        emitUpdate(update);
+      }
+      // ACP replay 必须在 session/load response 前送达。
+      await Future<void>.delayed(Duration.zero);
+      return <String, Object?>{};
+    }
+    if (method == 'session/list') {
+      return <String, Object?>{'sessions': remoteSessions};
+    }
+    if (method == 'session/delete') {
+      return <String, Object?>{};
+    }
+    if (method == 'session/prompt') {
+      return <String, Object?>{'stopReason': 'end_turn'};
+    }
+    return <String, Object?>{};
   }
 
   Map<String, Object?> paramsFor(String method) {

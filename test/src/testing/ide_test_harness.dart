@@ -105,7 +105,7 @@ class FakeAgentProviderFactory implements AgentProviderFactory {
 
 class FakeAgentProvider
     with AgentProviderThreadLifecycleStub
-    implements AgentProvider {
+    implements AgentProvider, AgentLocalThreadListProvider {
   FakeAgentProvider({
     this.emitToolAndApproval = false,
     this.emitCompletedCommentary = false,
@@ -115,6 +115,8 @@ class FakeAgentProvider
     this.tokenUsageDuringTurn,
     this.responseText = 'Fake response from provider',
     this.onResumeSession,
+    this.declaredCapabilities = AgentProviderCapabilities.codexAppServer,
+    this.config = AgentProviderConfig.defaultCodex,
     List<AgentThreadPage> threadPages = const <AgentThreadPage>[],
     Map<String, AgentThreadHistorySnapshot> threadHistories =
         const <String, AgentThreadHistorySnapshot>{},
@@ -131,6 +133,9 @@ class FakeAgentProvider
   final AgentTokenUsage? tokenUsageDuringTurn;
   final String responseText;
   final Future<AgentSession> Function(String sessionId)? onResumeSession;
+  final AgentProviderCapabilities declaredCapabilities;
+  @override
+  final AgentProviderConfig config;
   final List<AgentThreadPage> _threadPages;
   final Map<String, AgentThreadHistorySnapshot> _threadHistories;
   final StreamController<AgentEvent> _events =
@@ -147,9 +152,10 @@ class FakeAgentProvider
   final List<String> approvedRequests = <String>[];
   final List<String> deniedRequests = <String>[];
   final List<String> cancelledTurns = <String>[];
+  final List<String> removedLocalThreads = <String>[];
 
   @override
-  AgentProviderConfig get config => AgentProviderConfig.defaultCodex;
+  AgentProviderCapabilities get capabilities => declaredCapabilities;
 
   @override
   Stream<AgentEvent> get events => _events.stream;
@@ -208,6 +214,7 @@ class FakeAgentProvider
   Future<AgentThreadHistorySnapshot> readThreadHistory({
     required String threadId,
     String? sessionPath,
+    String? projectPath,
   }) async {
     await initialize();
     readHistories.add(threadId);
@@ -217,6 +224,11 @@ class FakeAgentProvider
           threadId: threadId,
           turns: const <AgentHistoryTurn>[],
         );
+  }
+
+  @override
+  Future<void> removeThreadFromList(String threadId) async {
+    removedLocalThreads.add(threadId);
   }
 
   @override
