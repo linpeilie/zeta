@@ -99,6 +99,11 @@ main -> app -> presentation/application -> domain
 - mapper 文件负责字段兼容、默认值和协议名称转换；不要在 widget 中写散落的 JSON key。
 - 标准 ACP 的 session update、content block 和 permission option 优先复用公共 mapper；
   厂商扩展保留在对应 adapter，不得污染 presentation。
+- 通用 CLI 名称（例如 Cursor 的 `agent`）不得只按 basename 判定产品身份；定位器必须
+  组合无副作用版本/帮助探测，并在 ACP initialize 的 `agentInfo` 上二次校验。
+- workspace-scoped provider 的子进程 cwd 与 session cwd 必须一致；workspace 变化时关闭
+  旧 peer、清理待响应请求并重新握手，禁止跨项目复用进程。
+- JSON-RPC transport 日志不得记录 prompt、文件内容、认证参数或 stderr 原文。
 - 默认审批策略保持保守，不自动授权命令执行或文件写入。
 - Codex app-server 协议以 `third_party/codex_app_server_schema` 的 pinned
   快照为准；升级 CLI 时先用 `tool/gen_codex_schema.*` 导出并 diff，再改

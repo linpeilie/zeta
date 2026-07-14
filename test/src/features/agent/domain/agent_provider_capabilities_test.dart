@@ -40,5 +40,20 @@ void main() {
       expect(policy.requiresWorkspace, isTrue);
       expect(policy.allowsEagerModelPreload, isFalse);
     });
+
+    test('keeps Cursor conservative until ACP handshake', () {
+      final capabilities = AgentProviderCapabilities.defaultsFor(
+        AgentProviderKind.cursorAcp,
+      );
+
+      expect(capabilities.canCreateSession, isTrue);
+      expect(capabilities.canPrompt, isTrue);
+      expect(capabilities.canCancelTurn, isTrue);
+      expect(capabilities.canListThreads, isFalse);
+      expect(capabilities.canResumeSession, isFalse);
+      expect(capabilities.supportsLocalImageInput, isFalse);
+      expect(capabilities.supportsResourceInput, isFalse);
+      expect(capabilities.bootstrapPolicy.requiresWorkspace, isTrue);
+    });
   });
 }

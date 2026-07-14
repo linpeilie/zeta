@@ -353,6 +353,7 @@ class _AgentProviderSelectionPopoverState
     return switch (kind) {
       AgentProviderKind.codexAppServer => Icons.code_rounded,
       AgentProviderKind.acp => Icons.smart_toy_outlined,
+      AgentProviderKind.cursorAcp => Icons.auto_awesome_outlined,
       AgentProviderKind.claudeCode => Icons.terminal_rounded,
     };
   }
@@ -361,6 +362,7 @@ class _AgentProviderSelectionPopoverState
     return switch (kind) {
       AgentProviderKind.codexAppServer => 'Codex app-server',
       AgentProviderKind.acp => 'Agent Client Protocol',
+      AgentProviderKind.cursorAcp => 'Cursor ACP',
       AgentProviderKind.claudeCode => 'Claude Code CLI',
     };
   }

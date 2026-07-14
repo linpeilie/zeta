@@ -19,7 +19,17 @@ void main() {
       expect(settings.activeProvider.arguments, <String>['app-server']);
       expect(
         settings.providers.map((provider) => provider.id),
-        containsAll(<String>[defaultAgentProviderId, grokAgentProviderId]),
+        containsAll(<String>[
+          defaultAgentProviderId,
+          grokAgentProviderId,
+          cursorAgentProviderId,
+        ]),
+      );
+      expect(
+        settings.providers
+            .singleWhere((provider) => provider.id == cursorAgentProviderId)
+            .enabled,
+        isFalse,
       );
     });
 
@@ -52,5 +62,26 @@ void main() {
       expect(await store.load(), isA<AgentProviderSettings>());
       expect((await store.load()).activeProvider.id, 'claude');
     });
+
+    test(
+      'adds disabled Cursor to existing v1 settings without changing active',
+      () {
+        final settings = AgentProviderSettings.tryDecode(<String, Object?>{
+          'version': 1,
+          'activeProviderId': grokAgentProviderId,
+          'providers': <Object?>[
+            AgentProviderConfig.defaultCodex.toJson(),
+            AgentProviderConfig.defaultGrok.toJson(),
+          ],
+        });
+
+        expect(settings.activeProviderId, grokAgentProviderId);
+        final cursor = settings.providers.singleWhere(
+          (provider) => provider.id == cursorAgentProviderId,
+        );
+        expect(cursor.kind, AgentProviderKind.cursorAcp);
+        expect(cursor.enabled, isFalse);
+      },
+    );
   });
 }

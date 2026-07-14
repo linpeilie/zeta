@@ -214,6 +214,18 @@ class AgentProviderCapabilities {
     supportsUsage: true,
   );
 
+  /// Cursor ACP Phase 2 的静态能力。
+  ///
+  /// 图片和资源输入必须等 initialize 明确协商后再动态开启；会话列表、历史与
+  /// 恢复属于后续阶段，此处保持关闭。
+  static const cursorAcp = AgentProviderCapabilities(
+    canCreateSession: true,
+    canPrompt: true,
+    canCancelTurn: true,
+    supportsPermissionRequests: true,
+    bootstrapPolicy: AgentProviderBootstrapPolicy.workspaceScoped,
+  );
+
   /// 尚未接入的 provider 使用全关闭能力，避免误显示可操作入口。
   static const unsupported = AgentProviderCapabilities();
 
@@ -222,6 +234,7 @@ class AgentProviderCapabilities {
     return switch (kind) {
       AgentProviderKind.codexAppServer => codexAppServer,
       AgentProviderKind.acp => grokAcp,
+      AgentProviderKind.cursorAcp => cursorAcp,
       AgentProviderKind.claudeCode => unsupported,
     };
   }

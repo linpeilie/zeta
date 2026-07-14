@@ -133,7 +133,9 @@ void main() {
           message: '你是什么模型？',
         );
 
-        await Future<void>.delayed(const Duration(milliseconds: 80));
+        await _waitUntil(
+          () => events.whereType<AgentThreadNameUpdatedEvent>().isNotEmpty,
+        );
 
         final nameEvents = events.whereType<AgentThreadNameUpdatedEvent>();
         expect(nameEvents, isNotEmpty);
@@ -197,7 +199,9 @@ void main() {
           context: const AgentContext(projectPath: projectPath),
           message: '你是什么模型',
         );
-        await Future<void>.delayed(const Duration(milliseconds: 30));
+        await _waitUntil(
+          () => events.whereType<AgentThreadNameUpdatedEvent>().isNotEmpty,
+        );
 
         expect(
           events.whereType<AgentThreadNameUpdatedEvent>().single.threadName,
@@ -550,6 +554,13 @@ Available models:
       expect(list.models.last.id, 'grok-composer-2.5-fast');
     });
   });
+}
+
+Future<void> _waitUntil(bool Function() condition) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 1));
+  while (!condition() && DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+  }
 }
 
 class _FakeJsonRpcPeer implements JsonRpcPeer {

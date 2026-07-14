@@ -1,6 +1,6 @@
 # 设计文档
 
-最后更新：2026-07-10
+最后更新：2026-07-14
 
 ## 1. 设计目标
 
@@ -12,7 +12,7 @@ Zeta 的设计目标是让 Flutter UI、Agent provider、会话持久化和本�
 
 - app：应用根组件、窗口启动、应用常量。
 - core：日志等跨层基础能力。
-- features/agent：Agent provider 抽象、Codex app-server、Grok ACP stdio、JSON-RPC stdio、历史解析、事件映射、对话 view model 和 Agent pane。
+- features/agent：Agent provider 抽象、Codex app-server、Grok/Cursor ACP stdio、JSON-RPC stdio、历史解析、事件映射、对话 view model 和 Agent pane。
 - features/agent_management：Agent CLI 检测、版本与账号诊断、模型读取、配置安全编辑、
   CLI 磁盘日志读取和管理页面。
 - features/ide_session：会话状态、版本化持久化、恢复计划和恢复协调。
@@ -50,15 +50,16 @@ AgentConversationViewModel
   -> AgentConversationUiSignals
   -> AgentConversationModelSelectionController
   -> AgentProvider
-    -> CodexAppServerAgentProvider | GrokAcpAgentProvider
+    -> CodexAppServerAgentProvider | GrokAcpAgentProvider | CursorAcpAgentProvider
       -> JsonRpcPeer
-        -> codex app-server 或 grok agent stdio
+        -> codex app-server / grok agent stdio / agent acp
 
 AgentManagementController
-  -> CodexAgentManagementRepository
-    -> codex --version / login status
-    -> AgentProvider initialize / model/list
-    -> config.toml / Codex 磁盘日志
+  -> CodexAgentManagementRepository | GrokAgentManagementRepository
+     | CursorAgentManagementRepository
+    -> CLI 身份、版本与登录态检查
+    -> 无计费 initialize / authenticate 握手
+    -> provider 对应配置与脱敏诊断
 
 UsageStatisticsController
   -> UsageStatisticsRepository
@@ -80,9 +81,11 @@ UsageStatisticsController
 ### Agent 管理
 
 - 设置页提供 Agent 列表和独立详情，列表状态、搜索与筛选在返回时保留。
-- 第一阶段只内置 Codex；未安装时仍在“全部支持”中展示，但不提供应用内安装。
-- 详情包含基础诊断、模型、TOML 配置和磁盘日志；桌面端双栏，窄窗口上下排列。
-- 连接测试只执行版本、账号、initialize 与 `model/list`，不会创建计费 turn。
+- 当前内置 Codex、Grok 与默认关闭的 Cursor Beta；未安装时仍在“全部支持”中展示，
+  但不提供应用内安装或自动更新。
+- 详情包含基础诊断、模型和 provider 对应配置；桌面端双栏，窄窗口上下排列。
+- 连接测试只执行版本、账号与协议握手；Cursor 不创建 session、不发送计费 prompt，
+  握手成功后才允许显式启用。
 - 禁用 Codex 后不再允许创建可写会话；既有会话仍可读取历史，输入区隐藏并显示
   只读提示。
 
@@ -143,7 +146,8 @@ composer，应用层误调用时抛出 `UnsupportedError`。`AgentProviderBootst
 
 ### 默认 provider
 
-当前内置 provider 为 Codex CLI 与 Grok ACP；默认 active provider 仍为 Codex CLI：
+当前内置 provider 为 Codex CLI、Grok ACP 与 Cursor ACP；Cursor 默认关闭，默认 active
+provider 仍为 Codex CLI：
 
 ```text
 codex app-server
@@ -158,12 +162,20 @@ Grok provider 使用 ACP stdio、本地历史和 xAI 扩展。标准 ACP
 `GrokAcpNotificationMapper` 只保留厂商扩展适配。session config option 与带稳定 id、
 可多选的用户问答选项使用中立领域模型，供后续 ACP provider 共用。
 
+Cursor provider 使用官方 `agent acp`，启动前由 `CursorCliLocator` 组合校验产品标识、
+版本输出和 ACP 帮助，不能仅凭通用 basename `agent` 判定身份。provider 进程与 workspace
+绑定：首次创建 session 时在项目目录启动，切换项目即关闭旧 peer 并重新 initialize /
+authenticate。Phase 2 已支持 `session/new`、文本 prompt、标准流式消息/思考/工具/计划、
+权限响应、取消、错误和进程早退；图片与 resource 入口只有握手明确声明 capability 后才
+开放。session 列表、历史恢复和动态 config options 留在后续阶段。
+
 ### 管理适配
 
 `AgentManagementController` 负责管理页异步编排，并复用
-`ActiveAgentProviderController` 的全局 provider 配置。`CodexAgentManagementRepository`
-负责 PATH/常见目录定位、版本与账号命令、npm 最新版本、无计费 provider 探测、
-TOML 校验与安全替换，以及 Codex 自身日志的尾部读取和脱敏。
+`ActiveAgentProviderController` 的全局 provider 配置。各 CLI 使用独立 management
+repository。Cursor repository 负责多候选身份探测、版本/账号检查和无 session、无 prompt
+的 ACP 握手；保存的 `cliPath` 必须已经通过身份校验。协议 transport 不记录 prompt、文件
+内容或 stderr 原文。
 
 检测摘要和真实 CLI 路径保存在 provider `extra` 中；项目 thread 仍只保存稳定的
 `providerId`。管理 feature 不解析 thread/turn 原始协议，也不替代现有 provider。
@@ -247,6 +259,7 @@ IDE 会话状态目前版本为 2，持久化内容包括：
 - Agent 模型 JSON 编解码和宽容读取。
 - JSON-RPC stdio transport。
 - Codex provider 事件映射。
+- Cursor CLI 身份冲突、workspace peer 重建、ACP 流式映射、权限拒绝/取消和进程早退。
 - AgentConversationViewModel 状态机。
 - Agent 管理的版本比较、配置校验/冲突/备份、日志脱敏和禁用只读联动。
 - ProjectThreadsController 和 ProjectThreadsViewModel 的分页、缓存、选择和错误状态分工。
@@ -257,7 +270,7 @@ IDE 会话状态目前版本为 2，持久化内容包括：
 ## 10. 演进方向
 
 - Codex 适配 Phase 2：thread 重命名/归档/删除/分叉/回滚/压缩，以及审批表单与策略预设（见适配计划）。
-- 扩展 Agent 管理适配到更多 provider，并为不同 CLI 增加稳定的账号/日志策略。
+- 完成 Cursor session 索引、历史恢复、动态模型/模式与阻塞扩展。
 - 增加文件内容预览或编辑器能力。
 - 增加 Agent 执行审计记录。
 - 支持更多 Agent provider。

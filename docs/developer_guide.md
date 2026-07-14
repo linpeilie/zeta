@@ -92,9 +92,10 @@ windows/
 
 - `lib/src/app`：应用装配、窗口启动、菜单桥接、shell controller 和常量。
 - `lib/src/core`：日志、路径工具等跨功能基础设施。
-- `lib/src/features/agent`：Agent provider 抽象、Codex data source、事件映射、对话状态和 Agent pane。
-- `lib/src/features/agent_management`：Codex CLI 检测、在线版本查询、账号/模型诊断、
-  TOML 配置安全编辑、磁盘日志读取和 Agent 管理页面。
+- `lib/src/features/agent`：Agent provider 抽象、Codex app-server、Grok/Cursor ACP、
+  共享事件映射、对话状态和 Agent pane。
+- `lib/src/features/agent_management`：Codex/Grok/Cursor CLI 检测、身份/版本/账号诊断、
+  无计费连接测试、配置安全编辑和 Agent 管理页面。
 - `lib/src/features/ide_session`：IDE 会话模型、状态构建、恢复协调和持久化。
 - `lib/src/features/project_threads`：项目 thread 列表状态、恢复快照、分页控制器和 view model。
 - `lib/src/features/usage_statistics`：Codex 全局历史读取、版本化派生索引、统计聚合
@@ -151,6 +152,16 @@ Agent 管理适配与会话 provider 适配保持分层：管理 data 层可以�
 真实模型 turn 做自动连接测试。配置文件保存必须走
 `CodexAgentManagementRepository` 的校验、冲突检测、备份和临时文件替换流程；
 日志必须在 data 层脱敏后再交给 presentation。
+
+Cursor 适配还必须遵守以下约束：
+
+- `agent` 是通用命令名，必须通过 `CursorCliLocator` 的产品标识与 ACP 能力探测确认身份；
+  不得只检查 basename 或接受 PATH 中第一个 `agent`。
+- `CursorAcpAgentProvider` 必须先获得绝对 workspace，进程 cwd 与 session cwd 保持一致；
+  切换 workspace 必须销毁并重建 peer。
+- 管理页连接测试只执行 initialize/authenticate，不得创建 session 或发送 prompt。
+- 未识别的服务端 request 必须返回 JSON-RPC `-32601`；权限请求在拒绝、取消和 dispose
+  时都必须回包，避免 turn 永久等待。
 
 修改 Codex 适配层前，先对照
 [`third_party/codex_app_server_schema`](../third_party/codex_app_server_schema/)
@@ -223,6 +234,12 @@ codex app-server
 如果命令不存在或协议变更，应用会显示 provider 不可用或错误状态。
 协议字段变更时，按 [协议版本锁定文档](./codex_app_server_protocol.md)
 重新导出 schema 并 diff，再更新适配层。
+
+### Cursor Agent 无法启用或启动
+
+先在终端确认 `agent --version`、`agent help acp` 和 `agent status` 指向 Cursor，且账号已
+登录。若 PATH 中的 `agent` 实际来自 Grok 或其它产品，前往 Agent 管理页选择 Cursor CLI
+的绝对路径并重新检测；只有无计费 ACP 握手成功后，启用按钮才可用。
 
 ### 会话恢复后项目消失
 

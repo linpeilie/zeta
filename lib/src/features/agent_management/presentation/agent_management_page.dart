@@ -516,7 +516,11 @@ class AgentManagementPageState extends State<AgentManagementPage> {
               child: const Text('查看运行日志'),
             ),
             sf.OutlineButton(
-              onPressed: agent.installed
+              onPressed:
+                  agent.installed &&
+                      (agent.definition.id != cursorAgentProviderId ||
+                          agent.enabled ||
+                          agent.connectionTest?.success == true)
                   ? () => _setEnabled(agent.definition.id, !agent.enabled)
                   : null,
               size: sf.ButtonSize.small,

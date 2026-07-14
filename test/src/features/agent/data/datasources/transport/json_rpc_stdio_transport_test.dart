@@ -74,7 +74,7 @@ void main() {
     });
 
     test(
-      'does not log incoming JSON-RPC notifications and keeps stderr logs',
+      'logs only metadata while keeping stderr available to providers',
       () async {
         final transport = JsonRpcStdioTransport(
           command: 'fake-json-rpc-server',
@@ -104,11 +104,14 @@ void main() {
             .toList();
         expect(
           messages,
-          contains(
-            'Sending JSON-RPC request ping with id 1: '
-            '{"id":1,"method":"ping","params":{}}',
+          anyElement(
+            allOf(
+              contains('Sending JSON-RPC request ping with id 1'),
+              contains('characters'),
+            ),
           ),
         );
+        expect(messages, isNot(anyElement(contains('"method":"ping"'))));
         expect(
           messages,
           isNot(anyElement(contains('Received JSON-RPC notification'))),
@@ -124,8 +127,9 @@ void main() {
         );
         expect(
           messages,
-          contains('Received JSON-RPC stderr line: stderr: ping'),
+          contains('Received JSON-RPC stderr line (12 characters)'),
         );
+        expect(messages, isNot(anyElement(contains('stderr: ping'))));
       },
     );
 

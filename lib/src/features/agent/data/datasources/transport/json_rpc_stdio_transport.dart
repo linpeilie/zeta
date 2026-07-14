@@ -494,7 +494,9 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
     if (line.trim().isEmpty) {
       return;
     }
-    _log.fine('Received JSON-RPC stderr line: $line');
+    // stderr 可能包含本地路径、账号或凭证诊断；上层可消费脱敏后的内容，
+    // transport 日志只记录长度，避免把原文复制到应用日志。
+    _log.fine('Received JSON-RPC stderr line (${line.length} characters)');
     _stderrLines.add(line);
   }
 
@@ -503,7 +505,8 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
     required String description,
   }) {
     final encoded = jsonEncode(message);
-    _log.fine('Sending $description: $encoded');
+    // 请求参数可能包含 prompt、文件内容或认证信息；协议日志不得记录 payload。
+    _log.fine('Sending $description (${encoded.length} characters)');
     // IOSink 在 flush/addStream 期间不允许并发写入；所有 JSONL 输出都走同一条队列。
     final operation = _writeQueue.then((_) async {
       final process = _process;

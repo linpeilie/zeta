@@ -1,6 +1,6 @@
 # Zeta 接入 Cursor Agent 的分析与分步落地方案
 
-> 状态：Phase 1 已完成；Phase 2–7 待实施
+> 状态：Phase 1–2 已完成；Phase 3–7 待实施
 >
 > 编制日期：2026-07-13
 >
@@ -455,7 +455,7 @@ Cursor session 使用双层来源：
 - 标准 ACP fixture 在共享 mapper 中通过；
 - 工厂和 v1 配置仍能读取旧数据。
 
-### Phase 2：Cursor CLI 管理与核心对话 MVP
+### Phase 2：Cursor CLI 管理与核心对话 MVP（已完成，2026-07-14）
 
 目标：用户可显式启用 Cursor，并完成单个项目内的安全对话。
 
@@ -469,6 +469,23 @@ Cursor session 使用双层来源：
 5. 处理未知通知、未知 content block、错误 response、stderr、进程早退和超时。
 6. 实现 Agent 管理页的安装、版本、账号和无计费连接测试；连接成功后允许启用。
 7. 支持 text；图片/mention 只有 prompt capability 明确允许时才启用。
+
+实际落地：
+
+- 已增加稳定 `cursor` id、`cursorAcp` kind 与默认关闭的 Cursor 配置；旧 v1 配置会宽容
+  补入 Cursor，且不改变 active provider。
+- 已实现 `CursorCliLocator` 与 process starter：逐候选执行产品/版本/ACP 身份探测，跳过
+  Grok 等同名 `agent`，保存路径和每次启动前都会重新验证。
+- 已实现 workspace-scoped `CursorAcpAgentProvider`：项目切换会取消挂起审批、关闭旧 peer
+  并重新 initialize/authenticate；无 workspace 不允许 eager initialize。
+- 已支持 session/new、文本 prompt、标准消息/思考/工具/计划流、服务端权限请求、拒绝、
+  取消、未知 request 错误响应、协议警告、stderr 脱敏处理、进程早退和超时收尾。
+- 图片与 resource/mention capability 默认关闭，只有 initialize 明确声明后才开放；图片按
+  ACP MIME/base64 block 发送。
+- Agent 管理页已注册 Cursor，提供安装身份、版本、账号和无 session/无 prompt 连接测试；
+  只有连接测试成功后才允许启用。
+- 已增加配置兼容、locator 冲突、process 参数、provider 生命周期/流式/权限/取消、管理
+  检测和敏感信息遮挡回归测试。
 
 退出标准：
 

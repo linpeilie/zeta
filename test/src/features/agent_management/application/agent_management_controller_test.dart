@@ -52,6 +52,49 @@ void main() {
       expect(providers, isEmpty);
     });
   });
+
+  test(
+    'Cursor can only be enabled after a successful connection test',
+    () async {
+      // Arrange
+      final provider = FakeAgentProvider();
+      final providerFactory = FakeAgentProviderFactory(provider);
+      final providerController = ActiveAgentProviderController(
+        providerFactory: providerFactory,
+        configStore: MemoryAgentProviderConfigStore(
+          const AgentProviderSettings(
+            providers: <AgentProviderConfig>[
+              AgentProviderConfig.defaultCodex,
+              AgentProviderConfig.defaultCursor,
+            ],
+          ),
+        ),
+      );
+      final controller = AgentManagementController(
+        repositories: <String, AgentCliManagementRepository>{
+          cursorAgentProviderId: _FakeCursorManagementRepository(),
+        },
+        providerController: providerController,
+      );
+      addTearDown(controller.dispose);
+      addTearDown(providerController.dispose);
+      await controller.initialize();
+
+      // Act / Assert: 未测试时拒绝启用。
+      await controller.setEnabled(true);
+      expect(controller.agent.enabled, isFalse);
+      expect(controller.operationError, contains('连接测试'));
+
+      // Act / Assert: 检测中的无计费握手成功后允许启用。
+      await controller.detect();
+      await controller.setEnabled(true);
+      expect(controller.agent.enabled, isTrue);
+      expect(
+        providerController.isProviderEnabled(cursorAgentProviderId),
+        isTrue,
+      );
+    },
+  );
 }
 
 class _ManagementHarness {
@@ -106,4 +149,78 @@ class _ManagementHarness {
       await root.delete(recursive: true);
     }
   }
+}
+
+class _FakeCursorManagementRepository implements AgentCliManagementRepository {
+  @override
+  String get agentId => cursorAgentProviderId;
+
+  @override
+  String get configPath => 'cursor-config.json';
+
+  @override
+  Future<ManagedAgent> detect({
+    required AgentProviderConfig providerConfig,
+    required bool enabled,
+    AgentDetectionProgressCallback? onProgress,
+  }) async {
+    return ManagedAgent.cursor(enabled: enabled).copyWith(
+      installationState: AgentInstallationState.installed,
+      accountState: AgentAccountState.loggedIn,
+      connectionTest: AgentConnectionTestResult(
+        success: true,
+        testedAt: DateTime(2026),
+        elapsed: const Duration(milliseconds: 1),
+        cliCallable: true,
+        accountValid: true,
+        protocolReady: true,
+      ),
+    );
+  }
+
+  @override
+  Future<(AgentConnectionTestResult, List<AgentModelInfo>)> testConnection({
+    required AgentProviderConfig providerConfig,
+  }) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<AgentProviderConfig> providerConfigForPath({
+    required AgentProviderConfig current,
+    required String path,
+    required int timeoutSeconds,
+  }) async => current;
+
+  @override
+  AgentProviderConfig providerConfigWithTimeout(
+    AgentProviderConfig current,
+    int timeoutSeconds,
+  ) => current;
+
+  @override
+  Future<AgentConfigurationDocument> readConfiguration() async {
+    throw UnimplementedError();
+  }
+
+  @override
+  String? validateConfiguration(String content) => null;
+
+  @override
+  Future<AgentConfigurationSaveResult> saveConfiguration({
+    required AgentConfigurationDocument original,
+    required String content,
+    bool overwriteExternalChanges = false,
+  }) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<String>> discoverLogPaths() async => const <String>[];
+
+  @override
+  Future<List<AgentLogEntry>> readLogs(
+    List<String> paths, {
+    int maxLines = 1000,
+  }) async => const <AgentLogEntry>[];
 }

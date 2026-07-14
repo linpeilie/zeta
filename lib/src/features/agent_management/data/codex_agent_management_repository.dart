@@ -667,8 +667,16 @@ String maskSensitiveConfiguration(String content) {
     caseSensitive: false,
     multiLine: true,
   );
-  return content.replaceAllMapped(
+  final tomlMasked = content.replaceAllMapped(
     sensitive,
+    (match) => '${match.group(1)}"••••••"',
+  );
+  final jsonSensitive = RegExp(
+    r'("(?:api[_-]?key|token|secret|password|authorization|access[_-]?token|refresh[_-]?token)"\s*:\s*)"[^"]*"',
+    caseSensitive: false,
+  );
+  return tomlMasked.replaceAllMapped(
+    jsonSensitive,
     (match) => '${match.group(1)}"••••••"',
   );
 }

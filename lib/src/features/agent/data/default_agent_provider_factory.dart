@@ -1,6 +1,7 @@
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_acp_agent_provider.dart';
+import 'package:zeta/src/features/agent/data/datasources/acp/cursor_acp_agent_provider.dart';
 import 'package:zeta/src/features/agent/data/datasources/app_server/codex_app_server_agent_provider.dart';
 
 /// 生产环境默认 provider 工厂。
@@ -16,6 +17,7 @@ class DefaultAgentProviderFactory implements AgentProviderFactory {
         config: config,
       ),
       AgentProviderKind.acp => GrokAcpAgentProvider(config: config),
+      AgentProviderKind.cursorAcp => CursorAcpAgentProvider(config: config),
       AgentProviderKind.claudeCode => throw UnsupportedError(
         'Claude Code providers are not implemented yet.',
       ),

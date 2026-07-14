@@ -3,7 +3,7 @@ import 'package:zeta/src/features/agent/domain/agent_model_codec.dart';
 /// Agent 后端的类型。
 ///
 /// UI 和会话状态只关心这个中立枚举，不直接绑定某个 CLI 的协议细节。
-enum AgentProviderKind { codexAppServer, acp, claudeCode }
+enum AgentProviderKind { codexAppServer, acp, cursorAcp, claudeCode }
 
 /// Provider 与当前回合的连接状态。
 ///
@@ -22,6 +22,9 @@ const String defaultAgentProviderId = 'codex';
 
 /// 内置 Grok ACP provider 的稳定配置 id。
 const String grokAgentProviderId = 'grok';
+
+/// 内置 Cursor ACP provider 的稳定配置 id。
+const String cursorAgentProviderId = 'cursor';
 
 /// 一个可启动的 Agent provider 定义。
 ///
@@ -112,6 +115,18 @@ class AgentProviderConfig {
     kind: AgentProviderKind.acp,
     command: 'grok',
     arguments: <String>['agent', 'stdio'],
+  );
+
+  /// 默认 Cursor CLI ACP stdio 配置。
+  ///
+  /// Cursor 仍处于 Beta 接入阶段，默认关闭，只有用户完成检测后才显式启用。
+  static const AgentProviderConfig defaultCursor = AgentProviderConfig(
+    id: cursorAgentProviderId,
+    displayName: 'Cursor Agent',
+    kind: AgentProviderKind.cursorAcp,
+    command: 'agent',
+    arguments: <String>['acp'],
+    enabled: false,
   );
 
   /// 复制配置并覆盖部分字段，主要用于持久化用户在输入框中的模型选择。
@@ -230,6 +245,7 @@ class AgentProviderSettings {
     this.providers = const <AgentProviderConfig>[
       AgentProviderConfig.defaultCodex,
       AgentProviderConfig.defaultGrok,
+      AgentProviderConfig.defaultCursor,
     ],
     this.activeProviderId = defaultAgentProviderId,
   });
@@ -270,7 +286,8 @@ class AgentProviderSettings {
   /// 读取版本化配置。
   ///
   /// 配置缺失、版本不匹配或内容损坏时都返回默认设置，保证 UI 启动不崩溃。
-  /// 旧配置若缺少内置 Grok 条目，会自动补齐以便双 provider 切换。
+  /// 旧配置若缺少内置 Grok/Cursor 条目，会自动补齐；Cursor 保持默认关闭，
+  /// 且不会改变原 active provider。
   static AgentProviderSettings tryDecode(Object? value) {
     final map = decodeObjectMap(value);
     if (map['version'] != 1) {
@@ -299,6 +316,7 @@ class AgentProviderSettings {
       return const <AgentProviderConfig>[
         AgentProviderConfig.defaultCodex,
         AgentProviderConfig.defaultGrok,
+        AgentProviderConfig.defaultCursor,
       ];
     }
 
@@ -313,7 +331,7 @@ class AgentProviderSettings {
     return providers;
   }
 
-  /// 保证内置 Codex / Grok 始终出现在列表中（不覆盖用户已有同 id 配置）。
+  /// 保证内置 Codex / Grok / Cursor 始终出现（不覆盖用户已有同 id 配置）。
   static List<AgentProviderConfig> _ensureBuiltinProviders(
     List<AgentProviderConfig> providers,
   ) {
@@ -324,6 +342,9 @@ class AgentProviderSettings {
     }
     if (!ids.contains(AgentProviderConfig.defaultGrok.id)) {
       result.add(AgentProviderConfig.defaultGrok);
+    }
+    if (!ids.contains(AgentProviderConfig.defaultCursor.id)) {
+      result.add(AgentProviderConfig.defaultCursor);
     }
     return result;
   }

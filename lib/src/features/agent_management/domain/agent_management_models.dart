@@ -107,8 +107,25 @@ class AgentDefinition {
     npmPackage: '',
   );
 
+  /// 内置 Cursor Agent（官方 ACP stdio）定义。
+  static const AgentDefinition cursor = AgentDefinition(
+    id: cursorAgentProviderId,
+    displayName: 'Cursor Agent',
+    vendor: 'Cursor',
+    commandName: 'agent',
+    protocol: 'ACP v1 JSON-RPC',
+    transport: 'stdin / stdout',
+    configFormat: 'JSON',
+    defaultConfigRelativePath: '.cursor/cli-config.json',
+    npmPackage: '',
+  );
+
   /// 应用当前支持的全部 Agent 定义。
-  static const List<AgentDefinition> all = <AgentDefinition>[codex, grok];
+  static const List<AgentDefinition> all = <AgentDefinition>[
+    codex,
+    grok,
+    cursor,
+  ];
 
   /// 按 id 查找定义；未知 id 返回 null。
   static AgentDefinition? byId(String id) {
@@ -251,6 +268,14 @@ class ManagedAgent {
   factory ManagedAgent.grok({required bool enabled}) {
     return ManagedAgent.forDefinition(
       definition: AgentDefinition.grok,
+      enabled: enabled,
+    );
+  }
+
+  /// Cursor Agent 的初始空快照。
+  factory ManagedAgent.cursor({required bool enabled}) {
+    return ManagedAgent.forDefinition(
+      definition: AgentDefinition.cursor,
       enabled: enabled,
     );
   }
