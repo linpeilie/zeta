@@ -51,7 +51,7 @@ class CursorAcpAgentProvider
            sessionConfigMapper ?? const AcpSessionConfigMapper(),
        _extensionMapper = extensionMapper ?? CursorAcpExtensionMapper(),
        _sessionIndexStore =
-           sessionIndexStore ?? SharedPreferencesCursorSessionIndexStore(),
+           sessionIndexStore ?? MemoryCursorSessionIndexStore(),
        _diagnostics = diagnosticsStore ?? CursorDiagnosticsStore.shared,
        _clock = clock ?? DateTime.now,
        _workspacePath = normalizeCursorWorkspacePath(initialWorkspace);
@@ -1359,7 +1359,7 @@ class CursorAcpAgentProvider
         level: CursorDiagnosticLevel.warning,
       );
       _log.warning(
-        'Cursor ACP protocol warning: ${error.message}',
+        'Cursor ACP protocol warning (${error.message.length} characters)',
         error.cause,
       );
       _events.add(

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -5,13 +6,22 @@ import 'package:macos_window_utils/window_manipulator.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/app_constants.dart';
+import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+
+final _loggingWindowCloseListener = _LoggingWindowCloseListener();
+bool _loggingWindowCloseInstalled = false;
 
 /// 初始化桌面窗口。
 ///
 /// 隐藏原生标题栏（macOS 仍保留交通灯按钮）、设定初始尺寸与最小尺寸后显示窗口。
 /// 需要在 `runApp` 之前调用 [windowManager.ensureInitialized]。
 Future<void> bootstrapDesktopWindow() async {
+  if (!_loggingWindowCloseInstalled) {
+    windowManager.addListener(_loggingWindowCloseListener);
+    await windowManager.setPreventClose(true);
+    _loggingWindowCloseInstalled = true;
+  }
   // 启动时尚未读取持久化的主题偏好，默认跟随系统：用系统亮度决定窗口初始
   // 背景色，避免浅色系统下出现深色闪烁。
   final systemBrightness =
@@ -44,4 +54,26 @@ Future<void> bootstrapDesktopWindow() async {
     await windowManager.show();
     await windowManager.focus();
   });
+}
+
+class _LoggingWindowCloseListener with WindowListener {
+  bool _isClosing = false;
+
+  @override
+  void onWindowClose() {
+    if (_isClosing) {
+      return;
+    }
+    _isClosing = true;
+    unawaited(_flushAndClose());
+  }
+
+  Future<void> _flushAndClose() async {
+    try {
+      await shutdownAppLogging();
+    } finally {
+      await windowManager.setPreventClose(false);
+      await windowManager.close();
+    }
+  }
 }

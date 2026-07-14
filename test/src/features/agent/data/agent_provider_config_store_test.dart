@@ -1,16 +1,32 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 void main() {
-  group('AgentProviderConfigStore', () {
-    test('loads the default Codex provider when storage is empty', () async {
-      final store = CallbackAgentProviderConfigStore(
-        loadJson: () async => null,
-        saveJson: (_) async {},
+  group('FileAgentProviderConfigStore', () {
+    late Directory tempDirectory;
+    late File settingsFile;
+
+    setUp(() {
+      tempDirectory = Directory.systemTemp.createTempSync(
+        'zeta_provider_store_',
       );
+      settingsFile = File(
+        '${tempDirectory.path}${Platform.pathSeparator}providers.json',
+      );
+    });
+
+    tearDown(() async {
+      if (await tempDirectory.exists()) {
+        await tempDirectory.delete(recursive: true);
+      }
+    });
+
+    test('loads the default Codex provider when storage is empty', () async {
+      final store = FileAgentProviderConfigStore(file: settingsFile);
 
       final settings = await store.load();
 
@@ -34,13 +50,7 @@ void main() {
     });
 
     test('saves provider settings as versioned JSON', () async {
-      String? saved;
-      final store = CallbackAgentProviderConfigStore(
-        loadJson: () async => saved,
-        saveJson: (value) async {
-          saved = value;
-        },
-      );
+      final store = FileAgentProviderConfigStore(file: settingsFile);
       const settings = AgentProviderSettings(
         providers: <AgentProviderConfig>[
           AgentProviderConfig.defaultCodex,
@@ -55,7 +65,8 @@ void main() {
       );
 
       await store.save(settings);
-      final raw = jsonDecode(saved!) as Map<String, Object?>;
+      final raw =
+          jsonDecode(await settingsFile.readAsString()) as Map<String, Object?>;
 
       expect(raw['version'], 1);
       expect(raw['activeProviderId'], 'claude');
@@ -63,6 +74,43 @@ void main() {
       expect((await store.load()).activeProvider.id, 'claude');
     });
 
+    test('falls back to defaults when the JSON file is damaged', () async {
+      await settingsFile.writeAsString('{not-json');
+      final store = FileAgentProviderConfigStore(file: settingsFile);
+
+      final settings = await store.load();
+
+      expect(settings.activeProvider.id, defaultAgentProviderId);
+    });
+
+    test('falls back to defaults when the file is not valid UTF-8', () async {
+      await settingsFile.writeAsBytes(<int>[0xff]);
+      final store = FileAgentProviderConfigStore(file: settingsFile);
+
+      final settings = await store.load();
+
+      expect(settings.activeProvider.id, defaultAgentProviderId);
+    });
+
+    test('propagates file system errors while saving', () async {
+      final blockedParent = File(
+        '${tempDirectory.path}${Platform.pathSeparator}blocked',
+      );
+      await blockedParent.writeAsString('not a directory');
+      final store = FileAgentProviderConfigStore(
+        file: File(
+          '${blockedParent.path}${Platform.pathSeparator}providers.json',
+        ),
+      );
+
+      await expectLater(
+        store.save(const AgentProviderSettings()),
+        throwsA(isA<FileSystemException>()),
+      );
+    });
+  });
+
+  group('AgentProviderSettings', () {
     test(
       'adds disabled Cursor to existing v1 settings without changing active',
       () {

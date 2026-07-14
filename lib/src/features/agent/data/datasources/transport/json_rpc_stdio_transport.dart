@@ -318,12 +318,12 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
       await _write(<String, Object?>{
         'id': id,
         'error': error.toJson(),
-      }, description: 'JSON-RPC error response for id $id');
+      }, description: 'JSON-RPC error response for id type ${id.runtimeType}');
     } else {
       await _write(<String, Object?>{
         'id': id,
         'result': result,
-      }, description: 'JSON-RPC response for id $id');
+      }, description: 'JSON-RPC response for id type ${id.runtimeType}');
     }
   }
 
@@ -403,7 +403,8 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
     // JSON-RPC 响应：带 id 且包含 result 或 error。
     if (id != null && (raw.containsKey('result') || raw.containsKey('error'))) {
       _log.fine(
-        'Received JSON-RPC response id=$id ($payloadLength characters)',
+        'Received JSON-RPC response idType=${id.runtimeType} '
+        '($payloadLength characters)',
       );
       _handleResponse(id, raw);
       return;
@@ -413,7 +414,7 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
     if (method is String && id != null) {
       _log.fine(
         'Received JSON-RPC server request $method '
-        'id=$id ($payloadLength characters)',
+        'idType=${id.runtimeType} ($payloadLength characters)',
       );
       _serverRequests.add(
         JsonRpcRequest(
@@ -448,7 +449,9 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
     final completer = _pending.remove(id);
     _pendingTimers.remove(id)?.cancel();
     if (completer == null) {
-      _log.warning('JSON-RPC response for unknown request id: $id');
+      _log.warning(
+        'JSON-RPC response for unknown request id (${id.runtimeType})',
+      );
       _protocolErrors.add(
         JsonRpcProtocolException('Response for unknown request id: $id'),
       );
@@ -458,9 +461,7 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
     final error = raw['error'];
     if (error != null) {
       final decodedError = _decodeError(error);
-      _log.warning(
-        'JSON-RPC error response ${decodedError.code}: ${decodedError.message}',
-      );
+      _log.warning('JSON-RPC error response code=${decodedError.code}');
       completer.completeError(JsonRpcException(decodedError));
       return;
     }

@@ -65,6 +65,7 @@ class CodexUsageTurnSnapshot {
     this.model,
     this.errorMessage,
     this.errorCode,
+    this.errorCategoryHint,
   });
 
   final String id;
@@ -77,6 +78,9 @@ class CodexUsageTurnSnapshot {
   final String? errorMessage;
   final String? errorCode;
 
+  /// 不含原始错误内容的稳定分类，用于派生索引跨启动恢复统计。
+  final String? errorCategoryHint;
+
   Map<String, Object?> toJson() => <String, Object?>{
     'id': id,
     'status': status.name,
@@ -84,8 +88,14 @@ class CodexUsageTurnSnapshot {
     'completedAt': completedAt?.millisecondsSinceEpoch,
     'cwd': cwd,
     'model': model,
-    'errorMessage': errorMessage,
-    'errorCode': errorCode,
+    // 原始错误文本与 provider code 可能携带 payload 或凭据，只保留在当前内存扫描。
+    'errorCategoryHint':
+        errorCategoryHint ??
+        codexUsageErrorCategoryHint(
+          status: status,
+          code: errorCode,
+          message: errorMessage,
+        ),
     'samples': samples.map((sample) => sample.toJson()).toList(),
   };
 
@@ -104,15 +114,25 @@ class CodexUsageTurnSnapshot {
         }
       }
     }
+    final status = _historyStatus(map['status']);
+    final errorMessage = _string(map['errorMessage']);
+    final errorCode = _string(map['errorCode']);
     return CodexUsageTurnSnapshot(
       id: id,
-      status: _historyStatus(map['status']),
+      status: status,
       startedAt: _dateTime(map['startedAt']),
       completedAt: _dateTime(map['completedAt']),
       cwd: _string(map['cwd']),
       model: _string(map['model']),
-      errorMessage: _string(map['errorMessage']),
-      errorCode: _string(map['errorCode']),
+      errorMessage: errorMessage,
+      errorCode: errorCode,
+      errorCategoryHint:
+          _string(map['errorCategoryHint']) ??
+          codexUsageErrorCategoryHint(
+            status: status,
+            code: errorCode,
+            message: errorMessage,
+          ),
       samples: List<CodexUsageSample>.unmodifiable(samples),
     );
   }
@@ -120,17 +140,22 @@ class CodexUsageTurnSnapshot {
 
 /// 单个 Codex rollout 文件的可缓存扫描结果。
 class CodexUsageSessionSnapshot {
-  const CodexUsageSessionSnapshot({
+  CodexUsageSessionSnapshot({
     required this.sourcePath,
+    String? sourceId,
     required this.fingerprint,
     required this.threadId,
     required this.projectPath,
     required this.sourceKind,
     required this.createdAt,
     required this.turns,
-  });
+  }) : sourceId = sourceId ?? codexUsageSourceId(sourcePath);
 
+  /// 当前进程发现的 rollout 文件路径，只用于只读扫描，不进入派生索引。
   final String sourcePath;
+
+  /// rollout 路径的稳定不可逆标识，用于跨启动命中派生缓存。
+  final String sourceId;
   final String fingerprint;
   final String threadId;
   final String projectPath;
@@ -139,7 +164,7 @@ class CodexUsageSessionSnapshot {
   final List<CodexUsageTurnSnapshot> turns;
 
   Map<String, Object?> toJson() => <String, Object?>{
-    'sourcePath': sourcePath,
+    'sourceId': sourceId,
     'fingerprint': fingerprint,
     'threadId': threadId,
     'projectPath': projectPath,
@@ -150,13 +175,18 @@ class CodexUsageSessionSnapshot {
 
   static CodexUsageSessionSnapshot? tryDecode(Object? value) {
     final map = _map(value);
-    final sourcePath = _string(map['sourcePath']);
+    final legacySourcePath = _string(map['sourcePath']);
+    final sourceId =
+        _string(map['sourceId']) ??
+        (legacySourcePath == null
+            ? null
+            : codexUsageSourceId(legacySourcePath));
     final fingerprint = _string(map['fingerprint']);
     final threadId = _string(map['threadId']);
     final projectPath = _string(map['projectPath']);
     final sourceKind = _string(map['sourceKind']);
     final createdAt = _dateTime(map['createdAt']);
-    if (sourcePath == null ||
+    if (sourceId == null ||
         fingerprint == null ||
         threadId == null ||
         projectPath == null ||
@@ -174,7 +204,8 @@ class CodexUsageSessionSnapshot {
       }
     }
     return CodexUsageSessionSnapshot(
-      sourcePath: sourcePath,
+      sourcePath: legacySourcePath ?? '',
+      sourceId: sourceId,
       fingerprint: fingerprint,
       threadId: threadId,
       projectPath: projectPath,
@@ -183,6 +214,73 @@ class CodexUsageSessionSnapshot {
       turns: List<CodexUsageTurnSnapshot>.unmodifiable(turns),
     );
   }
+
+  /// 为从索引恢复的快照补回本次扫描发现的真实路径，路径不会再次持久化。
+  CodexUsageSessionSnapshot withSourcePath(String value) {
+    return CodexUsageSessionSnapshot(
+      sourcePath: value,
+      sourceId: sourceId,
+      fingerprint: fingerprint,
+      threadId: threadId,
+      projectPath: projectPath,
+      sourceKind: sourceKind,
+      createdAt: createdAt,
+      turns: turns,
+    );
+  }
+}
+
+/// 为 Codex rollout 路径生成稳定的 64-bit FNV-1a 标识。
+///
+/// 该标识只用于派生缓存匹配，避免把 Agent CLI session 文件路径写入 `~/.zeta`。
+String codexUsageSourceId(String sourcePath) {
+  var hash = 0xcbf29ce484222325;
+  for (final byte in utf8.encode(sourcePath)) {
+    hash ^= byte;
+    hash = (hash * 0x100000001b3) & 0xffffffffffffffff;
+  }
+  return hash.toRadixString(16).padLeft(16, '0');
+}
+
+/// 将 Codex turn 错误归一为不含原始内容的稳定分类标识。
+String? codexUsageErrorCategoryHint({
+  required AgentHistoryTurnStatus status,
+  required String? code,
+  required String? message,
+}) {
+  if (status == AgentHistoryTurnStatus.interrupted) {
+    return 'cancelled';
+  }
+  if (status != AgentHistoryTurnStatus.failed) {
+    return null;
+  }
+  final normalizedCode = code?.toLowerCase() ?? '';
+  final normalizedMessage = message?.toLowerCase() ?? '';
+  if (normalizedCode.contains('unauthorized') ||
+      normalizedCode.contains('usagelimit') ||
+      normalizedMessage.contains('account') ||
+      normalizedMessage.contains('login')) {
+    return 'account';
+  }
+  if (normalizedCode.contains('connection') ||
+      normalizedCode.contains('stream') ||
+      normalizedCode.contains('serveroverloaded') ||
+      normalizedMessage.contains('network') ||
+      normalizedMessage.contains('connection')) {
+    return 'network';
+  }
+  if (normalizedCode.contains('timeout') ||
+      normalizedMessage.contains('timeout') ||
+      normalizedMessage.contains('timed out') ||
+      normalizedMessage.contains('deadline')) {
+    return 'timeout';
+  }
+  if (normalizedCode.contains('sandbox') ||
+      normalizedCode.contains('threadrollback') ||
+      normalizedMessage.contains('codex cli')) {
+    return 'cli';
+  }
+  return 'other';
 }
 
 class CodexUsageScanResult {
@@ -242,9 +340,13 @@ class FileSystemCodexUsageLogScanner implements CodexUsageLogScanner {
         final stat = await file.stat();
         final fingerprint =
             '${stat.size}:${stat.modified.microsecondsSinceEpoch}';
-        final cached = cachedSessions[file.path];
+        final cached =
+            cachedSessions[codexUsageSourceId(file.path)] ??
+            cachedSessions[file.path];
         if (!forceRefresh && cached?.fingerprint == fingerprint) {
-          sessions[file.path] = cached!;
+          sessions[file.path] = cached!.sourcePath == file.path
+              ? cached
+              : cached.withSourcePath(file.path);
           continue;
         }
         final parsed = await _CodexUsageFileParser(

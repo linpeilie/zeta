@@ -120,7 +120,7 @@ void main() {
           messages,
           anyElement(
             allOf(
-              contains('Received JSON-RPC response id=1'),
+              contains('Received JSON-RPC response idType=int'),
               contains('characters'),
             ),
           ),
@@ -132,6 +132,29 @@ void main() {
         expect(messages, isNot(anyElement(contains('stderr: ping'))));
       },
     );
+
+    test('does not log an unknown provider request id value', () async {
+      const secretId = 'provider-secret-request-id';
+      final transport = JsonRpcStdioTransport(
+        command: 'fake-json-rpc-server',
+        processStarter: _fakeProcessStarter((process, message) {
+          process
+            ..writeStdout(<String, Object?>{'id': secretId, 'result': null})
+            ..writeStdout(<String, Object?>{
+              'id': message['id'],
+              'result': null,
+            });
+        }),
+      );
+
+      await transport.start();
+      await transport.sendRequest('ping');
+      await transport.close();
+
+      final messages = records.map((record) => record.message).join('\n');
+      expect(messages, contains('unknown request id (String)'));
+      expect(messages, isNot(contains(secretId)));
+    });
 
     test('reports invalid stdout without closing the transport', () async {
       final transport = JsonRpcStdioTransport(
@@ -225,6 +248,12 @@ void main() {
 
       expect(await clientResponseFuture, <String, Object?>{'answered': true});
       await transport.close();
+      final messages = records.map((record) => record.message).join('\n');
+      expect(
+        messages,
+        contains('server request client/approval idType=String'),
+      );
+      expect(messages, isNot(contains('server-request-1')));
     });
 
     test('serializes notifications before following requests', () async {

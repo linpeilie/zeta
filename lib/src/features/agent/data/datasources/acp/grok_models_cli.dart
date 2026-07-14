@@ -41,7 +41,8 @@ class GrokModelsCli {
       );
       if (result.exitCode != 0) {
         _log.warning(
-          'grok models exited with ${result.exitCode}: ${result.stderr}',
+          'grok models exited with ${result.exitCode} '
+          '(${result.stderr.toString().length} stderr characters)',
         );
         return const AgentModelList(models: <AgentModelInfo>[]);
       }

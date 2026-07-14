@@ -67,7 +67,7 @@ main -> app -> presentation/application -> domain
 
 - presentation 可以读取 view model、controller 暴露的状态并触发动作，但不直接解析 provider 原始协议。
 - application 负责异步流程、恢复、分页、竞态隔离和状态写入，不负责绘制 widget。
-- data 实现 provider、JSON-RPC、JSONL、SharedPreferences、本地文件系统等具体细节，并把外部 payload 映射为 domain 模型。
+- data 实现 provider、JSON-RPC、JSONL、版本化本地 JSON 文件等具体细节，并把外部 payload 映射为 domain 模型。
 - domain 不依赖 Flutter widget、不访问本地文件系统、不引用具体 provider 实现。
 - app 可以引用具体 data 实现，因为 app 是依赖注入和默认实现装配点。
 
@@ -115,6 +115,15 @@ main -> app -> presentation/application -> domain
 
 持久化数据必须可演进、可恢复、可容错。
 
+- Zeta 自有配置、状态、派生索引、日志和预留缓存统一位于 `~/.zeta`：
+  `config/providers.json`、`config/appearance.json`、`state/ide_session.json`、
+  `state/cursor_sessions.json`、`state/usage_statistics_index.json`、
+  `state/migration_marker.json`、`logs/zeta-YYYY-MM-DD.log` 与 `cache/`。
+- HOME 解析、目录布局和安全文本替换属于 `core`；各 feature 的 data store 只接收
+  app 注入的具体文件并负责自身 codec，presentation/application 不拼接 `~/.zeta` 路径。
+- 旧 SharedPreferences 仅由 app 启动迁移器读取。迁移以已存在的目标文件为准，全部
+  成功后写 marker；部分失败时本次运行使用内存状态，避免空文件覆盖待迁移数据，
+  且不得标记完成或阻断主界面启动。
 - 会话状态使用版本化 JSON；字段新增时提供默认值。
 - `tryDecode` 或等价宽容读取逻辑必须处理空值、损坏 JSON、旧版本和未知字段。
 - 启动恢复失败不能阻断应用进入主界面。
@@ -123,8 +132,14 @@ main -> app -> presentation/application -> domain
 - Agent 配置保存必须先校验语法、检测外部修改、写入同目录临时文件并保留原文件
   备份；不得直接覆盖符号链接或在失败后破坏原配置。
 - Agent 日志在进入 UI 前完成凭证与用户目录脱敏。
+- 应用根日志同时保留 developer 输出并按本地日期追加到 `~/.zeta/logs`；文件 sink
+  必须串行写入、脱敏消息，写入失败不能递归进入根 Logger，并在正常关闭窗口前
+  排空待写队列。
 - 使用统计派生索引只保存聚合所需元数据；禁止写入 Prompt、回复正文、工具输出、
   session 文件路径和原始错误文本。索引必须版本化并支持损坏后重建。
+- `~/.codex`、`~/.grok`、`~/.cursor`、项目 `.cursor/*` 与用户源码始终由 CLI/用户
+  原地管理。迁移器不得遍历、复制或改写这些目录；`cursor_sessions.json` 只是 Zeta
+  维护的最小会话索引，不是 Cursor 官方 session 正文。
 
 ## 6. UI 与交互
 

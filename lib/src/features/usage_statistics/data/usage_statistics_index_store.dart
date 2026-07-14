@@ -1,11 +1,13 @@
 import 'dart:convert';
+import 'dart:io';
 
-import 'package:shared_preferences/shared_preferences.dart';
-
+import 'package:zeta/src/core/storage/atomic_text_file.dart';
 import 'package:zeta/src/features/agent/data/datasources/local_history/codex_usage_log_scanner.dart';
 
 const int usageStatisticsIndexVersion = 2;
-const String _usageStatisticsIndexKey = 'usage_statistics.index.v2';
+
+/// 使用统计派生索引的旧版 shared_preferences key。
+const String usageStatisticsIndexStorageKey = 'usage_statistics.index.v2';
 
 class UsageStatisticsIndexSnapshot {
   const UsageStatisticsIndexSnapshot({
@@ -30,7 +32,7 @@ class UsageStatisticsIndexSnapshot {
       for (final rawSession in rawSessions) {
         final session = CodexUsageSessionSnapshot.tryDecode(rawSession);
         if (session != null) {
-          sessions[session.sourcePath] = session;
+          sessions[session.sourceId] = session;
         }
       }
     }
@@ -46,32 +48,36 @@ abstract class UsageStatisticsIndexStore {
   Future<void> save(UsageStatisticsIndexSnapshot snapshot);
 }
 
-class SharedPreferencesUsageStatisticsIndexStore
-    implements UsageStatisticsIndexStore {
-  const SharedPreferencesUsageStatisticsIndexStore();
+/// 基于 JSON 文件的生产统计索引仓库。
+class FileUsageStatisticsIndexStore implements UsageStatisticsIndexStore {
+  FileUsageStatisticsIndexStore({required File file})
+    : _storage = AtomicTextFile(file);
+
+  final AtomicTextFile _storage;
 
   @override
   Future<UsageStatisticsIndexSnapshot> load() async {
-    final preferences = await SharedPreferences.getInstance();
-    final encoded = preferences.getString(_usageStatisticsIndexKey);
-    if (encoded == null || encoded.trim().isEmpty) {
-      return const UsageStatisticsIndexSnapshot();
-    }
     try {
+      final encoded = await _storage.read();
+      if (encoded == null || encoded.trim().isEmpty) {
+        return const UsageStatisticsIndexSnapshot();
+      }
       return UsageStatisticsIndexSnapshot.tryDecode(jsonDecode(encoded));
-    } catch (_) {
+    } on FormatException {
       // 索引损坏不能阻止应用启动；下一次加载会从 Codex 历史重建。
+      return const UsageStatisticsIndexSnapshot();
+    } on IOException {
+      // 索引文件不可读时同样回退重建，不阻断统计页或应用启动。
+      return const UsageStatisticsIndexSnapshot();
+    } catch (_) {
+      // 合法 JSON 也可能包含越界时间戳等损坏字段，统一视为可重建索引。
       return const UsageStatisticsIndexSnapshot();
     }
   }
 
   @override
   Future<void> save(UsageStatisticsIndexSnapshot snapshot) async {
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(
-      _usageStatisticsIndexKey,
-      jsonEncode(snapshot.toJson()),
-    );
+    await _storage.write(jsonEncode(snapshot.toJson()));
   }
 }
 

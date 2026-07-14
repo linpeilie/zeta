@@ -1,10 +1,23 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/cursor_session_index_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 void main() {
+  late Directory tempDirectory;
+
+  setUp(() async {
+    tempDirectory = await Directory.systemTemp.createTemp(
+      'zeta-cursor-session-index-',
+    );
+  });
+
+  tearDown(() async {
+    await tempDirectory.delete(recursive: true);
+  });
+
   group('CursorSessionIndexStore', () {
     test('tolerates damaged JSON and legacy fields', () async {
       // Arrange
@@ -128,6 +141,103 @@ void main() {
 
       // Assert
       expect((await store.load()).sessions.single.sessionId, 'session-b');
+    });
+
+    test(
+      'file store serializes updates and reloads them after restart',
+      () async {
+        // Arrange
+        final file = File.fromUri(
+          tempDirectory.uri.resolve('state/cursor_sessions.json'),
+        );
+        final store = FileCursorSessionIndexStore(file: file);
+        expect((await store.load()).sessions, isEmpty);
+
+        // Act
+        await Future.wait(<Future<void>>[
+          store.update((current) => current.upsert(_entry('session-a'))),
+          store.update((current) => current.upsert(_entry('session-b'))),
+        ]);
+        final reloaded = await FileCursorSessionIndexStore(file: file).load();
+
+        // Assert
+        expect(await file.exists(), isTrue);
+        expect(
+          reloaded.sessions.map((entry) => entry.sessionId),
+          containsAll(<String>['session-a', 'session-b']),
+        );
+      },
+    );
+
+    test('file store serializes updates from separate instances', () async {
+      // Arrange
+      final file = File.fromUri(
+        tempDirectory.uri.resolve('state/cursor_sessions.json'),
+      );
+      final first = FileCursorSessionIndexStore(file: file);
+      final second = FileCursorSessionIndexStore(file: file);
+
+      // Act
+      await Future.wait(<Future<void>>[
+        first.update((current) => current.upsert(_entry('session-a'))),
+        second.update((current) => current.upsert(_entry('session-b'))),
+      ]);
+      final reloaded = await FileCursorSessionIndexStore(file: file).load();
+
+      // Assert
+      expect(
+        reloaded.sessions.map((entry) => entry.sessionId),
+        containsAll(<String>['session-a', 'session-b']),
+      );
+    });
+
+    test('file store treats damaged JSON as an empty snapshot', () async {
+      // Arrange
+      final file = File.fromUri(
+        tempDirectory.uri.resolve('state/cursor_sessions.json'),
+      );
+      await file.parent.create(recursive: true);
+      await file.writeAsString('{damaged');
+
+      // Act
+      final snapshot = await FileCursorSessionIndexStore(file: file).load();
+
+      // Assert
+      expect(snapshot.sessions, isEmpty);
+    });
+
+    test('file store treats invalid UTF-8 as an empty snapshot', () async {
+      // Arrange
+      final file = File.fromUri(
+        tempDirectory.uri.resolve('state/cursor_sessions.json'),
+      );
+      await file.parent.create(recursive: true);
+      await file.writeAsBytes(<int>[0xff]);
+
+      // Act
+      final snapshot = await FileCursorSessionIndexStore(file: file).load();
+
+      // Assert
+      expect(snapshot.sessions, isEmpty);
+    });
+
+    test('file store propagates write failures', () async {
+      // Arrange
+      final blockingParent = File.fromUri(
+        tempDirectory.uri.resolve('not-a-directory'),
+      );
+      await blockingParent.writeAsString('blocked');
+      final store = FileCursorSessionIndexStore(
+        file: File.fromUri(
+          tempDirectory.uri.resolve('not-a-directory/cursor_sessions.json'),
+        ),
+      );
+
+      // Act / Assert
+      await expectLater(
+        store.update((current) => current.upsert(_entry('session-a'))),
+        throwsA(isA<IOException>()),
+      );
     });
   });
 }

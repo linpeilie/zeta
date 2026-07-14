@@ -1,10 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 
-import 'package:shared_preferences/shared_preferences.dart';
-
+import 'package:zeta/src/core/storage/atomic_text_file.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 
-/// 外观设置 shared_preferences key。
+/// 外观设置的旧版 shared_preferences key。
 const String appearanceSettingsStorageKey = 'zeta.appearance.settings.v1';
 
 /// 旧版仅主题模式时的存储 key。
@@ -17,49 +17,29 @@ abstract class AppearanceSettingsStore {
   Future<void> save(AppearanceSettings settings);
 }
 
-/// 基于 shared_preferences 的生产外观设置仓库。
-class SharedPreferencesAppearanceSettingsStore
-    implements AppearanceSettingsStore {
-  SharedPreferencesAppearanceSettingsStore({
-    this.preferences,
-    this.readString,
-    this.writeString,
-  });
+/// 基于 JSON 文件的生产外观设置仓库。
+class FileAppearanceSettingsStore implements AppearanceSettingsStore {
+  FileAppearanceSettingsStore({required File file})
+    : _storage = AtomicTextFile(file);
 
-  final SharedPreferencesAsync? preferences;
-  final Future<String?> Function(String key)? readString;
-  final Future<void> Function(String key, String value)? writeString;
+  final AtomicTextFile _storage;
 
   @override
   Future<AppearanceSettings> load() async {
-    final value = await _read(appearanceSettingsStorageKey);
-    if (value == null || value.isEmpty) {
-      return AppearanceSettings.fromLegacyThemeMode(
-        await _read(legacyThemeModeStorageKey),
-      );
+    try {
+      return _decodeAppearanceSettings(await _storage.read());
+    } on IOException {
+      // 外观文件不可读时使用默认主题与字体，保证根组件可继续构建。
+      return const AppearanceSettings();
+    } on FormatException {
+      // 外观文件不可读时使用默认主题与字体，保证根组件可继续构建。
+      return const AppearanceSettings();
     }
-    return _decodeAppearanceSettings(value);
   }
 
   @override
   Future<void> save(AppearanceSettings settings) async {
-    await _write(appearanceSettingsStorageKey, jsonEncode(settings.toJson()));
-  }
-
-  Future<String?> _read(String key) {
-    final customRead = readString;
-    if (customRead != null) {
-      return customRead(key);
-    }
-    return (preferences ?? SharedPreferencesAsync()).getString(key);
-  }
-
-  Future<void> _write(String key, String value) {
-    final customWrite = writeString;
-    if (customWrite != null) {
-      return customWrite(key, value);
-    }
-    return (preferences ?? SharedPreferencesAsync()).setString(key, value);
+    await _storage.write(jsonEncode(settings.toJson()));
   }
 }
 

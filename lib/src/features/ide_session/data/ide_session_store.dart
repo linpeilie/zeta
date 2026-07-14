@@ -1,7 +1,9 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:io';
 
+import 'package:zeta/src/core/storage/atomic_text_file.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 
+/// IDE 会话状态的旧版 shared_preferences key。
 const String sessionStorageKey = 'zeta.ide.session.v1';
 
 abstract class IdeSessionStore {
@@ -10,21 +12,28 @@ abstract class IdeSessionStore {
   Future<void> save(IdeSessionState state);
 }
 
-class SharedPreferencesIdeSessionStore implements IdeSessionStore {
-  SharedPreferencesIdeSessionStore({SharedPreferencesAsync? preferences})
-    : _preferences = preferences ?? SharedPreferencesAsync();
+/// 基于 JSON 文件的 IDE 会话仓库。
+class FileIdeSessionStore implements IdeSessionStore {
+  FileIdeSessionStore({required File file}) : _storage = AtomicTextFile(file);
 
-  final SharedPreferencesAsync _preferences;
+  final AtomicTextFile _storage;
 
   @override
   Future<IdeSessionState?> load() async {
-    final value = await _preferences.getString(sessionStorageKey);
-    return IdeSessionState.tryDecode(value);
+    try {
+      return IdeSessionState.tryDecode(await _storage.read());
+    } on IOException {
+      // 会话文件不可读与首次启动等价，不阻断 IDE 进入空工作区。
+      return null;
+    } on FormatException {
+      // 会话文件不可读与首次启动等价，不阻断 IDE 进入空工作区。
+      return null;
+    }
   }
 
   @override
   Future<void> save(IdeSessionState state) async {
-    await _preferences.setString(sessionStorageKey, state.encode());
+    await _storage.write(state.encode());
   }
 }
 

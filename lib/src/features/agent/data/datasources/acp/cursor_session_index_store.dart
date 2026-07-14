@@ -2,14 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:shared_preferences/shared_preferences.dart';
-
+import 'package:zeta/src/core/storage/atomic_text_file.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 /// Cursor 会话最小索引的持久化版本。
 const int cursorSessionIndexVersion = 1;
 
-/// Cursor 会话索引的 shared_preferences key。
+/// Cursor 会话索引的旧版 shared_preferences key。
 const String cursorSessionIndexStorageKey = 'zeta.agent.cursor.sessions.v1';
 
 /// 单条 Cursor 会话索引。
@@ -223,21 +222,25 @@ abstract class CursorSessionIndexStore {
   );
 }
 
-/// 基于 shared_preferences 的生产索引仓库。
-class SharedPreferencesCursorSessionIndexStore
-    implements CursorSessionIndexStore {
-  SharedPreferencesCursorSessionIndexStore({
-    SharedPreferencesAsync? preferences,
-  }) : _preferences = preferences ?? SharedPreferencesAsync();
+/// 基于 JSON 文件的生产索引仓库。
+class FileCursorSessionIndexStore implements CursorSessionIndexStore {
+  FileCursorSessionIndexStore({required File file})
+    : _storage = AtomicTextFile(file);
 
-  final SharedPreferencesAsync _preferences;
+  final AtomicTextFile _storage;
   static final _MutationQueue _mutationQueue = _MutationQueue();
 
   @override
   Future<CursorSessionIndexSnapshot> load() async {
-    return _decodeIndex(
-      await _preferences.getString(cursorSessionIndexStorageKey),
-    );
+    try {
+      return _decodeIndex(await _storage.read());
+    } on IOException {
+      // 索引文件不可读时回退为空列表，后续仍可从官方 session/list 回填。
+      return CursorSessionIndexSnapshot();
+    } on FormatException {
+      // 索引文件不可读时回退为空列表，后续仍可从官方 session/list 回填。
+      return CursorSessionIndexSnapshot();
+    }
   }
 
   @override
@@ -248,10 +251,7 @@ class SharedPreferencesCursorSessionIndexStore
     return _mutationQueue.run(() async {
       final current = await load();
       final next = transform(current);
-      await _preferences.setString(
-        cursorSessionIndexStorageKey,
-        jsonEncode(next.toJson()),
-      );
+      await _storage.write(jsonEncode(next.toJson()));
     });
   }
 }

@@ -125,6 +125,15 @@ changes in this repository.
   handle missing fields, damaged content, and older versions without blocking
   app startup.
 - Keep global provider configuration separate from project/session state.
+- Zeta-owned configuration, state, derived indexes, logs, and reserved cache
+  live under `~/.zeta`; feature stores receive concrete files from `app`
+  composition instead of resolving HOME themselves.
+- Treat SharedPreferences keys from older Zeta releases as migration inputs
+  only. The migration is idempotent, target-file-first, and recorded in
+  `~/.zeta/state/migration_marker.json`.
+- Never move or rewrite Agent CLI configuration or session history under
+  `~/.codex`, `~/.grok`, `~/.cursor`, project `.cursor` folders, or user source
+  workspaces. Zeta's `cursor_sessions.json` remains a minimal local index.
 - Do not leak raw provider payloads into presentation; add mapper or codec
   helpers near the data source instead.
 - If JSON models become complex or API-backed, prefer `json_serializable` and

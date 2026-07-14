@@ -37,7 +37,10 @@ Zeta 是一个基于 Flutter Desktop 的本地 AI IDE 壳层。它面向需要�
 - 三栏布局：左侧项目与 thread，中间 Agent 时间线，右侧文件树。
 - 本地目录选择和文件树懒加载。
 - 忽略常见大目录：`.git`、`.dart_tool`、`build`、`node_modules` 等。
-- 使用 `shared_preferences` 保存 IDE 会话和 Agent provider 设置。
+- 使用 `~/.zeta` 下的版本化 JSON 文件保存 Zeta 自有 IDE 会话、Agent provider、外观设置、
+  Cursor 最小索引与使用统计派生索引；旧 SharedPreferences 仅用于一次性迁移。
+- 应用日志按日期写入 `~/.zeta/logs`；Agent CLI 自有配置和 session 历史保持原位，
+  不迁入 `~/.zeta`。
 - 内置 Codex CLI、Grok ACP 与 Cursor ACP provider；Codex 仍为默认 active provider，
   Cursor 为默认关闭的 Beta。
 - Agent 管理页支持 CLI 身份、版本、账号、连接、配置和脱敏诊断；Cursor 同名 `agent`

@@ -602,7 +602,10 @@ class CodexAppServerAgentProvider
       _log.fine('Codex stderr line received (${line.length} characters)');
     });
     _protocolErrorSubscription ??= _peer.protocolErrors.listen((error) {
-      _log.warning('Codex protocol warning: ${error.message}', error.cause);
+      _log.warning(
+        'Codex protocol warning (${error.message.length} characters)',
+        error.cause,
+      );
       _events.add(
         AgentErrorEvent(
           message: 'Codex protocol warning',
@@ -624,22 +627,26 @@ class CodexAppServerAgentProvider
           _string(_map(notification.params['error'])['message']) ??
           _string(notification.params['summary']) ??
           'No message';
-      _log.warning('Codex ${notification.method}: $message');
+      _log.warning(
+        'Codex ${notification.method} '
+        '(${message.length} message characters)',
+      );
     } else if (notification.method == 'deprecationNotice') {
       // 弃用提示需可观测，便于升级适配层；UI 侧再做一次性展示。
       final summary = _string(notification.params['summary']) ?? 'No summary';
       final details = _string(notification.params['details']);
       _log.warning(
-        'Codex deprecationNotice: $summary'
-        '${details == null ? '' : ' ($details)'}',
+        'Codex deprecationNotice '
+        '(${summary.length} summary characters, '
+        '${details?.length ?? 0} detail characters)',
       );
     } else if (notification.method == 'model/rerouted') {
       final fromModel = _string(notification.params['fromModel']);
       final toModel = _string(notification.params['toModel']);
       final reason = _string(notification.params['reason']);
       _log.info(
-        'Codex model/rerouted: $fromModel → $toModel'
-        '${reason == null ? '' : ' ($reason)'}',
+        'Codex model/rerouted: $fromModel → $toModel '
+        '(${reason?.length ?? 0} reason characters)',
       );
     }
 

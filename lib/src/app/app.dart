@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/app/app_constants.dart';
+import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/agent/data/datasources/acp/cursor_session_index_store.dart';
 import 'package:zeta/src/features/agent/data/default_agent_provider_factory.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
@@ -14,6 +16,7 @@ import 'package:zeta/src/features/settings/application/appearance_settings_contr
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
+import 'package:zeta/src/features/usage_statistics/data/usage_statistics_index_store.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 
@@ -34,6 +37,8 @@ class MainApp extends StatefulWidget {
     this.agentProviderAvailabilityLoader,
     this.projectLocationOpener,
     this.appearanceController,
+    this.dataPaths,
+    this.usageStatisticsIndexStore,
   });
 
   final Future<String?> Function()? directoryPicker;
@@ -45,9 +50,17 @@ class MainApp extends StatefulWidget {
   final AgentProviderAvailabilityLoader? agentProviderAvailabilityLoader;
   final ProjectLocationOpener? projectLocationOpener;
 
-  /// 全局外观控制器。测试可注入内存版本以避免触碰 shared_preferences；
+  /// 全局外观控制器。测试可注入内存版本以避免触碰真实用户文件；
   /// 生产环境由 [MainAppState.appearanceController] 自动创建并加载持久化偏好。
   final AppearanceSettingsController? appearanceController;
+
+  /// 生产启动阶段解析并初始化的 Zeta 自有数据路径。
+  ///
+  /// 未传入时使用内存/回调存储，避免测试或嵌入式宿主意外写入真实 HOME。
+  final ZetaDataPaths? dataPaths;
+
+  /// 使用统计索引存储注入点；默认按 [dataPaths] 选择文件或内存实现。
+  final UsageStatisticsIndexStore? usageStatisticsIndexStore;
 
   @override
   State<MainApp> createState() => MainAppState();
@@ -55,6 +68,8 @@ class MainApp extends StatefulWidget {
 
 class MainAppState extends State<MainApp> {
   late final AppearanceSettingsController _appearanceController;
+  late final AgentProviderFactory _defaultAgentProviderFactory;
+  late final UsageStatisticsIndexStore _usageStatisticsIndexStore;
   bool _ownsAppearanceController = false;
 
   /// 全局外观控制器引用，供设置面板和主题构建共享。
@@ -64,16 +79,29 @@ class MainAppState extends State<MainApp> {
   @override
   void initState() {
     super.initState();
+    final useFilePersistence = _useFilePersistence;
+    final dataPaths = widget.dataPaths;
+    final cursorSessionIndexStore = useFilePersistence
+        ? FileCursorSessionIndexStore(file: dataPaths!.cursorSessionsFile)
+        : MemoryCursorSessionIndexStore();
+    _defaultAgentProviderFactory = DefaultAgentProviderFactory(
+      cursorSessionIndexStore: cursorSessionIndexStore,
+    );
+    _usageStatisticsIndexStore =
+        widget.usageStatisticsIndexStore ??
+        (useFilePersistence
+            ? FileUsageStatisticsIndexStore(
+                file: dataPaths!.usageStatisticsIndexFile,
+              )
+            : MemoryUsageStatisticsIndexStore());
     if (widget.appearanceController != null) {
       _appearanceController = widget.appearanceController!;
       _ownsAppearanceController = false;
     } else {
       // 测试通过 sessionLoader/sessionSaver 注入会话回调时，避免读写真实
-      // shared_preferences；生产环境走默认持久化。
-      final usePersistence =
-          widget.sessionLoader == null && widget.sessionSaver == null;
-      final store = usePersistence
-          ? SharedPreferencesAppearanceSettingsStore()
+      // ~/.zeta；生产环境走默认文件持久化。
+      final store = useFilePersistence
+          ? FileAppearanceSettingsStore(file: dataPaths!.appearanceFile)
           : MemoryAppearanceSettingsStore();
       _appearanceController = AppearanceSettingsController(
         store: store,
@@ -129,8 +157,7 @@ class MainAppState extends State<MainApp> {
               enableNativeWindowFrame: widget.enableNativeWindowFrame,
               sessionStore: _createSessionStore(),
               agentProviderFactory:
-                  widget.agentProviderFactory ??
-                  const DefaultAgentProviderFactory(),
+                  widget.agentProviderFactory ?? _defaultAgentProviderFactory,
               agentProviderConfigStore:
                   widget.agentProviderConfigStore ??
                   _createAgentProviderConfigStore(),
@@ -139,6 +166,7 @@ class MainAppState extends State<MainApp> {
               projectLocationOpener:
                   widget.projectLocationOpener ?? openPathInSystemFileManager,
               appearanceController: _appearanceController,
+              usageStatisticsIndexStore: _usageStatisticsIndexStore,
             ),
           ),
         );
@@ -153,7 +181,14 @@ class MainAppState extends State<MainApp> {
         saveJson: widget.sessionSaver ?? (_) async {},
       );
     }
-    return SharedPreferencesIdeSessionStore();
+    final dataPaths = widget.dataPaths;
+    if (_useFilePersistence && dataPaths != null) {
+      return FileIdeSessionStore(file: dataPaths.ideSessionFile);
+    }
+    return const CallbackIdeSessionStore(
+      loadJson: _loadEmptySession,
+      saveJson: _ignoreSessionSave,
+    );
   }
 
   AgentProviderConfigStore _createAgentProviderConfigStore() {
@@ -161,9 +196,22 @@ class MainAppState extends State<MainApp> {
       return widget.agentProviderConfigStore!;
     }
     if (widget.sessionLoader != null || widget.sessionSaver != null) {
-      // widget test 传入会话回调时，默认不触碰真实 shared_preferences。
+      // widget test 传入会话回调时，默认不触碰真实 ~/.zeta。
       return MemoryAgentProviderConfigStore();
     }
-    return SharedPreferencesAgentProviderConfigStore();
+    final dataPaths = widget.dataPaths;
+    if (_useFilePersistence && dataPaths != null) {
+      return FileAgentProviderConfigStore(file: dataPaths.providersFile);
+    }
+    return MemoryAgentProviderConfigStore();
   }
+
+  bool get _useFilePersistence =>
+      widget.dataPaths != null &&
+      widget.sessionLoader == null &&
+      widget.sessionSaver == null;
 }
+
+Future<String?> _loadEmptySession() async => null;
+
+Future<void> _ignoreSessionSave(String _) async {}

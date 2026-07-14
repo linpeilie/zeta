@@ -102,7 +102,7 @@ windows/
 重要模块：
 
 - `lib/src/app`：应用装配、窗口启动、菜单桥接、shell controller 和常量。
-- `lib/src/core`：日志、路径工具等跨功能基础设施。
+- `lib/src/core`：日志、`~/.zeta` 路径布局、原子文本写入等跨功能基础设施。
 - `lib/src/features/agent`：Agent provider 抽象、Codex app-server、Grok/Cursor ACP、
   共享事件映射、对话状态和 Agent pane。
 - `lib/src/features/agent_management`：Codex/Grok/Cursor CLI 检测、身份/版本/账号诊断、
@@ -215,12 +215,40 @@ Cursor 适配还必须遵守以下约束：
 
 ## 9. 会话和持久化
 
+Zeta 自有数据统一写入用户主目录下的以下结构：
+
+```text
+~/.zeta/
+  config/
+    providers.json
+    appearance.json
+  state/
+    ide_session.json
+    cursor_sessions.json
+    usage_statistics_index.json
+    migration_marker.json
+  logs/
+    zeta-YYYY-MM-DD.log
+  cache/
+```
+
+`main` 在 `runApp` 前解析 HOME、配置文件日志并执行一次性迁移；`app` 把具体文件
+注入各 feature data store。旧版 SharedPreferences key 只作为迁移来源，目标文件已
+存在时不会被覆盖；迁移失败时本次运行使用内存状态，既不阻止主界面，也不写空
+目标覆盖待迁移数据，下次启动会继续重试。
+
 会话状态使用版本化 JSON。变更字段时：
 
 - 保持 `tryDecode` 宽容读取，损坏内容不能导致启动失败。
 - 新字段提供默认值。
 - 如破坏兼容性，提升版本并保留旧版本迁移逻辑。
 - 不要把 provider 全局配置复制进每个项目状态。
+- 不要在 presentation/application 中直接构造 `File('~/.zeta/...')`。
+
+Agent CLI 的数据不属于这套目录：Codex/Grok/Cursor 配置与 session 历史继续保留在
+`~/.codex`、`~/.grok`、`~/.cursor` 或项目 `.cursor/*`，迁移器不会扫描、复制或改写。
+`cursor_sessions.json` 仅保存 Zeta 恢复列表所需的最小索引；Codex 使用统计仍只读原
+rollout JSONL，并把可重建的派生索引写入 `~/.zeta/state`。
 
 ## 10. 文件系统注意事项
 

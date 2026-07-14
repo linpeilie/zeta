@@ -733,7 +733,10 @@ class GrokAcpAgentProvider implements AgentProvider {
       _log.fine('Grok stderr (${line.length} chars)');
     });
     _protocolErrorSubscription ??= _peer.protocolErrors.listen((error) {
-      _log.warning('Grok protocol warning: ${error.message}', error.cause);
+      _log.warning(
+        'Grok protocol warning (${error.message.length} characters)',
+        error.cause,
+      );
       _events.add(
         AgentErrorEvent(
           message: 'Grok protocol warning',
@@ -887,7 +890,8 @@ class GrokAcpAgentProvider implements AgentProvider {
         }
         _emittedTitlesBySessionId[sessionId] = authoritative;
         _log.info(
-          'Grok session $sessionId generated_title ready: $authoritative',
+          'Grok session $sessionId generated_title ready '
+          '(${authoritative.length} characters)',
         );
         _events.add(
           AgentThreadNameUpdatedEvent(
@@ -915,7 +919,8 @@ class GrokAcpAgentProvider implements AgentProvider {
       }
       _emittedTitlesBySessionId[sessionId] = fallback;
       _log.fine(
-        'Grok session $sessionId falling back to session_summary: $fallback',
+        'Grok session $sessionId falling back to session_summary '
+        '(${fallback.length} characters)',
       );
       _events.add(
         AgentThreadNameUpdatedEvent(threadId: sessionId, threadName: fallback),

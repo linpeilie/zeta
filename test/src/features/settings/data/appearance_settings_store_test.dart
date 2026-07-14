@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,61 +7,101 @@ import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 
 void main() {
-  test('loads default appearance settings when storage is empty', () async {
-    final store = SharedPreferencesAppearanceSettingsStore(
-      readString: (_) async => null,
-      writeString: (_, _) async {},
-    );
+  group('FileAppearanceSettingsStore', () {
+    late Directory tempDirectory;
+    late File settingsFile;
 
-    expect(await store.load(), const AppearanceSettings());
-  });
-
-  test('saves versioned appearance settings json', () async {
-    final writes = <String, String>{};
-    final store = SharedPreferencesAppearanceSettingsStore(
-      readString: (_) async => null,
-      writeString: (key, value) async {
-        writes[key] = value;
-      },
-    );
-
-    await store.save(
-      const AppearanceSettings(
-        themeMode: ThemeMode.dark,
-        uiFontChoice: AppearanceFontChoice.system('Maple UI'),
-        codeFontChoice: AppearanceFontChoice.system('Cascadia Mono'),
-      ),
-    );
-
-    final saved =
-        jsonDecode(writes[appearanceSettingsStorageKey]!)
-            as Map<String, Object?>;
-    expect(saved['version'], 1);
-    expect(saved['themeMode'], 'dark');
-    expect(saved['uiFontChoice'], <String, Object?>{
-      'kind': 'system',
-      'fontFamily': 'Maple UI',
+    setUp(() {
+      tempDirectory = Directory.systemTemp.createTempSync(
+        'zeta_appearance_store_',
+      );
+      settingsFile = File(
+        '${tempDirectory.path}${Platform.pathSeparator}appearance.json',
+      );
     });
-    expect(saved['codeFontChoice'], <String, Object?>{
-      'kind': 'system',
-      'fontFamily': 'Cascadia Mono',
+
+    tearDown(() async {
+      if (await tempDirectory.exists()) {
+        await tempDirectory.delete(recursive: true);
+      }
+    });
+
+    test('loads default appearance settings when storage is empty', () async {
+      final store = FileAppearanceSettingsStore(file: settingsFile);
+
+      expect(await store.load(), const AppearanceSettings());
+    });
+
+    test('saves versioned appearance settings json', () async {
+      final store = FileAppearanceSettingsStore(file: settingsFile);
+
+      await store.save(
+        const AppearanceSettings(
+          themeMode: ThemeMode.dark,
+          uiFontChoice: AppearanceFontChoice.system('Maple UI'),
+          codeFontChoice: AppearanceFontChoice.system('Cascadia Mono'),
+        ),
+      );
+
+      final saved =
+          jsonDecode(await settingsFile.readAsString()) as Map<String, Object?>;
+      expect(saved['version'], 1);
+      expect(saved['themeMode'], 'dark');
+      expect(saved['uiFontChoice'], <String, Object?>{
+        'kind': 'system',
+        'fontFamily': 'Maple UI',
+      });
+      expect(saved['codeFontChoice'], <String, Object?>{
+        'kind': 'system',
+        'fontFamily': 'Cascadia Mono',
+      });
+      expect(
+        await store.load(),
+        const AppearanceSettings(
+          themeMode: ThemeMode.dark,
+          uiFontChoice: AppearanceFontChoice.system('Maple UI'),
+          codeFontChoice: AppearanceFontChoice.system('Cascadia Mono'),
+        ),
+      );
+    });
+
+    test('falls back to defaults on invalid json', () async {
+      await settingsFile.writeAsString('{not-json');
+      final store = FileAppearanceSettingsStore(file: settingsFile);
+
+      expect(await store.load(), const AppearanceSettings());
+    });
+
+    test('falls back to defaults on invalid UTF-8', () async {
+      await settingsFile.writeAsBytes(<int>[0xff]);
+      final store = FileAppearanceSettingsStore(file: settingsFile);
+
+      expect(await store.load(), const AppearanceSettings());
+    });
+
+    test('propagates file system errors while saving', () async {
+      final blockedParent = File(
+        '${tempDirectory.path}${Platform.pathSeparator}blocked',
+      );
+      await blockedParent.writeAsString('not a directory');
+      final store = FileAppearanceSettingsStore(
+        file: File(
+          '${blockedParent.path}${Platform.pathSeparator}appearance.json',
+        ),
+      );
+
+      await expectLater(
+        store.save(const AppearanceSettings()),
+        throwsA(isA<FileSystemException>()),
+      );
     });
   });
 
-  test('falls back to defaults on invalid json', () async {
-    final store = SharedPreferencesAppearanceSettingsStore(
-      readString: (_) async => '{not-json',
-      writeString: (_, _) async {},
-    );
-
-    expect(await store.load(), const AppearanceSettings());
-  });
-
-  test('migrates legacy theme mode when new settings key is missing', () async {
-    final values = <String, String>{legacyThemeModeStorageKey: 'dark'};
-    final store = SharedPreferencesAppearanceSettingsStore(
-      readString: (key) async => values[key],
-      writeString: (_, _) async {},
+  test('callback store falls back to the legacy theme mode', () async {
+    final store = CallbackAppearanceSettingsStore(
+      loadJson: () async => null,
+      saveJson: (_) async {},
+      loadLegacyThemeMode: () async => 'dark',
     );
 
     expect(

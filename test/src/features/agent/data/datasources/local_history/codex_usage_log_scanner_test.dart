@@ -315,12 +315,23 @@ void main() {
       codexHome: tempDirectory.path,
       cachedSessions: first.sessions,
     );
+    final persisted = CodexUsageSessionSnapshot.tryDecode(
+      first.sessions[valid.path]!.toJson(),
+    )!;
+    final restored = await scanner.scan(
+      codexHome: tempDirectory.path,
+      cachedSessions: <String, CodexUsageSessionSnapshot>{
+        persisted.sourceId: persisted,
+      },
+    );
 
     expect(first.sessions, hasLength(1));
     expect(
       identical(first.sessions[valid.path], second.sessions[valid.path]),
       isTrue,
     );
+    expect(restored.sessions[valid.path]?.sourcePath, valid.path);
+    expect(restored.sessions[valid.path]?.fingerprint, persisted.fingerprint);
 
     await valid.writeAsString(
       '${jsonEncode(_tokenEvent(timestamp: '2026-07-08T09:00:10Z', total: _usage(input: 10, cached: 0, output: 2, reasoning: 0, total: 12), last: _usage(input: 10, cached: 0, output: 2, reasoning: 0, total: 12)))}\n',

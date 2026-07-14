@@ -22,8 +22,9 @@
 - `window_manager` 用于桌面窗口体验（隐藏原生标题栏、自定义标题栏）。
 - macOS 原生「文件 - 打开项目」菜单通过 `zeta/menu` MethodChannel 桥接到 Flutter。
 - `file_selector` 用于选择本地目录。
-- `shared_preferences` 用于会话和 provider 配置持久化。
-- `logging` 用于应用日志。
+- `shared_preferences` 仅用于读取旧版 Zeta key 并一次性迁移。
+- Zeta 自有配置、会话状态与派生索引使用 `~/.zeta` 下的版本化 JSON 文件。
+- `logging` 同时输出 developer 日志与 `~/.zeta/logs/zeta-YYYY-MM-DD.log`。
 
 ## 3. 架构决策
 
@@ -38,6 +39,8 @@
   `docs/cursor_acp_release_validation.md`。
 - 文件树采用懒加载，不递归扫描整个仓库。
 - 会话恢复必须宽容失败，不能阻断应用启动。
+- `core` 统一解析 `~/.zeta` 与原子写入，feature data store 接收 app 注入的文件；
+  迁移器不得访问或改写 Agent CLI 自有配置和 session 历史。
 
 ## 4. 重要模块记忆
 

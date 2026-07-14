@@ -92,6 +92,52 @@ void main() {
     expect(source.warnings, contains('Codex 当前未返回套餐额度信息。'));
   });
 
+  test('safe cached index preserves the derived error category', () async {
+    final createdAt = DateTime.utc(2026, 7, 8, 9);
+    final session = CodexUsageSessionSnapshot(
+      sourcePath: '/codex/rollout.jsonl',
+      fingerprint: '100:1',
+      threadId: 'thread-failed',
+      projectPath: '/workspace/zeta',
+      sourceKind: 'codex_cli_rs',
+      createdAt: createdAt,
+      turns: <CodexUsageTurnSnapshot>[
+        CodexUsageTurnSnapshot(
+          id: 'turn-failed',
+          status: AgentHistoryTurnStatus.failed,
+          startedAt: createdAt,
+          completedAt: createdAt.add(const Duration(seconds: 1)),
+          errorMessage: 'network connection failed with private payload',
+          samples: const <CodexUsageSample>[],
+        ),
+      ],
+    );
+    final encoded = jsonEncode(
+      UsageStatisticsIndexSnapshot(
+        sessions: <String, CodexUsageSessionSnapshot>{
+          session.sourcePath: session,
+        },
+      ).toJson(),
+    );
+    final restored = UsageStatisticsIndexSnapshot.tryDecode(
+      jsonDecode(encoded),
+    );
+    final indexStore = MemoryUsageStatisticsIndexStore()..snapshot = restored;
+    final repository = CodexUsageStatisticsRepository(
+      providerLoader: () async => _UsageProvider(),
+      indexStore: indexStore,
+      scanner: _UsageScanner(restored.sessions),
+      clock: () => DateTime(2026, 7, 10),
+    );
+
+    final source = await repository.load(earliest: DateTime(2026, 7, 1));
+
+    expect(encoded, contains('"errorCategoryHint":"network"'));
+    expect(encoded, isNot(contains('private payload')));
+    expect(source.records.single.errorCategory, UsageErrorCategory.network);
+    expect(source.records.single.errorMessage, isNull);
+  });
+
   test('damaged and V1 index content decode as an empty V2 snapshot', () {
     expect(
       UsageStatisticsIndexSnapshot.tryDecode(<String, Object?>{

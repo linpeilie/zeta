@@ -11,7 +11,7 @@ Zeta 的设计目标是让 Flutter UI、Agent provider、会话持久化和本�
 当前代码按 `lib/src` 下的 app、core、features、ui 分层组织。重构后的核心原则是以 feature 为内聚边界，在 feature 内再按 domain、application、data、presentation 拆分职责：
 
 - app：应用根组件、窗口启动、应用常量。
-- core：日志等跨层基础能力。
+- core：日志、Zeta 数据路径与原子文本写入等跨层基础能力。
 - features/agent：Agent provider 抽象、Codex app-server、Grok/Cursor ACP stdio、JSON-RPC stdio、历史解析、事件映射、对话 view model 和 Agent pane。
 - features/agent_management：Agent CLI 检测、版本与账号诊断、模型读取、配置安全编辑、
   CLI 磁盘日志读取和管理页面。
@@ -29,6 +29,9 @@ Zeta 的设计目标是让 Flutter UI、Agent provider、会话持久化和本�
 
 ```text
 main()
+  -> ZetaDataPaths (~/.zeta)
+  -> ZetaStorageMigrator (legacy SharedPreferences -> JSON files)
+  -> daily app log (~/.zeta/logs)
   -> MainApp
     -> IdeShellController
     -> IdeHome
@@ -220,6 +223,25 @@ repository。Cursor repository 负责多候选身份探测、版本/账号检查
 
 ## 6. 会话状态设计
 
+### Zeta 自有存储边界
+
+Zeta 通过 `ZetaDataPaths` 统一解析 `~/.zeta`，由 app 装配层把文件注入 feature data
+store。配置位于 `config/providers.json` 与 `config/appearance.json`；IDE 会话、Cursor
+最小索引、使用统计派生索引和迁移 marker 位于 `state/`；应用日志按本地日期写入
+`logs/zeta-YYYY-MM-DD.log`，并创建空 `cache/` 预留目录。JSON store 使用同目录临时
+文件、flush 与 rename 替换，并在读取损坏或 I/O 失败时按 feature 语义降级。
+
+启动迁移只读取 Zeta 旧版 SharedPreferences key，目标文件存在时不覆盖，全部处理成功
+后才写 `migration_marker.json`。迁移不会删除旧值，以便旧版应用临时降级；新版本运行时
+不再把这些状态写回 SharedPreferences。若迁移中途失败，本次运行改用内存 store，避免
+空启动状态抢先创建目标文件；marker 保持未完成并在下次启动重试。
+
+`~/.codex`、`~/.grok`、`~/.cursor`、项目 `.cursor/*` 和用户项目源码不属于 Zeta 自有
+存储。Agent CLI 配置及 session/rollout 正文保持原位；Cursor 的
+`state/cursor_sessions.json` 只含 Zeta 最小索引，不是 Cursor 官方历史正文。
+
+### IDE 会话快照
+
 IDE 会话状态目前版本为 2，持久化内容包括：
 
 - 最近项目列表。
@@ -250,6 +272,8 @@ IDE 会话状态目前版本为 2，持久化内容包括：
 ## 8. 错误处理
 
 - 全局使用 `runZonedGuarded`、`FlutterError.onError` 和 `PlatformDispatcher.instance.onError` 记录未处理错误。
+- 应用日志保留 developer 输出，并以脱敏单行格式追加到 `~/.zeta/logs/zeta-YYYY-MM-DD.log`；
+  文件写入失败不回灌 Logger，避免递归错误；窗口正常关闭前会等待日志队列排空。
 - 目录读取失败通过日志和短提示反馈，不中断当前工作区。
 - 会话恢复失败会清理恢复状态并继续启动。
 - Agent provider 启动失败、协议失败或进程异常会转换为 UI 状态和错误消息。

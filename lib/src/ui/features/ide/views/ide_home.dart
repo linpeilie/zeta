@@ -50,6 +50,7 @@ class IdeHome extends StatefulWidget {
     required this.sessionStore,
     required this.agentProviderFactory,
     required this.agentProviderConfigStore,
+    required this.usageStatisticsIndexStore,
     required this.projectLocationOpener,
     required this.appearanceController,
     this.agentProviderAvailabilityLoader,
@@ -62,6 +63,7 @@ class IdeHome extends StatefulWidget {
   final IdeSessionStore sessionStore;
   final AgentProviderFactory agentProviderFactory;
   final AgentProviderConfigStore agentProviderConfigStore;
+  final UsageStatisticsIndexStore usageStatisticsIndexStore;
   final ProjectLocationOpener projectLocationOpener;
   final AppearanceSettingsController appearanceController;
   final AgentProviderAvailabilityLoader? agentProviderAvailabilityLoader;
@@ -130,7 +132,7 @@ class _IdeHomeState extends State<IdeHome> {
     _usageStatisticsController = UsageStatisticsController(
       repository: CodexUsageStatisticsRepository(
         providerLoader: _shellController.agentProviderController.activeProvider,
-        indexStore: const SharedPreferencesUsageStatisticsIndexStore(),
+        indexStore: widget.usageStatisticsIndexStore,
       ),
     );
     // 生产环境注册原生菜单的「打开项目」回调，与工具栏按钮走同一逻辑。

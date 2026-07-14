@@ -1,10 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 
-import 'package:shared_preferences/shared_preferences.dart';
-
+import 'package:zeta/src/core/storage/atomic_text_file.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
-/// 全局 provider 配置的 shared_preferences key。
+/// 全局 provider 配置的旧版 shared_preferences key。
 const String agentProviderConfigStorageKey = 'zeta.agent.providers.v1';
 
 /// Agent provider 配置仓库。
@@ -18,27 +18,29 @@ abstract class AgentProviderConfigStore {
   Future<void> save(AgentProviderSettings settings);
 }
 
-/// 基于 shared_preferences 的生产配置仓库。
-class SharedPreferencesAgentProviderConfigStore
-    implements AgentProviderConfigStore {
-  SharedPreferencesAgentProviderConfigStore({
-    SharedPreferencesAsync? preferences,
-  }) : _preferences = preferences ?? SharedPreferencesAsync();
+/// 基于 JSON 文件的生产配置仓库。
+class FileAgentProviderConfigStore implements AgentProviderConfigStore {
+  FileAgentProviderConfigStore({required File file})
+    : _storage = AtomicTextFile(file);
 
-  final SharedPreferencesAsync _preferences;
+  final AtomicTextFile _storage;
 
   @override
   Future<AgentProviderSettings> load() async {
-    final value = await _preferences.getString(agentProviderConfigStorageKey);
-    return _decodeSettings(value);
+    try {
+      return _decodeSettings(await _storage.read());
+    } on IOException {
+      // 配置文件不可读时继续使用内置 provider，不阻断应用启动。
+      return const AgentProviderSettings();
+    } on FormatException {
+      // 配置文件不可读时继续使用内置 provider，不阻断应用启动。
+      return const AgentProviderSettings();
+    }
   }
 
   @override
   Future<void> save(AgentProviderSettings settings) async {
-    await _preferences.setString(
-      agentProviderConfigStorageKey,
-      jsonEncode(settings.toJson()),
-    );
+    await _storage.write(jsonEncode(settings.toJson()));
   }
 }
 

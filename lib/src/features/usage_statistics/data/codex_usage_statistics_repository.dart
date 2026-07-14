@@ -153,8 +153,13 @@ class CodexUsageStatisticsRepository implements UsageStatisticsRepository {
             tokens: tokens,
             errorCategory: _errorCategory(
               status: status,
-              code: turn.errorCode,
-              message: turn.errorMessage,
+              hint:
+                  turn.errorCategoryHint ??
+                  codexUsageErrorCategoryHint(
+                    status: turn.status,
+                    code: turn.errorCode,
+                    message: turn.errorMessage,
+                  ),
             ),
             errorMessage: _nonEmpty(turn.errorMessage),
             errorCode: _nonEmpty(turn.errorCode),
@@ -181,42 +186,19 @@ UsageTaskStatus _usageStatus(AgentHistoryTurnStatus status) => switch (status) {
 
 UsageErrorCategory? _errorCategory({
   required UsageTaskStatus status,
-  required String? code,
-  required String? message,
+  required String? hint,
 }) {
   if (!status.isFailure) {
     return null;
   }
-  if (status == UsageTaskStatus.interrupted) {
-    return UsageErrorCategory.cancelled;
-  }
-  final normalizedCode = code?.toLowerCase() ?? '';
-  final normalizedMessage = message?.toLowerCase() ?? '';
-  if (normalizedCode.contains('unauthorized') ||
-      normalizedCode.contains('usagelimit') ||
-      normalizedMessage.contains('account') ||
-      normalizedMessage.contains('login')) {
-    return UsageErrorCategory.account;
-  }
-  if (normalizedCode.contains('connection') ||
-      normalizedCode.contains('stream') ||
-      normalizedCode.contains('serveroverloaded') ||
-      normalizedMessage.contains('network') ||
-      normalizedMessage.contains('connection')) {
-    return UsageErrorCategory.network;
-  }
-  if (normalizedCode.contains('timeout') ||
-      normalizedMessage.contains('timeout') ||
-      normalizedMessage.contains('timed out') ||
-      normalizedMessage.contains('deadline')) {
-    return UsageErrorCategory.timeout;
-  }
-  if (normalizedCode.contains('sandbox') ||
-      normalizedCode.contains('threadrollback') ||
-      normalizedMessage.contains('codex cli')) {
-    return UsageErrorCategory.cli;
-  }
-  return UsageErrorCategory.other;
+  return switch (hint) {
+    'account' => UsageErrorCategory.account,
+    'cli' => UsageErrorCategory.cli,
+    'network' => UsageErrorCategory.network,
+    'timeout' => UsageErrorCategory.timeout,
+    'cancelled' => UsageErrorCategory.cancelled,
+    _ => UsageErrorCategory.other,
+  };
 }
 
 String? _nonEmpty(String? value) {
