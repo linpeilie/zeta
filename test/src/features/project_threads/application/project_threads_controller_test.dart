@@ -482,6 +482,48 @@ void main() {
         grokAgentProviderId,
       );
     });
+
+    test('registerSession can optimistically mark the new thread running', () {
+      final provider = _FakeAgentProvider(pages: const <AgentThreadPage>[]);
+      final controller = _createController(provider);
+
+      controller.registerSession(
+        '/repo',
+        const AgentSession(
+          id: 'new-thread',
+          providerId: defaultAgentProviderId,
+          title: 'New thread',
+        ),
+        markRunning: true,
+      );
+
+      final state = controller.stateFor('/repo');
+      expect(state.threads.single.id, 'new-thread');
+      expect(state.runningThreadIds, <String>{'new-thread'});
+      expect(state.selectedThreadId, 'new-thread');
+    });
+
+    test('setThreadRunning toggles list busy indicator for mapped threads', () {
+      final provider = _FakeAgentProvider(pages: const <AgentThreadPage>[]);
+      final controller = _createController(provider);
+
+      controller.registerSession(
+        '/repo',
+        const AgentSession(
+          id: 'new-thread',
+          providerId: defaultAgentProviderId,
+        ),
+      );
+      expect(controller.stateFor('/repo').runningThreadIds, isEmpty);
+
+      controller.setThreadRunning('new-thread', isRunning: true);
+      expect(controller.stateFor('/repo').runningThreadIds, <String>{
+        'new-thread',
+      });
+
+      controller.setThreadRunning('new-thread', isRunning: false);
+      expect(controller.stateFor('/repo').runningThreadIds, isEmpty);
+    });
   });
 }
 
@@ -490,7 +532,7 @@ ProjectThreadsController _createController(
   ProjectThreadsViewModel? viewModel,
 }) {
   // 单 provider 配置，避免默认 Codex+Grok 下同一 fake 被聚合调用两次。
-  final controller = ActiveAgentProviderController(
+  final providerController = ActiveAgentProviderController(
     providerFactory: _FakeAgentProviderFactory(provider),
     configStore: MemoryAgentProviderConfigStore(
       AgentProviderSettings(
@@ -499,11 +541,15 @@ ProjectThreadsController _createController(
       ),
     ),
   );
-  addTearDown(controller.dispose);
-  return ProjectThreadsController(
-    providerController: controller,
+  final controller = ProjectThreadsController(
+    providerController: providerController,
     viewModel: viewModel,
   );
+  addTearDown(() {
+    controller.dispose();
+    providerController.dispose();
+  });
+  return controller;
 }
 
 ProjectThreadsController _createMultiProviderController({
@@ -512,7 +558,7 @@ ProjectThreadsController _createMultiProviderController({
   _FakeAgentProvider? cursor,
   ProjectThreadsViewModel? viewModel,
 }) {
-  final controller = ActiveAgentProviderController(
+  final providerController = ActiveAgentProviderController(
     providerFactory: _MultiAgentProviderFactory(
       codex: codex,
       grok: grok,
@@ -530,11 +576,15 @@ ProjectThreadsController _createMultiProviderController({
       ),
     ),
   );
-  addTearDown(controller.dispose);
-  return ProjectThreadsController(
-    providerController: controller,
+  final controller = ProjectThreadsController(
+    providerController: providerController,
     viewModel: viewModel,
   );
+  addTearDown(() {
+    controller.dispose();
+    providerController.dispose();
+  });
+  return controller;
 }
 
 AgentThreadPage _page(

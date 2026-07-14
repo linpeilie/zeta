@@ -28,7 +28,10 @@ class ProjectThreadsController {
   ProjectThreadsController({
     required this.providerController,
     ProjectThreadsViewModel? viewModel,
-  }) : viewModel = viewModel ?? ProjectThreadsViewModel();
+  }) : viewModel = viewModel ?? ProjectThreadsViewModel() {
+    // active provider 切换后必须重绑事件流，否则列表收不到 TurnStarted，侧栏无执行动画。
+    providerController.addListener(_handleProviderControllerChanged);
+  }
 
   final ActiveAgentProviderController providerController;
   final ProjectThreadsViewModel viewModel;
@@ -206,10 +209,14 @@ class ProjectThreadsController {
   ///
   /// [preview] 可传入首条用户消息等临时摘要，避免列表在 generated_title
   /// 写入前只能显示短 id。
+  ///
+  /// [markRunning] 为 true 时乐观写入执行中指示（新建 thread 首条消息场景），
+  /// 避免 active provider 事件订阅尚未跟上时侧栏无转圈动画。
   void registerSession(
     String projectPath,
     AgentSession session, {
     String? preview,
+    bool markRunning = false,
   }) {
     _registerThreadMapping(projectPath, session.id);
     final resolvedPreview = (preview ?? session.title ?? '').trim();
@@ -237,6 +244,16 @@ class ProjectThreadsController {
       );
     }
     selectThreadId(projectPath, session.id);
+    if (markRunning) {
+      _setThreadRunning(session.id, isRunning: true);
+    }
+    // 新 session 往往伴随 active provider 刚切换；立刻挂上事件流接收 TurnStarted。
+    unawaited(_ensureProviderEventSubscription());
+  }
+
+  /// 由详情侧 turn 状态同步列表执行中指示（不依赖 provider 事件是否已送达）。
+  void setThreadRunning(String threadId, {required bool isRunning}) {
+    _setThreadRunning(threadId, isRunning: isRunning);
   }
 
   /// 更新列表中某条 thread 的标题（供 shell 从详情侧回写）。
@@ -410,6 +427,7 @@ class ProjectThreadsController {
       return;
     }
     _disposed = true;
+    providerController.removeListener(_handleProviderControllerChanged);
     _provider = null;
     _loadTokens.clear();
     _projectPathByThreadId.clear();
@@ -420,6 +438,13 @@ class ProjectThreadsController {
     final subscription = _providerEventSubscription;
     _providerEventSubscription = null;
     unawaited(subscription?.cancel());
+  }
+
+  void _handleProviderControllerChanged() {
+    if (_disposed) {
+      return;
+    }
+    unawaited(_ensureProviderEventSubscription());
   }
 
   Future<void> _loadPage({
@@ -740,8 +765,11 @@ class ProjectThreadsController {
     _provider = provider;
     _providerEventSubscription = provider.events.listen(_handleProviderEvent);
     await previousSubscription?.cancel();
-    if (previousProvider != null) {
-      _clearAllRunningThreadIds();
+    // 仅清理「旧 provider 名下」的执行中标记。同 id 重建实例时保留乐观 running，
+    // 避免新建 thread 刚 markRunning 就被整表清空导致侧栏无转圈。
+    if (previousProvider != null &&
+        previousProvider.config.id != provider.config.id) {
+      _clearRunningThreadIdsOwnedByProvider(previousProvider.config.id);
     }
     return provider;
   }
@@ -908,12 +936,27 @@ class ProjectThreadsController {
     _projectPathByThreadId[threadId] = projectPath;
   }
 
-  void _clearAllRunningThreadIds() {
+  /// 去掉属于 [providerId] 的 thread 的执行中标记（切换 active provider 时用）。
+  void _clearRunningThreadIdsOwnedByProvider(String providerId) {
     for (final entry in viewModel.states.entries) {
-      if (entry.value.runningThreadIds.isEmpty) {
+      final state = entry.value;
+      if (state.runningThreadIds.isEmpty) {
         continue;
       }
-      viewModel.setRunningThreadIds(entry.key, const <String>{});
+      final ownedIds = <String>{
+        for (final thread in state.threads)
+          if (thread.providerId == providerId) thread.id,
+      };
+      if (ownedIds.isEmpty) {
+        continue;
+      }
+      final nextRunning = state.runningThreadIds
+          .where((threadId) => !ownedIds.contains(threadId))
+          .toSet();
+      if (nextRunning.length == state.runningThreadIds.length) {
+        continue;
+      }
+      viewModel.setRunningThreadIds(entry.key, nextRunning);
     }
   }
 

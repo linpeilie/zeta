@@ -612,11 +612,14 @@ class IdeShellController extends ChangeNotifier {
     final mappingChanged = _agentThreadIdsByProject[projectPath] != sessionId;
 
     var selectedBySessionRegistration = false;
+    final turnRunning = agentViewModel.isTurnRunning;
     if (currentSession != null && !hasProviderSummary) {
       projectThreadsController.registerSession(
         projectPath,
         currentSession,
         preview: _provisionalThreadPreview(),
+        // 新建 session 时常已在发首条消息；乐观标 running，避免事件订阅滞后无动画。
+        markRunning: turnRunning,
       );
       selectedBySessionRegistration = true;
     }
@@ -629,6 +632,12 @@ class IdeShellController extends ChangeNotifier {
       }
       _requestSessionSave();
     }
+    // 详情侧 turn 生命周期驱动侧栏执行指示；不单依赖 provider 事件到达列表 controller。
+    projectThreadsController.registerThreadMapping(projectPath, sessionId);
+    projectThreadsController.setThreadRunning(
+      sessionId,
+      isRunning: turnRunning,
+    );
     // 注意：不要把详情侧的临时首条消息标题回写为列表 title。
     // 正式标题只应由 name/updated（Grok 为 summary.generated_title）驱动。
   }
