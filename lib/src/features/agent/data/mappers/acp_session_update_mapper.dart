@@ -1,4 +1,5 @@
 import 'package:zeta/src/features/agent/data/mappers/acp_content_codec.dart';
+import 'package:zeta/src/features/agent/data/mappers/context_window_codec.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 /// 标准 ACP `session/update` 到领域事件的映射结果。
@@ -135,6 +136,7 @@ class AcpSessionUpdateMapper {
                 totalTokens: used,
                 inputTokens: used,
                 outputTokens: 0,
+                modelContextWindow: ContextWindowCodec.positiveWindow(update),
               ),
               raw: update,
             ),
@@ -206,6 +208,7 @@ class AcpSessionUpdateMapper {
         totalTokens: _asInt(usageMap['totalTokens']),
         cachedInputTokens: _asInt(usageMap['cachedReadTokens']),
         reasoningOutputTokens: _asInt(usageMap['reasoningTokens']),
+        modelContextWindow: ContextWindowCodec.positiveWindow(usageMap),
       );
     }
 

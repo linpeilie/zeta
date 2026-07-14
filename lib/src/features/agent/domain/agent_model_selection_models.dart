@@ -48,6 +48,7 @@ class AgentModelInfo {
     this.serviceTiers = const <AgentModelServiceTier>[],
     this.defaultServiceTier,
     this.isDefault = false,
+    this.contextWindowTokens,
     this.raw = const <String, Object?>{},
   });
 
@@ -80,6 +81,9 @@ class AgentModelInfo {
 
   /// 是否为 CLI 默认模型。
   final bool isDefault;
+
+  /// 模型上下文窗口 token 上限；仅在 provider 明确返回时设置。
+  final int? contextWindowTokens;
 
   /// 原始 provider payload。
   final Map<String, Object?> raw;

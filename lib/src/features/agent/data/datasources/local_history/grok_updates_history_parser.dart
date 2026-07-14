@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_user_content_parser.dart';
+import 'package:zeta/src/features/agent/data/mappers/context_window_codec.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 /// 从 Grok `updates.jsonl` 重建多回合历史快照。
@@ -24,6 +25,7 @@ class GrokUpdatesHistoryParser {
     final turns = <_TurnBuilder>[];
     _TurnBuilder? current;
     final toolById = <String, AgentToolCall>{};
+    String? currentModelId;
 
     void ensureTurn({String? promptId, String? fallbackId, DateTime? at}) {
       if (current != null) {
@@ -36,7 +38,7 @@ class GrokUpdatesHistoryParser {
           'grok-turn-${turns.length + 1}-$threadId'.hashCode
               .toUnsigned(32)
               .toRadixString(16);
-      current = _TurnBuilder(id: id)..noteTime(at);
+      current = _TurnBuilder(id: id, model: currentModelId)..noteTime(at);
       turns.add(current!);
     }
 
@@ -122,6 +124,18 @@ class GrokUpdatesHistoryParser {
           _dateTimeFromMs(updateMeta['agentTimestampMs']) ??
           _dateTimeFromMs(paramsMeta['agentTimestampMs']) ??
           _dateTimeFromTimestamp(root['timestamp']);
+
+      final reportedModelId = _firstNonEmpty(<Object?>[
+        update['modelId'],
+        update['model_id'],
+        updateMeta['modelId'],
+        paramsMeta['modelId'],
+        params['modelId'],
+      ]);
+      if (reportedModelId != null) {
+        currentModelId = reportedModelId;
+        current?.model ??= reportedModelId;
+      }
 
       switch (kind) {
         case 'user_message_chunk':
@@ -239,6 +253,7 @@ class GrokUpdatesHistoryParser {
               totalTokens: _asInt(usageMap['totalTokens']),
               cachedInputTokens: _asInt(usageMap['cachedReadTokens']),
               reasoningOutputTokens: _asInt(usageMap['reasoningTokens']),
+              modelContextWindow: ContextWindowCodec.positiveWindow(usageMap),
             );
             final apiDurationMs = _asInt(usageMap['apiDurationMs']);
             if (apiDurationMs != null && apiDurationMs >= 0) {
@@ -415,7 +430,7 @@ class GrokUpdatesHistoryParser {
 }
 
 class _TurnBuilder {
-  _TurnBuilder({required this.id});
+  _TurnBuilder({required this.id, this.model});
 
   String id;
   final List<AgentHistoryEntry> entries = <AgentHistoryEntry>[];
@@ -429,6 +444,7 @@ class _TurnBuilder {
   DateTime? startedAt;
   DateTime? completedAt;
   Duration? duration;
+  String? model;
 
   bool get hasContent => entries.isNotEmpty;
 
@@ -613,6 +629,7 @@ class _TurnBuilder {
       startedAt: startedAt,
       completedAt: completedAt,
       duration: duration,
+      model: model,
       tokenUsage: tokenUsage,
       // Grok turn_completed.usage 是本回合绝对用量，不是会话累计。
       tokenUsageIsSessionCumulative: false,
@@ -626,6 +643,16 @@ Map<String, Object?>? _asMap(Object? value) {
     return null;
   }
   return value.map((key, item) => MapEntry(key.toString(), item as Object?));
+}
+
+String? _firstNonEmpty(List<Object?> values) {
+  for (final value in values) {
+    final text = value?.toString().trim();
+    if (text != null && text.isNotEmpty) {
+      return text;
+    }
+  }
+  return null;
 }
 
 String? _userPromptKey({

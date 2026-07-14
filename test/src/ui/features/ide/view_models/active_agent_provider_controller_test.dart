@@ -54,10 +54,43 @@ void main() {
         expect(controller.isProviderEnabled(grokAgentProviderId), isTrue);
       },
     );
+
+    test('rejects and disposes a provider with the wrong identity', () async {
+      // Arrange
+      final mismatchedProvider = _TrackingFakeAgentProvider(
+        AgentProviderConfig.defaultGrok,
+      );
+      final controller = ActiveAgentProviderController(
+        providerFactory: FakeAgentProviderFactory(mismatchedProvider),
+        configStore: MemoryAgentProviderConfigStore(
+          const AgentProviderSettings(),
+        ),
+      );
+      addTearDown(controller.dispose);
+
+      // Act + Assert
+      await expectLater(
+        controller.activeProvider(),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains(
+              'returned $grokAgentProviderId for $defaultAgentProviderId',
+            ),
+          ),
+        ),
+      );
+      expect(mismatchedProvider.disposeCount, 1);
+    });
   });
 }
 
 class _TrackingFakeAgentProvider extends FakeAgentProvider {
+  _TrackingFakeAgentProvider([
+    AgentProviderConfig config = AgentProviderConfig.defaultCodex,
+  ]) : super(config: config);
+
   int disposeCount = 0;
 
   @override

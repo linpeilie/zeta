@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/data/grok_cli_locator.dart';
+import 'package:zeta/src/features/agent/data/mappers/context_window_codec.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 final _log = loggerFor('zeta.agent.grok_models_cli');
@@ -202,6 +203,9 @@ AgentModelList? parseAcpModelsPayload(Object? value) {
         defaultReasoningEffort:
             metaMap['reasoningEffort']?.toString() ??
             (efforts.isNotEmpty ? efforts.first.effort : null),
+        contextWindowTokens:
+            ContextWindowCodec.positiveWindow(entry) ??
+            ContextWindowCodec.positiveWindow(metaMap),
         raw: Map<String, Object?>.from(entry),
       ),
     );

@@ -22,6 +22,24 @@ Future<void> pumpSessionSave(WidgetTester tester) async {
   await tester.pump();
 }
 
+/// 在存在常驻动画的页面中，按有限帧数等待目标状态，避免 `pumpAndSettle`
+/// 因不定进度动画永不结束而持续占用 CPU 和内存。
+Future<void> pumpUntilCondition(
+  WidgetTester tester,
+  bool Function() condition, {
+  Duration step = const Duration(milliseconds: 50),
+  int maxPumps = 20,
+  String failureMessage = 'Widget state did not become ready',
+}) async {
+  for (var pumpCount = 0; pumpCount < maxPumps; pumpCount += 1) {
+    await tester.pump(step);
+    if (condition()) {
+      return;
+    }
+  }
+  throw TestFailure(failureMessage);
+}
+
 String sessionJson({required String projectPath, String? currentFilePath}) {
   return jsonEncode(<String, Object?>{
     'version': 1,

@@ -287,7 +287,11 @@ void main() {
     await tester.tap(
       find.byKey(ValueKey<String>('project-thread-${directory.path}-thread-b')),
     );
-    await tester.pumpAndSettle();
+    await pumpUntilCondition(
+      tester,
+      () => find.text('History B').evaluate().isNotEmpty,
+      failureMessage: 'Thread B history did not become visible',
+    );
 
     expect(find.text('History B'), findsOneWidget);
     expect(find.text('History A'), findsNothing);
@@ -718,7 +722,10 @@ void main() {
   testWidgets('composer hides image and policy controls for Grok', (
     tester,
   ) async {
-    final provider = FakeAgentProvider();
+    final provider = FakeAgentProvider(
+      config: AgentProviderConfig.defaultGrok,
+      declaredCapabilities: AgentProviderCapabilities.grokAcp,
+    );
     await tester.pumpWidget(
       MainApp(
         enableNativeWindowFrame: false,
@@ -734,20 +741,27 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    final attachImageButton = find.byKey(
+      const ValueKey('agent-attach-image-button'),
+    );
+    final permissionPolicySelector = find.byKey(
+      const ValueKey('agent-permission-policy-selector'),
+    );
+    final mentionFileButton = find.byKey(
+      const ValueKey('agent-mention-file-button'),
+    );
+    await pumpUntilCondition(
+      tester,
+      () =>
+          attachImageButton.evaluate().isEmpty &&
+          permissionPolicySelector.evaluate().isEmpty &&
+          mentionFileButton.evaluate().isNotEmpty,
+      failureMessage: 'Grok composer controls did not become ready',
+    );
 
-    expect(
-      find.byKey(const ValueKey('agent-attach-image-button')),
-      findsNothing,
-    );
-    expect(
-      find.byKey(const ValueKey('agent-permission-policy-selector')),
-      findsNothing,
-    );
-    expect(
-      find.byKey(const ValueKey('agent-mention-file-button')),
-      findsOneWidget,
-    );
+    expect(attachImageButton, findsNothing);
+    expect(permissionPolicySelector, findsNothing);
+    expect(mentionFileButton, findsOneWidget);
   });
 
   testWidgets(

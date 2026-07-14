@@ -33,6 +33,11 @@ void main() {
       final caps = initParams['clientCapabilities']! as Map<String, Object?>;
       expect(caps['terminal'], isFalse);
 
+      final models = await provider.listModels();
+      expect(models.models, hasLength(2));
+      expect(models.models.first.contextWindowTokens, 500000);
+      expect(models.models.last.contextWindowTokens, 200000);
+
       await provider.dispose();
     });
 
@@ -64,6 +69,72 @@ void main() {
         expect(provider.capabilities.canForkThread, isFalse);
       },
     );
+
+    test(
+      'enriches restored Grok history with initialize model context window',
+      () async {
+        final sessionDir = await Directory.systemTemp.createTemp(
+          'zeta-grok-context-history-',
+        );
+        addTearDown(() async {
+          if (await sessionDir.exists()) {
+            await sessionDir.delete(recursive: true);
+          }
+        });
+        await File(
+          '${sessionDir.path}${Platform.pathSeparator}updates.jsonl',
+        ).writeAsString(r'''
+{"method":"session/update","params":{"sessionId":"sess-context","update":{"sessionUpdate":"session_info_update","modelId":"grok-4.5"}}}
+{"method":"session/update","params":{"sessionId":"sess-context","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"hello"}},"_meta":{"eventId":"u1"}}}
+{"method":"_x.ai/session/update","params":{"sessionId":"sess-context","update":{"sessionUpdate":"turn_completed","stop_reason":"end_turn","usage":{"inputTokens":393000,"cachedReadTokens":350000,"outputTokens":10400,"totalTokens":403400}},"_meta":{"eventId":"done"}}}
+''');
+
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: _FakeJsonRpcPeer(),
+        );
+        addTearDown(provider.dispose);
+
+        final history = await provider.readThreadHistory(
+          threadId: 'sess-context',
+          sessionPath: sessionDir.path,
+        );
+
+        expect(history.turns.single.model, 'grok-4.5');
+        expect(history.turns.single.modelContextWindow, 500000);
+        expect(history.turns.single.tokenUsage?.modelContextWindow, 500000);
+        expect(history.turns.single.tokenUsage?.totalTokens, 403400);
+      },
+    );
+
+    test('ignores a late model list after provider disposal', () async {
+      final peer = _FakeJsonRpcPeer()..includeModelState = false;
+      final modelsCompleter = Completer<AgentModelList>();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+        modelsCli: _DelayedModelsCli(modelsCompleter.future),
+      );
+
+      await provider.initialize();
+      final listFuture = provider.listModels();
+      await Future<void>.delayed(Duration.zero);
+      await provider.dispose();
+      modelsCompleter.complete(
+        const AgentModelList(
+          models: <AgentModelInfo>[
+            AgentModelInfo(
+              id: 'grok-4.5',
+              model: 'grok-4.5',
+              displayName: 'Grok 4.5',
+            ),
+          ],
+        ),
+      );
+
+      final models = await listFuture;
+      expect(models.models.single.id, 'grok-4.5');
+    });
 
     test(
       'polls summary.json after turn complete and emits name updated',
@@ -521,6 +592,7 @@ void main() {
             'name': 'Grok 4.5',
             'description': 'frontier',
             '_meta': <String, Object?>{
+              'totalContextTokens': 500000,
               'supportsReasoningEffort': true,
               'reasoningEffort': 'high',
               'reasoningEfforts': <Object?>[
@@ -538,6 +610,28 @@ void main() {
       expect(list!.models.single.id, 'grok-4.5');
       expect(list.models.single.isDefault, isTrue);
       expect(list.models.single.supportedReasoningEfforts, isNotEmpty);
+      expect(list.models.single.contextWindowTokens, 500000);
+    });
+
+    test('parses context window aliases only when positive', () {
+      final list = parseAcpModelsPayload(<String, Object?>{
+        'currentModelId': 'grok-4.5',
+        'availableModels': <Object?>[
+          <String, Object?>{
+            'modelId': 'grok-4.5',
+            'name': 'Grok 4.5',
+            '_meta': <String, Object?>{'total_context_tokens': '500000'},
+          },
+          <String, Object?>{
+            'modelId': 'invalid',
+            'name': 'Invalid',
+            '_meta': <String, Object?>{'totalContextTokens': 0},
+          },
+        ],
+      });
+
+      expect(list!.models.first.contextWindowTokens, 500000);
+      expect(list.models.last.contextWindowTokens, isNull);
     });
 
     test('parses grok models CLI text', () {
@@ -581,6 +675,9 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
   /// 模拟 initialize 返回的 session/load 能力。
   bool supportsLoadSession = true;
 
+  /// 模拟旧 Grok initialize 不带模型状态，以覆盖 CLI 降级竞态。
+  bool includeModelState = true;
+
   @override
   Stream<JsonRpcNotification> get notifications => _notifications.stream;
 
@@ -613,6 +710,35 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
         'authMethods': <Object?>[
           <String, Object?>{'id': 'cached_token', 'name': 'cached_token'},
         ],
+        if (includeModelState)
+          '_meta': <String, Object?>{
+            'modelState': <String, Object?>{
+              'currentModelId': 'grok-4.5',
+              'availableModels': <Object?>[
+                <String, Object?>{
+                  'modelId': 'grok-4.5',
+                  'name': 'Grok 4.5',
+                  'description': 'SpaceXAI frontier model',
+                  '_meta': <String, Object?>{
+                    'totalContextTokens': 500000,
+                    'supportsReasoningEffort': true,
+                    'reasoningEffort': 'high',
+                    'reasoningEfforts': <Object?>[
+                      <String, Object?>{
+                        'value': 'high',
+                        'description': 'High reasoning effort',
+                      },
+                    ],
+                  },
+                },
+                <String, Object?>{
+                  'modelId': 'grok-composer-2.5-fast',
+                  'name': 'Composer 2.5',
+                  '_meta': <String, Object?>{'totalContextTokens': 200000},
+                },
+              ],
+            },
+          },
       },
       'authenticate' => <String, Object?>{'_meta': <String, Object?>{}},
       'session/new' => <String, Object?>{
@@ -696,4 +822,13 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
       JsonRpcRequest(id: id, method: method, params: params, raw: params),
     );
   }
+}
+
+class _DelayedModelsCli extends GrokModelsCli {
+  _DelayedModelsCli(this.result);
+
+  final Future<AgentModelList> result;
+
+  @override
+  Future<AgentModelList> listModels(AgentProviderConfig config) => result;
 }

@@ -209,6 +209,13 @@ class GrokAcpAgentProvider implements AgentProvider {
       final caps = _asStringKeyedMap(initMap['agentCapabilities']);
       _loadSessionSupported = caps?['loadSession'] != false;
 
+      // Grok 0.2.101 把完整模型列表放在 initialize._meta.modelState，
+      // session/new 并不是唯一来源。这里必须在鉴权前接入，保证旧会话也能显示选择器。
+      final initMeta = _asStringKeyedMap(initMap['_meta']);
+      _applyModelsPayload(
+        initMeta?['modelState'] ?? initMap['modelState'] ?? initMap['models'],
+      );
+
       // 优先使用缓存 token；失败不阻断后续（某些环境可能已隐式鉴权）。
       await _authenticateBestEffort(initMap['authMethods']);
 
@@ -236,7 +243,7 @@ class GrokAcpAgentProvider implements AgentProvider {
           details: error.toString(),
         ),
       );
-      _events.add(
+      _addEvent(
         AgentErrorEvent(
           message: 'Could not start ${config.displayName}',
           details: error.toString(),
@@ -286,11 +293,10 @@ class GrokAcpAgentProvider implements AgentProvider {
     }
     try {
       final list = await _modelsCli.listModels(config);
-      if (list.models.isEmpty) {
+      if (_disposed || list.models.isEmpty) {
         return;
       }
-      _modelList = list;
-      _events.add(AgentModelListEvent(list));
+      _setModelList(list);
     } catch (error, stackTrace) {
       _log.fine('CLI model prefetch failed', error, stackTrace);
     }
@@ -325,7 +331,7 @@ class GrokAcpAgentProvider implements AgentProvider {
     );
     _session = session;
     _rememberProjectPath(sessionId, cwd);
-    _events.add(AgentSessionStartedEvent(session));
+    _addEvent(AgentSessionStartedEvent(session));
     _log.info('Started Grok ACP session $sessionId');
     return session;
   }
@@ -368,7 +374,7 @@ class GrokAcpAgentProvider implements AgentProvider {
         }
         // 恢复已有会话时也可能已有 generated_title，主动同步一次。
         _scheduleGeneratedTitlePoll(sessionId);
-        _events.add(AgentSessionStartedEvent(session));
+        _addEvent(AgentSessionStartedEvent(session));
         _log.info('Loaded Grok ACP session $sessionId (replay suppressed)');
         return session;
       } catch (error, stackTrace) {
@@ -419,9 +425,8 @@ class GrokAcpAgentProvider implements AgentProvider {
       return _modelList!;
     }
     final fromCli = await _modelsCli.listModels(config);
-    _modelList = fromCli;
-    if (fromCli.models.isNotEmpty) {
-      _events.add(AgentModelListEvent(fromCli));
+    if (!_disposed && fromCli.models.isNotEmpty) {
+      _setModelList(fromCli);
     }
     return fromCli;
   }
@@ -463,13 +468,26 @@ class GrokAcpAgentProvider implements AgentProvider {
     String? sessionPath,
     String? projectPath,
   }) async {
+    // 历史 JSONL 只有用量和 modelId，上下文上限来自 initialize.modelState。
+    // 初始化失败不应阻断离线历史，因此仅做 best-effort。
+    if (_modelList == null || _modelList!.models.isEmpty) {
+      try {
+        await initialize();
+      } catch (error, stackTrace) {
+        _log.fine(
+          'Could not load Grok model metadata before reading history',
+          error,
+          stackTrace,
+        );
+      }
+    }
     final cached = _historyCache[threadId];
     if (cached != null &&
         cached.turns.isNotEmpty &&
         (sessionPath == null ||
             sessionPath.isEmpty ||
             cached.raw['sessionPath'] == sessionPath)) {
-      return cached;
+      return _enrichHistorySnapshot(cached);
     }
 
     final snapshot = await _sessionHistoryReader.readThreadHistory(
@@ -482,10 +500,11 @@ class GrokAcpAgentProvider implements AgentProvider {
         ...config.environment,
       },
     );
-    if (snapshot.turns.isNotEmpty) {
-      _historyCache[threadId] = snapshot;
+    final enriched = _enrichHistorySnapshot(snapshot);
+    if (enriched.turns.isNotEmpty) {
+      _historyCache[threadId] = enriched;
     }
-    return snapshot;
+    return enriched;
   }
 
   @override
@@ -560,7 +579,7 @@ class GrokAcpAgentProvider implements AgentProvider {
     _runningTurnIdsBySessionId[session.id] = turnId;
     _lastTurnIdsBySessionId[session.id] = turnId;
     final turn = AgentTurn(id: turnId, sessionId: session.id);
-    _events.add(AgentTurnStartedEvent(turn));
+    _addEvent(AgentTurnStartedEvent(turn));
     _emitStatus(
       const AgentProviderStatus(
         state: AgentProviderConnectionState.running,
@@ -585,7 +604,7 @@ class GrokAcpAgentProvider implements AgentProvider {
             'end_turn';
         final status = _stopReasonToStatus(stopReason);
         _runningTurnIdsBySessionId.remove(session.id);
-        _events.add(
+        _addEvent(
           AgentTurnCompletedEvent(
             sessionId: session.id,
             turnId: turnId,
@@ -612,7 +631,7 @@ class GrokAcpAgentProvider implements AgentProvider {
       }
       _log.warning('session/prompt failed', error, stackTrace);
       if (stillRunning) {
-        _events.add(
+        _addEvent(
           AgentTurnCompletedEvent(
             sessionId: session.id,
             turnId: turnId,
@@ -621,7 +640,7 @@ class GrokAcpAgentProvider implements AgentProvider {
           ),
         );
       }
-      _events.add(
+      _addEvent(
         AgentErrorEvent(
           message: 'Grok prompt failed',
           details: error.toString(),
@@ -737,7 +756,7 @@ class GrokAcpAgentProvider implements AgentProvider {
         'Grok protocol warning (${error.message.length} characters)',
         error.cause,
       );
-      _events.add(
+      _addEvent(
         AgentErrorEvent(
           message: 'Grok protocol warning',
           details: error.toString(),
@@ -802,7 +821,7 @@ class GrokAcpAgentProvider implements AgentProvider {
 
   void _emitMapped(GrokAcpMappedUpdate mapped) {
     for (final event in mapped.events) {
-      _events.add(event);
+      _addEvent(_enrichUsageEvent(event));
     }
     final unmatched = mapped.unmatchedKind;
     if (unmatched != null &&
@@ -893,7 +912,7 @@ class GrokAcpAgentProvider implements AgentProvider {
           'Grok session $sessionId generated_title ready '
           '(${authoritative.length} characters)',
         );
-        _events.add(
+        _addEvent(
           AgentThreadNameUpdatedEvent(
             threadId: sessionId,
             threadName: authoritative,
@@ -922,7 +941,7 @@ class GrokAcpAgentProvider implements AgentProvider {
         'Grok session $sessionId falling back to session_summary '
         '(${fallback.length} characters)',
       );
-      _events.add(
+      _addEvent(
         AgentThreadNameUpdatedEvent(threadId: sessionId, threadName: fallback),
       );
     }
@@ -1032,7 +1051,7 @@ class GrokAcpAgentProvider implements AgentProvider {
       return;
     }
 
-    _events.add(AgentPermissionRequestedEvent(mapping.request));
+    _addEvent(AgentPermissionRequestedEvent(mapping.request));
 
     // 更新状态文案，避免 UI 看起来像「无响应卡住」。
     _emitStatus(
@@ -1129,16 +1148,69 @@ class GrokAcpAgentProvider implements AgentProvider {
   }
 
   void _applyModelsFromSessionPayload(Map<String, Object?> map) {
-    final list = parseAcpModelsPayload(map['models']);
+    _applyModelsPayload(map['models']);
+  }
+
+  /// 应用 initialize / session 返回的模型状态，并保留更完整的旧元数据。
+  void _applyModelsPayload(Object? payload) {
+    final list = parseAcpModelsPayload(payload);
     if (list == null || list.models.isEmpty) {
       return;
     }
-    _modelList = list;
-    _events.add(AgentModelListEvent(list));
+    final modelsMap = _asStringKeyedMap(payload);
+    _setModelList(
+      list,
+      currentModelId: modelsMap?['currentModelId']?.toString(),
+    );
+  }
+
+  void _setModelList(AgentModelList incoming, {String? currentModelId}) {
+    if (_disposed) {
+      return;
+    }
+    final previousById = <String, AgentModelInfo>{
+      for (final model in _modelList?.models ?? const <AgentModelInfo>[])
+        model.id: model,
+    };
+    final incomingIds = incoming.models.map((model) => model.id).toSet();
+    final merged = AgentModelList(
+      models: List<AgentModelInfo>.unmodifiable(<AgentModelInfo>[
+        ...incoming.models.map((model) {
+          final previous = previousById[model.id];
+          if (previous == null || model.contextWindowTokens != null) {
+            return model;
+          }
+          return AgentModelInfo(
+            id: model.id,
+            model: model.model,
+            displayName: model.displayName,
+            description: model.description ?? previous.description,
+            hidden: model.hidden,
+            supportedReasoningEfforts: model.supportedReasoningEfforts.isEmpty
+                ? previous.supportedReasoningEfforts
+                : model.supportedReasoningEfforts,
+            defaultReasoningEffort:
+                model.defaultReasoningEffort ?? previous.defaultReasoningEffort,
+            serviceTiers: model.serviceTiers.isEmpty
+                ? previous.serviceTiers
+                : model.serviceTiers,
+            defaultServiceTier:
+                model.defaultServiceTier ?? previous.defaultServiceTier,
+            isDefault: model.isDefault,
+            contextWindowTokens: previous.contextWindowTokens,
+            raw: model.raw,
+          );
+        }),
+        for (final previous in previousById.values)
+          if (!incomingIds.contains(previous.id)) previous,
+      ]),
+      nextCursor: incoming.nextCursor,
+    );
+    _modelList = merged;
+    _addEvent(AgentModelListEvent(merged));
 
     // 同步当前模型选择
-    final modelsMap = _asStringKeyedMap(map['models']);
-    final current = modelsMap?['currentModelId']?.toString();
+    final current = currentModelId?.trim();
     if (current != null &&
         current.isNotEmpty &&
         (_modelSelection.modelId == null || _modelSelection.modelId!.isEmpty)) {
@@ -1148,6 +1220,116 @@ class GrokAcpAgentProvider implements AgentProvider {
         serviceTierId: _modelSelection.serviceTierId,
       );
     }
+  }
+
+  AgentEvent _enrichUsageEvent(AgentEvent event) {
+    if (event is! AgentTokenUsageEvent ||
+        event.tokenUsage.modelContextWindow != null) {
+      return event;
+    }
+    final window = _contextWindowForModel();
+    if (window == null) {
+      return event;
+    }
+    return AgentTokenUsageEvent(
+      sessionId: event.sessionId,
+      turnId: event.turnId,
+      isSessionCumulative: event.isSessionCumulative,
+      tokenUsage: _withContextWindow(event.tokenUsage, window),
+      raw: event.raw,
+    );
+  }
+
+  AgentThreadHistorySnapshot _enrichHistorySnapshot(
+    AgentThreadHistorySnapshot snapshot,
+  ) {
+    final turns = <AgentHistoryTurn>[];
+    for (final turn in snapshot.turns) {
+      final usage = turn.tokenUsage;
+      final window =
+          turn.modelContextWindow ??
+          usage?.modelContextWindow ??
+          _contextWindowForModel(turn.model);
+      if (window == null) {
+        turns.add(turn);
+        continue;
+      }
+      turns.add(
+        AgentHistoryTurn(
+          id: turn.id,
+          entries: turn.entries,
+          status: turn.status,
+          startedAt: turn.startedAt,
+          completedAt: turn.completedAt,
+          duration: turn.duration,
+          timeToFirstToken: turn.timeToFirstToken,
+          cwd: turn.cwd,
+          model: turn.model,
+          modelContextWindow: window,
+          collaborationMode: turn.collaborationMode,
+          tokenUsage: usage == null ? null : _withContextWindow(usage, window),
+          tokenUsageIsSessionCumulative: turn.tokenUsageIsSessionCumulative,
+          errorMessage: turn.errorMessage,
+          errorCode: turn.errorCode,
+          raw: turn.raw,
+        ),
+      );
+    }
+    final currentTurnId = snapshot.currentTurn?.id;
+    AgentHistoryTurn? currentTurn;
+    if (currentTurnId != null) {
+      for (final turn in turns) {
+        if (turn.id == currentTurnId) {
+          currentTurn = turn;
+          break;
+        }
+      }
+    }
+    return AgentThreadHistorySnapshot(
+      threadId: snapshot.threadId,
+      turns: List<AgentHistoryTurn>.unmodifiable(turns),
+      currentTurn: currentTurn,
+      raw: snapshot.raw,
+    );
+  }
+
+  int? _contextWindowForModel([String? modelId]) {
+    final models = _modelList?.models ?? const <AgentModelInfo>[];
+    if (models.isEmpty) {
+      return null;
+    }
+    final target = modelId?.trim().isNotEmpty == true
+        ? modelId!.trim()
+        : _modelSelection.modelId?.trim();
+    if (target != null && target.isNotEmpty) {
+      for (final model in models) {
+        if (model.id == target || model.model == target) {
+          return model.contextWindowTokens;
+        }
+      }
+    }
+    for (final model in models) {
+      if (model.isDefault && model.contextWindowTokens != null) {
+        return model.contextWindowTokens;
+      }
+    }
+    return null;
+  }
+
+  AgentTokenUsage _withContextWindow(AgentTokenUsage usage, int window) {
+    return AgentTokenUsage(
+      inputTokens: usage.inputTokens,
+      cachedInputTokens: usage.cachedInputTokens,
+      outputTokens: usage.outputTokens,
+      reasoningOutputTokens: usage.reasoningOutputTokens,
+      totalTokens: usage.totalTokens,
+      lastInputTokens: usage.lastInputTokens,
+      lastCachedInputTokens: usage.lastCachedInputTokens,
+      lastOutputTokens: usage.lastOutputTokens,
+      lastReasoningOutputTokens: usage.lastReasoningOutputTokens,
+      lastTotalTokens: usage.lastTotalTokens,
+      modelContextWindow: usage.modelContextWindow ?? window,
+    );
   }
 
   Future<void> _applyModelSelectionIfNeeded(String sessionId) async {
@@ -1188,7 +1370,7 @@ class GrokAcpAgentProvider implements AgentProvider {
   }
 
   void _emitStatus(AgentProviderStatus status) {
-    _events.add(AgentStatusEvent(status));
+    _addEvent(AgentStatusEvent(status));
   }
 
   void _emitUnavailable(String message, {String? details}) {
@@ -1199,7 +1381,15 @@ class GrokAcpAgentProvider implements AgentProvider {
         details: details,
       ),
     );
-    _events.add(AgentErrorEvent(message: message, details: details));
+    _addEvent(AgentErrorEvent(message: message, details: details));
+  }
+
+  /// provider 切换时异步任务可能晚于 dispose 返回；关闭后禁止再写事件流。
+  void _addEvent(AgentEvent event) {
+    if (_disposed || _events.isClosed) {
+      return;
+    }
+    _events.add(event);
   }
 
   Map<String, Object?>? _asStringKeyedMap(Object? value) {

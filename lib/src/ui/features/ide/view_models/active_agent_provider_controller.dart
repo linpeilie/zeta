@@ -297,9 +297,29 @@ class ActiveAgentProviderController extends ChangeNotifier {
 
   Future<AgentProvider> _createProvider() async {
     final existing = _provider;
+    _provider = null;
     await existing?.dispose();
-    _log.fine('Creating shared Agent provider: ${_settings.activeProvider.id}');
-    final provider = providerFactory.create(_settings.activeProvider);
+    final expectedConfig = _settings.activeProvider;
+    _log.fine('Creating shared Agent provider: ${expectedConfig.id}');
+    final provider = providerFactory.create(expectedConfig);
+    final actualProviderId = provider.config.id;
+    if (actualProviderId != expectedConfig.id) {
+      // factory 身份错配会让 activeProvider 的调用方不断尝试重建实例；尽早失败，
+      // 避免通知/微任务循环持续占用 CPU 和内存。
+      try {
+        await provider.dispose();
+      } catch (error, stackTrace) {
+        _log.warning(
+          'Could not dispose mismatched Agent provider $actualProviderId',
+          error,
+          stackTrace,
+        );
+      }
+      throw StateError(
+        'AgentProviderFactory returned $actualProviderId for '
+        '${expectedConfig.id}',
+      );
+    }
     _provider = provider;
     _notify();
     return provider;

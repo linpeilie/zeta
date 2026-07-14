@@ -81,6 +81,19 @@ void main() {
       expect(tool.content, contains('found 42 matches'));
     });
 
+    test('restores model id and explicit context window from updates', () {
+      const content = r'''
+{"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"session_info_update","modelId":"grok-4.5"}}}
+{"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"hello"}},"_meta":{"eventId":"u1"}}}
+{"method":"_x.ai/session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"turn_completed","stop_reason":"end_turn","usage":{"inputTokens":10,"outputTokens":4,"totalTokens":14,"totalContextTokens":500000}},"_meta":{"eventId":"done"}}}
+''';
+
+      final turn = parser.parse(threadId: 's1', content: content).turns.single;
+
+      expect(turn.model, 'grok-4.5');
+      expect(turn.tokenUsage?.modelContextWindow, 500000);
+    });
+
     test('maps plan entries to plan messages', () {
       const content = r'''
 {"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"plan this"}},"_meta":{"eventId":"u1"}}}
