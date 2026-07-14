@@ -139,8 +139,8 @@ windows/
    发生变化，应返回更精确的动态 capabilities。
 3. 把 provider 原始事件映射成 `AgentEvent`、`AgentToolCall`、
    `AgentPermissionRequest`、`AgentThreadSummary`、`AgentSessionConfigOption` 等中立模型。
-4. ACP provider 优先复用 `AcpSessionUpdateMapper`、`AcpPermissionMapper` 和
-   `AcpContentCodec`；厂商通知单独留在薄适配层。
+4. ACP provider 优先复用 `AcpSessionUpdateMapper`、`AcpPermissionMapper`、
+   `AcpContentCodec` 和 `AcpSessionConfigMapper`；厂商通知与阻塞扩展单独留在薄适配层。
 5. 在 factory 中接入 provider kind。
 6. 添加单元测试覆盖初始化、session、turn、权限请求、capability gate 和错误映射。
 
@@ -160,8 +160,12 @@ Cursor 适配还必须遵守以下约束：
 - `CursorAcpAgentProvider` 必须先获得绝对 workspace，进程 cwd 与 session cwd 保持一致；
   切换 workspace 必须销毁并重建 peer。
 - 管理页连接测试只执行 initialize/authenticate，不得创建 session 或发送 prompt。
-- 未识别的服务端 request 必须返回 JSON-RPC `-32601`；权限请求在拒绝、取消和 dispose
-  时都必须回包，避免 turn 永久等待。
+- session 配置必须以服务端返回的完整 `configOptions` 快照为准；只展示已支持的 select /
+  boolean 类型，未知类型应安全忽略，旧服务端仅在缺少 config options 时回退 modes。
+- `cursor/*` payload 必须经 Cursor 扩展 mapper 转为中立领域事件，不得在 widget 中解析；
+  提问与计划审批保持独立响应语义。
+- 未识别的服务端 request 必须返回 JSON-RPC `-32601`；权限、提问和计划请求在超时、拒绝、
+  取消、workspace 切换和 dispose 时都必须回包并清理 pending state，避免 turn 永久等待。
 
 修改 Codex 适配层前，先对照
 [`third_party/codex_app_server_schema`](../third_party/codex_app_server_schema/)

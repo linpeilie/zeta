@@ -415,6 +415,147 @@ String _toolCardTitle(AgentToolCall toolCall) {
 /// 审批卡片。
 ///
 /// 用户点击后 ViewModel 会把 approve/deny 回写给 provider。
+/// Cursor 等 provider 的独立计划审批卡片。
+class _AgentPlanApprovalCard extends StatelessWidget {
+  const _AgentPlanApprovalCard({
+    required this.request,
+    required this.onRespond,
+  });
+
+  final AgentPlanApprovalRequest request;
+  final ValueChanged<AgentPlanApprovalDecisionKind> onRespond;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    return IdeStatusCard(
+      tone: IdeStatusCardTone.warning,
+      title: request.title,
+      leading: Icon(
+        Icons.account_tree_outlined,
+        size: 16,
+        color: colors.warning,
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (request.overview case final overview?
+              when overview.trim().isNotEmpty) ...[
+            Text(
+              overview,
+              style: textStyles.bodyMedium.copyWith(
+                color: colors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: IdeSpacing.space8),
+          ],
+          if (request.markdown.trim().isNotEmpty)
+            _AgentMarkdownBody(data: request.markdown),
+          if (request.todos.isNotEmpty) ...[
+            const SizedBox(height: IdeSpacing.space8),
+            _AgentPlanTodoList(title: 'Todos', todos: request.todos),
+          ],
+          for (final phase in request.phases) ...[
+            const SizedBox(height: IdeSpacing.space8),
+            _AgentPlanTodoList(title: phase.name, todos: phase.todos),
+          ],
+        ],
+      ),
+      footer: Wrap(
+        alignment: WrapAlignment.end,
+        spacing: IdeSpacing.space8,
+        runSpacing: IdeSpacing.space6,
+        children: [
+          sf.GhostButton(
+            key: ValueKey<String>('agent-plan-cancel-${request.id}'),
+            onPressed: () => onRespond(AgentPlanApprovalDecisionKind.cancelled),
+            size: sf.ButtonSize.small,
+            child: const Text('Cancel turn'),
+          ),
+          sf.OutlineButton(
+            key: ValueKey<String>('agent-plan-reject-${request.id}'),
+            onPressed: () => onRespond(AgentPlanApprovalDecisionKind.rejected),
+            size: sf.ButtonSize.small,
+            child: const Text('Reject'),
+          ),
+          sf.PrimaryButton(
+            key: ValueKey<String>('agent-plan-accept-${request.id}'),
+            onPressed: () => onRespond(AgentPlanApprovalDecisionKind.accepted),
+            size: sf.ButtonSize.small,
+            leading: const Icon(Icons.check_rounded, size: 16),
+            child: const Text('Accept plan'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AgentPlanTodoList extends StatelessWidget {
+  const _AgentPlanTodoList({required this.title, required this.todos});
+
+  final String title;
+  final List<AgentPlanEntry> todos;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: textStyles.bodySmall.copyWith(
+            color: colors.textTertiary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: IdeSpacing.space4),
+        for (final todo in todos)
+          Padding(
+            padding: const EdgeInsets.only(bottom: IdeSpacing.space2),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  _planTodoIcon(todo.status),
+                  size: 14,
+                  color: todo.status == 'completed'
+                      ? colors.success
+                      : colors.textTertiary,
+                ),
+                const SizedBox(width: IdeSpacing.space6),
+                Expanded(
+                  child: Text(
+                    todo.content,
+                    style: textStyles.bodySmall.copyWith(
+                      color: colors.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+IconData _planTodoIcon(String? status) {
+  return switch (status) {
+    'completed' => Icons.check_circle_outline_rounded,
+    'in_progress' => Icons.radio_button_checked_rounded,
+    'cancelled' => Icons.cancel_outlined,
+    _ => Icons.radio_button_unchecked_rounded,
+  };
+}
+
 class _AgentPermissionCard extends StatefulWidget {
   const _AgentPermissionCard({
     required this.request,
@@ -553,6 +694,13 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
         spacing: IdeSpacing.space8,
         runSpacing: IdeSpacing.space6,
         children: [
+          sf.GhostButton(
+            key: ValueKey('agent-permission-cancel-${request.id}'),
+            onPressed: () =>
+                widget.onRespond(approved: false, cancelTurn: true),
+            size: sf.ButtonSize.small,
+            child: const Text('Cancel turn'),
+          ),
           sf.OutlineButton(
             key: ValueKey('agent-permission-deny-${request.id}'),
             onPressed: () => widget.onRespond(
@@ -653,6 +801,13 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
         spacing: IdeSpacing.space8,
         runSpacing: IdeSpacing.space6,
         children: [
+          sf.GhostButton(
+            key: ValueKey('agent-permission-cancel-${request.id}'),
+            onPressed: () =>
+                widget.onRespond(approved: false, cancelTurn: true),
+            size: sf.ButtonSize.small,
+            child: const Text('Cancel turn'),
+          ),
           sf.OutlineButton(
             key: ValueKey('agent-permission-deny-${request.id}'),
             onPressed: () => widget.onRespond(approved: false),

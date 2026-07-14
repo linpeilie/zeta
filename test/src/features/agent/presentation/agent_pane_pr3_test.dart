@@ -641,6 +641,112 @@ void main() {
         'tests',
       ]);
     });
+
+    testWidgets(
+      'renders dynamic session config options and sends stable values',
+      (tester) async {
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(provider.dispose);
+        addTearDown(viewModel.dispose);
+        await tester.pumpWidget(_TestApp(viewModel: viewModel));
+        await viewModel.loadModels();
+        await viewModel.switchThread(
+          _thread(id: 'thread-config', title: 'Config thread'),
+        );
+        provider.emitEvent(
+          const AgentSessionConfigUpdatedEvent(
+            sessionId: 'thread-config',
+            options: <AgentSessionConfigOption>[
+              AgentSessionConfigOption(
+                id: 'cursor-model',
+                name: 'Model',
+                category: 'model',
+                kind: AgentSessionConfigOptionKind.select,
+                currentValue: 'fast',
+                values: <AgentSessionConfigValue>[
+                  AgentSessionConfigValue(id: 'fast', label: 'Fast'),
+                  AgentSessionConfigValue(id: 'smart', label: 'Smart'),
+                ],
+              ),
+            ],
+          ),
+        );
+        await tester.pump();
+
+        expect(
+          find.byKey(const ValueKey('agent-session-config-cursor-model')),
+          findsOneWidget,
+        );
+        expect(find.text('Fast'), findsOneWidget);
+        await tester.tap(
+          find.byKey(const ValueKey('agent-session-config-cursor-model')),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.tap(
+          find.byKey(
+            const ValueKey('agent-session-config-cursor-model-option-smart'),
+          ),
+        );
+        await tester.pump();
+
+        expect(provider.sessionConfigSelections, <(String, String, Object)>[
+          ('thread-config', 'cursor-model', 'smart'),
+        ]);
+      },
+    );
+
+    testWidgets('renders and accepts an independent plan approval card', (
+      tester,
+    ) async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(provider.dispose);
+      addTearDown(viewModel.dispose);
+      await tester.pumpWidget(_TestApp(viewModel: viewModel));
+      await viewModel.loadModels();
+      await viewModel.switchThread(
+        _thread(id: 'thread-plan', title: 'Plan thread'),
+      );
+      provider.emitEvent(
+        const AgentPlanApprovalRequestedEvent(
+          AgentPlanApprovalRequest(
+            id: 'plan-1',
+            title: 'Refactor tabs',
+            overview: 'Preserve behavior',
+            markdown: '1. Inspect\n2. Update',
+            todos: <AgentPlanEntry>[
+              AgentPlanEntry(
+                id: 'todo-1',
+                content: 'Inspect current layout',
+                status: 'completed',
+              ),
+            ],
+            sessionId: 'thread-plan',
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Refactor tabs'), findsOneWidget);
+      expect(find.text('Inspect current layout'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('agent-plan-accept-plan-1')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('agent-plan-accept-plan-1')));
+      await tester.pump();
+
+      expect(
+        provider.planDecisions.single.kind,
+        AgentPlanApprovalDecisionKind.accepted,
+      );
+      expect(
+        find.byKey(const ValueKey('agent-plan-accept-plan-1')),
+        findsNothing,
+      );
+    });
   });
 }
 
@@ -804,7 +910,10 @@ class _FakeAgentProviderFactory implements AgentProviderFactory {
 
 class _FakeAgentProvider
     with AgentProviderThreadLifecycleStub
-    implements AgentProvider {
+    implements
+        AgentProvider,
+        AgentSessionConfigProvider,
+        AgentPlanApprovalProvider {
   _FakeAgentProvider({
     Map<String, AgentThreadHistorySnapshot> historySnapshotsByThread =
         const <String, AgentThreadHistorySnapshot>{},
@@ -819,6 +928,10 @@ class _FakeAgentProvider
       StreamController<AgentEvent>.broadcast();
   final List<AgentPermissionDecision> permissionDecisions =
       <AgentPermissionDecision>[];
+  final List<(String, String, Object)> sessionConfigSelections =
+      <(String, String, Object)>[];
+  final List<AgentPlanApprovalDecision> planDecisions =
+      <AgentPlanApprovalDecision>[];
 
   void emitEvent(AgentEvent event) {
     _events.add(event);
@@ -926,6 +1039,25 @@ class _FakeAgentProvider
   @override
   Future<void> respondToPermission(AgentPermissionDecision decision) async {
     permissionDecisions.add(decision);
+  }
+
+  @override
+  List<AgentSessionConfigOption> sessionConfigOptions(String sessionId) {
+    return const <AgentSessionConfigOption>[];
+  }
+
+  @override
+  Future<void> setSessionConfigOption({
+    required String sessionId,
+    required String configId,
+    required Object value,
+  }) async {
+    sessionConfigSelections.add((sessionId, configId, value));
+  }
+
+  @override
+  Future<void> respondToPlanApproval(AgentPlanApprovalDecision decision) async {
+    planDecisions.add(decision);
   }
 
   @override

@@ -145,6 +145,22 @@ abstract interface class AgentLocalThreadListProvider {
   Future<void> removeThreadFromList(String threadId);
 }
 
+/// 支持 session 动态配置的 provider 可选接口。
+abstract interface class AgentSessionConfigProvider {
+  List<AgentSessionConfigOption> sessionConfigOptions(String sessionId);
+
+  Future<void> setSessionConfigOption({
+    required String sessionId,
+    required String configId,
+    required Object value,
+  });
+}
+
+/// 支持独立计划审批的 provider 可选接口。
+abstract interface class AgentPlanApprovalProvider {
+  Future<void> respondToPlanApproval(AgentPlanApprovalDecision decision);
+}
+
 /// 根据 provider 配置创建具体实现。
 ///
 /// 测试可以注入 fake factory，生产环境使用默认 factory。

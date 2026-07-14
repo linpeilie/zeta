@@ -18,7 +18,15 @@ enum AgentToolStatus { pending, inProgress, completed, failed, cancelled }
 
 /// 计划列表中的单个条目。
 class AgentPlanEntry {
-  const AgentPlanEntry({required this.content, this.status, this.priority});
+  const AgentPlanEntry({
+    required this.content,
+    this.id,
+    this.status,
+    this.priority,
+  });
+
+  /// Provider 提供的稳定 todo id；旧 ACP plan 条目可以为空。
+  final String? id;
 
   /// 计划条目内容。
   final String content;

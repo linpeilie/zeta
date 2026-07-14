@@ -157,17 +157,19 @@ Codex provider 通过 JSON-RPC stdio 通信，把 `thread/*`、`turn/*` 和 `ite
 事件转换为领域层 `AgentEvent`。UI 不直接处理 Codex 原始协议。
 
 Grok provider 使用 ACP stdio、本地历史和 xAI 扩展。标准 ACP
-`session/update`、permission 和 content block 已分别下沉到
-`AcpSessionUpdateMapper`、`AcpPermissionMapper` 与 `AcpContentCodec`；
+`session/update`、permission、content block 和 session config 已分别下沉到
+`AcpSessionUpdateMapper`、`AcpPermissionMapper`、`AcpContentCodec` 与
+`AcpSessionConfigMapper`；
 `GrokAcpNotificationMapper` 只保留厂商扩展适配。session config option 与带稳定 id、
 可多选的用户问答选项使用中立领域模型，供后续 ACP provider 共用。
 
 Cursor provider 使用官方 `agent acp`，启动前由 `CursorCliLocator` 组合校验产品标识、
 版本输出和 ACP 帮助，不能仅凭通用 basename `agent` 判定身份。provider 进程与 workspace
 绑定：首次创建 session 时在项目目录启动，切换项目即关闭旧 peer 并重新 initialize /
-authenticate。Phase 2 已支持 `session/new`、文本 prompt、标准流式消息/思考/工具/计划、
-权限响应、取消、错误和进程早退；图片与 resource 入口只有握手明确声明 capability 后才
-开放。session 列表、历史恢复和动态 config options 留在后续阶段。
+authenticate。Phase 2–4 已支持核心对话、权限响应与取消、本地 session 索引、
+`session/load` 历史恢复、动态 config options、legacy mode 回退，以及 Cursor 提问、计划、
+todo、子任务和图片状态扩展。阻塞请求在超时、turn cancel、workspace 切换、进程退出和
+provider dispose 时统一收尾；图片与 resource 入口只有握手明确声明 capability 后才开放。
 
 ### 管理适配
 
@@ -259,7 +261,8 @@ IDE 会话状态目前版本为 2，持久化内容包括：
 - Agent 模型 JSON 编解码和宽容读取。
 - JSON-RPC stdio transport。
 - Codex provider 事件映射。
-- Cursor CLI 身份冲突、workspace peer 重建、ACP 流式映射、权限拒绝/取消和进程早退。
+- Cursor CLI 身份冲突、workspace peer 重建、session 索引与恢复、ACP 流式映射、动态配置、
+  权限/提问/计划响应，以及超时、取消、dispose 和进程早退收尾。
 - AgentConversationViewModel 状态机。
 - Agent 管理的版本比较、配置校验/冲突/备份、日志脱敏和禁用只读联动。
 - ProjectThreadsController 和 ProjectThreadsViewModel 的分页、缓存、选择和错误状态分工。
@@ -270,7 +273,7 @@ IDE 会话状态目前版本为 2，持久化内容包括：
 ## 10. 演进方向
 
 - Codex 适配 Phase 2：thread 重命名/归档/删除/分叉/回滚/压缩，以及审批表单与策略预设（见适配计划）。
-- 完成 Cursor session 索引、历史恢复、动态模型/模式与阻塞扩展。
+- 完成 Cursor 配置安全编辑、脱敏诊断与 Beta 兼容告警。
 - 增加文件内容预览或编辑器能力。
 - 增加 Agent 执行审计记录。
 - 支持更多 Agent provider。

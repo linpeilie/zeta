@@ -87,6 +87,9 @@ class AgentConversationViewModel extends ChangeNotifier {
   /// 最近一次模型改道的目标模型；用于头栏短暂提示。
   String? _modelRerouteNotice;
 
+  List<AgentSessionConfigOption> _sessionConfigOptions =
+      const <AgentSessionConfigOption>[];
+
   /// 是否正在执行上下文压缩。
   bool _isCompacting = false;
 
@@ -121,6 +124,9 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   List<AgentPermissionRequest> get permissionRequests =>
       _timeline.permissionRequests;
+
+  List<AgentPlanApprovalRequest> get planApprovalRequests =>
+      _timeline.planApprovalRequests;
 
   List<AgentTimelineEntry> get timelineEntries => _timeline.timelineEntries;
 
@@ -220,6 +226,17 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   List<AgentModelInfo> get models => _modelSelectionController.models;
 
+  /// 当前 session 可直接渲染的动态配置；未知类型按 ACP 约定忽略。
+  List<AgentSessionConfigOption> get sessionConfigOptions =>
+      List<AgentSessionConfigOption>.unmodifiable(
+        _sessionConfigOptions.where(
+          (option) =>
+              (option.kind == AgentSessionConfigOptionKind.select &&
+                  option.values.isNotEmpty) ||
+              option.kind == AgentSessionConfigOptionKind.boolean,
+        ),
+      );
+
   AgentModelInfo? get selectedModel => _modelSelectionController.selectedModel;
 
   String? get selectedModelId => _modelSelectionController.selectedModelId;
@@ -296,6 +313,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     _permissionSelectionController.resetForProvider(config);
     // 切换后清空当前会话草稿，避免跨协议 thread id 混用。
     _session = null;
+    _sessionConfigOptions = const <AgentSessionConfigOption>[];
     _restoredSessionId = null;
     _selectedProviderId = providerId;
     _requiresResumedSelectedThread = false;
@@ -670,6 +688,34 @@ class AgentConversationViewModel extends ChangeNotifier {
     _publishUiChanges(composer: true);
   }
 
+  Future<void> selectSessionConfigOption(String configId, Object value) async {
+    final sessionId = _selectedThreadId;
+    final provider = _provider;
+    if (sessionId == null || provider is! AgentSessionConfigProvider) {
+      return;
+    }
+    final configProvider = provider as AgentSessionConfigProvider;
+    try {
+      await configProvider.setSessionConfigOption(
+        sessionId: sessionId,
+        configId: configId,
+        value: value,
+      );
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Could not update Agent session config $configId',
+        error,
+        stackTrace,
+      );
+      _status = AgentProviderStatus(
+        state: AgentProviderConnectionState.error,
+        message: 'Could not update session option',
+        details: error.toString(),
+      );
+      _publishUiChanges(header: true, composer: true);
+    }
+  }
+
   void _handleModelList(AgentModelList modelList) {
     _modelSelectionController.handleModelList(modelList);
     _publishUiChanges(composer: true);
@@ -711,6 +757,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       _flushPendingStreamChangesNow();
       _threadSwitchToken += 1;
       _session = null;
+      _sessionConfigOptions = const <AgentSessionConfigOption>[];
       _restoredSessionId = effectiveRestoredSessionId;
       _selectedProviderId = effectiveRestoredSessionId == null
           ? null
@@ -923,6 +970,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       );
       if (!canSwitch) {
         _session = null;
+        _sessionConfigOptions = const <AgentSessionConfigOption>[];
         _restoredSessionId = thread.id;
         _selectedProviderId = thread.providerId;
         _requiresResumedSelectedThread = true;
@@ -948,6 +996,7 @@ class AgentConversationViewModel extends ChangeNotifier {
           stackTrace,
         );
         _session = null;
+        _sessionConfigOptions = const <AgentSessionConfigOption>[];
         _restoredSessionId = thread.id;
         _selectedProviderId = thread.providerId;
         _requiresResumedSelectedThread = true;
@@ -968,6 +1017,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     final previousThreadId = _selectedThreadId;
     _flushPendingStreamChangesNow();
     _session = null;
+    _sessionConfigOptions = const <AgentSessionConfigOption>[];
     _restoredSessionId = thread.id;
     _selectedProviderId = thread.providerId;
     _requiresResumedSelectedThread = true;
@@ -1066,6 +1116,22 @@ class AgentConversationViewModel extends ChangeNotifier {
         commandDecision: commandDecision,
         execpolicyAmendment: execpolicyAmendment,
       ),
+    );
+  }
+
+  Future<void> respondToPlanApproval(
+    AgentPlanApprovalRequest request,
+    AgentPlanApprovalDecisionKind kind,
+  ) async {
+    _timeline.removePlanApprovalRequest(request.id);
+    _publishUiChanges(history: true, liveTurn: true);
+    final provider = _provider;
+    if (provider is! AgentPlanApprovalProvider) {
+      return;
+    }
+    final planProvider = provider as AgentPlanApprovalProvider;
+    await planProvider.respondToPlanApproval(
+      AgentPlanApprovalDecision(requestId: request.id, kind: kind),
     );
   }
 
@@ -1340,6 +1406,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     _provider = null;
     // 旧 backend 上的 live session 不可复用。
     _session = null;
+    _sessionConfigOptions = const <AgentSessionConfigOption>[];
     final config = providerController.activeProviderConfig;
     _modelSelectionController.resetForProvider(config);
     _permissionSelectionController.resetForProvider(config);
@@ -1646,6 +1713,12 @@ class AgentConversationViewModel extends ChangeNotifier {
         }
         _timeline.upsertPlanMessage(event);
         _flushStreamChangesNow(liveTurn: true, autoScroll: true);
+      case AgentSessionConfigUpdatedEvent():
+        if (!_shouldHandleEventForCurrentThread(sessionId: event.sessionId)) {
+          break;
+        }
+        _sessionConfigOptions = event.options;
+        _publishUiChanges(composer: true);
       case AgentTurnDiffEvent():
         if (!_shouldHandleEventForCurrentThread(
           sessionId: event.sessionId,
@@ -1697,6 +1770,21 @@ class AgentConversationViewModel extends ChangeNotifier {
           break;
         }
         _timeline.removePermissionRequest(event.requestId);
+        _flushStreamChangesNow(liveTurn: true, autoScroll: true);
+      case AgentPlanApprovalRequestedEvent():
+        if (!_shouldHandleEventForCurrentThread(
+          sessionId: event.request.sessionId,
+          turnId: event.request.turnId,
+        )) {
+          break;
+        }
+        _timeline.addPlanApprovalRequest(event.request);
+        _flushStreamChangesNow(liveTurn: true, autoScroll: true);
+      case AgentPlanApprovalResolvedEvent():
+        if (!_shouldHandleEventForCurrentThread(sessionId: event.sessionId)) {
+          break;
+        }
+        _timeline.removePlanApprovalRequest(event.requestId);
         _flushStreamChangesNow(liveTurn: true, autoScroll: true);
       case AgentModelReroutedEvent():
         if (!_shouldHandleEventForCurrentThread(

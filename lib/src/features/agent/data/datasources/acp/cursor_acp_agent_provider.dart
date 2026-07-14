@@ -9,7 +9,9 @@ import 'package:zeta/src/features/agent/data/datasources/acp/cursor_process_star
 import 'package:zeta/src/features/agent/data/datasources/acp/cursor_session_index_store.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
 import 'package:zeta/src/features/agent/data/mappers/acp_permission_mapper.dart';
+import 'package:zeta/src/features/agent/data/mappers/acp_session_config_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/acp_session_update_mapper.dart';
+import 'package:zeta/src/features/agent/data/mappers/cursor_acp_extension_mapper.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 
@@ -23,19 +25,29 @@ typedef CursorJsonRpcPeerFactory =
 ///
 /// 进程严格绑定单个工作区；切换工作区时会关闭旧 peer、取消挂起审批并重新握手。
 class CursorAcpAgentProvider
-    implements AgentProvider, AgentLocalThreadListProvider {
+    implements
+        AgentProvider,
+        AgentLocalThreadListProvider,
+        AgentSessionConfigProvider,
+        AgentPlanApprovalProvider {
   CursorAcpAgentProvider({
     required this.config,
     JsonRpcPeer? peer,
     CursorJsonRpcPeerFactory? peerFactory,
     AcpSessionUpdateMapper? notificationMapper,
+    AcpSessionConfigMapper? sessionConfigMapper,
+    CursorAcpExtensionMapper? extensionMapper,
     CursorSessionIndexStore? sessionIndexStore,
     DateTime Function()? clock,
     String? initialWorkspace,
+    this.blockingRequestTimeout = const Duration(minutes: 5),
   }) : _injectedPeer = peer,
        _peerFactory = peerFactory ?? createDefaultPeer,
        _notificationMapper =
            notificationMapper ?? const AcpSessionUpdateMapper(),
+       _sessionConfigMapper =
+           sessionConfigMapper ?? const AcpSessionConfigMapper(),
+       _extensionMapper = extensionMapper ?? CursorAcpExtensionMapper(),
        _sessionIndexStore =
            sessionIndexStore ?? SharedPreferencesCursorSessionIndexStore(),
        _clock = clock ?? DateTime.now,
@@ -61,12 +73,19 @@ class CursorAcpAgentProvider
   final JsonRpcPeer? _injectedPeer;
   final CursorJsonRpcPeerFactory _peerFactory;
   final AcpSessionUpdateMapper _notificationMapper;
+  final AcpSessionConfigMapper _sessionConfigMapper;
+  final CursorAcpExtensionMapper _extensionMapper;
   final CursorSessionIndexStore _sessionIndexStore;
   final DateTime Function() _clock;
+  final Duration blockingRequestTimeout;
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
   final Map<String, _PendingCursorPermission> _pendingPermissions =
       <String, _PendingCursorPermission>{};
+  final Map<String, _PendingCursorQuestion> _pendingQuestions =
+      <String, _PendingCursorQuestion>{};
+  final Map<String, _PendingCursorPlan> _pendingPlans =
+      <String, _PendingCursorPlan>{};
   final Map<String, String> _runningTurnIdsBySessionId = <String, String>{};
   final Set<String> _loggedUnknownNotifications = <String>{};
   final Map<String, AcpSessionReplayCollector> _replayCollectors =
@@ -76,6 +95,9 @@ class CursorAcpAgentProvider
   final Map<String, _LoadedCursorSession> _loadedSessions =
       <String, _LoadedCursorSession>{};
   final Map<String, String?> _sessionTitles = <String, String?>{};
+  final Map<String, List<AgentSessionConfigOption>> _sessionConfigOptions =
+      <String, List<AgentSessionConfigOption>>{};
+  final Set<String> _legacyModeSessions = <String>{};
   final Random _random = Random();
 
   JsonRpcPeer? _peer;
@@ -149,6 +171,11 @@ class CursorAcpAgentProvider
               'writeTextFile': false,
             },
             'terminal': false,
+            'session': <String, Object?>{
+              'configOptions': <String, Object?>{
+                'boolean': <String, Object?>{},
+              },
+            },
           },
           'clientInfo': <String, Object?>{
             'name': 'zeta',
@@ -287,6 +314,7 @@ class CursorAcpAgentProvider
         createdAt: _clock(),
       );
       _events.add(AgentSessionStartedEvent(session));
+      _applySessionSetup(sessionId: sessionId, payload: payload);
       _emitStatus(
         AgentProviderStatus(
           state: AgentProviderConnectionState.ready,
@@ -413,6 +441,81 @@ class CursorAcpAgentProvider
   }) async {
     // Cursor 模型来自 session config options；Phase 2 不创建探测 session 污染历史。
     return const AgentModelList(models: <AgentModelInfo>[]);
+  }
+
+  @override
+  List<AgentSessionConfigOption> sessionConfigOptions(String sessionId) {
+    return _sessionConfigOptions[sessionId] ??
+        const <AgentSessionConfigOption>[];
+  }
+
+  @override
+  Future<void> setSessionConfigOption({
+    required String sessionId,
+    required String configId,
+    required Object value,
+  }) async {
+    final options = sessionConfigOptions(sessionId);
+    AgentSessionConfigOption? option;
+    for (final candidate in options) {
+      if (candidate.id == configId) {
+        option = candidate;
+        break;
+      }
+    }
+    if (option == null) {
+      throw StateError('Cursor session 不存在配置项：$configId');
+    }
+    if (option.kind == AgentSessionConfigOptionKind.select &&
+        !option.values.any((item) => item.id == value)) {
+      throw ArgumentError.value(value, 'value', '不是服务端提供的配置值');
+    }
+    if (option.kind == AgentSessionConfigOptionKind.boolean && value is! bool) {
+      throw ArgumentError.value(value, 'value', '布尔配置必须使用 bool');
+    }
+    if (_session?.id != sessionId && !_loadedSessions.containsKey(sessionId)) {
+      throw StateError('Cursor session 尚未在当前工作区加载');
+    }
+    await initialize();
+
+    if (_legacyModeSessions.contains(sessionId) &&
+        (option.category == 'mode' || option.id == 'mode')) {
+      await _requirePeer().sendRequest(
+        'session/set_mode',
+        params: <String, Object?>{'sessionId': sessionId, 'modeId': value},
+        timeout: _requestTimeout,
+      );
+      _applyConfigOptions(
+        sessionId: sessionId,
+        options: _sessionConfigMapper.applyCurrentMode(options, value),
+        usesLegacyModes: true,
+      );
+      return;
+    }
+
+    final result = await _requirePeer().sendRequest(
+      'session/set_config_option',
+      params: <String, Object?>{
+        'sessionId': sessionId,
+        'configId': configId,
+        if (option.kind == AgentSessionConfigOptionKind.boolean)
+          'type': 'boolean',
+        'value': value,
+      },
+      timeout: _requestTimeout,
+    );
+    final payload = _asMap(result);
+    final updated = _sessionConfigMapper.tryMapConfigOptions(
+      payload?['configOptions'],
+    );
+    if (updated == null) {
+      throw StateError('Cursor ACP set_config_option 未返回完整 configOptions');
+    }
+    _applyConfigOptions(
+      sessionId: sessionId,
+      options: updated,
+      usesLegacyModes: false,
+    );
   }
 
   @override
@@ -646,35 +749,92 @@ class CursorAcpAgentProvider
       'session/cancel',
       params: <String, Object?>{'sessionId': turn.sessionId},
     );
-    await _cancelPendingPermissions(peer);
+    await _cancelPendingInteractions(peer);
   }
 
   @override
   Future<void> respondToPermission(AgentPermissionDecision decision) async {
     final pending = _pendingPermissions.remove(decision.requestId);
-    if (pending == null) {
-      _log.warning('Ignoring unknown Cursor permission ${decision.requestId}');
+    if (pending != null) {
+      pending.timer.cancel();
+      if (decision.cancelTurn) {
+        await _respondPermissionCancelled(_requirePeer(), pending);
+        return;
+      }
+      final optionId = pending.mapping.preferredOptionId(
+        approved: decision.approved,
+      );
+      if (optionId == null) {
+        await _respondPermissionCancelled(_requirePeer(), pending);
+        return;
+      }
+      await _requirePeer().sendResponse(
+        pending.requestId,
+        result: <String, Object?>{
+          'outcome': <String, Object?>{
+            'outcome': 'selected',
+            'optionId': optionId,
+          },
+        },
+      );
       return;
     }
-    if (decision.cancelTurn) {
-      await _respondPermissionCancelled(_requirePeer(), pending);
+
+    final question = _pendingQuestions.remove(decision.requestId);
+    if (question == null) {
+      _log.warning('Ignoring unknown Cursor interaction ${decision.requestId}');
       return;
     }
-    final optionId = pending.mapping.preferredOptionId(
-      approved: decision.approved,
+    question.timer.cancel();
+    final outcome = decision.cancelTurn
+        ? <String, Object?>{'outcome': 'cancelled'}
+        : !decision.approved
+        ? <String, Object?>{
+            'outcome': 'skipped',
+            if (decision.message?.trim().isNotEmpty ?? false)
+              'reason': decision.message!.trim(),
+          }
+        : <String, Object?>{
+            'outcome': 'answered',
+            'answers': <Map<String, Object?>>[
+              for (final item in question.request.questions)
+                <String, Object?>{
+                  'questionId': item.questionId,
+                  'selectedOptionIds':
+                      decision.answers[item.questionId] ?? const <String>[],
+                },
+            ],
+          };
+    await _requirePeer().sendResponse(
+      question.requestId,
+      result: <String, Object?>{'outcome': outcome},
     );
-    if (optionId == null) {
-      await _respondPermissionCancelled(_requirePeer(), pending);
+  }
+
+  @override
+  Future<void> respondToPlanApproval(AgentPlanApprovalDecision decision) async {
+    final pending = _pendingPlans.remove(decision.requestId);
+    if (pending == null) {
+      _log.warning('Ignoring unknown Cursor plan ${decision.requestId}');
       return;
     }
+    pending.timer.cancel();
+    final outcome = switch (decision.kind) {
+      AgentPlanApprovalDecisionKind.accepted => <String, Object?>{
+        'outcome': 'accepted',
+      },
+      AgentPlanApprovalDecisionKind.rejected => <String, Object?>{
+        'outcome': 'rejected',
+        if (decision.reason?.trim().isNotEmpty ?? false)
+          'reason': decision.reason!.trim(),
+      },
+      AgentPlanApprovalDecisionKind.cancelled => <String, Object?>{
+        'outcome': 'cancelled',
+      },
+    };
     await _requirePeer().sendResponse(
       pending.requestId,
-      result: <String, Object?>{
-        'outcome': <String, Object?>{
-          'outcome': 'selected',
-          'optionId': optionId,
-        },
-      },
+      result: <String, Object?>{'outcome': outcome},
     );
   }
 
@@ -852,6 +1012,7 @@ class CursorAcpAgentProvider
     }
 
     final payload = _asMap(result) ?? const <String, Object?>{};
+    _applySessionSetup(sessionId: sessionId, payload: payload);
     final index = await _sessionIndexStore.load();
     final indexed = index.find(sessionId);
     final payloadTitle = _optionalString(payload['title']);
@@ -944,6 +1105,51 @@ class CursorAcpAgentProvider
         metadata: _asMap(update['_meta']),
       ),
     );
+  }
+
+  void _applySessionSetup({
+    required String sessionId,
+    required Map<String, Object?> payload,
+  }) {
+    final snapshot = _sessionConfigMapper.mapSessionSetup(payload);
+    _applyConfigOptions(
+      sessionId: sessionId,
+      options: snapshot.options,
+      usesLegacyModes: snapshot.usesLegacyModes,
+    );
+  }
+
+  void _applyConfigOptions({
+    required String sessionId,
+    required List<AgentSessionConfigOption> options,
+    required bool usesLegacyModes,
+  }) {
+    final snapshot = List<AgentSessionConfigOption>.unmodifiable(options);
+    _sessionConfigOptions[sessionId] = snapshot;
+    if (usesLegacyModes) {
+      _legacyModeSessions.add(sessionId);
+    } else {
+      _legacyModeSessions.remove(sessionId);
+    }
+    _capabilities = _capabilities.copyWith(
+      supportsModelSelection: snapshot.any(
+        (option) => option.category == 'model',
+      ),
+      supportsModeSelection: snapshot.any(
+        (option) => option.category == 'mode',
+      ),
+      supportsReasoningOptions: snapshot.any(
+        (option) => option.category == 'thought_level',
+      ),
+      supportsServiceTierSelection: snapshot.any(
+        (option) => option.category == 'model_config',
+      ),
+    );
+    if (!_events.isClosed) {
+      _events.add(
+        AgentSessionConfigUpdatedEvent(sessionId: sessionId, options: snapshot),
+      );
+    }
   }
 
   Future<void> _rememberSessionBestEffort({
@@ -1049,6 +1255,9 @@ class CursorAcpAgentProvider
     await _sessionIndexStore.update((current) => current.remove(sessionId));
     _loadedSessions.remove(sessionId);
     _sessionTitles.remove(sessionId);
+    _sessionConfigOptions.remove(sessionId);
+    _legacyModeSessions.remove(sessionId);
+    _extensionMapper.clearSession(sessionId);
     if (_session?.id == sessionId) {
       _session = null;
     }
@@ -1097,6 +1306,22 @@ class CursorAcpAgentProvider
 
   void _handleNotification(JsonRpcNotification notification) {
     if (notification.method != 'session/update') {
+      if (notification.method.startsWith('cursor/')) {
+        final sessionId =
+            _optionalString(notification.params['sessionId']) ?? _session?.id;
+        final mapped = _extensionMapper.mapNotification(
+          method: notification.method,
+          params: notification.params,
+          sessionId: sessionId,
+          turnId: _runningTurnId(sessionId),
+        );
+        for (final event in mapped.events) {
+          _events.add(event);
+        }
+        if (mapped.events.isNotEmpty) {
+          return;
+        }
+      }
       if (_loggedUnknownNotifications.add(notification.method)) {
         _log.fine(
           'Ignoring unknown Cursor notification ${notification.method}',
@@ -1106,8 +1331,36 @@ class CursorAcpAgentProvider
     }
     final sessionId = notification.params['sessionId']?.toString();
     final update = _asMap(notification.params['update']);
-    if (sessionId != null &&
-        update?['sessionUpdate']?.toString() == 'session_info_update') {
+    final updateKind = update?['sessionUpdate']?.toString();
+    if (sessionId != null && updateKind == 'config_option_update') {
+      final options = _sessionConfigMapper.tryMapConfigOptions(
+        update?['configOptions'],
+      );
+      if (options != null) {
+        _applyConfigOptions(
+          sessionId: sessionId,
+          options: options,
+          usesLegacyModes: false,
+        );
+      }
+      return;
+    }
+    if (sessionId != null && updateKind == 'current_mode_update') {
+      final current = sessionConfigOptions(sessionId);
+      final updated = _sessionConfigMapper.applyCurrentMode(
+        current,
+        update?['modeId'],
+      );
+      if (!identical(current, updated)) {
+        _applyConfigOptions(
+          sessionId: sessionId,
+          options: updated,
+          usesLegacyModes: _legacyModeSessions.contains(sessionId),
+        );
+      }
+      return;
+    }
+    if (sessionId != null && updateKind == 'session_info_update') {
       _handleSessionInfoUpdate(sessionId: sessionId, update: update!);
     }
     final replayCollector = sessionId == null
@@ -1139,9 +1392,25 @@ class CursorAcpAgentProvider
 
   Future<void> _handleServerRequest(JsonRpcRequest request) async {
     try {
-      if (request.method == 'session/request_permission') {
-        await _handlePermissionRequest(request);
-        return;
+      switch (request.method) {
+        case 'session/request_permission':
+          await _handlePermissionRequest(request);
+          return;
+        case 'cursor/ask_question':
+          await _handleQuestionRequest(request);
+          return;
+        case 'cursor/create_plan':
+          await _handlePlanRequest(request);
+          return;
+        case 'cursor/generate_image':
+          await _requirePeer().sendResponse(
+            request.id,
+            error: const JsonRpcError(
+              code: -32601,
+              message: 'Client-side image generation is not supported',
+            ),
+          );
+          return;
       }
       await _requirePeer().sendResponse(
         request.id,
@@ -1181,6 +1450,10 @@ class CursorAcpAgentProvider
       requestKey: mapping.request.id,
       mapping: mapping,
     );
+    pending.timer = Timer(
+      blockingRequestTimeout,
+      () => unawaited(_timeoutPermission(pending)),
+    );
     _pendingPermissions[pending.requestKey] = pending;
     if (mapping.options.isEmpty) {
       await _respondPermissionCancelled(_requirePeer(), pending);
@@ -1191,6 +1464,74 @@ class CursorAcpAgentProvider
       AgentProviderStatus(
         state: AgentProviderConnectionState.running,
         message: 'Waiting for approval: ${mapping.request.title}',
+      ),
+    );
+  }
+
+  Future<void> _handleQuestionRequest(JsonRpcRequest request) async {
+    final sessionId =
+        _optionalString(request.params['sessionId']) ?? _session?.id;
+    final mapped = _extensionMapper.mapAskQuestion(
+      requestId: request.id,
+      params: request.params,
+      sessionId: sessionId,
+      turnId: _runningTurnId(sessionId),
+    );
+    if (mapped.questions.isEmpty) {
+      await _requirePeer().sendResponse(
+        request.id,
+        result: <String, Object?>{
+          'outcome': <String, Object?>{
+            'outcome': 'skipped',
+            'reason': 'No valid questions were provided',
+          },
+        },
+      );
+      return;
+    }
+    final pending = _PendingCursorQuestion(
+      requestId: request.id,
+      requestKey: mapped.id,
+      request: mapped,
+    );
+    pending.timer = Timer(
+      blockingRequestTimeout,
+      () => unawaited(_timeoutQuestion(pending)),
+    );
+    _pendingQuestions[pending.requestKey] = pending;
+    _events.add(AgentPermissionRequestedEvent(mapped));
+    _emitStatus(
+      AgentProviderStatus(
+        state: AgentProviderConnectionState.running,
+        message: 'Waiting for input: ${mapped.title}',
+      ),
+    );
+  }
+
+  Future<void> _handlePlanRequest(JsonRpcRequest request) async {
+    final sessionId =
+        _optionalString(request.params['sessionId']) ?? _session?.id;
+    final mapped = _extensionMapper.mapCreatePlan(
+      requestId: request.id,
+      params: request.params,
+      sessionId: sessionId,
+      turnId: _runningTurnId(sessionId),
+    );
+    final pending = _PendingCursorPlan(
+      requestId: request.id,
+      requestKey: mapped.id,
+      request: mapped,
+    );
+    pending.timer = Timer(
+      blockingRequestTimeout,
+      () => unawaited(_timeoutPlan(pending)),
+    );
+    _pendingPlans[pending.requestKey] = pending;
+    _events.add(AgentPlanApprovalRequestedEvent(mapped));
+    _emitStatus(
+      AgentProviderStatus(
+        state: AgentProviderConnectionState.running,
+        message: 'Waiting for plan review: ${mapped.title}',
       ),
     );
   }
@@ -1246,12 +1587,30 @@ class CursorAcpAgentProvider
     return blocks;
   }
 
-  Future<void> _cancelPendingPermissions(JsonRpcPeer peer) async {
+  Future<void> _cancelPendingInteractions(JsonRpcPeer peer) async {
     for (final pending in _pendingPermissions.values.toList()) {
       try {
         await _respondPermissionCancelled(peer, pending);
       } catch (_) {
         _pendingPermissions.remove(pending.requestKey);
+        pending.timer.cancel();
+        _resolvePermissionUi(pending);
+      }
+    }
+    for (final pending in _pendingQuestions.values.toList()) {
+      try {
+        await _respondQuestionCancelled(peer, pending);
+      } catch (_) {
+        _pendingQuestions.remove(pending.requestKey);
+        _resolveQuestionUi(pending);
+      }
+    }
+    for (final pending in _pendingPlans.values.toList()) {
+      try {
+        await _respondPlanCancelled(peer, pending);
+      } catch (_) {
+        _pendingPlans.remove(pending.requestKey);
+        _resolvePlanUi(pending);
       }
     }
   }
@@ -1261,12 +1620,151 @@ class CursorAcpAgentProvider
     _PendingCursorPermission pending,
   ) async {
     _pendingPermissions.remove(pending.requestKey);
+    pending.timer.cancel();
     await peer.sendResponse(
       pending.requestId,
       result: <String, Object?>{
         'outcome': <String, Object?>{'outcome': 'cancelled'},
       },
     );
+    _resolvePermissionUi(pending);
+  }
+
+  Future<void> _respondQuestionCancelled(
+    JsonRpcPeer peer,
+    _PendingCursorQuestion pending,
+  ) async {
+    _pendingQuestions.remove(pending.requestKey);
+    pending.timer.cancel();
+    await peer.sendResponse(
+      pending.requestId,
+      result: <String, Object?>{
+        'outcome': <String, Object?>{'outcome': 'cancelled'},
+      },
+    );
+    _resolveQuestionUi(pending);
+  }
+
+  Future<void> _respondPlanCancelled(
+    JsonRpcPeer peer,
+    _PendingCursorPlan pending,
+  ) async {
+    _pendingPlans.remove(pending.requestKey);
+    pending.timer.cancel();
+    await peer.sendResponse(
+      pending.requestId,
+      result: <String, Object?>{
+        'outcome': <String, Object?>{'outcome': 'cancelled'},
+      },
+    );
+    _resolvePlanUi(pending);
+  }
+
+  Future<void> _timeoutPermission(_PendingCursorPermission pending) async {
+    if (!identical(_pendingPermissions[pending.requestKey], pending)) {
+      return;
+    }
+    final peer = _peer;
+    if (peer != null) {
+      try {
+        await _respondPermissionCancelled(peer, pending);
+        return;
+      } catch (_) {
+        // 连接关闭时仍需清理 UI 和 pending 状态。
+      }
+    }
+    _pendingPermissions.remove(pending.requestKey);
+    pending.timer.cancel();
+    _resolvePermissionUi(pending);
+  }
+
+  Future<void> _timeoutQuestion(_PendingCursorQuestion pending) async {
+    if (!identical(_pendingQuestions[pending.requestKey], pending)) {
+      return;
+    }
+    final peer = _peer;
+    if (peer != null) {
+      try {
+        await _respondQuestionCancelled(peer, pending);
+        return;
+      } catch (_) {
+        // 连接关闭时仍需清理 UI 和 pending 状态。
+      }
+    }
+    _pendingQuestions.remove(pending.requestKey);
+    pending.timer.cancel();
+    _resolveQuestionUi(pending);
+  }
+
+  Future<void> _timeoutPlan(_PendingCursorPlan pending) async {
+    if (!identical(_pendingPlans[pending.requestKey], pending)) {
+      return;
+    }
+    final peer = _peer;
+    if (peer != null) {
+      try {
+        await _respondPlanCancelled(peer, pending);
+        return;
+      } catch (_) {
+        // 连接关闭时仍需清理 UI 和 pending 状态。
+      }
+    }
+    _pendingPlans.remove(pending.requestKey);
+    pending.timer.cancel();
+    _resolvePlanUi(pending);
+  }
+
+  void _resolvePermissionUi(_PendingCursorPermission pending) {
+    final sessionId = pending.mapping.request.sessionId ?? _session?.id;
+    if (!_events.isClosed && sessionId != null) {
+      _events.add(
+        AgentPermissionResolvedEvent(
+          requestId: pending.requestKey,
+          threadId: sessionId,
+        ),
+      );
+    }
+  }
+
+  void _resolveQuestionUi(_PendingCursorQuestion pending) {
+    final sessionId = pending.request.sessionId ?? _session?.id;
+    if (!_events.isClosed && sessionId != null) {
+      _events.add(
+        AgentPermissionResolvedEvent(
+          requestId: pending.requestKey,
+          threadId: sessionId,
+        ),
+      );
+    }
+  }
+
+  void _resolvePlanUi(_PendingCursorPlan pending) {
+    if (!_events.isClosed) {
+      _events.add(
+        AgentPlanApprovalResolvedEvent(
+          requestId: pending.requestKey,
+          sessionId: pending.request.sessionId ?? _session?.id,
+        ),
+      );
+    }
+  }
+
+  void _discardPendingInteractions() {
+    for (final pending in _pendingPermissions.values) {
+      pending.timer.cancel();
+      _resolvePermissionUi(pending);
+    }
+    for (final pending in _pendingQuestions.values) {
+      pending.timer.cancel();
+      _resolveQuestionUi(pending);
+    }
+    for (final pending in _pendingPlans.values) {
+      pending.timer.cancel();
+      _resolvePlanUi(pending);
+    }
+    _pendingPermissions.clear();
+    _pendingQuestions.clear();
+    _pendingPlans.clear();
   }
 
   Future<void> _closeCurrentPeer() async {
@@ -1280,13 +1778,17 @@ class CursorAcpAgentProvider
     _sessionLoadOperations.clear();
     _loadedSessions.clear();
     _sessionTitles.clear();
+    _sessionConfigOptions.clear();
+    _legacyModeSessions.clear();
+    _extensionMapper.clear();
     _supportsRemoteSessionList = false;
     if (peer == null) {
+      _discardPendingInteractions();
       return;
     }
     _closingPeer = true;
     try {
-      await _cancelPendingPermissions(peer);
+      await _cancelPendingInteractions(peer);
       await _notificationSubscription?.cancel();
       await _serverRequestSubscription?.cancel();
       await _stderrSubscription?.cancel();
@@ -1307,14 +1809,17 @@ class CursorAcpAgentProvider
     }
     _initialized = false;
     _peer = null;
+    _discardPendingInteractions();
     _session = null;
-    _pendingPermissions.clear();
     _runningTurnIdsBySessionId.clear();
     _peerGeneration += 1;
     _replayCollectors.clear();
     _sessionLoadOperations.clear();
     _loadedSessions.clear();
     _sessionTitles.clear();
+    _sessionConfigOptions.clear();
+    _legacyModeSessions.clear();
+    _extensionMapper.clear();
     _supportsRemoteSessionList = false;
     _capabilities = AgentProviderCapabilities.cursorAcp;
     _emitUnavailable('Cursor Agent 进程已意外退出');
@@ -1326,6 +1831,10 @@ class CursorAcpAgentProvider
       throw StateError('Cursor ACP peer 尚未启动');
     }
     return peer;
+  }
+
+  String? _runningTurnId(String? sessionId) {
+    return sessionId == null ? null : _runningTurnIdsBySessionId[sessionId];
   }
 
   String _requiredWorkspace(AgentContext context) {
@@ -1397,7 +1906,7 @@ class CursorAcpAgentProvider
 }
 
 class _PendingCursorPermission {
-  const _PendingCursorPermission({
+  _PendingCursorPermission({
     required this.requestId,
     required this.requestKey,
     required this.mapping,
@@ -1406,6 +1915,33 @@ class _PendingCursorPermission {
   final Object requestId;
   final String requestKey;
   final AcpPermissionMapping mapping;
+  late final Timer timer;
+}
+
+class _PendingCursorQuestion {
+  _PendingCursorQuestion({
+    required this.requestId,
+    required this.requestKey,
+    required this.request,
+  });
+
+  final Object requestId;
+  final String requestKey;
+  final AgentPermissionRequest request;
+  late final Timer timer;
+}
+
+class _PendingCursorPlan {
+  _PendingCursorPlan({
+    required this.requestId,
+    required this.requestKey,
+    required this.request,
+  });
+
+  final Object requestId;
+  final String requestKey;
+  final AgentPlanApprovalRequest request;
+  late final Timer timer;
 }
 
 class _LoadedCursorSession {

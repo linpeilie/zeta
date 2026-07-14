@@ -159,6 +159,10 @@ class _AgentTurnSection extends StatelessWidget {
               execpolicyAmendment: execpolicyAmendment,
             ),
       ),
+      AgentPlanApprovalTimelineEntry(:final request) => _AgentPlanApprovalCard(
+        request: request,
+        onRespond: (kind) => viewModel.respondToPlanApproval(request, kind),
+      ),
       // 正常路径会在 grouping 中转成文件编辑组；此处仅作兜底。
       AgentTurnDiffTimelineEntry() => const SizedBox.shrink(),
       AgentHistoryEventTimelineEntry(:final event) => _AgentHistoryEventCard(
@@ -232,12 +236,15 @@ class _AgentComposerSection extends StatelessWidget {
                   permissionPresets: AgentPermissionSelection.presets,
                   selectedPermissionPresetId:
                       viewModel.permissionSelection.matchedPresetId,
+                  sessionConfigOptions: viewModel.sessionConfigOptions,
                   onSelectModel: (modelId) => viewModel.selectModel(modelId),
                   onSelectReasoningEffort: (effort) =>
                       viewModel.selectReasoningEffort(effort),
                   onSelectServiceTier: (tierId) =>
                       viewModel.selectServiceTier(tierId),
                   onSelectPermissionPreset: viewModel.selectPermissionPreset,
+                  onSelectSessionConfigOption:
+                      viewModel.selectSessionConfigOption,
                   mentionCandidates: viewModel.mentionCandidateFiles,
                   onInsertMention: onInsertMention,
                 );

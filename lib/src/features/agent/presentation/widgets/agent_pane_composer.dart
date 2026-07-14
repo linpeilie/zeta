@@ -33,10 +33,12 @@ class _AgentComposer extends StatelessWidget {
     required this.permissionPolicyLabel,
     required this.permissionPresets,
     required this.selectedPermissionPresetId,
+    required this.sessionConfigOptions,
     required this.onSelectModel,
     required this.onSelectReasoningEffort,
     required this.onSelectServiceTier,
     required this.onSelectPermissionPreset,
+    required this.onSelectSessionConfigOption,
     required this.mentionCandidates,
     required this.onInsertMention,
   });
@@ -87,10 +89,15 @@ class _AgentComposer extends StatelessWidget {
   /// 当前匹配的预设 id。
   final String? selectedPermissionPresetId;
 
+  /// 当前 session 由 provider 动态下发的配置项。
+  final List<AgentSessionConfigOption> sessionConfigOptions;
+
   final ValueChanged<String> onSelectModel;
   final ValueChanged<String?> onSelectReasoningEffort;
   final ValueChanged<String?> onSelectServiceTier;
   final ValueChanged<AgentPermissionPreset> onSelectPermissionPreset;
+  final void Function(String configId, Object value)
+  onSelectSessionConfigOption;
 
   /// @mention 候选文件查询。
   final List<WorkspaceNode> Function({String query}) mentionCandidates;
@@ -124,43 +131,59 @@ class _AgentComposer extends StatelessWidget {
     final contextWindowTokenProgress = _contextWindowTokenUsageProgressValue(
       currentWindowTokenUsage,
     );
-    final selectorControls = <Widget>[
-      if (showModelSelection && models.isNotEmpty)
+    final selectorControls = <Widget>[];
+    void addSelector(Widget control) {
+      if (selectorControls.isNotEmpty) {
+        selectorControls.add(const SizedBox(width: IdeSpacing.space6));
+      }
+      selectorControls.add(control);
+    }
+
+    for (final option in sessionConfigOptions) {
+      addSelector(
+        _SessionConfigOptionControl(
+          option: option,
+          onSelect: (value) => onSelectSessionConfigOption(option.id, value),
+        ),
+      );
+    }
+    if (showModelSelection && models.isNotEmpty) {
+      addSelector(
         _ModelSelectorButton(
           models: models,
           selectedModel: selectedModel,
           onSelect: onSelectModel,
         ),
-      if (showReasoningEffort && selectedModel != null) ...[
-        if (models.isNotEmpty) const SizedBox(width: IdeSpacing.space6),
+      );
+    }
+    if (showReasoningEffort && selectedModel != null) {
+      addSelector(
         _ReasoningEffortButton(
           efforts: selectedModel!.supportedReasoningEfforts,
           selectedEffort: selectedReasoningEffort,
           onSelect: onSelectReasoningEffort,
         ),
-      ],
-      if (showServiceTier && selectedModel != null) ...[
-        if (models.isNotEmpty || showReasoningEffort)
-          const SizedBox(width: IdeSpacing.space6),
+      );
+    }
+    if (showServiceTier && selectedModel != null) {
+      addSelector(
         _ServiceTierButton(
           tiers: selectedModel!.serviceTiers,
           selectedTierId: selectedServiceTierId,
           onSelect: onSelectServiceTier,
         ),
-      ],
-      if (showPermissionPolicy) ...[
-        if (models.isNotEmpty ||
-            (showReasoningEffort && selectedModel != null) ||
-            (showServiceTier && selectedModel != null))
-          const SizedBox(width: IdeSpacing.space6),
+      );
+    }
+    if (showPermissionPolicy) {
+      addSelector(
         _PermissionPolicyButton(
           label: permissionPolicyLabel,
           presets: permissionPresets,
           selectedPresetId: selectedPermissionPresetId,
           onSelect: onSelectPermissionPreset,
         ),
-      ],
-    ];
+      );
+    }
     return Focus(
       onKeyEvent: (node, event) {
         if (event is! KeyDownEvent) {
@@ -767,6 +790,77 @@ class _SelectorSelectState<T extends Object> extends State<_SelectorSelect<T>> {
       ),
     );
   }
+}
+
+/// Provider 动态下发的 session 配置控件。
+class _SessionConfigOptionControl extends StatelessWidget {
+  const _SessionConfigOptionControl({
+    required this.option,
+    required this.onSelect,
+  });
+
+  final AgentSessionConfigOption option;
+  final ValueChanged<Object> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    if (option.kind == AgentSessionConfigOptionKind.boolean) {
+      final selected = option.currentValue == true;
+      return IdeTooltip(
+        message: option.description ?? option.name,
+        child: IdeChip(
+          key: ValueKey<String>('agent-session-config-${option.id}'),
+          label: '${option.name}: ${selected ? 'On' : 'Off'}',
+          leadingIcon: _sessionConfigIcon(option.category),
+          selected: selected,
+          onPressed: () => onSelect(!selected),
+          semanticLabel: option.name,
+        ),
+      );
+    }
+    return _SelectorSelect<Object>(
+      selectorKey: ValueKey<String>('agent-session-config-${option.id}'),
+      tooltip: option.description ?? option.name,
+      placeholderLabel: option.name,
+      icon: _sessionConfigIcon(option.category),
+      value: option.currentValue,
+      labelBuilder: _valueLabel,
+      onChanged: onSelect,
+      options: <Widget>[
+        for (final value in option.values)
+          sf.SelectItemButton<Object>(
+            key: ValueKey<String>(
+              'agent-session-config-${option.id}-option-${value.id}',
+            ),
+            value: value.id,
+            child: Text(
+              value.label,
+              overflow: TextOverflow.ellipsis,
+              style: IdeTextStyles.of(context).bodyMedium,
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _valueLabel(Object value) {
+    for (final candidate in option.values) {
+      if (candidate.id == value) {
+        return candidate.label;
+      }
+    }
+    return value.toString();
+  }
+}
+
+IconData _sessionConfigIcon(String? category) {
+  return switch (category) {
+    'model' => Icons.auto_awesome_outlined,
+    'mode' => Icons.tune_rounded,
+    'thought_level' => Icons.psychology_alt_outlined,
+    'model_config' => Icons.settings_suggest_outlined,
+    _ => Icons.tune_rounded,
+  };
 }
 
 /// 模型选择按钮，点击弹出可用模型列表。

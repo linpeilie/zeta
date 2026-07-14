@@ -1,6 +1,6 @@
 # Zeta 接入 Cursor Agent 的分析与分步落地方案
 
-> 状态：Phase 1–3 已完成；Phase 4–7 待实施
+> 状态：Phase 1–4 已完成；Phase 5–7 待实施
 >
 > 编制日期：2026-07-13
 >
@@ -540,7 +540,7 @@ Cursor session 使用双层来源：
 - `session/list` 缺失时不影响 Codex/Grok 聚合列表；
 - session/load 失败时 fail-closed，不偷偷创建新 session。
 
-### Phase 4：模型、模式与 Cursor 阻塞扩展
+### Phase 4：模型、模式与 Cursor 阻塞扩展（已完成，2026-07-14）
 
 目标：补齐 Cursor 与原生 CLI 的关键交互体验。
 
@@ -554,6 +554,23 @@ Cursor session 使用双层来源：
 6. 将 `cursor/update_todos` 映射为 plan/todo 状态。
 7. 将 `cursor/task`、`cursor/generate_image` 映射为中立时间线事件。
 8. 对阻塞请求增加超时、turn cancel、provider dispose 的收尾测试。
+
+实际落地：
+
+- 新增标准 `AcpSessionConfigMapper` 与中立 session config 领域模型；优先读取
+  `configOptions`，仅在服务端未提供新协议时回退 legacy modes。
+- `CursorAcpAgentProvider` 已支持 `session/set_config_option`、`session/set_mode` 回退、
+  `config_option_update` 与 `current_mode_update`；配置 UI 只展示服务端声明的 select / boolean
+  选项，并在服务端成功回执后更新状态。
+- 新增 `CursorAcpExtensionMapper`，隔离 `cursor/*` wire payload；提问保留稳定 question / option
+  id 和多选语义，计划审批使用独立领域事件与时间线卡片，不与普通权限审批混用。
+- `cursor/update_todos` 已按 session 执行 merge，`cursor/task` 与
+  `cursor/generate_image` 已映射为中立工具时间线事件；客户端产图请求会明确返回
+  method-not-supported。
+- 所有待响应的 permission、question 与 plan request 均配置超时，并在 turn cancel、workspace
+  切换、进程退出和 provider dispose 时回包、清理 timer 与 UI pending state。
+- 已补充 config mapper、Cursor 扩展 mapper、provider 生命周期、timeline store 与 widget
+  测试；`flutter analyze` 无问题，完整 `flutter test` 共 402 项通过。
 
 退出标准：
 

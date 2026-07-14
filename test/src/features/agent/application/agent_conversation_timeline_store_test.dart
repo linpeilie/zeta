@@ -522,6 +522,30 @@ void main() {
       expect(errorEntries.single.message.text, 'second');
       expect(store.liveTurnState!.entries, hasLength(1));
     });
+
+    test('adds and removes independent plan approval entries', () {
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+      const request = AgentPlanApprovalRequest(
+        id: 'plan-1',
+        title: 'Review plan',
+        markdown: '1. Inspect',
+      );
+
+      store.addPlanApprovalRequest(request);
+      expect(store.planApprovalRequests, <AgentPlanApprovalRequest>[request]);
+      expect(
+        store.timelineEntries.whereType<AgentPlanApprovalTimelineEntry>(),
+        hasLength(1),
+      );
+
+      store.removePlanApprovalRequest(request.id);
+      expect(store.planApprovalRequests, isEmpty);
+      expect(
+        store.timelineEntries.whereType<AgentPlanApprovalTimelineEntry>(),
+        isEmpty,
+      );
+    });
   });
 }
 

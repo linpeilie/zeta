@@ -475,6 +475,18 @@ List<_ContextRawItem> _buildContextRawItems({
                   },
           ),
         );
+      case AgentPlanApprovalTimelineEntry(:final request):
+        if (filterNonChat) {
+          continue;
+        }
+        items.add(
+          _ContextRawItem(
+            id: request.id,
+            displayId: request.id,
+            kindLabel: '计划审批',
+            raw: request.raw,
+          ),
+        );
       case AgentHistoryEventTimelineEntry(:final event):
         if (filterNonChat) {
           continue;

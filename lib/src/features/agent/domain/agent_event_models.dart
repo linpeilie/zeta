@@ -1,7 +1,9 @@
 import 'package:zeta/src/features/agent/domain/agent_message_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_model_selection_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_permission_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_plan_approval_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_session_config_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_session_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_thread_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_tool_models.dart';
@@ -430,6 +432,35 @@ class AgentPlanUpdatedEvent extends AgentEvent {
 
   /// 可选回合 id。
   final String? turnId;
+}
+
+/// Session 动态配置的完整快照。
+class AgentSessionConfigUpdatedEvent extends AgentEvent {
+  const AgentSessionConfigUpdatedEvent({
+    required this.sessionId,
+    required this.options,
+  });
+
+  final String sessionId;
+  final List<AgentSessionConfigOption> options;
+}
+
+/// Provider 请求用户独立审批计划。
+class AgentPlanApprovalRequestedEvent extends AgentEvent {
+  const AgentPlanApprovalRequestedEvent(this.request);
+
+  final AgentPlanApprovalRequest request;
+}
+
+/// 计划审批已超时、取消或由其他路径解决。
+class AgentPlanApprovalResolvedEvent extends AgentEvent {
+  const AgentPlanApprovalResolvedEvent({
+    required this.requestId,
+    this.sessionId,
+  });
+
+  final String requestId;
+  final String? sessionId;
 }
 
 /// 回合级聚合 diff 更新。

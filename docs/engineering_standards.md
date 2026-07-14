@@ -97,8 +97,10 @@ main -> app -> presentation/application -> domain
 - 非所有 provider 都具备的账号能力使用可选接口（例如
   `AgentUsageQuotaProvider`），不要扩大 `AgentProvider` 的必选实现面。
 - mapper 文件负责字段兼容、默认值和协议名称转换；不要在 widget 中写散落的 JSON key。
-- 标准 ACP 的 session update、content block 和 permission option 优先复用公共 mapper；
-  厂商扩展保留在对应 adapter，不得污染 presentation。
+- 标准 ACP 的 session update、content block、permission option 和 session config 优先复用
+  公共 mapper；厂商扩展保留在对应 adapter，不得污染 presentation。
+- 厂商阻塞请求必须覆盖成功、拒绝/跳过、取消、超时和 provider 清理路径；每条路径都要
+  回包、释放 timer 并移除 presentation pending state，未知 request 明确返回 `-32601`。
 - 通用 CLI 名称（例如 Cursor 的 `agent`）不得只按 basename 判定产品身份；定位器必须
   组合无副作用版本/帮助探测，并在 ACP initialize 的 `agentInfo` 上二次校验。
 - workspace-scoped provider 的子进程 cwd 与 session cwd 必须一致；workspace 变化时关闭

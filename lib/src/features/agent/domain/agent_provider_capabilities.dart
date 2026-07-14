@@ -232,6 +232,8 @@ class AgentProviderCapabilities {
     canPrompt: true,
     canCancelTurn: true,
     supportsPermissionRequests: true,
+    supportsUserQuestions: true,
+    supportsPlanApproval: true,
     bootstrapPolicy: AgentProviderBootstrapPolicy.workspaceScoped,
   );
 

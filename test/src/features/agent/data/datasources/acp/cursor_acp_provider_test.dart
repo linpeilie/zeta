@@ -109,6 +109,392 @@ void main() {
       );
     });
 
+    test(
+      'syncs config options from setup, response, and notifications',
+      () async {
+        final peer = _FakeCursorPeer(
+          configOptions: const <Map<String, Object?>>[
+            <String, Object?>{
+              'id': 'model',
+              'name': 'Model',
+              'category': 'model',
+              'type': 'select',
+              'currentValue': 'fast',
+              'options': <Object?>[
+                <String, Object?>{'value': 'fast', 'name': 'Fast'},
+                <String, Object?>{'value': 'smart', 'name': 'Smart'},
+              ],
+            },
+          ],
+          updatedConfigOptions: const <Map<String, Object?>>[
+            <String, Object?>{
+              'id': 'model',
+              'name': 'Model',
+              'category': 'model',
+              'type': 'select',
+              'currentValue': 'smart',
+              'options': <Object?>[
+                <String, Object?>{'value': 'fast', 'name': 'Fast'},
+                <String, Object?>{'value': 'smart', 'name': 'Smart'},
+              ],
+            },
+          ],
+        );
+        final provider = CursorAcpAgentProvider(
+          config: AgentProviderConfig.defaultCursor,
+          peer: peer,
+          sessionIndexStore: MemoryCursorSessionIndexStore(),
+        );
+        addTearDown(provider.dispose);
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+        addTearDown(subscription.cancel);
+
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+        );
+        await Future<void>.delayed(Duration.zero);
+        await provider.setSessionConfigOption(
+          sessionId: session.id,
+          configId: 'model',
+          value: 'smart',
+        );
+        peer.emitUpdate(<String, Object?>{
+          'sessionUpdate': 'config_option_update',
+          'configOptions': <Object?>[
+            <String, Object?>{
+              'id': 'thought',
+              'name': 'Thought level',
+              'category': 'thought_level',
+              'type': 'select',
+              'currentValue': 'high',
+              'options': <Object?>[
+                <String, Object?>{'value': 'high', 'name': 'High'},
+              ],
+            },
+          ],
+        });
+        await Future<void>.delayed(Duration.zero);
+
+        final initialize = peer.paramsFor('initialize');
+        final clientCapabilities =
+            initialize['clientCapabilities']! as Map<String, Object?>;
+        final sessionCapabilities =
+            clientCapabilities['session']! as Map<String, Object?>;
+        expect(sessionCapabilities, contains('configOptions'));
+        expect(peer.paramsFor('session/set_config_option'), <String, Object?>{
+          'sessionId': session.id,
+          'configId': 'model',
+          'value': 'smart',
+        });
+        expect(provider.sessionConfigOptions(session.id).single.id, 'thought');
+        expect(provider.capabilities.supportsReasoningOptions, isTrue);
+        expect(
+          events.whereType<AgentSessionConfigUpdatedEvent>().length,
+          greaterThanOrEqualTo(3),
+        );
+      },
+    );
+
+    test(
+      'falls back to legacy session modes and tracks mode updates',
+      () async {
+        final peer = _FakeCursorPeer(
+          legacyModes: const <String, Object?>{
+            'currentModeId': 'ask',
+            'availableModes': <Object?>[
+              <String, Object?>{'id': 'ask', 'name': 'Ask'},
+              <String, Object?>{'id': 'agent', 'name': 'Agent'},
+            ],
+          },
+        );
+        final provider = CursorAcpAgentProvider(
+          config: AgentProviderConfig.defaultCursor,
+          peer: peer,
+          sessionIndexStore: MemoryCursorSessionIndexStore(),
+        );
+        addTearDown(provider.dispose);
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+        );
+
+        peer.emitUpdate(<String, Object?>{
+          'sessionUpdate': 'current_mode_update',
+          'modeId': 'agent',
+        });
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          provider.sessionConfigOptions(session.id).single.currentValue,
+          'agent',
+        );
+
+        await provider.setSessionConfigOption(
+          sessionId: session.id,
+          configId: 'mode',
+          value: 'ask',
+        );
+        expect(peer.requestMethods, contains('session/set_mode'));
+        expect(
+          provider.sessionConfigOptions(session.id).single.currentValue,
+          'ask',
+        );
+      },
+    );
+
+    test('answers, skips, and cancels Cursor questions', () async {
+      final peer = _FakeCursorPeer();
+      final provider = CursorAcpAgentProvider(
+        config: AgentProviderConfig.defaultCursor,
+        peer: peer,
+        sessionIndexStore: MemoryCursorSessionIndexStore(),
+      );
+      addTearDown(provider.dispose);
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+      addTearDown(subscription.cancel);
+      await provider.startSession(
+        context: const AgentContext(projectPath: r'D:\repo\zeta'),
+      );
+
+      for (final id in <int>[50, 51, 52]) {
+        peer.emitServerRequest(
+          id: id,
+          method: 'cursor/ask_question',
+          params: <String, Object?>{
+            'title': 'Choose scope',
+            'questions': <Object?>[
+              <String, Object?>{
+                'id': 'scope',
+                'prompt': 'What should change?',
+                'allowMultiple': true,
+                'options': <Object?>[
+                  <String, Object?>{'id': 'src', 'label': 'Source'},
+                  <String, Object?>{'id': 'tests', 'label': 'Tests'},
+                ],
+              },
+            ],
+          },
+        );
+        await Future<void>.delayed(Duration.zero);
+      }
+      final requests = events
+          .whereType<AgentPermissionRequestedEvent>()
+          .map((event) => event.request)
+          .toList();
+      await provider.respondToPermission(
+        AgentPermissionDecision(
+          requestId: requests[0].id,
+          approved: true,
+          answers: const <String, List<String>>{
+            'scope': <String>['src', 'tests'],
+          },
+        ),
+      );
+      await provider.respondToPermission(
+        AgentPermissionDecision(requestId: requests[1].id, approved: false),
+      );
+      await provider.respondToPermission(
+        AgentPermissionDecision(
+          requestId: requests[2].id,
+          approved: false,
+          cancelTurn: true,
+        ),
+      );
+
+      final outcomes = peer.responses.map((response) {
+        final result = response['result']! as Map<String, Object?>;
+        return (result['outcome']! as Map<String, Object?>)['outcome'];
+      });
+      expect(outcomes, <Object?>['answered', 'skipped', 'cancelled']);
+      final answered =
+          (peer.responses.first['result']! as Map<String, Object?>)['outcome']!
+              as Map<String, Object?>;
+      final answers = answered['answers']! as List<Object?>;
+      expect(
+        (answers.single as Map<String, Object?>)['selectedOptionIds'],
+        <String>['src', 'tests'],
+      );
+    });
+
+    test(
+      'maps Cursor plan, todo, task, and generated image extensions',
+      () async {
+        final peer = _FakeCursorPeer();
+        final provider = CursorAcpAgentProvider(
+          config: AgentProviderConfig.defaultCursor,
+          peer: peer,
+          sessionIndexStore: MemoryCursorSessionIndexStore(),
+        );
+        addTearDown(provider.dispose);
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+        addTearDown(subscription.cancel);
+        await provider.startSession(
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+        );
+
+        peer.emitServerRequest(
+          id: 60,
+          method: 'cursor/create_plan',
+          params: <String, Object?>{
+            'name': 'Refactor tabs',
+            'plan': '1. Inspect\n2. Update',
+            'todos': <Object?>[
+              <String, Object?>{
+                'id': 'one',
+                'content': 'Inspect',
+                'status': 'completed',
+              },
+            ],
+          },
+        );
+        await Future<void>.delayed(Duration.zero);
+        final plan = events.whereType<AgentPlanApprovalRequestedEvent>().single;
+        await provider.respondToPlanApproval(
+          AgentPlanApprovalDecision(
+            requestId: plan.request.id,
+            kind: AgentPlanApprovalDecisionKind.accepted,
+          ),
+        );
+        peer.emitNotification(
+          'cursor/update_todos',
+          params: <String, Object?>{
+            'todos': <Object?>[
+              <String, Object?>{
+                'id': 'two',
+                'content': 'Update',
+                'status': 'in_progress',
+              },
+            ],
+            'merge': false,
+          },
+        );
+        peer.emitNotification(
+          'cursor/task',
+          params: <String, Object?>{
+            'toolCallId': 'task-1',
+            'description': 'Explore codebase',
+            'prompt': 'Find tab sizing',
+          },
+        );
+        peer.emitNotification(
+          'cursor/generate_image',
+          params: <String, Object?>{
+            'toolCallId': 'image-1',
+            'description': 'Tab icon',
+            'filePath': '/tmp/tab.png',
+          },
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        final accepted =
+            peer.responses.single['result']! as Map<String, Object?>;
+        expect(
+          (accepted['outcome']! as Map<String, Object?>)['outcome'],
+          'accepted',
+        );
+        expect(
+          events.whereType<AgentPlanUpdatedEvent>().single.entries.single.id,
+          'two',
+        );
+        final tools = events.whereType<AgentToolCallEvent>().toList();
+        expect(tools.map((event) => event.toolCall.id), <String>[
+          'task-1',
+          'image-1',
+        ]);
+        expect(tools.last.toolCall.locations, <String>['/tmp/tab.png']);
+      },
+    );
+
+    test('times out blocking extensions and resolves their cards', () async {
+      final peer = _FakeCursorPeer();
+      final provider = CursorAcpAgentProvider(
+        config: AgentProviderConfig.defaultCursor,
+        peer: peer,
+        sessionIndexStore: MemoryCursorSessionIndexStore(),
+        blockingRequestTimeout: const Duration(milliseconds: 10),
+      );
+      addTearDown(provider.dispose);
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+      addTearDown(subscription.cancel);
+      await provider.startSession(
+        context: const AgentContext(projectPath: r'D:\repo\zeta'),
+      );
+      peer.emitServerRequest(
+        id: 70,
+        method: 'cursor/ask_question',
+        params: <String, Object?>{
+          'questions': <Object?>[
+            <String, Object?>{
+              'id': 'q',
+              'prompt': 'Continue?',
+              'options': <Object?>[
+                <String, Object?>{'id': 'yes', 'label': 'Yes'},
+              ],
+            },
+          ],
+        },
+      );
+      peer.emitServerRequest(
+        id: 71,
+        method: 'cursor/create_plan',
+        params: <String, Object?>{'plan': 'Do the work', 'todos': <Object?>[]},
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+
+      expect(peer.responses, hasLength(2));
+      for (final response in peer.responses) {
+        final result = response['result']! as Map<String, Object?>;
+        expect(
+          (result['outcome']! as Map<String, Object?>)['outcome'],
+          'cancelled',
+        );
+      }
+      expect(events.whereType<AgentPermissionResolvedEvent>(), hasLength(1));
+      expect(events.whereType<AgentPlanApprovalResolvedEvent>(), hasLength(1));
+    });
+
+    test('dispose cancels every pending Cursor interaction', () async {
+      final peer = _FakeCursorPeer();
+      final provider = CursorAcpAgentProvider(
+        config: AgentProviderConfig.defaultCursor,
+        peer: peer,
+        sessionIndexStore: MemoryCursorSessionIndexStore(),
+      );
+      await provider.startSession(
+        context: const AgentContext(projectPath: r'D:\repo\zeta'),
+      );
+      peer.emitPermissionRequest();
+      peer.emitServerRequest(
+        id: 80,
+        method: 'cursor/ask_question',
+        params: <String, Object?>{
+          'questions': <Object?>[
+            <String, Object?>{
+              'id': 'q',
+              'prompt': 'Continue?',
+              'options': <Object?>[
+                <String, Object?>{'id': 'yes', 'label': 'Yes'},
+              ],
+            },
+          ],
+        },
+      );
+      peer.emitServerRequest(
+        id: 81,
+        method: 'cursor/create_plan',
+        params: <String, Object?>{'plan': 'Do the work', 'todos': <Object?>[]},
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      await provider.dispose();
+
+      expect(peer.responses, hasLength(3));
+      expect(peer.closed, isTrue);
+    });
+
     test('rejecting permission responds with server option id', () async {
       // Arrange
       final peer = _FakeCursorPeer();
@@ -648,6 +1034,9 @@ class _FakeCursorPeer implements JsonRpcPeer {
     this.supportsDelete = false,
     this.remoteSessions = const <Map<String, Object?>>[],
     this.loadUpdates = const <Map<String, Object?>>[],
+    this.configOptions,
+    this.updatedConfigOptions,
+    this.legacyModes,
   });
 
   final String sessionId;
@@ -657,6 +1046,9 @@ class _FakeCursorPeer implements JsonRpcPeer {
   final bool supportsDelete;
   final List<Map<String, Object?>> remoteSessions;
   final List<Map<String, Object?>> loadUpdates;
+  final List<Map<String, Object?>>? configOptions;
+  final List<Map<String, Object?>>? updatedConfigOptions;
+  final Map<String, Object?>? legacyModes;
   final _notifications = StreamController<JsonRpcNotification>.broadcast();
   final _serverRequests = StreamController<JsonRpcRequest>.broadcast();
   final _stderr = StreamController<String>.broadcast();
@@ -726,7 +1118,11 @@ class _FakeCursorPeer implements JsonRpcPeer {
           JsonRpcError(code: -32000, message: 'session failed'),
         );
       }
-      return <String, Object?>{'sessionId': sessionId};
+      return <String, Object?>{
+        'sessionId': sessionId,
+        if (configOptions != null) 'configOptions': configOptions,
+        if (legacyModes != null) 'modes': legacyModes,
+      };
     }
     if (method == 'session/load') {
       if (sessionLoadFails) {
@@ -739,7 +1135,10 @@ class _FakeCursorPeer implements JsonRpcPeer {
       }
       // ACP replay 必须在 session/load response 前送达。
       await Future<void>.delayed(Duration.zero);
-      return <String, Object?>{};
+      return <String, Object?>{
+        if (configOptions != null) 'configOptions': configOptions,
+        if (legacyModes != null) 'modes': legacyModes,
+      };
     }
     if (method == 'session/list') {
       return <String, Object?>{'sessions': remoteSessions};
@@ -749,6 +1148,14 @@ class _FakeCursorPeer implements JsonRpcPeer {
     }
     if (method == 'session/prompt') {
       return <String, Object?>{'stopReason': 'end_turn'};
+    }
+    if (method == 'session/set_config_option') {
+      return <String, Object?>{
+        'configOptions': updatedConfigOptions ?? configOptions ?? <Object?>[],
+      };
+    }
+    if (method == 'session/set_mode') {
+      return <String, Object?>{};
     }
     return <String, Object?>{};
   }
@@ -798,6 +1205,15 @@ class _FakeCursorPeer implements JsonRpcPeer {
         params: <String, Object?>{'sessionId': sessionId, 'update': update},
         raw: update,
       ),
+    );
+  }
+
+  void emitNotification(
+    String method, {
+    Map<String, Object?> params = const <String, Object?>{},
+  }) {
+    _notifications.add(
+      JsonRpcNotification(method: method, params: params, raw: params),
     );
   }
 

@@ -35,6 +35,8 @@ class AgentConversationTimelineStore {
   final List<AgentToolCall> _toolCalls = <AgentToolCall>[];
   final List<AgentPermissionRequest> _permissionRequests =
       <AgentPermissionRequest>[];
+  final List<AgentPlanApprovalRequest> _planApprovalRequests =
+      <AgentPlanApprovalRequest>[];
   final List<AgentTimelineEntry> _timelineEntries = <AgentTimelineEntry>[
     AgentMessageTimelineEntry(message: welcomeMessage),
   ];
@@ -77,6 +79,9 @@ class AgentConversationTimelineStore {
 
   List<AgentPermissionRequest> get permissionRequests =>
       List<AgentPermissionRequest>.unmodifiable(_permissionRequests);
+
+  List<AgentPlanApprovalRequest> get planApprovalRequests =>
+      List<AgentPlanApprovalRequest>.unmodifiable(_planApprovalRequests);
 
   List<AgentTimelineEntry> get timelineEntries =>
       List<AgentTimelineEntry>.unmodifiable(_timelineEntries);
@@ -307,6 +312,7 @@ class AgentConversationTimelineStore {
     _messages.clear();
     _toolCalls.clear();
     _permissionRequests.clear();
+    _planApprovalRequests.clear();
     _timelineEntries.clear();
     _timelineEntryTurnIds.clear();
     _turnIdsByTimelineEntryId.clear();
@@ -493,6 +499,13 @@ class AgentConversationTimelineStore {
     return appendTimelineEntry(AgentPermissionTimelineEntry(request: request));
   }
 
+  String addPlanApprovalRequest(AgentPlanApprovalRequest request) {
+    _planApprovalRequests.add(request);
+    return appendTimelineEntry(
+      AgentPlanApprovalTimelineEntry(request: request),
+    );
+  }
+
   /// 插入或更新回合级聚合 diff。
   ///
   /// 同一 `turnId` 只保留一条；空 diff 时移除已有条目。
@@ -546,6 +559,24 @@ class AgentConversationTimelineStore {
     while (index < _timelineEntries.length) {
       final entry = _timelineEntries[index];
       if (entry is AgentPermissionTimelineEntry &&
+          entry.request.id == requestId) {
+        final turnId = _timelineEntryTurnIds[index];
+        _timelineEntries.removeAt(index);
+        _timelineEntryTurnIds.removeAt(index);
+        _turnIdsByTimelineEntryId.remove(entry.id);
+        _turnGroups[turnId]?.removeEntry(entry.id);
+      } else {
+        index += 1;
+      }
+    }
+  }
+
+  void removePlanApprovalRequest(String requestId) {
+    _planApprovalRequests.removeWhere((item) => item.id == requestId);
+    var index = 0;
+    while (index < _timelineEntries.length) {
+      final entry = _timelineEntries[index];
+      if (entry is AgentPlanApprovalTimelineEntry &&
           entry.request.id == requestId) {
         final turnId = _timelineEntryTurnIds[index];
         _timelineEntries.removeAt(index);
@@ -1657,6 +1688,14 @@ class AgentPermissionTimelineEntry extends AgentTimelineEntry {
     : super(id: 'permission-${request.id}');
 
   final AgentPermissionRequest request;
+}
+
+/// 时间线独立计划审批条目。
+class AgentPlanApprovalTimelineEntry extends AgentTimelineEntry {
+  AgentPlanApprovalTimelineEntry({required this.request})
+    : super(id: 'plan-approval-${request.id}');
+
+  final AgentPlanApprovalRequest request;
 }
 
 /// 时间线历史事件条目。

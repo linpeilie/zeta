@@ -42,6 +42,30 @@ class AgentSessionConfigOption {
   final List<AgentSessionConfigValue> values;
   final Map<String, Object?> raw;
 
+  AgentSessionConfigOption copyWith({
+    String? id,
+    String? name,
+    AgentSessionConfigOptionKind? kind,
+    String? description,
+    String? category,
+    Object? currentValue = _unchangedConfigValue,
+    List<AgentSessionConfigValue>? values,
+    Map<String, Object?>? raw,
+  }) {
+    return AgentSessionConfigOption(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      kind: kind ?? this.kind,
+      description: description ?? this.description,
+      category: category ?? this.category,
+      currentValue: identical(currentValue, _unchangedConfigValue)
+          ? this.currentValue
+          : currentValue,
+      values: values ?? this.values,
+      raw: raw ?? this.raw,
+    );
+  }
+
   /// 宽容解码 ACP 风格配置项；损坏或缺少 id/name 的数据返回 `null`。
   static AgentSessionConfigOption? tryDecode(Object? value) {
     final map = decodeObjectMap(value);
@@ -98,3 +122,5 @@ class AgentSessionConfigOption {
     );
   }
 }
+
+const Object _unchangedConfigValue = Object();
