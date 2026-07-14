@@ -224,7 +224,12 @@ void main() {
     expect(find.text('Previously asked question'), findsOneWidget);
     expect(find.text('Historical answer'), findsOneWidget);
     expect(find.text('1 次执行'), findsOneWidget);
-    expect(find.text('History command'), findsNothing);
+    expect(
+      find.byKey(
+        const ValueKey<String>('agent-command-group-item-tool-history-tool-1'),
+      ),
+      findsNothing,
+    );
     expect(headerTitleText(tester), 'Initial thread');
     expect(find.byKey(const ValueKey('agent-header-token')), findsOneWidget);
     expect(
@@ -251,7 +256,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('History command'), findsOneWidget);
+    expect(
+      find.byKey(
+        const ValueKey<String>('agent-command-group-item-tool-history-tool-1'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('done'), findsNothing);
     expect(
       find.byKey(const ValueKey<String>('agent-tool-body-history-tool-1')),

@@ -204,6 +204,9 @@ repository。Cursor repository 负责多候选身份探测、版本/账号检查
 - 流式推理（思考卡，摘要优先）与流式 plan 卡。
 - 回合级聚合 diff（「本回合改动」）。
 - 线程状态胶囊：等待审批 / 等待输入；列表侧同步 waiting 标志。
+- 权限、用户提问与计划审批统一显示在 Composer 上方的 Pending Interaction Dock；
+  Dock 使用独立 pending 列表、按权限优先顺序展示，限高为 Agent 面板高度的 35%
+  （最高 360px）并内部滚动，时间线不重复渲染待处理卡片。
 - 模型改道、弃用通知等系统提示；token 用量含 `modelContextWindow` 占用比例。
 - 18 种 ThreadItem 在实时路径与 `thread/read` / JSONL 历史中一致映射。
 - 输入区支持本地图片（选图 / 粘贴落盘）随 turn 发送，时间线气泡预览。

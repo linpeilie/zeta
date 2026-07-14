@@ -1729,8 +1729,20 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(controller.offset, lessThan(40));
-    expect(find.text('History command'), findsOneWidget);
-    expect(find.text('Tool search'), findsOneWidget);
+    expect(
+      find.byKey(
+        const ValueKey<String>('agent-command-group-item-tool-history-tool-a'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey<String>(
+          'agent-command-group-item-history-event-history-search-a',
+        ),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('rip_grep_packages'), findsNothing);
     expect(
       find.byKey(
@@ -1837,7 +1849,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(controller.offset, lessThan(40));
-    expect(find.text('History command'), findsOneWidget);
+    expect(
+      find.byKey(
+        const ValueKey<String>(
+          'agent-command-group-item-tool-history-tool-jump',
+        ),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('long output'), findsNothing);
     expect(
       find.byKey(const ValueKey<String>('agent-tool-body-history-tool-jump')),
@@ -2042,8 +2061,18 @@ void main() {
     );
     await pumpLiveAgentUi(tester);
 
-    expect(find.text('Run tests'), findsOneWidget);
-    expect(find.text('Tool search'), findsOneWidget);
+    expect(
+      find.byKey(
+        const ValueKey<String>('agent-command-group-item-tool-live-tool-1'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey<String>('agent-command-group-item-tool-live-tool-2'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('flutter test'), findsNothing);
     expect(find.text('rip_grep_packages'), findsNothing);
     expect(find.text('hidden log line'), findsNothing);
@@ -2461,6 +2490,19 @@ void main() {
       findsNothing,
     );
     expect(find.text('Approve command'), findsOneWidget);
+    final dock = find.byKey(const ValueKey('agent-pending-interaction-dock'));
+    final approveButton = find.byKey(
+      const ValueKey('agent-permission-approve-approval-1'),
+    );
+    expect(dock, findsOneWidget);
+    expect(find.descendant(of: dock, matching: approveButton), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('agent-message-list')),
+        matching: approveButton,
+      ),
+      findsNothing,
+    );
 
     await tester.tap(
       find.byKey(
@@ -2471,7 +2513,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Run tests'), findsOneWidget);
+    expect(
+      find.byKey(
+        const ValueKey<String>('agent-command-group-item-tool-tool-1'),
+      ),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey<String>('agent-tool-body-tool-1')),
       findsNothing,
@@ -2483,6 +2530,30 @@ void main() {
     await tester.pump();
 
     expect(provider.approvedRequests, <String>['approval-1']);
+    expect(dock, findsNothing);
+
+    provider.emit(
+      const AgentPermissionRequestedEvent(
+        AgentPermissionRequest(
+          id: 'approval-remote',
+          title: 'Remote approval',
+          kind: AgentPermissionKind.permissions,
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(dock, findsOneWidget);
+
+    provider.emit(
+      const AgentPermissionResolvedEvent(
+        requestId: 'approval-remote',
+        threadId: 'thread-1',
+      ),
+    );
+    await tester.pump();
+    expect(dock, findsNothing);
   });
 
   testWidgets('cancel button interrupts an active provider turn', (

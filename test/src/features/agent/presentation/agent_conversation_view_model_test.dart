@@ -862,6 +862,9 @@ void main() {
         addTearDown(viewModel.dispose);
 
         await viewModel.sendMessage('hello');
+        await Future<void>.delayed(Duration.zero);
+        final autoScrollTick = viewModel.autoScrollTick;
+        final pendingVersion = viewModel.pendingInteractionVersion;
         provider.emit(
           const AgentPermissionRequestedEvent(
             AgentPermissionRequest(
@@ -883,7 +886,13 @@ void main() {
           viewModel.timelineEntries.whereType<AgentPermissionTimelineEntry>(),
           hasLength(1),
         );
+        expect(
+          viewModel.pendingInteractionVersion,
+          greaterThan(pendingVersion),
+        );
+        expect(viewModel.autoScrollTick, autoScrollTick);
 
+        final requestedPendingVersion = viewModel.pendingInteractionVersion;
         provider.emit(
           const AgentPermissionResolvedEvent(
             requestId: 'approval-1',
@@ -897,6 +906,11 @@ void main() {
           viewModel.timelineEntries.whereType<AgentPermissionTimelineEntry>(),
           isEmpty,
         );
+        expect(
+          viewModel.pendingInteractionVersion,
+          greaterThan(requestedPendingVersion),
+        );
+        expect(viewModel.autoScrollTick, autoScrollTick);
       },
     );
 

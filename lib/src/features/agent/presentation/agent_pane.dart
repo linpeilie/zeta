@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
@@ -122,75 +123,81 @@ class _AgentPaneState extends State<AgentPane> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _AgentContentAlign(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
-                    child: ListenableBuilder(
-                      listenable: widget.viewModel.headerVersionListenable,
-                      builder: (context, _) {
-                        return _AgentHeader(viewModel: widget.viewModel);
-                      },
+            child: LayoutBuilder(
+              builder: (context, constraints) => Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _AgentContentAlign(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                      child: ListenableBuilder(
+                        listenable: widget.viewModel.headerVersionListenable,
+                        builder: (context, _) {
+                          return _AgentHeader(viewModel: widget.viewModel);
+                        },
+                      ),
                     ),
                   ),
-                ),
-                Expanded(
-                  // 对话、工具调用和审批卡片共用一个滚动流，模拟 Agent 面板的时间线。
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        maxWidth: _agentContentMaxWidth,
-                      ),
-                      child: SingleChildScrollView(
-                        key: const ValueKey('agent-message-list'),
-                        controller: _scrollController,
-                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                        // turn 卡片高度差异很大；改用精确内容高度滚动，避免
-                        // SliverList 在滚动过程中重估 maxScrollExtent 导致滚动条跳动。
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _AgentHistoryTurnsSection(
-                              viewModel: widget.viewModel,
-                              onLoadOlder: _loadOlderTurns,
-                              buildTurnSection: _buildTurnSection,
-                            ),
-                            _AgentLiveTurnSection(
-                              viewModel: widget.viewModel,
-                              buildTurnSection: _buildTurnSection,
-                            ),
-                          ],
+                  Expanded(
+                    // 对话与工具调用保留在可滚动时间线；阻塞交互固定在输入框上方。
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: _agentContentMaxWidth,
+                        ),
+                        child: SingleChildScrollView(
+                          key: const ValueKey('agent-message-list'),
+                          controller: _scrollController,
+                          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                          // turn 卡片高度差异很大；改用精确内容高度滚动，避免
+                          // SliverList 在滚动过程中重估 maxScrollExtent 导致滚动条跳动。
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _AgentHistoryTurnsSection(
+                                viewModel: widget.viewModel,
+                                onLoadOlder: _loadOlderTurns,
+                                buildTurnSection: _buildTurnSection,
+                              ),
+                              _AgentLiveTurnSection(
+                                viewModel: widget.viewModel,
+                                buildTurnSection: _buildTurnSection,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                ListenableBuilder(
-                  listenable: widget.viewModel.composerVersionListenable,
-                  builder: (context, _) {
-                    if (widget.viewModel.isReadOnly) {
-                      return const _AgentReadOnlyNotice();
-                    }
-                    return _AgentComposerSection(
-                      viewModel: widget.viewModel,
-                      inputController: _inputController,
-                      composerFocusNode: _composerFocusNode,
-                      canSendListenable: _canSendNotifier,
-                      draftImagePaths: List<String>.unmodifiable(
-                        _draftImagePaths,
-                      ),
-                      onAttachImages: _pickImages,
-                      onRemoveImage: _removeDraftImage,
-                      onPasteImages: _pasteImagesFromClipboard,
-                      onSend: _sendMessage,
-                      onInsertMention: _insertMention,
-                    );
-                  },
-                ),
-              ],
+                  _AgentPendingInteractionSection(
+                    viewModel: widget.viewModel,
+                    panelHeight: constraints.maxHeight,
+                  ),
+                  ListenableBuilder(
+                    listenable: widget.viewModel.composerVersionListenable,
+                    builder: (context, _) {
+                      if (widget.viewModel.isReadOnly) {
+                        return const _AgentReadOnlyNotice();
+                      }
+                      return _AgentComposerSection(
+                        viewModel: widget.viewModel,
+                        inputController: _inputController,
+                        composerFocusNode: _composerFocusNode,
+                        canSendListenable: _canSendNotifier,
+                        draftImagePaths: List<String>.unmodifiable(
+                          _draftImagePaths,
+                        ),
+                        onAttachImages: _pickImages,
+                        onRemoveImage: _removeDraftImage,
+                        onPasteImages: _pasteImagesFromClipboard,
+                        onSend: _sendMessage,
+                        onInsertMention: _insertMention,
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
           // 头栏「上下文」菜单触发的详情面板，默认隐藏。

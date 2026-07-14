@@ -182,6 +182,9 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   int get composerVersion => _uiSignals.composerVersion;
 
+  /// 待处理权限、提问或计划审批列表的变更版本。
+  int get pendingInteractionVersion => _uiSignals.pendingInteractionVersion;
+
   int get expansionVersion => _uiSignals.expansionVersion;
 
   ValueListenable<int> get historyVersionListenable =>
@@ -192,6 +195,10 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   ValueListenable<int> get composerVersionListenable =>
       _uiSignals.composerVersionListenable;
+
+  /// 供固定交互区监听 pending 列表，避免依赖消息流刷新。
+  ValueListenable<int> get pendingInteractionVersionListenable =>
+      _uiSignals.pendingInteractionVersionListenable;
 
   ValueListenable<int> get expansionVersionListenable =>
       _uiSignals.expansionVersionListenable;
@@ -1103,7 +1110,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     List<String> execpolicyAmendment = const <String>[],
   }) async {
     _timeline.removePermissionRequest(request.id);
-    _publishUiChanges(history: true, liveTurn: true);
+    _publishUiChanges(history: true, liveTurn: true, pendingInteraction: true);
     _log.info(
       'Responding to Agent permission ${request.kind.name}: approved=$approved',
     );
@@ -1124,7 +1131,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     AgentPlanApprovalDecisionKind kind,
   ) async {
     _timeline.removePlanApprovalRequest(request.id);
-    _publishUiChanges(history: true, liveTurn: true);
+    _publishUiChanges(history: true, liveTurn: true, pendingInteraction: true);
     final provider = _provider;
     if (provider is! AgentPlanApprovalProvider) {
       return;
@@ -1763,14 +1770,14 @@ class AgentConversationViewModel extends ChangeNotifier {
           break;
         }
         _timeline.addPermissionRequest(event.request);
-        _flushStreamChangesNow(liveTurn: true, autoScroll: true);
+        _flushStreamChangesNow(liveTurn: true, pendingInteraction: true);
       case AgentPermissionResolvedEvent():
         // 他端已应答：按 threadId 路由，移除本端仍展示的审批卡。
         if (!_shouldHandleEventForCurrentThread(sessionId: event.threadId)) {
           break;
         }
         _timeline.removePermissionRequest(event.requestId);
-        _flushStreamChangesNow(liveTurn: true, autoScroll: true);
+        _flushStreamChangesNow(liveTurn: true, pendingInteraction: true);
       case AgentPlanApprovalRequestedEvent():
         if (!_shouldHandleEventForCurrentThread(
           sessionId: event.request.sessionId,
@@ -1779,13 +1786,13 @@ class AgentConversationViewModel extends ChangeNotifier {
           break;
         }
         _timeline.addPlanApprovalRequest(event.request);
-        _flushStreamChangesNow(liveTurn: true, autoScroll: true);
+        _flushStreamChangesNow(liveTurn: true, pendingInteraction: true);
       case AgentPlanApprovalResolvedEvent():
         if (!_shouldHandleEventForCurrentThread(sessionId: event.sessionId)) {
           break;
         }
         _timeline.removePlanApprovalRequest(event.requestId);
-        _flushStreamChangesNow(liveTurn: true, autoScroll: true);
+        _flushStreamChangesNow(liveTurn: true, pendingInteraction: true);
       case AgentModelReroutedEvent():
         if (!_shouldHandleEventForCurrentThread(
           sessionId: event.threadId,
@@ -2171,6 +2178,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     bool syncLiveTurn = false,
     bool header = false,
     bool composer = false,
+    bool pendingInteraction = false,
     bool expansion = false,
     bool liveTurn = false,
     bool autoScroll = false,
@@ -2180,6 +2188,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       syncLiveTurn: syncLiveTurn,
       header: header,
       composer: composer,
+      pendingInteraction: pendingInteraction,
       expansion: expansion,
       liveTurn: liveTurn,
       autoScroll: autoScroll,
@@ -2215,6 +2224,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     bool syncLiveTurn = false,
     bool header = false,
     bool composer = false,
+    bool pendingInteraction = false,
     bool liveTurn = false,
     bool autoScroll = false,
   }) {
@@ -2223,6 +2233,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       syncLiveTurn: syncLiveTurn,
       header: header,
       composer: composer,
+      pendingInteraction: pendingInteraction,
       liveTurn: liveTurn,
       autoScroll: autoScroll,
     );

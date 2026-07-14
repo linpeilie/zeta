@@ -26,7 +26,7 @@ Zeta 是一个基于 Flutter Desktop 的本地 AI IDE 壳层。它面向需要�
 - 支持将当前项目路径和选中文件路径作为 Agent 上下文传递给 provider。
 - 支持通过 Codex CLI app-server、Grok ACP 和默认关闭的 Cursor ACP Beta 创建、恢复和继续
   Agent thread，并按握手能力降级 UI。
-- 支持展示 Agent 消息、工具调用状态和权限审批卡片。
+- 支持展示 Agent 消息与工具调用状态，并把权限、提问和计划审批固定在输入框上方。
 - 支持持久化 IDE 会话状态，减少重启后的上下文丢失。
 
 ## 5. 当前范围
@@ -82,9 +82,10 @@ Zeta 是一个基于 Flutter Desktop 的本地 AI IDE 壳层。它面向需要�
 1. 用户在 Agent 输入框输入请求。
 2. 系统创建或恢复当前项目对应的 Agent session。
 3. 系统把用户请求和当前文件路径上下文发送给 provider。
-4. Agent 时间线展示用户消息、Agent 消息、工具卡片和审批卡片。
-5. 如 provider 请求审批，用户在卡片中批准或拒绝。
-6. Cursor 提问和计划审批使用独立卡片；取消、超时或 provider 退出时必须完成协议收尾。
+4. Agent 时间线展示用户消息、Agent 消息和工具卡片，并允许用户滚动回看上下文。
+5. 如 provider 请求权限、用户输入或计划审批，输入框上方的固定交互区立即展示卡片，
+   响应后自动移除且不在时间线重复显示。
+6. Cursor 提问和计划审批使用独立卡片；取消、超时、他端响应或 provider 退出时必须完成协议收尾。
 
 ### 恢复会话
 

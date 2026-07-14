@@ -624,6 +624,18 @@ void main() {
       );
       await tester.pump();
 
+      final dock = find.byKey(const ValueKey('agent-pending-interaction-dock'));
+      final messageList = find.byKey(const ValueKey('agent-message-list'));
+      final submitButton = find.byKey(
+        const ValueKey('agent-permission-approve-question-1'),
+      );
+      expect(dock, findsOneWidget);
+      expect(find.descendant(of: dock, matching: submitButton), findsOneWidget);
+      expect(
+        find.descendant(of: messageList, matching: submitButton),
+        findsNothing,
+      );
+
       await tester.tap(
         find.byKey(const ValueKey('agent-user-input-question-1-scope-source')),
       );
@@ -640,6 +652,7 @@ void main() {
         'source',
         'tests',
       ]);
+      expect(dock, findsNothing);
     });
 
     testWidgets(
@@ -735,6 +748,13 @@ void main() {
         find.byKey(const ValueKey('agent-plan-accept-plan-1')),
         findsOneWidget,
       );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('agent-message-list')),
+          matching: find.byKey(const ValueKey('agent-plan-accept-plan-1')),
+        ),
+        findsNothing,
+      );
       await tester.tap(find.byKey(const ValueKey('agent-plan-accept-plan-1')));
       await tester.pump();
 
@@ -747,6 +767,67 @@ void main() {
         findsNothing,
       );
     });
+
+    testWidgets(
+      'stacks permissions before plans and keeps composer visible in a short window',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(480, 400));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(provider.dispose);
+        addTearDown(viewModel.dispose);
+        await tester.pumpWidget(_TestApp(viewModel: viewModel));
+        await viewModel.loadModels();
+        await viewModel.switchThread(
+          _thread(id: 'thread-pending', title: 'Pending thread'),
+        );
+
+        provider.emitEvent(
+          const AgentPermissionRequestedEvent(
+            AgentPermissionRequest(
+              id: 'permission-1',
+              title: 'Approve command',
+              kind: AgentPermissionKind.commandExecution,
+              command: 'flutter test',
+              sessionId: 'thread-pending',
+            ),
+          ),
+        );
+        provider.emitEvent(
+          AgentPlanApprovalRequestedEvent(
+            AgentPlanApprovalRequest(
+              id: 'plan-long',
+              title: 'Approve long plan',
+              markdown: List<String>.generate(
+                24,
+                (index) => '${index + 1}. Update component ${index + 1}',
+              ).join('\n'),
+              sessionId: 'thread-pending',
+            ),
+          ),
+        );
+        await tester.pump();
+
+        final dock = find.byKey(
+          const ValueKey('agent-pending-interaction-dock'),
+        );
+        final permission = find.byKey(
+          const ValueKey('agent-pending-permission-permission-1'),
+        );
+        final plan = find.byKey(const ValueKey('agent-pending-plan-plan-long'));
+        final composer = find.byKey(const ValueKey('agent-message-input'));
+        expect(dock, findsOneWidget);
+        expect(permission, findsOneWidget);
+        expect(plan, findsOneWidget);
+        expect(
+          tester.getTopLeft(permission).dy,
+          lessThan(tester.getTopLeft(plan).dy),
+        );
+        expect(tester.getSize(dock).height, lessThanOrEqualTo(140));
+        expect(tester.getBottomLeft(composer).dy, lessThanOrEqualTo(400));
+      },
+    );
   });
 }
 

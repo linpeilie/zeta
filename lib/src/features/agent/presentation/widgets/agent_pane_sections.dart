@@ -77,6 +77,121 @@ class _AgentLiveTurnSection extends StatelessWidget {
   }
 }
 
+/// 固定在 Composer 上方的待处理交互区。
+///
+/// 权限、用户提问和计划审批都从独立 pending 列表读取，不依赖时间线 entry。
+class _AgentPendingInteractionSection extends StatelessWidget {
+  const _AgentPendingInteractionSection({
+    required this.viewModel,
+    required this.panelHeight,
+  });
+
+  final AgentConversationViewModel viewModel;
+  final double panelHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: Listenable.merge(<Listenable>[
+        viewModel.historyVersionListenable,
+        viewModel.composerVersionListenable,
+        viewModel.pendingInteractionVersionListenable,
+      ]),
+      builder: (context, _) => _buildDock(context),
+    );
+  }
+
+  Widget _buildDock(BuildContext context) {
+    final permissionRequests = viewModel.permissionRequests;
+    final planApprovalRequests = viewModel.planApprovalRequests;
+    if (viewModel.isReadOnly ||
+        (permissionRequests.isEmpty && planApprovalRequests.isEmpty)) {
+      return const SizedBox.shrink();
+    }
+
+    final maxHeight = math.min<double>(360, panelHeight * 0.35);
+    return _AgentContentAlign(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+        child: ConstrainedBox(
+          key: const ValueKey('agent-pending-interaction-dock'),
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: SingleChildScrollView(
+            key: const ValueKey('agent-pending-interaction-scroll'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                for (var index = 0; index < permissionRequests.length; index++)
+                  Padding(
+                    key: ValueKey(
+                      'agent-pending-permission-${permissionRequests[index].id}',
+                    ),
+                    padding: EdgeInsets.only(
+                      bottom:
+                          index < permissionRequests.length - 1 ||
+                              planApprovalRequests.isNotEmpty
+                          ? IdeSpacing.space8
+                          : 0,
+                    ),
+                    child: _buildPermissionCard(permissionRequests[index]),
+                  ),
+                for (
+                  var index = 0;
+                  index < planApprovalRequests.length;
+                  index++
+                )
+                  Padding(
+                    key: ValueKey(
+                      'agent-pending-plan-${planApprovalRequests[index].id}',
+                    ),
+                    padding: EdgeInsets.only(
+                      bottom: index < planApprovalRequests.length - 1
+                          ? IdeSpacing.space8
+                          : 0,
+                    ),
+                    child: _AgentPlanApprovalCard(
+                      request: planApprovalRequests[index],
+                      onRespond: (kind) => viewModel.respondToPlanApproval(
+                        planApprovalRequests[index],
+                        kind,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPermissionCard(AgentPermissionRequest request) {
+    return _AgentPermissionCard(
+      request: request,
+      autoReview: viewModel.autoReviewForTurn(request.turnId),
+      onApproveGuardian: viewModel.latestDeniedAutoReview != null
+          ? viewModel.approveGuardianDeniedAction
+          : null,
+      onRespond:
+          ({
+            required bool approved,
+            bool cancelTurn = false,
+            Map<String, List<String>> answers = const <String, List<String>>{},
+            AgentCommandApprovalDecisionKind? commandDecision,
+            List<String> execpolicyAmendment = const <String>[],
+          }) => viewModel.respondToPermission(
+            request,
+            approved: approved,
+            cancelTurn: cancelTurn,
+            answers: answers,
+            commandDecision: commandDecision,
+            execpolicyAmendment: execpolicyAmendment,
+          ),
+    );
+  }
+}
+
 class _AgentTurnSection extends StatelessWidget {
   const _AgentTurnSection({
     required this.turn,
@@ -136,33 +251,9 @@ class _AgentTurnSection extends StatelessWidget {
         toolCall: toolCall,
         viewModel: viewModel,
       ),
-      AgentPermissionTimelineEntry(:final request) => _AgentPermissionCard(
-        request: request,
-        autoReview: viewModel.autoReviewForTurn(request.turnId),
-        onApproveGuardian: viewModel.latestDeniedAutoReview != null
-            ? viewModel.approveGuardianDeniedAction
-            : null,
-        onRespond:
-            ({
-              required bool approved,
-              bool cancelTurn = false,
-              Map<String, List<String>> answers =
-                  const <String, List<String>>{},
-              AgentCommandApprovalDecisionKind? commandDecision,
-              List<String> execpolicyAmendment = const <String>[],
-            }) => viewModel.respondToPermission(
-              request,
-              approved: approved,
-              cancelTurn: cancelTurn,
-              answers: answers,
-              commandDecision: commandDecision,
-              execpolicyAmendment: execpolicyAmendment,
-            ),
-      ),
-      AgentPlanApprovalTimelineEntry(:final request) => _AgentPlanApprovalCard(
-        request: request,
-        onRespond: (kind) => viewModel.respondToPlanApproval(request, kind),
-      ),
+      // pending 交互只在 Composer 上方的 dock 渲染，避免时间线出现重复卡片。
+      AgentPermissionTimelineEntry() => const SizedBox.shrink(),
+      AgentPlanApprovalTimelineEntry() => const SizedBox.shrink(),
       // 正常路径会在 grouping 中转成文件编辑组；此处仅作兜底。
       AgentTurnDiffTimelineEntry() => const SizedBox.shrink(),
       AgentHistoryEventTimelineEntry(:final event) => _AgentHistoryEventCard(

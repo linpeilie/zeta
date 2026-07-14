@@ -6,8 +6,8 @@ import 'package:zeta/src/features/agent/application/agent_conversation_timeline_
 
 /// Agent 面板的分区刷新信号与流式节流器。
 ///
-/// 它把 UI 刷新拆成 header/history/composer/live turn/auto scroll 五类信号，
-/// 避免流式输出时整页频繁重建。
+/// 它把 UI 刷新拆成 header/history/composer/pending interaction/
+/// live turn/auto scroll 等分区信号，避免流式输出时整页频繁重建。
 class AgentConversationUiSignals {
   AgentConversationUiSignals({
     required this._timeline,
@@ -22,6 +22,8 @@ class AgentConversationUiSignals {
   final ValueNotifier<int> _historyVersionNotifier = ValueNotifier<int>(0);
   final ValueNotifier<int> _headerVersionNotifier = ValueNotifier<int>(0);
   final ValueNotifier<int> _composerVersionNotifier = ValueNotifier<int>(0);
+  final ValueNotifier<int> _pendingInteractionVersionNotifier =
+      ValueNotifier<int>(0);
   final ValueNotifier<int> _expansionVersionNotifier = ValueNotifier<int>(0);
   final ValueNotifier<int> _autoScrollTickNotifier = ValueNotifier<int>(0);
 
@@ -40,6 +42,9 @@ class AgentConversationUiSignals {
 
   int get composerVersion => _composerVersionNotifier.value;
 
+  /// 待处理权限、提问或计划审批列表的变更版本。
+  int get pendingInteractionVersion => _pendingInteractionVersionNotifier.value;
+
   int get expansionVersion => _expansionVersionNotifier.value;
 
   ValueListenable<int> get historyVersionListenable => _historyVersionNotifier;
@@ -48,6 +53,10 @@ class AgentConversationUiSignals {
 
   ValueListenable<int> get composerVersionListenable =>
       _composerVersionNotifier;
+
+  /// 只在待处理交互变更时通知 Dock，避免跟随流式正文频繁重建。
+  ValueListenable<int> get pendingInteractionVersionListenable =>
+      _pendingInteractionVersionNotifier;
 
   ValueListenable<int> get expansionVersionListenable =>
       _expansionVersionNotifier;
@@ -59,6 +68,7 @@ class AgentConversationUiSignals {
     bool syncLiveTurn = false,
     bool header = false,
     bool composer = false,
+    bool pendingInteraction = false,
     bool expansion = false,
     bool liveTurn = false,
     bool autoScroll = false,
@@ -77,6 +87,9 @@ class AgentConversationUiSignals {
     }
     if (composer) {
       _composerVersionNotifier.value += 1;
+    }
+    if (pendingInteraction) {
+      _pendingInteractionVersionNotifier.value += 1;
     }
     if (expansion) {
       _expansionVersionNotifier.value += 1;
@@ -120,6 +133,7 @@ class AgentConversationUiSignals {
     bool syncLiveTurn = false,
     bool header = false,
     bool composer = false,
+    bool pendingInteraction = false,
     bool expansion = false,
     bool liveTurn = false,
     bool autoScroll = false,
@@ -144,6 +158,7 @@ class AgentConversationUiSignals {
       syncLiveTurn: syncLiveTurn,
       header: header || scheduledHeaderFlush,
       composer: composer || scheduledComposerFlush,
+      pendingInteraction: pendingInteraction,
       expansion: expansion || scheduledExpansionFlush,
       liveTurn: liveTurn || scheduledLiveFlush,
       autoScroll: autoScroll || scheduledAutoScroll,
@@ -155,6 +170,7 @@ class AgentConversationUiSignals {
     _historyVersionNotifier.dispose();
     _headerVersionNotifier.dispose();
     _composerVersionNotifier.dispose();
+    _pendingInteractionVersionNotifier.dispose();
     _expansionVersionNotifier.dispose();
     _autoScrollTickNotifier.dispose();
   }
