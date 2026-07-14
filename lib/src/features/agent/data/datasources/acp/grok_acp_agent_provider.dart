@@ -747,9 +747,19 @@ class GrokAcpAgentProvider implements AgentProvider {
     final method = notification.method;
     final params = notification.params;
 
+    // UI 调试：打印 Grok 实时通知原始 JSON（含 method/params 的完整 raw）。
+    _log.info(
+      'Grok realtime notification $method '
+      'raw=${_encodeGrokDebugPayload(notification.raw)}',
+    );
+
     // session/load 回放或带 isReplay 的更新：不进入直播时间线，避免与
     // readThreadHistory → applyHistorySnapshot 重复渲染。
     if (_shouldSuppressTimelineNotification(method: method, params: params)) {
+      _log.fine(
+        'Suppressed Grok timeline notification $method '
+        '(session load replay or isReplay)',
+      );
       return;
     }
 
@@ -794,6 +804,15 @@ class GrokAcpAgentProvider implements AgentProvider {
 
     if (_loggedUnmatched.add(method)) {
       _log.fine('Unmatched Grok notification: $method');
+    }
+  }
+
+  /// 将 Grok 实时消息编码为可读 JSON，编码失败时回退 toString。
+  static String _encodeGrokDebugPayload(Object? value) {
+    try {
+      return jsonEncode(value);
+    } catch (_) {
+      return value.toString();
     }
   }
 
