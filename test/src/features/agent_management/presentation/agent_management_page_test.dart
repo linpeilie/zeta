@@ -117,6 +117,90 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
   });
+
+  testWidgets('marks Cursor as Beta and prompts before first enable', (
+    tester,
+  ) async {
+    final harness = _CursorManagementHarness.create();
+    addTearDown(harness.dispose);
+    await tester.runAsync(harness.managementController.initialize);
+    await tester.runAsync(harness.managementController.detect);
+
+    await _pumpManagementPage(tester, controller: harness.managementController);
+    expect(find.byKey(const ValueKey('agent-row-cursor')), findsOneWidget);
+    expect(find.text('Beta'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('agent-row-cursor')));
+    await tester.pump();
+    final enableButton = tester.widget<sf.OutlineButton>(
+      find.widgetWithText(sf.OutlineButton, '启用 Agent'),
+    );
+    expect(enableButton.onPressed, isNotNull);
+    enableButton.onPressed!();
+    await tester.pumpAndSettle();
+    expect(find.text('Cursor Agent Beta 兼容性说明'), findsOneWidget);
+  });
+
+  testWidgets('skips the Cursor Beta prompt after acknowledgement', (
+    tester,
+  ) async {
+    final harness = _CursorManagementHarness.create(
+      betaWarningAcknowledged: true,
+    );
+    addTearDown(harness.dispose);
+    await tester.runAsync(harness.managementController.initialize);
+    await tester.runAsync(harness.managementController.detect);
+
+    await _pumpManagementPage(tester, controller: harness.managementController);
+    await tester.tap(find.byKey(const ValueKey('agent-row-cursor')));
+    await tester.pump();
+    final enableButton = tester.widget<sf.OutlineButton>(
+      find.widgetWithText(sf.OutlineButton, '启用 Agent'),
+    );
+    expect(enableButton.onPressed, isNotNull);
+    enableButton.onPressed!();
+    await tester.pumpAndSettle();
+    expect(find.text('Cursor Agent Beta 兼容性说明'), findsNothing);
+  });
+
+  test(
+    'persists the Cursor Beta acknowledgement in provider settings',
+    () async {
+      final harness = _CursorManagementHarness.create();
+      addTearDown(harness.dispose);
+      await harness.managementController.initialize();
+
+      await harness.managementController.acknowledgeBetaCompatibilityWarning();
+
+      expect(
+        harness.providerController
+            .providerConfigById(cursorAgentProviderId)
+            ?.extra['betaCompatibilityWarningAcknowledged'],
+        isTrue,
+      );
+    },
+  );
+
+  testWidgets('explains global and project Cursor configuration boundaries', (
+    tester,
+  ) async {
+    final harness = _CursorManagementHarness.create();
+    addTearDown(harness.dispose);
+    await tester.runAsync(harness.managementController.initialize);
+    await tester.runAsync(harness.managementController.detect);
+
+    await _pumpManagementPage(tester, controller: harness.managementController);
+    await tester.tap(find.byKey(const ValueKey('agent-row-cursor')));
+    await tester.pump();
+    await tester.tap(find.text('配置'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('cursor-config-boundary-notice')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('.cursor/mcp.json'), findsOneWidget);
+  });
 }
 
 class _ManagementHarness {
@@ -187,6 +271,151 @@ class _ManagementHarness {
       }
     }
   }
+}
+
+class _CursorManagementHarness {
+  _CursorManagementHarness({
+    required this.providerController,
+    required this.managementController,
+  });
+
+  final ActiveAgentProviderController providerController;
+  final AgentManagementController managementController;
+
+  static _CursorManagementHarness create({
+    bool betaWarningAcknowledged = false,
+  }) {
+    final provider = FakeAgentProvider();
+    final providerController = ActiveAgentProviderController(
+      providerFactory: FakeAgentProviderFactory(provider),
+      configStore: MemoryAgentProviderConfigStore(
+        AgentProviderSettings(
+          providers: <AgentProviderConfig>[
+            AgentProviderConfig.defaultCursor.copyWith(
+              extra: <String, Object?>{
+                if (betaWarningAcknowledged)
+                  'betaCompatibilityWarningAcknowledged': true,
+              },
+            ),
+          ],
+          activeProviderId: cursorAgentProviderId,
+        ),
+      ),
+    );
+    final managementController = AgentManagementController(
+      repositories: <String, AgentCliManagementRepository>{
+        cursorAgentProviderId: _FakeCursorManagementRepository(),
+      },
+      providerController: providerController,
+    );
+    return _CursorManagementHarness(
+      providerController: providerController,
+      managementController: managementController,
+    );
+  }
+
+  void dispose() {
+    managementController.dispose();
+    providerController.dispose();
+  }
+}
+
+class _FakeCursorManagementRepository implements AgentCliManagementRepository {
+  @override
+  String get agentId => cursorAgentProviderId;
+
+  @override
+  String get configPath => '~/.cursor/cli-config.json';
+
+  @override
+  Future<ManagedAgent> detect({
+    required AgentProviderConfig providerConfig,
+    required bool enabled,
+    AgentDetectionProgressCallback? onProgress,
+  }) async {
+    return ManagedAgent.cursor(enabled: enabled).copyWith(
+      installationState: AgentInstallationState.installed,
+      accountState: AgentAccountState.loggedIn,
+      runtimeState: enabled
+          ? AgentRuntimeState.notRunning
+          : AgentRuntimeState.disabled,
+      currentVersion: '1.5.0',
+      executablePath: '/usr/local/bin/agent',
+      configPath: configPath,
+      connectionTest: AgentConnectionTestResult(
+        success: true,
+        testedAt: DateTime.utc(2026, 7, 14),
+        elapsed: const Duration(milliseconds: 10),
+        cliCallable: true,
+        accountValid: true,
+        protocolReady: true,
+        protocolVersion: '1',
+        agentName: 'Cursor Agent',
+      ),
+    );
+  }
+
+  @override
+  Future<(AgentConnectionTestResult, List<AgentModelInfo>)> testConnection({
+    required AgentProviderConfig providerConfig,
+  }) async {
+    return (
+      AgentConnectionTestResult(
+        success: true,
+        testedAt: DateTime.utc(2026, 7, 14),
+        elapsed: const Duration(milliseconds: 10),
+        cliCallable: true,
+        accountValid: true,
+        protocolReady: true,
+      ),
+      const <AgentModelInfo>[],
+    );
+  }
+
+  @override
+  Future<AgentProviderConfig> providerConfigForPath({
+    required AgentProviderConfig current,
+    required String path,
+    required int timeoutSeconds,
+  }) async => current.copyWith(command: path);
+
+  @override
+  AgentProviderConfig providerConfigWithTimeout(
+    AgentProviderConfig current,
+    int timeoutSeconds,
+  ) => current;
+
+  @override
+  Future<AgentConfigurationDocument> readConfiguration() async {
+    return AgentConfigurationDocument(
+      path: configPath,
+      format: 'JSON',
+      content: '{"mode":"ask"}',
+      maskedContent: '{"mode":"ask"}',
+      exists: true,
+      loadedAt: DateTime.utc(2026, 7, 14),
+      signature: 'test',
+    );
+  }
+
+  @override
+  String? validateConfiguration(String content) => null;
+
+  @override
+  Future<AgentConfigurationSaveResult> saveConfiguration({
+    required AgentConfigurationDocument original,
+    required String content,
+    bool overwriteExternalChanges = false,
+  }) async => AgentConfigurationSaveResult(document: original);
+
+  @override
+  Future<List<String>> discoverLogPaths() async => const <String>[];
+
+  @override
+  Future<List<AgentLogEntry>> readLogs(
+    List<String> paths, {
+    int maxLines = 1000,
+  }) async => const <AgentLogEntry>[];
 }
 
 Future<void> _pumpManagementPage(

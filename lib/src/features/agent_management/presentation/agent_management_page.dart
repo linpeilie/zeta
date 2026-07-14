@@ -454,11 +454,22 @@ class AgentManagementPageState extends State<AgentManagementPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    agent.definition.displayName,
-                    style: textStyles.titleLarge.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          agent.definition.displayName,
+                          overflow: TextOverflow.ellipsis,
+                          style: textStyles.titleLarge.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      if (agent.definition.isBeta) ...[
+                        const SizedBox(width: IdeSpacing.space6),
+                        StateLabel(text: 'Beta', color: colors.warning),
+                      ],
+                    ],
                   ),
                   Text(
                     '${agent.definition.vendor} · ${agent.definition.commandName} · '
@@ -511,7 +522,11 @@ class AgentManagementPageState extends State<AgentManagementPage> {
             ),
             sf.OutlineButton(
               key: const ValueKey('agent-open-logs-button'),
-              onPressed: agent.logPaths.isEmpty ? null : _openLogs,
+              onPressed:
+                  agent.logPaths.isEmpty &&
+                      agent.definition.id != cursorAgentProviderId
+                  ? null
+                  : _openLogs,
               size: sf.ButtonSize.small,
               child: const Text('查看运行日志'),
             ),
@@ -714,6 +729,39 @@ class AgentManagementPageState extends State<AgentManagementPage> {
   Future<void> _setEnabled(String agentId, bool enabled) async {
     widget.controller.selectAgent(agentId);
     final agent = widget.controller.agent;
+    if (enabled &&
+        agent.definition.isBeta &&
+        !widget.controller.betaCompatibilityWarningAcknowledged) {
+      final confirmed = await showIdeDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => IdeDialog(
+          title: Text('${agent.definition.displayName} Beta 兼容性说明'),
+          content: const Text(
+            'Cursor Agent 仍为默认关闭的 Beta Provider。Cursor CLI 自动更新后，'
+            '协议能力可能变化；出现异常时请先在 Agent 管理页重新检测。Zeta 不会自动更新 CLI。',
+          ),
+          actions: <IdeDialogAction>[
+            IdeDialogAction.cancel(
+              onPressed: () =>
+                  Navigator.of(context, rootNavigator: true).pop(false),
+            ),
+            IdeDialogAction.confirm(
+              label: '了解并启用',
+              onPressed: () =>
+                  Navigator.of(context, rootNavigator: true).pop(true),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) {
+        return;
+      }
+      await widget.controller.acknowledgeBetaCompatibilityWarning();
+      if (!mounted) {
+        return;
+      }
+    }
     if (!enabled && agent.runtimeState == AgentRuntimeState.running) {
       final confirmed = await showIdeDialog<bool>(
         context: context,
@@ -1006,13 +1054,23 @@ class _AgentListRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      agent.definition.displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textStyles.displaySmall.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            agent.definition.displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: textStyles.displaySmall.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        if (agent.definition.isBeta) ...[
+                          const SizedBox(width: IdeSpacing.space6),
+                          StateLabel(text: 'Beta', color: colors.warning),
+                        ],
+                      ],
                     ),
                     Text(
                       agent.definition.commandName,
@@ -1431,6 +1489,29 @@ class _AgentDiagnosticsCard extends StatelessWidget {
             _DiagnosticLine(
               label: '最近测试耗时',
               value: '${agent.connectionTest!.elapsed.inMilliseconds} ms',
+            ),
+          if (agent.connectionTest?.protocolVersion != null)
+            _DiagnosticLine(
+              label: 'ACP 协议',
+              value: 'v${agent.connectionTest!.protocolVersion}',
+            ),
+          if (agent.connectionTest?.agentName != null)
+            _DiagnosticLine(
+              label: '握手身份',
+              value:
+                  '${agent.connectionTest!.agentName}'
+                  '${agent.connectionTest!.agentVersion == null ? '' : ' ${agent.connectionTest!.agentVersion}'}',
+            ),
+          if (agent.connectionTest?.capabilitySummary.isNotEmpty == true)
+            _DiagnosticLine(
+              label: '协商能力',
+              value: agent.connectionTest!.capabilitySummary.join(', '),
+            ),
+          if (agent.connectionTest?.success == false &&
+              agent.connectionTest?.exitReason != null)
+            _DiagnosticLine(
+              label: '退出原因',
+              value: agent.connectionTest!.exitReason!,
             ),
           if (agent.errorStage != null)
             _DiagnosticLine(

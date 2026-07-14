@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/cursor_acp_agent_provider.dart';
+import 'package:zeta/src/features/agent/data/datasources/acp/cursor_diagnostics_store.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/cursor_session_index_store.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -58,6 +59,41 @@ void main() {
       expect(initialize['protocolVersion'], 1);
       expect(provider.capabilities.supportsLocalImageInput, isFalse);
       expect(provider.capabilities.supportsResourceInput, isFalse);
+    });
+
+    test('records a redacted handshake, stderr, and exit reason', () async {
+      // Arrange
+      final peer = _FakeCursorPeer();
+      final diagnostics = CursorDiagnosticsStore();
+      final provider = CursorAcpAgentProvider(
+        config: AgentProviderConfig.defaultCursor.copyWith(
+          extra: const <String, Object?>{'detectedCurrentVersion': '1.0.0'},
+        ),
+        peer: peer,
+        diagnosticsStore: diagnostics,
+        sessionIndexStore: MemoryCursorSessionIndexStore(),
+      );
+
+      // Act
+      await provider.startSession(
+        context: const AgentContext(projectPath: r'D:\repo\zeta'),
+      );
+      peer.emitStderr('authorization=very-secret-value');
+      await _flushAsync();
+      await peer.simulateUnexpectedExit();
+      await _flushAsync();
+
+      // Assert
+      final snapshot = diagnostics.snapshot;
+      expect(snapshot.handshake?.protocolVersion, '1');
+      expect(snapshot.handshake?.agentName, 'Cursor Agent');
+      expect(snapshot.handshake?.capabilities, contains('loadSession'));
+      expect(
+        snapshot.records.map((record) => record.message).join('\n'),
+        isNot(contains('very-secret-value')),
+      );
+      expect(snapshot.exitReason, 'process closed unexpectedly');
+      await provider.dispose();
     });
 
     test('maps streaming messages, tools and plans', () async {
@@ -1215,6 +1251,10 @@ class _FakeCursorPeer implements JsonRpcPeer {
     _notifications.add(
       JsonRpcNotification(method: method, params: params, raw: params),
     );
+  }
+
+  void emitStderr(String line) {
+    _stderr.add(line);
   }
 
   Future<void> simulateUnexpectedExit() async {

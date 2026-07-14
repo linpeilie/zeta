@@ -108,6 +108,13 @@ class AgentManagementController extends ChangeNotifier {
   AgentDetectionProgress? get detectionProgress => _detectionProgress;
   AgentConfigurationDocument? get configuration => _configuration;
   List<AgentLogEntry> get logs => List<AgentLogEntry>.unmodifiable(_logs);
+  bool get betaCompatibilityWarningAcknowledged {
+    return _configForAgent(
+          _selectedAgentId,
+        ).extra['betaCompatibilityWarningAcknowledged'] ==
+        true;
+  }
+
   bool get initialized => _initialized;
   bool get detecting => _detecting;
   bool get testing => _testing;
@@ -255,6 +262,23 @@ class AgentManagementController extends ChangeNotifier {
       _operationError =
           '无法${enabled ? '启用' : '禁用'} ${current.definition.displayName}：$error';
     }
+    _notify();
+  }
+
+  /// 记录用户已阅读当前 Beta provider 的一次性兼容性说明。
+  Future<void> acknowledgeBetaCompatibilityWarning() async {
+    final current = _configForAgent(_selectedAgentId);
+    if (current.extra['betaCompatibilityWarningAcknowledged'] == true) {
+      return;
+    }
+    await providerController.updateProviderConfig(
+      current.copyWith(
+        extra: <String, Object?>{
+          ...current.extra,
+          'betaCompatibilityWarningAcknowledged': true,
+        },
+      ),
+    );
     _notify();
   }
 
@@ -465,6 +489,11 @@ class AgentManagementController extends ChangeNotifier {
         'detectedLatestVersion': detected.latestVersion,
         'detectedAccountState': detected.accountState.name,
         'lastDetectedAt': detected.lastDetectedAt?.toIso8601String(),
+        if (detected.connectionTest?.protocolVersion != null)
+          'detectedProtocolVersion': detected.connectionTest!.protocolVersion,
+        if (detected.connectionTest?.capabilityFingerprint != null)
+          'cursorCapabilityFingerprint':
+              detected.connectionTest!.capabilityFingerprint,
         if (path != null && _pathBelongsToAgent(agentId, path)) 'cliPath': path,
       },
     );

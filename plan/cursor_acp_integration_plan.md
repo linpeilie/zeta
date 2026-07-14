@@ -1,6 +1,6 @@
 # Zeta 接入 Cursor Agent 的分析与分步落地方案
 
-> 状态：Phase 1–4 已完成；Phase 5–7 待实施
+> 状态：Phase 1–5 已完成；Phase 6 待实施
 >
 > 编制日期：2026-07-13
 >
@@ -579,7 +579,7 @@ Cursor session 使用双层来源：
 - 模型/模式缺失或变化不会导致 UI 崩溃；
 - 未知 Cursor 扩展记录一次诊断后安全忽略或明确拒绝。
 
-### Phase 5：配置、安全与可观测性
+### Phase 5：配置、安全与可观测性（已完成，2026-07-14）
 
 目标：使 Cursor Provider 可长期维护，而不是仅能跑通 demo。
 
@@ -592,6 +592,28 @@ Cursor session 使用双层来源：
    prompt 正文或密钥。
 5. 对 Cursor 自动更新导致的 capability 变化给出“重新检测”提示，不自动执行更新。
 6. 增加 feature flag/Beta 标记和一次性兼容告警。
+
+实际落地：
+
+- Cursor 全局 `cli-config.json` 已支持 JSON object 校验、递归敏感字段脱敏、外部修改签名
+  冲突检测、保存前备份、临时文件写入与原子替换；符号链接配置仍拒绝写入，保存失败不会
+  用半成品覆盖原文件。
+- Agent 配置页已明确只编辑全局 `~/.cursor/cli-config.json`；项目内
+  `.cursor/cli.json`、`.cursor/mcp.json`、规则和 `AGENTS.md` 只随 workspace 加载，不在
+  全局管理页读取、合并或改写。
+- 新增进程内 `CursorDiagnosticsStore` ring buffer，默认最多 200 行、单行最多 1000 字符；
+  stderr、协议告警和错误在入库前统一折叠换行、遮挡凭证与用户目录，不扫描 Cursor 私有
+  日志目录，也不记录 prompt 正文或完整 wire payload。
+- initialize 成功后只记录 CLI 版本、ACP protocolVersion、agentInfo 白名单字段、协商
+  capability 名称与安全 fingerprint；同时记录定位/启动、认证、session、turn、映射告警、
+  workspace 切换和意外退出阶段，管理页可搜索、筛选和复制这些内存诊断。
+- 检测结果会持久化 capability fingerprint；Cursor CLI 版本或协商能力变化时给出重新检测
+  与复核提示，Zeta 不执行自动更新。
+- Cursor 继续默认关闭，并在 Agent 列表和详情显示 Beta；首次启用前展示一次性兼容告警，
+  用户确认只持久化非敏感 acknowledgement 标志，后续不重复弹出。
+- 已补充诊断脱敏/容量、握手摘要、stderr/退出、嵌套 JSON 脱敏、配置冲突与备份、版本变化、
+  Beta 提示及配置边界的单元和 Widget 回归测试；`flutter analyze` 无问题，完整
+  `flutter test` 共 413 项通过。
 
 退出标准：
 

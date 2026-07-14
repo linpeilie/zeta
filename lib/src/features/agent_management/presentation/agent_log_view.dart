@@ -14,7 +14,7 @@ import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/ide_toast.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 
-/// Codex 自身磁盘日志的查看、搜索、复制和刷新页面。
+/// Agent 磁盘日志或受控内存诊断的查看、搜索、复制和刷新页面。
 class AgentLogView extends StatefulWidget {
   const AgentLogView({
     required this.controller,
@@ -82,13 +82,13 @@ class _AgentLogViewState extends State<AgentLogView> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Codex 运行日志',
+                              '${widget.controller.agent.definition.displayName} 运行日志',
                               style: textStyles.displaySmall.copyWith(
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
                             Text(
-                              '${widget.controller.agent.logPaths.length} 个日志文件 · '
+                              '${widget.controller.agent.logPaths.length} 个诊断来源 · '
                               '${widget.controller.logs.length} 行已加载',
                               style: textStyles.caption.copyWith(
                                 color: colors.textSecondary,
@@ -170,7 +170,7 @@ class _AgentLogViewState extends State<AgentLogView> {
                       child: IdeLoadingIndicator(
                         width: 32,
                         height: 14,
-                        semanticsLabel: '正在读取 Codex 日志',
+                        semanticsLabel: '正在读取 Agent 日志',
                       ),
                     )
                   : entries.isEmpty

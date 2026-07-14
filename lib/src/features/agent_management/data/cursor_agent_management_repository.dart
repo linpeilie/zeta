@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:zeta/src/features/agent/data/codex_cli_locator.dart';
 import 'package:zeta/src/features/agent/data/cursor_cli_locator.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/cursor_acp_agent_provider.dart';
+import 'package:zeta/src/features/agent/data/datasources/acp/cursor_diagnostics_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent_management/data/cli_process_runner.dart';
 import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart'
@@ -31,6 +32,7 @@ class CursorAgentManagementRepository implements AgentCliManagementRepository {
     CursorAcpHandshakeProbe? handshakeProbe,
     DateTime Function()? now,
     String Function()? cursorHomeProvider,
+    CursorDiagnosticsStore? diagnosticsStore,
   }) : _locator = locator ?? const CursorCliLocator(),
        _processRunner =
            processRunner ??
@@ -47,15 +49,23 @@ class CursorAgentManagementRepository implements AgentCliManagementRepository {
                environment: environment,
              );
            }),
-       _handshakeProbe = handshakeProbe ?? _defaultHandshakeProbe,
+       _handshakeProbe =
+           handshakeProbe ??
+           ((config, workspacePath) => _defaultHandshakeProbe(
+             config,
+             workspacePath,
+             diagnosticsStore ?? CursorDiagnosticsStore.shared,
+           )),
        _now = now ?? DateTime.now,
-       _cursorHomeProvider = cursorHomeProvider ?? _defaultCursorHome;
+       _cursorHomeProvider = cursorHomeProvider ?? _defaultCursorHome,
+       _diagnostics = diagnosticsStore ?? CursorDiagnosticsStore.shared;
 
   final CursorCliLocator _locator;
   final CursorCliProcessRun _processRunner;
   final CursorAcpHandshakeProbe _handshakeProbe;
   final DateTime Function() _now;
   final String Function() _cursorHomeProvider;
+  final CursorDiagnosticsStore _diagnostics;
 
   @override
   String get agentId => cursorAgentProviderId;
@@ -106,6 +116,21 @@ class CursorAgentManagementRepository implements AgentCliManagementRepository {
           ? AgentVersionState.unknown
           : AgentVersionState.current,
     );
+    final cachedVersion = providerConfig.extra['detectedCurrentVersion']
+        ?.toString();
+    final versionChanged =
+        cachedVersion != null &&
+        resolved.identity.version != null &&
+        cachedVersion != resolved.identity.version;
+    if (versionChanged) {
+      _diagnostics.record(
+        source: CursorDiagnosticsStore.runtimeSource,
+        message:
+            'compatibility warning; CLI version changed from '
+            '$cachedVersion to ${resolved.identity.version}; run detection again',
+        level: CursorDiagnosticLevel.warning,
+      );
+    }
     publish(1, 'Cursor CLI 身份已确认');
     publish(2, '版本信息已读取');
 
@@ -146,7 +171,9 @@ class CursorAgentManagementRepository implements AgentCliManagementRepository {
           ? current.errorDetails
           : connection.rawErrorSummary,
       suggestion: connection.success
-          ? current.suggestion
+          ? versionChanged
+                ? '检测到 Cursor CLI 版本变化；ACP 能力已重新检测，请复核后继续使用。'
+                : _capabilityChangeSuggestion(providerConfig, connection)
           : '请先运行 agent login，并确认 `agent help acp` 可用。',
     );
     publish(4, connection.success ? 'ACP 握手成功' : 'ACP 握手失败');
@@ -158,6 +185,7 @@ class CursorAgentManagementRepository implements AgentCliManagementRepository {
       configModifiedAt: configExists
           ? (await configFile.stat()).modified
           : null,
+      logPaths: await discoverLogPaths(),
       lastDetectedAt: _now(),
     );
     publish(total, 'Cursor 检测完成');
@@ -215,6 +243,12 @@ class CursorAgentManagementRepository implements AgentCliManagementRepository {
             ? 'Cursor ACP 连接正常'
             : account.error ?? result.message,
         rawErrorSummary: result.rawErrorSummary,
+        protocolVersion: result.protocolVersion,
+        agentName: result.agentName,
+        agentVersion: result.agentVersion,
+        capabilitySummary: result.capabilitySummary,
+        capabilityFingerprint: result.capabilityFingerprint,
+        exitReason: result.exitReason,
       ),
       const <AgentModelInfo>[],
     );
@@ -259,7 +293,7 @@ class CursorAgentManagementRepository implements AgentCliManagementRepository {
       path: configPath,
       format: 'JSON',
       content: content,
-      maskedContent: maskSensitiveConfiguration(content),
+      maskedContent: maskCursorJsonConfiguration(content),
       exists: exists,
       loadedAt: _now(),
       modifiedAt: stat?.modified,
@@ -339,15 +373,37 @@ class CursorAgentManagementRepository implements AgentCliManagementRepository {
   }
 
   @override
-  Future<List<String>> discoverLogPaths() async => const <String>[];
+  Future<List<String>> discoverLogPaths() async {
+    return const <String>[CursorDiagnosticsStore.runtimeSource];
+  }
 
   @override
   Future<List<AgentLogEntry>> readLogs(
     List<String> paths, {
     int maxLines = 1000,
   }) async {
-    // Cursor 未承诺稳定日志目录；Phase 2 不扫描私有文件。
-    return const <AgentLogEntry>[];
+    final records = _diagnostics.snapshot.records;
+    final limit = maxLines < 0 ? 0 : maxLines;
+    final selected = limit == 0
+        ? const <CursorDiagnosticRecord>[]
+        : records.length <= limit
+        ? records
+        : records.sublist(records.length - limit);
+    return <AgentLogEntry>[
+      for (final record in selected)
+        AgentLogEntry(
+          id: record.id,
+          sourcePath: record.source,
+          message: record.message,
+          level: switch (record.level) {
+            CursorDiagnosticLevel.debug => AgentLogLevel.debug,
+            CursorDiagnosticLevel.info => AgentLogLevel.info,
+            CursorDiagnosticLevel.warning => AgentLogLevel.warning,
+            CursorDiagnosticLevel.error => AgentLogLevel.error,
+          },
+          timestamp: record.timestamp,
+        ),
+    ];
   }
 
   AgentProviderConfig _providerConfig(
@@ -365,6 +421,8 @@ class CursorAgentManagementRepository implements AgentCliManagementRepository {
         ...current.extra,
         'cliPath': resolved.displayPath,
         'timeoutSeconds': timeoutSeconds,
+        if (resolved.identity.version != null)
+          'detectedCurrentVersion': resolved.identity.version,
       },
     );
   }
@@ -436,6 +494,8 @@ class CursorAgentManagementRepository implements AgentCliManagementRepository {
         Directory.current.absolute.path,
       ).timeout(Duration(seconds: _timeoutSeconds(config)));
       stopwatch.stop();
+      final diagnostics = _diagnostics.snapshot;
+      final handshake = diagnostics.handshake;
       return AgentConnectionTestResult(
         success: true,
         testedAt: testedAt,
@@ -444,6 +504,12 @@ class CursorAgentManagementRepository implements AgentCliManagementRepository {
         accountValid: true,
         protocolReady: true,
         message: 'Cursor ACP 连接正常',
+        protocolVersion: handshake?.protocolVersion,
+        agentName: handshake?.agentName,
+        agentVersion: handshake?.agentVersion,
+        capabilitySummary: handshake?.capabilities ?? const <String>[],
+        capabilityFingerprint: handshake?.capabilityFingerprint,
+        exitReason: diagnostics.exitReason,
       );
     } catch (error) {
       stopwatch.stop();
@@ -457,6 +523,7 @@ class CursorAgentManagementRepository implements AgentCliManagementRepository {
         failureStage: AgentDiagnosticStage.protocolHandshake,
         message: 'Cursor ACP 握手失败。',
         rawErrorSummary: _safeSummary('$error'),
+        exitReason: _diagnostics.snapshot.exitReason,
       );
     }
   }
@@ -473,10 +540,12 @@ class CursorAgentManagementRepository implements AgentCliManagementRepository {
 Future<void> _defaultHandshakeProbe(
   AgentProviderConfig config,
   String workspacePath,
+  CursorDiagnosticsStore diagnosticsStore,
 ) async {
   final provider = CursorAcpAgentProvider(
     config: config,
     initialWorkspace: workspacePath,
+    diagnosticsStore: diagnosticsStore,
   );
   try {
     await provider.initialize();
@@ -506,6 +575,57 @@ String _signature(String content, FileStat? stat) {
 String _safeSummary(String value) {
   final redacted = redactLogLine(value.replaceAll(RegExp(r'[\r\n]+'), ' '));
   return redacted.length <= 500 ? redacted : redacted.substring(0, 500);
+}
+
+String? _capabilityChangeSuggestion(
+  AgentProviderConfig config,
+  AgentConnectionTestResult connection,
+) {
+  final previous = config.extra['cursorCapabilityFingerprint']?.toString();
+  final current = connection.capabilityFingerprint;
+  if (previous == null || current == null || previous == current) {
+    return null;
+  }
+  return 'Cursor ACP 协商能力发生变化；请重新检测并复核可用功能。';
+}
+
+/// 对 Cursor JSON 做结构化递归脱敏；损坏 JSON 回退到通用文本遮挡。
+String maskCursorJsonConfiguration(String content) {
+  if (content.trim().isEmpty) {
+    return content;
+  }
+  try {
+    final decoded = jsonDecode(content);
+    return const JsonEncoder.withIndent('  ').convert(_maskJsonValue(decoded));
+  } catch (_) {
+    return maskSensitiveConfiguration(content);
+  }
+}
+
+Object? _maskJsonValue(Object? value) {
+  if (value is Map) {
+    return <String, Object?>{
+      for (final entry in value.entries)
+        entry.key.toString(): _isSensitiveJsonKey(entry.key.toString())
+            ? '••••••'
+            : _maskJsonValue(entry.value),
+    };
+  }
+  if (value is List) {
+    return <Object?>[for (final item in value) _maskJsonValue(item)];
+  }
+  return value;
+}
+
+bool _isSensitiveJsonKey(String key) {
+  final normalized = key.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  return normalized.endsWith('apikey') ||
+      normalized.endsWith('token') ||
+      normalized.endsWith('secret') ||
+      normalized.endsWith('password') ||
+      normalized.endsWith('privatekey') ||
+      normalized == 'authorization' ||
+      normalized == 'authorizationheader';
 }
 
 String _join(String parent, String child) {

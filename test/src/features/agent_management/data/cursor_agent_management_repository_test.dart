@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/data/codex_cli_locator.dart';
 import 'package:zeta/src/features/agent/data/cursor_cli_locator.dart';
+import 'package:zeta/src/features/agent/data/datasources/acp/cursor_diagnostics_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent_management/data/cli_process_runner.dart';
 import 'package:zeta/src/features/agent_management/data/cursor_agent_management_repository.dart';
@@ -147,6 +148,119 @@ void main() {
       expect(document.content, contains('super-secret-value'));
       expect(document.maskedContent, isNot(contains('super-secret-value')));
       expect(document.maskedContent, contains('••••••'));
+    });
+
+    test(
+      'recursively masks nested JSON credentials and keeps normal values',
+      () async {
+        // Arrange
+        final repository = CursorAgentManagementRepository(
+          cursorHomeProvider: () => tempDirectory.path,
+        );
+        await File(repository.configPath).writeAsString('''
+{
+  "auth": {"access_token": "nested-secret", "CURSOR_API_KEY": "api-secret", "user": "alice"},
+  "servers": [{"privateKey": "private-secret", "enabled": true}]
+}
+''');
+
+        // Act
+        final document = await repository.readConfiguration();
+
+        // Assert
+        expect(document.maskedContent, isNot(contains('nested-secret')));
+        expect(document.maskedContent, isNot(contains('private-secret')));
+        expect(document.maskedContent, isNot(contains('api-secret')));
+        expect(document.maskedContent, contains('alice'));
+        expect(document.maskedContent, contains('"enabled": true'));
+      },
+    );
+
+    test(
+      'detects external changes and preserves a backup on overwrite',
+      () async {
+        // Arrange
+        final repository = CursorAgentManagementRepository(
+          cursorHomeProvider: () => tempDirectory.path,
+        );
+        final file = File(repository.configPath);
+        await file.writeAsString('{"mode":"ask"}');
+        final original = await repository.readConfiguration();
+        await file.writeAsString('{"mode":"agent"}');
+
+        // Act / Assert
+        await expectLater(
+          repository.saveConfiguration(
+            original: original,
+            content: '{"mode":"plan"}',
+          ),
+          throwsA(isA<AgentConfigurationConflictException>()),
+        );
+        final saved = await repository.saveConfiguration(
+          original: original,
+          content: '{"mode":"plan"}',
+          overwriteExternalChanges: true,
+        );
+        expect(await file.readAsString(), '{"mode":"plan"}');
+        expect(saved.backupPath, isNotNull);
+        expect(
+          await File(saved.backupPath!).readAsString(),
+          '{"mode":"agent"}',
+        );
+      },
+    );
+
+    test('exposes only bounded in-memory Cursor diagnostics as logs', () async {
+      // Arrange
+      final diagnostics = CursorDiagnosticsStore(maxRecords: 2);
+      diagnostics.recordStderr('info ready');
+      diagnostics.recordStderr('token=hidden-token warning');
+      final repository = CursorAgentManagementRepository(
+        cursorHomeProvider: () => tempDirectory.path,
+        diagnosticsStore: diagnostics,
+      );
+
+      // Act
+      final paths = await repository.discoverLogPaths();
+      final logs = await repository.readLogs(paths, maxLines: 1);
+
+      // Assert
+      expect(paths, const <String>[CursorDiagnosticsStore.runtimeSource]);
+      expect(logs, hasLength(1));
+      expect(logs.single.message, isNot(contains('hidden-token')));
+      expect(logs.single.sourcePath, contains('内存'));
+    });
+
+    test('warns when detected CLI version changed', () async {
+      // Arrange
+      final repository = CursorAgentManagementRepository(
+        locator: CursorCliLocator(
+          identityProbe: (_) async => const CursorCliIdentity(
+            productName: 'Cursor Agent',
+            version: '1.5.0',
+          ),
+        ),
+        processRunner: _runnerWithOutput('Authenticated'),
+        handshakeProbe: (_, _) async {},
+        cursorHomeProvider: () => tempDirectory.path,
+        diagnosticsStore: CursorDiagnosticsStore(),
+      );
+      final config = AgentProviderConfig.defaultCursor.copyWith(
+        command: executable.path,
+        extra: <String, Object?>{
+          'cliPath': executable.path,
+          'detectedCurrentVersion': '1.4.0',
+        },
+      );
+
+      // Act
+      final detected = await repository.detect(
+        providerConfig: config,
+        enabled: false,
+      );
+
+      // Assert
+      expect(detected.suggestion, contains('版本变化'));
     });
   });
 }

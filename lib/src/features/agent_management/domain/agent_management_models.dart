@@ -69,6 +69,7 @@ class AgentDefinition {
     required this.configFormat,
     required this.defaultConfigRelativePath,
     required this.npmPackage,
+    this.isBeta = false,
   });
 
   final String id;
@@ -80,6 +81,9 @@ class AgentDefinition {
   final String configFormat;
   final String defaultConfigRelativePath;
   final String npmPackage;
+
+  /// 是否需要用户显式启用并确认兼容性风险的预览能力。
+  final bool isBeta;
 
   /// 内置 Codex CLI 定义。
   static const AgentDefinition codex = AgentDefinition(
@@ -118,6 +122,7 @@ class AgentDefinition {
     configFormat: 'JSON',
     defaultConfigRelativePath: '.cursor/cli-config.json',
     npmPackage: '',
+    isBeta: true,
   );
 
   /// 应用当前支持的全部 Agent 定义。
@@ -150,6 +155,12 @@ class AgentConnectionTestResult {
     this.failureStage,
     this.message,
     this.rawErrorSummary,
+    this.protocolVersion,
+    this.agentName,
+    this.agentVersion,
+    this.capabilitySummary = const <String>[],
+    this.capabilityFingerprint,
+    this.exitReason,
   });
 
   final bool success;
@@ -161,6 +172,14 @@ class AgentConnectionTestResult {
   final AgentDiagnosticStage? failureStage;
   final String? message;
   final String? rawErrorSummary;
+
+  /// 握手诊断只保存白名单摘要，不包含原始 payload。
+  final String? protocolVersion;
+  final String? agentName;
+  final String? agentVersion;
+  final List<String> capabilitySummary;
+  final String? capabilityFingerprint;
+  final String? exitReason;
 }
 
 /// 可编辑配置文件的加载快照。

@@ -5,6 +5,7 @@ import 'dart:math';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/acp_session_replay_collector.dart';
+import 'package:zeta/src/features/agent/data/datasources/acp/cursor_diagnostics_store.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/cursor_process_starter.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/cursor_session_index_store.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
@@ -38,6 +39,7 @@ class CursorAcpAgentProvider
     AcpSessionConfigMapper? sessionConfigMapper,
     CursorAcpExtensionMapper? extensionMapper,
     CursorSessionIndexStore? sessionIndexStore,
+    CursorDiagnosticsStore? diagnosticsStore,
     DateTime Function()? clock,
     String? initialWorkspace,
     this.blockingRequestTimeout = const Duration(minutes: 5),
@@ -50,6 +52,7 @@ class CursorAcpAgentProvider
        _extensionMapper = extensionMapper ?? CursorAcpExtensionMapper(),
        _sessionIndexStore =
            sessionIndexStore ?? SharedPreferencesCursorSessionIndexStore(),
+       _diagnostics = diagnosticsStore ?? CursorDiagnosticsStore.shared,
        _clock = clock ?? DateTime.now,
        _workspacePath = normalizeCursorWorkspacePath(initialWorkspace);
 
@@ -76,6 +79,7 @@ class CursorAcpAgentProvider
   final AcpSessionConfigMapper _sessionConfigMapper;
   final CursorAcpExtensionMapper _extensionMapper;
   final CursorSessionIndexStore _sessionIndexStore;
+  final CursorDiagnosticsStore _diagnostics;
   final DateTime Function() _clock;
   final Duration blockingRequestTimeout;
   final StreamController<AgentEvent> _events =
@@ -151,6 +155,10 @@ class CursorAcpAgentProvider
   }
 
   Future<void> _initializeOnce(String workspace) async {
+    _diagnostics.record(
+      source: CursorDiagnosticsStore.runtimeSource,
+      message: 'startup; stage=cli; workspace=selected',
+    );
     _emitStatus(
       const AgentProviderStatus(
         state: AgentProviderConnectionState.connecting,
@@ -188,7 +196,32 @@ class CursorAcpAgentProvider
       final init = _asMap(result) ?? const <String, Object?>{};
       _validateInitializeResponse(init);
       _applyNegotiatedCapabilities(init['agentCapabilities']);
+      _diagnostics.recordHandshake(
+        protocolVersion: init['protocolVersion'],
+        agentInfo: init['agentInfo'],
+        capabilities: init['agentCapabilities'],
+        cliVersion: config.extra['detectedCurrentVersion']?.toString(),
+      );
+      final previousFingerprint = config.extra['cursorCapabilityFingerprint']
+          ?.toString();
+      final currentFingerprint =
+          _diagnostics.snapshot.handshake?.capabilityFingerprint;
+      if (previousFingerprint != null &&
+          currentFingerprint != null &&
+          previousFingerprint != currentFingerprint) {
+        _diagnostics.record(
+          source: CursorDiagnosticsStore.runtimeSource,
+          message:
+              'compatibility warning; negotiated capabilities changed; '
+              'run Cursor detection again',
+          level: CursorDiagnosticLevel.warning,
+        );
+      }
       await _authenticate(init['authMethods']);
+      _diagnostics.record(
+        source: CursorDiagnosticsStore.runtimeSource,
+        message: 'authentication ready; stage=auth',
+      );
       _initialized = true;
       _emitStatus(
         AgentProviderStatus(
@@ -199,11 +232,21 @@ class CursorAcpAgentProvider
       _log.info('Cursor ACP initialized for workspace $workspace');
     } on ProcessException catch (error, stackTrace) {
       _log.warning('Could not start Cursor CLI', error, stackTrace);
+      _diagnostics.record(
+        source: CursorDiagnosticsStore.runtimeSource,
+        message: 'startup failed; stage=cli; error=$error',
+        level: CursorDiagnosticLevel.error,
+      );
       await _closeCurrentPeer();
       _emitUnavailable(error.message, details: error.toString());
       rethrow;
     } catch (error, stackTrace) {
       _log.warning('Could not initialize Cursor ACP', error, stackTrace);
+      _diagnostics.record(
+        source: CursorDiagnosticsStore.runtimeSource,
+        message: 'initialize failed; stage=handshake/auth; error=$error',
+        level: CursorDiagnosticLevel.error,
+      );
       await _closeCurrentPeer();
       _emitFailure('Cursor ACP 初始化失败', error);
       rethrow;
@@ -324,6 +367,11 @@ class CursorAcpAgentProvider
       return session;
     } catch (error, stackTrace) {
       _log.warning('Cursor session/new failed', error, stackTrace);
+      _diagnostics.record(
+        source: CursorDiagnosticsStore.runtimeSource,
+        message: 'session/new failed; stage=session; error=$error',
+        level: CursorDiagnosticLevel.error,
+      );
       _emitFailure('Cursor session 创建失败', error);
       rethrow;
     }
@@ -711,6 +759,12 @@ class CursorAcpAgentProvider
       return turn;
     } catch (error, stackTrace) {
       _log.warning('Cursor session/prompt failed', error, stackTrace);
+      _diagnostics.record(
+        source: CursorDiagnosticsStore.runtimeSource,
+        message:
+            'session/prompt failed; stage=turn; errorType=${error.runtimeType}',
+        level: CursorDiagnosticLevel.error,
+      );
       if (_runningTurnIdsBySessionId.remove(session.id) == turnId) {
         _events.add(
           AgentTurnCompletedEvent(
@@ -845,12 +899,16 @@ class CursorAcpAgentProvider
     }
     _disposed = true;
     await _closeCurrentPeer();
+    _diagnostics.recordExit('provider disposed', expected: true);
     await _events.close();
   }
 
   Future<void> _prepareWorkspace(String workspace) async {
     if (cursorWorkspacePathsEqual(_workspacePath, workspace)) {
       return;
+    }
+    if (_peer != null) {
+      _diagnostics.recordExit('workspace changed', expected: true);
     }
     await _closeCurrentPeer();
     _workspacePath = workspace;
@@ -1289,11 +1347,17 @@ class CursorAcpAgentProvider
     );
     _stderrSubscription = peer.stderrLines.listen((line) {
       if (line.trim().isNotEmpty) {
+        _diagnostics.recordStderr(line);
         // 不写入 stderr 原文，避免登录态或路径信息进入应用日志。
         _log.fine('Cursor stderr (${line.length} chars)');
       }
     });
     _protocolErrorSubscription = peer.protocolErrors.listen((error) {
+      _diagnostics.record(
+        source: CursorDiagnosticsStore.runtimeSource,
+        message: 'protocol warning; stage=mapping; error=${error.message}',
+        level: CursorDiagnosticLevel.warning,
+      );
       _log.warning(
         'Cursor ACP protocol warning: ${error.message}',
         error.cause,
@@ -1323,6 +1387,12 @@ class CursorAcpAgentProvider
         }
       }
       if (_loggedUnknownNotifications.add(notification.method)) {
+        _diagnostics.record(
+          source: CursorDiagnosticsStore.runtimeSource,
+          message:
+              'compatibility warning; unknown notification=${notification.method}',
+          level: CursorDiagnosticLevel.warning,
+        );
         _log.fine(
           'Ignoring unknown Cursor notification ${notification.method}',
         );
@@ -1386,6 +1456,11 @@ class CursorAcpAgentProvider
     if (mapped.events.isEmpty &&
         unmatched != null &&
         _loggedUnknownNotifications.add('session/update:$unmatched')) {
+      _diagnostics.record(
+        source: CursorDiagnosticsStore.runtimeSource,
+        message: 'compatibility warning; unknown session update=$unmatched',
+        level: CursorDiagnosticLevel.warning,
+      );
       _log.fine('Ignoring unknown Cursor update $unmatched');
     }
   }
@@ -1419,11 +1494,22 @@ class CursorAcpAgentProvider
           message: 'Method not supported: ${request.method}',
         ),
       );
+      _diagnostics.record(
+        source: CursorDiagnosticsStore.runtimeSource,
+        message: 'unsupported server request=${request.method}',
+        level: CursorDiagnosticLevel.warning,
+      );
     } catch (error, stackTrace) {
       _log.warning(
         'Cursor server request ${request.method} failed',
         error,
         stackTrace,
+      );
+      _diagnostics.record(
+        source: CursorDiagnosticsStore.runtimeSource,
+        message:
+            'server request failed; stage=mapping; method=${request.method}; error=$error',
+        level: CursorDiagnosticLevel.error,
       );
       try {
         await _requirePeer().sendResponse(
@@ -1822,6 +1908,7 @@ class CursorAcpAgentProvider
     _extensionMapper.clear();
     _supportsRemoteSessionList = false;
     _capabilities = AgentProviderCapabilities.cursorAcp;
+    _diagnostics.recordExit('process closed unexpectedly');
     _emitUnavailable('Cursor Agent 进程已意外退出');
   }
 
