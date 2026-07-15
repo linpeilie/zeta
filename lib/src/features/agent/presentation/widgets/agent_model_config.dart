@@ -472,6 +472,28 @@ class _ComposerSelectorTrigger extends StatelessWidget {
   }
 }
 
+/// Composer 选择器共用弹层表面。
+///
+/// 使用与未展开触发器相同的面板色和小圆角，只保留细边界用于
+/// 区分 overlay，避免弹层呈现为另一套重卡片视觉。
+class _ComposerSelectorPanel extends StatelessWidget {
+  const _ComposerSelectorPanel({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    return PanelCard(
+      color: colors.panel,
+      borderColor: colors.borderSubtle,
+      borderRadius: IdeRadius.allSmall,
+      boxShadow: const <BoxShadow>[],
+      child: child,
+    );
+  }
+}
+
 class _ModelConfigPopover extends StatefulWidget {
   const _ModelConfigPopover({
     required this.stateListenable,
@@ -663,7 +685,6 @@ class _ModelConfigPopoverState extends State<_ModelConfigPopover> {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final brightness = sf.Theme.of(context).brightness;
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     return Focus(
       canRequestFocus: false,
@@ -693,11 +714,7 @@ class _ModelConfigPopoverState extends State<_ModelConfigPopover> {
                 width: widget.width,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxHeight: widget.maxHeight),
-                  child: PanelCard(
-                    color: colors.surfaceOverlay,
-                    borderColor: colors.borderSubtle,
-                    borderRadius: IdeRadius.allMedium,
-                    boxShadow: IdeEffects.overlayShadow(brightness),
+                  child: _ComposerSelectorPanel(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -716,7 +733,7 @@ class _ModelConfigPopoverState extends State<_ModelConfigPopover> {
                         Divider(
                           height: 1,
                           thickness: 1,
-                          color: colors.borderSubtle,
+                          color: colors.borderSubtle.withValues(alpha: 0.6),
                         ),
                         Flexible(
                           child: Listener(
@@ -878,18 +895,18 @@ class _ModelListLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     return SizedBox(
-      height: 32,
+      height: 28,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space10),
+        padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space8),
         child: Row(
           children: [
             Expanded(
               child: Text(
                 '选择模型',
                 style: IdeTextStyles.of(context).bodySmall.copyWith(
-                  color: colors.textSecondary,
+                  color: colors.textTertiary,
                   fontSize: 12,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),
@@ -960,8 +977,8 @@ class _ModelListItem extends StatelessWidget {
       height: _composerSelectorRowHeight,
       padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space8),
       borderRadius: IdeRadius.allSmall,
-      selectedBackgroundColor: colors.accent.withValues(alpha: 0.09),
-      focusBorderColor: colors.accent.withValues(alpha: 0.42),
+      selectedBackgroundColor: colors.border.withValues(alpha: 0.2),
+      focusBorderColor: colors.border,
       semanticLabel:
           '${model.displayName}${selected ? '，已选择' : ''}${model.enabled ? '' : '，不可用'}',
       child: Row(

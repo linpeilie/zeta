@@ -12,6 +12,7 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
@@ -575,10 +576,11 @@ void main() {
         of: popover,
         matching: find.byType(PanelCard),
       );
-      expect(
-        tester.widget<PanelCard>(popoverPanel.first).borderRadius,
-        IdeRadius.allMedium,
-      );
+      final modelPopoverPanel = tester.widget<PanelCard>(popoverPanel.first);
+      final colors = IdeColors.of(tester.element(modelSelector));
+      expect(modelPopoverPanel.color, colors.panel);
+      expect(modelPopoverPanel.borderRadius, IdeRadius.allSmall);
+      expect(modelPopoverPanel.boxShadow, isEmpty);
       final selectedModelSurface = tester.widget<PaneInteractiveSurface>(
         find.byKey(const ValueKey('agent-model-option-gpt-5.5')),
       );
@@ -587,9 +589,9 @@ void main() {
       expect(selectedModelSurface.selected, isTrue);
       expect(
         selectedModelSurface.selectedBackgroundColor?.a,
-        closeTo(0.09, 0.001),
+        closeTo(0.2, 0.001),
       );
-      expect(selectedModelSurface.focusBorderColor?.a, closeTo(0.42, 0.001));
+      expect(selectedModelSurface.focusBorderColor, colors.border);
       final openTriggerTooltip = find.ancestor(
         of: modelSelector,
         matching: find.byType(IdeTooltip),
@@ -717,18 +719,19 @@ void main() {
           of: popover,
           matching: find.byType(PanelCard),
         );
-        expect(
-          tester.widget<PanelCard>(popoverPanel).borderRadius,
-          IdeRadius.allMedium,
-        );
+        final permissionPopoverPanel = tester.widget<PanelCard>(popoverPanel);
+        final colors = IdeColors.of(tester.element(permissionSelector));
+        expect(permissionPopoverPanel.color, colors.panel);
+        expect(permissionPopoverPanel.borderRadius, IdeRadius.allSmall);
+        expect(permissionPopoverPanel.boxShadow, isEmpty);
         final selectedOption = tester.widget<PaneInteractiveSurface>(
           find.byKey(const ValueKey('agent-permission-preset-workspace')),
         );
         expect(selectedOption.height, 32);
         expect(selectedOption.borderRadius, IdeRadius.allSmall);
         expect(selectedOption.selected, isTrue);
-        expect(selectedOption.selectedBackgroundColor?.a, closeTo(0.09, 0.001));
-        expect(selectedOption.focusBorderColor?.a, closeTo(0.42, 0.001));
+        expect(selectedOption.selectedBackgroundColor?.a, closeTo(0.2, 0.001));
+        expect(selectedOption.focusBorderColor, colors.border);
 
         await tester.tap(
           find.byKey(const ValueKey('agent-permission-preset-fullAccess')),

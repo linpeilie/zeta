@@ -1021,7 +1021,6 @@ class _PermissionPolicyPopover extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final brightness = sf.Theme.of(context).brightness;
     return Focus(
       canRequestFocus: false,
       onKeyEvent: (_, event) {
@@ -1041,35 +1040,35 @@ class _PermissionPolicyPopover extends StatelessWidget {
           width: width,
           child: ConstrainedBox(
             constraints: BoxConstraints(maxHeight: maxHeight),
-            child: PanelCard(
-              color: colors.surfaceOverlay,
-              borderColor: colors.borderSubtle,
-              borderRadius: IdeRadius.allMedium,
-              boxShadow: IdeEffects.overlayShadow(brightness),
+            child: _ComposerSelectorPanel(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   SizedBox(
-                    height: 32,
+                    height: 28,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: IdeSpacing.space10,
+                        horizontal: IdeSpacing.space8,
                       ),
                       child: Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
                           '工作目录权限',
                           style: IdeTextStyles.of(context).bodySmall.copyWith(
-                            color: colors.textSecondary,
+                            color: colors.textTertiary,
                             fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),
                     ),
                   ),
-                  Divider(height: 1, thickness: 1, color: colors.borderSubtle),
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: colors.borderSubtle.withValues(alpha: 0.6),
+                  ),
                   Flexible(
                     child: ListView.builder(
                       key: const ValueKey('agent-permission-policy-list'),
@@ -1118,8 +1117,8 @@ class _PermissionPolicyOption extends StatelessWidget {
       height: _composerSelectorRowHeight,
       padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space8),
       borderRadius: IdeRadius.allSmall,
-      selectedBackgroundColor: colors.accent.withValues(alpha: 0.09),
-      focusBorderColor: colors.accent.withValues(alpha: 0.42),
+      selectedBackgroundColor: colors.border.withValues(alpha: 0.2),
+      focusBorderColor: colors.border,
       semanticLabel: '${preset.label}${selected ? '，已选择' : ''}',
       child: Row(
         children: [
