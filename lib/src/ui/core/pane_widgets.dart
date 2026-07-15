@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
@@ -20,42 +22,127 @@ Color resolveMutedForegroundColor(BuildContext context) {
 }
 
 /// 统一 runtime 中的紧凑 tooltip。
-class IdeTooltip extends StatelessWidget {
+class IdeTooltip extends StatefulWidget {
   const IdeTooltip({
     required this.message,
     required this.child,
     super.key,
     this.waitDuration,
+    this.enabled = true,
   });
 
   final String message;
   final Widget child;
   final Duration? waitDuration;
 
+  /// 设为 false 时立即移除已显示的 tooltip，并停止新的 hover 调度。
+  final bool enabled;
+
   @override
-  Widget build(BuildContext context) {
-    if (message.trim().isEmpty) {
-      return child;
+  State<IdeTooltip> createState() => _IdeTooltipState();
+}
+
+class _IdeTooltipState extends State<IdeTooltip> {
+  Timer? _showTimer;
+  sf.OverlayCompleter<void>? _entry;
+  bool _hovered = false;
+
+  @override
+  void didUpdateWidget(covariant IdeTooltip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.enabled ||
+        widget.message.trim().isEmpty ||
+        widget.message != oldWidget.message) {
+      _hideTooltip();
     }
+  }
+
+  @override
+  void dispose() {
+    _showTimer?.cancel();
+    _entry?.remove();
+    _entry?.dispose();
+    super.dispose();
+  }
+
+  void _scheduleTooltip() {
+    _hovered = true;
+    _showTimer?.cancel();
+    _showTimer = Timer(
+      widget.waitDuration ?? const Duration(milliseconds: 500),
+      () {
+        if (!mounted ||
+            !_hovered ||
+            !widget.enabled ||
+            widget.message.trim().isEmpty) {
+          return;
+        }
+        _showTooltip();
+      },
+    );
+  }
+
+  void _hideTooltip() {
+    _hovered = false;
+    _showTimer?.cancel();
+    _showTimer = null;
+    final entry = _entry;
+    _entry = null;
+    entry?.remove();
+    entry?.dispose();
+  }
+
+  void _showTooltip() {
+    _entry?.remove();
+    _entry?.dispose();
+    final entry = sf.OverlayManager.of(context).showTooltip<void>(
+      context: context,
+      modal: false,
+      alignment: Alignment.topCenter,
+      anchorAlignment: Alignment.bottomCenter,
+      dismissBackdropFocus: false,
+      overlayBarrier: const sf.OverlayBarrier(barrierColor: Colors.transparent),
+      builder: _buildTooltip,
+    );
+    _entry = entry;
+  }
+
+  Widget _buildTooltip(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    return sf.Tooltip(
-      waitDuration: waitDuration ?? const Duration(milliseconds: 500),
-      tooltip: (context) => sf.TooltipContainer(
-        backgroundColor: colors.surfaceOverlay,
-        borderRadius: IdeRadius.allSmall,
-        surfaceOpacity: 1,
-        surfaceBlur: 0,
-        child: Text(
-          message,
-          style: textStyles.bodySmall.copyWith(
-            color: colors.textPrimary,
-            fontWeight: FontWeight.w500,
-            height: 1.15,
-          ),
+    return sf.TooltipContainer(
+      backgroundColor: colors.surfaceOverlay,
+      borderRadius: IdeRadius.allSmall,
+      surfaceOpacity: 1,
+      surfaceBlur: 0,
+      child: Text(
+        widget.message,
+        style: textStyles.bodySmall.copyWith(
+          color: colors.textPrimary,
+          fontWeight: FontWeight.w500,
+          height: 1.15,
         ),
       ),
-      child: child,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.enabled || widget.message.trim().isEmpty) {
+      return widget.child;
+    }
+    return TapRegion(
+      onTapOutside: (_) => _hideTooltip(),
+      child: MouseRegion(
+        onEnter: (_) => _scheduleTooltip(),
+        onExit: (_) => _hideTooltip(),
+        child: Listener(
+          behavior: HitTestBehavior.translucent,
+          // 激活控件时先移除 tooltip，避免它与随后打开的菜单共享 Overlay。
+          onPointerDown: (_) => _hideTooltip(),
+          child: widget.child,
+        ),
+      ),
     );
   }
 }

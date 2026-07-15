@@ -1,5 +1,9 @@
 part of '../agent_pane.dart';
 
+const double _modelConfigPopoverPreferredWidth = 288;
+const double _modelConfigPopoverMaxHeight = 360;
+const double _modelConfigRowHeight = 32;
+
 /// Composer 中统一的模型配置入口与 Popover 协调器。
 class _AgentModelConfig extends StatefulWidget {
   const _AgentModelConfig({
@@ -100,8 +104,18 @@ class _AgentModelConfigState extends State<_AgentModelConfig> {
     final spaceAbove = origin.dy;
     final spaceBelow = viewport.height - origin.dy - triggerHeight;
     final openAbove = spaceAbove > spaceBelow && spaceBelow < 260;
-    final width = math.min(400.0, math.max(240.0, viewport.width - 24));
-    final maxHeight = math.min(480.0, math.max(120.0, viewport.height - 24));
+    final availablePopoverHeight =
+        (openAbove ? spaceAbove : spaceBelow) -
+        IdeSpacing.space6 -
+        IdeSpacing.space12;
+    final width = math.max(
+      1.0,
+      math.min(_modelConfigPopoverPreferredWidth, viewport.width - 24),
+    );
+    final maxHeight = math.max(
+      1.0,
+      math.min(_modelConfigPopoverMaxHeight, availablePopoverHeight),
+    );
     final reduceMotion = mediaQuery.disableAnimations;
 
     _setPopoverState(widget.state.copyWith(expandedModelId: null));
@@ -110,13 +124,15 @@ class _AgentModelConfigState extends State<_AgentModelConfig> {
       alignment: openAbove ? Alignment.bottomLeft : Alignment.topLeft,
       anchorAlignment: openAbove ? Alignment.topLeft : Alignment.bottomLeft,
       widthConstraint: IdePopoverConstraint.intrinsic,
-      heightConstraint: IdePopoverConstraint.intrinsic,
+      // 列表使用 shrink-wrap viewport；避免底层 popover 请求其 intrinsic
+      // height，并由组件自身的 maxHeight 负责滚动约束。
+      heightConstraint: IdePopoverConstraint.flexible,
       offset: Offset(0, openAbove ? -6 : 6),
       margin: const EdgeInsets.all(IdeSpacing.space12),
       allowInvertVertical: false,
       showDuration: reduceMotion
           ? const Duration(milliseconds: 80)
-          : const Duration(milliseconds: 150),
+          : IdeMotion.durationFast,
       dismissDuration: reduceMotion
           ? const Duration(milliseconds: 80)
           : IdeMotion.durationFast,
@@ -124,6 +140,9 @@ class _AgentModelConfigState extends State<_AgentModelConfig> {
         stateListenable: _popoverState,
         width: width,
         maxHeight: maxHeight,
+        expansionAlignment: openAbove
+            ? Alignment.bottomLeft
+            : Alignment.topLeft,
         onSelectModel: _selectModel,
         onSelectReasoningEffort: _selectReasoningEffort,
         onSelectFastEnabled: _selectFastEnabled,
@@ -311,7 +330,10 @@ class _ModelConfigTrigger extends StatelessWidget {
     }
 
     return IdeTooltip(
+      // 点击触发器时鼠标仍停在原位；打开后禁用 tooltip，避免其延迟出现并
+      // 覆盖 popover 底部的模型行。
       message: tooltip.toString(),
+      enabled: !open,
       child: PaneInteractiveSurface(
         key: const ValueKey('agent-model-selector'),
         focusNode: focusNode,
@@ -423,6 +445,7 @@ class _ModelConfigPopover extends StatefulWidget {
     required this.stateListenable,
     required this.width,
     required this.maxHeight,
+    required this.expansionAlignment,
     required this.onSelectModel,
     required this.onSelectReasoningEffort,
     required this.onSelectFastEnabled,
@@ -434,6 +457,7 @@ class _ModelConfigPopover extends StatefulWidget {
   final ValueListenable<AgentModelConfigUiState> stateListenable;
   final double width;
   final double maxHeight;
+  final Alignment expansionAlignment;
   final ValueChanged<AgentModelInfo> onSelectModel;
   final ValueChanged<String> onSelectReasoningEffort;
   final ValueChanged<bool> onSelectFastEnabled;
@@ -604,26 +628,6 @@ class _ModelConfigPopoverState extends State<_ModelConfigPopover> {
     });
   }
 
-  double _contentHeight(AgentModelConfigUiState state) {
-    var height = 16.0 + 36 + (state.models.length * 40);
-    if (state.appliesNextTurn) {
-      height += 34;
-    }
-    if (state.selectionNotice != null) {
-      height += 48;
-    }
-    if (state.expandedModelId != null) {
-      height += 166;
-      if (state.compatibilityConflict != null || state.saveError != null) {
-        height += 54;
-      }
-    }
-    if (state.models.isEmpty) {
-      height += 56;
-    }
-    return height.clamp(92.0, widget.maxHeight);
-  }
-
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
@@ -646,89 +650,106 @@ class _ModelConfigPopoverState extends State<_ModelConfigPopover> {
         child: ValueListenableBuilder<AgentModelConfigUiState>(
           valueListenable: widget.stateListenable,
           builder: (context, state, _) {
-            return AnimatedContainer(
+            return AnimatedSize(
               key: const ValueKey('agent-model-config-popover'),
               duration: reduceMotion
                   ? const Duration(milliseconds: 80)
-                  : const Duration(milliseconds: 180),
+                  : IdeMotion.durationNormal,
               curve: Curves.easeOutCubic,
-              width: widget.width,
-              height: _contentHeight(state),
-              child: PanelCard(
-                color: colors.surfaceOverlay,
-                borderColor: colors.borderSubtle,
-                borderRadius: IdeRadius.allLarge,
-                boxShadow: IdeEffects.overlayShadow(brightness),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (state.appliesNextTurn)
-                      _NextTurnModelConfigBanner(colors: colors),
-                    if (state.selectionNotice != null)
-                      _ModelSelectionNoticeBanner(
-                        message: state.selectionNotice!,
-                        colors: colors,
-                      ),
-                    _ModelListLabel(
-                      refreshing: state.isRefreshing,
-                      refreshError: state.refreshError,
-                    ),
-                    Expanded(
-                      child: Listener(
-                        onPointerSignal: (event) {
-                          if (event is PointerScrollEvent) {
-                            _lastWheelScrollAt = DateTime.now();
-                          }
-                        },
-                        child: state.models.isEmpty
-                            ? Center(
-                                child: Text(
-                                  state.isRefreshing ? '正在加载模型…' : '暂无可用模型',
-                                  style: IdeTextStyles.of(context).bodySmall
-                                      .copyWith(color: colors.textSecondary),
-                                ),
-                              )
-                            : ListView.builder(
-                                key: const ValueKey('agent-model-list'),
-                                controller: _scrollController,
-                                padding: const EdgeInsets.fromLTRB(
-                                  IdeSpacing.space8,
-                                  IdeSpacing.space2,
-                                  IdeSpacing.space8,
-                                  IdeSpacing.space8,
-                                ),
-                                itemCount: state.models.length,
-                                itemBuilder: (context, index) {
-                                  final model = state.models[index];
-                                  return RepaintBoundary(
-                                    key: ValueKey<String>(model.id),
-                                    child: _ModelListItem(
-                                      model: model,
-                                      selected:
-                                          state.selectedModelId == model.id,
-                                      expanded:
-                                          state.expandedModelId == model.id,
-                                      saving: state.savingModelIds.contains(
-                                        model.id,
+              alignment: widget.expansionAlignment,
+              child: SizedBox(
+                width: widget.width,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: widget.maxHeight),
+                  child: PanelCard(
+                    color: colors.surfaceOverlay,
+                    borderColor: colors.borderSubtle,
+                    borderRadius: IdeRadius.allMedium,
+                    boxShadow: IdeEffects.overlayShadow(brightness),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (state.appliesNextTurn)
+                          _NextTurnModelConfigBanner(colors: colors),
+                        if (state.selectionNotice != null)
+                          _ModelSelectionNoticeBanner(
+                            message: state.selectionNotice!,
+                            colors: colors,
+                          ),
+                        _ModelListLabel(
+                          refreshing: state.isRefreshing,
+                          refreshError: state.refreshError,
+                        ),
+                        Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: colors.borderSubtle,
+                        ),
+                        Flexible(
+                          child: Listener(
+                            onPointerSignal: (event) {
+                              if (event is PointerScrollEvent) {
+                                _lastWheelScrollAt = DateTime.now();
+                              }
+                            },
+                            child: state.models.isEmpty
+                                ? Padding(
+                                    padding: IdeSpacing.all16,
+                                    child: Center(
+                                      child: Text(
+                                        state.isRefreshing
+                                            ? '正在加载模型…'
+                                            : '暂无可用模型',
+                                        style: IdeTextStyles.of(context)
+                                            .bodySmall
+                                            .copyWith(
+                                              color: colors.textSecondary,
+                                            ),
                                       ),
-                                      state: state,
-                                      focusNode: _modelFocusNodes[model.id]!,
-                                      configKey: _configKeys[model.id]!,
-                                      onSelect: () =>
-                                          widget.onSelectModel(model),
-                                      onReasoningChanged:
-                                          widget.onSelectReasoningEffort,
-                                      onFastChanged: widget.onSelectFastEnabled,
-                                      onResolveCompatibility:
-                                          widget.onResolveCompatibility,
-                                      onRetrySave: widget.onRetrySave,
                                     ),
-                                  );
-                                },
-                              ),
-                      ),
+                                  )
+                                : ListView.builder(
+                                    key: const ValueKey('agent-model-list'),
+                                    controller: _scrollController,
+                                    shrinkWrap: true,
+                                    padding: IdeSpacing.all4,
+                                    itemCount: state.models.length,
+                                    itemBuilder: (context, index) {
+                                      final model = state.models[index];
+                                      return RepaintBoundary(
+                                        key: ValueKey<String>(model.id),
+                                        child: _ModelListItem(
+                                          model: model,
+                                          selected:
+                                              state.selectedModelId == model.id,
+                                          expanded:
+                                              state.expandedModelId == model.id,
+                                          saving: state.savingModelIds.contains(
+                                            model.id,
+                                          ),
+                                          state: state,
+                                          focusNode:
+                                              _modelFocusNodes[model.id]!,
+                                          configKey: _configKeys[model.id]!,
+                                          onSelect: () =>
+                                              widget.onSelectModel(model),
+                                          onReasoningChanged:
+                                              widget.onSelectReasoningEffort,
+                                          onFastChanged:
+                                              widget.onSelectFastEnabled,
+                                          onResolveCompatibility:
+                                              widget.onResolveCompatibility,
+                                          onRetrySave: widget.onRetrySave,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             );
@@ -748,8 +769,8 @@ class _NextTurnModelConfigBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       key: const ValueKey('agent-model-next-turn-banner'),
-      height: 34,
-      padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space12),
+      height: 30,
+      padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space10),
       color: colors.info.withValues(alpha: 0.1),
       child: Row(
         children: [
@@ -781,10 +802,10 @@ class _ModelSelectionNoticeBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       key: const ValueKey('agent-model-auto-switch-notice'),
-      constraints: const BoxConstraints(minHeight: 34),
+      constraints: const BoxConstraints(minHeight: 30),
       padding: const EdgeInsets.symmetric(
-        horizontal: IdeSpacing.space12,
-        vertical: IdeSpacing.space8,
+        horizontal: IdeSpacing.space10,
+        vertical: IdeSpacing.space6,
       ),
       color: colors.info.withValues(alpha: 0.1),
       child: Row(
@@ -825,17 +846,17 @@ class _ModelListLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     return SizedBox(
-      height: 36,
+      height: 32,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space16),
+        padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space10),
         child: Row(
           children: [
             Expanded(
               child: Text(
                 '选择模型',
-                style: IdeTextStyles.of(context).titleSmall.copyWith(
+                style: IdeTextStyles.of(context).bodySmall.copyWith(
                   color: colors.textSecondary,
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -904,33 +925,30 @@ class _ModelListItem extends StatelessWidget {
       onPressed: model.enabled ? onSelect : null,
       enabled: model.enabled,
       selected: selected,
-      height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space10),
-      borderRadius: IdeRadius.allMedium,
-      selectedBackgroundColor: colors.primaryMuted,
+      height: _modelConfigRowHeight,
+      padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space8),
+      borderRadius: IdeRadius.allSmall,
+      selectedBackgroundColor: colors.accent.withValues(alpha: 0.09),
+      focusBorderColor: colors.accent.withValues(alpha: 0.42),
       semanticLabel:
           '${model.displayName}${selected ? '，已选择' : ''}${model.enabled ? '' : '，不可用'}',
       child: Row(
         children: [
           SizedBox(
-            width: 16,
+            width: 14,
             child: selected && model.enabled
-                ? Icon(
-                    Icons.check_rounded,
-                    size: 16,
-                    color: colors.accentForeground,
-                  )
+                ? Icon(Icons.check_rounded, size: 14, color: colors.accent)
                 : null,
           ),
-          const SizedBox(width: IdeSpacing.space8),
+          const SizedBox(width: IdeSpacing.space6),
           Expanded(
             child: Text(
               model.displayName,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: textStyles.bodyMedium.copyWith(
+              style: textStyles.bodySmall.copyWith(
                 color: model.enabled ? colors.textPrimary : colors.textTertiary,
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -947,7 +965,7 @@ class _ModelListItem extends StatelessWidget {
           else if (!model.enabled)
             Icon(
               Icons.info_outline_rounded,
-              size: 16,
+              size: 14,
               color: colors.textTertiary,
             ),
         ],
@@ -1120,63 +1138,73 @@ class _ModelInlineConfig extends StatelessWidget {
     return Padding(
       key: ValueKey<String>('agent-model-inline-config-${model.id}'),
       padding: const EdgeInsets.fromLTRB(
-        IdeSpacing.space8,
         IdeSpacing.space4,
-        IdeSpacing.space8,
-        IdeSpacing.space6,
+        IdeSpacing.space2,
+        IdeSpacing.space4,
+        IdeSpacing.space4,
       ),
       child: PanelCard(
         color: colors.surfaceElevated,
         borderColor: colors.borderSubtle,
-        borderRadius: IdeRadius.allLarge,
+        borderRadius: IdeRadius.allSmall,
         boxShadow: const <BoxShadow>[],
         child: Padding(
-          padding: IdeSpacing.all12,
+          padding: IdeSpacing.all8,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '思考程度',
-                      style: textStyles.bodySmall.copyWith(
-                        color: colors.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  if (saving)
-                    SizedBox(
-                      width: 10,
-                      height: 10,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 1.4,
-                        color: colors.textSecondary,
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: IdeSpacing.space8),
               if (efforts.isEmpty)
-                Text(
-                  '该模型未提供可配置档位',
-                  style: textStyles.bodySmall.copyWith(
-                    color: colors.textTertiary,
+                SizedBox(
+                  height: 28,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '该模型未提供可配置的思考程度',
+                      style: textStyles.bodySmall.copyWith(
+                        color: colors.textTertiary,
+                      ),
+                    ),
                   ),
                 )
               else
-                _ReasoningSegmentControl(
-                  efforts: efforts,
-                  selectedEffort:
-                      state.selectedReasoningEffort ?? efforts.first.effort,
-                  onChanged: onReasoningChanged,
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 52,
+                      child: Text(
+                        '思考程度',
+                        style: textStyles.bodySmall.copyWith(
+                          color: colors.textSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: IdeSpacing.space6),
+                    Expanded(
+                      child: _ReasoningSegmentControl(
+                        efforts: efforts,
+                        selectedEffort:
+                            state.selectedReasoningEffort ??
+                            efforts.first.effort,
+                        onChanged: onReasoningChanged,
+                      ),
+                    ),
+                    if (saving) ...[
+                      const SizedBox(width: IdeSpacing.space6),
+                      SizedBox(
+                        width: 10,
+                        height: 10,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.4,
+                          color: colors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-              const SizedBox(height: IdeSpacing.space12),
-              Divider(height: 1, thickness: 1, color: colors.borderSubtle),
-              const SizedBox(height: IdeSpacing.space6),
+              const SizedBox(height: IdeSpacing.space4),
               _FastConfigRow(
                 model: model,
                 enabled: fastSupported,
@@ -1233,7 +1261,7 @@ class _FastConfigRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final content = SizedBox(
-      height: 36,
+      height: 32,
       child: Row(
         children: [
           Icon(
@@ -1418,7 +1446,7 @@ class _ReasoningSegmentControlState extends State<_ReasoningSegmentControl> {
       label: '思考程度',
       child: Container(
         key: const ValueKey('agent-reasoning-segment-control'),
-        height: 32,
+        height: 28,
         padding: const EdgeInsets.all(IdeSpacing.space2),
         decoration: BoxDecoration(
           color: colors.surface,
@@ -1463,7 +1491,7 @@ class _ReasoningSegmentControlState extends State<_ReasoningSegmentControl> {
                               'agent-reasoning-option-${effort.effort}',
                             ),
                             focusNode: _focusNodes[effort.effort],
-                            height: 28,
+                            height: 24,
                             onPressed: () => widget.onChanged(effort.effort),
                             selected: effort.effort == widget.selectedEffort,
                             selectedBackgroundColor: Colors.transparent,

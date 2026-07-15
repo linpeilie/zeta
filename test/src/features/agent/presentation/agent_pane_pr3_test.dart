@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -554,10 +555,46 @@ void main() {
       expect(selectorSurface.borderColor, isNull);
       expect(selectorSurface.borderRadius, IdeRadius.allSmall);
       expect(find.text('GPT-5.5'), findsOneWidget);
+      final closedTriggerTooltip = find.ancestor(
+        of: modelSelector,
+        matching: find.byType(IdeTooltip),
+      );
+      expect(
+        tester.widget<IdeTooltip>(closedTriggerTooltip).message,
+        contains('Fast：已关闭'),
+      );
 
       await tester.tap(find.byKey(const ValueKey('agent-model-selector')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
+
+      final popover = find.byKey(const ValueKey('agent-model-config-popover'));
+      expect(tester.getSize(popover).width, 288);
+      expect(tester.getSize(popover).height, lessThan(160));
+      final popoverPanel = find.descendant(
+        of: popover,
+        matching: find.byType(PanelCard),
+      );
+      expect(
+        tester.widget<PanelCard>(popoverPanel.first).borderRadius,
+        IdeRadius.allMedium,
+      );
+      final selectedModelSurface = tester.widget<PaneInteractiveSurface>(
+        find.byKey(const ValueKey('agent-model-option-gpt-5.5')),
+      );
+      expect(selectedModelSurface.height, 32);
+      expect(selectedModelSurface.borderRadius, IdeRadius.allSmall);
+      expect(selectedModelSurface.selected, isTrue);
+      expect(
+        selectedModelSurface.selectedBackgroundColor?.a,
+        closeTo(0.09, 0.001),
+      );
+      expect(selectedModelSurface.focusBorderColor?.a, closeTo(0.42, 0.001));
+      final openTriggerTooltip = find.ancestor(
+        of: modelSelector,
+        matching: find.byType(IdeTooltip),
+      );
+      expect(tester.widget<IdeTooltip>(openTriggerTooltip).enabled, isFalse);
 
       expect(
         find.byKey(const ValueKey('agent-model-option-gpt-5.4-mini')),
@@ -612,19 +649,162 @@ void main() {
       );
 
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
       expect(
         find.byKey(const ValueKey('agent-model-config-popover')),
         findsNothing,
       );
+      final tooltipAfterEscape = find.ancestor(
+        of: modelSelector,
+        matching: find.byType(IdeTooltip),
+      );
+      expect(tester.widget<IdeTooltip>(tooltipAfterEscape).enabled, isTrue);
 
       await tester.tap(find.byKey(const ValueKey('agent-model-selector')));
       await tester.pump(const Duration(milliseconds: 300));
       expect(viewModel.selectedModelId, 'gpt-5.4-mini');
       expect(
+        find.byKey(const ValueKey('agent-model-config-popover')),
+        findsOneWidget,
+      );
+      expect(
         find.byKey(const ValueKey('agent-model-inline-config-gpt-5.4-mini')),
         findsNothing,
       );
+    });
+
+    testWidgets(
+      'model config stays bounded and scrollable in a narrow window',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(280, 400);
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
+        final models = AgentModelList(
+          models: <AgentModelInfo>[
+            _modelConfigList.models.first,
+            for (var index = 1; index <= 14; index++)
+              AgentModelInfo(
+                id: 'model-$index',
+                model: 'model-$index',
+                displayName: 'Model $index',
+              ),
+          ],
+        );
+        final provider = _FakeAgentProvider(models: models);
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+        await viewModel.loadModels();
+        await tester.pumpWidget(_TestApp(viewModel: viewModel));
+        await tester.pumpAndSettle();
+        expect(
+          MediaQuery.sizeOf(
+            tester.element(find.byKey(const ValueKey('agent-model-selector'))),
+          ).width,
+          280,
+        );
+
+        await tester.tap(find.byKey(const ValueKey('agent-model-selector')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+
+        final popover = find.byKey(
+          const ValueKey('agent-model-config-popover'),
+        );
+        final popoverRect = tester.getRect(popover);
+        expect(popoverRect.width, 256);
+        expect(popoverRect.height, lessThanOrEqualTo(360));
+        expect(popoverRect.left, greaterThanOrEqualTo(12));
+        expect(popoverRect.top, greaterThanOrEqualTo(12));
+        expect(popoverRect.right, lessThanOrEqualTo(268));
+        expect(popoverRect.bottom, lessThanOrEqualTo(388));
+
+        await tester.tap(
+          find.byKey(const ValueKey('agent-model-option-gpt-5.5')),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(
+          find.byKey(const ValueKey('agent-model-inline-config-gpt-5.5')),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+        final expandedPopoverRect = tester.getRect(popover);
+        expect(expandedPopoverRect.height, lessThanOrEqualTo(360));
+        expect(expandedPopoverRect.top, greaterThanOrEqualTo(12));
+        expect(expandedPopoverRect.bottom, lessThanOrEqualTo(388));
+
+        final lastModel = find.byKey(
+          const ValueKey('agent-model-option-model-14'),
+        );
+        await tester.scrollUntilVisible(
+          lastModel,
+          160,
+          scrollable: find
+              .descendant(
+                of: find.byKey(const ValueKey('agent-model-list')),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        );
+        expect(lastModel, findsOneWidget);
+      },
+    );
+
+    testWidgets('opening model config dismisses the trigger tooltip', (
+      tester,
+    ) async {
+      final provider = _FakeAgentProvider(models: _modelConfigList);
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+      await viewModel.loadModels();
+      await tester.pumpWidget(_TestApp(viewModel: viewModel));
+      await tester.pumpAndSettle();
+
+      final selector = find.byKey(const ValueKey('agent-model-selector'));
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      await mouse.moveTo(tester.getCenter(selector));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.textContaining('Fast：已关闭'), findsNothing);
+
+      await tester.tap(selector);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+
+      expect(
+        find.byKey(const ValueKey('agent-model-config-popover')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Fast：已关闭'), findsNothing);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        find.byKey(const ValueKey('agent-model-config-popover')),
+        findsNothing,
+      );
+      await mouse.moveTo(Offset.zero);
+      await tester.pump();
+      await mouse.moveTo(tester.getCenter(selector));
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.textContaining('Fast：已关闭'), findsOneWidget);
+
+      await tester.tap(selector);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        find.byKey(const ValueKey('agent-model-config-popover')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Fast：已关闭'), findsNothing);
+      await mouse.removePointer();
     });
 
     testWidgets('model config resolves Fast and xhigh conflict explicitly', (
