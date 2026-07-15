@@ -142,8 +142,10 @@ class IdeColors {
   /// 浅色调色板「Graphite Day」：中性浅灰白底 + 蔚蓝强调，扁平清爽，
   /// 与深色主题共享同一套语义层级。
   static const IdeColors light = IdeColors(
-    frame: Color(0xFFEEEFF1),
-    surface: Color(0xFFFFFFFF),
+    // frame: Color(0xFFEEEFF1),
+    // surface: Color(0xFFFFFFFF),
+    frame: Color(0xFFFFFFFF),
+    surface: Color(0xFFF9F9FA),
     surfaceElevated: Color(0xFFF4F5F7),
     surfaceOverlay: Color(0xFFFFFFFF),
     panel: Color(0xFFFFFFFF),

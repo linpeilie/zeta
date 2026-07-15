@@ -1,8 +1,8 @@
 part of '../agent_pane.dart';
 
-const double _modelConfigPopoverPreferredWidth = 288;
-const double _modelConfigPopoverMaxHeight = 360;
-const double _modelConfigRowHeight = 32;
+const double _composerSelectorPopoverPreferredWidth = 288;
+const double _composerSelectorPopoverMaxHeight = 360;
+const double _composerSelectorRowHeight = 32;
 
 /// Composer 中统一的模型配置入口与 Popover 协调器。
 class _AgentModelConfig extends StatefulWidget {
@@ -110,11 +110,11 @@ class _AgentModelConfigState extends State<_AgentModelConfig> {
         IdeSpacing.space12;
     final width = math.max(
       1.0,
-      math.min(_modelConfigPopoverPreferredWidth, viewport.width - 24),
+      math.min(_composerSelectorPopoverPreferredWidth, viewport.width - 24),
     );
     final maxHeight = math.max(
       1.0,
-      math.min(_modelConfigPopoverMaxHeight, availablePopoverHeight),
+      math.min(_composerSelectorPopoverMaxHeight, availablePopoverHeight),
     );
     final reduceMotion = mediaQuery.disableAnimations;
 
@@ -329,13 +329,105 @@ class _ModelConfigTrigger extends StatelessWidget {
       tooltip.write('\n配置将在下一回合生效');
     }
 
+    return _ComposerSelectorTrigger(
+      surfaceKey: const ValueKey('agent-model-selector'),
+      tooltip: tooltip.toString(),
+      semanticLabel: '$modelLabel，模型配置',
+      open: open,
+      focusNode: focusNode,
+      onPressed: onPressed,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 只限制模型名本身；外层保持无界，避免触发器在高 DPI 下
+          // 扩张到最大宽度。
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 140),
+            child: Text(
+              modelLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textStyles.bodySmall.copyWith(
+                color: colors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          if (effortLabel != null) ...[
+            const SizedBox(width: IdeSpacing.space4),
+            Text(
+              '· $effortLabel',
+              maxLines: 1,
+              style: textStyles.bodySmall.copyWith(color: colors.textTertiary),
+            ),
+          ],
+          if (state.selectedFastEnabled) ...[
+            const SizedBox(width: IdeSpacing.space4),
+            Icon(
+              Icons.bolt_rounded,
+              key: const ValueKey('agent-model-fast-enabled'),
+              size: 13,
+              color: colors.warning,
+            ),
+          ],
+          const SizedBox(width: IdeSpacing.space4),
+          if (state.isRefreshing)
+            SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                color: colors.textTertiary,
+              ),
+            )
+          else
+            AnimatedRotation(
+              turns: open ? 0.5 : 0,
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : IdeMotion.durationNormal,
+              curve: IdeMotion.curveDefault,
+              child: Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 13,
+                color: colors.textTertiary,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Composer 选择器共用触发器：模型与权限使用同一套尺寸和交互反馈。
+class _ComposerSelectorTrigger extends StatelessWidget {
+  const _ComposerSelectorTrigger({
+    required this.surfaceKey,
+    required this.tooltip,
+    required this.semanticLabel,
+    required this.open,
+    required this.focusNode,
+    required this.onPressed,
+    required this.child,
+  });
+
+  final Key surfaceKey;
+  final String tooltip;
+  final String semanticLabel;
+  final bool open;
+  final FocusNode focusNode;
+  final VoidCallback? onPressed;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     return IdeTooltip(
-      // 点击触发器时鼠标仍停在原位；打开后禁用 tooltip，避免其延迟出现并
-      // 覆盖 popover 底部的模型行。
-      message: tooltip.toString(),
+      // 弹层打开后禁用 tooltip，避免延迟提示覆盖选项。
+      message: tooltip,
       enabled: !open,
       child: PaneInteractiveSurface(
-        key: const ValueKey('agent-model-selector'),
+        key: surfaceKey,
         focusNode: focusNode,
         onPressed: onPressed,
         enabled: onPressed != null,
@@ -349,74 +441,14 @@ class _ModelConfigTrigger extends StatelessWidget {
         selectedBackgroundColor: colors.frame.withValues(alpha: 0.72),
         focusBorderColor: colors.accent.withValues(alpha: 0.68),
         selectedBorderColor: colors.borderSubtle,
-        semanticLabel: '$modelLabel，模型配置',
+        semanticLabel: semanticLabel,
         child: Stack(
           clipBehavior: Clip.none,
           alignment: Alignment.bottomCenter,
           children: [
             Padding(
               padding: const EdgeInsets.only(bottom: IdeSpacing.space2),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // 只限制模型名本身；外层保持无界，避免 PaneInteractiveSurface
-                  // 因 alignment 在高 DPI 下扩张到最大宽度。
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 140),
-                    child: Text(
-                      modelLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textStyles.bodySmall.copyWith(
-                        color: colors.textSecondary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  if (effortLabel != null) ...[
-                    const SizedBox(width: IdeSpacing.space4),
-                    Text(
-                      '· $effortLabel',
-                      maxLines: 1,
-                      style: textStyles.bodySmall.copyWith(
-                        color: colors.textTertiary,
-                      ),
-                    ),
-                  ],
-                  if (state.selectedFastEnabled) ...[
-                    const SizedBox(width: IdeSpacing.space4),
-                    Icon(
-                      Icons.bolt_rounded,
-                      key: const ValueKey('agent-model-fast-enabled'),
-                      size: 13,
-                      color: colors.warning,
-                    ),
-                  ],
-                  const SizedBox(width: IdeSpacing.space4),
-                  if (state.isRefreshing)
-                    SizedBox(
-                      width: 12,
-                      height: 12,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 1.5,
-                        color: colors.textTertiary,
-                      ),
-                    )
-                  else
-                    AnimatedRotation(
-                      turns: open ? 0.5 : 0,
-                      duration: MediaQuery.disableAnimationsOf(context)
-                          ? Duration.zero
-                          : IdeMotion.durationNormal,
-                      curve: IdeMotion.curveDefault,
-                      child: Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        size: 13,
-                        color: colors.textTertiary,
-                      ),
-                    ),
-                ],
-              ),
+              child: child,
             ),
             Positioned(
               bottom: 0,
@@ -925,7 +957,7 @@ class _ModelListItem extends StatelessWidget {
       onPressed: model.enabled ? onSelect : null,
       enabled: model.enabled,
       selected: selected,
-      height: _modelConfigRowHeight,
+      height: _composerSelectorRowHeight,
       padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space8),
       borderRadius: IdeRadius.allSmall,
       selectedBackgroundColor: colors.accent.withValues(alpha: 0.09),

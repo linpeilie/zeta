@@ -837,7 +837,7 @@ IconData _sessionConfigIcon(String? category) {
 }
 
 /// 审批/沙箱策略预设选择按钮。
-class _PermissionPolicyButton extends StatelessWidget {
+class _PermissionPolicyButton extends StatefulWidget {
   const _PermissionPolicyButton({
     required this.label,
     required this.presets,
@@ -851,40 +851,299 @@ class _PermissionPolicyButton extends StatelessWidget {
   final ValueChanged<AgentPermissionPreset> onSelect;
 
   @override
+  State<_PermissionPolicyButton> createState() =>
+      _PermissionPolicyButtonState();
+}
+
+class _PermissionPolicyButtonState extends State<_PermissionPolicyButton> {
+  final FocusNode _triggerFocusNode = FocusNode(
+    debugLabel: 'agent-permission-policy-trigger',
+  );
+  IdePopoverHandle<void>? _popoverEntry;
+
+  @override
+  void dispose() {
+    _popoverEntry?.dismiss();
+    _triggerFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _togglePopover() {
+    if (_popoverEntry != null) {
+      _popoverEntry!.dismiss();
+      return;
+    }
+    _showPopover();
+  }
+
+  void _showPopover() {
+    if (_popoverEntry != null || widget.presets.isEmpty) {
+      return;
+    }
+    final mediaQuery = MediaQuery.of(context);
+    final viewport = mediaQuery.size;
+    final renderBox = context.findRenderObject() as RenderBox?;
+    final origin = renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+    final triggerHeight = renderBox?.size.height ?? 28;
+    final spaceAbove = origin.dy;
+    final spaceBelow = viewport.height - origin.dy - triggerHeight;
+    final openAbove = spaceAbove > spaceBelow && spaceBelow < 180;
+    final availablePopoverHeight =
+        (openAbove ? spaceAbove : spaceBelow) -
+        IdeSpacing.space6 -
+        IdeSpacing.space12;
+    final width = math.max(
+      1.0,
+      math.min(_composerSelectorPopoverPreferredWidth, viewport.width - 24),
+    );
+    final maxHeight = math.max(
+      1.0,
+      math.min(_composerSelectorPopoverMaxHeight, availablePopoverHeight),
+    );
+    final reduceMotion = mediaQuery.disableAnimations;
+
+    final entry = showIdePopover<void>(
+      context: context,
+      alignment: openAbove ? Alignment.bottomLeft : Alignment.topLeft,
+      anchorAlignment: openAbove ? Alignment.topLeft : Alignment.bottomLeft,
+      widthConstraint: IdePopoverConstraint.intrinsic,
+      heightConstraint: IdePopoverConstraint.flexible,
+      offset: Offset(0, openAbove ? -6 : 6),
+      margin: const EdgeInsets.all(IdeSpacing.space12),
+      allowInvertVertical: false,
+      showDuration: reduceMotion
+          ? const Duration(milliseconds: 80)
+          : IdeMotion.durationFast,
+      dismissDuration: reduceMotion
+          ? const Duration(milliseconds: 80)
+          : IdeMotion.durationFast,
+      builder: (context) => _PermissionPolicyPopover(
+        width: width,
+        maxHeight: maxHeight,
+        presets: widget.presets,
+        selectedPresetId: widget.selectedPresetId,
+        onSelect: _selectPreset,
+        onDismiss: () => _popoverEntry?.dismiss(),
+      ),
+    );
+    _popoverEntry = entry;
+    setState(() {});
+    entry.future.whenComplete(() {
+      if (!mounted || !identical(_popoverEntry, entry)) {
+        return;
+      }
+      _popoverEntry = null;
+      setState(() {});
+      _triggerFocusNode.requestFocus();
+    });
+  }
+
+  void _selectPreset(AgentPermissionPreset preset) {
+    widget.onSelect(preset);
+    _popoverEntry?.dismiss();
+  }
+
+  String get _displayLabel {
+    for (final preset in widget.presets) {
+      if (preset.id == widget.selectedPresetId) {
+        return preset.label;
+      }
+    }
+    return widget.label;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return _SelectorSelect<String>(
-      selectorKey: const ValueKey('agent-permission-policy-selector'),
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    final open = _popoverEntry != null;
+    final displayLabel = _displayLabel;
+    return _ComposerSelectorTrigger(
+      surfaceKey: const ValueKey('agent-permission-policy-selector'),
       tooltip: 'Approval & sandbox',
-      placeholderLabel: label,
-      icon: Icons.shield_outlined,
-      value: selectedPresetId,
-      labelBuilder: (id) {
-        for (final preset in presets) {
-          if (preset.id == id) {
-            return preset.label;
-          }
-        }
-        return label;
-      },
-      onChanged: (value) {
-        for (final preset in presets) {
-          if (preset.id == value) {
-            onSelect(preset);
-            return;
-          }
-        }
-      },
-      options: [
-        for (final preset in presets)
-          sf.SelectItemButton<String>(
-            key: ValueKey<String>('agent-permission-preset-${preset.id}'),
-            value: preset.id,
+      semanticLabel: '$displayLabel，工作目录权限',
+      open: open,
+      focusNode: _triggerFocusNode,
+      onPressed: widget.presets.isEmpty ? null : _togglePopover,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.shield_outlined, size: 14, color: colors.textSecondary),
+          const SizedBox(width: IdeSpacing.space6),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 140),
             child: Text(
-              preset.label,
-              style: IdeTextStyles.of(context).bodyMedium,
+              displayLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textStyles.bodySmall.copyWith(
+                color: colors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
-      ],
+          const SizedBox(width: IdeSpacing.space4),
+          AnimatedRotation(
+            turns: open ? 0.5 : 0,
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : IdeMotion.durationNormal,
+            curve: IdeMotion.curveDefault,
+            child: Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 13,
+              color: colors.textTertiary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PermissionPolicyPopover extends StatelessWidget {
+  const _PermissionPolicyPopover({
+    required this.width,
+    required this.maxHeight,
+    required this.presets,
+    required this.selectedPresetId,
+    required this.onSelect,
+    required this.onDismiss,
+  });
+
+  final double width;
+  final double maxHeight;
+  final List<AgentPermissionPreset> presets;
+  final String? selectedPresetId;
+  final ValueChanged<AgentPermissionPreset> onSelect;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final brightness = sf.Theme.of(context).brightness;
+    return Focus(
+      canRequestFocus: false,
+      onKeyEvent: (_, event) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.escape) {
+          onDismiss();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Semantics(
+        container: true,
+        explicitChildNodes: true,
+        label: '工作目录权限',
+        child: SizedBox(
+          key: const ValueKey('agent-permission-policy-popover'),
+          width: width,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxHeight),
+            child: PanelCard(
+              color: colors.surfaceOverlay,
+              borderColor: colors.borderSubtle,
+              borderRadius: IdeRadius.allMedium,
+              boxShadow: IdeEffects.overlayShadow(brightness),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    height: 32,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: IdeSpacing.space10,
+                      ),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '工作目录权限',
+                          style: IdeTextStyles.of(context).bodySmall.copyWith(
+                            color: colors.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Divider(height: 1, thickness: 1, color: colors.borderSubtle),
+                  Flexible(
+                    child: ListView.builder(
+                      key: const ValueKey('agent-permission-policy-list'),
+                      shrinkWrap: true,
+                      padding: IdeSpacing.all4,
+                      itemCount: presets.length,
+                      itemBuilder: (context, index) {
+                        final preset = presets[index];
+                        return _PermissionPolicyOption(
+                          preset: preset,
+                          selected: preset.id == selectedPresetId,
+                          onPressed: () => onSelect(preset),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PermissionPolicyOption extends StatelessWidget {
+  const _PermissionPolicyOption({
+    required this.preset,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final AgentPermissionPreset preset;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    return PaneInteractiveSurface(
+      key: ValueKey<String>('agent-permission-preset-${preset.id}'),
+      onPressed: onPressed,
+      selected: selected,
+      autofocus: selected,
+      height: _composerSelectorRowHeight,
+      padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space8),
+      borderRadius: IdeRadius.allSmall,
+      selectedBackgroundColor: colors.accent.withValues(alpha: 0.09),
+      focusBorderColor: colors.accent.withValues(alpha: 0.42),
+      semanticLabel: '${preset.label}${selected ? '，已选择' : ''}',
+      child: Row(
+        children: [
+          SizedBox(
+            width: 14,
+            child: selected
+                ? Icon(Icons.check_rounded, size: 14, color: colors.accent)
+                : null,
+          ),
+          const SizedBox(width: IdeSpacing.space6),
+          Expanded(
+            child: Text(
+              preset.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: IdeTextStyles.of(context).bodySmall.copyWith(
+                color: colors.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

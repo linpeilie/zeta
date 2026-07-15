@@ -675,6 +675,74 @@ void main() {
     });
 
     testWidgets(
+      'permission policy matches model selector style and updates selection',
+      (tester) async {
+        final provider = _FakeAgentProvider(models: _modelConfigList);
+        final viewModel = _createViewModel(provider);
+        addTearDown(provider.dispose);
+        addTearDown(viewModel.dispose);
+        await viewModel.loadModels();
+        await tester.pumpWidget(_TestApp(viewModel: viewModel));
+        await tester.pumpAndSettle();
+
+        final modelSelector = find.byKey(
+          const ValueKey('agent-model-selector'),
+        );
+        final permissionSelector = find.byKey(
+          const ValueKey('agent-permission-policy-selector'),
+        );
+        final modelSurface = tester.widget<PaneInteractiveSurface>(
+          modelSelector,
+        );
+        final permissionSurface = tester.widget<PaneInteractiveSurface>(
+          permissionSelector,
+        );
+        expect(permissionSurface.height, modelSurface.height);
+        expect(permissionSurface.borderRadius, modelSurface.borderRadius);
+        expect(permissionSurface.backgroundColor, modelSurface.backgroundColor);
+        expect(permissionSurface.borderColor, modelSurface.borderColor);
+        expect(find.text('Workspace write'), findsOneWidget);
+
+        await tester.tap(permissionSelector);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+
+        final popover = find.byKey(
+          const ValueKey('agent-permission-policy-popover'),
+        );
+        expect(popover, findsOneWidget);
+        expect(tester.getSize(popover).width, 288);
+        expect(find.text('工作目录权限'), findsOneWidget);
+        final popoverPanel = find.descendant(
+          of: popover,
+          matching: find.byType(PanelCard),
+        );
+        expect(
+          tester.widget<PanelCard>(popoverPanel).borderRadius,
+          IdeRadius.allMedium,
+        );
+        final selectedOption = tester.widget<PaneInteractiveSurface>(
+          find.byKey(const ValueKey('agent-permission-preset-workspace')),
+        );
+        expect(selectedOption.height, 32);
+        expect(selectedOption.borderRadius, IdeRadius.allSmall);
+        expect(selectedOption.selected, isTrue);
+        expect(selectedOption.selectedBackgroundColor?.a, closeTo(0.09, 0.001));
+        expect(selectedOption.focusBorderColor?.a, closeTo(0.42, 0.001));
+
+        await tester.tap(
+          find.byKey(const ValueKey('agent-permission-preset-fullAccess')),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+
+        expect(viewModel.permissionSelection.matchedPresetId, 'fullAccess');
+        expect(popover, findsNothing);
+        expect(find.text('Full access'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
       'model config stays bounded and scrollable in a narrow window',
       (tester) async {
         tester.view.devicePixelRatio = 1;
