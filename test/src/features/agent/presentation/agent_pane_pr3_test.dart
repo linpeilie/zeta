@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
@@ -9,6 +11,8 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/ui/core/ide_effects.dart';
+import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 
@@ -527,34 +531,10 @@ void main() {
       await tester.pump();
     });
 
-    testWidgets('model selector opens options and updates selection', (
+    testWidgets('model config expands inline and keeps popover open', (
       tester,
     ) async {
-      final provider = _FakeAgentProvider(
-        models: const AgentModelList(
-          models: <AgentModelInfo>[
-            AgentModelInfo(
-              id: 'gpt-5.5',
-              model: 'gpt-5.5',
-              displayName: 'GPT-5.5',
-              isDefault: true,
-              supportedReasoningEfforts: <AgentModelReasoningEffort>[
-                AgentModelReasoningEffort(effort: 'medium'),
-              ],
-              defaultReasoningEffort: 'medium',
-            ),
-            AgentModelInfo(
-              id: 'gpt-5.4-mini',
-              model: 'gpt-5.4-mini',
-              displayName: 'GPT-5.4-Mini',
-              supportedReasoningEfforts: <AgentModelReasoningEffort>[
-                AgentModelReasoningEffort(effort: 'low'),
-              ],
-              defaultReasoningEffort: 'low',
-            ),
-          ],
-        ),
-      );
+      final provider = _FakeAgentProvider(models: _modelConfigList);
       final viewModel = _createViewModel(provider);
       await viewModel.loadModels();
       await tester.pumpWidget(_TestApp(viewModel: viewModel));
@@ -564,6 +544,15 @@ void main() {
         find.byKey(const ValueKey('agent-model-selector')),
         findsOneWidget,
       );
+      final modelSelector = find.byKey(const ValueKey('agent-model-selector'));
+      final selectorSurface = tester.widget<PaneInteractiveSurface>(
+        modelSelector,
+      );
+      expect(tester.getSize(modelSelector).width, lessThan(180));
+      expect(tester.getSize(modelSelector).height, 28);
+      expect(selectorSurface.backgroundColor, Colors.transparent);
+      expect(selectorSurface.borderColor, isNull);
+      expect(selectorSurface.borderRadius, IdeRadius.allSmall);
       expect(find.text('GPT-5.5'), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('agent-model-selector')));
@@ -574,6 +563,14 @@ void main() {
         find.byKey(const ValueKey('agent-model-option-gpt-5.4-mini')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const ValueKey('agent-model-inline-config-gpt-5.5')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('agent-reasoning-segment-control')),
+        findsNothing,
+      );
       await tester.tap(
         find.byKey(const ValueKey('agent-model-option-gpt-5.4-mini')),
       );
@@ -581,9 +578,276 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(viewModel.selectedModelId, 'gpt-5.4-mini');
-      expect(find.text('GPT-5.4-Mini'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('agent-model-option-gpt-5.4-mini')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('agent-model-inline-config-gpt-5.4-mini')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('agent-reasoning-segment-control')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('agent-reasoning-option-high')),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(viewModel.selectedReasoningEffort, 'high');
+      expect(
+        find.byKey(const ValueKey('agent-model-config-popover')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('agent-fast-switch-gpt-5.4-mini')),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(viewModel.selectedServiceTierId, 'priority');
+      expect(
+        find.byKey(const ValueKey('agent-model-fast-enabled')),
+        findsOneWidget,
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        find.byKey(const ValueKey('agent-model-config-popover')),
+        findsNothing,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('agent-model-selector')));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(viewModel.selectedModelId, 'gpt-5.4-mini');
+      expect(
+        find.byKey(const ValueKey('agent-model-inline-config-gpt-5.4-mini')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('model config resolves Fast and xhigh conflict explicitly', (
+      tester,
+    ) async {
+      final provider = _FakeAgentProvider(models: _modelConfigList);
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+      await viewModel.loadModels();
+      await tester.pumpWidget(_TestApp(viewModel: viewModel));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('agent-model-selector')));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(
+        find.byKey(const ValueKey('agent-model-option-gpt-5.5')),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      final xhighOption = find.byKey(
+        const ValueKey('agent-reasoning-option-xhigh'),
+      );
+      await tester.ensureVisible(xhighOption);
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.tap(xhighOption);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.byKey(const ValueKey('agent-fast-switch-gpt-5.5')));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump();
+
+      expect(viewModel.selectedReasoningEffort, 'xhigh');
+      expect(viewModel.selectedServiceTierId, isNull);
+      expect(viewModel.modelConfigUiState.compatibilityConflict, isNotNull);
+      expect(
+        find.byKey(const ValueKey('agent-model-compatibility-alert')),
+        findsOneWidget,
+      );
+
+      final resolveAction = find.byKey(
+        const ValueKey('agent-model-alert-切换到高并开启 Fast'),
+      );
+      await tester.ensureVisible(resolveAction);
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.tap(resolveAction);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump();
+
+      expect(viewModel.selectedReasoningEffort, 'high');
+      expect(viewModel.selectedServiceTierId, 'priority');
+      expect(
+        find.byKey(const ValueKey('agent-model-compatibility-alert')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('agent-model-config-popover')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('model config supports keyboard model and effort navigation', (
+      tester,
+    ) async {
+      final provider = _FakeAgentProvider(models: _modelConfigList);
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+      await viewModel.loadModels();
+      await tester.pumpWidget(_TestApp(viewModel: viewModel));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('agent-model-selector')));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(viewModel.selectedModelId, 'gpt-5.4-mini');
+      expect(
+        find.byKey(const ValueKey('agent-model-inline-config-gpt-5.4-mini')),
+        findsOneWidget,
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(viewModel.selectedReasoningEffort, 'high');
+    });
+
+    testWidgets('model config rolls back failed save and retries inline', (
+      tester,
+    ) async {
+      final provider = _FakeAgentProvider(models: _modelConfigList);
+      final initialPreference = AgentModelPreference(
+        modelId: 'gpt-5.5',
+        reasoningEffort: 'medium',
+        fastEnabled: false,
+        serviceTierId: null,
+        updatedAt: DateTime.utc(2026, 7, 15),
+      );
+      final store = _ToggleFailAgentProviderConfigStore(
+        AgentProviderSettings(
+          providers: <AgentProviderConfig>[
+            AgentProviderConfig.defaultCodex.copyWith(
+              selectedModel: 'gpt-5.5',
+              selectedReasoningEffort: 'medium',
+              modelPreferences: <String, AgentModelPreference>{
+                'gpt-5.5': initialPreference,
+              },
+            ),
+            AgentProviderConfig.defaultGrok,
+            AgentProviderConfig.defaultCursor,
+          ],
+        ),
+      );
+      final viewModel = _createViewModelWithStore(provider, store);
+      addTearDown(viewModel.dispose);
+      await viewModel.loadModels();
+      await tester.pumpWidget(_TestApp(viewModel: viewModel));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('agent-model-selector')));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(
+        find.byKey(const ValueKey('agent-model-option-gpt-5.4-mini')),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      await tester.pump();
+
+      expect(viewModel.selectedModelId, 'gpt-5.5');
+      expect(viewModel.modelConfigUiState.saveError, isNotNull);
+      expect(
+        find.byKey(const ValueKey('agent-model-save-error')),
+        findsOneWidget,
+      );
+
+      store.failSaves = false;
+      final retry = find.byKey(const ValueKey('agent-model-alert-重试'));
+      await tester.ensureVisible(retry);
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.tap(retry);
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      await tester.pump();
+      // 异步保存完成后，给旧配置卡的退出动画一帧完整时长。
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(viewModel.selectedModelId, 'gpt-5.4-mini');
+      expect(viewModel.modelConfigUiState.saveError, isNull);
+      expect(
+        find.byKey(const ValueKey('agent-model-inline-config-gpt-5.4-mini')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('agent-model-save-error')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('agent-model-config-popover')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('model config shows next-turn banner while a turn is running', (
+      tester,
+    ) async {
+      final provider = _FakeAgentProvider(models: _modelConfigList);
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+      await viewModel.loadModels();
+      await tester.pumpWidget(_TestApp(viewModel: viewModel));
+      await viewModel.sendMessage('Keep working');
+      await _pumpLiveAgentUi(tester);
+
+      await tester.tap(find.byKey(const ValueKey('agent-model-selector')));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(
+        find.byKey(const ValueKey('agent-model-next-turn-banner')),
+        findsOneWidget,
+      );
+      expect(find.text('配置将在下一回合生效'), findsOneWidget);
+      provider.emitEvent(
+        const AgentTurnCompletedEvent(sessionId: 'session-1', turnId: 'turn-1'),
+      );
+      await tester.pump();
+    });
+
+    testWidgets('model config reports an automatic fallback once', (
+      tester,
+    ) async {
+      final provider = _FakeAgentProvider(models: _modelConfigList);
+      final store = MemoryAgentProviderConfigStore(
+        AgentProviderSettings(
+          providers: <AgentProviderConfig>[
+            AgentProviderConfig.defaultCodex.copyWith(
+              selectedModel: 'retired-model',
+              selectedReasoningEffort: 'medium',
+            ),
+            AgentProviderConfig.defaultGrok,
+            AgentProviderConfig.defaultCursor,
+          ],
+        ),
+      );
+      final viewModel = _createViewModelWithStore(provider, store);
+      addTearDown(viewModel.dispose);
+      await viewModel.loadModels();
+      await tester.pumpWidget(_TestApp(viewModel: viewModel));
+      await tester.pumpAndSettle();
+
+      expect(viewModel.selectedModelId, 'gpt-5.5');
+      await tester.tap(find.byKey(const ValueKey('agent-model-selector')));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        find.byKey(const ValueKey('agent-model-auto-switch-notice')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('retired-model'), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.byKey(const ValueKey('agent-model-selector')));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        find.byKey(const ValueKey('agent-model-auto-switch-notice')),
         findsNothing,
       );
     });
@@ -869,15 +1133,82 @@ class _TestApp extends StatelessWidget {
   }
 }
 
+const AgentModelList _modelConfigList = AgentModelList(
+  models: <AgentModelInfo>[
+    AgentModelInfo(
+      id: 'gpt-5.5',
+      model: 'gpt-5.5',
+      displayName: 'GPT-5.5',
+      isDefault: true,
+      supportedReasoningEfforts: <AgentModelReasoningEffort>[
+        AgentModelReasoningEffort(effort: 'low'),
+        AgentModelReasoningEffort(effort: 'medium'),
+        AgentModelReasoningEffort(effort: 'high'),
+        AgentModelReasoningEffort(effort: 'xhigh'),
+      ],
+      defaultReasoningEffort: 'medium',
+      serviceTiers: <AgentModelServiceTier>[
+        AgentModelServiceTier(id: 'priority', name: 'Fast'),
+      ],
+    ),
+    AgentModelInfo(
+      id: 'gpt-5.4-mini',
+      model: 'gpt-5.4-mini',
+      displayName: 'GPT-5.4-Mini',
+      supportedReasoningEfforts: <AgentModelReasoningEffort>[
+        AgentModelReasoningEffort(effort: 'low'),
+        AgentModelReasoningEffort(effort: 'high'),
+        AgentModelReasoningEffort(effort: 'xhigh'),
+      ],
+      defaultReasoningEffort: 'low',
+      serviceTiers: <AgentModelServiceTier>[
+        AgentModelServiceTier(id: 'priority', name: 'Fast'),
+      ],
+    ),
+    AgentModelInfo(
+      id: 'gpt-legacy',
+      model: 'gpt-legacy',
+      displayName: 'GPT-Legacy',
+      enabled: false,
+      unavailableReason: '当前账号没有访问权限',
+    ),
+  ],
+);
+
 AgentConversationViewModel _createViewModel(_FakeAgentProvider provider) {
+  return _createViewModelWithStore(provider, MemoryAgentProviderConfigStore());
+}
+
+AgentConversationViewModel _createViewModelWithStore(
+  _FakeAgentProvider provider,
+  AgentProviderConfigStore configStore,
+) {
   final controller = ActiveAgentProviderController(
     providerFactory: _FakeAgentProviderFactory(provider),
-    configStore: MemoryAgentProviderConfigStore(),
+    configStore: configStore,
   );
   addTearDown(controller.dispose);
   final viewModel = AgentConversationViewModel(providerController: controller);
   viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
   return viewModel;
+}
+
+class _ToggleFailAgentProviderConfigStore implements AgentProviderConfigStore {
+  _ToggleFailAgentProviderConfigStore(this.settings);
+
+  AgentProviderSettings settings;
+  bool failSaves = true;
+
+  @override
+  Future<AgentProviderSettings> load() async => settings;
+
+  @override
+  Future<void> save(AgentProviderSettings next) async {
+    if (failSaves) {
+      throw const FileSystemException('simulated model config save failure');
+    }
+    settings = next;
+  }
 }
 
 AgentThreadSummary _thread({required String id, required String title}) {

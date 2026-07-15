@@ -1,4 +1,5 @@
 import 'package:zeta/src/features/agent/domain/agent_model_codec.dart';
+import 'package:zeta/src/features/agent/domain/agent_model_selection_models.dart';
 
 /// Agent 后端的类型。
 ///
@@ -43,6 +44,7 @@ class AgentProviderConfig {
     this.selectedModel,
     this.selectedReasoningEffort,
     this.selectedServiceTier,
+    this.modelPreferences = const <String, AgentModelPreference>{},
     this.selectedApprovalPolicy,
     this.selectedSandboxPolicy,
     this.selectedPermissionProfileId,
@@ -79,6 +81,9 @@ class AgentProviderConfig {
 
   /// 用户选择的服务档位 id（如 priority）。
   final String? selectedServiceTier;
+
+  /// 按模型保存的最近一次有效配置。
+  final Map<String, AgentModelPreference> modelPreferences;
 
   /// 用户选择的审批策略（`AskForApproval` 字符串变体）。
   final String? selectedApprovalPolicy;
@@ -141,6 +146,7 @@ class AgentProviderConfig {
     String? selectedModel,
     String? selectedReasoningEffort,
     String? selectedServiceTier,
+    Map<String, AgentModelPreference>? modelPreferences,
     String? selectedApprovalPolicy,
     String? selectedSandboxPolicy,
     String? selectedPermissionProfileId,
@@ -159,6 +165,7 @@ class AgentProviderConfig {
       selectedReasoningEffort:
           selectedReasoningEffort ?? this.selectedReasoningEffort,
       selectedServiceTier: selectedServiceTier ?? this.selectedServiceTier,
+      modelPreferences: modelPreferences ?? this.modelPreferences,
       selectedApprovalPolicy:
           selectedApprovalPolicy ?? this.selectedApprovalPolicy,
       selectedSandboxPolicy:
@@ -167,6 +174,36 @@ class AgentProviderConfig {
           selectedPermissionProfileId ?? this.selectedPermissionProfileId,
       enabled: enabled ?? this.enabled,
       extra: extra ?? this.extra,
+    );
+  }
+
+  /// 原子替换当前模型选择和全部模型级偏好。
+  ///
+  /// 与 [copyWith] 分开是为了允许将 nullable 选择字段明确清空，例如关闭
+  /// Fast 时必须把 `selectedServiceTier` 持久化为 `null`。
+  AgentProviderConfig withModelConfiguration({
+    required AgentModelSelection selection,
+    required Map<String, AgentModelPreference> preferences,
+  }) {
+    return AgentProviderConfig(
+      id: id,
+      displayName: displayName,
+      kind: kind,
+      command: command,
+      arguments: arguments,
+      environment: environment,
+      defaultModel: defaultModel,
+      selectedModel: selection.modelId,
+      selectedReasoningEffort: selection.reasoningEffort,
+      selectedServiceTier: selection.serviceTierId,
+      modelPreferences: Map<String, AgentModelPreference>.unmodifiable(
+        preferences,
+      ),
+      selectedApprovalPolicy: selectedApprovalPolicy,
+      selectedSandboxPolicy: selectedSandboxPolicy,
+      selectedPermissionProfileId: selectedPermissionProfileId,
+      enabled: enabled,
+      extra: extra,
     );
   }
 
@@ -182,6 +219,10 @@ class AgentProviderConfig {
       'selectedModel': selectedModel,
       'selectedReasoningEffort': selectedReasoningEffort,
       'selectedServiceTier': selectedServiceTier,
+      'modelPreferences': <String, Object?>{
+        for (final entry in modelPreferences.entries)
+          entry.key: entry.value.toJson(),
+      },
       'selectedApprovalPolicy': selectedApprovalPolicy,
       'selectedSandboxPolicy': selectedSandboxPolicy,
       'selectedPermissionProfileId': selectedPermissionProfileId,
@@ -223,6 +264,7 @@ class AgentProviderConfig {
         map['selectedReasoningEffort'],
       ),
       selectedServiceTier: decodeOptionalString(map['selectedServiceTier']),
+      modelPreferences: _decodeModelPreferences(map['modelPreferences']),
       selectedApprovalPolicy: decodeOptionalString(
         map['selectedApprovalPolicy'],
       ),
@@ -234,6 +276,27 @@ class AgentProviderConfig {
       extra: decodeObjectMap(map['extra']),
     );
   }
+}
+
+Map<String, AgentModelPreference> _decodeModelPreferences(Object? value) {
+  final decoded = <String, AgentModelPreference>{};
+  if (value is Map) {
+    for (final entry in value.entries) {
+      final preference = AgentModelPreference.tryDecode(entry.value);
+      if (preference != null) {
+        decoded[preference.modelId] = preference;
+      }
+    }
+  } else if (value is List) {
+    // 兼容早期设计稿或手工配置采用数组的形式。
+    for (final item in value) {
+      final preference = AgentModelPreference.tryDecode(item);
+      if (preference != null) {
+        decoded[preference.modelId] = preference;
+      }
+    }
+  }
+  return Map<String, AgentModelPreference>.unmodifiable(decoded);
 }
 
 /// 全局 Agent provider 设置。

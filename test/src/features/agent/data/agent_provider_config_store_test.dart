@@ -111,6 +111,54 @@ void main() {
   });
 
   group('AgentProviderSettings', () {
+    test('round-trips versioned model preferences tolerantly', () {
+      final updatedAt = DateTime.utc(2026, 7, 15, 8);
+      final config = AgentProviderConfig.defaultCodex.withModelConfiguration(
+        selection: const AgentModelSelection(
+          modelId: 'gpt-5.5',
+          reasoningEffort: 'high',
+        ),
+        preferences: <String, AgentModelPreference>{
+          'gpt-5.5': AgentModelPreference(
+            modelId: 'gpt-5.5',
+            reasoningEffort: 'high',
+            fastEnabled: false,
+            serviceTierId: null,
+            updatedAt: updatedAt,
+          ),
+        },
+      );
+
+      final decoded = AgentProviderConfig.tryDecode(config.toJson());
+
+      expect(decoded, isNotNull);
+      expect(decoded!.selectedServiceTier, isNull);
+      expect(decoded.modelPreferences['gpt-5.5']?.reasoningEffort, 'high');
+      expect(decoded.modelPreferences['gpt-5.5']?.fastEnabled, isFalse);
+      expect(decoded.modelPreferences['gpt-5.5']?.updatedAt, updatedAt);
+    });
+
+    test('ignores damaged model preference entries', () {
+      final raw = AgentProviderConfig.defaultCodex.toJson();
+      raw['modelPreferences'] = <String, Object?>{
+        'missing-id': <String, Object?>{'fastEnabled': true},
+        'valid': <String, Object?>{
+          'modelId': 'gpt-5.5',
+          'reasoningEffort': 'medium',
+          'fastEnabled': false,
+          'updatedAt': 'not-a-date',
+        },
+      };
+
+      final decoded = AgentProviderConfig.tryDecode(raw);
+
+      expect(decoded?.modelPreferences.keys, <String>['gpt-5.5']);
+      expect(
+        decoded?.modelPreferences['gpt-5.5']?.updatedAt,
+        DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      );
+    });
+
     test(
       'adds disabled Cursor to existing v1 settings without changing active',
       () {

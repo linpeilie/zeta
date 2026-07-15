@@ -164,6 +164,8 @@ class PaneInteractiveSurface extends StatefulWidget {
     this.enabled = true,
     this.button = true,
     this.semanticLabel,
+    this.focusNode,
+    this.autofocus = false,
     this.onHoverChanged,
     this.onFocusChanged,
   });
@@ -186,6 +188,8 @@ class PaneInteractiveSurface extends StatefulWidget {
   final bool enabled;
   final bool button;
   final String? semanticLabel;
+  final FocusNode? focusNode;
+  final bool autofocus;
   final ValueChanged<bool>? onHoverChanged;
   final ValueChanged<bool>? onFocusChanged;
 
@@ -272,6 +276,8 @@ class _PaneInteractiveSurfaceState extends State<PaneInteractiveSurface> {
       label: widget.semanticLabel,
       child: FocusableActionDetector(
         enabled: _interactive,
+        focusNode: widget.focusNode,
+        autofocus: widget.autofocus,
         mouseCursor: _interactive
             ? SystemMouseCursors.click
             : MouseCursor.defer,

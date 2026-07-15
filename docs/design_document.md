@@ -208,10 +208,29 @@ repository。Cursor repository 负责多候选身份探测、版本/账号检查
   Dock 使用独立 pending 列表、按权限优先顺序展示，限高为 Agent 面板高度的 35%
   （最高 360px）并内部滚动，时间线不重复渲染待处理卡片。
 - 模型改道、弃用通知等系统提示；token 用量含 `modelContextWindow` 占用比例。
+- Composer 使用单一模型配置入口：Popover 以模型列表为一级信息，选中后在该行下
+  内嵌 Reasoning effort 与 Fast，运行中更改明确标记为下一回合生效。
 - 18 种 ThreadItem 在实时路径与 `thread/read` / JSONL 历史中一致映射。
 - 输入区支持本地图片（选图 / 粘贴落盘）随 turn 发送，时间线气泡预览。
 - Thread 列表：搜索、活动/归档切换、右键重命名/归档/删除/分叉。
 - 编辑上一条用户消息（`thread/rollback` + 重发）；头栏分叉与上下文压缩入口。
+
+### 输入框模型配置
+
+模型配置遵循“领域能力→应用编排→不可变 UI 快照→局部交互态”的单向流：
+
+- `AgentModelInfo` 提供模型、Reasoning 顺序、service tier 和可用性；
+  `AgentModelPreference` 保存每个 `modelId` 最后一次有效的 Reasoning / Fast 组合。
+- `AgentConversationModelSelectionController` 是配置真源，负责 capability 归一化、
+  Fast / `xhigh` 冲突解决、provider 运行态更新及持久化。快速连续修改串行合并，
+  过期请求不得覆盖新快照。
+- 保存采用乐观更新；失败时同步回滚 selection、模型偏好和 provider 运行态，
+  并保留失败快照供卡片内原子重试。
+- `AgentModelConfigUiState` 只是不可变渲染快照。`selectedModelId` 属于持久业务状态；
+  `expandedModelId` 是 Popover 局部运行态，每次打开重置，不写入 provider 配置。
+- `AgentProviderConfig.modelPreferences` 按 `modelId` 写入版本化
+  `~/.zeta/config/providers.json`；老版单一 selection 在首次模型列表归一化时迁移，
+  损坏或过期的偏好条目被宽容忽略或降级到服务端默认值。
 
 ### 上下文策略
 
@@ -289,6 +308,8 @@ IDE 会话状态目前版本为 2，持久化内容包括：
 当前测试重点应覆盖：
 
 - Agent 模型 JSON 编解码和宽容读取。
+- 模型配置的模型级恢复、capability 归一化、Fast 冲突确认、快速修改合并、
+  保存失败回滚/重试，以及 Popover 键盘、动画与下一回合提示。
 - JSON-RPC stdio transport。
 - Codex provider 事件映射。
 - Cursor CLI 身份冲突、workspace peer 重建、session 索引与恢复、ACP 流式映射、动态配置、

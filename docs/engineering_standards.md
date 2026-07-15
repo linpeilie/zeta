@@ -79,6 +79,10 @@ main -> app -> presentation/application -> domain
 - 应用控制器收敛分页、恢复、缓存、provider 调用和竞态处理，例如 `ProjectThreadsController`。
 - 高吞吐 UI 使用分区 `ValueListenable` 或版本号信号，避免流式输出导致整页重建。
 - 对会被新请求覆盖的异步加载使用 token/version guard，旧结果返回时必须被丢弃。
+- 乐观持久化必须分离“当前快照”与“最近确认快照”；快速连续更新应串行、
+  合并或取消过期请求，保存失败时整体回滚关联字段并保留可重试快照。
+- 业务选择态与短生命周期的 UI 展开态必须分离；例如 Composer 的
+  `selectedModelId` 可持久化，`expandedModelId` 只由 Popover 持有。
 - `ChangeNotifier`、`ValueNotifier` 和 timer 持有者必须在 `dispose` 中释放资源；通知前应检查 disposed 状态。
 - 对外暴露的集合默认使用不可变列表、不可变 map 或 unmodifiable view。
 
@@ -97,6 +101,8 @@ main -> app -> presentation/application -> domain
 - 非所有 provider 都具备的账号能力使用可选接口（例如
   `AgentUsageQuotaProvider`），不要扩大 `AgentProvider` 的必选实现面。
 - mapper 文件负责字段兼容、默认值和协议名称转换；不要在 widget 中写散落的 JSON key。
+- 模型目录的 Reasoning 和 service tier 在 data mapper 中转为中立领域模型，保留服务端顺序和
+  精确 tier id；Fast 等产品语义可在 domain/application 层识别，但不得改写 provider 协议值。
 - 标准 ACP 的 session update、content block、permission option 和 session config 优先复用
   公共 mapper；厂商扩展保留在对应 adapter，不得污染 presentation。
 - 厂商阻塞请求必须覆盖成功、拒绝/跳过、取消、超时和 provider 清理路径；每条路径都要
@@ -128,6 +134,8 @@ main -> app -> presentation/application -> domain
 - `tryDecode` 或等价宽容读取逻辑必须处理空值、损坏 JSON、旧版本和未知字段。
 - 启动恢复失败不能阻断应用进入主界面。
 - provider 全局配置和项目级 session/thread 状态必须分开存储。
+- provider 模型偏好按 `modelId` 保存为版本化条目；当前 selection 和偏好 map 必须同快照写入，
+  宽容解码忽略损坏条目并用最新 capability 重新归一化。
 - 路径不存在、目录不可读、权限失败等文件系统异常应转换为可理解状态或日志。
 - Agent 配置保存必须先校验语法、检测外部修改、写入同目录临时文件并保留原文件
   备份；不得直接覆盖符号链接或在失败后破坏原配置。
@@ -155,6 +163,8 @@ Zeta 是桌面工具，不是营销页。界面应紧凑、克制、可扫描。
 - 长项目路径、文件路径、thread 标题、工具调用摘要和 diff 统计必须限制行数并使用 ellipsis。
 - 非文本按钮需要 tooltip；重要自定义控件需要语义标签。
 - 重复的交互行应使用稳定 `ValueKey`，方便测试和状态保持。
+- Popover 中的可选列表应支持 roving focus、禁用项原因、Esc 关闭与焦点恢复；
+  展开动画必须遵循 reduce motion，不得在用户滚动时强制自动定位。
 - 流式消息、语法高亮代码块、diff 明细等高频或重绘成本高的区域应使用 `RepaintBoundary`。
 - 桌面布局优先用 `Expanded`、`Flexible`、`LayoutBuilder`、scroll view 和固定高度工具栏避免溢出。
 - 统计页等宽数据面板在宽屏可双栏排列，窄屏必须回退为单栏；宽表格使用受限的
@@ -174,6 +184,8 @@ Zeta 是桌面工具，不是营销页。界面应紧凑、克制、可扫描。
 
 - domain 模型、codec、mapper 和 JSON 宽容解析用单元测试。
 - application controller 的分页、恢复、竞态和错误路径用单元测试。
+- 包含多字段配置的 application controller 必须覆盖快速连续更新、过期请求、
+  确认态回滚、完整快照重试与损坏持久化输入。
 - provider datasource 和 transport 用 fake process、fake storage 或 callback 注入。
 - pane、timeline、file tree 等用户可见行为用 widget test。
 - 简单视觉调整可以只运行分析和相关 widget test，但行为变化必须补测试。

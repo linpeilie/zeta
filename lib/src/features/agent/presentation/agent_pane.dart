@@ -5,6 +5,7 @@ import 'dart:math' as math;
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_highlight/flutter_highlight.dart';
@@ -28,12 +29,14 @@ import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
+import 'package:zeta/src/features/agent/presentation/model_config_ui_state.dart';
 
 part 'widgets/agent_pane_cards.dart';
 part 'widgets/agent_pane_composer.dart';
 part 'widgets/agent_pane_context_panel.dart';
 part 'widgets/agent_pane_header.dart';
 part 'widgets/agent_pane_messages.dart';
+part 'widgets/agent_model_config.dart';
 part 'widgets/agent_pane_sections.dart';
 part 'widgets/agent_pane_styles.dart';
 

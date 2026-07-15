@@ -13,6 +13,7 @@ import 'package:zeta/src/features/agent/application/agent_conversation_timeline_
 import 'package:zeta/src/features/agent/application/agent_conversation_ui_signals.dart';
 import 'package:zeta/src/features/agent/application/agent_elapsed_ticker.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/presentation/model_config_ui_state.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 
 export 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
@@ -32,6 +33,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     permissionSelectionController,
     this.workspaceFilesProvider,
   }) : _timeline = timelineStore ?? AgentConversationTimelineStore(),
+       _ownsModelSelectionController = modelSelectionController == null,
        _modelSelectionController =
            modelSelectionController ??
            AgentConversationModelSelectionController(
@@ -47,6 +49,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       onLegacyNotify: _notifyLegacyListeners,
       isDisposed: () => _disposed,
     );
+    _modelSelectionController.addListener(_handleModelSelectionChanged);
     providerController.addListener(_handleProviderSettingsChanged);
   }
 
@@ -57,6 +60,7 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   final ActiveAgentProviderController providerController;
   final AgentConversationTimelineStore _timeline;
+  final bool _ownsModelSelectionController;
   final AgentConversationModelSelectionController _modelSelectionController;
   final AgentConversationPermissionSelectionController
   _permissionSelectionController;
@@ -89,6 +93,9 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   List<AgentSessionConfigOption> _sessionConfigOptions =
       const <AgentSessionConfigOption>[];
+
+  bool _modelsRefreshing = false;
+  String? _modelRefreshError;
 
   /// 是否正在执行上下文压缩。
   bool _isCompacting = false;
@@ -253,6 +260,26 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   String? get selectedServiceTierId =>
       _modelSelectionController.selectedServiceTierId;
+
+  /// 输入框模型入口与 Popover 共用的不可变快照。
+  AgentModelConfigUiState get modelConfigUiState => AgentModelConfigUiState(
+    models: models,
+    selectedModelId: selectedModelId,
+    expandedModelId: null,
+    selectedReasoningEffort: selectedReasoningEffort,
+    selectedServiceTierId: selectedServiceTierId,
+    preferences: _modelSelectionController.preferences,
+    savingModelIds: _modelSelectionController.savingModelIds,
+    isRefreshing: _modelsRefreshing,
+    appliesNextTurn: isTurnRunning,
+    supportsReasoningOptions: activeCapabilities.supportsReasoningOptions,
+    supportsServiceTierSelection:
+        activeCapabilities.supportsServiceTierSelection,
+    compatibilityConflict: _modelSelectionController.compatibilityConflict,
+    saveError: _modelSelectionController.saveError,
+    selectionNotice: _modelSelectionController.selectionNotice,
+    refreshError: _modelRefreshError,
+  );
 
   bool get showReasoningEffort {
     if (!activeCapabilities.supportsReasoningOptions) {
@@ -637,6 +664,9 @@ class AgentConversationViewModel extends ChangeNotifier {
       _publishUiChanges(composer: true);
       return;
     }
+    _modelsRefreshing = true;
+    _modelRefreshError = null;
+    _publishUiChanges(composer: true);
     try {
       final provider = await _ensureProvider();
       await provider.initialize();
@@ -647,19 +677,18 @@ class AgentConversationViewModel extends ChangeNotifier {
       await _permissionSelectionController.refreshProfiles();
     } catch (error, stackTrace) {
       _log.warning('Could not preload Agent models', error, stackTrace);
+      _modelRefreshError = '模型列表刷新失败，已保留现有配置。';
+    } finally {
+      _modelsRefreshing = false;
+      _publishUiChanges(composer: true);
     }
-    _publishUiChanges(composer: true);
   }
 
-  Future<void> selectModel(String modelId) async {
-    await _modelSelectionController.selectModel(modelId);
-    _publishUiChanges(composer: true);
-  }
+  Future<bool> selectModel(String modelId) =>
+      _modelSelectionController.selectModel(modelId);
 
-  Future<void> selectReasoningEffort(String? effort) async {
-    await _modelSelectionController.selectReasoningEffort(effort);
-    _publishUiChanges(composer: true);
-  }
+  Future<bool> selectReasoningEffort(String? effort) =>
+      _modelSelectionController.selectReasoningEffort(effort);
 
   Future<void> selectPermissionPreset(AgentPermissionPreset preset) async {
     await _permissionSelectionController.selectPreset(preset);
@@ -690,10 +719,20 @@ class AgentConversationViewModel extends ChangeNotifier {
     }
   }
 
-  Future<void> selectServiceTier(String? tierId) async {
-    await _modelSelectionController.selectServiceTier(tierId);
-    _publishUiChanges(composer: true);
-  }
+  Future<bool> selectServiceTier(String? tierId) =>
+      _modelSelectionController.selectServiceTier(tierId);
+
+  Future<bool> selectFastEnabled(bool enabled) =>
+      _modelSelectionController.selectFastEnabled(enabled);
+
+  Future<bool> resolveModelCompatibilityConflict() =>
+      _modelSelectionController.resolveCompatibilityConflict();
+
+  Future<bool> retryModelConfigurationSave() =>
+      _modelSelectionController.retryFailedSelection();
+
+  void clearModelConfigurationTransientState() =>
+      _modelSelectionController.clearTransientState();
 
   Future<void> selectSessionConfigOption(String configId, Object value) async {
     final sessionId = _selectedThreadId;
@@ -724,6 +763,7 @@ class AgentConversationViewModel extends ChangeNotifier {
   }
 
   void _handleModelList(AgentModelList modelList) {
+    _modelRefreshError = null;
     _modelSelectionController.handleModelList(modelList);
     _publishUiChanges(composer: true);
   }
@@ -1333,6 +1373,10 @@ class AgentConversationViewModel extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     providerController.removeListener(_handleProviderSettingsChanged);
+    _modelSelectionController.removeListener(_handleModelSelectionChanged);
+    if (_ownsModelSelectionController) {
+      _modelSelectionController.dispose();
+    }
     _elapsedTicker.dispose();
     _uiSignals.dispose();
     contextPanelVisible.dispose();
@@ -1360,6 +1404,13 @@ class AgentConversationViewModel extends ChangeNotifier {
       return;
     }
     _publishUiChanges(header: true, composer: true);
+  }
+
+  void _handleModelSelectionChanged() {
+    if (_disposed) {
+      return;
+    }
+    _publishUiChanges(composer: true);
   }
 
   /// 确保拿到正确的共享 provider 实例。

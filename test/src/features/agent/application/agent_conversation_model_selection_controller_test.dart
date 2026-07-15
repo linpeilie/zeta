@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -12,10 +13,11 @@ void main() {
     test('reconciles invalid config selection to provider defaults', () async {
       final persistedSelections = <AgentModelSelection>[];
       final controller = AgentConversationModelSelectionController(
-        persistSelection: (selection) async {
+        persistSelection: (selection, _) async {
           persistedSelections.add(selection);
         },
       );
+      addTearDown(controller.dispose);
 
       controller.seedFromConfig(
         AgentProviderConfig.defaultCodex.copyWith(
@@ -30,20 +32,25 @@ void main() {
       expect(controller.selectedModelId, 'gpt-5.5');
       expect(controller.selectedReasoningEffort, 'medium');
       expect(controller.selectedServiceTierId, 'priority');
+      expect(controller.selectionNotice, contains('missing-model'));
       expect(persistedSelections, hasLength(1));
       expect(persistedSelections.single.modelId, 'gpt-5.5');
       expect(persistedSelections.single.reasoningEffort, 'medium');
       expect(persistedSelections.single.serviceTierId, 'priority');
+
+      controller.clearTransientState();
+      expect(controller.selectionNotice, isNull);
     });
 
     test('selectModel updates provider runtime state and persists', () async {
       final persistedSelections = <AgentModelSelection>[];
       final provider = _FakeAgentProvider();
       final controller = AgentConversationModelSelectionController(
-        persistSelection: (selection) async {
+        persistSelection: (selection, _) async {
           persistedSelections.add(selection);
         },
       );
+      addTearDown(controller.dispose);
 
       controller.bindProvider(provider);
       controller.handleModelList(_modelList);
@@ -60,7 +67,169 @@ void main() {
       expect(persistedSelections, hasLength(1));
       expect(persistedSelections.single.modelId, 'gpt-5.4-mini');
     });
+
+    test('restores each model last valid preference when switching', () async {
+      final persistedPreferences = <Map<String, AgentModelPreference>>[];
+      final controller = AgentConversationModelSelectionController(
+        persistSelection: (selection, preferences) async {
+          persistedPreferences.add(preferences);
+        },
+        clock: () => _now,
+      );
+      addTearDown(controller.dispose);
+      controller.seedFromConfig(_configuredProvider());
+      controller.handleModelList(_modelList);
+
+      await controller.selectModel('gpt-5.4-mini');
+      await controller.selectFastEnabled(true);
+      await controller.selectModel('gpt-5.5');
+      await controller.selectModel('gpt-5.4-mini');
+
+      expect(controller.selectedReasoningEffort, 'low');
+      expect(controller.selectedServiceTierId, 'priority');
+      expect(controller.selectedFastEnabled, isTrue);
+      expect(persistedPreferences.last['gpt-5.4-mini']?.fastEnabled, isTrue);
+    });
+
+    test('requires explicit atomic resolution for xhigh and Fast', () async {
+      final controller = AgentConversationModelSelectionController(
+        persistSelection: (_, _) async {},
+        clock: () => _now,
+      );
+      addTearDown(controller.dispose);
+      controller.seedFromConfig(_configuredProvider());
+      controller.handleModelList(_modelList);
+      await controller.selectModel('gpt-reasoner');
+      await controller.selectReasoningEffort('xhigh');
+
+      final fastAccepted = await controller.selectFastEnabled(true);
+
+      expect(fastAccepted, isFalse);
+      expect(controller.selectedReasoningEffort, 'xhigh');
+      expect(controller.selectedFastEnabled, isFalse);
+      expect(controller.compatibilityConflict?.actionLabel, '切换到高并开启 Fast');
+
+      expect(await controller.resolveCompatibilityConflict(), isTrue);
+      expect(controller.selectedReasoningEffort, 'high');
+      expect(controller.selectedFastEnabled, isTrue);
+
+      final xhighAccepted = await controller.selectReasoningEffort('xhigh');
+      expect(xhighAccepted, isFalse);
+      expect(controller.selectedReasoningEffort, 'high');
+      expect(controller.compatibilityConflict?.actionLabel, '关闭 Fast 并切换到极高');
+
+      expect(await controller.resolveCompatibilityConflict(), isTrue);
+      expect(controller.selectedReasoningEffort, 'xhigh');
+      expect(controller.selectedFastEnabled, isFalse);
+    });
+
+    test('rolls back a failed save and retries the full snapshot', () async {
+      var shouldFail = true;
+      final controller = AgentConversationModelSelectionController(
+        persistSelection: (_, _) async {
+          if (shouldFail) {
+            throw const FileSystemException('disk full');
+          }
+        },
+        clock: () => _now,
+      );
+      addTearDown(controller.dispose);
+      controller.seedFromConfig(_configuredProvider());
+      controller.handleModelList(_modelList);
+
+      expect(await controller.selectModel('gpt-5.4-mini'), isFalse);
+      expect(controller.selectedModelId, 'gpt-5.5');
+      expect(controller.saveError, isNotNull);
+
+      shouldFail = false;
+      expect(await controller.retryFailedSelection(), isTrue);
+      expect(controller.selectedModelId, 'gpt-5.4-mini');
+      expect(controller.saveError, isNull);
+    });
+
+    test(
+      'coalesces rapid changes and persists the latest snapshot last',
+      () async {
+        final firstSave = Completer<void>();
+        final persisted = <AgentModelSelection>[];
+        final controller = AgentConversationModelSelectionController(
+          persistSelection: (selection, _) async {
+            persisted.add(selection);
+            if (persisted.length == 1) {
+              await firstSave.future;
+            }
+          },
+          clock: () => _now,
+        );
+        addTearDown(controller.dispose);
+        controller.seedFromConfig(_configuredProvider());
+        controller.handleModelList(_modelList);
+
+        final low = controller.selectReasoningEffort('low');
+        final medium = controller.selectReasoningEffort('medium');
+        final fast = controller.selectFastEnabled(true);
+        firstSave.complete();
+
+        expect(await low, isTrue);
+        expect(await medium, isTrue);
+        expect(await fast, isTrue);
+        expect(persisted, hasLength(2));
+        expect(persisted.last.reasoningEffort, 'medium');
+        expect(persisted.last.serviceTierId, 'priority');
+      },
+    );
+
+    test('selecting the current model does not persist again', () async {
+      var saveCount = 0;
+      final controller = AgentConversationModelSelectionController(
+        persistSelection: (_, _) async {
+          saveCount += 1;
+        },
+        clock: () => _now,
+      );
+      addTearDown(controller.dispose);
+      controller.seedFromConfig(_configuredProvider());
+      controller.handleModelList(_modelList);
+
+      expect(await controller.selectModel('gpt-5.5'), isTrue);
+      expect(saveCount, 0);
+    });
+
+    test('rejects a disabled model without changing or persisting', () async {
+      var saveCount = 0;
+      final controller = AgentConversationModelSelectionController(
+        persistSelection: (_, _) async {
+          saveCount += 1;
+        },
+        clock: () => _now,
+      );
+      addTearDown(controller.dispose);
+      controller.seedFromConfig(_configuredProvider());
+      controller.handleModelList(_modelList);
+
+      expect(await controller.selectModel('gpt-legacy'), isFalse);
+      expect(controller.selectedModelId, 'gpt-5.5');
+      expect(saveCount, 0);
+    });
   });
+}
+
+final DateTime _now = DateTime.utc(2026, 7, 15, 8);
+
+AgentProviderConfig _configuredProvider() {
+  return AgentProviderConfig.defaultCodex.copyWith(
+    selectedModel: 'gpt-5.5',
+    selectedReasoningEffort: 'medium',
+    modelPreferences: <String, AgentModelPreference>{
+      'gpt-5.5': AgentModelPreference(
+        modelId: 'gpt-5.5',
+        reasoningEffort: 'medium',
+        fastEnabled: false,
+        serviceTierId: null,
+        updatedAt: _now,
+      ),
+    },
+  );
 }
 
 const AgentModelList _modelList = AgentModelList(
@@ -88,6 +257,31 @@ const AgentModelList _modelList = AgentModelList(
         AgentModelReasoningEffort(effort: 'low'),
       ],
       defaultReasoningEffort: 'low',
+      serviceTiers: <AgentModelServiceTier>[
+        AgentModelServiceTier(id: 'priority', name: 'Fast'),
+      ],
+    ),
+    AgentModelInfo(
+      id: 'gpt-reasoner',
+      model: 'gpt-reasoner',
+      displayName: 'GPT-Reasoner',
+      supportedReasoningEfforts: <AgentModelReasoningEffort>[
+        AgentModelReasoningEffort(effort: 'low'),
+        AgentModelReasoningEffort(effort: 'medium'),
+        AgentModelReasoningEffort(effort: 'high'),
+        AgentModelReasoningEffort(effort: 'xhigh'),
+      ],
+      defaultReasoningEffort: 'medium',
+      serviceTiers: <AgentModelServiceTier>[
+        AgentModelServiceTier(id: 'priority', name: 'Fast'),
+      ],
+    ),
+    AgentModelInfo(
+      id: 'gpt-legacy',
+      model: 'gpt-legacy',
+      displayName: 'GPT-Legacy',
+      enabled: false,
+      unavailableReason: '当前账号没有访问权限',
     ),
   ],
 );

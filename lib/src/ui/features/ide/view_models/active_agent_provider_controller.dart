@@ -200,27 +200,31 @@ class ActiveAgentProviderController extends ChangeNotifier {
   /// 持久化用户在输入框选择的模型组合到 active provider 配置。
   ///
   /// 写入 configStore 并同步内存中的 settings，下次创建 provider 时会读取。
-  Future<void> persistModelSelection(AgentModelSelection selection) async {
+  Future<void> persistModelSelection(
+    AgentModelSelection selection,
+    Map<String, AgentModelPreference> preferences,
+  ) async {
     final providerId = _settings.activeProvider.id;
     final updatedProviders = _settings.providers.map((provider) {
       if (provider.id != providerId) {
         return provider;
       }
-      return provider.copyWith(
-        selectedModel: selection.modelId,
-        selectedReasoningEffort: selection.reasoningEffort,
-        selectedServiceTier: selection.serviceTierId,
+      return provider.withModelConfiguration(
+        selection: selection,
+        preferences: preferences,
       );
     }).toList();
-    _settings = AgentProviderSettings(
+    final updatedSettings = AgentProviderSettings(
       providers: List<AgentProviderConfig>.unmodifiable(updatedProviders),
       activeProviderId: providerId,
     );
     try {
-      await configStore.save(_settings);
+      await configStore.save(updatedSettings);
+      _settings = updatedSettings;
       _log.fine('Persisted model selection for provider $providerId');
     } catch (error, stackTrace) {
       _log.warning('Could not persist model selection', error, stackTrace);
+      rethrow;
     }
     _notify();
   }

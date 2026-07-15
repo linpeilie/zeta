@@ -21,6 +21,8 @@ class AgentModelServiceTier {
     required this.id,
     required this.name,
     this.description,
+    this.enabled = true,
+    this.unavailableReason,
   });
 
   /// 档位 id，如 priority。
@@ -31,6 +33,12 @@ class AgentModelServiceTier {
 
   /// 可选说明。
   final String? description;
+
+  /// 当前服务档位是否可选。
+  final bool enabled;
+
+  /// 服务档位不可用时的用户可读原因。
+  final String? unavailableReason;
 }
 
 /// 可选模型信息。
@@ -48,6 +56,8 @@ class AgentModelInfo {
     this.serviceTiers = const <AgentModelServiceTier>[],
     this.defaultServiceTier,
     this.isDefault = false,
+    this.enabled = true,
+    this.unavailableReason,
     this.contextWindowTokens,
     this.raw = const <String, Object?>{},
   });
@@ -81,6 +91,15 @@ class AgentModelInfo {
 
   /// 是否为 CLI 默认模型。
   final bool isDefault;
+
+  /// 当前模型是否允许选择。
+  ///
+  /// Codex app-server 0.144.1 的稳定 `model/list` 仅返回可用目录，不提供
+  /// 该字段；其他 provider 或未来适配层可通过此中立字段表达不可用模型。
+  final bool enabled;
+
+  /// 模型不可用时的用户可读原因。
+  final String? unavailableReason;
 
   /// 模型上下文窗口 token 上限；仅在 provider 明确返回时设置。
   final int? contextWindowTokens;
@@ -123,4 +142,111 @@ class AgentModelSelection {
   /// 是否所有字段都为空。
   bool get isEmpty =>
       modelId == null && reasoningEffort == null && serviceTierId == null;
+}
+
+/// 单个模型最近一次由服务端确认有效的用户偏好。
+class AgentModelPreference {
+  const AgentModelPreference({
+    required this.modelId,
+    required this.reasoningEffort,
+    required this.fastEnabled,
+    required this.serviceTierId,
+    required this.updatedAt,
+    this.version = currentVersion,
+  });
+
+  /// 当前持久化结构版本。
+  static const int currentVersion = 1;
+
+  final String modelId;
+  final String? reasoningEffort;
+
+  /// UI 中 Fast 的明确语义；[serviceTierId] 保留 provider 的精确协议值。
+  final bool fastEnabled;
+  final String? serviceTierId;
+  final DateTime updatedAt;
+  final int version;
+
+  AgentModelSelection get selection => AgentModelSelection(
+    modelId: modelId,
+    reasoningEffort: reasoningEffort,
+    serviceTierId: serviceTierId,
+  );
+
+  AgentModelPreference copyWith({
+    String? reasoningEffort,
+    bool? fastEnabled,
+    Object? serviceTierId = _modelPreferenceUnset,
+    DateTime? updatedAt,
+    int? version,
+  }) {
+    return AgentModelPreference(
+      modelId: modelId,
+      reasoningEffort: reasoningEffort ?? this.reasoningEffort,
+      fastEnabled: fastEnabled ?? this.fastEnabled,
+      serviceTierId: identical(serviceTierId, _modelPreferenceUnset)
+          ? this.serviceTierId
+          : serviceTierId as String?,
+      updatedAt: updatedAt ?? this.updatedAt,
+      version: version ?? this.version,
+    );
+  }
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'modelId': modelId,
+    'reasoningEffort': reasoningEffort,
+    'fastEnabled': fastEnabled,
+    'serviceTierId': serviceTierId,
+    'updatedAt': updatedAt.toUtc().toIso8601String(),
+    'version': version,
+  };
+
+  /// 宽容读取模型偏好；损坏或缺少稳定 id 的条目会被忽略。
+  static AgentModelPreference? tryDecode(Object? value) {
+    if (value is! Map) {
+      return null;
+    }
+    final map = <String, Object?>{
+      for (final entry in value.entries)
+        if (entry.key is String) entry.key as String: entry.value,
+    };
+    final modelId = map['modelId'];
+    if (modelId is! String || modelId.trim().isEmpty) {
+      return null;
+    }
+    final updatedAt = DateTime.tryParse('${map['updatedAt'] ?? ''}')?.toUtc();
+    final rawVersion = map['version'];
+    return AgentModelPreference(
+      modelId: modelId.trim(),
+      reasoningEffort: map['reasoningEffort'] is String
+          ? map['reasoningEffort'] as String
+          : null,
+      fastEnabled: map['fastEnabled'] == true,
+      serviceTierId: map['serviceTierId'] is String
+          ? map['serviceTierId'] as String
+          : null,
+      updatedAt:
+          updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      version: rawVersion is int && rawVersion > 0
+          ? rawVersion
+          : currentVersion,
+    );
+  }
+}
+
+const Object _modelPreferenceUnset = Object();
+
+/// 返回模型目录中代表 Fast 的服务档位。
+///
+/// 官方协议把它建模为可扩展的 service tier，因此优先按 id/name 识别；只有
+/// 一个档位时再使用目录本身作为保守回退，避免把多档服务误标为 Fast。
+AgentModelServiceTier? agentFastServiceTier(AgentModelInfo model) {
+  for (final tier in model.serviceTiers) {
+    final id = tier.id.trim().toLowerCase();
+    final name = tier.name.trim().toLowerCase();
+    if (id == 'fast' || id == 'priority' || name == 'fast') {
+      return tier;
+    }
+  }
+  return model.serviceTiers.length == 1 ? model.serviceTiers.single : null;
 }

@@ -183,6 +183,11 @@ Cursor 适配还必须遵守以下约束：
 与 [协议版本锁定文档](./codex_app_server_protocol.md)；升级 CLI 时先
 `./tool/gen_codex_schema.sh --diff`（或 PowerShell `-Diff`）再改代码。
 
+新 provider 支持 Composer 模型配置时，必须把协议字段映射为中立
+`AgentModelInfo.supportedReasoningEfforts` 和 `serviceTiers`，保留服务端数组顺序。
+Fast 是产品语义，运行时仍必须传递 provider 的精确 `serviceTierId`；不得在 widget
+中解析 `model/list` 或猜测协议 JSON key。
+
 ## 8. UI 开发指南
 
 - 保持三栏工作台的职责边界：Projects 管项目和 threads，Agent 管对话，Files 管文件上下文。
@@ -201,6 +206,19 @@ Cursor 适配还必须遵守以下约束：
   provider kind 或显示名称硬编码。
 - 使用统计是标题栏全局页面，不属于设置分区。统计表格在窄窗口保留横向滚动，
   分析区按可用宽度从双栏切换为单栏。
+
+### Composer 模型配置开发约束
+
+- 入口、列表和卡片只消费 `AgentModelConfigUiState`；归一化、持久化、回滚与
+  provider 更新必须留在 `AgentConversationModelSelectionController`。
+- `selectedModelId` 与 `expandedModelId` 不得合并：前者影响下一回合且持久化，
+  后者仅用于 Popover 展开卡片并在重新打开时清空。
+- 新的模型行使用稳定 `ValueKey(model.id)`，禁用项保留可读原因；列表刷新不得
+  清空旧快照、改变 Popover 打开方向或抢走用户滚动。
+- 一次修改必须同步更新 selection 与对应模型偏好；保存失败时从最近确认
+  快照整体回滚，不得只回滚某个字段。
+- 交互变更至少覆盖：鼠标选择、重新打开收起、键盘 roving focus、Fast / `xhigh`
+  冲突确认、保存回滚/重试与运行中的下一回合 Banner。
 
 ### 使用统计开发约束
 
@@ -245,6 +263,11 @@ Zeta 自有数据统一写入用户主目录下的以下结构：
 - 不要把 provider 全局配置复制进每个项目状态。
 - 不要在 presentation/application 中直接构造 `File('~/.zeta/...')`。
 
+`providers.json` 中的 `modelPreferences` 是 provider 全局配置，按 `modelId` 保存
+`reasoningEffort`、`fastEnabled`、`serviceTierId`、`updatedAt` 和条目 `version`。
+解码时忽略损坏条目并兼容旧版单一 selection；写入时 selection 与完整偏好 map
+必须作为同一快照保存。
+
 Agent CLI 的数据不属于这套目录：Codex/Grok/Cursor 配置与 session 历史继续保留在
 `~/.codex`、`~/.grok`、`~/.cursor` 或项目 `.cursor/*`，迁移器不会扫描、复制或改写。
 `cursor_sessions.json` 仅保存 Zeta 恢复列表所需的最小索引；Codex 使用统计仍只读原
@@ -262,6 +285,8 @@ rollout JSONL，并把可重建的派生索引写入 `~/.zeta/state`。
 - 纯逻辑、JSON 编解码和状态机使用单元测试。
 - Widget 渲染和用户交互使用 `flutter_test`。
 - 外部 CLI、文件系统和持久化优先使用 fake 或 callback 注入。
+- 对乐观配置增加“运行态更新→持久化失败→确认态回滚→重试”测试，
+  并用可控 Completer 覆盖快速连续修改的最终快照语义。
 - 只有端到端用户流程稳定后再添加 integration test。
 
 ## 12. 常见问题

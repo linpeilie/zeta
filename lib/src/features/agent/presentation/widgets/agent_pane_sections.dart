@@ -316,23 +316,22 @@ class _AgentComposerSection extends StatelessWidget {
                   showImageAttachment: viewModel.canAttachImages,
                   showResourceMention: viewModel.canMentionResources,
                   showModelSelection: viewModel.showModelSelection,
-                  models: viewModel.models,
-                  selectedModel: viewModel.selectedModel,
-                  selectedReasoningEffort: viewModel.selectedReasoningEffort,
-                  selectedServiceTierId: viewModel.selectedServiceTierId,
-                  showReasoningEffort: viewModel.showReasoningEffort,
-                  showServiceTier: viewModel.showServiceTier,
+                  modelConfigState: viewModel.modelConfigUiState,
                   showPermissionPolicy: viewModel.showPermissionPolicy,
                   permissionPolicyLabel: viewModel.permissionPolicyLabel,
                   permissionPresets: AgentPermissionSelection.presets,
                   selectedPermissionPresetId:
                       viewModel.permissionSelection.matchedPresetId,
                   sessionConfigOptions: viewModel.sessionConfigOptions,
-                  onSelectModel: (modelId) => viewModel.selectModel(modelId),
-                  onSelectReasoningEffort: (effort) =>
-                      viewModel.selectReasoningEffort(effort),
-                  onSelectServiceTier: (tierId) =>
-                      viewModel.selectServiceTier(tierId),
+                  onSelectModel: viewModel.selectModel,
+                  onSelectReasoningEffort: viewModel.selectReasoningEffort,
+                  onSelectFastEnabled: viewModel.selectFastEnabled,
+                  onResolveModelCompatibility:
+                      viewModel.resolveModelCompatibilityConflict,
+                  onRetryModelConfiguration:
+                      viewModel.retryModelConfigurationSave,
+                  onCloseModelConfiguration:
+                      viewModel.clearModelConfigurationTransientState,
                   onSelectPermissionPreset: viewModel.selectPermissionPreset,
                   onSelectSessionConfigOption:
                       viewModel.selectSessionConfigOption,

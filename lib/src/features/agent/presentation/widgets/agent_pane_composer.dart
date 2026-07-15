@@ -2,8 +2,8 @@ part of '../agent_pane.dart';
 
 /// 底部输入面板。
 ///
-/// 上半部分是多行输入框，下半部分是操作行：左侧放模型选择、思考按钮和速率按钮，
-/// 右侧放发送/取消按钮。provider 运行时发送按钮切换为取消按钮。
+/// 上半部分是多行输入框，下半部分是操作行：左侧通过一个模型配置入口渐进
+/// 展示模型、思考程度和 Fast，右侧放发送/取消按钮。
 class _AgentComposer extends StatelessWidget {
   static const double _compactToolbarBreakpoint = 560;
 
@@ -23,12 +23,7 @@ class _AgentComposer extends StatelessWidget {
     required this.showImageAttachment,
     required this.showResourceMention,
     required this.showModelSelection,
-    required this.models,
-    required this.selectedModel,
-    required this.selectedReasoningEffort,
-    required this.selectedServiceTierId,
-    required this.showReasoningEffort,
-    required this.showServiceTier,
+    required this.modelConfigState,
     required this.showPermissionPolicy,
     required this.permissionPolicyLabel,
     required this.permissionPresets,
@@ -36,7 +31,10 @@ class _AgentComposer extends StatelessWidget {
     required this.sessionConfigOptions,
     required this.onSelectModel,
     required this.onSelectReasoningEffort,
-    required this.onSelectServiceTier,
+    required this.onSelectFastEnabled,
+    required this.onResolveModelCompatibility,
+    required this.onRetryModelConfiguration,
+    required this.onCloseModelConfiguration,
     required this.onSelectPermissionPreset,
     required this.onSelectSessionConfigOption,
     required this.mentionCandidates,
@@ -59,23 +57,7 @@ class _AgentComposer extends StatelessWidget {
   final bool showResourceMention;
   final bool showModelSelection;
 
-  /// 可选模型列表。
-  final List<AgentModelInfo> models;
-
-  /// 当前选中的模型信息。
-  final AgentModelInfo? selectedModel;
-
-  /// 当前选中的推理深度档位。
-  final String? selectedReasoningEffort;
-
-  /// 当前选中的服务档位 id。
-  final String? selectedServiceTierId;
-
-  /// 是否显示思考按钮。
-  final bool showReasoningEffort;
-
-  /// 是否显示速率按钮。
-  final bool showServiceTier;
+  final AgentModelConfigUiState modelConfigState;
 
   /// 是否显示审批/沙箱策略按钮。
   final bool showPermissionPolicy;
@@ -92,9 +74,12 @@ class _AgentComposer extends StatelessWidget {
   /// 当前 session 由 provider 动态下发的配置项。
   final List<AgentSessionConfigOption> sessionConfigOptions;
 
-  final ValueChanged<String> onSelectModel;
-  final ValueChanged<String?> onSelectReasoningEffort;
-  final ValueChanged<String?> onSelectServiceTier;
+  final Future<bool> Function(String modelId) onSelectModel;
+  final Future<bool> Function(String? effort) onSelectReasoningEffort;
+  final Future<bool> Function(bool enabled) onSelectFastEnabled;
+  final Future<bool> Function() onResolveModelCompatibility;
+  final Future<bool> Function() onRetryModelConfiguration;
+  final VoidCallback onCloseModelConfiguration;
   final ValueChanged<AgentPermissionPreset> onSelectPermissionPreset;
   final void Function(String configId, Object value)
   onSelectSessionConfigOption;
@@ -147,30 +132,17 @@ class _AgentComposer extends StatelessWidget {
         ),
       );
     }
-    if (showModelSelection && models.isNotEmpty) {
+    if (showModelSelection &&
+        (modelConfigState.models.isNotEmpty || modelConfigState.isRefreshing)) {
       addSelector(
-        _ModelSelectorButton(
-          models: models,
-          selectedModel: selectedModel,
-          onSelect: onSelectModel,
-        ),
-      );
-    }
-    if (showReasoningEffort && selectedModel != null) {
-      addSelector(
-        _ReasoningEffortButton(
-          efforts: selectedModel!.supportedReasoningEfforts,
-          selectedEffort: selectedReasoningEffort,
-          onSelect: onSelectReasoningEffort,
-        ),
-      );
-    }
-    if (showServiceTier && selectedModel != null) {
-      addSelector(
-        _ServiceTierButton(
-          tiers: selectedModel!.serviceTiers,
-          selectedTierId: selectedServiceTierId,
-          onSelect: onSelectServiceTier,
+        _AgentModelConfig(
+          state: modelConfigState,
+          onSelectModel: onSelectModel,
+          onSelectReasoningEffort: onSelectReasoningEffort,
+          onSelectFastEnabled: onSelectFastEnabled,
+          onResolveCompatibility: onResolveModelCompatibility,
+          onRetrySave: onRetryModelConfiguration,
+          onPopoverClosed: onCloseModelConfiguration,
         ),
       );
     }
@@ -862,142 +834,6 @@ IconData _sessionConfigIcon(String? category) {
     'model_config' => Icons.settings_suggest_outlined,
     _ => Icons.tune_rounded,
   };
-}
-
-/// 模型选择按钮，点击弹出可用模型列表。
-class _ModelSelectorButton extends StatelessWidget {
-  const _ModelSelectorButton({
-    required this.models,
-    required this.selectedModel,
-    required this.onSelect,
-  });
-
-  final List<AgentModelInfo> models;
-  final AgentModelInfo? selectedModel;
-  final ValueChanged<String> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    return _SelectorSelect<String>(
-      selectorKey: const ValueKey('agent-model-selector'),
-      tooltip: 'Select model',
-      placeholderLabel: 'Model',
-      icon: Icons.auto_awesome_outlined,
-      value: selectedModel?.id,
-      labelBuilder: _modelLabel,
-      onChanged: onSelect,
-      options: [
-        for (final model in models)
-          sf.SelectItemButton<String>(
-            key: ValueKey<String>('agent-model-option-${model.id}'),
-            value: model.id,
-            child: Text(
-              model.displayName,
-              overflow: TextOverflow.ellipsis,
-              style: IdeTextStyles.of(context).bodyMedium,
-            ),
-          ),
-      ],
-    );
-  }
-
-  String _modelLabel(String modelId) {
-    for (final model in models) {
-      if (model.id == modelId) {
-        return model.displayName;
-      }
-    }
-    return selectedModel?.displayName ?? modelId;
-  }
-}
-
-/// 推理深度（思考）选择按钮，点击弹出 low/medium/high/xhigh 列表。
-class _ReasoningEffortButton extends StatelessWidget {
-  const _ReasoningEffortButton({
-    required this.efforts,
-    required this.selectedEffort,
-    required this.onSelect,
-  });
-
-  final List<AgentModelReasoningEffort> efforts;
-  final String? selectedEffort;
-  final ValueChanged<String?> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    return _SelectorSelect<String>(
-      selectorKey: const ValueKey('agent-reasoning-effort-selector'),
-      tooltip: 'Reasoning effort',
-      placeholderLabel: 'Think',
-      icon: Icons.psychology_alt_outlined,
-      value: selectedEffort,
-      labelBuilder: _effortLabel,
-      onChanged: (value) => onSelect(value),
-      options: [
-        for (final effort in efforts)
-          sf.SelectItemButton<String>(
-            key: ValueKey<String>('agent-reasoning-option-${effort.effort}'),
-            value: effort.effort,
-            child: Text(
-              effort.description ?? effort.effort,
-              style: IdeTextStyles.of(context).bodyMedium,
-            ),
-          ),
-      ],
-    );
-  }
-
-  String _effortLabel(String effortValue) {
-    for (final effort in efforts) {
-      if (effort.effort == effortValue) {
-        return effort.description ?? effort.effort;
-      }
-    }
-    return selectedEffort ?? effortValue;
-  }
-}
-
-/// 服务档位（速率）选择按钮，点击弹出可用档位列表。
-class _ServiceTierButton extends StatelessWidget {
-  const _ServiceTierButton({
-    required this.tiers,
-    required this.selectedTierId,
-    required this.onSelect,
-  });
-
-  final List<AgentModelServiceTier> tiers;
-  final String? selectedTierId;
-  final ValueChanged<String?> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    return _SelectorSelect<String>(
-      selectorKey: const ValueKey('agent-service-tier-selector'),
-      tooltip: 'Service tier',
-      placeholderLabel: 'Speed',
-      icon: Icons.speed_rounded,
-      value: selectedTierId,
-      labelBuilder: _tierLabel,
-      onChanged: (value) => onSelect(value),
-      options: [
-        for (final tier in tiers)
-          sf.SelectItemButton<String>(
-            key: ValueKey<String>('agent-service-tier-option-${tier.id}'),
-            value: tier.id,
-            child: Text(tier.name, style: IdeTextStyles.of(context).bodyMedium),
-          ),
-      ],
-    );
-  }
-
-  String _tierLabel(String id) {
-    for (final tier in tiers) {
-      if (tier.id == id) {
-        return tier.name;
-      }
-    }
-    return id;
-  }
 }
 
 /// 审批/沙箱策略预设选择按钮。
