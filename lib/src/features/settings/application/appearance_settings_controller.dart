@@ -103,6 +103,42 @@ class AppearanceSettingsController extends ChangeNotifier {
     return true;
   }
 
+  /// 更新界面基准字号；输入会按整数步进并限制在领域允许范围内。
+  Future<bool> setUiFontSize(double value) async {
+    await load();
+    final normalized = _normalizeFontSize(
+      value,
+      min: minUiFontSize,
+      max: maxUiFontSize,
+    );
+    if (normalized == null) {
+      return false;
+    }
+    if (_settings.uiFontSize == normalized) {
+      return true;
+    }
+    await _applySettings(_settings.copyWith(uiFontSize: normalized));
+    return true;
+  }
+
+  /// 更新代码基准字号；输入会按整数步进并限制在领域允许范围内。
+  Future<bool> setCodeFontSize(double value) async {
+    await load();
+    final normalized = _normalizeFontSize(
+      value,
+      min: minCodeFontSize,
+      max: maxCodeFontSize,
+    );
+    if (normalized == null) {
+      return false;
+    }
+    if (_settings.codeFontSize == normalized) {
+      return true;
+    }
+    await _applySettings(_settings.copyWith(codeFontSize: normalized));
+    return true;
+  }
+
   Future<AppearanceSettings> _loadOnce() async {
     final stored = await store.load();
     final normalized = await _normalizeSettings(stored);
@@ -178,4 +214,15 @@ class AppearanceSettingsController extends ChangeNotifier {
     _settingsNotifier.dispose();
     super.dispose();
   }
+}
+
+double? _normalizeFontSize(
+  double value, {
+  required double min,
+  required double max,
+}) {
+  if (!value.isFinite) {
+    return null;
+  }
+  return value.roundToDouble().clamp(min, max);
 }

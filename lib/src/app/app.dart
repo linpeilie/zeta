@@ -129,11 +129,15 @@ class MainAppState extends State<MainApp> {
           brightness: Brightness.light,
           uiFontFamily: settings.uiFontFamily,
           codeFontFamily: settings.codeFontFamily,
+          uiFontSize: settings.uiFontSize,
+          codeFontSize: settings.codeFontSize,
         );
         final darkIdeTheme = buildIdeThemeData(
           brightness: Brightness.dark,
           uiFontFamily: settings.uiFontFamily,
           codeFontFamily: settings.codeFontFamily,
+          uiFontSize: settings.uiFontSize,
+          codeFontSize: settings.codeFontSize,
         );
         final materialBrightness = resolveBrightnessForThemeMode(
           settings.themeMode,

@@ -40,6 +40,8 @@ void main() {
           themeMode: ThemeMode.dark,
           uiFontChoice: AppearanceFontChoice.system('Maple UI'),
           codeFontChoice: AppearanceFontChoice.system('Cascadia Mono'),
+          uiFontSize: 14,
+          codeFontSize: 16,
         ),
       );
 
@@ -55,13 +57,34 @@ void main() {
         'kind': 'system',
         'fontFamily': 'Cascadia Mono',
       });
+      expect(saved['uiFontSize'], 14.0);
+      expect(saved['codeFontSize'], 16.0);
       expect(
         await store.load(),
         const AppearanceSettings(
           themeMode: ThemeMode.dark,
           uiFontChoice: AppearanceFontChoice.system('Maple UI'),
           codeFontChoice: AppearanceFontChoice.system('Cascadia Mono'),
+          uiFontSize: 14,
+          codeFontSize: 16,
         ),
+      );
+    });
+
+    test('uses default font sizes for older or damaged values', () async {
+      await settingsFile.writeAsString(
+        jsonEncode(<String, Object?>{
+          'version': 1,
+          'themeMode': 'dark',
+          'uiFontSize': 99,
+          'codeFontSize': 'large',
+        }),
+      );
+      final store = FileAppearanceSettingsStore(file: settingsFile);
+
+      expect(
+        await store.load(),
+        const AppearanceSettings(themeMode: ThemeMode.dark),
       );
     });
 

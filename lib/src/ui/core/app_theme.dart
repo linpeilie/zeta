@@ -21,12 +21,16 @@ class IdeThemeData {
     required this.colors,
     this.uiFontFamily,
     required this.codeFontFamily,
+    this.uiFontSize = defaultUiFontSize,
+    this.codeFontSize = defaultCodeFontSize,
   });
 
   final Brightness brightness;
   final IdeColors colors;
   final String? uiFontFamily;
   final String codeFontFamily;
+  final double uiFontSize;
+  final double codeFontSize;
 }
 
 /// 在应用根部提供 Graphite light/dark token，并在运行时解析当前有效主题。
@@ -109,6 +113,8 @@ IdeThemeData buildIdeThemeData({
   required Brightness brightness,
   String? uiFontFamily,
   required String codeFontFamily,
+  double uiFontSize = defaultUiFontSize,
+  double codeFontSize = defaultCodeFontSize,
 }) {
   return IdeThemeData(
     brightness: brightness,
@@ -116,6 +122,8 @@ IdeThemeData buildIdeThemeData({
     uiFontFamily: _normalizeFontFamily(uiFontFamily),
     codeFontFamily:
         _normalizeFontFamily(codeFontFamily) ?? bundledCodeFontFamily,
+    uiFontSize: uiFontSize,
+    codeFontSize: codeFontSize,
   );
 }
 
@@ -145,13 +153,51 @@ ThemeData buildMaterialTheme(IdeThemeData ideTheme) {
     dividerColor: colors.border,
     iconTheme: IconThemeData(color: colors.textSecondary),
   );
+  final baseTextTheme = baseTheme.textTheme.apply(
+    fontFamily: ideTheme.uiFontFamily,
+    bodyColor: colors.textPrimary,
+    displayColor: colors.textPrimary,
+  );
+  final fontSizeFactor = ideTheme.uiFontSize / defaultUiFontSize;
   return baseTheme.copyWith(
-    textTheme: baseTheme.textTheme.apply(
-      fontFamily: ideTheme.uiFontFamily,
-      bodyColor: colors.textPrimary,
-      displayColor: colors.textPrimary,
+    textTheme: baseTextTheme.copyWith(
+      displayLarge: _scaleTextStyle(baseTextTheme.displayLarge, fontSizeFactor),
+      displayMedium: _scaleTextStyle(
+        baseTextTheme.displayMedium,
+        fontSizeFactor,
+      ),
+      displaySmall: _scaleTextStyle(baseTextTheme.displaySmall, fontSizeFactor),
+      headlineLarge: _scaleTextStyle(
+        baseTextTheme.headlineLarge,
+        fontSizeFactor,
+      ),
+      headlineMedium: _scaleTextStyle(
+        baseTextTheme.headlineMedium,
+        fontSizeFactor,
+      ),
+      headlineSmall: _scaleTextStyle(
+        baseTextTheme.headlineSmall,
+        fontSizeFactor,
+      ),
+      titleLarge: _scaleTextStyle(baseTextTheme.titleLarge, fontSizeFactor),
+      titleMedium: _scaleTextStyle(baseTextTheme.titleMedium, fontSizeFactor),
+      titleSmall: _scaleTextStyle(baseTextTheme.titleSmall, fontSizeFactor),
+      bodyLarge: _scaleTextStyle(baseTextTheme.bodyLarge, fontSizeFactor),
+      bodyMedium: _scaleTextStyle(baseTextTheme.bodyMedium, fontSizeFactor),
+      bodySmall: _scaleTextStyle(baseTextTheme.bodySmall, fontSizeFactor),
+      labelLarge: _scaleTextStyle(baseTextTheme.labelLarge, fontSizeFactor),
+      labelMedium: _scaleTextStyle(baseTextTheme.labelMedium, fontSizeFactor),
+      labelSmall: _scaleTextStyle(baseTextTheme.labelSmall, fontSizeFactor),
     ),
   );
+}
+
+TextStyle? _scaleTextStyle(TextStyle? style, double factor) {
+  final fontSize = style?.fontSize;
+  if (style == null || fontSize == null || factor == 1) {
+    return style;
+  }
+  return style.copyWith(fontSize: fontSize * factor);
 }
 
 IdeColors _baseIdeColorsForBrightness(Brightness brightness) {
@@ -195,43 +241,58 @@ sf.Typography _buildShadcnTypography(IdeThemeData ideTheme) {
   const base = sf.Typography.geist();
   final uiFontFamily = ideTheme.uiFontFamily;
   final codeFontFamily = ideTheme.codeFontFamily;
+  final uiFontSizeFactor = ideTheme.uiFontSize / defaultUiFontSize;
+  final codeFontSizeFactor = ideTheme.codeFontSize / defaultCodeFontSize;
+
+  TextStyle uiStyle(TextStyle style) => _overrideTextStyle(
+    style,
+    fontFamily: uiFontFamily,
+    fontSizeFactor: uiFontSizeFactor,
+  );
+
+  TextStyle codeStyle(TextStyle style) => _overrideTextStyle(
+    style,
+    fontFamily: codeFontFamily,
+    fontSizeFactor: codeFontSizeFactor,
+  );
+
   return base.copyWith(
-    sans: () => _overrideFontFamily(base.sans, uiFontFamily),
-    mono: () => _overrideFontFamily(base.mono, codeFontFamily),
-    xSmall: () => _overrideFontFamily(base.xSmall, uiFontFamily),
-    small: () => _overrideFontFamily(base.small, uiFontFamily),
-    base: () => _overrideFontFamily(base.base, uiFontFamily),
-    large: () => _overrideFontFamily(base.large, uiFontFamily),
-    xLarge: () => _overrideFontFamily(base.xLarge, uiFontFamily),
-    x2Large: () => _overrideFontFamily(base.x2Large, uiFontFamily),
-    x3Large: () => _overrideFontFamily(base.x3Large, uiFontFamily),
-    x4Large: () => _overrideFontFamily(base.x4Large, uiFontFamily),
-    x5Large: () => _overrideFontFamily(base.x5Large, uiFontFamily),
-    x6Large: () => _overrideFontFamily(base.x6Large, uiFontFamily),
-    x7Large: () => _overrideFontFamily(base.x7Large, uiFontFamily),
-    x8Large: () => _overrideFontFamily(base.x8Large, uiFontFamily),
-    x9Large: () => _overrideFontFamily(base.x9Large, uiFontFamily),
-    thin: () => _overrideFontFamily(base.thin, uiFontFamily),
-    light: () => _overrideFontFamily(base.light, uiFontFamily),
-    extraLight: () => _overrideFontFamily(base.extraLight, uiFontFamily),
-    normal: () => _overrideFontFamily(base.normal, uiFontFamily),
-    medium: () => _overrideFontFamily(base.medium, uiFontFamily),
-    semiBold: () => _overrideFontFamily(base.semiBold, uiFontFamily),
-    bold: () => _overrideFontFamily(base.bold, uiFontFamily),
-    extraBold: () => _overrideFontFamily(base.extraBold, uiFontFamily),
-    black: () => _overrideFontFamily(base.black, uiFontFamily),
-    italic: () => _overrideFontFamily(base.italic, uiFontFamily),
-    h1: () => _overrideFontFamily(base.h1, uiFontFamily),
-    h2: () => _overrideFontFamily(base.h2, uiFontFamily),
-    h3: () => _overrideFontFamily(base.h3, uiFontFamily),
-    h4: () => _overrideFontFamily(base.h4, uiFontFamily),
-    p: () => _overrideFontFamily(base.p, uiFontFamily),
-    blockQuote: () => _overrideFontFamily(base.blockQuote, uiFontFamily),
-    inlineCode: () => _overrideFontFamily(base.inlineCode, codeFontFamily),
-    lead: () => _overrideFontFamily(base.lead, uiFontFamily),
-    textLarge: () => _overrideFontFamily(base.textLarge, uiFontFamily),
-    textSmall: () => _overrideFontFamily(base.textSmall, uiFontFamily),
-    textMuted: () => _overrideFontFamily(base.textMuted, uiFontFamily),
+    sans: () => uiStyle(base.sans),
+    mono: () => codeStyle(base.mono),
+    xSmall: () => uiStyle(base.xSmall),
+    small: () => uiStyle(base.small),
+    base: () => uiStyle(base.base),
+    large: () => uiStyle(base.large),
+    xLarge: () => uiStyle(base.xLarge),
+    x2Large: () => uiStyle(base.x2Large),
+    x3Large: () => uiStyle(base.x3Large),
+    x4Large: () => uiStyle(base.x4Large),
+    x5Large: () => uiStyle(base.x5Large),
+    x6Large: () => uiStyle(base.x6Large),
+    x7Large: () => uiStyle(base.x7Large),
+    x8Large: () => uiStyle(base.x8Large),
+    x9Large: () => uiStyle(base.x9Large),
+    thin: () => uiStyle(base.thin),
+    light: () => uiStyle(base.light),
+    extraLight: () => uiStyle(base.extraLight),
+    normal: () => uiStyle(base.normal),
+    medium: () => uiStyle(base.medium),
+    semiBold: () => uiStyle(base.semiBold),
+    bold: () => uiStyle(base.bold),
+    extraBold: () => uiStyle(base.extraBold),
+    black: () => uiStyle(base.black),
+    italic: () => uiStyle(base.italic),
+    h1: () => uiStyle(base.h1),
+    h2: () => uiStyle(base.h2),
+    h3: () => uiStyle(base.h3),
+    h4: () => uiStyle(base.h4),
+    p: () => uiStyle(base.p),
+    blockQuote: () => uiStyle(base.blockQuote),
+    inlineCode: () => codeStyle(base.inlineCode),
+    lead: () => uiStyle(base.lead),
+    textLarge: () => uiStyle(base.textLarge),
+    textSmall: () => uiStyle(base.textSmall),
+    textMuted: () => uiStyle(base.textMuted),
   );
 }
 
@@ -243,16 +304,27 @@ String? _normalizeFontFamily(String? fontFamily) {
   return trimmed.isEmpty ? null : trimmed;
 }
 
-TextStyle _overrideFontFamily(TextStyle style, String? fontFamily) {
+TextStyle _overrideTextStyle(
+  TextStyle style, {
+  required String? fontFamily,
+  required double fontSizeFactor,
+}) {
   final normalizedFontFamily = _normalizeFontFamily(fontFamily);
   if (normalizedFontFamily == null) {
-    return style;
+    if (fontSizeFactor == 1) {
+      return style;
+    }
+    return style.copyWith(
+      fontSize: style.fontSize == null
+          ? null
+          : style.fontSize! * fontSizeFactor,
+    );
   }
   return TextStyle(
     inherit: style.inherit,
     color: style.color,
     backgroundColor: style.backgroundColor,
-    fontSize: style.fontSize,
+    fontSize: style.fontSize == null ? null : style.fontSize! * fontSizeFactor,
     fontWeight: style.fontWeight,
     fontStyle: style.fontStyle,
     letterSpacing: style.letterSpacing,

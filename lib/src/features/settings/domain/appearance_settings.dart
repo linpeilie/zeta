@@ -2,6 +2,18 @@ import 'package:flutter/material.dart';
 
 import 'package:zeta/src/core/constants/app_typography.dart';
 
+/// 界面字号允许的最小值。
+const double minUiFontSize = 10;
+
+/// 界面字号允许的最大值。
+const double maxUiFontSize = 20;
+
+/// 代码字号允许的最小值。
+const double minCodeFontSize = 10;
+
+/// 代码字号允许的最大值。
+const double maxCodeFontSize = 24;
+
 /// 字体选择来源。
 enum AppearanceFontChoiceKind { systemDefault, system, bundledJetBrainsMono }
 
@@ -86,11 +98,22 @@ class AppearanceSettings {
     this.themeMode = ThemeMode.system,
     this.uiFontChoice = const AppearanceFontChoice.systemDefault(),
     this.codeFontChoice = const AppearanceFontChoice.bundledJetBrainsMono(),
-  });
+    this.uiFontSize = defaultUiFontSize,
+    this.codeFontSize = defaultCodeFontSize,
+  }) : assert(uiFontSize >= minUiFontSize && uiFontSize <= maxUiFontSize),
+       assert(
+         codeFontSize >= minCodeFontSize && codeFontSize <= maxCodeFontSize,
+       );
 
   final ThemeMode themeMode;
   final AppearanceFontChoice uiFontChoice;
   final AppearanceFontChoice codeFontChoice;
+
+  /// 普通界面文本的基准字号，其他界面排版 token 按比例缩放。
+  final double uiFontSize;
+
+  /// 代码正文的基准字号，较小代码 token 按比例缩放。
+  final double codeFontSize;
 
   String? get uiFontFamily =>
       uiFontChoice.isSystemFont ? uiFontChoice.fontFamily : null;
@@ -103,11 +126,15 @@ class AppearanceSettings {
     ThemeMode? themeMode,
     AppearanceFontChoice? uiFontChoice,
     AppearanceFontChoice? codeFontChoice,
+    double? uiFontSize,
+    double? codeFontSize,
   }) {
     return AppearanceSettings(
       themeMode: themeMode ?? this.themeMode,
       uiFontChoice: uiFontChoice ?? this.uiFontChoice,
       codeFontChoice: codeFontChoice ?? this.codeFontChoice,
+      uiFontSize: uiFontSize ?? this.uiFontSize,
+      codeFontSize: codeFontSize ?? this.codeFontSize,
     );
   }
 
@@ -121,6 +148,8 @@ class AppearanceSettings {
       },
       'uiFontChoice': uiFontChoice.toJson(),
       'codeFontChoice': codeFontChoice.toJson(),
+      'uiFontSize': uiFontSize,
+      'codeFontSize': codeFontSize,
     };
   }
 
@@ -141,6 +170,18 @@ class AppearanceSettings {
       codeFontChoice: AppearanceFontChoice.tryDecode(
         map['codeFontChoice'],
         fallback: const AppearanceFontChoice.bundledJetBrainsMono(),
+      ),
+      uiFontSize: _parseFontSize(
+        map['uiFontSize'],
+        fallback: defaultUiFontSize,
+        min: minUiFontSize,
+        max: maxUiFontSize,
+      ),
+      codeFontSize: _parseFontSize(
+        map['codeFontSize'],
+        fallback: defaultCodeFontSize,
+        min: minCodeFontSize,
+        max: maxCodeFontSize,
       ),
     );
   }
@@ -163,9 +204,30 @@ class AppearanceSettings {
     return other is AppearanceSettings &&
         other.themeMode == themeMode &&
         other.uiFontChoice == uiFontChoice &&
-        other.codeFontChoice == codeFontChoice;
+        other.codeFontChoice == codeFontChoice &&
+        other.uiFontSize == uiFontSize &&
+        other.codeFontSize == codeFontSize;
   }
 
   @override
-  int get hashCode => Object.hash(themeMode, uiFontChoice, codeFontChoice);
+  int get hashCode => Object.hash(
+    themeMode,
+    uiFontChoice,
+    codeFontChoice,
+    uiFontSize,
+    codeFontSize,
+  );
+}
+
+double _parseFontSize(
+  Object? raw, {
+  required double fallback,
+  required double min,
+  required double max,
+}) {
+  if (raw is! num) {
+    return fallback;
+  }
+  final value = raw.toDouble();
+  return value.isFinite && value >= min && value <= max ? value : fallback;
 }

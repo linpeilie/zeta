@@ -247,7 +247,7 @@ class _AppearanceSettingsPane extends StatelessWidget {
       key: const ValueKey('settings-detail-panel'),
       child: Pane(
         title: '外观',
-        subtitle: '切换主题模式、界面字体和代码字体',
+        subtitle: '切换主题模式、字体与字号',
         trailing: Icon(
           Icons.palette_outlined,
           size: 16,
@@ -292,6 +292,20 @@ class _AppearanceSettingsPane extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: IdeSpacing.space12),
+                      _FontSizeSettingRow(
+                        key: const ValueKey('settings-ui-font-size-row'),
+                        keyPrefix: 'settings-ui-font-size',
+                        label: '界面字号',
+                        description:
+                            '缩放普通界面文本与非代码 markdown 正文（${minUiFontSize.toInt()}–${maxUiFontSize.toInt()} px）。',
+                        value: settings.uiFontSize,
+                        min: minUiFontSize,
+                        max: maxUiFontSize,
+                        onChanged: (value) {
+                          unawaited(appearanceController.setUiFontSize(value));
+                        },
+                      ),
+                      const SizedBox(height: IdeSpacing.space12),
                       _AppearanceSettingRow(
                         key: const ValueKey('settings-code-font-row'),
                         label: '代码字体',
@@ -301,6 +315,22 @@ class _AppearanceSettingsPane extends StatelessWidget {
                           context,
                           currentChoice: settings.codeFontChoice,
                         ),
+                      ),
+                      const SizedBox(height: IdeSpacing.space12),
+                      _FontSizeSettingRow(
+                        key: const ValueKey('settings-code-font-size-row'),
+                        keyPrefix: 'settings-code-font-size',
+                        label: '代码字号',
+                        description:
+                            '缩放代码块、命令、diff 与工具输出（${minCodeFontSize.toInt()}–${maxCodeFontSize.toInt()} px）。',
+                        value: settings.codeFontSize,
+                        min: minCodeFontSize,
+                        max: maxCodeFontSize,
+                        onChanged: (value) {
+                          unawaited(
+                            appearanceController.setCodeFontSize(value),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -534,6 +564,136 @@ class _AppearanceSettingRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 字号步进设置行；宽度不足时把控制器换到下一行，避免说明文字被过度挤压。
+class _FontSizeSettingRow extends StatelessWidget {
+  const _FontSizeSettingRow({
+    required this.keyPrefix,
+    required this.label,
+    required this.description,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.onChanged,
+    super.key,
+  });
+
+  final String keyPrefix;
+  final String label;
+  final String description;
+  final double value;
+  final double min;
+  final double max;
+  final ValueChanged<double> onChanged;
+
+  static const double _stackedBreakpoint = 520;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    final canDecrease = value > min;
+    final canIncrease = value < max;
+    final labelContent = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: textStyles.displaySmall.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: IdeSpacing.space4),
+        Text(
+          description,
+          style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
+        ),
+      ],
+    );
+    final controls = Semantics(
+      container: true,
+      label: '$label，当前 ${value.toInt()} 像素',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IdeTooltip(
+            message: '减小$label',
+            child: Semantics(
+              button: true,
+              enabled: canDecrease,
+              label: '减小$label',
+              child: ExcludeSemantics(
+                child: sf.IconButton.outline(
+                  key: ValueKey<String>('$keyPrefix-decrease'),
+                  onPressed: canDecrease ? () => onChanged(value - 1) : null,
+                  size: sf.ButtonSize.small,
+                  density: sf.ButtonDensity.iconDense,
+                  icon: const Icon(Icons.remove_rounded, size: 16),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: IdeSpacing.space8),
+          SizedBox(
+            width: 48,
+            child: Text(
+              '${value.toInt()} px',
+              key: ValueKey<String>('$keyPrefix-value'),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              style: textStyles.bodyMedium.copyWith(
+                color: colors.accent,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: IdeSpacing.space8),
+          IdeTooltip(
+            message: '增大$label',
+            child: Semantics(
+              button: true,
+              enabled: canIncrease,
+              label: '增大$label',
+              child: ExcludeSemantics(
+                child: sf.IconButton.outline(
+                  key: ValueKey<String>('$keyPrefix-increase'),
+                  onPressed: canIncrease ? () => onChanged(value + 1) : null,
+                  size: sf.ButtonSize.small,
+                  density: sf.ButtonDensity.iconDense,
+                  icon: const Icon(Icons.add_rounded, size: 16),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return PaneInteractiveSurface(
+      padding: IdeSpacing.all12,
+      borderColor: colors.border,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < _stackedBreakpoint) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                labelContent,
+                const SizedBox(height: IdeSpacing.space12),
+                Align(alignment: Alignment.centerRight, child: controls),
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: labelContent),
+              const SizedBox(width: IdeSpacing.space16),
+              controls,
+            ],
+          );
+        },
       ),
     );
   }

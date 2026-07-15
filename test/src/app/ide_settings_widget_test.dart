@@ -26,7 +26,15 @@ void main() {
     expect(find.byKey(const ValueKey('settings-theme-tabs')), findsOneWidget);
     expect(find.byKey(const ValueKey('settings-ui-font-row')), findsOneWidget);
     expect(
+      find.byKey(const ValueKey('settings-ui-font-size-row')),
+      findsOneWidget,
+    );
+    expect(
       find.byKey(const ValueKey('settings-code-font-row')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('settings-code-font-size-row')),
       findsOneWidget,
     );
     expect(find.text('外观'), findsNWidgets(2));
@@ -165,6 +173,52 @@ void main() {
       const AppearanceFontChoice.system('Source Han Sans'),
     );
     expect(find.text('Source Han Sans'), findsOneWidget);
+  });
+
+  testWidgets('font size controls update settings and theme tokens', (
+    tester,
+  ) async {
+    final controller = AppearanceSettingsController(
+      store: MemoryAppearanceSettingsStore(),
+      fontCatalog: const _FakeSystemFontCatalogService(),
+    );
+    await _pumpSettingsPage(tester, controller: controller);
+
+    double? headingFontSize() =>
+        tester.widget<Text>(find.text('主题模式')).style?.fontSize;
+
+    expect(headingFontSize(), 15);
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('settings-ui-font-size-value')),
+          )
+          .data,
+      '12 px',
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('settings-ui-font-size-increase')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(controller.settings.uiFontSize, 13);
+    expect(headingFontSize(), closeTo(16.25, 0.001));
+
+    await tester.tap(
+      find.byKey(const ValueKey('settings-code-font-size-increase')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(controller.settings.codeFontSize, 13);
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('settings-code-font-size-value')),
+          )
+          .data,
+      '13 px',
+    );
   });
 
   testWidgets(
@@ -315,11 +369,15 @@ Future<void> _pumpSettingsPage(
           brightness: Brightness.light,
           uiFontFamily: settings.uiFontFamily,
           codeFontFamily: settings.codeFontFamily,
+          uiFontSize: settings.uiFontSize,
+          codeFontSize: settings.codeFontSize,
         );
         final darkIdeTheme = buildIdeThemeData(
           brightness: Brightness.dark,
           uiFontFamily: settings.uiFontFamily,
           codeFontFamily: settings.codeFontFamily,
+          uiFontSize: settings.uiFontSize,
+          codeFontSize: settings.codeFontSize,
         );
         final materialBrightness = resolveBrightnessForThemeMode(
           settings.themeMode,

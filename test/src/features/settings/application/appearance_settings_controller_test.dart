@@ -13,6 +13,8 @@ void main() {
           themeMode: ThemeMode.dark,
           uiFontChoice: AppearanceFontChoice.system('Maple UI'),
           codeFontChoice: AppearanceFontChoice.system('Cascadia Mono'),
+          uiFontSize: 14,
+          codeFontSize: 16,
         ),
       ),
       fontCatalog: const _FakeSystemFontCatalogService(
@@ -27,6 +29,8 @@ void main() {
         themeMode: ThemeMode.dark,
         uiFontChoice: AppearanceFontChoice.system('Maple UI'),
         codeFontChoice: AppearanceFontChoice.system('Cascadia Mono'),
+        uiFontSize: 14,
+        codeFontSize: 16,
       ),
     );
   });
@@ -103,6 +107,24 @@ void main() {
       );
     },
   );
+
+  test('font size setters normalize and persist values', () async {
+    final store = MemoryAppearanceSettingsStore();
+    final controller = AppearanceSettingsController(
+      store: store,
+      fontCatalog: const _FakeSystemFontCatalogService(),
+    );
+    addTearDown(controller.dispose);
+
+    expect(await controller.setUiFontSize(14.4), isTrue);
+    expect(await controller.setCodeFontSize(99), isTrue);
+    expect(await controller.setUiFontSize(double.nan), isFalse);
+
+    expect(
+      await store.load(),
+      const AppearanceSettings(uiFontSize: 14, codeFontSize: maxCodeFontSize),
+    );
+  });
 
   test(
     'load normalizes persisted fonts that can no longer be loaded',

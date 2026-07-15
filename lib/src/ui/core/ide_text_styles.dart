@@ -39,6 +39,8 @@ class IdeTextStyles {
       codeFontFamily: codeFontFamily == null || codeFontFamily.isEmpty
           ? ideTheme.codeFontFamily
           : codeFontFamily,
+      uiFontSize: ideTheme.uiFontSize,
+      codeFontSize: ideTheme.codeFontSize,
     );
   }
 
@@ -47,68 +49,72 @@ class IdeTextStyles {
     required IdeColors colors,
     String? uiFontFamily,
     String codeFontFamily = bundledCodeFontFamily,
+    double uiFontSize = defaultUiFontSize,
+    double codeFontSize = defaultCodeFontSize,
   }) {
+    final uiScale = uiFontSize / defaultUiFontSize;
+    final codeScale = codeFontSize / defaultCodeFontSize;
     return IdeTextStyles(
       displayLarge: _textStyle(
         color: colors.textPrimary,
         fontFamily: uiFontFamily,
-        fontSize: 18,
+        fontSize: 18 * uiScale,
         height: 1.3,
         fontWeight: FontWeight.w700,
       ),
       displaySmall: _textStyle(
         color: colors.textPrimary,
         fontFamily: uiFontFamily,
-        fontSize: 15,
+        fontSize: 15 * uiScale,
         height: 1.35,
         fontWeight: FontWeight.w700,
       ),
       titleLarge: _textStyle(
         color: colors.textPrimary,
         fontFamily: uiFontFamily,
-        fontSize: 13,
+        fontSize: 13 * uiScale,
         height: 1.35,
         fontWeight: FontWeight.w700,
       ),
       titleSmall: _textStyle(
         color: colors.textPrimary,
         fontFamily: uiFontFamily,
-        fontSize: 12,
+        fontSize: 12 * uiScale,
         height: 1.35,
         fontWeight: FontWeight.w600,
       ),
       bodyMedium: _textStyle(
         color: colors.textPrimary,
         fontFamily: uiFontFamily,
-        fontSize: 12,
+        fontSize: 12 * uiScale,
         height: 1.42,
         fontWeight: FontWeight.w400,
       ),
       bodySmall: _textStyle(
         color: colors.textPrimary,
         fontFamily: uiFontFamily,
-        fontSize: 11,
+        fontSize: 11 * uiScale,
         height: 1.35,
         fontWeight: FontWeight.w400,
       ),
       caption: _textStyle(
         color: colors.textTertiary,
         fontFamily: uiFontFamily,
-        fontSize: 10,
+        fontSize: 10 * uiScale,
         height: 1.3,
         fontWeight: FontWeight.w500,
       ),
       codeMedium: _textStyle(
         color: colors.textPrimary,
         fontFamily: codeFontFamily,
-        fontSize: 12,
+        fontSize: 12 * codeScale,
         height: 1.35,
         fontWeight: FontWeight.w500,
       ),
       codeSmall: _textStyle(
         color: colors.textSecondary,
         fontFamily: codeFontFamily,
-        fontSize: 11,
+        fontSize: 11 * codeScale,
         height: 1.35,
         fontWeight: FontWeight.w400,
       ),
