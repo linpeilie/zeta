@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 
 import 'app_theme.dart';
 
+/// Windows/Linux 自绘窗口关闭按钮的共享悬停红色。
+///
+/// 生效位置：`WindowFrame` 右上角关闭按钮的 hover 背景；普通的
+/// 最小化和最大化按钮不使用该颜色。
 const _sharedCloseHoverColor = Color(0xFFE5484D);
 
 /// IDE 主题专用调色板。
@@ -9,6 +13,10 @@ const _sharedCloseHoverColor = Color(0xFFE5484D);
 /// 这组颜色完全由 Graphite token 定义，并通过 [IdeThemeScope] 在运行时解析。
 /// 深色调色板中的 accent / warning 直接复用顶层真值常量（[ideAccentColor] /
 /// [ideWarningColor]）。
+///
+/// 每个字段都是跨功能的语义颜色，而不是某个组件的专用色。下方字段
+/// 注释中的“生效位置”列出当前主要消费者；`app_theme.dart` 还会将它们
+/// 投影到 Material 和 `shadcn_flutter` 主题，因此第三方组件也会间接生效。
 @immutable
 class IdeColors {
   const IdeColors({
@@ -37,82 +45,156 @@ class IdeColors {
     required this.closeHover,
   });
 
-  /// 窗口外框 / scaffold 背景。
+  /// 应用最底层的框架背景，用于承托各个内容表面。
+  ///
+  /// 生效位置：`WindowFrame` 外框与标题栏、Material `Scaffold` 和
+  /// shadcn 根背景、面板拖拽分隔区，以及 `IdeTab`/Composer 选择器的
+  /// 展开态背景。
   final Color frame;
 
-  /// 卡片、浮层等次级表面。
+  /// 默认内容表面，层级高于 [frame]、低于抬升和覆盖层。
+  ///
+  /// 生效位置：Material canvas/card、shadcn card、Agent 上下文侧栏，
+  /// 以及模型配置中的分段控件容器。
   final Color surface;
 
-  /// 抬升一层的表面色，用于面板、Toast 等容器。
+  /// 在 [surface] 上抬升一层的中性表面，用于嵌套内容分组。
+  ///
+  /// 生效位置：设置页导航面板、`IdeTab` 背景、Agent 回答/文件编辑卡、
+  /// 消息气泡、Markdown 代码块/引用/表头、附件缩略图和配置编辑器行号栏。
   final Color surfaceElevated;
 
-  /// 最上层浮层背景，用于 popover、dialog 等覆盖层。
+  /// 最上层覆盖表面，与页面内容分离且必须保持不透明。
+  ///
+  /// 生效位置：`IdeContextMenu`、Provider 选择 Popover、`IdeTooltip`、
+  /// 用量统计筛选层和模型配置内部的次级选择层；同时投影为 shadcn popover。
   final Color surfaceOverlay;
 
-  /// 面板背景。保留旧字段以兼容历史调用。
+  /// Composer 专用的连续面板背景。
+  ///
+  /// 生效位置：Agent Composer 外卡、输入区及其拖拽角遮罩，
+  /// 以及模型/工作目录权限的共享选择弹层。该字段保留独立语义，
+  /// 便于 Composer 未来与通用 [surface] 分色。
   final Color panel;
 
-  /// 中间编辑区背景。保留旧字段以兼容历史调用。
+  /// IDE 中央主工作区背景。
+  ///
+  /// 生效位置：`IdeHome` 中承载 `AgentPane` 的中央编辑器容器。
+  /// 不用于 Composer 或侧栏，这些区域分别使用 [panel]/[surface]。
   final Color editor;
 
-  /// 常规边框 / 分隔线。
+  /// 可清晰识别的常规边界色，也是交互态中性底色的基准。
+  ///
+  /// 生效位置：窗口外边框、卡片/消息/设置控件边框、Material 分隔线、
+  /// shadcn border，以及文件树、项目列表、选择器的 hover/pressed/focus 派生色。
   final Color border;
 
-  /// 低对比度边框，用于弱化层级。
+  /// 低对比度边界色，用于同一表面内的轻量分组。
+  ///
+  /// 生效位置：上下文菜单分隔线、页头/侧栏内分隔线、Markdown 表格和
+  /// 代码块边界、模型/权限选择弹层、图片草稿边框，并投影为 shadcn input。
   final Color borderSubtle;
 
-  /// 次要文本与图标。保留旧字段以兼容历史调用。
+  /// 旧版的弱化前景别名，语义与 [textSecondary] 保持同步。
+  ///
+  /// 生效位置：Agent 头部的 provider/token/时间元数据、项目 Thread 辅助文字、
+  /// 空面板 trailing 图标。新代码应优先使用 [textSecondary]；[copyWith] 会保证
+  /// 两个字段的兼容同步行为。
   final Color mutedText;
 
-  /// 主文本颜色。
+  /// 最高对比度的内容前景色。
+  ///
+  /// 生效位置：页面/面板标题、正文、代码、可用菜单项、消息内容，
+  /// `IdeTextStyles` 默认正文，以及 Material/shadcn 的核心 foreground。
   final Color textPrimary;
 
-  /// 次级文本 / 标签颜色。
+  /// 中等对比度的辅助前景色。
+  ///
+  /// 生效位置：副标题、元数据、标签、未激活导航/按钮图标、折叠卡摘要、
+  /// `IdeTextStyles.bodySmall/caption`，以及 Material icon 和 shadcn muted foreground。
   final Color textSecondary;
 
-  /// 三级文本 / 占位符 / 禁用态颜色。
+  /// 最低对比度但仍需可读的辅助前景色。
+  ///
+  /// 生效位置：输入占位符、禁用/不可用控件、隐藏模型、调试日志与时间戳、
+  /// 选择弹层轻量标题，以及 `IdeTextStyles.placeholder`。
   final Color textTertiary;
 
-  /// 主题强调色（运行中、选中态等）。
+  /// 主题的强交互与品牌强调色。
+  ///
+  /// 生效位置：选中的文件/Thread/导航图标、进行中状态、Composer 焦点环
+  /// 与发送按钮、Markdown 链接、选择器勾选/底部指示线，并投影为 shadcn
+  /// primary/ring 和图表 `chart1`。
   final Color accent;
 
-  /// 主强调色的弱化背景，用于 selected 态。
+  /// [accent] 的半透明弱化背景，只表达选中而不表达主操作。
+  ///
+  /// 生效位置：文件树/Thread/活动栏/设置导航的选中底色、用户消息气泡、
+  /// Markdown 文本选区和 Choice Card；同时投影为 shadcn accent 背景。
   final Color primaryMuted;
 
-  /// 警告 / 待审批色。
+  /// 需要注意、等待或可恢复异常的状态色。
+  ///
+  /// 生效位置：待审批/等待中的 Agent 回合、压缩和更新提示、Fast 标识、
+  /// Agent 安装/账号警告、warning 日志与状态卡，以及图表 `chart3`。
   final Color warning;
 
-  /// 错误 / destructive 色。
+  /// 失败、不可恢复问题和破坏性操作的状态色。
+  ///
+  /// 生效位置：错误文本/日志/状态卡、配置校验失败、错误 Toast、
+  /// `IdeContextMenu` destructive 菜单项、shadcn destructive 和图表 `chart5`。
   final Color error;
 
-  /// 成功色。
+  /// 成功、已完成和健康可用状态的语义色。
+  ///
+  /// 生效位置：Agent 回合完成标记、已安装/已登录/配置有效状态、
+  /// 成功 Toast/状态卡、Diff 新增行，以及图表 `chart4`。
   final Color success;
 
-  /// 信息色。
+  /// 中性说明、正常运行和搜索/系统事件的状态色。
+  ///
+  /// 生效位置：info 日志/状态卡、Agent 搜索与系统事件、模型下回合生效提示、
+  /// 用户问题图标和 Markdown 引用边线，以及图表 `chart2`。
   final Color info;
 
   /// 选中/激活态落在浅底或 [primaryMuted] 上时的前景色（图标/标签）。
   ///
   /// 深色下为白；浅色下使用 [accent]，以便在浅底面板上保持可见。
   /// 不要用于实心 [accent] 填充上的文字——那种场景用 [onAccent]。
+  ///
+  /// 生效位置：`IdeActivityRail` 的激活图标和 `WindowFrame` 的激活
+  /// 标题栏动作图标。
   final Color accentForeground;
 
   /// 落在实心 [accent] 填充上的前景色（Primary 按钮文字/图标等）。
   ///
   /// 深浅主题均为高对比白色，与 [accentForeground]（选中态强调色）语义分离。
+  ///
+  /// 生效位置：`app_theme.dart` 中 shadcn `primaryForeground`，最终影响所有
+  /// 使用实心 primary/accent 背景的第三方主按钮和图标。
   final Color onAccent;
 
-  /// Windows/Linux 自绘窗口按钮的悬停背景。
+  /// Windows/Linux 自绘的普通窗口按钮悬停背景。
+  ///
+  /// 生效位置：`WindowFrame` 右上角最小化和最大化/还原按钮 hover；
+  /// 关闭按钮改用 [closeHover]。
   final Color windowHover;
 
-  /// Windows/Linux 自绘窗口按钮的图标颜色。
+  /// Windows/Linux 自绘窗口控制图标的静止态前景色。
+  ///
+  /// 生效位置：`WindowFrame` 右上角最小化、最大化/还原和关闭图标；
+  /// hover 时普通按钮切换到 [textPrimary]，关闭按钮切换到白色。
   final Color windowIcon;
 
-  /// 关闭按钮的悬停背景（两个主题共用红色）。
+  /// Windows/Linux 自绘关闭按钮的破坏性悬停背景。
+  ///
+  /// 生效位置：`WindowFrame` 右上角关闭按钮 hover。深浅主题均引用
+  /// [_sharedCloseHoverColor]，以保持平台操作语义一致。
   final Color closeHover;
 
   /// 深色调色板「Graphite Night」：中性石墨底 + 蔚蓝强调，
-  /// 无色相偏移的灰阶层次，长时间注视友好。
+  /// 无色相偏移的灰阶层次，长时间注视友好。各参数的具体生效位置
+  /// 见上方同名字段注释。
   static const IdeColors dark = IdeColors(
     frame: Color(0xFF0A0A0B),
     surface: Color(0xFF18191B),
@@ -140,10 +222,9 @@ class IdeColors {
   );
 
   /// 浅色调色板「Graphite Day」：中性浅灰白底 + 蔚蓝强调，扁平清爽，
-  /// 与深色主题共享同一套语义层级。
+  /// 与深色主题共享同一套语义层级。各参数的具体生效位置见上方同名
+  /// 字段注释。
   static const IdeColors light = IdeColors(
-    // frame: Color(0xFFEEEFF1),
-    // surface: Color(0xFFFFFFFF),
     frame: Color(0xFFFFFFFF),
     surface: Color(0xFFF9F9FA),
     surfaceElevated: Color(0xFFF4F5F7),
@@ -174,6 +255,10 @@ class IdeColors {
     return IdeThemeScope.of(context).colors;
   }
 
+  /// 复制当前调色板并替换指定语义颜色。
+  ///
+  /// [mutedText] 是 [textSecondary] 的历史兼容别名；仅覆盖其中任意一个时，
+  /// 本方法会同步另一个，避免新旧调用点出现不一致的辅助前景色。
   IdeColors copyWith({
     Color? frame,
     Color? surface,
@@ -229,6 +314,7 @@ class IdeColors {
     );
   }
 
+  /// 在当前调色板与 [other] 之间逐项插值，用于主题过渡动画。
   IdeColors lerp(IdeColors other, double t) {
     return IdeColors(
       frame: Color.lerp(frame, other.frame, t)!,
