@@ -46,7 +46,7 @@ class _AgentHeader extends StatelessWidget {
                       if (viewModel.threadStatusCapsuleLabel
                           case final label?) ...[
                         const SizedBox(width: IdeSpacing.space6),
-                        IdeChip(
+                        IdeTab(
                           key: const ValueKey('agent-header-status-capsule'),
                           label: label,
                           leadingIcon: viewModel.threadWaitingOnApproval

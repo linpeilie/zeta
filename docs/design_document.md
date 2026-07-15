@@ -124,7 +124,7 @@ UsageStatisticsController
   `buildShadcnTheme` 只把项目 token 投影到 `shadcn_flutter` 的 `sf.ThemeData`，
   不再反向从第三方 theme 回读语义色。
 - 第三方组件统一 `import ... as sf;`；业务页面优先消费 `ui/core` primitives
-  （`Pane` / `PanelCard` / `IdeChip` / `IdeContextMenu` / `showIdeToast` 等）。
+  （`Pane` / `PanelCard` / `IdeTabs` / `IdeTab` / `IdeContextMenu` / `showIdeToast` 等）。
 - 业务代码禁止硬编码颜色、圆角和阴影。
 - 面板圆角 8、间距紧凑，适合桌面工具密度。
 

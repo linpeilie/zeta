@@ -101,7 +101,7 @@ changes in this repository.
 - Use `LayoutBuilder`, `Flexible`, `Expanded`, `Wrap`, scroll views, and builder
   constructors to avoid overflow.
 - Reuse `ui/core` primitives such as `Pane`, `PanelCard`,
-  `PaneInteractiveSurface`, `IdeChip`, `IdeContextMenu`, `IdeStatusCard`,
+  `PaneInteractiveSurface`, `IdeTabs`/`IdeTab`, `IdeContextMenu`, `IdeStatusCard`,
   `IdeCollapsibleCard`, and the window frame before introducing feature-local
   visual primitives.
 - Keep the IDE UI compact, dense, and scannable. Long file paths, thread titles,

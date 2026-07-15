@@ -7,7 +7,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
-import 'package:zeta/src/ui/core/ide_chip.dart';
+import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
@@ -129,16 +129,33 @@ class _AgentLogViewState extends State<AgentLogView> {
                           ),
                         ],
                       );
-                      final filters = Wrap(
-                        spacing: IdeSpacing.space6,
-                        runSpacing: IdeSpacing.space6,
-                        children: [
-                          _levelChip('全部', null),
-                          _levelChip('Debug', AgentLogLevel.debug),
-                          _levelChip('Info', AgentLogLevel.info),
-                          _levelChip('Warning', AgentLogLevel.warning),
-                          _levelChip('Error', AgentLogLevel.error),
+                      final filters = IdeTabs<AgentLogLevel?>(
+                        value: _level,
+                        semanticLabel: '日志级别',
+                        items: const [
+                          IdeTabItem<AgentLogLevel?>(value: null, label: '全部'),
+                          IdeTabItem<AgentLogLevel?>(
+                            value: AgentLogLevel.debug,
+                            label: 'Debug',
+                          ),
+                          IdeTabItem<AgentLogLevel?>(
+                            value: AgentLogLevel.info,
+                            label: 'Info',
+                          ),
+                          IdeTabItem<AgentLogLevel?>(
+                            value: AgentLogLevel.warning,
+                            label: 'Warning',
+                          ),
+                          IdeTabItem<AgentLogLevel?>(
+                            value: AgentLogLevel.error,
+                            label: 'Error',
+                          ),
                         ],
+                        onChanged: (value) {
+                          setState(() {
+                            _level = value;
+                          });
+                        },
                       );
                       if (constraints.maxWidth < 720) {
                         return Column(
@@ -189,19 +206,6 @@ class _AgentLogViewState extends State<AgentLogView> {
             ),
           ],
         );
-      },
-    );
-  }
-
-  Widget _levelChip(String label, AgentLogLevel? level) {
-    return IdeChip(
-      label: label,
-      selected: _level == level,
-      trailingIcon: null,
-      onPressed: () {
-        setState(() {
-          _level = level;
-        });
       },
     );
   }

@@ -9,7 +9,7 @@ import 'package:zeta/src/features/usage_statistics/application/usage_statistics_
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_report_builder.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_formatters.dart';
-import 'package:zeta/src/ui/core/ide_chip.dart';
+import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
@@ -648,19 +648,18 @@ class _TrendSection extends StatelessWidget {
     return _SectionCard(
       title: '使用趋势',
       subtitle: '粒度根据时间范围自动调整',
-      trailing: Wrap(
-        spacing: IdeSpacing.space6,
-        runSpacing: IdeSpacing.space6,
-        children: [
+      trailing: IdeTabs<UsageTrendMetric>(
+        value: controller.trendMetric,
+        semanticLabel: '趋势指标',
+        items: [
           for (final metric in UsageTrendMetric.values)
-            IdeChip(
+            IdeTabItem<UsageTrendMetric>(
               key: ValueKey<String>('usage-trend-${metric.name}'),
+              value: metric,
               label: metric.label,
-              selected: controller.trendMetric == metric,
-              trailingIcon: null,
-              onPressed: () => controller.selectTrendMetric(metric),
             ),
         ],
+        onChanged: controller.selectTrendMetric,
       ),
       child: _UsageLineChart(
         key: ValueKey<String>(
@@ -935,7 +934,7 @@ class _QuotaSection extends StatelessWidget {
                       ),
                     ),
                     if (quota.credits?.unlimited == true)
-                      const IdeChip(
+                      const IdeTab(
                         label: '无限额度',
                         selected: true,
                         trailingIcon: null,

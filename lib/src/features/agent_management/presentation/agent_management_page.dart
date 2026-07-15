@@ -12,7 +12,7 @@ import 'package:zeta/src/features/agent_management/application/agent_management_
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_configuration_editor.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_log_view.dart';
-import 'package:zeta/src/ui/core/ide_chip.dart';
+import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_dialog.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
@@ -251,33 +251,26 @@ class AgentManagementPageState extends State<AgentManagementPage> {
       children: [
         LayoutBuilder(
           builder: (context, constraints) {
-            final tabs = Wrap(
-              spacing: IdeSpacing.space6,
-              runSpacing: IdeSpacing.space6,
-              children: [
-                IdeChip(
-                  key: const ValueKey('agent-tab-installed'),
+            final tabs = IdeTabs<_AgentListTab>(
+              value: _listTab,
+              semanticLabel: 'Agent 列表范围',
+              items: const [
+                IdeTabItem<_AgentListTab>(
+                  key: ValueKey('agent-tab-installed'),
+                  value: _AgentListTab.installed,
                   label: '已安装',
-                  selected: _listTab == _AgentListTab.installed,
-                  trailingIcon: null,
-                  onPressed: () {
-                    setState(() {
-                      _listTab = _AgentListTab.installed;
-                    });
-                  },
                 ),
-                IdeChip(
-                  key: const ValueKey('agent-tab-supported'),
+                IdeTabItem<_AgentListTab>(
+                  key: ValueKey('agent-tab-supported'),
+                  value: _AgentListTab.supported,
                   label: '全部支持',
-                  selected: _listTab == _AgentListTab.supported,
-                  trailingIcon: null,
-                  onPressed: () {
-                    setState(() {
-                      _listTab = _AgentListTab.supported;
-                    });
-                  },
                 ),
               ],
+              onChanged: (value) {
+                setState(() {
+                  _listTab = value;
+                });
+              },
             );
             final search = sf.TextField(
               key: const ValueKey('agent-search-field'),
@@ -307,31 +300,43 @@ class AgentManagementPageState extends State<AgentManagementPage> {
           },
         ),
         const SizedBox(height: IdeSpacing.space8),
-        Wrap(
-          spacing: IdeSpacing.space6,
-          runSpacing: IdeSpacing.space6,
-          children: [
-            _filterChip('全部状态', _AgentListFilter.all),
-            _filterChip('已启用', _AgentListFilter.enabled),
-            _filterChip('需要处理', _AgentListFilter.attention),
-            _filterChip('运行中', _AgentListFilter.running),
-            _filterChip('可更新', _AgentListFilter.updateAvailable),
+        IdeTabs<_AgentListFilter>(
+          value: _filter,
+          semanticLabel: 'Agent 状态筛选',
+          items: const [
+            IdeTabItem<_AgentListFilter>(
+              key: ValueKey('agent-filter-all'),
+              value: _AgentListFilter.all,
+              label: '全部状态',
+            ),
+            IdeTabItem<_AgentListFilter>(
+              key: ValueKey('agent-filter-enabled'),
+              value: _AgentListFilter.enabled,
+              label: '已启用',
+            ),
+            IdeTabItem<_AgentListFilter>(
+              key: ValueKey('agent-filter-attention'),
+              value: _AgentListFilter.attention,
+              label: '需要处理',
+            ),
+            IdeTabItem<_AgentListFilter>(
+              key: ValueKey('agent-filter-running'),
+              value: _AgentListFilter.running,
+              label: '运行中',
+            ),
+            IdeTabItem<_AgentListFilter>(
+              key: ValueKey('agent-filter-update'),
+              value: _AgentListFilter.updateAvailable,
+              label: '可更新',
+            ),
           ],
+          onChanged: (value) {
+            setState(() {
+              _filter = value;
+            });
+          },
         ),
       ],
-    );
-  }
-
-  Widget _filterChip(String label, _AgentListFilter value) {
-    return IdeChip(
-      label: label,
-      selected: _filter == value,
-      trailingIcon: null,
-      onPressed: () {
-        setState(() {
-          _filter = value;
-        });
-      },
     );
   }
 
@@ -413,14 +418,27 @@ class AgentManagementPageState extends State<AgentManagementPage> {
                   const SizedBox(height: IdeSpacing.space8),
                   _buildDetailTitle(context, agent),
                   const SizedBox(height: IdeSpacing.space12),
-                  Wrap(
-                    spacing: IdeSpacing.space6,
-                    runSpacing: IdeSpacing.space6,
-                    children: [
-                      _detailTabChip('基础信息', _AgentDetailTab.overview),
-                      _detailTabChip('模型', _AgentDetailTab.models),
-                      _detailTabChip('配置', _AgentDetailTab.configuration),
+                  IdeTabs<_AgentDetailTab>(
+                    value: _detailTab,
+                    semanticLabel: 'Agent 详情',
+                    items: const [
+                      IdeTabItem<_AgentDetailTab>(
+                        key: ValueKey('agent-detail-tab-overview'),
+                        value: _AgentDetailTab.overview,
+                        label: '基础信息',
+                      ),
+                      IdeTabItem<_AgentDetailTab>(
+                        key: ValueKey('agent-detail-tab-models'),
+                        value: _AgentDetailTab.models,
+                        label: '模型',
+                      ),
+                      IdeTabItem<_AgentDetailTab>(
+                        key: ValueKey('agent-detail-tab-configuration'),
+                        value: _AgentDetailTab.configuration,
+                        label: '配置',
+                      ),
                     ],
+                    onChanged: _selectDetailTab,
                   ),
                 ],
               ),
@@ -562,15 +580,6 @@ class AgentManagementPageState extends State<AgentManagementPage> {
           ],
         );
       },
-    );
-  }
-
-  Widget _detailTabChip(String label, _AgentDetailTab value) {
-    return IdeChip(
-      label: label,
-      selected: _detailTab == value,
-      trailingIcon: null,
-      onPressed: () => _selectDetailTab(value),
     );
   }
 
@@ -1643,14 +1652,14 @@ class _ModelCard extends StatelessWidget {
                 spacing: IdeSpacing.space6,
                 runSpacing: IdeSpacing.space6,
                 children: [
-                  const IdeChip(label: '文本', trailingIcon: null),
+                  const IdeTab(label: '文本', trailingIcon: null),
                   if (supportsImage)
-                    const IdeChip(label: '图片', trailingIcon: null),
-                  const IdeChip(label: '代码', trailingIcon: null),
-                  const IdeChip(label: '文件操作', trailingIcon: null),
-                  const IdeChip(label: '工具调用', trailingIcon: null),
-                  const IdeChip(label: '终端', trailingIcon: null),
-                  const IdeChip(label: '流式输出', trailingIcon: null),
+                    const IdeTab(label: '图片', trailingIcon: null),
+                  const IdeTab(label: '代码', trailingIcon: null),
+                  const IdeTab(label: '文件操作', trailingIcon: null),
+                  const IdeTab(label: '工具调用', trailingIcon: null),
+                  const IdeTab(label: '终端', trailingIcon: null),
+                  const IdeTab(label: '流式输出', trailingIcon: null),
                 ],
               ),
               const SizedBox(height: IdeSpacing.space8),

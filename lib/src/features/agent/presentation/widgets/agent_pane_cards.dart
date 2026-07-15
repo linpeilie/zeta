@@ -866,7 +866,7 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
             runSpacing: IdeSpacing.space4,
             children: [
               for (final option in question.resolvedOptions)
-                IdeChip(
+                IdeTab(
                   key: ValueKey(
                     'agent-user-input-${request.id}-${question.questionId}-${option.id}',
                   ),

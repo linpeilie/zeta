@@ -779,7 +779,7 @@ class _SelectorSelectState<T extends Object> extends State<_SelectorSelect<T>> {
         : widget.labelBuilder(widget.value as T);
     return IdeTooltip(
       message: widget.tooltip,
-      child: IdeChip(
+      child: IdeTab(
         key: widget.selectorKey,
         label: label,
         leadingIcon: widget.icon,
@@ -808,10 +808,11 @@ class _SessionConfigOptionControl extends StatelessWidget {
       final selected = option.currentValue == true;
       return IdeTooltip(
         message: option.description ?? option.name,
-        child: IdeChip(
+        child: IdeTab(
           key: ValueKey<String>('agent-session-config-${option.id}'),
           label: '${option.name}: ${selected ? 'On' : 'Off'}',
           leadingIcon: _sessionConfigIcon(option.category),
+          trailingIcon: null,
           selected: selected,
           onPressed: () => onSelect(!selected),
           semanticLabel: option.name,

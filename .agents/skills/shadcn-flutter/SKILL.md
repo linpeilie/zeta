@@ -190,7 +190,7 @@ Shadcn Flutter features over 100+ high-quality components. Below are the core ca
 
 - 一律 `import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;`，避免与 Flutter Material 同名类型冲突。
 - Graphite 语义 token 真源是 `IdeThemeScope` / `IdeColors` / `IdeTextStyles`；`sf.ThemeData` 只是投影层。
-- feature 页面优先复用 `lib/src/ui/core` primitives（`Pane`、`PanelCard`、`IdeChip`、`IdeContextMenu`、`showIdeToast` 等），不要散落大量 `sf.*` 细节。
+- feature 页面优先复用 `lib/src/ui/core` primitives（`Pane`、`PanelCard`、`IdeTabs` / `IdeTab`、`IdeContextMenu`、`showIdeToast` 等），不要散落大量 `sf.*` 细节。
 - 通知统一走 `showIdeToast`；弹窗用 `showDialog` + `sf.AlertDialog`；菜单/选择器用 `sf.showPopover` / `SelectPopup`。
 - 禁止再引入 `package:shadcn_ui/shadcn_ui.dart`、`showShadDialog` 或旧 `Shad*` API。
 

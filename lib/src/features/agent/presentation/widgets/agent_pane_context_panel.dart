@@ -289,7 +289,7 @@ class _AgentContextRawMessageList extends StatelessWidget {
                   ),
                 ),
               ),
-              IdeChip(
+              IdeTab(
                 key: const ValueKey('agent-context-raw-filter'),
                 label: filterNonChat ? '仅对话' : '全部',
                 selected: filterNonChat,
