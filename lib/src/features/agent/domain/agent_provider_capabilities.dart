@@ -208,7 +208,8 @@ class AgentProviderCapabilities {
     supportsResourceInput: true,
     supportsPermissionRequests: true,
     supportsUserQuestions: true,
-    supportsPlanApproval: true,
+    // 当前 Codex 适配尚未暴露独立计划审批回写端口，避免提前声明可执行能力。
+    supportsPlanApproval: false,
     supportsModelSelection: true,
     supportsReasoningOptions: true,
     supportsServiceTierSelection: true,

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_event_listener_gate.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
@@ -295,12 +296,18 @@ class ProjectThreadsController {
       supported: provider.capabilities.canRenameThread,
       operation: 'rename threads',
     );
+    final threadMutations = provider.bundle.threadMutations;
+    if (threadMutations == null) {
+      throw StateError(
+        '${provider.config.displayName} missing thread mutation port',
+      );
+    }
     viewModel.updateThreadTitle(
       projectPath: projectPath,
       threadId: threadId,
       title: trimmed,
     );
-    await provider.renameThread(threadId: threadId, name: trimmed);
+    await threadMutations.renameThread(threadId: threadId, name: trimmed);
   }
 
   /// 归档 thread。
@@ -320,7 +327,13 @@ class ProjectThreadsController {
       supported: provider.capabilities.canArchiveThread,
       operation: 'archive threads',
     );
-    await provider.archiveThread(threadId);
+    final threadMutations = provider.bundle.threadMutations;
+    if (threadMutations == null) {
+      throw StateError(
+        '${provider.config.displayName} missing thread mutation port',
+      );
+    }
+    await threadMutations.archiveThread(threadId);
     _removeThreadFromList(
       projectPath: projectPath,
       threadId: threadId,
@@ -345,7 +358,13 @@ class ProjectThreadsController {
       supported: provider.capabilities.canUnarchiveThread,
       operation: 'unarchive threads',
     );
-    await provider.unarchiveThread(threadId);
+    final threadMutations = provider.bundle.threadMutations;
+    if (threadMutations == null) {
+      throw StateError(
+        '${provider.config.displayName} missing thread mutation port',
+      );
+    }
+    await threadMutations.unarchiveThread(threadId);
     _removeThreadFromList(
       projectPath: projectPath,
       threadId: threadId,
@@ -366,12 +385,24 @@ class ProjectThreadsController {
       return;
     }
     if (provider.capabilities.canDeleteThread) {
-      await provider.deleteThread(threadId);
-    } else if (provider.capabilities.canRemoveThreadFromList &&
-        provider is AgentLocalThreadListProvider) {
-      await (provider as AgentLocalThreadListProvider).removeThreadFromList(
-        threadId,
-      );
+      final threadMutations = provider.bundle.threadMutations;
+      if (threadMutations == null) {
+        throw StateError(
+          '${provider.config.displayName} missing thread mutation port',
+        );
+      }
+      await threadMutations.deleteThread(threadId);
+    } else if (provider.capabilities.canRemoveThreadFromList) {
+      final localThreadList = provider.bundle.localThreadList;
+      if (localThreadList != null) {
+        await localThreadList.removeThreadFromList(threadId);
+      } else {
+        _requireCapability(
+          provider: provider,
+          supported: false,
+          operation: 'delete or remove threads',
+        );
+      }
     } else {
       _requireCapability(
         provider: provider,
@@ -403,7 +434,13 @@ class ProjectThreadsController {
       supported: provider.capabilities.canForkThread,
       operation: 'fork threads',
     );
-    final session = await provider.forkThread(
+    final threadBranching = provider.bundle.threadBranching;
+    if (threadBranching == null) {
+      throw StateError(
+        '${provider.config.displayName} missing thread branching port',
+      );
+    }
+    final session = await threadBranching.forkThread(
       threadId: threadId,
       context: AgentContext(projectPath: projectPath),
     );
@@ -654,6 +691,10 @@ class ProjectThreadsController {
     required bool archived,
     required String? searchTerm,
   }) async {
+    final threadCatalog = provider.bundle.threadCatalog;
+    if (threadCatalog == null) {
+      return const <AgentThreadSummary>[];
+    }
     final collected = <AgentThreadSummary>[];
     String? pageCursor;
     final seenIds = <String>{};
@@ -663,7 +704,7 @@ class ProjectThreadsController {
       final pageLimit = remaining < projectThreadPageLimit
           ? remaining
           : projectThreadPageLimit;
-      final page = await provider.listThreads(
+      final page = await threadCatalog.listThreads(
         query: AgentThreadListQuery(
           projectPath: projectPath,
           limit: pageLimit,
@@ -823,10 +864,7 @@ class ProjectThreadsController {
   }
 
   AgentRuntimeScope? _runtimeScopeOf(AgentProvider provider) {
-    if (provider case final AgentRuntimeScopeProvider scopedProvider) {
-      return scopedProvider.runtimeScope;
-    }
-    return null;
+    return provider.bundle.runtime.runtimeScope;
   }
 
   bool _hasCurrentProviderEventListener(AgentProvider provider) {

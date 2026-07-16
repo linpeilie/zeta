@@ -1,0 +1,510 @@
+import 'dart:async';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
+
+void main() {
+  group('AgentProviderBundle', () {
+    test(
+      'adapts conversation, thread, interaction, and optional ports',
+      () async {
+        final provider = _BundleFakeProvider(
+          runtimeInfo: const AgentRuntimeInfo(
+            runtimeId: 'runtime-1',
+            connectionEpoch: 2,
+            protocolName: 'codex',
+            protocolVersion: '0.144.1',
+            compatibilityStatus: AgentRuntimeCompatibilityStatus.supported,
+          ),
+          runtimeScope: const AgentRuntimeScope(
+            runtimeId: 'runtime-1',
+            connectionEpoch: 2,
+          ),
+          availableModels: const AgentModelList(
+            models: <AgentModelInfo>[
+              AgentModelInfo(
+                id: 'model-1',
+                model: 'model-1',
+                displayName: 'Model 1',
+              ),
+            ],
+          ),
+        );
+
+        final bundle = provider.bundle;
+
+        expect(bundle.provider, same(provider));
+        expect(bundle.runtime.config, same(provider.config));
+        expect(bundle.runtime.capabilities, same(provider.capabilities));
+        expect(bundle.runtime.runtimeInfo?.runtimeId, 'runtime-1');
+        expect(
+          bundle.runtime.lifecycleState,
+          AgentProviderLifecycleState.ready,
+        );
+        expect(bundle.runtime.runtimeScope, provider.runtimeScope);
+        expect(bundle.conversation, isNotNull);
+        expect(bundle.threadCatalog, isNotNull);
+        expect(bundle.threadMutations, isNotNull);
+        expect(bundle.threadBranching, isNotNull);
+        expect(bundle.turnSteering, isNotNull);
+        expect(bundle.interactions, isNotNull);
+        expect(bundle.modelCatalog, isNotNull);
+        expect(bundle.localThreadList, isNotNull);
+        expect(bundle.sessionConfiguration, isNotNull);
+        expect(bundle.planApproval, isNotNull);
+
+        final started = await bundle.conversation.startSession(
+          context: const AgentContext(projectPath: '/workspace'),
+        );
+        final resumed = await bundle.conversation.resumeSession(
+          'thread-2',
+          context: const AgentContext(projectPath: '/workspace'),
+        );
+        final turn = await bundle.conversation.sendMessage(
+          session: started,
+          context: const AgentContext(projectPath: '/workspace'),
+          inputs: const <AgentUserInput>[AgentUserInput.text('hello')],
+        );
+        await bundle.conversation.cancelTurn(turn);
+        final page = await bundle.threadCatalog!.listThreads(
+          query: const AgentThreadListQuery(
+            projectPath: '/workspace',
+            limit: 10,
+          ),
+        );
+        final history = await bundle.threadCatalog!.readThreadHistory(
+          threadId: 'thread-1',
+          sessionPath: '/workspace/.session',
+          projectPath: '/workspace',
+        );
+        await bundle.threadCatalog!.unsubscribeThread('thread-1');
+        await bundle.threadMutations!.renameThread(
+          threadId: 'thread-1',
+          name: 'Renamed thread',
+        );
+        await bundle.threadMutations!.archiveThread('thread-1');
+        await bundle.threadMutations!.unarchiveThread('thread-1');
+        await bundle.threadMutations!.deleteThread('thread-1');
+        await bundle.threadMutations!.compactThread('thread-1');
+        final forked = await bundle.threadBranching!.forkThread(
+          threadId: 'thread-1',
+          context: const AgentContext(projectPath: '/workspace'),
+          boundary: const AgentForkThroughTurn('turn-7'),
+        );
+        await bundle.turnSteering!.steerTurn(
+          session: started,
+          expectedTurnId: 'turn-1',
+          context: const AgentContext(projectPath: '/workspace'),
+          inputs: const <AgentUserInput>[AgentUserInput.text('continue')],
+        );
+        await bundle.interactions!.respondToPermission(
+          const AgentPermissionDecision(
+            requestId: 'permission-1',
+            approved: true,
+          ),
+        );
+        await bundle.interactions!.approveGuardianDeniedAction(
+          threadId: 'thread-1',
+          event: 'guardian-event',
+        );
+        final models = await bundle.modelCatalog!.listModels();
+        await bundle.localThreadList!.removeThreadFromList('thread-1');
+        await bundle.sessionConfiguration!.setSessionConfigOption(
+          sessionId: 'thread-1',
+          configId: 'mode',
+          value: 'think',
+        );
+        await bundle.planApproval!.respondToPlanApproval(
+          const AgentPlanApprovalDecision(
+            requestId: 'plan-1',
+            kind: AgentPlanApprovalDecisionKind.accepted,
+          ),
+        );
+
+        expect(started.id, 'thread-1');
+        expect(resumed.id, 'thread-2');
+        expect(page.threads, isEmpty);
+        expect(history.threadId, 'thread-1');
+        expect(forked.id, 'fork-thread-1');
+        expect(models.models, hasLength(1));
+        expect(provider.startedContexts, hasLength(1));
+        expect(provider.startedContexts.single.projectPath, '/workspace');
+        expect(provider.resumedSessions, <String>['thread-2']);
+        expect(provider.sentMessages, <String>['hello']);
+        expect(provider.cancelledTurns, <String>['turn-1']);
+        expect(provider.listQueries, hasLength(1));
+        expect(provider.listQueries.single.projectPath, '/workspace');
+        expect(provider.readThreads, <String>['thread-1']);
+        expect(provider.unsubscribedThreads, <String>['thread-1']);
+        expect(provider.renamedThreads, <({String threadId, String name})>[
+          (threadId: 'thread-1', name: 'Renamed thread'),
+        ]);
+        expect(provider.archivedThreads, <String>['thread-1']);
+        expect(provider.unarchivedThreads, <String>['thread-1']);
+        expect(provider.deletedThreads, <String>['thread-1']);
+        expect(provider.compactedThreads, <String>['thread-1']);
+        expect(provider.forkedThreads, <String>['thread-1']);
+        expect(provider.forkBoundaries, hasLength(1));
+        expect(provider.forkBoundaries.single, isA<AgentForkThroughTurn>());
+        expect(
+          (provider.forkBoundaries.single as AgentForkThroughTurn).turnId,
+          'turn-7',
+        );
+        expect(provider.steeredMessages, <String>['continue']);
+        expect(provider.permissionDecisions, hasLength(1));
+        expect(provider.permissionDecisions.single.requestId, 'permission-1');
+        expect(provider.permissionDecisions.single.approved, isTrue);
+        expect(provider.guardianApprovals, <String>['thread-1:guardian-event']);
+        expect(provider.modelListCalls, 1);
+        expect(provider.removedThreads, <String>['thread-1']);
+        expect(
+          provider.sessionConfigWrites,
+          <({String sessionId, String configId, Object value})>[
+            (sessionId: 'thread-1', configId: 'mode', value: 'think'),
+          ],
+        );
+        expect(provider.planDecisions, const <AgentPlanApprovalDecision>[
+          AgentPlanApprovalDecision(
+            requestId: 'plan-1',
+            kind: AgentPlanApprovalDecisionKind.accepted,
+          ),
+        ]);
+      },
+    );
+
+    test('omits unsupported capability domains from the bundle surface', () {
+      final bundle = _MinimalBundleFakeProvider(
+        capabilities: AgentProviderCapabilities.unsupported,
+      ).bundle;
+
+      expect(bundle.conversation, isNotNull);
+      expect(bundle.threadCatalog, isNull);
+      expect(bundle.threadMutations, isNull);
+      expect(bundle.threadBranching, isNull);
+      expect(bundle.turnSteering, isNull);
+      expect(bundle.interactions, isNull);
+      expect(bundle.modelCatalog, isNull);
+      expect(bundle.localThreadList, isNull);
+      expect(bundle.sessionConfiguration, isNull);
+      expect(bundle.planApproval, isNull);
+      expect(bundle.runtime.runtimeInfo, isNull);
+      expect(
+        bundle.runtime.lifecycleState,
+        AgentProviderLifecycleState.stopped,
+      );
+      expect(bundle.runtime.runtimeScope, isNull);
+    });
+
+    test('maps codex, grok, and cursor capability domains to ports', () {
+      final codex = _MinimalBundleFakeProvider(
+        capabilities: AgentProviderCapabilities.codexAppServer,
+      ).bundle;
+      final grok = _MinimalBundleFakeProvider(
+        config: AgentProviderConfig.defaultGrok,
+        capabilities: AgentProviderCapabilities.grokAcp,
+      ).bundle;
+      final cursor = _BundleFakeProvider(
+        config: AgentProviderConfig.defaultCursor,
+        capabilities: AgentProviderCapabilities.cursorAcp,
+      ).bundle;
+
+      expect(codex.threadCatalog, isNotNull);
+      expect(codex.threadMutations, isNotNull);
+      expect(codex.threadBranching, isNotNull);
+      expect(codex.turnSteering, isNotNull);
+      expect(codex.interactions, isNotNull);
+      expect(codex.modelCatalog, isNotNull);
+
+      expect(grok.threadCatalog, isNotNull);
+      expect(grok.threadMutations, isNull);
+      expect(grok.threadBranching, isNull);
+      expect(grok.turnSteering, isNull);
+      expect(grok.interactions, isNotNull);
+      expect(grok.modelCatalog, isNotNull);
+
+      expect(cursor.threadCatalog, isNotNull);
+      expect(cursor.threadMutations, isNull);
+      expect(cursor.threadBranching, isNull);
+      expect(cursor.turnSteering, isNull);
+      expect(cursor.interactions, isNotNull);
+      expect(cursor.modelCatalog, isNull);
+      expect(cursor.localThreadList, isNotNull);
+      expect(cursor.sessionConfiguration, isNotNull);
+      expect(cursor.planApproval, isNotNull);
+    });
+  });
+}
+
+class _MinimalBundleFakeProvider implements AgentProvider {
+  _MinimalBundleFakeProvider({
+    this.config = AgentProviderConfig.defaultCodex,
+    this.capabilities = AgentProviderCapabilities.codexAppServer,
+    this.availableModels = const AgentModelList(models: <AgentModelInfo>[]),
+  });
+
+  final StreamController<AgentEvent> _events =
+      StreamController<AgentEvent>.broadcast();
+  final List<AgentContext> startedContexts = <AgentContext>[];
+  final List<String> resumedSessions = <String>[];
+  final List<String> sentMessages = <String>[];
+  final List<String> steeredMessages = <String>[];
+  final List<String> cancelledTurns = <String>[];
+  final List<AgentThreadListQuery> listQueries = <AgentThreadListQuery>[];
+  final List<String> readThreads = <String>[];
+  final List<String> unsubscribedThreads = <String>[];
+  final List<({String threadId, String name})> renamedThreads =
+      <({String threadId, String name})>[];
+  final List<String> archivedThreads = <String>[];
+  final List<String> unarchivedThreads = <String>[];
+  final List<String> deletedThreads = <String>[];
+  final List<String> compactedThreads = <String>[];
+  final List<String> forkedThreads = <String>[];
+  final List<AgentForkBoundary> forkBoundaries = <AgentForkBoundary>[];
+  final List<AgentPermissionDecision> permissionDecisions =
+      <AgentPermissionDecision>[];
+  final List<String> guardianApprovals = <String>[];
+  int modelListCalls = 0;
+
+  @override
+  final AgentProviderConfig config;
+
+  @override
+  final AgentProviderCapabilities capabilities;
+
+  final AgentModelList availableModels;
+
+  @override
+  Stream<AgentEvent> get events => _events.stream;
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  Future<AgentSession> startSession({required AgentContext context}) async {
+    startedContexts.add(context);
+    return const AgentSession(
+      id: 'thread-1',
+      providerId: defaultAgentProviderId,
+    );
+  }
+
+  @override
+  Future<AgentSession> resumeSession(
+    String sessionId, {
+    required AgentContext context,
+  }) async {
+    resumedSessions.add(sessionId);
+    return AgentSession(id: sessionId, providerId: defaultAgentProviderId);
+  }
+
+  @override
+  Future<AgentThreadPage> listThreads({
+    required AgentThreadListQuery query,
+  }) async {
+    listQueries.add(query);
+    return const AgentThreadPage(
+      threads: <AgentThreadSummary>[],
+      nextCursor: null,
+    );
+  }
+
+  @override
+  Future<AgentModelList> listModels({
+    int limit = 20,
+    bool includeHidden = false,
+  }) async {
+    modelListCalls += 1;
+    return availableModels;
+  }
+
+  @override
+  void updateModelSelection(AgentModelSelection selection) {}
+
+  @override
+  void updatePermissionSelection(AgentPermissionSelection selection) {}
+
+  @override
+  Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
+    return const <AgentPermissionProfileSummary>[];
+  }
+
+  @override
+  Future<void> approveGuardianDeniedAction({
+    required String threadId,
+    required Object event,
+  }) async {
+    guardianApprovals.add('$threadId:$event');
+  }
+
+  @override
+  Future<AgentThreadHistorySnapshot> readThreadHistory({
+    required String threadId,
+    String? sessionPath,
+    String? projectPath,
+  }) async {
+    readThreads.add(threadId);
+    return AgentThreadHistorySnapshot(
+      threadId: threadId,
+      turns: const <AgentHistoryTurn>[],
+    );
+  }
+
+  @override
+  Future<void> unsubscribeThread(String threadId) async {
+    unsubscribedThreads.add(threadId);
+  }
+
+  @override
+  Future<void> renameThread({
+    required String threadId,
+    required String name,
+  }) async {
+    renamedThreads.add((threadId: threadId, name: name));
+  }
+
+  @override
+  Future<void> archiveThread(String threadId) async {
+    archivedThreads.add(threadId);
+  }
+
+  @override
+  Future<void> unarchiveThread(String threadId) async {
+    unarchivedThreads.add(threadId);
+  }
+
+  @override
+  Future<void> deleteThread(String threadId) async {
+    deletedThreads.add(threadId);
+  }
+
+  @override
+  Future<AgentSession> forkThread({
+    required String threadId,
+    required AgentContext context,
+    AgentForkBoundary boundary = const AgentForkCurrentHead(),
+  }) async {
+    forkedThreads.add(threadId);
+    forkBoundaries.add(boundary);
+    return AgentSession(
+      id: 'fork-$threadId',
+      providerId: defaultAgentProviderId,
+    );
+  }
+
+  @override
+  Future<void> compactThread(String threadId) async {
+    compactedThreads.add(threadId);
+  }
+
+  @override
+  Future<AgentTurn> sendMessage({
+    required AgentSession session,
+    required AgentContext context,
+    String? message,
+    List<AgentUserInput>? inputs,
+    String? clientUserMessageId,
+  }) async {
+    sentMessages.add(
+      (inputs ?? <AgentUserInput>[AgentUserInput.text(message ?? '')])
+          .whereType<AgentTextUserInput>()
+          .map((item) => item.text)
+          .join('\n'),
+    );
+    return AgentTurn(id: 'turn-1', sessionId: session.id);
+  }
+
+  @override
+  Future<void> steerTurn({
+    required AgentSession session,
+    required String expectedTurnId,
+    required AgentContext context,
+    String? message,
+    List<AgentUserInput>? inputs,
+    String? clientUserMessageId,
+  }) async {
+    steeredMessages.add(
+      (inputs ?? <AgentUserInput>[AgentUserInput.text(message ?? '')])
+          .whereType<AgentTextUserInput>()
+          .map((item) => item.text)
+          .join('\n'),
+    );
+  }
+
+  @override
+  Future<void> cancelTurn(AgentTurn turn) async {
+    cancelledTurns.add(turn.id);
+  }
+
+  @override
+  Future<void> respondToPermission(AgentPermissionDecision decision) async {
+    permissionDecisions.add(decision);
+  }
+
+  @override
+  Future<void> dispose() async {
+    await _events.close();
+  }
+}
+
+class _BundleFakeProvider extends _MinimalBundleFakeProvider
+    implements
+        AgentLocalThreadListProvider,
+        AgentSessionConfigProvider,
+        AgentPlanApprovalProvider,
+        AgentRuntimeInfoProvider,
+        AgentRuntimeLifecycleProvider,
+        AgentRuntimeScopeProvider {
+  _BundleFakeProvider({
+    this.runtimeInfo,
+    this.runtimeScope,
+    super.config = AgentProviderConfig.defaultCodex,
+    super.capabilities = AgentProviderCapabilities.codexAppServer,
+    super.availableModels,
+  });
+
+  final List<String> removedThreads = <String>[];
+  final List<({String sessionId, String configId, Object value})>
+  sessionConfigWrites = <({String sessionId, String configId, Object value})>[];
+  final List<AgentPlanApprovalDecision> planDecisions =
+      <AgentPlanApprovalDecision>[];
+
+  @override
+  final AgentRuntimeInfo? runtimeInfo;
+
+  @override
+  final AgentRuntimeScope? runtimeScope;
+
+  @override
+  AgentProviderLifecycleState get lifecycleState =>
+      AgentProviderLifecycleState.ready;
+
+  @override
+  Future<void> removeThreadFromList(String threadId) async {
+    removedThreads.add(threadId);
+  }
+
+  @override
+  List<AgentSessionConfigOption> sessionConfigOptions(String sessionId) {
+    return const <AgentSessionConfigOption>[];
+  }
+
+  @override
+  Future<void> setSessionConfigOption({
+    required String sessionId,
+    required String configId,
+    required Object value,
+  }) async {
+    sessionConfigWrites.add((
+      sessionId: sessionId,
+      configId: configId,
+      value: value,
+    ));
+  }
+
+  @override
+  Future<void> respondToPlanApproval(AgentPlanApprovalDecision decision) async {
+    planDecisions.add(decision);
+  }
+}

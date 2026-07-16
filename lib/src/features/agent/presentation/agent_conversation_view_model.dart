@@ -13,6 +13,7 @@ import 'package:zeta/src/features/agent/application/agent_elapsed_ticker.dart';
 import 'package:zeta/src/features/agent/application/agent_event_stream_buffer.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_event_listener_gate.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/presentation/model_config_ui_state.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
@@ -682,8 +683,9 @@ class AgentConversationViewModel extends ChangeNotifier {
         provider,
         threadId: _selectedThreadId,
       );
-      if (_modelSelectionController.modelList == null) {
-        final models = await provider.listModels();
+      final modelCatalog = provider.bundle.modelCatalog;
+      if (_modelSelectionController.modelList == null && modelCatalog != null) {
+        final models = await modelCatalog.listModels();
         _handleModelList(models);
       }
       await _permissionSelectionController.refreshProfiles();
@@ -716,7 +718,11 @@ class AgentConversationViewModel extends ChangeNotifier {
     }
     try {
       final provider = await _ensureProvider();
-      await provider.approveGuardianDeniedAction(
+      final interactions = provider.bundle.interactions;
+      if (interactions == null) {
+        return;
+      }
+      await interactions.approveGuardianDeniedAction(
         threadId: threadId,
         event: review.raw,
       );
@@ -749,12 +755,12 @@ class AgentConversationViewModel extends ChangeNotifier {
   Future<void> selectSessionConfigOption(String configId, Object value) async {
     final sessionId = _selectedThreadId;
     final provider = _provider;
-    if (sessionId == null || provider is! AgentSessionConfigProvider) {
+    final sessionConfiguration = provider?.bundle.sessionConfiguration;
+    if (sessionId == null || sessionConfiguration == null) {
       return;
     }
-    final configProvider = provider as AgentSessionConfigProvider;
     try {
-      await configProvider.setSessionConfigOption(
+      await sessionConfiguration.setSessionConfigOption(
         sessionId: sessionId,
         configId: configId,
         value: value,
@@ -944,6 +950,7 @@ class AgentConversationViewModel extends ChangeNotifier {
         switchToken: switchToken,
         expectedThreadId: selectedThreadId,
       );
+      final conversation = provider.bundle.conversation;
       // 新会话在 Grok 异步 generated_title 出现前，先用首条用户消息作临时标题。
       if (_isStillSelectedThread(switchToken, session.id) &&
           _currentThreadTitle == defaultThreadTitle &&
@@ -953,7 +960,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       }
       _log.info('Sending Agent request with provider ${provider.config.id}');
       if (isNewTurn) {
-        final turn = await provider.sendMessage(
+        final turn = await conversation.sendMessage(
           session: session,
           inputs: inputs,
           context: context,
@@ -971,7 +978,13 @@ class AgentConversationViewModel extends ChangeNotifier {
           );
         }
       } else {
-        await provider.steerTurn(
+        final turnSteering = provider.bundle.turnSteering;
+        if (turnSteering == null) {
+          throw UnsupportedError(
+            '${provider.config.displayName} does not support steering turns',
+          );
+        }
+        await turnSteering.steerTurn(
           session: session,
           expectedTurnId: runningTurnId,
           inputs: inputs,
@@ -1018,7 +1031,9 @@ class AgentConversationViewModel extends ChangeNotifier {
       return;
     }
     _log.info('Cancelling Agent turn $turnId');
-    await provider.cancelTurn(AgentTurn(id: turnId, sessionId: sessionId));
+    await provider.bundle.conversation.cancelTurn(
+      AgentTurn(id: turnId, sessionId: sessionId),
+    );
   }
 
   /// 切换到项目列表中选中的 thread。
@@ -1116,7 +1131,13 @@ class AgentConversationViewModel extends ChangeNotifier {
         // 不阻塞历史加载：退订失败只记日志。
         unawaited(_unsubscribeThreadBestEffort(provider, previousThreadId));
       }
-      final history = await provider.readThreadHistory(
+      final threadCatalog = provider.bundle.threadCatalog;
+      if (threadCatalog == null) {
+        throw UnsupportedError(
+          '${provider.config.displayName} does not support thread history',
+        );
+      }
+      final history = await threadCatalog.readThreadHistory(
         threadId: thread.id,
         sessionPath: thread.sessionPath,
         projectPath: thread.projectPath,
@@ -1175,7 +1196,11 @@ class AgentConversationViewModel extends ChangeNotifier {
     _log.info(
       'Responding to Agent permission ${request.kind.name}: approved=$approved',
     );
-    await _provider?.respondToPermission(
+    final interactions = _provider?.bundle.interactions;
+    if (interactions == null) {
+      return;
+    }
+    await interactions.respondToPermission(
       AgentPermissionDecision(
         requestId: request.id,
         approved: approved,
@@ -1193,12 +1218,11 @@ class AgentConversationViewModel extends ChangeNotifier {
   ) async {
     _timeline.removePlanApprovalRequest(request.id);
     _publishUiChanges(history: true, liveTurn: true, pendingInteraction: true);
-    final provider = _provider;
-    if (provider is! AgentPlanApprovalProvider) {
+    final planApproval = _provider?.bundle.planApproval;
+    if (planApproval == null) {
       return;
     }
-    final planProvider = provider as AgentPlanApprovalProvider;
-    await planProvider.respondToPlanApproval(
+    await planApproval.respondToPlanApproval(
       AgentPlanApprovalDecision(requestId: request.id, kind: kind),
     );
   }
@@ -1232,7 +1256,13 @@ class AgentConversationViewModel extends ChangeNotifier {
 
     try {
       final provider = await _ensureProvider();
-      final session = await provider.forkThread(
+      final threadBranching = provider.bundle.threadBranching;
+      if (threadBranching == null) {
+        throw UnsupportedError(
+          '${provider.config.displayName} does not support thread branching',
+        );
+      }
+      final session = await threadBranching.forkThread(
         threadId: threadId,
         context: AgentContext(
           projectPath: _projectPath,
@@ -1284,7 +1314,13 @@ class AgentConversationViewModel extends ChangeNotifier {
     final switchToken = _threadSwitchToken;
     try {
       final provider = await _ensureProvider();
-      final session = await provider.forkThread(
+      final threadBranching = provider.bundle.threadBranching;
+      if (threadBranching == null) {
+        throw UnsupportedError(
+          '${provider.config.displayName} does not support thread branching',
+        );
+      }
+      final session = await threadBranching.forkThread(
         threadId: threadId,
         context: AgentContext(
           projectPath: _projectPath,
@@ -1324,7 +1360,13 @@ class AgentConversationViewModel extends ChangeNotifier {
     _publishUiChanges(header: true, composer: true);
     try {
       final provider = await _ensureProvider();
-      await provider.compactThread(threadId);
+      final threadMutations = provider.bundle.threadMutations;
+      if (threadMutations == null) {
+        throw UnsupportedError(
+          '${provider.config.displayName} does not support compacting threads',
+        );
+      }
+      await threadMutations.compactThread(threadId);
     } catch (error, stackTrace) {
       _isCompacting = false;
       _log.warning('Could not compact thread $threadId', error, stackTrace);
@@ -1348,7 +1390,13 @@ class AgentConversationViewModel extends ChangeNotifier {
     _publishUiChanges(header: true);
     try {
       final provider = await _ensureProvider();
-      await provider.renameThread(threadId: threadId, name: trimmed);
+      final threadMutations = provider.bundle.threadMutations;
+      if (threadMutations == null) {
+        throw UnsupportedError(
+          '${provider.config.displayName} does not support renaming threads',
+        );
+      }
+      await threadMutations.renameThread(threadId: threadId, name: trimmed);
     } catch (error, stackTrace) {
       if (sessionId == threadId && _currentThreadTitle == trimmed) {
         _applyThreadTitle(previousTitle);
@@ -1367,7 +1415,13 @@ class AgentConversationViewModel extends ChangeNotifier {
     }
     try {
       final provider = await _ensureProvider();
-      await provider.archiveThread(threadId);
+      final threadMutations = provider.bundle.threadMutations;
+      if (threadMutations == null) {
+        throw UnsupportedError(
+          '${provider.config.displayName} does not support archiving threads',
+        );
+      }
+      await threadMutations.archiveThread(threadId);
     } catch (error, stackTrace) {
       _log.warning('Could not archive thread $threadId', error, stackTrace);
       _markError('Could not archive thread', details: error.toString());
@@ -1541,7 +1595,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     if (restoredSessionId != null) {
       try {
         _log.fine('Resuming Agent session $restoredSessionId');
-        final session = await provider.resumeSession(
+        final session = await provider.bundle.conversation.resumeSession(
           restoredSessionId,
           context: context,
         );
@@ -1580,7 +1634,9 @@ class AgentConversationViewModel extends ChangeNotifier {
     }
 
     _log.fine('Starting new Agent session with provider ${provider.config.id}');
-    final session = await provider.startSession(context: context);
+    final session = await provider.bundle.conversation.startSession(
+      context: context,
+    );
     if (_isStillSelectedThread(switchToken, expectedThreadId)) {
       await _replaceProviderEventSubscription(provider, threadId: session.id);
     }
@@ -1596,10 +1652,7 @@ class AgentConversationViewModel extends ChangeNotifier {
   }
 
   AgentRuntimeScope? _runtimeScopeOf(AgentProvider provider) {
-    if (provider case final AgentRuntimeScopeProvider scopedProvider) {
-      return scopedProvider.runtimeScope;
-    }
-    return null;
+    return provider.bundle.runtime.runtimeScope;
   }
 
   bool _hasCurrentProviderEventListener(
@@ -2272,7 +2325,11 @@ class AgentConversationViewModel extends ChangeNotifier {
     String threadId,
   ) async {
     try {
-      await provider.unsubscribeThread(threadId);
+      final threadCatalog = provider.bundle.threadCatalog;
+      if (threadCatalog == null) {
+        return;
+      }
+      await threadCatalog.unsubscribeThread(threadId);
     } catch (error, stackTrace) {
       _log.warning(
         'Could not unsubscribe Agent thread $threadId',

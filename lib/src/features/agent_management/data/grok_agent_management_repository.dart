@@ -7,6 +7,7 @@ import 'package:toml/toml.dart';
 import 'package:zeta/src/features/agent/data/codex_cli_locator.dart';
 import 'package:zeta/src/features/agent/data/grok_cli_locator.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent_management/data/cli_process_runner.dart';
 import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart'
@@ -645,9 +646,12 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
       await provider.initialize().timeout(
         Duration(seconds: _timeoutSeconds(config)),
       );
-      final models = await provider.listModels().timeout(
-        Duration(seconds: _timeoutSeconds(config)),
-      );
+      final modelCatalog = provider.bundle.modelCatalog;
+      final models = modelCatalog == null
+          ? const AgentModelList(models: <AgentModelInfo>[])
+          : await modelCatalog.listModels().timeout(
+              Duration(seconds: _timeoutSeconds(config)),
+            );
       return _ProviderProbe(success: true, models: models.models);
     } catch (error) {
       return _ProviderProbe(

@@ -17,6 +17,7 @@ void main() {
       expect(capabilities.supportsPermissionPolicySelection, isTrue);
       expect(capabilities.supportsPermissionProfileDiscovery, isTrue);
       expect(capabilities.supportsPermissionProfileSelection, isFalse);
+      expect(capabilities.supportsPlanApproval, isFalse);
     });
 
     test('reports only Grok operations that have real implementations', () {
