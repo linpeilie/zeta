@@ -1,6 +1,6 @@
 # Agent 执行中状态体验方案
 
-最后更新: 2026-07-13
+最后更新: 2026-07-16
 
 ## 0. 文档目的
 
@@ -12,6 +12,7 @@
 2. 标题栏、thread 列表、时间线、footer 应如何分层展示状态？
 3. 「思考了多久 / 命令跑了多久 / 本轮跑了多久」如何在现有架构下实现？
 4. 按什么优先级落地，避免误报、整页狂刷与协议泄漏？
+5. 多 thread 常驻后，侧栏 busy 指示如何与详情 runtime 对齐？
 
 **范围：**
 
@@ -36,6 +37,7 @@
 | 等待审批/输入与「模型工作中」观感接近 | 可行动状态不够醒目 |
 | 看不到「已经跑了多久」 | 难判断是正常长任务还是异常拖住 |
 | 上下文进度环曾不刷新 | 占用比与右上角 token 不同步（已修） |
+| 详情页 turn 已结束，侧栏当前 thread 仍转圈 | 列表 busy 与详情 runtime 脱节（已修，见 §2.5） |
 
 用户真正想回答的三个问题：
 
@@ -78,8 +80,10 @@
 关键逻辑：
 
 - `showRunningIndicator = isTurnRunning && threadStatusCapsuleLabel == null`
-- 列表 `isBusy = active || waitingOnApproval || waitingOnUserInput`
+- 列表摘要 `isBusy = status == active || waitingOnApproval || waitingOnUserInput`
+- 列表行还会用 `runningThreadIds` 覆盖展示：若 id 在集合中且 status 非 active，渲染前视为 active（转圈）
 - 等待态已优先于普通 spinner；**工作中子相位未建模**
+- 后台 turn 结束后，非当前选中 thread 可进入 `completedThreadIds`（绿色完成提示，仅内存）；选中或点击 dismiss 后清除
 
 ### 2.2 协议与本地已有信号（未充分用于 UI）
 
@@ -104,6 +108,8 @@
 
 - 相位/对象变化 → 应走现有 header / live 信号。
 - **仅秒数 +1** → 必须用局部 ticker，禁止整 VM `notifyListeners` 每秒狂刷。
+- **thread 列表 runtime 不读分区 version**，只消费 `threadSnapshotListenable`（见 §2.5）；
+  因此任何会改变 `isTurnRunning` / `runtimeStatus` 的路径，在 flush 分区信号时也必须同步 snapshot。
 
 ### 2.4 时长相关代码锚点
 
@@ -114,6 +120,51 @@
 | 格式化 | `_formatDuration` | `12s` / `1m 5s` |
 | Tool 模型 | `AgentToolCall` | **无** `startedAt` / `duration` |
 | Reasoning | → `AgentToolKind.think` 卡 | 与工具卡同路径，可统一 item 计时 |
+
+### 2.5 侧栏 busy 与详情 runtime 同步（已落地契约）
+
+多 thread 常驻后，每个 Agent Canvas entry 有独立 `AgentConversationViewModel` 与
+provider controller。Project Threads **不能**只依赖 shell 级 active provider 的单路
+事件流来驱动「当前打开 thread」的执行中指示；列表 busy 的真源是：
+
+```text
+AgentConversationViewModel
+  → AgentConversationThreadSnapshot
+       (sessionId, isTurnRunning, runtimeStatus, waiting*)
+  → IdeShellController._syncWorkspaceEntryState
+  → ProjectThreadsController.syncRuntimeSnapshot
+  → ProjectThreadsViewModel
+       (runningThreadIds / threads[].status / completedThreadIds)
+  → project_list_pane 行渲染 (isBusy / IdeBusySpinner / 完成 icon)
+```
+
+**不变量（改代码时必须保持）：**
+
+1. **`_publishUiChanges` 与 `_flushStreamChangesNow` 都必须刷新 `threadSnapshotListenable`。**  
+   `turn/completed` 等路径只走 stream flush；若只 bump 分区 version 而不推 snapshot，
+   详情已 idle、侧栏仍 `isTurnRunning: true`，当前 thread 会一直转圈，直到切走再切回
+   触发其它 publish 才消失。
+2. **`isTurnRunning` 是列表「执行中」的权威 turn 信号。**  
+   `syncRuntimeSnapshot` 在 `!isTurnRunning` 且无 waiting 时，把滞后的
+   `runtimeStatus == active` 映射为列表 `idle`，避免 `thread/status/changed→idle`
+   迟到或缺失时 `isBusy` 假阳性。
+3. **`setThreadRunning(false)` 会收束摘要上残留的 active/waiting。**  
+   与 snapshot 路径互补，防止只清 `runningThreadIds` 后 `thread.status` 仍为 active。
+4. **turn 完成后详情侧若仍为 `active` 且无其它 running turn，应收束为 `idle`。**  
+   与协议 idle 通知对齐，减少 sticky active 窗口。
+5. **后台完成提示仅在「退出执行中且非当前选中」时写入 `completedThreadIds`。**  
+   当前详情页上的 thread 结束后应直接回到相对时间 / `now`，不显示绿色完成点；
+   选中或用户 dismiss 清除完成提示。
+
+**代码锚点：**
+
+| 职责 | 位置 |
+| --- | --- |
+| 轻量快照模型 | `agent_conversation_thread_snapshot.dart` |
+| 推 snapshot | `_syncThreadSnapshotListenable` / `_publishUiChanges` / `_flushStreamChangesNow` |
+| shell 同步 | `IdeShellController._syncWorkspaceEntryState` |
+| 列表应用 snapshot | `ProjectThreadsController.syncRuntimeSnapshot` |
+| running / completed / sticky active | `ProjectThreadsViewModel.setThreadRunning` 等 |
 
 ---
 
@@ -488,6 +539,8 @@ project_threads
 | --- | --- |
 | Token 事件同时刷新 header + composer | ✅ |
 | 执行中 `IdeBusySpinner`（标题栏 + 列表） | ✅ |
+| 多 thread snapshot → 列表 busy 同步；flush 必推 snapshot | ✅ |
+| turn 结束后 sticky active 收束；后台完成绿点 | ✅ |
 
 ### Phase 1 — P0：Turn 时长 + 基础相位文案（推荐下一迭代）
 

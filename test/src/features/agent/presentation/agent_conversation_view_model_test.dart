@@ -992,6 +992,47 @@ void main() {
     });
 
     test(
+      'turn completed clears sticky active runtime status for list snapshot',
+      () async {
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.sendMessage('hello');
+        provider.emit(
+          const AgentThreadStatusChangedEvent(
+            threadId: 'thread-1',
+            status: AgentThreadRuntimeStatus.active,
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(viewModel.isTurnRunning, isTrue);
+        expect(viewModel.threadRuntimeStatus, AgentThreadRuntimeStatus.active);
+        expect(viewModel.threadSnapshot.isTurnRunning, isTrue);
+        expect(
+          viewModel.threadSnapshot.runtimeStatus,
+          AgentThreadRuntimeStatus.active,
+        );
+
+        provider.emit(
+          const AgentTurnCompletedEvent(
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(viewModel.isTurnRunning, isFalse);
+        expect(viewModel.threadRuntimeStatus, AgentThreadRuntimeStatus.idle);
+        expect(viewModel.threadSnapshot.isTurnRunning, isFalse);
+        expect(
+          viewModel.threadSnapshot.runtimeStatus,
+          AgentThreadRuntimeStatus.idle,
+        );
+      },
+    );
+
+    test(
       'dismisses approval card when serverRequest/resolved arrives',
       () async {
         final provider = _FakeAgentProvider();

@@ -2254,6 +2254,16 @@ class AgentConversationViewModel extends ChangeNotifier {
             message: '$activeProviderName ready',
           );
         }
+        // turn 已结束后若仍残留 active，会让侧栏 isBusy 一直转圈；
+        // status/changed→idle 可能迟到或缺失，这里与 isTurnRunning 对齐。
+        if (!isTurnRunning &&
+            _threadRuntimeStatus == AgentThreadRuntimeStatus.active) {
+          _applyThreadRuntimeStatus(
+            status: AgentThreadRuntimeStatus.idle,
+            waitingOnApproval: false,
+            waitingOnUserInput: false,
+          );
+        }
         _consumeActivityDirty();
         _syncElapsedTicker();
         _flushStreamChangesNow(
@@ -2796,10 +2806,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     bool liveTurn = false,
     bool autoScroll = false,
   }) {
-    final nextThreadSnapshot = _buildThreadSnapshot();
-    if (nextThreadSnapshot != _threadSnapshotListenable.value) {
-      _threadSnapshotListenable.value = nextThreadSnapshot;
-    }
+    _syncThreadSnapshotListenable();
     _uiSignals.publish(
       history: history,
       syncLiveTurn: syncLiveTurn,
@@ -2857,6 +2864,9 @@ class AgentConversationViewModel extends ChangeNotifier {
     bool liveTurn = false,
     bool autoScroll = false,
   }) {
+    // 流式 flush 也必须刷新 thread snapshot，否则 turn/completed 等路径
+    // 只更新分区信号、不推 isTurnRunning，侧栏会一直卡在执行中。
+    _syncThreadSnapshotListenable();
     _uiSignals.flushStreamChangesNow(
       history: history,
       syncLiveTurn: syncLiveTurn,
@@ -2866,6 +2876,14 @@ class AgentConversationViewModel extends ChangeNotifier {
       liveTurn: liveTurn,
       autoScroll: autoScroll,
     );
+  }
+
+  /// 将当前 isTurnRunning / runtimeStatus 等推到 [threadSnapshotListenable]。
+  void _syncThreadSnapshotListenable() {
+    final nextThreadSnapshot = _buildThreadSnapshot();
+    if (nextThreadSnapshot != _threadSnapshotListenable.value) {
+      _threadSnapshotListenable.value = nextThreadSnapshot;
+    }
   }
 }
 

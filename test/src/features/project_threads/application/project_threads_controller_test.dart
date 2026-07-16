@@ -730,6 +730,141 @@ void main() {
       expect(waitingThread.waitingOnUserInput, isTrue);
       expect(waitingThread.waitingOnApproval, isFalse);
     });
+
+    test(
+      'selected thread turn completion clears list busy when status lags active',
+      () {
+        // 复现：详情页仍打开时 turn 已结束，但 runtimeStatus 仍为 active
+        // （status/changed→idle 迟到），侧栏 isBusy 会一直转圈。
+        final provider = _FakeAgentProvider(pages: const <AgentThreadPage>[]);
+        final controller = _createController(provider);
+
+        controller.registerSession(
+          '/repo',
+          const AgentSession(
+            id: 'thread-selected',
+            providerId: defaultAgentProviderId,
+            title: 'Selected',
+          ),
+        );
+        controller.selectThreadId('/repo', 'thread-selected');
+
+        controller.syncRuntimeSnapshot(
+          projectPath: '/repo',
+          snapshot: const AgentConversationThreadSnapshot(
+            sessionId: 'thread-selected',
+            providerId: defaultAgentProviderId,
+            threadTitle: 'Selected',
+            isTurnRunning: true,
+            runtimeStatus: AgentThreadRuntimeStatus.active,
+            waitingOnApproval: false,
+            waitingOnUserInput: false,
+          ),
+        );
+        final running = controller.stateFor('/repo').threads.single;
+        expect(controller.stateFor('/repo').runningThreadIds, <String>{
+          'thread-selected',
+        });
+        expect(running.status, AgentThreadRuntimeStatus.active);
+        expect(running.isBusy, isTrue);
+
+        controller.syncRuntimeSnapshot(
+          projectPath: '/repo',
+          snapshot: const AgentConversationThreadSnapshot(
+            sessionId: 'thread-selected',
+            providerId: defaultAgentProviderId,
+            threadTitle: 'Selected',
+            isTurnRunning: false,
+            // 服务端尚未推送 idle，详情 snapshot 仍可能带着 active。
+            runtimeStatus: AgentThreadRuntimeStatus.active,
+            waitingOnApproval: false,
+            waitingOnUserInput: false,
+          ),
+        );
+
+        final state = controller.stateFor('/repo');
+        expect(state.runningThreadIds, isEmpty);
+        expect(state.completedThreadIds, isEmpty);
+        final idle = state.threads.single;
+        expect(idle.status, AgentThreadRuntimeStatus.idle);
+        expect(idle.waitingOnApproval, isFalse);
+        expect(idle.waitingOnUserInput, isFalse);
+        expect(idle.isBusy, isFalse);
+      },
+    );
+
+    test(
+      'setThreadRunning false clears sticky active status on list summary',
+      () {
+        final provider = _FakeAgentProvider(pages: const <AgentThreadPage>[]);
+        final viewModel = ProjectThreadsViewModel();
+        final controller = _createController(provider, viewModel: viewModel);
+        viewModel.setStateFor(
+          '/repo',
+          ProjectThreadListState(
+            hasLoaded: true,
+            selectedThreadId: 'thread-a',
+            threads: List<AgentThreadSummary>.unmodifiable(<AgentThreadSummary>[
+              _thread(
+                id: 'thread-a',
+                providerId: defaultAgentProviderId,
+                updatedAt: DateTime.utc(2026, 7, 15),
+                title: 'A',
+              ).copyWith(
+                status: AgentThreadRuntimeStatus.active,
+                waitingOnApproval: false,
+                waitingOnUserInput: false,
+              ),
+            ]),
+            runningThreadIds: <String>{'thread-a'},
+          ),
+        );
+        controller.registerThreadMapping('/repo', 'thread-a');
+
+        controller.setThreadRunning('thread-a', isRunning: false);
+
+        final state = controller.stateFor('/repo');
+        expect(state.runningThreadIds, isEmpty);
+        expect(state.completedThreadIds, isEmpty);
+        expect(state.threads.single.status, AgentThreadRuntimeStatus.idle);
+        expect(state.threads.single.isBusy, isFalse);
+      },
+    );
+
+    test('syncRuntimeSnapshot keeps waiting flags while turn still active', () {
+      final provider = _FakeAgentProvider(pages: const <AgentThreadPage>[]);
+      final controller = _createController(provider);
+
+      controller.registerSession(
+        '/repo',
+        const AgentSession(
+          id: 'thread-wait',
+          providerId: defaultAgentProviderId,
+          title: 'Waiting',
+        ),
+      );
+
+      controller.syncRuntimeSnapshot(
+        projectPath: '/repo',
+        snapshot: const AgentConversationThreadSnapshot(
+          sessionId: 'thread-wait',
+          providerId: defaultAgentProviderId,
+          threadTitle: 'Waiting',
+          isTurnRunning: true,
+          runtimeStatus: AgentThreadRuntimeStatus.active,
+          waitingOnApproval: true,
+          waitingOnUserInput: false,
+        ),
+      );
+
+      final thread = controller.stateFor('/repo').threads.single;
+      expect(thread.status, AgentThreadRuntimeStatus.active);
+      expect(thread.waitingOnApproval, isTrue);
+      expect(thread.isBusy, isTrue);
+      expect(controller.stateFor('/repo').runningThreadIds, <String>{
+        'thread-wait',
+      });
+    });
   });
 }
 

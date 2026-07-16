@@ -115,6 +115,9 @@ class ProjectThreadsViewModel extends ChangeNotifier {
   ///
   /// 首次进入执行中时会同步 [promoteThread]（刷新 recency 并置顶），
   /// 使已有 thread 发消息后与新建会话的列表行为一致。
+  ///
+  /// 结束执行时会把摘要上残留的 `active`/waiting 收束为 idle，避免仅靠
+  /// `runningThreadIds` 清除后 `thread.isBusy` 仍因 status 字段为 true 而转圈。
   void setThreadRunning({
     required String projectPath,
     required String threadId,
@@ -140,11 +143,17 @@ class ProjectThreadsViewModel extends ChangeNotifier {
         }
       } else {
         final removed = nextRunning.remove(threadId);
-        if (!removed) {
+        final clearedActive = _clearActiveStatusInState(
+          next,
+          threadId: threadId,
+        );
+        if (!removed && identical(clearedActive, next)) {
           return current;
         }
+        next = clearedActive;
         // 后台完成：当前查看的不是该 thread 时，保留绿色完成提示。
-        if (current.selectedThreadId != threadId) {
+        // 仅在确实从执行中退出时记入，避免重复 snapshot 误加提示。
+        if (removed && current.selectedThreadId != threadId) {
           nextCompleted.add(threadId);
         }
       }
@@ -215,10 +224,13 @@ class ProjectThreadsViewModel extends ChangeNotifier {
         return current;
       }
       final threads = List<AgentThreadSummary>.of(base.threads);
-      threads[promotedIndex] = threads[promotedIndex].copyWith(
+      final existing = threads[promotedIndex];
+      // 非 active 时强制清 waiting，与详情侧 _applyThreadRuntimeStatus 一致。
+      final isActive = status == AgentThreadRuntimeStatus.active;
+      threads[promotedIndex] = existing.copyWith(
         status: status,
-        waitingOnApproval: waitingOnApproval,
-        waitingOnUserInput: waitingOnUserInput,
+        waitingOnApproval: isActive && waitingOnApproval,
+        waitingOnUserInput: isActive && waitingOnUserInput,
       );
       return base.copyWith(
         threads: List<AgentThreadSummary>.unmodifiable(threads),
@@ -317,6 +329,34 @@ class ProjectThreadsViewModel extends ChangeNotifier {
         activityAt: activityAt ?? DateTime.now(),
       );
     });
+  }
+
+  /// 将列表摘要上残留的 active/waiting 收束为 idle；无变化时返回原 state。
+  static ProjectThreadListState _clearActiveStatusInState(
+    ProjectThreadListState current, {
+    required String threadId,
+  }) {
+    final index = current.threads.indexWhere((thread) => thread.id == threadId);
+    if (index == -1) {
+      return current;
+    }
+    final existing = current.threads[index];
+    final needsClear =
+        existing.status == AgentThreadRuntimeStatus.active ||
+        existing.waitingOnApproval ||
+        existing.waitingOnUserInput;
+    if (!needsClear) {
+      return current;
+    }
+    final threads = List<AgentThreadSummary>.of(current.threads);
+    threads[index] = existing.copyWith(
+      status: AgentThreadRuntimeStatus.idle,
+      waitingOnApproval: false,
+      waitingOnUserInput: false,
+    );
+    return current.copyWith(
+      threads: List<AgentThreadSummary>.unmodifiable(threads),
+    );
   }
 
   /// 在单次状态更新内完成 recency 刷新与置顶，避免多次 notify。

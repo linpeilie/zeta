@@ -2,6 +2,15 @@
 
 ## 2026-07-16
 
+### 侧栏 thread 执行中指示与详情 runtime 对齐
+
+- 根因：`turn/completed` 等路径只走 `_flushStreamChangesNow`，未推
+  `threadSnapshotListenable`，详情已 idle、列表仍 `isTurnRunning: true`。
+- 修复：stream flush 同步 snapshot；turn 结束收束 sticky `active`；
+  `syncRuntimeSnapshot` / `setThreadRunning(false)` 防御列表 `isBusy` 假阳性。
+- 文档：`plan/agent_running_status_ux_plan.md` §2.5，以及 design / developer /
+  project_memory 中的同步契约说明。
+
 ### Turn footer 展示本回合模型配置
 
 - turn 终态 footer 在耗时与 token 之外，追加模型、思考程度（若有）、

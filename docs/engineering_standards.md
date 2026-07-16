@@ -78,6 +78,8 @@ main -> app -> presentation/application -> domain
 - 纯状态容器只暴露状态和同步更新方法，例如 `ProjectThreadsViewModel`。
 - 应用控制器收敛分页、恢复、缓存、provider 调用和竞态处理，例如 `ProjectThreadsController`。
 - 高吞吐 UI 使用分区 `ValueListenable` 或版本号信号，避免流式输出导致整页重建。
+- 跨模块共享的运行时指示（如侧栏 thread busy）若依赖独立 snapshot listenable，
+  stream flush 与分区 publish 都必须同步该 snapshot，不得只 bump 面板 version。
 - 对会被新请求覆盖的异步加载使用 token/version guard，旧结果返回时必须被丢弃。
 - 乐观持久化必须分离“当前快照”与“最近确认快照”；快速连续更新应串行、
   合并或取消过期请求，保存失败时整体回滚关联字段并保留可重试快照。

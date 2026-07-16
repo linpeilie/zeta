@@ -218,6 +218,13 @@ delta 追加，同 turn token/diff 快照取最新，同工具 progress 按协�
 和 Provider mapper 仍无损消费；完整 item、工具/turn 终态、审批、错误和连接状态会先 flush
 缓冲再立即发布。缓冲上限只产生不含正文的计数诊断，并触发即时 flush。
 
+Agent Canvas 支持多 thread 常驻 entry（各自独立 conversation VM 与 provider controller）。
+Project Threads 侧栏对**已打开** thread 的执行中/等待指示，以 entry 的
+`AgentConversationThreadSnapshot` 为真源，经 shell 调用 `syncRuntimeSnapshot` 更新
+`runningThreadIds`、摘要 `status`/waiting 与内存态 `completedThreadIds`。分区 UI 信号
+（history/header/live 等）不替代 snapshot：任何改变 `isTurnRunning` 或 runtime status 的
+路径（含 stream flush）必须同步推送 snapshot，避免详情已结束而列表持续 busy。
+
 Provider 的 Thread 访问统一经过 `ProviderOperationScheduler`。列表使用 Project 级
 `sharedRead`，历史读取使用 Thread 级 `sharedRead`；resume、fork、重命名、归档、删除和
 压缩等变更使用 Thread 级 `exclusive`。同一资源上的连续读取可并发，独占操作保持 FIFO

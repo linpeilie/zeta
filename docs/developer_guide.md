@@ -108,7 +108,9 @@ windows/
 - `lib/src/features/agent_management`：Codex/Grok/Cursor CLI 检测、身份/版本/账号诊断、
   无计费连接测试、配置安全编辑和 Agent 管理页面。
 - `lib/src/features/ide_session`：IDE 会话模型、状态构建、恢复协调和持久化。
-- `lib/src/features/project_threads`：项目 thread 列表状态、恢复快照、分页控制器和 view model。
+- `lib/src/features/project_threads`：项目 thread 列表状态、恢复快照、分页控制器和 view model；
+  打开中 thread 的执行中/等待态由常驻 workspace 的 `threadSnapshot` 经
+  `syncRuntimeSnapshot` 写入，不依赖 shell 单路 provider 事件流。
 - `lib/src/features/usage_statistics`：Codex 全局历史读取、版本化派生索引、统计聚合
   controller、响应式统计页面和任务详情抽屉。
 - `lib/src/features/workspace`：工作区目录规则、文件树构建、文件节点映射和 file tree pane。
@@ -201,6 +203,12 @@ Cursor 适配还必须遵守以下约束：
 - 高频事件只在 `AgentEventStreamBuffer` 的 Application 投影边界合并。新增可合并事件时，
   key 必须包含 thread、turn、item 和 event kind；完整 item、终态、审批、错误与连接状态
   不得进入可替代缓冲，并应先 flush 此前 delta。Transport/mapper 层保持逐条处理。
+- 多 thread 常驻时，侧栏 busy 真源是各 entry 的 `AgentConversationThreadSnapshot`
+  （`isTurnRunning` / `runtimeStatus` / waiting），经 shell `syncRuntimeSnapshot` 写入
+  `runningThreadIds` 与摘要 status。`_publishUiChanges` 与 `_flushStreamChangesNow`
+  都必须刷新 `threadSnapshotListenable`；turn 结束后若无 waiting，不得让列表残留
+  sticky `active`。后台完成仅非选中 thread 记入 `completedThreadIds`。细节见
+  [执行中状态方案 §2.5](../plan/agent_running_status_ux_plan.md)。
 
 修改 Codex 适配层前，先对照
 [`third_party/codex_app_server_schema`](../third_party/codex_app_server_schema/)

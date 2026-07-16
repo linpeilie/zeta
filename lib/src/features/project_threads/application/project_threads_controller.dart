@@ -285,7 +285,7 @@ class ProjectThreadsController {
       return;
     }
     _registerThreadMapping(projectPath, sessionId);
-    final runtimeStatus = snapshot.runtimeStatus;
+    final runtimeStatus = _effectiveListRuntimeStatus(snapshot);
     if (runtimeStatus != null) {
       viewModel.updateThreadRuntimeStatus(
         projectPath: projectPath,
@@ -295,7 +295,29 @@ class ProjectThreadsController {
         waitingOnUserInput: snapshot.waitingOnUserInput,
       );
     }
+    // 先写 status 再写 running：isTurnRunning=false 时 setThreadRunning 会
+    // 收束残留 active，避免 status 事件迟到时侧栏一直转圈。
     _setThreadRunning(sessionId, isRunning: snapshot.isTurnRunning);
+  }
+
+  /// 将详情侧 snapshot 映射为列表可消费的 runtime status。
+  ///
+  /// turn 已结束但 `thread/status/changed` 仍停留在 active 时，若无 waiting
+  /// 标志，视为 idle，避免列表 `isBusy` 假阳性。
+  AgentThreadRuntimeStatus? _effectiveListRuntimeStatus(
+    AgentConversationThreadSnapshot snapshot,
+  ) {
+    final status = snapshot.runtimeStatus;
+    if (status == null) {
+      return null;
+    }
+    if (!snapshot.isTurnRunning &&
+        status == AgentThreadRuntimeStatus.active &&
+        !snapshot.waitingOnApproval &&
+        !snapshot.waitingOnUserInput) {
+      return AgentThreadRuntimeStatus.idle;
+    }
+    return status;
   }
 
   /// 更新列表中某条 thread 的标题（供 shell 从详情侧回写）。

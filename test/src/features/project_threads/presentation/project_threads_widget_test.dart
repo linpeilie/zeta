@@ -382,7 +382,8 @@ void main() {
       await tester.pump();
 
       expect(listCompleted, findsNothing);
-      expect(find.text('5m'), findsOneWidget);
+      // turn 开始时会 promote recency，结束后相对时间回到「刚刚」。
+      expect(find.text('now'), findsOneWidget);
     },
   );
 

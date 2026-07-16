@@ -46,11 +46,15 @@
 ## 4. 重要模块记忆
 
 - `MainApp` 支持测试注入目录选择器、会话存储和 Agent provider factory。
-- `IdeShellController` 协调项目选择、文件树状态、会话恢复、Agent workspace 同步和项目 thread 控制器。
+- `IdeShellController` 协调项目选择、文件树状态、会话恢复、Agent workspace 同步和项目 thread 控制器；
+  将各 workspace entry 的 `threadSnapshot` 同步到 `ProjectThreadsController`。
 - `IdeHome` 组合三栏 UI，保持页面层职责轻量。
-- `AgentConversationViewModel` 对外暴露 Agent 面板状态，并委托 timeline store、UI signals、model selection controller 处理细分职责。
-- `ProjectThreadsController` 负责项目下 thread 分页、恢复、缓存快照、provider 交互和竞态隔离。
-- `ProjectThreadsViewModel` 是项目 thread 列表的纯状态容器。
+- `AgentConversationViewModel` 对外暴露 Agent 面板状态，并委托 timeline store、UI signals、model selection controller 处理细分职责；
+  `_publishUiChanges` / `_flushStreamChangesNow` 均须刷新 `threadSnapshotListenable`。
+- `ProjectThreadsController` 负责项目下 thread 分页、恢复、缓存快照、provider 交互和竞态隔离；
+  打开中 thread 的 busy 态以 `syncRuntimeSnapshot` 为准。
+- `ProjectThreadsViewModel` 是项目 thread 列表的纯状态容器（含 `runningThreadIds` /
+  `completedThreadIds` 与 sticky active 收束）。
 - 当前迁移期内，`AgentProviderBundle` 是应用层能力入口，`AgentProvider` 是 provider
   中立兼容门面；capabilities 仍是入口显隐和执行校验的事实来源。
 - `CodexAppServerAgentProvider` 是当前默认 provider 实现；协议 pin 见 `third_party/codex_app_server_schema`。
