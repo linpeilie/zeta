@@ -77,6 +77,27 @@ void main() {
       expect(_decorationOf(tester).color, Colors.transparent);
     });
   }
+
+  testWidgets('无点击回调的展示型表面不会进入 hover 状态', (tester) async {
+    final focusNode = FocusNode();
+    addTearDown(focusNode.dispose);
+    await _pumpSurface(
+      tester,
+      themeMode: ThemeMode.dark,
+      focusNode: focusNode,
+      selected: true,
+      interactive: false,
+    );
+    expect(_decorationOf(tester).color, IdeColors.dark.selectedSurface);
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: Offset.zero);
+    await mouse.moveTo(tester.getCenter(_surfaceFinder));
+    await tester.pumpAndSettle();
+
+    expect(_decorationOf(tester).color, IdeColors.dark.selectedSurface);
+  });
 }
 
 const _surfaceKey = ValueKey<String>('interactive-surface');
@@ -98,6 +119,7 @@ Future<void> _pumpSurface(
   required FocusNode focusNode,
   bool selected = false,
   bool enabled = true,
+  bool interactive = true,
 }) async {
   final lightTheme = buildIdeThemeData(
     brightness: Brightness.light,
@@ -123,7 +145,7 @@ Future<void> _pumpSurface(
             child: PaneInteractiveSurface(
               key: _surfaceKey,
               focusNode: focusNode,
-              onPressed: () {},
+              onPressed: interactive ? () {} : null,
               selected: selected,
               enabled: enabled,
               width: 120,

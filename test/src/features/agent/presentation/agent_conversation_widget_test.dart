@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -17,9 +19,17 @@ import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_contr
 import '../../../testing/ide_test_harness.dart';
 
 void main() {
+  final binding = TestWidgetsFlutterBinding.ensureInitialized();
   final tempDirectories = <Directory>[];
 
+  setUp(() {
+    binding.window.devicePixelRatioTestValue = 1;
+    binding.window.physicalSizeTestValue = const Size(1000, 600);
+  });
+
   tearDown(() {
+    binding.window.clearPhysicalSizeTestValue();
+    binding.window.clearDevicePixelRatioTestValue();
     for (final directory in tempDirectories) {
       if (directory.existsSync()) {
         directory.deleteSync(recursive: true);

@@ -6,6 +6,7 @@ import 'ide_effects.dart';
 import 'ide_spacing.dart';
 import 'ide_text_styles.dart';
 import 'pane_widgets.dart';
+import 'surfaces/ide_surface.dart';
 
 @immutable
 class IdeContextMenuAction {
@@ -46,39 +47,33 @@ class IdeContextMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final brightness = sf.Theme.of(context).brightness;
     return RepaintBoundary(
-      child: PanelCard(
-        color: colors.surfaceOverlay,
-        borderRadius: IdeRadius.allLarge,
-        boxShadow: IdeEffects.overlayShadow(brightness),
-        child: Padding(
-          padding: IdeSpacing.all4,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minWidth: minWidth),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (var index = 0; index < actions.length; index++) ...[
-                  if (actions[index].dividerAbove && index != 0)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: IdeSpacing.space4,
-                      ),
-                      child: Divider(
-                        height: 1,
-                        thickness: 1,
-                        color: colors.borderSubtle,
-                      ),
+      child: IdeSurface.popover(
+        padding: IdeSpacing.all4,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minWidth: minWidth),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var index = 0; index < actions.length; index++) ...[
+                if (actions[index].dividerAbove && index != 0)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: IdeSpacing.space4,
                     ),
-                  _ContextMenuActionButton(
-                    action: actions[index],
-                    closeOnActivate: closeOnActivate,
+                    child: Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: colors.borderSubtle,
+                    ),
                   ),
-                ],
+                _ContextMenuActionButton(
+                  action: actions[index],
+                  closeOnActivate: closeOnActivate,
+                ),
               ],
-            ),
+            ],
           ),
         ),
       ),

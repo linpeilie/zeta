@@ -28,13 +28,13 @@ import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/workspace/presentation/file_tree_pane.dart';
 import 'package:zeta/src/ui/core/ide_activity_rail.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_resize_handle.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_toast.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/window_frame.dart';
+import 'package:zeta/src/ui/core/workbench/ide_workbench_scaffold.dart';
 import 'package:zeta/src/ui/features/ide/views/project_list_pane.dart';
 
 typedef AgentProviderAvailabilityLoader =
@@ -75,14 +75,9 @@ class IdeHome extends StatefulWidget {
 }
 
 class _IdeHomeState extends State<IdeHome> {
-  static const double _activityRailWidth = IdeMetrics.activityRailWidth;
   static const double _initialPanelWidth = IdeMetrics.sidePaneDefaultWidth;
   static const double _minPanelWidth = IdeMetrics.sidePaneMinWidth;
   static const double _maxPanelWidth = IdeMetrics.sidePaneMaxWidth;
-  // Overlay 行为属于后续 Workbench 迭代，本阶段保持现有响应式边界。
-  static const double _minMainEditorWidth = 320;
-  static const double _leftOverlayBreakpoint = 720;
-  static const double _rightOverlayBreakpoint = 1000;
   static const double _initialPanelRatio = 0.5;
   static const double _minPanelRatio = 0.1;
   static const double _maxPanelRatio = 0.9;
@@ -95,8 +90,8 @@ class _IdeHomeState extends State<IdeHome> {
   bool _leftBottomVisible = false;
   bool _rightTopVisible = false;
   bool _rightBottomVisible = false;
-  bool _leftOverlayOpen = false;
-  bool _rightOverlayOpen = false;
+  IdeWorkbenchOverlay? _activeOverlay;
+  FocusNode? _overlayTriggerFocusNode;
   double _leftPanelWidth = _initialPanelWidth;
   double _rightPanelWidth = _initialPanelWidth;
   double _leftTopRatio = _initialPanelRatio;
@@ -104,6 +99,18 @@ class _IdeHomeState extends State<IdeHome> {
   sf.ToastOverlay? _statusToast;
   _IdeHomePage _page = _IdeHomePage.home;
   SettingsSection _settingsSection = SettingsSection.appearance;
+  final FocusNode _leftProjectsFocusNode = FocusNode(
+    debugLabel: 'LeftProjectsRailAction',
+  );
+  final FocusNode _leftContextFocusNode = FocusNode(
+    debugLabel: 'LeftContextRailAction',
+  );
+  final FocusNode _rightFilesFocusNode = FocusNode(
+    debugLabel: 'RightFilesRailAction',
+  );
+  final FocusNode _rightToolsFocusNode = FocusNode(
+    debugLabel: 'RightToolsRailAction',
+  );
 
   @override
   void initState() {
@@ -152,6 +159,10 @@ class _IdeHomeState extends State<IdeHome> {
     _usageStatisticsController.dispose();
     _agentManagementController.dispose();
     _shellController.dispose();
+    _leftProjectsFocusNode.dispose();
+    _leftContextFocusNode.dispose();
+    _rightFilesFocusNode.dispose();
+    _rightToolsFocusNode.dispose();
     super.dispose();
   }
 
@@ -190,11 +201,7 @@ class _IdeHomeState extends State<IdeHome> {
 
   Widget _buildPageBody() {
     return switch (_page) {
-      _IdeHomePage.home => LayoutBuilder(
-        builder: (context, constraints) {
-          return _buildIdeLayout(maxWidth: constraints.maxWidth);
-        },
-      ),
+      _IdeHomePage.home => _buildIdeLayout(),
       _IdeHomePage.settings => SettingsPage(
         key: const ValueKey('settings-page'),
         activeSection: _settingsSection,
@@ -240,275 +247,141 @@ class _IdeHomeState extends State<IdeHome> {
     ];
   }
 
-  Widget _buildIdeLayout({required double maxWidth}) {
-    final colors = IdeColors.of(context);
+  Widget _buildIdeLayout() {
     final leftPanelVisible = _leftTopVisible || _leftBottomVisible;
     final rightPanelVisible = _rightTopVisible || _rightBottomVisible;
-    final useLeftOverlay = maxWidth < _leftOverlayBreakpoint;
-    final rightOverlayAvailableWidth =
-        maxWidth - _activityRailWidth - IdeSpacing.space8;
-    final useRightOverlay =
-        rightOverlayAvailableWidth < _rightOverlayBreakpoint;
-    final leftPanelInline = leftPanelVisible && !useLeftOverlay;
-    final panelWidths = _effectivePanelWidths(
-      maxWidth: maxWidth,
-      leftPanelVisible: leftPanelInline,
-      rightPanelVisible: !useRightOverlay && rightPanelVisible,
-    );
-
-    final content = Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SizedBox(
-          width: _activityRailWidth,
-          child: IdeActivityRail(
-            indicatorSide: IdeActivityRailIndicatorSide.right,
-            leadingActions: [
-              IdeRailAction(
-                key: const ValueKey('left-projects-action'),
-                icon: Icons.account_tree_rounded,
-                tooltip: 'Projects',
-                semanticLabel: 'Toggle projects panel',
-                active:
-                    _leftTopVisible && (!useLeftOverlay || _leftOverlayOpen),
-                onPressed: () {
-                  _toggleLeftPanel(isTop: true, useOverlay: useLeftOverlay);
-                },
-              ),
-            ],
-            trailingActions: [
-              IdeRailAction(
-                key: const ValueKey('left-context-action'),
-                icon: Icons.data_object_rounded,
-                tooltip: 'Context',
-                semanticLabel: 'Toggle context panel',
-                active:
-                    _leftBottomVisible && (!useLeftOverlay || _leftOverlayOpen),
-                onPressed: () {
-                  _toggleLeftPanel(isTop: false, useOverlay: useLeftOverlay);
-                },
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: IdeSpacing.space8),
-        if (leftPanelInline) ...[
-          SizedBox(
-            key: const ValueKey('left-activity-panel'),
-            width: panelWidths.left,
-            child: _buildLeftPanel(),
-          ),
-          IdeResizeHandle(
-            key: const ValueKey('left-width-resize-handle'),
-            axis: IdeResizeHandleAxis.horizontal,
-            semanticLabel: 'Resize left panel width',
-            onDragUpdate: (details) {
-              setState(() {
-                _leftPanelWidth = (_leftPanelWidth + details.delta.dx).clamp(
-                  _minPanelWidth,
-                  _maxPanelWidth,
+    return IdeWorkbenchScaffold(
+      leadingRailBuilder: (context, mode) {
+        final useOverlay = mode == IdeWorkbenchLayoutMode.compact;
+        return IdeActivityRail(
+          indicatorSide: IdeActivityRailIndicatorSide.right,
+          leadingActions: [
+            IdeRailAction(
+              key: const ValueKey('left-projects-action'),
+              icon: Icons.account_tree_rounded,
+              tooltip: 'Projects',
+              semanticLabel: 'Toggle projects panel',
+              active:
+                  _leftTopVisible &&
+                  (!useOverlay ||
+                      _activeOverlay == IdeWorkbenchOverlay.navigation),
+              focusNode: _leftProjectsFocusNode,
+              onPressed: () {
+                _toggleLeftPanel(
+                  isTop: true,
+                  useOverlay: useOverlay,
+                  triggerFocusNode: _leftProjectsFocusNode,
                 );
-              });
-            },
-          ),
-        ],
-        Expanded(
-          child: PanelCard(
-            key: const ValueKey('agent-pane-host'),
-            color: colors.editor,
-            showBorder: false,
-            child: AgentPane(viewModel: _shellController.agentViewModel),
-          ),
-        ),
-        if (!useRightOverlay && rightPanelVisible) ...[
-          IdeResizeHandle(
-            key: const ValueKey('right-width-resize-handle'),
-            axis: IdeResizeHandleAxis.horizontal,
-            semanticLabel: 'Resize right panel width',
-            onDragUpdate: (details) {
-              setState(() {
-                _rightPanelWidth = (_rightPanelWidth - details.delta.dx).clamp(
-                  _minPanelWidth,
-                  _maxPanelWidth,
+              },
+            ),
+          ],
+          trailingActions: [
+            IdeRailAction(
+              key: const ValueKey('left-context-action'),
+              icon: Icons.data_object_rounded,
+              tooltip: 'Context',
+              semanticLabel: 'Toggle context panel',
+              active:
+                  _leftBottomVisible &&
+                  (!useOverlay ||
+                      _activeOverlay == IdeWorkbenchOverlay.navigation),
+              focusNode: _leftContextFocusNode,
+              onPressed: () {
+                _toggleLeftPanel(
+                  isTop: false,
+                  useOverlay: useOverlay,
+                  triggerFocusNode: _leftContextFocusNode,
                 );
-              });
-            },
-          ),
-          SizedBox(
-            key: const ValueKey('right-activity-panel'),
-            width: panelWidths.right,
-            child: _buildRightPanel(),
-          ),
-        ],
-        const SizedBox(width: IdeSpacing.space8),
-        SizedBox(
-          width: _activityRailWidth,
-          child: IdeActivityRail(
-            leadingActions: [
-              IdeRailAction(
-                key: const ValueKey('right-files-action'),
-                icon: Icons.folder_rounded,
-                tooltip: 'Files',
-                semanticLabel: 'Toggle files panel',
-                active:
-                    _rightTopVisible && (!useRightOverlay || _rightOverlayOpen),
-                onPressed: () {
-                  _toggleRightPanel(isTop: true, useOverlay: useRightOverlay);
-                },
-              ),
-            ],
-            trailingActions: [
-              IdeRailAction(
-                key: const ValueKey('right-tools-action'),
-                icon: Icons.build_circle_rounded,
-                tooltip: 'Tools',
-                semanticLabel: 'Toggle tools panel',
-                active:
-                    _rightBottomVisible &&
-                    (!useRightOverlay || _rightOverlayOpen),
-                onPressed: () {
-                  _toggleRightPanel(isTop: false, useOverlay: useRightOverlay);
-                },
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-
-    final showLeftOverlay =
-        useLeftOverlay && _leftOverlayOpen && leftPanelVisible;
-    final showRightOverlay =
-        useRightOverlay && _rightOverlayOpen && rightPanelVisible;
-    if (!showLeftOverlay && !showRightOverlay) {
-      return content;
-    }
-
-    final leftOverlayWidth = _leftPanelWidth.clamp(
-      _minPanelWidth,
-      _maxPanelWidth,
-    );
-    final rightOverlayWidth = _rightPanelWidth.clamp(
-      _minPanelWidth,
-      _maxPanelWidth,
-    );
-    final leftInset = _activityRailWidth + IdeSpacing.space8;
-    final rightInset = _activityRailWidth + IdeSpacing.space8;
-    final brightness = sf.Theme.of(context).brightness;
-    return Stack(
-      children: [
-        content,
-        if (showLeftOverlay) ...[
-          Positioned.fill(
-            left: leftInset,
-            child: GestureDetector(
-              key: const ValueKey('left-overlay-scrim'),
-              behavior: HitTestBehavior.translucent,
-              onTap: _closeLeftOverlay,
-              child: ColoredBox(color: IdeEffects.scrim(brightness)),
+              },
             ),
-          ),
-          Positioned(
-            key: const ValueKey('left-activity-overlay'),
-            top: 0,
-            left: leftInset,
-            bottom: 0,
-            width: leftOverlayWidth,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: IdeRadius.allMedium,
-                boxShadow: IdeEffects.overlayShadow(brightness),
-              ),
-              child: _buildLeftPanel(),
+          ],
+        );
+      },
+      navigationPane: _buildLeftPanel(),
+      navigationResizeHandle: IdeResizeHandle(
+        key: const ValueKey('left-width-resize-handle'),
+        axis: IdeResizeHandleAxis.horizontal,
+        semanticLabel: 'Resize left panel width',
+        onDragUpdate: (details) {
+          setState(() {
+            _leftPanelWidth = (_leftPanelWidth + details.delta.dx).clamp(
+              _minPanelWidth,
+              _maxPanelWidth,
+            );
+          });
+        },
+      ),
+      navigationVisible: leftPanelVisible,
+      navigationWidth: _leftPanelWidth,
+      canvas: KeyedSubtree(
+        key: const ValueKey('agent-pane-host'),
+        child: AgentPane(viewModel: _shellController.agentViewModel),
+      ),
+      inspectorPane: _buildRightPanel(),
+      inspectorResizeHandle: IdeResizeHandle(
+        key: const ValueKey('right-width-resize-handle'),
+        axis: IdeResizeHandleAxis.horizontal,
+        semanticLabel: 'Resize right panel width',
+        onDragUpdate: (details) {
+          setState(() {
+            _rightPanelWidth = (_rightPanelWidth - details.delta.dx).clamp(
+              _minPanelWidth,
+              _maxPanelWidth,
+            );
+          });
+        },
+      ),
+      inspectorVisible: rightPanelVisible,
+      inspectorWidth: _rightPanelWidth,
+      trailingRailBuilder: (context, mode) {
+        final useOverlay = mode != IdeWorkbenchLayoutMode.wide;
+        return IdeActivityRail(
+          leadingActions: [
+            IdeRailAction(
+              key: const ValueKey('right-files-action'),
+              icon: Icons.folder_rounded,
+              tooltip: 'Files',
+              semanticLabel: 'Toggle files panel',
+              active:
+                  _rightTopVisible &&
+                  (!useOverlay ||
+                      _activeOverlay == IdeWorkbenchOverlay.inspector),
+              focusNode: _rightFilesFocusNode,
+              onPressed: () {
+                _toggleRightPanel(
+                  isTop: true,
+                  useOverlay: useOverlay,
+                  triggerFocusNode: _rightFilesFocusNode,
+                );
+              },
             ),
-          ),
-        ],
-        if (showRightOverlay) ...[
-          Positioned.fill(
-            right: rightInset,
-            child: GestureDetector(
-              key: const ValueKey('right-overlay-scrim'),
-              behavior: HitTestBehavior.translucent,
-              onTap: _closeRightOverlay,
-              child: ColoredBox(color: IdeEffects.scrim(brightness)),
+          ],
+          trailingActions: [
+            IdeRailAction(
+              key: const ValueKey('right-tools-action'),
+              icon: Icons.build_circle_rounded,
+              tooltip: 'Tools',
+              semanticLabel: 'Toggle tools panel',
+              active:
+                  _rightBottomVisible &&
+                  (!useOverlay ||
+                      _activeOverlay == IdeWorkbenchOverlay.inspector),
+              focusNode: _rightToolsFocusNode,
+              onPressed: () {
+                _toggleRightPanel(
+                  isTop: false,
+                  useOverlay: useOverlay,
+                  triggerFocusNode: _rightToolsFocusNode,
+                );
+              },
             ),
-          ),
-          Positioned(
-            key: const ValueKey('right-activity-overlay'),
-            top: 0,
-            right: rightInset,
-            bottom: 0,
-            width: rightOverlayWidth,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: IdeRadius.allMedium,
-                boxShadow: IdeEffects.overlayShadow(brightness),
-              ),
-              child: _buildRightPanel(),
-            ),
-          ),
-        ],
-      ],
+          ],
+        );
+      },
+      activeOverlay: _activeOverlay,
+      onDismissOverlay: _closeActiveOverlay,
+      overlayTriggerFocusNode: _overlayTriggerFocusNode,
     );
-  }
-
-  _PanelWidths _effectivePanelWidths({
-    required double maxWidth,
-    required bool leftPanelVisible,
-    required bool rightPanelVisible,
-  }) {
-    var leftWidth = _leftPanelWidth;
-    var rightWidth = _rightPanelWidth;
-    final visiblePanels =
-        (leftPanelVisible ? 1 : 0) + (rightPanelVisible ? 1 : 0);
-    if (visiblePanels == 0 || !maxWidth.isFinite) {
-      return _PanelWidths(left: leftWidth, right: rightWidth);
-    }
-
-    final fixedWidth =
-        (_activityRailWidth * 2) +
-        (IdeSpacing.space8 * 2) +
-        (leftPanelVisible ? IdeSpacing.space8 : 0) +
-        (rightPanelVisible ? IdeSpacing.space8 : 0);
-    final availablePanelWidth = maxWidth - fixedWidth - _minMainEditorWidth;
-    final minimumPanelWidth = _minPanelWidth * visiblePanels;
-
-    if (availablePanelWidth < minimumPanelWidth) {
-      if (leftPanelVisible) {
-        leftWidth = _minPanelWidth;
-      }
-      if (rightPanelVisible) {
-        rightWidth = _minPanelWidth;
-      }
-      return _PanelWidths(left: leftWidth, right: rightWidth);
-    }
-
-    if (visiblePanels == 1) {
-      if (leftPanelVisible) {
-        leftWidth = leftWidth.clamp(_minPanelWidth, availablePanelWidth);
-      }
-      if (rightPanelVisible) {
-        rightWidth = rightWidth.clamp(_minPanelWidth, availablePanelWidth);
-      }
-      return _PanelWidths(left: leftWidth, right: rightWidth);
-    }
-
-    final requestedPanelWidth = leftWidth + rightWidth;
-    if (requestedPanelWidth <= availablePanelWidth) {
-      return _PanelWidths(left: leftWidth, right: rightWidth);
-    }
-
-    final extraWidth = availablePanelWidth - minimumPanelWidth;
-    final requestedExtraWidth =
-        (leftWidth - _minPanelWidth) + (rightWidth - _minPanelWidth);
-    if (requestedExtraWidth <= 0) {
-      return _PanelWidths(left: _minPanelWidth, right: _minPanelWidth);
-    }
-
-    final shrinkRatio = extraWidth / requestedExtraWidth;
-    leftWidth = _minPanelWidth + ((leftWidth - _minPanelWidth) * shrinkRatio);
-    rightWidth = _minPanelWidth + ((rightWidth - _minPanelWidth) * shrinkRatio);
-    return _PanelWidths(left: leftWidth, right: rightWidth);
   }
 
   Widget _buildProjectsPanel() {
@@ -662,9 +535,17 @@ class _IdeHomeState extends State<IdeHome> {
     return _agentManagementController.loadAvailableThreadProviders();
   }
 
-  void _toggleLeftPanel({required bool isTop, required bool useOverlay}) {
+  void _toggleLeftPanel({
+    required bool isTop,
+    required bool useOverlay,
+    required FocusNode triggerFocusNode,
+  }) {
     setState(() {
       if (!useOverlay) {
+        if (_activeOverlay == IdeWorkbenchOverlay.navigation) {
+          _activeOverlay = null;
+          _overlayTriggerFocusNode = null;
+        }
         if (isTop) {
           _leftTopVisible = !_leftTopVisible;
         } else {
@@ -675,23 +556,28 @@ class _IdeHomeState extends State<IdeHome> {
 
       final currentlyVisible = isTop ? _leftTopVisible : _leftBottomVisible;
       final otherVisible = isTop ? _leftBottomVisible : _leftTopVisible;
-      if (_leftOverlayOpen && currentlyVisible && !otherVisible) {
+      final overlayOpen = _activeOverlay == IdeWorkbenchOverlay.navigation;
+      if (overlayOpen && currentlyVisible && !otherVisible) {
         if (isTop) {
           _leftTopVisible = false;
         } else {
           _leftBottomVisible = false;
         }
-        _leftOverlayOpen = false;
+        _activeOverlay = null;
+        _overlayTriggerFocusNode = null;
         return;
       }
 
-      if (_leftOverlayOpen && currentlyVisible) {
+      if (overlayOpen && currentlyVisible) {
         if (isTop) {
           _leftTopVisible = false;
         } else {
           _leftBottomVisible = false;
         }
-        _leftOverlayOpen = _leftTopVisible || _leftBottomVisible;
+        if (!_leftTopVisible && !_leftBottomVisible) {
+          _activeOverlay = null;
+          _overlayTriggerFocusNode = null;
+        }
         return;
       }
 
@@ -700,24 +586,32 @@ class _IdeHomeState extends State<IdeHome> {
       } else {
         _leftBottomVisible = true;
       }
-      _leftOverlayOpen = true;
-      // 小窗口一次只打开一个覆盖层，避免两个半透明遮罩叠加。
-      _rightOverlayOpen = false;
+      _activeOverlay = IdeWorkbenchOverlay.navigation;
+      _overlayTriggerFocusNode = triggerFocusNode;
     });
   }
 
-  void _closeLeftOverlay() {
-    if (!_leftOverlayOpen) {
+  void _closeActiveOverlay() {
+    if (_activeOverlay == null) {
       return;
     }
     setState(() {
-      _leftOverlayOpen = false;
+      _activeOverlay = null;
+      _overlayTriggerFocusNode = null;
     });
   }
 
-  void _toggleRightPanel({required bool isTop, required bool useOverlay}) {
+  void _toggleRightPanel({
+    required bool isTop,
+    required bool useOverlay,
+    required FocusNode triggerFocusNode,
+  }) {
     setState(() {
       if (!useOverlay) {
+        if (_activeOverlay == IdeWorkbenchOverlay.inspector) {
+          _activeOverlay = null;
+          _overlayTriggerFocusNode = null;
+        }
         if (isTop) {
           _rightTopVisible = !_rightTopVisible;
         } else {
@@ -728,23 +622,28 @@ class _IdeHomeState extends State<IdeHome> {
 
       final currentlyVisible = isTop ? _rightTopVisible : _rightBottomVisible;
       final otherVisible = isTop ? _rightBottomVisible : _rightTopVisible;
-      if (_rightOverlayOpen && currentlyVisible && !otherVisible) {
+      final overlayOpen = _activeOverlay == IdeWorkbenchOverlay.inspector;
+      if (overlayOpen && currentlyVisible && !otherVisible) {
         if (isTop) {
           _rightTopVisible = false;
         } else {
           _rightBottomVisible = false;
         }
-        _rightOverlayOpen = false;
+        _activeOverlay = null;
+        _overlayTriggerFocusNode = null;
         return;
       }
 
-      if (_rightOverlayOpen && currentlyVisible) {
+      if (overlayOpen && currentlyVisible) {
         if (isTop) {
           _rightTopVisible = false;
         } else {
           _rightBottomVisible = false;
         }
-        _rightOverlayOpen = _rightTopVisible || _rightBottomVisible;
+        if (!_rightTopVisible && !_rightBottomVisible) {
+          _activeOverlay = null;
+          _overlayTriggerFocusNode = null;
+        }
         return;
       }
 
@@ -753,18 +652,8 @@ class _IdeHomeState extends State<IdeHome> {
       } else {
         _rightBottomVisible = true;
       }
-      _rightOverlayOpen = true;
-      // 小窗口一次只打开一个覆盖层，避免两个半透明遮罩叠加。
-      _leftOverlayOpen = false;
-    });
-  }
-
-  void _closeRightOverlay() {
-    if (!_rightOverlayOpen) {
-      return;
-    }
-    setState(() {
-      _rightOverlayOpen = false;
+      _activeOverlay = IdeWorkbenchOverlay.inspector;
+      _overlayTriggerFocusNode = triggerFocusNode;
     });
   }
 
@@ -853,13 +742,6 @@ class _IdeHomeState extends State<IdeHome> {
 }
 
 enum _IdeHomePage { home, settings, usageStatistics }
-
-class _PanelWidths {
-  const _PanelWidths({required this.left, required this.right});
-
-  final double left;
-  final double right;
-}
 
 class _ResizableColumn extends StatelessWidget {
   const _ResizableColumn({

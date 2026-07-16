@@ -15,6 +15,9 @@ import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/ide_toast.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
+import 'package:zeta/src/ui/core/rows/ide_list_row.dart';
+import 'package:zeta/src/ui/core/rows/ide_settings_row.dart';
+import 'package:zeta/src/ui/core/workbench/ide_page_header.dart';
 
 enum SettingsSection { appearance, agents }
 
@@ -111,7 +114,6 @@ class _SettingsNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
     return PanelCard(
       key: const ValueKey('settings-nav-panel'),
       child: DecoratedBox(
@@ -119,31 +121,21 @@ class _SettingsNavigation extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              height: IdeMetrics.pageHeaderHeight,
-              padding: IdeSpacing.horizontal8,
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: colors.borderSubtle)),
-              ),
-              child: Row(
-                children: [
-                  IdeTooltip(
-                    message: '返回主界面',
-                    child: sf.IconButton.ghost(
-                      key: const ValueKey('settings-back-button'),
-                      onPressed: onBackPressed,
-                      size: sf.ButtonSize.small,
-                      density: sf.ButtonDensity.iconDense,
-                      icon: Icon(
-                        Icons.arrow_back_rounded,
-                        size: 18,
-                        color: colors.textSecondary,
-                      ),
-                    ),
+            IdePageHeader(
+              title: '设置',
+              leading: IdeTooltip(
+                message: '返回主界面',
+                child: sf.IconButton.ghost(
+                  key: const ValueKey('settings-back-button'),
+                  onPressed: onBackPressed,
+                  size: sf.ButtonSize.small,
+                  density: sf.ButtonDensity.iconDense,
+                  icon: Icon(
+                    Icons.arrow_back_rounded,
+                    size: 18,
+                    color: colors.textSecondary,
                   ),
-                  const SizedBox(width: IdeSpacing.space8),
-                  Text('设置', style: textStyles.pageTitle),
-                ],
+                ),
               ),
             ),
             Expanded(
@@ -410,9 +402,9 @@ class _ThemeModeSection extends StatelessWidget {
   final ThemeMode groupValue;
   final ValueChanged<ThemeMode> onSelected;
 
-  static const double _labelColumnWidth = 168;
   static const double _stackedBreakpoint = IdeMetrics.stackedRowBreakpoint;
 
+  static const double _labelColumnWidth = 168;
   @override
   Widget build(BuildContext context) {
     final selectedTab = tabs.firstWhere(
@@ -506,51 +498,32 @@ class _AppearanceSettingRow extends StatelessWidget {
     final textStyles = IdeTextStyles.of(context);
     return PaneInteractiveSurface(
       onPressed: onTap,
-      padding: IdeSpacing.settingsRowPadding,
-      borderColor: colors.border,
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: textStyles.rowTitle),
-                const SizedBox(height: IdeSpacing.space4),
-                Text(
-                  description,
-                  style: textStyles.bodySmall.copyWith(
-                    color: colors.textSecondary,
-                  ),
+      borderRadius: BorderRadius.zero,
+      child: IdeSettingsRow(
+        label: label,
+        description: description,
+        control: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textStyles.bodyMedium.copyWith(
+                  color: colors.accent,
+                  fontWeight: FontWeight.w600,
                 ),
-              ],
+              ),
             ),
-          ),
-          const SizedBox(width: IdeSpacing.space16),
-          Flexible(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: Text(
-                    value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textStyles.bodyMedium.copyWith(
-                      color: colors.accent,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: IdeSpacing.space8),
-                Icon(
-                  Icons.expand_more_rounded,
-                  size: 18,
-                  color: colors.textSecondary,
-                ),
-              ],
+            const SizedBox(width: IdeSpacing.space8),
+            Icon(
+              Icons.expand_more_rounded,
+              size: 18,
+              color: colors.textSecondary,
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -577,25 +550,12 @@ class _FontSizeSettingRow extends StatelessWidget {
   final double max;
   final ValueChanged<double> onChanged;
 
-  static const double _stackedBreakpoint = IdeMetrics.stackedRowBreakpoint;
-
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final canDecrease = value > min;
     final canIncrease = value < max;
-    final labelContent = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: textStyles.rowTitle),
-        const SizedBox(height: IdeSpacing.space4),
-        Text(
-          description,
-          style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
-        ),
-      ],
-    );
     final controls = Semantics(
       container: true,
       label: '$label，当前 ${value.toInt()} 像素',
@@ -655,30 +615,10 @@ class _FontSizeSettingRow extends StatelessWidget {
       ),
     );
 
-    return PaneInteractiveSurface(
-      padding: IdeSpacing.all12,
-      borderColor: colors.border,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth < _stackedBreakpoint) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                labelContent,
-                const SizedBox(height: IdeSpacing.space12),
-                Align(alignment: Alignment.centerRight, child: controls),
-              ],
-            );
-          }
-          return Row(
-            children: [
-              Expanded(child: labelContent),
-              const SizedBox(width: IdeSpacing.space16),
-              controls,
-            ],
-          );
-        },
-      ),
+    return IdeSettingsRow(
+      label: label,
+      description: description,
+      control: controls,
     );
   }
 }
@@ -699,33 +639,14 @@ class _SettingsNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
-    final foreground = active ? colors.accent : colors.textSecondary;
-    return PaneInteractiveSurface(
-      onPressed: onTap,
-      selected: active,
+    return SizedBox(
       height: 40,
-      padding: IdeSpacing.horizontal12,
-      selectedBackgroundColor: colors.selectedSurface,
-      selectedHoverBackgroundColor: colors.selectedHoverSurface,
-      selectedBorderColor: colors.accent,
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: foreground),
-          const SizedBox(width: IdeSpacing.space10),
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: textStyles.bodyMedium.copyWith(
-                color: foreground,
-                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
+      child: IdeListRow(
+        title: label,
+        leading: Icon(icon),
+        selected: active,
+        onPressed: onTap,
+        showDivider: false,
       ),
     );
   }

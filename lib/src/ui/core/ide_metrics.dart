@@ -24,6 +24,10 @@ abstract final class IdeMetrics {
   static const double analyticsContentMaxWidth = 1440;
   static const double mainEditorMinWidth = 480;
 
+  static const double metricBarEqualWidthBreakpoint = 900;
+  static const double metricBarItemWidth = 180;
+  static const double metricBarDividerHeight = 36;
+
   static const double composerMinHeight = 88;
   static const double composerMaxHeight = 240;
 

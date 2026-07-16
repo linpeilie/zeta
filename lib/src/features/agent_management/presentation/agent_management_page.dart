@@ -20,7 +20,9 @@ import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_status_card.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/ide_toast.dart';
+import 'package:zeta/src/ui/core/metrics/compact_metric_bar.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
+import 'package:zeta/src/ui/core/workbench/ide_page_header.dart';
 
 /// 设置中的 Agent 管理列表、详情、配置和日志页面。
 class AgentManagementPage extends StatefulWidget {
@@ -101,23 +103,29 @@ class AgentManagementPageState extends State<AgentManagementPage> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _PageHeader(
+            IdePageHeader(
               title: 'Agent 管理',
               subtitle: '管理本机已安装及当前应用支持的 Agent CLI',
-              icon: Icons.smart_toy_outlined,
-              trailing: sf.PrimaryButton(
-                key: const ValueKey('agent-detect-button'),
-                onPressed: widget.controller.detecting
-                    ? null
-                    : widget.controller.detect,
-                size: sf.ButtonSize.small,
-                leading: widget.controller.detecting
-                    ? const IdeLoadingIndicator(width: 18, height: 10)
-                    : const Icon(Icons.radar_rounded, size: 16),
-                child: Text(
-                  widget.controller.detecting ? '正在检测…' : '自动检测 Agent',
-                ),
+              leading: Icon(
+                Icons.smart_toy_outlined,
+                size: 20,
+                color: colors.accent,
               ),
+              actions: [
+                sf.PrimaryButton(
+                  key: const ValueKey('agent-detect-button'),
+                  onPressed: widget.controller.detecting
+                      ? null
+                      : widget.controller.detect,
+                  size: sf.ButtonSize.small,
+                  leading: widget.controller.detecting
+                      ? const IdeLoadingIndicator(width: 18, height: 10)
+                      : const Icon(Icons.radar_rounded, size: 16),
+                  child: Text(
+                    widget.controller.detecting ? '正在检测…' : '自动检测 Agent',
+                  ),
+                ),
+              ],
             ),
             Expanded(
               child: SingleChildScrollView(
@@ -173,6 +181,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
   }
 
   Widget _buildSummary(BuildContext context, List<ManagedAgent> agents) {
+    final colors = IdeColors.of(context);
     final installed = agents.where((agent) => agent.installed).length;
     final enabled = agents
         .where((agent) => agent.enabled && agent.installed)
@@ -181,67 +190,52 @@ class AgentManagementPageState extends State<AgentManagementPage> {
         .where((agent) => agent.runtimeState == AgentRuntimeState.running)
         .length;
     final attention = agents.where((agent) => agent.needsAttention).length;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth >= 760
-            ? (constraints.maxWidth - IdeSpacing.space24) / 4
-            : constraints.maxWidth >= 420
-            ? (constraints.maxWidth - IdeSpacing.space8) / 2
-            : constraints.maxWidth;
-        return Wrap(
-          spacing: IdeSpacing.space8,
-          runSpacing: IdeSpacing.space8,
-          children: [
-            _SummaryBlock(
-              width: width,
-              label: '已安装',
-              value: installed,
-              icon: Icons.download_done_rounded,
-              onPressed: () {
-                setState(() {
-                  _listTab = _AgentListTab.installed;
-                  _filter = _AgentListFilter.all;
-                });
-              },
-            ),
-            _SummaryBlock(
-              width: width,
-              label: '已启用',
-              value: enabled,
-              icon: Icons.toggle_on_outlined,
-              onPressed: () {
-                setState(() {
-                  _listTab = _AgentListTab.supported;
-                  _filter = _AgentListFilter.enabled;
-                });
-              },
-            ),
-            _SummaryBlock(
-              width: width,
-              label: '运行中',
-              value: running,
-              icon: Icons.play_circle_outline_rounded,
-              onPressed: () {
-                setState(() {
-                  _filter = _AgentListFilter.running;
-                });
-              },
-            ),
-            _SummaryBlock(
-              width: width,
-              label: '需要处理',
-              value: attention,
-              icon: Icons.warning_amber_rounded,
-              warning: attention > 0,
-              onPressed: () {
-                setState(() {
-                  _filter = _AgentListFilter.attention;
-                });
-              },
-            ),
-          ],
-        );
-      },
+    return CompactMetricBar(
+      items: [
+        CompactMetricItem(
+          label: '已安装',
+          value: '$installed',
+          icon: Icons.download_done_rounded,
+          onPressed: () {
+            setState(() {
+              _listTab = _AgentListTab.installed;
+              _filter = _AgentListFilter.all;
+            });
+          },
+        ),
+        CompactMetricItem(
+          label: '已启用',
+          value: '$enabled',
+          icon: Icons.toggle_on_outlined,
+          onPressed: () {
+            setState(() {
+              _listTab = _AgentListTab.supported;
+              _filter = _AgentListFilter.enabled;
+            });
+          },
+        ),
+        CompactMetricItem(
+          label: '运行中',
+          value: '$running',
+          icon: Icons.play_circle_outline_rounded,
+          onPressed: () {
+            setState(() {
+              _filter = _AgentListFilter.running;
+            });
+          },
+        ),
+        CompactMetricItem(
+          label: '需要处理',
+          value: '$attention',
+          icon: Icons.warning_amber_rounded,
+          tone: attention > 0 ? colors.warning : null,
+          onPressed: () {
+            setState(() {
+              _filter = _AgentListFilter.attention;
+            });
+          },
+        ),
+      ],
     );
   }
 
@@ -895,56 +889,6 @@ enum _AgentListFilter { all, enabled, attention, running, updateAvailable }
 
 enum _AgentDetailTab { overview, models, configuration }
 
-class _PageHeader extends StatelessWidget {
-  const _PageHeader({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.trailing,
-  });
-
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Widget trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
-    return Container(
-      padding: IdeSpacing.all12,
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: colors.borderSubtle)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: colors.accent),
-          const SizedBox(width: IdeSpacing.space10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: textStyles.pageTitle),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: textStyles.caption.copyWith(
-                    color: colors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: IdeSpacing.space12),
-          trailing,
-        ],
-      ),
-    );
-  }
-}
-
 class _DetectionProgressBanner extends StatelessWidget {
   const _DetectionProgressBanner({required this.progress});
 
@@ -970,56 +914,6 @@ class _DetectionProgressBanner extends StatelessWidget {
           Text(
             '${progress.completed}/${progress.total}',
             style: textStyles.codeSmall.copyWith(color: colors.textSecondary),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SummaryBlock extends StatelessWidget {
-  const _SummaryBlock({
-    required this.width,
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.onPressed,
-    this.warning = false,
-  });
-
-  final double width;
-  final String label;
-  final int value;
-  final IconData icon;
-  final VoidCallback onPressed;
-  final bool warning;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
-    final accent = warning ? colors.warning : colors.accent;
-    return PaneInteractiveSurface(
-      width: width,
-      onPressed: onPressed,
-      padding: IdeSpacing.all12,
-      borderColor: colors.borderSubtle,
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: accent),
-          const SizedBox(width: IdeSpacing.space8),
-          Expanded(
-            child: Text(
-              label,
-              style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
-            ),
-          ),
-          Text(
-            '$value',
-            style: textStyles.titleLarge.copyWith(
-              color: accent,
-              fontWeight: FontWeight.w800,
-            ),
           ),
         ],
       ),

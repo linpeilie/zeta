@@ -293,6 +293,18 @@ class _PaneInteractiveSurfaceState extends State<PaneInteractiveSurface> {
 
   bool get _interactive => widget.enabled && widget.onPressed != null;
 
+  @override
+  void didUpdateWidget(PaneInteractiveSurface oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final wasInteractive = oldWidget.enabled && oldWidget.onPressed != null;
+    if (wasInteractive && !_interactive) {
+      // 手势进行中被业务状态禁用时，不能把瞬时交互态带到下一次启用。
+      _hovered = false;
+      _focused = false;
+      _pressed = false;
+    }
+  }
+
   void _setHovered(bool value) {
     if (_hovered == value) {
       return;
@@ -354,7 +366,8 @@ class _PaneInteractiveSurfaceState extends State<PaneInteractiveSurface> {
         : widget.borderColor;
 
     return Semantics(
-      button: widget.button && _interactive,
+      button: widget.button && widget.onPressed != null,
+      enabled: widget.onPressed == null ? null : _interactive,
       selected: widget.selected,
       label: widget.semanticLabel,
       child: FocusableActionDetector(
@@ -367,16 +380,17 @@ class _PaneInteractiveSurfaceState extends State<PaneInteractiveSurface> {
         actions: <Type, Action<Intent>>{
           ActivateIntent: CallbackAction<ActivateIntent>(
             onInvoke: (_) {
-              widget.onPressed?.call();
+              if (_interactive) {
+                widget.onPressed?.call();
+              }
               return null;
             },
           ),
         },
         onShowFocusHighlight: _setFocused,
         child: MouseRegion(
-          cursor: _interactive ? SystemMouseCursors.click : MouseCursor.defer,
-          onEnter: (_) => _setHovered(true),
-          onExit: (_) => _setHovered(false),
+          onEnter: _interactive ? (_) => _setHovered(true) : null,
+          onExit: _interactive ? (_) => _setHovered(false) : null,
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
             onTap: _interactive ? widget.onPressed : null,

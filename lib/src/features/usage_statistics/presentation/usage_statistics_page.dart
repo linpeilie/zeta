@@ -16,7 +16,9 @@ import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_status_card.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
+import 'package:zeta/src/ui/core/metrics/compact_metric_bar.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
+import 'package:zeta/src/ui/core/workbench/ide_page_header.dart';
 
 /// 本地 Agent CLI 使用统计页面。
 class UsageStatisticsPage extends StatefulWidget {
@@ -44,13 +46,31 @@ class _UsageStatisticsPageState extends State<UsageStatisticsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     return PanelCard(
       key: const ValueKey('usage-statistics-page'),
       showBorder: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _PageHeader(onBackPressed: widget.onBackPressed),
+          IdePageHeader(
+            title: '使用统计',
+            subtitle: '分析本地 Codex 的调用、性能、Token、项目与套餐额度',
+            leading: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                sf.IconButton.ghost(
+                  key: const ValueKey('usage-statistics-back-button'),
+                  onPressed: widget.onBackPressed,
+                  size: sf.ButtonSize.small,
+                  density: sf.ButtonDensity.iconDense,
+                  icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                ),
+                const SizedBox(width: IdeSpacing.space8),
+                Icon(Icons.query_stats_rounded, size: 20, color: colors.accent),
+              ],
+            ),
+          ),
           Expanded(
             child: ListenableBuilder(
               listenable: widget.controller,
@@ -184,54 +204,6 @@ class _UsageStatisticsPageState extends State<UsageStatisticsPage> {
           sf.closeOverlay(drawerContext);
           _openTaskDrawer(context, record);
         },
-      ),
-    );
-  }
-}
-
-class _PageHeader extends StatelessWidget {
-  const _PageHeader({required this.onBackPressed});
-
-  final VoidCallback onBackPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
-    return Container(
-      padding: IdeSpacing.all12,
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: colors.borderSubtle)),
-      ),
-      child: Row(
-        children: [
-          sf.IconButton.ghost(
-            key: const ValueKey('usage-statistics-back-button'),
-            onPressed: onBackPressed,
-            size: sf.ButtonSize.small,
-            density: sf.ButtonDensity.iconDense,
-            icon: const Icon(Icons.arrow_back_rounded, size: 18),
-          ),
-          const SizedBox(width: IdeSpacing.space8),
-          Icon(Icons.query_stats_rounded, size: 20, color: colors.accent),
-          const SizedBox(width: IdeSpacing.space8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('使用统计', style: textStyles.displaySmall),
-                Text(
-                  '分析本地 Codex 的调用、性能、Token、项目与套餐额度',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: textStyles.bodySmall.copyWith(
-                    color: colors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -501,137 +473,54 @@ class _OverviewGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 1120
-            ? 5
-            : constraints.maxWidth >= 720
-            ? 3
-            : constraints.maxWidth >= 420
-            ? 2
-            : 1;
-        final width =
-            (constraints.maxWidth - (IdeSpacing.space8 * (columns - 1))) /
-            columns;
-        final comparison = overview.callComparison;
-        final comparisonText = comparison.changePercent == null
-            ? comparison.current > 0
-                  ? '上一周期无调用'
-                  : '与上一周期持平'
-            : '${comparison.changePercent! >= 0 ? '↑' : '↓'} '
-                  '${comparison.changePercent!.abs().toStringAsFixed(1)}% · 相比上一周期';
-        return Wrap(
-          spacing: IdeSpacing.space8,
-          runSpacing: IdeSpacing.space8,
-          children: [
-            _MetricCard(
-              width: width,
-              label: '调用次数',
-              value: formatUsageCount(overview.totalCalls),
-              detail: comparisonText,
-              icon: Icons.bolt_rounded,
-            ),
-            _MetricCard(
-              width: width,
-              label: '成功率',
-              value: formatUsagePercent(overview.successRate),
-              detail: '失败：${overview.failedCalls} 次',
-              icon: Icons.check_circle_outline_rounded,
-            ),
-            _MetricCard(
-              width: width,
-              label: '平均响应时间',
-              value: formatUsageDuration(overview.averageResponse),
-              detail: overview.responseSampleCount == 0
-                  ? '暂无可靠 TTFT 样本'
-                  : '有效样本：${overview.responseSampleCount}',
-              icon: Icons.speed_rounded,
-            ),
-            _MetricCard(
-              width: width,
-              label: '平均任务耗时',
-              value: formatUsageDuration(overview.averageDuration),
-              detail: '按 Codex turn 统计',
-              icon: Icons.timer_outlined,
-            ),
-            _MetricCard(
-              width: width,
-              label: 'Token 使用量',
-              value: overview.tokens.hasData
-                  ? formatUsageCount(overview.tokens.effectiveTotal ?? 0)
-                  : '不支持',
-              detail: overview.tokens.hasData
-                  ? '输入 ${formatUsageCount(overview.tokens.inputTokens ?? 0)} · '
-                        '输出 ${formatUsageCount(overview.tokens.outputTokens ?? 0)} · '
-                        '推理 ${formatUsageCount(overview.tokens.reasoningTokens ?? 0)}'
-                  : '当前 Agent 不支持 Token 统计',
-              icon: Icons.data_usage_rounded,
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _MetricCard extends StatelessWidget {
-  const _MetricCard({
-    required this.width,
-    required this.label,
-    required this.value,
-    required this.detail,
-    required this.icon,
-  });
-
-  final double width;
-  final String label;
-  final String value;
-  final String detail;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
-    return SizedBox(
-      width: width,
-      child: PanelCard(
-        color: colors.surfaceElevated,
-        child: Padding(
-          padding: IdeSpacing.cardPadding,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(icon, size: 15, color: colors.accent),
-                  const SizedBox(width: IdeSpacing.space6),
-                  Expanded(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textStyles.bodySmall.copyWith(
-                        color: colors.textSecondary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: IdeSpacing.space8),
-              Text(value, style: textStyles.displayLarge),
-              const SizedBox(height: IdeSpacing.space4),
-              Text(
-                detail,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: textStyles.caption.copyWith(color: colors.textTertiary),
-              ),
-            ],
-          ),
+    final comparison = overview.callComparison;
+    final comparisonText = comparison.changePercent == null
+        ? comparison.current > 0
+              ? '上一周期无调用'
+              : '与上一周期持平'
+        : '${comparison.changePercent! >= 0 ? '↑' : '↓'} '
+              '${comparison.changePercent!.abs().toStringAsFixed(1)}% · 相比上一周期';
+    return CompactMetricBar(
+      items: [
+        CompactMetricItem(
+          label: '调用次数',
+          value: formatUsageCount(overview.totalCalls),
+          detail: comparisonText,
+          icon: Icons.bolt_rounded,
         ),
-      ),
+        CompactMetricItem(
+          label: '成功率',
+          value: formatUsagePercent(overview.successRate),
+          detail: '失败：${overview.failedCalls} 次',
+          icon: Icons.check_circle_outline_rounded,
+        ),
+        CompactMetricItem(
+          label: '平均响应时间',
+          value: formatUsageDuration(overview.averageResponse),
+          detail: overview.responseSampleCount == 0
+              ? '暂无可靠 TTFT 样本'
+              : '有效样本：${overview.responseSampleCount}',
+          icon: Icons.speed_rounded,
+        ),
+        CompactMetricItem(
+          label: '平均任务耗时',
+          value: formatUsageDuration(overview.averageDuration),
+          detail: '按 Codex turn 统计',
+          icon: Icons.timer_outlined,
+        ),
+        CompactMetricItem(
+          label: 'Token 使用量',
+          value: overview.tokens.hasData
+              ? formatUsageCount(overview.tokens.effectiveTotal ?? 0)
+              : '不支持',
+          detail: overview.tokens.hasData
+              ? '输入 ${formatUsageCount(overview.tokens.inputTokens ?? 0)} · '
+                    '输出 ${formatUsageCount(overview.tokens.outputTokens ?? 0)} · '
+                    '推理 ${formatUsageCount(overview.tokens.reasoningTokens ?? 0)}'
+              : '当前 Agent 不支持 Token 统计',
+          icon: Icons.data_usage_rounded,
+        ),
+      ],
     );
   }
 }

@@ -38,13 +38,19 @@ void main() {
 
     expect(find.byKey(const ValueKey('projects-panel-card')), findsNothing);
     expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
-    expect(find.byKey(const ValueKey('left-activity-panel')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('workbench-navigation-inline')),
+      findsNothing,
+    );
 
     await tester.tap(find.byKey(const ValueKey('left-context-action')));
     await tester.pump();
 
     expect(find.byKey(const ValueKey('context-panel-card')), findsOneWidget);
-    expect(find.byKey(const ValueKey('left-activity-panel')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('workbench-navigation-inline')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey('left-width-resize-handle')),
       findsOneWidget,
@@ -54,7 +60,10 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
-    expect(find.byKey(const ValueKey('left-activity-panel')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('workbench-navigation-inline')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey('left-width-resize-handle')),
       findsOneWidget,
@@ -64,7 +73,10 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const ValueKey('files-panel-card')), findsOneWidget);
-    expect(find.byKey(const ValueKey('right-activity-panel')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('workbench-inspector-inline')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey('right-width-resize-handle')),
       findsOneWidget,
@@ -74,21 +86,27 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const ValueKey('tools-panel-card')), findsOneWidget);
-    expect(find.byKey(const ValueKey('right-activity-panel')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('workbench-inspector-inline')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const ValueKey('right-tools-action')));
     await tester.pump();
 
     expect(find.byKey(const ValueKey('files-panel-card')), findsOneWidget);
     expect(find.byKey(const ValueKey('tools-panel-card')), findsNothing);
-    expect(find.byKey(const ValueKey('right-activity-panel')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('workbench-inspector-inline')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('horizontal resize handles clamp side widths', (tester) async {
     await _pumpIde(tester);
 
     expect(
-      _widthOf(tester, 'left-activity-panel'),
+      _widthOf(tester, 'workbench-navigation-inline'),
       IdeMetrics.sidePaneDefaultWidth,
     );
 
@@ -96,7 +114,7 @@ void main() {
     await tester.pump();
 
     expect(
-      _widthOf(tester, 'right-activity-panel'),
+      _widthOf(tester, 'workbench-inspector-inline'),
       IdeMetrics.sidePaneDefaultWidth,
     );
 
@@ -106,7 +124,7 @@ void main() {
     );
     await tester.pump();
     expect(
-      _widthOf(tester, 'left-activity-panel'),
+      _widthOf(tester, 'workbench-navigation-inline'),
       IdeMetrics.sidePaneMaxWidth,
     );
 
@@ -116,7 +134,7 @@ void main() {
     );
     await tester.pump();
     expect(
-      _widthOf(tester, 'left-activity-panel'),
+      _widthOf(tester, 'workbench-navigation-inline'),
       IdeMetrics.sidePaneMinWidth,
     );
 
@@ -126,7 +144,7 @@ void main() {
     );
     await tester.pump();
     expect(
-      _widthOf(tester, 'right-activity-panel'),
+      _widthOf(tester, 'workbench-inspector-inline'),
       IdeMetrics.sidePaneMaxWidth,
     );
 
@@ -136,18 +154,18 @@ void main() {
     );
     await tester.pump();
     expect(
-      _widthOf(tester, 'right-activity-panel'),
+      _widthOf(tester, 'workbench-inspector-inline'),
       IdeMetrics.sidePaneMinWidth,
     );
   });
 
   testWidgets('vertical resize handles clamp panel ratio', (tester) async {
     await _pumpIde(tester);
+    final expandedPanelHeight = _heightOf(tester, 'projects-panel-card');
     await tester.tap(find.byKey(const ValueKey('left-context-action')));
     await tester.pump();
 
-    final columnHeight = _heightOf(tester, 'left-activity-panel');
-    final minimumPanelHeight = (columnHeight - 8) * 0.1;
+    final minimumPanelHeight = (expandedPanelHeight - 8) * 0.1;
 
     await tester.drag(
       find.byKey(const ValueKey('left-height-resize-handle')),
@@ -165,37 +183,54 @@ void main() {
 
     expect(
       _heightOf(tester, 'projects-panel-card'),
-      moreOrLessEquals(columnHeight, epsilon: 1),
+      moreOrLessEquals(expandedPanelHeight, epsilon: 1),
     );
   });
 
-  testWidgets('right panels use overlay below 800px width', (tester) async {
+  testWidgets('right panels use overlay in medium and compact modes', (
+    tester,
+  ) async {
     await _pumpIde(tester, size: const Size(832, 900));
 
-    expect(find.byKey(const ValueKey('right-activity-panel')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('workbench-inspector-inline')),
+      findsNothing,
+    );
     expect(
       find.byKey(const ValueKey('right-width-resize-handle')),
       findsNothing,
     );
-    expect(find.byKey(const ValueKey('right-activity-overlay')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('workbench-inspector-overlay')),
+      findsNothing,
+    );
     expect(find.byKey(const ValueKey('files-panel-card')), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('right-files-action')));
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('right-activity-panel')), findsNothing);
     expect(
-      find.byKey(const ValueKey('right-activity-overlay')),
+      find.byKey(const ValueKey('workbench-inspector-inline')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('workbench-inspector-overlay')),
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('files-panel-card')), findsOneWidget);
     expect(find.text('Files'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('right-overlay-scrim')));
+    await tester.tapAt(const Offset(200, 450));
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('right-activity-overlay')), findsNothing);
-    expect(find.byKey(const ValueKey('right-activity-panel')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('workbench-inspector-overlay')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('workbench-inspector-inline')),
+      findsNothing,
+    );
     expect(find.byKey(const ValueKey('files-panel-card')), findsNothing);
   });
 
@@ -204,20 +239,32 @@ void main() {
   ) async {
     await _pumpIde(tester, size: const Size(640, 900));
 
-    expect(find.byKey(const ValueKey('left-activity-panel')), findsNothing);
-    expect(find.byKey(const ValueKey('left-activity-overlay')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('workbench-navigation-inline')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('workbench-navigation-overlay')),
+      findsNothing,
+    );
     expect(find.byKey(const ValueKey('projects-panel-card')), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('left-projects-action')));
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('left-activity-overlay')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('workbench-navigation-overlay')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('left-overlay-scrim')));
+    await tester.tapAt(const Offset(500, 450));
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('left-activity-overlay')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('workbench-navigation-overlay')),
+      findsNothing,
+    );
     expect(find.byKey(const ValueKey('agent-pane-host')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

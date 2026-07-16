@@ -16,6 +16,7 @@ class IdeRailAction {
     required this.onPressed,
     this.key,
     this.enabled = true,
+    this.focusNode,
   });
 
   final Key? key;
@@ -25,6 +26,7 @@ class IdeRailAction {
   final bool active;
   final bool enabled;
   final VoidCallback onPressed;
+  final FocusNode? focusNode;
 }
 
 /// 统一 IDE 左右活动栏。
@@ -94,6 +96,7 @@ class _RailActionButton extends StatelessWidget {
             onPressed: action.enabled ? action.onPressed : null,
             selected: action.active,
             enabled: action.enabled,
+            focusNode: action.focusNode,
             width: 32,
             height: 32,
             padding: EdgeInsets.zero,
