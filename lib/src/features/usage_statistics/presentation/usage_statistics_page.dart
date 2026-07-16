@@ -12,6 +12,7 @@ import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics
 import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
+import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_status_card.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
@@ -35,8 +36,6 @@ class UsageStatisticsPage extends StatefulWidget {
 }
 
 class _UsageStatisticsPageState extends State<UsageStatisticsPage> {
-  static const double _twoColumnBreakpoint = 980;
-
   @override
   void initState() {
     super.initState();
@@ -68,7 +67,7 @@ class _UsageStatisticsPageState extends State<UsageStatisticsPage> {
     final report = controller.report;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final twoColumns = constraints.maxWidth >= _twoColumnBreakpoint;
+        final twoColumns = constraints.maxWidth >= IdeMetrics.wideBreakpoint;
         return ListView(
           key: const ValueKey('usage-statistics-scroll-view'),
           padding: IdeSpacing.all16,

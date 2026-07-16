@@ -357,7 +357,7 @@ class _AgentContentAlign extends StatelessWidget {
     return Align(
       alignment: Alignment.topCenter,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: _agentContentMaxWidth),
+        constraints: const BoxConstraints(maxWidth: IdeMetrics.contentMaxWidth),
         child: child,
       ),
     );

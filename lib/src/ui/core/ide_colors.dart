@@ -43,6 +43,12 @@ class IdeColors {
     required this.windowHover,
     required this.windowIcon,
     required this.closeHover,
+    required this.hoverSurface,
+    required this.pressedSurface,
+    required this.selectedSurface,
+    required this.selectedHoverSurface,
+    required this.userMessageSurface,
+    required this.focusRing,
   });
 
   /// 应用最底层的框架背景，用于承托各个内容表面。
@@ -122,15 +128,15 @@ class IdeColors {
 
   /// 主题的强交互与品牌强调色。
   ///
-  /// 生效位置：选中的文件/Thread/导航图标、进行中状态、Composer 焦点环
-  /// 与发送按钮、Markdown 链接、选择器勾选/底部指示线，并投影为 shadcn
-  /// primary/ring 和图表 `chart1`。
+  /// 生效位置：选中的文件/Thread/导航图标、进行中状态、Composer 发送按钮、
+  /// Markdown 链接、选择器勾选/底部指示线，并投影为 shadcn primary 和
+  /// 图表 `chart1`。焦点描边统一使用 [focusRing]。
   final Color accent;
 
-  /// [accent] 的半透明弱化背景，只表达选中而不表达主操作。
+  /// [accent] 的半透明弱化背景，用于蓝色弱强调。
   ///
-  /// 生效位置：文件树/Thread/活动栏/设置导航的选中底色、用户消息气泡、
-  /// Markdown 文本选区和 Choice Card；同时投影为 shadcn accent 背景。
+  /// 生效位置：可操作提示、少量活动状态和 Markdown 文本选区。普通导航、
+  /// 列表选中与用户消息分别使用 [selectedSurface] 和 [userMessageSurface]。
   final Color primaryMuted;
 
   /// 需要注意、等待或可恢复异常的状态色。
@@ -157,7 +163,7 @@ class IdeColors {
   /// 用户问题图标和 Markdown 引用边线，以及图表 `chart2`。
   final Color info;
 
-  /// 选中/激活态落在浅底或 [primaryMuted] 上时的前景色（图标/标签）。
+  /// 选中/激活态落在中性选中底色上的前景色（图标/标签）。
   ///
   /// 深色下为白；浅色下使用 [accent]，以便在浅底面板上保持可见。
   /// 不要用于实心 [accent] 填充上的文字——那种场景用 [onAccent]。
@@ -192,6 +198,39 @@ class IdeColors {
   /// [_sharedCloseHoverColor]，以保持平台操作语义一致。
   final Color closeHover;
 
+  /// 普通可交互控件的悬停背景。
+  final Color hoverSurface;
+
+  /// 普通可交互控件的按下背景。
+  final Color pressedSurface;
+
+  /// 普通导航、列表和 Tab 的中性选中背景。
+  final Color selectedSurface;
+
+  /// 已选中控件的悬停背景。
+  final Color selectedHoverSurface;
+
+  /// 用户消息专用表面，不表达品牌或主操作。
+  final Color userMessageSurface;
+
+  /// 键盘焦点和输入焦点的统一描边色。
+  final Color focusRing;
+
+  /// 窗口框架、标题栏与面板间 gutter 表面。
+  Color get frameSurface => frame;
+
+  /// 中央编辑器与页面主画布表面。
+  Color get canvasSurface => editor;
+
+  /// 会话栏、文件栏与设置导航表面。
+  Color get paneSurface => surface;
+
+  /// 输入框、分段控件与紧凑选择器表面。
+  Color get controlSurface => surfaceElevated;
+
+  /// Popover、菜单、Tooltip 与 Drawer 表面。
+  Color get popoverSurface => surfaceOverlay;
+
   /// 深色调色板「Graphite Night」：中性石墨底 + 蔚蓝强调，
   /// 无色相偏移的灰阶层次，长时间注视友好。各参数的具体生效位置
   /// 见上方同名字段注释。
@@ -219,6 +258,12 @@ class IdeColors {
     windowHover: Color(0xFF2A2B2E),
     windowIcon: Color(0xFFA6A9AE),
     closeHover: _sharedCloseHoverColor,
+    hoverSurface: Color(0xFF242529),
+    pressedSurface: Color(0xFF2A2B30),
+    selectedSurface: Color(0xFF292A2E),
+    selectedHoverSurface: Color(0xFF303136),
+    userMessageSurface: Color(0xFF2B2C30),
+    focusRing: ideAccentColor,
   );
 
   /// 浅色调色板「Graphite Day」：中性浅灰白底 + 蔚蓝强调，扁平清爽，
@@ -248,6 +293,12 @@ class IdeColors {
     windowHover: Color(0xFFE1E2E6),
     windowIcon: Color(0xFF5B5E66),
     closeHover: _sharedCloseHoverColor,
+    hoverSurface: Color(0xFFF0F1F3),
+    pressedSurface: Color(0xFFE8EAED),
+    selectedSurface: Color(0xFFE9EAED),
+    selectedHoverSurface: Color(0xFFE2E4E8),
+    userMessageSurface: Color(0xFFECEDEF),
+    focusRing: Color(0xFF0B76D8),
   );
 
   /// 从 [context] 取出当前主题下的 [IdeColors]。
@@ -283,6 +334,12 @@ class IdeColors {
     Color? windowHover,
     Color? windowIcon,
     Color? closeHover,
+    Color? hoverSurface,
+    Color? pressedSurface,
+    Color? selectedSurface,
+    Color? selectedHoverSurface,
+    Color? userMessageSurface,
+    Color? focusRing,
   }) {
     final resolvedTextSecondary =
         textSecondary ?? mutedText ?? this.textSecondary;
@@ -311,6 +368,12 @@ class IdeColors {
       windowHover: windowHover ?? this.windowHover,
       windowIcon: windowIcon ?? this.windowIcon,
       closeHover: closeHover ?? this.closeHover,
+      hoverSurface: hoverSurface ?? this.hoverSurface,
+      pressedSurface: pressedSurface ?? this.pressedSurface,
+      selectedSurface: selectedSurface ?? this.selectedSurface,
+      selectedHoverSurface: selectedHoverSurface ?? this.selectedHoverSurface,
+      userMessageSurface: userMessageSurface ?? this.userMessageSurface,
+      focusRing: focusRing ?? this.focusRing,
     );
   }
 
@@ -344,6 +407,20 @@ class IdeColors {
       windowHover: Color.lerp(windowHover, other.windowHover, t)!,
       windowIcon: Color.lerp(windowIcon, other.windowIcon, t)!,
       closeHover: Color.lerp(closeHover, other.closeHover, t)!,
+      hoverSurface: Color.lerp(hoverSurface, other.hoverSurface, t)!,
+      pressedSurface: Color.lerp(pressedSurface, other.pressedSurface, t)!,
+      selectedSurface: Color.lerp(selectedSurface, other.selectedSurface, t)!,
+      selectedHoverSurface: Color.lerp(
+        selectedHoverSurface,
+        other.selectedHoverSurface,
+        t,
+      )!,
+      userMessageSurface: Color.lerp(
+        userMessageSurface,
+        other.userMessageSurface,
+        t,
+      )!,
+      focusRing: Color.lerp(focusRing, other.focusRing, t)!,
     );
   }
 }

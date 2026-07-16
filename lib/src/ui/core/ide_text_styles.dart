@@ -18,6 +18,14 @@ class IdeTextStyles {
     required this.caption,
     required this.codeMedium,
     required this.codeSmall,
+    required this.pageTitle,
+    required this.sectionTitle,
+    required this.rowTitle,
+    required this.toolbarLabel,
+    required this.proseBody,
+    required this.meta,
+    required this.metricValue,
+    required this.placeholder,
   });
 
   final TextStyle displayLarge;
@@ -29,6 +37,14 @@ class IdeTextStyles {
   final TextStyle caption;
   final TextStyle codeMedium;
   final TextStyle codeSmall;
+  final TextStyle pageTitle;
+  final TextStyle sectionTitle;
+  final TextStyle rowTitle;
+  final TextStyle toolbarLabel;
+  final TextStyle proseBody;
+  final TextStyle meta;
+  final TextStyle metricValue;
+  final TextStyle placeholder;
 
   /// 从当前上下文解析语义排版。
   static IdeTextStyles of(BuildContext context, {String? codeFontFamily}) {
@@ -116,6 +132,62 @@ class IdeTextStyles {
         fontFamily: codeFontFamily,
         fontSize: 11 * codeScale,
         height: 1.35,
+        fontWeight: FontWeight.w400,
+      ),
+      pageTitle: _textStyle(
+        color: colors.textPrimary,
+        fontFamily: uiFontFamily,
+        fontSize: 15 * uiScale,
+        height: 1.3,
+        fontWeight: FontWeight.w600,
+      ),
+      sectionTitle: _textStyle(
+        color: colors.textPrimary,
+        fontFamily: uiFontFamily,
+        fontSize: 13 * uiScale,
+        height: 1.35,
+        fontWeight: FontWeight.w600,
+      ),
+      rowTitle: _textStyle(
+        color: colors.textPrimary,
+        fontFamily: uiFontFamily,
+        fontSize: 12 * uiScale,
+        height: 1.35,
+        fontWeight: FontWeight.w500,
+      ),
+      toolbarLabel: _textStyle(
+        color: colors.textSecondary,
+        fontFamily: uiFontFamily,
+        fontSize: 11 * uiScale,
+        height: 1.25,
+        fontWeight: FontWeight.w500,
+      ),
+      proseBody: _textStyle(
+        color: colors.textPrimary,
+        fontFamily: uiFontFamily,
+        fontSize: 13 * uiScale,
+        height: 1.55,
+        fontWeight: FontWeight.w400,
+      ),
+      meta: _textStyle(
+        color: colors.textTertiary,
+        fontFamily: uiFontFamily,
+        fontSize: 10 * uiScale,
+        height: 1.3,
+        fontWeight: FontWeight.w400,
+      ),
+      metricValue: _textStyle(
+        color: colors.textPrimary,
+        fontFamily: uiFontFamily,
+        fontSize: 18 * uiScale,
+        height: 1.2,
+        fontWeight: FontWeight.w600,
+      ),
+      placeholder: _textStyle(
+        color: colors.textTertiary,
+        fontFamily: uiFontFamily,
+        fontSize: 12 * uiScale,
+        height: 1.4,
         fontWeight: FontWeight.w400,
       ),
     );

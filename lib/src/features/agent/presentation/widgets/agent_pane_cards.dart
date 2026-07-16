@@ -1097,10 +1097,7 @@ class _AgentUserInputQaRow extends StatelessWidget {
         Text(pair.question, style: _agentItemTextStyle(context)),
         Padding(
           padding: const EdgeInsets.only(top: IdeSpacing.space2),
-          child: Text(
-            answerText,
-            style: _agentMetaTextStyle(context, alpha: 0.72),
-          ),
+          child: Text(answerText, style: _agentMetaTextStyle(context)),
         ),
       ],
     );

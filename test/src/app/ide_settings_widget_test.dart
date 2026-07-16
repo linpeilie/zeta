@@ -187,7 +187,7 @@ void main() {
     double? headingFontSize() =>
         tester.widget<Text>(find.text('主题模式')).style?.fontSize;
 
-    expect(headingFontSize(), 15);
+    expect(headingFontSize(), 13);
     expect(
       tester
           .widget<Text>(
@@ -203,7 +203,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(controller.settings.uiFontSize, 13);
-    expect(headingFontSize(), closeTo(16.25, 0.001));
+    expect(headingFontSize(), closeTo(14.083, 0.001));
 
     await tester.tap(
       find.byKey(const ValueKey('settings-code-font-size-increase')),

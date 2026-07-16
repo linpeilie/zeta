@@ -12,6 +12,7 @@ import 'package:zeta/src/ui/core/ide_context_menu.dart';
 import 'package:zeta/src/ui/core/ide_dialog.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_motion.dart';
+import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_popover.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
@@ -418,7 +419,6 @@ class _ProjectTile extends StatefulWidget {
 }
 
 class _ProjectTileState extends State<_ProjectTile> {
-  static const double _actionHitSize = 18;
   static const double _actionIconSize = 16;
   static const double _actionIconGap = IdeSpacing.space6;
 
@@ -605,8 +605,6 @@ class _ProjectTileState extends State<_ProjectTile> {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final selectedBackground = colors.primaryMuted;
-    final hoverBackground = colors.border.withValues(alpha: 0.12);
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: IdeSpacing.space6,
@@ -623,8 +621,6 @@ class _ProjectTileState extends State<_ProjectTile> {
               horizontal: IdeSpacing.space8,
               vertical: 7,
             ),
-            selectedBackgroundColor: selectedBackground,
-            hoverBackgroundColor: hoverBackground,
             onHoverChanged: (value) {
               setState(() {
                 _hovered = value;
@@ -664,7 +660,7 @@ class _ProjectTileState extends State<_ProjectTile> {
                           key: ValueKey<String>(
                             'project-tile-actions-${widget.path}',
                           ),
-                          height: _actionHitSize,
+                          height: IdeMetrics.iconButtonHitSize,
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -736,7 +732,10 @@ class _ProjectTileState extends State<_ProjectTile> {
                           ),
                         )
                       // 用 AnimatedSize 直接收展，避免 AnimatedSwitcher 在快速切换时堆叠旧 child。
-                      : const SizedBox(width: 0, height: _actionHitSize),
+                      : const SizedBox(
+                          width: 0,
+                          height: IdeMetrics.iconButtonHitSize,
+                        ),
                 ),
               ],
             ),
@@ -865,7 +864,6 @@ class _ThreadTile extends StatefulWidget {
 }
 
 class _ThreadTileState extends State<_ThreadTile> {
-  static const double _actionHitSize = 18;
   static const double _actionIconSize = 14;
 
   IdePopoverHandle<void>? _popoverEntry;
@@ -1104,7 +1102,6 @@ class _ThreadTileState extends State<_ThreadTile> {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final hoverBackground = colors.border.withValues(alpha: 0.12);
     final thread = widget.thread;
     final isBusy = thread.isBusy;
     final waitingLabel = thread.waitingOnApproval
@@ -1132,8 +1129,6 @@ class _ThreadTileState extends State<_ThreadTile> {
               vertical: IdeSpacing.space6,
             ),
             borderRadius: IdeRadius.allSmall,
-            selectedBackgroundColor: colors.primaryMuted,
-            hoverBackgroundColor: hoverBackground,
             onHoverChanged: (value) {
               setState(() {
                 _hovered = value;
@@ -1221,8 +1216,8 @@ class _ThreadTileState extends State<_ThreadTile> {
                           key: ValueKey<String>(
                             'project-thread-actions-${widget.projectPath}-${thread.id}',
                           ),
-                          width: _actionHitSize,
-                          height: _actionHitSize,
+                          width: IdeMetrics.iconButtonHitSize,
+                          height: IdeMetrics.iconButtonHitSize,
                           child: IdeTooltip(
                             message: '更多',
                             child: sf.IconButton.ghost(
@@ -1243,7 +1238,10 @@ class _ThreadTileState extends State<_ThreadTile> {
                           ),
                         )
                       // 用 AnimatedSize 直接收展，避免 AnimatedSwitcher 在快速切换时堆叠旧 child。
-                      : const SizedBox(width: 0, height: _actionHitSize),
+                      : const SizedBox(
+                          width: 0,
+                          height: IdeMetrics.iconButtonHitSize,
+                        ),
                 ),
               ],
             ),

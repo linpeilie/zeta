@@ -9,6 +9,7 @@ import 'package:zeta/src/features/agent_management/application/agent_management_
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
 import 'package:zeta/src/ui/core/ide_choice_card.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_dialog.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
@@ -41,7 +42,7 @@ class _SettingsPageState extends State<SettingsPage> {
   final GlobalKey<AgentManagementPageState> _agentManagementKey =
       GlobalKey<AgentManagementPageState>();
 
-  static const double _navigationWidth = 240;
+  static const double _navigationWidth = IdeMetrics.navigationPaneWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -119,7 +120,7 @@ class _SettingsNavigation extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Container(
-              height: 44,
+              height: IdeMetrics.pageHeaderHeight,
               padding: IdeSpacing.horizontal8,
               decoration: BoxDecoration(
                 border: Border(bottom: BorderSide(color: colors.borderSubtle)),
@@ -141,12 +142,7 @@ class _SettingsNavigation extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: IdeSpacing.space8),
-                  Text(
-                    '设置',
-                    style: textStyles.displaySmall.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                  Text('设置', style: textStyles.pageTitle),
                 ],
               ),
             ),
@@ -415,7 +411,7 @@ class _ThemeModeSection extends StatelessWidget {
   final ValueChanged<ThemeMode> onSelected;
 
   static const double _labelColumnWidth = 168;
-  static const double _stackedBreakpoint = 520;
+  static const double _stackedBreakpoint = IdeMetrics.stackedRowBreakpoint;
 
   @override
   Widget build(BuildContext context) {
@@ -476,10 +472,7 @@ class _ThemeModeLabel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '主题模式',
-          style: textStyles.displaySmall.copyWith(fontWeight: FontWeight.w700),
-        ),
+        Text('主题模式', style: textStyles.sectionTitle),
         const SizedBox(height: IdeSpacing.space4),
         Text(
           description,
@@ -513,21 +506,15 @@ class _AppearanceSettingRow extends StatelessWidget {
     final textStyles = IdeTextStyles.of(context);
     return PaneInteractiveSurface(
       onPressed: onTap,
-      padding: IdeSpacing.all12,
+      padding: IdeSpacing.settingsRowPadding,
       borderColor: colors.border,
-      hoverBackgroundColor: colors.border.withValues(alpha: 0.12),
       child: Row(
         children: [
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  style: textStyles.displaySmall.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                Text(label, style: textStyles.rowTitle),
                 const SizedBox(height: IdeSpacing.space4),
                 Text(
                   description,
@@ -590,7 +577,7 @@ class _FontSizeSettingRow extends StatelessWidget {
   final double max;
   final ValueChanged<double> onChanged;
 
-  static const double _stackedBreakpoint = 520;
+  static const double _stackedBreakpoint = IdeMetrics.stackedRowBreakpoint;
 
   @override
   Widget build(BuildContext context) {
@@ -601,10 +588,7 @@ class _FontSizeSettingRow extends StatelessWidget {
     final labelContent = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: textStyles.displaySmall.copyWith(fontWeight: FontWeight.w700),
-        ),
+        Text(label, style: textStyles.rowTitle),
         const SizedBox(height: IdeSpacing.space4),
         Text(
           description,
@@ -717,18 +701,15 @@ class _SettingsNavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final activeBackground = colors.primaryMuted;
     final foreground = active ? colors.accent : colors.textSecondary;
     return PaneInteractiveSurface(
       onPressed: onTap,
       selected: active,
       height: 40,
       padding: IdeSpacing.horizontal12,
-      selectedBackgroundColor: activeBackground,
+      selectedBackgroundColor: colors.selectedSurface,
+      selectedHoverBackgroundColor: colors.selectedHoverSurface,
       selectedBorderColor: colors.accent,
-      hoverBackgroundColor: active
-          ? activeBackground
-          : colors.border.withValues(alpha: 0.12),
       child: Row(
         children: [
           Icon(icon, size: 18, color: foreground),
@@ -902,11 +883,11 @@ class _FontChoiceDialogState extends State<_FontChoiceDialog> {
                               density: sf.ButtonDensity.dense,
                             ).withBackgroundColor(
                               color: selected
-                                  ? colors.primaryMuted
+                                  ? colors.selectedSurface
                                   : Colors.transparent,
                               hoverColor: selected
-                                  ? colors.primaryMuted.withValues(alpha: 0.18)
-                                  : colors.border.withValues(alpha: 0.12),
+                                  ? colors.selectedHoverSurface
+                                  : colors.hoverSurface,
                             );
                         return SizedBox(
                           width: double.infinity,

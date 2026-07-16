@@ -147,10 +147,12 @@ ThemeData buildMaterialTheme(IdeThemeData ideTheme) {
   final baseTheme = ThemeData(
     brightness: ideTheme.brightness,
     useMaterial3: true,
-    scaffoldBackgroundColor: colors.frame,
-    canvasColor: colors.surface,
-    cardColor: colors.surface,
+    scaffoldBackgroundColor: colors.frameSurface,
+    canvasColor: colors.canvasSurface,
+    cardColor: colors.paneSurface,
     dividerColor: colors.border,
+    focusColor: colors.focusRing,
+    hoverColor: colors.hoverSurface,
     iconTheme: IconThemeData(color: colors.textSecondary),
   );
   final baseTextTheme = baseTheme.textTheme.apply(
@@ -208,27 +210,28 @@ sf.ColorScheme _buildShadcnColorScheme(IdeThemeData ideTheme) {
   final colors = ideTheme.colors;
   return sf.ColorScheme(
     brightness: ideTheme.brightness,
-    background: colors.frame,
+    background: colors.frameSurface,
     foreground: colors.textPrimary,
-    card: colors.surface,
+    card: colors.paneSurface,
     cardForeground: colors.textPrimary,
-    popover: colors.surfaceOverlay,
+    popover: colors.popoverSurface,
     popoverForeground: colors.textPrimary,
     primary: colors.accent,
     // 实心 primary 上的前景，必须用 onAccent；勿复用 accentForeground
     // （浅色选中态强调色与 accent 同蓝，会导致 Primary 按钮蓝底蓝字）。
     primaryForeground: colors.onAccent,
-    secondary: colors.surfaceElevated,
+    secondary: colors.controlSurface,
     secondaryForeground: colors.textPrimary,
-    muted: colors.surfaceElevated,
+    muted: colors.controlSurface,
     mutedForeground: colors.textSecondary,
-    accent: colors.primaryMuted,
+    // shadcn 的 accent 在 Zeta 中表达普通选中，而不是品牌蓝。
+    accent: colors.selectedSurface,
     accentForeground: colors.textPrimary,
     destructive: colors.error,
     destructiveForeground: Colors.white,
     border: colors.border,
     input: colors.borderSubtle,
-    ring: colors.accent,
+    ring: colors.focusRing,
     chart1: colors.accent,
     chart2: colors.info,
     chart3: colors.warning,

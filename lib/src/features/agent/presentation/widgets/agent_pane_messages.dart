@@ -270,13 +270,11 @@ class _AgentBubbleMessage extends StatelessWidget {
             children: [
               DecoratedBox(
                 decoration: BoxDecoration(
-                  color: isUser ? colors.primaryMuted : colors.surfaceElevated,
+                  color: isUser
+                      ? colors.userMessageSurface
+                      : colors.surfaceElevated,
                   borderRadius: IdeRadius.allMedium,
-                  border: Border.all(
-                    color: isUser
-                        ? colors.accent.withValues(alpha: 0.22)
-                        : colors.borderSubtle,
-                  ),
+                  border: Border.all(color: colors.borderSubtle),
                 ),
                 child: Padding(
                   padding: IdeSpacing.inputContentPadding,
@@ -661,7 +659,7 @@ class _AgentFinalAnswerCardState extends State<_AgentFinalAnswerCard> {
         key: ValueKey<String>('agent-final-answer-card-${widget.message.id}'),
         color: colors.surfaceElevated,
         borderColor: colors.border,
-        borderRadius: IdeRadius.allComposer,
+        borderRadius: IdeRadius.allMedium,
         child: Padding(
           padding: IdeSpacing.sectionPadding,
           child: Column(
@@ -754,8 +752,8 @@ class _AgentPlanMessageCard extends StatelessWidget {
               bodyPadding: const EdgeInsets.only(top: IdeSpacing.space10),
               backgroundColor: colors.surfaceElevated,
               borderColor: colors.border,
-              borderRadius: IdeRadius.allComposer,
-              hoverBackgroundColor: colors.border.withValues(alpha: 0.08),
+              borderRadius: IdeRadius.allMedium,
+              hoverBackgroundColor: colors.hoverSurface,
               semanticLabel: expanded ? '收起计划' : '展开计划',
               body: Padding(
                 padding: const EdgeInsets.only(right: IdeSpacing.space4),

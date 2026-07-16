@@ -22,6 +22,7 @@ import 'package:zeta/src/ui/core/ide_context_menu.dart';
 import 'package:zeta/src/ui/core/ide_dialog.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_motion.dart';
+import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_popover.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_status_card.dart';
@@ -40,7 +41,6 @@ part 'widgets/agent_model_config.dart';
 part 'widgets/agent_pane_sections.dart';
 part 'widgets/agent_pane_styles.dart';
 
-const double _agentContentMaxWidth = 920;
 const int _markdownCollapseLineThreshold = 12;
 const int _markdownCollapseLengthThreshold = 420;
 const int _diffPreviewLineCount = 24;
@@ -147,7 +147,7 @@ class _AgentPaneState extends State<AgentPane> {
                       alignment: Alignment.topCenter,
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(
-                          maxWidth: _agentContentMaxWidth,
+                          maxWidth: IdeMetrics.contentMaxWidth,
                         ),
                         child: SingleChildScrollView(
                           key: const ValueKey('agent-message-list'),

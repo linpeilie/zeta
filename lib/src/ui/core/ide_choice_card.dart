@@ -28,7 +28,7 @@ class IdeChoiceCardOption<T> {
 /// 图标 + 标题的选项卡片（Choice Card）。
 ///
 /// 用于 2–4 个互斥选项的单选场景（如设置项）：图标居左上、标题在下，
-/// 选中态使用 accent 边框 + primaryMuted 底色，hover/focus/disabled
+/// 选中态使用 accent 边框 + selectedSurface 底色，hover/focus/disabled
 /// 反馈由 [PaneInteractiveSurface] 提供。
 class IdeChoiceCard extends StatelessWidget {
   const IdeChoiceCard({
@@ -73,7 +73,7 @@ class IdeChoiceCard extends StatelessWidget {
       borderRadius: IdeRadius.allMedium,
       borderColor: colors.border,
       selectedBorderColor: colors.accent,
-      selectedBackgroundColor: colors.primaryMuted,
+      selectedBackgroundColor: colors.selectedSurface,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,

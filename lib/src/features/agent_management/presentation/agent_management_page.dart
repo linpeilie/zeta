@@ -925,12 +925,7 @@ class _PageHeader extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: textStyles.displaySmall.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
+                Text(title, style: textStyles.pageTitle),
                 Text(
                   subtitle,
                   maxLines: 1,
@@ -1070,9 +1065,7 @@ class _AgentListRow extends StatelessWidget {
                             agent.definition.displayName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: textStyles.displaySmall.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+                            style: textStyles.rowTitle,
                           ),
                         ),
                         if (agent.definition.isBeta) ...[
@@ -1307,12 +1300,7 @@ class _AgentInformationCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              '基础信息',
-              style: textStyles.displaySmall.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+            Text('基础信息', style: textStyles.sectionTitle),
             const SizedBox(height: IdeSpacing.space12),
             _InfoRow(label: '名称', value: agent.definition.displayName),
             _InfoRow(label: '厂商', value: agent.definition.vendor),
@@ -1617,12 +1605,7 @@ class _ModelCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          model.displayName,
-                          style: textStyles.displaySmall.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
+                        Text(model.displayName, style: textStyles.rowTitle),
                         SelectableText(
                           model.model,
                           style: textStyles.codeSmall.copyWith(

@@ -233,12 +233,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
         final info = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '配置文件',
-              style: textStyles.displaySmall.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+            Text('配置文件', style: textStyles.sectionTitle),
             const SizedBox(height: IdeSpacing.space4),
             SelectableText(
               document.path,

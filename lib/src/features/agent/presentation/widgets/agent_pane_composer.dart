@@ -178,11 +178,9 @@ class _AgentComposer extends StatelessWidget {
           final brightness = sf.Theme.of(context).brightness;
           final isFocused = focusNode.hasFocus;
           // 焦点是键盘状态而非高度：用无方向的 ring，而不是下坠投影。
-          final cardBorder = isFocused
-              ? colors.accent.withValues(alpha: 0.84)
-              : colors.border.withValues(alpha: 0.6);
+          final cardBorder = isFocused ? colors.focusRing : colors.border;
           final focusRing = isFocused
-              ? IdeEffects.focusRing(brightness, accent: colors.accent)
+              ? IdeEffects.focusRing(brightness, accent: colors.focusRing)
               : const <BoxShadow>[];
 
           return AnimatedContainer(
@@ -190,21 +188,16 @@ class _AgentComposer extends StatelessWidget {
             duration: IdeMotion.durationNormal,
             curve: IdeMotion.curveDefault,
             decoration: BoxDecoration(
-              borderRadius: IdeRadius.allComposer,
+              borderRadius: IdeRadius.allMedium,
               boxShadow: focusRing,
             ),
             child: PanelCard(
               color: colors.panel,
               borderColor: cardBorder,
-              borderRadius: IdeRadius.allComposer,
+              borderRadius: IdeRadius.allMedium,
               showBorder: true,
               child: Padding(
-                padding: const EdgeInsets.only(
-                  left: IdeSpacing.space16,
-                  top: IdeSpacing.space12,
-                  right: IdeSpacing.space8,
-                  bottom: IdeSpacing.space8,
-                ),
+                padding: IdeSpacing.composerPadding,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1118,7 +1111,7 @@ class _PermissionPolicyOption extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space8),
       borderRadius: IdeRadius.allSmall,
       selectedBackgroundColor: colors.border.withValues(alpha: 0.2),
-      focusBorderColor: colors.border,
+      focusBorderColor: colors.focusRing,
       semanticLabel: '${preset.label}${selected ? '，已选择' : ''}',
       child: Row(
         children: [

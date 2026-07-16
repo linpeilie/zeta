@@ -99,7 +99,7 @@ class _RailActionButton extends StatelessWidget {
             padding: EdgeInsets.zero,
             borderRadius: IdeRadius.allSmall,
             backgroundColor: Colors.transparent,
-            selectedBackgroundColor: colors.primaryMuted,
+            selectedBackgroundColor: colors.selectedSurface,
             semanticLabel: action.semanticLabel,
             child: Icon(action.icon, size: 19, color: iconColor),
           ),

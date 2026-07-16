@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/main.dart';
+import 'package:zeta/src/ui/core/ide_metrics.dart';
 
 import '../testing/ide_test_harness.dart';
 
@@ -86,40 +87,58 @@ void main() {
   testWidgets('horizontal resize handles clamp side widths', (tester) async {
     await _pumpIde(tester);
 
-    expect(_widthOf(tester, 'left-activity-panel'), 260);
+    expect(
+      _widthOf(tester, 'left-activity-panel'),
+      IdeMetrics.sidePaneDefaultWidth,
+    );
 
     await tester.tap(find.byKey(const ValueKey('right-files-action')));
     await tester.pump();
 
-    expect(_widthOf(tester, 'right-activity-panel'), 260);
+    expect(
+      _widthOf(tester, 'right-activity-panel'),
+      IdeMetrics.sidePaneDefaultWidth,
+    );
 
     await tester.drag(
       find.byKey(const ValueKey('left-width-resize-handle')),
       const Offset(500, 0),
     );
     await tester.pump();
-    expect(_widthOf(tester, 'left-activity-panel'), 400);
+    expect(
+      _widthOf(tester, 'left-activity-panel'),
+      IdeMetrics.sidePaneMaxWidth,
+    );
 
     await tester.drag(
       find.byKey(const ValueKey('left-width-resize-handle')),
       const Offset(-500, 0),
     );
     await tester.pump();
-    expect(_widthOf(tester, 'left-activity-panel'), 200);
+    expect(
+      _widthOf(tester, 'left-activity-panel'),
+      IdeMetrics.sidePaneMinWidth,
+    );
 
     await tester.drag(
       find.byKey(const ValueKey('right-width-resize-handle')),
       const Offset(-500, 0),
     );
     await tester.pump();
-    expect(_widthOf(tester, 'right-activity-panel'), 400);
+    expect(
+      _widthOf(tester, 'right-activity-panel'),
+      IdeMetrics.sidePaneMaxWidth,
+    );
 
     await tester.drag(
       find.byKey(const ValueKey('right-width-resize-handle')),
       const Offset(500, 0),
     );
     await tester.pump();
-    expect(_widthOf(tester, 'right-activity-panel'), 200);
+    expect(
+      _widthOf(tester, 'right-activity-panel'),
+      IdeMetrics.sidePaneMinWidth,
+    );
   });
 
   testWidgets('vertical resize handles clamp panel ratio', (tester) async {

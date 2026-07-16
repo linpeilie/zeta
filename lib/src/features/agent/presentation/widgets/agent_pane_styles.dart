@@ -23,15 +23,10 @@ TextStyle _agentItemTextStyle(
 
 TextStyle _agentMetaTextStyle(
   BuildContext context, {
-  double alpha = 0.68,
   FontWeight fontWeight = FontWeight.w400,
 }) {
-  final colors = IdeColors.of(context);
   final textStyles = IdeTextStyles.of(context);
-  return textStyles.bodySmall.copyWith(
-    fontWeight: fontWeight,
-    color: colors.textSecondary.withValues(alpha: alpha),
-  );
+  return textStyles.meta.copyWith(fontWeight: fontWeight);
 }
 
 Color _agentHoverBackground(BuildContext context) {
@@ -247,15 +242,12 @@ IdeStatusCardTone _historyEventTone(AgentHistoryEventKind kind) {
 MarkdownThemeData _agentMarkdownTheme(BuildContext context) {
   final colors = IdeColors.of(context);
   final textStyles = IdeTextStyles.of(context);
-  final base = textStyles.bodyMedium.copyWith(
-    color: colors.textPrimary,
-    height: 1.42,
-  );
+  final base = textStyles.proseBody;
   final codeStyle = _agentCodeTextStyle(context, baseStyle: base);
 
   return MarkdownThemeData.fallback(
     context,
-    maxContentWidth: _agentContentMaxWidth,
+    maxContentWidth: IdeMetrics.contentMaxWidth,
   ).copyWith(
     padding: EdgeInsets.zero,
     blockSpacing: IdeSpacing.space8,

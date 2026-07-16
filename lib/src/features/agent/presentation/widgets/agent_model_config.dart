@@ -439,7 +439,7 @@ class _ComposerSelectorTrigger extends StatelessWidget {
         hoverBackgroundColor: colors.border.withValues(alpha: 0.2),
         pressedBackgroundColor: colors.border.withValues(alpha: 0.32),
         selectedBackgroundColor: colors.frame.withValues(alpha: 0.72),
-        focusBorderColor: colors.accent.withValues(alpha: 0.68),
+        focusBorderColor: colors.focusRing,
         selectedBorderColor: colors.borderSubtle,
         semanticLabel: semanticLabel,
         child: Stack(
@@ -978,7 +978,7 @@ class _ModelListItem extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space8),
       borderRadius: IdeRadius.allSmall,
       selectedBackgroundColor: colors.border.withValues(alpha: 0.2),
-      focusBorderColor: colors.border,
+      focusBorderColor: colors.focusRing,
       semanticLabel:
           '${model.displayName}${selected ? '，已选择' : ''}${model.enabled ? '' : '，不可用'}',
       child: Row(

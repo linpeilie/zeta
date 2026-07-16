@@ -29,6 +29,7 @@ import 'package:zeta/src/features/workspace/presentation/file_tree_pane.dart';
 import 'package:zeta/src/ui/core/ide_activity_rail.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
+import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_resize_handle.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_toast.dart';
@@ -74,10 +75,11 @@ class IdeHome extends StatefulWidget {
 }
 
 class _IdeHomeState extends State<IdeHome> {
-  static const double _activityRailWidth = 36;
-  static const double _initialPanelWidth = 260;
-  static const double _minPanelWidth = 200;
-  static const double _maxPanelWidth = 400;
+  static const double _activityRailWidth = IdeMetrics.activityRailWidth;
+  static const double _initialPanelWidth = IdeMetrics.sidePaneDefaultWidth;
+  static const double _minPanelWidth = IdeMetrics.sidePaneMinWidth;
+  static const double _maxPanelWidth = IdeMetrics.sidePaneMaxWidth;
+  // Overlay 行为属于后续 Workbench 迭代，本阶段保持现有响应式边界。
   static const double _minMainEditorWidth = 320;
   static const double _leftOverlayBreakpoint = 720;
   static const double _rightOverlayBreakpoint = 1000;

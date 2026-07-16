@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
@@ -14,5 +15,26 @@ void main() {
     expect(styles.displayLarge.fontSize, 21);
     expect(styles.codeMedium.fontSize, 18);
     expect(styles.codeSmall.fontSize, 16.5);
+    expect(styles.pageTitle.fontSize, 17.5);
+    expect(styles.sectionTitle.fontSize, closeTo(15.1667, 0.0001));
+    expect(styles.rowTitle.fontSize, 14);
+    expect(styles.toolbarLabel.fontSize, closeTo(12.8333, 0.0001));
+    expect(styles.proseBody.fontSize, closeTo(15.1667, 0.0001));
+    expect(styles.meta.fontSize, closeTo(11.6667, 0.0001));
+    expect(styles.metricValue.fontSize, 21);
+    expect(styles.placeholder.fontSize, 14);
+  });
+
+  test('高层语义样式使用统一字重与前景色', () {
+    final styles = IdeTextStyles.resolve(colors: IdeColors.dark);
+
+    expect(styles.pageTitle.fontWeight, FontWeight.w600);
+    expect(styles.sectionTitle.fontWeight, FontWeight.w600);
+    expect(styles.rowTitle.fontWeight, FontWeight.w500);
+    expect(styles.toolbarLabel.color, IdeColors.dark.textSecondary);
+    expect(styles.proseBody.height, 1.55);
+    expect(styles.meta.color, IdeColors.dark.textTertiary);
+    expect(styles.metricValue.fontWeight, FontWeight.w600);
+    expect(styles.placeholder.color, IdeColors.dark.textTertiary);
   });
 }

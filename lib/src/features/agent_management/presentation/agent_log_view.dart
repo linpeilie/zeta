@@ -83,9 +83,7 @@ class _AgentLogViewState extends State<AgentLogView> {
                           children: [
                             Text(
                               '${widget.controller.agent.definition.displayName} 运行日志',
-                              style: textStyles.displaySmall.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
+                              style: textStyles.pageTitle,
                             ),
                             Text(
                               '${widget.controller.agent.logPaths.length} 个诊断来源 · '

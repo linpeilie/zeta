@@ -16,17 +16,21 @@ abstract final class IdeSpacing {
   static const EdgeInsets none = EdgeInsets.zero;
 
   static const EdgeInsets all4 = EdgeInsets.all(space4);
+  static const EdgeInsets all6 = EdgeInsets.all(space6);
   static const EdgeInsets all8 = EdgeInsets.all(space8);
   static const EdgeInsets all10 = EdgeInsets.all(space10);
   static const EdgeInsets all12 = EdgeInsets.all(space12);
   static const EdgeInsets all16 = EdgeInsets.all(space16);
   static const EdgeInsets all20 = EdgeInsets.all(space20);
 
+  static const EdgeInsets horizontal6 = EdgeInsets.symmetric(
+    horizontal: space6,
+  );
   static const EdgeInsets horizontal8 = EdgeInsets.symmetric(
     horizontal: space8,
   );
-  static const EdgeInsets horizontal6 = EdgeInsets.symmetric(
-    horizontal: space6,
+  static const EdgeInsets horizontal10 = EdgeInsets.symmetric(
+    horizontal: space10,
   );
   static const EdgeInsets horizontal12 = EdgeInsets.symmetric(
     horizontal: space12,
@@ -44,11 +48,33 @@ abstract final class IdeSpacing {
   static const EdgeInsets vertical12 = EdgeInsets.symmetric(vertical: space12);
   static const EdgeInsets vertical16 = EdgeInsets.symmetric(vertical: space16);
 
-  static const EdgeInsets pagePadding = EdgeInsets.all(space20);
+  static const EdgeInsets pagePadding = EdgeInsets.symmetric(
+    horizontal: space20,
+    vertical: space16,
+  );
+  static const EdgeInsets pagePaddingCompact = EdgeInsets.all(space12);
   static const EdgeInsets sectionPadding = EdgeInsets.all(space16);
   static const EdgeInsets panelPadding = EdgeInsets.all(space12);
   static const EdgeInsets cardPadding = EdgeInsets.all(space10);
   static const EdgeInsets dialogPadding = EdgeInsets.all(space16);
+  static const EdgeInsets toolbarPadding = EdgeInsets.symmetric(
+    horizontal: space8,
+    vertical: space4,
+  );
+  static const EdgeInsets rowPadding = EdgeInsets.symmetric(
+    horizontal: space10,
+    vertical: space6,
+  );
+  static const EdgeInsets settingsRowPadding = EdgeInsets.symmetric(
+    horizontal: space12,
+    vertical: space10,
+  );
+  static const EdgeInsets composerPadding = EdgeInsets.fromLTRB(
+    space12,
+    space10,
+    space8,
+    space8,
+  );
   static const EdgeInsets compactControlPadding = EdgeInsets.symmetric(
     horizontal: space8,
     vertical: space4,

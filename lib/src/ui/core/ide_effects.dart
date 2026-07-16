@@ -22,6 +22,7 @@ abstract final class IdeRadius {
     Radius.circular(medium),
   );
   static const BorderRadius allLarge = BorderRadius.all(Radius.circular(large));
+  @Deprecated('Composer 已统一使用 IdeRadius.allMedium')
   static const BorderRadius allComposer = BorderRadius.all(
     Radius.circular(composer),
   );

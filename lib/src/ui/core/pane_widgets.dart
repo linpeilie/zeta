@@ -244,6 +244,7 @@ class PaneInteractiveSurface extends StatefulWidget {
     this.hoverBackgroundColor,
     this.pressedBackgroundColor,
     this.selectedBackgroundColor,
+    this.selectedHoverBackgroundColor,
     this.borderColor,
     this.focusBorderColor,
     this.selectedBorderColor,
@@ -268,6 +269,7 @@ class PaneInteractiveSurface extends StatefulWidget {
   final Color? hoverBackgroundColor;
   final Color? pressedBackgroundColor;
   final Color? selectedBackgroundColor;
+  final Color? selectedHoverBackgroundColor;
   final Color? borderColor;
   final Color? focusBorderColor;
   final Color? selectedBorderColor;
@@ -322,37 +324,31 @@ class _PaneInteractiveSurfaceState extends State<PaneInteractiveSurface> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = sf.Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final colors = IdeColors.of(context);
     final radius = widget.borderRadius ?? IdeRadius.allSmall;
     final baseBackground = widget.backgroundColor ?? Colors.transparent;
-    final hoverBackground =
-        widget.hoverBackgroundColor ??
-        colors.border.withValues(
-          alpha: theme.brightness == Brightness.dark ? 0.18 : 0.3,
-        );
+    final hoverBackground = widget.hoverBackgroundColor ?? colors.hoverSurface;
     final pressedBackground =
-        widget.pressedBackgroundColor ??
-        colors.border.withValues(
-          alpha: theme.brightness == Brightness.dark ? 0.28 : 0.4,
-        );
+        widget.pressedBackgroundColor ?? colors.pressedSurface;
     final selectedBackground =
-        widget.selectedBackgroundColor ?? colors.primaryMuted;
-    final resolvedBackground = switch ((_pressed, _hovered, widget.selected)) {
-      (true, _, true) => colorScheme.primary.withValues(
-        alpha: theme.brightness == Brightness.dark ? 0.24 : 0.16,
-      ),
-      (false, true, true) => colorScheme.primary.withValues(
-        alpha: theme.brightness == Brightness.dark ? 0.22 : 0.14,
-      ),
-      (_, _, true) => selectedBackground,
-      (true, _, false) => pressedBackground,
-      (false, true, false) => hoverBackground,
+        widget.selectedBackgroundColor ?? colors.selectedSurface;
+    final selectedHoverBackground =
+        widget.selectedHoverBackgroundColor ?? colors.selectedHoverSurface;
+    final resolvedBackground = switch ((
+      widget.enabled,
+      _pressed,
+      _hovered,
+      widget.selected,
+    )) {
+      (false, _, _, _) => baseBackground,
+      (true, true, _, _) => pressedBackground,
+      (true, false, true, true) => selectedHoverBackground,
+      (true, false, false, true) => selectedBackground,
+      (true, false, true, false) => hoverBackground,
       _ => baseBackground,
     };
     final resolvedBorderColor = _focused
-        ? (widget.focusBorderColor ?? colorScheme.ring.withValues(alpha: 0.7))
+        ? (widget.focusBorderColor ?? colors.focusRing)
         : widget.selected
         ? (widget.selectedBorderColor ?? widget.borderColor)
         : widget.borderColor;

@@ -591,7 +591,7 @@ void main() {
         selectedModelSurface.selectedBackgroundColor?.a,
         closeTo(0.2, 0.001),
       );
-      expect(selectedModelSurface.focusBorderColor, colors.border);
+      expect(selectedModelSurface.focusBorderColor, colors.focusRing);
       final openTriggerTooltip = find.ancestor(
         of: modelSelector,
         matching: find.byType(IdeTooltip),
@@ -731,7 +731,7 @@ void main() {
         expect(selectedOption.borderRadius, IdeRadius.allSmall);
         expect(selectedOption.selected, isTrue);
         expect(selectedOption.selectedBackgroundColor?.a, closeTo(0.2, 0.001));
-        expect(selectedOption.focusBorderColor, colors.border);
+        expect(selectedOption.focusBorderColor, colors.focusRing);
 
         await tester.tap(
           find.byKey(const ValueKey('agent-permission-preset-fullAccess')),

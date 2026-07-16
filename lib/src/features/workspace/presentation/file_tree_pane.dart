@@ -4,6 +4,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
@@ -122,7 +123,6 @@ class _FileTreeNodeTile extends StatelessWidget {
     super.key,
   });
 
-  static const double _rowHeight = 28;
   static const double _indent = IdeSpacing.space16;
 
   final WorkspaceNode node;
@@ -136,8 +136,6 @@ class _FileTreeNodeTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final selectedBackground = colors.primaryMuted;
-    final hoverBackground = colors.border.withValues(alpha: 0.14);
     final iconColor = selected
         ? colors.accent
         : node.isDirectory
@@ -150,16 +148,14 @@ class _FileTreeNodeTile extends StatelessWidget {
       child: PaneInteractiveSurface(
         key: ValueKey<String>('file-node-${node.name}'),
         onPressed: onTap,
-        height: _rowHeight,
+        height: IdeMetrics.compactRowHeight,
         padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space6),
         selected: selected,
-        selectedBackgroundColor: selectedBackground,
-        hoverBackgroundColor: hoverBackground,
         child: Row(
           children: [
             SizedBox(
-              width: 18,
-              height: 18,
+              width: IdeMetrics.iconButtonHitSize,
+              height: IdeMetrics.iconButtonHitSize,
               child: node.isDirectory
                   ? sf.IconButton.ghost(
                       onPressed: onToggleExpansion,
