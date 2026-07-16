@@ -398,23 +398,22 @@ Future<_RetainedAgentState> _prepareRetainedAgentState(
       'retained-thread': AgentThreadHistorySnapshot(
         threadId: 'retained-thread',
         turns: <AgentHistoryTurn>[
-          for (var turnIndex = 0; turnIndex < 8; turnIndex += 1)
-            AgentHistoryTurn(
-              id: 'retained-turn-$turnIndex',
-              entries: <AgentHistoryEntry>[
-                for (var messageIndex = 0; messageIndex < 4; messageIndex += 1)
-                  AgentHistoryMessageEntry(
-                    id: 'retained-message-$turnIndex-$messageIndex',
-                    role: AgentMessageRole.agent,
-                    text: List<String>.generate(
-                      10,
-                      (line) =>
-                          'Retained conversation $turnIndex.$messageIndex '
-                          'line $line keeps the timeline scrollable.',
-                    ).join('\n\n'),
-                  ),
-              ],
-            ),
+          AgentHistoryTurn(
+            id: 'retained-turn',
+            status: AgentHistoryTurnStatus.completed,
+            entries: <AgentHistoryEntry>[
+              AgentHistoryMessageEntry(
+                id: 'retained-message',
+                role: AgentMessageRole.agent,
+                text: List<String>.generate(
+                  24,
+                  (line) =>
+                      'Retained conversation line $line keeps the timeline '
+                      'scrollable across workbench pages.',
+                ).join('\n\n'),
+              ),
+            ],
+          ),
         ],
       ),
     },
@@ -441,27 +440,42 @@ Future<_RetainedAgentState> _prepareRetainedAgentState(
 
   await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
   await tester.runAsync(waitForIo);
-  await tester.pumpAndSettle();
-  await tester.tap(
-    find.byKey(
-      ValueKey<String>('project-thread-${directory.path}-retained-thread'),
-    ),
-  );
-  await tester.pumpAndSettle();
-
   await tester.tap(find.byKey(const ValueKey('right-files-action')));
   await tester.pump();
+  final retainedThreadRow = find.byKey(
+    ValueKey<String>('project-thread-${directory.path}-retained-thread'),
+  );
+  await pumpUntilCondition(
+    tester,
+    () =>
+        retainedThreadRow.evaluate().isNotEmpty &&
+        find.byKey(fileNodeKey('sample.txt')).evaluate().isNotEmpty,
+    failureMessage: 'Project and retained thread did not become ready',
+  );
+  await tester.tap(retainedThreadRow);
+
+  final messageList = find.byKey(const ValueKey('agent-message-list'));
+  await pumpUntilCondition(tester, () {
+    if (headerTitleText(tester) != 'Retained thread' ||
+        messageList.evaluate().isEmpty) {
+      return false;
+    }
+    final controller = tester
+        .widget<SingleChildScrollView>(messageList)
+        .controller;
+    return controller?.hasClients == true &&
+        controller!.position.maxScrollExtent > 0;
+  }, failureMessage: 'Retained thread history did not become ready');
+
   await tester.drag(
     find.byKey(const ValueKey('left-width-resize-handle')),
     const Offset(48, 0),
   );
   await tester.pump();
 
-  final messageList = find.byKey(const ValueKey('agent-message-list'));
   final scrollController = tester
       .widget<SingleChildScrollView>(messageList)
       .controller!;
-  expect(scrollController.position.maxScrollExtent, greaterThan(0));
   scrollController.jumpTo(scrollController.position.maxScrollExtent / 2);
   await tester.pump();
 

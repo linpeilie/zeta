@@ -2052,7 +2052,8 @@ class AgentConversationViewModel extends ChangeNotifier {
     previousBuffer?.dispose();
     if (previousSubscription != null &&
         !identical(previousSubscription, subscription)) {
-      await previousSubscription.cancel();
+      // 代次门已经屏蔽旧流；取消过程不得阻塞新 thread 的历史发布。
+      unawaited(previousSubscription.cancel());
     }
   }
 

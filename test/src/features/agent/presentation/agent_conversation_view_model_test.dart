@@ -73,6 +73,43 @@ void main() {
     });
 
     test(
+      'switchThread does not wait for stale event subscription cancellation',
+      () async {
+        final cancellationGate = Completer<void>();
+        final provider = _FakeAgentProvider(
+          eventCancellationGate: cancellationGate.future,
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'thread-1': _historySnapshot(
+              threadId: 'thread-1',
+              userText: 'History remains available',
+            ),
+          },
+        );
+        final viewModel = _createViewModel(provider);
+        addTearDown(() {
+          if (!cancellationGate.isCompleted) {
+            cancellationGate.complete();
+          }
+          viewModel.dispose();
+        });
+        await viewModel.loadModels();
+
+        await viewModel
+            .switchThread(_thread())
+            .timeout(const Duration(seconds: 1));
+
+        expect(viewModel.threadOpenPhase, AgentThreadOpenPhase.idle);
+        expect(
+          viewModel.timelineEntries.whereType<AgentMessageTimelineEntry>().map(
+            (entry) => entry.message.text,
+          ),
+          contains('History remains available'),
+        );
+        expect(cancellationGate.isCompleted, isFalse);
+      },
+    );
+
+    test(
       'uses provider session title after resuming a selected thread',
       () async {
         final provider = _FakeAgentProvider(
@@ -2698,6 +2735,7 @@ class _FakeAgentProvider
     this.resumeSessionTitle,
     this.providerConfig = AgentProviderConfig.defaultCodex,
     this.availableModels = const AgentModelList(models: <AgentModelInfo>[]),
+    this.eventCancellationGate,
     AgentProviderCapabilities? declaredCapabilities,
     AgentThreadHistorySnapshot? historySnapshot,
     Map<String, AgentThreadHistorySnapshot> historySnapshotsByThread =
@@ -2728,6 +2766,7 @@ class _FakeAgentProvider
   final String? resumeSessionTitle;
   final AgentProviderConfig providerConfig;
   final AgentModelList availableModels;
+  final Future<void>? eventCancellationGate;
   final AgentProviderCapabilities declaredCapabilities;
   final AgentThreadHistorySnapshot _defaultHistorySnapshot;
   final Map<String, AgentThreadHistorySnapshot> _historySnapshotsByThread;
@@ -2749,7 +2788,12 @@ class _FakeAgentProvider
   AgentProviderCapabilities get capabilities => declaredCapabilities;
 
   @override
-  Stream<AgentEvent> get events => _events.stream;
+  Stream<AgentEvent> get events {
+    final gate = eventCancellationGate;
+    return gate == null
+        ? _events.stream
+        : _DelayedCancelStream<AgentEvent>(_events.stream, gate);
+  }
 
   @override
   Future<void> initialize() async {
@@ -2942,4 +2986,67 @@ class _RuntimeScopedFakeAgentProvider extends _FakeAgentProvider
 
   @override
   AgentRuntimeScope? runtimeScope;
+}
+
+class _DelayedCancelStream<T> extends Stream<T> {
+  const _DelayedCancelStream(this._delegate, this._cancellationGate);
+
+  final Stream<T> _delegate;
+  final Future<void> _cancellationGate;
+
+  @override
+  StreamSubscription<T> listen(
+    void Function(T event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
+    return _DelayedCancelSubscription<T>(
+      _delegate.listen(
+        onData,
+        onError: onError,
+        onDone: onDone,
+        cancelOnError: cancelOnError,
+      ),
+      _cancellationGate,
+    );
+  }
+}
+
+class _DelayedCancelSubscription<T> implements StreamSubscription<T> {
+  _DelayedCancelSubscription(this._delegate, this._cancellationGate);
+
+  final StreamSubscription<T> _delegate;
+  final Future<void> _cancellationGate;
+  Future<void>? _cancelFuture;
+
+  @override
+  Future<void> cancel() => _cancelFuture ??= _cancel();
+
+  Future<void> _cancel() async {
+    await _delegate.cancel();
+    await _cancellationGate;
+  }
+
+  @override
+  void onData(void Function(T data)? handleData) =>
+      _delegate.onData(handleData);
+
+  @override
+  void onError(Function? handleError) => _delegate.onError(handleError);
+
+  @override
+  void onDone(void Function()? handleDone) => _delegate.onDone(handleDone);
+
+  @override
+  void pause([Future<void>? resumeSignal]) => _delegate.pause(resumeSignal);
+
+  @override
+  void resume() => _delegate.resume();
+
+  @override
+  bool get isPaused => _delegate.isPaused;
+
+  @override
+  Future<E> asFuture<E>([E? futureValue]) => _delegate.asFuture<E>(futureValue);
 }
