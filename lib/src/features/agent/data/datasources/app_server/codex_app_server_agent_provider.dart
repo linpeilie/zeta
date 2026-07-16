@@ -163,6 +163,8 @@ class CodexAppServerAgentProvider
     'turn/moderationMetadata',
   ];
 
+  static const bool _experimentalApiEnabled = true;
+
   @override
   Stream<AgentEvent> get events => _events.stream;
 
@@ -237,8 +239,9 @@ class CodexAppServerAgentProvider
           },
           // 显式声明协商能力，避免依赖服务端默认值的隐式行为。
           'capabilities': <String, Object?>{
-            // 不接收实验性 API 方法与字段；动态工具等能力落地时再开启。
-            'experimentalApi': false,
+            // permission profile 选择依赖 experimental 字段；其余未消费字段保持
+            // 宽容忽略，未知请求仍走 fail-closed 拒绝。
+            'experimentalApi': _experimentalApiEnabled,
             // 不参与 attestation/generate 流程（A5 已对误发请求兜底拒绝）。
             'requestAttestation': false,
             // 表单式 elicitation 尚无渲染能力（见计划 3.8），暂不允许。
@@ -252,6 +255,7 @@ class CodexAppServerAgentProvider
         initializeResult,
         runtimeScope: _peer.runtimeScope!,
         configuredVersion: config.extra['detectedCurrentVersion']?.toString(),
+        experimentalApiEnabled: _experimentalApiEnabled,
       );
       _capabilities = _codexCapabilitiesForRuntime(_runtimeInfo!);
 

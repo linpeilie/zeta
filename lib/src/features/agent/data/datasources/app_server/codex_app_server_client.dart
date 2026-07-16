@@ -247,6 +247,7 @@ class _CodexAppServerClient {
     String? clientUserMessageId,
   }) async {
     final model = selection.modelId ?? _config.defaultModel;
+    final permissionProfileId = permissionSelection.protocolPermissionProfileId;
     final result = await _peer.sendRequest(
       'turn/start',
       params: <String, Object?>{
@@ -261,7 +262,10 @@ class _CodexAppServerClient {
         'approvalPolicy': AgentPermissionSelection.normalizeApprovalPolicy(
           permissionSelection.approvalPolicy,
         ),
-        'sandboxPolicy': permissionSelection.toTurnSandboxPolicy(),
+        'permissions': ?permissionProfileId,
+        'sandboxPolicy': ?(permissionProfileId == null
+            ? permissionSelection.toTurnSandboxPolicy()
+            : null),
         'clientUserMessageId': ?clientUserMessageId,
       },
     );
@@ -371,13 +375,17 @@ class _CodexAppServerClient {
     AgentContext context,
     AgentPermissionSelection permissionSelection,
   ) {
+    final permissionProfileId = permissionSelection.protocolPermissionProfileId;
     return <String, Object?>{
       if (context.projectPath != null) 'cwd': context.projectPath,
       if (_config.defaultModel != null) 'model': _config.defaultModel,
       'approvalPolicy': AgentPermissionSelection.normalizeApprovalPolicy(
         permissionSelection.approvalPolicy,
       ),
-      'sandbox': permissionSelection.toThreadSandboxMode(),
+      'permissions': ?permissionProfileId,
+      'sandbox': ?(permissionProfileId == null
+          ? permissionSelection.toThreadSandboxMode()
+          : null),
     };
   }
 

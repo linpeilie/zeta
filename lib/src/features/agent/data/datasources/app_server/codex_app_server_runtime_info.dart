@@ -7,6 +7,7 @@ AgentRuntimeInfo _codexRuntimeInfoFromInitialize(
   Object? value, {
   required AgentRuntimeScope runtimeScope,
   required String? configuredVersion,
+  required bool experimentalApiEnabled,
 }) {
   final result = _map(value);
   final userAgent = _string(result['userAgent']);
@@ -38,7 +39,7 @@ AgentRuntimeInfo _codexRuntimeInfoFromInitialize(
       platformOs,
     ].whereType<String>().where((part) => part.isNotEmpty).join('/'),
     homePath: _string(result['codexHome']),
-    experimentalApiEnabled: false,
+    experimentalApiEnabled: experimentalApiEnabled,
     compatibilityStatus: compatibility,
   );
 }
@@ -57,7 +58,8 @@ AgentProviderCapabilities _codexCapabilitiesForRuntime(
     canForkThreadAtTurn:
         !isUnsupported && version != null && version >= _codexTargetVersion,
     supportsPermissionProfileDiscovery: !isUnsupported,
-    supportsPermissionProfileSelection: false,
+    supportsPermissionProfileSelection:
+        !isUnsupported && runtime.experimentalApiEnabled,
   );
 }
 

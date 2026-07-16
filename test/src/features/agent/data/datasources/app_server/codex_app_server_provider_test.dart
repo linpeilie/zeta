@@ -55,7 +55,7 @@ void main() {
       expect(clientInfo['name'], 'zeta');
 
       final capabilities = params['capabilities']! as Map<String, Object?>;
-      expect(capabilities['experimentalApi'], isFalse);
+      expect(capabilities['experimentalApi'], isTrue);
       expect(capabilities['requestAttestation'], isFalse);
       expect(capabilities['mcpServerOpenaiFormElicitation'], isFalse);
 
@@ -1473,7 +1473,7 @@ void main() {
         'lastTurnId': 'turn-7',
         'cwd': '/repo',
         'approvalPolicy': 'on-request',
-        'sandbox': 'workspace-write',
+        'permissions': ':workspace',
       });
       expect(peer.requestMethods, isNot(contains('thread/rollback')));
 
@@ -2839,6 +2839,47 @@ void main() {
       },
     );
 
+    test(
+      'prefers permissions profile over legacy sandbox fields when available',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+
+        provider.updatePermissionSelection(
+          const AgentPermissionSelection(
+            approvalPolicy: 'on-request',
+            sandboxPolicy: 'workspaceWrite',
+            permissionProfileId: ':workspace',
+          ),
+        );
+
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: '/repo'),
+        );
+        final threadStartIndex = peer.requestMethods.indexOf('thread/start');
+        final threadParams =
+            peer.requestParams[threadStartIndex]! as Map<String, Object?>;
+        expect(threadParams['permissions'], ':workspace');
+        expect(threadParams.containsKey('sandbox'), isFalse);
+
+        await provider.sendMessage(
+          session: session,
+          message: 'hello',
+          context: const AgentContext(projectPath: '/repo'),
+        );
+
+        final turnStartIndex = peer.requestMethods.indexOf('turn/start');
+        final turnParams =
+            peer.requestParams[turnStartIndex]! as Map<String, Object?>;
+        expect(turnParams['permissions'], ':workspace');
+        expect(turnParams.containsKey('sandboxPolicy'), isFalse);
+      },
+    );
+
     test('turn/steer requires active expectedTurnId and omits cwd', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
@@ -2915,6 +2956,7 @@ void main() {
         expect(provider.runtimeInfo?.cliVersion, '0.144.5');
         expect(provider.runtimeInfo?.runtimeId, isNotEmpty);
         expect(provider.runtimeInfo?.connectionEpoch, 1);
+        expect(provider.runtimeInfo?.experimentalApiEnabled, isTrue);
         expect(provider.lifecycleState, AgentProviderLifecycleState.ready);
         expect(
           provider.runtimeInfo?.compatibilityStatus,
@@ -2927,7 +2969,7 @@ void main() {
         );
         expect(
           provider.capabilities.supportsPermissionProfileSelection,
-          isFalse,
+          isTrue,
         );
       },
     );

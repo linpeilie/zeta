@@ -21,5 +21,20 @@ void main() {
         isNull,
       );
     });
+
+    test('derives built-in permission profiles and readable labels', () {
+      const workspace = AgentPermissionSelection();
+      expect(workspace.protocolPermissionProfileId, ':workspace');
+      expect(workspace.displayLabel, 'Workspace write · Ask first');
+
+      const custom = AgentPermissionSelection(
+        approvalPolicy: 'on-request',
+        sandboxPolicy: 'workspaceWrite',
+        permissionProfileId: ':team-safe',
+      );
+      expect(custom.matchedPresetId, isNull);
+      expect(custom.protocolPermissionProfileId, ':team-safe');
+      expect(custom.displayLabel, 'Workspace write · Ask first · :team-safe');
+    });
   });
 }

@@ -941,7 +941,8 @@ class _PermissionPolicyButtonState extends State<_PermissionPolicyButton> {
   String get _displayLabel {
     for (final preset in widget.presets) {
       if (preset.id == widget.selectedPresetId) {
-        return preset.label;
+        return '${preset.label} · '
+            '${AgentPermissionSelection.approvalPolicyDisplayLabel(preset.approvalPolicy)}';
       }
     }
     return widget.label;
@@ -956,7 +957,7 @@ class _PermissionPolicyButtonState extends State<_PermissionPolicyButton> {
     return _ComposerSelectorTrigger(
       surfaceKey: const ValueKey('agent-permission-policy-selector'),
       tooltip: 'Approval & sandbox',
-      semanticLabel: '$displayLabel，工作目录权限',
+      semanticLabel: '$displayLabel，审批与沙箱',
       open: open,
       focusNode: _triggerFocusNode,
       onPressed: widget.presets.isEmpty ? null : _togglePopover,
@@ -1029,7 +1030,7 @@ class _PermissionPolicyPopover extends StatelessWidget {
       child: Semantics(
         container: true,
         explicitChildNodes: true,
-        label: '工作目录权限',
+        label: '审批与沙箱',
         child: SizedBox(
           key: const ValueKey('agent-permission-policy-popover'),
           width: width,
@@ -1049,7 +1050,7 @@ class _PermissionPolicyPopover extends StatelessWidget {
                       child: Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          '工作目录权限',
+                          '审批与沙箱',
                           style: IdeTextStyles.of(context).bodySmall.copyWith(
                             color: colors.textTertiary,
                             fontSize: 12,
@@ -1101,6 +1102,10 @@ class _PermissionPolicyOption extends StatelessWidget {
   final bool selected;
   final VoidCallback onPressed;
 
+  String get _displayLabel =>
+      '${preset.label} · '
+      '${AgentPermissionSelection.approvalPolicyDisplayLabel(preset.approvalPolicy)}';
+
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
@@ -1114,7 +1119,7 @@ class _PermissionPolicyOption extends StatelessWidget {
       borderRadius: IdeRadius.allSmall,
       selectedBackgroundColor: colors.border.withValues(alpha: 0.2),
       focusBorderColor: colors.focusRing,
-      semanticLabel: '${preset.label}${selected ? '，已选择' : ''}',
+      semanticLabel: '$_displayLabel${selected ? '，已选择' : ''}',
       child: Row(
         children: [
           SizedBox(
@@ -1126,7 +1131,7 @@ class _PermissionPolicyOption extends StatelessWidget {
           const SizedBox(width: IdeSpacing.space6),
           Expanded(
             child: Text(
-              preset.label,
+              _displayLabel,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: IdeTextStyles.of(context).bodySmall.copyWith(

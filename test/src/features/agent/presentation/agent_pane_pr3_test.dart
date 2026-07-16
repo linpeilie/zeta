@@ -1051,7 +1051,7 @@ void main() {
             modelSurface.backgroundColor,
           );
           expect(permissionSurface.borderColor, modelSurface.borderColor);
-          expect(find.text('Workspace write'), findsOneWidget);
+          expect(find.text('Workspace write · Ask first'), findsOneWidget);
 
           await tester.tap(permissionSelector);
           await tester.pump();
@@ -1062,7 +1062,7 @@ void main() {
           );
           expect(popover, findsOneWidget);
           expect(tester.getSize(popover).width, 288);
-          expect(find.text('工作目录权限'), findsOneWidget);
+          expect(find.text('审批与沙箱'), findsOneWidget);
           final popoverPanel = find.descendant(
             of: popover,
             matching: find.byType(PanelCard),
@@ -1092,7 +1092,7 @@ void main() {
 
           expect(viewModel.permissionSelection.matchedPresetId, 'fullAccess');
           expect(popover, findsNothing);
-          expect(find.text('Full access'), findsOneWidget);
+          expect(find.text('Full access · Never ask'), findsOneWidget);
         },
       );
 

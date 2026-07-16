@@ -215,8 +215,9 @@ class AgentProviderCapabilities {
     supportsServiceTierSelection: true,
     supportsPermissionPolicySelection: true,
     supportsPermissionProfileDiscovery: true,
-    // 0.144.5 的 profile 选择仍属于实验性协议，Zeta 暂不承诺可选。
-    supportsPermissionProfileSelection: false,
+    // 运行时通过 experimentalApi 协商并做版本门控；静态阶段先保留入口，避免
+    // 在 provider initialize 前清空已持久化的 profile 选择。
+    supportsPermissionProfileSelection: true,
     supportsUsage: true,
   );
 

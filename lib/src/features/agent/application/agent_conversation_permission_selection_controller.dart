@@ -61,7 +61,7 @@ class AgentConversationPermissionSelectionController {
       sandboxPolicy: preset.sandboxPolicy,
       permissionProfileId:
           _provider?.capabilities.supportsPermissionProfileSelection == true
-          ? _selection.permissionProfileId
+          ? preset.permissionProfileId
           : null,
     );
     await _syncSelection();

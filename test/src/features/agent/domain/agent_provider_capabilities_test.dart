@@ -16,7 +16,7 @@ void main() {
       expect(capabilities.supportsLocalImageInput, isTrue);
       expect(capabilities.supportsPermissionPolicySelection, isTrue);
       expect(capabilities.supportsPermissionProfileDiscovery, isTrue);
-      expect(capabilities.supportsPermissionProfileSelection, isFalse);
+      expect(capabilities.supportsPermissionProfileSelection, isTrue);
       expect(capabilities.supportsPlanApproval, isFalse);
     });
 
