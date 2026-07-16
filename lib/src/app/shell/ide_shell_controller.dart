@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/application/agent_thread_workspace_controller.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -33,6 +34,8 @@ typedef IdeShellStatusReporter = void Function(String message);
 /// 它承接项目打开、文件树状态、会话恢复/保存以及 Agent thread 选择同步，
 /// 让页面只负责三栏布局和 UI 事件转发。
 class IdeShellController extends ChangeNotifier {
+  static const String _bootstrapProjectPath = '';
+
   IdeShellController({
     required this._directoryPicker,
     required IdeSessionStore sessionStore,
@@ -49,18 +52,27 @@ class IdeShellController extends ChangeNotifier {
          store: sessionStore,
          saveDelay: sessionSaveDelay,
        ) {
-    agentViewModel = AgentConversationViewModel(
-      providerController: agentProviderController,
+    agentWorkspaceController = AgentThreadWorkspaceController(
+      providerFactory: agentProviderFactory,
+      configStore: agentProviderConfigStore,
       workspaceFilesProvider: () => _workspaceTree,
     );
+    _bootstrapAgentEntry = agentWorkspaceController.ensureDraftEntry(
+      projectPath: _bootstrapProjectPath,
+      providerId: defaultAgentProviderId,
+    );
+    agentWorkspaceController.selectEntry(_bootstrapAgentEntry.entryId);
     projectThreadsController = ProjectThreadsController(
       providerController: agentProviderController,
       viewModel: projectThreadsViewModel,
     );
     projectThreadsController.onActiveThreadCleared = _handleActiveThreadCleared;
-    agentViewModel.addListener(_handleAgentChanged);
+    agentWorkspaceController.addListener(_handleAgentWorkspaceChanged);
     projectThreadsViewModel.addListener(_handleProjectThreadsChanged);
-    unawaited(agentViewModel.loadSettings());
+    _refreshWorkspaceEntryBindings();
+    _bindSelectedWorkspaceRuntime();
+    unawaited(agentProviderController.loadSettings());
+    unawaited(selectedAgentViewModel.loadSettings());
     unawaited(_restoreSession());
   }
 
@@ -70,9 +82,18 @@ class IdeShellController extends ChangeNotifier {
   final IdeSessionPersistenceCoordinator _sessionCoordinator;
 
   final ActiveAgentProviderController agentProviderController;
-  late final AgentConversationViewModel agentViewModel;
+  late final AgentThreadWorkspaceController agentWorkspaceController;
+  late final AgentThreadWorkspaceEntry _bootstrapAgentEntry;
   late final ProjectThreadsController projectThreadsController;
   final ProjectThreadsViewModel projectThreadsViewModel;
+  final Map<String, ({AgentThreadWorkspaceEntry entry, VoidCallback listener})>
+  _workspaceEntryListeners =
+      <String, ({AgentThreadWorkspaceEntry entry, VoidCallback listener})>{};
+
+  ({AgentConversationViewModel viewModel, VoidCallback listener})?
+  _selectedWorkspaceViewModelBinding;
+  ({ActiveAgentProviderController providerController, VoidCallback listener})?
+  _selectedProviderControllerBinding;
 
   List<WorkspaceNode> _workspaceTree = const <WorkspaceNode>[];
   Set<String> _expandedDirectoryPaths = <String>{};
@@ -83,6 +104,19 @@ class IdeShellController extends ChangeNotifier {
   String? _selectedTreePath;
   bool _isLoadingProject = false;
   bool _isDisposed = false;
+
+  List<AgentThreadWorkspaceEntry> get agentWorkspaceEntries =>
+      agentWorkspaceController.entries;
+
+  String? get selectedAgentWorkspaceEntryId =>
+      agentWorkspaceController.selectedEntryId;
+
+  AgentConversationViewModel get selectedAgentViewModel =>
+      agentWorkspaceController.selectedEntry?.viewModel ??
+      _bootstrapAgentEntry.viewModel;
+
+  /// 兼容旧调用点；请优先改用 [selectedAgentViewModel]。
+  AgentConversationViewModel get agentViewModel => selectedAgentViewModel;
 
   List<String> get projects => List<String>.unmodifiable(_projects);
 
@@ -223,7 +257,6 @@ class IdeShellController extends ChangeNotifier {
     String projectPath, {
     required String providerId,
   }) async {
-    await agentViewModel.loadSettings();
     if (!_canMutateAgentHistory(providerId: providerId)) {
       return;
     }
@@ -236,30 +269,14 @@ class IdeShellController extends ChangeNotifier {
         return;
       }
     }
-
-    if (providerId != agentViewModel.activeProviderId) {
-      try {
-        await agentViewModel.switchActiveProvider(providerId);
-      } catch (error, stackTrace) {
-        _log.warning(
-          'Could not select provider $providerId for a new thread',
-          error,
-          stackTrace,
-        );
-        _statusReporter?.call('Could not select Agent provider: $error');
-        return;
-      }
+    try {
+      await _selectWorkspaceDraftEntry(
+        projectPath: projectPath,
+        providerId: providerId,
+      );
+    } catch (_) {
+      return;
     }
-
-    projectThreadsController.clearSelectedThread(projectPath);
-    _agentThreadIdsByProject.remove(projectPath);
-    agentViewModel.updateWorkspace(
-      projectPath: projectPath,
-      contextFilePath: _currentFilePath,
-      resetConversation: true,
-    );
-    _requestSessionSave();
-    _notifyStateChanged();
   }
 
   Future<void> openProjectInSystemFileManager(String projectPath) async {
@@ -290,6 +307,7 @@ class IdeShellController extends ChangeNotifier {
     _projects.removeAt(index);
     _agentThreadIdsByProject.remove(path);
     projectThreadsController.retainProjects(_projects);
+    agentWorkspaceController.removeEntriesForProject(path);
 
     if (!wasActive) {
       _requestSessionSave();
@@ -314,12 +332,14 @@ class IdeShellController extends ChangeNotifier {
     if (projectPath != _projectPath) {
       await _loadProject(projectPath, activateThreads: false);
     }
-
-    projectThreadsController.registerThreadMapping(projectPath, thread.id);
-    projectThreadsController.selectThread(projectPath, thread);
-    _agentThreadIdsByProject[projectPath] = thread.id;
-    _requestSessionSave();
-    await agentViewModel.switchThread(thread);
+    if (_projectPath != projectPath) {
+      return;
+    }
+    await _selectWorkspaceThreadEntry(
+      projectPath: projectPath,
+      thread: thread,
+      persistSelection: true,
+    );
   }
 
   void handleTreeExpansionChanged(String key, bool expanded) {
@@ -347,7 +367,7 @@ class IdeShellController extends ChangeNotifier {
     }
 
     _currentFilePath = node.path;
-    _syncAgentWorkspace();
+    _syncProjectEntryContexts(_projectPath);
     _notifyStateChanged();
     _requestSessionSave();
   }
@@ -388,7 +408,7 @@ class IdeShellController extends ChangeNotifier {
       if (activateThreads) {
         projectThreadsController.activateProject(path);
       }
-      _syncAgentWorkspace();
+      await _syncSelectedAgentWorkspace();
       _requestSessionSave();
       _log.info('Opened project folder: $path');
       _notifyStateChanged();
@@ -415,7 +435,7 @@ class IdeShellController extends ChangeNotifier {
         return;
       case IdeSessionRestoreStatus.failed:
         _currentFilePath = null;
-        _syncAgentWorkspace();
+        await _syncSelectedAgentWorkspace();
         _notifyStateChanged();
         if (result.shouldRequestSave) {
           _requestSessionSave();
@@ -478,7 +498,7 @@ class IdeShellController extends ChangeNotifier {
       }
       projectThreadsController.registerThreadMapping(entry.key, thread.id);
     }
-    _syncAgentWorkspace();
+    await _syncSelectedAgentWorkspace();
     _log.info(
       'Restored IDE session with ${session.projectPaths.length} projects',
     );
@@ -528,23 +548,29 @@ class IdeShellController extends ChangeNotifier {
     _selectedTreePath = null;
     _expandedDirectoryPaths = <String>{};
     _workspaceTree = const <WorkspaceNode>[];
-    _syncAgentWorkspace();
+    agentWorkspaceController.selectEntry(_bootstrapAgentEntry.entryId);
+    _bootstrapAgentEntry.viewModel.updateWorkspace(
+      projectPath: null,
+      contextFilePath: null,
+      resetConversation: true,
+    );
     _requestSessionSave();
     _notifyStateChanged();
   }
 
   IdeSessionState _currentSessionState() {
+    final selectedAgentViewModel = this.selectedAgentViewModel;
     return buildIdeSessionState(
       projectPaths: _projects,
       activeProjectPath: _projectPath,
       currentFilePath: _currentFilePath,
       expandedDirectoryPaths: _currentExpandedDirectoryPaths(),
       selectedTreeKey: _selectedTreePath,
-      activeAgentProviderId: agentViewModel.activeProviderId,
+      activeAgentProviderId: selectedAgentViewModel.activeProviderId,
       agentThreadIdsByProject: _agentThreadIdsByProject,
       projectThreadsSessionSnapshot: projectThreadsController.sessionSnapshot,
       currentProjectPath: _projectPath,
-      currentSessionId: agentViewModel.sessionId,
+      currentSessionId: selectedAgentViewModel.sessionId,
     );
   }
 
@@ -556,17 +582,26 @@ class IdeShellController extends ChangeNotifier {
     return WorkspaceNode.findByPath(_workspaceTree, path);
   }
 
-  void _syncAgentWorkspace() {
+  Future<void> _syncSelectedAgentWorkspace() async {
     final projectPath = _projectPath;
-    var restoredSessionId = projectPath == null
-        ? null
-        : _agentThreadIdsByProject[projectPath];
-    var restoredThread = projectPath == null || restoredSessionId == null
+    if (projectPath == null) {
+      agentWorkspaceController.selectEntry(_bootstrapAgentEntry.entryId);
+      _bootstrapAgentEntry.applyDraftIdentity(
+        projectPath: _bootstrapProjectPath,
+        providerId: _bootstrapAgentEntry.providerId,
+      );
+      _bootstrapAgentEntry.viewModel.updateWorkspace(
+        projectPath: null,
+        contextFilePath: null,
+      );
+      return;
+    }
+
+    var restoredSessionId = _agentThreadIdsByProject[projectPath];
+    var restoredThread = restoredSessionId == null
         ? null
         : _threadSummaryFor(projectPath, restoredSessionId);
-    if (projectPath != null &&
-        restoredSessionId != null &&
-        restoredThread == null) {
+    if (restoredSessionId != null && restoredThread == null) {
       _log.warning(
         'Discarding thread $restoredSessionId without provider ownership',
       );
@@ -574,77 +609,313 @@ class IdeShellController extends ChangeNotifier {
       projectThreadsController.clearSelectedThread(projectPath);
       restoredSessionId = null;
     }
-    if (projectPath != null && restoredThread != null) {
+    if (restoredThread != null) {
       projectThreadsController.registerThreadMapping(
         projectPath,
         restoredThread.id,
       );
-    }
-    // Agent 上下文只传项目路径和当前文件路径；不会读取文件内容。
-    agentViewModel.updateWorkspace(
-      projectPath: projectPath,
-      contextFilePath: _currentFilePath,
-      restoredSessionId: restoredSessionId,
-      restoredProviderId: restoredThread?.providerId,
-    );
-    // 项目就绪后预加载模型列表，使输入框下方控件在发送前可用。
-    if (projectPath != null) {
-      unawaited(agentViewModel.loadModels());
-    }
-  }
-
-  void _handleAgentChanged() {
-    final projectPath = _projectPath;
-    final currentSession = agentViewModel.currentSession;
-    final sessionId = agentViewModel.sessionId;
-    if (projectPath == null || sessionId == null) {
+      await _selectWorkspaceThreadEntry(
+        projectPath: projectPath,
+        thread: restoredThread,
+        persistSelection: false,
+      );
       return;
     }
 
+    try {
+      await _selectWorkspaceDraftEntry(
+        projectPath: projectPath,
+        providerId: _preferredDraftProviderId(),
+        persistSelection: false,
+      );
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Could not restore draft workspace for $projectPath',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<AgentThreadWorkspaceEntry> _selectWorkspaceDraftEntry({
+    required String projectPath,
+    required String providerId,
+    bool persistSelection = true,
+  }) async {
+    final entry = agentWorkspaceController.ensureDraftEntry(
+      projectPath: projectPath,
+      providerId: providerId,
+    );
+    entry.applyDraftIdentity(projectPath: projectPath, providerId: providerId);
+    agentWorkspaceController.selectEntry(entry.entryId);
+    await entry.viewModel.loadSettings();
+    if (entry.viewModel.activeProviderId != providerId) {
+      try {
+        await entry.viewModel.switchActiveProvider(providerId);
+      } catch (error, stackTrace) {
+        _log.warning(
+          'Could not select provider $providerId for project draft $projectPath',
+          error,
+          stackTrace,
+        );
+        _statusReporter?.call('Could not select Agent provider: $error');
+        rethrow;
+      }
+    }
+    entry.viewModel.updateWorkspace(
+      projectPath: projectPath,
+      contextFilePath: _currentFilePath,
+      resetConversation: false,
+    );
+    projectThreadsController.clearSelectedThread(projectPath);
+    _agentThreadIdsByProject.remove(projectPath);
+    unawaited(entry.viewModel.loadModels());
+    if (persistSelection) {
+      _requestSessionSave();
+      _notifyStateChanged();
+    }
+    return entry;
+  }
+
+  Future<AgentThreadWorkspaceEntry> _selectWorkspaceThreadEntry({
+    required String projectPath,
+    required AgentThreadSummary thread,
+    bool persistSelection = true,
+  }) async {
+    final entry = agentWorkspaceController.ensureThreadEntry(
+      projectPath: projectPath,
+      providerId: thread.providerId,
+      threadId: thread.id,
+    );
+    entry.bindThreadIdentity(
+      projectPath: projectPath,
+      providerId: thread.providerId,
+      threadId: thread.id,
+    );
+    agentWorkspaceController.selectEntry(entry.entryId);
+    entry.viewModel.updateWorkspace(
+      projectPath: projectPath,
+      contextFilePath: _currentFilePath,
+    );
+    projectThreadsController.registerThreadMapping(projectPath, thread.id);
+    projectThreadsController.selectThread(projectPath, thread);
+    _agentThreadIdsByProject[projectPath] = thread.id;
+    if (_shouldLoadWorkspaceThreadEntry(entry, thread)) {
+      await entry.viewModel.switchThread(thread);
+    } else {
+      unawaited(entry.viewModel.loadModels());
+    }
+    _syncSelectedThreadTitleFromList();
+    if (persistSelection) {
+      _requestSessionSave();
+      _notifyStateChanged();
+    }
+    return entry;
+  }
+
+  bool _shouldLoadWorkspaceThreadEntry(
+    AgentThreadWorkspaceEntry entry,
+    AgentThreadSummary thread,
+  ) {
+    if (entry.viewModel.sessionId != thread.id) {
+      return true;
+    }
+    if (entry.viewModel.threadOpenPhase == AgentThreadOpenPhase.openFailed) {
+      return true;
+    }
+    if (entry.viewModel.currentSession != null) {
+      return false;
+    }
+    if (entry.viewModel.visibleHistoryTurns.isNotEmpty ||
+        entry.viewModel.liveTurnState != null) {
+      return false;
+    }
+    return entry.viewModel.threadOpenPhase != AgentThreadOpenPhase.idle;
+  }
+
+  void _syncProjectEntryContexts(String? projectPath) {
+    if (projectPath == null) {
+      return;
+    }
+    for (final entry in agentWorkspaceController.entriesForProject(
+      projectPath,
+    )) {
+      entry.viewModel.updateWorkspace(
+        projectPath: projectPath,
+        contextFilePath: _currentFilePath,
+      );
+    }
+  }
+
+  String _preferredDraftProviderId() {
+    final preferred = selectedAgentViewModel.threadProviderId;
+    if (agentProviderController.isProviderEnabled(preferred)) {
+      return preferred;
+    }
+    return agentProviderController.activeProviderId;
+  }
+
+  void _handleAgentWorkspaceChanged() {
+    if (_isDisposed) {
+      return;
+    }
+    _refreshWorkspaceEntryBindings();
+    _bindSelectedWorkspaceRuntime();
+    _syncAllWorkspaceEntries();
+    _requestSessionSave();
+    _notifyStateChanged();
+  }
+
+  void _refreshWorkspaceEntryBindings() {
+    final activeIds = agentWorkspaceController.entries
+        .map((entry) => entry.entryId)
+        .toSet();
+    for (final staleId
+        in _workspaceEntryListeners.keys
+            .where((entryId) => !activeIds.contains(entryId))
+            .toList()) {
+      _workspaceEntryListeners.remove(staleId);
+    }
+    for (final entry in agentWorkspaceController.entries) {
+      if (_workspaceEntryListeners.containsKey(entry.entryId)) {
+        continue;
+      }
+      void listener() => _handleWorkspaceEntryChanged(entry.entryId);
+      entry.addListener(listener);
+      _workspaceEntryListeners[entry.entryId] = (
+        entry: entry,
+        listener: listener,
+      );
+      _syncWorkspaceEntryState(entry);
+    }
+  }
+
+  void _bindSelectedWorkspaceRuntime() {
+    final selectedEntry = agentWorkspaceController.selectedEntry;
+
+    final currentViewModelBinding = _selectedWorkspaceViewModelBinding;
+    if (currentViewModelBinding != null &&
+        !identical(
+          currentViewModelBinding.viewModel,
+          selectedEntry?.viewModel,
+        )) {
+      currentViewModelBinding.viewModel.removeListener(
+        currentViewModelBinding.listener,
+      );
+      _selectedWorkspaceViewModelBinding = null;
+    }
+    if (selectedEntry != null && _selectedWorkspaceViewModelBinding == null) {
+      final listener = _handleSelectedWorkspaceViewModelChanged;
+      selectedEntry.viewModel.addListener(listener);
+      _selectedWorkspaceViewModelBinding = (
+        viewModel: selectedEntry.viewModel,
+        listener: listener,
+      );
+    }
+
+    final currentProviderBinding = _selectedProviderControllerBinding;
+    if (currentProviderBinding != null &&
+        !identical(
+          currentProviderBinding.providerController,
+          selectedEntry?.providerController,
+        )) {
+      currentProviderBinding.providerController.removeListener(
+        currentProviderBinding.listener,
+      );
+      _selectedProviderControllerBinding = null;
+    }
+    if (selectedEntry != null && _selectedProviderControllerBinding == null) {
+      final listener = _handleSelectedProviderControllerChanged;
+      selectedEntry.providerController.addListener(listener);
+      _selectedProviderControllerBinding = (
+        providerController: selectedEntry.providerController,
+        listener: listener,
+      );
+    }
+  }
+
+  void _handleWorkspaceEntryChanged(String entryId) {
+    if (_isDisposed) {
+      return;
+    }
+    final binding = _workspaceEntryListeners[entryId];
+    if (binding == null) {
+      return;
+    }
+    _syncWorkspaceEntryState(binding.entry);
+    if (entryId == selectedAgentWorkspaceEntryId) {
+      _notifyStateChanged();
+    }
+    _requestSessionSave();
+  }
+
+  void _syncAllWorkspaceEntries() {
+    for (final entry in agentWorkspaceController.entries) {
+      _syncWorkspaceEntryState(entry);
+    }
+  }
+
+  void _syncWorkspaceEntryState(AgentThreadWorkspaceEntry entry) {
+    final projectPath = entry.projectPath;
+    if (projectPath.isEmpty) {
+      return;
+    }
+
+    final snapshot = entry.threadSnapshot;
+    final sessionId = snapshot.sessionId;
     final state = projectThreadsController.stateFor(projectPath);
+    final currentSession = entry.viewModel.currentSession;
     final hasProviderSummary =
-        currentSession == null ||
+        sessionId == null ||
         state.threads.any(
           (thread) =>
-              thread.id == currentSession.id &&
-              thread.providerId == currentSession.providerId,
+              thread.id == sessionId &&
+              thread.providerId == snapshot.providerId,
         );
-    final mappingChanged = _agentThreadIdsByProject[projectPath] != sessionId;
-
-    var selectedBySessionRegistration = false;
-    final turnRunning = agentViewModel.isTurnRunning;
     if (currentSession != null && !hasProviderSummary) {
       projectThreadsController.registerSession(
         projectPath,
         currentSession,
-        preview: _provisionalThreadPreview(),
-        // 新建 session 时常已在发首条消息；乐观标 running，避免事件订阅滞后无动画。
-        markRunning: turnRunning,
+        preview: _provisionalThreadPreview(entry.viewModel),
+        markRunning: snapshot.isTurnRunning,
       );
-      selectedBySessionRegistration = true;
     }
-    if (mappingChanged) {
-      // Agent 创建或恢复 thread 后，把 thread id 写回项目级映射。
-      _agentThreadIdsByProject[projectPath] = sessionId;
+    if (sessionId != null) {
       projectThreadsController.registerThreadMapping(projectPath, sessionId);
-      if (!selectedBySessionRegistration) {
-        projectThreadsController.selectThreadId(projectPath, sessionId);
-      }
-      _requestSessionSave();
+      projectThreadsController.syncRuntimeSnapshot(
+        projectPath: projectPath,
+        snapshot: snapshot,
+      );
     }
-    // 详情侧 turn 生命周期驱动侧栏执行指示；不单依赖 provider 事件到达列表 controller。
-    projectThreadsController.registerThreadMapping(projectPath, sessionId);
-    projectThreadsController.setThreadRunning(
-      sessionId,
-      isRunning: turnRunning,
-    );
-    // 注意：不要把详情侧的临时首条消息标题回写为列表 title。
-    // 正式标题只应由 name/updated（Grok 为 summary.generated_title）驱动。
+
+    if (entry.entryId != selectedAgentWorkspaceEntryId ||
+        projectPath != _projectPath) {
+      return;
+    }
+
+    if (sessionId == null) {
+      projectThreadsController.clearSelectedThread(projectPath);
+      _agentThreadIdsByProject.remove(projectPath);
+      return;
+    }
+
+    _agentThreadIdsByProject[projectPath] = sessionId;
+    projectThreadsController.selectThreadId(projectPath, sessionId);
+    _syncSelectedThreadTitleFromList();
+  }
+
+  void _handleSelectedWorkspaceViewModelChanged() {
+    _notifyStateChanged();
+  }
+
+  void _handleSelectedProviderControllerChanged() {
+    unawaited(agentProviderController.reloadSettings());
+    _notifyStateChanged();
   }
 
   /// 从当前时间线取首条用户消息，作为新 thread 的临时列表 preview。
-  String? _provisionalThreadPreview() {
-    for (final message in agentViewModel.messages) {
+  String? _provisionalThreadPreview(AgentConversationViewModel viewModel) {
+    for (final message in viewModel.messages) {
       if (message.role != AgentMessageRole.user) {
         continue;
       }
@@ -668,7 +939,7 @@ class IdeShellController extends ChangeNotifier {
 
   void _handleProjectThreadsChanged() {
     // 列表标题可能因 thread/name/updated 或刷新而变化；详情头栏需同步。
-    _syncActiveThreadTitleFromList();
+    _syncSelectedThreadTitleFromList();
     _notifyStateChanged();
     _requestSessionSave();
   }
@@ -678,9 +949,10 @@ class IdeShellController extends ChangeNotifier {
   /// 仅使用 summary.title（generated_title / 手动重命名），不用 preview。
   /// 这样刷新列表拿到正式标题后，停留在详情也能更新；又不会把首条
   /// 用户消息 preview 误当成最终标题。
-  void _syncActiveThreadTitleFromList() {
+  void _syncSelectedThreadTitleFromList() {
     final projectPath = _projectPath;
-    final sessionId = agentViewModel.sessionId;
+    final viewModel = selectedAgentViewModel;
+    final sessionId = viewModel.sessionId;
     if (projectPath == null || sessionId == null) {
       return;
     }
@@ -692,18 +964,31 @@ class IdeShellController extends ChangeNotifier {
     if (title == null || title.isEmpty) {
       return;
     }
-    agentViewModel.syncThreadTitleIfCurrent(sessionId, title);
+    viewModel.syncThreadTitleIfCurrent(sessionId, title);
   }
 
   void _handleActiveThreadCleared(String projectPath, String threadId) {
     if (_agentThreadIdsByProject[projectPath] == threadId) {
       _agentThreadIdsByProject.remove(projectPath);
     }
-    if (projectPath == _projectPath) {
-      agentViewModel.updateWorkspace(
-        projectPath: projectPath,
-        contextFilePath: _currentFilePath,
-        resetConversation: true,
+    final removedEntries = <String>[
+      for (final entry in agentWorkspaceController.entriesForProject(
+        projectPath,
+      ))
+        if (entry.threadId == threadId) entry.entryId,
+    ];
+    final removedSelected = removedEntries.contains(
+      selectedAgentWorkspaceEntryId,
+    );
+    for (final entryId in removedEntries) {
+      agentWorkspaceController.removeEntry(entryId);
+    }
+    if (removedSelected && projectPath == _projectPath) {
+      unawaited(
+        _selectWorkspaceDraftEntry(
+          projectPath: projectPath,
+          providerId: _preferredDraftProviderId(),
+        ),
       );
     }
     _requestSessionSave();
@@ -739,11 +1024,25 @@ class IdeShellController extends ChangeNotifier {
     unawaited(saveNow());
     _isDisposed = true;
     _sessionCoordinator.dispose();
+    agentWorkspaceController.removeListener(_handleAgentWorkspaceChanged);
     projectThreadsViewModel.removeListener(_handleProjectThreadsChanged);
-    agentViewModel.removeListener(_handleAgentChanged);
+    final selectedViewModelBinding = _selectedWorkspaceViewModelBinding;
+    if (selectedViewModelBinding != null) {
+      selectedViewModelBinding.viewModel.removeListener(
+        selectedViewModelBinding.listener,
+      );
+      _selectedWorkspaceViewModelBinding = null;
+    }
+    final selectedProviderBinding = _selectedProviderControllerBinding;
+    if (selectedProviderBinding != null) {
+      selectedProviderBinding.providerController.removeListener(
+        selectedProviderBinding.listener,
+      );
+      _selectedProviderControllerBinding = null;
+    }
     projectThreadsController.dispose();
     projectThreadsViewModel.dispose();
-    agentViewModel.dispose();
+    agentWorkspaceController.dispose();
     agentProviderController.dispose();
     super.dispose();
   }

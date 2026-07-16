@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_event_listener_gate.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
@@ -258,6 +259,32 @@ class ProjectThreadsController {
   /// 由详情侧 turn 状态同步列表执行中指示（不依赖 provider 事件是否已送达）。
   void setThreadRunning(String threadId, {required bool isRunning}) {
     _setThreadRunning(threadId, isRunning: isRunning);
+  }
+
+  /// 用常驻 thread runtime 快照同步列表状态。
+  ///
+  /// 这里不依赖当前 active provider 的单路事件流；已打开 thread 的后台执行、
+  /// 等待审批与等待输入都应由各自 runtime 常驻同步。
+  void syncRuntimeSnapshot({
+    required String projectPath,
+    required AgentConversationThreadSnapshot snapshot,
+  }) {
+    final sessionId = snapshot.sessionId;
+    if (sessionId == null || sessionId.isEmpty) {
+      return;
+    }
+    _registerThreadMapping(projectPath, sessionId);
+    final runtimeStatus = snapshot.runtimeStatus;
+    if (runtimeStatus != null) {
+      viewModel.updateThreadRuntimeStatus(
+        projectPath: projectPath,
+        threadId: sessionId,
+        status: runtimeStatus,
+        waitingOnApproval: snapshot.waitingOnApproval,
+        waitingOnUserInput: snapshot.waitingOnUserInput,
+      );
+    }
+    _setThreadRunning(sessionId, isRunning: snapshot.isTurnRunning);
   }
 
   /// 更新列表中某条 thread 的标题（供 shell 从详情侧回写）。
@@ -806,7 +833,6 @@ class ProjectThreadsController {
       return provider;
     }
 
-    final previousProvider = _provider;
     final previousSubscription = _providerEventSubscription;
     final scope = _providerEventListenerGate.activate(
       providerId: provider.config.id,
@@ -854,12 +880,6 @@ class ProjectThreadsController {
     );
     _providerEventSubscription = subscription;
     await previousSubscription?.cancel();
-    // 仅清理「旧 provider 名下」的执行中标记。同 id 重建实例时保留乐观 running，
-    // 避免新建 thread 刚 markRunning 就被整表清空导致侧栏无转圈。
-    if (previousProvider != null &&
-        previousProvider.config.id != provider.config.id) {
-      _clearRunningThreadIdsOwnedByProvider(previousProvider.config.id);
-    }
     return provider;
   }
 
@@ -1050,30 +1070,6 @@ class ProjectThreadsController {
 
   void _registerThreadMapping(String projectPath, String threadId) {
     _projectPathByThreadId[threadId] = projectPath;
-  }
-
-  /// 去掉属于 [providerId] 的 thread 的执行中标记（切换 active provider 时用）。
-  void _clearRunningThreadIdsOwnedByProvider(String providerId) {
-    for (final entry in viewModel.states.entries) {
-      final state = entry.value;
-      if (state.runningThreadIds.isEmpty) {
-        continue;
-      }
-      final ownedIds = <String>{
-        for (final thread in state.threads)
-          if (thread.providerId == providerId) thread.id,
-      };
-      if (ownedIds.isEmpty) {
-        continue;
-      }
-      final nextRunning = state.runningThreadIds
-          .where((threadId) => !ownedIds.contains(threadId))
-          .toSet();
-      if (nextRunning.length == state.runningThreadIds.length) {
-        continue;
-      }
-      viewModel.setRunningThreadIds(entry.key, nextRunning);
-    }
   }
 
   List<AgentThreadSummary> _appendUnique(

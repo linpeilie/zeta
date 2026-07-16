@@ -700,7 +700,10 @@ void main() {
             ),
           );
           await tester.ensureVisible(expandAllFinder);
-          await tester.tap(expandAllFinder);
+          final expandAllButton = tester.widget<sf.GhostButton>(
+            expandAllFinder,
+          );
+          expandAllButton.onPressed?.call();
           await _pumpAgentPaneUi(tester);
 
           expect(viewModel.historyVersion, historyVersion);

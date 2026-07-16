@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -523,6 +524,64 @@ void main() {
 
       controller.setThreadRunning('new-thread', isRunning: false);
       expect(controller.stateFor('/repo').runningThreadIds, isEmpty);
+    });
+
+    test('syncRuntimeSnapshot keeps multiple background thread states', () {
+      final provider = _FakeAgentProvider(pages: const <AgentThreadPage>[]);
+      final controller = _createController(provider);
+
+      controller.registerSession(
+        '/repo',
+        const AgentSession(
+          id: 'thread-a',
+          providerId: defaultAgentProviderId,
+          title: 'Thread A',
+        ),
+      );
+      controller.registerSession(
+        '/repo',
+        const AgentSession(
+          id: 'thread-b',
+          providerId: defaultAgentProviderId,
+          title: 'Thread B',
+        ),
+      );
+      controller.selectThreadId('/repo', 'thread-b');
+
+      controller.syncRuntimeSnapshot(
+        projectPath: '/repo',
+        snapshot: const AgentConversationThreadSnapshot(
+          sessionId: 'thread-a',
+          providerId: defaultAgentProviderId,
+          threadTitle: 'Thread A',
+          isTurnRunning: true,
+          runtimeStatus: AgentThreadRuntimeStatus.active,
+          waitingOnApproval: false,
+          waitingOnUserInput: false,
+        ),
+      );
+      controller.syncRuntimeSnapshot(
+        projectPath: '/repo',
+        snapshot: const AgentConversationThreadSnapshot(
+          sessionId: 'thread-b',
+          providerId: defaultAgentProviderId,
+          threadTitle: 'Thread B',
+          isTurnRunning: true,
+          runtimeStatus: AgentThreadRuntimeStatus.active,
+          waitingOnApproval: false,
+          waitingOnUserInput: true,
+        ),
+      );
+
+      final state = controller.stateFor('/repo');
+      expect(state.selectedThreadId, 'thread-b');
+      expect(state.runningThreadIds, <String>{'thread-a', 'thread-b'});
+      final waitingThread = state.threads
+          .where((thread) => thread.id == 'thread-b')
+          .single;
+      expect(waitingThread.status, AgentThreadRuntimeStatus.active);
+      expect(waitingThread.waitingOnUserInput, isTrue);
+      expect(waitingThread.waitingOnApproval, isFalse);
     });
   });
 }

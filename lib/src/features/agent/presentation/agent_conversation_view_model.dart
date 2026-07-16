@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_permission_selection_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
@@ -54,6 +55,9 @@ class AgentConversationViewModel extends ChangeNotifier {
     );
     _modelSelectionController.addListener(_handleModelSelectionChanged);
     providerController.addListener(_handleProviderSettingsChanged);
+    _threadSnapshotListenable = ValueNotifier<AgentConversationThreadSnapshot>(
+      _buildThreadSnapshot(),
+    );
   }
 
   static const String defaultThreadTitle = 'New thread';
@@ -69,6 +73,8 @@ class AgentConversationViewModel extends ChangeNotifier {
   _permissionSelectionController;
   late final AgentConversationUiSignals _uiSignals;
   final AgentElapsedTicker _elapsedTicker = AgentElapsedTicker();
+  late final ValueNotifier<AgentConversationThreadSnapshot>
+  _threadSnapshotListenable;
 
   AgentProvider? _provider;
   StreamSubscription<AgentEvent>? _eventSubscription;
@@ -444,6 +450,13 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   String? get sessionId => _session?.id ?? _restoredSessionId;
 
+  /// 当前 thread/draft 的轻量运行时快照。
+  AgentConversationThreadSnapshot get threadSnapshot =>
+      _threadSnapshotListenable.value;
+
+  ValueListenable<AgentConversationThreadSnapshot>
+  get threadSnapshotListenable => _threadSnapshotListenable;
+
   /// 已由 provider 创建或恢复成功的当前会话；草稿和待恢复状态返回 null。
   AgentSession? get currentSession => _session;
 
@@ -455,6 +468,10 @@ class AgentConversationViewModel extends ChangeNotifier {
   }
 
   String get currentThreadTitle => _currentThreadTitle;
+
+  /// 当前 thread 逻辑归属的 provider id。
+  String get threadProviderId =>
+      _session?.providerId ?? _selectedProviderId ?? activeProviderId;
 
   bool get showRunningIndicator =>
       isTurnRunning && threadStatusCapsuleLabel == null;
@@ -1786,6 +1803,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     }
     _elapsedTicker.dispose();
     _uiSignals.dispose();
+    _threadSnapshotListenable.dispose();
     contextPanelVisible.dispose();
     unawaited(_eventSubscription?.cancel());
     _timeline.dispose();
@@ -2778,6 +2796,10 @@ class AgentConversationViewModel extends ChangeNotifier {
     bool liveTurn = false,
     bool autoScroll = false,
   }) {
+    final nextThreadSnapshot = _buildThreadSnapshot();
+    if (nextThreadSnapshot != _threadSnapshotListenable.value) {
+      _threadSnapshotListenable.value = nextThreadSnapshot;
+    }
     _uiSignals.publish(
       history: history,
       syncLiveTurn: syncLiveTurn,
@@ -2787,6 +2809,18 @@ class AgentConversationViewModel extends ChangeNotifier {
       expansion: expansion,
       liveTurn: liveTurn,
       autoScroll: autoScroll,
+    );
+  }
+
+  AgentConversationThreadSnapshot _buildThreadSnapshot() {
+    return AgentConversationThreadSnapshot(
+      sessionId: sessionId,
+      providerId: threadProviderId,
+      threadTitle: _currentThreadTitle,
+      isTurnRunning: isTurnRunning,
+      runtimeStatus: _threadRuntimeStatus,
+      waitingOnApproval: _threadWaitingOnApproval,
+      waitingOnUserInput: _threadWaitingOnUserInput,
     );
   }
 

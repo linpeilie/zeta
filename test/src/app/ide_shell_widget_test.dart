@@ -295,7 +295,7 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(find.byType(AgentPane, skipOffstage: false), findsOneWidget);
+      expect(retained.agentPaneElement.mounted, isTrue);
 
       await tester.tap(find.byKey(const ValueKey('settings-nav-agents')));
       await tester.pump();
@@ -337,7 +337,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.byType(AgentPane, skipOffstage: false), findsOneWidget);
+    expect(retained.agentPaneElement.mounted, isTrue);
 
     await tester.tap(
       find.byKey(const ValueKey('usage-statistics-back-button')),
@@ -345,6 +345,142 @@ void main() {
     await tester.pump();
 
     _expectRetainedAgentState(tester, retained);
+  });
+
+  testWidgets('switching threads keeps each pane draft isolated', (
+    tester,
+  ) async {
+    final directory = Directory.systemTemp.createTempSync('zeta_thread_tabs_');
+    addTearDown(() {
+      if (directory.existsSync()) {
+        directory.deleteSync(recursive: true);
+      }
+    });
+    File(
+      '${directory.path}${Platform.pathSeparator}sample.txt',
+    ).writeAsStringSync('thread pane retention');
+
+    final provider = FakeAgentProvider(
+      threadHistories: <String, AgentThreadHistorySnapshot>{
+        'thread-a': AgentThreadHistorySnapshot(
+          threadId: 'thread-a',
+          turns: <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-a-1',
+              entries: const <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'thread-a-history',
+                  role: AgentMessageRole.agent,
+                  text: 'Thread A history',
+                ),
+              ],
+            ),
+          ],
+        ),
+        'thread-b': AgentThreadHistorySnapshot(
+          threadId: 'thread-b',
+          turns: <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-b-1',
+              entries: const <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'thread-b-history',
+                  role: AgentMessageRole.agent,
+                  text: 'Thread B history',
+                ),
+              ],
+            ),
+          ],
+        ),
+      },
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[
+            agentThread(
+              id: 'thread-a',
+              projectPath: directory.path,
+              title: 'Thread A',
+            ),
+            agentThread(
+              id: 'thread-b',
+              projectPath: directory.path,
+              title: 'Thread B',
+              lastActiveAt: DateTime.fromMillisecondsSinceEpoch(3),
+            ),
+          ],
+          nextCursor: null,
+        ),
+      ],
+    );
+
+    await _pumpIde(
+      tester,
+      directoryPicker: () async => directory.path,
+      agentProviderFactory: FakeAgentProviderFactory(provider),
+      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+    );
+
+    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await tester.runAsync(waitForIo);
+
+    final threadARow = find.byKey(
+      ValueKey<String>('project-thread-${directory.path}-thread-a'),
+    );
+    final threadBRow = find.byKey(
+      ValueKey<String>('project-thread-${directory.path}-thread-b'),
+    );
+    await pumpUntilCondition(
+      tester,
+      () =>
+          threadARow.evaluate().isNotEmpty && threadBRow.evaluate().isNotEmpty,
+      failureMessage: 'Thread rows did not become ready',
+    );
+
+    await tester.tap(threadARow);
+    await pumpUntilCondition(
+      tester,
+      () =>
+          headerTitleText(tester) == 'Thread A' &&
+          find.text('Thread A history').evaluate().isNotEmpty,
+      failureMessage: 'Thread A pane did not become ready',
+    );
+    await tester.enterText(_agentMessageInput(), 'draft for thread a');
+    await tester.pump();
+
+    await tester.tap(threadBRow);
+    await pumpUntilCondition(
+      tester,
+      () =>
+          headerTitleText(tester) == 'Thread B' &&
+          find.text('Thread B history').evaluate().isNotEmpty,
+      failureMessage: 'Thread B pane did not become ready',
+    );
+    expect(
+      tester.widget<EditableText>(_agentMessageInput()).controller.text,
+      isEmpty,
+    );
+    await tester.enterText(_agentMessageInput(), 'draft for thread b');
+    await tester.pump();
+
+    await tester.tap(threadARow);
+    await pumpUntilCondition(
+      tester,
+      () =>
+          headerTitleText(tester) == 'Thread A' &&
+          tester.widget<EditableText>(_agentMessageInput()).controller.text ==
+              'draft for thread a',
+      failureMessage: 'Thread A draft was not retained',
+    );
+
+    await tester.tap(threadBRow);
+    await pumpUntilCondition(
+      tester,
+      () =>
+          headerTitleText(tester) == 'Thread B' &&
+          tester.widget<EditableText>(_agentMessageInput()).controller.text ==
+              'draft for thread b',
+      failureMessage: 'Thread B draft was not retained',
+    );
   });
 }
 

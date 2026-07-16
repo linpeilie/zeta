@@ -143,7 +143,7 @@ class _IdeHomeState extends State<IdeHome> {
       },
       providerController: _shellController.agentProviderController,
       runtimeStateProvider: _managementRuntimeState,
-      runtimeListenable: _shellController.agentViewModel,
+      runtimeListenable: _shellController,
     );
     _usageStatisticsController = UsageStatisticsController(
       repository: CodexUsageStatisticsRepository(
@@ -293,7 +293,7 @@ class _IdeHomeState extends State<IdeHome> {
           enabled: _page == _IdeHomePage.home,
           child: KeyedSubtree(
             key: const ValueKey('agent-pane-host'),
-            child: AgentPane(viewModel: _shellController.agentViewModel),
+            child: _buildRetainedAgentPaneStack(),
           ),
         ),
         TickerMode(
@@ -318,6 +318,31 @@ class _IdeHomeState extends State<IdeHome> {
                 )
               : const SizedBox.shrink(),
         ),
+      ],
+    );
+  }
+
+  Widget _buildRetainedAgentPaneStack() {
+    final entries = _shellController.agentWorkspaceEntries;
+    if (entries.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final selectedEntryId = _shellController.selectedAgentWorkspaceEntryId;
+    var selectedIndex = entries.indexWhere(
+      (entry) => entry.entryId == selectedEntryId,
+    );
+    if (selectedIndex < 0) {
+      selectedIndex = 0;
+    }
+    return IndexedStack(
+      key: const ValueKey('agent-pane-entry-stack'),
+      index: selectedIndex,
+      children: [
+        for (final entry in entries)
+          KeyedSubtree(
+            key: ValueKey<String>('agent-pane-entry-${entry.entryId}'),
+            child: AgentPane(viewModel: entry.viewModel),
+          ),
       ],
     );
   }
@@ -783,7 +808,7 @@ class _IdeHomeState extends State<IdeHome> {
   }
 
   AgentRuntimeState _managementRuntimeState() {
-    return switch (_shellController.agentViewModel.status.state) {
+    return switch (_shellController.selectedAgentViewModel.status.state) {
       AgentProviderConnectionState.idle => AgentRuntimeState.notRunning,
       AgentProviderConnectionState.connecting => AgentRuntimeState.starting,
       AgentProviderConnectionState.ready => AgentRuntimeState.idle,

@@ -274,6 +274,15 @@ class ActiveAgentProviderController extends ChangeNotifier {
     return future;
   }
 
+  /// 重新从持久化层读取 provider 设置。
+  ///
+  /// 当其他运行时实例已经落盘了新的 active provider 或模型/权限配置时，
+  /// 调用方可用此方法让当前 controller 与磁盘真源重新对齐。
+  Future<AgentProviderSettings> reloadSettings() {
+    _settingsFuture = null;
+    return loadSettings();
+  }
+
   /// 获取 active provider；必要时会懒启动实例。
   Future<AgentProvider> activeProvider() async {
     await loadSettings();
