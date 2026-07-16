@@ -90,6 +90,8 @@ class _IdeHomeState extends State<IdeHome> {
   bool _leftBottomVisible = false;
   bool _rightTopVisible = false;
   bool _rightBottomVisible = false;
+  bool _settingsPageMounted = false;
+  bool _usageStatisticsPageMounted = false;
   IdeWorkbenchOverlay? _activeOverlay;
   FocusNode? _overlayTriggerFocusNode;
   double _leftPanelWidth = _initialPanelWidth;
@@ -111,6 +113,11 @@ class _IdeHomeState extends State<IdeHome> {
   final FocusNode _rightToolsFocusNode = FocusNode(
     debugLabel: 'RightToolsRailAction',
   );
+  final FocusNode _settingsNavigationFocusNode = FocusNode(
+    debugLabel: 'SettingsNavigationRailAction',
+  );
+  final GlobalKey<SettingsPageCanvasState> _settingsCanvasKey =
+      GlobalKey<SettingsPageCanvasState>();
 
   @override
   void initState() {
@@ -163,12 +170,14 @@ class _IdeHomeState extends State<IdeHome> {
     _leftContextFocusNode.dispose();
     _rightFilesFocusNode.dispose();
     _rightToolsFocusNode.dispose();
+    _settingsNavigationFocusNode.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final body = WindowFrame(
+      key: const ValueKey('ide-window-frame'),
       enableNativeWindowFrame: widget.enableNativeWindowFrame,
       menus: _windowMenus,
       titleBarActions: <WindowTitleBarAction>[
@@ -192,34 +201,11 @@ class _IdeHomeState extends State<IdeHome> {
       showWindowControls: widget.showWindowControls,
       child: Padding(
         padding: const EdgeInsets.all(IdeSpacing.space8),
-        child: _buildPageBody(),
+        child: _buildWorkbench(),
       ),
     );
 
     return body;
-  }
-
-  Widget _buildPageBody() {
-    return switch (_page) {
-      _IdeHomePage.home => _buildIdeLayout(),
-      _IdeHomePage.settings => SettingsPage(
-        key: const ValueKey('settings-page'),
-        activeSection: _settingsSection,
-        appearanceController: widget.appearanceController,
-        agentManagementController: _agentManagementController,
-        onBackPressed: _closeSettingsPage,
-        onSectionSelected: (section) {
-          setState(() {
-            _settingsSection = section;
-          });
-        },
-      ),
-      _IdeHomePage.usageStatistics => UsageStatisticsPage(
-        controller: _usageStatisticsController,
-        onBackPressed: _closeUsageStatisticsPage,
-        onOpenAgentManagement: _openAgentManagementFromUsage,
-      ),
-    };
   }
 
   List<WindowMenu> get _windowMenus {
@@ -247,140 +233,254 @@ class _IdeHomeState extends State<IdeHome> {
     ];
   }
 
-  Widget _buildIdeLayout() {
-    final leftPanelVisible = _leftTopVisible || _leftBottomVisible;
-    final rightPanelVisible = _rightTopVisible || _rightBottomVisible;
+  /// 所有主要页面共享一个 Workbench：
+  ///
+  /// - Agent 首页：Wide/Medium 内联 Navigation，Inspector 仅 Wide 内联；其余
+  ///   模式通过 Workbench Overlay 展示对应 Pane。
+  /// - 设置与 Agent 管理：Wide/Medium 内联设置 Navigation，Compact 按需打开
+  ///   Navigation Overlay，不提供 Inspector。
+  /// - 使用统计：只提供 Canvas，左右 Rail 仍保留在同一骨架中。
+  Widget _buildWorkbench() {
+    final homePage = _page == _IdeHomePage.home;
+    final settingsPage = _page == _IdeHomePage.settings;
+    final navigationVisible = settingsPage
+        ? true
+        : homePage && (_leftTopVisible || _leftBottomVisible);
+    final inspectorVisible =
+        homePage && (_rightTopVisible || _rightBottomVisible);
     return IdeWorkbenchScaffold(
-      leadingRailBuilder: (context, mode) {
-        final useOverlay = mode == IdeWorkbenchLayoutMode.compact;
-        return IdeActivityRail(
-          indicatorSide: IdeActivityRailIndicatorSide.right,
-          leadingActions: [
-            IdeRailAction(
-              key: const ValueKey('left-projects-action'),
-              icon: Icons.account_tree_rounded,
-              tooltip: 'Projects',
-              semanticLabel: 'Toggle projects panel',
-              active:
-                  _leftTopVisible &&
-                  (!useOverlay ||
-                      _activeOverlay == IdeWorkbenchOverlay.navigation),
-              focusNode: _leftProjectsFocusNode,
-              onPressed: () {
-                _toggleLeftPanel(
-                  isTop: true,
-                  useOverlay: useOverlay,
-                  triggerFocusNode: _leftProjectsFocusNode,
-                );
+      key: const ValueKey('ide-workbench'),
+      leadingRailBuilder: _buildLeadingRail,
+      navigationPane: settingsPage
+          ? SettingsNavigationPane(
+              activeSection: _settingsSection,
+              showAgentManagement: true,
+              onBackPressed: () {
+                unawaited(_closeSettingsPage());
               },
-            ),
-          ],
-          trailingActions: [
-            IdeRailAction(
-              key: const ValueKey('left-context-action'),
-              icon: Icons.data_object_rounded,
-              tooltip: 'Context',
-              semanticLabel: 'Toggle context panel',
-              active:
-                  _leftBottomVisible &&
-                  (!useOverlay ||
-                      _activeOverlay == IdeWorkbenchOverlay.navigation),
-              focusNode: _leftContextFocusNode,
-              onPressed: () {
-                _toggleLeftPanel(
-                  isTop: false,
-                  useOverlay: useOverlay,
-                  triggerFocusNode: _leftContextFocusNode,
-                );
+              onSectionSelected: (section) {
+                unawaited(_selectSettingsSection(section));
               },
-            ),
-          ],
-        );
-      },
-      navigationPane: _buildLeftPanel(),
-      navigationResizeHandle: IdeResizeHandle(
-        key: const ValueKey('left-width-resize-handle'),
-        axis: IdeResizeHandleAxis.horizontal,
-        semanticLabel: 'Resize left panel width',
-        onDragUpdate: (details) {
-          setState(() {
-            _leftPanelWidth = (_leftPanelWidth + details.delta.dx).clamp(
-              _minPanelWidth,
-              _maxPanelWidth,
-            );
-          });
-        },
-      ),
-      navigationVisible: leftPanelVisible,
+            )
+          : homePage
+          ? _buildLeftPanel()
+          : null,
+      navigationResizeHandle: navigationVisible
+          ? _buildNavigationResizeHandle()
+          : null,
+      navigationVisible: navigationVisible,
       navigationWidth: _leftPanelWidth,
-      canvas: KeyedSubtree(
-        key: const ValueKey('agent-pane-host'),
-        child: AgentPane(viewModel: _shellController.agentViewModel),
-      ),
-      inspectorPane: _buildRightPanel(),
-      inspectorResizeHandle: IdeResizeHandle(
-        key: const ValueKey('right-width-resize-handle'),
-        axis: IdeResizeHandleAxis.horizontal,
-        semanticLabel: 'Resize right panel width',
-        onDragUpdate: (details) {
-          setState(() {
-            _rightPanelWidth = (_rightPanelWidth - details.delta.dx).clamp(
-              _minPanelWidth,
-              _maxPanelWidth,
-            );
-          });
-        },
-      ),
-      inspectorVisible: rightPanelVisible,
+      canvas: _buildRetainedCanvasStack(),
+      inspectorPane: homePage ? _buildRightPanel() : null,
+      inspectorResizeHandle: inspectorVisible
+          ? _buildInspectorResizeHandle()
+          : null,
+      inspectorVisible: inspectorVisible,
       inspectorWidth: _rightPanelWidth,
-      trailingRailBuilder: (context, mode) {
-        final useOverlay = mode != IdeWorkbenchLayoutMode.wide;
-        return IdeActivityRail(
-          leadingActions: [
-            IdeRailAction(
-              key: const ValueKey('right-files-action'),
-              icon: Icons.folder_rounded,
-              tooltip: 'Files',
-              semanticLabel: 'Toggle files panel',
-              active:
-                  _rightTopVisible &&
-                  (!useOverlay ||
-                      _activeOverlay == IdeWorkbenchOverlay.inspector),
-              focusNode: _rightFilesFocusNode,
-              onPressed: () {
-                _toggleRightPanel(
-                  isTop: true,
-                  useOverlay: useOverlay,
-                  triggerFocusNode: _rightFilesFocusNode,
-                );
-              },
-            ),
-          ],
-          trailingActions: [
-            IdeRailAction(
-              key: const ValueKey('right-tools-action'),
-              icon: Icons.build_circle_rounded,
-              tooltip: 'Tools',
-              semanticLabel: 'Toggle tools panel',
-              active:
-                  _rightBottomVisible &&
-                  (!useOverlay ||
-                      _activeOverlay == IdeWorkbenchOverlay.inspector),
-              focusNode: _rightToolsFocusNode,
-              onPressed: () {
-                _toggleRightPanel(
-                  isTop: false,
-                  useOverlay: useOverlay,
-                  triggerFocusNode: _rightToolsFocusNode,
-                );
-              },
-            ),
-          ],
-        );
-      },
+      trailingRailBuilder: _buildTrailingRail,
       activeOverlay: _activeOverlay,
       onDismissOverlay: _closeActiveOverlay,
       overlayTriggerFocusNode: _overlayTriggerFocusNode,
+    );
+  }
+
+  Widget _buildRetainedCanvasStack() {
+    return IndexedStack(
+      key: const ValueKey('workbench-page-stack'),
+      index: _page.index,
+      children: [
+        TickerMode(
+          enabled: _page == _IdeHomePage.home,
+          child: KeyedSubtree(
+            key: const ValueKey('agent-pane-host'),
+            child: AgentPane(viewModel: _shellController.agentViewModel),
+          ),
+        ),
+        TickerMode(
+          enabled: _page == _IdeHomePage.settings,
+          child: _settingsPageMounted
+              ? SettingsPageCanvas(
+                  key: _settingsCanvasKey,
+                  activeSection: _settingsSection,
+                  appearanceController: widget.appearanceController,
+                  agentManagementController: _agentManagementController,
+                )
+              : const SizedBox.shrink(),
+        ),
+        TickerMode(
+          enabled: _page == _IdeHomePage.usageStatistics,
+          child: _usageStatisticsPageMounted
+              ? UsageStatisticsPage(
+                  key: const ValueKey('usage-statistics-page-host'),
+                  controller: _usageStatisticsController,
+                  onBackPressed: _closeUsageStatisticsPage,
+                  onOpenAgentManagement: _openAgentManagementFromUsage,
+                )
+              : const SizedBox.shrink(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLeadingRail(BuildContext context, IdeWorkbenchLayoutMode mode) {
+    if (_page == _IdeHomePage.settings) {
+      final compact = mode == IdeWorkbenchLayoutMode.compact;
+      return IdeActivityRail(
+        indicatorSide: IdeActivityRailIndicatorSide.right,
+        leadingActions: [
+          IdeRailAction(
+            key: const ValueKey('settings-navigation-action'),
+            icon: Icons.tune_rounded,
+            tooltip: 'Settings navigation',
+            semanticLabel: 'Toggle settings navigation',
+            active:
+                !compact || _activeOverlay == IdeWorkbenchOverlay.navigation,
+            focusNode: _settingsNavigationFocusNode,
+            onPressed: () {
+              if (compact) {
+                _toggleSettingsNavigationOverlay();
+              }
+            },
+          ),
+        ],
+      );
+    }
+    if (_page == _IdeHomePage.usageStatistics) {
+      return IdeActivityRail(
+        indicatorSide: IdeActivityRailIndicatorSide.right,
+        leadingActions: [
+          IdeRailAction(
+            key: const ValueKey('usage-home-action'),
+            icon: Icons.smart_toy_outlined,
+            tooltip: 'Agent',
+            semanticLabel: 'Return to Agent page',
+            active: false,
+            onPressed: _closeUsageStatisticsPage,
+          ),
+        ],
+      );
+    }
+
+    final useOverlay = mode == IdeWorkbenchLayoutMode.compact;
+    return IdeActivityRail(
+      indicatorSide: IdeActivityRailIndicatorSide.right,
+      leadingActions: [
+        IdeRailAction(
+          key: const ValueKey('left-projects-action'),
+          icon: Icons.account_tree_rounded,
+          tooltip: 'Projects',
+          semanticLabel: 'Toggle projects panel',
+          active:
+              _leftTopVisible &&
+              (!useOverlay || _activeOverlay == IdeWorkbenchOverlay.navigation),
+          focusNode: _leftProjectsFocusNode,
+          onPressed: () {
+            _toggleLeftPanel(
+              isTop: true,
+              useOverlay: useOverlay,
+              triggerFocusNode: _leftProjectsFocusNode,
+            );
+          },
+        ),
+      ],
+      trailingActions: [
+        IdeRailAction(
+          key: const ValueKey('left-context-action'),
+          icon: Icons.data_object_rounded,
+          tooltip: 'Context',
+          semanticLabel: 'Toggle context panel',
+          active:
+              _leftBottomVisible &&
+              (!useOverlay || _activeOverlay == IdeWorkbenchOverlay.navigation),
+          focusNode: _leftContextFocusNode,
+          onPressed: () {
+            _toggleLeftPanel(
+              isTop: false,
+              useOverlay: useOverlay,
+              triggerFocusNode: _leftContextFocusNode,
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTrailingRail(BuildContext context, IdeWorkbenchLayoutMode mode) {
+    if (_page != _IdeHomePage.home) {
+      return const IdeActivityRail(leadingActions: <IdeRailAction>[]);
+    }
+    final useOverlay = mode != IdeWorkbenchLayoutMode.wide;
+    return IdeActivityRail(
+      leadingActions: [
+        IdeRailAction(
+          key: const ValueKey('right-files-action'),
+          icon: Icons.folder_rounded,
+          tooltip: 'Files',
+          semanticLabel: 'Toggle files panel',
+          active:
+              _rightTopVisible &&
+              (!useOverlay || _activeOverlay == IdeWorkbenchOverlay.inspector),
+          focusNode: _rightFilesFocusNode,
+          onPressed: () {
+            _toggleRightPanel(
+              isTop: true,
+              useOverlay: useOverlay,
+              triggerFocusNode: _rightFilesFocusNode,
+            );
+          },
+        ),
+      ],
+      trailingActions: [
+        IdeRailAction(
+          key: const ValueKey('right-tools-action'),
+          icon: Icons.build_circle_rounded,
+          tooltip: 'Tools',
+          semanticLabel: 'Toggle tools panel',
+          active:
+              _rightBottomVisible &&
+              (!useOverlay || _activeOverlay == IdeWorkbenchOverlay.inspector),
+          focusNode: _rightToolsFocusNode,
+          onPressed: () {
+            _toggleRightPanel(
+              isTop: false,
+              useOverlay: useOverlay,
+              triggerFocusNode: _rightToolsFocusNode,
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNavigationResizeHandle() {
+    return IdeResizeHandle(
+      key: const ValueKey('left-width-resize-handle'),
+      axis: IdeResizeHandleAxis.horizontal,
+      semanticLabel: 'Resize left panel width',
+      onDragUpdate: (details) {
+        setState(() {
+          _leftPanelWidth = (_leftPanelWidth + details.delta.dx).clamp(
+            _minPanelWidth,
+            _maxPanelWidth,
+          );
+        });
+      },
+    );
+  }
+
+  Widget _buildInspectorResizeHandle() {
+    return IdeResizeHandle(
+      key: const ValueKey('right-width-resize-handle'),
+      axis: IdeResizeHandleAxis.horizontal,
+      semanticLabel: 'Resize right panel width',
+      onDragUpdate: (details) {
+        setState(() {
+          _rightPanelWidth = (_rightPanelWidth - details.delta.dx).clamp(
+            _minPanelWidth,
+            _maxPanelWidth,
+          );
+        });
+      },
     );
   }
 
@@ -701,8 +801,11 @@ class _IdeHomeState extends State<IdeHome> {
       return;
     }
     setState(() {
+      _settingsPageMounted = true;
       _page = _IdeHomePage.settings;
       _settingsSection = SettingsSection.appearance;
+      _activeOverlay = null;
+      _overlayTriggerFocusNode = null;
     });
   }
 
@@ -711,7 +814,10 @@ class _IdeHomeState extends State<IdeHome> {
       return;
     }
     setState(() {
+      _usageStatisticsPageMounted = true;
       _page = _IdeHomePage.usageStatistics;
+      _activeOverlay = null;
+      _overlayTriggerFocusNode = null;
     });
   }
 
@@ -721,22 +827,52 @@ class _IdeHomeState extends State<IdeHome> {
     }
     setState(() {
       _page = _IdeHomePage.home;
+      _activeOverlay = null;
+      _overlayTriggerFocusNode = null;
     });
   }
 
   void _openAgentManagementFromUsage() {
     setState(() {
+      _settingsPageMounted = true;
       _page = _IdeHomePage.settings;
       _settingsSection = SettingsSection.agents;
+      _activeOverlay = null;
+      _overlayTriggerFocusNode = null;
     });
   }
 
-  void _closeSettingsPage() {
-    if (_page == _IdeHomePage.home) {
+  Future<void> _selectSettingsSection(SettingsSection section) async {
+    if (section == _settingsSection ||
+        !(await _settingsCanvasKey.currentState?.confirmCanLeave() ?? true) ||
+        !mounted) {
+      return;
+    }
+    setState(() {
+      _settingsSection = section;
+    });
+  }
+
+  Future<void> _closeSettingsPage() async {
+    if (_page != _IdeHomePage.settings ||
+        !(await _settingsCanvasKey.currentState?.confirmCanLeave() ?? true) ||
+        !mounted) {
       return;
     }
     setState(() {
       _page = _IdeHomePage.home;
+      _activeOverlay = null;
+      _overlayTriggerFocusNode = null;
+    });
+  }
+
+  void _toggleSettingsNavigationOverlay() {
+    setState(() {
+      final navigationOpen = _activeOverlay == IdeWorkbenchOverlay.navigation;
+      _activeOverlay = navigationOpen ? null : IdeWorkbenchOverlay.navigation;
+      _overlayTriggerFocusNode = navigationOpen
+          ? null
+          : _settingsNavigationFocusNode;
     });
   }
 }

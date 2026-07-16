@@ -30,6 +30,7 @@ class MainApp extends StatefulWidget {
     super.key,
     this.directoryPicker,
     this.enableNativeWindowFrame = true,
+    this.showWindowControls = true,
     this.sessionLoader,
     this.sessionSaver,
     this.agentProviderFactory,
@@ -43,6 +44,9 @@ class MainApp extends StatefulWidget {
 
   final Future<String?> Function()? directoryPicker;
   final bool enableNativeWindowFrame;
+
+  /// 测试可关闭原生窗口控制按钮，避免依赖桌面平台通道。
+  final bool showWindowControls;
   final Future<String?> Function()? sessionLoader;
   final Future<void> Function(String value)? sessionSaver;
   final AgentProviderFactory? agentProviderFactory;
@@ -159,6 +163,7 @@ class MainAppState extends State<MainApp> {
             home: IdeHome(
               directoryPicker: widget.directoryPicker ?? getDirectoryPath,
               enableNativeWindowFrame: widget.enableNativeWindowFrame,
+              showWindowControls: widget.showWindowControls,
               sessionStore: _createSessionStore(),
               agentProviderFactory:
                   widget.agentProviderFactory ?? _defaultAgentProviderFactory,

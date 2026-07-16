@@ -45,8 +45,8 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  final GlobalKey<AgentManagementPageState> _agentManagementKey =
-      GlobalKey<AgentManagementPageState>();
+  final GlobalKey<SettingsPageCanvasState> _canvasKey =
+      GlobalKey<SettingsPageCanvasState>();
 
   static const double _navigationWidth = IdeMetrics.navigationPaneWidth;
 
@@ -57,7 +57,7 @@ class _SettingsPageState extends State<SettingsPage> {
       children: [
         SizedBox(
           width: _navigationWidth,
-          child: _SettingsNavigation(
+          child: SettingsNavigationPane(
             activeSection: widget.activeSection,
             showAgentManagement: widget.agentManagementController != null,
             onBackPressed: () {
@@ -70,11 +70,11 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         const SizedBox(width: IdeSpacing.space8),
         Expanded(
-          child: _SettingsDetailPane(
+          child: SettingsPageCanvas(
+            key: _canvasKey,
             activeSection: widget.activeSection,
             appearanceController: widget.appearanceController,
             agentManagementController: widget.agentManagementController,
-            agentManagementKey: _agentManagementKey,
           ),
         ),
       ],
@@ -82,8 +82,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _handleBackPressed() async {
-    if (widget.activeSection == SettingsSection.agents &&
-        !(await _agentManagementKey.currentState?.confirmCanLeave() ?? true)) {
+    if (!(await _canvasKey.currentState?.confirmCanLeave() ?? true)) {
       return;
     }
     widget.onBackPressed();
@@ -93,20 +92,24 @@ class _SettingsPageState extends State<SettingsPage> {
     if (section == widget.activeSection) {
       return;
     }
-    if (widget.activeSection == SettingsSection.agents &&
-        !(await _agentManagementKey.currentState?.confirmCanLeave() ?? true)) {
+    if (!(await _canvasKey.currentState?.confirmCanLeave() ?? true)) {
       return;
     }
     widget.onSectionSelected(section);
   }
 }
 
-class _SettingsNavigation extends StatelessWidget {
-  const _SettingsNavigation({
+/// 设置页放入 Workbench Navigation slot 的导航内容。
+///
+/// 分区切换与离开确认仍由设置 Feature 的 Canvas 状态协调；该组件只负责展示
+/// 设置导航和转发用户意图。
+class SettingsNavigationPane extends StatelessWidget {
+  const SettingsNavigationPane({
     required this.activeSection,
     required this.onBackPressed,
     required this.onSectionSelected,
     required this.showAgentManagement,
+    super.key,
   });
 
   final SettingsSection activeSection;
@@ -170,31 +173,48 @@ class _SettingsNavigation extends StatelessWidget {
   }
 }
 
-class _SettingsDetailPane extends StatelessWidget {
-  const _SettingsDetailPane({
+/// 设置页放入 Workbench Canvas slot 的业务内容。
+class SettingsPageCanvas extends StatefulWidget {
+  const SettingsPageCanvas({
     required this.activeSection,
     required this.appearanceController,
     required this.agentManagementController,
-    required this.agentManagementKey,
+    super.key,
   });
 
   final SettingsSection activeSection;
   final AppearanceSettingsController appearanceController;
   final AgentManagementController? agentManagementController;
-  final GlobalKey<AgentManagementPageState> agentManagementKey;
+
+  @override
+  State<SettingsPageCanvas> createState() => SettingsPageCanvasState();
+}
+
+/// 设置 Canvas 的可离开状态，由设置 Feature 持有并供页面路由入口查询。
+class SettingsPageCanvasState extends State<SettingsPageCanvas> {
+  final GlobalKey<AgentManagementPageState> _agentManagementKey =
+      GlobalKey<AgentManagementPageState>();
+
+  /// 当前设置内容是否允许离开；Agent 配置编辑器可能需要先确认未保存内容。
+  Future<bool> confirmCanLeave() async {
+    if (widget.activeSection != SettingsSection.agents) {
+      return true;
+    }
+    return await _agentManagementKey.currentState?.confirmCanLeave() ?? true;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return switch (activeSection) {
+    return switch (widget.activeSection) {
       SettingsSection.appearance => _AppearanceSettingsPane(
-        appearanceController: appearanceController,
+        appearanceController: widget.appearanceController,
       ),
       SettingsSection.agents =>
-        agentManagementController == null
+        widget.agentManagementController == null
             ? const IdeSurface.canvas(child: EmptyState(text: 'Agent 管理服务不可用。'))
             : AgentManagementPage(
-                key: agentManagementKey,
-                controller: agentManagementController!,
+                key: _agentManagementKey,
+                controller: widget.agentManagementController!,
               ),
     };
   }

@@ -123,6 +123,7 @@ class IdeWorkbenchScaffold extends StatelessWidget {
               _PaneSeparator(child: navigationResizeHandle),
             ],
             Expanded(
+              key: const ValueKey('workbench-canvas-slot'),
               child: KeyedSubtree(
                 key: const ValueKey('workbench-canvas'),
                 child: IdeSurface.canvas(child: canvas),
