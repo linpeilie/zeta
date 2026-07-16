@@ -96,7 +96,7 @@ class CodexUsageStatisticsRepository implements UsageStatisticsRepository {
     AgentProvider provider,
     Iterable<CodexUsageSessionSnapshot> sessions,
   ) {
-    final records = <AgentUsageRecord>[];
+    final recordsById = <String, AgentUsageRecord>{};
     final seenSamples = <String>{};
     final orderedSessions = sessions.toList()
       ..sort((left, right) => left.createdAt.compareTo(right.createdAt));
@@ -137,38 +137,136 @@ class CodexUsageStatisticsRepository implements UsageStatisticsRepository {
                   (sample) => sample.totalTokens,
                 ),
               );
-        records.add(
-          AgentUsageRecord(
-            threadId: session.threadId,
-            turnId: turn.id,
-            providerId: provider.config.id,
-            providerName: provider.config.displayName,
-            projectPath: _nonEmpty(turn.cwd) ?? session.projectPath,
-            sourceKind: session.sourceKind,
-            startedAt: startedAt,
-            completedAt: turn.completedAt,
-            duration: _durationBetween(startedAt, turn.completedAt),
-            model: _nonEmpty(turn.model),
+        final record = AgentUsageRecord(
+          threadId: session.threadId,
+          turnId: turn.id,
+          providerId: provider.config.id,
+          providerName: provider.config.displayName,
+          projectPath: _nonEmpty(turn.cwd) ?? session.projectPath,
+          sourceKind: session.sourceKind,
+          startedAt: startedAt,
+          completedAt: turn.completedAt,
+          duration: _durationBetween(startedAt, turn.completedAt),
+          model: _nonEmpty(turn.model),
+          status: status,
+          tokens: tokens,
+          errorCategory: _errorCategory(
             status: status,
-            tokens: tokens,
-            errorCategory: _errorCategory(
-              status: status,
-              hint:
-                  turn.errorCategoryHint ??
-                  codexUsageErrorCategoryHint(
-                    status: turn.status,
-                    code: turn.errorCode,
-                    message: turn.errorMessage,
-                  ),
-            ),
-            errorMessage: _nonEmpty(turn.errorMessage),
-            errorCode: _nonEmpty(turn.errorCode),
+            hint:
+                turn.errorCategoryHint ??
+                codexUsageErrorCategoryHint(
+                  status: turn.status,
+                  code: turn.errorCode,
+                  message: turn.errorMessage,
+                ),
           ),
+          errorMessage: _nonEmpty(turn.errorMessage),
+          errorCode: _nonEmpty(turn.errorCode),
+        );
+        recordsById.update(
+          record.id,
+          (existing) => _mergeUsageRecords(existing, record),
+          ifAbsent: () => record,
         );
       }
     }
-    return List<AgentUsageRecord>.unmodifiable(records);
+    return List<AgentUsageRecord>.unmodifiable(recordsById.values);
   }
+}
+
+/// 合并多个 rollout 文件中指向同一 thread/turn 的派生记录。
+///
+/// Token sample 已由调用方按原始事件键去重，这里只累加真正新增的 sample，
+/// 并保留终态、完成时间、模型和错误等更完整的元数据。
+AgentUsageRecord _mergeUsageRecords(
+  AgentUsageRecord existing,
+  AgentUsageRecord candidate,
+) {
+  final candidatePreferred =
+      _usageStatusRank(candidate.status) >= _usageStatusRank(existing.status);
+  final preferred = candidatePreferred ? candidate : existing;
+  final fallback = candidatePreferred ? existing : candidate;
+  final startedAt = existing.startedAt.isBefore(candidate.startedAt)
+      ? existing.startedAt
+      : candidate.startedAt;
+  final completedAt = _latestDateTime(
+    existing.completedAt,
+    candidate.completedAt,
+  );
+
+  return AgentUsageRecord(
+    threadId: existing.threadId,
+    turnId: existing.turnId,
+    providerId: existing.providerId,
+    providerName: existing.providerName,
+    projectPath: _nonEmpty(preferred.projectPath) ?? fallback.projectPath,
+    sourceKind: _nonEmpty(preferred.sourceKind) ?? fallback.sourceKind,
+    startedAt: startedAt,
+    completedAt: completedAt,
+    duration: _durationBetween(startedAt, completedAt),
+    timeToFirstToken: _shorterDuration(
+      existing.timeToFirstToken,
+      candidate.timeToFirstToken,
+    ),
+    model: _nonEmpty(preferred.model) ?? _nonEmpty(fallback.model),
+    status: preferred.status,
+    tokens: _sumTokenBreakdown(existing.tokens, candidate.tokens),
+    errorCategory: preferred.errorCategory ?? fallback.errorCategory,
+    errorMessage:
+        _nonEmpty(preferred.errorMessage) ?? _nonEmpty(fallback.errorMessage),
+    errorCode: _nonEmpty(preferred.errorCode) ?? _nonEmpty(fallback.errorCode),
+  );
+}
+
+UsageTokenBreakdown _sumTokenBreakdown(
+  UsageTokenBreakdown left,
+  UsageTokenBreakdown right,
+) {
+  return UsageTokenBreakdown(
+    inputTokens: _sumNullable(left.inputTokens, right.inputTokens),
+    cachedInputTokens: _sumNullable(
+      left.cachedInputTokens,
+      right.cachedInputTokens,
+    ),
+    outputTokens: _sumNullable(left.outputTokens, right.outputTokens),
+    reasoningTokens: _sumNullable(left.reasoningTokens, right.reasoningTokens),
+    totalTokens: _sumNullable(left.totalTokens, right.totalTokens),
+  );
+}
+
+int? _sumNullable(int? left, int? right) {
+  if (left == null && right == null) {
+    return null;
+  }
+  return (left ?? 0) + (right ?? 0);
+}
+
+int _usageStatusRank(UsageTaskStatus status) => switch (status) {
+  UsageTaskStatus.unknown => 0,
+  UsageTaskStatus.running => 1,
+  UsageTaskStatus.completed ||
+  UsageTaskStatus.interrupted ||
+  UsageTaskStatus.failed => 2,
+};
+
+DateTime? _latestDateTime(DateTime? left, DateTime? right) {
+  if (left == null) {
+    return right;
+  }
+  if (right == null) {
+    return left;
+  }
+  return left.isAfter(right) ? left : right;
+}
+
+Duration? _shorterDuration(Duration? left, Duration? right) {
+  if (left == null) {
+    return right;
+  }
+  if (right == null) {
+    return left;
+  }
+  return left <= right ? left : right;
 }
 
 int _sum(

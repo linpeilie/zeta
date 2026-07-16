@@ -6,7 +6,7 @@ import 'ide_spacing.dart';
 import 'ide_text_styles.dart';
 import 'pane_widgets.dart';
 
-enum IdeStatusCardTone { info, warning, error, success }
+enum IdeStatusCardTone { neutral, info, warning, error, success }
 
 /// 统一 IDE 中的语义状态卡片。
 class IdeStatusCard extends StatelessWidget {
@@ -34,15 +34,18 @@ class IdeStatusCard extends StatelessWidget {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final accent = _toneColor(colors);
+    final neutral = tone == IdeStatusCardTone.neutral;
 
     return Padding(
       padding: margin,
       child: PanelCard(
-        color: accent.withValues(alpha: 0.08),
+        color: neutral ? colors.controlSurface : accent.withValues(alpha: 0.08),
         showBorder: true,
-        borderColor: accent.withValues(
-          alpha: tone == IdeStatusCardTone.warning ? 0.35 : 0.26,
-        ),
+        borderColor: neutral
+            ? colors.borderSubtle
+            : accent.withValues(
+                alpha: tone == IdeStatusCardTone.warning ? 0.35 : 0.26,
+              ),
         borderRadius: IdeRadius.allMedium,
         child: Padding(
           padding: padding,
@@ -86,6 +89,7 @@ class IdeStatusCard extends StatelessWidget {
 
   Color _toneColor(IdeColors colors) {
     return switch (tone) {
+      IdeStatusCardTone.neutral => colors.textTertiary,
       IdeStatusCardTone.info => colors.info,
       IdeStatusCardTone.warning => colors.warning,
       IdeStatusCardTone.error => colors.error,
@@ -95,6 +99,7 @@ class IdeStatusCard extends StatelessWidget {
 
   IconData _toneIcon() {
     return switch (tone) {
+      IdeStatusCardTone.neutral => Icons.info_outline_rounded,
       IdeStatusCardTone.info => Icons.info_outline_rounded,
       IdeStatusCardTone.warning => Icons.warning_amber_rounded,
       IdeStatusCardTone.error => Icons.error_outline_rounded,

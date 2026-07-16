@@ -25,7 +25,7 @@ class _AgentCommandGroupCard extends StatelessWidget {
           leading: Icon(
             Icons.segment_rounded,
             size: 14,
-            color: colors.accent.withValues(alpha: 0.7),
+            color: colors.textTertiary,
           ),
           margin: const EdgeInsets.only(bottom: IdeSpacing.space10),
           bodyPadding: const EdgeInsets.only(
@@ -113,7 +113,7 @@ class _AgentFileEditGroupCardState extends State<_AgentFileEditGroupCard> {
       leading: Icon(
         Icons.edit_note_rounded,
         size: 14,
-        color: colors.accent.withValues(alpha: 0.7),
+        color: colors.textTertiary,
       ),
       titleWidget: Text.rich(
         key: ValueKey<String>(
@@ -383,7 +383,7 @@ class _AgentToolCallCard extends StatelessWidget {
               : Icon(
                   _toolIcon(toolCall.kind),
                   size: 14,
-                  color: colors.accent.withValues(alpha: 0.7),
+                  color: colors.textTertiary,
                 ),
           margin: const EdgeInsets.only(bottom: IdeSpacing.space10),
           bodyPadding: const EdgeInsets.only(top: IdeSpacing.space8),
@@ -1001,6 +1001,7 @@ class _AgentHistoryEventCard extends StatelessWidget {
     final accent = _historyEventAccent(event.kind, colors);
 
     return IdeStatusCard(
+      key: ValueKey<String>('agent-history-event-${event.id}'),
       tone: _historyEventTone(event.kind),
       title: event.title,
       leading: Icon(_historyEventIcon(event.kind), size: 16, color: accent),

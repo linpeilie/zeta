@@ -91,6 +91,59 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('keeps table row keys unique for duplicate record ids', (
+    tester,
+  ) async {
+    final now = DateTime(2026, 7, 10, 12);
+    final source = _source(now);
+    final duplicate = AgentUsageRecord(
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      providerId: 'codex',
+      providerName: 'Codex CLI',
+      projectPath: r'C:\work\zeta',
+      sourceKind: 'appServer',
+      startedAt: DateTime(2026, 7, 10, 10),
+      status: UsageTaskStatus.completed,
+    );
+    final controller = UsageStatisticsController(
+      repository: _UsageRepository(
+        UsageStatisticsSourceSnapshot(
+          records: <AgentUsageRecord>[duplicate, ...source.records],
+          refreshedAt: source.refreshedAt,
+          quota: source.quota,
+          warnings: source.warnings,
+        ),
+      ),
+      clock: () => now,
+    );
+    addTearDown(controller.dispose);
+    await tester.runAsync(controller.initialize);
+
+    await _pumpUsagePage(tester, controller: controller);
+
+    final firstDuplicateRow = find.byKey(
+      const ValueKey('usage-row-thread-1/turn-1'),
+    );
+    await tester.scrollUntilVisible(
+      firstDuplicateRow,
+      500,
+      scrollable: find
+          .byWidgetPredicate(
+            (widget) =>
+                widget is Scrollable &&
+                widget.axisDirection == AxisDirection.down,
+          )
+          .first,
+    );
+    expect(firstDuplicateRow, findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('usage-row-thread-1/turn-1#2')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('shows empty state and opens Agent management callback', (
     tester,
   ) async {

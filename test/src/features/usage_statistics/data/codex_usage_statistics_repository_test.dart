@@ -78,6 +78,27 @@ void main() {
     },
   );
 
+  test('coalesces duplicate thread turns across rollout files', () async {
+    final repository = CodexUsageStatisticsRepository(
+      providerLoader: () async => _UsageProvider(),
+      indexStore: MemoryUsageStatisticsIndexStore(),
+      scanner: _UsageScanner(_duplicateTurnSessions()),
+      environment: const <String, String>{},
+      clock: () => DateTime(2026, 7, 10, 12),
+    );
+
+    final snapshot = await repository.load(earliest: DateTime(2026, 7, 1));
+
+    expect(snapshot.records, hasLength(1));
+    final record = snapshot.records.single;
+    expect(record.id, 'thread-duplicate/turn-duplicate');
+    expect(record.status, UsageTaskStatus.completed);
+    expect(record.model, 'gpt-5');
+    expect(record.projectPath, r'C:\work\zeta');
+    expect(record.tokens.totalTokens, 30);
+    expect(record.duration, const Duration(minutes: 2));
+  });
+
   test('quota failure is a warning and does not hide local records', () async {
     final provider = _UsageProvider(quotaFails: true);
     final repository = CodexUsageStatisticsRepository(
@@ -238,6 +259,65 @@ Map<String, CodexUsageSessionSnapshot> _sessions() {
           completedAt: forkCreated.add(const Duration(minutes: 1)),
           model: 'gpt-5',
           samples: <CodexUsageSample>[sampleA, sampleC],
+        ),
+      ],
+    ),
+  };
+}
+
+Map<String, CodexUsageSessionSnapshot> _duplicateTurnSessions() {
+  final startedAt = DateTime(2026, 7, 8, 9);
+  final firstSample = CodexUsageSample(
+    deduplicationKey: 'duplicate-sample-a',
+    timestamp: startedAt.add(const Duration(seconds: 1)),
+    inputTokens: 6,
+    cachedInputTokens: 1,
+    outputTokens: 2,
+    reasoningTokens: 1,
+    totalTokens: 10,
+  );
+  final secondSample = CodexUsageSample(
+    deduplicationKey: 'duplicate-sample-b',
+    timestamp: startedAt.add(const Duration(seconds: 2)),
+    inputTokens: 12,
+    cachedInputTokens: 2,
+    outputTokens: 4,
+    reasoningTokens: 2,
+    totalTokens: 20,
+  );
+  return <String, CodexUsageSessionSnapshot>{
+    '/codex/duplicate-partial.jsonl': CodexUsageSessionSnapshot(
+      sourcePath: '/codex/duplicate-partial.jsonl',
+      fingerprint: '100:1',
+      threadId: 'thread-duplicate',
+      projectPath: r'C:\work\old',
+      sourceKind: 'codex_cli_rs',
+      createdAt: startedAt,
+      turns: <CodexUsageTurnSnapshot>[
+        CodexUsageTurnSnapshot(
+          id: 'turn-duplicate',
+          status: AgentHistoryTurnStatus.running,
+          startedAt: startedAt,
+          samples: <CodexUsageSample>[firstSample],
+        ),
+      ],
+    ),
+    '/codex/duplicate-complete.jsonl': CodexUsageSessionSnapshot(
+      sourcePath: '/codex/duplicate-complete.jsonl',
+      fingerprint: '200:2',
+      threadId: 'thread-duplicate',
+      projectPath: r'C:\work\new',
+      sourceKind: 'codex_cli_rs',
+      createdAt: startedAt.add(const Duration(minutes: 1)),
+      turns: <CodexUsageTurnSnapshot>[
+        CodexUsageTurnSnapshot(
+          id: 'turn-duplicate',
+          status: AgentHistoryTurnStatus.completed,
+          startedAt: startedAt,
+          completedAt: startedAt.add(const Duration(minutes: 2)),
+          cwd: r'C:\work\zeta',
+          model: 'gpt-5',
+          samples: <CodexUsageSample>[firstSample, secondSample],
         ),
       ],
     ),

@@ -14,7 +14,11 @@ import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
+import 'package:zeta/src/ui/core/ide_metrics.dart';
+import 'package:zeta/src/ui/core/ide_motion.dart';
+import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
+import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 
@@ -22,6 +26,241 @@ import '../../../testing/agent_provider_stub_base.dart';
 
 void main() {
   group('AgentPane PR3', () {
+    testWidgets('uses the canvas surface and one responsive content axis', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(provider.dispose);
+      addTearDown(viewModel.dispose);
+
+      await tester.pumpWidget(_TestApp(viewModel: viewModel));
+      await tester.pumpAndSettle();
+
+      final canvas = tester.widget<IdeSurface>(
+        find.byKey(const ValueKey('agent-canvas')),
+      );
+      expect(canvas.level, IdeSurfaceLevel.canvas);
+      final emptyAlignment = tester.widget<AnimatedAlign>(
+        find.byKey(const ValueKey('agent-composer-alignment')),
+      );
+      expect(emptyAlignment.alignment, const Alignment(0, -0.12));
+      expect(
+        tester
+            .getSize(find.byKey(const ValueKey('agent-composer-focus-ring')))
+            .width,
+        IdeMetrics.contentMaxWidth - IdeSpacing.pagePadding.horizontal,
+      );
+
+      await tester.binding.setSurfaceSize(const Size(600, 800));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .getSize(find.byKey(const ValueKey('agent-composer-focus-ring')))
+            .width,
+        600 - IdeSpacing.pagePaddingCompact.horizontal,
+      );
+    });
+
+    testWidgets(
+      'moves the same focused composer below an active neutral user message',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1280, 800));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final provider = _FakeAgentProvider(
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'thread-design-system': AgentThreadHistorySnapshot(
+              threadId: 'thread-design-system',
+              turns: <AgentHistoryTurn>[
+                AgentHistoryTurn(
+                  id: 'turn-design-system',
+                  entries: const <AgentHistoryEntry>[
+                    AgentHistoryMessageEntry(
+                      id: 'history-user-design-system',
+                      role: AgentMessageRole.user,
+                      text: 'Keep the message surface neutral',
+                    ),
+                    AgentHistoryEventEntry(
+                      id: 'history-system-design-system',
+                      kind: AgentHistoryEventKind.system,
+                      title: 'Session restored',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          },
+        );
+        final viewModel = _createViewModel(provider);
+        addTearDown(provider.dispose);
+        addTearDown(viewModel.dispose);
+
+        await tester.pumpWidget(_TestApp(viewModel: viewModel));
+        await tester.enterText(
+          find.byKey(const ValueKey('agent-message-input')),
+          'Preserve this draft',
+        );
+        await tester.pump();
+        final composerEditable = find.descendant(
+          of: find.byKey(const ValueKey('agent-message-input')),
+          matching: find.byType(EditableText),
+        );
+        expect(
+          tester.widget<EditableText>(composerEditable).focusNode.hasFocus,
+          isTrue,
+        );
+
+        await viewModel.switchThread(
+          _thread(id: 'thread-design-system', title: 'Design system'),
+        );
+        await tester.pump();
+        await tester.pump(IdeMotion.durationSlow);
+
+        final activeAlignment = tester.widget<AnimatedAlign>(
+          find.byKey(const ValueKey('agent-composer-alignment')),
+        );
+        expect(activeAlignment.alignment, Alignment.bottomCenter);
+        final editableText = tester.widget<EditableText>(composerEditable);
+        expect(editableText.controller.text, 'Preserve this draft');
+        expect(editableText.focusNode.hasFocus, isTrue);
+
+        final bubbleFinder = find.byKey(
+          const ValueKey('agent-message-bubble-history-user-design-system'),
+        );
+        final bubble = tester.widget<DecoratedBox>(bubbleFinder);
+        final decoration = bubble.decoration as BoxDecoration;
+        final colors = IdeColors.of(tester.element(bubbleFinder));
+        expect(decoration.color, colors.userMessageSurface);
+        expect(decoration.border!.top.color, colors.borderSubtle);
+        final historyEvent = find.byKey(
+          const ValueKey('agent-history-event-history-system-design-system'),
+        );
+        final historyEventPanel = tester.widget<PanelCard>(
+          find.descendant(of: historyEvent, matching: find.byType(PanelCard)),
+        );
+        expect(historyEventPanel.color, colors.controlSurface);
+        expect(historyEventPanel.borderColor, colors.borderSubtle);
+        expect(
+          tester
+              .getSize(find.byKey(const ValueKey('agent-message-list')))
+              .width,
+          IdeMetrics.contentMaxWidth,
+        );
+      },
+    );
+
+    testWidgets('disables layout and focus-ring motion for reduce motion', (
+      tester,
+    ) async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(provider.dispose);
+      addTearDown(viewModel.dispose);
+
+      await tester.pumpWidget(
+        _TestApp(viewModel: viewModel, disableAnimations: true),
+      );
+      await tester.pump();
+
+      expect(
+        tester
+            .widget<AnimatedAlign>(
+              find.byKey(const ValueKey('agent-composer-alignment')),
+            )
+            .duration,
+        Duration.zero,
+      );
+      expect(
+        tester
+            .widget<AnimatedContainer>(
+              find.byKey(const ValueKey('agent-composer-focus-ring')),
+            )
+            .duration,
+        Duration.zero,
+      );
+    });
+
+    testWidgets('matches the empty dark wide golden', (tester) async {
+      _configureGoldenView(tester, const Size(1280, 800));
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(provider.dispose);
+      addTearDown(viewModel.dispose);
+
+      await tester.pumpWidget(_TestApp(viewModel: viewModel));
+      await tester.pumpAndSettle();
+
+      await expectLater(
+        find.byKey(const ValueKey('agent-canvas')),
+        matchesGoldenFile('../../../../goldens/agent/empty_dark_1280x800.png'),
+      );
+    });
+
+    testWidgets('matches the empty light compact golden', (tester) async {
+      _configureGoldenView(tester, const Size(800, 700));
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(provider.dispose);
+      addTearDown(viewModel.dispose);
+
+      await tester.pumpWidget(
+        _TestApp(viewModel: viewModel, themeMode: ThemeMode.light),
+      );
+      await tester.pumpAndSettle();
+
+      await expectLater(
+        find.byKey(const ValueKey('agent-canvas')),
+        matchesGoldenFile('../../../../goldens/agent/empty_light_800x700.png'),
+      );
+    });
+
+    testWidgets('matches the active dark wide golden', (tester) async {
+      _configureGoldenView(tester, const Size(1440, 900));
+      final provider = _FakeAgentProvider(
+        historySnapshotsByThread: _designGoldenHistory(),
+      );
+      final viewModel = _createViewModel(provider);
+      addTearDown(provider.dispose);
+      addTearDown(viewModel.dispose);
+
+      await tester.pumpWidget(_TestApp(viewModel: viewModel));
+      await viewModel.switchThread(
+        _thread(id: 'thread-golden', title: 'Refactor Agent workspace'),
+      );
+      await tester.pumpAndSettle();
+
+      await expectLater(
+        find.byKey(const ValueKey('agent-canvas')),
+        matchesGoldenFile('../../../../goldens/agent/active_dark_1440x900.png'),
+      );
+    });
+
+    testWidgets('matches the active light compact golden', (tester) async {
+      _configureGoldenView(tester, const Size(800, 700));
+      final provider = _FakeAgentProvider(
+        historySnapshotsByThread: _designGoldenHistory(),
+      );
+      final viewModel = _createViewModel(provider);
+      addTearDown(provider.dispose);
+      addTearDown(viewModel.dispose);
+
+      await tester.pumpWidget(
+        _TestApp(viewModel: viewModel, themeMode: ThemeMode.light),
+      );
+      await viewModel.switchThread(
+        _thread(id: 'thread-golden', title: 'Refactor Agent workspace'),
+      );
+      await tester.pumpAndSettle();
+
+      await expectLater(
+        find.byKey(const ValueKey('agent-canvas')),
+        matchesGoldenFile('../../../../goldens/agent/active_light_800x700.png'),
+      );
+    });
+
     testWidgets(
       'renders heavy history markdown fully without collapse toggle',
       (tester) async {
@@ -788,10 +1027,10 @@ void main() {
         final popoverRect = tester.getRect(popover);
         expect(popoverRect.width, 256);
         expect(popoverRect.height, lessThanOrEqualTo(360));
-        expect(popoverRect.left, greaterThanOrEqualTo(12));
-        expect(popoverRect.top, greaterThanOrEqualTo(12));
-        expect(popoverRect.right, lessThanOrEqualTo(268));
-        expect(popoverRect.bottom, lessThanOrEqualTo(388));
+        expect(popoverRect.left, greaterThanOrEqualTo(12 - 1e-9));
+        expect(popoverRect.top, greaterThanOrEqualTo(12 - 1e-9));
+        expect(popoverRect.right, lessThanOrEqualTo(268 + 1e-9));
+        expect(popoverRect.bottom, lessThanOrEqualTo(388 + 1e-9));
 
         await tester.tap(
           find.byKey(const ValueKey('agent-model-option-gpt-5.5')),
@@ -805,8 +1044,8 @@ void main() {
         expect(tester.takeException(), isNull);
         final expandedPopoverRect = tester.getRect(popover);
         expect(expandedPopoverRect.height, lessThanOrEqualTo(360));
-        expect(expandedPopoverRect.top, greaterThanOrEqualTo(12));
-        expect(expandedPopoverRect.bottom, lessThanOrEqualTo(388));
+        expect(expandedPopoverRect.top, greaterThanOrEqualTo(12 - 1e-9));
+        expect(expandedPopoverRect.bottom, lessThanOrEqualTo(388 + 1e-9));
 
         final lastModel = find.byKey(
           const ValueKey('agent-model-option-model-14'),
@@ -1351,11 +1590,15 @@ class _TestApp extends StatelessWidget {
     required this.viewModel,
     this.uiFontFamily,
     this.codeFontFamily = 'CodeFont',
+    this.disableAnimations = false,
+    this.themeMode = ThemeMode.dark,
   });
 
   final AgentConversationViewModel viewModel;
   final String? uiFontFamily;
   final String codeFontFamily;
+  final bool disableAnimations;
+  final ThemeMode themeMode;
 
   @override
   Widget build(BuildContext context) {
@@ -1370,18 +1613,79 @@ class _TestApp extends StatelessWidget {
       codeFontFamily: codeFontFamily,
     );
     return IdeThemeScope(
-      themeMode: ThemeMode.dark,
+      themeMode: themeMode,
       lightTheme: lightIdeTheme,
       darkTheme: darkIdeTheme,
       child: sf.ShadcnApp(
         theme: buildShadcnTheme(lightIdeTheme),
         darkTheme: buildShadcnTheme(darkIdeTheme),
         materialTheme: buildMaterialTheme(darkIdeTheme),
-        themeMode: sf.ThemeMode.dark,
-        home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+        themeMode: themeMode == ThemeMode.light
+            ? sf.ThemeMode.light
+            : sf.ThemeMode.dark,
+        home: Builder(
+          builder: (context) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(disableAnimations: disableAnimations),
+            child: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+          ),
+        ),
       ),
     );
   }
+}
+
+void _configureGoldenView(WidgetTester tester, Size size) {
+  tester.view.devicePixelRatio = 1;
+  tester.view.physicalSize = size;
+  addTearDown(() {
+    tester.view.resetDevicePixelRatio();
+    tester.view.resetPhysicalSize();
+  });
+}
+
+Map<String, AgentThreadHistorySnapshot> _designGoldenHistory() {
+  return <String, AgentThreadHistorySnapshot>{
+    'thread-golden': AgentThreadHistorySnapshot(
+      threadId: 'thread-golden',
+      turns: <AgentHistoryTurn>[
+        AgentHistoryTurn(
+          id: 'turn-golden',
+          status: AgentHistoryTurnStatus.completed,
+          duration: const Duration(seconds: 18),
+          entries: <AgentHistoryEntry>[
+            const AgentHistoryMessageEntry(
+              id: 'history-user-golden',
+              role: AgentMessageRole.user,
+              text:
+                  'Refactor the Agent workspace with the unified design system.',
+            ),
+            const AgentHistoryMessageEntry(
+              id: 'history-agent-golden',
+              role: AgentMessageRole.agent,
+              text:
+                  'The Agent canvas now shares one content axis, neutral message surfaces, and a compact timeline.',
+            ),
+            AgentHistoryToolEntry(
+              toolCall: const AgentToolCall(
+                id: 'history-tool-golden',
+                title: 'Analyze Agent widgets',
+                kind: AgentToolKind.execute,
+                status: AgentToolStatus.completed,
+                content: 'flutter analyze',
+              ),
+            ),
+            const AgentHistoryEventEntry(
+              id: 'history-system-golden',
+              kind: AgentHistoryEventKind.system,
+              title: 'Workspace synchronized',
+            ),
+          ],
+        ),
+      ],
+    ),
+  };
 }
 
 const AgentModelList _modelConfigList = AgentModelList(

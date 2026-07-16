@@ -224,18 +224,19 @@ IconData _historyEventIcon(AgentHistoryEventKind kind) {
 
 Color _historyEventAccent(AgentHistoryEventKind kind, IdeColors colors) {
   return switch (kind) {
-    AgentHistoryEventKind.permission ||
     AgentHistoryEventKind.warning => colors.warning,
-    AgentHistoryEventKind.search || AgentHistoryEventKind.system => colors.info,
+    AgentHistoryEventKind.permission ||
+    AgentHistoryEventKind.search ||
+    AgentHistoryEventKind.system => colors.textTertiary,
   };
 }
 
 IdeStatusCardTone _historyEventTone(AgentHistoryEventKind kind) {
   return switch (kind) {
-    AgentHistoryEventKind.permission => IdeStatusCardTone.warning,
-    AgentHistoryEventKind.warning => IdeStatusCardTone.error,
-    AgentHistoryEventKind.search => IdeStatusCardTone.info,
-    AgentHistoryEventKind.system => IdeStatusCardTone.info,
+    AgentHistoryEventKind.warning => IdeStatusCardTone.warning,
+    AgentHistoryEventKind.permission ||
+    AgentHistoryEventKind.search ||
+    AgentHistoryEventKind.system => IdeStatusCardTone.neutral,
   };
 }
 

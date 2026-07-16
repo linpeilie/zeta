@@ -1135,9 +1135,7 @@ class _UsageTable extends StatelessWidget {
                 ),
                 for (var index = 0; index < rows.length; index += 1) ...[
                   PaneInteractiveSurface(
-                    key: rowKeys == null
-                        ? ValueKey<int>(index)
-                        : ValueKey<String>('usage-row-${rowKeys![index]}'),
+                    key: _rowKey(index),
                     onPressed: onRowPressed == null
                         ? null
                         : () => onRowPressed!(index),
@@ -1164,6 +1162,22 @@ class _UsageTable extends StatelessWidget {
         );
       },
     );
+  }
+
+  Key _rowKey(int index) {
+    final keys = rowKeys;
+    if (keys == null) {
+      return ValueKey<int>(index);
+    }
+    final base = keys[index];
+    var occurrence = 1;
+    for (var previous = 0; previous < index; previous += 1) {
+      if (keys[previous] == base) {
+        occurrence += 1;
+      }
+    }
+    final suffix = occurrence == 1 ? '' : '#$occurrence';
+    return ValueKey<String>('usage-row-$base$suffix');
   }
 }
 

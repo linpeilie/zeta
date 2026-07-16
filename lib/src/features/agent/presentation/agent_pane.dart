@@ -28,6 +28,7 @@ import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_status_card.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
+import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 import 'package:zeta/src/features/agent/presentation/model_config_ui_state.dart';
@@ -120,87 +121,104 @@ class _AgentPaneState extends State<AgentPane> {
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: IdeColors.of(context).frame,
+    return IdeSurface.canvas(
+      key: const ValueKey('agent-canvas'),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
             child: LayoutBuilder(
-              builder: (context, constraints) => Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _AgentContentAlign(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+              builder: (context, constraints) {
+                final pagePadding =
+                    constraints.maxWidth < IdeMetrics.stackedRowBreakpoint
+                    ? IdeSpacing.pagePaddingCompact
+                    : IdeSpacing.pagePadding;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _AgentContentAlign(
+                      child: Padding(
+                        padding: pagePadding,
+                        child: ListenableBuilder(
+                          listenable: widget.viewModel.headerVersionListenable,
+                          builder: (context, _) {
+                            return _AgentHeader(viewModel: widget.viewModel);
+                          },
+                        ),
+                      ),
+                    ),
+                    Expanded(
                       child: ListenableBuilder(
-                        listenable: widget.viewModel.headerVersionListenable,
+                        listenable: Listenable.merge(<Listenable>[
+                          widget.viewModel.historyVersionListenable,
+                          widget.viewModel.liveTurnListenable,
+                        ]),
                         builder: (context, _) {
-                          return _AgentHeader(viewModel: widget.viewModel);
+                          final hasConversation =
+                              widget.viewModel.visibleHistoryTurns.isNotEmpty ||
+                              widget.viewModel.liveTurnState != null;
+                          return _AgentConversationLayout(
+                            hasConversation: hasConversation,
+                            reduceMotion: MediaQuery.disableAnimationsOf(
+                              context,
+                            ),
+                            timeline: _AgentConversationTimeline(
+                              viewModel: widget.viewModel,
+                              scrollController: _scrollController,
+                              pagePadding: pagePadding,
+                              onLoadOlder: _loadOlderTurns,
+                              buildTurnSection: _buildTurnSection,
+                            ),
+                            footer: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                // 阻塞交互始终固定在输入框上方，并沿用原最大高度。
+                                _AgentPendingInteractionSection(
+                                  viewModel: widget.viewModel,
+                                  panelHeight: constraints.maxHeight,
+                                  pagePadding: pagePadding,
+                                ),
+                                ListenableBuilder(
+                                  listenable: widget
+                                      .viewModel
+                                      .composerVersionListenable,
+                                  builder: (context, _) {
+                                    if (widget.viewModel.isReadOnly) {
+                                      return _AgentReadOnlyNotice(
+                                        pagePadding: pagePadding,
+                                      );
+                                    }
+                                    return _AgentComposerSection(
+                                      key: const ValueKey(
+                                        'agent-composer-section',
+                                      ),
+                                      viewModel: widget.viewModel,
+                                      inputController: _inputController,
+                                      composerFocusNode: _composerFocusNode,
+                                      canSendListenable: _canSendNotifier,
+                                      draftImagePaths:
+                                          List<String>.unmodifiable(
+                                            _draftImagePaths,
+                                          ),
+                                      pagePadding: pagePadding,
+                                      onAttachImages: _pickImages,
+                                      onRemoveImage: _removeDraftImage,
+                                      onPasteImages: _pasteImagesFromClipboard,
+                                      onSend: _sendMessage,
+                                      onInsertMention: _insertMention,
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          );
                         },
                       ),
                     ),
-                  ),
-                  Expanded(
-                    // 对话与工具调用保留在可滚动时间线；阻塞交互固定在输入框上方。
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          maxWidth: IdeMetrics.contentMaxWidth,
-                        ),
-                        child: SingleChildScrollView(
-                          key: const ValueKey('agent-message-list'),
-                          controller: _scrollController,
-                          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                          // turn 卡片高度差异很大；改用精确内容高度滚动，避免
-                          // SliverList 在滚动过程中重估 maxScrollExtent 导致滚动条跳动。
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _AgentHistoryTurnsSection(
-                                viewModel: widget.viewModel,
-                                onLoadOlder: _loadOlderTurns,
-                                buildTurnSection: _buildTurnSection,
-                              ),
-                              _AgentLiveTurnSection(
-                                viewModel: widget.viewModel,
-                                buildTurnSection: _buildTurnSection,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  _AgentPendingInteractionSection(
-                    viewModel: widget.viewModel,
-                    panelHeight: constraints.maxHeight,
-                  ),
-                  ListenableBuilder(
-                    listenable: widget.viewModel.composerVersionListenable,
-                    builder: (context, _) {
-                      if (widget.viewModel.isReadOnly) {
-                        return const _AgentReadOnlyNotice();
-                      }
-                      return _AgentComposerSection(
-                        viewModel: widget.viewModel,
-                        inputController: _inputController,
-                        composerFocusNode: _composerFocusNode,
-                        canSendListenable: _canSendNotifier,
-                        draftImagePaths: List<String>.unmodifiable(
-                          _draftImagePaths,
-                        ),
-                        onAttachImages: _pickImages,
-                        onRemoveImage: _removeDraftImage,
-                        onPasteImages: _pasteImagesFromClipboard,
-                        onSend: _sendMessage,
-                        onInsertMention: _insertMention,
-                      );
-                    },
-                  ),
-                ],
-              ),
+                  ],
+                );
+              },
             ),
           ),
           // 头栏「上下文」菜单触发的详情面板，默认隐藏。
@@ -469,6 +487,10 @@ class _AgentPaneState extends State<AgentPane> {
       if (!_scrollController.hasClients) {
         return;
       }
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+        return;
+      }
       _scrollController.animateTo(
         _scrollController.position.maxScrollExtent,
         duration: const Duration(milliseconds: 180),
@@ -479,7 +501,9 @@ class _AgentPaneState extends State<AgentPane> {
 }
 
 class _AgentReadOnlyNotice extends StatelessWidget {
-  const _AgentReadOnlyNotice();
+  const _AgentReadOnlyNotice({required this.pagePadding});
+
+  final EdgeInsets pagePadding;
 
   @override
   Widget build(BuildContext context) {
@@ -487,7 +511,7 @@ class _AgentReadOnlyNotice extends StatelessWidget {
     final colors = IdeColors.of(context);
     return _AgentContentAlign(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        padding: pagePadding.copyWith(top: IdeSpacing.space8),
         child: IdeStatusCard(
           key: const ValueKey('agent-read-only-notice'),
           tone: IdeStatusCardTone.warning,

@@ -269,10 +269,11 @@ class _AgentBubbleMessage extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               DecoratedBox(
+                key: ValueKey<String>('agent-message-bubble-${message.id}'),
                 decoration: BoxDecoration(
                   color: isUser
                       ? colors.userMessageSurface
-                      : colors.surfaceElevated,
+                      : colors.controlSurface,
                   borderRadius: IdeRadius.allMedium,
                   border: Border.all(color: colors.borderSubtle),
                 ),
@@ -324,10 +325,14 @@ class _AgentBubbleMessage extends StatelessWidget {
                       if (hasText)
                         SelectableText(
                           message.text,
-                          style: textStyles.bodyMedium.copyWith(
-                            height: 1.4,
-                            color: colors.textPrimary,
-                          ),
+                          style:
+                              (isUser
+                                      ? textStyles.bodyMedium
+                                      : textStyles.proseBody)
+                                  .copyWith(
+                                    height: 1.4,
+                                    color: colors.textPrimary,
+                                  ),
                         ),
                     ],
                   ),

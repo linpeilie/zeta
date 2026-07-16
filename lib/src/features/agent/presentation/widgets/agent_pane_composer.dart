@@ -185,7 +185,9 @@ class _AgentComposer extends StatelessWidget {
 
           return AnimatedContainer(
             key: const ValueKey('agent-composer-focus-ring'),
-            duration: IdeMotion.durationNormal,
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : IdeMotion.durationNormal,
             curve: IdeMotion.curveDefault,
             decoration: BoxDecoration(
               borderRadius: IdeRadius.allMedium,
