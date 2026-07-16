@@ -105,4 +105,38 @@ void main() {
       expect(sum.modelContextWindow, 2000);
     });
   });
+
+  group('AgentTurnModelConfig', () {
+    test('parses model, effort and Fast from turnContext', () {
+      const turn = AgentHistoryTurn(
+        id: 'turn-1',
+        model: 'gpt-5.5',
+        raw: <String, Object?>{
+          'turnContext': <String, Object?>{
+            'model': 'gpt-5.5',
+            'effort': 'high',
+            'serviceTier': 'priority',
+          },
+        },
+      );
+
+      final config = AgentTurnModelConfig.fromHistoryTurn(turn);
+      expect(config, isNotNull);
+      expect(config!.modelId, 'gpt-5.5');
+      expect(config.reasoningEffort, 'high');
+      expect(config.fastEnabled, isTrue);
+    });
+
+    test('returns null when turn has no model config', () {
+      const turn = AgentHistoryTurn(id: 'turn-empty');
+      expect(AgentTurnModelConfig.fromHistoryTurn(turn), isNull);
+    });
+
+    test('maps known reasoning effort labels for footer', () {
+      expect(agentReasoningEffortFooterLabel('high'), '高');
+      expect(agentReasoningEffortFooterLabel('xhigh'), '极高');
+      expect(agentReasoningEffortFooterLabel(null), isNull);
+      expect(agentReasoningEffortFooterLabel('custom'), 'custom');
+    });
+  });
 }

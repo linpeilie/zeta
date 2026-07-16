@@ -10,6 +10,8 @@ import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdi
 import 'package:zeta/src/features/agent/data/mappers/grok_acp_notification_mapper.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
+import '../../../../../testing/fixture_reader.dart';
+
 void main() {
   group('GrokAcpAgentProvider', () {
     test('initializes, authenticates, and starts ACP sessions', () async {
@@ -357,6 +359,51 @@ void main() {
       await provider.dispose();
     });
 
+    test('sends session/cancel and cancels pending permissions', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+
+      await provider.initialize();
+      peer.emitServerRequest(
+        id: 77,
+        method: 'session/request_permission',
+        params: <String, Object?>{
+          'sessionId': 'sess-1',
+          'toolCall': <String, Object?>{
+            'toolCallId': 'call-cancel',
+            'title': 'Run baseline fixture',
+          },
+          'options': <Object?>[
+            <String, Object?>{
+              'optionId': 'allow-once',
+              'name': 'Allow once',
+              'kind': 'allow_once',
+            },
+          ],
+        },
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(events.whereType<AgentPermissionRequestedEvent>(), isNotEmpty);
+
+      await provider.cancelTurn(
+        const AgentTurn(id: 'turn-1', sessionId: 'sess-1'),
+      );
+
+      expect(peer.notificationsSent, contains('session/cancel'));
+      expect(peer.responses, isNotEmpty);
+      final cancelled = peer.responses.last['result']! as Map<String, Object?>;
+      final outcome = cancelled['outcome']! as Map<String, Object?>;
+      expect(outcome['outcome'], 'cancelled');
+
+      await subscription.cancel();
+      await provider.dispose();
+    });
+
     test('suppresses session/load replay updates from live timeline', () async {
       final peer = _FakeJsonRpcPeer()..loadSessionEmitsReplay = true;
       final provider = GrokAcpAgentProvider(
@@ -531,22 +578,9 @@ void main() {
 
     test('maps turn_completed usage as turn-absolute with apiDurationMs', () {
       final mapped = mapper.mapXaiSessionUpdate(
-        params: <String, Object?>{
-          'sessionId': 's1',
-          'update': <String, Object?>{
-            'sessionUpdate': 'turn_completed',
-            'prompt_id': 'prompt-1',
-            'stop_reason': 'end_turn',
-            'usage': <String, Object?>{
-              'inputTokens': 100,
-              'outputTokens': 20,
-              'totalTokens': 120,
-              'cachedReadTokens': 40,
-              'reasoningTokens': 5,
-              'apiDurationMs': 4500,
-            },
-          },
-        },
+        params: readFixtureJsonMap(
+          'grok/acp/xai_turn_completed_notification_redacted.json',
+        ),
         runningTurnId: 'local-turn-1',
       );
       expect(mapped.events, hasLength(2));
@@ -581,6 +615,18 @@ void main() {
       );
       final event = mapped.events.single as AgentPlanUpdatedEvent;
       expect(event.entries.single.content, 'Step 1');
+    });
+
+    test('keeps redacted x.ai updates page fixture parseable', () {
+      final page = readFixtureJsonMap(
+        'grok/acp/xai_session_updates_response_redacted.json',
+      );
+
+      expect(page['totalCount'], 2);
+      expect(page['hasMore'], isFalse);
+      expect(page['lastEventId'], 'evt-turn-completed');
+      expect((page['updates']! as List<Object?>), hasLength(2));
+      expect(jsonEncode(page), isNot(contains('super-secret')));
     });
   });
 
@@ -705,53 +751,16 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
     requestParams.add(params);
     return switch (method) {
       'initialize' => <String, Object?>{
-        'protocolVersion': 1,
+        ...readFixtureJsonMap('grok/acp/initialize_0_2_101_redacted.json'),
         'agentCapabilities': <String, Object?>{
           'loadSession': supportsLoadSession,
         },
-        'authMethods': <Object?>[
-          <String, Object?>{'id': 'cached_token', 'name': 'cached_token'},
-        ],
-        if (includeModelState)
-          '_meta': <String, Object?>{
-            'modelState': <String, Object?>{
-              'currentModelId': 'grok-4.5',
-              'availableModels': <Object?>[
-                <String, Object?>{
-                  'modelId': 'grok-4.5',
-                  'name': 'Grok 4.5',
-                  'description': 'SpaceXAI frontier model',
-                  '_meta': <String, Object?>{
-                    'totalContextTokens': 500000,
-                    'supportsReasoningEffort': true,
-                    'reasoningEffort': 'high',
-                    'reasoningEfforts': <Object?>[
-                      <String, Object?>{
-                        'value': 'high',
-                        'description': 'High reasoning effort',
-                      },
-                    ],
-                  },
-                },
-                <String, Object?>{
-                  'modelId': 'grok-composer-2.5-fast',
-                  'name': 'Composer 2.5',
-                  '_meta': <String, Object?>{'totalContextTokens': 200000},
-                },
-              ],
-            },
-          },
+        if (!includeModelState) '_meta': <String, Object?>{},
       },
       'authenticate' => <String, Object?>{'_meta': <String, Object?>{}},
-      'session/new' => <String, Object?>{
-        'sessionId': 'sess-1',
-        'models': <String, Object?>{
-          'currentModelId': 'grok-4.5',
-          'availableModels': <Object?>[
-            <String, Object?>{'modelId': 'grok-4.5', 'name': 'Grok 4.5'},
-          ],
-        },
-      },
+      'session/new' => readFixtureJsonMap(
+        'grok/acp/session_new_0_2_101_redacted.json',
+      ),
       'session/load' => () {
         if (loadSessionEmitsReplay) {
           // 在响应返回前同步发出回放通知（真实 Grok 行为）。
@@ -768,14 +777,9 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
             '_meta': <String, Object?>{'isReplay': true},
           });
         }
-        return <String, Object?>{
-          'models': <String, Object?>{
-            'currentModelId': 'grok-4.5',
-            'availableModels': <Object?>[
-              <String, Object?>{'modelId': 'grok-4.5', 'name': 'Grok 4.5'},
-            ],
-          },
-        };
+        return readFixtureJsonMap(
+          'grok/acp/session_load_0_2_101_redacted.json',
+        );
       }(),
       'session/prompt' => <String, Object?>{'stopReason': 'end_turn'},
       'session/set_model' => <String, Object?>{},

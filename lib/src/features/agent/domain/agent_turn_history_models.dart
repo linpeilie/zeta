@@ -96,6 +96,137 @@ class AgentHistoryTurn {
   final Map<String, Object?> raw;
 }
 
+/// 单个 turn 实际使用的模型配置摘要，供 turn footer 等 UI 展示。
+class AgentTurnModelConfig {
+  const AgentTurnModelConfig({
+    this.modelId,
+    this.reasoningEffort,
+    this.fastEnabled,
+  });
+
+  /// 模型 id 或 provider 上报的 model 标识。
+  final String? modelId;
+
+  /// 推理深度档位（如 low/medium/high/xhigh）。
+  final String? reasoningEffort;
+
+  /// 是否开启 Fast；`true` 时 footer 展示 “Fast”，其它情况不展示。
+  final bool? fastEnabled;
+
+  /// 是否含有可展示的配置项。
+  bool get hasDisplayable {
+    final model = modelId?.trim();
+    final effort = reasoningEffort?.trim();
+    return (model != null && model.isNotEmpty) ||
+        (effort != null && effort.isNotEmpty) ||
+        fastEnabled == true;
+  }
+
+  /// 从历史 turn 解析本回合模型配置（优先 `turnContext`，回退 turn 顶层字段）。
+  static AgentTurnModelConfig? fromHistoryTurn(AgentHistoryTurn turn) {
+    final turnContext = _objectMap(turn.raw['turnContext']);
+    final source = turnContext.isEmpty ? turn.raw : turnContext;
+
+    final modelId =
+        _nonEmptyString(turn.model) ??
+        _nonEmptyString(source['model']) ??
+        _nonEmptyString(source['modelId']);
+
+    final reasoningEffort =
+        _nonEmptyString(source['effort']) ??
+        _nonEmptyString(source['reasoningEffort']) ??
+        _nonEmptyString(source['reasoning_effort']);
+
+    final serviceTierId =
+        _nonEmptyString(source['serviceTier']) ??
+        _nonEmptyString(source['service_tier']) ??
+        _nonEmptyString(source['serviceTierId']) ??
+        _nonEmptyString(source['service_tier_id']);
+
+    final explicitFast =
+        _boolValue(source['fast']) ??
+        _boolValue(source['fastMode']) ??
+        _boolValue(source['isFast']) ??
+        _boolValue(source['fast_enabled']);
+
+    final fastEnabled =
+        explicitFast ?? _fastEnabledFromServiceTier(serviceTierId);
+
+    final config = AgentTurnModelConfig(
+      modelId: modelId,
+      reasoningEffort: reasoningEffort,
+      fastEnabled: fastEnabled,
+    );
+    return config.hasDisplayable ? config : null;
+  }
+
+  static bool? _fastEnabledFromServiceTier(String? serviceTierId) {
+    if (serviceTierId == null) {
+      return null;
+    }
+    final normalized = serviceTierId.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return null;
+    }
+    // 与 agentFastServiceTier 启发式一致：fast / priority 视为 Fast。
+    if (normalized == 'fast' || normalized == 'priority') {
+      return true;
+    }
+    return false;
+  }
+
+  static Map<String, Object?> _objectMap(Object? value) {
+    if (value is! Map) {
+      return const <String, Object?>{};
+    }
+    return <String, Object?>{
+      for (final entry in value.entries)
+        if (entry.key is String) entry.key as String: entry.value,
+    };
+  }
+
+  static String? _nonEmptyString(Object? value) {
+    if (value is! String) {
+      return null;
+    }
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  static bool? _boolValue(Object? value) {
+    if (value is bool) {
+      return value;
+    }
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      if (normalized == 'true' || normalized == '1' || normalized == 'yes') {
+        return true;
+      }
+      if (normalized == 'false' || normalized == '0' || normalized == 'no') {
+        return false;
+      }
+    }
+    return null;
+  }
+}
+
+/// 将推理深度档位格式化为 footer 短标签。
+String? agentReasoningEffortFooterLabel(String? effort) {
+  final normalized = effort?.trim().toLowerCase();
+  if (normalized == null || normalized.isEmpty) {
+    return null;
+  }
+  return switch (normalized) {
+    'none' => '无',
+    'minimal' => '最低',
+    'low' => '低',
+    'medium' => '中',
+    'high' => '高',
+    'xhigh' => '极高',
+    _ => effort!.trim(),
+  };
+}
+
 /// Token 消耗统计。
 ///
 /// 实时来源是 Codex `thread/tokenUsage/updated` 通知（camelCase 字段），

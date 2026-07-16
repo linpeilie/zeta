@@ -1,5 +1,23 @@
 # 开发记录
 
+## 2026-07-16
+
+### Turn footer 展示本回合模型配置
+
+- turn 终态 footer 在耗时与 token 之外，追加模型、思考程度（若有）、
+  Fast（有且开启时）展示。
+- 新增 `AgentTurnModelConfig`：历史 turn 从 `model` / `turnContext` 解析；
+  live turn 在发送时冻结当前 composer 选择。
+- 覆盖 domain 解析、timeline 挂载与 footer widget 测试。
+
+### 移除 ActivityRail 选中侧边指示条
+
+- `IdeActivityRail` 选中态不再绘制图标旁的 `accent` 指示条/小方块，仅保留中性
+  `selectedSurface` 底色与 `accentForeground` 图标色。
+- 删除 `IdeActivityRailIndicatorSide` 与 `indicatorSide` API；同步清理
+  `IdeHome` 与 golden 测试中的传参。
+- 更新统一设计系统实施文档与 UI 现代化蓝图中的状态视觉说明。
+
 ## 2026-07-09
 
 ### Codex app-server Phase 1 收尾

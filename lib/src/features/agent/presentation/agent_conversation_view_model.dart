@@ -301,6 +301,26 @@ class AgentConversationViewModel extends ChangeNotifier {
     return selectedModel?.serviceTiers.isNotEmpty ?? false;
   }
 
+  /// 当前 composer 选择对应的本回合模型配置快照（用于 live turn footer）。
+  AgentTurnModelConfig? _currentTurnModelConfig() {
+    final model = selectedModel?.displayName.trim().isNotEmpty == true
+        ? selectedModel!.displayName.trim()
+        : (selectedModelId?.trim().isNotEmpty == true
+              ? selectedModelId!.trim()
+              : selectedModel?.model.trim());
+    final effort = selectedReasoningEffort?.trim();
+    final fastEnabled = _modelSelectionController.selectedFastEnabled
+        ? true
+        : null;
+    final config = AgentTurnModelConfig(
+      modelId: model == null || model.isEmpty ? null : model,
+      reasoningEffort: effort == null || effort.isEmpty ? null : effort,
+      // 仅在开启时记录，footer 按「有且开启」展示 Fast。
+      fastEnabled: fastEnabled,
+    );
+    return config.hasDisplayable ? config : null;
+  }
+
   /// Provider 支持会话级审批/沙箱策略时显示选择器。
   bool get showPermissionPolicy =>
       activeCapabilities.supportsPermissionPolicySelection;
@@ -1215,7 +1235,8 @@ class AgentConversationViewModel extends ChangeNotifier {
 
     final isNewTurn = runningTurnId == null;
     if (isNewTurn) {
-      _timeline.startPendingLiveTurn();
+      // 在发送瞬间冻结本回合模型配置，避免 footer 被后续改配置污染。
+      _timeline.startPendingLiveTurn(modelConfig: _currentTurnModelConfig());
       _consumeActivityDirty();
     } else {
       _timeline.currentTurnGroupId = runningTurnId;

@@ -282,7 +282,9 @@ class AgentConversationTimelineStore {
   }
 
   /// 新回合启动前，先创建一个临时分组承载用户消息与后续增量。
-  String startPendingLiveTurn() {
+  ///
+  /// [modelConfig] 为本回合发送时的模型配置快照，供终态 footer 展示。
+  String startPendingLiveTurn({AgentTurnModelConfig? modelConfig}) {
     // 用户已开始真实对话，移除初始 Ready 占位文案。
     _dismissWelcomeMessage();
     final pendingTurnId = 'pending-${DateTime.now().microsecondsSinceEpoch}';
@@ -296,6 +298,7 @@ class AgentConversationTimelineStore {
     ).updateMetadata(
       status: AgentHistoryTurnStatus.running,
       startedAt: startedAt,
+      modelConfig: modelConfig,
     );
     _setActivity(AgentTurnActivityPhase.starting, turnStartedAt: startedAt);
     return pendingTurnId;
@@ -1002,7 +1005,9 @@ class AgentConversationTimelineStore {
 
   /// turn 真正启动时，把 sendMessage 建立的临时分组重命名为真实 turn id，
   /// 并记录运行状态与起始时间。后续条目都会归到该分组。
-  void beginLiveTurnGroup(AgentTurn turn) {
+  ///
+  /// [modelConfig] 可选；若 pending 分组已在 [startPendingLiveTurn] 写入配置则保留。
+  void beginLiveTurnGroup(AgentTurn turn, {AgentTurnModelConfig? modelConfig}) {
     final pendingId = _pendingTurnGroupId;
     if (pendingId != null && pendingId != turn.id) {
       _renameTurnGroup(pendingId, turn.id);
@@ -1021,6 +1026,7 @@ class AgentConversationTimelineStore {
       completedAt: turnState.completedAt,
       duration: turnState.duration,
       tokenUsage: turnState.tokenUsage,
+      modelConfig: modelConfig ?? turnState.modelConfig,
     );
     // 若尚未进入思考/工具/回复，保持或进入 starting。
     if (!_currentActivity.isActive ||
@@ -1077,6 +1083,7 @@ class AgentConversationTimelineStore {
       completedAt: completedAt,
       duration: resolvedDuration,
       tokenUsage: turnState.tokenUsage,
+      modelConfig: turnState.modelConfig,
     );
     _freezeOpenToolDurations(completedAt);
     _promoteTurnToHistorical(turnId);
@@ -1146,6 +1153,7 @@ class AgentConversationTimelineStore {
       completedAt: turnState.completedAt,
       duration: turnState.duration,
       tokenUsage: turnDelta,
+      modelConfig: turnState.modelConfig,
     );
   }
 
@@ -1400,6 +1408,7 @@ class AgentConversationTimelineStore {
       completedAt: turn.completedAt,
       duration: turn.duration,
       tokenUsage: tokenUsage ?? turn.tokenUsage,
+      modelConfig: AgentTurnModelConfig.fromHistoryTurn(turn),
     );
   }
 
@@ -1757,6 +1766,7 @@ class AgentConversationTurnGroup {
     this.completedAt,
     this.duration,
     this.tokenUsage,
+    this.modelConfig,
   });
 
   final String id;
@@ -1767,6 +1777,9 @@ class AgentConversationTurnGroup {
   final DateTime? completedAt;
   final Duration? duration;
   final AgentTokenUsage? tokenUsage;
+
+  /// 本回合使用的模型 / 思考程度 / Fast 配置（若有）。
+  final AgentTurnModelConfig? modelConfig;
 }
 
 /// 单个 turn 的运行时状态。
@@ -1783,6 +1796,7 @@ class AgentConversationTurnState extends ChangeNotifier {
   DateTime? _completedAt;
   Duration? _duration;
   AgentTokenUsage? _tokenUsage;
+  AgentTurnModelConfig? _modelConfig;
   bool _dirty = false;
 
   List<AgentTimelineEntry> get entries => UnmodifiableListView(_entries);
@@ -1796,6 +1810,8 @@ class AgentConversationTurnState extends ChangeNotifier {
   Duration? get duration => _duration;
 
   AgentTokenUsage? get tokenUsage => _tokenUsage;
+
+  AgentTurnModelConfig? get modelConfig => _modelConfig;
 
   bool get isRunning => _status == AgentHistoryTurnStatus.running;
 
@@ -1840,12 +1856,14 @@ class AgentConversationTurnState extends ChangeNotifier {
     DateTime? completedAt,
     Duration? duration,
     AgentTokenUsage? tokenUsage,
+    AgentTurnModelConfig? modelConfig,
   }) {
     _status = status;
     _startedAt = startedAt;
     _completedAt = completedAt;
     _duration = duration;
     _tokenUsage = tokenUsage;
+    _modelConfig = modelConfig;
     _dirty = true;
   }
 
@@ -1871,6 +1889,7 @@ class AgentConversationTurnState extends ChangeNotifier {
       completedAt: _completedAt,
       duration: _duration,
       tokenUsage: _tokenUsage,
+      modelConfig: _modelConfig,
     );
   }
 }

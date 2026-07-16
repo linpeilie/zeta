@@ -326,7 +326,6 @@ class _IdeHomeState extends State<IdeHome> {
     if (_page == _IdeHomePage.settings) {
       final compact = mode == IdeWorkbenchLayoutMode.compact;
       return IdeActivityRail(
-        indicatorSide: IdeActivityRailIndicatorSide.right,
         leadingActions: [
           IdeRailAction(
             key: const ValueKey('settings-navigation-action'),
@@ -347,7 +346,6 @@ class _IdeHomeState extends State<IdeHome> {
     }
     if (_page == _IdeHomePage.usageStatistics) {
       return IdeActivityRail(
-        indicatorSide: IdeActivityRailIndicatorSide.right,
         leadingActions: [
           IdeRailAction(
             key: const ValueKey('usage-home-action'),
@@ -363,7 +361,6 @@ class _IdeHomeState extends State<IdeHome> {
 
     final useOverlay = mode == IdeWorkbenchLayoutMode.compact;
     return IdeActivityRail(
-      indicatorSide: IdeActivityRailIndicatorSide.right,
       leadingActions: [
         IdeRailAction(
           key: const ValueKey('left-projects-action'),

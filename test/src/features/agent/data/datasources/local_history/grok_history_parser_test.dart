@@ -3,6 +3,8 @@ import 'package:zeta/src/features/agent/data/datasources/local_history/grok_chat
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_updates_history_parser.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
+import '../../../../../testing/fixture_reader.dart';
+
 void main() {
   group('GrokUpdatesHistoryParser', () {
     const parser = GrokUpdatesHistoryParser();
@@ -140,6 +142,25 @@ void main() {
       expect(user.text, isEmpty);
       expect(user.localImagePaths, <String>['/tmp/only.png']);
     });
+
+    test('ignores malformed lines from the redacted updates fixture', () {
+      final snapshot = parser.parse(
+        threadId: 'sess-fixture',
+        content: readFixtureText(
+          'grok/local_history/updates_malformed_lines_redacted.jsonl',
+        ),
+      );
+
+      expect(snapshot.turns, hasLength(1));
+      final turn = snapshot.turns.single;
+      expect(turn.status, AgentHistoryTurnStatus.completed);
+      expect(turn.duration, const Duration(milliseconds: 1200));
+      final messages = turn.entries
+          .whereType<AgentHistoryMessageEntry>()
+          .toList();
+      expect(messages.first.text, 'fix baseline');
+      expect(messages.last.text, 'baseline fixed');
+    });
   });
 
   group('GrokChatHistoryParser', () {
@@ -203,6 +224,22 @@ void main() {
           .first;
       expect(user.text, 'inspect this');
       expect(user.localImagePaths, <String>[r'C:\Users\tester\fallback.png']);
+    });
+
+    test('parses the redacted legacy chat_history fixture', () {
+      final snapshot = parser.parse(
+        threadId: 'legacy-thread',
+        content: readFixtureText(
+          'grok/local_history/chat_history_legacy_redacted.jsonl',
+        ),
+      );
+
+      expect(snapshot.turns, hasLength(1));
+      final entries = snapshot.turns.single.entries
+          .whereType<AgentHistoryMessageEntry>()
+          .toList();
+      expect(entries[0].text, 'legacy hello');
+      expect(entries[1].text, 'legacy world');
     });
   });
 }

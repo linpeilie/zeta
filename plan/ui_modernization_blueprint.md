@@ -189,7 +189,7 @@
 ### C.4 `IdeActivityRail` — 图标活动栏
 
 > **解决的问题**: `_ActivityRail` + `_ActionIcon` 组合模式在 `ide_home.dart` 中以私有类形式存在，不可复用。  
-> **统一属性**: 图标列表、选中态、hover 反馈、tooltip、语义标签、紧凑尺寸。  
+> **统一属性**: 图标列表、选中态（中性 `selectedSurface` + `accentForeground`，无侧边指示条）、hover 反馈、tooltip、语义标签、紧凑尺寸。  
 > **替换目标**: `ide_home.dart` 中的 `_ActivityRail` 和 `_ActionIcon`。
 
 ### C.5 `IdeContextMenu` — 上下文菜单

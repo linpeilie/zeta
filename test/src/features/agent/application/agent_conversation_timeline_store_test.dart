@@ -147,6 +147,58 @@ void main() {
       expect(store.currentThreadLastTokenUsage!.totalTokens, 1240);
     });
 
+    test('attaches model config from history and live pending turn', () {
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+
+      store.applyHistorySnapshot(
+        const AgentThreadHistorySnapshot(
+          threadId: 'thread-1',
+          turns: <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-history',
+              model: 'gpt-5.5',
+              status: AgentHistoryTurnStatus.completed,
+              duration: Duration(seconds: 12),
+              raw: <String, Object?>{
+                'turnContext': <String, Object?>{
+                  'effort': 'medium',
+                  'serviceTier': 'priority',
+                },
+              },
+            ),
+          ],
+        ),
+        _thread(),
+      );
+
+      final historyConfig = store.conversationTurns.single.modelConfig;
+      expect(historyConfig, isNotNull);
+      expect(historyConfig!.modelId, 'gpt-5.5');
+      expect(historyConfig.reasoningEffort, 'medium');
+      expect(historyConfig.fastEnabled, isTrue);
+
+      store.startPendingLiveTurn(
+        modelConfig: const AgentTurnModelConfig(
+          modelId: 'GPT-5.5',
+          reasoningEffort: 'high',
+          fastEnabled: true,
+        ),
+      );
+      store.beginLiveTurnGroup(
+        const AgentTurn(id: 'turn-live', sessionId: 'thread-1'),
+      );
+      store.completeLiveTurnGroup('turn-live');
+      store.syncLiveTurnBinding();
+
+      final liveGroup = store.conversationTurns.firstWhere(
+        (turn) => turn.id == 'turn-live',
+      );
+      expect(liveGroup.modelConfig?.modelId, 'GPT-5.5');
+      expect(liveGroup.modelConfig?.reasoningEffort, 'high');
+      expect(liveGroup.modelConfig?.fastEnabled, isTrue);
+    });
+
     test('stamps tool startedAt, tracks activity phase, freezes duration', () {
       final store = AgentConversationTimelineStore();
       addTearDown(store.dispose);

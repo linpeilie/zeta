@@ -354,11 +354,19 @@ void main() {
                       id: 'turn-footer-1',
                       status: AgentHistoryTurnStatus.completed,
                       duration: const Duration(seconds: 95),
+                      model: 'gpt-5.5',
                       tokenUsage: const AgentTokenUsage(
                         inputTokens: 1000,
                         outputTokens: 240,
                         totalTokens: 1240,
                       ),
+                      raw: const <String, Object?>{
+                        'turnContext': <String, Object?>{
+                          'model': 'gpt-5.5',
+                          'effort': 'high',
+                          'serviceTier': 'priority',
+                        },
+                      },
                       entries: const <AgentHistoryEntry>[
                         AgentHistoryMessageEntry(
                           id: 'history-user-footer-1',
@@ -392,6 +400,18 @@ void main() {
           expect(footer, findsOneWidget);
           expect(
             find.descendant(of: footer, matching: find.text('1m 35s')),
+            findsOneWidget,
+          );
+          expect(
+            find.descendant(of: footer, matching: find.text('gpt-5.5')),
+            findsOneWidget,
+          );
+          expect(
+            find.descendant(of: footer, matching: find.text('高')),
+            findsOneWidget,
+          );
+          expect(
+            find.descendant(of: footer, matching: find.text('Fast')),
             findsOneWidget,
           );
           expect(

@@ -80,7 +80,6 @@ class _WorkbenchGoldenScene extends StatelessWidget {
       padding: const EdgeInsets.all(IdeSpacing.space8),
       child: IdeWorkbenchScaffold(
         leadingRailBuilder: (context, mode) => IdeActivityRail(
-          indicatorSide: IdeActivityRailIndicatorSide.right,
           leadingActions: [
             IdeRailAction(
               icon: Icons.account_tree_rounded,

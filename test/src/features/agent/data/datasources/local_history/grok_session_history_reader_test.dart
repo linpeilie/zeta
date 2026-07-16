@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_session_history_reader.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
+import '../../../../../testing/fixture_reader.dart';
+
 void main() {
   group('GrokSessionHistoryReader', () {
     late Directory tempRoot;
@@ -185,6 +187,49 @@ void main() {
       expect(entries[0].text, 'hello');
       expect(entries[1].role, AgentMessageRole.agent);
     });
+
+    test(
+      'falls back from unreadable updates fixture to legacy chat_history fixture',
+      () async {
+        final sessionId = '019f593a-4ad3-7533-b118-144607cf8988';
+        final sessionDir = Directory(
+          '${tempRoot.path}${Platform.pathSeparator}sessions'
+          '${Platform.pathSeparator}manual'
+          '${Platform.pathSeparator}$sessionId',
+        );
+        await sessionDir.create(recursive: true);
+
+        await File(
+          '${sessionDir.path}${Platform.pathSeparator}updates.jsonl',
+        ).writeAsString(
+          readFixtureText(
+            'grok/local_history/updates_unreadable_redacted.jsonl',
+          ),
+        );
+        await File(
+          '${sessionDir.path}${Platform.pathSeparator}chat_history.jsonl',
+        ).writeAsString(
+          readFixtureText(
+            'grok/local_history/chat_history_legacy_redacted.jsonl',
+          ),
+        );
+
+        final reader = GrokSessionHistoryReader(grokHome: tempRoot.path);
+        final snapshot = await reader.readThreadHistory(
+          threadId: sessionId,
+          providerId: 'grok',
+          sessionPath: sessionDir.path,
+        );
+
+        expect(snapshot.raw['source'], 'chat_history.jsonl');
+        expect(snapshot.turns, hasLength(1));
+        final entries = snapshot.turns.single.entries
+            .whereType<AgentHistoryMessageEntry>()
+            .toList();
+        expect(entries[0].text, 'legacy hello');
+        expect(entries[1].text, 'legacy world');
+      },
+    );
   });
 }
 

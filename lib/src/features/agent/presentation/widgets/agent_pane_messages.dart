@@ -117,10 +117,10 @@ class _AgentLiveActivityStatus extends StatelessWidget {
   }
 }
 
-/// 单个 turn 末尾的分割线：展示本回合耗时与 token 用量。
+/// 单个 turn 末尾的分割线：展示本回合耗时、模型配置与 token 用量。
 ///
 /// 仅终态（完成/中断/失败）展示；进行中耗时已在 live 活动条展示，避免重复。
-/// 无耗时且无 token 时不渲染，避免空行干扰时间线。
+/// 无任何可展示元数据时不渲染，避免空行干扰时间线。
 class _AgentTurnFooter extends StatelessWidget {
   const _AgentTurnFooter({required this.turn});
 
@@ -134,11 +134,26 @@ class _AgentTurnFooter extends StatelessWidget {
     }
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
+    final metaStyle = textStyles.caption.copyWith(
+      color: colors.textSecondary.withValues(alpha: 0.72),
+      fontWeight: FontWeight.w500,
+    );
     final durationLabel = _turnDurationLabel(turn);
+    final modelConfig = turn.modelConfig;
+    final modelLabel = _nonEmptyTrimmed(modelConfig?.modelId);
+    final effortLabel = agentReasoningEffortFooterLabel(
+      modelConfig?.reasoningEffort,
+    );
+    final showFast = modelConfig?.fastEnabled == true;
     final tokenLabel = _turnTokenUsageLabel(turn.tokenUsage);
     final tokenTooltip = _tokenUsageTooltip(turn.tokenUsage);
     final showTokens = tokenLabel != null;
-    final hasMeta = durationLabel != null || showTokens;
+    final hasMeta =
+        durationLabel != null ||
+        modelLabel != null ||
+        effortLabel != null ||
+        showFast ||
+        showTokens;
     if (!hasMeta) {
       return const SizedBox.shrink();
     }
@@ -167,12 +182,32 @@ class _AgentTurnFooter extends StatelessWidget {
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   if (durationLabel != null)
+                    Text(durationLabel, style: metaStyle),
+                  if (modelLabel != null)
                     Text(
-                      durationLabel,
-                      style: textStyles.caption.copyWith(
-                        color: colors.textSecondary.withValues(alpha: 0.72),
-                        fontWeight: FontWeight.w500,
+                      modelLabel,
+                      key: ValueKey<String>(
+                        'agent-turn-footer-model-${turn.id}',
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: metaStyle,
+                    ),
+                  if (effortLabel != null)
+                    Text(
+                      effortLabel,
+                      key: ValueKey<String>(
+                        'agent-turn-footer-effort-${turn.id}',
+                      ),
+                      style: metaStyle,
+                    ),
+                  if (showFast)
+                    Text(
+                      'Fast',
+                      key: ValueKey<String>(
+                        'agent-turn-footer-fast-${turn.id}',
+                      ),
+                      style: metaStyle,
                     ),
                   if (showTokens)
                     IdeTooltip(
@@ -219,6 +254,14 @@ class _AgentTurnFooter extends StatelessWidget {
       ),
     );
   }
+}
+
+String? _nonEmptyTrimmed(String? value) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  return trimmed;
 }
 
 /// turn 末尾耗时/状态文案（仅终态 footer 使用；进行中不渲染 footer）。

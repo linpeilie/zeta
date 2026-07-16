@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'ide_colors.dart';
 import 'ide_effects.dart';
-import 'ide_motion.dart';
 import 'ide_spacing.dart';
 import 'pane_widgets.dart';
 
@@ -30,19 +29,18 @@ class IdeRailAction {
 }
 
 /// 统一 IDE 左右活动栏。
+///
+/// 选中态仅通过中性 [IdeColors.selectedSurface] 底与
+/// [IdeColors.accentForeground] 图标色表达，不再绘制侧边指示条。
 class IdeActivityRail extends StatelessWidget {
   const IdeActivityRail({
     required this.leadingActions,
     super.key,
     this.trailingActions = const <IdeRailAction>[],
-    this.indicatorSide = IdeActivityRailIndicatorSide.left,
   });
 
   final List<IdeRailAction> leadingActions;
   final List<IdeRailAction> trailingActions;
-
-  /// 选中态指示条位置：左侧栏靠右、右侧栏靠左，贴近内容区。
-  final IdeActivityRailIndicatorSide indicatorSide;
 
   @override
   Widget build(BuildContext context) {
@@ -55,10 +53,10 @@ class IdeActivityRail extends StatelessWidget {
         child: Column(
           children: [
             for (final action in leadingActions)
-              _RailActionButton(action: action, indicatorSide: indicatorSide),
+              _RailActionButton(action: action),
             if (trailingActions.isNotEmpty) const Spacer(),
             for (final action in trailingActions)
-              _RailActionButton(action: action, indicatorSide: indicatorSide),
+              _RailActionButton(action: action),
           ],
         ),
       ),
@@ -66,14 +64,10 @@ class IdeActivityRail extends StatelessWidget {
   }
 }
 
-/// 活动栏选中指示条相对按钮的水平位置。
-enum IdeActivityRailIndicatorSide { left, right }
-
 class _RailActionButton extends StatelessWidget {
-  const _RailActionButton({required this.action, required this.indicatorSide});
+  const _RailActionButton({required this.action});
 
   final IdeRailAction action;
-  final IdeActivityRailIndicatorSide indicatorSide;
 
   @override
   Widget build(BuildContext context) {
@@ -83,51 +77,23 @@ class _RailActionButton extends StatelessWidget {
         : action.active
         ? colors.accentForeground
         : colors.textSecondary;
-    final indicatorOnLeft = indicatorSide == IdeActivityRailIndicatorSide.left;
 
     return IdeTooltip(
       message: action.tooltip,
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.center,
-        children: [
-          PaneInteractiveSurface(
-            key: action.key,
-            onPressed: action.enabled ? action.onPressed : null,
-            selected: action.active,
-            enabled: action.enabled,
-            focusNode: action.focusNode,
-            width: 32,
-            height: 32,
-            padding: EdgeInsets.zero,
-            borderRadius: IdeRadius.allSmall,
-            backgroundColor: Colors.transparent,
-            selectedBackgroundColor: colors.selectedSurface,
-            semanticLabel: action.semanticLabel,
-            child: Icon(action.icon, size: 19, color: iconColor),
-          ),
-          Positioned(
-            left: indicatorOnLeft ? -2 : null,
-            right: indicatorOnLeft ? null : -2,
-            child: AnimatedContainer(
-              duration: IdeMotion.durationNormal,
-              curve: IdeMotion.curveDefault,
-              width: 3,
-              height: action.active ? 16 : 0,
-              decoration: BoxDecoration(
-                color: colors.accent,
-                borderRadius: BorderRadius.horizontal(
-                  left: indicatorOnLeft
-                      ? Radius.zero
-                      : const Radius.circular(2),
-                  right: indicatorOnLeft
-                      ? const Radius.circular(2)
-                      : Radius.zero,
-                ),
-              ),
-            ),
-          ),
-        ],
+      child: PaneInteractiveSurface(
+        key: action.key,
+        onPressed: action.enabled ? action.onPressed : null,
+        selected: action.active,
+        enabled: action.enabled,
+        focusNode: action.focusNode,
+        width: 32,
+        height: 32,
+        padding: EdgeInsets.zero,
+        borderRadius: IdeRadius.allSmall,
+        backgroundColor: Colors.transparent,
+        selectedBackgroundColor: colors.selectedSurface,
+        semanticLabel: action.semanticLabel,
+        child: Icon(action.icon, size: 19, color: iconColor),
       ),
     );
   }
