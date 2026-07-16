@@ -163,43 +163,63 @@ class _AgentTurnFooter extends StatelessWidget {
         top: IdeSpacing.space12,
         bottom: IdeSpacing.space16,
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: sf.Divider(
-              padding: EdgeInsets.zero,
-              thickness: 1,
-              color: colors.borderSubtle,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final meta = Wrap(
+            key: ValueKey<String>('agent-turn-footer-meta-${turn.id}'),
+            alignment: WrapAlignment.center,
+            runSpacing: IdeSpacing.space6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: _turnFooterMetaItems(
+              turnId: turn.id,
+              style: metaStyle,
+              durationLabel: durationLabel,
+              modelLabel: modelLabel,
+              effortLabel: effortLabel,
+              showFast: showFast,
+              tokenLabel: showTokens ? tokenLabel : null,
+              tokenTooltip: tokenTooltip,
             ),
-          ),
-          const SizedBox(width: IdeSpacing.space10),
-          Flexible(
-            child: Align(
-              alignment: Alignment.center,
-              child: Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: _turnFooterMetaItems(
-                  turnId: turn.id,
-                  style: metaStyle,
-                  durationLabel: durationLabel,
-                  modelLabel: modelLabel,
-                  effortLabel: effortLabel,
-                  showFast: showFast,
-                  tokenLabel: showTokens ? tokenLabel : null,
-                  tokenTooltip: tokenTooltip,
+          );
+          final divider = sf.Divider(
+            padding: EdgeInsets.zero,
+            thickness: 1,
+            color: colors.borderSubtle,
+          );
+
+          if (constraints.maxWidth < IdeMetrics.stackedRowBreakpoint) {
+            return Column(
+              key: ValueKey<String>('agent-turn-footer-stacked-${turn.id}'),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(width: double.infinity, child: divider),
+                const SizedBox(height: IdeSpacing.space8),
+                meta,
+              ],
+            );
+          }
+          return Row(
+            key: ValueKey<String>('agent-turn-footer-inline-${turn.id}'),
+            children: [
+              Expanded(child: divider),
+              const SizedBox(width: IdeSpacing.space12),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: constraints.maxWidth * 2 / 3,
+                ),
+                child: meta,
+              ),
+              const SizedBox(width: IdeSpacing.space12),
+              Expanded(
+                child: sf.Divider(
+                  padding: EdgeInsets.zero,
+                  thickness: 1,
+                  color: colors.borderSubtle,
                 ),
               ),
-            ),
-          ),
-          const SizedBox(width: IdeSpacing.space10),
-          Expanded(
-            child: sf.Divider(
-              padding: EdgeInsets.zero,
-              thickness: 1,
-              color: colors.borderSubtle,
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -213,7 +233,7 @@ String? _nonEmptyTrimmed(String? value) {
   return trimmed;
 }
 
-/// 组装 turn footer 元数据项，各项以 ` • ` 分隔，无 icon。
+/// 组装 turn footer 元数据项，各项以带留白的 `•` 分隔，无 icon。
 List<Widget> _turnFooterMetaItems({
   required String turnId,
   required TextStyle style,
@@ -225,11 +245,27 @@ List<Widget> _turnFooterMetaItems({
   required String tokenTooltip,
 }) {
   final items = <Widget>[];
+  var separatorIndex = 0;
   void add(Widget child) {
-    if (items.isNotEmpty) {
-      items.add(Text(' • ', style: style));
+    if (items.isEmpty) {
+      items.add(child);
+      return;
     }
-    items.add(child);
+    items.add(
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            key: ValueKey<String>(
+              'agent-turn-footer-separator-$turnId-${separatorIndex++}',
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space8),
+            child: Text('•', style: style),
+          ),
+          Flexible(child: child),
+        ],
+      ),
+    );
   }
 
   if (durationLabel != null) {

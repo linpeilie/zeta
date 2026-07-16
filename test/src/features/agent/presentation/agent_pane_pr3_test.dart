@@ -344,6 +344,8 @@ void main() {
       testWidgets(
         'renders end-of-turn footer with duration and token usage',
         (tester) async {
+          await tester.binding.setSurfaceSize(const Size(800, 800));
+          addTearDown(() => tester.binding.setSurfaceSize(null));
           final viewModel = _createViewModel(
             _FakeAgentProvider(
               historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
@@ -418,10 +420,32 @@ void main() {
             find.descendant(of: footer, matching: find.text('1.2k tokens')),
             findsOneWidget,
           );
-          // 各项以 • 分隔，且不再渲染 token 的 bolt icon。
+          // 宽布局给元数据留出足够空间，各项以带留白的 • 分隔。
           expect(
-            find.descendant(of: footer, matching: find.text(' • ')),
+            find.descendant(
+              of: footer,
+              matching: find.byKey(
+                const ValueKey<String>(
+                  'agent-turn-footer-inline-turn-footer-1',
+                ),
+              ),
+            ),
+            findsOneWidget,
+          );
+          expect(
+            find.descendant(of: footer, matching: find.text('•')),
             findsNWidgets(4),
+          );
+          final firstSeparator = tester.widget<Padding>(
+            find.byKey(
+              const ValueKey<String>(
+                'agent-turn-footer-separator-turn-footer-1-0',
+              ),
+            ),
+          );
+          expect(
+            firstSeparator.padding,
+            const EdgeInsets.symmetric(horizontal: IdeSpacing.space8),
           );
           expect(
             find.descendant(
@@ -430,6 +454,17 @@ void main() {
             ),
             findsNothing,
           );
+
+          await tester.binding.setSurfaceSize(const Size(480, 800));
+          await _pumpAgentPaneUi(tester);
+
+          expect(
+            find.byKey(
+              const ValueKey<String>('agent-turn-footer-stacked-turn-footer-1'),
+            ),
+            findsOneWidget,
+          );
+          expect(tester.takeException(), isNull);
         },
         skip: _skipWindowsActiveHistoryPr3,
       );
