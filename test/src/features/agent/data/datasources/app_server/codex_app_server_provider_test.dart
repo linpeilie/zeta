@@ -7,7 +7,7 @@ import 'package:logging/logging.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/data/datasources/app_server/codex_app_server_agent_provider.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
-import 'package:zeta/src/features/agent/data/datasources/transport/provider_runtime_json_rpc_peer.dart';
+import 'package:zeta/src/features/agent/data/datasources/transport/provider_operation_scheduler.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 void main() {
@@ -1422,6 +1422,37 @@ void main() {
       await subscription.cancel();
       await provider.dispose();
     });
+
+    test(
+      'serializes mutations per thread while allowing different threads',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+        await provider.initialize();
+        final archiveGate = Completer<void>();
+        peer.blockNextRequest('thread/archive', archiveGate);
+
+        final archive = provider.archiveThread('thread-1');
+        await Future<void>.delayed(Duration.zero);
+        final sameThreadDelete = provider.deleteThread('thread-1');
+        final otherThreadDelete = provider.deleteThread('thread-2');
+        await Future<void>.delayed(Duration.zero);
+
+        expect(_deleteThreadIds(peer), <String>['thread-2']);
+
+        archiveGate.complete();
+        await Future.wait(<Future<void>>[
+          archive,
+          sameThreadDelete,
+          otherThreadDelete,
+        ]);
+        expect(_deleteThreadIds(peer), <String>['thread-2', 'thread-1']);
+      },
+    );
 
     test('fork at turn sends stable inclusive lastTurnId boundary', () async {
       final peer = _FakeJsonRpcPeer();
@@ -2937,7 +2968,7 @@ void main() {
         provider.listThreads(
           query: const AgentThreadListQuery(projectPath: '/repo', limit: 20),
         ),
-        throwsA(isA<ProviderConnectionClosedException>()),
+        throwsA(isA<ProviderOperationSchedulerClosedException>()),
       );
       expect(peer.requestMethods, hasLength(requestCount));
     });
@@ -3225,6 +3256,8 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
   final List<String> notificationsSent = <String>[];
   final Map<Object, Object?> responses = <Object, Object?>{};
   final Map<Object, JsonRpcError> errorResponses = <Object, JsonRpcError>{};
+  final Map<String, List<Completer<void>>> _requestGates =
+      <String, List<Completer<void>>>{};
   final Completer<void>? _startCompleter;
   final Map<String, Object?> initializeResponse;
   int startCalls = 0;
@@ -3257,6 +3290,10 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
   }) async {
     requestMethods.add(method);
     requestParams.add(params);
+    final gates = _requestGates[method];
+    if (gates != null && gates.isNotEmpty) {
+      await gates.removeAt(0).future;
+    }
     final paramsMap = params is Map<String, Object?>
         ? params
         : const <String, Object?>{};
@@ -3507,6 +3544,10 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
 
   Future<void> simulateUnexpectedExit() => close();
 
+  void blockNextRequest(String method, Completer<void> gate) {
+    _requestGates.putIfAbsent(method, () => <Completer<void>>[]).add(gate);
+  }
+
   void emitNotification(String method, Map<String, Object?> params) {
     _notifications.add(
       JsonRpcNotification(
@@ -3539,6 +3580,18 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
   void completeStart() {
     _startCompleter?.complete();
   }
+}
+
+List<String> _deleteThreadIds(_FakeJsonRpcPeer peer) {
+  final ids = <String>[];
+  for (var index = 0; index < peer.requestMethods.length; index += 1) {
+    if (peer.requestMethods[index] != 'thread/delete') {
+      continue;
+    }
+    final params = peer.requestParams[index]! as Map<String, Object?>;
+    ids.add(params['threadId']! as String);
+  }
+  return ids;
 }
 
 List<AgentHistoryEntry> _historyEntries(AgentThreadHistorySnapshot history) {

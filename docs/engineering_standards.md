@@ -114,6 +114,9 @@ main -> app -> presentation/application -> domain
 - JSON-RPC provider 必须复用 `ProviderRuntimeJsonRpcPeer` 的生命周期 gate。`closing` 后
   禁止新 client RPC；反向请求以 `(runtimeId, connectionEpoch, requestId)` 为权威身份，
   dispose 必须关闭 transport 并等待已入场的 start、RPC 与 handler 排空后才进入 `closed`。
+- Provider Thread 操作必须复用 `ProviderOperationScheduler`。同一 Thread 的变更使用
+  `exclusive` 并保持 FIFO，list/read 使用 Project/Thread `sharedRead`；禁止同键重入，
+  dispose 必须拒绝未入场任务并等待已入场任务释放资源键。
 - JSON-RPC transport 日志不得记录 prompt、文件内容、认证参数或 stderr 原文。
 - 默认审批策略保持保守，不自动授权命令执行或文件写入。
 - Codex app-server 协议以 `third_party/codex_app_server_schema` 的 pinned

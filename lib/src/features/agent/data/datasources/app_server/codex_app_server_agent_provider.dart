@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/data/datasources/app_server/codex_process_starter.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
+import 'package:zeta/src/features/agent/data/datasources/transport/provider_operation_scheduler.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/provider_runtime_json_rpc_peer.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -83,6 +84,10 @@ class CodexAppServerAgentProvider
   /// 广播事件流控制器，所有 Agent 事件通过此流发出。
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
+
+  /// 以 Thread/Project 资源键协调历史读取与变更请求。
+  final ProviderOperationScheduler _operationScheduler =
+      ProviderOperationScheduler();
 
   /// 等待用户审批的服务端 JSON-RPC 请求。
   final Map<String, _PendingApproval> _pendingApprovals =
@@ -317,39 +322,49 @@ class CodexAppServerAgentProvider
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
-  }) async {
-    await initialize();
-    _log.fine('Resuming Codex thread $sessionId');
+  }) => _scheduleThreadOperation(
+    sessionId,
+    ProviderOperationAccess.exclusive,
+    () async {
+      await initialize();
+      _log.fine('Resuming Codex thread $sessionId');
 
-    final previousSessionId = _session?.id;
-    final session = await _client.resumeSession(
-      sessionId,
-      context: context,
-      permissionSelection: _permissionSelection,
-      previousSessionId: previousSessionId,
-    );
-    // resume 成功后再退订旧 thread，保证新会话已接管订阅。
-    await _unsubscribePreviousThreadIfNeeded(
-      previousSessionId: previousSessionId,
-      nextSessionId: session.id,
-    );
-    _session = session;
-    _events.add(AgentSessionStartedEvent(session));
-    _log.info('Resumed Codex thread ${session.id}');
-    return session;
-  }
+      final previousSessionId = _session?.id;
+      final session = await _client.resumeSession(
+        sessionId,
+        context: context,
+        permissionSelection: _permissionSelection,
+        previousSessionId: previousSessionId,
+      );
+      // resume 成功后再退订旧 thread，保证新会话已接管订阅。
+      await _unsubscribePreviousThreadIfNeeded(
+        previousSessionId: previousSessionId,
+        nextSessionId: session.id,
+      );
+      _session = session;
+      _events.add(AgentSessionStartedEvent(session));
+      _log.info('Resumed Codex thread ${session.id}');
+      return session;
+    },
+  );
 
   @override
-  Future<AgentThreadPage> listThreads({
-    required AgentThreadListQuery query,
-  }) async {
-    await initialize();
-    _log.fine(
-      'Listing Codex threads for ${query.projectPath} '
-      'limit=${query.limit} cursor=${query.cursor}',
-    );
-    return _client.listThreads(query: query);
-  }
+  Future<AgentThreadPage> listThreads({required AgentThreadListQuery query}) =>
+      _operationScheduler.schedule<AgentThreadPage>(
+        key: ProjectOperationKey(
+          providerId: config.id,
+          projectPath: query.projectPath,
+        ),
+        access: ProviderOperationAccess.sharedRead,
+        operation: () async {
+          await initialize();
+          _log.fine(
+            'Listing Codex threads for ${query.projectPath} '
+            'limit=${query.limit} cursor=${query.cursor}',
+          );
+          return _client.listThreads(query: query);
+        },
+      );
 
   @override
   Future<AgentUsageQuotaSnapshot?> readUsageQuota() async {
@@ -421,14 +436,18 @@ class CodexAppServerAgentProvider
     required String threadId,
     String? sessionPath,
     String? projectPath,
-  }) async {
-    await initialize();
-    _log.fine('Reading Codex thread history $threadId');
-    return _client.readThreadHistory(
-      threadId: threadId,
-      sessionPath: sessionPath,
-    );
-  }
+  }) => _scheduleThreadOperation(
+    threadId,
+    ProviderOperationAccess.sharedRead,
+    () async {
+      await initialize();
+      _log.fine('Reading Codex thread history $threadId');
+      return _client.readThreadHistory(
+        threadId: threadId,
+        sessionPath: sessionPath,
+      );
+    },
+  );
 
   @override
   Future<void> unsubscribeThread(String threadId) async {
@@ -440,70 +459,104 @@ class CodexAppServerAgentProvider
   }
 
   @override
-  Future<void> renameThread({
-    required String threadId,
-    required String name,
-  }) async {
-    await initialize();
-    await _client.renameThread(threadId: threadId, name: name);
-  }
+  Future<void> renameThread({required String threadId, required String name}) =>
+      _scheduleThreadOperation(
+        threadId,
+        ProviderOperationAccess.exclusive,
+        () async {
+          await initialize();
+          await _client.renameThread(threadId: threadId, name: name);
+        },
+      );
 
   @override
-  Future<void> archiveThread(String threadId) async {
-    await initialize();
-    await _client.archiveThread(threadId);
-  }
+  Future<void> archiveThread(String threadId) => _scheduleThreadOperation(
+    threadId,
+    ProviderOperationAccess.exclusive,
+    () async {
+      await initialize();
+      await _client.archiveThread(threadId);
+    },
+  );
 
   @override
-  Future<void> unarchiveThread(String threadId) async {
-    await initialize();
-    await _client.unarchiveThread(threadId);
-  }
+  Future<void> unarchiveThread(String threadId) => _scheduleThreadOperation(
+    threadId,
+    ProviderOperationAccess.exclusive,
+    () async {
+      await initialize();
+      await _client.unarchiveThread(threadId);
+    },
+  );
 
   @override
-  Future<void> deleteThread(String threadId) async {
-    await initialize();
-    await _client.deleteThread(threadId);
-    if (_session?.id == threadId) {
-      await _unsubscribeThreadBestEffort(threadId);
-      _session = null;
-    }
-  }
+  Future<void> deleteThread(String threadId) => _scheduleThreadOperation(
+    threadId,
+    ProviderOperationAccess.exclusive,
+    () async {
+      await initialize();
+      await _client.deleteThread(threadId);
+      if (_session?.id == threadId) {
+        await _unsubscribeThreadBestEffort(threadId);
+        _session = null;
+      }
+    },
+  );
 
   @override
   Future<AgentSession> forkThread({
     required String threadId,
     required AgentContext context,
     AgentForkBoundary boundary = const AgentForkCurrentHead(),
-  }) async {
-    await initialize();
-    if (boundary is AgentForkThroughTurn &&
-        !_capabilities.canForkThreadAtTurn) {
-      throw UnsupportedError('当前 Codex 版本不支持稳定的指定 turn 分支能力');
-    }
-    final previousSessionId = _session?.id;
-    final session = await _client.forkThread(
-      threadId: threadId,
-      context: context,
-      boundary: boundary,
-      permissionSelection: _permissionSelection,
-      previousSessionId: previousSessionId,
-    );
-    await _unsubscribePreviousThreadIfNeeded(
-      previousSessionId: previousSessionId,
-      nextSessionId: session.id,
-    );
-    _session = session;
-    _events.add(AgentSessionStartedEvent(session));
-    _log.info('Forked Codex thread $threadId -> ${session.id}');
-    return session;
-  }
+  }) => _scheduleThreadOperation(
+    threadId,
+    ProviderOperationAccess.exclusive,
+    () async {
+      await initialize();
+      if (boundary is AgentForkThroughTurn &&
+          !_capabilities.canForkThreadAtTurn) {
+        throw UnsupportedError('当前 Codex 版本不支持稳定的指定 turn 分支能力');
+      }
+      final previousSessionId = _session?.id;
+      final session = await _client.forkThread(
+        threadId: threadId,
+        context: context,
+        boundary: boundary,
+        permissionSelection: _permissionSelection,
+        previousSessionId: previousSessionId,
+      );
+      await _unsubscribePreviousThreadIfNeeded(
+        previousSessionId: previousSessionId,
+        nextSessionId: session.id,
+      );
+      _session = session;
+      _events.add(AgentSessionStartedEvent(session));
+      _log.info('Forked Codex thread $threadId -> ${session.id}');
+      return session;
+    },
+  );
 
   @override
-  Future<void> compactThread(String threadId) async {
-    await initialize();
-    _log.info('Starting compact for Codex thread $threadId');
-    await _client.compactThread(threadId);
+  Future<void> compactThread(String threadId) => _scheduleThreadOperation(
+    threadId,
+    ProviderOperationAccess.exclusive,
+    () async {
+      await initialize();
+      _log.info('Starting compact for Codex thread $threadId');
+      await _client.compactThread(threadId);
+    },
+  );
+
+  Future<T> _scheduleThreadOperation<T>(
+    String threadId,
+    ProviderOperationAccess access,
+    FutureOr<T> Function() operation,
+  ) {
+    return _operationScheduler.schedule<T>(
+      key: ThreadOperationKey(providerId: config.id, threadId: threadId),
+      access: access,
+      operation: operation,
+    );
   }
 
   @override
@@ -625,6 +678,7 @@ class CodexAppServerAgentProvider
   Future<void> _disposeOnce() async {
     _log.fine('Disposing Agent provider ${config.id}');
     _disposed = true;
+    _operationScheduler.beginClosing();
     _peer.beginClosing();
 
     _resolvePendingApprovalsOnConnectionClosed();
@@ -634,6 +688,7 @@ class CodexAppServerAgentProvider
     await _stderrSubscription?.cancel();
     await _protocolErrorSubscription?.cancel();
     await _peer.close();
+    await _operationScheduler.close();
     await _events.close();
   }
 

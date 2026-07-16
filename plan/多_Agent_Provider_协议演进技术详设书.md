@@ -994,12 +994,21 @@ Provider dispose 先进入 `closing`，处理 pending 交互并关闭 transport�
 排空后进入 `closed`；Cursor 工作区切换会创建新的 runtime scope。协议 transport 仍负责
 JSONL 分帧和请求 ID 关联，没有新建平行传输层。
 
-#### PR 1.2：资源键调度器
+#### PR 1.2：资源键调度器（已完成）
 
-- 实现 sharedRead/exclusive 队列。
-- 先接入 thread resume/fork/archive/delete/compact。
-- 再接入 list/read sharedRead。
-- 增加顺序、并发、异常释放和 dispose 测试。
+- [x] 实现 sharedRead/exclusive 队列。
+- [x] 先接入 thread resume/fork/archive/delete/compact。
+- [x] 再接入 list/read sharedRead。
+- [x] 增加顺序、并发、异常释放和 dispose 测试。
+
+实现落点：`ProviderOperationScheduler` 按 Runtime、Project、Thread、Process 资源键维护
+独立队列；同键连续 `sharedRead` 并发执行，`exclusive` 形成 FIFO 屏障，不同键互不
+阻塞。同键重入直接返回 `ProviderOperationReentrancyException`，避免调用链同步等待自身
+形成死锁；关闭时拒绝新任务、取消未入场任务并等待已入场任务排空。Codex 的 resume、
+fork、rename、archive/unarchive、delete、compact，Grok 的 resume，以及 Cursor 的
+resume、delete/本地索引移除已接入 Thread exclusive；三类 Provider 的 list/read 已接入
+Project/Thread sharedRead。Provider initialize/dispose 继续由 PR 1.1 的生命周期 Gate
+负责，dispose 会先关闭调度器入口，再关闭 peer，最后等待调度任务收尾。
 
 #### PR 1.3：Listener Generation 与流式合并
 

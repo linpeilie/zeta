@@ -9,6 +9,7 @@ import 'package:zeta/src/features/agent/data/datasources/acp/cursor_diagnostics_
 import 'package:zeta/src/features/agent/data/datasources/acp/cursor_process_starter.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/cursor_session_index_store.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
+import 'package:zeta/src/features/agent/data/datasources/transport/provider_operation_scheduler.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/provider_runtime_json_rpc_peer.dart';
 import 'package:zeta/src/features/agent/data/mappers/acp_permission_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/acp_session_config_mapper.dart';
@@ -86,6 +87,8 @@ class CursorAcpAgentProvider
   final Duration blockingRequestTimeout;
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
+  final ProviderOperationScheduler _operationScheduler =
+      ProviderOperationScheduler();
   final Map<String, _PendingCursorPermission> _pendingPermissions =
       <String, _PendingCursorPermission>{};
   final Map<String, _PendingCursorQuestion> _pendingQuestions =
@@ -393,6 +396,15 @@ class CursorAcpAgentProvider
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
+  }) => _scheduleThreadOperation(
+    sessionId,
+    ProviderOperationAccess.exclusive,
+    () => _resumeSession(sessionId, context: context),
+  );
+
+  Future<AgentSession> _resumeSession(
+    String sessionId, {
+    required AgentContext context,
   }) async {
     final workspace = _requiredWorkspace(context);
     final indexed = await _sessionIndexStore.load();
@@ -411,7 +423,17 @@ class CursorAcpAgentProvider
   }
 
   @override
-  Future<AgentThreadPage> listThreads({
+  Future<AgentThreadPage> listThreads({required AgentThreadListQuery query}) =>
+      _operationScheduler.schedule<AgentThreadPage>(
+        key: ProjectOperationKey(
+          providerId: config.id,
+          projectPath: normalizeCursorWorkspacePath(query.projectPath),
+        ),
+        access: ProviderOperationAccess.sharedRead,
+        operation: () => _listThreads(query: query),
+      );
+
+  Future<AgentThreadPage> _listThreads({
     required AgentThreadListQuery query,
   }) async {
     if (query.archived) {
@@ -606,6 +628,20 @@ class CursorAcpAgentProvider
     required String threadId,
     String? sessionPath,
     String? projectPath,
+  }) => _scheduleThreadOperation(
+    threadId,
+    ProviderOperationAccess.sharedRead,
+    () => _readThreadHistory(
+      threadId: threadId,
+      sessionPath: sessionPath,
+      projectPath: projectPath,
+    ),
+  );
+
+  Future<AgentThreadHistorySnapshot> _readThreadHistory({
+    required String threadId,
+    String? sessionPath,
+    String? projectPath,
   }) async {
     final index = await _sessionIndexStore.load();
     final indexed = index.find(threadId);
@@ -652,7 +688,13 @@ class CursorAcpAgentProvider
   }
 
   @override
-  Future<void> deleteThread(String threadId) async {
+  Future<void> deleteThread(String threadId) => _scheduleThreadOperation(
+    threadId,
+    ProviderOperationAccess.exclusive,
+    () => _deleteThread(threadId),
+  );
+
+  Future<void> _deleteThread(String threadId) async {
     final index = await _sessionIndexStore.load();
     final workspace = index.find(threadId)?.workspacePath ?? _workspacePath;
     if (workspace == null) {
@@ -672,9 +714,12 @@ class CursorAcpAgentProvider
   }
 
   @override
-  Future<void> removeThreadFromList(String threadId) async {
-    await _removeIndexedSession(threadId, localOnly: true);
-  }
+  Future<void> removeThreadFromList(String threadId) =>
+      _scheduleThreadOperation(
+        threadId,
+        ProviderOperationAccess.exclusive,
+        () => _removeIndexedSession(threadId, localOnly: true),
+      );
 
   @override
   Future<AgentSession> forkThread({
@@ -688,6 +733,18 @@ class CursorAcpAgentProvider
   @override
   Future<void> compactThread(String threadId) async {
     throw UnsupportedError('Cursor ACP 未声明压缩能力');
+  }
+
+  Future<T> _scheduleThreadOperation<T>(
+    String threadId,
+    ProviderOperationAccess access,
+    FutureOr<T> Function() operation,
+  ) {
+    return _operationScheduler.schedule<T>(
+      key: ThreadOperationKey(providerId: config.id, threadId: threadId),
+      access: access,
+      operation: operation,
+    );
   }
 
   @override
@@ -914,7 +971,9 @@ class CursorAcpAgentProvider
 
   Future<void> _disposeOnce() async {
     _disposed = true;
+    _operationScheduler.beginClosing();
     await _closeCurrentPeer();
+    await _operationScheduler.close();
     _diagnostics.recordExit('provider disposed', expected: true);
     await _events.close();
   }

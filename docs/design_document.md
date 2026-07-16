@@ -183,6 +183,12 @@ composer，应用层误调用时抛出 `UnsupportedError`。`AgentProviderBootst
 server-request handler 排空。Codex 的 `AgentRuntimeInfo` 同步暴露 runtime identity，
 Grok/Cursor 通过可选 `AgentRuntimeLifecycleProvider` 暴露中立生命周期，不把协议状态泄漏到 UI。
 
+Provider 的 Thread 访问统一经过 `ProviderOperationScheduler`。列表使用 Project 级
+`sharedRead`，历史读取使用 Thread 级 `sharedRead`；resume、fork、重命名、归档、删除和
+压缩等变更使用 Thread 级 `exclusive`。同一资源上的连续读取可并发，独占操作保持 FIFO
+并阻塞后续读取；不同资源仍可并发。Provider dispose 先停止调度器接收新任务，再关闭
+连接并等待已入场操作结束，避免队列任务在关闭阶段重新发起 RPC。
+
 ### 默认 provider
 
 当前内置 provider 为 Codex CLI、Grok ACP 与 Cursor ACP；Cursor 默认关闭，默认 active

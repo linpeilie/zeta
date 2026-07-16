@@ -8,6 +8,7 @@ import 'package:zeta/src/features/agent/data/datasources/acp/grok_models_cli.dar
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_process_starter.dart';
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_session_history_reader.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
+import 'package:zeta/src/features/agent/data/datasources/transport/provider_operation_scheduler.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/provider_runtime_json_rpc_peer.dart';
 import 'package:zeta/src/features/agent/data/mappers/acp_content_codec.dart';
 import 'package:zeta/src/features/agent/data/mappers/acp_permission_mapper.dart';
@@ -98,6 +99,8 @@ class GrokAcpAgentProvider
 
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
+  final ProviderOperationScheduler _operationScheduler =
+      ProviderOperationScheduler();
 
   final Map<String, _PendingAcpPermission> _pendingPermissions =
       <String, _PendingAcpPermission>{};
@@ -355,75 +358,143 @@ class GrokAcpAgentProvider
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
-  }) async {
-    await initialize();
-    final cwd = context.projectPath?.trim();
+  }) => _scheduleThreadOperation(
+    sessionId,
+    ProviderOperationAccess.exclusive,
+    () async {
+      await initialize();
+      final cwd = context.projectPath?.trim();
 
-    if (_loadSessionSupported) {
-      // 预热本地历史缓存：UI 已在 switchThread 应用过；此处保证后续读一致。
-      unawaited(
-        readThreadHistory(threadId: sessionId).then((_) {}, onError: (_) {}),
-      );
-      _suppressingSessionLoadReplay = true;
-      try {
-        final result = await _peer.sendRequest(
-          'session/load',
-          params: <String, Object?>{
-            'sessionId': sessionId,
-            if (cwd != null && cwd.isNotEmpty) 'cwd': cwd,
-            'mcpServers': <Object?>[],
-          },
-          timeout: const Duration(seconds: 120),
-        );
-        final map = _asStringKeyedMap(result) ?? const <String, Object?>{};
-        _applyModelsFromSessionPayload(map);
-        await _applyModelSelectionIfNeeded(sessionId);
-        final session = AgentSession(
-          id: sessionId,
-          providerId: config.id,
-          raw: map,
-        );
-        _session = session;
-        if (cwd != null && cwd.isNotEmpty) {
-          _rememberProjectPath(sessionId, cwd);
+      if (_loadSessionSupported) {
+        // 历史预热属于本次独占恢复操作，避免后台读取越过后续同 Thread 变更。
+        try {
+          await _readThreadHistory(threadId: sessionId);
+        } catch (_) {
+          // 历史元数据不可用不应阻止协议恢复。
         }
-        // 恢复已有会话时也可能已有 generated_title，主动同步一次。
-        _scheduleGeneratedTitlePoll(sessionId);
-        _addEvent(AgentSessionStartedEvent(session));
-        _log.info('Loaded Grok ACP session $sessionId (replay suppressed)');
-        return session;
-      } catch (error, stackTrace) {
-        _log.warning('session/load failed for $sessionId', error, stackTrace);
-        rethrow;
-      } finally {
-        _suppressingSessionLoadReplay = false;
+        _suppressingSessionLoadReplay = true;
+        try {
+          final result = await _peer.sendRequest(
+            'session/load',
+            params: <String, Object?>{
+              'sessionId': sessionId,
+              if (cwd != null && cwd.isNotEmpty) 'cwd': cwd,
+              'mcpServers': <Object?>[],
+            },
+            timeout: const Duration(seconds: 120),
+          );
+          final map = _asStringKeyedMap(result) ?? const <String, Object?>{};
+          _applyModelsFromSessionPayload(map);
+          await _applyModelSelectionIfNeeded(sessionId);
+          final session = AgentSession(
+            id: sessionId,
+            providerId: config.id,
+            raw: map,
+          );
+          _session = session;
+          if (cwd != null && cwd.isNotEmpty) {
+            _rememberProjectPath(sessionId, cwd);
+          }
+          // 恢复已有会话时也可能已有 generated_title，主动同步一次。
+          _scheduleGeneratedTitlePoll(sessionId);
+          _addEvent(AgentSessionStartedEvent(session));
+          _log.info('Loaded Grok ACP session $sessionId (replay suppressed)');
+          return session;
+        } catch (error, stackTrace) {
+          _log.warning('session/load failed for $sessionId', error, stackTrace);
+          rethrow;
+        } finally {
+          _suppressingSessionLoadReplay = false;
+        }
       }
-    }
 
-    throw UnsupportedError(
-      '${config.displayName} does not support resuming existing sessions',
+      throw UnsupportedError(
+        '${config.displayName} does not support resuming existing sessions',
+      );
+    },
+  );
+
+  @override
+  Future<AgentThreadPage> listThreads({required AgentThreadListQuery query}) =>
+      _operationScheduler.schedule<AgentThreadPage>(
+        key: ProjectOperationKey(
+          providerId: config.id,
+          projectPath: query.projectPath,
+        ),
+        access: ProviderOperationAccess.sharedRead,
+        operation: () async {
+          // 归档视图：Grok 本地存储暂无归档语义，返回空页。
+          if (query.archived) {
+            return const AgentThreadPage(
+              threads: <AgentThreadSummary>[],
+              nextCursor: null,
+            );
+          }
+          return _sessionHistoryReader.listThreads(
+            query: query,
+            providerId: config.id,
+            environment: <String, String>{
+              ...Platform.environment,
+              ...config.environment,
+            },
+          );
+        },
+      );
+
+  Future<T> _scheduleThreadOperation<T>(
+    String threadId,
+    ProviderOperationAccess access,
+    FutureOr<T> Function() operation,
+  ) {
+    return _operationScheduler.schedule<T>(
+      key: ThreadOperationKey(providerId: config.id, threadId: threadId),
+      access: access,
+      operation: operation,
     );
   }
 
-  @override
-  Future<AgentThreadPage> listThreads({
-    required AgentThreadListQuery query,
+  Future<AgentThreadHistorySnapshot> _readThreadHistory({
+    required String threadId,
+    String? sessionPath,
+    String? projectPath,
   }) async {
-    // 归档视图：Grok 本地存储暂无归档语义，返回空页。
-    if (query.archived) {
-      return const AgentThreadPage(
-        threads: <AgentThreadSummary>[],
-        nextCursor: null,
-      );
+    // 历史 JSONL 只有用量和 modelId，上下文上限来自 initialize.modelState。
+    // 初始化失败不应阻断离线历史，因此仅做 best-effort。
+    if (_modelList == null || _modelList!.models.isEmpty) {
+      try {
+        await initialize();
+      } catch (error, stackTrace) {
+        _log.fine(
+          'Could not load Grok model metadata before reading history',
+          error,
+          stackTrace,
+        );
+      }
     }
-    return _sessionHistoryReader.listThreads(
-      query: query,
+    final cached = _historyCache[threadId];
+    if (cached != null &&
+        cached.turns.isNotEmpty &&
+        (sessionPath == null ||
+            sessionPath.isEmpty ||
+            cached.raw['sessionPath'] == sessionPath)) {
+      return _enrichHistorySnapshot(cached);
+    }
+
+    final snapshot = await _sessionHistoryReader.readThreadHistory(
+      threadId: threadId,
       providerId: config.id,
+      projectPath: projectPath,
+      sessionPath: sessionPath,
       environment: <String, String>{
         ...Platform.environment,
         ...config.environment,
       },
     );
+    final enriched = _enrichHistorySnapshot(snapshot);
+    if (enriched.turns.isNotEmpty) {
+      _historyCache[threadId] = enriched;
+    }
+    return enriched;
   }
 
   @override
@@ -482,45 +553,15 @@ class GrokAcpAgentProvider
     required String threadId,
     String? sessionPath,
     String? projectPath,
-  }) async {
-    // 历史 JSONL 只有用量和 modelId，上下文上限来自 initialize.modelState。
-    // 初始化失败不应阻断离线历史，因此仅做 best-effort。
-    if (_modelList == null || _modelList!.models.isEmpty) {
-      try {
-        await initialize();
-      } catch (error, stackTrace) {
-        _log.fine(
-          'Could not load Grok model metadata before reading history',
-          error,
-          stackTrace,
-        );
-      }
-    }
-    final cached = _historyCache[threadId];
-    if (cached != null &&
-        cached.turns.isNotEmpty &&
-        (sessionPath == null ||
-            sessionPath.isEmpty ||
-            cached.raw['sessionPath'] == sessionPath)) {
-      return _enrichHistorySnapshot(cached);
-    }
-
-    final snapshot = await _sessionHistoryReader.readThreadHistory(
+  }) => _scheduleThreadOperation(
+    threadId,
+    ProviderOperationAccess.sharedRead,
+    () => _readThreadHistory(
       threadId: threadId,
-      providerId: config.id,
-      projectPath: projectPath,
       sessionPath: sessionPath,
-      environment: <String, String>{
-        ...Platform.environment,
-        ...config.environment,
-      },
-    );
-    final enriched = _enrichHistorySnapshot(snapshot);
-    if (enriched.turns.isNotEmpty) {
-      _historyCache[threadId] = enriched;
-    }
-    return enriched;
-  }
+      projectPath: projectPath,
+    ),
+  );
 
   @override
   Future<void> unsubscribeThread(String threadId) async {
@@ -742,6 +783,7 @@ class GrokAcpAgentProvider
 
   Future<void> _disposeOnce() async {
     _disposed = true;
+    _operationScheduler.beginClosing();
     _peer.beginClosing();
     // 递增所有 token 以停止进行中的标题轮询。
     for (final sessionId in _titlePollTokensBySessionId.keys.toList()) {
@@ -760,6 +802,7 @@ class GrokAcpAgentProvider
     await _stderrSubscription?.cancel();
     await _protocolErrorSubscription?.cancel();
     await _peer.close();
+    await _operationScheduler.close();
     await _events.close();
   }
 

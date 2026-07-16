@@ -155,7 +155,11 @@ windows/
 5. 在 factory 中接入 provider kind。
 6. JSON-RPC provider 必须把裸 peer 包装为 `ProviderRuntimeJsonRpcPeer`，在握手成功后
    `markReady`、失败时 `markFailed`；dispose 先 `beginClosing`，再收尾 pending 交互和关闭 peer。
-7. 添加单元测试覆盖初始化、session、turn、权限请求、capability gate、生命周期门控和错误映射。
+7. Thread 的 list/read 与变更操作必须通过 `ProviderOperationScheduler`：list/read 使用
+   Project/Thread `sharedRead`，resume/fork/rename/archive/delete/compact 使用 Thread
+   `exclusive`；不要在持有资源键时再次调度同键操作。
+8. 添加单元测试覆盖初始化、session、turn、权限请求、capability gate、生命周期门控、
+   调度顺序和错误映射。
 
 注意：默认策略应保持保守，不自动授权命令执行或文件写入。
 未支持操作必须 capability=false，并抛出 `UnsupportedError`；不得静默成功。
