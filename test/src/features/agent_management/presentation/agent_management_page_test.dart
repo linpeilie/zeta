@@ -13,6 +13,11 @@ import 'package:zeta/src/features/agent_management/domain/agent_management_model
 import 'package:zeta/src/features/agent_management/presentation/agent_configuration_editor.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/ui/core/metrics/compact_metric_bar.dart';
+import 'package:zeta/src/ui/core/pane_widgets.dart';
+import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
+import 'package:zeta/src/ui/core/workbench/ide_section.dart';
+import 'package:zeta/src/ui/core/workbench/ide_toolbar.dart';
 import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 
 import '../../../testing/ide_test_harness.dart';
@@ -35,6 +40,20 @@ void main() {
     expect(find.byKey(const ValueKey('agent-row-codex')), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-detect-button')), findsOneWidget);
     expect(find.text('Codex CLI'), findsOneWidget);
+    expect(find.byType(CompactMetricBar), findsOneWidget);
+    expect(find.byType(IdeToolbar), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-list-pane')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('agent-row-status-compact')),
+      findsOneWidget,
+    );
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is IdeSurface && widget.level == IdeSurfaceLevel.pane,
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const ValueKey('agent-row-codex')));
     await tester.pump();
@@ -50,6 +69,19 @@ void main() {
     expect(find.text('基础信息'), findsWidgets);
     expect(find.text('模型'), findsOneWidget);
     expect(find.text('配置'), findsOneWidget);
+    expect(find.byType(IdeSection), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('wide Agent rows keep neutral status columns', (tester) async {
+    final harness = _ManagementHarness.create();
+    addTearDown(harness.dispose);
+    await tester.runAsync(harness.managementController.initialize);
+
+    await _pumpManagementPage(tester, controller: harness.managementController);
+
+    expect(find.byKey(const ValueKey('agent-row-status-wide')), findsOneWidget);
+    expect(find.byType(StateLabel), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

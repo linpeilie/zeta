@@ -7,8 +7,9 @@ import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
-import 'package:zeta/src/ui/core/ide_choice_card.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_tabs.dart';
+import 'package:zeta/src/ui/core/rows/ide_row_divider.dart';
 
 void main() {
   testWidgets('settings page renders navigation and appearance detail', (
@@ -24,6 +25,16 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('settings-theme-tabs')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('settings-appearance-group')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('settings-appearance-group')))
+          .width,
+      lessThanOrEqualTo(960),
+    );
     expect(find.byKey(const ValueKey('settings-ui-font-row')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('settings-ui-font-size-row')),
@@ -38,6 +49,20 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('外观'), findsNWidgets(2));
+    expect(find.byType(IdeRowDivider), findsNWidgets(4));
+  });
+
+  testWidgets('settings rows stack below the content breakpoint', (
+    tester,
+  ) async {
+    await _pumpSettingsPage(tester, size: const Size(820, 720));
+
+    expect(
+      find.byKey(const ValueKey('ide-settings-row-stacked')),
+      findsNWidgets(5),
+    );
+    expect(find.byKey(const ValueKey('ide-settings-row-inline')), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('settings back button invokes onBackPressed', (tester) async {
@@ -72,11 +97,11 @@ void main() {
     expect(controller.settings.themeMode, ThemeMode.system);
     expect(
       tester
-          .widget<IdeChoiceCard>(
-            find.byKey(const ValueKey('settings-theme-system')),
+          .widget<IdeTabs<ThemeMode>>(
+            find.byKey(const ValueKey('settings-theme-tabs')),
           )
-          .selected,
-      isTrue,
+          .value,
+      ThemeMode.system,
     );
     expect(find.text('使用系统当前的浅色或深色偏好。'), findsOneWidget);
 
@@ -86,11 +111,11 @@ void main() {
     expect(controller.settings.themeMode, ThemeMode.dark);
     expect(
       tester
-          .widget<IdeChoiceCard>(
-            find.byKey(const ValueKey('settings-theme-dark')),
+          .widget<IdeTabs<ThemeMode>>(
+            find.byKey(const ValueKey('settings-theme-tabs')),
           )
-          .selected,
-      isTrue,
+          .value,
+      ThemeMode.dark,
     );
     expect(find.text('使用深底、高对比度面板和明亮强调色。'), findsOneWidget);
     expect(headingColor(), IdeColors.dark.textPrimary);
@@ -101,11 +126,11 @@ void main() {
     expect(controller.settings.themeMode, ThemeMode.light);
     expect(
       tester
-          .widget<IdeChoiceCard>(
-            find.byKey(const ValueKey('settings-theme-light')),
+          .widget<IdeTabs<ThemeMode>>(
+            find.byKey(const ValueKey('settings-theme-tabs')),
           )
-          .selected,
-      isTrue,
+          .value,
+      ThemeMode.light,
     );
     expect(find.text('使用浅底、低对比度边框和蔚蓝强调色。'), findsOneWidget);
     expect(headingColor(), IdeColors.light.textPrimary);
@@ -187,7 +212,7 @@ void main() {
     double? headingFontSize() =>
         tester.widget<Text>(find.text('主题模式')).style?.fontSize;
 
-    expect(headingFontSize(), 13);
+    expect(headingFontSize(), 12);
     expect(
       tester
           .widget<Text>(
@@ -203,7 +228,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(controller.settings.uiFontSize, 13);
-    expect(headingFontSize(), closeTo(14.083, 0.001));
+    expect(headingFontSize(), closeTo(13, 0.001));
 
     await tester.tap(
       find.byKey(const ValueKey('settings-code-font-size-increase')),

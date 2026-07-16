@@ -16,13 +16,19 @@ import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_dialog.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
+import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_status_card.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/ide_toast.dart';
 import 'package:zeta/src/ui/core/metrics/compact_metric_bar.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
+import 'package:zeta/src/ui/core/rows/ide_list_row.dart';
+import 'package:zeta/src/ui/core/rows/ide_settings_row.dart';
+import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/ui/core/workbench/ide_page_header.dart';
+import 'package:zeta/src/ui/core/workbench/ide_section.dart';
+import 'package:zeta/src/ui/core/workbench/ide_toolbar.dart';
 
 /// 设置中的 Agent 管理列表、详情、配置和日志页面。
 class AgentManagementPage extends StatefulWidget {
@@ -73,7 +79,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
 
   @override
   Widget build(BuildContext context) {
-    return PanelCard(
+    return IdeSurface.canvas(
       key: const ValueKey('agent-management-page'),
       child: switch (_view) {
         _ManagementView.list => _buildListPage(context),
@@ -127,51 +133,83 @@ class AgentManagementPageState extends State<AgentManagementPage> {
                 ),
               ],
             ),
+            if (widget.controller.detecting &&
+                widget.controller.detectionProgress != null)
+              _DetectionProgressBanner(
+                progress: widget.controller.detectionProgress!,
+              ),
             Expanded(
-              child: SingleChildScrollView(
-                padding: IdeSpacing.all16,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (widget.controller.detecting &&
-                        widget.controller.detectionProgress != null)
-                      _DetectionProgressBanner(
-                        progress: widget.controller.detectionProgress!,
-                      ),
-                    if (widget.controller.operationError
-                        case final String error)
-                      IdeStatusCard(
-                        tone: IdeStatusCardTone.error,
-                        title: '操作未完成',
-                        body: Text(
-                          error,
-                          style: textStyles.bodySmall.copyWith(
-                            color: colors.textSecondary,
-                          ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact =
+                      constraints.maxWidth < IdeMetrics.mediumBreakpoint;
+                  return Padding(
+                    padding: compact
+                        ? IdeSpacing.pagePaddingCompact
+                        : IdeSpacing.pagePadding,
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: IdeMetrics.settingsContentMaxWidth,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (widget.controller.operationError
+                                case final String error) ...[
+                              IdeStatusCard(
+                                tone: IdeStatusCardTone.error,
+                                title: '操作未完成',
+                                body: Text(
+                                  error,
+                                  style: textStyles.bodySmall.copyWith(
+                                    color: colors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: IdeSpacing.space12),
+                            ],
+                            _buildSummary(context, allAgents),
+                            const SizedBox(height: IdeSpacing.space12),
+                            _buildListToolbar(context),
+                            const SizedBox(height: IdeSpacing.space8),
+                            Expanded(
+                              child: visibleAgents.isEmpty
+                                  ? _buildListEmptyState(context, allAgents)
+                                  : IdeSurface.pane(
+                                      key: const ValueKey('agent-list-pane'),
+                                      child: ListView.builder(
+                                        key: const ValueKey(
+                                          'agent-management-list',
+                                        ),
+                                        itemCount: visibleAgents.length,
+                                        itemBuilder: (context, index) {
+                                          final agent = visibleAgents[index];
+                                          return _AgentListRow(
+                                            agent: agent,
+                                            showDivider:
+                                                index <
+                                                visibleAgents.length - 1,
+                                            onOpen: () => _openDetail(
+                                              agent.definition.id,
+                                            ),
+                                            onEnabledChanged: (enabled) =>
+                                                _setEnabled(
+                                                  agent.definition.id,
+                                                  enabled,
+                                                ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                            ),
+                          ],
                         ),
                       ),
-                    _buildSummary(context, allAgents),
-                    const SizedBox(height: IdeSpacing.space16),
-                    _buildListToolbar(context),
-                    const SizedBox(height: IdeSpacing.space12),
-                    if (visibleAgents.isEmpty)
-                      _buildListEmptyState(context, allAgents)
-                    else
-                      ...visibleAgents.map(
-                        (agent) => Padding(
-                          padding: const EdgeInsets.only(
-                            bottom: IdeSpacing.space8,
-                          ),
-                          child: _AgentListRow(
-                            agent: agent,
-                            onOpen: () => _openDetail(agent.definition.id),
-                            onEnabledChanged: (enabled) =>
-                                _setEnabled(agent.definition.id, enabled),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+                    ),
+                  );
+                },
               ),
             ),
           ],
@@ -240,97 +278,92 @@ class AgentManagementPageState extends State<AgentManagementPage> {
   }
 
   Widget _buildListToolbar(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final tabs = IdeTabs<_AgentListTab>(
-              value: _listTab,
-              semanticLabel: 'Agent 列表范围',
-              items: const [
-                IdeTabItem<_AgentListTab>(
-                  key: ValueKey('agent-tab-installed'),
-                  value: _AgentListTab.installed,
-                  label: '已安装',
-                ),
-                IdeTabItem<_AgentListTab>(
-                  key: ValueKey('agent-tab-supported'),
-                  value: _AgentListTab.supported,
-                  label: '全部支持',
-                ),
-              ],
-              onChanged: (value) {
-                setState(() {
-                  _listTab = value;
-                });
-              },
-            );
-            final search = sf.TextField(
-              key: const ValueKey('agent-search-field'),
-              controller: _searchController,
-              placeholder: const Text('搜索 Agent 或厂商'),
-              features: const <sf.InputFeature>[
-                sf.InputFeature.leading(Icon(Icons.search_rounded, size: 18)),
-              ],
-            );
-            if (constraints.maxWidth < 640) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  tabs,
-                  const SizedBox(height: IdeSpacing.space8),
-                  search,
+    return IdeToolbar(
+      key: const ValueKey('agent-list-toolbar'),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final searchWidth = constraints.maxWidth < 280
+              ? constraints.maxWidth
+              : 280.0;
+          return Wrap(
+            spacing: IdeSpacing.space8,
+            runSpacing: IdeSpacing.space8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              IdeTabs<_AgentListTab>(
+                value: _listTab,
+                semanticLabel: 'Agent 列表范围',
+                items: const [
+                  IdeTabItem<_AgentListTab>(
+                    key: ValueKey('agent-tab-installed'),
+                    value: _AgentListTab.installed,
+                    label: '已安装',
+                  ),
+                  IdeTabItem<_AgentListTab>(
+                    key: ValueKey('agent-tab-supported'),
+                    value: _AgentListTab.supported,
+                    label: '全部支持',
+                  ),
                 ],
-              );
-            }
-            return Row(
-              children: [
-                tabs,
-                const Spacer(),
-                SizedBox(width: 280, child: search),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: IdeSpacing.space8),
-        IdeTabs<_AgentListFilter>(
-          value: _filter,
-          semanticLabel: 'Agent 状态筛选',
-          items: const [
-            IdeTabItem<_AgentListFilter>(
-              key: ValueKey('agent-filter-all'),
-              value: _AgentListFilter.all,
-              label: '全部状态',
-            ),
-            IdeTabItem<_AgentListFilter>(
-              key: ValueKey('agent-filter-enabled'),
-              value: _AgentListFilter.enabled,
-              label: '已启用',
-            ),
-            IdeTabItem<_AgentListFilter>(
-              key: ValueKey('agent-filter-attention'),
-              value: _AgentListFilter.attention,
-              label: '需要处理',
-            ),
-            IdeTabItem<_AgentListFilter>(
-              key: ValueKey('agent-filter-running'),
-              value: _AgentListFilter.running,
-              label: '运行中',
-            ),
-            IdeTabItem<_AgentListFilter>(
-              key: ValueKey('agent-filter-update'),
-              value: _AgentListFilter.updateAvailable,
-              label: '可更新',
-            ),
-          ],
-          onChanged: (value) {
-            setState(() {
-              _filter = value;
-            });
-          },
-        ),
-      ],
+                onChanged: (value) {
+                  setState(() {
+                    _listTab = value;
+                  });
+                },
+              ),
+              IdeTabs<_AgentListFilter>(
+                value: _filter,
+                semanticLabel: 'Agent 状态筛选',
+                items: const [
+                  IdeTabItem<_AgentListFilter>(
+                    key: ValueKey('agent-filter-all'),
+                    value: _AgentListFilter.all,
+                    label: '全部状态',
+                  ),
+                  IdeTabItem<_AgentListFilter>(
+                    key: ValueKey('agent-filter-enabled'),
+                    value: _AgentListFilter.enabled,
+                    label: '已启用',
+                  ),
+                  IdeTabItem<_AgentListFilter>(
+                    key: ValueKey('agent-filter-attention'),
+                    value: _AgentListFilter.attention,
+                    label: '需要处理',
+                  ),
+                  IdeTabItem<_AgentListFilter>(
+                    key: ValueKey('agent-filter-running'),
+                    value: _AgentListFilter.running,
+                    label: '运行中',
+                  ),
+                  IdeTabItem<_AgentListFilter>(
+                    key: ValueKey('agent-filter-update'),
+                    value: _AgentListFilter.updateAvailable,
+                    label: '可更新',
+                  ),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    _filter = value;
+                  });
+                },
+              ),
+              SizedBox(
+                width: searchWidth,
+                child: sf.TextField(
+                  key: const ValueKey('agent-search-field'),
+                  controller: _searchController,
+                  placeholder: const Text('搜索 Agent 或厂商'),
+                  features: const <sf.InputFeature>[
+                    sf.InputFeature.leading(
+                      Icon(Icons.search_rounded, size: 18),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -370,8 +403,6 @@ class AgentManagementPageState extends State<AgentManagementPage> {
   }
 
   Widget _buildDetailPage(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
     return ListenableBuilder(
       listenable: widget.controller,
       builder: (context, _) {
@@ -379,39 +410,57 @@ class AgentManagementPageState extends State<AgentManagementPage> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              padding: IdeSpacing.all12,
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: colors.borderSubtle)),
+            IdePageHeader(
+              title: agent.definition.displayName,
+              subtitle:
+                  '${agent.definition.vendor} · ${agent.definition.commandName} · '
+                  '版本 ${agent.currentVersion ?? '未知'}',
+              leading: sf.IconButton.ghost(
+                key: const ValueKey('agent-detail-back-button'),
+                onPressed: _backToList,
+                size: sf.ButtonSize.small,
+                density: sf.ButtonDensity.iconDense,
+                icon: const Icon(Icons.arrow_back_rounded, size: 18),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              actions: [
+                sf.OutlineButton(
+                  key: const ValueKey('agent-test-connection-button'),
+                  onPressed: agent.installed && !widget.controller.testing
+                      ? _testConnection
+                      : null,
+                  size: sf.ButtonSize.small,
+                  child: Text(widget.controller.testing ? '正在测试…' : '测试连接'),
+                ),
+                sf.OutlineButton(
+                  key: const ValueKey('agent-open-logs-button'),
+                  onPressed:
+                      agent.logPaths.isEmpty &&
+                          agent.definition.id != cursorAgentProviderId
+                      ? null
+                      : _openLogs,
+                  size: sf.ButtonSize.small,
+                  child: const Text('查看运行日志'),
+                ),
+                sf.OutlineButton(
+                  onPressed:
+                      agent.installed &&
+                          (agent.definition.id != cursorAgentProviderId ||
+                              agent.enabled ||
+                              agent.connectionTest?.success == true)
+                      ? () => _setEnabled(agent.definition.id, !agent.enabled)
+                      : null,
+                  size: sf.ButtonSize.small,
+                  child: Text(agent.enabled ? '禁用 Agent' : '启用 Agent'),
+                ),
+              ],
+            ),
+            IdeToolbar(
+              child: Wrap(
+                spacing: IdeSpacing.space12,
+                runSpacing: IdeSpacing.space8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Row(
-                    children: [
-                      sf.IconButton.ghost(
-                        key: const ValueKey('agent-detail-back-button'),
-                        onPressed: _backToList,
-                        size: sf.ButtonSize.small,
-                        density: sf.ButtonDensity.iconDense,
-                        icon: const Icon(Icons.arrow_back_rounded, size: 18),
-                      ),
-                      const SizedBox(width: IdeSpacing.space8),
-                      Expanded(
-                        child: Text(
-                          'Agent 管理 / ${agent.definition.displayName}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: textStyles.caption.copyWith(
-                            color: colors.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: IdeSpacing.space8),
-                  _buildDetailTitle(context, agent),
-                  const SizedBox(height: IdeSpacing.space12),
+                  _AgentDetailStatusSummary(agent: agent),
                   IdeTabs<_AgentDetailTab>(
                     value: _detailTab,
                     semanticLabel: 'Agent 详情',
@@ -447,130 +496,6 @@ class AgentManagementPageState extends State<AgentManagementPage> {
                 ),
               },
             ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildDetailTitle(BuildContext context, ManagedAgent agent) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final identity = Row(
-          children: [
-            _AgentLogo(installed: agent.installed),
-            const SizedBox(width: IdeSpacing.space12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          agent.definition.displayName,
-                          overflow: TextOverflow.ellipsis,
-                          style: textStyles.titleLarge.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      if (agent.definition.isBeta) ...[
-                        const SizedBox(width: IdeSpacing.space6),
-                        StateLabel(text: 'Beta', color: colors.warning),
-                      ],
-                    ],
-                  ),
-                  Text(
-                    '${agent.definition.vendor} · ${agent.definition.commandName} · '
-                    '版本 ${agent.currentVersion ?? '未知'}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textStyles.bodySmall.copyWith(
-                      color: colors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: IdeSpacing.space6),
-                  Wrap(
-                    spacing: IdeSpacing.space6,
-                    runSpacing: IdeSpacing.space6,
-                    children: [
-                      StateLabel(
-                        text: _accountLabel(agent.accountState),
-                        color: _accountColor(colors, agent.accountState),
-                      ),
-                      StateLabel(
-                        text: agent.installed ? 'CLI 可用' : 'CLI 未安装',
-                        color: agent.installed
-                            ? colors.success
-                            : colors.warning,
-                      ),
-                      StateLabel(
-                        text: _runtimeLabel(agent.runtimeState),
-                        color: _runtimeColor(colors, agent.runtimeState),
-                      ),
-                      if (agent.updateAvailable)
-                        StateLabel(text: '存在可用更新', color: colors.warning),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        );
-        final actions = Wrap(
-          spacing: IdeSpacing.space8,
-          runSpacing: IdeSpacing.space8,
-          children: [
-            sf.OutlineButton(
-              key: const ValueKey('agent-test-connection-button'),
-              onPressed: agent.installed && !widget.controller.testing
-                  ? _testConnection
-                  : null,
-              size: sf.ButtonSize.small,
-              child: Text(widget.controller.testing ? '正在测试…' : '测试连接'),
-            ),
-            sf.OutlineButton(
-              key: const ValueKey('agent-open-logs-button'),
-              onPressed:
-                  agent.logPaths.isEmpty &&
-                      agent.definition.id != cursorAgentProviderId
-                  ? null
-                  : _openLogs,
-              size: sf.ButtonSize.small,
-              child: const Text('查看运行日志'),
-            ),
-            sf.OutlineButton(
-              onPressed:
-                  agent.installed &&
-                      (agent.definition.id != cursorAgentProviderId ||
-                          agent.enabled ||
-                          agent.connectionTest?.success == true)
-                  ? () => _setEnabled(agent.definition.id, !agent.enabled)
-                  : null,
-              size: sf.ButtonSize.small,
-              child: Text(agent.enabled ? '禁用 Agent' : '启用 Agent'),
-            ),
-          ],
-        );
-        if (constraints.maxWidth < 760) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              identity,
-              const SizedBox(height: IdeSpacing.space12),
-              actions,
-            ],
-          );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: identity),
-            const SizedBox(width: IdeSpacing.space16),
-            actions,
           ],
         );
       },
@@ -889,6 +814,26 @@ enum _AgentListFilter { all, enabled, attention, running, updateAvailable }
 
 enum _AgentDetailTab { overview, models, configuration }
 
+class _AgentDetailStatusSummary extends StatelessWidget {
+  const _AgentDetailStatusSummary({required this.agent});
+
+  final ManagedAgent agent;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    return Row(
+      key: const ValueKey('agent-detail-status-summary'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _AgentLogo(installed: agent.installed),
+        const SizedBox(width: IdeSpacing.space8),
+        _AgentStatusText(status: _priorityAgentStatus(colors, agent)),
+      ],
+    );
+  }
+}
+
 class _DetectionProgressBanner extends StatelessWidget {
   const _DetectionProgressBanner({required this.progress});
 
@@ -898,12 +843,30 @@ class _DetectionProgressBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    return IdeStatusCard(
-      tone: IdeStatusCardTone.info,
-      title: progress.message,
-      body: Row(
+    return Container(
+      key: const ValueKey('agent-detection-progress-bar'),
+      constraints: const BoxConstraints(minHeight: IdeMetrics.compactRowHeight),
+      padding: IdeSpacing.horizontal12,
+      decoration: BoxDecoration(
+        color: colors.info.withValues(alpha: 0.06),
+        border: Border(bottom: BorderSide(color: colors.borderSubtle)),
+      ),
+      child: Row(
         children: [
+          Icon(Icons.radar_rounded, size: 14, color: colors.info),
+          const SizedBox(width: IdeSpacing.space6),
           Expanded(
+            flex: 3,
+            child: Text(
+              progress.message,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
+            ),
+          ),
+          const SizedBox(width: IdeSpacing.space8),
+          Expanded(
+            flex: 2,
             child: sf.Progress(
               progress: progress.total == 0
                   ? null
@@ -926,144 +889,241 @@ class _AgentListRow extends StatelessWidget {
     required this.agent,
     required this.onOpen,
     required this.onEnabledChanged,
+    required this.showDivider,
   });
 
   final ManagedAgent agent;
   final VoidCallback onOpen;
   final ValueChanged<bool> onEnabledChanged;
+  final bool showDivider;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 760;
+        return IdeListRow(
+          key: ValueKey('agent-row-${agent.definition.id}'),
+          title: agent.definition.displayName,
+          subtitle: agent.definition.commandName,
+          leading: _AgentLogo(installed: agent.installed),
+          trailing: _AgentRowStatus(
+            agent: agent,
+            compact: compact,
+            onEnabledChanged: onEnabledChanged,
+          ),
+          showDivider: showDivider,
+          semanticLabel: '查看 ${agent.definition.displayName} 详情',
+          onPressed: onOpen,
+        );
+      },
+    );
+  }
+}
+
+class _AgentRowStatus extends StatelessWidget {
+  const _AgentRowStatus({
+    required this.agent,
+    required this.compact,
+    required this.onEnabledChanged,
+  });
+
+  final ManagedAgent agent;
+  final bool compact;
+  final ValueChanged<bool> onEnabledChanged;
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
-    return PaneInteractiveSurface(
-      key: ValueKey('agent-row-${agent.definition.id}'),
-      onPressed: onOpen,
-      padding: IdeSpacing.all12,
-      borderColor: colors.border,
-      semanticLabel: '查看 ${agent.definition.displayName} 详情',
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final identity = Row(
-            children: [
-              _AgentLogo(installed: agent.installed),
-              const SizedBox(width: IdeSpacing.space10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            agent.definition.displayName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: textStyles.rowTitle,
-                          ),
-                        ),
-                        if (agent.definition.isBeta) ...[
-                          const SizedBox(width: IdeSpacing.space6),
-                          StateLabel(text: 'Beta', color: colors.warning),
-                        ],
-                      ],
-                    ),
-                    Text(
-                      agent.definition.commandName,
-                      style: textStyles.codeSmall.copyWith(
-                        color: colors.textTertiary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
-          if (constraints.maxWidth < 760) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                identity,
-                const SizedBox(height: IdeSpacing.space10),
-                Wrap(
-                  spacing: IdeSpacing.space8,
-                  runSpacing: IdeSpacing.space8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    StateLabel(
-                      text: agent.installed ? '已安装' : '未安装',
-                      color: agent.installed ? colors.success : colors.warning,
-                    ),
-                    StateLabel(
-                      text: _accountLabel(agent.accountState),
-                      color: _accountColor(colors, agent.accountState),
-                    ),
-                    StateLabel(
-                      text: _runtimeLabel(agent.runtimeState),
-                      color: _runtimeColor(colors, agent.runtimeState),
-                    ),
-                    Text(
-                      '版本 ${agent.currentVersion ?? '未知'}',
-                      style: textStyles.bodySmall,
-                    ),
-                    sf.Switch(
-                      value: agent.enabled,
-                      enabled: agent.installed,
-                      onChanged: agent.installed ? onEnabledChanged : null,
-                      trailing: const Text('启用'),
-                    ),
-                  ],
-                ),
-              ],
-            );
-          }
-          return Row(
-            children: [
-              Expanded(flex: 3, child: identity),
-              Expanded(child: Text(agent.definition.vendor)),
-              Expanded(
-                child: StateLabel(
-                  text: agent.installed
-                      ? _accountLabel(agent.accountState)
-                      : '—',
-                  color: _accountColor(colors, agent.accountState),
-                ),
-              ),
-              Expanded(
-                child: sf.Switch(
-                  value: agent.enabled,
-                  enabled: agent.installed,
-                  onChanged: agent.installed ? onEnabledChanged : null,
-                ),
-              ),
-              Expanded(child: Text(agent.currentVersion ?? '未知')),
-              Expanded(
-                child: Text(
-                  agent.latestVersion ?? '未知',
-                  style: textStyles.bodySmall.copyWith(
-                    color: agent.updateAvailable
-                        ? colors.warning
-                        : colors.textPrimary,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: StateLabel(
-                  text: agent.installed
-                      ? _runtimeLabel(agent.runtimeState)
-                      : '未安装',
-                  color: agent.installed
-                      ? _runtimeColor(colors, agent.runtimeState)
-                      : colors.textTertiary,
-                ),
-              ),
-              Icon(Icons.chevron_right_rounded, color: colors.textTertiary),
-            ],
-          );
-        },
-      ),
+    if (compact) {
+      final status = _priorityAgentStatus(colors, agent);
+      return Row(
+        key: const ValueKey('agent-row-status-compact'),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _AgentStatusText(status: status),
+          const SizedBox(width: IdeSpacing.space4),
+          Icon(
+            Icons.chevron_right_rounded,
+            size: 18,
+            color: colors.textTertiary,
+          ),
+        ],
+      );
+    }
+
+    final accountNeedsAttention = switch (agent.accountState) {
+      AgentAccountState.loggedOut || AgentAccountState.expired => true,
+      _ => false,
+    };
+    final runtimeNeedsAttention = switch (agent.runtimeState) {
+      AgentRuntimeState.error || AgentRuntimeState.unavailable => true,
+      _ => false,
+    };
+    return Row(
+      key: const ValueKey('agent-row-status-wide'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (agent.definition.isBeta) ...[
+          StateLabel(text: 'Beta', color: colors.warning),
+          const SizedBox(width: IdeSpacing.space8),
+        ],
+        SizedBox(
+          width: 92,
+          child: _AgentStatusText(
+            status: _AgentStatus(
+              label: agent.installed ? _accountLabel(agent.accountState) : '—',
+              icon: accountNeedsAttention
+                  ? Icons.account_circle_outlined
+                  : Icons.person_outline_rounded,
+              color: accountNeedsAttention
+                  ? colors.warning
+                  : colors.textSecondary,
+            ),
+          ),
+        ),
+        SizedBox(
+          width: 96,
+          child: _AgentStatusText(
+            status: _AgentStatus(
+              label: agent.currentVersion ?? '版本未知',
+              icon: Icons.tag_rounded,
+              color: agent.updateAvailable
+                  ? colors.warning
+                  : colors.textSecondary,
+            ),
+          ),
+        ),
+        SizedBox(
+          width: 92,
+          child: _AgentStatusText(
+            status: _AgentStatus(
+              label: agent.installed
+                  ? _runtimeLabel(agent.runtimeState)
+                  : '未安装',
+              icon: runtimeNeedsAttention
+                  ? Icons.error_outline_rounded
+                  : Icons.circle_outlined,
+              color: runtimeNeedsAttention
+                  ? colors.error
+                  : agent.installed
+                  ? colors.textSecondary
+                  : colors.warning,
+            ),
+          ),
+        ),
+        sf.Switch(
+          value: agent.enabled,
+          enabled: agent.installed,
+          onChanged: agent.installed ? onEnabledChanged : null,
+        ),
+        const SizedBox(width: IdeSpacing.space6),
+        Icon(Icons.chevron_right_rounded, size: 18, color: colors.textTertiary),
+      ],
     );
   }
+}
+
+class _AgentStatusText extends StatelessWidget {
+  const _AgentStatusText({required this.status});
+
+  final _AgentStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyles = IdeTextStyles.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(status.icon, size: 13, color: status.color),
+        const SizedBox(width: IdeSpacing.space4),
+        Flexible(
+          child: Text(
+            status.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textStyles.meta.copyWith(color: status.color),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AgentStatus {
+  const _AgentStatus({
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color color;
+}
+
+_AgentStatus _priorityAgentStatus(IdeColors colors, ManagedAgent agent) {
+  if (agent.runtimeState == AgentRuntimeState.error ||
+      agent.runtimeState == AgentRuntimeState.unavailable) {
+    return _AgentStatus(
+      label: _runtimeLabel(agent.runtimeState),
+      icon: Icons.error_outline_rounded,
+      color: colors.error,
+    );
+  }
+  if (!agent.installed) {
+    return _AgentStatus(
+      label: '未安装',
+      icon: Icons.download_for_offline_outlined,
+      color: colors.warning,
+    );
+  }
+  if (agent.accountState == AgentAccountState.loggedOut ||
+      agent.accountState == AgentAccountState.expired) {
+    return _AgentStatus(
+      label: _accountLabel(agent.accountState),
+      icon: Icons.account_circle_outlined,
+      color: colors.warning,
+    );
+  }
+  if (agent.updateAvailable) {
+    return _AgentStatus(
+      label: '可更新',
+      icon: Icons.system_update_alt_rounded,
+      color: colors.warning,
+    );
+  }
+  if (agent.accountState == AgentAccountState.checking ||
+      agent.runtimeState == AgentRuntimeState.starting ||
+      agent.runtimeState == AgentRuntimeState.stopping) {
+    return _AgentStatus(
+      label: agent.accountState == AgentAccountState.checking
+          ? '检测中'
+          : _runtimeLabel(agent.runtimeState),
+      icon: Icons.sync_rounded,
+      color: colors.info,
+    );
+  }
+  if (agent.definition.isBeta) {
+    return _AgentStatus(
+      label: 'Beta',
+      icon: Icons.science_outlined,
+      color: colors.warning,
+    );
+  }
+  return _AgentStatus(
+    label: agent.runtimeState == AgentRuntimeState.running
+        ? '运行中'
+        : agent.enabled
+        ? '已启用'
+        : '已安装',
+    icon: agent.runtimeState == AgentRuntimeState.running
+        ? Icons.play_circle_outline_rounded
+        : agent.enabled
+        ? Icons.toggle_on_outlined
+        : Icons.download_done_rounded,
+    color: colors.textSecondary,
+  );
 }
 
 class _AgentLogo extends StatelessWidget {
@@ -1075,18 +1135,18 @@ class _AgentLogo extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     return Container(
-      width: 42,
-      height: 42,
+      width: 32,
+      height: 32,
       decoration: BoxDecoration(
-        color: colors.primaryMuted,
-        borderRadius: IdeRadius.allMedium,
-        border: Border.all(color: colors.accent.withValues(alpha: 0.35)),
+        color: colors.surfaceElevated,
+        borderRadius: IdeRadius.allSmall,
+        border: Border.all(color: colors.borderSubtle),
       ),
       alignment: Alignment.center,
       child: Icon(
         Icons.auto_awesome_rounded,
-        size: 22,
-        color: installed ? colors.accent : colors.textTertiary,
+        size: 17,
+        color: installed ? colors.textSecondary : colors.textTertiary,
       ),
     );
   }
@@ -1188,14 +1248,12 @@ class _AgentInformationCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    return PanelCard(
-      child: Padding(
-        padding: IdeSpacing.all16,
+    return IdeSection(
+      title: '基础信息',
+      child: IdeSurface.pane(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('基础信息', style: textStyles.sectionTitle),
-            const SizedBox(height: IdeSpacing.space12),
             _InfoRow(label: '名称', value: agent.definition.displayName),
             _InfoRow(label: '厂商', value: agent.definition.vendor),
             _InfoRow(
@@ -1216,69 +1274,74 @@ class _AgentInformationCard extends StatelessWidget {
             ),
             _InfoRow(label: '通信协议', value: agent.definition.protocol),
             _InfoRow(label: '传输方式', value: agent.definition.transport),
-            const SizedBox(height: IdeSpacing.space12),
-            Text('可执行文件路径', style: textStyles.titleSmall),
-            const SizedBox(height: IdeSpacing.space6),
-            SelectableText(
-              agent.executablePath ?? '尚未检测到可执行文件',
-              style: textStyles.codeSmall.copyWith(
-                color: agent.executablePath == null
-                    ? colors.error
-                    : colors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: IdeSpacing.space8),
-            Wrap(
-              spacing: IdeSpacing.space8,
-              runSpacing: IdeSpacing.space8,
-              children: [
-                sf.OutlineButton(
-                  onPressed: onSelectExecutable,
-                  size: sf.ButtonSize.small,
-                  child: const Text('选择文件'),
-                ),
-                sf.OutlineButton(
-                  onPressed: onDetect,
-                  size: sf.ButtonSize.small,
-                  child: const Text('自动检测'),
-                ),
-                sf.OutlineButton(
-                  onPressed: agent.executablePath == null
-                      ? null
-                      : onOpenExecutableDirectory,
-                  size: sf.ButtonSize.small,
-                  child: const Text('打开所在目录'),
-                ),
-              ],
-            ),
-            const SizedBox(height: IdeSpacing.space16),
-            Text('超时时间', style: textStyles.titleSmall),
-            const SizedBox(height: IdeSpacing.space4),
-            Text(
-              'Agent 启动、握手或单次无响应等待的最大时长。',
-              style: textStyles.caption.copyWith(color: colors.textSecondary),
-            ),
-            const SizedBox(height: IdeSpacing.space8),
-            Row(
-              children: [
-                SizedBox(
-                  width: 120,
-                  child: sf.TextField(
-                    key: const ValueKey('agent-timeout-field'),
-                    controller: timeoutController,
-                    keyboardType: TextInputType.number,
-                    features: const <sf.InputFeature>[
-                      sf.InputFeature.trailing(Text('秒')),
+            IdeSettingsRow(
+              label: '可执行文件路径',
+              description: agent.executablePath == null ? '尚未检测到可执行文件' : null,
+              control: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (agent.executablePath case final String executablePath)
+                    SelectableText(
+                      executablePath,
+                      maxLines: 2,
+                      style: textStyles.codeSmall.copyWith(
+                        color: colors.textSecondary,
+                      ),
+                    ),
+                  const SizedBox(height: IdeSpacing.space6),
+                  Wrap(
+                    spacing: IdeSpacing.space6,
+                    runSpacing: IdeSpacing.space6,
+                    alignment: WrapAlignment.end,
+                    children: [
+                      sf.OutlineButton(
+                        onPressed: onSelectExecutable,
+                        size: sf.ButtonSize.small,
+                        child: const Text('选择文件'),
+                      ),
+                      sf.OutlineButton(
+                        onPressed: onDetect,
+                        size: sf.ButtonSize.small,
+                        child: const Text('自动检测'),
+                      ),
+                      sf.OutlineButton(
+                        onPressed: agent.executablePath == null
+                            ? null
+                            : onOpenExecutableDirectory,
+                        size: sf.ButtonSize.small,
+                        child: const Text('打开目录'),
+                      ),
                     ],
                   ),
-                ),
-                const SizedBox(width: IdeSpacing.space8),
-                sf.OutlineButton(
-                  onPressed: onSaveTimeout,
-                  size: sf.ButtonSize.small,
-                  child: const Text('保存'),
-                ),
-              ],
+                ],
+              ),
+            ),
+            IdeSettingsRow(
+              label: '超时时间',
+              description: 'Agent 启动、握手或单次无响应等待的最大时长。',
+              showDivider: false,
+              control: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 120,
+                    child: sf.TextField(
+                      key: const ValueKey('agent-timeout-field'),
+                      controller: timeoutController,
+                      keyboardType: TextInputType.number,
+                      features: const <sf.InputFeature>[
+                        sf.InputFeature.trailing(Text('秒')),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: IdeSpacing.space8),
+                  sf.OutlineButton(
+                    onPressed: onSaveTimeout,
+                    size: sf.ButtonSize.small,
+                    child: const Text('保存'),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -1302,29 +1365,25 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: IdeSpacing.space6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return IdeSettingsRow(
+      label: label,
+      control: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox(
-            width: 112,
-            child: Text(
-              label,
-              style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
-            ),
-          ),
-          Expanded(
+          Flexible(
             child: Text(
               value,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
               style: textStyles.bodyMedium.copyWith(color: valueColor),
             ),
           ),
-          ?trailing,
+          if (trailing case final Widget trailingWidget) ...[
+            const SizedBox(width: IdeSpacing.space4),
+            trailingWidget,
+          ],
         ],
       ),
     );
@@ -1350,126 +1409,158 @@ class _AgentDiagnosticsCard extends StatelessWidget {
         agent.installed &&
         agent.errorMessage == null &&
         agent.accountState == AgentAccountState.loggedIn;
-    return IdeStatusCard(
-      tone: healthy ? IdeStatusCardTone.success : IdeStatusCardTone.error,
-      title: healthy ? '连接正常' : (agent.errorMessage ?? '状态需要检查'),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _DiagnosticLine(
-            label: 'CLI',
-            value: agent.installed ? '可执行文件存在且可调用' : '未找到可执行文件',
-          ),
-          _DiagnosticLine(
-            label: '账号',
-            value: _accountLabel(agent.accountState),
-          ),
-          _DiagnosticLine(
-            label: '通信',
-            value: agent.connectionTest?.protocolReady == true
-                ? '握手成功'
-                : agent.runtimeState == AgentRuntimeState.idle
-                ? '基础握手正常'
-                : '尚未确认',
-          ),
-          _DiagnosticLine(
-            label: '最近检测',
-            value: _relativeTime(agent.lastDetectedAt),
-          ),
-          if (agent.connectionTest != null)
-            _DiagnosticLine(
-              label: '最近测试耗时',
-              value: '${agent.connectionTest!.elapsed.inMilliseconds} ms',
-            ),
-          if (agent.connectionTest?.protocolVersion != null)
-            _DiagnosticLine(
-              label: 'ACP 协议',
-              value: 'v${agent.connectionTest!.protocolVersion}',
-            ),
-          if (agent.connectionTest?.agentName != null)
-            _DiagnosticLine(
-              label: '握手身份',
-              value:
-                  '${agent.connectionTest!.agentName}'
-                  '${agent.connectionTest!.agentVersion == null ? '' : ' ${agent.connectionTest!.agentVersion}'}',
-            ),
-          if (agent.connectionTest?.capabilitySummary.isNotEmpty == true)
-            _DiagnosticLine(
-              label: '协商能力',
-              value: agent.connectionTest!.capabilitySummary.join(', '),
-            ),
-          if (agent.connectionTest?.success == false &&
-              agent.connectionTest?.exitReason != null)
-            _DiagnosticLine(
-              label: '退出原因',
-              value: agent.connectionTest!.exitReason!,
-            ),
-          if (agent.errorStage != null)
-            _DiagnosticLine(
-              label: '异常阶段',
-              value: _diagnosticStageLabel(agent.errorStage!),
-            ),
-          if (agent.errorDetails != null) ...[
-            const SizedBox(height: IdeSpacing.space8),
-            Text(
-              agent.errorDetails!,
-              maxLines: 8,
-              overflow: TextOverflow.ellipsis,
-              style: textStyles.codeSmall.copyWith(color: colors.textSecondary),
-            ),
-          ],
-          if (agent.suggestion != null) ...[
-            const SizedBox(height: IdeSpacing.space8),
-            Text(
-              '建议操作：${agent.suggestion}',
-              style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
-            ),
-          ],
-        ],
+    final diagnostics = <_DiagnosticEntry>[
+      _DiagnosticEntry(
+        label: 'CLI',
+        value: agent.installed ? '可执行文件存在且可调用' : '未找到可执行文件',
       ),
-      footer: healthy
-          ? null
-          : Wrap(
-              spacing: IdeSpacing.space8,
-              children: [
-                sf.OutlineButton(
-                  onPressed: onDetect,
-                  size: sf.ButtonSize.small,
-                  child: const Text('自动检测'),
+      _DiagnosticEntry(label: '账号', value: _accountLabel(agent.accountState)),
+      _DiagnosticEntry(
+        label: '通信',
+        value: agent.connectionTest?.protocolReady == true
+            ? '握手成功'
+            : agent.runtimeState == AgentRuntimeState.idle
+            ? '基础握手正常'
+            : '尚未确认',
+      ),
+      _DiagnosticEntry(
+        label: '最近检测',
+        value: _relativeTime(agent.lastDetectedAt),
+      ),
+      if (agent.connectionTest != null)
+        _DiagnosticEntry(
+          label: '最近测试耗时',
+          value: '${agent.connectionTest!.elapsed.inMilliseconds} ms',
+        ),
+      if (agent.connectionTest?.protocolVersion case final String version)
+        _DiagnosticEntry(label: 'ACP 协议', value: 'v$version'),
+      if (agent.connectionTest?.agentName case final String agentName)
+        _DiagnosticEntry(
+          label: '握手身份',
+          value:
+              '$agentName'
+              '${agent.connectionTest!.agentVersion == null ? '' : ' ${agent.connectionTest!.agentVersion}'}',
+        ),
+      if (agent.connectionTest?.capabilitySummary.isNotEmpty == true)
+        _DiagnosticEntry(
+          label: '协商能力',
+          value: agent.connectionTest!.capabilitySummary.join(', '),
+        ),
+      if (agent.connectionTest?.success == false &&
+          agent.connectionTest?.exitReason != null)
+        _DiagnosticEntry(
+          label: '退出原因',
+          value: agent.connectionTest!.exitReason!,
+        ),
+      if (agent.errorStage case final AgentDiagnosticStage errorStage)
+        _DiagnosticEntry(
+          label: '异常阶段',
+          value: _diagnosticStageLabel(errorStage),
+        ),
+    ];
+    final hasSupplement =
+        agent.errorDetails != null || agent.suggestion != null || !healthy;
+    return IdeSection(
+      title: '诊断',
+      subtitle: healthy ? '连接正常' : (agent.errorMessage ?? '状态需要检查'),
+      trailing: Icon(
+        healthy ? Icons.check_circle_outline_rounded : Icons.error_outline,
+        size: 17,
+        color: healthy ? colors.textSecondary : colors.error,
+      ),
+      child: IdeSurface.pane(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var index = 0; index < diagnostics.length; index++)
+              _DiagnosticLine(
+                label: diagnostics[index].label,
+                value: diagnostics[index].value,
+                showDivider: index < diagnostics.length - 1 || hasSupplement,
+              ),
+            if (agent.errorDetails case final String errorDetails)
+              Container(
+                padding: IdeSpacing.all12,
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: colors.borderSubtle),
+                  ),
                 ),
-                sf.OutlineButton(
-                  onPressed: onSelectExecutable,
-                  size: sf.ButtonSize.small,
-                  child: const Text('选择文件'),
+                child: SelectableText(
+                  errorDetails,
+                  maxLines: 8,
+                  style: textStyles.codeSmall.copyWith(
+                    color: colors.textSecondary,
+                  ),
                 ),
-              ],
-            ),
+              ),
+            if (agent.suggestion case final String suggestion)
+              Container(
+                padding: IdeSpacing.all12,
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: colors.borderSubtle),
+                  ),
+                ),
+                child: Text(
+                  '建议操作：$suggestion',
+                  style: textStyles.bodySmall.copyWith(
+                    color: colors.textSecondary,
+                  ),
+                ),
+              ),
+            if (!healthy)
+              Padding(
+                padding: IdeSpacing.all12,
+                child: Wrap(
+                  spacing: IdeSpacing.space8,
+                  runSpacing: IdeSpacing.space8,
+                  children: [
+                    sf.OutlineButton(
+                      onPressed: onDetect,
+                      size: sf.ButtonSize.small,
+                      child: const Text('自动检测'),
+                    ),
+                    sf.OutlineButton(
+                      onPressed: onSelectExecutable,
+                      size: sf.ButtonSize.small,
+                      child: const Text('选择文件'),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
 
-class _DiagnosticLine extends StatelessWidget {
-  const _DiagnosticLine({required this.label, required this.value});
+class _DiagnosticEntry {
+  const _DiagnosticEntry({required this.label, required this.value});
 
   final String label;
   final String value;
+}
+
+class _DiagnosticLine extends StatelessWidget {
+  const _DiagnosticLine({
+    required this.label,
+    required this.value,
+    required this.showDivider,
+  });
+
+  final String label;
+  final String value;
+  final bool showDivider;
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: IdeSpacing.space8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: textStyles.caption.copyWith(color: colors.textTertiary),
-          ),
-          Text(value, style: textStyles.bodySmall),
-        ],
-      ),
+    return IdeListRow(
+      title: label,
+      subtitle: value,
+      leading: const Icon(Icons.circle_outlined),
+      showDivider: showDivider,
     );
   }
 }
@@ -1568,16 +1659,6 @@ String _accountLabel(AgentAccountState state) {
   };
 }
 
-Color _accountColor(IdeColors colors, AgentAccountState state) {
-  return switch (state) {
-    AgentAccountState.loggedIn ||
-    AgentAccountState.notRequired => colors.success,
-    AgentAccountState.loggedOut || AgentAccountState.expired => colors.warning,
-    AgentAccountState.checking => colors.info,
-    _ => colors.textTertiary,
-  };
-}
-
 String _runtimeLabel(AgentRuntimeState state) {
   return switch (state) {
     AgentRuntimeState.notRunning => '未运行',
@@ -1588,17 +1669,6 @@ String _runtimeLabel(AgentRuntimeState state) {
     AgentRuntimeState.error => '异常',
     AgentRuntimeState.unavailable => '不可用',
     AgentRuntimeState.disabled => '已禁用',
-  };
-}
-
-Color _runtimeColor(IdeColors colors, AgentRuntimeState state) {
-  return switch (state) {
-    AgentRuntimeState.idle => colors.success,
-    AgentRuntimeState.running || AgentRuntimeState.starting => colors.info,
-    AgentRuntimeState.stopping => colors.warning,
-    AgentRuntimeState.error || AgentRuntimeState.unavailable => colors.error,
-    AgentRuntimeState.disabled ||
-    AgentRuntimeState.notRunning => colors.textTertiary,
   };
 }
 

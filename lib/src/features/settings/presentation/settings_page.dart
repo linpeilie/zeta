@@ -7,16 +7,19 @@ import 'package:zeta/src/features/settings/application/appearance_settings_contr
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
-import 'package:zeta/src/ui/core/ide_choice_card.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_dialog.dart';
+import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
+import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/ide_toast.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/rows/ide_list_row.dart';
+import 'package:zeta/src/ui/core/rows/ide_row_divider.dart';
 import 'package:zeta/src/ui/core/rows/ide_settings_row.dart';
+import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
+import 'package:zeta/src/ui/core/workbench/ide_page_body.dart';
 import 'package:zeta/src/ui/core/workbench/ide_page_header.dart';
 
 enum SettingsSection { appearance, agents }
@@ -114,56 +117,54 @@ class _SettingsNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    return PanelCard(
+    return IdeSurface.pane(
       key: const ValueKey('settings-nav-panel'),
-      child: DecoratedBox(
-        decoration: BoxDecoration(color: colors.surfaceElevated),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            IdePageHeader(
-              title: '设置',
-              leading: IdeTooltip(
-                message: '返回主界面',
-                child: sf.IconButton.ghost(
-                  key: const ValueKey('settings-back-button'),
-                  onPressed: onBackPressed,
-                  size: sf.ButtonSize.small,
-                  density: sf.ButtonDensity.iconDense,
-                  icon: Icon(
-                    Icons.arrow_back_rounded,
-                    size: 18,
-                    color: colors.textSecondary,
-                  ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          IdePageHeader(
+            title: '设置',
+            leading: IdeTooltip(
+              message: '返回主界面',
+              child: sf.IconButton.ghost(
+                key: const ValueKey('settings-back-button'),
+                onPressed: onBackPressed,
+                size: sf.ButtonSize.small,
+                density: sf.ButtonDensity.iconDense,
+                icon: Icon(
+                  Icons.arrow_back_rounded,
+                  size: 18,
+                  color: colors.textSecondary,
                 ),
               ),
             ),
-            Expanded(
-              child: ListView(
-                padding: IdeSpacing.all8,
-                children: [
-                  _SettingsNavItem(
-                    key: const ValueKey('settings-nav-appearance'),
-                    label: '外观',
-                    icon: Icons.palette_outlined,
-                    active: activeSection == SettingsSection.appearance,
-                    onTap: () => onSectionSelected(SettingsSection.appearance),
+          ),
+          Expanded(
+            child: ListView(
+              padding: IdeSpacing.all8,
+              children: [
+                IdeListRow(
+                  key: const ValueKey('settings-nav-appearance'),
+                  title: '外观',
+                  leading: const Icon(Icons.palette_outlined),
+                  selected: activeSection == SettingsSection.appearance,
+                  onPressed: () =>
+                      onSectionSelected(SettingsSection.appearance),
+                  showDivider: false,
+                ),
+                if (showAgentManagement)
+                  IdeListRow(
+                    key: const ValueKey('settings-nav-agents'),
+                    title: 'Agent 管理',
+                    leading: const Icon(Icons.smart_toy_outlined),
+                    selected: activeSection == SettingsSection.agents,
+                    onPressed: () => onSectionSelected(SettingsSection.agents),
+                    showDivider: false,
                   ),
-                  if (showAgentManagement) ...[
-                    const SizedBox(height: IdeSpacing.space4),
-                    _SettingsNavItem(
-                      key: const ValueKey('settings-nav-agents'),
-                      label: 'Agent 管理',
-                      icon: Icons.smart_toy_outlined,
-                      active: activeSection == SettingsSection.agents,
-                      onTap: () => onSectionSelected(SettingsSection.agents),
-                    ),
-                  ],
-                ],
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -190,7 +191,7 @@ class _SettingsDetailPane extends StatelessWidget {
       ),
       SettingsSection.agents =>
         agentManagementController == null
-            ? const PanelCard(child: EmptyState(text: 'Agent 管理服务不可用。'))
+            ? const IdeSurface.canvas(child: EmptyState(text: 'Agent 管理服务不可用。'))
             : AgentManagementPage(
                 key: agentManagementKey,
                 controller: agentManagementController!,
@@ -231,102 +232,117 @@ class _AppearanceSettingsPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    return PanelCard(
+    return IdeSurface.canvas(
       key: const ValueKey('settings-detail-panel'),
-      child: Pane(
-        title: '外观',
-        subtitle: '切换主题模式、字体与字号',
-        trailing: Icon(
-          Icons.palette_outlined,
-          size: 16,
-          color: colors.textSecondary,
-        ),
-        child: ValueListenableBuilder<AppearanceSettings>(
-          valueListenable: appearanceController.listenable,
-          builder: (context, settings, _) {
-            final textStyles = IdeTextStyles.of(context);
-            final colors = IdeColors.of(context);
-            return SingleChildScrollView(
-              padding: IdeSpacing.all16,
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 760),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          IdePageHeader(
+            title: '外观',
+            subtitle: '切换主题模式、字体与字号',
+            leading: Icon(
+              Icons.palette_outlined,
+              size: 18,
+              color: colors.textSecondary,
+            ),
+          ),
+          Expanded(
+            child: ValueListenableBuilder<AppearanceSettings>(
+              valueListenable: appearanceController.listenable,
+              builder: (context, settings, _) {
+                final textStyles = IdeTextStyles.of(context);
+                final colors = IdeColors.of(context);
+                return IdePageBody(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        '设置页会立即应用主题和字体切换，并保留到下次启动。',
+                        '设置会立即应用，并保留到下次启动。',
                         style: textStyles.bodySmall.copyWith(
                           color: colors.textSecondary,
                         ),
                       ),
-                      const SizedBox(height: IdeSpacing.space16),
-                      _ThemeModeSection(
-                        tabs: _tabs,
-                        groupValue: settings.themeMode,
-                        onSelected: (value) {
-                          unawaited(appearanceController.setThemeMode(value));
-                        },
-                      ),
-                      const SizedBox(height: IdeSpacing.space24),
-                      _AppearanceSettingRow(
-                        key: const ValueKey('settings-ui-font-row'),
-                        label: '界面字体',
-                        description: '用于普通界面文本与非代码 markdown 正文。',
-                        value: _fontChoiceLabel(settings.uiFontChoice),
-                        onTap: () => _selectUiFont(
-                          context,
-                          currentChoice: settings.uiFontChoice,
+                      const SizedBox(height: IdeSpacing.space12),
+                      IdeSurface.pane(
+                        key: const ValueKey('settings-appearance-group'),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _ThemeModeSection(
+                              tabs: _tabs,
+                              groupValue: settings.themeMode,
+                              onSelected: (value) {
+                                unawaited(
+                                  appearanceController.setThemeMode(value),
+                                );
+                              },
+                            ),
+                            const IdeRowDivider(),
+                            _AppearanceSettingRow(
+                              key: const ValueKey('settings-ui-font-row'),
+                              label: '界面字体',
+                              description: '用于普通界面文本与非代码 Markdown 正文。',
+                              value: _fontChoiceLabel(settings.uiFontChoice),
+                              onTap: () => _selectUiFont(
+                                context,
+                                currentChoice: settings.uiFontChoice,
+                              ),
+                            ),
+                            const IdeRowDivider(),
+                            _FontSizeSettingRow(
+                              key: const ValueKey('settings-ui-font-size-row'),
+                              keyPrefix: 'settings-ui-font-size',
+                              label: '界面字号',
+                              description:
+                                  '缩放普通界面文本（${minUiFontSize.toInt()}–${maxUiFontSize.toInt()} px）。',
+                              value: settings.uiFontSize,
+                              min: minUiFontSize,
+                              max: maxUiFontSize,
+                              onChanged: (value) {
+                                unawaited(
+                                  appearanceController.setUiFontSize(value),
+                                );
+                              },
+                            ),
+                            const IdeRowDivider(),
+                            _AppearanceSettingRow(
+                              key: const ValueKey('settings-code-font-row'),
+                              label: '代码字体',
+                              description: '用于代码块、命令、Diff 和工具输出。',
+                              value: _fontChoiceLabel(settings.codeFontChoice),
+                              onTap: () => _selectCodeFont(
+                                context,
+                                currentChoice: settings.codeFontChoice,
+                              ),
+                            ),
+                            const IdeRowDivider(),
+                            _FontSizeSettingRow(
+                              key: const ValueKey(
+                                'settings-code-font-size-row',
+                              ),
+                              keyPrefix: 'settings-code-font-size',
+                              label: '代码字号',
+                              description:
+                                  '缩放代码内容（${minCodeFontSize.toInt()}–${maxCodeFontSize.toInt()} px）。',
+                              value: settings.codeFontSize,
+                              min: minCodeFontSize,
+                              max: maxCodeFontSize,
+                              onChanged: (value) {
+                                unawaited(
+                                  appearanceController.setCodeFontSize(value),
+                                );
+                              },
+                            ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: IdeSpacing.space12),
-                      _FontSizeSettingRow(
-                        key: const ValueKey('settings-ui-font-size-row'),
-                        keyPrefix: 'settings-ui-font-size',
-                        label: '界面字号',
-                        description:
-                            '缩放普通界面文本与非代码 markdown 正文（${minUiFontSize.toInt()}–${maxUiFontSize.toInt()} px）。',
-                        value: settings.uiFontSize,
-                        min: minUiFontSize,
-                        max: maxUiFontSize,
-                        onChanged: (value) {
-                          unawaited(appearanceController.setUiFontSize(value));
-                        },
-                      ),
-                      const SizedBox(height: IdeSpacing.space12),
-                      _AppearanceSettingRow(
-                        key: const ValueKey('settings-code-font-row'),
-                        label: '代码字体',
-                        description: '仅用于代码块、命令、diff 和工具输出。',
-                        value: _fontChoiceLabel(settings.codeFontChoice),
-                        onTap: () => _selectCodeFont(
-                          context,
-                          currentChoice: settings.codeFontChoice,
-                        ),
-                      ),
-                      const SizedBox(height: IdeSpacing.space12),
-                      _FontSizeSettingRow(
-                        key: const ValueKey('settings-code-font-size-row'),
-                        keyPrefix: 'settings-code-font-size',
-                        label: '代码字号',
-                        description:
-                            '缩放代码块、命令、diff 与工具输出（${minCodeFontSize.toInt()}–${maxCodeFontSize.toInt()} px）。',
-                        value: settings.codeFontSize,
-                        min: minCodeFontSize,
-                        max: maxCodeFontSize,
-                        onChanged: (value) {
-                          unawaited(
-                            appearanceController.setCodeFontSize(value),
-                          );
-                        },
                       ),
                     ],
                   ),
-                ),
-              ),
-            );
-          },
-        ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -388,9 +404,7 @@ class _ThemeModeTabSpec {
   final ThemeMode value;
 }
 
-/// 主题模式设置行：左列标签与当前模式描述，右列选项卡片组。
-///
-/// 窄容器下自动改为上下堆叠，避免卡片组被压缩溢出。
+/// 主题模式使用紧凑分段控件，并复用设置行的响应式堆叠规则。
 class _ThemeModeSection extends StatelessWidget {
   const _ThemeModeSection({
     required this.tabs,
@@ -402,78 +416,35 @@ class _ThemeModeSection extends StatelessWidget {
   final ThemeMode groupValue;
   final ValueChanged<ThemeMode> onSelected;
 
-  static const double _stackedBreakpoint = IdeMetrics.stackedRowBreakpoint;
-
-  static const double _labelColumnWidth = 168;
   @override
   Widget build(BuildContext context) {
     final selectedTab = tabs.firstWhere(
       (tab) => tab.value == groupValue,
       orElse: () => tabs.first,
     );
-    final label = _ThemeModeLabel(description: selectedTab.description);
-    final cards = IdeChoiceCardGroup<ThemeMode>(
-      key: const ValueKey('settings-theme-tabs'),
-      options: [
-        for (final tab in tabs)
-          IdeChoiceCardOption<ThemeMode>(
-            value: tab.value,
-            label: tab.title,
-            icon: tab.icon,
-            semanticLabel: tab.title,
-            key: ValueKey<String>('settings-theme-${tab.keyName}'),
-          ),
-      ],
-      value: groupValue,
-      onChanged: onSelected,
-    );
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < _stackedBreakpoint) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              label,
-              const SizedBox(height: IdeSpacing.space12),
-              cards,
-            ],
-          );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(width: _labelColumnWidth, child: label),
-            const SizedBox(width: IdeSpacing.space16),
-            Expanded(child: cards),
+    return IdeSettingsRow(
+      label: '主题模式',
+      description: selectedTab.description,
+      showDivider: false,
+      control: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 380),
+        child: IdeTabs<ThemeMode>(
+          key: const ValueKey('settings-theme-tabs'),
+          value: groupValue,
+          semanticLabel: '主题模式',
+          items: [
+            for (final tab in tabs)
+              IdeTabItem<ThemeMode>(
+                value: tab.value,
+                label: tab.title,
+                leadingIcon: tab.icon,
+                semanticLabel: tab.title,
+                key: ValueKey<String>('settings-theme-${tab.keyName}'),
+              ),
           ],
-        );
-      },
-    );
-  }
-}
-
-class _ThemeModeLabel extends StatelessWidget {
-  const _ThemeModeLabel({required this.description});
-
-  final String description;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('主题模式', style: textStyles.sectionTitle),
-        const SizedBox(height: IdeSpacing.space4),
-        Text(
-          description,
-          key: const ValueKey('settings-theme-description'),
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-          style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
+          onChanged: onSelected,
         ),
-      ],
+      ),
     );
   }
 }
@@ -502,6 +473,7 @@ class _AppearanceSettingRow extends StatelessWidget {
       child: IdeSettingsRow(
         label: label,
         description: description,
+        showDivider: false,
         control: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -618,36 +590,8 @@ class _FontSizeSettingRow extends StatelessWidget {
     return IdeSettingsRow(
       label: label,
       description: description,
+      showDivider: false,
       control: controls,
-    );
-  }
-}
-
-class _SettingsNavItem extends StatelessWidget {
-  const _SettingsNavItem({
-    required this.label,
-    required this.icon,
-    required this.active,
-    required this.onTap,
-    super.key,
-  });
-
-  final String label;
-  final IconData icon;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 40,
-      child: IdeListRow(
-        title: label,
-        leading: Icon(icon),
-        selected: active,
-        onPressed: onTap,
-        showDivider: false,
-      ),
     );
   }
 }
