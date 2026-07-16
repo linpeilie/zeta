@@ -7,6 +7,7 @@ import 'package:logging/logging.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/data/datasources/app_server/codex_app_server_agent_provider.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
+import 'package:zeta/src/features/agent/data/datasources/transport/provider_runtime_json_rpc_peer.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 void main() {
@@ -2881,6 +2882,9 @@ void main() {
         await provider.initialize();
 
         expect(provider.runtimeInfo?.cliVersion, '0.144.5');
+        expect(provider.runtimeInfo?.runtimeId, isNotEmpty);
+        expect(provider.runtimeInfo?.connectionEpoch, 1);
+        expect(provider.lifecycleState, AgentProviderLifecycleState.ready);
         expect(
           provider.runtimeInfo?.compatibilityStatus,
           AgentRuntimeCompatibilityStatus.supported,
@@ -2896,6 +2900,83 @@ void main() {
         );
       },
     );
+
+    test('dispose closes pending approvals and rejects new RPC', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+      addTearDown(subscription.cancel);
+
+      await provider.initialize();
+      peer.emitServerRequest(
+        id: 'approval-closing',
+        method: 'item/commandExecution/requestApproval',
+        params: <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'command': 'dart format .',
+        },
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final firstDispose = provider.dispose();
+      final secondDispose = provider.dispose();
+      expect(identical(firstDispose, secondDispose), isTrue);
+      await firstDispose;
+
+      expect(provider.lifecycleState, AgentProviderLifecycleState.closed);
+      final resolved = events.whereType<AgentPermissionResolvedEvent>().single;
+      expect(resolved.requestId, 'approval-closing');
+      expect(resolved.raw['reason'], 'connectionClosed');
+      final requestCount = peer.requestMethods.length;
+      await expectLater(
+        provider.listThreads(
+          query: const AgentThreadListQuery(projectPath: '/repo', limit: 20),
+        ),
+        throwsA(isA<ProviderConnectionClosedException>()),
+      );
+      expect(peer.requestMethods, hasLength(requestCount));
+    });
+
+    test('unexpected connection close clears pending approval UI', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+      addTearDown(subscription.cancel);
+
+      await provider.initialize();
+      peer.emitServerRequest(
+        id: 'approval-disconnected',
+        method: 'item/commandExecution/requestApproval',
+        params: <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'command': 'flutter test',
+        },
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      await peer.simulateUnexpectedExit();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(provider.lifecycleState, AgentProviderLifecycleState.failed);
+      final resolved = events.whereType<AgentPermissionResolvedEvent>().single;
+      expect(resolved.requestId, 'approval-disconnected');
+      expect(resolved.raw['reason'], 'connectionClosed');
+      expect(
+        events.whereType<AgentStatusEvent>().last.status.state,
+        AgentProviderConnectionState.unavailable,
+      );
+    });
 
     test('keeps fork-at-turn closed for older Codex runtime', () async {
       final peer = _FakeJsonRpcPeer(
@@ -3148,6 +3229,7 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
   final Map<String, Object?> initializeResponse;
   int startCalls = 0;
   int _threadStartCount = 0;
+  bool _closed = false;
 
   @override
   Stream<JsonRpcNotification> get notifications => _notifications.stream;
@@ -3413,11 +3495,17 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
 
   @override
   Future<void> close() async {
+    if (_closed) {
+      return;
+    }
+    _closed = true;
     await _notifications.close();
     await _serverRequests.close();
     await _stderrLines.close();
     await _protocolErrors.close();
   }
+
+  Future<void> simulateUnexpectedExit() => close();
 
   void emitNotification(String method, Map<String, Object?> params) {
     _notifications.add(

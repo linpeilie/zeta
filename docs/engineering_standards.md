@@ -111,6 +111,9 @@ main -> app -> presentation/application -> domain
   组合无副作用版本/帮助探测，并在 ACP initialize 的 `agentInfo` 上二次校验。
 - workspace-scoped provider 的子进程 cwd 与 session cwd 必须一致；workspace 变化时关闭
   旧 peer、清理待响应请求并重新握手，禁止跨项目复用进程。
+- JSON-RPC provider 必须复用 `ProviderRuntimeJsonRpcPeer` 的生命周期 gate。`closing` 后
+  禁止新 client RPC；反向请求以 `(runtimeId, connectionEpoch, requestId)` 为权威身份，
+  dispose 必须关闭 transport 并等待已入场的 start、RPC 与 handler 排空后才进入 `closed`。
 - JSON-RPC transport 日志不得记录 prompt、文件内容、认证参数或 stderr 原文。
 - 默认审批策略保持保守，不自动授权命令执行或文件写入。
 - Codex app-server 协议以 `third_party/codex_app_server_schema` 的 pinned
@@ -153,6 +156,15 @@ main -> app -> presentation/application -> domain
 
 Zeta 是桌面工具，不是营销页。界面应紧凑、克制、可扫描。
 
+- `IdeHome` 是主要页面唯一的 Workbench 组合边界。首页、设置、Agent 管理和使用统计
+  必须由同一个常驻 `WindowFrame` + `IdeWorkbenchScaffold` 承载，只切换
+  Navigation、Canvas、Inspector slot；Feature 页面不得另建或替换顶层骨架。
+- Workbench 负责布局模式、Pane 表面与 Overlay，Feature 负责业务内容、控制器和离开
+  确认。设置页应通过 `SettingsNavigationPane` 与 `SettingsPageCanvas` 接入 slot，
+  不把设置分区或 Agent 配置规则下沉到共享 Scaffold。
+- 跨页面保活的 Canvas 必须保证关键 State、`ScrollController`、输入控制器和当前 Thread
+  不被销毁。可能因兄弟 slot 增删而换位的 Flex 子节点必须直接使用稳定 Key；仅给内部
+  Widget 加 Key 不足以保证父级 Element 复用。
 - 设计系统底层是 `shadcn_flutter`（固定 `0.0.52`）+ Graphite token。语义色/字号
   走 `IdeThemeScope` / `IdeColors` / `IdeTextStyles`；第三方组件走 `sf.*`。
 - 统一 `import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;`，禁止旧
@@ -188,6 +200,9 @@ Zeta 是桌面工具，不是营销页。界面应紧凑、克制、可扫描。
   确认态回滚、完整快照重试与损坏持久化输入。
 - provider datasource 和 transport 用 fake process、fake storage 或 callback 注入。
 - pane、timeline、file tree 等用户可见行为用 widget test。
+- 主要页面切换必须使用实际 `IdeHome` 做集成级 Widget 测试。Agent → Settings → Agent
+  与 Agent → Usage → Agent 至少验证常驻骨架、AgentPane Element、当前 Thread、草稿、
+  非零滚动位置、Pane 宽度和 Pane 可见状态保持。
 - 简单视觉调整可以只运行分析和相关 widget test，但行为变化必须补测试。
 - 外部 CLI 的自动化测试不能替代真实平台验收。Beta provider 发布前使用脱敏 smoke，分别
   记录 OS/架构、CLI 版本、包装器类型和结果；没有设备或凭据时必须标记“待执行/阻塞”，

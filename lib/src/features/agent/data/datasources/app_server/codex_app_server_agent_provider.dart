@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/data/datasources/app_server/codex_process_starter.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
+import 'package:zeta/src/features/agent/data/datasources/transport/provider_runtime_json_rpc_peer.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
@@ -31,7 +32,8 @@ class CodexAppServerAgentProvider
     implements
         AgentProvider,
         AgentUsageQuotaProvider,
-        AgentRuntimeInfoProvider {
+        AgentRuntimeInfoProvider,
+        AgentRuntimeLifecycleProvider {
   /// 创建 Codex app-server provider 实例。
   ///
   /// [config] 包含命令、参数、环境变量等 provider 配置。
@@ -54,8 +56,11 @@ class CodexAppServerAgentProvider
              config.selectedSandboxPolicy ??
              AgentPermissionSelection.defaultSandboxPolicy,
          permissionProfileId: config.selectedPermissionProfileId,
-       ),
-       _peer = peer ?? (peerFactory ?? _defaultPeerFactory)(config) {
+       ) {
+    _peer = ProviderRuntimeJsonRpcPeer(
+      peer ?? (peerFactory ?? _defaultPeerFactory)(config),
+      providerId: config.id,
+    );
     final threadHistoryReader = _CodexThreadHistoryReader();
     final modelListMapper = _CodexModelListMapper();
     _client = _CodexAppServerClient(
@@ -69,7 +74,7 @@ class CodexAppServerAgentProvider
   }
 
   /// JSON-RPC 通信对等体，负责与 Codex app-server 进程交换消息。
-  final JsonRpcPeer _peer;
+  late final ProviderRuntimeJsonRpcPeer _peer;
 
   late final _CodexAppServerClient _client;
   late final _CodexNotificationMapper _notificationMapper;
@@ -111,6 +116,8 @@ class CodexAppServerAgentProvider
 
   /// 是否已调用 dispose，防止重复释放资源。
   bool _disposed = false;
+
+  Future<void>? _disposeOperation;
 
   /// 已记过 fine 日志的未匹配通知 method（按 method 去重，避免刷屏）。
   final Set<String> _loggedUnmatchedNotificationMethods = <String>{};
@@ -159,6 +166,9 @@ class CodexAppServerAgentProvider
   @override
   AgentRuntimeInfo? get runtimeInfo => _runtimeInfo;
 
+  @override
+  AgentProviderLifecycleState get lifecycleState => _peer.lifecycleState;
+
   /// 开发诊断：未匹配服务端通知按 method 的累计次数。
   ///
   /// 首次见到某 method 会记一条 fine 日志；后续同名通知只递增计数。
@@ -168,6 +178,11 @@ class CodexAppServerAgentProvider
 
   @override
   Future<void> initialize() async {
+    if (_disposed) {
+      throw const ProviderConnectionClosedException(
+        'Codex Provider has been disposed',
+      );
+    }
     if (_initialized) {
       return;
     }
@@ -226,11 +241,13 @@ class CodexAppServerAgentProvider
 
       _runtimeInfo = _codexRuntimeInfoFromInitialize(
         initializeResult,
+        runtimeScope: _peer.runtimeScope!,
         configuredVersion: config.extra['detectedCurrentVersion']?.toString(),
       );
       _capabilities = _codexCapabilitiesForRuntime(_runtimeInfo!);
 
       _peer.sendNotification('initialized');
+      _peer.markReady();
       _initialized = true;
       _emitStatus(
         AgentProviderStatus(
@@ -242,6 +259,7 @@ class CodexAppServerAgentProvider
 
       await _fetchModelList();
     } on ProcessException catch (error, stackTrace) {
+      _peer.markFailed();
       _log.warning(
         'Could not start Agent provider process ${config.id}',
         error,
@@ -250,6 +268,7 @@ class CodexAppServerAgentProvider
       _emitUnavailable(error.message, details: error.toString());
       rethrow;
     } catch (error, stackTrace) {
+      _peer.markFailed();
       _log.warning(
         'Could not initialize Agent provider ${config.id}',
         error,
@@ -585,19 +604,30 @@ class CodexAppServerAgentProvider
       'Responding to Codex permission ${pending.method}: '
       'approved=${decision.approved}',
     );
-    await _peer.sendResponse(
+    await _peer.sendScopedResponse(
       pending.requestId,
+      runtimeScope: pending.runtimeScope,
       result: _approvalMapper.approvalResponse(pending, decision),
     );
   }
 
   @override
-  Future<void> dispose() async {
-    if (_disposed) {
-      return;
+  Future<void> dispose() {
+    final existing = _disposeOperation;
+    if (existing != null) {
+      return existing;
     }
+    final operation = _disposeOnce();
+    _disposeOperation = operation;
+    return operation;
+  }
+
+  Future<void> _disposeOnce() async {
     _log.fine('Disposing Agent provider ${config.id}');
     _disposed = true;
+    _peer.beginClosing();
+
+    _resolvePendingApprovalsOnConnectionClosed();
 
     await _notificationSubscription?.cancel();
     await _serverRequestSubscription?.cancel();
@@ -611,10 +641,22 @@ class CodexAppServerAgentProvider
   void _listenToPeer() {
     _notificationSubscription ??= _peer.notifications.listen(
       _handleNotification,
+      onDone: _handlePeerClosed,
     );
-    _serverRequestSubscription ??= _peer.serverRequests.listen(
-      _handleServerRequest,
-    );
+    _serverRequestSubscription ??= _peer.serverRequests.listen((request) {
+      unawaited(
+        _peer.handleServerRequest(request, _handleServerRequest).catchError((
+          Object error,
+          StackTrace stackTrace,
+        ) {
+          _log.warning(
+            'Codex server request ${request.method} did not complete',
+            error,
+            stackTrace,
+          );
+        }),
+      );
+    });
     _stderrSubscription ??= _peer.stderrLines.listen((line) {
       if (line.trim().isEmpty) {
         return;
@@ -753,7 +795,7 @@ class CodexAppServerAgentProvider
   }
 
   /// 将服务端审批请求委托给审批映射器，再由 provider 保存待处理状态。
-  void _handleServerRequest(JsonRpcRequest request) {
+  Future<void> _handleServerRequest(JsonRpcRequest request) async {
     // 未知或不支持的请求立即回 JSON-RPC error，不进 UI；伪造 `{}`/null
     // 成功应答会违反响应 schema，可能让服务端 turn 永久卡住。
     final rejection = _approvalMapper.rejectionFor(request);
@@ -762,17 +804,10 @@ class CodexAppServerAgentProvider
         'Declining unsupported Codex server request ${request.method}: '
         '${rejection.message}',
       );
-      unawaited(
-        _peer.sendResponse(request.id, error: rejection).catchError((
-          Object error,
-          StackTrace stackTrace,
-        ) {
-          _log.warning(
-            'Failed to reject Codex server request ${request.method}',
-            error,
-            stackTrace,
-          );
-        }),
+      await _peer.sendScopedResponse(
+        request.id,
+        runtimeScope: request.runtimeScope,
+        error: rejection,
       );
       return;
     }
@@ -780,6 +815,31 @@ class CodexAppServerAgentProvider
     final mapped = _approvalMapper.mapRequest(request);
     _pendingApprovals[mapped.pendingApproval.id] = mapped.pendingApproval;
     _events.add(mapped.event);
+  }
+
+  void _handlePeerClosed() {
+    if (_disposed ||
+        _peer.lifecycleState == AgentProviderLifecycleState.closing ||
+        _peer.lifecycleState == AgentProviderLifecycleState.closed) {
+      return;
+    }
+    _initialized = false;
+    _runningTurnIdsBySessionId.clear();
+    _resolvePendingApprovalsOnConnectionClosed();
+    _emitUnavailable('Codex App Server 连接已关闭');
+  }
+
+  void _resolvePendingApprovalsOnConnectionClosed() {
+    for (final pending in _pendingApprovals.values) {
+      _events.add(
+        AgentPermissionResolvedEvent(
+          requestId: pending.id,
+          threadId: _string(pending.params['threadId']) ?? '',
+          raw: const <String, Object?>{'reason': 'connectionClosed'},
+        ),
+      );
+    }
+    _pendingApprovals.clear();
   }
 
   /// 发出 provider 连接状态事件。

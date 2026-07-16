@@ -9,6 +9,7 @@ import 'package:zeta/src/features/agent/data/datasources/acp/cursor_diagnostics_
 import 'package:zeta/src/features/agent/data/datasources/acp/cursor_process_starter.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/cursor_session_index_store.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
+import 'package:zeta/src/features/agent/data/datasources/transport/provider_runtime_json_rpc_peer.dart';
 import 'package:zeta/src/features/agent/data/mappers/acp_permission_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/acp_session_config_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/acp_session_update_mapper.dart';
@@ -30,7 +31,8 @@ class CursorAcpAgentProvider
         AgentProvider,
         AgentLocalThreadListProvider,
         AgentSessionConfigProvider,
-        AgentPlanApprovalProvider {
+        AgentPlanApprovalProvider,
+        AgentRuntimeLifecycleProvider {
   CursorAcpAgentProvider({
     required this.config,
     JsonRpcPeer? peer,
@@ -104,17 +106,20 @@ class CursorAcpAgentProvider
   final Set<String> _legacyModeSessions = <String>{};
   final Random _random = Random();
 
-  JsonRpcPeer? _peer;
+  ProviderRuntimeJsonRpcPeer? _peer;
   AgentSession? _session;
   String? _workspacePath;
   AgentProviderCapabilities _capabilities = AgentProviderCapabilities.cursorAcp;
   Future<void>? _initializationOperation;
+  Future<void>? _disposeOperation;
   bool _initialized = false;
   bool _disposed = false;
   bool _closingPeer = false;
   bool _usedInjectedPeer = false;
   bool _supportsRemoteSessionList = false;
   int _peerGeneration = 0;
+  AgentProviderLifecycleState _detachedLifecycleState =
+      AgentProviderLifecycleState.stopped;
 
   StreamSubscription<JsonRpcNotification>? _notificationSubscription;
   StreamSubscription<JsonRpcRequest>? _serverRequestSubscription;
@@ -126,6 +131,10 @@ class CursorAcpAgentProvider
 
   @override
   Stream<AgentEvent> get events => _events.stream;
+
+  @override
+  AgentProviderLifecycleState get lifecycleState =>
+      _peer?.lifecycleState ?? _detachedLifecycleState;
 
   @override
   Future<void> initialize() async {
@@ -222,6 +231,7 @@ class CursorAcpAgentProvider
         source: CursorDiagnosticsStore.runtimeSource,
         message: 'authentication ready; stage=auth',
       );
+      peer.markReady();
       _initialized = true;
       _emitStatus(
         AgentProviderStatus(
@@ -231,6 +241,7 @@ class CursorAcpAgentProvider
       );
       _log.info('Cursor ACP initialized for workspace $workspace');
     } on ProcessException catch (error, stackTrace) {
+      _peer?.markFailed();
       _log.warning('Could not start Cursor CLI', error, stackTrace);
       _diagnostics.record(
         source: CursorDiagnosticsStore.runtimeSource,
@@ -241,6 +252,7 @@ class CursorAcpAgentProvider
       _emitUnavailable(error.message, details: error.toString());
       rethrow;
     } catch (error, stackTrace) {
+      _peer?.markFailed();
       _log.warning('Could not initialize Cursor ACP', error, stackTrace);
       _diagnostics.record(
         source: CursorDiagnosticsStore.runtimeSource,
@@ -816,8 +828,9 @@ class CursorAcpAgentProvider
         await _respondPermissionCancelled(_requirePeer(), pending);
         return;
       }
-      await _requirePeer().sendResponse(
+      await _requirePeer().sendScopedResponse(
         pending.requestId,
+        runtimeScope: pending.runtimeScope,
         result: <String, Object?>{
           'outcome': <String, Object?>{
             'outcome': 'selected',
@@ -853,8 +866,9 @@ class CursorAcpAgentProvider
                 },
             ],
           };
-    await _requirePeer().sendResponse(
+    await _requirePeer().sendScopedResponse(
       question.requestId,
+      runtimeScope: question.runtimeScope,
       result: <String, Object?>{'outcome': outcome},
     );
   }
@@ -880,17 +894,25 @@ class CursorAcpAgentProvider
         'outcome': 'cancelled',
       },
     };
-    await _requirePeer().sendResponse(
+    await _requirePeer().sendScopedResponse(
       pending.requestId,
+      runtimeScope: pending.runtimeScope,
       result: <String, Object?>{'outcome': outcome},
     );
   }
 
   @override
-  Future<void> dispose() async {
-    if (_disposed) {
-      return;
+  Future<void> dispose() {
+    final existing = _disposeOperation;
+    if (existing != null) {
+      return existing;
     }
+    final operation = _disposeOnce();
+    _disposeOperation = operation;
+    return operation;
+  }
+
+  Future<void> _disposeOnce() async {
     _disposed = true;
     await _closeCurrentPeer();
     _diagnostics.recordExit('provider disposed', expected: true);
@@ -1323,22 +1345,36 @@ class CursorAcpAgentProvider
     }
   }
 
-  JsonRpcPeer _createPeer(String workspace) {
+  ProviderRuntimeJsonRpcPeer _createPeer(String workspace) {
+    final JsonRpcPeer delegate;
     if (!_usedInjectedPeer && _injectedPeer != null) {
       _usedInjectedPeer = true;
-      return _injectedPeer;
+      delegate = _injectedPeer;
+    } else {
+      delegate = _peerFactory(config, workspace);
     }
-    return _peerFactory(config, workspace);
+    return ProviderRuntimeJsonRpcPeer(delegate, providerId: config.id);
   }
 
-  void _listenToPeer(JsonRpcPeer peer) {
+  void _listenToPeer(ProviderRuntimeJsonRpcPeer peer) {
     _notificationSubscription = peer.notifications.listen(
       _handleNotification,
       onDone: _handlePeerClosed,
     );
-    _serverRequestSubscription = peer.serverRequests.listen(
-      _handleServerRequest,
-    );
+    _serverRequestSubscription = peer.serverRequests.listen((request) {
+      unawaited(
+        peer.handleServerRequest(request, _handleServerRequest).catchError((
+          Object error,
+          StackTrace stackTrace,
+        ) {
+          _log.warning(
+            'Cursor server request ${request.method} did not complete',
+            error,
+            stackTrace,
+          );
+        }),
+      );
+    });
     _stderrSubscription = peer.stderrLines.listen((line) {
       if (line.trim().isNotEmpty) {
         _diagnostics.recordStderr(line);
@@ -1472,8 +1508,9 @@ class CursorAcpAgentProvider
           await _handlePlanRequest(request);
           return;
         case 'cursor/generate_image':
-          await _requirePeer().sendResponse(
+          await _requirePeer().sendScopedResponse(
             request.id,
+            runtimeScope: request.runtimeScope,
             error: const JsonRpcError(
               code: -32601,
               message: 'Client-side image generation is not supported',
@@ -1481,8 +1518,9 @@ class CursorAcpAgentProvider
           );
           return;
       }
-      await _requirePeer().sendResponse(
+      await _requirePeer().sendScopedResponse(
         request.id,
+        runtimeScope: request.runtimeScope,
         error: JsonRpcError(
           code: -32601,
           message: 'Method not supported: ${request.method}',
@@ -1506,8 +1544,9 @@ class CursorAcpAgentProvider
         level: CursorDiagnosticLevel.error,
       );
       try {
-        await _requirePeer().sendResponse(
+        await _requirePeer().sendScopedResponse(
           request.id,
+          runtimeScope: request.runtimeScope,
           error: JsonRpcError(code: -32000, message: error.toString()),
         );
       } catch (_) {
@@ -1528,6 +1567,7 @@ class CursorAcpAgentProvider
     final pending = _PendingCursorPermission(
       requestId: request.id,
       requestKey: mapping.request.id,
+      runtimeScope: request.runtimeScope,
       mapping: mapping,
     );
     pending.timer = Timer(
@@ -1558,8 +1598,9 @@ class CursorAcpAgentProvider
       turnId: _runningTurnId(sessionId),
     );
     if (mapped.questions.isEmpty) {
-      await _requirePeer().sendResponse(
+      await _requirePeer().sendScopedResponse(
         request.id,
+        runtimeScope: request.runtimeScope,
         result: <String, Object?>{
           'outcome': <String, Object?>{
             'outcome': 'skipped',
@@ -1572,6 +1613,7 @@ class CursorAcpAgentProvider
     final pending = _PendingCursorQuestion(
       requestId: request.id,
       requestKey: mapped.id,
+      runtimeScope: request.runtimeScope,
       request: mapped,
     );
     pending.timer = Timer(
@@ -1600,6 +1642,7 @@ class CursorAcpAgentProvider
     final pending = _PendingCursorPlan(
       requestId: request.id,
       requestKey: mapped.id,
+      runtimeScope: request.runtimeScope,
       request: mapped,
     );
     pending.timer = Timer(
@@ -1667,7 +1710,9 @@ class CursorAcpAgentProvider
     return blocks;
   }
 
-  Future<void> _cancelPendingInteractions(JsonRpcPeer peer) async {
+  Future<void> _cancelPendingInteractions(
+    ProviderRuntimeJsonRpcPeer peer,
+  ) async {
     for (final pending in _pendingPermissions.values.toList()) {
       try {
         await _respondPermissionCancelled(peer, pending);
@@ -1696,13 +1741,14 @@ class CursorAcpAgentProvider
   }
 
   Future<void> _respondPermissionCancelled(
-    JsonRpcPeer peer,
+    ProviderRuntimeJsonRpcPeer peer,
     _PendingCursorPermission pending,
   ) async {
     _pendingPermissions.remove(pending.requestKey);
     pending.timer.cancel();
-    await peer.sendResponse(
+    await peer.sendScopedResponse(
       pending.requestId,
+      runtimeScope: pending.runtimeScope,
       result: <String, Object?>{
         'outcome': <String, Object?>{'outcome': 'cancelled'},
       },
@@ -1711,13 +1757,14 @@ class CursorAcpAgentProvider
   }
 
   Future<void> _respondQuestionCancelled(
-    JsonRpcPeer peer,
+    ProviderRuntimeJsonRpcPeer peer,
     _PendingCursorQuestion pending,
   ) async {
     _pendingQuestions.remove(pending.requestKey);
     pending.timer.cancel();
-    await peer.sendResponse(
+    await peer.sendScopedResponse(
       pending.requestId,
+      runtimeScope: pending.runtimeScope,
       result: <String, Object?>{
         'outcome': <String, Object?>{'outcome': 'cancelled'},
       },
@@ -1726,13 +1773,14 @@ class CursorAcpAgentProvider
   }
 
   Future<void> _respondPlanCancelled(
-    JsonRpcPeer peer,
+    ProviderRuntimeJsonRpcPeer peer,
     _PendingCursorPlan pending,
   ) async {
     _pendingPlans.remove(pending.requestKey);
     pending.timer.cancel();
-    await peer.sendResponse(
+    await peer.sendScopedResponse(
       pending.requestId,
+      runtimeScope: pending.runtimeScope,
       result: <String, Object?>{
         'outcome': <String, Object?>{'outcome': 'cancelled'},
       },
@@ -1849,7 +1897,13 @@ class CursorAcpAgentProvider
 
   Future<void> _closeCurrentPeer() async {
     final peer = _peer;
+    peer?.beginClosing();
     _peer = null;
+    _detachedLifecycleState = peer == null
+        ? (_disposed
+              ? AgentProviderLifecycleState.closed
+              : AgentProviderLifecycleState.stopped)
+        : AgentProviderLifecycleState.closing;
     _peerGeneration += 1;
     _initialized = false;
     _initializationOperation = null;
@@ -1880,6 +1934,9 @@ class CursorAcpAgentProvider
       await peer.close();
     } finally {
       _closingPeer = false;
+      _detachedLifecycleState = _disposed
+          ? AgentProviderLifecycleState.closed
+          : AgentProviderLifecycleState.stopped;
     }
   }
 
@@ -1888,6 +1945,7 @@ class CursorAcpAgentProvider
       return;
     }
     _initialized = false;
+    _detachedLifecycleState = AgentProviderLifecycleState.failed;
     _peer = null;
     _discardPendingInteractions();
     _session = null;
@@ -1906,7 +1964,7 @@ class CursorAcpAgentProvider
     _emitUnavailable('Cursor Agent 进程已意外退出');
   }
 
-  JsonRpcPeer _requirePeer() {
+  ProviderRuntimeJsonRpcPeer _requirePeer() {
     final peer = _peer;
     if (peer == null) {
       throw StateError('Cursor ACP peer 尚未启动');
@@ -1990,11 +2048,13 @@ class _PendingCursorPermission {
   _PendingCursorPermission({
     required this.requestId,
     required this.requestKey,
+    required this.runtimeScope,
     required this.mapping,
   });
 
   final Object requestId;
   final String requestKey;
+  final AgentRuntimeScope? runtimeScope;
   final AcpPermissionMapping mapping;
   late final Timer timer;
 }
@@ -2003,11 +2063,13 @@ class _PendingCursorQuestion {
   _PendingCursorQuestion({
     required this.requestId,
     required this.requestKey,
+    required this.runtimeScope,
     required this.request,
   });
 
   final Object requestId;
   final String requestKey;
+  final AgentRuntimeScope? runtimeScope;
   final AgentPermissionRequest request;
   late final Timer timer;
 }
@@ -2016,11 +2078,13 @@ class _PendingCursorPlan {
   _PendingCursorPlan({
     required this.requestId,
     required this.requestKey,
+    required this.runtimeScope,
     required this.request,
   });
 
   final Object requestId;
   final String requestKey;
+  final AgentRuntimeScope? runtimeScope;
   final AgentPlanApprovalRequest request;
   late final Timer timer;
 }

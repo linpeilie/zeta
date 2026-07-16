@@ -59,6 +59,9 @@ void main() {
       expect(initialize['protocolVersion'], 1);
       expect(provider.capabilities.supportsLocalImageInput, isFalse);
       expect(provider.capabilities.supportsResourceInput, isFalse);
+      expect(provider.lifecycleState, AgentProviderLifecycleState.ready);
+      await provider.dispose();
+      expect(provider.lifecycleState, AgentProviderLifecycleState.closed);
     });
 
     test('records a redacted handshake, stderr, and exit reason', () async {
@@ -93,6 +96,7 @@ void main() {
         isNot(contains('very-secret-value')),
       );
       expect(snapshot.exitReason, 'process closed unexpectedly');
+      expect(provider.lifecycleState, AgentProviderLifecycleState.failed);
       await provider.dispose();
     });
 

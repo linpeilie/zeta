@@ -153,7 +153,9 @@ windows/
 4. ACP provider 优先复用 `AcpSessionUpdateMapper`、`AcpPermissionMapper`、
    `AcpContentCodec` 和 `AcpSessionConfigMapper`；厂商通知与阻塞扩展单独留在薄适配层。
 5. 在 factory 中接入 provider kind。
-6. 添加单元测试覆盖初始化、session、turn、权限请求、capability gate 和错误映射。
+6. JSON-RPC provider 必须把裸 peer 包装为 `ProviderRuntimeJsonRpcPeer`，在握手成功后
+   `markReady`、失败时 `markFailed`；dispose 先 `beginClosing`，再收尾 pending 交互和关闭 peer。
+7. 添加单元测试覆盖初始化、session、turn、权限请求、capability gate、生命周期门控和错误映射。
 
 注意：默认策略应保持保守，不自动授权命令执行或文件写入。
 未支持操作必须 capability=false，并抛出 `UnsupportedError`；不得静默成功。
@@ -177,6 +179,8 @@ Cursor 适配还必须遵守以下约束：
   提问与计划审批保持独立响应语义。
 - 未识别的服务端 request 必须返回 JSON-RPC `-32601`；权限、提问和计划请求在超时、拒绝、
   取消、workspace 切换和 dispose 时都必须回包并清理 pending state，避免 turn 永久等待。
+- pending server request 必须保存收到时的 `AgentRuntimeScope`，响应时使用 scoped response；
+  不得把旧 `runtimeId / connectionEpoch` 的审批或提问回写到新连接。
 
 修改 Codex 适配层前，先对照
 [`third_party/codex_app_server_schema`](../third_party/codex_app_server_schema/)
@@ -190,6 +194,14 @@ Fast 是产品语义，运行时仍必须传递 provider 的精确 `serviceTierI
 
 ## 8. UI 开发指南
 
+- `IdeHome` 持有主要页面唯一的 `WindowFrame` 和 `IdeWorkbenchScaffold`。新增主要页面时
+  只提供 Navigation、Canvas、Inspector slot 内容，不得用页面组件替换整个 Workbench。
+- Agent 首页、设置/Agent 管理和使用统计分别按设计文档中的 slot 矩阵组合：设置 Feature
+  使用 `SettingsNavigationPane` + `SettingsPageCanvas`，使用统计只占用 Canvas。
+- 需要跨页面保持的 Canvas 应使用稳定位置、稳定 Key 和保活容器。Key 必须放在可能因
+  slot 增删而换位的 Flex 子节点上，不能只放在其内部后代；非活动页面应暂停 ticker。
+- 页面容器只负责切换 slot。搜索、筛选、未保存配置确认等业务状态继续归对应 Feature；
+  例如离开 Agent 管理前通过 `SettingsPageCanvasState.confirmCanLeave()` 查询。
 - 保持三栏工作台的职责边界：Projects 管项目和 threads，Agent 管对话，Files 管文件上下文。
 - 复杂交互逻辑优先放入 view model，widget 层负责渲染和用户输入。
 - 桌面工具界面需要保持信息密度，但文本必须可读，按钮和状态提示不能挤压变形。
@@ -206,6 +218,9 @@ Fast 是产品语义，运行时仍必须传递 provider 的精确 `serviceTierI
   provider kind 或显示名称硬编码。
 - 使用统计是标题栏全局页面，不属于设置分区。统计表格在窄窗口保留横向滚动，
   分析区按可用宽度从双栏切换为单栏。
+- 修改主要页面切换行为时，必须使用实际 `IdeHome` 补 Widget 测试，至少验证
+  `WindowFrame`/Workbench/AgentPane Element、当前 Thread、草稿、对话滚动位置、
+  Pane 宽度和可见状态没有被重置。
 
 ### Composer 模型配置开发约束
 

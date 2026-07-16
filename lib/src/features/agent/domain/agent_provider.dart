@@ -135,6 +135,11 @@ abstract interface class AgentRuntimeInfoProvider {
   AgentRuntimeInfo? get runtimeInfo;
 }
 
+/// 暴露 Provider 当前生命周期，用于连接切换与诊断的可选接口。
+abstract interface class AgentRuntimeLifecycleProvider {
+  AgentProviderLifecycleState get lifecycleState;
+}
+
 /// Provider 拥有本地会话索引时，可只移除客户端列表记录而不删除服务端历史。
 ///
 /// 该操作与 [AgentProvider.deleteThread] 语义严格分离，UI 必须明确提示用户远端

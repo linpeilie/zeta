@@ -54,6 +54,10 @@ changes in this repository.
   `ui` buckets when a feature package is the natural owner.
 - Keep `main.dart` limited to startup, global error logging, desktop window
   bootstrap, and `runApp`. Put app wiring in `lib/src/app`.
+- Keep `IdeHome` as the single composition boundary for the persistent
+  `WindowFrame` and `IdeWorkbenchScaffold`. Main pages provide Navigation,
+  Canvas, and Inspector slot content; feature pages must not replace the top-level
+  workbench or move feature routing rules into the shared scaffold.
 - Keep concrete protocol details such as Codex app-server JSON-RPC, JSONL
   history parsing, and provider configuration inside the agent data layer and
   mappers. UI code should consume neutral domain events and provider contracts.
@@ -98,6 +102,10 @@ changes in this repository.
   do not call `sf.showToast` ad hoc from feature pages.
 - Build responsive layouts that work on desktop-sized windows as well as narrow
   viewports.
+- Preserve the Agent Canvas across main-page switches. Stable keys belong on
+  Flex children that can move when slots appear or disappear, and page-switch
+  tests must protect the Agent state, draft, scroll position, pane widths, and
+  pane visibility.
 - Use `LayoutBuilder`, `Flexible`, `Expanded`, `Wrap`, scroll views, and builder
   constructors to avoid overflow.
 - Reuse `ui/core` primitives such as `Pane`, `PanelCard`,

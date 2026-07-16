@@ -8,6 +8,7 @@ import 'package:zeta/src/features/agent/data/datasources/acp/grok_models_cli.dar
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_process_starter.dart';
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_session_history_reader.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
+import 'package:zeta/src/features/agent/data/datasources/transport/provider_runtime_json_rpc_peer.dart';
 import 'package:zeta/src/features/agent/data/mappers/acp_content_codec.dart';
 import 'package:zeta/src/features/agent/data/mappers/acp_permission_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_acp_notification_mapper.dart';
@@ -23,7 +24,8 @@ typedef JsonRpcPeerFactory = JsonRpcPeer Function(AgentProviderConfig config);
 ///
 /// 启动 `grok agent stdio`，通过标准 ACP JSON-RPC 完成会话、流式回复与审批。
 /// 不支持的 Codex 专有能力通过 [capabilities] 关闭，并在误调用时明确失败。
-class GrokAcpAgentProvider implements AgentProvider {
+class GrokAcpAgentProvider
+    implements AgentProvider, AgentRuntimeLifecycleProvider {
   GrokAcpAgentProvider({
     required this.config,
     JsonRpcPeer? peer,
@@ -45,7 +47,7 @@ class GrokAcpAgentProvider implements AgentProvider {
        _generatedTitlePollDelays =
            generatedTitlePollDelays ?? _defaultGeneratedTitlePollDelays {
     // 在构造体中创建 peer，以便闭包捕获运行时模型选择。
-    _peer =
+    final delegate =
         peer ??
         (peerFactory ??
             ((cfg) => createDefaultPeer(
@@ -53,6 +55,7 @@ class GrokAcpAgentProvider implements AgentProvider {
               modelIdResolver: () => _modelSelection.modelId,
               reasoningEffortResolver: () => _modelSelection.reasoningEffort,
             )))(config);
+    _peer = ProviderRuntimeJsonRpcPeer(delegate, providerId: config.id);
   }
 
   /// 首轮结束后轮询本地 `summary.json` 的间隔（Grok 异步写 generated_title）。
@@ -87,7 +90,7 @@ class GrokAcpAgentProvider implements AgentProvider {
     );
   }
 
-  late final JsonRpcPeer _peer;
+  late final ProviderRuntimeJsonRpcPeer _peer;
   final GrokSessionHistoryReader _sessionHistoryReader;
   final GrokModelsCli _modelsCli;
   final GrokAcpNotificationMapper _notificationMapper;
@@ -123,6 +126,7 @@ class GrokAcpAgentProvider implements AgentProvider {
   bool _initialized = false;
   Future<void>? _initializationOperation;
   bool _disposed = false;
+  Future<void>? _disposeOperation;
   bool _loadSessionSupported = true;
 
   /// session/load 期间为 true：抑制回放通知进入直播时间线。
@@ -152,7 +156,15 @@ class GrokAcpAgentProvider implements AgentProvider {
       .copyWith(canResumeSession: _loadSessionSupported);
 
   @override
+  AgentProviderLifecycleState get lifecycleState => _peer.lifecycleState;
+
+  @override
   Future<void> initialize() async {
+    if (_disposed) {
+      throw const ProviderConnectionClosedException(
+        'Grok Provider has been disposed',
+      );
+    }
     if (_initialized) {
       return;
     }
@@ -219,6 +231,7 @@ class GrokAcpAgentProvider implements AgentProvider {
       // 优先使用缓存 token；失败不阻断后续（某些环境可能已隐式鉴权）。
       await _authenticateBestEffort(initMap['authMethods']);
 
+      _peer.markReady();
       _initialized = true;
       _emitStatus(
         AgentProviderStatus(
@@ -231,10 +244,12 @@ class GrokAcpAgentProvider implements AgentProvider {
       // 模型列表在 session/new 时更完整；此处先 CLI 降级预填。
       unawaited(_prefetchModelsFromCli());
     } on ProcessException catch (error, stackTrace) {
+      _peer.markFailed();
       _log.warning('Could not start Grok CLI', error, stackTrace);
       _emitUnavailable(error.message, details: error.toString());
       rethrow;
     } catch (error, stackTrace) {
+      _peer.markFailed();
       _log.warning('Could not initialize Grok ACP provider', error, stackTrace);
       _emitStatus(
         AgentProviderStatus(
@@ -702,8 +717,9 @@ class GrokAcpAgentProvider implements AgentProvider {
       return;
     }
 
-    await _peer.sendResponse(
+    await _peer.sendScopedResponse(
       pending.requestId,
+      runtimeScope: pending.runtimeScope,
       result: <String, Object?>{
         'outcome': <String, Object?>{
           'outcome': 'selected',
@@ -714,15 +730,30 @@ class GrokAcpAgentProvider implements AgentProvider {
   }
 
   @override
-  Future<void> dispose() async {
-    if (_disposed) {
-      return;
+  Future<void> dispose() {
+    final existing = _disposeOperation;
+    if (existing != null) {
+      return existing;
     }
+    final operation = _disposeOnce();
+    _disposeOperation = operation;
+    return operation;
+  }
+
+  Future<void> _disposeOnce() async {
     _disposed = true;
+    _peer.beginClosing();
     // 递增所有 token 以停止进行中的标题轮询。
     for (final sessionId in _titlePollTokensBySessionId.keys.toList()) {
       _titlePollTokensBySessionId[sessionId] =
           (_titlePollTokensBySessionId[sessionId] ?? 0) + 1;
+    }
+    for (final pending in _pendingPermissions.values.toList()) {
+      try {
+        await _respondPermissionCancelled(pending);
+      } catch (_) {
+        _pendingPermissions.remove(pending.requestKey);
+      }
     }
     await _notificationSubscription?.cancel();
     await _serverRequestSubscription?.cancel();
@@ -735,10 +766,22 @@ class GrokAcpAgentProvider implements AgentProvider {
   void _listenToPeer() {
     _notificationSubscription ??= _peer.notifications.listen(
       _handleNotification,
+      onDone: _handlePeerClosed,
     );
-    _serverRequestSubscription ??= _peer.serverRequests.listen(
-      _handleServerRequest,
-    );
+    _serverRequestSubscription ??= _peer.serverRequests.listen((request) {
+      unawaited(
+        _peer.handleServerRequest(request, _handleServerRequest).catchError((
+          Object error,
+          StackTrace stackTrace,
+        ) {
+          _log.warning(
+            'Grok server request ${request.method} did not complete',
+            error,
+            stackTrace,
+          );
+        }),
+      );
+    });
     _stderrSubscription ??= _peer.stderrLines.listen((line) {
       if (line.trim().isEmpty) {
         return;
@@ -974,8 +1017,9 @@ class GrokAcpAgentProvider implements AgentProvider {
         case 'fs/read_text_file':
           await _handleReadTextFile(request);
         case 'fs/write_text_file':
-          await _peer.sendResponse(
+          await _peer.sendScopedResponse(
             request.id,
+            runtimeScope: request.runtimeScope,
             error: const JsonRpcError(
               code: -32601,
               message: 'fs/write_text_file is not supported by Zeta client',
@@ -985,8 +1029,9 @@ class GrokAcpAgentProvider implements AgentProvider {
           _log.fine(
             'Rejecting unsupported Grok server request ${request.method}',
           );
-          await _peer.sendResponse(
+          await _peer.sendScopedResponse(
             request.id,
+            runtimeScope: request.runtimeScope,
             error: JsonRpcError(
               code: -32601,
               message: 'Method not supported: ${request.method}',
@@ -1001,14 +1046,36 @@ class GrokAcpAgentProvider implements AgentProvider {
         stackTrace,
       );
       try {
-        await _peer.sendResponse(
+        await _peer.sendScopedResponse(
           request.id,
+          runtimeScope: request.runtimeScope,
           error: JsonRpcError(code: -32000, message: error.toString()),
         );
       } catch (_) {
         // 连接已断开时忽略二次失败。
       }
     }
+  }
+
+  void _handlePeerClosed() {
+    if (_disposed ||
+        _peer.lifecycleState == AgentProviderLifecycleState.closing ||
+        _peer.lifecycleState == AgentProviderLifecycleState.closed) {
+      return;
+    }
+    _initialized = false;
+    _runningTurnIdsBySessionId.clear();
+    for (final pending in _pendingPermissions.values) {
+      _addEvent(
+        AgentPermissionResolvedEvent(
+          requestId: pending.requestKey,
+          threadId: pending.mapping.request.sessionId ?? '',
+          raw: const <String, Object?>{'reason': 'connectionClosed'},
+        ),
+      );
+    }
+    _pendingPermissions.clear();
+    _emitUnavailable('Grok ACP 连接已关闭');
   }
 
   Future<void> _handlePermissionRequest(JsonRpcRequest request) async {
@@ -1027,6 +1094,7 @@ class GrokAcpAgentProvider implements AgentProvider {
     final pending = _PendingAcpPermission(
       requestId: request.id,
       requestKey: requestKey,
+      runtimeScope: request.runtimeScope,
       mapping: mapping,
     );
     _pendingPermissions[requestKey] = pending;
@@ -1060,8 +1128,9 @@ class GrokAcpAgentProvider implements AgentProvider {
     final rawPath = request.params['path']?.toString();
     final path = _normalizeClientFsPath(rawPath);
     if (path == null || path.isEmpty) {
-      await _peer.sendResponse(
+      await _peer.sendScopedResponse(
         request.id,
+        runtimeScope: request.runtimeScope,
         error: const JsonRpcError(code: -32602, message: 'path is required'),
       );
       return;
@@ -1069,8 +1138,9 @@ class GrokAcpAgentProvider implements AgentProvider {
     try {
       final file = File(path);
       if (!await file.exists()) {
-        await _peer.sendResponse(
+        await _peer.sendScopedResponse(
           request.id,
+          runtimeScope: request.runtimeScope,
           error: JsonRpcError(code: -32000, message: 'File not found: $path'),
         );
         return;
@@ -1090,13 +1160,15 @@ class GrokAcpAgentProvider implements AgentProvider {
             : lines.length;
         text = lines.sublist(start.clamp(0, lines.length), end).join('\n');
       }
-      await _peer.sendResponse(
+      await _peer.sendScopedResponse(
         request.id,
+        runtimeScope: request.runtimeScope,
         result: <String, Object?>{'content': text},
       );
     } catch (error) {
-      await _peer.sendResponse(
+      await _peer.sendScopedResponse(
         request.id,
+        runtimeScope: request.runtimeScope,
         error: JsonRpcError(code: -32000, message: error.toString()),
       );
     }
@@ -1133,8 +1205,9 @@ class GrokAcpAgentProvider implements AgentProvider {
     _PendingAcpPermission pending,
   ) async {
     _pendingPermissions.remove(pending.requestKey);
-    await _peer.sendResponse(
+    await _peer.sendScopedResponse(
       pending.requestId,
+      runtimeScope: pending.runtimeScope,
       result: <String, Object?>{
         'outcome': <String, Object?>{'outcome': 'cancelled'},
       },
@@ -1398,10 +1471,12 @@ class _PendingAcpPermission {
   _PendingAcpPermission({
     required this.requestId,
     required this.requestKey,
+    required this.runtimeScope,
     required this.mapping,
   });
 
   final Object requestId;
   final String requestKey;
+  final AgentRuntimeScope? runtimeScope;
   final AcpPermissionMapping mapping;
 }

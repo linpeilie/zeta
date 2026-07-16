@@ -1,6 +1,6 @@
 # 设计文档
 
-最后更新：2026-07-14
+最后更新：2026-07-16
 
 ## 1. 设计目标
 
@@ -35,12 +35,17 @@ main()
   -> MainApp
     -> IdeShellController
     -> IdeHome
-      -> ProjectListPane
-      -> AgentPane
-      -> FileTreePane
-      -> SettingsPage
-        -> AgentManagementPage
-      -> UsageStatisticsPage
+      -> WindowFrame（常驻）
+        -> IdeWorkbenchScaffold（常驻）
+          -> Navigation slot
+            -> ProjectListPane | SettingsNavigationPane
+          -> Canvas slot（保活页面栈）
+            -> AgentPane
+            -> SettingsPageCanvas
+              -> AgentManagementPage
+            -> UsageStatisticsPage
+          -> Inspector slot
+            -> FileTreePane | Tools
 
 IdeShellController
   -> IdeSessionStore
@@ -74,6 +79,30 @@ UsageStatisticsController
 ```
 
 ## 4. UI 设计
+
+### 统一 Workbench 页面骨架
+
+`IdeHome` 是主要页面唯一的 Workbench 组合边界。`WindowFrame` 与
+`IdeWorkbenchScaffold` 在页面切换期间保持同一 Element 和稳定 Key，首页、设置、
+Agent 管理与使用统计只切换 Navigation、Canvas、Inspector slot 内容，不再创建相互
+独立的顶层页面骨架。Feature 仍持有自己的业务组件和离开确认逻辑，共享 Scaffold 只做
+布局与 Overlay 编排。
+
+| 页面 | Navigation slot | Canvas slot | Inspector slot | 响应式策略 |
+|---|---|---|---|---|
+| Agent 首页 | Projects / Context | 常驻 `AgentPane` | Files / Tools | Wide 可内联左右 Pane；Medium 内联 Navigation、Inspector 按需 Overlay；Compact 左右 Pane 均按需 Overlay |
+| 设置 / Agent 管理 | `SettingsNavigationPane` | `SettingsPageCanvas`，Agent 分区内承载 `AgentManagementPage` | 无 | Wide/Medium 内联设置导航；Compact 由 Rail 打开统一 Navigation Overlay |
+| 使用统计 | 无 | `UsageStatisticsPage` | 无 | 所有模式只占用 Canvas，左右 Rail 与 Workbench 骨架继续保留 |
+
+Canvas 使用延迟挂载的保活页面栈：`AgentPane` 始终挂载，设置和使用统计在首次访问后
+保留。页面切换只暂停非活动页 ticker，不销毁 Agent 的 State、输入控制器或滚动控制器。
+Workbench 的 Canvas Flex slot 自身也使用稳定 Key，保证 Navigation/Inspector slot
+增删导致 Canvas 在 `Row` 中换位时仍复用原 Element。Pane 宽度和用户控制的可见状态由
+`IdeHome` 持有，离开其他页面再返回时保持不变。
+
+设置 Feature 对 Workbench 暴露 `SettingsNavigationPane` 与 `SettingsPageCanvas`；
+`SettingsPageCanvasState.confirmCanLeave()` 继续负责 Agent 配置编辑器的未保存内容确认，
+业务规则没有下沉到 `IdeWorkbenchScaffold`。
 
 ### 三栏工作台
 
@@ -146,6 +175,13 @@ UsageStatisticsController
 capability 采用保守声明：不支持的操作不进入 Project thread 菜单、Agent header 或
 composer，应用层误调用时抛出 `UnsupportedError`。`AgentProviderBootstrapPolicy`
 额外约束 provider 是否必须在 workspace 下启动、是否允许 eager model preload。
+
+所有 JSON-RPC provider 在裸 transport 外统一使用 `ProviderRuntimeJsonRpcPeer`。该边界
+维护 `stopped / starting / initializing / ready / failed / closing / closed` 生命周期，
+为每次连接生成 `runtimeId + connectionEpoch`，并把 scope 注入服务端反向请求。进入
+`closing` 后拒绝新的 client RPC；关闭 transport 后等待已入场的 start、RPC 和
+server-request handler 排空。Codex 的 `AgentRuntimeInfo` 同步暴露 runtime identity，
+Grok/Cursor 通过可选 `AgentRuntimeLifecycleProvider` 暴露中立生命周期，不把协议状态泄漏到 UI。
 
 ### 默认 provider
 

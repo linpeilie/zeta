@@ -5,6 +5,7 @@ const _codexMinimumSupportedVersion = _CodexSemanticVersion(0, 142, 5);
 
 AgentRuntimeInfo _codexRuntimeInfoFromInitialize(
   Object? value, {
+  required AgentRuntimeScope runtimeScope,
   required String? configuredVersion,
 }) {
   final result = _map(value);
@@ -26,6 +27,8 @@ AgentRuntimeInfo _codexRuntimeInfoFromInitialize(
   final platformOs = _string(result['platformOs']);
 
   return AgentRuntimeInfo(
+    runtimeId: runtimeScope.runtimeId,
+    connectionEpoch: runtimeScope.connectionEpoch,
     protocolName: 'codex-app-server',
     protocolVersion: 'v2-stable/0.144.5',
     cliVersion: version?.toString(),

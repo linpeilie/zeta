@@ -37,8 +37,10 @@ void main() {
       expect(models.models, hasLength(2));
       expect(models.models.first.contextWindowTokens, 500000);
       expect(models.models.last.contextWindowTokens, 200000);
+      expect(provider.lifecycleState, AgentProviderLifecycleState.ready);
 
       await provider.dispose();
+      expect(provider.lifecycleState, AgentProviderLifecycleState.closed);
     });
 
     test(

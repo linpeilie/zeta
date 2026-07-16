@@ -980,12 +980,19 @@ Phase 0 总体验收：
 
 建议拆分为 3 个 PR。
 
-#### PR 1.1：连接 Gate 与 Epoch
+#### PR 1.1：连接 Gate 与 Epoch（已完成）
 
-- Provider 生命周期状态机。
-- closing 后禁止新请求。
-- pending request 使用 runtime/epoch 作用域。
-- dispose 等待或取消 in-flight handler。
+- [x] Provider 生命周期状态机。
+- [x] closing 后禁止新请求。
+- [x] pending request 使用 runtime/epoch 作用域。
+- [x] dispose 等待或取消 in-flight handler。
+
+实现落点：`ProviderRuntimeJsonRpcPeer` 包装 Codex/Grok/Cursor 的现有
+`JsonRpcPeer`，统一生成 `AgentRuntimeScope(runtimeId, connectionEpoch)`、门控 client
+RPC、给反向请求注入连接作用域，并追踪 start / client RPC / server-request handler。
+Provider dispose 先进入 `closing`，处理 pending 交互并关闭 transport，再等待已入场操作
+排空后进入 `closed`；Cursor 工作区切换会创建新的 runtime scope。协议 transport 仍负责
+JSONL 分帧和请求 ID 关联，没有新建平行传输层。
 
 #### PR 1.2：资源键调度器
 
@@ -1259,4 +1266,3 @@ thread/fork.lastTurnId
 - `docs/codex_app_server_protocol.md`：Zeta 协议固定与升级流程
 - `plan/codex_app_server_adaptation_plan.md`：已有适配清单与历史记录
 - 本次目标源码：`D:\Development\Workspace\OpenSource\codex-rust-v0.144.5`
-

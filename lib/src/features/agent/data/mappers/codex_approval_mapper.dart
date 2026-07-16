@@ -68,6 +68,7 @@ class _CodexApprovalMapper {
     final pendingApproval = _PendingApproval(
       id: id,
       requestId: request.id,
+      runtimeScope: request.runtimeScope,
       method: request.method,
       params: request.params,
     );
@@ -216,6 +217,7 @@ class _PendingApproval {
   const _PendingApproval({
     required this.id,
     required this.requestId,
+    required this.runtimeScope,
     required this.method,
     required this.params,
   });
@@ -225,6 +227,9 @@ class _PendingApproval {
 
   /// JSON-RPC 请求的原始 id，用于回写响应时定位。
   final Object requestId;
+
+  /// 收到请求时的连接身份；Provider 重启后禁止向新连接回写旧审批。
+  final AgentRuntimeScope? runtimeScope;
 
   /// 审批方法名，如 item/commandExecution/requestApproval。
   final String method;

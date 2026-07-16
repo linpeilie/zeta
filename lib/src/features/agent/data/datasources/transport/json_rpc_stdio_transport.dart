@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/domain/agent_runtime_models.dart';
 
 final _log = loggerFor('zeta.agent.json_rpc_stdio');
 
@@ -60,11 +61,24 @@ class JsonRpcNotification {
     required this.method,
     required this.params,
     required this.raw,
+    this.runtimeScope,
   });
 
   final String method;
   final Map<String, Object?> params;
   final Map<String, Object?> raw;
+
+  /// 由 Provider runtime gate 注入；裸 transport 消息可以为空。
+  final AgentRuntimeScope? runtimeScope;
+
+  JsonRpcNotification withRuntimeScope(AgentRuntimeScope scope) {
+    return JsonRpcNotification(
+      method: method,
+      params: params,
+      raw: raw,
+      runtimeScope: scope,
+    );
+  }
 }
 
 /// 服务端请求消息。
@@ -74,12 +88,26 @@ class JsonRpcRequest {
     required this.method,
     required this.params,
     required this.raw,
+    this.runtimeScope,
   });
 
   final Object id;
   final String method;
   final Map<String, Object?> params;
   final Map<String, Object?> raw;
+
+  /// 由 Provider runtime gate 注入，用于约束反向请求的响应连接。
+  final AgentRuntimeScope? runtimeScope;
+
+  JsonRpcRequest withRuntimeScope(AgentRuntimeScope scope) {
+    return JsonRpcRequest(
+      id: id,
+      method: method,
+      params: params,
+      raw: raw,
+      runtimeScope: scope,
+    );
+  }
 }
 
 /// JSON-RPC error object。
