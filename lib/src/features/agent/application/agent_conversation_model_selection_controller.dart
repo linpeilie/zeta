@@ -174,9 +174,75 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
     _notify();
   }
 
+  /// 用当前 thread/session 已知的运行时配置回填选择器，但不持久化为 provider 默认值。
+  void applyRuntimeSelection(AgentModelSelection selection) {
+    _generation += 1;
+    _completeAllWaiters(false);
+    _revision = 0;
+    _processedRevision = 0;
+    _savingModelIds.clear();
+    _compatibilityConflict = null;
+    _saveError = null;
+    _selectionNotice = null;
+    _failedSnapshot = null;
+
+    final resolvedModelId = selection.modelId?.trim().isNotEmpty == true
+        ? selection.modelId!.trim()
+        : _modelSelection.modelId;
+    if (resolvedModelId == null || resolvedModelId.isEmpty) {
+      return;
+    }
+    final model = findModel(resolvedModelId);
+    final nextSelection = selection.modelId == resolvedModelId
+        ? selection
+        : AgentModelSelection(
+            modelId: resolvedModelId,
+            reasoningEffort: selection.reasoningEffort,
+            serviceTierId: selection.serviceTierId,
+          );
+    if (model != null) {
+      final fastTier = agentFastServiceTier(model);
+      final preference = _normalizePreference(
+        model,
+        AgentModelPreference(
+          modelId: model.id,
+          reasoningEffort: nextSelection.reasoningEffort,
+          fastEnabled:
+              fastTier != null && fastTier.id == nextSelection.serviceTierId,
+          serviceTierId: nextSelection.serviceTierId,
+          updatedAt: _clock().toUtc(),
+        ),
+      );
+      _preferences = <String, AgentModelPreference>{
+        ..._preferences,
+        model.id: preference,
+      };
+      _modelSelection = preference.selection;
+    } else {
+      _preferences = <String, AgentModelPreference>{
+        ..._preferences,
+        resolvedModelId: AgentModelPreference(
+          modelId: resolvedModelId,
+          reasoningEffort: nextSelection.reasoningEffort,
+          fastEnabled: nextSelection.serviceTierId != null,
+          serviceTierId: nextSelection.serviceTierId,
+          updatedAt: _clock().toUtc(),
+        ),
+      };
+      _modelSelection = nextSelection;
+    }
+    _needsPreferenceMigration = false;
+    _confirmedSelection = _modelSelection;
+    _confirmedPreferences = Map<String, AgentModelPreference>.from(
+      _preferences,
+    );
+    _provider?.updateModelSelection(_modelSelection);
+    _notify();
+  }
+
   AgentModelInfo? findModel(String modelId) {
     for (final model in models) {
-      if (model.id == modelId) {
+      if (model.id == modelId || model.model == modelId) {
         return model;
       }
     }

@@ -2160,6 +2160,143 @@ void main() {
     });
 
     test(
+      'switchThread prefers current session selection and falls back to the latest turn model',
+      () async {
+        final provider = _FakeAgentProvider(
+          availableModels: const AgentModelList(
+            models: <AgentModelInfo>[
+              AgentModelInfo(
+                id: 'gpt-5.5',
+                model: 'gpt-5.5',
+                displayName: 'GPT-5.5',
+                isDefault: true,
+                supportedReasoningEfforts: <AgentModelReasoningEffort>[
+                  AgentModelReasoningEffort(effort: 'low'),
+                  AgentModelReasoningEffort(effort: 'high'),
+                ],
+                defaultReasoningEffort: 'low',
+                serviceTiers: <AgentModelServiceTier>[
+                  AgentModelServiceTier(id: 'priority', name: 'Fast'),
+                ],
+              ),
+            ],
+          ),
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'thread-1': const AgentThreadHistorySnapshot(
+              threadId: 'thread-1',
+              turns: <AgentHistoryTurn>[
+                AgentHistoryTurn(
+                  id: 'turn-1',
+                  model: 'gpt-5.5',
+                  raw: <String, Object?>{
+                    'turnContext': <String, Object?>{
+                      'model': 'gpt-5.5',
+                      'effort': 'low',
+                      'serviceTier': 'priority',
+                    },
+                  },
+                ),
+                AgentHistoryTurn(id: 'turn-2'),
+              ],
+              currentTurn: AgentHistoryTurn(
+                id: 'turn-2',
+                raw: <String, Object?>{
+                  'turnContext': <String, Object?>{'effort': 'high'},
+                },
+              ),
+            ),
+          },
+        );
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.loadModels();
+        await viewModel.switchThread(_thread());
+
+        expect(viewModel.selectedModelId, 'gpt-5.5');
+        expect(viewModel.selectedReasoningEffort, 'high');
+        expect(viewModel.selectedServiceTierId, 'priority');
+      },
+    );
+
+    test(
+      'session config update keeps last turn model when current session omits model',
+      () async {
+        final provider = _FakeAgentProvider(
+          availableModels: const AgentModelList(
+            models: <AgentModelInfo>[
+              AgentModelInfo(
+                id: 'gpt-5.5',
+                model: 'gpt-5.5',
+                displayName: 'GPT-5.5',
+                isDefault: true,
+                supportedReasoningEfforts: <AgentModelReasoningEffort>[
+                  AgentModelReasoningEffort(effort: 'low'),
+                  AgentModelReasoningEffort(effort: 'high'),
+                ],
+                defaultReasoningEffort: 'low',
+                serviceTiers: <AgentModelServiceTier>[
+                  AgentModelServiceTier(id: 'priority', name: 'Fast'),
+                ],
+              ),
+            ],
+          ),
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'thread-1': const AgentThreadHistorySnapshot(
+              threadId: 'thread-1',
+              turns: <AgentHistoryTurn>[
+                AgentHistoryTurn(
+                  id: 'turn-1',
+                  model: 'gpt-5.5',
+                  raw: <String, Object?>{
+                    'turnContext': <String, Object?>{
+                      'model': 'gpt-5.5',
+                      'effort': 'low',
+                    },
+                  },
+                ),
+              ],
+            ),
+          },
+        );
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.loadModels();
+        await viewModel.switchThread(_thread());
+        provider.emit(
+          const AgentSessionConfigUpdatedEvent(
+            sessionId: 'thread-1',
+            options: <AgentSessionConfigOption>[
+              AgentSessionConfigOption(
+                id: 'thought',
+                name: 'Thought level',
+                category: 'thought_level',
+                kind: AgentSessionConfigOptionKind.select,
+                currentValue: 'high',
+                values: <AgentSessionConfigValue>[
+                  AgentSessionConfigValue(id: 'high', label: 'High'),
+                ],
+              ),
+              AgentSessionConfigOption(
+                id: 'fast',
+                name: 'Fast',
+                category: 'model_config',
+                kind: AgentSessionConfigOptionKind.boolean,
+                currentValue: true,
+              ),
+            ],
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(viewModel.selectedModelId, 'gpt-5.5');
+        expect(viewModel.selectedReasoningEffort, 'high');
+        expect(viewModel.selectedServiceTierId, 'priority');
+      },
+    );
+
+    test(
       'switchActiveProvider defers workspace-scoped Cursor initialization',
       () async {
         // Arrange

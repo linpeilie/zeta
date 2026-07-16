@@ -786,6 +786,313 @@ class AgentConversationViewModel extends ChangeNotifier {
     _publishUiChanges(composer: true);
   }
 
+  void _applyThreadSelectionFromHistory(AgentThreadHistorySnapshot history) {
+    final fallback = _latestHistorySelectionPatch(history.turns);
+    final current = _selectionPatchFromHistoryTurn(history.currentTurn);
+    _applyThreadSelectionPatch(_mergeThreadSelectionPatches(fallback, current));
+  }
+
+  void _applyThreadSelectionFromThreadSettings({String? modelId}) {
+    final cleanedModelId = _nonEmptyValue(modelId);
+    if (cleanedModelId == null) {
+      return;
+    }
+    _applyThreadSelectionPatch(
+      _ThreadModelSelectionPatch(modelId: cleanedModelId),
+    );
+  }
+
+  void _applyThreadSelectionFromSessionConfigOptions(
+    List<AgentSessionConfigOption> options,
+  ) {
+    String? modelId;
+    Object? reasoningEffort = _threadModelSelectionUnset;
+    Object? serviceTierId = _threadModelSelectionUnset;
+    Object? fastEnabled = _threadModelSelectionUnset;
+    for (final option in options) {
+      if (option.category == 'model') {
+        final value = _stringValue(option.currentValue);
+        if (value != null) {
+          modelId = value;
+        }
+        continue;
+      }
+      if (option.category == 'thought_level') {
+        if (option.currentValue == null) {
+          reasoningEffort = null;
+        } else {
+          final value = _stringValue(option.currentValue);
+          if (value != null) {
+            reasoningEffort = value;
+          }
+        }
+        continue;
+      }
+      if (option.category == 'model_config') {
+        if (option.kind == AgentSessionConfigOptionKind.boolean) {
+          final value = _boolValue(option.currentValue);
+          if (value != null) {
+            fastEnabled = value;
+          }
+          continue;
+        }
+        if (option.currentValue == null) {
+          serviceTierId = null;
+          continue;
+        }
+        final value = _stringValue(option.currentValue);
+        if (value != null) {
+          serviceTierId = value;
+        }
+      }
+    }
+    final patch = _ThreadModelSelectionPatch(
+      modelId: modelId,
+      reasoningEffort: reasoningEffort,
+      serviceTierId: serviceTierId,
+      fastEnabled: fastEnabled,
+    );
+    if (!patch.hasAny) {
+      return;
+    }
+    _applyThreadSelectionPatch(patch);
+  }
+
+  void _applyThreadSelectionPatch(_ThreadModelSelectionPatch? patch) {
+    if (patch == null || !patch.hasAny) {
+      return;
+    }
+    final currentSelection = _modelSelectionController.selection;
+    final requestedModelId = _nonEmptyValue(patch.modelId);
+    final resolvedModel = _resolveModelInfo(
+      requestedModelId ?? currentSelection.modelId,
+    );
+    final targetModelId =
+        resolvedModel?.id ?? requestedModelId ?? currentSelection.modelId;
+    if (targetModelId == null || targetModelId.isEmpty) {
+      return;
+    }
+
+    String? reasoningEffort;
+    String? serviceTierId;
+    if (resolvedModel != null) {
+      final basePreference = currentSelection.modelId == resolvedModel.id
+          ? AgentModelPreference(
+              modelId: resolvedModel.id,
+              reasoningEffort: currentSelection.reasoningEffort,
+              fastEnabled:
+                  agentFastServiceTier(resolvedModel)?.id ==
+                  currentSelection.serviceTierId,
+              serviceTierId: currentSelection.serviceTierId,
+              updatedAt: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+            )
+          : modelConfigUiState.effectivePreference(resolvedModel);
+      reasoningEffort =
+          identical(patch.reasoningEffort, _threadModelSelectionUnset)
+          ? basePreference.reasoningEffort
+          : patch.reasoningEffort as String?;
+      if (!identical(patch.fastEnabled, _threadModelSelectionUnset)) {
+        final fastTier = agentFastServiceTier(resolvedModel);
+        serviceTierId = (patch.fastEnabled as bool?) == true
+            ? fastTier?.id
+            : null;
+      } else if (!identical(patch.serviceTierId, _threadModelSelectionUnset)) {
+        serviceTierId = _normalizeThreadServiceTierId(
+          resolvedModel,
+          patch.serviceTierId as String?,
+        );
+      } else {
+        serviceTierId = basePreference.serviceTierId;
+      }
+    } else {
+      final modelChanged =
+          requestedModelId != null &&
+          requestedModelId != currentSelection.modelId;
+      reasoningEffort =
+          identical(patch.reasoningEffort, _threadModelSelectionUnset)
+          ? (modelChanged ? null : currentSelection.reasoningEffort)
+          : patch.reasoningEffort as String?;
+      if (!identical(patch.fastEnabled, _threadModelSelectionUnset)) {
+        serviceTierId = (patch.fastEnabled as bool?) == true && !modelChanged
+            ? currentSelection.serviceTierId
+            : null;
+      } else if (!identical(patch.serviceTierId, _threadModelSelectionUnset)) {
+        serviceTierId = patch.serviceTierId as String?;
+      } else {
+        serviceTierId = modelChanged ? null : currentSelection.serviceTierId;
+      }
+    }
+
+    _modelSelectionController.applyRuntimeSelection(
+      AgentModelSelection(
+        modelId: targetModelId,
+        reasoningEffort: reasoningEffort,
+        serviceTierId: serviceTierId,
+      ),
+    );
+  }
+
+  _ThreadModelSelectionPatch? _latestHistorySelectionPatch(
+    List<AgentHistoryTurn> turns,
+  ) {
+    for (var index = turns.length - 1; index >= 0; index -= 1) {
+      final patch = _selectionPatchFromHistoryTurn(turns[index]);
+      if (patch != null && _nonEmptyValue(patch.modelId) != null) {
+        return patch;
+      }
+    }
+    for (var index = turns.length - 1; index >= 0; index -= 1) {
+      final patch = _selectionPatchFromHistoryTurn(turns[index]);
+      if (patch != null && patch.hasAny) {
+        return patch;
+      }
+    }
+    return null;
+  }
+
+  _ThreadModelSelectionPatch? _selectionPatchFromHistoryTurn(
+    AgentHistoryTurn? turn,
+  ) {
+    if (turn == null) {
+      return null;
+    }
+    final turnContext = _objectMap(turn.raw['turnContext']);
+    final source = turnContext.isEmpty ? turn.raw : turnContext;
+
+    Object? reasoningEffort = _threadModelSelectionUnset;
+    if (source.containsKey('effort')) {
+      reasoningEffort = _stringValue(source['effort']);
+    } else if (source.containsKey('reasoningEffort')) {
+      reasoningEffort = _stringValue(source['reasoningEffort']);
+    }
+
+    Object? serviceTierId = _threadModelSelectionUnset;
+    if (source.containsKey('serviceTier')) {
+      serviceTierId = _stringValue(source['serviceTier']);
+    } else if (source.containsKey('service_tier')) {
+      serviceTierId = _stringValue(source['service_tier']);
+    } else if (source.containsKey('serviceTierId')) {
+      serviceTierId = _stringValue(source['serviceTierId']);
+    } else if (source.containsKey('service_tier_id')) {
+      serviceTierId = _stringValue(source['service_tier_id']);
+    }
+
+    Object? fastEnabled = _threadModelSelectionUnset;
+    if (source.containsKey('fast')) {
+      fastEnabled = _boolValue(source['fast']);
+    } else if (source.containsKey('fastMode')) {
+      fastEnabled = _boolValue(source['fastMode']);
+    } else if (source.containsKey('isFast')) {
+      fastEnabled = _boolValue(source['isFast']);
+    } else if (source.containsKey('fast_enabled')) {
+      fastEnabled = _boolValue(source['fast_enabled']);
+    }
+
+    final patch = _ThreadModelSelectionPatch(
+      modelId: _nonEmptyValue(turn.model) ?? _stringValue(source['model']),
+      reasoningEffort: reasoningEffort,
+      serviceTierId: serviceTierId,
+      fastEnabled: fastEnabled,
+    );
+    return patch.hasAny ? patch : null;
+  }
+
+  _ThreadModelSelectionPatch? _mergeThreadSelectionPatches(
+    _ThreadModelSelectionPatch? base,
+    _ThreadModelSelectionPatch? overlay,
+  ) {
+    if (base == null) {
+      return overlay;
+    }
+    if (overlay == null) {
+      return base;
+    }
+    final merged = _ThreadModelSelectionPatch(
+      modelId: _nonEmptyValue(overlay.modelId) ?? base.modelId,
+      reasoningEffort:
+          identical(overlay.reasoningEffort, _threadModelSelectionUnset)
+          ? base.reasoningEffort
+          : overlay.reasoningEffort,
+      serviceTierId:
+          identical(overlay.serviceTierId, _threadModelSelectionUnset)
+          ? base.serviceTierId
+          : overlay.serviceTierId,
+      fastEnabled: identical(overlay.fastEnabled, _threadModelSelectionUnset)
+          ? base.fastEnabled
+          : overlay.fastEnabled,
+    );
+    return merged.hasAny ? merged : null;
+  }
+
+  AgentModelInfo? _resolveModelInfo(String? modelId) {
+    final candidate = _nonEmptyValue(modelId);
+    if (candidate == null) {
+      return null;
+    }
+    for (final model in models) {
+      if (model.id == candidate || model.model == candidate) {
+        return model;
+      }
+    }
+    return null;
+  }
+
+  String? _normalizeThreadServiceTierId(
+    AgentModelInfo model,
+    String? serviceTierId,
+  ) {
+    final candidate = _nonEmptyValue(serviceTierId);
+    if (candidate == null) {
+      return null;
+    }
+    for (final tier in model.serviceTiers) {
+      if (tier.id == candidate) {
+        return tier.id;
+      }
+    }
+    final lowerCandidate = candidate.toLowerCase();
+    final fastTier = agentFastServiceTier(model);
+    if (fastTier != null) {
+      final fastTierId = fastTier.id.trim().toLowerCase();
+      final fastTierName = fastTier.name.trim().toLowerCase();
+      if (lowerCandidate == fastTierId ||
+          lowerCandidate == fastTierName ||
+          lowerCandidate == 'fast' ||
+          lowerCandidate == 'priority') {
+        return fastTier.id;
+      }
+    }
+    return candidate;
+  }
+
+  Map<String, Object?> _objectMap(Object? value) {
+    if (value is! Map) {
+      return const <String, Object?>{};
+    }
+    return <String, Object?>{
+      for (final entry in value.entries) entry.key.toString(): entry.value,
+    };
+  }
+
+  String? _stringValue(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    return _nonEmptyValue(value.toString());
+  }
+
+  bool? _boolValue(Object? value) {
+    if (value is bool) {
+      return value;
+    }
+    return null;
+  }
+
+  String? _nonEmptyValue(String? value) {
+    final trimmed = value?.trim();
+    return trimmed == null || trimmed.isEmpty ? null : trimmed;
+  }
+
   /// 更新当前项目和文件上下文。
   ///
   /// 项目变更时清空内存中的 session/turn；如果恢复状态里带了 thread id，则保留到
@@ -1150,6 +1457,7 @@ class AgentConversationViewModel extends ChangeNotifier {
         return;
       }
       _timeline.applyHistorySnapshot(history, thread);
+      _applyThreadSelectionFromHistory(history);
       // 再次锁定 resume：避免异步路径把 requiresResumed 清掉。
       _restoredSessionId = thread.id;
       _selectedProviderId = thread.providerId;
@@ -1843,10 +2151,7 @@ class AgentConversationViewModel extends ChangeNotifier {
         if (!_shouldHandleEventForCurrentThread(sessionId: event.threadId)) {
           break;
         }
-        final model = event.model?.trim();
-        if (model != null && model.isNotEmpty) {
-          unawaited(selectModel(model));
-        }
+        _applyThreadSelectionFromThreadSettings(modelId: event.model);
         _permissionSelectionController.applyThreadSettings(
           approvalPolicy: event.approvalPolicy,
           sandboxPolicy: event.sandboxPolicy,
@@ -1988,6 +2293,7 @@ class AgentConversationViewModel extends ChangeNotifier {
           break;
         }
         _sessionConfigOptions = event.options;
+        _applyThreadSelectionFromSessionConfigOptions(event.options);
         _publishUiChanges(composer: true);
       case AgentTurnDiffEvent():
         if (!_shouldHandleEventForCurrentThread(
@@ -2505,4 +2811,26 @@ class AgentConversationViewModel extends ChangeNotifier {
       autoScroll: autoScroll,
     );
   }
+}
+
+const Object _threadModelSelectionUnset = Object();
+
+final class _ThreadModelSelectionPatch {
+  const _ThreadModelSelectionPatch({
+    this.modelId,
+    this.reasoningEffort = _threadModelSelectionUnset,
+    this.serviceTierId = _threadModelSelectionUnset,
+    this.fastEnabled = _threadModelSelectionUnset,
+  });
+
+  final String? modelId;
+  final Object? reasoningEffort;
+  final Object? serviceTierId;
+  final Object? fastEnabled;
+
+  bool get hasAny =>
+      (modelId != null && modelId!.isNotEmpty) ||
+      !identical(reasoningEffort, _threadModelSelectionUnset) ||
+      !identical(serviceTierId, _threadModelSelectionUnset) ||
+      !identical(fastEnabled, _threadModelSelectionUnset);
 }

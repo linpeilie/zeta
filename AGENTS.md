@@ -1,175 +1,157 @@
-# Project AI Rules
+# 项目 AI 规则
 
-This is a Flutter project named `zeta`. Follow these rules when making
-changes in this repository.
+这是一个名为 `zeta` 的 Flutter 项目。在此仓库中进行修改时，请遵循以下规则。
 
-## Project Context
+## 项目背景
 
-- The app is a Flutter Desktop Agent IDE shell with `lib/main.dart` as the
-  entry point and `lib/src/app` as the composition boundary.
-- Supported generated platform folders are `linux`, `macos`, and `windows`.
-- The project uses `flutter_lints` through `analysis_options.yaml`.
-- Dart and Flutter skills are installed under `.agents/skills`; use the
-  relevant skill for focused tasks such as widget tests, integration tests,
-  static analysis, routing, localization, JSON serialization, responsive
-  layout, package conflicts, or coverage.
+- 该应用是一个 Flutter 桌面端 Agent IDE 外壳，入口为 `lib/main.dart`，
+  `lib/src/app` 是组合边界。
+- 当前支持的生成平台目录为 `linux`、`macos` 和 `windows`。
+- 项目通过 `analysis_options.yaml` 使用 `flutter_lints`。
+- Dart 和 Flutter 技能安装在 `.agents/skills` 下；在处理 widget 测试、
+  集成测试、静态分析、路由、本地化、JSON 序列化、响应式布局、依赖冲突
+  或覆盖率等聚焦任务时，请使用相应技能。
 
-## Default Workflow
+## 默认工作流
 
-- Prefer small, focused changes that match the current feature-sliced project
-  shape.
-- Run `dart format .` after editing Dart files.
-- Run `flutter analyze` before finishing code changes.
-- Run `flutter test` when tests exist or when adding/changing behavior.
-- If a generated file or platform file changes unexpectedly, explain why before
-  keeping the change.
+- 优先进行小而聚焦的改动，并保持与当前 feature-sliced 项目结构一致。
+- 编辑 Dart 文件后运行 `dart format .`。
+- 结束代码修改前运行 `flutter analyze`。
+- 当项目中已有测试，或你新增/修改了行为时，运行 `flutter test`。
+- 如果生成文件或平台文件出现了非预期改动，在保留这些改动之前先说明原因。
 
-## Flutter And Dart Style
+## Flutter 与 Dart 风格
 
-- Use modern, sound null-safe Dart.
-- Favor `const` constructors and immutable widgets wherever possible.
-- Compose UI from small widgets; use private widget classes when a `build`
-  method becomes large.
-- Keep functions short and single-purpose.
-- Use descriptive `camelCase` names for members and `PascalCase` for classes.
-- Use `snake_case.dart` file names.
-- Avoid `print`; use `dart:developer` logging for diagnostics that should stay
-  in code.
-- Add `///` documentation for public APIs, but avoid comments that merely
-  restate obvious code.
+- 使用现代、可靠的空安全 Dart。
+- 尽可能优先使用 `const` 构造函数和不可变 Widget。
+- 用小型 Widget 组合 UI；当 `build` 方法过大时，使用私有 Widget 类拆分。
+- 保持函数简短且职责单一。
+- 成员使用语义清晰的 `camelCase` 命名，类使用 `PascalCase` 命名。
+- 文件名使用 `snake_case.dart`。
+- 避免使用 `print`；对需要保留在代码中的诊断信息，使用 `dart:developer`
+  日志。
+- 为公共 API 添加 `///` 文档注释，但避免写仅仅重复显而易见代码含义的注释。
 - 新实现的代码优先使用中文注释；公共 API、协议适配、状态机、错误处理和不易
   直观看懂的分支应尽可能补充 `///` 或简短行内注释，同时避免只复述代码字面
   行为的空注释。
 
-## Architecture
+## 架构
 
-- Treat the current `lib/src` structure as feature-sliced architecture:
-  `app` composes runtime dependencies, `core` holds cross-cutting utilities,
-  `features/<feature>` owns domain/application/data/presentation code, and
-  `ui/core` holds shared theme and shell widgets.
-- Keep dependency direction explicit: presentation depends on application and
-  domain contracts; application coordinates workflows; data implements external
-  protocols and storage; domain models stay pure and UI-agnostic.
-- Do not put new feature code back into broad top-level `data`, `domain`, or
-  `ui` buckets when a feature package is the natural owner.
-- Keep `main.dart` limited to startup, global error logging, desktop window
-  bootstrap, and `runApp`. Put app wiring in `lib/src/app`.
-- Keep `IdeHome` as the single composition boundary for the persistent
-  `WindowFrame` and `IdeWorkbenchScaffold`. Main pages provide Navigation,
-  Canvas, and Inspector slot content; feature pages must not replace the top-level
-  workbench or move feature routing rules into the shared scaffold.
-- Keep concrete protocol details such as Codex app-server JSON-RPC, JSONL
-  history parsing, and provider configuration inside the agent data layer and
-  mappers. UI code should consume neutral domain events and provider contracts.
-- For simple local UI state, prefer Flutter built-ins such as `StatefulWidget`,
-  `ValueNotifier`, `ValueListenableBuilder`, `FutureBuilder`, and
-  `StreamBuilder`.
-- When state becomes shared or complex, split responsibilities into:
-  immutable domain state, application controllers for async orchestration, and
-  presentation view models or listenable signals for rendering.
-- Use token/version guards for async loads that can be superseded, and check
-  disposed state before notifying listeners.
-- Expose collection state as unmodifiable snapshots unless mutation is an
-  intentional part of the API.
-- Prefer constructor dependency injection for testability.
-- Add third-party state management only when explicitly requested or clearly
-  justified by the feature.
+- 将当前 `lib/src` 结构视为 feature-sliced 架构：
+  `app` 负责组合运行时依赖，`core` 保存横切工具，
+  `features/<feature>` 拥有 domain/application/data/presentation 代码，
+  `ui/core` 保存共享主题和 shell Widget。
+- 保持依赖方向清晰：presentation 依赖 application 和 domain 契约；
+  application 负责工作流编排；data 实现外部协议与存储；domain 模型保持纯净，
+  不依赖 UI。
+- 当某个 feature 包天然是代码归属地时，不要再把新功能代码放回顶层宽泛的
+  `data`、`domain` 或 `ui` 目录。
+- 将 `main.dart` 限制为启动、全局错误日志、桌面窗口初始化和 `runApp`；
+  应用装配逻辑放在 `lib/src/app`。
+- 保持 `IdeHome` 作为持久 `WindowFrame` 和 `IdeWorkbenchScaffold`
+  的唯一组合边界。主页面提供 Navigation、Canvas 和 Inspector 的槽位内容；
+  feature 页面不得替换顶层 workbench，也不得把 feature 路由规则挪到共享
+  scaffold 中。
+- 将 Codex app-server JSON-RPC、JSONL 历史解析、provider 配置等具体协议细节
+  保留在 agent 数据层和 mapper 中。UI 代码应消费中立的 domain 事件和 provider
+  契约。
+- 对于简单的本地 UI 状态，优先使用 Flutter 内建能力，例如 `StatefulWidget`、
+  `ValueNotifier`、`ValueListenableBuilder`、`FutureBuilder` 和
+  `StreamBuilder`。
+- 当状态变得共享或复杂时，将职责拆分为：不可变 domain state、负责异步编排的
+  application controller，以及负责渲染的 presentation view model 或
+  listenable signal。
+- 对可能被后续请求覆盖的异步加载使用 token/version 守卫，并在通知监听者前检查
+  disposed 状态。
+- 除非 API 明确要求可变，否则对集合状态暴露不可修改快照。
+- 为了可测试性，优先使用构造函数依赖注入。
+- 只有在明确要求或 feature 有充分理由时，才引入第三方状态管理。
 
-## Dependencies
+## 依赖
 
-- Use `flutter pub add <package>` for runtime dependencies.
-- Use `flutter pub add dev:<package>` for development dependencies.
-- Before adding a package, check whether Flutter or Dart already provides a
-  simple built-in solution.
-- Explain the purpose of every new dependency in the final summary.
+- 运行时依赖使用 `flutter pub add <package>` 添加。
+- 开发依赖使用 `flutter pub add dev:<package>` 添加。
+- 添加新包前，先检查 Flutter 或 Dart 是否已经提供了足够简单的内建方案。
+- 在最终总结中说明每个新增依赖的用途。
 
-## UI, Layout, And Accessibility
+## UI、布局与可访问性
 
-- Theming is built on `shadcn_flutter` plus design tokens in `lib/src/ui/core/`:
-  `IdeColors`, `IdeRadius`/`IdeEffects`, `IdeSpacing`, `IdeTextStyles`, and
-  `IdeMotion`. Graphite tokens are the semantic source of truth via
-  `IdeThemeScope`; `sf.ThemeData` is only a projection for third-party widgets.
-  Do not use Material `ThemeData`/`ColorScheme.fromSeed` styling,
-  raw `Color(0x...)` values, hand-written `BoxShadow` lists, or ad-hoc
-  `BorderRadius.circular(...)` in feature code.
-- Import `shadcn_flutter` only as `sf`
-  (`import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;`). Never use bare
-  `Shad*` APIs from the removed `shadcn_ui` package.
-- Resolve brightness through `IdeThemeScope.of(context).brightness` or
-  `sf.Theme.of(context).brightness`. Prefer `IdeColors.of(context)` /
-  `IdeTextStyles.of(context)` for semantic tokens.
-- Use `showIdeToast` from `lib/src/ui/core/ide_toast.dart` for IDE notifications;
-  do not call `sf.showToast` ad hoc from feature pages.
-- Build responsive layouts that work on desktop-sized windows as well as narrow
-  viewports.
-- Preserve the Agent Canvas across main-page switches. Stable keys belong on
-  Flex children that can move when slots appear or disappear, and page-switch
-  tests must protect the Agent state, draft, scroll position, pane widths, and
-  pane visibility.
-- Use `LayoutBuilder`, `Flexible`, `Expanded`, `Wrap`, scroll views, and builder
-  constructors to avoid overflow.
-- Reuse `ui/core` primitives such as `Pane`, `PanelCard`,
-  `PaneInteractiveSurface`, `IdeTabs`/`IdeTab`, `IdeContextMenu`, `IdeStatusCard`,
-  `IdeCollapsibleCard`, and the window frame before introducing feature-local
-  visual primitives.
-- Keep the IDE UI compact, dense, and scannable. Long file paths, thread titles,
-  tool summaries, and status text must use bounded layout and ellipsis.
-- Use stable `ValueKey`s for repeated interactive timeline, thread, and file
-  tree rows. Add `RepaintBoundary` around expensive or high-frequency regions
-  such as streaming turns, highlighted code, and diff details.
-- Ensure text remains readable with larger system text sizes.
-- Add semantic labels for non-text controls and important custom widgets.
+- 主题系统建立在 `shadcn_flutter` 和 `lib/src/ui/core/` 下的设计令牌之上：
+  `IdeColors`、`IdeRadius`/`IdeEffects`、`IdeSpacing`、`IdeTextStyles` 和
+  `IdeMotion`。Graphite tokens 通过 `IdeThemeScope` 作为语义真源；
+  `sf.ThemeData` 仅作为第三方 Widget 的投影。不要在 feature 代码中使用
+  Material `ThemeData`/`ColorScheme.fromSeed` 样式、裸 `Color(0x...)`
+  数值、手写 `BoxShadow` 列表或临时拼装的
+  `BorderRadius.circular(...)`。
+- 导入 `shadcn_flutter` 时只能使用 `sf` 别名
+  （`import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;`）。
+  不要再使用已移除 `shadcn_ui` 包中的裸 `Shad*` API。
+- 亮度应通过 `IdeThemeScope.of(context).brightness` 或
+  `sf.Theme.of(context).brightness` 获取。语义令牌优先使用
+  `IdeColors.of(context)` / `IdeTextStyles.of(context)`。
+- IDE 通知统一使用 `lib/src/ui/core/ide_toast.dart` 中的 `showIdeToast`；
+  不要在 feature 页面中临时调用 `sf.showToast`。
+- 构建既适用于桌面窗口尺寸，也适用于窄视口的响应式布局。
+- 在主页面切换时保留 Agent Canvas。稳定 key 应挂在会随槽位出现或消失而移动的
+  Flex 子节点上；页面切换测试必须保护 Agent 状态、草稿、滚动位置、面板宽度和
+  面板可见性。
+- 使用 `LayoutBuilder`、`Flexible`、`Expanded`、`Wrap`、滚动视图和
+  builder 构造方式来避免溢出。
+- 在引入 feature 局部视觉原语前，优先复用 `ui/core` 中的基础组件，如
+  `Pane`、`PanelCard`、`PaneInteractiveSurface`、`IdeTabs`/`IdeTab`、
+  `IdeContextMenu`、`IdeStatusCard`、`IdeCollapsibleCard` 以及窗口框架。
+- 保持 IDE UI 紧凑、信息密集且易于扫读。长文件路径、thread 标题、工具摘要和
+  状态文本必须使用有界布局和省略号。
+- 对重复出现的交互式 timeline、thread 和文件树行使用稳定的 `ValueKey`。
+  对高开销或高频刷新区域（如流式 turn、高亮代码和 diff 细节）添加
+  `RepaintBoundary`。
+- 确保在系统文字较大时文本仍然可读。
+- 为非文本控件和重要的自定义 Widget 添加语义标签。
 
-## Navigation
+## 导航
 
-- Keep `Navigator` for simple, short-lived flows.
-- Use `go_router` only when the app needs declarative routing, deep links, or
-  multiple durable screens.
+- 对于简单、短生命周期的流程，继续使用 `Navigator`。
+- 仅在应用需要声明式路由、深链接或多个持久页面时使用 `go_router`。
 
-## Data And Code Generation
+## 数据与代码生成
 
-- Use plain Dart models for simple local data.
-- Keep persisted JSON versioned and tolerant. `tryDecode`-style readers must
-  handle missing fields, damaged content, and older versions without blocking
-  app startup.
-- Keep global provider configuration separate from project/session state.
-- Zeta-owned configuration, state, derived indexes, logs, and reserved cache
-  live under `~/.zeta`; feature stores receive concrete files from `app`
-  composition instead of resolving HOME themselves.
-- Treat SharedPreferences keys from older Zeta releases as migration inputs
-  only. The migration is idempotent, target-file-first, and recorded in
-  `~/.zeta/state/migration_marker.json`.
-- Never move or rewrite Agent CLI configuration or session history under
-  `~/.codex`, `~/.grok`, `~/.cursor`, project `.cursor` folders, or user source
-  workspaces. Zeta's `cursor_sessions.json` remains a minimal local index.
-- Do not leak raw provider payloads into presentation; add mapper or codec
-  helpers near the data source instead.
-- If JSON models become complex or API-backed, prefer `json_serializable` and
-  `json_annotation`.
-- When using code generation, ensure `build_runner` is present and run:
+- 对简单的本地数据优先使用普通 Dart 模型。
+- 持久化 JSON 必须带版本且具备容错性。`tryDecode` 风格的读取器必须能处理缺失
+  字段、损坏内容和旧版本，而不阻塞应用启动。
+- 全局 provider 配置必须与项目/会话状态分离。
+- 由 Zeta 拥有的配置、状态、派生索引、日志和保留缓存都放在 `~/.zeta`
+  下；feature store 通过 `app` 组合层接收具体文件，而不是自行解析 HOME。
+- 将旧版 Zeta 的 SharedPreferences key 仅视作迁移输入。迁移必须幂等、以目标
+  文件优先，并记录在 `~/.zeta/state/migration_marker.json` 中。
+- 严禁移动或重写 `~/.codex`、`~/.grok`、`~/.cursor`、项目 `.cursor`
+  目录或用户源码工作区下的 Agent CLI 配置或会话历史。Zeta 的
+  `cursor_sessions.json` 只保留最小本地索引职责。
+- 不要将 provider 原始 payload 直接泄漏到 presentation；应在数据源附近补充
+  mapper 或 codec 辅助逻辑。
+- 如果 JSON 模型变复杂或改为 API 驱动，优先使用 `json_serializable` 和
+  `json_annotation`。
+- 使用代码生成时，确保 `build_runner` 已安装，并执行：
 
 ```sh
 dart run build_runner build --delete-conflicting-outputs
 ```
 
-## Testing
+## 测试
 
-- Add widget tests with `flutter_test` for UI behavior.
-- Add unit tests for non-UI logic.
-- Add integration tests only for end-to-end user flows.
-- Prefer fakes or stubs over mocks; use mock packages only when they are clearly
-  needed.
-- Structure tests with Arrange, Act, Assert.
+- 使用 `flutter_test` 为 UI 行为补充 widget 测试。
+- 为非 UI 逻辑补充单元测试。
+- 集成测试仅用于端到端用户流程。
+- 优先使用 fake 或 stub，而不是 mock；只有在确实需要时才引入 mock 包。
+- 测试结构遵循 Arrange、Act、Assert。
 
-## Repository Hygiene
+## 仓库卫生
 
-- Keep platform directories generated by Flutter unless a task explicitly
-  targets native desktop behavior.
-- Do not commit build outputs or `.dart_tool` contents.
-- Update this file when the project adopts routing, localization, app-wide
-  state management, networking, assets, or a formal feature/module structure.
-- Keep `docs/engineering_standards.md`, `docs/developer_guide.md`, and
-  `docs/design_document.md` aligned when architecture boundaries change.
+- 除非任务明确针对原生桌面行为，否则保留 Flutter 生成的平台目录。
+- 不要提交构建产物或 `.dart_tool` 内容。
+- 当项目引入路由、本地化、全局状态管理、网络、资源或正式的 feature/module
+  结构时，更新此文件。
+- 当架构边界发生变化时，保持 `docs/engineering_standards.md`、
+  `docs/developer_guide.md` 和 `docs/design_document.md` 内容一致。
 
 ## Git 提交信息
 每次你修改或更新完代码后，必须在回复的最后附加一个【Git 提交信息】模块。
@@ -186,3 +168,4 @@ feat(auth): 优化登录接口的错误处理逻辑
 
 - 增加了对验证码过期的状态码拦截
 - 修复了前端重复提交请求的 bug
+```
