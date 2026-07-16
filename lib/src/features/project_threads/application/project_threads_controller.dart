@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_event_listener_gate.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
@@ -42,6 +43,8 @@ class ProjectThreadsController {
 
   AgentProvider? _provider;
   StreamSubscription<AgentEvent>? _providerEventSubscription;
+  final AgentProviderEventListenerGate _providerEventListenerGate =
+      AgentProviderEventListenerGate();
   bool _disposed = false;
 
   /// 当前会话因删除/归档/关闭而被清空时回调（projectPath, threadId）。
@@ -427,6 +430,7 @@ class ProjectThreadsController {
       return;
     }
     _disposed = true;
+    _providerEventListenerGate.invalidate();
     providerController.removeListener(_handleProviderControllerChanged);
     _provider = null;
     _loadTokens.clear();
@@ -756,14 +760,58 @@ class ProjectThreadsController {
     if (_disposed) {
       return null;
     }
-    if (identical(provider, _provider)) {
+    if (identical(provider, _provider) &&
+        _hasCurrentProviderEventListener(provider)) {
       return provider;
     }
 
     final previousProvider = _provider;
     final previousSubscription = _providerEventSubscription;
+    final scope = _providerEventListenerGate.activate(
+      providerId: provider.config.id,
+      threadId: null,
+      runtimeScope: _runtimeScopeOf(provider),
+    );
     _provider = provider;
-    _providerEventSubscription = provider.events.listen(_handleProviderEvent);
+    StreamSubscription<AgentEvent>? subscription;
+    subscription = provider.events.listen(
+      (event) {
+        if (_disposed || !identical(_provider, provider)) {
+          return;
+        }
+        if (!_providerEventListenerGate.accepts(
+          scope,
+          currentRuntimeScope: _runtimeScopeOf(provider),
+          allowDetachedRuntime: _isProjectThreadTerminalEvent(event),
+        )) {
+          return;
+        }
+        _handleProviderEvent(event);
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        if (!_providerEventListenerGate.accepts(
+          scope,
+          currentRuntimeScope: _runtimeScopeOf(provider),
+          allowDetachedRuntime: true,
+        )) {
+          return;
+        }
+        _log.warning(
+          'Project thread provider event stream failed',
+          error,
+          stackTrace,
+        );
+      },
+      onDone: () {
+        if (!_providerEventListenerGate.release(scope)) {
+          return;
+        }
+        if (identical(_providerEventSubscription, subscription)) {
+          _providerEventSubscription = null;
+        }
+      },
+    );
+    _providerEventSubscription = subscription;
     await previousSubscription?.cancel();
     // 仅清理「旧 provider 名下」的执行中标记。同 id 重建实例时保留乐观 running，
     // 避免新建 thread 刚 markRunning 就被整表清空导致侧栏无转圈。
@@ -772,6 +820,36 @@ class ProjectThreadsController {
       _clearRunningThreadIdsOwnedByProvider(previousProvider.config.id);
     }
     return provider;
+  }
+
+  AgentRuntimeScope? _runtimeScopeOf(AgentProvider provider) {
+    if (provider case final AgentRuntimeScopeProvider scopedProvider) {
+      return scopedProvider.runtimeScope;
+    }
+    return null;
+  }
+
+  bool _hasCurrentProviderEventListener(AgentProvider provider) {
+    final scope = _providerEventListenerGate.current;
+    if (scope == null || scope.providerId != provider.config.id) {
+      return false;
+    }
+    final expectedRuntime = scope.runtimeScope;
+    if (expectedRuntime == null) {
+      return true;
+    }
+    return expectedRuntime == _runtimeScopeOf(provider);
+  }
+
+  bool _isProjectThreadTerminalEvent(AgentEvent event) {
+    return event is AgentTurnStartedEvent ||
+        event is AgentTurnCompletedEvent ||
+        event is AgentThreadStatusChangedEvent ||
+        event is AgentThreadNameUpdatedEvent ||
+        event is AgentThreadArchivedEvent ||
+        event is AgentThreadUnarchivedEvent ||
+        event is AgentThreadDeletedEvent ||
+        event is AgentThreadClosedEvent;
   }
 
   /// 解析 thread 所属 provider；必要时切换 active 以便后续写操作落到正确后端。

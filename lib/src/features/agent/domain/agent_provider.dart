@@ -140,6 +140,11 @@ abstract interface class AgentRuntimeLifecycleProvider {
   AgentProviderLifecycleState get lifecycleState;
 }
 
+/// 暴露当前连接 scope，供 application 隔离旧 listener 事件。
+abstract interface class AgentRuntimeScopeProvider {
+  AgentRuntimeScope? get runtimeScope;
+}
+
 /// Provider 拥有本地会话索引时，可只移除客户端列表记录而不删除服务端历史。
 ///
 /// 该操作与 [AgentProvider.deleteThread] 语义严格分离，UI 必须明确提示用户远端

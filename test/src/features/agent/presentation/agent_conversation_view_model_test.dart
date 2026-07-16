@@ -532,6 +532,106 @@ void main() {
     );
 
     test(
+      'drops a queued event from the previous listener generation',
+      () async {
+        final provider = _FakeAgentProvider(
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'thread-1': _historySnapshot(
+              threadId: 'thread-1',
+              userText: 'Thread one history',
+            ),
+            'thread-2': _historySnapshot(
+              threadId: 'thread-2',
+              userText: 'Thread two history',
+            ),
+          },
+        );
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.switchThread(_thread(id: 'thread-1'));
+        // 不等待 broadcast stream 投递；switchThread 必须在首个 await 前废弃旧代次。
+        provider.emit(
+          const AgentMessageDeltaEvent(
+            messageId: 'queued-old-message',
+            delta: 'Queued update from old listener',
+            role: AgentMessageRole.agent,
+          ),
+        );
+        await viewModel.switchThread(
+          _thread(id: 'thread-2', title: 'Thread two'),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        final texts = viewModel.timelineEntries
+            .whereType<AgentMessageTimelineEntry>()
+            .map((entry) => entry.message.text)
+            .toList();
+        expect(texts, contains('Thread two history'));
+        expect(texts, isNot(contains('Queued update from old listener')));
+      },
+    );
+
+    test('rejects events after the provider runtime epoch changes', () async {
+      final provider = _RuntimeScopedFakeAgentProvider(
+        runtimeScope: const AgentRuntimeScope(
+          runtimeId: 'runtime-1',
+          connectionEpoch: 1,
+        ),
+        historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+          'thread-1': _historySnapshot(
+            threadId: 'thread-1',
+            userText: 'Thread one history',
+          ),
+          'thread-2': _historySnapshot(
+            threadId: 'thread-2',
+            userText: 'Thread two history',
+          ),
+        },
+      );
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.switchThread(_thread(id: 'thread-1'));
+      provider.runtimeScope = const AgentRuntimeScope(
+        runtimeId: 'runtime-2',
+        connectionEpoch: 2,
+      );
+      provider.emit(
+        const AgentMessageDeltaEvent(
+          messageId: 'old-runtime-message',
+          delta: 'Event from mismatched runtime',
+          role: AgentMessageRole.agent,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        viewModel.messages.map((message) => message.text),
+        isNot(contains('Event from mismatched runtime')),
+      );
+
+      // Thread 切换创建的新 generation 捕获 runtime-2，后续事件恢复正常。
+      await viewModel.switchThread(
+        _thread(id: 'thread-2', title: 'Thread two'),
+      );
+      provider.emit(
+        const AgentMessageDeltaEvent(
+          messageId: 'new-runtime-message',
+          delta: 'Event from current runtime',
+          role: AgentMessageRole.agent,
+          sessionId: 'thread-2',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        viewModel.messages.map((message) => message.text),
+        contains('Event from current runtime'),
+      );
+    });
+
+    test(
       'merges realtime agent message metadata into existing message',
       () async {
         final provider = _FakeAgentProvider();
@@ -2694,4 +2794,15 @@ class _FakeAgentProvider
   void emit(AgentEvent event) {
     _events.add(event);
   }
+}
+
+class _RuntimeScopedFakeAgentProvider extends _FakeAgentProvider
+    implements AgentRuntimeScopeProvider {
+  _RuntimeScopedFakeAgentProvider({
+    required this.runtimeScope,
+    required super.historySnapshotsByThread,
+  });
+
+  @override
+  AgentRuntimeScope? runtimeScope;
 }

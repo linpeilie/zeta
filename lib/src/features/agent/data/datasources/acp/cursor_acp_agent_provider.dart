@@ -33,7 +33,8 @@ class CursorAcpAgentProvider
         AgentLocalThreadListProvider,
         AgentSessionConfigProvider,
         AgentPlanApprovalProvider,
-        AgentRuntimeLifecycleProvider {
+        AgentRuntimeLifecycleProvider,
+        AgentRuntimeScopeProvider {
   CursorAcpAgentProvider({
     required this.config,
     JsonRpcPeer? peer,
@@ -138,6 +139,9 @@ class CursorAcpAgentProvider
   @override
   AgentProviderLifecycleState get lifecycleState =>
       _peer?.lifecycleState ?? _detachedLifecycleState;
+
+  @override
+  AgentRuntimeScope? get runtimeScope => _peer?.runtimeScope;
 
   @override
   Future<void> initialize() async {

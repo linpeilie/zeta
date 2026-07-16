@@ -5,16 +5,18 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
-import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_permission_selection_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_ui_signals.dart';
 import 'package:zeta/src/features/agent/application/agent_elapsed_ticker.dart';
+import 'package:zeta/src/features/agent/application/agent_event_stream_buffer.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_event_listener_gate.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/presentation/model_config_ui_state.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
+import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 
 export 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
 
@@ -69,6 +71,9 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   AgentProvider? _provider;
   StreamSubscription<AgentEvent>? _eventSubscription;
+  AgentEventStreamBuffer? _eventBuffer;
+  final AgentProviderEventListenerGate _eventListenerGate =
+      AgentProviderEventListenerGate();
 
   AgentSession? _session;
   String? _projectPath;
@@ -338,6 +343,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       return;
     }
     _flushPendingStreamChangesNow();
+    _invalidateProviderEventListener();
     await providerController.setActiveProvider(providerId);
     await _eventSubscription?.cancel();
     _eventSubscription = null;
@@ -672,6 +678,10 @@ class AgentConversationViewModel extends ChangeNotifier {
     try {
       final provider = await _ensureProvider();
       await provider.initialize();
+      await _replaceProviderEventSubscription(
+        provider,
+        threadId: _selectedThreadId,
+      );
       if (_modelSelectionController.modelList == null) {
         final models = await provider.listModels();
         _handleModelList(models);
@@ -804,6 +814,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       // 离开当前会话时取消订阅；恢复到另一 thread 时也退订旧 id。
       final previousThreadId = _selectedThreadId;
       _flushPendingStreamChangesNow();
+      _invalidateProviderEventListener();
       _threadSwitchToken += 1;
       _session = null;
       _sessionConfigOptions = const <AgentSessionConfigOption>[];
@@ -841,6 +852,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     // 同项目下仅同步文件上下文：若 shell 带了 restoredSessionId，只在本地
     // 尚无选中 thread 时写入，避免覆盖 switchThread 已锁定的 resume 目标。
     if (effectiveRestoredSessionId != null && _selectedThreadId == null) {
+      _invalidateProviderEventListener();
       _restoredSessionId = effectiveRestoredSessionId;
       _selectedProviderId = normalizedProviderId;
       _threadOpenPhase = AgentThreadOpenPhase.idle;
@@ -1012,6 +1024,8 @@ class AgentConversationViewModel extends ChangeNotifier {
   /// 切换到项目列表中选中的 thread。
   Future<void> switchThread(AgentThreadSummary thread) async {
     final switchToken = ++_threadSwitchToken;
+    // 在第一个 await 前让旧 thread listener 失效，避免其微任务事件污染新时间线。
+    _invalidateProviderEventListener();
     // 跨 provider thread：先切 active backend，再加载历史。
     // 失败必须 fail-closed，禁止用错误 provider 读历史 / 后续 resume。
     if (thread.providerId != activeProviderId) {
@@ -1107,6 +1121,10 @@ class AgentConversationViewModel extends ChangeNotifier {
         sessionPath: thread.sessionPath,
         projectPath: thread.projectPath,
       );
+      if (!_isCurrentSwitch(switchToken)) {
+        return;
+      }
+      await _replaceProviderEventSubscription(provider, threadId: thread.id);
       if (!_isCurrentSwitch(switchToken)) {
         return;
       }
@@ -1377,6 +1395,7 @@ class AgentConversationViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _invalidateProviderEventListener();
     providerController.removeListener(_handleProviderSettingsChanged);
     _modelSelectionController.removeListener(_handleModelSelectionChanged);
     if (_ownsModelSelectionController) {
@@ -1431,16 +1450,24 @@ class AgentConversationViewModel extends ChangeNotifier {
     }
 
     final provider = await providerController.activeProvider();
-    if (identical(_provider, provider)) {
+    if (identical(_provider, provider) &&
+        _hasCurrentProviderEventListener(
+          provider,
+          threadId: _selectedThreadId,
+        )) {
       return provider;
     }
 
-    await _eventSubscription?.cancel();
-    _log.fine('Using shared Agent provider: ${provider.config.id}');
-    _provider = provider;
-    _modelSelectionController.bindProvider(provider);
-    _permissionSelectionController.bindProvider(provider);
-    _eventSubscription = provider.events.listen(_handleEvent);
+    if (!identical(_provider, provider)) {
+      _log.fine('Using shared Agent provider: ${provider.config.id}');
+      _provider = provider;
+      _modelSelectionController.bindProvider(provider);
+      _permissionSelectionController.bindProvider(provider);
+    }
+    await _replaceProviderEventSubscription(
+      provider,
+      threadId: _selectedThreadId,
+    );
     return provider;
   }
 
@@ -1463,6 +1490,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     _log.info(
       'Rebinding active provider to $providerId without clearing conversation',
     );
+    _invalidateProviderEventListener();
     await providerController.setActiveProvider(providerId);
     await _eventSubscription?.cancel();
     _eventSubscription = null;
@@ -1518,6 +1546,12 @@ class AgentConversationViewModel extends ChangeNotifier {
           context: context,
         );
         if (_isStillSelectedThread(switchToken, expectedThreadId)) {
+          await _replaceProviderEventSubscription(
+            provider,
+            threadId: session.id,
+          );
+        }
+        if (_isStillSelectedThread(switchToken, expectedThreadId)) {
           _session = session;
           _restoredSessionId = session.id;
           _threadOpenPhase = AgentThreadOpenPhase.idle;
@@ -1548,6 +1582,9 @@ class AgentConversationViewModel extends ChangeNotifier {
     _log.fine('Starting new Agent session with provider ${provider.config.id}');
     final session = await provider.startSession(context: context);
     if (_isStillSelectedThread(switchToken, expectedThreadId)) {
+      await _replaceProviderEventSubscription(provider, threadId: session.id);
+    }
+    if (_isStillSelectedThread(switchToken, expectedThreadId)) {
       _session = session;
       _restoredSessionId = session.id;
       _threadOpenPhase = AgentThreadOpenPhase.idle;
@@ -1556,6 +1593,123 @@ class AgentConversationViewModel extends ChangeNotifier {
       _publishUiChanges(header: true, composer: true);
     }
     return session;
+  }
+
+  AgentRuntimeScope? _runtimeScopeOf(AgentProvider provider) {
+    if (provider case final AgentRuntimeScopeProvider scopedProvider) {
+      return scopedProvider.runtimeScope;
+    }
+    return null;
+  }
+
+  bool _hasCurrentProviderEventListener(
+    AgentProvider provider, {
+    required String? threadId,
+  }) {
+    final scope = _eventListenerGate.current;
+    if (scope == null ||
+        scope.providerId != provider.config.id ||
+        scope.threadId != threadId) {
+      return false;
+    }
+    final expectedRuntime = scope.runtimeScope;
+    final currentRuntime = _runtimeScopeOf(provider);
+    if (expectedRuntime == null) {
+      // Provider 尚未创建 runtime；首个事件会把 scope 绑定到实际连接。
+      return true;
+    }
+    return expectedRuntime == currentRuntime;
+  }
+
+  /// 先安装新 listener，再异步取消旧 listener；代次门保证重叠窗口内只消费新事件。
+  Future<void> _replaceProviderEventSubscription(
+    AgentProvider provider, {
+    required String? threadId,
+  }) async {
+    if (_disposed) {
+      return;
+    }
+    final previousSubscription = _eventSubscription;
+    final previousBuffer = _eventBuffer;
+    final scope = _eventListenerGate.activate(
+      providerId: provider.config.id,
+      threadId: threadId,
+      runtimeScope: _runtimeScopeOf(provider),
+    );
+    final buffer = AgentEventStreamBuffer(
+      onEvent: (event) {
+        if (_disposed || !identical(_provider, provider)) {
+          return;
+        }
+        if (!_eventListenerGate.accepts(
+          scope,
+          currentRuntimeScope: _runtimeScopeOf(provider),
+          allowDetachedRuntime: _isCriticalDetachedEvent(event),
+        )) {
+          return;
+        }
+        _handleEvent(event);
+      },
+      onBackpressure: (pendingEventCount) {
+        // 诊断仅记录键数量，不泄露对话或工具输出正文。
+        _log.warning(
+          'Flushing Agent event buffer after backpressure '
+          '(pending keys: $pendingEventCount)',
+        );
+      },
+    );
+    StreamSubscription<AgentEvent>? subscription;
+    subscription = provider.events.listen(
+      buffer.add,
+      onError: (Object error, StackTrace stackTrace) {
+        if (!_eventListenerGate.accepts(
+          scope,
+          currentRuntimeScope: _runtimeScopeOf(provider),
+          allowDetachedRuntime: true,
+        )) {
+          return;
+        }
+        _log.warning('Agent provider event stream failed', error, stackTrace);
+      },
+      onDone: () {
+        buffer.dispose();
+        if (!_eventListenerGate.release(scope)) {
+          return;
+        }
+        if (identical(_eventBuffer, buffer)) {
+          _eventBuffer = null;
+        }
+        if (identical(_eventSubscription, subscription)) {
+          _eventSubscription = null;
+        }
+      },
+    );
+    _eventSubscription = subscription;
+    _eventBuffer = buffer;
+
+    // 旧代数未发布的 delta/progress 属于旧 thread 或旧连接，必须直接丢弃。
+    previousBuffer?.dispose();
+    if (previousSubscription != null &&
+        !identical(previousSubscription, subscription)) {
+      await previousSubscription.cancel();
+    }
+  }
+
+  void _invalidateProviderEventListener() {
+    _eventListenerGate.invalidate();
+    _eventBuffer?.dispose();
+    _eventBuffer = null;
+  }
+
+  bool _isCriticalDetachedEvent(AgentEvent event) {
+    return event is AgentStatusEvent ||
+        event is AgentErrorEvent ||
+        event is AgentTurnCompletedEvent ||
+        event is AgentThreadClosedEvent ||
+        event is AgentPermissionRequestedEvent ||
+        event is AgentPermissionResolvedEvent ||
+        event is AgentPlanApprovalRequestedEvent ||
+        event is AgentPlanApprovalResolvedEvent;
   }
 
   /// 最近一次已展示的错误概要。

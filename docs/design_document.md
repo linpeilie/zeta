@@ -183,6 +183,17 @@ composer，应用层误调用时抛出 `UnsupportedError`。`AgentProviderBootst
 server-request handler 排空。Codex 的 `AgentRuntimeInfo` 同步暴露 runtime identity，
 Grok/Cursor 通过可选 `AgentRuntimeLifecycleProvider` 暴露中立生命周期，不把协议状态泄漏到 UI。
 
+Provider 事件进入对话详情和 Project Threads 前还经过 listener generation gate。每次绑定以
+`runtimeId + connectionEpoch + providerId + threadId + listenerGeneration` 标识；新监听先安装、
+旧监听后取消，且旧监听退出只能释放自身 generation。Codex/Grok/Cursor 均通过可选
+`AgentRuntimeScopeProvider` 提供当前连接作用域，因此快速切换 Thread、Provider 重启和 dispose
+交叉不会把旧流投影到新会话。
+
+高频事件在 Application → UI 边界由 `AgentEventStreamBuffer` 合并：同 item 文本/reasoning
+delta 追加，同 turn token/diff 快照取最新，同工具 progress 按协议语义追加或替换。Transport
+和 Provider mapper 仍无损消费；完整 item、工具/turn 终态、审批、错误和连接状态会先 flush
+缓冲再立即发布。缓冲上限只产生不含正文的计数诊断，并触发即时 flush。
+
 Provider 的 Thread 访问统一经过 `ProviderOperationScheduler`。列表使用 Project 级
 `sharedRead`，历史读取使用 Thread 级 `sharedRead`；resume、fork、重命名、归档、删除和
 压缩等变更使用 Thread 级 `exclusive`。同一资源上的连续读取可并发，独占操作保持 FIFO

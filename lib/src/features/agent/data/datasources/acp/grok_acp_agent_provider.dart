@@ -26,7 +26,10 @@ typedef JsonRpcPeerFactory = JsonRpcPeer Function(AgentProviderConfig config);
 /// 启动 `grok agent stdio`，通过标准 ACP JSON-RPC 完成会话、流式回复与审批。
 /// 不支持的 Codex 专有能力通过 [capabilities] 关闭，并在误调用时明确失败。
 class GrokAcpAgentProvider
-    implements AgentProvider, AgentRuntimeLifecycleProvider {
+    implements
+        AgentProvider,
+        AgentRuntimeLifecycleProvider,
+        AgentRuntimeScopeProvider {
   GrokAcpAgentProvider({
     required this.config,
     JsonRpcPeer? peer,
@@ -160,6 +163,9 @@ class GrokAcpAgentProvider
 
   @override
   AgentProviderLifecycleState get lifecycleState => _peer.lifecycleState;
+
+  @override
+  AgentRuntimeScope? get runtimeScope => _peer.runtimeScope;
 
   @override
   Future<void> initialize() async {

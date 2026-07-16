@@ -1010,12 +1010,26 @@ resume、delete/本地索引移除已接入 Thread exclusive；三类 Provider �
 Project/Thread sharedRead。Provider initialize/dispose 继续由 PR 1.1 的生命周期 Gate
 负责，dispose 会先关闭调度器入口，再关闭 peer，最后等待调度任务收尾。
 
-#### PR 1.3：Listener Generation 与流式合并
+#### PR 1.3：Listener Generation 与流式合并（已完成）
 
-- Thread listener generation。
-- 旧连接事件隔离。
-- delta/progress/snapshot 合并。
-- terminal/approval 事件不可丢测试。
+- [x] Thread listener generation。
+- [x] 旧连接事件隔离。
+- [x] delta/progress/snapshot 合并。
+- [x] terminal/approval 事件不可丢测试。
+
+实现落点：`AgentProviderEventListenerGate` 为对话详情和 Project Threads 消费者维护
+`(runtimeId, connectionEpoch, providerId, threadId, listenerGeneration)`；新监听先入场，
+旧监听后取消，旧 generation 的退出回调只能释放自身，快速切换 Thread、Provider 重启和
+dispose 交叉时都不能清理或污染新监听。Codex/Grok/Cursor 通过可选
+`AgentRuntimeScopeProvider` 暴露当前连接作用域，未启动的监听在首个 runtime 事件到达时
+完成绑定，之后拒绝不同 epoch 的事件。
+
+`AgentEventStreamBuffer` 只位于 Application → UI 投影边界，Transport/Provider mapper
+仍逐条消费全部协议消息。缓冲器按同一 thread/turn/item/event kind 合并文本和 reasoning
+delta、token/diff 最新快照及工具 progress；item 完整快照、工具终态、turn 终态、审批、
+错误和连接状态会先 flush 既有增量再立即发布。键数量达到上限时立即 flush，并只记录无正文
+的计数诊断。单元测试覆盖合并/顺序/背压/旧代次丢弃，ViewModel 回归测试覆盖切换 Thread
+前已排队的旧流事件隔离。
 
 Phase 1 验收：
 

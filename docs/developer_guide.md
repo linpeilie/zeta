@@ -185,6 +185,13 @@ Cursor 适配还必须遵守以下约束：
   取消、workspace 切换和 dispose 时都必须回包并清理 pending state，避免 turn 永久等待。
 - pending server request 必须保存收到时的 `AgentRuntimeScope`，响应时使用 scoped response；
   不得把旧 `runtimeId / connectionEpoch` 的审批或提问回写到新连接。
+- 对话详情与 Project Threads 的 provider 事件订阅统一经过
+  `AgentProviderEventListenerGate`；切换 Thread/Provider 时先废弃旧 generation，再安装或
+  复用新监听。Provider 若实现 `AgentRuntimeScopeProvider`，监听还必须校验 runtime/epoch；
+  旧 listener `onDone` 只能释放仍为当前的 scope。
+- 高频事件只在 `AgentEventStreamBuffer` 的 Application 投影边界合并。新增可合并事件时，
+  key 必须包含 thread、turn、item 和 event kind；完整 item、终态、审批、错误与连接状态
+  不得进入可替代缓冲，并应先 flush 此前 delta。Transport/mapper 层保持逐条处理。
 
 修改 Codex 适配层前，先对照
 [`third_party/codex_app_server_schema`](../third_party/codex_app_server_schema/)

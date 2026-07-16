@@ -114,6 +114,13 @@ main -> app -> presentation/application -> domain
 - JSON-RPC provider 必须复用 `ProviderRuntimeJsonRpcPeer` 的生命周期 gate。`closing` 后
   禁止新 client RPC；反向请求以 `(runtimeId, connectionEpoch, requestId)` 为权威身份，
   dispose 必须关闭 transport 并等待已入场的 start、RPC 与 handler 排空后才进入 `closed`。
+- Provider 事件消费者必须使用 listener generation，并以
+  `(runtimeId, connectionEpoch, providerId, threadId, listenerGeneration)` 隔离旧流；旧
+  listener 的退出回调不得清理新 generation，Thread/Provider 切换应在首个 `await` 前
+  使旧 generation 失效。
+- Transport 与 Provider mapper 不得丢弃协议事件。Application 投影层只允许合并同一
+  thread/turn/item/kind 的连续文本或 reasoning delta、token/diff 最新快照和工具 progress；
+  item/工具/turn 终态、审批、错误和连接状态必须先 flush 缓冲后立即发布。背压诊断不得包含正文。
 - Provider Thread 操作必须复用 `ProviderOperationScheduler`。同一 Thread 的变更使用
   `exclusive` 并保持 FIFO，list/read 使用 Project/Thread `sharedRead`；禁止同键重入，
   dispose 必须拒绝未入场任务并等待已入场任务释放资源键。

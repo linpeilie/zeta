@@ -34,7 +34,8 @@ class CodexAppServerAgentProvider
         AgentProvider,
         AgentUsageQuotaProvider,
         AgentRuntimeInfoProvider,
-        AgentRuntimeLifecycleProvider {
+        AgentRuntimeLifecycleProvider,
+        AgentRuntimeScopeProvider {
   /// 创建 Codex app-server provider 实例。
   ///
   /// [config] 包含命令、参数、环境变量等 provider 配置。
@@ -173,6 +174,9 @@ class CodexAppServerAgentProvider
 
   @override
   AgentProviderLifecycleState get lifecycleState => _peer.lifecycleState;
+
+  @override
+  AgentRuntimeScope? get runtimeScope => _peer.runtimeScope;
 
   /// 开发诊断：未匹配服务端通知按 method 的累计次数。
   ///
