@@ -1433,7 +1433,7 @@ class _AgentDiagnosticsCard extends StatelessWidget {
           value: '${agent.connectionTest!.elapsed.inMilliseconds} ms',
         ),
       if (agent.connectionTest?.protocolVersion case final String version)
-        _DiagnosticEntry(label: 'ACP 协议', value: 'v$version'),
+        _DiagnosticEntry(label: '协议', value: version),
       if (agent.connectionTest?.agentName case final String agentName)
         _DiagnosticEntry(
           label: '握手身份',
@@ -1446,6 +1446,9 @@ class _AgentDiagnosticsCard extends StatelessWidget {
           label: '协商能力',
           value: agent.connectionTest!.capabilitySummary.join(', '),
         ),
+      if (agent.connectionTest?.compatibilitySummary
+          case final String compatibility)
+        _DiagnosticEntry(label: '兼容性', value: compatibility),
       if (agent.connectionTest?.success == false &&
           agent.connectionTest?.exitReason != null)
         _DiagnosticEntry(

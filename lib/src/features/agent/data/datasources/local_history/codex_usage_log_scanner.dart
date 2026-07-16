@@ -258,6 +258,7 @@ String? codexUsageErrorCategoryHint({
   final normalizedMessage = message?.toLowerCase() ?? '';
   if (normalizedCode.contains('unauthorized') ||
       normalizedCode.contains('usagelimit') ||
+      normalizedCode.contains('sessionbudget') ||
       normalizedMessage.contains('account') ||
       normalizedMessage.contains('login')) {
     return 'account';

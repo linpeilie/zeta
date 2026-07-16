@@ -7,8 +7,9 @@ import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 /// 需要断言调用时，在具体 Fake 中 override 并记录参数即可。
 mixin AgentProviderThreadLifecycleStub {
   /// 测试 fake 默认模拟能力完整的 Codex；专项测试可 override。
-  AgentProviderCapabilities get capabilities =>
-      AgentProviderCapabilities.codexAppServer;
+  AgentProviderCapabilities get capabilities => AgentProviderCapabilities
+      .codexAppServer
+      .copyWith(canForkThreadAtTurn: true);
 
   final List<({String threadId, String name})> renamedThreads =
       <({String threadId, String name})>[];
@@ -16,15 +17,11 @@ mixin AgentProviderThreadLifecycleStub {
   final List<String> unarchivedThreads = <String>[];
   final List<String> deletedThreads = <String>[];
   final List<String> forkedThreads = <String>[];
-  final List<({String threadId, int numTurns})> rolledBackThreads =
-      <({String threadId, int numTurns})>[];
+  final List<AgentForkBoundary> forkBoundaries = <AgentForkBoundary>[];
   final List<String> compactedThreads = <String>[];
 
   /// 分叉时返回的会话；为空则用 `forked-<threadId>`。
   AgentSession? forkResult;
-
-  /// 回滚时返回的历史；为空则返回空 turns。
-  AgentThreadHistorySnapshot? rollbackResult;
 
   /// Fake 的 provider id，用于默认 fork 结果。
   String get threadLifecycleProviderId => defaultAgentProviderId;
@@ -51,25 +48,15 @@ mixin AgentProviderThreadLifecycleStub {
   Future<AgentSession> forkThread({
     required String threadId,
     required AgentContext context,
+    AgentForkBoundary boundary = const AgentForkCurrentHead(),
   }) async {
     forkedThreads.add(threadId);
+    forkBoundaries.add(boundary);
     return forkResult ??
         AgentSession(
           id: 'forked-$threadId',
           providerId: threadLifecycleProviderId,
           title: 'Fork of $threadId',
-        );
-  }
-
-  Future<AgentThreadHistorySnapshot> rollbackThread({
-    required String threadId,
-    required int numTurns,
-  }) async {
-    rolledBackThreads.add((threadId: threadId, numTurns: numTurns));
-    return rollbackResult ??
-        AgentThreadHistorySnapshot(
-          threadId: threadId,
-          turns: const <AgentHistoryTurn>[],
         );
   }
 

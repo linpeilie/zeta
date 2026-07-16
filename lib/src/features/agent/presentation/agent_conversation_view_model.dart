@@ -539,15 +539,17 @@ class AgentConversationViewModel extends ChangeNotifier {
     contextPanelVisible.value = false;
   }
 
-  /// 空闲且末尾存在用户消息时可编辑重试。
+  /// 空闲、版本支持指定 turn 分支，且存在稳定前置边界时可创建分支重试。
   bool get canEditLastUserMessage {
-    if (!activeCapabilities.canRollbackThread ||
+    if (!activeCapabilities.canForkThreadAtTurn ||
         !canSubmitMessage ||
         isTurnRunning ||
         _isCompacting) {
       return false;
     }
-    return _lastEditableUserMessage() != null;
+    final message = _lastEditableUserMessage();
+    return message != null &&
+        _timeline.forkBoundaryBeforeMessage(message.id) != null;
   }
 
   /// 最近一条可编辑的用户消息文本；无可编辑消息时为空。
@@ -959,6 +961,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       } else {
         await provider.steerTurn(
           session: session,
+          expectedTurnId: runningTurnId,
           inputs: inputs,
           context: context,
           clientUserMessageId: clientUserMessageId,
@@ -1182,9 +1185,9 @@ class AgentConversationViewModel extends ChangeNotifier {
     );
   }
 
-  /// 回滚末尾一回合并用新文本重发（编辑上一条用户消息）。
+  /// 从上一历史 turn 创建新分支，并用编辑后的文本开启新回合。
   ///
-  /// 协议明确：rollback **不**还原 agent 已写入的本地文件。
+  /// 原 thread 保持不变；分支也不会回滚 Agent 已写入工作区的文件。
   Future<void> editLastUserMessageAndRetry(String newText) async {
     final trimmed = newText.trim();
     if (trimmed.isEmpty || !canEditLastUserMessage) {
@@ -1194,61 +1197,63 @@ class AgentConversationViewModel extends ChangeNotifier {
     if (threadId == null) {
       return;
     }
+    final message = _lastEditableUserMessage();
+    final boundaryTurnId = message == null
+        ? null
+        : _timeline.forkBoundaryBeforeMessage(message.id);
+    if (boundaryTurnId == null) {
+      return;
+    }
 
     final switchToken = _threadSwitchToken;
     _status = const AgentProviderStatus(
       state: AgentProviderConnectionState.running,
-      message: 'Rolling back turn',
+      message: 'Creating branch',
     );
     _publishUiChanges(header: true, composer: true);
 
     try {
       final provider = await _ensureProvider();
-      final history = await provider.rollbackThread(
+      final session = await provider.forkThread(
         threadId: threadId,
-        numTurns: 1,
+        context: AgentContext(
+          projectPath: _projectPath,
+          filePath: _contextFilePath,
+        ),
+        boundary: AgentForkThroughTurn(boundaryTurnId),
       );
       if (!_isCurrentSwitch(switchToken)) {
         return;
       }
       final summary = AgentThreadSummary(
-        id: threadId,
-        providerId: provider.config.id,
+        id: session.id,
+        providerId: session.providerId,
         projectPath: _projectPath ?? '',
-        title: _currentThreadTitle == defaultThreadTitle
-            ? null
-            : _currentThreadTitle,
-        preview: '',
+        title: session.title,
+        preview: session.title ?? '',
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
         status: AgentThreadRuntimeStatus.idle,
       );
-      _timeline.applyHistorySnapshot(history, summary);
-      _session = AgentSession(
-        id: threadId,
-        providerId: provider.config.id,
-        title: summary.title,
-      );
-      _restoredSessionId = threadId;
-      _requiresResumedSelectedThread = false;
-      _threadOpenPhase = AgentThreadOpenPhase.idle;
-      _publishUiChanges(
-        history: true,
-        syncLiveTurn: true,
-        header: true,
-        composer: true,
-      );
+      await switchThread(summary);
+      if (sessionId != session.id ||
+          _threadOpenPhase != AgentThreadOpenPhase.idle) {
+        return;
+      }
       await sendMessage(trimmed);
     } catch (error, stackTrace) {
       if (!_isCurrentSwitch(switchToken)) {
         return;
       }
       _log.warning(
-        'Could not rollback and retry thread $threadId',
+        'Could not create branch and retry thread $threadId',
         error,
         stackTrace,
       );
-      _markError('Could not edit and retry message', details: error.toString());
+      _markError(
+        'Could not create branch and retry message',
+        details: error.toString(),
+      );
     }
   }
 

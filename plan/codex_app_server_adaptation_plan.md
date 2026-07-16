@@ -1,12 +1,12 @@
 # Codex app-server 适配清单与适配计划
 
-最后更新:2026-07-09
+最后更新:2026-07-16
 
 ## 0. 文档目的与协议基准
 
 本文档回答一个问题:**当前 `features/agent` 适配层相对 Codex app-server 完整协议,还有哪些功能没有适配,以及按什么顺序补齐。**
 
-- 协议基准:本机 pinned `codex-cli 0.142.5`(审计最初对照 `0.142.3`;仓库快照以可复现的 `0.142.5` 为准),通过 `tool/gen_codex_schema.*` 调用 `codex app-server generate-json-schema --out <dir>` 导出并提交到 `third_party/codex_app_server_schema/`(`ClientRequest` / `ClientNotification` / `ServerNotification` / `ServerRequest` 四个联合类型 + v2 逐方法 schema)。详见 `docs/codex_app_server_protocol.md`。
+- 协议基准:pinned `codex-cli 0.144.5` stable Schema，快照来自对应 release 源码的已生成 schema，并提交到 `third_party/codex_app_server_schema/`。Phase 0 之后，协议冲突以 `plan/多_Agent_Provider_协议演进技术详设书.md` 和目标 Schema 为准；本文保留为早期覆盖清单。详见 `docs/codex_app_server_protocol.md`。
 - 代码基准:`lib/src/features/agent/` 下的 Codex 适配层,入口为
   `data/datasources/app_server/codex_app_server_agent_provider.dart`(library,
   通过 `part` 聚合 client、mapper、parser)。
@@ -40,7 +40,7 @@
 | `thread/archive` / `thread/unarchive` | 同上 | 列表归档视图(2.1) |
 | `thread/delete` | 同上 | 删除确认后调用(2.1) |
 | `thread/fork` | 同上 | 列表/头栏分叉(2.1/2.4) |
-| `thread/rollback` | 同上 | 编辑上一条消息重试(2.4) |
+| `thread/rollback` | 0.144.5 已弃用 | Phase 0 已移除；编辑重试迁移到 `thread/fork.lastTurnId` |
 | `thread/compact/start` | 同上 | 上下文占用提示条(2.5) |
 | `permissionProfile/list` | 同上 | 审批/沙箱预设选择器(2.7) |
 | `thread/approveGuardianDeniedAction` | 同上 | Guardian 拒绝后人工放行(2.9) |
@@ -183,7 +183,7 @@
 | 归档/取消归档 | `thread/archive` / `thread/unarchive` | `thread/archived` / `thread/unarchived` | `thread/list` 增加 archived 视图切换 | P2 |
 | 删除 | `thread/delete` | `thread/deleted` | 危险操作需确认对话框 | P2 |
 | 分叉 | `thread/fork { threadId, ... }` | — | 从既有会话分叉出新会话(与 UI"从此处新开分支"结合) | P2 |
-| 回滚 | `thread/rollback { threadId, numTurns }` | — | 支撑"编辑上一条消息/重试"体验的基础 | P2 |
+| 指定历史边界分支 | `thread/fork { threadId, lastTurnId }` | — | 保留原会话的“编辑并重试”基础 | P0 迁移完成 |
 | 压缩上下文 | `thread/compact/start { threadId }` | `thread/compacted` | 上下文接近上限时(配合 A1 的 `modelContextWindow`)提示一键压缩 | P2 |
 | 设置变更同步 | — | `thread/settings/updated` | 服务端/他端修改 model、approvalPolicy 后同步 UI 选择器 | P2 |
 | 线程被关闭 | — | `thread/closed` | 释放本地运行状态 | P2 |
@@ -304,7 +304,7 @@
 | 0.5 ✅ | 未知服务端请求返回 JSON-RPC error 而非 `{}`/`null`;`item/tool/call`、`account/chatgptAuthTokens/refresh` 显式结构化拒绝(已完成:`rejectionFor` 分类 + `-32601` 应答,顺带修复 requestUserInput/elicitation 响应结构;transport 的 `sendResponse(error:)` 原生支持,无需改动) | `codex_approval_mapper.dart`、`codex_app_server_agent_provider.dart` |
 | 0.6 ✅ | `initialize` 声明 capabilities;`optOutNotificationMethods` 屏蔽 `thread/realtime/*` 等(已完成:显式声明三个布尔能力为 false + 15 个 P4~P5 通知 opt-out,经真实 app-server 验证通知确实被抑制) | provider |
 | 0.7 ✅ | 未匹配通知记录日志(去重);新增开发诊断计数(已完成:mapper 标记 `unmatchedMethod`,provider 按 method 去重 fine 日志 + 累计计数,含单测) | provider / `codex_notification_mapper.dart` |
-| 0.8 ✅ | 建立协议同步机制:`tool/` 下加脚本调用 `codex app-server generate-json-schema`,在 `docs/` 记录 pinned codex 版本;协议升级时 diff schema(已完成:`tool/gen_codex_schema.sh` + `.ps1`,快照 `third_party/codex_app_server_schema` pin `0.142.5`,文档 `docs/codex_app_server_protocol.md`;排除键序不稳定的 v2 聚合文件) | `tool/gen_codex_schema.*` + `docs/codex_app_server_protocol.md` + `third_party/codex_app_server_schema/` |
+| 0.8 ✅ | 建立协议同步机制:`tool/` 下加脚本调用 `codex app-server generate-json-schema`,在 `docs/` 记录 pinned codex 版本;协议升级时 diff schema(当前快照 pin `0.144.5`;排除键序不稳定的 v2 聚合文件) | `tool/gen_codex_schema.*` + `docs/codex_app_server_protocol.md` + `third_party/codex_app_server_schema/` |
 
 验收标准:真实 `codex app-server` 冒烟(发一条消息)可看到 token 用量更新;人为断网可看到带错误码的错误卡片;`turn/interrupt` 后时间线显示"已中断";全部现有测试通过 + 新增 fixture 测试。
 
@@ -336,7 +336,7 @@
 | 2.1 ✅ | `AgentProvider` 接口扩展:rename/archive/unarchive/delete/fork/rollback/compact | `agent_provider.dart` + client + provider |
 | 2.2 ✅ | thread 列表右键菜单与归档视图(`thread/list archived:true`、`searchTerm` 搜索框) | `project_threads` feature + agent feature |
 | 2.3 ✅ | 配套通知(`thread/archived|unarchived|deleted|closed|name/updated|compacted|settings/updated`)→ 列表与会话状态同步 | mapper + threads controller |
-| 2.4 ✅ | 基于 `thread/rollback` + `thread/fork` 实现"编辑消息重试 / 从此处分叉" | conversation view model + UI |
+| 2.4 ✅ | 基于 `thread/fork.lastTurnId` 实现“创建分支并重试”；原 thread 与工作区文件保持不变 | conversation view model + UI |
 | 2.5 ✅ | 上下文用量接近 `modelContextWindow` 时提示 `thread/compact/start` | timeline store + 状态条 |
 | 2.6 ✅ | `item/tool/requestUserInput` 表单卡片(问题列表 + 选项 + 自由文本),答案结构化回传(已完成 2026-07-09: questions 解析/`answers` 编码;可交互表单卡;Deny 回空答案) | approval mapper、permission 模型、`_AgentPermissionCard` |
 | 2.7 ✅ | `permissionProfile/list` 驱动审批/沙箱预设选择器;`turn/start`/`thread/start` 携带所选策略;`thread/settings/updated` 同步(已完成 2026-07-09) | client、`AgentPermissionSelection` controller、composer 策略按钮 |
@@ -382,7 +382,7 @@
 
 ## 5. 横切工程事项
 
-1. **协议版本锁定**:适配层按 pinned `codex-cli 0.142.5` schema 开发(见 `third_party/codex_app_server_schema/PINNED_VERSION`);`tool/gen_codex_schema.sh` / `.ps1` 输出纳入 review 流程,升级 codex 时先 `--diff`/`-Diff` 再动代码。流程见 `docs/codex_app_server_protocol.md`。
+1. **协议版本锁定**:适配层按 pinned `codex-cli 0.144.5` stable schema 开发(见 `third_party/codex_app_server_schema/PINNED_VERSION`);`tool/gen_codex_schema.sh` / `.ps1` 输出纳入 review 流程,升级 codex 时先 `--diff`/`-Diff` 再动代码。流程见 `docs/codex_app_server_protocol.md`。
 2. **domain 事件演进**:新增事件一律走 `agent_event_models.dart` 的 sealed 层次,禁止在 presentation 里读 raw 协议字段;raw payload 仅存 `raw` 字段用于诊断。
 3. **测试策略**:
    - 每个新通知/请求映射:fixture JSON → mapper 单测(Arrange-Act-Assert);

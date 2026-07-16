@@ -25,6 +25,10 @@ class AgentConversationPermissionSelectionController {
 
   void bindProvider(AgentProvider provider) {
     _provider = provider;
+    if (!provider.capabilities.supportsPermissionProfileSelection &&
+        _selection.permissionProfileId != null) {
+      _selection = _selection.copyWith(clearPermissionProfileId: true);
+    }
     provider.updatePermissionSelection(_selection);
   }
 
@@ -37,13 +41,16 @@ class AgentConversationPermissionSelectionController {
 
   void seedFromConfig(AgentProviderConfig config) {
     _selection = AgentPermissionSelection(
-      approvalPolicy:
-          config.selectedApprovalPolicy ??
-          AgentPermissionSelection.defaultApprovalPolicy,
+      approvalPolicy: AgentPermissionSelection.normalizeApprovalPolicy(
+        config.selectedApprovalPolicy,
+      ),
       sandboxPolicy:
           config.selectedSandboxPolicy ??
           AgentPermissionSelection.defaultSandboxPolicy,
-      permissionProfileId: config.selectedPermissionProfileId,
+      permissionProfileId:
+          _provider?.capabilities.supportsPermissionProfileSelection == true
+          ? config.selectedPermissionProfileId
+          : null,
     );
     _provider?.updatePermissionSelection(_selection);
   }
@@ -52,13 +59,19 @@ class AgentConversationPermissionSelectionController {
     _selection = AgentPermissionSelection(
       approvalPolicy: preset.approvalPolicy,
       sandboxPolicy: preset.sandboxPolicy,
-      permissionProfileId: _selection.permissionProfileId,
+      permissionProfileId:
+          _provider?.capabilities.supportsPermissionProfileSelection == true
+          ? _selection.permissionProfileId
+          : null,
     );
     await _syncSelection();
   }
 
   Future<void> selectSelection(AgentPermissionSelection selection) async {
-    _selection = selection;
+    _selection =
+        _provider?.capabilities.supportsPermissionProfileSelection == true
+        ? selection
+        : selection.copyWith(clearPermissionProfileId: true);
     await _syncSelection();
   }
 
@@ -82,7 +95,8 @@ class AgentConversationPermissionSelectionController {
       next = next.copyWith(sandboxPolicy: sandboxPolicy);
       changed = true;
     }
-    if (permissionProfileId != null &&
+    if (_provider?.capabilities.supportsPermissionProfileSelection == true &&
+        permissionProfileId != null &&
         permissionProfileId != next.permissionProfileId) {
       next = next.copyWith(permissionProfileId: permissionProfileId);
       changed = true;
@@ -96,7 +110,9 @@ class AgentConversationPermissionSelectionController {
 
   Future<void> refreshProfiles() async {
     final provider = _provider;
-    if (provider == null) {
+    if (provider == null ||
+        !provider.capabilities.supportsPermissionProfileDiscovery) {
+      _profiles = const <AgentPermissionProfileSummary>[];
       return;
     }
     try {

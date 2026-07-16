@@ -48,7 +48,7 @@ class AgentProviderCapabilities {
     this.canArchiveThread = false,
     this.canUnarchiveThread = false,
     this.canForkThread = false,
-    this.canRollbackThread = false,
+    this.canForkThreadAtTurn = false,
     this.canCompactThread = false,
     this.supportsTextInput = true,
     this.supportsLocalImageInput = false,
@@ -61,7 +61,8 @@ class AgentProviderCapabilities {
     this.supportsReasoningOptions = false,
     this.supportsServiceTierSelection = false,
     this.supportsPermissionPolicySelection = false,
-    this.supportsPermissionProfiles = false,
+    this.supportsPermissionProfileDiscovery = false,
+    this.supportsPermissionProfileSelection = false,
     this.supportsUsage = false,
     this.bootstrapPolicy = AgentProviderBootstrapPolicy.eager,
   });
@@ -81,7 +82,9 @@ class AgentProviderCapabilities {
   final bool canArchiveThread;
   final bool canUnarchiveThread;
   final bool canForkThread;
-  final bool canRollbackThread;
+
+  /// 是否可在指定历史 turn 结束处创建分支。
+  final bool canForkThreadAtTurn;
   final bool canCompactThread;
   final bool supportsTextInput;
   final bool supportsLocalImageInput;
@@ -94,7 +97,12 @@ class AgentProviderCapabilities {
   final bool supportsReasoningOptions;
   final bool supportsServiceTierSelection;
   final bool supportsPermissionPolicySelection;
-  final bool supportsPermissionProfiles;
+
+  /// 是否可发现 provider 提供的权限配置档案。
+  final bool supportsPermissionProfileDiscovery;
+
+  /// 是否可把权限配置档案作为运行时选择发送给 provider。
+  final bool supportsPermissionProfileSelection;
   final bool supportsUsage;
   final AgentProviderBootstrapPolicy bootstrapPolicy;
 
@@ -112,7 +120,7 @@ class AgentProviderCapabilities {
     bool? canArchiveThread,
     bool? canUnarchiveThread,
     bool? canForkThread,
-    bool? canRollbackThread,
+    bool? canForkThreadAtTurn,
     bool? canCompactThread,
     bool? supportsTextInput,
     bool? supportsLocalImageInput,
@@ -125,7 +133,8 @@ class AgentProviderCapabilities {
     bool? supportsReasoningOptions,
     bool? supportsServiceTierSelection,
     bool? supportsPermissionPolicySelection,
-    bool? supportsPermissionProfiles,
+    bool? supportsPermissionProfileDiscovery,
+    bool? supportsPermissionProfileSelection,
     bool? supportsUsage,
     AgentProviderBootstrapPolicy? bootstrapPolicy,
   }) {
@@ -144,7 +153,7 @@ class AgentProviderCapabilities {
       canArchiveThread: canArchiveThread ?? this.canArchiveThread,
       canUnarchiveThread: canUnarchiveThread ?? this.canUnarchiveThread,
       canForkThread: canForkThread ?? this.canForkThread,
-      canRollbackThread: canRollbackThread ?? this.canRollbackThread,
+      canForkThreadAtTurn: canForkThreadAtTurn ?? this.canForkThreadAtTurn,
       canCompactThread: canCompactThread ?? this.canCompactThread,
       supportsTextInput: supportsTextInput ?? this.supportsTextInput,
       supportsLocalImageInput:
@@ -167,8 +176,12 @@ class AgentProviderCapabilities {
       supportsPermissionPolicySelection:
           supportsPermissionPolicySelection ??
           this.supportsPermissionPolicySelection,
-      supportsPermissionProfiles:
-          supportsPermissionProfiles ?? this.supportsPermissionProfiles,
+      supportsPermissionProfileDiscovery:
+          supportsPermissionProfileDiscovery ??
+          this.supportsPermissionProfileDiscovery,
+      supportsPermissionProfileSelection:
+          supportsPermissionProfileSelection ??
+          this.supportsPermissionProfileSelection,
       supportsUsage: supportsUsage ?? this.supportsUsage,
       bootstrapPolicy: bootstrapPolicy ?? this.bootstrapPolicy,
     );
@@ -188,7 +201,8 @@ class AgentProviderCapabilities {
     canArchiveThread: true,
     canUnarchiveThread: true,
     canForkThread: true,
-    canRollbackThread: true,
+    // 指定 turn 分支取决于运行时 Codex 版本，初始化后动态开启。
+    canForkThreadAtTurn: false,
     canCompactThread: true,
     supportsLocalImageInput: true,
     supportsResourceInput: true,
@@ -199,7 +213,9 @@ class AgentProviderCapabilities {
     supportsReasoningOptions: true,
     supportsServiceTierSelection: true,
     supportsPermissionPolicySelection: true,
-    supportsPermissionProfiles: true,
+    supportsPermissionProfileDiscovery: true,
+    // 0.144.5 的 profile 选择仍属于实验性协议，Zeta 暂不承诺可选。
+    supportsPermissionProfileSelection: false,
     supportsUsage: true,
   );
 

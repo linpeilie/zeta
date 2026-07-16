@@ -615,7 +615,8 @@ class AgentErrorEvent extends AgentEvent {
   final String? details;
 
   /// Codex 错误码（`codexErrorInfo`），如 `contextWindowExceeded`、
-  /// `unauthorized`、`httpConnectionFailed`；非协议错误或旧版协议为空。
+  /// `unauthorized`、`sessionBudgetExceeded`、`httpConnectionFailed`；
+  /// 非协议错误或旧版协议为空。
   ///
   /// UI 可据此提供针对性引导（如上下文超限时建议压缩会话）。
   final String? code;

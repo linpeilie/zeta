@@ -1,30 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "ExternalAgentConfigImportCompletedNotification",
-  "type": "object",
-  "required": [
-    "importId",
-    "itemTypeResults"
-  ],
-  "properties": {
-    "importId": {
-      "type": "string"
-    },
-    "itemTypeResults": {
-      "type": "array",
-      "items": {
-        "$ref": "#/definitions/ExternalAgentConfigImportTypeResult"
-      }
-    }
-  },
   "definitions": {
     "ExternalAgentConfigImportItemTypeFailure": {
-      "type": "object",
-      "required": [
-        "failureStage",
-        "itemType",
-        "message"
-      ],
       "properties": {
         "cwd": {
           "type": [
@@ -53,13 +30,15 @@
             "null"
           ]
         }
-      }
+      },
+      "required": [
+        "failureStage",
+        "itemType",
+        "message"
+      ],
+      "type": "object"
     },
     "ExternalAgentConfigImportItemTypeSuccess": {
-      "type": "object",
-      "required": [
-        "itemType"
-      ],
       "properties": {
         "cwd": {
           "type": [
@@ -82,35 +61,38 @@
             "null"
           ]
         }
-      }
+      },
+      "required": [
+        "itemType"
+      ],
+      "type": "object"
     },
     "ExternalAgentConfigImportTypeResult": {
-      "type": "object",
-      "required": [
-        "failures",
-        "itemType",
-        "successes"
-      ],
       "properties": {
         "failures": {
-          "type": "array",
           "items": {
             "$ref": "#/definitions/ExternalAgentConfigImportItemTypeFailure"
-          }
+          },
+          "type": "array"
         },
         "itemType": {
           "$ref": "#/definitions/ExternalAgentConfigMigrationItemType"
         },
         "successes": {
-          "type": "array",
           "items": {
             "$ref": "#/definitions/ExternalAgentConfigImportItemTypeSuccess"
-          }
+          },
+          "type": "array"
         }
-      }
+      },
+      "required": [
+        "failures",
+        "itemType",
+        "successes"
+      ],
+      "type": "object"
     },
     "ExternalAgentConfigMigrationItemType": {
-      "type": "string",
       "enum": [
         "AGENTS_MD",
         "CONFIG",
@@ -121,7 +103,25 @@
         "HOOKS",
         "COMMANDS",
         "SESSIONS"
-      ]
+      ],
+      "type": "string"
     }
-  }
+  },
+  "properties": {
+    "importId": {
+      "type": "string"
+    },
+    "itemTypeResults": {
+      "items": {
+        "$ref": "#/definitions/ExternalAgentConfigImportTypeResult"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "importId",
+    "itemTypeResults"
+  ],
+  "title": "ExternalAgentConfigImportCompletedNotification",
+  "type": "object"
 }

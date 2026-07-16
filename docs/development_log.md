@@ -21,7 +21,7 @@
 ### Codex app-server 协议同步机制
 
 - 新增 `tool/gen_codex_schema.sh` 与 `tool/gen_codex_schema.ps1`，从本机 Codex CLI 导出 JSON Schema。
-- 将 pinned 快照提交到 `third_party/codex_app_server_schema/`（当前 `0.142.5`），并排除键序不稳定的 v2 聚合文件。
+- 将 pinned 快照提交到 `third_party/codex_app_server_schema/`（当前 `0.144.5`），并排除键序不稳定的 v2 聚合文件。
 - 新增 `docs/codex_app_server_protocol.md`，记录 pin 版本、再生命令与升级 diff 流程；同步开发者文档、设计文档与工程规范入口。
 - Phase 0（协议对齐审计）在适配计划中全部完成。
 

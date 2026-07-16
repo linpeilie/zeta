@@ -668,16 +668,9 @@ class CursorAcpAgentProvider
   Future<AgentSession> forkThread({
     required String threadId,
     required AgentContext context,
+    AgentForkBoundary boundary = const AgentForkCurrentHead(),
   }) async {
     throw UnsupportedError('Cursor ACP 未声明 session 分叉能力');
-  }
-
-  @override
-  Future<AgentThreadHistorySnapshot> rollbackThread({
-    required String threadId,
-    required int numTurns,
-  }) async {
-    throw UnsupportedError('Cursor ACP 未声明回滚能力');
   }
 
   @override
@@ -788,6 +781,7 @@ class CursorAcpAgentProvider
   @override
   Future<void> steerTurn({
     required AgentSession session,
+    required String expectedTurnId,
     required AgentContext context,
     String? message,
     List<AgentUserInput>? inputs,

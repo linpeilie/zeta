@@ -1422,7 +1422,7 @@ void main() {
       await provider.dispose();
     });
 
-    test('fork and rollback return session and history', () async {
+    test('fork at turn sends stable inclusive lastTurnId boundary', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
         config: AgentProviderConfig.defaultCodex,
@@ -1432,20 +1432,18 @@ void main() {
       final session = await provider.forkThread(
         threadId: 'thread-1',
         context: const AgentContext(projectPath: '/repo'),
+        boundary: const AgentForkThroughTurn('turn-7'),
       );
       expect(session.id, isNotEmpty);
       expect(peer.requestMethods, contains('thread/fork'));
-
-      final history = await provider.rollbackThread(
-        threadId: 'thread-1',
-        numTurns: 1,
-      );
-      expect(history.threadId, 'thread-1');
-      expect(peer.requestMethods, contains('thread/rollback'));
       expect(peer.requestParams.last, <String, Object?>{
         'threadId': 'thread-1',
-        'numTurns': 1,
+        'lastTurnId': 'turn-7',
+        'cwd': '/repo',
+        'approvalPolicy': 'on-request',
+        'sandbox': 'workspace-write',
       });
+      expect(peer.requestMethods, isNot(contains('thread/rollback')));
 
       await provider.dispose();
     });
@@ -1467,7 +1465,6 @@ void main() {
       expect(peer.requestParams.last, <String, Object?>{
         'threadId': 'thread-1',
         'includeTurns': true,
-        'itemsView': 'full',
       });
       expect(history.threadId, 'thread-1');
       expect(_historyEntries(history), hasLength(8));
@@ -2295,6 +2292,21 @@ void main() {
       expect(errors[1].message, 'Connection failed');
       expect(errors[1].code, 'httpConnectionFailed');
       expect(errors[1].willRetry, isFalse);
+
+      peer.emitNotification('error', <String, Object?>{
+        'threadId': 'thread-1',
+        'turnId': 'turn-live',
+        'willRetry': false,
+        'error': <String, Object?>{
+          'message': 'Session budget exceeded',
+          'codexErrorInfo': 'sessionBudgetExceeded',
+        },
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        events.whereType<AgentErrorEvent>().last.code,
+        'sessionBudgetExceeded',
+      );
     });
 
     test(
@@ -2795,6 +2807,128 @@ void main() {
       },
     );
 
+    test('turn/steer requires active expectedTurnId and omits cwd', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+
+      final session = await provider.startSession(
+        context: const AgentContext(projectPath: '/repo'),
+      );
+      final turn = await provider.sendMessage(
+        session: session,
+        message: 'start',
+        context: const AgentContext(projectPath: '/repo'),
+      );
+      await provider.steerTurn(
+        session: session,
+        expectedTurnId: turn.id,
+        message: 'continue',
+        context: const AgentContext(projectPath: '/different-repo'),
+      );
+
+      final index = peer.requestMethods.indexOf('turn/steer');
+      final params = peer.requestParams[index]! as Map<String, Object?>;
+      expect(params['expectedTurnId'], turn.id);
+      expect(params.containsKey('cwd'), isFalse);
+      await expectLater(
+        provider.steerTurn(
+          session: session,
+          expectedTurnId: 'stale-turn',
+          message: 'stale',
+          context: const AgentContext(projectPath: '/repo'),
+        ),
+        throwsStateError,
+      );
+    });
+
+    test(
+      'normalizes removed on-failure approval policy before encoding',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+        provider.updatePermissionSelection(
+          const AgentPermissionSelection(approvalPolicy: 'on-failure'),
+        );
+
+        await provider.startSession(
+          context: const AgentContext(projectPath: '/repo'),
+        );
+        final threadIndex = peer.requestMethods.indexOf('thread/start');
+        final threadParams =
+            peer.requestParams[threadIndex]! as Map<String, Object?>;
+        expect(threadParams['approvalPolicy'], 'on-request');
+      },
+    );
+
+    test(
+      'maps initialize response into version-gated runtime capabilities',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+
+        await provider.initialize();
+
+        expect(provider.runtimeInfo?.cliVersion, '0.144.5');
+        expect(
+          provider.runtimeInfo?.compatibilityStatus,
+          AgentRuntimeCompatibilityStatus.supported,
+        );
+        expect(provider.capabilities.canForkThreadAtTurn, isTrue);
+        expect(
+          provider.capabilities.supportsPermissionProfileDiscovery,
+          isTrue,
+        );
+        expect(
+          provider.capabilities.supportsPermissionProfileSelection,
+          isFalse,
+        );
+      },
+    );
+
+    test('keeps fork-at-turn closed for older Codex runtime', () async {
+      final peer = _FakeJsonRpcPeer(
+        initializeResponse: const <String, Object?>{
+          'codexHome': '/home/test/.codex',
+          'platformFamily': 'unix',
+          'platformOs': 'linux',
+          'userAgent': 'codex_cli_rs/0.144.4',
+        },
+      );
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+
+      await provider.initialize();
+
+      expect(
+        provider.runtimeInfo?.compatibilityStatus,
+        AgentRuntimeCompatibilityStatus.supportedWithLimitedCapabilities,
+      );
+      expect(provider.capabilities.canForkThreadAtTurn, isFalse);
+      await expectLater(
+        provider.forkThread(
+          threadId: 'thread-1',
+          context: const AgentContext(projectPath: '/repo'),
+          boundary: const AgentForkThroughTurn('turn-1'),
+        ),
+        throwsUnsupportedError,
+      );
+    });
+
     test('encodes mention inputs in turn/start', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
@@ -2986,7 +3120,15 @@ Future<File> _writeJsonlFile(List<Object?> records) async {
 }
 
 class _FakeJsonRpcPeer implements JsonRpcPeer {
-  _FakeJsonRpcPeer({this._startCompleter});
+  _FakeJsonRpcPeer({
+    this._startCompleter,
+    this.initializeResponse = const <String, Object?>{
+      'codexHome': '/home/test/.codex',
+      'platformFamily': 'unix',
+      'platformOs': 'linux',
+      'userAgent': 'codex_cli_rs/0.144.5',
+    },
+  });
 
   final StreamController<JsonRpcNotification> _notifications =
       StreamController<JsonRpcNotification>.broadcast();
@@ -3003,6 +3145,7 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
   final Map<Object, Object?> responses = <Object, Object?>{};
   final Map<Object, JsonRpcError> errorResponses = <Object, JsonRpcError>{};
   final Completer<void>? _startCompleter;
+  final Map<String, Object?> initializeResponse;
   int startCalls = 0;
   int _threadStartCount = 0;
 
@@ -3036,7 +3179,7 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
         ? params
         : const <String, Object?>{};
     return switch (method) {
-      'initialize' => <String, Object?>{'ok': true},
+      'initialize' => initializeResponse,
       'thread/start' => () {
         _threadStartCount += 1;
         return <String, Object?>{
@@ -3079,17 +3222,6 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
         'model': 'gpt-5.5',
         'modelProvider': 'openai',
         'sandbox': 'workspace-write',
-      },
-      'thread/rollback' => <String, Object?>{
-        'thread': <String, Object?>{
-          'id': paramsMap['threadId'] ?? 'thread-1',
-          'cwd': '/repo',
-          'preview': 'Rolled back',
-          'createdAt': 100,
-          'updatedAt': 120,
-          'status': <String, Object?>{'type': 'idle'},
-          'turns': <Object?>[],
-        },
       },
       'thread/list' => <String, Object?>{
         'data': <Object?>[

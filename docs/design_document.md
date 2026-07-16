@@ -196,8 +196,8 @@ repository。Cursor repository 负责多候选身份探测、版本/账号检查
 
 **适配进度（截至 Phase 2 核心 2.1–2.5）：** Phase 0 完成协议对齐；Phase 1
 完成核心流式体验；Phase 2 核心完成 thread 生命周期管理（重命名/归档/删除/
-分叉/回滚/压缩）、列表搜索与归档视图、配套通知同步，以及上下文占用提示。
-审批表单、permissionProfile、mention 等（2.6–2.10）仍待后续切片。
+分叉/按历史 turn 创建分支/压缩）、列表搜索与归档视图、配套通知同步，以及上下文
+占用提示。Permission Profile 当前仅承诺稳定的发现能力，不承诺实验性选择能力。
 
 ### 当前已落地的对话体验
 
@@ -213,7 +213,8 @@ repository。Cursor repository 负责多候选身份探测、版本/账号检查
 - 18 种 ThreadItem 在实时路径与 `thread/read` / JSONL 历史中一致映射。
 - 输入区支持本地图片（选图 / 粘贴落盘）随 turn 发送，时间线气泡预览。
 - Thread 列表：搜索、活动/归档切换、右键重命名/归档/删除/分叉。
-- 编辑上一条用户消息（`thread/rollback` + 重发）；头栏分叉与上下文压缩入口。
+- 编辑上一条用户消息时保留原 thread，并通过 `thread/fork.lastTurnId` 创建分支后
+  重发；工作区文件改动不会随会话分支而回滚。
 
 ### 输入框模型配置
 
@@ -325,7 +326,7 @@ IDE 会话状态目前版本为 2，持久化内容包括：
 
 ## 10. 演进方向
 
-- Codex 适配 Phase 2：thread 重命名/归档/删除/分叉/回滚/压缩，以及审批表单与策略预设（见适配计划）。
+- Codex 适配 Phase 2：thread 重命名/归档/删除/分叉/按 turn 创建分支/压缩，以及审批表单与策略预设（见适配计划）；不再承诺已弃用的 `thread/rollback`。
 - 在 Windows、macOS、Linux/WSL 完成两个 Cursor CLI 版本的真实 smoke 后，再评估提升
   Cursor Beta 的默认展示层级；provider 继续默认禁用。
 - 增加文件内容预览或编辑器能力。

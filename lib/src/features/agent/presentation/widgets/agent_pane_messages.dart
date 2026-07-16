@@ -346,7 +346,7 @@ class _AgentBubbleMessage extends StatelessWidget {
                   onPressed: () {
                     unawaited(_showEditRetryDialog(context));
                   },
-                  child: Text('编辑并重试', style: textStyles.bodySmall),
+                  child: Text('从此处创建分支', style: textStyles.bodySmall),
                 ),
               ],
             ],
@@ -362,14 +362,17 @@ class _AgentBubbleMessage extends StatelessWidget {
       context: context,
       builder: (dialogContext) {
         return IdeDialog(
-          title: const Text('编辑并重试'),
+          title: const Text('创建分支并重试'),
           content: SizedBox(
             width: 360,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('将回滚上一回合后重新发送。不会还原 Agent 已写入的本地文件改动。'),
+                const Text(
+                  '将保留原会话，并从上一回合结束处创建新分支。'
+                  '工作区文件不会回滚，之前由 Agent 写入的改动仍然存在。',
+                ),
                 const SizedBox(height: IdeSpacing.space12),
                 sf.TextField(
                   controller: controller,
@@ -384,7 +387,7 @@ class _AgentBubbleMessage extends StatelessWidget {
               onPressed: () => Navigator.of(dialogContext).pop(false),
             ),
             IdeDialogAction.confirm(
-              label: '发送',
+              label: '创建分支并发送',
               onPressed: () => Navigator.of(dialogContext).pop(true),
             ),
           ],

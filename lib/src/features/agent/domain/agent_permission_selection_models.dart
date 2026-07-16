@@ -32,7 +32,9 @@ class AgentPermissionSelection {
   /// 默认沙箱策略（域内 camelCase；编码时再映射到协议形状）。
   static const String defaultSandboxPolicy = 'workspaceWrite';
 
-  /// 审批策略：`untrusted` / `on-failure` / `on-request` / `never`。
+  /// 审批策略：`untrusted` / `on-request` / `never`。
+  ///
+  /// 旧配置中的 `on-failure` 会在读取和协议编码前迁移为 `on-request`。
   final String approvalPolicy;
 
   /// 沙箱策略：`readOnly` / `workspaceWrite` / `dangerFullAccess`。
@@ -114,6 +116,20 @@ class AgentPermissionSelection {
       'dangerFullAccess' => 'danger-full-access',
       _ => 'workspace-write',
     };
+  }
+
+  /// 把持久化或 UI 输入归一化为 0.144.5 稳定协议支持的审批策略。
+  static String normalizeApprovalPolicy(String? value) {
+    return switch (value) {
+      'untrusted' || 'on-request' || 'never' => value!,
+      'on-failure' => 'on-request',
+      _ => defaultApprovalPolicy,
+    };
+  }
+
+  /// 可空配置的迁移入口；未配置仍保持 `null`，由上层应用默认值。
+  static String? normalizePersistedApprovalPolicy(String? value) {
+    return value == null ? null : normalizeApprovalPolicy(value);
   }
 
   /// 从协议 sandbox 对象或 SandboxMode 字符串解析域内 sandboxPolicy。

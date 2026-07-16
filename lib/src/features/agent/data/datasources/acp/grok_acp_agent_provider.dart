@@ -539,16 +539,9 @@ class GrokAcpAgentProvider implements AgentProvider {
   Future<AgentSession> forkThread({
     required String threadId,
     required AgentContext context,
+    AgentForkBoundary boundary = const AgentForkCurrentHead(),
   }) async {
     throw UnsupportedError('Grok ACP does not support forking threads');
-  }
-
-  @override
-  Future<AgentThreadHistorySnapshot> rollbackThread({
-    required String threadId,
-    required int numTurns,
-  }) async {
-    throw UnsupportedError('Grok ACP does not support rolling back threads');
   }
 
   @override
@@ -662,6 +655,7 @@ class GrokAcpAgentProvider implements AgentProvider {
   @override
   Future<void> steerTurn({
     required AgentSession session,
+    required String expectedTurnId,
     required AgentContext context,
     String? message,
     List<AgentUserInput>? inputs,

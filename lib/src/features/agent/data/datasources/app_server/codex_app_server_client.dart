@@ -167,11 +167,7 @@ class _CodexAppServerClient {
 
     final result = await _peer.sendRequest(
       'thread/read',
-      params: <String, Object?>{
-        'threadId': threadId,
-        'includeTurns': true,
-        'itemsView': 'full',
-      },
+      params: <String, Object?>{'threadId': threadId, 'includeTurns': true},
     );
     return _threadHistoryReader.threadHistoryFromReadResult(result, threadId);
   }
@@ -216,6 +212,7 @@ class _CodexAppServerClient {
   Future<AgentSession> forkThread({
     required String threadId,
     required AgentContext context,
+    required AgentForkBoundary boundary,
     required AgentPermissionSelection permissionSelection,
     String? previousSessionId,
   }) async {
@@ -223,6 +220,8 @@ class _CodexAppServerClient {
       'thread/fork',
       params: <String, Object?>{
         'threadId': threadId,
+        if (boundary case AgentForkThroughTurn(:final turnId))
+          'lastTurnId': turnId,
         ..._threadParams(context, permissionSelection),
       },
     );
@@ -230,17 +229,6 @@ class _CodexAppServerClient {
       result,
       previousSessionId: previousSessionId,
     );
-  }
-
-  Future<AgentThreadHistorySnapshot> rollbackThread({
-    required String threadId,
-    required int numTurns,
-  }) async {
-    final result = await _peer.sendRequest(
-      'thread/rollback',
-      params: <String, Object?>{'threadId': threadId, 'numTurns': numTurns},
-    );
-    return _threadHistoryReader.threadHistoryFromReadResult(result, threadId);
   }
 
   Future<void> compactThread(String threadId) {
@@ -270,7 +258,9 @@ class _CodexAppServerClient {
         // reasoningEffort；`summary`（推理摘要模式）暂无 UI 来源，不发送。
         'effort': ?selection.reasoningEffort,
         'serviceTier': ?selection.serviceTierId,
-        'approvalPolicy': permissionSelection.approvalPolicy,
+        'approvalPolicy': AgentPermissionSelection.normalizeApprovalPolicy(
+          permissionSelection.approvalPolicy,
+        ),
         'sandboxPolicy': permissionSelection.toTurnSandboxPolicy(),
         'clientUserMessageId': ?clientUserMessageId,
       },
@@ -281,7 +271,7 @@ class _CodexAppServerClient {
   Future<void> steerTurn({
     required AgentSession session,
     required List<AgentUserInput> inputs,
-    required AgentContext context,
+    required String expectedTurnId,
     String? clientUserMessageId,
   }) {
     return _peer.sendRequest(
@@ -289,7 +279,7 @@ class _CodexAppServerClient {
       params: <String, Object?>{
         'threadId': session.id,
         'input': _encodeUserInputs(inputs),
-        if (context.projectPath != null) 'cwd': context.projectPath,
+        'expectedTurnId': expectedTurnId,
         'clientUserMessageId': ?clientUserMessageId,
       },
     );
@@ -384,7 +374,9 @@ class _CodexAppServerClient {
     return <String, Object?>{
       if (context.projectPath != null) 'cwd': context.projectPath,
       if (_config.defaultModel != null) 'model': _config.defaultModel,
-      'approvalPolicy': permissionSelection.approvalPolicy,
+      'approvalPolicy': AgentPermissionSelection.normalizeApprovalPolicy(
+        permissionSelection.approvalPolicy,
+      ),
       'sandbox': permissionSelection.toThreadSandboxMode(),
     };
   }

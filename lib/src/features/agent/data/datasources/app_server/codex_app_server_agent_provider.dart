@@ -10,6 +10,7 @@ import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 part 'codex_app_server_client.dart';
+part 'codex_app_server_runtime_info.dart';
 part '../../mappers/codex_app_server_helpers.dart';
 part '../../mappers/codex_approval_mapper.dart';
 part '../../mappers/codex_model_list_mapper.dart';
@@ -27,7 +28,10 @@ typedef JsonRpcPeerFactory = JsonRpcPeer Function(AgentProviderConfig config);
 /// 该类现在只负责生命周期、状态协同与事件分发，具体的 JSON-RPC 请求、
 /// 通知映射、审批映射与历史解析已经拆分到独立模块。
 class CodexAppServerAgentProvider
-    implements AgentProvider, AgentUsageQuotaProvider {
+    implements
+        AgentProvider,
+        AgentUsageQuotaProvider,
+        AgentRuntimeInfoProvider {
   /// 创建 Codex app-server provider 实例。
   ///
   /// [config] 包含命令、参数、环境变量等 provider 配置。
@@ -91,6 +95,11 @@ class CodexAppServerAgentProvider
   /// 用户选择的审批/沙箱策略。
   AgentPermissionSelection _permissionSelection;
 
+  AgentProviderCapabilities _capabilities =
+      AgentProviderCapabilities.codexAppServer;
+
+  AgentRuntimeInfo? _runtimeInfo;
+
   /// 缓存的模型列表，initialize 握手后自动拉取。
   AgentModelList? _modelList;
 
@@ -145,8 +154,10 @@ class CodexAppServerAgentProvider
   Stream<AgentEvent> get events => _events.stream;
 
   @override
-  AgentProviderCapabilities get capabilities =>
-      AgentProviderCapabilities.codexAppServer;
+  AgentProviderCapabilities get capabilities => _capabilities;
+
+  @override
+  AgentRuntimeInfo? get runtimeInfo => _runtimeInfo;
 
   /// 开发诊断：未匹配服务端通知按 method 的累计次数。
   ///
@@ -192,7 +203,7 @@ class CodexAppServerAgentProvider
       await _peer.start();
       _listenToPeer();
 
-      await _peer.sendRequest(
+      final initializeResult = await _peer.sendRequest(
         'initialize',
         params: <String, Object?>{
           'clientInfo': <String, Object?>{
@@ -212,6 +223,12 @@ class CodexAppServerAgentProvider
           },
         },
       );
+
+      _runtimeInfo = _codexRuntimeInfoFromInitialize(
+        initializeResult,
+        configuredVersion: config.extra['detectedCurrentVersion']?.toString(),
+      );
+      _capabilities = _codexCapabilitiesForRuntime(_runtimeInfo!);
 
       _peer.sendNotification('initialized');
       _initialized = true;
@@ -438,12 +455,18 @@ class CodexAppServerAgentProvider
   Future<AgentSession> forkThread({
     required String threadId,
     required AgentContext context,
+    AgentForkBoundary boundary = const AgentForkCurrentHead(),
   }) async {
     await initialize();
+    if (boundary is AgentForkThroughTurn &&
+        !_capabilities.canForkThreadAtTurn) {
+      throw UnsupportedError('当前 Codex 版本不支持稳定的指定 turn 分支能力');
+    }
     final previousSessionId = _session?.id;
     final session = await _client.forkThread(
       threadId: threadId,
       context: context,
+      boundary: boundary,
       permissionSelection: _permissionSelection,
       previousSessionId: previousSessionId,
     );
@@ -455,16 +478,6 @@ class CodexAppServerAgentProvider
     _events.add(AgentSessionStartedEvent(session));
     _log.info('Forked Codex thread $threadId -> ${session.id}');
     return session;
-  }
-
-  @override
-  Future<AgentThreadHistorySnapshot> rollbackThread({
-    required String threadId,
-    required int numTurns,
-  }) async {
-    await initialize();
-    _log.info('Rolling back Codex thread $threadId by $numTurns turn(s)');
-    return _client.rollbackThread(threadId: threadId, numTurns: numTurns);
   }
 
   @override
@@ -509,18 +522,28 @@ class CodexAppServerAgentProvider
   @override
   Future<void> steerTurn({
     required AgentSession session,
+    required String expectedTurnId,
     required AgentContext context,
     String? message,
     List<AgentUserInput>? inputs,
     String? clientUserMessageId,
   }) async {
     await initialize();
+    final activeTurnId = _runningTurnIdsBySessionId[session.id];
+    if (activeTurnId == null) {
+      throw StateError('当前会话没有可追加指令的活动 turn');
+    }
+    if (activeTurnId != expectedTurnId) {
+      throw StateError(
+        '活动 turn 已变化：expected=$expectedTurnId, actual=$activeTurnId',
+      );
+    }
     final resolvedInputs = _resolveUserInputs(message: message, inputs: inputs);
     _log.info('Steering Codex turn for thread ${session.id}');
     await _client.steerTurn(
       session: session,
       inputs: resolvedInputs,
-      context: context,
+      expectedTurnId: activeTurnId,
       clientUserMessageId: clientUserMessageId,
     );
   }

@@ -228,6 +228,22 @@ class AgentConversationTimelineStore {
     return _turnGroups.containsKey(turnId);
   }
 
+  /// 返回指定消息所属 turn 的前一个历史 turn，供“从此前分支”使用。
+  ///
+  /// Codex 0.144.5 的 `lastTurnId` 是包含式边界，因此编辑某个 turn 的用户消息
+  /// 时必须传它的前一 turn，才能让新分支排除待替换的整回合。
+  String? forkBoundaryBeforeMessage(String messageId) {
+    final targetTurnId = _turnIdsByTimelineEntryId['message-$messageId'];
+    if (targetTurnId == null) {
+      return null;
+    }
+    final targetIndex = _historicalTurnOrder.indexOf(targetTurnId);
+    if (targetIndex <= 0) {
+      return null;
+    }
+    return _historicalTurnOrder[targetIndex - 1];
+  }
+
   /// 扩大历史窗口，一次多显示固定页数的更早 turn。
   bool loadOlderTurns() {
     final nextStartIndex = math.max(

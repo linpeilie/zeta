@@ -241,6 +241,13 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
         failureStage: probe.failureStage,
         message: probe.message,
         rawErrorSummary: probe.details,
+        protocolVersion: probe.runtimeInfo?.protocolVersion,
+        agentName: probe.runtimeInfo?.protocolName,
+        agentVersion: probe.runtimeInfo?.cliVersion,
+        capabilitySummary: _capabilitySummary(probe.capabilities),
+        compatibilitySummary: probe.runtimeInfo == null
+            ? null
+            : _compatibilitySummary(probe.runtimeInfo!.compatibilityStatus),
       ),
       probe.models,
     );
@@ -572,7 +579,14 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
       final models = await provider.listModels().timeout(
         Duration(seconds: _timeoutSeconds(config)),
       );
-      return _ProviderProbe(success: true, models: models.models);
+      return _ProviderProbe(
+        success: true,
+        models: models.models,
+        runtimeInfo: provider is AgentRuntimeInfoProvider
+            ? (provider as AgentRuntimeInfoProvider).runtimeInfo
+            : null,
+        capabilities: provider.capabilities,
+      );
     } catch (error) {
       return _ProviderProbe(
         success: false,
@@ -779,6 +793,8 @@ class _ProviderProbe {
     this.failureStage,
     this.message,
     this.details,
+    this.runtimeInfo,
+    this.capabilities,
   });
 
   final bool success;
@@ -786,6 +802,34 @@ class _ProviderProbe {
   final AgentDiagnosticStage? failureStage;
   final String? message;
   final String? details;
+  final AgentRuntimeInfo? runtimeInfo;
+  final AgentProviderCapabilities? capabilities;
+}
+
+List<String> _capabilitySummary(AgentProviderCapabilities? capabilities) {
+  if (capabilities == null) {
+    return const <String>[];
+  }
+  return <String>[
+    if (capabilities.canPrompt) 'prompt',
+    if (capabilities.canSteerTurn) 'steer',
+    if (capabilities.canForkThreadAtTurn) 'fork-at-turn',
+    if (capabilities.supportsPermissionProfileDiscovery)
+      'permission-profile-discovery',
+    if (capabilities.supportsPermissionProfileSelection)
+      'permission-profile-selection',
+  ];
+}
+
+String _compatibilitySummary(AgentRuntimeCompatibilityStatus status) {
+  return switch (status) {
+    AgentRuntimeCompatibilityStatus.supported => '已验证支持',
+    AgentRuntimeCompatibilityStatus.supportedWithLimitedCapabilities =>
+      '兼容运行，部分能力关闭',
+    AgentRuntimeCompatibilityStatus.newerUntested => '版本较新，尚未完整验证',
+    AgentRuntimeCompatibilityStatus.olderUnsupported => '版本过旧，不受支持',
+    AgentRuntimeCompatibilityStatus.protocolMismatch => '协议不兼容',
+  };
 }
 
 class _ConfigurationInfo {

@@ -1,6 +1,6 @@
 # Codex app-server 协议版本锁定
 
-最后更新：2026-07-09
+最后更新：2026-07-16
 
 ## 1. 目的
 
@@ -15,15 +15,14 @@ Zeta 的默认 Agent provider（`CodexAppServerAgentProvider`）按 Codex CLI
 
 | 项 | 值 |
 | --- | --- |
-| Pinned Codex CLI | **0.142.5**（见 `third_party/codex_app_server_schema/PINNED_VERSION`） |
+| Pinned Codex CLI | **0.144.5**（见 `third_party/codex_app_server_schema/PINNED_VERSION`） |
 | 导出命令 | `codex app-server generate-json-schema --out <dir>` |
 | Schema 快照目录 | [`third_party/codex_app_server_schema/`](../third_party/codex_app_server_schema/) |
 | 生成脚本 | [`tool/gen_codex_schema.sh`](../tool/gen_codex_schema.sh)、[`tool/gen_codex_schema.ps1`](../tool/gen_codex_schema.ps1) |
 | 适配计划 | [`plan/codex_app_server_adaptation_plan.md`](../plan/codex_app_server_adaptation_plan.md) |
 
-> 说明：适配审计最初对照 `0.142.3` 完成；仓库快照以本机可复现的
-> `0.142.5` 导出为准。若需严格对齐 `0.142.3`，用该版本 CLI 重新生成并
-> `--force` / `-Force` 覆盖 pin。
+> 说明：本次快照直接取自 `codex-rust-v0.144.5` release 源码中已生成的
+> stable JSON Schema；未纳入实验性 API，也继续排除键序不稳定的 v2 聚合文件。
 
 运行时仍通过 PATH / 安装目录解析 `codex`；**运行时 CLI 版本不必与 pin
 完全一致**，但升级前应先做 schema diff，确认适配层仍覆盖关键方法。
@@ -86,7 +85,18 @@ Windows 上若 PATH 里的 npm 全局 `codex` 偏旧，脚本会优先尝试
 5. 更新本文件的 pinned 版本说明，以及
    `plan/codex_app_server_adaptation_plan.md` 中的协议基准段落。
 6. 用真实 `codex app-server --stdio` 做冒烟（发消息、中断、错误路径）。
-   仓库脚本：`python tool/smoke_codex_app_server.py`（默认找本机 `0.142.x`）。
+   仓库脚本：`python tool/smoke_codex_app_server.py`（目标版本 `0.144.5`）。
+
+## 7. 0.142.5 → 0.144.5 适配结论
+
+- `turn/steer` 必须发送活动回合的 `expectedTurnId`，不得发送 `cwd`。
+- `thread/read` 只发送 `threadId` 与 `includeTurns`，不再夹带 `itemsView`。
+- `thread/rollback` 不再作为 Zeta 产品能力；编辑重试使用
+  `thread/fork.lastTurnId` 创建新分支。
+- `on-failure` 不再下发，旧持久化值迁移为 `on-request`。
+- Permission Profile 的稳定能力仅声明发现，不承诺实验性的运行时选择。
+- `initialize` 返回值被映射为运行时版本、兼容状态与动态能力，未知或旧版本
+  采用保守降级。
 
 ## 6. 与适配层的关系
 

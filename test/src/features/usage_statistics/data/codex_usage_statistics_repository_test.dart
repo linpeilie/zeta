@@ -440,6 +440,7 @@ class _UsageProvider
   @override
   Future<void> steerTurn({
     required AgentSession session,
+    required String expectedTurnId,
     required AgentContext context,
     String? message,
     List<AgentUserInput>? inputs,

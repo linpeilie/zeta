@@ -11,10 +11,12 @@ void main() {
       expect(capabilities.canRenameThread, isTrue);
       expect(capabilities.canArchiveThread, isTrue);
       expect(capabilities.canForkThread, isTrue);
-      expect(capabilities.canRollbackThread, isTrue);
+      expect(capabilities.canForkThreadAtTurn, isFalse);
       expect(capabilities.canCompactThread, isTrue);
       expect(capabilities.supportsLocalImageInput, isTrue);
       expect(capabilities.supportsPermissionPolicySelection, isTrue);
+      expect(capabilities.supportsPermissionProfileDiscovery, isTrue);
+      expect(capabilities.supportsPermissionProfileSelection, isFalse);
     });
 
     test('reports only Grok operations that have real implementations', () {

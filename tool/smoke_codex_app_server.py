@@ -2,7 +2,7 @@
 """Phase 1 smoke against a real `codex app-server --stdio`.
 
 Validates handshake, turn streaming signals, interrupt, unsubscribe, and
-localImage encoding against the pinned Codex CLI (0.142.x).
+localImage encoding against the pinned Codex CLI (0.144.5).
 """
 
 from __future__ import annotations

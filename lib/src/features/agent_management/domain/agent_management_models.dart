@@ -160,6 +160,7 @@ class AgentConnectionTestResult {
     this.agentVersion,
     this.capabilitySummary = const <String>[],
     this.capabilityFingerprint,
+    this.compatibilitySummary,
     this.exitReason,
   });
 
@@ -179,6 +180,7 @@ class AgentConnectionTestResult {
   final String? agentVersion;
   final List<String> capabilitySummary;
   final String? capabilityFingerprint;
+  final String? compatibilitySummary;
   final String? exitReason;
 }
 

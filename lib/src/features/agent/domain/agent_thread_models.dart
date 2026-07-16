@@ -1,5 +1,23 @@
 import 'package:zeta/src/features/agent/domain/agent_model_codec.dart';
 
+/// 创建新会话时采用的历史边界。
+sealed class AgentForkBoundary {
+  const AgentForkBoundary();
+}
+
+/// 从当前 thread 的最新位置创建分支。
+final class AgentForkCurrentHead extends AgentForkBoundary {
+  const AgentForkCurrentHead();
+}
+
+/// 新分支保留到指定 turn（包含该 turn）为止。
+final class AgentForkThroughTurn extends AgentForkBoundary {
+  const AgentForkThroughTurn(this.turnId);
+
+  /// 新分支最后保留的 turn id。
+  final String turnId;
+}
+
 const Object agentThreadSummaryUnset = Object();
 
 /// Agent thread 当前运行状态。

@@ -1,5 +1,6 @@
 import 'package:zeta/src/features/agent/domain/agent_model_codec.dart';
 import 'package:zeta/src/features/agent/domain/agent_model_selection_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_permission_selection_models.dart';
 
 /// Agent 后端的类型。
 ///
@@ -265,9 +266,10 @@ class AgentProviderConfig {
       ),
       selectedServiceTier: decodeOptionalString(map['selectedServiceTier']),
       modelPreferences: _decodeModelPreferences(map['modelPreferences']),
-      selectedApprovalPolicy: decodeOptionalString(
-        map['selectedApprovalPolicy'],
-      ),
+      selectedApprovalPolicy:
+          AgentPermissionSelection.normalizePersistedApprovalPolicy(
+            decodeOptionalString(map['selectedApprovalPolicy']),
+          ),
       selectedSandboxPolicy: decodeOptionalString(map['selectedSandboxPolicy']),
       selectedPermissionProfileId: decodeOptionalString(
         map['selectedPermissionProfileId'],

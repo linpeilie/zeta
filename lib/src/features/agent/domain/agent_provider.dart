@@ -90,15 +90,7 @@ abstract class AgentProvider {
   Future<AgentSession> forkThread({
     required String threadId,
     required AgentContext context,
-  });
-
-  /// 回滚 thread 末尾若干回合（对应 `thread/rollback`）。
-  ///
-  /// 仅修改会话历史，**不**还原 agent 已写入的本地文件。
-  /// 返回回滚后的历史快照（含 turns）。
-  Future<AgentThreadHistorySnapshot> rollbackThread({
-    required String threadId,
-    required int numTurns,
+    AgentForkBoundary boundary = const AgentForkCurrentHead(),
   });
 
   /// 启动上下文压缩（对应 `thread/compact/start`）。
@@ -121,6 +113,7 @@ abstract class AgentProvider {
   /// 语义同 [sendMessage]：优先使用 [inputs]，否则回退到 [message]。
   Future<void> steerTurn({
     required AgentSession session,
+    required String expectedTurnId,
     required AgentContext context,
     String? message,
     List<AgentUserInput>? inputs,
@@ -135,6 +128,11 @@ abstract class AgentProvider {
 
   /// 释放进程、订阅和流。
   Future<void> dispose();
+}
+
+/// 初始化后可提供运行时版本与兼容诊断的 provider 可选接口。
+abstract interface class AgentRuntimeInfoProvider {
+  AgentRuntimeInfo? get runtimeInfo;
 }
 
 /// Provider 拥有本地会话索引时，可只移除客户端列表记录而不删除服务端历史。

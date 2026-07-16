@@ -1889,7 +1889,8 @@ void main() {
       expect(viewModel.currentThreadLastTokenUsage!.totalTokens, 900);
       expect(viewModel.contextWindowUsageRatio, closeTo(0.9, 0.001));
       expect(viewModel.shouldOfferContextCompact, isTrue);
-      expect(viewModel.canEditLastUserMessage, isTrue);
+      // 首回合前没有稳定的 lastTurnId 包含式边界，不能伪造分支能力。
+      expect(viewModel.canEditLastUserMessage, isFalse);
 
       await viewModel.compactCurrentThread();
       expect(provider.calls, contains('compact:thread-1'));
@@ -1951,29 +1952,46 @@ void main() {
       expect(viewModel.currentThreadTitle, 'Renamed title');
     });
 
-    test('edit last user message rolls back then resends', () async {
+    test('edit last user message creates branch then resends', () async {
       final provider =
           _FakeAgentProvider(
-              historySnapshot: AgentThreadHistorySnapshot(
-                threadId: 'thread-1',
-                turns: <AgentHistoryTurn>[
-                  const AgentHistoryTurn(
-                    id: 'turn-1',
-                    status: AgentHistoryTurnStatus.completed,
-                    entries: <AgentHistoryEntry>[
-                      AgentHistoryMessageEntry(
-                        id: 'user-1',
-                        role: AgentMessageRole.user,
-                        text: 'old prompt',
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+              historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+                'thread-1': const AgentThreadHistorySnapshot(
+                  threadId: 'thread-1',
+                  turns: <AgentHistoryTurn>[
+                    AgentHistoryTurn(
+                      id: 'turn-1',
+                      status: AgentHistoryTurnStatus.completed,
+                      entries: <AgentHistoryEntry>[
+                        AgentHistoryMessageEntry(
+                          id: 'user-1',
+                          role: AgentMessageRole.user,
+                          text: 'first prompt',
+                        ),
+                      ],
+                    ),
+                    AgentHistoryTurn(
+                      id: 'turn-2',
+                      status: AgentHistoryTurnStatus.completed,
+                      entries: <AgentHistoryEntry>[
+                        AgentHistoryMessageEntry(
+                          id: 'user-2',
+                          role: AgentMessageRole.user,
+                          text: 'old prompt',
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                'forked-thread-1': const AgentThreadHistorySnapshot(
+                  threadId: 'forked-thread-1',
+                  turns: <AgentHistoryTurn>[],
+                ),
+              },
             )
-            ..rollbackResult = const AgentThreadHistorySnapshot(
-              threadId: 'thread-1',
-              turns: <AgentHistoryTurn>[],
+            ..forkResult = const AgentSession(
+              id: 'forked-thread-1',
+              providerId: defaultAgentProviderId,
             );
       final viewModel = _createViewModel(provider);
       addTearDown(viewModel.dispose);
@@ -1991,8 +2009,8 @@ void main() {
       );
       await viewModel.editLastUserMessageAndRetry('new prompt');
 
-      expect(provider.calls, contains('rollback:thread-1:1'));
-      expect(provider.calls, contains('send:thread-1'));
+      expect(provider.calls, contains('fork:thread-1:through:turn-1'));
+      expect(provider.calls, contains('send:forked-thread-1'));
     });
 
     test('handles model list event and reconciles default selection', () async {
@@ -2443,13 +2461,18 @@ class _FakeAgentProvider
     this.resumeSessionTitle,
     this.providerConfig = AgentProviderConfig.defaultCodex,
     this.availableModels = const AgentModelList(models: <AgentModelInfo>[]),
-    this.declaredCapabilities = AgentProviderCapabilities.codexAppServer,
+    AgentProviderCapabilities? declaredCapabilities,
     AgentThreadHistorySnapshot? historySnapshot,
     Map<String, AgentThreadHistorySnapshot> historySnapshotsByThread =
         const <String, AgentThreadHistorySnapshot>{},
     Map<String, Completer<AgentSession>> resumeCompleters =
         const <String, Completer<AgentSession>>{},
-  }) : _defaultHistorySnapshot =
+  }) : declaredCapabilities =
+           declaredCapabilities ??
+           AgentProviderCapabilities.codexAppServer.copyWith(
+             canForkThreadAtTurn: true,
+           ),
+       _defaultHistorySnapshot =
            historySnapshot ??
            const AgentThreadHistorySnapshot(
              threadId: 'thread-1',
@@ -2606,6 +2629,7 @@ class _FakeAgentProvider
   @override
   Future<void> steerTurn({
     required AgentSession session,
+    required String expectedTurnId,
     required AgentContext context,
     String? message,
     List<AgentUserInput>? inputs,
@@ -2623,21 +2647,21 @@ class _FakeAgentProvider
   Future<void> respondToPermission(AgentPermissionDecision decision) async {}
 
   @override
-  Future<AgentThreadHistorySnapshot> rollbackThread({
-    required String threadId,
-    required int numTurns,
-  }) async {
-    calls.add('rollback:$threadId:$numTurns');
-    return super.rollbackThread(threadId: threadId, numTurns: numTurns);
-  }
-
-  @override
   Future<AgentSession> forkThread({
     required String threadId,
     required AgentContext context,
+    AgentForkBoundary boundary = const AgentForkCurrentHead(),
   }) async {
-    calls.add('fork:$threadId');
-    return super.forkThread(threadId: threadId, context: context);
+    final boundaryLabel = switch (boundary) {
+      AgentForkCurrentHead() => 'head',
+      AgentForkThroughTurn(:final turnId) => 'through:$turnId',
+    };
+    calls.add('fork:$threadId:$boundaryLabel');
+    return super.forkThread(
+      threadId: threadId,
+      context: context,
+      boundary: boundary,
+    );
   }
 
   @override
