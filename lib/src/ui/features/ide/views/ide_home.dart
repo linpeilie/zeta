@@ -565,6 +565,9 @@ class _IdeHomeState extends State<IdeHome> {
         onForkThread: (projectPath, thread) {
           unawaited(_shellController.forkProjectThread(projectPath, thread));
         },
+        onDismissCompletedThread: (projectPath, threadId) {
+          _shellController.dismissCompletedProjectThread(projectPath, threadId);
+        },
       ),
     );
   }

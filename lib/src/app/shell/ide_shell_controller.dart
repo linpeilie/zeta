@@ -136,6 +136,14 @@ class IdeShellController extends ChangeNotifier {
     return projectThreadsController.stateFor(projectPath);
   }
 
+  /// 清除侧栏 thread 的「后台执行完毕」绿色提示。
+  void dismissCompletedProjectThread(String projectPath, String threadId) {
+    projectThreadsController.dismissCompletedThread(
+      projectPath: projectPath,
+      threadId: threadId,
+    );
+  }
+
   Future<void> openProject() async {
     final path = await _directoryPicker();
     if (path == null || path.trim().isEmpty) {

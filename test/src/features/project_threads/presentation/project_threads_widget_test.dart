@@ -368,6 +368,20 @@ void main() {
         ),
         findsNothing,
       );
+      // 后台完成：执行中 icon 替换为绿色完成提示，而非立刻回到相对时间。
+      final listCompleted = find.byKey(
+        ValueKey<String>(
+          'project-thread-completed-icon-${directory.path}-thread-a',
+        ),
+      );
+      expect(listCompleted, findsOneWidget);
+      expect(find.text('5m'), findsNothing);
+
+      await tester.tap(listCompleted);
+      await tester.pump();
+      await tester.pump();
+
+      expect(listCompleted, findsNothing);
       expect(find.text('5m'), findsOneWidget);
     },
   );

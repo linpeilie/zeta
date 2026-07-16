@@ -167,6 +167,97 @@ void main() {
       },
     );
 
+    test('promotes an existing thread to the top when a turn starts', () async {
+      // 列表按 recency 倒序：thread-2 最新在顶，thread-0 最旧在底。
+      final provider = _FakeAgentProvider(
+        pages: <AgentThreadPage>[_page(_threads(3), nextCursor: null)],
+      );
+      final controller = _createController(provider);
+
+      controller.activateProject('/repo');
+      await _flushAsync();
+
+      final before = controller.stateFor('/repo').threads;
+      expect(before.map((thread) => thread.id).toList(), <String>[
+        'thread-2',
+        'thread-1',
+        'thread-0',
+      ]);
+      final previousRecency = before.last.recencyAt ?? before.last.updatedAt;
+
+      provider.emit(
+        const AgentTurnStartedEvent(
+          AgentTurn(id: 'turn-1', sessionId: 'thread-0'),
+        ),
+      );
+      await _flushAsync();
+
+      final after = controller.stateFor('/repo').threads;
+      expect(after.map((thread) => thread.id).toList(), <String>[
+        'thread-0',
+        'thread-2',
+        'thread-1',
+      ]);
+      final promotedRecency = after.first.recencyAt ?? after.first.updatedAt;
+      expect(promotedRecency.isAfter(previousRecency), isTrue);
+      expect(controller.stateFor('/repo').runningThreadIds, <String>{
+        'thread-0',
+      });
+
+      // 同一 turn 期间再次标记 running 不应反复打乱次序或无意义重建。
+      final orderAfterFirstPromote = after.map((thread) => thread.id).toList();
+      controller.setThreadRunning('thread-0', isRunning: true);
+      expect(
+        controller
+            .stateFor('/repo')
+            .threads
+            .map((thread) => thread.id)
+            .toList(),
+        orderAfterFirstPromote,
+      );
+    });
+
+    test('setThreadRunning promotes mapped thread on idle-to-running edge', () {
+      final provider = _FakeAgentProvider(pages: const <AgentThreadPage>[]);
+      final viewModel = ProjectThreadsViewModel();
+      final controller = _createController(provider, viewModel: viewModel);
+      viewModel.setStateFor(
+        '/repo',
+        ProjectThreadListState(
+          hasLoaded: true,
+          threads: List<AgentThreadSummary>.unmodifiable(<AgentThreadSummary>[
+            _thread(
+              id: 'thread-a',
+              providerId: defaultAgentProviderId,
+              updatedAt: DateTime.fromMillisecondsSinceEpoch(2000),
+              title: 'A',
+            ),
+            _thread(
+              id: 'thread-b',
+              providerId: defaultAgentProviderId,
+              updatedAt: DateTime.fromMillisecondsSinceEpoch(1000),
+              title: 'B',
+            ),
+          ]),
+        ),
+      );
+      controller.registerThreadMapping('/repo', 'thread-b');
+
+      controller.setThreadRunning('thread-b', isRunning: true);
+
+      final state = controller.stateFor('/repo');
+      expect(state.threads.map((thread) => thread.id).toList(), <String>[
+        'thread-b',
+        'thread-a',
+      ]);
+      expect(state.runningThreadIds, <String>{'thread-b'});
+      expect(
+        (state.threads.first.recencyAt ?? state.threads.first.updatedAt)
+            .isAfter(DateTime.fromMillisecondsSinceEpoch(1000)),
+        isTrue,
+      );
+    });
+
     test('applies thread/status/changed waiting flags to list state', () async {
       final provider = _FakeAgentProvider(
         pages: <AgentThreadPage>[_page(_threads(1), nextCursor: null)],
@@ -524,7 +615,63 @@ void main() {
 
       controller.setThreadRunning('new-thread', isRunning: false);
       expect(controller.stateFor('/repo').runningThreadIds, isEmpty);
+      // registerSession 会选中该 thread，当前选中完成时不显示完成提示。
+      expect(controller.stateFor('/repo').completedThreadIds, isEmpty);
     });
+
+    test(
+      'background turn completion marks completed icon until dismissed or selected',
+      () {
+        final provider = _FakeAgentProvider(pages: const <AgentThreadPage>[]);
+        final controller = _createController(provider);
+
+        controller.registerSession(
+          '/repo',
+          const AgentSession(
+            id: 'thread-bg',
+            providerId: defaultAgentProviderId,
+            title: 'Background',
+          ),
+        );
+        controller.registerSession(
+          '/repo',
+          const AgentSession(
+            id: 'thread-fg',
+            providerId: defaultAgentProviderId,
+            title: 'Foreground',
+          ),
+        );
+        // 当前选中 thread-fg，thread-bg 在后台执行。
+        controller.selectThreadId('/repo', 'thread-fg');
+
+        controller.setThreadRunning('thread-bg', isRunning: true);
+        expect(controller.stateFor('/repo').runningThreadIds, <String>{
+          'thread-bg',
+        });
+
+        controller.setThreadRunning('thread-bg', isRunning: false);
+        expect(controller.stateFor('/repo').runningThreadIds, isEmpty);
+        expect(controller.stateFor('/repo').completedThreadIds, <String>{
+          'thread-bg',
+        });
+
+        controller.dismissCompletedThread(
+          projectPath: '/repo',
+          threadId: 'thread-bg',
+        );
+        expect(controller.stateFor('/repo').completedThreadIds, isEmpty);
+
+        controller.setThreadRunning('thread-bg', isRunning: true);
+        controller.setThreadRunning('thread-bg', isRunning: false);
+        expect(controller.stateFor('/repo').completedThreadIds, <String>{
+          'thread-bg',
+        });
+
+        // 选中该 thread 时也清除完成提示。
+        controller.selectThreadId('/repo', 'thread-bg');
+        expect(controller.stateFor('/repo').completedThreadIds, isEmpty);
+      },
+    );
 
     test('syncRuntimeSnapshot keeps multiple background thread states', () {
       final provider = _FakeAgentProvider(pages: const <AgentThreadPage>[]);

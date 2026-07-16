@@ -27,6 +27,9 @@ typedef ProjectThreadRenamed =
 typedef ProjectThreadAction =
     void Function(String projectPath, AgentThreadSummary thread);
 
+typedef ProjectThreadCompletedDismissed =
+    void Function(String projectPath, String threadId);
+
 typedef ProjectNewThread = void Function(String projectPath, String providerId);
 
 typedef AgentProviderCapabilitiesResolver =
@@ -52,6 +55,7 @@ class ProjectListPane extends StatelessWidget {
     required this.onUnarchiveThread,
     required this.onDeleteThread,
     required this.onForkThread,
+    required this.onDismissCompletedThread,
     super.key,
   });
 
@@ -73,6 +77,7 @@ class ProjectListPane extends StatelessWidget {
   final ProjectThreadAction onUnarchiveThread;
   final ProjectThreadAction onDeleteThread;
   final ProjectThreadAction onForkThread;
+  final ProjectThreadCompletedDismissed onDismissCompletedThread;
 
   @override
   Widget build(BuildContext context) {
@@ -115,6 +120,8 @@ class ProjectListPane extends StatelessWidget {
                       onUnarchiveThread(path, thread),
                   onDeleteThread: (thread) => onDeleteThread(path, thread),
                   onForkThread: (thread) => onForkThread(path, thread),
+                  onDismissCompletedThread: (threadId) =>
+                      onDismissCompletedThread(path, threadId),
                 );
               },
             ),
@@ -394,6 +401,7 @@ class _ProjectTile extends StatefulWidget {
     required this.onUnarchiveThread,
     required this.onDeleteThread,
     required this.onForkThread,
+    required this.onDismissCompletedThread,
   });
 
   final String path;
@@ -407,6 +415,7 @@ class _ProjectTile extends StatefulWidget {
   final AgentProviderCapabilitiesResolver capabilitiesForProvider;
   final ValueChanged<String> onNewThread;
   final VoidCallback onOpenProjectLocation;
+  final ValueChanged<String> onDismissCompletedThread;
   final VoidCallback onRemoveProject;
   final void Function(String threadId, String name) onRenameThread;
   final ValueChanged<AgentThreadSummary> onArchiveThread;
@@ -753,6 +762,7 @@ class _ProjectTileState extends State<_ProjectTile> {
               onUnarchiveThread: widget.onUnarchiveThread,
               onDeleteThread: widget.onDeleteThread,
               onForkThread: widget.onForkThread,
+              onDismissCompletedThread: widget.onDismissCompletedThread,
             ),
         ],
       ),
@@ -773,6 +783,7 @@ class _ProjectThreadList extends StatelessWidget {
     required this.onUnarchiveThread,
     required this.onDeleteThread,
     required this.onForkThread,
+    required this.onDismissCompletedThread,
   });
 
   final String projectPath;
@@ -786,6 +797,7 @@ class _ProjectThreadList extends StatelessWidget {
   final ValueChanged<AgentThreadSummary> onUnarchiveThread;
   final ValueChanged<AgentThreadSummary> onDeleteThread;
   final ValueChanged<AgentThreadSummary> onForkThread;
+  final ValueChanged<String> onDismissCompletedThread;
 
   @override
   Widget build(BuildContext context) {
@@ -799,9 +811,11 @@ class _ProjectThreadList extends StatelessWidget {
               ? thread.copyWith(status: AgentThreadRuntimeStatus.active)
               : thread,
           selected: thread.id == state.selectedThreadId,
+          showCompleted: state.completedThreadIds.contains(thread.id),
           archivedView: state.archived,
           capabilities: capabilitiesForProvider(thread.providerId),
           onTap: () => onSelectThread(projectPath, thread),
+          onDismissCompleted: () => onDismissCompletedThread(thread.id),
           onRenameThread: onRenameThread,
           onArchiveThread: onArchiveThread,
           onUnarchiveThread: onUnarchiveThread,
@@ -837,9 +851,11 @@ class _ThreadTile extends StatefulWidget {
     required this.projectPath,
     required this.thread,
     required this.selected,
+    required this.showCompleted,
     required this.archivedView,
     required this.capabilities,
     required this.onTap,
+    required this.onDismissCompleted,
     required this.onRenameThread,
     required this.onArchiveThread,
     required this.onUnarchiveThread,
@@ -850,9 +866,13 @@ class _ThreadTile extends StatefulWidget {
   final String projectPath;
   final AgentThreadSummary thread;
   final bool selected;
+
+  /// 后台执行完毕且尚未确认时，在原 spinner 位置展示绿色完成 icon。
+  final bool showCompleted;
   final bool archivedView;
   final AgentProviderCapabilities capabilities;
   final VoidCallback onTap;
+  final VoidCallback onDismissCompleted;
   final void Function(String threadId, String name) onRenameThread;
   final ValueChanged<AgentThreadSummary> onArchiveThread;
   final ValueChanged<AgentThreadSummary> onUnarchiveThread;
@@ -1196,6 +1216,24 @@ class _ThreadTileState extends State<_ThreadTile> {
                     size: 12,
                     strokeWidth: 1.8,
                     semanticsLabel: 'Thread running',
+                  ),
+                ] else if (widget.showCompleted) ...[
+                  const SizedBox(width: IdeSpacing.space8),
+                  IdeTooltip(
+                    message: '执行完毕，点击关闭',
+                    child: sf.IconButton.ghost(
+                      key: ValueKey<String>(
+                        'project-thread-completed-icon-${widget.projectPath}-${thread.id}',
+                      ),
+                      onPressed: widget.onDismissCompleted,
+                      size: sf.ButtonSize.xSmall,
+                      density: sf.ButtonDensity.iconDense,
+                      icon: Icon(
+                        Icons.check_circle_rounded,
+                        size: 12,
+                        color: colors.success,
+                      ),
+                    ),
                   ),
                 ] else if (lastActiveLabel != null) ...[
                   const SizedBox(width: IdeSpacing.space8),

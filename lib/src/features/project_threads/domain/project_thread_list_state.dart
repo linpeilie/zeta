@@ -14,6 +14,7 @@ class ProjectThreadListState {
     this.isLoadingMore = false,
     this.threads = const <AgentThreadSummary>[],
     this.runningThreadIds = const <String>{},
+    this.completedThreadIds = const <String>{},
     this.nextCursor,
     this.errorMessage,
     this.selectedThreadId,
@@ -38,6 +39,11 @@ class ProjectThreadListState {
 
   /// 当前项目内临时标记为执行中的 thread id。
   final Set<String> runningThreadIds;
+
+  /// 后台执行结束后、尚未被用户确认的 thread id（仅内存态，不持久化）。
+  ///
+  /// 用于在列表原「执行中」位置展示绿色完成提示；点击或选中该 thread 后清除。
+  final Set<String> completedThreadIds;
 
   /// 下一页游标，空表示没有更多。
   final String? nextCursor;
@@ -65,6 +71,7 @@ class ProjectThreadListState {
     bool? isLoadingMore,
     List<AgentThreadSummary>? threads,
     Set<String>? runningThreadIds,
+    Set<String>? completedThreadIds,
     Object? nextCursor = projectThreadUnset,
     Object? errorMessage = projectThreadUnset,
     Object? selectedThreadId = projectThreadUnset,
@@ -80,6 +87,9 @@ class ProjectThreadListState {
       runningThreadIds: runningThreadIds == null
           ? this.runningThreadIds
           : Set<String>.unmodifiable(runningThreadIds),
+      completedThreadIds: completedThreadIds == null
+          ? this.completedThreadIds
+          : Set<String>.unmodifiable(completedThreadIds),
       nextCursor: identical(nextCursor, projectThreadUnset)
           ? this.nextCursor
           : nextCursor as String?,

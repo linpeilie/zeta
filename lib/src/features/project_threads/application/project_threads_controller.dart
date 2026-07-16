@@ -261,6 +261,17 @@ class ProjectThreadsController {
     _setThreadRunning(threadId, isRunning: isRunning);
   }
 
+  /// 清除列表上「后台执行完毕」绿色提示（用户点击完成 icon）。
+  void dismissCompletedThread({
+    required String projectPath,
+    required String threadId,
+  }) {
+    viewModel.dismissCompletedThread(
+      projectPath: projectPath,
+      threadId: threadId,
+    );
+  }
+
   /// 用常驻 thread runtime 快照同步列表状态。
   ///
   /// 这里不依赖当前 active provider 的单路事件流；已打开 thread 的后台执行、
@@ -1008,12 +1019,8 @@ class ProjectThreadsController {
     if (projectPath == null) {
       return;
     }
-    final current = stateFor(projectPath);
-    final nextRunning = Set<String>.from(current.runningThreadIds)
-      ..remove(threadId);
-    if (nextRunning.length != current.runningThreadIds.length) {
-      viewModel.setRunningThreadIds(projectPath, nextRunning);
-    }
+    // 关闭即结束执行；若非当前选中会留下完成提示，与 turn 完成路径一致。
+    _setThreadRunning(threadId, isRunning: false);
   }
 
   void _removeThreadFromList({
@@ -1036,16 +1043,11 @@ class ProjectThreadsController {
     if (projectPath == null) {
       return;
     }
-
-    final current = stateFor(projectPath);
-    final nextRunningThreadIds = Set<String>.from(current.runningThreadIds);
-    final changed = isRunning
-        ? nextRunningThreadIds.add(threadId)
-        : nextRunningThreadIds.remove(threadId);
-    if (!changed) {
-      return;
-    }
-    viewModel.setRunningThreadIds(projectPath, nextRunningThreadIds);
+    viewModel.setThreadRunning(
+      projectPath: projectPath,
+      threadId: threadId,
+      isRunning: isRunning,
+    );
   }
 
   void _registerStateThreadMappings(
