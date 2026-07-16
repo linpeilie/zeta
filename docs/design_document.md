@@ -57,10 +57,19 @@ AgentConversationViewModel
   -> AgentConversationTimelineStore
   -> AgentConversationUiSignals
   -> AgentConversationModelSelectionController
-  -> AgentProvider
-    -> CodexAppServerAgentProvider | GrokAcpAgentProvider | CursorAcpAgentProvider
-      -> JsonRpcPeer
-        -> codex app-server / grok agent stdio / agent acp
+  -> AgentProviderBundle
+    -> AgentRuntimePort / AgentConversationPort
+    -> AgentThreadCatalogPort? / AgentThreadMutationsPort? / AgentThreadBranchingPort?
+    -> AgentTurnSteeringPort? / AgentInteractionPort? / AgentModelCatalogPort?
+    -> AgentLocalThreadListPort? / AgentSessionConfigurationPort? / AgentPlanApprovalPort?
+    -> AgentProvider
+      -> CodexAppServerAgentProvider | GrokAcpAgentProvider | CursorAcpAgentProvider
+        -> JsonRpcPeer
+          -> codex app-server / grok agent stdio / agent acp
+
+ProjectThreadsController
+  -> AgentProviderBundle
+    -> AgentThreadCatalogPort? / AgentThreadMutationsPort? / AgentThreadBranchingPort?
 
 AgentManagementController
   -> CodexAgentManagementRepository | GrokAgentManagementRepository
@@ -161,7 +170,17 @@ Workbench 的 Canvas Flex slot 自身也使用稳定 Key，保证 Navigation/Ins
 
 ### Provider 抽象
 
-`AgentProvider` 是 UI 与具体 Agent CLI 之间的稳定接口，负责：
+迁移期内，Application / Presentation 侧以 `AgentProviderBundle` 作为首选能力入口；
+`AgentProvider` 保留为 provider 中立兼容门面与 data 层协议适配承载体。
+
+`AgentProviderBundle` 当前负责把会话与线程能力拆成明确端口：
+
+- 必选：`runtime`、`conversation`。
+- 可选：`threadCatalog`、`threadMutations`、`threadBranching`、`turnSteering`、
+  `interactions`、`modelCatalog`、`localThreadList`、`sessionConfiguration`、
+  `planApproval`。
+
+`AgentProvider` 仍负责承载具体 CLI 对接和运行时边界，核心职责包括：
 
 - 通过 `AgentProviderCapabilities` 声明 session、history、turn、thread、input、
   interaction、config、telemetry 和 bootstrap 能力。
@@ -172,9 +191,14 @@ Workbench 的 Canvas Flex slot 自身也使用稳定 Key，保证 Navigation/Ins
 - 响应权限请求；他端已解决的审批通过事件撤销本地卡片。
 - 推送状态、消息、推理/计划流、工具调用、回合 diff、审批与系统提示事件。
 
-capability 采用保守声明：不支持的操作不进入 Project thread 菜单、Agent header 或
-composer，应用层误调用时抛出 `UnsupportedError`。`AgentProviderBootstrapPolicy`
-额外约束 provider 是否必须在 workspace 下启动、是否允许 eager model preload。
+当前 `AgentConversationViewModel` 与 `ProjectThreadsController` 已改为通过 bundle
+消费上述端口；Agent 管理页中的模型探测也统一走 `bundle.modelCatalog`。应用层不再
+需要通过 provider kind 或 `is SomeOptionalProvider` 决定这些已迁移功能域。
+
+capability 与 bundle 端口都采用保守声明：端口缺失或 capability=false 的操作不进入
+Project thread 菜单、Agent header 或 composer，应用层误调用时抛出
+`UnsupportedError`。`AgentProviderBootstrapPolicy` 额外约束 provider 是否必须在
+workspace 下启动、是否允许 eager model preload。
 
 所有 JSON-RPC provider 在裸 transport 外统一使用 `ProviderRuntimeJsonRpcPeer`。该边界
 维护 `stopped / starting / initializing / ready / failed / closing / closed` 生命周期，
@@ -247,10 +271,17 @@ repository。Cursor repository 负责多候选身份探测、版本/账号检查
 功能缺口与分阶段适配见
 [`plan/codex_app_server_adaptation_plan.md`](../plan/codex_app_server_adaptation_plan.md)。
 
-**适配进度（截至 Phase 2 核心 2.1–2.5）：** Phase 0 完成协议对齐；Phase 1
-完成核心流式体验；Phase 2 核心完成 thread 生命周期管理（重命名/归档/删除/
-分叉/按历史 turn 创建分支/压缩）、列表搜索与归档视图、配套通知同步，以及上下文
-占用提示。Permission Profile 当前仅承诺稳定的发现能力，不承诺实验性选择能力。
+**适配进度（截至 2026-07-16 / Phase 2）：** Phase 0 完成协议对齐；Phase 1 完成
+核心流式体验；Phase 2 已完成 Provider Bundle 与多 Provider 能力端口迁移，并覆盖：
+
+- thread 生命周期管理（重命名/归档/删除/分叉/按历史 turn 创建分支/压缩）。
+- `AgentConversationViewModel` 的会话、历史、steer、权限响应、Guardian 放行、
+  模型目录与计划审批路由。
+- `ProjectThreadsController` 的列表、重命名、归档、删除与分叉。
+- Codex / Grok / Cursor 的 bundle 端口一致性契约测试。
+
+当前剩余的收口项是：从旧 `AgentProvider` 删除已迁移的方法和静态布尔字段。Permission
+Profile 仍仅承诺稳定的发现能力，不承诺实验性选择能力。
 
 ### 当前已落地的对话体验
 

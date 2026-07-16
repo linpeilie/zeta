@@ -278,7 +278,8 @@ Domain 不依赖 data，UI 不识别 Codex/Grok/Cursor method 名称。
 
 ### 6.1 Provider Bundle
 
-建议新增：
+当前 Phase 2 已落地的 bundle 形状如下（位于
+`lib/src/features/agent/domain/agent_provider_bundle.dart`）：
 
 ```dart
 final class AgentProviderBundle {
@@ -291,52 +292,57 @@ final class AgentProviderBundle {
     this.turnSteering,
     this.interactions,
     this.modelCatalog,
+    this.localThreadList,
     this.sessionConfiguration,
-    this.usage,
-    this.review,
-    this.integrationDiscovery,
-    this.providerConfiguration,
+    this.planApproval,
   });
 
-  final AgentRuntime runtime;
-  final AgentConversationProvider conversation;
-  final AgentThreadCatalog? threadCatalog;
-  final AgentThreadMutations? threadMutations;
-  final AgentThreadBranching? threadBranching;
-  final AgentTurnSteering? turnSteering;
-  final AgentInteractionResponder? interactions;
-  final AgentModelCatalog? modelCatalog;
-  final AgentSessionConfiguration? sessionConfiguration;
-  final AgentUsageProvider? usage;
-  final AgentReviewProvider? review;
-  final AgentIntegrationDiscovery? integrationDiscovery;
-  final AgentProviderConfiguration? providerConfiguration;
+  factory AgentProviderBundle.adapt(AgentProvider provider);
+
+  final AgentRuntimePort runtime;
+  final AgentConversationPort conversation;
+  final AgentThreadCatalogPort? threadCatalog;
+  final AgentThreadMutationsPort? threadMutations;
+  final AgentThreadBranchingPort? threadBranching;
+  final AgentTurnSteeringPort? turnSteering;
+  final AgentInteractionPort? interactions;
+  final AgentModelCatalogPort? modelCatalog;
+  final AgentLocalThreadListPort? localThreadList;
+  final AgentSessionConfigurationPort? sessionConfiguration;
+  final AgentPlanApprovalPort? planApproval;
 }
 ```
 
-`AgentProviderFactory` 最终返回 Bundle。迁移期可由旧 `AgentProvider` 适配生成 Bundle，避免大爆炸式修改。
+当前 `AgentProviderFactory` 仍返回 `AgentProvider`；Application 通过 `provider.bundle`
+扩展获取 bundle。这样可以在不重写现有 factory、依赖注入和 provider 生命周期装配的前提下，
+渐进迁移 Application / Presentation 到端口化边界。
+
+Phase 3 预留的 `usage`、`review`、`integrationDiscovery`、`providerConfiguration`
+等端口尚未落地，不应写入当前实现清单。
 
 ### 6.2 核心端口职责
 
 | 端口 | 必选性 | 职责 |
 | --- | --- | --- |
-| `AgentRuntime` | 必选 | 配置、初始化、运行时信息、事件流、关闭 |
-| `AgentConversationProvider` | 必选 | start/resume、send、cancel |
-| `AgentThreadCatalog` | 可选 | list/read history、订阅管理 |
-| `AgentThreadMutations` | 可选 | rename/archive/unarchive/delete/compact |
-| `AgentThreadBranching` | 可选 | 普通 fork、按稳定 turn 边界 fork |
-| `AgentTurnSteering` | 可选 | 向当前活动 turn 追加输入 |
-| `AgentInteractionResponder` | 可选 | 权限、提问、计划、elicitation 响应 |
-| `AgentModelCatalog` | 可选 | 模型和模型级能力发现 |
-| `AgentSessionConfiguration` | 可选 | Provider 原生 session 动态配置 |
-| `AgentUsageProvider` | 可选 | 配额、速率限制和中立用量快照 |
-| `AgentReviewProvider` | 可选 | Provider 原生 Review 生命周期 |
-| `AgentIntegrationDiscovery` | 可选 | Skills、MCP、Apps/Connectors 状态发现 |
-| `AgentProviderConfiguration` | 可选 | Provider 配置读取、来源、约束和乐观写入 |
+| `AgentRuntimePort` | 必选 | 配置、capabilities、事件流、运行时信息、生命周期与初始化/关闭 |
+| `AgentConversationPort` | 必选 | start/resume、send、cancel |
+| `AgentThreadCatalogPort` | 可选 | list/read history、订阅管理 |
+| `AgentThreadMutationsPort` | 可选 | rename/archive/unarchive/delete/compact |
+| `AgentThreadBranchingPort` | 可选 | 普通 fork、按稳定 turn 边界 fork |
+| `AgentTurnSteeringPort` | 可选 | 向当前活动 turn 追加输入，并显式校验 `expectedTurnId` |
+| `AgentInteractionPort` | 可选 | 权限响应与 Guardian 放行 |
+| `AgentModelCatalogPort` | 可选 | 模型和模型级能力发现 |
+| `AgentLocalThreadListPort` | 可选 | 只移除 Zeta 本地 thread 列表记录 |
+| `AgentSessionConfigurationPort` | 可选 | Provider 原生 session 动态配置 |
+| `AgentPlanApprovalPort` | 可选 | 独立计划审批响应 |
+
+当前 `AgentInteractionPort` 与 `AgentPlanApprovalPort` 保持分离，避免把 Cursor 的独立计划审批路径
+重新折叠回通用权限/提问响应。
 
 ### 6.3 Steering 请求模型
 
-`steerTurn` 必须显式携带预期活动回合：
+`steerTurn` 必须显式携带预期活动回合。当前实现尚未单独抽出 `AgentSteerRequest`
+值对象，而是在 `AgentTurnSteeringPort.steerTurn(...)` 的参数上直接承载这些字段：
 
 ```dart
 final class AgentSteerRequest {
@@ -356,7 +362,7 @@ final class AgentSteerRequest {
 
 不包含 `cwd`、model、permission 或 sandbox 覆盖，因为 steering 不是新 turn，也不是 thread 配置变更。
 
-若 Provider 没有原生、可验证的活动 turn 身份，则不得实现 `AgentTurnSteering`。
+若 Provider 没有原生、可验证的活动 turn 身份，则不得实现 `AgentTurnSteeringPort`。
 
 ### 6.4 Thread 分支模型
 
@@ -385,18 +391,17 @@ final class AgentForkThroughTurn extends AgentForkBoundary {
 ### 6.5 运行时信息
 
 ```dart
-final class AgentRuntimeInfo {
+class AgentRuntimeInfo {
   const AgentRuntimeInfo({
     required this.runtimeId,
-    required this.providerKind,
-    required this.protocolName,
     required this.connectionEpoch,
-    required this.compatibility,
+    required this.protocolName,
+    required this.protocolVersion,
+    required this.compatibilityStatus,
     this.cliVersion,
     this.serverUserAgent,
-    this.platformFamily,
-    this.platformOs,
-    this.providerHome,
+    this.platform,
+    this.homePath,
     this.experimentalApiEnabled = false,
   });
 }
@@ -408,6 +413,9 @@ final class AgentRuntimeInfo {
 - 在 Agent 管理诊断页显示实际运行版本。
 - 为日志、pending request 和事件建立 connection epoch。
 - 避免 CLI 重启后旧 request ID 与新连接冲突。
+
+当前 `providerKind` 仍由 `AgentProviderConfig.kind` 提供，不在 `AgentRuntimeInfo`
+里重复保存。
 
 ### 6.6 中立错误模型
 
@@ -1040,23 +1048,30 @@ Phase 1 验收：
 
 ### Phase 2：多 Provider 能力端口迁移
 
-迁移顺序：
+当前状态（截至 2026-07-16）：
 
-1. 新增 `AgentProviderBundle`，由旧 Provider 适配生成。
-2. 先迁移已有可选能力：Usage、Session Config、Plan Approval、Local Thread List。
-3. 迁移 Thread Catalog/Mutations/Branching。
-4. 迁移 Steering/Interactions。
-5. 迁移 Model Catalog。
-6. 删除旧 `AgentProvider` 中已迁移的方法和静态布尔字段。
+1. 已完成：新增 `AgentProviderBundle`，由旧 Provider 适配生成，并通过 `provider.bundle`
+   暴露给应用层。
+2. 已完成：迁移既有可选能力 `SessionConfiguration`、`PlanApproval`、`LocalThreadList`。
+3. 已完成：迁移 `ThreadCatalog` / `ThreadMutations` / `ThreadBranching`。
+4. 已完成：迁移 `TurnSteering` / `Interactions`。
+5. 已完成：迁移 `ModelCatalog`。
+6. 未完成：删除旧 `AgentProvider` 中已迁移的方法和静态布尔字段；这是后续收口 PR，
+   不属于本轮 Phase 2 交付。
 
 每个功能域单独 PR，禁止同时迁移所有 Provider。
 
 Phase 2 验收：
 
-- Widget/Application 不按 Provider kind 决定入口。
-- 不支持功能不再需要 no-op 实现。
-- 能力与端口一致性契约测试覆盖 Codex/Grok/Cursor。
-- 原有核心对话、历史、权限和项目切换测试无回归。
+- 已满足：`AgentConversationViewModel`、`ProjectThreadsController` 和 Agent 管理模型探测
+  不再按 Provider kind 决定已迁移功能入口。
+- 已满足：应用层对不支持功能改为依赖端口缺失与 capability gate，而不是要求每个
+  provider 提供等价 no-op 行为。
+- 已满足：新增 `test/src/features/agent/domain/agent_provider_bundle_test.dart`，
+  覆盖 Codex / Grok / Cursor 的能力域到端口映射一致性。
+- 已满足：`AgentConversationViewModel` 与 `ProjectThreadsController` 迁移路径已有回归测试，
+  原有核心对话、历史、权限和项目切换行为无回归。
+- 待后续收口：删除旧 `AgentProvider` 的已迁移方法和静态布尔字段。
 
 ### Phase 3：稳定增量能力
 
@@ -1105,42 +1120,20 @@ lib/src/features/project_threads/application/project_threads_controller.dart
 lib/src/ui/features/ide/view_models/active_agent_provider_controller.dart
 ```
 
-### 15.2 建议新增结构
+### 15.2 当前已落地结构
 
 ```text
-lib/src/features/agent/domain/runtime/
-  agent_runtime_info.dart
-  agent_runtime_compatibility.dart
+lib/src/features/agent/domain/
+  agent_provider_bundle.dart        // bundle、端口声明与 legacy adapter
+  agent_runtime_models.dart         // runtime info / scope / lifecycle
+  agent_thread_models.dart          // fork boundary 等 thread 领域模型
 
-lib/src/features/agent/domain/capabilities/
-  agent_capability_descriptor.dart
-  agent_capability_ids.dart
-  agent_provider_bundle.dart
-
-lib/src/features/agent/domain/ports/
-  agent_runtime.dart
-  agent_conversation_provider.dart
-  agent_thread_catalog.dart
-  agent_thread_mutations.dart
-  agent_thread_branching.dart
-  agent_turn_steering.dart
-  agent_interaction_responder.dart
-  agent_model_catalog.dart
-  agent_review_provider.dart
-  agent_integration_discovery.dart
-  agent_provider_configuration.dart
-
-lib/src/features/agent/application/runtime/
-  provider_operation_scheduler.dart
-  provider_runtime_gate.dart
-  provider_capability_resolver.dart
-
-lib/src/features/agent/data/datasources/app_server/compatibility/
-  codex_version_policy.dart
-  codex_capability_mapper.dart
+test/src/features/agent/domain/
+  agent_provider_bundle_test.dart   // bundle 端口一致性与 provider 映射契约
 ```
 
-实际提交时保持小文件和 feature-sliced 依赖方向；若某目录只有一个文件，不为形式提前创建空层级。
+当前没有为了形式把端口拆到 `domain/ports/` 子目录。若 Phase 3/4 继续扩张端口数量，
+再评估是否拆分文件层级。
 
 ## 16. 测试设计
 
@@ -1163,11 +1156,17 @@ lib/src/features/agent/data/datasources/app_server/compatibility/
 - Server Request 成功、拒绝、外部 resolved、超时、dispose。
 - unknown notification/item/request。
 
+Phase 2 当前已新增 `test/src/features/agent/domain/agent_provider_bundle_test.dart`，
+验证 bundle 端口与 `AgentProviderCapabilities` 的一致性，以及 Codex / Grok / Cursor
+能力域映射。更底层的 JSON-RPC 请求字段约束继续由 adapter / datasource 契约测试承担。
+
 ### 16.2 Domain 与 Application 单测
 
 - 有效能力交集计算。
 - experimental/deprecated/version 限制。
 - Provider Bundle 与能力一致性。
+- `AgentConversationViewModel` 通过 bundle 的模型、权限、计划审批、历史、分叉和 steer 路由。
+- `ProjectThreadsController` 通过 bundle 的 list/rename/archive/delete/fork 路由。
 - Operation Scheduler FIFO、shared read、跨 key 并发、异常释放。
 - Listener Generation 旧事件丢弃。
 - 历史来源选择和不合并规则。

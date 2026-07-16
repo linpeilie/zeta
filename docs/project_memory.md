@@ -1,6 +1,6 @@
 # 项目记忆
 
-最后更新：2026-07-14
+最后更新：2026-07-16
 
 本文记录跨任务应长期保留的项目事实、决策和约束。后续开发中，如果事实变化，应同步更新本文。
 
@@ -30,7 +30,8 @@
 
 - 保持轻量 feature-sliced 分层，不提前引入大型架构框架。
 - feature 内按 domain、application、data、presentation 拆分；新功能优先进入对应 feature。
-- UI 依赖 domain 层的 Agent 抽象和 `AgentProviderCapabilities`，不直接处理 provider 原始协议。
+- UI / Application 依赖 domain 层的 Agent 抽象、`AgentProviderBundle` 和
+  `AgentProviderCapabilities`，不直接处理 provider 原始协议。
 - data 层负责把 provider 协议映射成中立领域事件。
 - Agent 上下文当前只传项目路径和当前文件路径，不自动读取文件内容；用户可附加本地图片（`localImage`）。
 - 默认 Codex 审批策略保持 `on-request`，不自动授权命令或文件修改。
@@ -50,7 +51,8 @@
 - `AgentConversationViewModel` 对外暴露 Agent 面板状态，并委托 timeline store、UI signals、model selection controller 处理细分职责。
 - `ProjectThreadsController` 负责项目下 thread 分页、恢复、缓存快照、provider 交互和竞态隔离。
 - `ProjectThreadsViewModel` 是项目 thread 列表的纯状态容器。
-- `AgentProvider` 是 provider 中立接口；capabilities 是 UI 和应用层操作入口的唯一事实来源。
+- 当前迁移期内，`AgentProviderBundle` 是应用层能力入口，`AgentProvider` 是 provider
+  中立兼容门面；capabilities 仍是入口显隐和执行校验的事实来源。
 - `CodexAppServerAgentProvider` 是当前默认 provider 实现；协议 pin 见 `third_party/codex_app_server_schema`。
 - `CursorAcpAgentProvider` 使用 workspace-scoped peer、ACP v1、最小 session 索引和动态
   config options；`CursorCliLocator` 必须跳过同名 Grok `agent`。

@@ -1,6 +1,6 @@
 # 工程规范
 
-最后更新：2026-07-14
+最后更新：2026-07-16
 
 本文从当前 `lib/` 重构后的代码结构中提炼长期遵循的工程规范。它补充根目录 `AGENTS.md`，用于指导后续功能开发、重构和评审。
 
@@ -88,16 +88,24 @@ main -> app -> presentation/application -> domain
 
 ## 4. Provider 与协议边界
 
-`AgentProvider` 是 UI 与具体 Agent 实现之间的稳定边界。
+迁移期内，`AgentProviderBundle` 是 application / presentation 首选能力边界；
+`AgentProvider` 保留为 data adapter 的兼容门面。
 
 - UI 只消费 `AgentEvent`、`AgentThreadSummary`、`AgentPermissionRequest`、`AgentToolCall` 等中立模型。
+- 已迁移能力域（`conversation`、`threadCatalog`、`threadMutations`、
+  `threadBranching`、`turnSteering`、`interactions`、`modelCatalog`、
+  `localThreadList`、`sessionConfiguration`、`planApproval`）优先通过 bundle 端口访问；
+  controller / view model 不再通过 provider kind、`is SomeProvider` 或直接调用
+  已迁移旧方法做分支。
 - 每个 provider 必须通过不可变 `AgentProviderCapabilities` 声明真实能力；presentation
   隐藏不支持入口，application 和 data 层执行前仍要校验。禁止以静默 no-op 或语义不等价
   的降级伪造 thread/turn 能力。
+- bundle 端口为空时，对应 capability 必须不可用；不支持功能不得靠 no-op 伪装成“已实现”。
 - 启动时机由 `AgentProviderBootstrapPolicy` 描述；需要项目目录的 provider 不得在获得
   workspace 前启动，也不得参与 eager model preload。
 - Codex app-server 的 JSON-RPC、通知、审批 payload 和历史 JSONL 解析必须留在 agent data 层。
-- 新 provider 应先评估 `AgentProvider` 接口，不足时扩展领域接口，再在 data 层实现具体协议。
+- 新 provider 应先评估现有 bundle 端口是否足够；不足时优先扩展可选端口，再在 data 层
+  实现具体协议。只有明确需要兼容旧调用面时，才同步补 `AgentProvider` 门面。
 - 非所有 provider 都具备的账号能力使用可选接口（例如
   `AgentUsageQuotaProvider`），不要扩大 `AgentProvider` 的必选实现面。
 - mapper 文件负责字段兼容、默认值和协议名称转换；不要在 widget 中写散落的 JSON key。

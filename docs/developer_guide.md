@@ -1,6 +1,6 @@
 # 开发者文档
 
-最后更新：2026-07-14
+最后更新：2026-07-16
 
 ## 1. 项目简介
 
@@ -144,22 +144,31 @@ windows/
 
 新增 provider 时：
 
-1. 在领域层确认现有 `AgentProvider` 接口是否足够，并定义初始化前可判断的静态
-   `AgentProviderCapabilities` 与 bootstrap policy。
-2. 在 data 层新增具体 provider 实现，不让 UI 直接依赖 provider 协议；握手后若能力
-   发生变化，应返回更精确的动态 capabilities。
-3. 把 provider 原始事件映射成 `AgentEvent`、`AgentToolCall`、
+1. 先确认现有 `AgentProviderBundle` 端口是否足够。已迁移的能力域优先接到
+   `conversation`、`threadCatalog`、`threadMutations`、`threadBranching`、
+   `turnSteering`、`interactions`、`modelCatalog`、`localThreadList`、
+   `sessionConfiguration`、`planApproval` 等端口，不要继续优先扩张
+   `AgentProvider` 旧必选接口。
+2. 在领域层定义初始化前可判断的静态 `AgentProviderCapabilities` 与 bootstrap
+   policy；握手后若能力发生变化，应返回更精确的动态 capabilities。
+3. 在 data 层新增具体 provider 实现，不让 UI 直接依赖 provider 协议。
+   `AgentProviderFactory` 当前仍返回 `AgentProvider`，应用层通过 `provider.bundle`
+   获取端口化能力。
+4. 把 provider 原始事件映射成 `AgentEvent`、`AgentToolCall`、
    `AgentPermissionRequest`、`AgentThreadSummary`、`AgentSessionConfigOption` 等中立模型。
-4. ACP provider 优先复用 `AcpSessionUpdateMapper`、`AcpPermissionMapper`、
+5. 如果出现新的可选能力域，优先新增 bundle 可选端口及其测试，再决定是否保留
+   兼容门面；不要把非通用能力直接做成所有 provider 的必选方法。
+6. ACP provider 优先复用 `AcpSessionUpdateMapper`、`AcpPermissionMapper`、
    `AcpContentCodec` 和 `AcpSessionConfigMapper`；厂商通知与阻塞扩展单独留在薄适配层。
-5. 在 factory 中接入 provider kind。
-6. JSON-RPC provider 必须把裸 peer 包装为 `ProviderRuntimeJsonRpcPeer`，在握手成功后
+7. 在 factory 中接入 provider kind。
+8. JSON-RPC provider 必须把裸 peer 包装为 `ProviderRuntimeJsonRpcPeer`，在握手成功后
    `markReady`、失败时 `markFailed`；dispose 先 `beginClosing`，再收尾 pending 交互和关闭 peer。
-7. Thread 的 list/read 与变更操作必须通过 `ProviderOperationScheduler`：list/read 使用
+9. Thread 的 list/read 与变更操作必须通过 `ProviderOperationScheduler`：list/read 使用
    Project/Thread `sharedRead`，resume/fork/rename/archive/delete/compact 使用 Thread
    `exclusive`；不要在持有资源键时再次调度同键操作。
-8. 添加单元测试覆盖初始化、session、turn、权限请求、capability gate、生命周期门控、
-   调度顺序和错误映射。
+10. 添加单元测试覆盖初始化、session、turn、权限请求、capability gate、生命周期门控、
+    调度顺序和错误映射；已迁移能力域至少补 `AgentProviderBundle` 端口一致性测试，并
+    回归 `AgentConversationViewModel` / `ProjectThreadsController` 的使用路径。
 
 注意：默认策略应保持保守，不自动授权命令执行或文件写入。
 未支持操作必须 capability=false，并抛出 `UnsupportedError`；不得静默成功。
