@@ -177,68 +177,17 @@ class _AgentTurnFooter extends StatelessWidget {
             child: Align(
               alignment: Alignment.center,
               child: Wrap(
-                spacing: IdeSpacing.space8,
-                runSpacing: IdeSpacing.space4,
                 crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  if (durationLabel != null)
-                    Text(durationLabel, style: metaStyle),
-                  if (modelLabel != null)
-                    Text(
-                      modelLabel,
-                      key: ValueKey<String>(
-                        'agent-turn-footer-model-${turn.id}',
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: metaStyle,
-                    ),
-                  if (effortLabel != null)
-                    Text(
-                      effortLabel,
-                      key: ValueKey<String>(
-                        'agent-turn-footer-effort-${turn.id}',
-                      ),
-                      style: metaStyle,
-                    ),
-                  if (showFast)
-                    Text(
-                      'Fast',
-                      key: ValueKey<String>(
-                        'agent-turn-footer-fast-${turn.id}',
-                      ),
-                      style: metaStyle,
-                    ),
-                  if (showTokens)
-                    IdeTooltip(
-                      message: tokenTooltip,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.bolt_outlined,
-                              size: 12,
-                              color: colors.textSecondary.withValues(
-                                alpha: 0.56,
-                              ),
-                            ),
-                            const SizedBox(width: IdeSpacing.space4),
-                            Text(
-                              tokenLabel,
-                              style: textStyles.caption.copyWith(
-                                color: colors.textSecondary.withValues(
-                                  alpha: 0.72,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
+                children: _turnFooterMetaItems(
+                  turnId: turn.id,
+                  style: metaStyle,
+                  durationLabel: durationLabel,
+                  modelLabel: modelLabel,
+                  effortLabel: effortLabel,
+                  showFast: showFast,
+                  tokenLabel: showTokens ? tokenLabel : null,
+                  tokenTooltip: tokenTooltip,
+                ),
               ),
             ),
           ),
@@ -262,6 +211,68 @@ String? _nonEmptyTrimmed(String? value) {
     return null;
   }
   return trimmed;
+}
+
+/// 组装 turn footer 元数据项，各项以 ` • ` 分隔，无 icon。
+List<Widget> _turnFooterMetaItems({
+  required String turnId,
+  required TextStyle style,
+  required String? durationLabel,
+  required String? modelLabel,
+  required String? effortLabel,
+  required bool showFast,
+  required String? tokenLabel,
+  required String tokenTooltip,
+}) {
+  final items = <Widget>[];
+  void add(Widget child) {
+    if (items.isNotEmpty) {
+      items.add(Text(' • ', style: style));
+    }
+    items.add(child);
+  }
+
+  if (durationLabel != null) {
+    add(Text(durationLabel, style: style));
+  }
+  if (modelLabel != null) {
+    add(
+      Text(
+        modelLabel,
+        key: ValueKey<String>('agent-turn-footer-model-$turnId'),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: style,
+      ),
+    );
+  }
+  if (effortLabel != null) {
+    add(
+      Text(
+        effortLabel,
+        key: ValueKey<String>('agent-turn-footer-effort-$turnId'),
+        style: style,
+      ),
+    );
+  }
+  if (showFast) {
+    add(
+      Text(
+        'Fast',
+        key: ValueKey<String>('agent-turn-footer-fast-$turnId'),
+        style: style,
+      ),
+    );
+  }
+  if (tokenLabel != null) {
+    add(
+      IdeTooltip(
+        message: tokenTooltip,
+        child: Text(tokenLabel, style: style),
+      ),
+    );
+  }
+  return items;
 }
 
 /// turn 末尾耗时/状态文案（仅终态 footer 使用；进行中不渲染 footer）。

@@ -418,6 +418,18 @@ void main() {
             find.descendant(of: footer, matching: find.text('1.2k tokens')),
             findsOneWidget,
           );
+          // 各项以 • 分隔，且不再渲染 token 的 bolt icon。
+          expect(
+            find.descendant(of: footer, matching: find.text(' • ')),
+            findsNWidgets(4),
+          );
+          expect(
+            find.descendant(
+              of: footer,
+              matching: find.byIcon(Icons.bolt_outlined),
+            ),
+            findsNothing,
+          );
         },
         skip: _skipWindowsActiveHistoryPr3,
       );
