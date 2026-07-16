@@ -9,16 +9,19 @@ import 'package:zeta/src/features/usage_statistics/application/usage_statistics_
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_report_builder.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_formatters.dart';
-import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_status_card.dart';
+import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/metrics/compact_metric_bar.dart';
-import 'package:zeta/src/ui/core/pane_widgets.dart';
+import 'package:zeta/src/ui/core/rows/ide_data_row.dart';
+import 'package:zeta/src/ui/core/rows/ide_list_row.dart';
+import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/ui/core/workbench/ide_page_header.dart';
+import 'package:zeta/src/ui/core/workbench/ide_section.dart';
+import 'package:zeta/src/ui/core/workbench/ide_toolbar.dart';
 
 /// 本地 Agent CLI 使用统计页面。
 class UsageStatisticsPage extends StatefulWidget {
@@ -46,29 +49,20 @@ class _UsageStatisticsPageState extends State<UsageStatisticsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    return PanelCard(
+    return IdeSurface.canvas(
       key: const ValueKey('usage-statistics-page'),
-      showBorder: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           IdePageHeader(
             title: '使用统计',
-            subtitle: '分析本地 Codex 的调用、性能、Token、项目与套餐额度',
-            leading: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                sf.IconButton.ghost(
-                  key: const ValueKey('usage-statistics-back-button'),
-                  onPressed: widget.onBackPressed,
-                  size: sf.ButtonSize.small,
-                  density: sf.ButtonDensity.iconDense,
-                  icon: const Icon(Icons.arrow_back_rounded, size: 18),
-                ),
-                const SizedBox(width: IdeSpacing.space8),
-                Icon(Icons.query_stats_rounded, size: 20, color: colors.accent),
-              ],
+            subtitle: '分析调用、性能、Token、项目与套餐额度',
+            leading: sf.IconButton.ghost(
+              key: const ValueKey('usage-statistics-back-button'),
+              onPressed: widget.onBackPressed,
+              size: sf.ButtonSize.small,
+              density: sf.ButtonDensity.iconDense,
+              icon: const Icon(Icons.arrow_back_rounded, size: 18),
             ),
           ),
           Expanded(
@@ -87,83 +81,119 @@ class _UsageStatisticsPageState extends State<UsageStatisticsPage> {
     final report = controller.report;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final twoColumns = constraints.maxWidth >= IdeMetrics.wideBreakpoint;
+        final wide = constraints.maxWidth >= IdeMetrics.wideBreakpoint;
+        final medium = constraints.maxWidth >= IdeMetrics.mediumBreakpoint;
+        final pagePadding = medium
+            ? IdeSpacing.pagePadding
+            : IdeSpacing.pagePaddingCompact;
         return ListView(
           key: const ValueKey('usage-statistics-scroll-view'),
-          padding: IdeSpacing.all16,
+          padding: EdgeInsets.zero,
           children: [
-            _UsageFilters(controller: controller, report: report),
-            const SizedBox(height: IdeSpacing.space12),
-            if (controller.loading) ...[
-              const sf.Progress(progress: null),
-              const SizedBox(height: IdeSpacing.space12),
-            ],
-            if (controller.errorMessage case final error?)
-              IdeStatusCard(
-                tone: IdeStatusCardTone.error,
-                title: '统计加载失败',
-                body: Text(error),
-                footer: Align(
-                  alignment: Alignment.centerLeft,
-                  child: sf.OutlineButton(
-                    onPressed: controller.refresh,
-                    size: sf.ButtonSize.small,
-                    child: const Text('重新加载'),
+            Align(
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                width: math.min(
+                  constraints.maxWidth,
+                  IdeMetrics.analyticsContentMaxWidth,
+                ),
+                child: Padding(
+                  padding: pagePadding,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _UsageFilters(controller: controller, report: report),
+                      const SizedBox(height: IdeSpacing.space12),
+                      if (controller.loading) ...[
+                        const sf.Progress(progress: null),
+                        const SizedBox(height: IdeSpacing.space12),
+                      ],
+                      if (controller.errorMessage case final error?)
+                        IdeStatusCard(
+                          tone: IdeStatusCardTone.error,
+                          title: '统计加载失败',
+                          body: Text(error),
+                          footer: Align(
+                            alignment: Alignment.centerLeft,
+                            child: sf.OutlineButton(
+                              onPressed: controller.refresh,
+                              size: sf.ButtonSize.small,
+                              child: const Text('重新加载'),
+                            ),
+                          ),
+                        ),
+                      for (final warning in controller.warnings)
+                        IdeStatusCard(
+                          tone: IdeStatusCardTone.warning,
+                          title: '部分数据不可用',
+                          body: Text(warning),
+                        ),
+                      if (report == null && controller.loading)
+                        const _LoadingState()
+                      else if (report == null)
+                        const SizedBox.shrink()
+                      else ...[
+                        _UsageOverviewBar(overview: report.overview),
+                        const SizedBox(height: IdeSpacing.space12),
+                        _TrendSection(controller: controller, report: report),
+                        const SizedBox(height: IdeSpacing.space16),
+                        if (report.records.isEmpty)
+                          _EmptyUsageState(
+                            onOpenAgentManagement: widget.onOpenAgentManagement,
+                          )
+                        else ...[
+                          _ResponsivePair(
+                            debugLabel: 'usage-ranking-layout',
+                            layout: wide
+                                ? _UsagePairLayout.equal
+                                : _UsagePairLayout.stacked,
+                            left: _AgentRankingSection(
+                              controller: controller,
+                              entries: report.agentRanking,
+                            ),
+                            right: _ProjectRankingSection(
+                              entries: report.projectRanking,
+                              onProjectSelected: controller.selectProject,
+                            ),
+                          ),
+                          const SizedBox(height: IdeSpacing.space16),
+                          _ResponsivePair(
+                            debugLabel: 'usage-resource-layout',
+                            layout: wide
+                                ? _UsagePairLayout.equal
+                                : medium
+                                ? _UsagePairLayout.sixtyForty
+                                : _UsagePairLayout.stacked,
+                            left: _TokenAnalysisSection(report: report),
+                            right: _QuotaSection(
+                              quota: controller.source?.quota,
+                            ),
+                          ),
+                          const SizedBox(height: IdeSpacing.space16),
+                          _RecentTasksSection(
+                            records: report.records,
+                            onTaskPressed: (record) =>
+                                _openTaskDrawer(context, record),
+                          ),
+                          const SizedBox(height: IdeSpacing.space16),
+                          _ErrorAnalysisSection(
+                            errors: report.errors,
+                            records: report.records,
+                            onCategoryPressed: (category) {
+                              _openErrorDrawer(
+                                context,
+                                category,
+                                report.records,
+                              );
+                            },
+                          ),
+                        ],
+                      ],
+                    ],
                   ),
                 ),
               ),
-            for (final warning in controller.warnings)
-              IdeStatusCard(
-                tone: IdeStatusCardTone.warning,
-                title: '部分数据不可用',
-                body: Text(warning),
-              ),
-            if (report == null && controller.loading)
-              const _LoadingState()
-            else if (report == null)
-              const SizedBox.shrink()
-            else ...[
-              _OverviewGrid(overview: report.overview),
-              const SizedBox(height: IdeSpacing.space12),
-              _TrendSection(controller: controller, report: report),
-              const SizedBox(height: IdeSpacing.space12),
-              if (report.records.isEmpty)
-                _EmptyUsageState(
-                  onOpenAgentManagement: widget.onOpenAgentManagement,
-                )
-              else ...[
-                _ResponsivePair(
-                  twoColumns: twoColumns,
-                  left: _AgentRankingSection(
-                    controller: controller,
-                    entries: report.agentRanking,
-                  ),
-                  right: _ProjectRankingSection(
-                    entries: report.projectRanking,
-                    onProjectSelected: controller.selectProject,
-                  ),
-                ),
-                const SizedBox(height: IdeSpacing.space12),
-                _ResponsivePair(
-                  twoColumns: twoColumns,
-                  left: _TokenAnalysisSection(report: report),
-                  right: _QuotaSection(quota: controller.source?.quota),
-                ),
-                const SizedBox(height: IdeSpacing.space12),
-                _RecentTasksSection(
-                  records: report.records,
-                  onTaskPressed: (record) => _openTaskDrawer(context, record),
-                ),
-                const SizedBox(height: IdeSpacing.space12),
-                _ErrorAnalysisSection(
-                  errors: report.errors,
-                  records: report.records,
-                  onCategoryPressed: (category) {
-                    _openErrorDrawer(context, category, report.records);
-                  },
-                ),
-              ],
-            ],
+            ),
           ],
         );
       },
@@ -225,106 +255,123 @@ class _UsageFilters extends StatelessWidget {
     final projects = report?.projectOptions ?? const <String>[];
     final agents = report?.agentOptions ?? const <String>[];
     final models = report?.modelOptions ?? const <String>[];
-    return PanelCard(
-      child: Padding(
-        padding: IdeSpacing.cardPadding,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final compact = constraints.maxWidth < 620;
-            final fieldWidth = compact ? constraints.maxWidth : 190.0;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Wrap(
-                  spacing: IdeSpacing.space8,
-                  runSpacing: IdeSpacing.space8,
-                  crossAxisAlignment: WrapCrossAlignment.end,
-                  children: [
-                    _LabeledFilter(
-                      label: '时间范围',
+    return IdeToolbar(
+      key: const ValueKey('usage-filters-toolbar'),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < IdeMetrics.mediumBreakpoint;
+          final singleColumn = constraints.maxWidth < 440;
+          final fieldWidth = singleColumn
+              ? constraints.maxWidth
+              : compact
+              ? math.max(0.0, (constraints.maxWidth - IdeSpacing.space8) / 2)
+              : 190.0;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Wrap(
+                spacing: IdeSpacing.space8,
+                runSpacing: IdeSpacing.space8,
+                crossAxisAlignment: WrapCrossAlignment.end,
+                children: [
+                  _LabeledFilter(
+                    label: '时间范围',
+                    width: fieldWidth,
+                    child: _select<UsageTimeRangePreset>(
+                      key: const ValueKey('usage-time-range-filter'),
                       width: fieldWidth,
-                      child: _select<UsageTimeRangePreset>(
-                        key: const ValueKey('usage-time-range-filter'),
-                        width: fieldWidth,
-                        value: controller.timePreset,
-                        options: [
-                          for (final preset in UsageTimeRangePreset.values)
-                            _SelectOption(preset, preset.label),
-                        ],
-                        onChanged: (value) {
-                          if (value != null) {
-                            unawaited(controller.selectTimePreset(value));
-                          }
-                        },
+                      value: controller.timePreset,
+                      options: [
+                        for (final preset in UsageTimeRangePreset.values)
+                          _SelectOption(preset, preset.label),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          unawaited(controller.selectTimePreset(value));
+                        }
+                      },
+                    ),
+                  ),
+                  _LabeledFilter(
+                    label: '项目',
+                    width: fieldWidth,
+                    child: _select<String>(
+                      key: const ValueKey('usage-project-filter'),
+                      width: fieldWidth,
+                      value: controller.projectPath ?? _all,
+                      options: <_SelectOption<String>>[
+                        const _SelectOption(_all, '全部项目'),
+                        for (final project in projects)
+                          _SelectOption(project, usageProjectName(project)),
+                      ],
+                      onChanged: (value) => controller.selectProject(
+                        value == null || value == _all ? null : value,
                       ),
                     ),
-                    _LabeledFilter(
-                      label: '项目',
+                  ),
+                  _LabeledFilter(
+                    label: 'Agent',
+                    width: fieldWidth,
+                    child: _select<String>(
+                      key: const ValueKey('usage-agent-filter'),
                       width: fieldWidth,
-                      child: _select<String>(
-                        key: const ValueKey('usage-project-filter'),
-                        width: fieldWidth,
-                        value: controller.projectPath ?? _all,
-                        options: <_SelectOption<String>>[
-                          const _SelectOption(_all, '全部项目'),
-                          for (final project in projects)
-                            _SelectOption(project, usageProjectName(project)),
-                        ],
-                        onChanged: (value) => controller.selectProject(
-                          value == null || value == _all ? null : value,
-                        ),
+                      value: controller.providerId ?? _all,
+                      options: <_SelectOption<String>>[
+                        const _SelectOption(_all, '全部 Agent'),
+                        for (final agent in agents)
+                          _SelectOption(agent, _providerName(report, agent)),
+                      ],
+                      onChanged: (value) => controller.selectProvider(
+                        value == null || value == _all ? null : value,
                       ),
                     ),
-                    _LabeledFilter(
-                      label: 'Agent',
+                  ),
+                  _LabeledFilter(
+                    label: '模型',
+                    width: fieldWidth,
+                    child: _select<String>(
+                      key: const ValueKey('usage-model-filter'),
                       width: fieldWidth,
-                      child: _select<String>(
-                        key: const ValueKey('usage-agent-filter'),
-                        width: fieldWidth,
-                        value: controller.providerId ?? _all,
-                        options: <_SelectOption<String>>[
-                          const _SelectOption(_all, '全部 Agent'),
-                          for (final agent in agents)
-                            _SelectOption(agent, _providerName(report, agent)),
-                        ],
-                        onChanged: (value) => controller.selectProvider(
-                          value == null || value == _all ? null : value,
-                        ),
+                      value: controller.model ?? _all,
+                      options: <_SelectOption<String>>[
+                        const _SelectOption(_all, '全部模型'),
+                        for (final model in models) _SelectOption(model, model),
+                      ],
+                      onChanged: (value) => controller.selectModel(
+                        value == null || value == _all ? null : value,
                       ),
                     ),
-                    _LabeledFilter(
-                      label: '模型',
-                      width: fieldWidth,
-                      child: _select<String>(
-                        key: const ValueKey('usage-model-filter'),
-                        width: fieldWidth,
-                        value: controller.model ?? _all,
-                        options: <_SelectOption<String>>[
-                          const _SelectOption(_all, '全部模型'),
-                          for (final model in models)
-                            _SelectOption(model, model),
-                        ],
-                        onChanged: (value) => controller.selectModel(
-                          value == null || value == _all ? null : value,
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: compact ? constraints.maxWidth : null,
-                      child: Row(
-                        mainAxisSize: compact
-                            ? MainAxisSize.max
-                            : MainAxisSize.min,
-                        children: [
-                          if (compact) const Spacer(),
+                  ),
+                  SizedBox(
+                    width: compact ? constraints.maxWidth : null,
+                    child: Row(
+                      mainAxisSize: compact
+                          ? MainAxisSize.max
+                          : MainAxisSize.min,
+                      children: [
+                        if (compact)
+                          Expanded(
+                            child: Text(
+                              '最后更新：${formatUsageClock(controller.lastUpdated)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.end,
+                              style: textStyles.caption.copyWith(
+                                color: colors.textSecondary,
+                              ),
+                            ),
+                          )
+                        else
                           Text(
                             '最后更新：${formatUsageClock(controller.lastUpdated)}',
                             style: textStyles.caption.copyWith(
                               color: colors.textSecondary,
                             ),
                           ),
-                          const SizedBox(width: IdeSpacing.space8),
-                          sf.OutlineButton(
+                        const SizedBox(width: IdeSpacing.space8),
+                        SizedBox(
+                          height: IdeMetrics.toolbarHeight,
+                          child: sf.OutlineButton(
                             key: const ValueKey('usage-refresh-button'),
                             onPressed: controller.loading
                                 ? null
@@ -336,46 +383,47 @@ class _UsageFilters extends StatelessWidget {
                             ),
                             child: const Text('刷新'),
                           ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                if (controller.timePreset == UsageTimeRangePreset.custom) ...[
-                  const SizedBox(height: IdeSpacing.space8),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: SizedBox(
-                      width: compact ? constraints.maxWidth : 320,
-                      child: sf.DateRangePicker(
-                        key: const ValueKey('usage-custom-date-range'),
-                        value: sf.DateTimeRange(
-                          controller.customStart ??
-                              DateTime.now().subtract(const Duration(days: 6)),
-                          controller.customEndInclusive ?? DateTime.now(),
                         ),
-                        mode: compact
-                            ? sf.PromptMode.dialog
-                            : sf.PromptMode.popover,
-                        dialogTitle: const Text('选择统计日期'),
-                        onChanged: (range) {
-                          if (range != null) {
-                            unawaited(
-                              controller.selectCustomRange(
-                                range.start,
-                                range.end,
-                              ),
-                            );
-                          }
-                        },
-                      ),
+                      ],
                     ),
                   ),
                 ],
+              ),
+              if (controller.timePreset == UsageTimeRangePreset.custom) ...[
+                const SizedBox(height: IdeSpacing.space8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: SizedBox(
+                    width: compact ? constraints.maxWidth : 320,
+                    height: IdeMetrics.toolbarHeight,
+                    child: sf.DateRangePicker(
+                      key: const ValueKey('usage-custom-date-range'),
+                      value: sf.DateTimeRange(
+                        controller.customStart ??
+                            DateTime.now().subtract(const Duration(days: 6)),
+                        controller.customEndInclusive ?? DateTime.now(),
+                      ),
+                      mode: compact
+                          ? sf.PromptMode.dialog
+                          : sf.PromptMode.popover,
+                      dialogTitle: const Text('选择统计日期'),
+                      onChanged: (range) {
+                        if (range != null) {
+                          unawaited(
+                            controller.selectCustomRange(
+                              range.start,
+                              range.end,
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ),
               ],
-            );
-          },
-        ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -390,7 +438,10 @@ class _UsageFilters extends StatelessWidget {
     return sf.Select<T>(
       key: key,
       value: value,
-      constraints: BoxConstraints.tightFor(width: width),
+      constraints: BoxConstraints.tightFor(
+        width: width,
+        height: IdeMetrics.toolbarHeight,
+      ),
       popupConstraints: BoxConstraints(maxHeight: 320, minWidth: width),
       itemBuilder: (context, selected) {
         final option = options.firstWhere(
@@ -466,8 +517,8 @@ class _LabeledFilter extends StatelessWidget {
   }
 }
 
-class _OverviewGrid extends StatelessWidget {
-  const _OverviewGrid({required this.overview});
+class _UsageOverviewBar extends StatelessWidget {
+  const _UsageOverviewBar({required this.overview});
 
   final UsageOverview overview;
 
@@ -533,48 +584,57 @@ class _TrendSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _SectionCard(
-      title: '使用趋势',
-      subtitle: '粒度根据时间范围自动调整',
-      trailing: IdeTabs<UsageTrendMetric>(
-        value: controller.trendMetric,
-        semanticLabel: '趋势指标',
-        items: [
-          for (final metric in UsageTrendMetric.values)
-            IdeTabItem<UsageTrendMetric>(
-              key: ValueKey<String>('usage-trend-${metric.name}'),
-              value: metric,
-              label: metric.label,
-            ),
-        ],
-        onChanged: controller.selectTrendMetric,
-      ),
-      child: _UsageLineChart(
-        key: ValueKey<String>(
-          'usage-main-chart-${controller.trendMetric.name}',
+    return IdeSurface.pane(
+      key: const ValueKey('usage-primary-trend-pane'),
+      padding: IdeSpacing.panelPadding,
+      child: IdeSection(
+        title: '使用趋势',
+        subtitle: '粒度根据时间范围自动调整',
+        trailing: IdeTabs<UsageTrendMetric>(
+          value: controller.trendMetric,
+          semanticLabel: '趋势指标',
+          items: [
+            for (final metric in UsageTrendMetric.values)
+              IdeTabItem<UsageTrendMetric>(
+                key: ValueKey<String>('usage-trend-${metric.name}'),
+                value: metric,
+                label: metric.label,
+              ),
+          ],
+          onChanged: controller.selectTrendMetric,
         ),
-        points: report.trend,
-        metric: controller.trendMetric,
+        child: _UsageLineChart(
+          key: ValueKey<String>(
+            'usage-main-chart-${controller.trendMetric.name}',
+          ),
+          points: report.trend,
+          metric: controller.trendMetric,
+        ),
       ),
     );
   }
 }
 
+enum _UsagePairLayout { stacked, equal, sixtyForty }
+
 class _ResponsivePair extends StatelessWidget {
   const _ResponsivePair({
-    required this.twoColumns,
+    required this.debugLabel,
+    required this.layout,
     required this.left,
     required this.right,
   });
 
-  final bool twoColumns;
+  final String debugLabel;
+  final _UsagePairLayout layout;
   final Widget left;
   final Widget right;
 
   @override
   Widget build(BuildContext context) {
-    if (!twoColumns) {
+    if (layout == _UsagePairLayout.stacked) {
       return Column(
+        key: ValueKey<String>('$debugLabel-stacked'),
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           left,
@@ -583,12 +643,17 @@ class _ResponsivePair extends StatelessWidget {
         ],
       );
     }
+    final leftFlex = layout == _UsagePairLayout.sixtyForty ? 3 : 1;
+    final rightFlex = layout == _UsagePairLayout.sixtyForty ? 2 : 1;
     return Row(
+      key: ValueKey<String>(
+        '$debugLabel-${layout == _UsagePairLayout.equal ? 'equal' : 'sixty-forty'}',
+      ),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(child: left),
+        Expanded(flex: leftFlex, child: left),
         const SizedBox(width: IdeSpacing.space12),
-        Expanded(child: right),
+        Expanded(flex: rightFlex, child: right),
       ],
     );
   }
@@ -602,7 +667,7 @@ class _AgentRankingSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _SectionCard(
+    return IdeSection(
       title: 'Agent 使用排行',
       subtitle: '按当前筛选范围汇总',
       trailing: _UsageFilters._select<UsageRankSort>(
@@ -652,7 +717,7 @@ class _ProjectRankingSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _SectionCard(
+    return IdeSection(
       title: '项目使用排行',
       subtitle: '点击项目可直接应用筛选',
       child: _UsageTable(
@@ -688,7 +753,7 @@ class _TokenAnalysisSection extends StatelessWidget {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final tokens = report.overview.tokens;
-    return _SectionCard(
+    return IdeSection(
       title: 'Token 分析',
       subtitle: '输入、输出与模型消耗比例',
       child: tokens.hasData
@@ -800,7 +865,7 @@ class _QuotaSection extends StatelessWidget {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final quota = this.quota;
-    return _SectionCard(
+    return IdeSection(
       title: '订阅套餐',
       subtitle: 'Codex 返回的实际限额窗口',
       child: quota == null
@@ -917,7 +982,7 @@ class _RecentTasksSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final visible = records.take(20).toList();
-    return _SectionCard(
+    return IdeSection(
       title: '最近任务',
       subtitle: '仅展示统计元数据，不展示 Prompt 和文件内容',
       child: _UsageTable(
@@ -961,7 +1026,7 @@ class _ErrorAnalysisSection extends StatelessWidget {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final failures = records.where((record) => record.status.isFailure).length;
-    return _SectionCard(
+    return IdeSection(
       title: '失败分析',
       subtitle: '失败次数：$failures',
       child: errors.isEmpty
@@ -976,110 +1041,35 @@ class _ErrorAnalysisSection extends StatelessWidget {
                 Text('当前范围内没有失败任务', style: textStyles.bodyMedium),
               ],
             )
-          : Wrap(
-              spacing: IdeSpacing.space8,
-              runSpacing: IdeSpacing.space8,
+          : Column(
               children: [
-                for (final error in errors)
-                  PaneInteractiveSurface(
-                    key: ValueKey<String>('usage-error-${error.category.name}'),
-                    onPressed: () => onCategoryPressed(error.category),
-                    padding: IdeSpacing.cardPadding,
-                    borderRadius: IdeRadius.allMedium,
-                    borderColor: colors.borderSubtle,
-                    semanticLabel: '查看${error.category.label}任务',
-                    child: Row(
+                for (var index = 0; index < errors.length; index += 1)
+                  IdeListRow(
+                    key: ValueKey<String>(
+                      'usage-error-${errors[index].category.name}',
+                    ),
+                    title: errors[index].category.label,
+                    subtitle: errors[index].category.nextAction,
+                    leading: Icon(Icons.error_outline, color: colors.error),
+                    trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          Icons.error_outline,
-                          size: 16,
-                          color: colors.error,
-                        ),
-                        const SizedBox(width: IdeSpacing.space6),
-                        Text(error.category.label, style: textStyles.bodySmall),
-                        const SizedBox(width: IdeSpacing.space12),
                         Text(
-                          error.count.toString(),
+                          errors[index].count.toString(),
                           style: textStyles.titleSmall.copyWith(
                             color: colors.error,
                           ),
                         ),
+                        const SizedBox(width: IdeSpacing.space4),
+                        const Icon(Icons.chevron_right_rounded, size: 16),
                       ],
                     ),
+                    onPressed: () => onCategoryPressed(errors[index].category),
+                    showDivider: index < errors.length - 1,
+                    semanticLabel: '查看${errors[index].category.label}任务',
                   ),
               ],
             ),
-    );
-  }
-}
-
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({
-    required this.title,
-    required this.child,
-    this.subtitle,
-    this.trailing,
-  });
-
-  final String title;
-  final String? subtitle;
-  final Widget? trailing;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
-    return PanelCard(
-      child: Padding(
-        padding: IdeSpacing.cardPadding,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final heading = Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: textStyles.titleLarge),
-                    if (subtitle != null)
-                      Text(
-                        subtitle!,
-                        style: textStyles.caption.copyWith(
-                          color: colors.textSecondary,
-                        ),
-                      ),
-                  ],
-                );
-                if (trailing == null) {
-                  return heading;
-                }
-                if (constraints.maxWidth < 620) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      heading,
-                      const SizedBox(height: IdeSpacing.space8),
-                      Align(alignment: Alignment.centerLeft, child: trailing),
-                    ],
-                  );
-                }
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: heading),
-                    const SizedBox(width: IdeSpacing.space12),
-                    trailing!,
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: IdeSpacing.space12),
-            child,
-          ],
-        ),
-      ),
     );
   }
 }
@@ -1114,49 +1104,31 @@ class _UsageTable extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final tableWidth = math.max(minWidth, constraints.maxWidth);
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SizedBox(
-            width: tableWidth,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: IdeSpacing.space8,
-                    vertical: IdeSpacing.space6,
-                  ),
-                  color: colors.surfaceElevated,
-                  child: _UsageTableCells(
-                    values: headers,
-                    flexes: flexes,
-                    header: true,
-                  ),
-                ),
-                for (var index = 0; index < rows.length; index += 1) ...[
-                  PaneInteractiveSurface(
-                    key: _rowKey(index),
-                    onPressed: onRowPressed == null
-                        ? null
-                        : () => onRowPressed!(index),
-                    button: onRowPressed != null,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: IdeSpacing.space8,
-                      vertical: IdeSpacing.space8,
-                    ),
-                    borderRadius: BorderRadius.zero,
-                    semanticLabel: onRowPressed == null
-                        ? null
-                        : '打开${rows[index].first}详情',
-                    child: _UsageTableCells(
+        return ClipRect(
+          child: SingleChildScrollView(
+            key: const ValueKey('usage-table-horizontal-scroll'),
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: tableWidth,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  IdeDataRow(values: headers, flexes: flexes, header: true),
+                  for (var index = 0; index < rows.length; index += 1)
+                    IdeDataRow(
+                      key: _rowKey(index),
                       values: rows[index],
                       flexes: flexes,
+                      onPressed: onRowPressed == null
+                          ? null
+                          : () => onRowPressed!(index),
+                      showDivider: index + 1 < rows.length,
+                      semanticLabel: onRowPressed == null
+                          ? null
+                          : '打开${rows[index].first}详情',
                     ),
-                  ),
-                  if (index + 1 < rows.length)
-                    Divider(height: 1, color: colors.borderSubtle),
                 ],
-              ],
+              ),
             ),
           ),
         );
@@ -1181,45 +1153,6 @@ class _UsageTable extends StatelessWidget {
   }
 }
 
-class _UsageTableCells extends StatelessWidget {
-  const _UsageTableCells({
-    required this.values,
-    required this.flexes,
-    this.header = false,
-  });
-
-  final List<String> values;
-  final List<int> flexes;
-  final bool header;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
-    return Row(
-      children: [
-        for (var index = 0; index < values.length; index += 1)
-          Expanded(
-            flex: flexes[index],
-            child: Padding(
-              padding: const EdgeInsets.only(right: IdeSpacing.space8),
-              child: Text(
-                values[index],
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: (header ? textStyles.caption : textStyles.bodySmall)
-                    .copyWith(
-                      color: header ? colors.textSecondary : colors.textPrimary,
-                      fontWeight: header ? FontWeight.w700 : FontWeight.w400,
-                    ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
 class _UsageLineChart extends StatelessWidget {
   const _UsageLineChart({
     required this.points,
@@ -1236,6 +1169,10 @@ class _UsageLineChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
+    final brightness = sf.Theme.of(context).brightness;
+    final fillColor = colors.accent.withValues(
+      alpha: brightness == Brightness.dark ? 0.10 : 0.07,
+    );
     final maximum = safeUsageChartMaximum(points);
     final labels = points.isEmpty
         ? const <String>[]
@@ -1259,7 +1196,7 @@ class _UsageLineChart extends StatelessWidget {
                     maximum: maximum,
                     lineColor: colors.accent,
                     gridColor: colors.borderSubtle,
-                    fillColor: colors.primaryMuted,
+                    fillColor: fillColor,
                   ),
                   child: const SizedBox.expand(),
                 ),
@@ -1326,7 +1263,7 @@ class _UsageLineChartPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
     final fillPaint = Paint()
-      ..color = fillColor.withValues(alpha: 0.45)
+      ..color = fillColor
       ..style = PaintingStyle.fill;
     final path = Path();
     final fillPath = Path();
@@ -1455,7 +1392,6 @@ class _ErrorListDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     return _DrawerSurface(
       title: category.label,
@@ -1471,32 +1407,19 @@ class _ErrorListDrawer extends StatelessWidget {
           const SizedBox(height: IdeSpacing.space12),
           Text('${records.length} 条任务', style: textStyles.titleSmall),
           const SizedBox(height: IdeSpacing.space8),
-          for (final record in records) ...[
-            PaneInteractiveSurface(
-              key: ValueKey<String>('usage-error-task-${record.id}'),
-              onPressed: () => onTaskPressed(record),
-              padding: IdeSpacing.cardPadding,
-              borderRadius: IdeRadius.allMedium,
-              borderColor: colors.borderSubtle,
-              alignment: Alignment.centerLeft,
-              semanticLabel: '打开 ${record.projectName} 失败任务',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(record.projectName, style: textStyles.bodySmall),
-                  Text(
-                    record.errorMessage ?? record.errorCode ?? '未提供详细原因',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: textStyles.caption.copyWith(
-                      color: colors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
+          for (var index = 0; index < records.length; index += 1)
+            IdeListRow(
+              key: ValueKey<String>('usage-error-task-${records[index].id}'),
+              title: records[index].projectName,
+              subtitle:
+                  records[index].errorMessage ??
+                  records[index].errorCode ??
+                  '未提供详细原因',
+              trailing: const Icon(Icons.chevron_right_rounded, size: 16),
+              onPressed: () => onTaskPressed(records[index]),
+              showDivider: index < records.length - 1,
+              semanticLabel: '打开 ${records[index].projectName} 失败任务',
             ),
-            const SizedBox(height: IdeSpacing.space8),
-          ],
         ],
       ),
     );
@@ -1511,32 +1434,31 @@ class _DrawerSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 460, maxHeight: 720),
-      child: ColoredBox(
-        color: colors.surfaceOverlay,
-        child: Padding(
-          padding: IdeSpacing.all16,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(child: Text(title, style: textStyles.displaySmall)),
-                  sf.IconButton.ghost(
-                    key: const ValueKey('usage-drawer-close-button'),
-                    onPressed: () => sf.closeOverlay(context),
-                    density: sf.ButtonDensity.iconDense,
-                    icon: const Icon(Icons.close_rounded, size: 18),
-                  ),
-                ],
+      child: IdeSurface.popover(
+        key: const ValueKey('usage-drawer-surface'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            IdePageHeader(
+              title: title,
+              actions: [
+                sf.IconButton.ghost(
+                  key: const ValueKey('usage-drawer-close-button'),
+                  onPressed: () => sf.closeOverlay(context),
+                  density: sf.ButtonDensity.iconDense,
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                ),
+              ],
+            ),
+            Expanded(
+              child: Padding(
+                padding: IdeSpacing.all16,
+                child: SingleChildScrollView(child: child),
               ),
-              const SizedBox(height: IdeSpacing.space12),
-              Expanded(child: SingleChildScrollView(child: child)),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -1579,7 +1501,8 @@ class _EmptyUsageState extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    return PanelCard(
+    return IdeSurface.pane(
+      key: const ValueKey('usage-empty-state-pane'),
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: IdeSpacing.space24,

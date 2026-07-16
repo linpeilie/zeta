@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../ide_colors.dart';
+import '../ide_metrics.dart';
 import '../ide_spacing.dart';
 import '../ide_text_styles.dart';
 
@@ -23,31 +24,46 @@ class IdeSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final styles = IdeTextStyles.of(context);
+    final heading = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: styles.sectionTitle),
+        if (subtitle case final String subtitleText)
+          Text(
+            subtitleText,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: styles.meta.copyWith(color: colors.textSecondary),
+          ),
+      ],
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final trailingWidget = trailing;
+            if (trailingWidget == null) {
+              return heading;
+            }
+            if (constraints.maxWidth < IdeMetrics.stackedRowBreakpoint) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(title, style: styles.sectionTitle),
-                  if (subtitle case final String subtitleText)
-                    Text(
-                      subtitleText,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: styles.meta.copyWith(color: colors.textSecondary),
-                    ),
+                  heading,
+                  const SizedBox(height: IdeSpacing.space8),
+                  Align(alignment: Alignment.centerLeft, child: trailingWidget),
                 ],
-              ),
-            ),
-            if (trailing case final Widget trailingWidget) ...[
-              const SizedBox(width: IdeSpacing.space8),
-              trailingWidget,
-            ],
-          ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: heading),
+                const SizedBox(width: IdeSpacing.space8),
+                Flexible(child: trailingWidget),
+              ],
+            );
+          },
         ),
         const SizedBox(height: IdeSpacing.space8),
         child,

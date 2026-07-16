@@ -8,6 +8,11 @@ import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_model
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_repository.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_page.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/ui/core/ide_metrics.dart';
+import 'package:zeta/src/ui/core/metrics/compact_metric_bar.dart';
+import 'package:zeta/src/ui/core/rows/ide_data_row.dart';
+import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
+import 'package:zeta/src/ui/core/workbench/ide_toolbar.dart';
 
 void main() {
   testWidgets('renders full statistics and opens task detail drawer', (
@@ -34,24 +39,50 @@ void main() {
       find.byKey(const ValueKey('usage-main-chart-calls')),
       findsOneWidget,
     );
+    expect(find.byType(CompactMetricBar), findsOneWidget);
+    expect(find.byType(IdeToolbar), findsOneWidget);
+    expect(find.byType(IdeDataRow), findsWidgets);
+    expect(
+      tester
+          .widget<IdeSurface>(
+            find.byKey(const ValueKey('usage-statistics-page')),
+          )
+          .level,
+      IdeSurfaceLevel.canvas,
+    );
+    expect(
+      tester
+          .widget<IdeSurface>(
+            find.byKey(const ValueKey('usage-primary-trend-pane')),
+          )
+          .level,
+      IdeSurfaceLevel.pane,
+    );
+    expect(
+      find.byKey(const ValueKey('usage-ranking-layout-equal')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('usage-resource-layout-equal')),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
 
     final taskRow = find.byKey(const ValueKey('usage-row-thread-1/turn-1'));
-    await tester.scrollUntilVisible(
-      taskRow,
-      500,
-      scrollable: find
-          .byWidgetPredicate(
-            (widget) =>
-                widget is Scrollable &&
-                widget.axisDirection == AxisDirection.down,
-          )
-          .first,
-    );
+    await tester.ensureVisible(taskRow);
+    await tester.pumpAndSettle();
     await tester.tap(taskRow);
     await tester.pumpAndSettle();
 
     expect(find.text('任务详情'), findsOneWidget);
+    expect(
+      tester
+          .widget<IdeSurface>(
+            find.byKey(const ValueKey('usage-drawer-surface')),
+          )
+          .level,
+      IdeSurfaceLevel.popover,
+    );
     expect(find.text('项目路径'), findsOneWidget);
     expect(find.text(r'C:\work\zeta'), findsWidgets);
     expect(find.text('首次响应'), findsOneWidget);
@@ -88,8 +119,55 @@ void main() {
       find.byKey(const ValueKey('usage-custom-date-range')),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const ValueKey('usage-ranking-layout-stacked')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('usage-resource-layout-stacked')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('usage-time-range-filter')))
+          .height,
+      IdeMetrics.toolbarHeight,
+    );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'uses stacked rankings and a 6:4 resource layout at medium width',
+    (tester) async {
+      final now = DateTime(2026, 7, 10, 12);
+      final controller = UsageStatisticsController(
+        repository: _UsageRepository(_source(now)),
+        clock: () => now,
+      );
+      addTearDown(controller.dispose);
+      await tester.runAsync(controller.initialize);
+
+      await _pumpUsagePage(
+        tester,
+        controller: controller,
+        size: const Size(900, 900),
+      );
+
+      expect(
+        find.byKey(const ValueKey('usage-ranking-layout-stacked')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('usage-resource-layout-sixty-forty')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('usage-table-horizontal-scroll')),
+        findsWidgets,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('keeps table row keys unique for duplicate record ids', (
     tester,
