@@ -294,14 +294,25 @@ void main() {
       final events = <AgentEvent>[];
       final subscription = provider.events.listen(events.add);
 
-      await provider.initialize();
+      final session = await provider.startSession(
+        context: const AgentContext(projectPath: r'D:\repo\zeta'),
+      );
+      peer.promptCompleter = Completer<Object?>();
+      final promptFuture = provider.sendMessage(
+        session: session,
+        context: const AgentContext(projectPath: r'D:\repo\zeta'),
+        message: 'ping',
+      );
+      await _waitUntil(() => peer.requestMethods.contains('session/prompt'));
       peer.emitNotification('session/update', <String, Object?>{
         'sessionId': 'sess-1',
         'update': <String, Object?>{
           'sessionUpdate': 'agent_message_chunk',
           'messageId': 'msg-1',
           'content': <String, Object?>{'type': 'text', 'text': 'Hello Grok'},
+          '_meta': <String, Object?>{'promptId': 'provider-prompt-1'},
         },
+        '_meta': <String, Object?>{'eventId': 'message-1'},
       });
       peer.emitNotification('session/update', <String, Object?>{
         'sessionId': 'sess-1',
@@ -311,7 +322,9 @@ void main() {
           'title': 'Read file',
           'kind': 'read',
           'status': 'completed',
+          '_meta': <String, Object?>{'promptId': 'provider-prompt-1'},
         },
+        '_meta': <String, Object?>{'eventId': 'tool-1'},
       });
       await Future<void>.delayed(Duration.zero);
 
@@ -327,6 +340,11 @@ void main() {
         events.whereType<AgentToolCallEvent>().single.toolCall.kind,
         AgentToolKind.read,
       );
+
+      peer.promptCompleter!.complete(<String, Object?>{
+        'stopReason': 'end_turn',
+      });
+      await promptFuture;
 
       await subscription.cancel();
       await provider.dispose();
@@ -368,7 +386,16 @@ void main() {
       final events = <AgentEvent>[];
       final subscription = provider.events.listen(events.add);
 
-      await provider.initialize();
+      final session = await provider.startSession(
+        context: const AgentContext(projectPath: r'D:\repo\zeta'),
+      );
+      peer.promptCompleter = Completer<Object?>();
+      final promptFuture = provider.sendMessage(
+        session: session,
+        context: const AgentContext(projectPath: r'D:\repo\zeta'),
+        message: 'ping',
+      );
+      await _waitUntil(() => peer.requestMethods.contains('session/prompt'));
       peer.emitServerRequest(
         id: 77,
         method: 'session/request_permission',
@@ -390,15 +417,25 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(events.whereType<AgentPermissionRequestedEvent>(), isNotEmpty);
 
-      await provider.cancelTurn(
-        const AgentTurn(id: 'turn-1', sessionId: 'sess-1'),
-      );
+      final turn = events.whereType<AgentTurnStartedEvent>().last.turn;
+      await provider.cancelTurn(turn);
+      await Future<void>.delayed(Duration.zero);
 
       expect(peer.notificationsSent, contains('session/cancel'));
       expect(peer.responses, isNotEmpty);
       final cancelled = peer.responses.last['result']! as Map<String, Object?>;
       final outcome = cancelled['outcome']! as Map<String, Object?>;
       expect(outcome['outcome'], 'cancelled');
+      expect(
+        events.whereType<AgentTurnCompletedEvent>().last.status,
+        AgentHistoryTurnStatus.interrupted,
+      );
+      expect(provider.streamIdentityDiagnostics.terminalAccepted, 1);
+
+      peer.promptCompleter!.complete(<String, Object?>{
+        'stopReason': 'cancelled',
+      });
+      await promptFuture;
 
       await subscription.cancel();
       await provider.dispose();
@@ -500,10 +537,259 @@ void main() {
       await subscription.cancel();
       await provider.dispose();
     });
+
+    test(
+      'permission boundary splits adapter message ids without TimelineStore',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final mapper = GrokAcpNotificationMapper();
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+          notificationMapper: mapper,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+        );
+        peer.promptCompleter = Completer<Object?>();
+        final promptFuture = provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+          message: 'ping',
+        );
+        await _waitUntil(() => peer.requestMethods.contains('session/prompt'));
+
+        peer.emitNotification(
+          'session/update',
+          _messageParams(
+            text: 'before',
+            eventId: 'message-before',
+            sourceMessageId: 'source-A',
+          ),
+        );
+        peer.emitServerRequest(
+          id: 88,
+          method: 'session/request_permission',
+          params: <String, Object?>{
+            'sessionId': 'sess-1',
+            'toolCall': <String, Object?>{
+              'toolCallId': 'tool-permission',
+              'title': 'Approve action',
+            },
+            'options': <Object?>[
+              <String, Object?>{
+                'optionId': 'allow-once',
+                'name': 'Allow once',
+                'kind': 'allow_once',
+              },
+            ],
+          },
+        );
+        await Future<void>.delayed(Duration.zero);
+        peer.emitNotification(
+          'session/update',
+          _messageParams(
+            text: 'after',
+            eventId: 'message-after',
+            sourceMessageId: 'source-A',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        final timelineEvents = events
+            .where(
+              (event) =>
+                  event is AgentMessageDeltaEvent ||
+                  event is AgentPermissionRequestedEvent,
+            )
+            .toList(growable: false);
+        expect(timelineEvents, <Matcher>[
+          isA<AgentMessageDeltaEvent>(),
+          isA<AgentPermissionRequestedEvent>(),
+          isA<AgentMessageDeltaEvent>(),
+        ]);
+        final messages = timelineEvents.whereType<AgentMessageDeltaEvent>();
+        expect(messages.first.sourceMessageId, 'source-A');
+        expect(messages.last.sourceMessageId, 'source-A');
+        expect(messages.first.messageId, isNot(messages.last.messageId));
+
+        final permission = events
+            .whereType<AgentPermissionRequestedEvent>()
+            .single;
+        await provider.respondToPermission(
+          AgentPermissionDecision(
+            requestId: permission.request.id,
+            approved: true,
+          ),
+        );
+        peer.promptCompleter!.complete(<String, Object?>{
+          'stopReason': 'end_turn',
+        });
+        await promptFuture;
+        await subscription.cancel();
+        await provider.dispose();
+      },
+    );
+
+    test('xAI notification wins prompt RPC terminal race once', () async {
+      final peer = _FakeJsonRpcPeer();
+      final mapper = GrokAcpNotificationMapper();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+        notificationMapper: mapper,
+      );
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+
+      final session = await provider.startSession(
+        context: const AgentContext(projectPath: r'D:\repo\zeta'),
+      );
+      peer.promptCompleter = Completer<Object?>();
+      final promptFuture = provider.sendMessage(
+        session: session,
+        context: const AgentContext(projectPath: r'D:\repo\zeta'),
+        message: 'ping',
+      );
+      await _waitUntil(() => peer.requestMethods.contains('session/prompt'));
+      peer.emitNotification(
+        'session/update',
+        _messageParams(text: 'chunk', eventId: 'message-1'),
+      );
+      peer.emitNotification('_x.ai/session/update', <String, Object?>{
+        'sessionId': 'sess-1',
+        'update': <String, Object?>{
+          'sessionUpdate': 'turn_completed',
+          'prompt_id': 'provider-prompt-1',
+          'stop_reason': 'end_turn',
+        },
+        '_meta': <String, Object?>{'eventId': 'xai-terminal'},
+      });
+      await Future<void>.delayed(Duration.zero);
+      peer.promptCompleter!.complete(<String, Object?>{
+        'stopReason': 'end_turn',
+      });
+      await promptFuture;
+
+      expect(events.whereType<AgentTurnCompletedEvent>(), hasLength(1));
+      expect(mapper.diagnostics.terminalAccepted, 1);
+      expect(mapper.diagnostics.duplicateTerminalIgnored, 1);
+
+      await subscription.cancel();
+      await provider.dispose();
+    });
+
+    test(
+      'prompt error completes failed and invalidates identity state',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final mapper = GrokAcpNotificationMapper();
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+          notificationMapper: mapper,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+        );
+        peer.promptCompleter = Completer<Object?>();
+        final promptFuture = provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+          message: 'ping',
+        );
+        await _waitUntil(() => peer.requestMethods.contains('session/prompt'));
+        final expectation = expectLater(promptFuture, throwsStateError);
+        peer.promptCompleter!.completeError(StateError('redacted failure'));
+        await expectation;
+        await Future<void>.delayed(Duration.zero);
+
+        final completed = events.whereType<AgentTurnCompletedEvent>().single;
+        expect(completed.status, AgentHistoryTurnStatus.failed);
+        expect(mapper.diagnostics.terminalAccepted, 1);
+        final turnId = events.whereType<AgentTurnStartedEvent>().last.turn.id;
+        expect(
+          mapper
+              .snapshot(
+                runtimeScope: provider.runtimeScope!,
+                sessionId: session.id,
+                turnId: turnId,
+              )!
+              .terminal,
+          isTrue,
+        );
+
+        await subscription.cancel();
+        await provider.dispose();
+      },
+    );
+
+    test('peer close and dispose invalidate reducer lifecycle state', () async {
+      final peer = _FakeJsonRpcPeer();
+      final mapper = GrokAcpNotificationMapper();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+        notificationMapper: mapper,
+      );
+
+      await provider.initialize();
+      final scope = provider.runtimeScope!;
+      mapper.beginTurn(
+        runtimeScope: scope,
+        sessionId: 'session-lifecycle',
+        turnId: 'turn-lifecycle',
+      );
+      await peer.closeNotificationStream();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        mapper
+            .snapshot(
+              runtimeScope: scope,
+              sessionId: 'session-lifecycle',
+              turnId: 'turn-lifecycle',
+            )!
+            .terminal,
+        isTrue,
+      );
+      await provider.dispose();
+      expect(
+        mapper.snapshot(
+          runtimeScope: scope,
+          sessionId: 'session-lifecycle',
+          turnId: 'turn-lifecycle',
+        ),
+        isNull,
+      );
+    });
   });
 
   group('GrokAcpNotificationMapper', () {
-    const mapper = GrokAcpNotificationMapper();
+    const runtimeScope = AgentRuntimeScope(
+      runtimeId: 'grok-mapper-test',
+      connectionEpoch: 1,
+    );
+    late GrokAcpNotificationMapper mapper;
+
+    setUp(() {
+      mapper = GrokAcpNotificationMapper();
+      mapper.beginTurn(
+        runtimeScope: runtimeScope,
+        sessionId: 's1',
+        turnId: 't1',
+      );
+    });
+
+    tearDown(() {
+      mapper.dispose();
+    });
 
     test('maps agent_thought_chunk to reasoning delta', () {
       final mapped = mapper.mapSessionUpdate(
@@ -515,6 +801,7 @@ void main() {
           },
         },
         runningTurnId: 't1',
+        runtimeScope: runtimeScope,
       );
       final event = mapped.events.single as AgentReasoningDeltaEvent;
       expect(event.delta, 'thinking');
@@ -535,6 +822,7 @@ void main() {
           },
         },
         runningTurnId: 't1',
+        runtimeScope: runtimeScope,
       );
       expect(mapped.events, isEmpty);
       expect(mapped.unmatchedKind, 'user_message_chunk');
@@ -553,6 +841,7 @@ void main() {
           },
         },
         runningTurnId: 't1',
+        runtimeScope: runtimeScope,
       );
       final tool = (mapped.events.single as AgentToolCallEvent).toolCall;
       expect(tool.status, AgentToolStatus.completed);
@@ -569,6 +858,7 @@ void main() {
           },
         },
         runningTurnId: 't1',
+        runtimeScope: runtimeScope,
       );
       final event = mapped.events.single as AgentTurnCompletedEvent;
       expect(event.sessionId, 's1');
@@ -577,11 +867,17 @@ void main() {
     });
 
     test('maps turn_completed usage as turn-absolute with apiDurationMs', () {
+      mapper.beginTurn(
+        runtimeScope: runtimeScope,
+        sessionId: 'sess-1',
+        turnId: 'local-turn-1',
+      );
       final mapped = mapper.mapXaiSessionUpdate(
         params: readFixtureJsonMap(
           'grok/acp/xai_turn_completed_notification_redacted.json',
         ),
         runningTurnId: 'local-turn-1',
+        runtimeScope: runtimeScope,
       );
       expect(mapped.events, hasLength(2));
       final usage = mapped.events[0] as AgentTokenUsageEvent;
@@ -612,6 +908,7 @@ void main() {
           },
         },
         runningTurnId: 't1',
+        runtimeScope: runtimeScope,
       );
       final event = mapped.events.single as AgentPlanUpdatedEvent;
       expect(event.entries.single.content, 'Step 1');
@@ -698,6 +995,21 @@ Available models:
   });
 }
 
+Map<String, Object?> _messageParams({
+  required String text,
+  required String eventId,
+  String? sourceMessageId,
+}) => <String, Object?>{
+  'sessionId': 'sess-1',
+  'update': <String, Object?>{
+    'sessionUpdate': 'agent_message_chunk',
+    'messageId': ?sourceMessageId,
+    'content': <String, Object?>{'type': 'text', 'text': text},
+    '_meta': <String, Object?>{'promptId': 'provider-prompt-1'},
+  },
+  '_meta': <String, Object?>{'eventId': eventId},
+};
+
 Future<void> _waitUntil(bool Function() condition) async {
   final deadline = DateTime.now().add(const Duration(seconds: 1));
   while (!condition() && DateTime.now().isBefore(deadline)) {
@@ -726,6 +1038,9 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
   /// 模拟旧 Grok initialize 不带模型状态，以覆盖 CLI 降级竞态。
   bool includeModelState = true;
 
+  /// 非空时延迟 `session/prompt` 响应，便于测试 live 通知竞态。
+  Completer<Object?>? promptCompleter;
+
   @override
   Stream<JsonRpcNotification> get notifications => _notifications.stream;
 
@@ -749,6 +1064,9 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
   }) async {
     requestMethods.add(method);
     requestParams.add(params);
+    if (method == 'session/prompt' && promptCompleter != null) {
+      return promptCompleter!.future;
+    }
     return switch (method) {
       'initialize' => <String, Object?>{
         ...readFixtureJsonMap('grok/acp/initialize_0_2_101_redacted.json'),
@@ -828,6 +1146,8 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
       JsonRpcRequest(id: id, method: method, params: params, raw: params),
     );
   }
+
+  Future<void> closeNotificationStream() => _notifications.close();
 }
 
 class _DelayedModelsCli extends GrokModelsCli {

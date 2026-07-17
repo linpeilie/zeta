@@ -1,50 +1,131 @@
-import 'package:zeta/src/features/agent/data/mappers/acp_session_update_mapper.dart';
+import 'package:zeta/src/features/agent/data/mappers/grok_session_update_mapper.dart';
+import 'package:zeta/src/features/agent/data/mappers/grok_stream_identity.dart';
+import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
-export 'package:zeta/src/features/agent/data/mappers/acp_session_update_mapper.dart'
-    show AcpMappedUpdate, GrokAcpMappedUpdate;
+export 'package:zeta/src/features/agent/data/mappers/grok_session_update_mapper.dart'
+    show GrokAcpMappedUpdate, GrokSessionUpdateMapper;
+export 'package:zeta/src/features/agent/data/mappers/grok_stream_identity.dart'
+    show
+        GrokIdentityInvalidationReason,
+        GrokNarrativeBoundaryKind,
+        GrokStreamIdentityDiagnostics,
+        GrokTerminalSource,
+        GrokTurnIdentitySnapshot;
 
-/// Grok ACP 通知适配层。
+/// Grok ACP 通知适配门面。
 ///
-/// 标准 `session/update` 委托给共享 mapper；这里只保留 `_x.ai/*` 厂商扩展入口。
-class GrokAcpNotificationMapper {
-  const GrokAcpNotificationMapper({
-    this.sessionUpdateMapper = const AcpSessionUpdateMapper(),
-  });
+/// 标准 `session/update` 与 `_x.ai/session/update` 共用同一个有状态 Grok adapter，
+/// 不再委托共享 `AcpSessionUpdateMapper` 决定叙事 identity。
+final class GrokAcpNotificationMapper {
+  GrokAcpNotificationMapper({GrokSessionUpdateMapper? sessionUpdateMapper})
+    : sessionUpdateMapper = sessionUpdateMapper ?? GrokSessionUpdateMapper();
 
-  final AcpSessionUpdateMapper sessionUpdateMapper;
+  final GrokSessionUpdateMapper sessionUpdateMapper;
+
+  GrokStreamIdentityDiagnostics get diagnostics =>
+      sessionUpdateMapper.diagnostics;
+
+  int beginTurn({
+    required AgentRuntimeScope runtimeScope,
+    required String sessionId,
+    required String turnId,
+  }) => sessionUpdateMapper.beginTurn(
+    runtimeScope: runtimeScope,
+    sessionId: sessionId,
+    turnId: turnId,
+  );
 
   GrokAcpMappedUpdate mapSessionUpdate({
     required Map<String, Object?> params,
     required String? runningTurnId,
-  }) {
-    return sessionUpdateMapper.mapSessionUpdate(
-      params: params,
-      runningTurnId: runningTurnId,
-    );
-  }
+    required AgentRuntimeScope runtimeScope,
+  }) => sessionUpdateMapper.mapSessionUpdate(
+    params: params,
+    runningTurnId: runningTurnId,
+    runtimeScope: runtimeScope,
+  );
 
-  /// 映射 `_x.ai/session/update` 中与回合完成相关的扩展。
+  /// 将 `_x.ai/session/update` 送入与标准通知相同的 session/turn reducer。
   GrokAcpMappedUpdate mapXaiSessionUpdate({
     required Map<String, Object?> params,
     required String? runningTurnId,
-  }) {
-    final updateRaw = params['update'];
-    if (updateRaw is! Map) {
-      return const AcpMappedUpdate(
-        unmatchedKind: '_x.ai/session/update:missing',
-      );
-    }
-    final update = updateRaw.map(
-      (key, value) => MapEntry(key.toString(), value as Object?),
-    );
-    final kind = update['sessionUpdate']?.toString() ?? '';
-    if (kind != 'turn_completed') {
-      return AcpMappedUpdate(unmatchedKind: kind);
-    }
-    return sessionUpdateMapper.mapTurnCompleted(
-      params: params,
-      update: update,
-      runningTurnId: runningTurnId,
-    );
-  }
+    required AgentRuntimeScope runtimeScope,
+  }) => sessionUpdateMapper.mapSessionUpdate(
+    params: params,
+    runningTurnId: runningTurnId,
+    runtimeScope: runtimeScope,
+    terminalSource: GrokTerminalSource.xaiNotification,
+  );
+
+  GrokAcpMappedUpdate mapPromptTerminal({
+    required AgentRuntimeScope runtimeScope,
+    required String sessionId,
+    required String turnId,
+    required String stopReason,
+    required GrokTerminalSource source,
+    Map<String, Object?> raw = const <String, Object?>{},
+  }) => sessionUpdateMapper.mapPromptTerminal(
+    runtimeScope: runtimeScope,
+    sessionId: sessionId,
+    turnId: turnId,
+    stopReason: stopReason,
+    source: source,
+    raw: raw,
+  );
+
+  bool noteBoundary({
+    required AgentRuntimeScope runtimeScope,
+    required String sessionId,
+    required String? runningTurnId,
+    required GrokNarrativeBoundaryKind kind,
+  }) => sessionUpdateMapper.noteBoundary(
+    runtimeScope: runtimeScope,
+    sessionId: sessionId,
+    runningTurnId: runningTurnId,
+    kind: kind,
+  );
+
+  void invalidateTurn({
+    required AgentRuntimeScope runtimeScope,
+    required String sessionId,
+    required String? runningTurnId,
+    required String? promptId,
+    required GrokIdentityInvalidationReason reason,
+  }) => sessionUpdateMapper.invalidateTurn(
+    runtimeScope: runtimeScope,
+    sessionId: sessionId,
+    runningTurnId: runningTurnId,
+    promptId: promptId,
+    reason: reason,
+  );
+
+  void invalidateRuntime({
+    required AgentRuntimeScope runtimeScope,
+    required GrokIdentityInvalidationReason reason,
+  }) => sessionUpdateMapper.invalidateRuntime(
+    runtimeScope: runtimeScope,
+    reason: reason,
+  );
+
+  void invalidateSession({
+    required AgentRuntimeScope runtimeScope,
+    required String sessionId,
+    required GrokIdentityInvalidationReason reason,
+  }) => sessionUpdateMapper.invalidateSession(
+    runtimeScope: runtimeScope,
+    sessionId: sessionId,
+    reason: reason,
+  );
+
+  GrokTurnIdentitySnapshot? snapshot({
+    required AgentRuntimeScope runtimeScope,
+    required String sessionId,
+    required String turnId,
+  }) => sessionUpdateMapper.snapshot(
+    runtimeScope: runtimeScope,
+    sessionId: sessionId,
+    turnId: turnId,
+  );
+
+  void dispose() => sessionUpdateMapper.dispose();
 }

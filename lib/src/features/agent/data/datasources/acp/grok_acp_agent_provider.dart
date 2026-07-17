@@ -18,15 +18,6 @@ import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 
 final _log = loggerFor('zeta.agent.grok_acp');
 
-/// 将 initialize 等 RPC 返回值安全编码为日志字符串。
-String _encodeForLog(Object? value) {
-  try {
-    return jsonEncode(value);
-  } catch (_) {
-    return value.toString();
-  }
-}
-
 /// 根据 provider 配置创建 JSON-RPC 端点。
 typedef JsonRpcPeerFactory = JsonRpcPeer Function(AgentProviderConfig config);
 
@@ -55,8 +46,7 @@ class GrokAcpAgentProvider
        _sessionHistoryReader =
            sessionHistoryReader ?? GrokSessionHistoryReader(),
        _modelsCli = modelsCli ?? const GrokModelsCli(),
-       _notificationMapper =
-           notificationMapper ?? const GrokAcpNotificationMapper(),
+       _notificationMapper = notificationMapper ?? GrokAcpNotificationMapper(),
        _generatedTitlePollDelays =
            generatedTitlePollDelays ?? _defaultGeneratedTitlePollDelays {
     // 在构造体中创建 peer，以便闭包捕获运行时模型选择。
@@ -120,10 +110,6 @@ class GrokAcpAgentProvider
   AgentSession? _session;
   final Map<String, String> _runningTurnIdsBySessionId = <String, String>{};
 
-  /// 最近一次 turn id（含已完成），供 `session/prompt` 返回后迟到的
-  /// `turn_completed` 通知仍能对齐本地 turn 分组。
-  final Map<String, String> _lastTurnIdsBySessionId = <String, String>{};
-
   /// sessionId → 工作目录，便于定位 `~/.grok/sessions/.../summary.json`。
   final Map<String, String> _projectPathBySessionId = <String, String>{};
 
@@ -175,6 +161,10 @@ class GrokAcpAgentProvider
 
   @override
   AgentRuntimeScope? get runtimeScope => _peer.runtimeScope;
+
+  /// Grok identity reducer 的脱敏累计诊断。
+  GrokStreamIdentityDiagnostics get streamIdentityDiagnostics =>
+      _notificationMapper.diagnostics;
 
   @override
   Future<void> initialize() async {
@@ -233,15 +223,14 @@ class GrokAcpAgentProvider
           },
         },
       );
-      _log.info(
-        'Grok initialize result for ${config.id}: '
-        '${_encodeForLog(initResult)}',
-      );
-
       final initMap =
           _asStringKeyedMap(initResult) ?? const <String, Object?>{};
       final caps = _asStringKeyedMap(initMap['agentCapabilities']);
       _loadSessionSupported = caps?['loadSession'] != false;
+      _log.info(
+        'Grok initialize completed for ${config.id}; '
+        'loadSession=$_loadSessionSupported',
+      );
 
       // Grok 0.2.101 把完整模型列表放在 initialize._meta.modelState，
       // session/new 并不是唯一来源。这里必须在鉴权前接入，保证旧会话也能显示选择器。
@@ -366,7 +355,7 @@ class GrokAcpAgentProvider
       providerId: config.id,
       raw: map,
     );
-    _session = session;
+    _activateSession(session);
     _rememberProjectPath(sessionId, cwd);
     _addEvent(AgentSessionStartedEvent(session));
     _log.info('Started Grok ACP session $sessionId');
@@ -410,7 +399,7 @@ class GrokAcpAgentProvider
             providerId: config.id,
             raw: map,
           );
-          _session = session;
+          _activateSession(session);
           if (cwd != null && cwd.isNotEmpty) {
             _rememberProjectPath(sessionId, cwd);
           }
@@ -645,7 +634,18 @@ class GrokAcpAgentProvider
     );
     final turnId = _newTurnId();
     _runningTurnIdsBySessionId[session.id] = turnId;
-    _lastTurnIdsBySessionId[session.id] = turnId;
+    final currentRuntimeScope = _peer.runtimeScope;
+    if (currentRuntimeScope == null) {
+      _runningTurnIdsBySessionId.remove(session.id);
+      throw const ProviderConnectionClosedException(
+        'Grok Provider has no active runtime scope',
+      );
+    }
+    _notificationMapper.beginTurn(
+      runtimeScope: currentRuntimeScope,
+      sessionId: session.id,
+      turnId: turnId,
+    );
     final turn = AgentTurn(id: turnId, sessionId: session.id);
     _addEvent(AgentTurnStartedEvent(turn));
     _emitStatus(
@@ -663,29 +663,20 @@ class GrokAcpAgentProvider
         timeout: const Duration(hours: 2),
       );
       final map = _asStringKeyedMap(result) ?? const <String, Object?>{};
-      // 若 `_x.ai/session/update` turn_completed 已先完成，不再二次 complete
-      //（避免冲掉 usage/duration，也避免与迟到通知竞态）。
-      if (_runningTurnIdsBySessionId[session.id] == turnId) {
-        final stopReason =
-            map['stopReason']?.toString() ??
-            map['stop_reason']?.toString() ??
-            'end_turn';
-        final status = _stopReasonToStatus(stopReason);
-        _runningTurnIdsBySessionId.remove(session.id);
-        _addEvent(
-          AgentTurnCompletedEvent(
-            sessionId: session.id,
-            turnId: turnId,
-            status: status,
-            errorMessage: status == AgentHistoryTurnStatus.failed
-                ? stopReason
-                : null,
-            raw: map,
-          ),
-        );
-        // RPC 完成路径也可能是最终信号；启动本地标题轮询。
-        _scheduleGeneratedTitlePoll(session.id);
-      }
+      final stopReason =
+          map['stopReason']?.toString() ??
+          map['stop_reason']?.toString() ??
+          'end_turn';
+      final mapped = _notificationMapper.mapPromptTerminal(
+        runtimeScope: currentRuntimeScope,
+        sessionId: session.id,
+        turnId: turnId,
+        stopReason: stopReason,
+        source: GrokTerminalSource.promptRpc,
+        raw: map,
+      );
+      _noteTurnCompletedFromMapped(sessionId: session.id, mapped: mapped);
+      _emitMapped(mapped);
       _emitStatus(
         AgentProviderStatus(
           state: AgentProviderConnectionState.ready,
@@ -693,21 +684,29 @@ class GrokAcpAgentProvider
         ),
       );
     } catch (error, stackTrace) {
-      final stillRunning = _runningTurnIdsBySessionId[session.id] == turnId;
-      if (stillRunning) {
-        _runningTurnIdsBySessionId.remove(session.id);
-      }
       _log.warning('session/prompt failed', error, stackTrace);
-      if (stillRunning) {
-        _addEvent(
-          AgentTurnCompletedEvent(
-            sessionId: session.id,
-            turnId: turnId,
-            status: AgentHistoryTurnStatus.failed,
-            errorMessage: error.toString(),
-          ),
-        );
-      }
+      _notificationMapper.noteBoundary(
+        runtimeScope: currentRuntimeScope,
+        sessionId: session.id,
+        runningTurnId: turnId,
+        kind: GrokNarrativeBoundaryKind.warningOrSystem,
+      );
+      final mapped = _notificationMapper.mapPromptTerminal(
+        runtimeScope: currentRuntimeScope,
+        sessionId: session.id,
+        turnId: turnId,
+        stopReason: 'prompt_error',
+        source: GrokTerminalSource.promptError,
+      );
+      _noteTurnCompletedFromMapped(sessionId: session.id, mapped: mapped);
+      _emitMapped(mapped);
+      _notificationMapper.invalidateTurn(
+        runtimeScope: currentRuntimeScope,
+        sessionId: session.id,
+        runningTurnId: turnId,
+        promptId: null,
+        reason: GrokIdentityInvalidationReason.promptError,
+      );
       _addEvent(
         AgentErrorEvent(
           message: 'Grok prompt failed',
@@ -742,10 +741,29 @@ class GrokAcpAgentProvider
   @override
   Future<void> cancelTurn(AgentTurn turn) async {
     _log.info('Cancelling Grok ACP turn ${turn.id}');
+    final currentRuntimeScope = _peer.runtimeScope;
     _peer.sendNotification(
       'session/cancel',
       params: <String, Object?>{'sessionId': turn.sessionId},
     );
+    if (currentRuntimeScope != null) {
+      final mapped = _notificationMapper.mapPromptTerminal(
+        runtimeScope: currentRuntimeScope,
+        sessionId: turn.sessionId,
+        turnId: turn.id,
+        stopReason: 'cancelled',
+        source: GrokTerminalSource.cancel,
+      );
+      _noteTurnCompletedFromMapped(sessionId: turn.sessionId, mapped: mapped);
+      _emitMapped(mapped);
+      _notificationMapper.invalidateTurn(
+        runtimeScope: currentRuntimeScope,
+        sessionId: turn.sessionId,
+        runningTurnId: turn.id,
+        promptId: null,
+        reason: GrokIdentityInvalidationReason.cancel,
+      );
+    }
     // 取消时关闭所有挂起的审批。
     for (final entry in List<_PendingAcpPermission>.from(
       _pendingPermissions.values,
@@ -804,6 +822,13 @@ class GrokAcpAgentProvider
     _disposed = true;
     _operationScheduler.beginClosing();
     _peer.beginClosing();
+    final currentRuntimeScope = _peer.runtimeScope;
+    if (currentRuntimeScope != null) {
+      _notificationMapper.invalidateRuntime(
+        runtimeScope: currentRuntimeScope,
+        reason: GrokIdentityInvalidationReason.dispose,
+      );
+    }
     // 递增所有 token 以停止进行中的标题轮询。
     for (final sessionId in _titlePollTokensBySessionId.keys.toList()) {
       _titlePollTokensBySessionId[sessionId] =
@@ -822,6 +847,7 @@ class GrokAcpAgentProvider
     await _protocolErrorSubscription?.cancel();
     await _peer.close();
     await _operationScheduler.close();
+    _notificationMapper.dispose();
     await _events.close();
   }
 
@@ -867,6 +893,10 @@ class GrokAcpAgentProvider
   void _handleNotification(JsonRpcNotification notification) {
     final method = notification.method;
     final params = notification.params;
+    final notificationRuntimeScope = notification.runtimeScope;
+    if (notificationRuntimeScope == null) {
+      return;
+    }
 
     // session/load 回放或带 isReplay 的更新：不进入直播时间线，避免与
     // readThreadHistory → applyHistorySnapshot 重复渲染。
@@ -878,11 +908,11 @@ class GrokAcpAgentProvider
       final sessionId = params['sessionId']?.toString();
       final turnId = sessionId == null
           ? null
-          : _runningTurnIdsBySessionId[sessionId] ??
-                _lastTurnIdsBySessionId[sessionId];
+          : _runningTurnIdsBySessionId[sessionId];
       final mapped = _notificationMapper.mapSessionUpdate(
         params: params,
         runningTurnId: turnId,
+        runtimeScope: notificationRuntimeScope,
       );
       _noteTurnCompletedFromMapped(sessionId: sessionId, mapped: mapped);
       _emitMapped(mapped);
@@ -891,14 +921,13 @@ class GrokAcpAgentProvider
 
     if (method == '_x.ai/session/update' || method == 'x.ai/session/update') {
       final sessionId = params['sessionId']?.toString();
-      // turn_completed 常在 session/prompt 返回后才到；用 lastTurnId 兜底对齐。
       final turnId = sessionId == null
           ? null
-          : _runningTurnIdsBySessionId[sessionId] ??
-                _lastTurnIdsBySessionId[sessionId];
+          : _runningTurnIdsBySessionId[sessionId];
       final mapped = _notificationMapper.mapXaiSessionUpdate(
         params: params,
         runningTurnId: turnId,
+        runtimeScope: notificationRuntimeScope,
       );
       _noteTurnCompletedFromMapped(sessionId: sessionId, mapped: mapped);
       _emitMapped(mapped);
@@ -940,7 +969,6 @@ class GrokAcpAgentProvider
     }
     for (final event in mapped.events) {
       if (event is AgentTurnCompletedEvent) {
-        _lastTurnIdsBySessionId[sessionId] = event.turnId;
         if (_runningTurnIdsBySessionId[sessionId] == event.turnId) {
           _runningTurnIdsBySessionId.remove(sessionId);
         }
@@ -949,6 +977,22 @@ class GrokAcpAgentProvider
         return;
       }
     }
+  }
+
+  void _activateSession(AgentSession session) {
+    final previousSessionId = _session?.id;
+    final currentRuntimeScope = _peer.runtimeScope;
+    if (previousSessionId != null &&
+        previousSessionId != session.id &&
+        currentRuntimeScope != null) {
+      _notificationMapper.invalidateSession(
+        runtimeScope: currentRuntimeScope,
+        sessionId: previousSessionId,
+        reason: GrokIdentityInvalidationReason.sessionSwitched,
+      );
+      _runningTurnIdsBySessionId.remove(previousSessionId);
+    }
+    _session = session;
   }
 
   void _rememberProjectPath(String sessionId, String projectPath) {
@@ -1125,6 +1169,13 @@ class GrokAcpAgentProvider
         _peer.lifecycleState == AgentProviderLifecycleState.closed) {
       return;
     }
+    final closedRuntimeScope = _peer.runtimeScope;
+    if (closedRuntimeScope != null) {
+      _notificationMapper.invalidateRuntime(
+        runtimeScope: closedRuntimeScope,
+        reason: GrokIdentityInvalidationReason.peerClosed,
+      );
+    }
     _initialized = false;
     _runningTurnIdsBySessionId.clear();
     for (final pending in _pendingPermissions.values) {
@@ -1143,6 +1194,15 @@ class GrokAcpAgentProvider
   Future<void> _handlePermissionRequest(JsonRpcRequest request) async {
     final params = request.params;
     final sessionId = params['sessionId']?.toString();
+    final requestRuntimeScope = request.runtimeScope;
+    if (sessionId != null && requestRuntimeScope != null) {
+      _notificationMapper.noteBoundary(
+        runtimeScope: requestRuntimeScope,
+        sessionId: sessionId,
+        runningTurnId: _runningTurnIdsBySessionId[sessionId],
+        kind: GrokNarrativeBoundaryKind.permission,
+      );
+    }
     final mapping = AcpPermissionMapper.mapRequest(
       requestId: request.id,
       params: params,
@@ -1151,8 +1211,6 @@ class GrokAcpAgentProvider
           : _runningTurnIdsBySessionId[sessionId],
     );
     final requestKey = mapping.request.id;
-    final title = mapping.request.title;
-
     final pending = _PendingAcpPermission(
       requestId: request.id,
       requestKey: requestKey,
@@ -1161,10 +1219,7 @@ class GrokAcpAgentProvider
     );
     _pendingPermissions[requestKey] = pending;
 
-    _log.info(
-      'Grok permission requested: $title '
-      '(options: ${mapping.options.map((o) => o.id).join(', ')})',
-    );
+    _log.info('Grok permission requested; options=${mapping.options.length}');
 
     // 无选项时无法交互批准，立即 cancelled，避免 prompt 永久挂起。
     if (mapping.options.isEmpty) {
@@ -1181,7 +1236,7 @@ class GrokAcpAgentProvider
     _emitStatus(
       AgentProviderStatus(
         state: AgentProviderConnectionState.running,
-        message: 'Waiting for approval: $title',
+        message: 'Waiting for approval: ${mapping.request.title}',
       ),
     );
   }
@@ -1475,21 +1530,6 @@ class GrokAcpAgentProvider
     } catch (error, stackTrace) {
       _log.fine('session/set_model failed for $modelId', error, stackTrace);
     }
-  }
-
-  AgentHistoryTurnStatus _stopReasonToStatus(String stopReason) {
-    final normalized = stopReason.toLowerCase();
-    if (normalized.contains('cancel')) {
-      return AgentHistoryTurnStatus.interrupted;
-    }
-    if (normalized.contains('refus') ||
-        normalized.contains('error') ||
-        normalized.contains('fail') ||
-        normalized.contains('max_token') ||
-        normalized.contains('max_turn')) {
-      return AgentHistoryTurnStatus.failed;
-    }
-    return AgentHistoryTurnStatus.completed;
   }
 
   String _newTurnId() {

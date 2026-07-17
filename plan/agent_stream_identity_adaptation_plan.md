@@ -660,12 +660,12 @@ Phase 1 门禁：
 
 | 任务 | 文件 | 实施内容 | 测试 |
 |------|------|----------|------|
-| P2-1 | `grok_stream_identity.dart` | 实现 session/turn reducer、message segment、reasoning phase、seen tool/event、source→entry 映射 | reducer unit tests |
-| P2-2 | `grok_session_update_mapper.dart` | typed ACP update → AgentEvent；使用 reducer 决定 identity | mapper sequence tests |
-| P2-3 | `grok_acp_notification_mapper.dart` | 标准 ACP 与 `_x.ai` 扩展进入同一 Grok adapter | notification tests |
-| P2-4 | `grok_acp_agent_provider.dart` | begin/complete/cancel/error/peer close/dispose 接线；permission/question boundary 接线 | provider lifecycle tests |
-| P2-5 | Grok 诊断 | 增加 synthetic id、duplicate、late drop、missing scope 计数，不记录正文 | diagnostic assertions |
-| P2-6 | 手测 | H1–H5 | 记录截图/结果，不作为自动测试替代 |
+| [x] P2-1 | `grok_stream_identity.dart` | 实现 session/turn reducer、message segment、reasoning phase、seen tool/event、source→entry 映射 | reducer unit tests |
+| [x] P2-2 | `grok_session_update_mapper.dart` | typed ACP update → AgentEvent；使用 reducer 决定 identity | mapper sequence tests |
+| [x] P2-3 | `grok_acp_notification_mapper.dart` | 标准 ACP 与 `_x.ai` 扩展进入同一 Grok adapter | notification tests |
+| [x] P2-4 | `grok_acp_agent_provider.dart` | begin/complete/cancel/error/peer close/dispose 接线；permission/question boundary 接线 | provider lifecycle tests |
+| [x] P2-5 | Grok 诊断 | 增加 synthetic id、duplicate、late drop、missing scope 计数，不记录正文 | diagnostic assertions |
+| [x] P2-6 | 手测 | H1–H5 | 记录截图/结果，不作为自动测试替代 |
 
 Grok reducer 必测序列：
 
@@ -684,10 +684,32 @@ Grok reducer 必测序列：
 
 Phase 2 门禁：
 
-- [ ] adapter 级测试在不经过 Store 的情况下已输出正确 entryId 序列。
-- [ ] Grok provider 不直接调用共享叙事 mapper。
-- [ ] `_x.ai` 和标准通知不会创建两套 turn state。
-- [ ] 现有 Store 即使暂时可能吞并连续不同 id，Phase 2 不宣称最终 UI 契约已完成；最终 UI 验收在 Phase 4。
+- [x] adapter 级测试在不经过 Store 的情况下已输出正确 entryId 序列。
+- [x] Grok provider 不直接调用共享叙事 mapper。
+- [x] `_x.ai` 和标准通知不会创建两套 turn state。
+- [x] 现有 Store 即使暂时可能吞并连续不同 id，Phase 2 不宣称最终 UI 契约已完成；最终 UI 验收在 Phase 4。
+
+Phase 2 执行记录（2026-07-17）：
+
+- 应用基线 commit：`1d8b686f` + 当前 Phase 2 working tree；Provider/CLI：
+  `grok 0.2.102 (ab5ebf69ac)`；模型：`grok-4.5`。
+- H1：通过；真实 live signature 为
+  `Reasoning, Message, Tool, Reasoning, Message`，其中 required
+  `Message, Tool, Message` 顺序成立。
+- H2：通过；长连续思考的 live signature 为 `Reasoning, Message`，只生成一个
+  reasoning phase。
+- H3：通过；live signature 为
+  `Reasoning, Message, Tool, Reasoning, Message`，工具前后 reasoning entryId
+  不同。
+- H4：通过；live signature 为
+  `Reasoning, Tool, Tool, Reasoning, Message`，两个不同 tool id 各一张卡，
+  同 id 更新未新增工具卡。
+- H5：通过（本次一回合样本）；重开后 history signature 与 live 均为
+  `Reasoning, Message, Tool, Reasoning, Message`。这只是 Phase 2 手测记录，
+  不替代 Phase 5 的 live/history canonical golden 门禁。
+- 全部 H1–H5 smoke 的异常诊断：`duplicate=0`、`late=0`、`missing=0`、
+  `collision=0`；`synthetic` 仅记录缺少 source id 时按预期生成的 entryId。
+  手测记录未保存 prompt 正文、正文输出或完整 raw payload。
 
 ### Phase 3：Cursor identity 与 replay 隔离（1.5–2.5 人日）
 
