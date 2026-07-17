@@ -7,8 +7,8 @@
 - [开发者文档](./developer_guide.md)
 - [工程规范](./engineering_standards.md)
 - [Codex app-server 协议版本锁定](./codex_app_server_protocol.md)
-- [Cursor Agent 使用与排错](./cursor_agent_guide.md)
-- [Cursor ACP 发布验收](./cursor_acp_release_validation.md)
+- [Cursor Agent 退役历史说明](./cursor_agent_guide.md)
+- [Cursor ACP 历史发布门禁](./cursor_acp_release_validation.md)
 - [开发记录](./development_log.md)
 - [项目记忆](./project_memory.md)
 

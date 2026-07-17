@@ -263,7 +263,7 @@ void main() {
         shell.selectedAgentViewModel.status.state,
         AgentProviderConnectionState.unavailable,
       );
-      expect(shell.selectedAgentViewModel.status.details, contains('已软下线'));
+      expect(shell.selectedAgentViewModel.status.details, contains('已退役'));
       expect(
         factory.createdProviderIds,
         isNot(contains(cursorAgentProviderId)),

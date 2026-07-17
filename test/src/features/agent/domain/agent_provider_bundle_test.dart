@@ -197,7 +197,7 @@ void main() {
       expect(bundle.runtime.runtimeScope, isNull);
     });
 
-    test('maps codex, grok, and cursor capability domains to ports', () {
+    test('maps active provider capability domains to ports', () {
       final codex = _MinimalBundleFakeProvider(
         capabilities: AgentProviderCapabilities.codexAppServer,
       ).bundle;
@@ -205,11 +205,6 @@ void main() {
         config: AgentProviderConfig.defaultGrok,
         capabilities: AgentProviderCapabilities.grokAcp,
       ).bundle;
-      final cursor = _BundleFakeProvider(
-        config: AgentProviderConfig.defaultCursor,
-        capabilities: AgentProviderCapabilities.cursorAcp,
-      ).bundle;
-
       expect(codex.threadCatalog, isNotNull);
       expect(codex.threadMutations, isNotNull);
       expect(codex.threadBranching, isNotNull);
@@ -223,16 +218,6 @@ void main() {
       expect(grok.turnSteering, isNull);
       expect(grok.interactions, isNotNull);
       expect(grok.modelCatalog, isNotNull);
-
-      expect(cursor.threadCatalog, isNotNull);
-      expect(cursor.threadMutations, isNull);
-      expect(cursor.threadBranching, isNull);
-      expect(cursor.turnSteering, isNull);
-      expect(cursor.interactions, isNotNull);
-      expect(cursor.modelCatalog, isNull);
-      expect(cursor.localThreadList, isNotNull);
-      expect(cursor.sessionConfiguration, isNotNull);
-      expect(cursor.planApproval, isNotNull);
     });
   });
 }
@@ -459,8 +444,6 @@ class _BundleFakeProvider extends _MinimalBundleFakeProvider
   _BundleFakeProvider({
     this.runtimeInfo,
     this.runtimeScope,
-    super.config = AgentProviderConfig.defaultCodex,
-    super.capabilities = AgentProviderCapabilities.codexAppServer,
     super.availableModels,
   });
 

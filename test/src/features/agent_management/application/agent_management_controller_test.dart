@@ -168,7 +168,10 @@ class _FakeCursorManagementRepository implements AgentCliManagementRepository {
     AgentDetectionProgressCallback? onProgress,
   }) async {
     detectCalls += 1;
-    return ManagedAgent.cursor(enabled: enabled).copyWith(
+    return ManagedAgent.forDefinition(
+      definition: _retiredCursorDefinition,
+      enabled: enabled,
+    ).copyWith(
       installationState: AgentInstallationState.installed,
       accountState: AgentAccountState.loggedIn,
       connectionTest: AgentConnectionTestResult(
@@ -228,3 +231,15 @@ class _FakeCursorManagementRepository implements AgentCliManagementRepository {
     int maxLines = 1000,
   }) async => const <AgentLogEntry>[];
 }
+
+const _retiredCursorDefinition = AgentDefinition(
+  id: cursorAgentProviderId,
+  displayName: 'Retired Cursor Agent',
+  vendor: 'Retired',
+  commandName: '',
+  protocol: 'unsupported',
+  transport: 'none',
+  configFormat: 'none',
+  defaultConfigRelativePath: '',
+  npmPackage: '',
+);

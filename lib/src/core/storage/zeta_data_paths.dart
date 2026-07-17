@@ -72,7 +72,7 @@ class ZetaDataPaths {
   File get ideSessionFile =>
       File(_joinPath(stateDirectory.path, 'ide_session.json'));
 
-  /// Zeta 维护的 Cursor 最小会话索引文件。
+  /// 退役 Cursor 遗留的受保护会话索引路径；运行时不得读写。
   File get cursorSessionsFile =>
       File(_joinPath(stateDirectory.path, 'cursor_sessions.json'));
 

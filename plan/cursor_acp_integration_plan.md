@@ -1,6 +1,7 @@
 # Zeta 接入 Cursor Agent 的分析与分步落地方案
 
-> 状态：Phase 1–5 已完成；Phase 6 工程门禁已落地，macOS/Linux/WSL 真实证据待补
+> 状态：已被 `agent_stream_identity_adaptation_plan.md` 的 Phase 3 退役决策取代；
+> 仅作为历史实现与决策证据保留，不代表当前支持
 >
 > 编制日期：2026-07-13
 >

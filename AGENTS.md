@@ -125,8 +125,8 @@
 - 将旧版 Zeta 的 SharedPreferences key 仅视作迁移输入。迁移必须幂等、以目标
   文件优先，并记录在 `~/.zeta/state/migration_marker.json` 中。
 - 严禁移动或重写 `~/.codex`、`~/.grok`、`~/.cursor`、项目 `.cursor`
-  目录或用户源码工作区下的 Agent CLI 配置或会话历史。Zeta 的
-  `cursor_sessions.json` 只保留最小本地索引职责。
+  目录或用户源码工作区下的 Agent CLI 配置或会话历史。退役 Cursor 遗留的
+  `cursor_sessions.json` 只作为受保护用户数据保留，不得读取、迁移或改写。
 - 不要将 provider 原始 payload 直接泄漏到 presentation；应在数据源附近补充
   mapper 或 codec 辅助逻辑。
 - 如果 JSON 模型变复杂或改为 API 驱动，优先使用 `json_serializable` 和

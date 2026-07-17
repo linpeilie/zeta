@@ -1,6 +1,6 @@
 # 开发者文档
 
-最后更新：2026-07-16
+最后更新：2026-07-17
 
 ## 1. 项目简介
 
@@ -14,8 +14,8 @@ Zeta 是一个 Flutter Desktop 项目，当前支持 macOS、Linux 和 Windows �
   `--listen` 时使用 stdio。
 - Codex 适配层按 pinned schema 开发；协议版本与升级流程见
   [Codex app-server 协议版本锁定](./codex_app_server_protocol.md)。
-- 如需 Cursor Beta，需要支持 `agent acp` 的 Cursor CLI 和有效登录态；安装、启用与数据
-  边界见 [Cursor Agent 使用与排错指南](./cursor_agent_guide.md)。
+- 当前活跃 Provider 为 Codex 与 Grok。Cursor 已退役，不参与 catalog、UI、运行时组合、
+  进程启动或会话恢复；旧配置仅用于 unavailable/fallback 兼容。
 
 ## 3. 常用命令
 
@@ -44,14 +44,8 @@ python tool/smoke_codex_app_server.py
 # 可选：python tool/smoke_codex_app_server.py --codex-bin "C:\...\codex.exe" --timeout 180
 ```
 
-对真实 Cursor ACP 做保守冒烟（临时项目、默认拒绝工具权限）：
-
-```sh
-python tool/smoke_cursor_acp.py --handshake-only
-python tool/smoke_cursor_acp.py
-```
-
-跨平台发布状态与记录格式见 [Cursor ACP 发布验收](./cursor_acp_release_validation.md)。
+Cursor 的旧 smoke 与发布材料只作为
+[退役历史证据](./cursor_acp_release_validation.md) 保留，当前版本没有 Cursor 启动工具。
 
 Linux 或 Windows 开发时，将 `flutter run` 的设备改为对应桌面设备。
 
@@ -103,9 +97,9 @@ windows/
 
 - `lib/src/app`：应用装配、窗口启动、菜单桥接、shell controller 和常量。
 - `lib/src/core`：日志、`~/.zeta` 路径布局、原子文本写入等跨功能基础设施。
-- `lib/src/features/agent`：Agent provider 抽象、Codex app-server、Grok/Cursor ACP、
+- `lib/src/features/agent`：Agent provider 抽象、Codex app-server、Grok ACP、
   共享事件映射、对话状态和 Agent pane。
-- `lib/src/features/agent_management`：Codex/Grok/Cursor CLI 检测、身份/版本/账号诊断、
+- `lib/src/features/agent_management`：Codex/Grok CLI 检测、身份/版本/账号诊断、
   无计费连接测试、配置安全编辑和 Agent 管理页面。
 - `lib/src/features/ide_session`：IDE 会话模型、状态构建、恢复协调和持久化。
 - `lib/src/features/project_threads`：项目 thread 列表状态、恢复快照、分页控制器和 view model；
@@ -117,7 +111,7 @@ windows/
 - `lib/src/ui/core`：主题、窗口框架、pane、panel、`IdeChip`、empty state 和状态标签等共享 UI 原语。
 - `lib/src/ui/features/ide`：IDE shell 视图、项目列表 pane 和 active provider controller。
 - `test/src`：app、core、feature 各层的单元测试和 widget 测试。
-- `tool/`：仓库维护脚本（含 Codex schema 导出与 Codex/Cursor 真实 CLI smoke）。
+- `tool/`：仓库维护脚本（含 Codex schema 导出与真实 CLI smoke）。
 - `third_party/codex_app_server_schema/`：pinned Codex app-server JSON Schema 快照。
 
 ## 5. 开发流程
@@ -181,21 +175,9 @@ Agent 管理适配与会话 provider 适配保持分层：管理 data 层可以�
 `CodexAgentManagementRepository` 的校验、冲突检测、备份和临时文件替换流程；
 日志必须在 data 层脱敏后再交给 presentation。
 
-Cursor 适配还必须遵守以下约束：
-
-- `agent` 是通用命令名，必须通过 `CursorCliLocator` 的产品标识与 ACP 能力探测确认身份；
-  不得只检查 basename 或接受 PATH 中第一个 `agent`。
-- `CursorAcpAgentProvider` 必须先获得绝对 workspace，进程 cwd 与 session cwd 保持一致；
-  切换 workspace 必须销毁并重建 peer。
-- 管理页连接测试只执行 initialize/authenticate，不得创建 session 或发送 prompt。
-- session 配置必须以服务端返回的完整 `configOptions` 快照为准；只展示已支持的 select /
-  boolean 类型，未知类型应安全忽略，旧服务端仅在缺少 config options 时回退 modes。
-- `cursor/*` payload 必须经 Cursor 扩展 mapper 转为中立领域事件，不得在 widget 中解析；
-  提问与计划审批保持独立响应语义。
-- 未识别的服务端 request 必须返回 JSON-RPC `-32601`；权限、提问和计划请求在超时、拒绝、
-  取消、workspace 切换和 dispose 时都必须回包并清理 pending state，避免 turn 永久等待。
-- pending server request 必须保存收到时的 `AgentRuntimeScope`，响应时使用 scoped response；
-  不得把旧 `runtimeId / connectionEpoch` 的审批或提问回写到新连接。
+Cursor 退役兼容必须遵守以下约束：旧 `cursor` id 与 `cursorAcp` kind 可宽容解码，但
+`CursorRetirementPolicy` 必须在 catalog、选择、恢复和 factory 边界 fail-closed；fallback
+只存在内存，不得保存覆盖旧设置。不得读取、迁移、改写或删除 Cursor 自有目录和遗留索引。
 - 对话详情与 Project Threads 的 provider 事件订阅统一经过
   `AgentProviderEventListenerGate`；切换 Thread/Provider 时先废弃旧 generation，再安装或
   复用新监听。Provider 若实现 `AgentRuntimeScopeProvider`，监听还必须校验 runtime/epoch；
@@ -285,7 +267,7 @@ Zeta 自有数据统一写入用户主目录下的以下结构：
     appearance.json
   state/
     ide_session.json
-    cursor_sessions.json
+    cursor_sessions.json  # 退役遗留数据，只读保护边界
     usage_statistics_index.json
     migration_marker.json
   logs/
@@ -313,8 +295,9 @@ Zeta 自有数据统一写入用户主目录下的以下结构：
 
 Agent CLI 的数据不属于这套目录：Codex/Grok/Cursor 配置与 session 历史继续保留在
 `~/.codex`、`~/.grok`、`~/.cursor` 或项目 `.cursor/*`，迁移器不会扫描、复制或改写。
-`cursor_sessions.json` 仅保存 Zeta 恢复列表所需的最小索引；Codex 使用统计仍只读原
-rollout JSONL，并把可重建的派生索引写入 `~/.zeta/state`。
+退役遗留的 `cursor_sessions.json` 不再参与恢复或运行时组合，仅作为受保护用户数据原样
+保留；Codex 使用统计仍只读原 rollout JSONL，并把可重建的派生索引写入
+`~/.zeta/state`。
 
 ## 10. 文件系统注意事项
 
@@ -346,13 +329,11 @@ codex app-server
 协议字段变更时，按 [协议版本锁定文档](./codex_app_server_protocol.md)
 重新导出 schema 并 diff，再更新适配层。
 
-### Cursor Agent 无法启用或启动
+### 旧 Cursor 配置显示 unavailable
 
-先在终端确认 `agent --version`、`agent help acp` 和 `agent status` 指向 Cursor，且账号已
-登录。若 PATH 中的 `agent` 实际来自 Grok 或其它产品，前往 Agent 管理页选择 Cursor CLI
-的绝对路径并重新检测；只有无计费 ACP 握手成功后，启用按钮才可用。
-完整安装、权限、MCP、诊断和卸载步骤见
-[Cursor Agent 使用与排错指南](./cursor_agent_guide.md)。
+这是退役后的预期行为。应用只在内存中回退到已启用的 Codex/Grok，不会自动保存覆盖旧
+配置，也不会读取或修改 Cursor 会话数据。历史背景见
+[Cursor Agent 退役历史说明](./cursor_agent_guide.md)。
 
 ### 会话恢复后项目消失
 

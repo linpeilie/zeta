@@ -2,10 +2,11 @@
   "_fixture": {
     "formatVersion": 1,
     "provider": "cursor",
+    "status": "retired_historical_evidence_not_current_support",
     "protocol": "ACP protocolVersion 1 session/load replay ordering",
     "cliVersion": "unknown for payload; local executable is 2026.07.09-a3815c0",
     "scenario": "Synthetic session/load notifications delivered before the response, including message and tool updates.",
-    "provenance": "Combined from current fake Cursor session/load test and AcpSessionReplayCollector test; this is not a real Cursor capture.",
+    "provenance": "Combined from pre-retirement fake Cursor session/load and replay collector tests; this is not a real Cursor capture.",
     "identityEvidence": {
       "messageId": "The synthetic collector test reuses one messageId for two chunks; real stability is unverified.",
       "eventId": "Absent from available replay tests; semantics are unknown.",

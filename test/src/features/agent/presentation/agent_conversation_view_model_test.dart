@@ -2384,7 +2384,7 @@ void main() {
         final codex = _FakeAgentProvider();
         final cursor = _FakeAgentProvider(
           providerConfig: cursorConfig,
-          declaredCapabilities: AgentProviderCapabilities.cursorAcp,
+          declaredCapabilities: AgentProviderCapabilities.unsupported,
         );
         final factory = _MultiFakeAgentProviderFactory(<String, AgentProvider>{
           defaultAgentProviderId: codex,
@@ -2474,7 +2474,7 @@ void main() {
         providerConfig: AgentProviderConfig.defaultCursor.copyWith(
           enabled: true,
         ),
-        declaredCapabilities: AgentProviderCapabilities.cursorAcp,
+        declaredCapabilities: AgentProviderCapabilities.unsupported,
       );
       final factory = _MultiFakeAgentProviderFactory(<String, AgentProvider>{
         defaultAgentProviderId: codex,
@@ -2513,7 +2513,7 @@ void main() {
 
       // Assert
       expect(viewModel.status.state, AgentProviderConnectionState.unavailable);
-      expect(viewModel.status.details, contains('已软下线'));
+      expect(viewModel.status.details, contains('已退役'));
       expect(factory.createdProviderIds, isEmpty);
       expect(cursor.calls, isEmpty);
       expect(cursor.initializeCalls, 0);

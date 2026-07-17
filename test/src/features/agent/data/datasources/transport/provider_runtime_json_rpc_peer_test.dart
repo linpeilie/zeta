@@ -67,7 +67,10 @@ void main() {
       'close waits for an accepted server request handler to drain',
       () async {
         final delegate = _FakeJsonRpcPeer();
-        final peer = ProviderRuntimeJsonRpcPeer(delegate, providerId: 'cursor');
+        final peer = ProviderRuntimeJsonRpcPeer(
+          delegate,
+          providerId: 'test-provider',
+        );
         await peer.start();
         peer.markReady();
         final handlerCompleter = Completer<void>();
@@ -100,7 +103,10 @@ void main() {
     test('close waits for an in-flight process start to settle', () async {
       final startCompleter = Completer<void>();
       final delegate = _FakeJsonRpcPeer(startCompleter: startCompleter);
-      final peer = ProviderRuntimeJsonRpcPeer(delegate, providerId: 'cursor');
+      final peer = ProviderRuntimeJsonRpcPeer(
+        delegate,
+        providerId: 'test-provider',
+      );
       final start = peer.start();
 
       var closeCompleted = false;

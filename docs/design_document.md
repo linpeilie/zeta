@@ -1,6 +1,6 @@
 # 设计文档
 
-最后更新：2026-07-16
+最后更新：2026-07-17
 
 ## 1. 设计目标
 
@@ -12,7 +12,7 @@ Zeta 的设计目标是让 Flutter UI、Agent provider、会话持久化和本�
 
 - app：应用根组件、窗口启动、应用常量。
 - core：日志、Zeta 数据路径与原子文本写入等跨层基础能力。
-- features/agent：Agent provider 抽象、Codex app-server、Grok/Cursor ACP stdio、JSON-RPC stdio、历史解析、事件映射、对话 view model 和 Agent pane。
+- features/agent：Agent provider 抽象、Codex app-server、Grok ACP stdio、JSON-RPC stdio、历史解析、事件映射、对话 view model 和 Agent pane。
 - features/agent_management：Agent CLI 检测、版本与账号诊断、模型读取、配置安全编辑、
   CLI 磁盘日志读取和管理页面。
 - features/ide_session：会话状态、版本化持久化、恢复计划和恢复协调。
@@ -63,9 +63,9 @@ AgentConversationViewModel
     -> AgentTurnSteeringPort? / AgentInteractionPort? / AgentModelCatalogPort?
     -> AgentLocalThreadListPort? / AgentSessionConfigurationPort? / AgentPlanApprovalPort?
     -> AgentProvider
-      -> CodexAppServerAgentProvider | GrokAcpAgentProvider | CursorAcpAgentProvider
+      -> CodexAppServerAgentProvider | GrokAcpAgentProvider
         -> JsonRpcPeer
-          -> codex app-server / grok agent stdio / agent acp
+          -> codex app-server / grok agent stdio
 
 ProjectThreadsController
   -> AgentProviderBundle
@@ -73,7 +73,6 @@ ProjectThreadsController
 
 AgentManagementController
   -> CodexAgentManagementRepository | GrokAgentManagementRepository
-     | CursorAgentManagementRepository
     -> CLI 身份、版本与登录态检查
     -> 无计费 initialize / authenticate 握手
     -> provider 对应配置与脱敏诊断
@@ -122,11 +121,9 @@ Workbench 的 Canvas Flex slot 自身也使用稳定 Key，保证 Navigation/Ins
 ### Agent 管理
 
 - 设置页提供 Agent 列表和独立详情，列表状态、搜索与筛选在返回时保留。
-- 当前内置 Codex、Grok 与默认关闭的 Cursor Beta；未安装时仍在“全部支持”中展示，
-  但不提供应用内安装或自动更新。
+- 当前支持 Codex 与 Grok。Cursor 已退役，不出现在“全部支持”、配置、检测或安装入口中。
 - 详情包含基础诊断、模型和 provider 对应配置；桌面端双栏，窄窗口上下排列。
-- 连接测试只执行版本、账号与协议握手；Cursor 不创建 session、不发送计费 prompt，
-  握手成功后才允许显式启用。
+- 连接测试只执行版本、账号与协议握手，不发送真实模型 turn。
 - 禁用 Codex 后不再允许创建可写会话；既有会话仍可读取历史，输入区隐藏并显示
   只读提示。
 
@@ -206,11 +203,11 @@ workspace 下启动、是否允许 eager model preload。
 为每次连接生成 `runtimeId + connectionEpoch`，并把 scope 注入服务端反向请求。进入
 `closing` 后拒绝新的 client RPC；关闭 transport 后等待已入场的 start、RPC 和
 server-request handler 排空。Codex 的 `AgentRuntimeInfo` 同步暴露 runtime identity，
-Grok/Cursor 通过可选 `AgentRuntimeLifecycleProvider` 暴露中立生命周期，不把协议状态泄漏到 UI。
+Grok 通过可选 `AgentRuntimeLifecycleProvider` 暴露中立生命周期，不把协议状态泄漏到 UI。
 
 Provider 事件进入对话详情和 Project Threads 前还经过 listener generation gate。每次绑定以
 `runtimeId + connectionEpoch + providerId + threadId + listenerGeneration` 标识；新监听先安装、
-旧监听后取消，且旧监听退出只能释放自身 generation。Codex/Grok/Cursor 均通过可选
+旧监听后取消，且旧监听退出只能释放自身 generation。Codex/Grok 均通过可选
 `AgentRuntimeScopeProvider` 提供当前连接作用域，因此快速切换 Thread、Provider 重启和 dispose
 交叉不会把旧流投影到新会话。
 
@@ -234,8 +231,7 @@ Provider 的 Thread 访问统一经过 `ProviderOperationScheduler`。列表使�
 
 ### 默认 provider
 
-当前内置 provider 为 Codex CLI、Grok ACP 与 Cursor ACP；Cursor 默认关闭，默认 active
-provider 仍为 Codex CLI：
+当前活跃 provider 为 Codex CLI 与 Grok ACP，默认 active provider 为 Codex CLI：
 
 ```text
 codex app-server
@@ -245,30 +241,21 @@ Codex provider 通过 JSON-RPC stdio 通信，把 `thread/*`、`turn/*` 和 `ite
 事件转换为领域层 `AgentEvent`。UI 不直接处理 Codex 原始协议。
 
 Grok provider 使用 ACP stdio、本地历史和 xAI 扩展。标准 ACP
-`session/update`、permission、content block 和 session config 已分别下沉到
-`AcpSessionUpdateMapper`、`AcpPermissionMapper`、`AcpContentCodec` 与
-`AcpSessionConfigMapper`；
-`GrokAcpNotificationMapper` 只保留厂商扩展适配。session config option 与带稳定 id、
+`session/update` 由无状态 `AcpSessionUpdateDecoder` 解码，再由 Grok mapper/reducer
+确定流式身份；permission、content block 和 session config 分别复用
+`AcpPermissionMapper`、`AcpContentCodec` 与 `AcpSessionConfigMapper`。session config option 与带稳定 id、
 可多选的用户问答选项使用中立领域模型，供后续 ACP provider 共用。
 
-Cursor provider 使用官方 `agent acp`，启动前由 `CursorCliLocator` 组合校验产品标识、
-版本输出和 ACP 帮助，不能仅凭通用 basename `agent` 判定身份。provider 进程与 workspace
-绑定：首次创建 session 时在项目目录启动，切换项目即关闭旧 peer 并重新 initialize /
-authenticate。Phase 2–4 已支持核心对话、权限响应与取消、本地 session 索引、
-`session/load` 历史恢复、动态 config options、legacy mode 回退，以及 Cursor 提问、计划、
-todo、子任务和图片状态扩展。阻塞请求在超时、turn cancel、workspace 切换、进程退出和
-provider dispose 时统一收尾；图片与 resource 入口只有握手明确声明 capability 后才开放。
-真实 CLI 发布门禁由 `tool/smoke_cursor_acp.py` 执行：默认临时 Git workspace、拒绝工具权限，
-验证握手、核心 turn、进程重启后的 replay 和取消。各平台/架构结果独立记录，自动化测试
-不能替代缺失的真实设备证据。
+Cursor 不再参与运行时组合。旧 `cursor` id 与 `cursorAcp` kind 只用于配置 decode、
+unavailable 展示和安全 fallback；`DefaultAgentProviderFactory` 对二者 fail-closed。
+catalog、设置、Agent 管理、deep link、workspace 恢复和历史入口都不能创建 Cursor
+provider 或启动进程。退役不会迁移或改写任何 Cursor 用户数据。
 
 ### 管理适配
 
 `AgentManagementController` 负责管理页异步编排，并复用
-`ActiveAgentProviderController` 的全局 provider 配置。各 CLI 使用独立 management
-repository。Cursor repository 负责多候选身份探测、版本/账号检查和无 session、无 prompt
-的 ACP 握手；保存的 `cliPath` 必须已经通过身份校验。协议 transport 不记录 prompt、文件
-内容或 stderr 原文。
+`ActiveAgentProviderController` 的全局 provider 配置。各活跃 CLI 使用独立 management
+repository；协议 transport 不记录 prompt、文件内容或 stderr 原文。
 
 检测摘要和真实 CLI 路径保存在 provider `extra` 中；项目 thread 仍只保存稳定的
 `providerId`。管理 feature 不解析 thread/turn 原始协议，也不替代现有 provider。
@@ -286,7 +273,7 @@ repository。Cursor repository 负责多候选身份探测、版本/账号检查
 - `AgentConversationViewModel` 的会话、历史、steer、权限响应、Guardian 放行、
   模型目录与计划审批路由。
 - `ProjectThreadsController` 的列表、重命名、归档、删除与分叉。
-- Codex / Grok / Cursor 的 bundle 端口一致性契约测试。
+- Codex / Grok 的 bundle 端口一致性契约测试，以及 Cursor 退役不可达性测试。
 
 当前剩余的收口项是：从旧 `AgentProvider` 删除已迁移的方法和静态布尔字段。Permission
 Profile 仍仅承诺稳定的发现能力，不承诺实验性选择能力。
@@ -341,8 +328,8 @@ Profile 仍仅承诺稳定的发现能力，不承诺实验性选择能力。
 ### Zeta 自有存储边界
 
 Zeta 通过 `ZetaDataPaths` 统一解析 `~/.zeta`，由 app 装配层把文件注入 feature data
-store。配置位于 `config/providers.json` 与 `config/appearance.json`；IDE 会话、Cursor
-最小索引、使用统计派生索引和迁移 marker 位于 `state/`；应用日志按本地日期写入
+store。配置位于 `config/providers.json` 与 `config/appearance.json`；IDE 会话、使用统计
+派生索引和迁移 marker 位于 `state/`；应用日志按本地日期写入
 `logs/zeta-YYYY-MM-DD.log`，并创建空 `cache/` 预留目录。JSON store 使用同目录临时
 文件、flush 与 rename 替换，并在读取损坏或 I/O 失败时按 feature 语义降级。
 
@@ -352,8 +339,8 @@ store。配置位于 `config/providers.json` 与 `config/appearance.json`；IDE 
 空启动状态抢先创建目标文件；marker 保持未完成并在下次启动重试。
 
 `~/.codex`、`~/.grok`、`~/.cursor`、项目 `.cursor/*` 和用户项目源码不属于 Zeta 自有
-存储。Agent CLI 配置及 session/rollout 正文保持原位；Cursor 的
-`state/cursor_sessions.json` 只含 Zeta 最小索引，不是 Cursor 官方历史正文。
+存储。Agent CLI 配置及 session/rollout 正文保持原位；退役遗留的
+`state/cursor_sessions.json` 不再被运行时读取或写入，只作为受保护用户数据保留。
 
 ### IDE 会话快照
 
@@ -407,8 +394,8 @@ IDE 会话状态目前版本为 2，持久化内容包括：
 - Codex provider 事件映射。
 - Cursor CLI 身份冲突、workspace peer 重建、session 索引与恢复、ACP 流式映射、动态配置、
   权限/提问/计划响应，以及超时、取消、dispose 和进程早退收尾。
-- Cursor 真实 CLI smoke 的中文/空格 workspace、包装器、重启恢复和拒绝权限路径；平台
-  证据矩阵见 `docs/cursor_acp_release_validation.md`。
+- Cursor 旧配置 fallback、运行时不可达、process spy 与用户数据未改写回归；历史证据
+  见 `docs/cursor_acp_release_validation.md`。
 - AgentConversationViewModel 状态机。
 - Agent 管理的版本比较、配置校验/冲突/备份、日志脱敏和禁用只读联动。
 - ProjectThreadsController 和 ProjectThreadsViewModel 的分页、缓存、选择和错误状态分工。
@@ -419,8 +406,8 @@ IDE 会话状态目前版本为 2，持久化内容包括：
 ## 10. 演进方向
 
 - Codex 适配 Phase 2：thread 重命名/归档/删除/分叉/按 turn 创建分支/压缩，以及审批表单与策略预设（见适配计划）；不再承诺已弃用的 `thread/rollback`。
-- 在 Windows、macOS、Linux/WSL 完成两个 Cursor CLI 版本的真实 smoke 后，再评估提升
-  Cursor Beta 的默认展示层级；provider 继续默认禁用。
+- Cursor 如需重新支持，必须另立方案、重新采集真实协议 fixture，并从 catalog 到运行时
+  重新完成全部协议与数据边界门禁。
 - 增加文件内容预览或编辑器能力。
 - 增加 Agent 执行审计记录。
 - 支持更多 Agent provider。

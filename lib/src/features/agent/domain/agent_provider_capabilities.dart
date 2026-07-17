@@ -239,22 +239,6 @@ class AgentProviderCapabilities {
     supportsUsage: true,
   );
 
-  /// Cursor ACP Phase 3 的静态能力。
-  ///
-  /// 本地最小索引始终可列出并移除；远端历史加载、删除、图片和资源输入必须等
-  /// initialize 明确协商后再动态开启。
-  static const cursorAcp = AgentProviderCapabilities(
-    canCreateSession: true,
-    canListThreads: true,
-    canRemoveThreadFromList: true,
-    canPrompt: true,
-    canCancelTurn: true,
-    supportsPermissionRequests: true,
-    supportsUserQuestions: true,
-    supportsPlanApproval: true,
-    bootstrapPolicy: AgentProviderBootstrapPolicy.workspaceScoped,
-  );
-
   /// 尚未接入的 provider 使用全关闭能力，避免误显示可操作入口。
   static const unsupported = AgentProviderCapabilities();
 
@@ -263,7 +247,7 @@ class AgentProviderCapabilities {
     return switch (kind) {
       AgentProviderKind.codexAppServer => codexAppServer,
       AgentProviderKind.acp => grokAcp,
-      AgentProviderKind.cursorAcp => cursorAcp,
+      AgentProviderKind.cursorAcp => unsupported,
       AgentProviderKind.claudeCode => unsupported,
     };
   }

@@ -1,6 +1,6 @@
 # 项目记忆
 
-最后更新：2026-07-16
+最后更新：2026-07-17
 
 本文记录跨任务应长期保留的项目事实、决策和约束。后续开发中，如果事实变化，应同步更新本文。
 
@@ -10,7 +10,7 @@
 - 类型：Flutter Desktop 本地应用。
 - 当前产品定位：本地 AI IDE 壳层，核心是项目上下文、Agent thread 和可审计对话时间线。
 - 入口文件：`lib/main.dart`。
-- 当前内置 Codex、Grok 与 Cursor Beta；Cursor 默认关闭，Codex 保持默认 active provider。
+- 当前活跃 Provider 为 Codex 与 Grok；Cursor 已退役，Codex 保持默认 active provider。
 
 ## 2. 当前技术栈
 
@@ -35,9 +35,8 @@
 - data 层负责把 provider 协议映射成中立领域事件。
 - Agent 上下文当前只传项目路径和当前文件路径，不自动读取文件内容；用户可附加本地图片（`localImage`）。
 - 默认 Codex 审批策略保持 `on-request`，不自动授权命令或文件修改。
-- Cursor ACP Phase 1–5 已完成；Phase 6 的自动化门禁、真实 smoke 工具与发布文档已落地，
-  真实平台矩阵仍必须逐设备记录。详见 `plan/cursor_acp_integration_plan.md` 与
-  `docs/cursor_acp_release_validation.md`。
+- Cursor 因缺少可验证的稳定协议契约而退役；旧接入计划、synthetic fixture 与发布门禁
+  只作为历史证据保留，不代表当前支持。
 - 文件树采用懒加载，不递归扫描整个仓库。
 - 会话恢复必须宽容失败，不能阻断应用启动。
 - `core` 统一解析 `~/.zeta` 与原子写入，feature data store 接收 app 注入的文件；
@@ -58,8 +57,8 @@
 - 当前迁移期内，`AgentProviderBundle` 是应用层能力入口，`AgentProvider` 是 provider
   中立兼容门面；capabilities 仍是入口显隐和执行校验的事实来源。
 - `CodexAppServerAgentProvider` 是当前默认 provider 实现；协议 pin 见 `third_party/codex_app_server_schema`。
-- `CursorAcpAgentProvider` 使用 workspace-scoped peer、ACP v1、最小 session 索引和动态
-  config options；`CursorCliLocator` 必须跳过同名 Grok `agent`。
+- `CursorRetirementPolicy` 保留旧配置 decode、unavailable 展示和内存 fallback；catalog、
+  factory、deep link、恢复和管理路径均不得创建 Cursor 运行时。
 - `JsonRpcPeer` 负责 stdio JSON-RPC 通信。
 - `IdeSessionState` 当前版本为 2。
 - Agent 时间线已消费流式 reasoning/plan、回合 diff、waiting 状态、系统提示与本地图片气泡。
@@ -88,8 +87,8 @@
   `tool/gen_codex_schema.* --diff` 对照 `third_party/codex_app_server_schema`
   （流程见 `docs/codex_app_server_protocol.md`）。
 - JSON-RPC stdio 的请求、通知和服务端 request 处理需要保持严格测试覆盖。
-- Cursor CLI 会自动更新且 `agent` 名称存在冲突；发布前使用 `tool/smoke_cursor_acp.py`
-  在各平台验证两个 CLI 版本，缺少真实证据时保持默认关闭 Beta。
+- Cursor 重新接入必须另立方案并重新采集真实协议 fixture；不得复用退役前的 synthetic
+  fixture 推断协议语义。
 - 会话恢复涉及真实文件系统，路径不存在和权限失败必须被宽容处理。
 - Agent 运行中切换 thread 容易造成状态竞争，需要继续用 token 或状态检查隔离旧结果。
 - 文件树如果误改为递归扫描，会显著影响大型项目打开性能。
@@ -97,7 +96,7 @@
 ## 8. 待确认方向
 
 - 是否引入内置文件预览或编辑器。
-- Cursor Beta 何时具备足够真实平台/版本证据，可以提升默认展示层级。
+- 是否在具备独立方案和真实协议证据后重新评估 Cursor 支持。
 - 是否支持多个项目并行 Agent session。
 - 是否需要审计和导出 Agent 执行记录。
 - 是否需要跨设备同步项目会话。

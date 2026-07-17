@@ -111,20 +111,6 @@ class AgentDefinition {
     npmPackage: '',
   );
 
-  /// 旧 Cursor Agent 定义，仅供兼容模型与 Phase 3B 删除前留档。
-  static const AgentDefinition cursor = AgentDefinition(
-    id: cursorAgentProviderId,
-    displayName: 'Cursor Agent',
-    vendor: 'Cursor',
-    commandName: 'agent',
-    protocol: 'ACP v1 JSON-RPC',
-    transport: 'stdin / stdout',
-    configFormat: 'JSON',
-    defaultConfigRelativePath: '.cursor/cli-config.json',
-    npmPackage: '',
-    isBeta: true,
-  );
-
   /// 应用当前支持的全部 Agent 定义。
   static const List<AgentDefinition> all = <AgentDefinition>[codex, grok];
 
@@ -285,14 +271,6 @@ class ManagedAgent {
   factory ManagedAgent.grok({required bool enabled}) {
     return ManagedAgent.forDefinition(
       definition: AgentDefinition.grok,
-      enabled: enabled,
-    );
-  }
-
-  /// Cursor Agent 的初始空快照。
-  factory ManagedAgent.cursor({required bool enabled}) {
-    return ManagedAgent.forDefinition(
-      definition: AgentDefinition.cursor,
       enabled: enabled,
     );
   }

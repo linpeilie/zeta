@@ -177,7 +177,7 @@ phase；被正文、tool、plan 或交互打断后的 reasoning 必须使用新 
 - EventBuffer 只允许合并同 entryId、同事件 kind 和同必要 detail 的事件；任一非合并
   事件先 flush。它不得推断“最后一个开放气泡”或替代 Provider boundary 状态机。
 - TimelineStore 的目标行为是同 entryId 更新、异 entryId 新建，不改写 id、不分配
-  segment。迁移期现有 open/`#segN` 兜底必须保留到 Grok 与 Cursor live/replay 门禁
+  segment。迁移期现有 open/`#segN` 兜底必须保留到 Grok identity 与 Cursor 退役门禁
   全部通过，但不得新增 Provider-specific 分支或扩大该兜底职责。
 - eventId、messageId 稳定性和 delta/snapshot 语义必须由带 Provider/CLI 版本的脱敏
   fixture 证明；缺少真实证据时明确阻塞对应门禁，禁止复制其他 Provider 的假设。
@@ -211,8 +211,8 @@ phase；被正文、tool、plan 或交互打断后的 reasoning 必须使用新 
 - 使用统计派生索引只保存聚合所需元数据；禁止写入 Prompt、回复正文、工具输出、
   session 文件路径和原始错误文本。索引必须版本化并支持损坏后重建。
 - `~/.codex`、`~/.grok`、`~/.cursor`、项目 `.cursor/*` 与用户源码始终由 CLI/用户
-  原地管理。迁移器不得遍历、复制或改写这些目录；`cursor_sessions.json` 只是 Zeta
-  维护的最小会话索引，不是 Cursor 官方 session 正文。
+  原地管理。迁移器不得遍历、复制或改写这些目录；退役遗留的
+  `cursor_sessions.json` 不再被运行时读取或写入，只作为受保护用户数据保留。
 
 ## 6. UI 与交互
 

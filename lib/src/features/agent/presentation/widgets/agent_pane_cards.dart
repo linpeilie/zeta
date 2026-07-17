@@ -426,7 +426,7 @@ String _toolCardTitle(AgentToolCall toolCall) {
 /// 审批卡片。
 ///
 /// 用户点击后 ViewModel 会把 approve/deny 回写给 provider。
-/// Cursor 等 provider 的独立计划审批卡片。
+/// 支持独立计划审批的 provider 所使用的审批卡片。
 class _AgentPlanApprovalCard extends StatelessWidget {
   const _AgentPlanApprovalCard({
     required this.request,

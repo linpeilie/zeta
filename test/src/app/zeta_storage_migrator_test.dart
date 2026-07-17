@@ -5,10 +5,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/zeta_storage_migrator.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/agent/data/datasources/acp/cursor_session_index_store.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_index_store.dart';
+
+const _legacyCursorSessionIndexStorageKey = 'zeta.agent.cursor.sessions.v1';
 
 void main() {
   group('SharedPreferencesLegacyZetaPreferences', () {
@@ -63,7 +64,7 @@ void main() {
           agentProviderConfigStorageKey: '{"version":1,"providers":[]}',
           appearanceSettingsStorageKey: '{"version":1,"themeMode":"dark"}',
           sessionStorageKey: '{"version":2,"projectPaths":[]}',
-          cursorSessionIndexStorageKey: '{"version":1,"sessions":[]}',
+          _legacyCursorSessionIndexStorageKey: '{"version":1,"sessions":[]}',
           usageStatisticsIndexStorageKey: '{"version":2,"sessions":[]}',
         };
         final preferences = _FakeLegacyZetaPreferences(values);
@@ -79,7 +80,9 @@ void main() {
         expect(
           result.migratedKeys,
           unorderedEquals(
-            values.keys.where((key) => key != cursorSessionIndexStorageKey),
+            values.keys.where(
+              (key) => key != _legacyCursorSessionIndexStorageKey,
+            ),
           ),
         );
         expect(
@@ -97,7 +100,7 @@ void main() {
         expect(paths.cursorSessionsFile.existsSync(), isFalse);
         expect(
           preferences.readKeys,
-          isNot(contains(cursorSessionIndexStorageKey)),
+          isNot(contains(_legacyCursorSessionIndexStorageKey)),
         );
         expect(
           await paths.usageStatisticsIndexFile.readAsString(),
@@ -320,7 +323,7 @@ void main() {
           sentinel.path: sentinel.readAsStringSync(),
       };
       final preferences = _FakeLegacyZetaPreferences(<String, String>{
-        cursorSessionIndexStorageKey:
+        _legacyCursorSessionIndexStorageKey:
             '{"version":1,"sessions":[{"id":"overwrite-attempt"}]}',
         agentProviderConfigStorageKey:
             '{"version":1,"activeProviderId":"codex","providers":[]}',
@@ -337,7 +340,7 @@ void main() {
       }
       expect(
         preferences.readKeys,
-        isNot(contains(cursorSessionIndexStorageKey)),
+        isNot(contains(_legacyCursorSessionIndexStorageKey)),
       );
     });
   });

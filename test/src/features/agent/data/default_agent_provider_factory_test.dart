@@ -12,7 +12,7 @@ void main() {
         isA<UnsupportedError>().having(
           (error) => error.message,
           'message',
-          contains('已软下线'),
+          contains('已退役'),
         ),
       ),
     );

@@ -123,9 +123,9 @@ class AgentProviderConfig {
     arguments: <String>['agent', 'stdio'],
   );
 
-  /// 旧 Cursor CLI ACP stdio 配置，仅供兼容解码与 Phase 3B 删除前留档。
+  /// 旧 Cursor CLI ACP stdio 配置，仅供旧配置解码与退役回归测试。
   ///
-  /// Phase 3A 起不再加入产品目录，也不得用于创建运行时。
+  /// 该配置不加入产品目录，[DefaultAgentProviderFactory] 会拒绝创建其运行时。
   static const AgentProviderConfig defaultCursor = AgentProviderConfig(
     id: cursorAgentProviderId,
     displayName: 'Cursor Agent',

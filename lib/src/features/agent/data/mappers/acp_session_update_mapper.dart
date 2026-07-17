@@ -19,8 +19,7 @@ typedef GrokAcpMappedUpdate = AcpMappedUpdate;
 /// 迁移期标准 ACP `session/update` 兼容 mapper。
 ///
 /// 原始字段先由无状态 [AcpSessionUpdateDecoder] 解码。本类暂时保留旧 entryId
-/// 合成规则，直到 Grok/Cursor 各自的 identity adapter 完成迁移；不得在此新增
-/// Provider 叙事策略。
+/// 合成规则，供迁移期兼容测试使用；不得在此新增 Provider 叙事策略。
 class AcpSessionUpdateMapper {
   const AcpSessionUpdateMapper({
     this.decoder = const AcpSessionUpdateDecoder(),
@@ -46,7 +45,7 @@ class AcpSessionUpdateMapper {
         if (text == null || text.isEmpty) {
           return AcpMappedUpdate(unmatchedKind: decoded.kind);
         }
-        // 迁移期保留旧 identity 优先级，避免尚未迁移的 Grok/Cursor 行为变化。
+        // 迁移期保留旧 identity 优先级，直到后续共享 mapper 收口。
         final messageId = _stableStreamMessageId(
           sourceMessageId: decoded.sourceMessageId,
           eventId: decoded.eventId,

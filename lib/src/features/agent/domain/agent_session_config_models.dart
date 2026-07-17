@@ -20,7 +20,7 @@ class AgentSessionConfigValue {
 
 /// Provider 暴露的单个 session 配置项。
 ///
-/// 该模型不携带 ACP/Cursor 字段名，presentation 可统一渲染模型、模式及未来自定义项。
+/// 该模型不携带 Provider 协议字段名，presentation 可统一渲染模型、模式及未来自定义项。
 class AgentSessionConfigOption {
   const AgentSessionConfigOption({
     required this.id,

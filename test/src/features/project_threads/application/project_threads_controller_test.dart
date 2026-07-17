@@ -132,7 +132,7 @@ void main() {
       // Arrange
       final provider = _FakeAgentProvider(
         config: AgentProviderConfig.defaultCursor.copyWith(enabled: true),
-        declaredCapabilities: AgentProviderCapabilities.cursorAcp,
+        declaredCapabilities: AgentProviderCapabilities.unsupported,
         pages: <AgentThreadPage>[
           _page(<AgentThreadSummary>[
             _thread(
@@ -413,7 +413,7 @@ void main() {
         );
         final cursor = _FakeAgentProvider(
           config: AgentProviderConfig.defaultCursor.copyWith(enabled: true),
-          declaredCapabilities: AgentProviderCapabilities.cursorAcp,
+          declaredCapabilities: AgentProviderCapabilities.unsupported,
           pages: <AgentThreadPage>[
             _page(<AgentThreadSummary>[
               _thread(

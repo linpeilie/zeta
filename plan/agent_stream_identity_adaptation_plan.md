@@ -1,7 +1,7 @@
 # Agent 流式身份与 Provider 适配层边界整改实施方案
 
-> 状态：Phase 0–2 已完成；Phase 3 Cursor 退役待实施
-> 版本：2.1
+> 状态：Phase 0–3 已完成；Phase 4 待实施
+> 版本：2.2
 > 编制日期：2026-07-17
 > 目标版本：当前主干；Codex app-server 以本机 `0.144.1` stable schema 为实现基线
 > 关联问题：Grok 实时时间线操作沉底、思考按 eventId 碎片化、共享层承担 Provider 叙事策略
@@ -770,19 +770,35 @@ Phase 3A 执行记录（2026-07-17）：
 
 | 任务 | 范围 | 实施内容 | 测试/审计 |
 |------|------|----------|-----------|
-| P3B-1 | CodeGraph + `rg` 引用清单 | 审计 Cursor 生产引用、测试引用、共享 ACP 调用方和用户数据边界 | 删除前 blast-radius 记录 |
-| P3B-2 | Cursor 运行实现 | 删除 provider、CLI locator、process starter、extension mapper、diagnostics store、session index store 与 management repository | 编译 + 引用审计 |
-| P3B-3 | Cursor replay/load | 删除 Cursor 的 live/replay/load 路径；`AcpSessionReplayCollector` 仅在确认无其他调用方时删除 | ACP provider tests |
-| P3B-4 | Cursor 专属测试与 fake | 删除运行实现测试；保留旧配置 decode/fallback、不可达性和数据未改写回归 | retirement compatibility tests |
-| P3B-5 | fixture 与文档 | synthetic fixture、identity analysis 作为历史证据保留；更新支持列表和设计文档 | docs/fixture review |
+| [x] P3B-1 | CodeGraph + `rg` 引用清单 | 审计 Cursor 生产引用、测试引用、共享 ACP 调用方和用户数据边界 | 删除前 blast-radius 记录 |
+| [x] P3B-2 | Cursor 运行实现 | 删除 provider、CLI locator、process starter、extension mapper、diagnostics store、session index store 与 management repository | 编译 + 引用审计 |
+| [x] P3B-3 | Cursor replay/load | 删除 Cursor 的 live/replay/load 路径；`AcpSessionReplayCollector` 仅在确认无其他调用方时删除 | ACP provider tests |
+| [x] P3B-4 | Cursor 专属测试与 fake | 删除运行实现测试；保留旧配置 decode/fallback、不可达性和数据未改写回归 | retirement compatibility tests |
+| [x] P3B-5 | fixture 与文档 | synthetic fixture、identity analysis 作为历史证据保留；更新支持列表和设计文档 | docs/fixture review |
 
 Phase 3B 门禁：
 
-- [ ] 生产代码不再引用 Cursor provider、CLI、ACP 扩展、诊断、session index 或 management repository。
-- [ ] 仓库不存在 `cursor-agent`/Cursor ACP 进程启动路径；provider catalog 与 UI 仍无 Cursor。
-- [ ] 只允许保留明确列入白名单的 legacy 配置兼容标识，以及 fixture/分析等退役证据。
-- [ ] 共享 ACP 文件经调用图证明仍被活跃 Provider 使用，或已随最后一个调用方安全删除。
-- [ ] 旧配置 fallback、运行时不可达和用户数据未改写测试通过；`flutter analyze` 通过。
+- [x] 生产代码不再引用 Cursor provider、CLI、ACP 扩展、诊断、session index 或 management repository。
+- [x] 仓库不存在 `cursor-agent`/Cursor ACP 进程启动路径；provider catalog 与 UI 仍无 Cursor。
+- [x] 只允许保留明确列入白名单的 legacy 配置兼容标识，以及 fixture/分析等退役证据。
+- [x] 共享 ACP 文件经调用图证明仍被活跃 Provider 使用，或已随最后一个调用方安全删除。
+- [x] 旧配置 fallback、运行时不可达和用户数据未改写测试通过；`flutter analyze` 通过。
+
+Phase 3B 执行记录（2026-07-17）：
+
+- 删除 Cursor provider、CLI locator、process starter、extension mapper、diagnostics store、
+  session index store、management repository 和真实 CLI smoke 工具；删除 8 个只验证这些
+  运行实现的测试文件。
+- CodeGraph 与 `rg` 证明 `AcpSessionReplayCollector` 的生产调用方只有 Cursor，因此随最后
+  调用方及其测试删除；`AcpSessionUpdateDecoder`、content/permission mapper、JSON-RPC
+  runtime peer/stdio transport 仍由 Grok 使用，runtime peer/stdio transport 也由 Codex 使用。
+- 保留旧 Cursor id/kind/default config、退役策略、unavailable 展示、旧配置 decode/fallback、
+  process-spy/运行时不可达、数据未改写测试，以及明确标为退役历史证据的 synthetic fixture。
+- 验证：`dart format .`、`flutter analyze`（0 issues）；兼容/不可达/数据边界/目录与管理
+  151 tests、共享 ACP/Grok/transport 89 tests、Codex/local history 93 tests 全部通过。
+  完整 `flutter test` 为 579 passed、22 skipped，只有 Phase 3A 已记录的 8 个 Windows golden
+  像素差异失败，未更新无关 golden 基线。
+- 未修改 TimelineStore/EventBuffer，也未读取、迁移、改写或删除任何真实 Cursor 用户数据。
 
 Phase 3 只有按顺序完成 3A 和 3B 才算通过。Cursor 真实 fixture 缺失不再阻塞 Phase 3；
 任何未来重新支持 Cursor 的需求必须另立方案并重新采集真实协议 fixture。
@@ -1081,7 +1097,7 @@ Store 行为切换放进同一个不可独立回滚的 PR。
 | PR-A | 已完成 | 已完成 | 2026-07-17 | 2026-07-17 | 已完成 |
 | PR-B | 已完成 | 已完成 | 2026-07-17 | 2026-07-17 | 已完成 |
 | PR-C1 | 已完成 | 已完成 | 2026-07-17 | 2026-07-17 | 已完成 |
-| PR-C2 | 待分配 | 待分配 | 待定 | 待定 | 未开始 |
+| PR-C2 | 已完成 | 已完成 | 2026-07-17 | 2026-07-17 | 已完成 |
 | PR-D | 待分配 | 待分配 | 待定 | 待定 | 未开始 |
 | PR-E | 待分配 | 待分配 | 待定 | 待定 | 未开始 |
 | PR-F | 待分配 | 待分配 | 待定 | 待定 | 未开始 |
@@ -1143,11 +1159,11 @@ Store 行为切换放进同一个不可独立回滚的 PR。
 
 ### Cursor 退役
 
-- [ ] Provider 目录、设置、创建会话和 Agent 管理 UI 不再显示 Cursor。
-- [ ] app 组合、bootstrap、恢复路径不创建 Cursor provider 或启动 `cursor-agent`。
-- [ ] 旧 Cursor 配置可容错读取、明确 unavailable 并安全回退。
-- [ ] Cursor 专属运行实现与测试已删除，只保留必要兼容和退役证据。
-- [ ] `~/.cursor`、项目 `.cursor`、`cursor_sessions.json` 与用户旧配置未被改写。
+- [x] Provider 目录、设置、创建会话和 Agent 管理 UI 不再显示 Cursor。
+- [x] app 组合、bootstrap、恢复路径不创建 Cursor provider 或启动 `cursor-agent`。
+- [x] 旧 Cursor 配置可容错读取、明确 unavailable 并安全回退。
+- [x] Cursor 专属运行实现与测试已删除，只保留必要兼容和退役证据。
+- [x] `~/.cursor`、项目 `.cursor`、`cursor_sessions.json` 与用户旧配置未被改写。
 
 ### Codex
 
@@ -1169,11 +1185,11 @@ Store 行为切换放进同一个不可独立回滚的 PR。
 
 - [ ] Grok live/history canonical golden 一致。
 - [ ] 诊断不记录敏感正文/raw payload。
-- [ ] `dart format .` 已执行。
-- [ ] `flutter analyze` 已通过。
+- [x] `dart format .` 已执行。
+- [x] `flutter analyze` 已通过。
 - [ ] 定向测试与 `flutter test` 已通过。
 - [ ] H1–H10 手测已记录。
-- [ ] 文档同步完成。
+- [x] 文档同步完成。
 - [ ] 回滚点已写入 PR 描述。
 
 ---
@@ -1202,3 +1218,4 @@ Store 行为切换放进同一个不可独立回滚的 PR。
 | 2026-07-17 | 1.0 | 初版：提出 Grok identity 下沉和 Store dumb merge |
 | 2026-07-17 | 2.0 | 补齐 source/entry 身份、typed decoder、Cursor 先迁移、replay 隔离、reasoning phase、生命周期、EventBuffer、测试门禁、排期与回滚，升级为可直接安排开发的实施规格 |
 | 2026-07-17 | 2.1 | 标记 Phase 0–2 已完成；Cursor 改为 Phase 3A 软下线、Phase 3B 删除实现，并同步后续门禁、测试、风险和回滚 |
+| 2026-07-17 | 2.2 | 完成 Phase 3A/3B Cursor 退役，记录实现删除、兼容白名单、共享 ACP 调用图与验证结果 |

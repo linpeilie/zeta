@@ -2,10 +2,11 @@
   "_fixture": {
     "formatVersion": 1,
     "provider": "cursor",
+    "status": "retired_historical_evidence_not_current_support",
     "protocol": "ACP protocolVersion 1",
     "cliVersion": "unknown for payload; local executable is 2026.07.09-a3815c0",
     "scenario": "Synthetic live message chunks, tool start/update, and a later message.",
-    "provenance": "Copied and extended only from current fake Cursor provider and ACP mapper tests; this is not a real Cursor capture.",
+    "provenance": "Copied and extended only from pre-retirement fake Cursor provider and ACP mapper tests; this is not a real Cursor capture.",
     "identityEvidence": {
       "messageId": "Present in synthetic tests, but stability across real chunks, boundaries, reconnects, or turns is unverified.",
       "eventId": "Absent from all available Cursor live/replay evidence; semantics are unknown.",

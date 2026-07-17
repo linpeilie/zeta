@@ -1,6 +1,6 @@
 import 'package:zeta/src/features/agent/domain/agent_provider_models.dart';
 
-/// Cursor 软下线后的运行时选择结果。
+/// Cursor 退役后的运行时选择结果。
 ///
 /// [effectiveProvider] 只用于当前进程，不会写回持久化设置；因此旧 Cursor
 /// 配置及其最后选择值可以保持原样。
@@ -16,12 +16,12 @@ final class CursorRetirementResolution {
   final String? unavailableReason;
 }
 
-/// Cursor Phase 3A 软下线策略。
+/// Cursor 退役后的兼容与运行时阻断策略。
 ///
 /// 该策略只处理产品目录和旧配置选择，不读取或修改任何 Cursor 会话数据。
 abstract final class CursorRetirementPolicy {
   static const String unavailableMessage =
-      'Cursor Agent 已软下线，当前版本不再支持启动或恢复 Cursor 会话。';
+      'Cursor Agent 已退役，当前版本不再支持启动或恢复 Cursor 会话。';
 
   /// 配置是否属于已经退役的 Cursor 运行时。
   static bool isRetiredProvider(AgentProviderConfig config) {

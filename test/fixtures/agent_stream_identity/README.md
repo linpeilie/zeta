@@ -3,12 +3,14 @@
 本目录冻结流式身份整改前的输入形状、版本证据和已知未知项。Fixture 只描述
 Provider 输入，不承诺 Phase 1 以后生成的规范化 `entryId`。
 
+Cursor fixture 是退役历史证据，不代表当前支持，也不得用于恢复运行实现或推断真实协议。
+
 ## 版本与来源
 
 | Provider | Fixture 基线 | 本机版本证据 | 来源等级 |
 |----------|--------------|--------------|----------|
 | Grok | `0.2.101` ACP redacted shape | `grok 0.2.102 (ab5ebf69ac)` | 现有脱敏抓取形状 + 当前测试的脱敏合成 |
-| Cursor | 版本未知 | `2026.07.09-a3815c0` | 仅当前 fake/test 的 synthetic baseline；没有真实抓取 |
+| Cursor（已退役） | 版本未知 | `2026.07.09-a3815c0` | 仅删除前 fake/test 的 synthetic baseline；没有真实抓取 |
 | Codex | `0.144.1` stable schema | `codex-cli 0.144.1` | 版本匹配 stable schema + 当前 provider 测试 |
 
 机器可读的完整索引见 `manifest.json`。场景覆盖：
@@ -36,4 +38,4 @@ Provider 输入，不承诺 Phase 1 以后生成的规范化 `entryId`。
 - `codex_stable_schema_evidence.md`：Codex `0.144.1` stable schema 证据。
 
 Cursor 的两个 JSON 文件不能替代真实抓取，也不能用于证明 eventId 或 payload
-语义；Phase 3 仍以 `cursor_identity_analysis.md` 中的 blocker 为准。
+语义；它们只保留退役决策与删除前行为的历史证据。

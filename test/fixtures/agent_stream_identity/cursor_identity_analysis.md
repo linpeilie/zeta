@@ -1,8 +1,11 @@
-# Cursor stream identity 分析与 blocker
+# Cursor stream identity 退役历史分析
+
+> 状态：Cursor 运行实现已删除。本文与 synthetic fixture 仅是退役历史证据，
+> 不代表当前支持，也不能作为重新接入的协议契约。
 
 ## 结论
 
-当前仓库没有 Cursor 真实 live 或 `session/load` replay 抓取。现有证据不足以判断：
+删除前仓库没有 Cursor 真实 live 或 `session/load` replay 抓取。现有证据不足以判断：
 
 1. `messageId` 是否在同一消息的所有 chunk 中稳定，以及是否会跨 boundary/turn 重用；
 2. `eventId` 是否存在、是否稳定、是否表示消息边界，或仅用于事件去重；
@@ -26,10 +29,10 @@
 - 本机 `cursor-agent --version`：`2026.07.09-a3815c0`；这只证明可执行文件版本。
 - `cursor_acp_provider_test.dart` 的 fake `session/update` 与 `session/load` 序列。
 - `acp_session_replay_collector_test.dart` 的 synthetic 多 chunk/tool update 序列。
-- CodeGraph 对 `CursorAcpAgentProvider._handleNotification`、`_loadSession` 与
-  `AcpSessionReplayCollector` 的当前调用链。
+- 删除前 CodeGraph 对 `CursorAcpAgentProvider._handleNotification`、`_loadSession` 与
+  `AcpSessionReplayCollector` 的调用链快照。
 
-## Blocker 所需输入
+## 未来重新支持所需输入
 
 需要从目标 Cursor Agent 版本采集并脱敏以下原始 JSON 顺序；只保留协议字段，所有
 正文、命令、输出、路径、凭据和用户内容替换为占位符：
@@ -43,11 +46,8 @@
    `_meta.promptId` 等 identity 字段的存在/缺失；正文只保留长度无关的占位符。
 5. 记录 Cursor Agent 精确版本；若 live 与 replay 来自不同版本，必须分别记录。
 
-## 影响与门禁
+## 退役结论
 
-- Phase 1 可以开始；它只建立 domain/decoder 契约，不决定 Cursor identity。
-- Phase 2 可以开始；Grok 有独立证据和独立 adapter 范围。
-- Phase 3 可以搭建无语义假设的骨架，但在真实 fixture 到位并完成上述分析前保持
-  **blocked**，不得通过 Phase 3 门禁。
-- Phase 4 不得开始，因为计划要求 Grok 与 Cursor live/replay 门禁全部通过后才删除
-  TimelineStore open/`#segN` 兜底。
+- 该证据缺口转化为 Cursor 退役理由，不再实施 identity adapter。
+- Phase 3A 先证明 catalog、UI、恢复、factory 和进程启动均不可达；Phase 3B 再删除实现。
+- synthetic fixture 保留，但任何未来重新支持都必须另立方案并采集真实协议 fixture。

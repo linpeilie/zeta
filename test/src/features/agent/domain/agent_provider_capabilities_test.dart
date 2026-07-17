@@ -44,21 +44,21 @@ void main() {
       expect(policy.allowsEagerModelPreload, isFalse);
     });
 
-    test('exposes Cursor local index while gating remote capabilities', () {
+    test('treats the retired Cursor kind as unsupported', () {
       final capabilities = AgentProviderCapabilities.defaultsFor(
         AgentProviderKind.cursorAcp,
       );
 
-      expect(capabilities.canCreateSession, isTrue);
-      expect(capabilities.canPrompt, isTrue);
-      expect(capabilities.canCancelTurn, isTrue);
-      expect(capabilities.canListThreads, isTrue);
-      expect(capabilities.canRemoveThreadFromList, isTrue);
+      expect(capabilities.canCreateSession, isFalse);
+      expect(capabilities.canPrompt, isFalse);
+      expect(capabilities.canCancelTurn, isFalse);
+      expect(capabilities.canListThreads, isFalse);
+      expect(capabilities.canRemoveThreadFromList, isFalse);
       expect(capabilities.canDeleteThread, isFalse);
       expect(capabilities.canResumeSession, isFalse);
       expect(capabilities.supportsLocalImageInput, isFalse);
       expect(capabilities.supportsResourceInput, isFalse);
-      expect(capabilities.bootstrapPolicy.requiresWorkspace, isTrue);
+      expect(capabilities.bootstrapPolicy.allowsEagerModelPreload, isTrue);
     });
   });
 }
