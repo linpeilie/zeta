@@ -31,6 +31,69 @@ void main() {
       expect(event.turnId, 'turn-1');
     });
 
+    test('falls back to eventId when agent_message_chunk omits messageId', () {
+      final mapped = mapper.mapSessionUpdate(
+        params: <String, Object?>{
+          'sessionId': 'session-1',
+          'update': <String, Object?>{
+            'sessionUpdate': 'agent_message_chunk',
+            'content': <String, Object?>{'type': 'text', 'text': 'Chunk'},
+            '_meta': <String, Object?>{'eventId': 'evt-42'},
+          },
+        },
+        runningTurnId: 'turn-1',
+      );
+
+      final event = mapped.events.single as AgentMessageDeltaEvent;
+      expect(event.messageId, 'acp-agent_message_chunk-event-evt-42');
+      expect(event.delta, 'Chunk');
+    });
+
+    test('falls back to turn scope when messageId and eventId are absent', () {
+      final mapped = mapper.mapSessionUpdate(
+        params: <String, Object?>{
+          'sessionId': 'session-1',
+          'update': <String, Object?>{
+            'sessionUpdate': 'agent_message_chunk',
+            'content': <String, Object?>{'type': 'text', 'text': 'Hi'},
+          },
+        },
+        runningTurnId: 'turn-1',
+      );
+
+      final event = mapped.events.single as AgentMessageDeltaEvent;
+      expect(event.messageId, 'acp-agent_message_chunk-turn-1');
+    });
+
+    test(
+      'aggregates agent_thought_chunk by turn even when eventIds differ',
+      () {
+        AgentReasoningDeltaEvent mapThought(String eventId, String text) {
+          final mapped = mapper.mapSessionUpdate(
+            params: <String, Object?>{
+              'sessionId': 'session-1',
+              'update': <String, Object?>{
+                'sessionUpdate': 'agent_thought_chunk',
+                'content': <String, Object?>{'type': 'text', 'text': text},
+                '_meta': <String, Object?>{'eventId': eventId},
+              },
+            },
+            runningTurnId: 'turn-1',
+          );
+          return mapped.events.single as AgentReasoningDeltaEvent;
+        }
+
+        final first = mapThought('evt-thought-1', 'Thinking a');
+        final second = mapThought('evt-thought-2', ' and b');
+
+        // 不同 eventId 必须落到同一 itemId，timeline 才能拼成一张思考卡。
+        expect(first.itemId, 'acp-agent_thought_chunk-turn-1');
+        expect(second.itemId, first.itemId);
+        expect(first.delta, 'Thinking a');
+        expect(second.delta, ' and b');
+      },
+    );
+
     test('maps standard usage updates as session cumulative', () {
       final mapped = mapper.mapSessionUpdate(
         params: <String, Object?>{

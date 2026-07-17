@@ -636,7 +636,150 @@ void main() {
       expect(tool.rawInput['pattern'], 'sessionUpdate');
       expect(tool.content, 'found 42 matches');
     });
+
+    test(
+      'segments agent text after tools when stream reuses turn-scoped message id',
+      () {
+        final store = AgentConversationTimelineStore();
+        addTearDown(store.dispose);
+
+        store.startPendingLiveTurn();
+        store.beginLiveTurnGroup(
+          const AgentTurn(id: 'turn-1', sessionId: 'thread-1'),
+        );
+
+        const streamId = 'acp-agent_message_chunk-turn-1';
+        store.appendMessageDelta(
+          const AgentMessageDeltaEvent(
+            messageId: streamId,
+            delta: 'Before tool. ',
+            role: AgentMessageRole.agent,
+            turnId: 'turn-1',
+          ),
+        );
+        store.appendMessageDelta(
+          const AgentMessageDeltaEvent(
+            messageId: streamId,
+            delta: 'Still before. ',
+            role: AgentMessageRole.agent,
+            turnId: 'turn-1',
+          ),
+        );
+        store.upsertToolCall(
+          const AgentToolCall(
+            id: 'tool-read',
+            title: 'Read file',
+            kind: AgentToolKind.read,
+            status: AgentToolStatus.completed,
+            turnId: 'turn-1',
+          ),
+        );
+        store.appendMessageDelta(
+          const AgentMessageDeltaEvent(
+            messageId: streamId,
+            delta: 'After tool.',
+            role: AgentMessageRole.agent,
+            turnId: 'turn-1',
+          ),
+        );
+
+        final entries = _liveTimelineEntries(store);
+        expect(entries, hasLength(3));
+        expect(entries[0], isA<AgentMessageTimelineEntry>());
+        expect(
+          (entries[0] as AgentMessageTimelineEntry).message.text,
+          'Before tool. Still before. ',
+        );
+        expect(entries[1], isA<AgentToolTimelineEntry>());
+        expect(entries[2], isA<AgentMessageTimelineEntry>());
+        expect(
+          (entries[2] as AgentMessageTimelineEntry).message.text,
+          'After tool.',
+        );
+        expect(
+          (entries[2] as AgentMessageTimelineEntry).message.id,
+          '$streamId#seg2',
+        );
+      },
+    );
+
+    test('coalesces consecutive eventId chunks until a tool interrupts', () {
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+
+      store.startPendingLiveTurn();
+      store.beginLiveTurnGroup(
+        const AgentTurn(id: 'turn-1', sessionId: 'thread-1'),
+      );
+
+      store.appendMessageDelta(
+        const AgentMessageDeltaEvent(
+          messageId: 'acp-agent_message_chunk-event-e1',
+          delta: 'A',
+          role: AgentMessageRole.agent,
+          turnId: 'turn-1',
+        ),
+      );
+      store.appendMessageDelta(
+        const AgentMessageDeltaEvent(
+          messageId: 'acp-agent_message_chunk-event-e2',
+          delta: 'B',
+          role: AgentMessageRole.agent,
+          turnId: 'turn-1',
+        ),
+      );
+      store.upsertToolCall(
+        const AgentToolCall(
+          id: 'tool-1',
+          title: 'Run',
+          kind: AgentToolKind.execute,
+          status: AgentToolStatus.completed,
+          turnId: 'turn-1',
+        ),
+      );
+      store.appendMessageDelta(
+        const AgentMessageDeltaEvent(
+          messageId: 'acp-agent_message_chunk-event-e3',
+          delta: 'C',
+          role: AgentMessageRole.agent,
+          turnId: 'turn-1',
+        ),
+      );
+
+      final entries = _liveTimelineEntries(store);
+      expect(entries, hasLength(3));
+      expect((entries[0] as AgentMessageTimelineEntry).message.text, 'AB');
+      expect(
+        (entries[0] as AgentMessageTimelineEntry).message.id,
+        'acp-agent_message_chunk-event-e1',
+      );
+      expect(entries[1], isA<AgentToolTimelineEntry>());
+      expect((entries[2] as AgentMessageTimelineEntry).message.text, 'C');
+      expect(
+        (entries[2] as AgentMessageTimelineEntry).message.id,
+        'acp-agent_message_chunk-event-e3',
+      );
+    });
   });
+}
+
+/// 当前 live turn 条目；必要时同步 binding。
+List<AgentTimelineEntry> _liveTimelineEntries(
+  AgentConversationTimelineStore store,
+) {
+  store.syncLiveTurnBinding();
+  final live = store.liveTurnState;
+  if (live != null) {
+    return List<AgentTimelineEntry>.from(live.entries);
+  }
+  return store.timelineEntries
+      .where(
+        (entry) =>
+            entry is! AgentMessageTimelineEntry ||
+            entry.message.id !=
+                AgentConversationTimelineStore.welcomeMessage.id,
+      )
+      .toList();
 }
 
 AgentThreadSummary _thread() {

@@ -47,8 +47,9 @@ class AcpSessionUpdateMapper {
         if (text == null || text.isEmpty) {
           return AcpMappedUpdate(unmatchedKind: kind);
         }
-        // 部分 ACP agent 的流式 chunk 无 messageId；按 turn/prompt 聚合，避免整会话共用
-        // 一个 id 导致后续 turn 文本追加到历史气泡。
+        // 部分 ACP agent（如 Grok）的流式 chunk 无 messageId。
+        // id 解析对齐历史 parser：messageId → eventId → turn/prompt 作用域，
+        // 以便 tool 打断后可开新文本段；连续 chunk 的合并由 timeline store 负责。
         final messageId = _stableStreamMessageId(
           update: update,
           params: params,
@@ -74,10 +75,12 @@ class AcpSessionUpdateMapper {
 
       case 'agent_thought_chunk':
         final text = AcpContentCodec.textFromContent(update['content']) ?? '';
-        final itemId = _stableStreamMessageId(
+        // 思考是整段连续流，不能按 eventId 切成多张「思考」卡。
+        // 仅 messageId（若有）或 turn/prompt 作用域聚合；与 agent_message 的
+        // eventId 分段策略刻意分离。
+        final itemId = _stableThoughtItemId(
           update: update,
           params: params,
-          kind: 'agent_thought_chunk',
           sessionId: sessionId,
           turnId: turnId,
         );
@@ -237,10 +240,16 @@ class AcpSessionUpdateMapper {
     return AcpMappedUpdate(events: events);
   }
 
-  /// 为无官方 messageId 的流式 chunk 生成按 turn 稳定的聚合 id。
+  /// 为无官方 messageId 的 **agent 正文** 流式 chunk 生成聚合 id。
   ///
-  /// 优先 `messageId` → `promptId` → `runningTurnId` → session 级回退。
-  /// 同 turn 内的 chunk 共用 id 以便 delta 拼接；跨 turn 必须不同。
+  /// 优先顺序：
+  /// `messageId` → `_meta.eventId` → `promptId` / `runningTurnId` / session。
+  ///
+  /// - 有 eventId 时按事件分段，工具插入后可自然开新气泡；
+  /// - 仅有 turn 作用域时，timeline store 会在操作打断后分配段后缀。
+  ///
+  /// **不要**用于 `agent_thought_chunk`：思考 chunk 常带独立 eventId，
+  /// 按 event 切分会拆成多张思考卡（见 [_stableThoughtItemId]）。
   String _stableStreamMessageId({
     required Map<String, Object?> update,
     required Map<String, Object?> params,
@@ -254,13 +263,53 @@ class AcpSessionUpdateMapper {
     }
     final updateMeta = _asStringKeyedMap(update['_meta']);
     final paramsMeta = _asStringKeyedMap(params['_meta']);
+    final eventId =
+        updateMeta?['eventId']?.toString() ??
+        paramsMeta?['eventId']?.toString();
+    if (eventId != null && eventId.isNotEmpty) {
+      return 'acp-$kind-event-$eventId';
+    }
+    return 'acp-$kind-${_streamScopeId(update: update, params: params, sessionId: sessionId, turnId: turnId)}';
+  }
+
+  /// 思考流的稳定 itemId：整 turn（或显式 messageId）聚合为一张「思考」卡。
+  ///
+  /// Grok 每个 `agent_thought_chunk` 通常带不同 `_meta.eventId`，若走正文的
+  /// eventId 分段策略，会在 timeline 上出现多条互不相关的思考卡片。
+  String _stableThoughtItemId({
+    required Map<String, Object?> update,
+    required Map<String, Object?> params,
+    required String? sessionId,
+    required String? turnId,
+  }) {
+    final explicit = update['messageId']?.toString();
+    if (explicit != null && explicit.isNotEmpty) {
+      return explicit;
+    }
+    final scope = _streamScopeId(
+      update: update,
+      params: params,
+      sessionId: sessionId,
+      turnId: turnId,
+    );
+    return 'acp-agent_thought_chunk-$scope';
+  }
+
+  /// promptId → runningTurnId → session 的流式作用域。
+  String _streamScopeId({
+    required Map<String, Object?> update,
+    required Map<String, Object?> params,
+    required String? sessionId,
+    required String? turnId,
+  }) {
+    final updateMeta = _asStringKeyedMap(update['_meta']);
+    final paramsMeta = _asStringKeyedMap(params['_meta']);
     final promptId =
         updateMeta?['promptId']?.toString() ??
         paramsMeta?['promptId']?.toString() ??
         update['promptId']?.toString() ??
         update['prompt_id']?.toString();
-    final scope = promptId ?? turnId ?? sessionId ?? 'unknown';
-    return 'acp-$kind-$scope';
+    return promptId ?? turnId ?? sessionId ?? 'unknown';
   }
 
   AgentToolCall? _mapToolCall({

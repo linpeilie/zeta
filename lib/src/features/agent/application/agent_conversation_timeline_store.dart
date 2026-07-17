@@ -48,6 +48,11 @@ class AgentConversationTimelineStore {
       <String, AgentConversationTurnState>{};
   final Map<String, int> _messageIndexesByProviderId = <String, int>{};
 
+  /// 同一逻辑 messageId 在 tool 等条目打断后再次流式输出时的段序号。
+  ///
+  /// key 为 provider/mapper 给出的基础 id；value 为已分配的最大段号（从 1 起）。
+  final Map<String, int> _agentMessageSegmentSeqByBaseId = <String, int>{};
+
   /// reasoning itemId → 摘要/原文双缓冲，供流式 delta 聚合。
   final Map<String, _ReasoningStreamBuffers> _reasoningBuffersByItemId =
       <String, _ReasoningStreamBuffers>{};
@@ -340,6 +345,7 @@ class AgentConversationTimelineStore {
     _turnGroups.clear();
     _liveTurnNotifier.value = null;
     _messageIndexesByProviderId.clear();
+    _agentMessageSegmentSeqByBaseId.clear();
     _reasoningBuffersByItemId.clear();
     _expandedToolCallIds.clear();
     _expandedPlanMessageIds.clear();
@@ -612,14 +618,24 @@ class AgentConversationTimelineStore {
   ///
   /// 同一个 provider messageId 首次出现时创建气泡，后续 delta 追加到同一条消息。
   /// `item/plan/delta` 会带上 `type: plan`，首次创建时自动展开计划卡。
+  ///
+  /// Grok/ACP 常无稳定 messageId 或每 chunk 换 eventId。此处额外：
+  /// 1. 若当前 turn 末尾仍是同角色普通 agent 消息 → 并入该开放段（避免 chunk 碎片）；
+  /// 2. 若基础 id 已存在但末尾已被 tool 等打断 → 分配新段 id，保留交错顺序。
   void appendMessageDelta(AgentMessageDeltaEvent event) {
-    final existingIndex = _messageIndexesByProviderId[event.messageId];
     final kind = _messageKindFromRaw(role: event.role, raw: event.raw);
+    final messageId = _resolveStreamingAgentMessageId(
+      preferredId: event.messageId,
+      role: event.role,
+      turnId: event.turnId,
+      kind: kind,
+    );
+    final existingIndex = _messageIndexesByProviderId[messageId];
     if (existingIndex == null) {
-      _messageIndexesByProviderId[event.messageId] = _messages.length;
+      _messageIndexesByProviderId[messageId] = _messages.length;
       addConversationMessage(
         AgentConversationMessage(
-          id: event.messageId,
+          id: messageId,
           role: event.role,
           text: event.delta,
           kind: kind,
@@ -630,7 +646,7 @@ class AgentConversationTimelineStore {
         ),
       );
       if (kind == AgentConversationMessageKind.plan && event.delta.isNotEmpty) {
-        _expandedPlanMessageIds.add(event.messageId);
+        _expandedPlanMessageIds.add(messageId);
       }
       _noteRespondingActivity(event.role);
       return;
@@ -654,9 +670,96 @@ class AgentConversationTimelineStore {
         (kind == AgentConversationMessageKind.plan &&
             !existing.isPlan &&
             event.delta.isNotEmpty)) {
-      _expandedPlanMessageIds.add(event.messageId);
+      _expandedPlanMessageIds.add(messageId);
     }
     _noteRespondingActivity(event.role);
+  }
+
+  /// 解析流式 agent 文本应写入的 message id。
+  ///
+  /// 优先并入当前 turn 末尾仍开放的 agent 文本气泡；否则在基础 id 已被旧气泡
+  /// 占用且中间插入了其它条目时开新段。
+  String _resolveStreamingAgentMessageId({
+    required String preferredId,
+    required AgentMessageRole role,
+    required String? turnId,
+    required AgentConversationMessageKind kind,
+  }) {
+    // plan / 用户消息保持原 id 语义，不做 ACP 文本段切分。
+    if (role != AgentMessageRole.agent ||
+        kind == AgentConversationMessageKind.plan) {
+      return preferredId;
+    }
+
+    final openId = _openAgentMessageStreamId(
+      role: role,
+      turnId: turnId,
+      kind: kind,
+    );
+    if (openId != null) {
+      return openId;
+    }
+
+    // 末尾不是开放 agent 文本：若 preferredId 仍指向更早的气泡，开新段以免
+    // 把 tool 之后的正文追加到 tool 之前的位置。
+    if (_messageIndexesByProviderId.containsKey(preferredId)) {
+      return _allocateAgentMessageSegmentId(preferredId);
+    }
+    return preferredId;
+  }
+
+  /// 当前 turn 末尾若是同角色、同计划/非计划属性的 agent 消息，返回其 id。
+  String? _openAgentMessageStreamId({
+    required AgentMessageRole role,
+    required String? turnId,
+    required AgentConversationMessageKind kind,
+  }) {
+    final last = _lastTimelineEntryForTurn(turnId);
+    if (last is! AgentMessageTimelineEntry) {
+      return null;
+    }
+    final message = last.message;
+    if (message.role != role) {
+      return null;
+    }
+    final lastIsPlan = message.isPlan;
+    final wantPlan = kind == AgentConversationMessageKind.plan;
+    if (lastIsPlan != wantPlan) {
+      return null;
+    }
+    return message.id;
+  }
+
+  /// 读取指定 turn（缺省为当前 live/standby）时间线的最后一条原始条目。
+  AgentTimelineEntry? _lastTimelineEntryForTurn(String? turnId) {
+    final resolvedTurnId = _resolveTurnIdForStreamLookup(turnId);
+    final turnState = _turnGroups[resolvedTurnId];
+    if (turnState != null && turnState.entries.isNotEmpty) {
+      return turnState.entries.last;
+    }
+    // turn 状态尚未建立时回退全局时间线末尾（并校验 turn 归属）。
+    for (var index = _timelineEntries.length - 1; index >= 0; index -= 1) {
+      if (_timelineEntryTurnIds[index] != resolvedTurnId) {
+        continue;
+      }
+      return _timelineEntries[index];
+    }
+    return null;
+  }
+
+  /// 流式写入时解析 turn：优先已存在的分组，否则回退 live/pending/standby。
+  String _resolveTurnIdForStreamLookup(String? turnId) {
+    if (turnId != null && _turnGroups.containsKey(turnId)) {
+      return turnId;
+    }
+    return currentTurnGroupId ?? _pendingTurnGroupId ?? turnId ?? standbyTurnId;
+  }
+
+  /// 为被打断的流式 agent 文本分配新段 id：`baseId#segN`。
+  String _allocateAgentMessageSegmentId(String baseId) {
+    final next = (_agentMessageSegmentSeqByBaseId[baseId] ?? 1) + 1;
+    _agentMessageSegmentSeqByBaseId[baseId] = next;
+    return '$baseId#seg$next';
   }
 
   /// 用 completed item 通知更新已有消息 metadata。
