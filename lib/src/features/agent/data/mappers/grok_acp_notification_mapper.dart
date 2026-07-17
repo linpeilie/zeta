@@ -5,7 +5,8 @@ export 'package:zeta/src/features/agent/data/mappers/acp_session_update_mapper.d
 
 /// Grok ACP 通知适配层。
 ///
-/// 标准 `session/update` 委托给共享 mapper；这里只保留 `_x.ai/*` 厂商扩展入口。
+/// 标准 `session/update` 委托给共享 mapper；这里只保留 Grok 元数据归一化和
+/// `_x.ai/*` 厂商扩展入口。
 class GrokAcpNotificationMapper {
   const GrokAcpNotificationMapper({
     this.sessionUpdateMapper = const AcpSessionUpdateMapper(),
@@ -18,9 +19,45 @@ class GrokAcpNotificationMapper {
     required String? runningTurnId,
   }) {
     return sessionUpdateMapper.mapSessionUpdate(
-      params: params,
+      params: _normalizeStreamMessageId(params),
       runningTurnId: runningTurnId,
     );
+  }
+
+  /// Grok 不发送 `messageId`，但会用 `eventId` 标识每段独立输出。
+  ///
+  /// 若直接回退到 prompt/turn id，工具调用前后的文字会被合并回第一条消息，
+  /// 导致中间工具卡片最终全部落在完整回复之后。这里与本地历史解析保持一致，
+  /// 将 Grok 的事件标识投影为标准 ACP message id。
+  Map<String, Object?> _normalizeStreamMessageId(Map<String, Object?> params) {
+    final updateRaw = params['update'];
+    if (updateRaw is! Map) {
+      return params;
+    }
+    final update = updateRaw.map(
+      (key, value) => MapEntry(key.toString(), value as Object?),
+    );
+    final kind = update['sessionUpdate']?.toString();
+    if (kind != 'agent_message_chunk' && kind != 'agent_thought_chunk') {
+      return params;
+    }
+    final messageId = update['messageId']?.toString().trim();
+    if (messageId != null && messageId.isNotEmpty) {
+      return params;
+    }
+
+    final paramsMeta = _asStringKeyedMap(params['_meta']);
+    final updateMeta = _asStringKeyedMap(update['_meta']);
+    final eventId =
+        paramsMeta?['eventId']?.toString().trim() ??
+        updateMeta?['eventId']?.toString().trim();
+    if (eventId == null || eventId.isEmpty) {
+      return params;
+    }
+    return <String, Object?>{
+      ...params,
+      'update': <String, Object?>{...update, 'messageId': eventId},
+    };
   }
 
   /// 映射 `_x.ai/session/update` 中与回合完成相关的扩展。
@@ -47,4 +84,11 @@ class GrokAcpNotificationMapper {
       runningTurnId: runningTurnId,
     );
   }
+}
+
+Map<String, Object?>? _asStringKeyedMap(Object? value) {
+  if (value is! Map) {
+    return null;
+  }
+  return value.map((key, item) => MapEntry(key.toString(), item as Object?));
 }
