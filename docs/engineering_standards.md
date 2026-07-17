@@ -189,8 +189,8 @@ Zeta 是桌面工具，不是营销页。界面应紧凑、克制、可扫描。
   走 `IdeThemeScope` / `IdeColors` / `IdeTextStyles`；第三方组件走 `sf.*`。
 - 统一 `import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;`，禁止旧
   `shadcn_ui` / `Shad*` / `showShadDialog` API。
-- 新 pane 或重复项优先复用 `Pane`、`PanelCard`、`IdeTabs` / `IdeTab`、`IdeContextMenu`、
-  `IdeStatusCard`、`WindowFrame` 和主题常量。
+- 新 pane 或重复项优先复用 `Pane`、`PanelCard`、`IdeTabs` / `IdeTab`、`IdeChip`、
+  `IdeContextMenu`、`IdeStatusCard`、`WindowFrame` 和主题常量。
 - IDE 通知统一走 `showIdeToast`，不要在 feature 页散落 `sf.showToast` builder。
 - 长项目路径、文件路径、thread 标题、工具调用摘要和 diff 统计必须限制行数并使用 ellipsis。
 - 非文本按钮需要 tooltip；重要自定义控件需要语义标签。

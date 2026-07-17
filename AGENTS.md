@@ -99,7 +99,8 @@
   builder 构造方式来避免溢出。
 - 在引入 feature 局部视觉原语前，优先复用 `ui/core` 中的基础组件，如
   `Pane`、`PanelCard`、`PaneInteractiveSurface`、`IdeTabs`/`IdeTab`、
-  `IdeContextMenu`、`IdeStatusCard`、`IdeCollapsibleCard` 以及窗口框架。
+  `IdeChip`、`IdeContextMenu`、`IdeStatusCard`、`IdeCollapsibleCard`
+  以及窗口框架。
 - 保持 IDE UI 紧凑、信息密集且易于扫读。长文件路径、thread 标题、工具摘要和
   状态文本必须使用有界布局和省略号。
 - 对重复出现的交互式 timeline、thread 和文件树行使用稳定的 `ValueKey`。

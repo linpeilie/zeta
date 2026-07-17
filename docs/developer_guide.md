@@ -114,7 +114,7 @@ windows/
 - `lib/src/features/usage_statistics`：Codex 全局历史读取、版本化派生索引、统计聚合
   controller、响应式统计页面和任务详情抽屉。
 - `lib/src/features/workspace`：工作区目录规则、文件树构建、文件节点映射和 file tree pane。
-- `lib/src/ui/core`：主题、窗口框架、pane、panel、empty state 和状态标签等共享 UI 原语。
+- `lib/src/ui/core`：主题、窗口框架、pane、panel、`IdeChip`、empty state 和状态标签等共享 UI 原语。
 - `lib/src/ui/features/ide`：IDE shell 视图、项目列表 pane 和 active provider controller。
 - `test/src`：app、core、feature 各层的单元测试和 widget 测试。
 - `tool/`：仓库维护脚本（含 Codex schema 导出与 Codex/Cursor 真实 CLI smoke）。

@@ -12,6 +12,7 @@ import 'package:zeta/src/features/agent_management/application/agent_management_
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_configuration_editor.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_log_view.dart';
+import 'package:zeta/src/ui/core/ide_chip.dart';
 import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_dialog.dart';
@@ -1623,14 +1624,13 @@ class _ModelCard extends StatelessWidget {
                 spacing: IdeSpacing.space6,
                 runSpacing: IdeSpacing.space6,
                 children: [
-                  const IdeTab(label: '文本', trailingIcon: null),
-                  if (supportsImage)
-                    const IdeTab(label: '图片', trailingIcon: null),
-                  const IdeTab(label: '代码', trailingIcon: null),
-                  const IdeTab(label: '文件操作', trailingIcon: null),
-                  const IdeTab(label: '工具调用', trailingIcon: null),
-                  const IdeTab(label: '终端', trailingIcon: null),
-                  const IdeTab(label: '流式输出', trailingIcon: null),
+                  const IdeChip(label: '文本'),
+                  if (supportsImage) const IdeChip(label: '图片'),
+                  const IdeChip(label: '代码'),
+                  const IdeChip(label: '文件操作'),
+                  const IdeChip(label: '工具调用'),
+                  const IdeChip(label: '终端'),
+                  const IdeChip(label: '流式输出'),
                 ],
               ),
               const SizedBox(height: IdeSpacing.space8),
