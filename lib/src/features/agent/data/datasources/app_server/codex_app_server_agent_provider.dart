@@ -22,6 +22,15 @@ part '../local_history/codex_thread_history_reader.dart';
 
 final _log = loggerFor('zeta.agent.codex_app_server');
 
+/// 将 initialize 等 RPC 返回值安全编码为日志字符串。
+String _encodeForLog(Object? value) {
+  try {
+    return jsonEncode(value);
+  } catch (_) {
+    return value.toString();
+  }
+}
+
 /// 根据 provider 配置创建 JSON-RPC 端点。
 typedef JsonRpcPeerFactory = JsonRpcPeer Function(AgentProviderConfig config);
 
@@ -249,6 +258,10 @@ class CodexAppServerAgentProvider
             'optOutNotificationMethods': _optedOutNotificationMethods,
           },
         },
+      );
+      _log.info(
+        'Codex initialize result for ${config.id}: '
+        '${_encodeForLog(initializeResult)}',
       );
 
       _runtimeInfo = _codexRuntimeInfoFromInitialize(

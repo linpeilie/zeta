@@ -20,6 +20,15 @@ import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 
 final _log = loggerFor('zeta.agent.cursor_acp');
 
+/// 将 initialize 等 RPC 返回值安全编码为日志字符串。
+String _encodeForLog(Object? value) {
+  try {
+    return jsonEncode(value);
+  } catch (_) {
+    return value.toString();
+  }
+}
+
 /// 为指定工作区创建 Cursor ACP peer。
 typedef CursorJsonRpcPeerFactory =
     JsonRpcPeer Function(AgentProviderConfig config, String workspacePath);
@@ -208,6 +217,10 @@ class CursorAcpAgentProvider
           },
         },
         timeout: _requestTimeout,
+      );
+      _log.info(
+        'Cursor initialize result for ${config.id}: '
+        '${_encodeForLog(result)}',
       );
       final init = _asMap(result) ?? const <String, Object?>{};
       _validateInitializeResponse(init);

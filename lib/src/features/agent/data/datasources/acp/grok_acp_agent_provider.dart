@@ -18,6 +18,15 @@ import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 
 final _log = loggerFor('zeta.agent.grok_acp');
 
+/// 将 initialize 等 RPC 返回值安全编码为日志字符串。
+String _encodeForLog(Object? value) {
+  try {
+    return jsonEncode(value);
+  } catch (_) {
+    return value.toString();
+  }
+}
+
 /// 根据 provider 配置创建 JSON-RPC 端点。
 typedef JsonRpcPeerFactory = JsonRpcPeer Function(AgentProviderConfig config);
 
@@ -223,6 +232,10 @@ class GrokAcpAgentProvider
             'version': '0.1.0',
           },
         },
+      );
+      _log.info(
+        'Grok initialize result for ${config.id}: '
+        '${_encodeForLog(initResult)}',
       );
 
       final initMap =
