@@ -76,7 +76,7 @@ ProcessStarter grokProcessStarter(
       modelId: modelIdResolver?.call(),
       reasoningEffort: reasoningEffortResolver?.call(),
     );
-    _log.info('Using Grok CLI ${command.displayPath}');
+    _log.info('Grok CLI executable resolved');
     return (delegate ?? Process.start)(
       command.executable,
       command.arguments,

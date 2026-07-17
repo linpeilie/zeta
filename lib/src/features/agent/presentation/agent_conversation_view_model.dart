@@ -167,6 +167,10 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   AgentProviderStatus get status => _status;
 
+  /// 旧 Cursor 选择被安全回退时需要持续展示的不可用原因。
+  String? get unavailableProviderReason =>
+      providerController.unavailableSelectionReason;
+
   /// 当前选中线程的运行时状态（来自 `thread/status/changed`）。
   AgentThreadRuntimeStatus? get threadRuntimeStatus => _threadRuntimeStatus;
 
@@ -676,8 +680,10 @@ class AgentConversationViewModel extends ChangeNotifier {
         );
       }
       _log.fine('Loaded Agent provider settings: $activeProviderId');
-    } catch (error, stackTrace) {
-      _log.warning('Could not load Agent provider settings', error, stackTrace);
+    } catch (error) {
+      _log.warning(
+        'Could not load Agent provider settings (${error.runtimeType})',
+      );
       _status = AgentProviderStatus(
         state: AgentProviderConnectionState.error,
         message: 'Could not load Agent providers',
@@ -737,8 +743,8 @@ class AgentConversationViewModel extends ChangeNotifier {
         _handleModelList(models);
       }
       await _permissionSelectionController.refreshProfiles();
-    } catch (error, stackTrace) {
-      _log.warning('Could not preload Agent models', error, stackTrace);
+    } catch (error) {
+      _log.warning('Could not preload Agent models (${error.runtimeType})');
       _modelRefreshError = '模型列表刷新失败，已保留现有配置。';
     } finally {
       _modelsRefreshing = false;
@@ -776,11 +782,9 @@ class AgentConversationViewModel extends ChangeNotifier {
       );
       _latestDeniedAutoReview = null;
       _publishUiChanges(header: true, liveTurn: true);
-    } catch (error, stackTrace) {
+    } catch (error) {
       _log.warning(
-        'Could not approve guardian-denied action',
-        error,
-        stackTrace,
+        'Could not approve guardian-denied action (${error.runtimeType})',
       );
     }
   }
@@ -813,11 +817,10 @@ class AgentConversationViewModel extends ChangeNotifier {
         configId: configId,
         value: value,
       );
-    } catch (error, stackTrace) {
+    } catch (error) {
       _log.warning(
-        'Could not update Agent session config $configId',
-        error,
-        stackTrace,
+        'Could not update Agent session config $configId '
+        '(${error.runtimeType})',
       );
       _status = AgentProviderStatus(
         state: AgentProviderConnectionState.error,
@@ -1348,26 +1351,24 @@ class AgentConversationViewModel extends ChangeNotifier {
           clientUserMessageId: clientUserMessageId,
         );
       }
-    } on ProcessException catch (error, stackTrace) {
+    } on ProcessException catch (error) {
       _log.warning(
-        'Agent provider process failed: ${error.message}',
-        error,
-        stackTrace,
+        'Agent provider process failed (errorCode=${error.errorCode})',
       );
       if (!_isStillSelectedThread(switchToken, selectedThreadId)) {
         return;
       }
       _failPendingLiveTurn();
       _markUnavailable(error.message, details: error.toString());
-    } on UnsupportedError catch (error, stackTrace) {
-      _log.warning('Unsupported Agent provider', error, stackTrace);
+    } on UnsupportedError catch (error) {
+      _log.warning('Unsupported Agent provider (${error.runtimeType})');
       if (!_isStillSelectedThread(switchToken, selectedThreadId)) {
         return;
       }
       _failPendingLiveTurn();
       _markError(error.message ?? 'Provider is not supported');
-    } catch (error, stackTrace) {
-      _log.warning('Agent request failed', error, stackTrace);
+    } catch (error) {
+      _log.warning('Agent request failed (${error.runtimeType})');
       if (!_isStillSelectedThread(switchToken, selectedThreadId)) {
         return;
       }
@@ -1428,14 +1429,13 @@ class AgentConversationViewModel extends ChangeNotifier {
       }
       try {
         await switchActiveProvider(thread.providerId);
-      } catch (error, stackTrace) {
+      } catch (error) {
         if (!_isCurrentSwitch(switchToken)) {
           return;
         }
         _log.warning(
-          'Could not switch provider to ${thread.providerId} for thread ${thread.id}',
-          error,
-          stackTrace,
+          'Could not switch provider to ${thread.providerId} for thread '
+          '${thread.id} (${error.runtimeType})',
         );
         _session = null;
         _sessionConfigOptions = const <AgentSessionConfigOption>[];
@@ -1530,15 +1530,14 @@ class AgentConversationViewModel extends ChangeNotifier {
         composer: true,
         autoScroll: true,
       );
-    } catch (error, stackTrace) {
+    } catch (error) {
       if (!_isCurrentSwitch(switchToken)) {
         return;
       }
       _threadOpenPhase = AgentThreadOpenPhase.openFailed;
       _log.warning(
-        'Could not load Agent thread history ${thread.id}',
-        error,
-        stackTrace,
+        'Could not load Agent thread history ${thread.id} '
+        '(${error.runtimeType})',
       );
       _markError('Could not load thread history', details: error.toString());
     }
@@ -1653,14 +1652,13 @@ class AgentConversationViewModel extends ChangeNotifier {
         return;
       }
       await sendMessage(trimmed);
-    } catch (error, stackTrace) {
+    } catch (error) {
       if (!_isCurrentSwitch(switchToken)) {
         return;
       }
       _log.warning(
-        'Could not create branch and retry thread $threadId',
-        error,
-        stackTrace,
+        'Could not create branch and retry thread $threadId '
+        '(${error.runtimeType})',
       );
       _markError(
         'Could not create branch and retry message',
@@ -1707,8 +1705,8 @@ class AgentConversationViewModel extends ChangeNotifier {
         ),
       );
       return session;
-    } catch (error, stackTrace) {
-      _log.warning('Could not fork thread $threadId', error, stackTrace);
+    } catch (error) {
+      _log.warning('Could not fork thread $threadId (${error.runtimeType})');
       _markError('Could not fork thread', details: error.toString());
       return null;
     }
@@ -1731,9 +1729,9 @@ class AgentConversationViewModel extends ChangeNotifier {
         );
       }
       await threadMutations.compactThread(threadId);
-    } catch (error, stackTrace) {
+    } catch (error) {
       _isCompacting = false;
-      _log.warning('Could not compact thread $threadId', error, stackTrace);
+      _log.warning('Could not compact thread $threadId (${error.runtimeType})');
       _markError('Could not compact context', details: error.toString());
       _publishUiChanges(header: true, composer: true);
     }
@@ -1761,12 +1759,12 @@ class AgentConversationViewModel extends ChangeNotifier {
         );
       }
       await threadMutations.renameThread(threadId: threadId, name: trimmed);
-    } catch (error, stackTrace) {
+    } catch (error) {
       if (sessionId == threadId && _currentThreadTitle == trimmed) {
         _applyThreadTitle(previousTitle);
         _publishUiChanges(header: true);
       }
-      _log.warning('Could not rename thread $threadId', error, stackTrace);
+      _log.warning('Could not rename thread $threadId (${error.runtimeType})');
       _markError('Could not rename thread', details: error.toString());
     }
   }
@@ -1786,8 +1784,8 @@ class AgentConversationViewModel extends ChangeNotifier {
         );
       }
       await threadMutations.archiveThread(threadId);
-    } catch (error, stackTrace) {
-      _log.warning('Could not archive thread $threadId', error, stackTrace);
+    } catch (error) {
+      _log.warning('Could not archive thread $threadId (${error.runtimeType})');
       _markError('Could not archive thread', details: error.toString());
     }
   }
@@ -1979,11 +1977,10 @@ class AgentConversationViewModel extends ChangeNotifier {
           _publishUiChanges(header: true, composer: true);
         }
         return session;
-      } catch (error, stackTrace) {
+      } catch (error) {
         _log.warning(
-          'Could not resume Agent session $restoredSessionId',
-          error,
-          stackTrace,
+          'Could not resume Agent session $restoredSessionId '
+          '(${error.runtimeType})',
         );
         if (_requiresResumedSelectedThread) {
           if (_isStillSelectedThread(switchToken, expectedThreadId)) {
@@ -2079,7 +2076,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     StreamSubscription<AgentEvent>? subscription;
     subscription = provider.events.listen(
       buffer.add,
-      onError: (Object error, StackTrace stackTrace) {
+      onError: (Object error, StackTrace _) {
         if (!_eventListenerGate.accepts(
           scope,
           currentRuntimeScope: _runtimeScopeOf(provider),
@@ -2087,7 +2084,9 @@ class AgentConversationViewModel extends ChangeNotifier {
         )) {
           return;
         }
-        _log.warning('Agent provider event stream failed', error, stackTrace);
+        _log.warning(
+          'Agent provider event stream failed (${error.runtimeType})',
+        );
       },
       onDone: () {
         buffer.dispose();
@@ -2704,11 +2703,10 @@ class AgentConversationViewModel extends ChangeNotifier {
         return;
       }
       await threadCatalog.unsubscribeThread(threadId);
-    } catch (error, stackTrace) {
+    } catch (error) {
       _log.warning(
-        'Could not unsubscribe Agent thread $threadId',
-        error,
-        stackTrace,
+        'Could not unsubscribe Agent thread $threadId '
+        '(${error.runtimeType})',
       );
     }
   }

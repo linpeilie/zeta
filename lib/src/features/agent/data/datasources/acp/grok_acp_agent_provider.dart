@@ -254,14 +254,16 @@ class GrokAcpAgentProvider
 
       // 模型列表在 session/new 时更完整；此处先 CLI 降级预填。
       unawaited(_prefetchModelsFromCli());
-    } on ProcessException catch (error, stackTrace) {
+    } on ProcessException catch (error) {
       _peer.markFailed();
-      _log.warning('Could not start Grok CLI', error, stackTrace);
+      _log.warning('Could not start Grok CLI (errorCode=${error.errorCode})');
       _emitUnavailable(error.message, details: error.toString());
       rethrow;
-    } catch (error, stackTrace) {
+    } catch (error) {
       _peer.markFailed();
-      _log.warning('Could not initialize Grok ACP provider', error, stackTrace);
+      _log.warning(
+        'Could not initialize Grok ACP provider (${error.runtimeType})',
+      );
       _emitStatus(
         AgentProviderStatus(
           state: AgentProviderConnectionState.error,
@@ -304,11 +306,10 @@ class GrokAcpAgentProvider
         timeout: const Duration(seconds: 20),
       );
       _log.fine('Grok ACP authenticated via $methodId');
-    } catch (error, stackTrace) {
+    } catch (error) {
       _log.warning(
-        'Grok ACP authenticate($methodId) failed; continuing',
-        error,
-        stackTrace,
+        'Grok ACP authenticate($methodId) failed; continuing '
+        '(${error.runtimeType})',
       );
     }
   }
@@ -408,8 +409,10 @@ class GrokAcpAgentProvider
           _addEvent(AgentSessionStartedEvent(session));
           _log.info('Loaded Grok ACP session $sessionId (replay suppressed)');
           return session;
-        } catch (error, stackTrace) {
-          _log.warning('session/load failed for $sessionId', error, stackTrace);
+        } catch (error) {
+          _log.warning(
+            'session/load failed for $sessionId (${error.runtimeType})',
+          );
           rethrow;
         } finally {
           _suppressingSessionLoadReplay = false;
@@ -683,8 +686,8 @@ class GrokAcpAgentProvider
           message: '${config.displayName} ready',
         ),
       );
-    } catch (error, stackTrace) {
-      _log.warning('session/prompt failed', error, stackTrace);
+    } catch (error) {
+      _log.warning('session/prompt failed (${error.runtimeType})');
       _notificationMapper.noteBoundary(
         runtimeScope: currentRuntimeScope,
         sessionId: session.id,
@@ -860,12 +863,11 @@ class GrokAcpAgentProvider
       unawaited(
         _peer.handleServerRequest(request, _handleServerRequest).catchError((
           Object error,
-          StackTrace stackTrace,
+          StackTrace _,
         ) {
           _log.warning(
-            'Grok server request ${request.method} did not complete',
-            error,
-            stackTrace,
+            'Grok server request ${request.method} did not complete '
+            '(${error.runtimeType})',
           );
         }),
       );
@@ -878,8 +880,8 @@ class GrokAcpAgentProvider
     });
     _protocolErrorSubscription ??= _peer.protocolErrors.listen((error) {
       _log.warning(
-        'Grok protocol warning (${error.message.length} characters)',
-        error.cause,
+        'Grok protocol warning (${error.message.length} characters; '
+        'cause=${error.causeType ?? 'unknown'})',
       );
       _addEvent(
         AgentErrorEvent(
@@ -1144,12 +1146,11 @@ class GrokAcpAgentProvider
             ),
           );
       }
-    } catch (error, stackTrace) {
+    } catch (error) {
       // 服务端请求必须始终应答，否则 session/prompt 会一直挂起。
       _log.warning(
-        'Grok server request ${request.method} failed',
-        error,
-        stackTrace,
+        'Grok server request ${request.method} failed '
+        '(${error.runtimeType})',
       );
       try {
         await _peer.sendScopedResponse(

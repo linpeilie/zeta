@@ -184,29 +184,46 @@ class _AgentPaneState extends State<AgentPane> {
                                       .viewModel
                                       .composerVersionListenable,
                                   builder: (context, _) {
-                                    if (widget.viewModel.isReadOnly) {
-                                      return _AgentReadOnlyNotice(
-                                        pagePadding: pagePadding,
-                                      );
-                                    }
-                                    return _AgentComposerSection(
-                                      key: const ValueKey(
-                                        'agent-composer-section',
-                                      ),
-                                      viewModel: widget.viewModel,
-                                      inputController: _inputController,
-                                      composerFocusNode: _composerFocusNode,
-                                      canSendListenable: _canSendNotifier,
-                                      draftImagePaths:
-                                          List<String>.unmodifiable(
-                                            _draftImagePaths,
+                                    return Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        if (widget
+                                                .viewModel
+                                                .unavailableProviderReason
+                                            case final reason?)
+                                          _AgentProviderUnavailableNotice(
+                                            reason: reason,
+                                            pagePadding: pagePadding,
                                           ),
-                                      pagePadding: pagePadding,
-                                      onAttachImages: _pickImages,
-                                      onRemoveImage: _removeDraftImage,
-                                      onPasteImages: _pasteImagesFromClipboard,
-                                      onSend: _sendMessage,
-                                      onInsertMention: _insertMention,
+                                        if (widget.viewModel.isReadOnly)
+                                          _AgentReadOnlyNotice(
+                                            pagePadding: pagePadding,
+                                          )
+                                        else
+                                          _AgentComposerSection(
+                                            key: const ValueKey(
+                                              'agent-composer-section',
+                                            ),
+                                            viewModel: widget.viewModel,
+                                            inputController: _inputController,
+                                            composerFocusNode:
+                                                _composerFocusNode,
+                                            canSendListenable: _canSendNotifier,
+                                            draftImagePaths:
+                                                List<String>.unmodifiable(
+                                                  _draftImagePaths,
+                                                ),
+                                            pagePadding: pagePadding,
+                                            onAttachImages: _pickImages,
+                                            onRemoveImage: _removeDraftImage,
+                                            onPasteImages:
+                                                _pasteImagesFromClipboard,
+                                            onSend: _sendMessage,
+                                            onInsertMention: _insertMention,
+                                          ),
+                                      ],
                                     );
                                   },
                                 ),
@@ -497,6 +514,37 @@ class _AgentPaneState extends State<AgentPane> {
         curve: Curves.easeOut,
       );
     });
+  }
+}
+
+class _AgentProviderUnavailableNotice extends StatelessWidget {
+  const _AgentProviderUnavailableNotice({
+    required this.reason,
+    required this.pagePadding,
+  });
+
+  final String reason;
+  final EdgeInsets pagePadding;
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyles = IdeTextStyles.of(context);
+    final colors = IdeColors.of(context);
+    return _AgentContentAlign(
+      child: Padding(
+        padding: pagePadding.copyWith(top: IdeSpacing.space8),
+        child: IdeStatusCard(
+          key: const ValueKey('agent-provider-unavailable-notice'),
+          tone: IdeStatusCardTone.warning,
+          title: 'Cursor Agent unavailable',
+          margin: EdgeInsets.zero,
+          body: Text(
+            reason,
+            style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
+          ),
+        ),
+      ),
+    );
   }
 }
 

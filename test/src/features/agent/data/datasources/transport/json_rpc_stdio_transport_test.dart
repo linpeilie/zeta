@@ -76,8 +76,9 @@ void main() {
     test(
       'logs only metadata while keeping stderr available to providers',
       () async {
+        const secretExecutable = r'C:\private\credentialed-cli.exe';
         final transport = JsonRpcStdioTransport(
-          command: 'fake-json-rpc-server',
+          command: secretExecutable,
           processStarter: _fakeProcessStarter((process, message) {
             process
               ..writeStderr('stderr: ${message['method']}')
@@ -130,6 +131,7 @@ void main() {
           contains('Received JSON-RPC stderr line (12 characters)'),
         );
         expect(messages, isNot(anyElement(contains('stderr: ping'))));
+        expect(messages, isNot(anyElement(contains(secretExecutable))));
       },
     );
 
@@ -157,11 +159,12 @@ void main() {
     });
 
     test('reports invalid stdout without closing the transport', () async {
+      const malformedPayload = 'private-broken-payload';
       final transport = JsonRpcStdioTransport(
         command: 'fake-json-rpc-server',
         processStarter: _fakeProcessStarter((process, message) {
           process
-            ..writeRawStdout('not-json')
+            ..writeRawStdout(malformedPayload)
             ..writeStdout(<String, Object?>{
               'id': message['id'],
               'result': null,
@@ -175,6 +178,19 @@ void main() {
       final error = await errorFuture;
 
       expect(error.message, contains('Invalid JSON'));
+      expect(error.payloadLength, malformedPayload.length);
+      expect(error.causeType, 'FormatException');
+      expect(error.toString(), isNot(contains(malformedPayload)));
+      final renderedLogs = records
+          .map(
+            (record) => <Object?>[
+              record.message,
+              record.error,
+              record.stackTrace,
+            ].whereType<Object>().join(' '),
+          )
+          .join('\n');
+      expect(renderedLogs, isNot(contains(malformedPayload)));
       await transport.close();
     });
 

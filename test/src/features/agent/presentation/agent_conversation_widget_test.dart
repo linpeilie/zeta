@@ -38,6 +38,53 @@ void main() {
     tempDirectories.clear();
   });
 
+  testWidgets('shows unavailable reason for a retired Cursor selection', (
+    tester,
+  ) async {
+    // Arrange
+    final session = MemorySessionStore();
+    final provider = FakeAgentProvider();
+    final configStore = MemoryAgentProviderConfigStore(
+      AgentProviderSettings(
+        providers: <AgentProviderConfig>[
+          AgentProviderConfig.defaultCodex,
+          AgentProviderConfig.defaultGrok,
+          AgentProviderConfig.defaultCursor.copyWith(enabled: true),
+        ],
+        activeProviderId: cursorAgentProviderId,
+      ),
+    );
+
+    // Act
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: configStore,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Assert
+    final notice = find.byKey(
+      const ValueKey('agent-provider-unavailable-notice'),
+    );
+    expect(notice, findsOneWidget);
+    expect(
+      find.descendant(
+        of: notice,
+        matching: find.text('Cursor Agent unavailable'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: notice, matching: find.textContaining('已临时回退')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('loads older turns without jumping the viewport', (tester) async {
     final session = MemorySessionStore();
     final directory = Directory.systemTemp.createTempSync('zeta_test_');

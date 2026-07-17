@@ -142,15 +142,23 @@ class JsonRpcException implements Exception {
 ///
 /// 这类异常通常不会直接关闭连接，而是通过 [JsonRpcPeer.protocolErrors] 暴露给上层。
 class JsonRpcProtocolException implements Exception {
-  const JsonRpcProtocolException(this.message, {this.line, this.cause});
+  const JsonRpcProtocolException(
+    this.message, {
+    this.payloadLength,
+    this.causeType,
+  });
 
   final String message;
-  final String? line;
-  final Object? cause;
+  final int? payloadLength;
+  final String? causeType;
 
   @override
   String toString() {
-    final suffix = line == null ? '' : ' Line: $line';
+    final metadata = <String>[
+      if (payloadLength != null) '$payloadLength characters',
+      if (causeType != null) 'cause=$causeType',
+    ];
+    final suffix = metadata.isEmpty ? '' : ' (${metadata.join(', ')})';
     return 'JSON-RPC protocol error: $message$suffix';
   }
 }
@@ -244,9 +252,7 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
   }
 
   Future<void> _startProcess() async {
-    _log.info(
-      'Starting JSON-RPC process $command with ${arguments.length} arguments',
-    );
+    _log.info('Starting JSON-RPC process with ${arguments.length} arguments');
 
     final mergedEnvironment = environment.isEmpty
         ? null
@@ -402,13 +408,16 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
     final Object? decoded;
     try {
       decoded = jsonDecode(line);
-    } catch (error, stackTrace) {
-      _log.warning('Invalid JSON-RPC stdout line', error, stackTrace);
+    } catch (error) {
+      _log.warning(
+        'Invalid JSON-RPC stdout line '
+        '(${error.runtimeType}, $payloadLength characters)',
+      );
       _protocolErrors.add(
         JsonRpcProtocolException(
           'Invalid JSON on stdout',
-          line: line,
-          cause: error,
+          payloadLength: payloadLength,
+          causeType: error.runtimeType.toString(),
         ),
       );
       return;
@@ -420,7 +429,7 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
       _protocolErrors.add(
         JsonRpcProtocolException(
           'JSON-RPC message must be an object',
-          line: line,
+          payloadLength: payloadLength,
         ),
       );
       return;
@@ -469,7 +478,10 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
 
     _log.warning('Unknown JSON-RPC message shape');
     _protocolErrors.add(
-      JsonRpcProtocolException('Unknown JSON-RPC message shape', line: line),
+      JsonRpcProtocolException(
+        'Unknown JSON-RPC message shape',
+        payloadLength: payloadLength,
+      ),
     );
   }
 
@@ -481,7 +493,9 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
         'JSON-RPC response for unknown request id (${id.runtimeType})',
       );
       _protocolErrors.add(
-        JsonRpcProtocolException('Response for unknown request id: $id'),
+        JsonRpcProtocolException(
+          'Response for unknown request id (${id.runtimeType})',
+        ),
       );
       return;
     }
@@ -518,10 +532,13 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
     await _closeControllers();
   }
 
-  void _handleStreamError(Object error, StackTrace stackTrace) {
-    _log.warning('JSON-RPC process stream error', error, stackTrace);
+  void _handleStreamError(Object error, StackTrace _) {
+    _log.warning('JSON-RPC process stream error (${error.runtimeType})');
     _protocolErrors.add(
-      JsonRpcProtocolException('Process stream error', cause: error),
+      JsonRpcProtocolException(
+        'Process stream error',
+        causeType: error.runtimeType.toString(),
+      ),
     );
   }
 
@@ -554,8 +571,8 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
       // stdio 管道可能缓冲，主动 flush 可以让交互式 CLI 更快收到请求。
       await process.stdin.flush();
     });
-    _writeQueue = operation.catchError((Object error, StackTrace stackTrace) {
-      _log.warning('JSON-RPC stdin write failed', error, stackTrace);
+    _writeQueue = operation.catchError((Object error, StackTrace _) {
+      _log.warning('JSON-RPC stdin write failed (${error.runtimeType})');
     });
     return operation;
   }

@@ -377,12 +377,20 @@ void main() {
     );
 
     test('does not log realtime notifications and server requests', () async {
+      const privateCodexHome = r'C:\private\codex-home-sentinel';
       final records = <LogRecord>[];
       await resetAppLoggingForTesting();
       configureAppLogging(level: Level.ALL, sink: records.add);
       addTearDown(resetAppLoggingForTesting);
 
-      final peer = _FakeJsonRpcPeer();
+      final peer = _FakeJsonRpcPeer(
+        initializeResponse: const <String, Object?>{
+          'codexHome': privateCodexHome,
+          'platformFamily': 'windows',
+          'platformOs': 'windows',
+          'userAgent': 'codex_cli_rs/0.144.1',
+        },
+      );
       final provider = CodexAppServerAgentProvider(
         config: AgentProviderConfig.defaultCodex,
         peer: peer,
@@ -430,6 +438,17 @@ void main() {
         ),
         isEmpty,
       );
+      final renderedLogs = records
+          .map(
+            (record) => <Object?>[
+              record.message,
+              record.error,
+              record.stackTrace,
+            ].whereType<Object>().join(' '),
+          )
+          .join('\n');
+      expect(renderedLogs, isNot(contains(privateCodexHome)));
+      expect(renderedLogs, isNot(contains('flutter test')));
     });
 
     test(

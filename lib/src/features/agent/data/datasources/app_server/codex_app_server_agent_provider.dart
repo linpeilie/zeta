@@ -22,15 +22,6 @@ part '../local_history/codex_thread_history_reader.dart';
 
 final _log = loggerFor('zeta.agent.codex_app_server');
 
-/// 将 initialize 等 RPC 返回值安全编码为日志字符串。
-String _encodeForLog(Object? value) {
-  try {
-    return jsonEncode(value);
-  } catch (_) {
-    return value.toString();
-  }
-}
-
 /// 根据 provider 配置创建 JSON-RPC 端点。
 typedef JsonRpcPeerFactory = JsonRpcPeer Function(AgentProviderConfig config);
 
@@ -259,10 +250,7 @@ class CodexAppServerAgentProvider
           },
         },
       );
-      _log.info(
-        'Codex initialize result for ${config.id}: '
-        '${_encodeForLog(initializeResult)}',
-      );
+      _log.info('Codex initialize completed for ${config.id}');
 
       _runtimeInfo = _codexRuntimeInfoFromInitialize(
         initializeResult,
@@ -284,21 +272,19 @@ class CodexAppServerAgentProvider
       _log.info('Agent provider ${config.id} initialized');
 
       await _fetchModelList();
-    } on ProcessException catch (error, stackTrace) {
+    } on ProcessException catch (error) {
       _peer.markFailed();
       _log.warning(
-        'Could not start Agent provider process ${config.id}',
-        error,
-        stackTrace,
+        'Could not start Agent provider process ${config.id} '
+        '(errorCode=${error.errorCode})',
       );
       _emitUnavailable(error.message, details: error.toString());
       rethrow;
-    } catch (error, stackTrace) {
+    } catch (error) {
       _peer.markFailed();
       _log.warning(
-        'Could not initialize Agent provider ${config.id}',
-        error,
-        stackTrace,
+        'Could not initialize Agent provider ${config.id} '
+        '(${error.runtimeType})',
       );
       _emitStatus(
         AgentProviderStatus(
@@ -447,8 +433,8 @@ class CodexAppServerAgentProvider
       _modelList = list;
       _events.add(AgentModelListEvent(list));
       _log.fine('Fetched ${list.models.length} models from Codex');
-    } catch (error, stackTrace) {
-      _log.warning('Could not fetch Codex model list', error, stackTrace);
+    } catch (error) {
+      _log.warning('Could not fetch Codex model list (${error.runtimeType})');
     }
   }
 
@@ -723,12 +709,11 @@ class CodexAppServerAgentProvider
       unawaited(
         _peer.handleServerRequest(request, _handleServerRequest).catchError((
           Object error,
-          StackTrace stackTrace,
+          StackTrace _,
         ) {
           _log.warning(
-            'Codex server request ${request.method} did not complete',
-            error,
-            stackTrace,
+            'Codex server request ${request.method} did not complete '
+            '(${error.runtimeType})',
           );
         }),
       );
@@ -744,8 +729,8 @@ class CodexAppServerAgentProvider
     });
     _protocolErrorSubscription ??= _peer.protocolErrors.listen((error) {
       _log.warning(
-        'Codex protocol warning (${error.message.length} characters)',
-        error.cause,
+        'Codex protocol warning (${error.message.length} characters; '
+        'cause=${error.causeType ?? 'unknown'})',
       );
       _events.add(
         AgentErrorEvent(
@@ -964,11 +949,10 @@ class CodexAppServerAgentProvider
         'Unsubscribed Codex thread $threadId'
         '${status == null ? '' : ' (status=$status)'}',
       );
-    } catch (error, stackTrace) {
+    } catch (error) {
       _log.warning(
-        'Could not unsubscribe Codex thread $threadId',
-        error,
-        stackTrace,
+        'Could not unsubscribe Codex thread $threadId '
+        '(${error.runtimeType})',
       );
     }
   }

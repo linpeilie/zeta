@@ -1,7 +1,7 @@
 # Agent 流式身份与 Provider 适配层边界整改实施方案
 
-> 状态：Phase 0–5 实现与自动化门禁已完成；Phase 4 记录中的未复测手工项保持原状
-> 版本：2.4
+> 状态：Phase 0–6 已执行；PR-F 发布验收结论为**不可发布**，阻断项见 Phase 6 执行记录
+> 版本：2.5
 > 编制日期：2026-07-17
 > 目标版本：当前主干；Codex app-server 以本机 `0.144.1` stable schema 为实现基线
 > 关联问题：Grok 实时时间线操作沉底、思考按 eventId 碎片化、共享层承担 Provider 叙事策略
@@ -905,12 +905,99 @@ Phase 5 执行记录（2026-07-17）：
 
 | 任务 | 内容 | 完成标准 |
 |------|------|----------|
-| P6-1 | `dart format .` | 无未格式化 Dart 文件 |
-| P6-2 | `flutter analyze` | 0 error；新增 warning 必须处理 |
-| P6-3 | 全量 `flutter test` | 全绿 |
-| P6-4 | H1–H10 手测 | 记录 provider/version/结果 |
-| P6-5 | 诊断检查 | 无 identity collision、missing scope、late drop 异常增长 |
-| P6-6 | 变更报告 | 记录 PR、测试、已知限制与回滚点 |
+| [x] P6-1 | `dart format .` | 无未格式化 Dart 文件 |
+| [x] P6-2 | `flutter analyze` | 0 error；新增 warning 必须处理 |
+| [ ] P6-3 | 全量 `flutter test` | 全绿 |
+| [x] P6-4 | H1–H10 手测 | 记录 provider/version/结果 |
+| [x] P6-5 | 诊断检查 | 无 identity collision、missing scope、late drop 异常增长 |
+| [x] P6-6 | 变更报告 | 记录 PR、测试、已知限制与回滚点 |
+
+Phase 6 执行记录（2026-07-17，PR-F）：
+
+- **发布结论：不可发布。** 最终全量 `flutter test` 为 585 passed、22 skipped、8 failed；
+  失败均为 Windows golden，但计划把任一自动测试失败列为硬阻断，因此不更新无关 golden、
+  不放宽断言，也不以“历史失败”豁免。严格的真实 `~/.cursor` 全程不变证明还受到后台
+  Cursor 进程并发写入的污染，H8 只能以隔离 profile 证明 Zeta 路径不写数据。
+- PR-F 以 `c54096d45192b5e548169515be65ea092c8a86fe`（PR-E）为基线，当前仅保留工作区
+  改动，未创建 commit、未 stage。前置提交为 PR-C1 `d8147133`、PR-C2 `f50b012b`、
+  PR-D `b6871ad1`、PR-E `c54096d4`；前置门禁无未决功能项，PR-E 已记录同一组 8 个
+  Windows golden 失败。
+- 按 `codex-app-server-docs` 同步并核对本机 stable schema：已安装 Codex CLI `0.144.1`，
+  schema 与安装版本一致；上游最新为 `0.144.5`，本轮未升级 CLI、未采用 experimental API。
+  Grok CLI 为 `0.2.102`（`ab5ebf69ac`）。
+- PR-F 只修复验收暴露的两个计划内根因：JSON-RPC/provider/process/ViewModel 日志不再记录
+  命令、CLI 路径、完整 initialize/result、raw payload 或异常正文；旧 Cursor 选择安全回退时，
+  Agent pane 持续显示 unavailable 原因。对应 transport、Codex provider 和 widget 回归已补齐，
+  未修改 Store、EventBuffer、Provider identity 规则或加入统一层启发式。
+
+自动验证：
+
+| 命令 | 结果 |
+|------|------|
+| `dart format .` | 244 files，0 changed |
+| `flutter analyze` | 0 issues |
+| §11.5 九组定向测试 | 全部通过，共 326 tests（45/33/26/73/24/10/20/63/32） |
+| `flutter build windows --debug` | 通过 |
+| `flutter test` | **失败**：585 passed、22 skipped、8 failed |
+
+8 个失败为 `AgentPane PR3` 的 empty dark wide、empty light compact，以及 Workbench 的
+dark/light × wide/medium/compact 六个 Windows golden。失败集合与 Phase 3–5 报告一致；
+PR-F 新增行为测试通过，没有新增非 golden 失败。
+
+H1–H10 手测记录（不保存 prompt 正文）：
+
+| 应用 commit | Provider/CLI | 场景 | 结果 | 异常诊断计数 |
+|-------------|--------------|------|------|--------------|
+| `c54096d4` + PR-F 工作区 | Grok `0.2.102` | H1 | 通过：Message → Tool → Message | collision/leak/missing/late/conflict 均 0 |
+| 同上 | Grok `0.2.102` | H2 | 通过：连续 reasoning 显示为单 phase，未按 eventId 碎卡 | 同上 |
+| 同上 | Grok `0.2.102` | H3 | 通过：Reasoning → Tool → Reasoning | 同上 |
+| 同上 | Grok `0.2.102` | H4 | 通过：同一 tool 的 start/progress/completed 只保留一张原地更新卡 | 同上 |
+| 同上 | Grok `0.2.102` | H5 | 通过：退出重开后 canonical 类型与相对顺序和 live 一致 | 同上 |
+| 同上 | Codex `0.144.1` / Grok `0.2.102` | H6 | 通过：catalog、设置和 Agent 管理仅显示 Codex/Grok | 同上 |
+| 同上 | Codex `0.144.1` | H7 | 通过：明确显示 unavailable，内存回退 Codex，旧配置仍选 Cursor | 同上 |
+| 同上 | Cursor 已退役 | H8 | **受限**：两组隔离 profile 的 `.cursor`/index 哈希与时间戳不变，`cursor-agent` 始终为 0；真实 `~/.cursor` 有后台 Cursor 进程并发写入，严格全程不变证据受污染 | 同上 |
+| 同上 | Codex `0.144.1` | H9 | 通过：Message → Tool → Message | 同上 |
+| 同上 | Codex `0.144.1` | H10 | 通过：多个 agentMessage item 独立，completed 无粘连、重复或终态错误 | 同上 |
+
+诊断与隐私验收：
+
+- Grok live、Grok history reopen、Codex live 和 Cursor 退役隔离运行日志中，
+  `identityCollisionDetected`、`missingTurnScopeDropped`、`lateContentDropped`、
+  `conflictingTerminalIgnored` 均为 0。`historyStateLeakPrevented` 没有独立运行时字段；本轮事件数为 0，
+  并以 history `parse` 每次创建并释放 fresh `GrokSessionUpdateMapper`、live 持有独立 mapper 及
+  canonical reopen 测试作为结构证据。
+- `conflictingTerminalIgnored == 1` 只出现在脱敏单元 fixture
+  `conflicting second terminal is diagnosed and ignored`：先接受 completed，再收到 failed，
+  first-terminal-wins 保留 completed；正常手测为 0。
+- 隔离日志扫描未命中 prompt 片段、场景文件名、shell/命令、CLI 路径、`cursor-agent`、
+  JSON `result`/`params` 或完整 raw。新增测试使用私有 sentinel 证明异常和 initialize 响应不会泄漏。
+
+最终静态审计：
+
+- application/presentation 对 `#seg`、open message resolver、legacy segment 和 identity resolver
+  精确 `rg` 为 0；Store 仅按规范化 item/entry/tool id 和显式 `AgentMessageKind.plan` 合并，
+  没有 eventId/promptId 或 raw identity/plan 推断。
+- 共享 `AcpSessionUpdateDecoder` 无 Grok/Cursor 分支和 mutable identity 状态；它只解码通用
+  ACP typed 字段。Grok live 与 history 分别持有 mapper，history 每次 `parse` 创建 fresh reducer。
+- 生产代码无 Cursor provider、CLI locator/process starter、ACP extension、diagnostics、session
+  index repository、management repository、replay collector 或 `cursor-agent` 启动路径。剩余命中仅为
+  `cursor`/`cursorAcp` 宽容 decode、`CursorRetirementPolicy` fail-closed/unavailable、受保护路径、
+  只读历史提示和退役 UI 证据。
+- 实际项目 `.cursor` 与 `~/.zeta/state/cursor_sessions.json` 的数量/长度/时间戳不变；真实
+  `~/.cursor` 的 item/file 数和根时间戳不变，但总字节增加 49,454，期间 15 个用户 Cursor
+  进程持续运行，两个 Cursor 自有 metadata 文件有新时间戳。Zeta 验收进程使用隔离
+  `USERPROFILE`，隔离 sentinel 均未变；仍按严格门禁将全局证明记为受限，而不把并发漂移误报为通过。
+
+文档、偏差、已知限制与回滚：
+
+- 已核对 `engineering_standards.md`、`developer_guide.md`、`design_document.md` 和 `AGENTS.md`；
+  当前内容已覆盖 adapter/reducer、Store dumb merge、状态隔离和 Cursor 退役边界，无需重复改写。
+- 偏差仅为验收根因修复（日志脱敏和 H7 可见提示）及 `codex-app-server-docs` 缓存同步；没有
+  功能扩展、Provider 特判绕过、Cursor 重启用或 CLI 升级。
+- 已知限制为 8 个 Windows golden 失败、真实 Cursor 目录并发漂移导致 H8 严格证据受限，
+  以及 `historyStateLeakPrevented` 目前只有结构防护、没有独立运行时计数字段。
+- PR-F 的回滚点为基线 `c54096d4`；回滚本工作区的日志脱敏/H7 提示不会迁移或重写数据。
+  若 identity/order 出现回归，仍按 §15 整体回滚对应 PR-D/PR-E，不恢复 Store 启发式。
 
 ---
 
@@ -1149,28 +1236,28 @@ Store 行为切换放进同一个不可独立回滚的 PR。
 | PR-C2 | 已完成 | 已完成 | 2026-07-17 | 2026-07-17 | 已完成 |
 | PR-D | 已完成 | 已完成 | 2026-07-17 | 2026-07-17 | 已完成 |
 | PR-E | 已完成 | 已完成 | 2026-07-17 | 2026-07-17 | 已完成 |
-| PR-F | 待分配 | 待分配 | 待定 | 待定 | 未开始 |
+| PR-F | 当前执行者 | 待评审 | 2026-07-17 | 2026-07-17 | 验收完成，**不可发布** |
 
 ### 16.4 Definition of Ready
 
 任务进入开发前必须满足：
 
-- [ ] 对应 fixture 已脱敏并入库。
-- [ ] 输入字段与预期 boundary 已写清。
-- [ ] 涉及的 Provider/CLI 版本已记录。
-- [ ] 测试文件和验收场景已指定。
-- [ ] 活跃 Provider 无未决的“eventId 是否表示消息边界”等协议问题；已退役 Provider 的协议未知项不构成门禁。
+- [x] 对应 fixture 已脱敏并入库。
+- [x] 输入字段与预期 boundary 已写清。
+- [x] 涉及的 Provider/CLI 版本已记录。
+- [x] 测试文件和验收场景已指定。
+- [x] 活跃 Provider 无未决的“eventId 是否表示消息边界”等协议问题；已退役 Provider 的协议未知项不构成门禁。
 
 ### 16.5 Definition of Done
 
-- [ ] 代码与 feature-sliced 目录归属一致。
-- [ ] 新公共 API 有中文 `///` 注释。
-- [ ] 无 Provider raw 语义泄漏到 Store/ViewModel/UI。
-- [ ] 活跃 Provider 的 live/replay/history mutable state 隔离。
+- [x] 代码与 feature-sliced 目录归属一致。
+- [x] 新公共 API 有中文 `///` 注释。
+- [x] 无 Provider raw identity/plan 语义泄漏到 Store/ViewModel/UI。
+- [x] 活跃 Provider 的 live/replay/history mutable state 隔离。
 - [ ] 已退役 Provider 不可从 UI、配置恢复或组合路径进入运行时，且用户数据未改写。
 - [ ] 定向测试、`flutter analyze`、最终 `flutter test` 通过。
-- [ ] 手测记录包含版本和诊断结果。
-- [ ] 对应工程文档同步。
+- [x] 手测记录包含版本和诊断结果。
+- [x] 对应工程文档同步。
 - [ ] PR 描述包含回滚点和已知限制。
 
 ---
@@ -1212,7 +1299,7 @@ Store 行为切换放进同一个不可独立回滚的 PR。
 - [x] app 组合、bootstrap、恢复路径不创建 Cursor provider 或启动 `cursor-agent`。
 - [x] 旧 Cursor 配置可容错读取、明确 unavailable 并安全回退。
 - [x] Cursor 专属运行实现与测试已删除，只保留必要兼容和退役证据。
-- [x] `~/.cursor`、项目 `.cursor`、`cursor_sessions.json` 与用户旧配置未被改写。
+- [ ] `~/.cursor`、项目 `.cursor`、`cursor_sessions.json` 与用户旧配置未被改写。
 
 ### Codex
 
@@ -1237,7 +1324,7 @@ Store 行为切换放进同一个不可独立回滚的 PR。
 - [x] `dart format .` 已执行。
 - [x] `flutter analyze` 已通过。
 - [ ] 定向测试与 `flutter test` 已通过。
-- [ ] H1–H10 手测已记录。
+- [x] H1–H10 手测已记录。
 - [x] 文档同步完成。
 - [ ] 回滚点已写入 PR 描述。
 
@@ -1270,3 +1357,4 @@ Store 行为切换放进同一个不可独立回滚的 PR。
 | 2026-07-17 | 2.2 | 完成 Phase 3A/3B Cursor 退役，记录实现删除、兼容白名单、共享 ACP 调用图与验证结果 |
 | 2026-07-17 | 2.3 | 完成 Phase 4 P4-1 至 P4-6 与自动化门禁；保留未重新执行的 H1/H3/H6/H7/H8/H9 手测项未勾选 |
 | 2026-07-17 | 2.4 | 完成 Phase 5 P5-1 至 P5-5：Grok live/history canonical golden、fresh history reducer、共享 mapper 删除、Cursor 残留审计与文档收口 |
+| 2026-07-17 | 2.5 | 执行 Phase 6 PR-F：完成定向回归、H1–H10、诊断/隐私/静态审计并修复日志泄漏与 H7 提示；因 8 个 Windows golden 失败及 H8 严格证据受并发 Cursor 写入污染，结论为不可发布 |
