@@ -200,11 +200,10 @@ class GrokUpdatesHistoryParser {
           if (text.trim().isEmpty) {
             break;
           }
-          // eventId 只标识单次 Grok 更新；同一 prompt 的连续 thought 必须
-          // 聚合为一个 reasoning item，避免历史恢复后膨胀成几十条「思考」。
           final itemId =
-              _firstNonEmpty(<Object?>[update['messageId']]) ??
-              'thought-${promptId ?? current!.id}';
+              update['messageId']?.toString() ??
+              eventId ??
+              'thought-${current!.id}-${current!.entries.length}';
           current!.addOrMergeThought(id: itemId, text: text, raw: update);
 
         case 'tool_call':

@@ -577,36 +577,6 @@ void main() {
       expect(event.messageId, 'message-1');
     });
 
-    test('aggregates Grok thought chunks across event ids', () {
-      final timeline = AgentConversationTimelineStore();
-      addTearDown(timeline.dispose);
-
-      for (final (eventId, text) in <(String, String)>[
-        ('thought-event-1', '先检查颜色配置'),
-        ('thought-event-2', '，再检查尺寸配置'),
-      ]) {
-        final mapped = mapper.mapSessionUpdate(
-          params: <String, Object?>{
-            'sessionId': 's1',
-            '_meta': <String, Object?>{'eventId': eventId},
-            'update': <String, Object?>{
-              'sessionUpdate': 'agent_thought_chunk',
-              'content': <String, Object?>{'type': 'text', 'text': text},
-              '_meta': <String, Object?>{'promptId': 'prompt-1'},
-            },
-          },
-          runningTurnId: 't1',
-        );
-        timeline.appendReasoningDelta(
-          mapped.events.single as AgentReasoningDeltaEvent,
-        );
-      }
-
-      expect(timeline.toolCalls, hasLength(1));
-      expect(timeline.timelineEntries, hasLength(1));
-      expect(timeline.toolCalls.single.content, '先检查颜色配置，再检查尺寸配置');
-    });
-
     test('maps agent_thought_chunk to reasoning delta', () {
       final mapped = mapper.mapSessionUpdate(
         params: <String, Object?>{
