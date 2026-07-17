@@ -10,7 +10,7 @@ import '../../../../../testing/fixture_reader.dart';
 import 'grok_canonical_signature.dart';
 
 void main() {
-  test('Grok live/history share the complete canonical signature golden', () {
+  test('Grok live/history share the complete canonical signature', () {
     final fixture = readFixtureJsonMap(
       'agent_stream_identity/grok_history.json',
     );
@@ -74,7 +74,7 @@ void main() {
 List<List<AgentEvent>> _mapLiveTurns(List<Map<String, Object?>> fixtureTurns) {
   final mapper = GrokSessionUpdateMapper();
   const runtimeScope = AgentRuntimeScope(
-    runtimeId: 'grok-live-golden',
+    runtimeId: 'grok-live-canonical-regression',
     connectionEpoch: 73,
   );
   final result = <List<AgentEvent>>[];

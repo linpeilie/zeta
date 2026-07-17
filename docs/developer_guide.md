@@ -170,7 +170,7 @@ windows/
     调度顺序和错误映射；已迁移能力域至少补 `AgentProviderBundle` 端口一致性测试，并
     回归 `AgentConversationViewModel` / `ProjectThreadsController` 的使用路径。
 11. 为流式 Provider 增加 adapter/reducer 序列测试；若同时支持 history/replay，必须使用
-    独立 reducer 实例，并用完整 canonical signature golden 比较相对顺序。Store 只按
+    独立 reducer 实例，并用完整 canonical signature regression 比较相对顺序。Store 只按
     entryId/tool id dumb merge，新增 Provider 不得修改 Store 来补叙事规则。
 
 注意：默认策略应保持保守，不自动授权命令执行或文件写入。

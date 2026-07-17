@@ -401,7 +401,7 @@ IDE 会话状态目前版本为 2，持久化内容包括：
   保存失败回滚/重试，以及 Popover 键盘、动画与下一回合提示。
 - JSON-RPC stdio transport。
 - Codex provider 事件映射。
-- Grok decoder/adapter/reducer、live/history 状态隔离、canonical ordering golden、history
+- Grok decoder/adapter/reducer、live/history 状态隔离、canonical ordering regression、history
   reader 只读性，以及 TimelineStore 的 dumb merge/history 应用顺序。
 - Cursor 旧配置 fallback、运行时不可达、process spy 与用户数据未改写回归；历史证据
   见 `docs/cursor_acp_release_validation.md`。

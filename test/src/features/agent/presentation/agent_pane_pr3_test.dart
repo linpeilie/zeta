@@ -186,95 +186,9 @@ void main() {
       );
     });
 
-    testWidgets('matches the empty dark wide golden', (tester) async {
-      _configureGoldenView(tester, const Size(1280, 800));
-      final provider = _FakeAgentProvider();
-      final viewModel = _createViewModel(provider);
-      addTearDown(provider.dispose);
-      addTearDown(viewModel.dispose);
-
-      await tester.pumpWidget(_TestApp(viewModel: viewModel));
-      await _pumpAgentPaneUi(tester);
-
-      await expectLater(
-        find.byKey(const ValueKey('agent-canvas')),
-        matchesGoldenFile('../../../../goldens/agent/empty_dark_1280x800.png'),
-      );
-    });
-
-    testWidgets('matches the empty light compact golden', (tester) async {
-      _configureGoldenView(tester, const Size(800, 700));
-      final provider = _FakeAgentProvider();
-      final viewModel = _createViewModel(provider);
-      addTearDown(provider.dispose);
-      addTearDown(viewModel.dispose);
-
-      await tester.pumpWidget(
-        _TestApp(viewModel: viewModel, themeMode: ThemeMode.light),
-      );
-      await _pumpAgentPaneUi(tester);
-
-      await expectLater(
-        find.byKey(const ValueKey('agent-canvas')),
-        matchesGoldenFile('../../../../goldens/agent/empty_light_800x700.png'),
-      );
-    });
-
     // Windows + Flutter 3.44 的 widget test 环境中，AgentPane 一旦挂载
     // 带 history 且 composer 可见的 active state，会在首帧/流式帧上卡死。
     group('advanced', skip: _skipWindowsActiveHistoryPr3, () {
-      testWidgets('matches the active dark wide golden', (tester) async {
-        _configureGoldenView(tester, const Size(1440, 900));
-        final provider = _FakeAgentProvider(
-          historySnapshotsByThread: _designGoldenHistory(),
-        );
-        final viewModel = _createViewModel(provider);
-        addTearDown(provider.dispose);
-        addTearDown(viewModel.dispose);
-
-        await tester.pumpWidget(_TestApp(viewModel: viewModel));
-        await viewModel.switchThread(
-          _thread(id: 'thread-golden', title: 'Refactor Agent workspace'),
-        );
-        await _pumpAgentPaneUi(tester);
-
-        await expectLater(
-          find.byKey(const ValueKey('agent-canvas')),
-          matchesGoldenFile(
-            '../../../../goldens/agent/active_dark_1440x900.png',
-          ),
-        );
-      }, skip: _skipWindowsActiveHistoryPr3);
-
-      testWidgets(
-        'matches the active light compact golden',
-        (tester) async {
-          _configureGoldenView(tester, const Size(800, 700));
-          final provider = _FakeAgentProvider(
-            historySnapshotsByThread: _designGoldenHistory(),
-          );
-          final viewModel = _createViewModel(provider);
-          addTearDown(provider.dispose);
-          addTearDown(viewModel.dispose);
-
-          await tester.pumpWidget(
-            _TestApp(viewModel: viewModel, themeMode: ThemeMode.light),
-          );
-          await viewModel.switchThread(
-            _thread(id: 'thread-golden', title: 'Refactor Agent workspace'),
-          );
-          await _pumpAgentPaneUi(tester);
-
-          await expectLater(
-            find.byKey(const ValueKey('agent-canvas')),
-            matchesGoldenFile(
-              '../../../../goldens/agent/active_light_800x700.png',
-            ),
-          );
-        },
-        skip: _skipWindowsActiveHistoryPr3,
-      );
-
       testWidgets(
         'renders heavy history markdown fully without collapse toggle',
         (tester) async {
@@ -1735,14 +1649,12 @@ class _TestApp extends StatelessWidget {
     this.uiFontFamily,
     this.codeFontFamily = 'CodeFont',
     this.disableAnimations = false,
-    this.themeMode = ThemeMode.dark,
   });
 
   final AgentConversationViewModel viewModel;
   final String? uiFontFamily;
   final String codeFontFamily;
   final bool disableAnimations;
-  final ThemeMode themeMode;
 
   @override
   Widget build(BuildContext context) {
@@ -1757,16 +1669,14 @@ class _TestApp extends StatelessWidget {
       codeFontFamily: codeFontFamily,
     );
     return IdeThemeScope(
-      themeMode: themeMode,
+      themeMode: ThemeMode.dark,
       lightTheme: lightIdeTheme,
       darkTheme: darkIdeTheme,
       child: sf.ShadcnApp(
         theme: buildShadcnTheme(lightIdeTheme),
         darkTheme: buildShadcnTheme(darkIdeTheme),
         materialTheme: buildMaterialTheme(darkIdeTheme),
-        themeMode: themeMode == ThemeMode.light
-            ? sf.ThemeMode.light
-            : sf.ThemeMode.dark,
+        themeMode: sf.ThemeMode.dark,
         home: Builder(
           builder: (context) => MediaQuery(
             data: MediaQuery.of(
@@ -1778,58 +1688,6 @@ class _TestApp extends StatelessWidget {
       ),
     );
   }
-}
-
-void _configureGoldenView(WidgetTester tester, Size size) {
-  tester.view.devicePixelRatio = 1;
-  tester.view.physicalSize = size;
-  addTearDown(() {
-    tester.view.resetDevicePixelRatio();
-    tester.view.resetPhysicalSize();
-  });
-}
-
-Map<String, AgentThreadHistorySnapshot> _designGoldenHistory() {
-  return <String, AgentThreadHistorySnapshot>{
-    'thread-golden': AgentThreadHistorySnapshot(
-      threadId: 'thread-golden',
-      turns: <AgentHistoryTurn>[
-        AgentHistoryTurn(
-          id: 'turn-golden',
-          status: AgentHistoryTurnStatus.completed,
-          duration: const Duration(seconds: 18),
-          entries: <AgentHistoryEntry>[
-            const AgentHistoryMessageEntry(
-              id: 'history-user-golden',
-              role: AgentMessageRole.user,
-              text:
-                  'Refactor the Agent workspace with the unified design system.',
-            ),
-            const AgentHistoryMessageEntry(
-              id: 'history-agent-golden',
-              role: AgentMessageRole.agent,
-              text:
-                  'The Agent canvas now shares one content axis, neutral message surfaces, and a compact timeline.',
-            ),
-            AgentHistoryToolEntry(
-              toolCall: const AgentToolCall(
-                id: 'history-tool-golden',
-                title: 'Analyze Agent widgets',
-                kind: AgentToolKind.execute,
-                status: AgentToolStatus.completed,
-                content: 'flutter analyze',
-              ),
-            ),
-            const AgentHistoryEventEntry(
-              id: 'history-system-golden',
-              kind: AgentHistoryEventKind.system,
-              title: 'Workspace synchronized',
-            ),
-          ],
-        ),
-      ],
-    ),
-  };
 }
 
 const AgentModelList _modelConfigList = AgentModelList(

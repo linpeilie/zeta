@@ -186,7 +186,7 @@ phase；被正文、tool、plan 或交互打断后的 reasoning 必须使用新 
 - eventId、messageId 稳定性和 delta/snapshot 语义必须由带 Provider/CLI 版本的脱敏
   fixture 证明；缺少真实证据时明确阻塞对应门禁，禁止复制其他 Provider 的假设。
 - History parser 只能只读来源文件；Grok 每次解析必须创建 fresh reducer，缺少稳定 turn id
-  时使用确定性的 history turn ordinal。live/history golden 必须逐位置比较 turn/entry
+  时使用确定性的 history turn ordinal。live/history canonical regression 必须逐位置比较 turn/entry
   ordinal、entry type、message/reasoning phase、source id、规范化文本和 tool kind/status。
 - Cursor 已退役，不参与 catalog、UI、Provider 组合、live/replay/load、ACP 扩展或进程启动。
   仅允许保留旧配置 decode/fallback、明确 unavailable、退役证据和用户数据未改写回归；
