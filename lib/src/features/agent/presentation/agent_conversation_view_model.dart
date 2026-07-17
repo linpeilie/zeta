@@ -358,11 +358,8 @@ class AgentConversationViewModel extends ChangeNotifier {
       activeCapabilities.canCompactThread;
 
   /// 可切换的全局 provider 列表（已启用）。
-  List<AgentProviderConfig> get availableProviders => providerController
-      .settings
-      .providers
-      .where((provider) => provider.enabled)
-      .toList(growable: false);
+  List<AgentProviderConfig> get availableProviders =>
+      providerController.enabledProviders;
 
   /// 切换 active provider（双后端共存）。
   Future<void> switchActiveProvider(String providerId) async {
@@ -666,10 +663,18 @@ class AgentConversationViewModel extends ChangeNotifier {
     _settingsLoaded = true;
     try {
       await providerController.loadSettings();
-      _status = AgentProviderStatus(
-        state: AgentProviderConnectionState.idle,
-        message: '$activeProviderName ready',
-      );
+      final unavailableReason = providerController.unavailableSelectionReason;
+      if (unavailableReason != null) {
+        _markUnavailable(
+          'Cursor Agent unavailable',
+          details: unavailableReason,
+        );
+      } else {
+        _status = AgentProviderStatus(
+          state: AgentProviderConnectionState.idle,
+          message: '$activeProviderName ready',
+        );
+      }
       _log.fine('Loaded Agent provider settings: $activeProviderId');
     } catch (error, stackTrace) {
       _log.warning('Could not load Agent provider settings', error, stackTrace);
@@ -688,6 +693,12 @@ class AgentConversationViewModel extends ChangeNotifier {
   /// 使输入框下方的模型/思考/速率控件在用户发送消息前就可用。
   Future<void> loadModels() async {
     await loadSettings();
+    if (!providerController.hasRuntimeProvider) {
+      _modelsRefreshing = false;
+      _modelRefreshError = null;
+      _publishUiChanges(composer: true);
+      return;
+    }
     final config = providerController.activeProviderConfig;
     _modelSelectionController.seedFromConfig(config);
     _permissionSelectionController.seedFromConfig(config);
@@ -1401,11 +1412,18 @@ class AgentConversationViewModel extends ChangeNotifier {
         _threadOpenPhase = AgentThreadOpenPhase.openFailed;
         _currentThreadTitle = thread.displayName;
         _timeline.clearConversation();
-        _markError(
-          'Could not open thread',
-          details:
-              'Provider ${thread.providerId} is not enabled; history is read-only or unavailable.',
+        final unavailable = providerController.unavailableReasonForProviderId(
+          thread.providerId,
         );
+        if (unavailable != null) {
+          _markUnavailable('Cursor Agent unavailable', details: unavailable);
+        } else {
+          _markError(
+            'Could not open thread',
+            details:
+                'Provider ${thread.providerId} is not enabled; history is read-only or unavailable.',
+          );
+        }
         return;
       }
       try {

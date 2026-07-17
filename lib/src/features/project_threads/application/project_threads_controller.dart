@@ -858,7 +858,7 @@ class ProjectThreadsController {
   }
 
   Future<AgentProvider?> _ensureProviderEventSubscription() async {
-    if (_disposed) {
+    if (_disposed || !providerController.hasRuntimeProvider) {
       return null;
     }
     final provider = await providerController.activeProvider();

@@ -123,9 +123,9 @@ class AgentProviderConfig {
     arguments: <String>['agent', 'stdio'],
   );
 
-  /// 默认 Cursor CLI ACP stdio 配置。
+  /// 旧 Cursor CLI ACP stdio 配置，仅供兼容解码与 Phase 3B 删除前留档。
   ///
-  /// Cursor 仍处于 Beta 接入阶段，默认关闭，只有用户完成检测后才显式启用。
+  /// Phase 3A 起不再加入产品目录，也不得用于创建运行时。
   static const AgentProviderConfig defaultCursor = AgentProviderConfig(
     id: cursorAgentProviderId,
     displayName: 'Cursor Agent',
@@ -310,7 +310,6 @@ class AgentProviderSettings {
     this.providers = const <AgentProviderConfig>[
       AgentProviderConfig.defaultCodex,
       AgentProviderConfig.defaultGrok,
-      AgentProviderConfig.defaultCursor,
     ],
     this.activeProviderId = defaultAgentProviderId,
   });
@@ -351,8 +350,7 @@ class AgentProviderSettings {
   /// 读取版本化配置。
   ///
   /// 配置缺失、版本不匹配或内容损坏时都返回默认设置，保证 UI 启动不崩溃。
-  /// 旧配置若缺少内置 Grok/Cursor 条目，会自动补齐；Cursor 保持默认关闭，
-  /// 且不会改变原 active provider。
+  /// 旧 Cursor 配置仍会按原字段解码，但不会再自动加入新的产品目录。
   static AgentProviderSettings tryDecode(Object? value) {
     final map = decodeObjectMap(value);
     if (map['version'] != 1) {
@@ -370,7 +368,8 @@ class AgentProviderSettings {
     return AgentProviderSettings(
       providers: List<AgentProviderConfig>.unmodifiable(providers),
       activeProviderId:
-          providers.any((provider) => provider.id == activeProviderId)
+          providers.any((provider) => provider.id == activeProviderId) ||
+              activeProviderId == cursorAgentProviderId
           ? activeProviderId
           : providers.first.id,
     );
@@ -381,7 +380,6 @@ class AgentProviderSettings {
       return const <AgentProviderConfig>[
         AgentProviderConfig.defaultCodex,
         AgentProviderConfig.defaultGrok,
-        AgentProviderConfig.defaultCursor,
       ];
     }
 
@@ -396,7 +394,9 @@ class AgentProviderSettings {
     return providers;
   }
 
-  /// 保证内置 Codex / Grok / Cursor 始终出现（不覆盖用户已有同 id 配置）。
+  /// 保证仍受支持的内置 Codex / Grok 始终出现。
+  ///
+  /// 输入中已有的旧 Cursor 配置会原样保留，但不再为新配置自动补齐。
   static List<AgentProviderConfig> _ensureBuiltinProviders(
     List<AgentProviderConfig> providers,
   ) {
@@ -407,9 +407,6 @@ class AgentProviderSettings {
     }
     if (!ids.contains(AgentProviderConfig.defaultGrok.id)) {
       result.add(AgentProviderConfig.defaultGrok);
-    }
-    if (!ids.contains(AgentProviderConfig.defaultCursor.id)) {
-      result.add(AgentProviderConfig.defaultCursor);
     }
     return result;
   }

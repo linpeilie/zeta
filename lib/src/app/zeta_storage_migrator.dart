@@ -6,7 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zeta/src/core/storage/atomic_text_file.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/agent/data/datasources/acp/cursor_session_index_store.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
@@ -113,12 +112,6 @@ class ZetaStorageMigrator {
     await _copyJsonPreference(
       key: sessionStorageKey,
       target: AtomicTextFile(paths.ideSessionFile),
-      migratedKeys: migratedKeys,
-      existingTargetKeys: existingTargetKeys,
-    );
-    await _copyJsonPreference(
-      key: cursorSessionIndexStorageKey,
-      target: AtomicTextFile(paths.cursorSessionsFile),
       migratedKeys: migratedKeys,
       existingTargetKeys: existingTargetKeys,
     );

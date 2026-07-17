@@ -23,6 +23,9 @@ class ActiveAgentProviderController extends ChangeNotifier {
   final AgentProviderConfigStore configStore;
 
   AgentProviderSettings _settings = const AgentProviderSettings();
+  CursorRetirementResolution _runtimeSelection = CursorRetirementPolicy.resolve(
+    const AgentProviderSettings(),
+  );
   AgentProvider? _provider;
   Future<AgentProviderSettings>? _settingsFuture;
   Future<AgentProvider>? _providerFuture;
@@ -32,26 +35,38 @@ class ActiveAgentProviderController extends ChangeNotifier {
   AgentProviderSettings get settings => _settings;
 
   /// 当前 active provider id。
-  String get activeProviderId => _settings.activeProvider.id;
+  String get activeProviderId => _runtimeSelection.effectiveProvider.id;
 
   /// 当前 active provider 展示名称。
-  String get activeProviderName => _settings.activeProvider.displayName;
+  String get activeProviderName =>
+      _runtimeSelection.effectiveProvider.displayName;
 
   /// 当前 active provider 的配置。
-  AgentProviderConfig get activeProviderConfig => _settings.activeProvider;
+  AgentProviderConfig get activeProviderConfig =>
+      _runtimeSelection.effectiveProvider;
+
+  /// 当前是否存在可安全进入运行时的 Provider。
+  bool get hasRuntimeProvider => _runtimeSelection.hasRuntimeProvider;
+
+  /// 旧 Cursor 选择触发 fallback 时展示给用户的原因。
+  String? get unavailableSelectionReason => _runtimeSelection.unavailableReason;
 
   /// 已启用的 provider 配置（用于跨 provider thread 列表等）。
   List<AgentProviderConfig> get enabledProviders {
     return List<AgentProviderConfig>.unmodifiable(
-      _settings.providers.where((provider) => provider.enabled),
+      CursorRetirementPolicy.enabledRuntimeProviders(_settings.providers),
     );
   }
 
   /// 指定 provider 是否允许创建新的可写会话。
   bool isProviderEnabled(String providerId) {
+    if (CursorRetirementPolicy.isRetiredProviderId(providerId)) {
+      return false;
+    }
     for (final provider in _settings.providers) {
       if (provider.id == providerId) {
-        return provider.enabled;
+        return provider.enabled &&
+            !CursorRetirementPolicy.isRetiredProvider(provider);
       }
     }
     return false;
@@ -69,11 +84,18 @@ class ActiveAgentProviderController extends ChangeNotifier {
 
   /// 查询指定 provider 的能力；共享实例存在时优先返回握手后的动态能力。
   AgentProviderCapabilities capabilitiesForProviderId(String providerId) {
+    final config = providerConfigById(providerId);
+    if (CursorRetirementPolicy.unavailableReasonFor(
+          providerId: providerId,
+          config: config,
+        ) !=
+        null) {
+      return AgentProviderCapabilities.unsupported;
+    }
     final running = _provider;
     if (running != null && running.config.id == providerId) {
       return running.capabilities;
     }
-    final config = providerConfigById(providerId);
     if (config == null) {
       return AgentProviderCapabilities.unsupported;
     }
@@ -86,6 +108,13 @@ class ActiveAgentProviderController extends ChangeNotifier {
   /// [isSharedActiveProvider] 为 false 时必须 [AgentProvider.dispose]。
   Future<AgentProvider> openProvider(AgentProviderConfig config) async {
     await loadSettings();
+    final unavailable = CursorRetirementPolicy.unavailableReasonFor(
+      providerId: config.id,
+      config: config,
+    );
+    if (unavailable != null) {
+      throw UnsupportedError(unavailable);
+    }
     final existing = _provider;
     if (existing != null && existing.config.id == config.id) {
       return existing;
@@ -112,13 +141,15 @@ class ActiveAgentProviderController extends ChangeNotifier {
     if (!providers.any((provider) => provider.id == updated.id)) {
       providers.add(updated);
     }
+    final previousActiveProviderId = activeProviderId;
     _settings = AgentProviderSettings(
       providers: List<AgentProviderConfig>.unmodifiable(providers),
       activeProviderId: _settings.activeProviderId,
     );
+    _applyRuntimeSelection();
 
     final shouldRestartActiveProvider =
-        restartProvider && updated.id == _settings.activeProviderId;
+        restartProvider && updated.id == previousActiveProviderId;
     if (shouldRestartActiveProvider) {
       final creating = _providerFuture;
       if (creating != null) {
@@ -140,6 +171,10 @@ class ActiveAgentProviderController extends ChangeNotifier {
   /// 启用或禁用 provider；禁用时终止当前运行实例。
   Future<void> setProviderEnabled(String providerId, bool enabled) async {
     await loadSettings();
+    final unavailable = unavailableReasonForProviderId(providerId);
+    if (unavailable != null) {
+      throw UnsupportedError(unavailable);
+    }
     final current = _settings.providers.firstWhere(
       (provider) => provider.id == providerId,
       orElse: () => AgentProviderConfig.defaultCodex,
@@ -152,12 +187,11 @@ class ActiveAgentProviderController extends ChangeNotifier {
       restartProvider: !enabled,
     );
     if (!enabled && _settings.activeProviderId == providerId) {
-      final fallback = _settings.providers.firstWhere(
-        (provider) => provider.enabled && provider.id != providerId,
-        orElse: () => current,
-      );
-      if (fallback.id != providerId) {
-        await setActiveProvider(fallback.id);
+      final fallbacks = CursorRetirementPolicy.enabledRuntimeProviders(
+        _settings.providers,
+      ).where((provider) => provider.id != providerId);
+      if (fallbacks.isNotEmpty) {
+        await setActiveProvider(fallbacks.first.id);
       }
     }
   }
@@ -165,7 +199,12 @@ class ActiveAgentProviderController extends ChangeNotifier {
   /// 切换当前 active provider，并重建运行实例。
   Future<void> setActiveProvider(String providerId) async {
     await loadSettings();
-    if (_settings.activeProviderId == providerId) {
+    final unavailable = unavailableReasonForProviderId(providerId);
+    if (unavailable != null) {
+      throw UnsupportedError(unavailable);
+    }
+    if (_settings.activeProviderId == providerId &&
+        activeProviderId == providerId) {
       return;
     }
     final exists = _settings.providers.any(
@@ -192,6 +231,7 @@ class ActiveAgentProviderController extends ChangeNotifier {
     await existing?.dispose();
 
     _settings = _settings.copyWith(activeProviderId: providerId);
+    _applyRuntimeSelection();
     await configStore.save(_settings);
     _log.info('Switched active Agent provider to $providerId');
     _notify();
@@ -204,7 +244,7 @@ class ActiveAgentProviderController extends ChangeNotifier {
     AgentModelSelection selection,
     Map<String, AgentModelPreference> preferences,
   ) async {
-    final providerId = _settings.activeProvider.id;
+    final providerId = activeProviderId;
     final updatedProviders = _settings.providers.map((provider) {
       if (provider.id != providerId) {
         return provider;
@@ -216,11 +256,12 @@ class ActiveAgentProviderController extends ChangeNotifier {
     }).toList();
     final updatedSettings = AgentProviderSettings(
       providers: List<AgentProviderConfig>.unmodifiable(updatedProviders),
-      activeProviderId: providerId,
+      activeProviderId: _settings.activeProviderId,
     );
     try {
       await configStore.save(updatedSettings);
       _settings = updatedSettings;
+      _applyRuntimeSelection();
       _log.fine('Persisted model selection for provider $providerId');
     } catch (error, stackTrace) {
       _log.warning('Could not persist model selection', error, stackTrace);
@@ -233,7 +274,7 @@ class ActiveAgentProviderController extends ChangeNotifier {
   Future<void> persistPermissionSelection(
     AgentPermissionSelection selection,
   ) async {
-    final providerId = _settings.activeProvider.id;
+    final providerId = activeProviderId;
     final updatedProviders = _settings.providers.map((provider) {
       if (provider.id != providerId) {
         return provider;
@@ -246,8 +287,9 @@ class ActiveAgentProviderController extends ChangeNotifier {
     }).toList();
     _settings = AgentProviderSettings(
       providers: List<AgentProviderConfig>.unmodifiable(updatedProviders),
-      activeProviderId: providerId,
+      activeProviderId: _settings.activeProviderId,
     );
+    _applyRuntimeSelection();
     try {
       await configStore.save(_settings);
       _log.fine('Persisted permission selection for provider $providerId');
@@ -266,7 +308,11 @@ class ActiveAgentProviderController extends ChangeNotifier {
 
     final future = configStore.load().then((settings) {
       _settings = settings;
-      _log.fine('Loaded active Agent provider ${settings.activeProvider.id}');
+      _applyRuntimeSelection();
+      _log.fine(
+        'Loaded Agent provider selection ${settings.activeProviderId}; '
+        'effective=$activeProviderId',
+      );
       _notify();
       return settings;
     });
@@ -287,8 +333,14 @@ class ActiveAgentProviderController extends ChangeNotifier {
   Future<AgentProvider> activeProvider() async {
     await loadSettings();
 
+    if (!hasRuntimeProvider) {
+      throw StateError(
+        unavailableSelectionReason ?? 'No Agent provider is available',
+      );
+    }
+
     final existing = _provider;
-    if (existing != null && existing.config.id == _settings.activeProvider.id) {
+    if (existing != null && existing.config.id == activeProviderId) {
       return existing;
     }
 
@@ -312,7 +364,7 @@ class ActiveAgentProviderController extends ChangeNotifier {
     final existing = _provider;
     _provider = null;
     await existing?.dispose();
-    final expectedConfig = _settings.activeProvider;
+    final expectedConfig = activeProviderConfig;
     _log.fine('Creating shared Agent provider: ${expectedConfig.id}');
     final provider = providerFactory.create(expectedConfig);
     final actualProviderId = provider.config.id;
@@ -336,6 +388,18 @@ class ActiveAgentProviderController extends ChangeNotifier {
     _provider = provider;
     _notify();
     return provider;
+  }
+
+  /// 返回指定旧 Provider 无法进入运行时的原因。
+  String? unavailableReasonForProviderId(String providerId) {
+    return CursorRetirementPolicy.unavailableReasonFor(
+      providerId: providerId,
+      config: providerConfigById(providerId),
+    );
+  }
+
+  void _applyRuntimeSelection() {
+    _runtimeSelection = CursorRetirementPolicy.resolve(_settings);
   }
 
   @override

@@ -13,7 +13,6 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
 import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart';
-import 'package:zeta/src/features/agent_management/data/cursor_agent_management_repository.dart';
 import 'package:zeta/src/features/agent_management/data/grok_agent_management_repository.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
@@ -139,7 +138,6 @@ class _IdeHomeState extends State<IdeHome> {
         AgentDefinition.grok.id: GrokAgentManagementRepository(
           providerFactory: widget.agentProviderFactory,
         ),
-        AgentDefinition.cursor.id: CursorAgentManagementRepository(),
       },
       providerController: _shellController.agentProviderController,
       runtimeStateProvider: _managementRuntimeState,

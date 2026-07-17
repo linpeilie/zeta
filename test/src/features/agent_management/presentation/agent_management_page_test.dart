@@ -150,88 +150,26 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets('marks Cursor as Beta and prompts before first enable', (
-    tester,
-  ) async {
+  testWidgets('removes every Cursor Agent management entry', (tester) async {
     final harness = _CursorManagementHarness.create();
     addTearDown(harness.dispose);
-    await tester.runAsync(harness.managementController.initialize);
-    await tester.runAsync(harness.managementController.detect);
+    await tester.runAsync(
+      () => harness.managementController.initialize(autoDetect: true),
+    );
+    await tester.pump();
 
     await _pumpManagementPage(tester, controller: harness.managementController);
-    expect(find.byKey(const ValueKey('agent-row-cursor')), findsOneWidget);
-    expect(find.text('Beta'), findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('agent-row-cursor')));
-    await tester.pump();
-    final enableButton = tester.widget<sf.OutlineButton>(
-      find.widgetWithText(sf.OutlineButton, '启用 Agent'),
-    );
-    expect(enableButton.onPressed, isNotNull);
-    enableButton.onPressed!();
-    await tester.pumpAndSettle();
-    expect(find.text('Cursor Agent Beta 兼容性说明'), findsOneWidget);
-  });
-
-  testWidgets('skips the Cursor Beta prompt after acknowledgement', (
-    tester,
-  ) async {
-    final harness = _CursorManagementHarness.create(
-      betaWarningAcknowledged: true,
-    );
-    addTearDown(harness.dispose);
-    await tester.runAsync(harness.managementController.initialize);
-    await tester.runAsync(harness.managementController.detect);
-
-    await _pumpManagementPage(tester, controller: harness.managementController);
-    await tester.tap(find.byKey(const ValueKey('agent-row-cursor')));
-    await tester.pump();
-    final enableButton = tester.widget<sf.OutlineButton>(
-      find.widgetWithText(sf.OutlineButton, '启用 Agent'),
-    );
-    expect(enableButton.onPressed, isNotNull);
-    enableButton.onPressed!();
-    await tester.pumpAndSettle();
-    expect(find.text('Cursor Agent Beta 兼容性说明'), findsNothing);
-  });
-
-  test(
-    'persists the Cursor Beta acknowledgement in provider settings',
-    () async {
-      final harness = _CursorManagementHarness.create();
-      addTearDown(harness.dispose);
-      await harness.managementController.initialize();
-
-      await harness.managementController.acknowledgeBetaCompatibilityWarning();
-
-      expect(
-        harness.providerController
-            .providerConfigById(cursorAgentProviderId)
-            ?.extra['betaCompatibilityWarningAcknowledged'],
-        isTrue,
-      );
-    },
-  );
-
-  testWidgets('explains global and project Cursor configuration boundaries', (
-    tester,
-  ) async {
-    final harness = _CursorManagementHarness.create();
-    addTearDown(harness.dispose);
-    await tester.runAsync(harness.managementController.initialize);
-    await tester.runAsync(harness.managementController.detect);
-
-    await _pumpManagementPage(tester, controller: harness.managementController);
-    await tester.tap(find.byKey(const ValueKey('agent-row-cursor')));
-    await tester.pump();
-    await tester.tap(find.text('配置'));
-    await tester.pumpAndSettle();
-
+    expect(find.byKey(const ValueKey('agent-row-cursor')), findsNothing);
+    expect(find.textContaining('Cursor'), findsNothing);
+    expect(find.text('Beta'), findsNothing);
+    expect(find.byKey(const ValueKey('agent-open-logs-button')), findsNothing);
     expect(
       find.byKey(const ValueKey('cursor-config-boundary-notice')),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(find.textContaining('.cursor/mcp.json'), findsOneWidget);
+    expect(harness.managementController.agents, isEmpty);
+    expect(harness.repository.detectCalls, 0);
+    expect(tester.takeException(), isNull);
   });
 }
 
@@ -307,28 +245,24 @@ class _ManagementHarness {
 
 class _CursorManagementHarness {
   _CursorManagementHarness({
+    required this.repository,
     required this.providerController,
     required this.managementController,
   });
 
+  final _FakeCursorManagementRepository repository;
   final ActiveAgentProviderController providerController;
   final AgentManagementController managementController;
 
-  static _CursorManagementHarness create({
-    bool betaWarningAcknowledged = false,
-  }) {
+  static _CursorManagementHarness create() {
     final provider = FakeAgentProvider();
+    final repository = _FakeCursorManagementRepository();
     final providerController = ActiveAgentProviderController(
       providerFactory: FakeAgentProviderFactory(provider),
       configStore: MemoryAgentProviderConfigStore(
         AgentProviderSettings(
           providers: <AgentProviderConfig>[
-            AgentProviderConfig.defaultCursor.copyWith(
-              extra: <String, Object?>{
-                if (betaWarningAcknowledged)
-                  'betaCompatibilityWarningAcknowledged': true,
-              },
-            ),
+            AgentProviderConfig.defaultCursor.copyWith(enabled: true),
           ],
           activeProviderId: cursorAgentProviderId,
         ),
@@ -336,11 +270,12 @@ class _CursorManagementHarness {
     );
     final managementController = AgentManagementController(
       repositories: <String, AgentCliManagementRepository>{
-        cursorAgentProviderId: _FakeCursorManagementRepository(),
+        cursorAgentProviderId: repository,
       },
       providerController: providerController,
     );
     return _CursorManagementHarness(
+      repository: repository,
       providerController: providerController,
       managementController: managementController,
     );
@@ -353,6 +288,8 @@ class _CursorManagementHarness {
 }
 
 class _FakeCursorManagementRepository implements AgentCliManagementRepository {
+  int detectCalls = 0;
+
   @override
   String get agentId => cursorAgentProviderId;
 
@@ -365,6 +302,7 @@ class _FakeCursorManagementRepository implements AgentCliManagementRepository {
     required bool enabled,
     AgentDetectionProgressCallback? onProgress,
   }) async {
+    detectCalls += 1;
     return ManagedAgent.cursor(enabled: enabled).copyWith(
       installationState: AgentInstallationState.installed,
       accountState: AgentAccountState.loggedIn,

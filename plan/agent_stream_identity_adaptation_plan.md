@@ -1,11 +1,11 @@
 # Agent 流式身份与 Provider 适配层边界整改实施方案
 
-> 状态：可排期实施
-> 版本：2.0
+> 状态：Phase 0–2 已完成；Phase 3 Cursor 退役待实施
+> 版本：2.1
 > 编制日期：2026-07-17
 > 目标版本：当前主干；Codex app-server 以本机 `0.144.1` stable schema 为实现基线
 > 关联问题：Grok 实时时间线操作沉底、思考按 eventId 碎片化、共享层承担 Provider 叙事策略
-> 核心约束：Grok 与 Cursor 的 live/replay 身份策略未完成前，禁止删除 TimelineStore 现有兜底
+> 核心约束：Cursor 必须先从运行时软下线、再删除实现；Phase 3 全部门禁完成前，禁止删除 TimelineStore 现有兜底
 
 ---
 
@@ -13,7 +13,7 @@
 
 ### 1.1 一句话目标
 
-**“某个流式片段属于哪一条时间线条目”由 Grok、Cursor、Codex 各自的数据适配层决定；application/presentation 只按规范化身份合并，不再推测消息边界。**
+**活跃 Provider 的流式身份由 Grok、Codex 各自的数据适配层决定；Cursor 因缺少可验证的稳定协议契约而退役，application/presentation 只按规范化身份合并。**
 
 ### 1.2 本次确定的架构决策
 
@@ -21,12 +21,13 @@
 |----|------|------|
 | ADR-1 | 区分 Provider 原始身份与 UI 合并身份 | `sourceItemId` 保存原始协议身份；`entryId` 是规范化时间线身份 |
 | ADR-2 | 保留现有字段名降低改动面 | `AgentMessageDeltaEvent.messageId` 暂不重命名，但语义改为 `entryId`；新增 `sourceMessageId` |
-| ADR-3 | ACP 共享层只解析协议语法 | 新增无状态 `AcpSessionUpdateDecoder`；叙事边界由 Grok/Cursor reducer 决定 |
-| ADR-4 | 状态按运行资源隔离 | live、replay、history 复用同一算法，但必须使用不同实例和状态 |
+| ADR-3 | ACP 共享层只解析协议语法 | 无状态 `AcpSessionUpdateDecoder` 只负责 typed 解码；叙事边界由活跃 Provider adapter/reducer 决定 |
+| ADR-4 | 状态按运行资源隔离 | 活跃 Provider 的 live、replay、history 复用算法时必须使用不同实例和状态 |
 | ADR-5 | 推理按连续 phase 聚合 | 不按 eventId 拆卡；被正文、工具、计划或交互打断后，新 reasoning phase 使用新 `itemId` |
-| ADR-6 | 所有 Provider 准备完成后再简化 Store | Grok + Cursor live/replay 通过门禁，Codex 契约测试通过，才删除 open/`#segN` |
+| ADR-6 | 所有活跃 Provider 准备完成后再简化 Store | Grok identity 已通过门禁、Cursor 完成退役、Codex 契约测试通过后，才删除 open/`#segN` |
 | ADR-7 | 不使用 raw payload 控制统一层兼容逻辑 | 禁止 `raw['_legacyStreamSegment']`；回滚以 PR revert 或 app 组合层 typed 配置完成 |
 | ADR-8 | plan 等展示语义必须显式进入 domain event | 新增中立 `AgentMessageKind`，Store/ViewModel 不再从 provider raw 猜 plan |
+| ADR-9 | Cursor 采用两阶段退役 | 先从目录、UI、组合与进程启动路径软下线，再删除实现；保留旧配置容错，不删除任何用户 Cursor 数据 |
 
 ### 1.3 最终数据流
 
@@ -35,10 +36,7 @@ Raw ACP notification
         ↓
 AcpSessionUpdateDecoder（共享、无状态、只解析协议）
         ↓
-┌─────────────────────┬──────────────────────┐
-│ GrokEventAdapter    │ CursorEventAdapter   │
-│ GrokStreamIdentity  │ CursorStreamIdentity │
-└─────────────────────┴──────────────────────┘
+GrokEventAdapter / GrokStreamIdentity
         ↓ 语义完整 AgentEvent（entryId 已确定）
 AgentEventStreamBuffer（同 entryId 批内合并，不猜边界）
         ↓
@@ -51,19 +49,27 @@ Codex app-server notification
 CodexNotificationMapper（itemId → entryId，维持 item 生命周期）
         ↓
 同一条统一链路
+
+Legacy Cursor config / selected provider
+        ↓
+CursorRetirementPolicy（容错读取、明确 unavailable、安全回退）
+        ↓
+不创建 provider、不启动 cursor-agent、不读取或改写 Cursor 会话数据
 ```
 
 ### 1.4 实施总顺序
 
 ```text
-Phase 0  契约、fixture 与基线
+Phase 0  契约、fixture 与基线 ✅
    ↓
-Phase 1  Domain 事件补全 + 无状态 ACP decoder
+Phase 1  Domain 事件补全 + 无状态 ACP decoder ✅
    ↓
-Phase 2  Grok live identity ─────┐
-                                 ├─ 可并行
-Phase 3  Cursor live/replay identity ┘
-   ↓ 两者均通过门禁
+Phase 2  Grok live identity ✅
+   ↓
+Phase 3A Cursor 软下线 ✅
+   ↓
+Phase 3B Cursor 实现删除
+   ↓ Cursor 退役门禁通过
 Phase 4  原子性简化 EventBuffer/TimelineStore + Codex 回归
    ↓
 Phase 5  Grok history 对齐 + 共享层清理 + 文档同步
@@ -113,13 +119,14 @@ ACP agent_message_chunk 可能没有稳定 messageId
 
 - Agent 正文、reasoning、tool、plan 和交互条目的身份与叙事边界。
 - `AgentMessageDeltaEvent` / `AgentMessageUpdatedEvent` 的规范化身份和显式消息 kind。
-- ACP 原始通知的无状态解码与 Grok/Cursor 厂商投影。
-- Grok live identity、Cursor live identity、Cursor `session/load` replay identity。
+- ACP 原始通知的无状态解码与 Grok 厂商投影。
+- Grok live identity，以及 Cursor 软下线、旧配置兼容和实现删除。
 - Grok updates history 与 live 的语义对齐。
 - `AgentEventStreamBuffer` 的顺序与合并契约。
 - `AgentConversationTimelineStore` open/`#segN` 启发式删除。
 - cancel、失败、断连、重连、迟到事件和重复事件的状态生命周期。
 - 单元测试、provider 测试、Store 测试、Widget 回归、手测和文档门禁。
+- Cursor provider 目录/UI/组合/进程入口清理，以及退役后的兼容回归。
 
 ### 3.2 有限纳入的用户消息
 
@@ -136,18 +143,21 @@ ACP agent_message_chunk 可能没有稳定 messageId
 - JSON-RPC transport、进程启动、认证或权限协议重写。
 - Claude Code Provider 实现；但其未来接入必须遵守本方案的 identity 契约。
 - 大规模目录迁移或第三方状态管理引入。
+- Cursor 协议继续适配、真实 fixture 补采或未来重新启用；重新支持必须另立方案并重新完成协议门禁。
+- 删除、迁移或重写 `~/.cursor`、项目 `.cursor`、`~/.zeta/state/cursor_sessions.json` 或用户已有 Cursor 配置。
 
 ### 3.4 依赖与前置输入
 
 | 输入 | 必需时间 | 说明 |
 |------|----------|------|
 | Grok 真实/脱敏 `session/update` 序列 | Phase 0 | 至少覆盖 text/tool/text、thought、turn_completed |
-| Cursor 真实/脱敏 live 序列 | Phase 0 | 明确 messageId、eventId、tool 更新的实际稳定性 |
-| Cursor `session/load` replay 序列 | Phase 0 | 确认 replay 与 live 字段差异 |
+| Cursor synthetic fixture 与 blocker 记录 | 已具备 | 作为退役决策证据保留，不再作为活跃 Provider 实现门禁 |
+| Cursor 运行入口与旧配置引用清单 | Phase 3A | 覆盖 provider catalog、UI、app 组合、bootstrap、持久化配置与 fallback |
+| Cursor 实现引用/用户数据边界清单 | Phase 3B | CodeGraph/`rg` 审计删除范围，并证明不触碰外部 Cursor 数据 |
 | Codex 0.144.1 stable schema | 已具备 | 作为当前实现基线，不读取 experimental API |
 | 现有关键测试清单 | Phase 0 | 记录迁移前通过状态和预期行为 |
 
-若 Cursor fixture 缺失，Phase 3 的实现可以开始搭骨架，但不得通过 Phase 3 门禁，也不得进入 Phase 4。
+Cursor 真实 fixture 缺失不再阻塞 identity 实现，因为 Cursor 不再作为活跃 Provider；它转化为 ADR-9 的退役理由。Phase 4 仍必须等待 Phase 3A、3B 全部门禁完成，确保不存在可受 Store 简化影响的 Cursor 运行路径。
 
 ---
 
@@ -158,7 +168,7 @@ ACP agent_message_chunk 可能没有稳定 messageId
 | S1 | Grok `text → tool → text` 最终条目顺序严格为 `Message, Tool, Message` |
 | S2 | Grok 连续 reasoning chunk 不因 eventId 不同而碎卡 |
 | S3 | `thought → tool → thought` 保留两个连续 reasoning phase 的真实顺序，不回填到 tool 之前 |
-| S4 | Cursor live 与 replay 使用独立状态实例，并输出相同的语义分段规则 |
+| S4 | Cursor 不再出现在可选 Provider 中，任何运行路径都不能实例化 provider 或启动 `cursor-agent` |
 | S5 | TimelineStore 不再读取最后一条 entry 推断流边界，不再生成 `#segN` |
 | S6 | EventBuffer 只按规范化 id 合并，不能跨 tool/reasoning/plan/interaction 合并已关闭条目 |
 | S7 | Codex 同一 itemId 的 delta 顺序拼接；不同 itemId 永不粘连；completed 更新同一条目 |
@@ -167,6 +177,8 @@ ACP agent_message_chunk 可能没有稳定 messageId
 | S10 | Grok live/history 的条目类型、相对顺序、文本和 phase 分段一致 |
 | S11 | Store/ViewModel 不再从 raw payload 识别 plan 或决定 identity |
 | S12 | `flutter analyze`、相关定向测试和最终 `flutter test` 全部通过 |
+| S13 | 旧 Cursor 配置可容错读取并安全回退；外部 `.cursor` 与 `cursor_sessions.json` 保持原样 |
+| S14 | Cursor 专属运行实现与测试删除完成，仓库只保留必要的 legacy 配置兼容和退役决策证据 |
 
 ---
 
@@ -199,13 +211,9 @@ lib/src/features/agent/
     grok_stream_identity.dart                 # 新增：Grok reducer/state
     grok_session_update_mapper.dart           # 新增或由 notification mapper 承担
     grok_acp_notification_mapper.dart         # xAI + Grok adapter 门面
-    cursor_stream_identity.dart               # 新增：Cursor reducer/state
-    cursor_session_update_mapper.dart         # 新增
     codex_notification_mapper.dart            # 保持 Codex 私有协议映射
   data/datasources/acp/
     grok_acp_agent_provider.dart               # 生命周期、交互 boundary 接线
-    cursor_acp_agent_provider.dart             # 生命周期、replay factory 接线
-    acp_session_replay_collector.dart          # 接收 fresh mapper/reducer 实例
   data/datasources/local_history/
     grok_updates_history_parser.dart           # 使用独立 history reducer
   application/
@@ -213,11 +221,15 @@ lib/src/features/agent/
     agent_conversation_timeline_store.dart     # dumb merge
 ```
 
+Phase 3B 应删除 Cursor 专属 provider、mapper、进程启动、session locator/index、诊断和测试；
+`acp_session_replay_collector.dart` 等共享命名文件只有在引用审计证明仅服务 Cursor 时才删除，
+不得误删 Grok 或其他活跃 Provider 仍依赖的 ACP 能力。
+
 ### 5.3 为什么不采用“每个厂商复制一份完整 ACP switch”
 
 标准 ACP kind、content、tool status、usage 等语法解析仍有共享价值。完整复制会导致：
 
-- Grok/Cursor 对标准字段的兼容修复漂移。
+- 活跃 ACP Provider 对标准字段的兼容修复漂移。
 - 未知 kind、宽容解码和 tool 映射需要重复维护。
 - Provider 差异与协议语法纠缠，难以单测。
 
@@ -403,7 +415,8 @@ abstract interface class AcpStreamIdentityReducer {
 }
 ```
 
-允许 Grok/Cursor 实现不同策略；不提供带叙事假设的默认实现。
+允许活跃 ACP Provider 实现各自策略；不提供带叙事假设的默认实现。Cursor 退役后不得
+为了保留其运行路径而新增 reducer 实现。
 
 mapper factory 最小接口：
 
@@ -469,14 +482,17 @@ text(a), thought(b), text(c)
 6. `_x.ai/session/update` 与标准 `session/update` 进入同一 session/turn reducer。
 7. `session/prompt` RPC 完成与 `_x.ai` turn_completed 采用“首个终态生效”规则。
 
-### 7.6 Cursor 规则
+### 7.6 Cursor 退役规则
 
-1. 有 messageId：作为 source id，仍经过 entry segment 规则。
-2. 无 messageId：连续 text 使用当前 segment；遇可见 boundary 后新建 segment。
-3. eventId 默认仅用于去重；只有 fixture 明确证明其表示消息边界时，才可在 Cursor adapter 内使用。
-4. reasoning 使用连续 phase 规则，不复制 Grok 的 xAI 假设。
-5. live 与 `session/load` replay 使用同一 reducer 实现，但由 factory 创建不同实例。
-6. replay reducer 在 collector `build()` 后立即 dispose，不得写回 live reducer map。
+1. 不再解释 Cursor `messageId`、`eventId`、delta 或 snapshot 语义，也不新增协议适配。
+2. 先从 provider catalog、UI、app 组合、bootstrap 与进程启动路径软下线，确认不可达后再删除实现。
+3. 旧配置仍可容错解码；若最后选择的是 Cursor，必须显示 unavailable 状态并安全回退到可用 Provider，
+   不得静默删改用户配置。
+4. 退役过程不得读取、迁移、清空或重写 `~/.cursor`、项目 `.cursor` 与
+   `~/.zeta/state/cursor_sessions.json`。
+5. Phase 3A 门禁通过后，删除 Cursor 专属 provider、mapper、replay/load、进程、诊断及对应运行测试；
+   只保留必要的旧配置兼容测试和退役决策证据。
+6. synthetic fixture 与缺少真实 fixture 的分析作为历史证据保留，但不再作为运行实现或 Phase 4 的协议门禁。
 
 ### 7.7 Codex 规则
 
@@ -507,7 +523,7 @@ idle
 
 ### 8.2 首个终态生效
 
-Grok/Cursor 可能同时从通知与 `session/prompt` RPC 响应得到终态：
+活跃 ACP Provider（当前为 Grok）可能同时从通知与 `session/prompt` RPC 响应得到终态：
 
 1. 第一个可关联当前 turn generation 的终态负责完成 turn。
 2. 后续相同终态视为幂等重复，不再次 emit `AgentTurnCompletedEvent`。
@@ -552,18 +568,14 @@ Grok/Cursor 可能同时从通知与 `session/prompt` RPC 响应得到终态：
 | typed decoded update | live runningTurn map |
 | golden fixture 断言工具 | connection epoch state |
 
-### 9.2 Cursor replay 接线
+### 9.2 Cursor 退役与数据保留
 
-目标形态：
+Cursor 软下线后不再创建 live/replay mapper，也不再执行 `session/load`。Phase 3B 通过
+CodeGraph 与 `rg` 审计 `AcpSessionReplayCollector`：若它只被 Cursor 使用则一并删除；若仍被
+活跃 Provider 使用，则保留其共享能力，但不得含 Cursor 分支。
 
-```dart
-final collector = AcpSessionReplayCollector(
-  threadId: sessionId,
-  mapper: cursorMapperFactory.createReplay(sessionId: sessionId),
-);
-```
-
-禁止继续把 provider 正在使用的 live mapper/reducer 实例直接传给 collector。
+退役不是数据迁移。`~/.zeta/state/cursor_sessions.json` 以及 Cursor 自有目录只作为用户数据边界
+保留，Zeta 不应为完成退役而读取、重写或删除这些内容。
 
 ### 9.3 Grok history 对齐
 
@@ -606,14 +618,14 @@ golden 测试不得只比较条目总数；必须比较完整相对顺序。
 | P0-1 | `test/fixtures/agent_stream_identity/` | 增加脱敏 Grok live、Grok history、Cursor live、Cursor replay、Codex 通知 fixture | 每个 fixture 有来源版本和场景说明 |
 | P0-2 | 本方案 + `docs/engineering_standards.md` | 写入 sourceId/entryId、boundary、状态隔离契约 | 文档评审通过 |
 | P0-3 | 现有测试报告 | 运行并记录 mapper/Store/provider/EventBuffer 迁移前结果 | 基线无未知失败 |
-| P0-4 | Cursor fixture 分析记录 | 明确 messageId/eventId 是否稳定、snapshot/delta 语义 | Phase 3 无阻塞未知项 |
+| P0-4 | Cursor fixture 分析记录 | 记录 messageId/eventId 与 delta/snapshot 缺少真实证据的 blocker | 作为 ADR-9 退役决策证据，不假设协议语义 |
 | P0-5 | Codex 协议证据记录 | 记录 0.144.1 stable item 生命周期、delta 和 completed 字段 | 不依赖实验 API |
 
 Phase 0 门禁：
 
 - [x] Grok `text/tool/text` 与 thought fixture 已入库。
-- [ ] Cursor **真实** live/replay fixture 已入库；当前只有从现有 fake/test 构造的
-  synthetic baseline，只允许继续 Phase 1/2，Phase 3 保持 blocked。
+- [x] Cursor 当前只有从现有 fake/test 构造的 synthetic baseline；真实 live/replay fixture
+  缺失及其影响已记录，因此不再实施 Cursor identity，转入两阶段退役。
 - [x] Codex delta/completed fixture 已入库。
 - [x] 所有 fixture 不包含 prompt 正文、token、真实路径或凭据等敏感信息。
 
@@ -621,20 +633,21 @@ Phase 0 执行记录（2026-07-17）：
 
 - [x] P0-1：已在 `test/fixtures/agent_stream_identity/` 增加 Grok live/history、
   Cursor live/replay synthetic、Codex stable 通知 fixture；每个文件记录版本、场景、
-  provenance 和隐私约束。P0-1 仅表示 fixture 产物已建立，不解除 Cursor 真实输入门禁。
+  provenance 和隐私约束。Cursor synthetic fixture 仅作为历史基线和退役决策证据。
 - [x] P0-2：`docs/engineering_standards.md` 已同步 sourceId/entryId、narrative
   boundary、Provider adapter、EventBuffer/TimelineStore 和状态隔离契约。
 - [x] P0-3：迁移前 6 组定向测试共 189 个用例全部通过，记录见
   `test/fixtures/agent_stream_identity/baseline_report.md`。
-- [ ] P0-4：Cursor messageId/eventId 稳定性和 delta/snapshot 语义仍缺真实 fixture
-  证据；blocker、所需输入与影响已记录，但“Phase 3 无阻塞未知项”完成标准未满足。
+- [x] P0-4：Cursor messageId/eventId 稳定性和 delta/snapshot 语义缺少真实 fixture
+  证据；blocker、所需输入与影响已记录，且没有假设 eventId 语义。该缺口已转化为
+  ADR-9 的退役依据，不再阻塞退役任务。
 - [x] P0-5：已按本机 Codex `0.144.1` stable schema 记录 item lifecycle、
   agentMessage delta 与 item/completed 字段；未使用 experimental API。
 
-Phase 0 总状态：**blocked by Cursor real fixture**。Phase 1/2 可开始；Phase 3 不得通过
-门禁，Phase 4 不得开始。
+Phase 0 总状态：**已完成**。Phase 1/2 已完成；Phase 3 改为 Cursor 两阶段退役。
+Phase 4 仍须等待 Phase 3A、3B 全部门禁通过。
 
-### Phase 1：Domain 补全与无状态 ACP decoder（1–2 人日）
+### Phase 1：Domain 补全与无状态 ACP decoder（已完成，1–2 人日）
 
 目标：先建立不含叙事策略的稳定输入/输出契约，不改变 Store 行为。
 
@@ -654,7 +667,7 @@ Phase 1 门禁：
 - [x] 未知 ACP kind 返回 typed unknown/diagnostic，不抛出导致 Provider 断连。
 - [x] Store 仍保持现状，避免尚未迁移的 Provider 回归。
 
-### Phase 2：Grok identity 下沉（1.5–2.5 人日）
+### Phase 2：Grok identity 下沉（已完成，1.5–2.5 人日）
 
 目标：Grok 对外产出的事件已经具备最终 entryId；Store 兜底暂留但不再是 Grok 正确性的来源。
 
@@ -711,45 +724,74 @@ Phase 2 执行记录（2026-07-17）：
   `collision=0`；`synthetic` 仅记录缺少 source id 时按预期生成的 entryId。
   手测记录未保存 prompt 正文、正文输出或完整 raw payload。
 
-### Phase 3：Cursor identity 与 replay 隔离（1.5–2.5 人日）
+### Phase 3：Cursor 两阶段退役（1.5–3 人日）
 
-目标：Cursor 不再继承 Grok 规则，并保证 `session/load` 不污染 live state。
+目标：先使 Cursor 在产品和运行时中不可选择、不可实例化、不可启动，再删除其专属实现；
+全过程保留旧配置容错，且不触碰任何用户 Cursor 数据。真实 Cursor fixture 不再是本阶段输入。
 
-| 任务 | 文件 | 实施内容 | 测试 |
+#### Phase 3A：软下线
+
+| 任务 | 范围 | 实施内容 | 测试 |
 |------|------|----------|------|
-| P3-1 | `cursor_stream_identity.dart` | 按 Cursor fixture 实现 message segment/reasoning phase | reducer unit tests |
-| P3-2 | `cursor_session_update_mapper.dart` | typed update → AgentEvent；不引用 Grok 类 | mapper fixture tests |
-| P3-3 | `cursor_acp_agent_provider.dart` | live factory、turn lifecycle、interaction boundary 接线 | provider tests |
-| P3-4 | `acp_session_replay_collector.dart` | 移除有状态 mapper 默认值，强制接收 fresh mapper/reducer 实例；build/failure 后 dispose | collector isolation tests |
-| P3-5 | Cursor load 路径 | `createReplay(sessionId)`，禁止传入 live mapper 实例 | live+load concurrency test |
-| P3-6 | Cursor 诊断 | 记录 unknown kind、missing scope、late/duplicate 计数 | diagnostic tests |
-| P3-7 | 手测 | Cursor 新建、普通 prompt、恢复 session、连续 turn | H6–H8 |
+| [x] P3A-1 | provider catalog / 设置 UI / Agent 管理 | 移除 Cursor 可选项、安装/检测/配置入口和支持声明 | catalog、widget、management tests |
+| [x] P3A-2 | `app.dart` / bootstrap / provider factory | 停止创建 `CursorAcpAgentProvider`、`FileCursorSessionIndexStore`、CLI locator 与进程 starter | composition/bootstrap tests |
+| [x] P3A-3 | 持久化 Provider 配置 | 旧配置仍可解码；最后选择 Cursor 时明确 unavailable，并安全回退到可用 Provider | legacy decode/fallback tests |
+| [x] P3A-4 | 用户数据边界 | 对 `~/.cursor`、项目 `.cursor`、`~/.zeta/state/cursor_sessions.json` 建立只读前后快照，退役代码不得读写或删除 | data-boundary regression |
+| [x] P3A-5 | 运行时不可达性 | 验证 UI、deep link/恢复、历史入口和启动流程均不能创建 Cursor provider 或启动 `cursor-agent` | negative path/process-spy tests |
 
-Cursor 必测序列：
+Phase 3A 门禁：
 
-| ID | 输入 | 期望 |
-|----|------|------|
-| C1 | 显式 source messageId 连续 delta | 同 entryId |
-| C2 | 无 messageId 的连续 text | 同当前 segment |
-| C3 | 无 messageId：text, tool, text | 两个 message entryId |
-| C4 | eventId 每 chunk 改变 | 默认不碎卡，除非 fixture 证明 eventId 是消息边界 |
-| C5 | live turn 运行时触发另一个 session/load | replay state 不修改 live 当前 segment |
-| C6 | replay build 后继续 live text | live entryId 连续且未重置 |
-| C7 | replay 失败/取消 | replay state dispose，无残留 collector |
-| C8 | connection epoch 改变 | 旧状态不可接受新通知 |
+- [x] Cursor 不出现在 provider catalog、设置、创建会话和 Agent 管理入口。
+- [x] app 组合与 bootstrap 不实例化 Cursor provider/index/locator，也不启动 `cursor-agent`。
+- [x] 旧 Cursor 配置不会阻塞启动，用户可见 unavailable 原因并回退到可用 Provider。
+- [x] Cursor 外部目录、会话索引和旧配置内容在软下线前后保持原样。
+- [x] 相关定向测试与 `flutter analyze` 通过。
 
-Phase 3 门禁：
+Phase 3A 执行记录（2026-07-17）：
 
-- [ ] Cursor live/replay mapper 由 factory 创建不同实例。
-- [ ] `AcpSessionReplayCollector` 不再默认持有有状态共享 mapper。
-- [ ] Cursor 的 eventId 策略由 fixture 证明，而不是复制 Grok 假设。
-- [ ] 所有 Cursor provider 和 replay collector 测试通过。
+- 产品入口：默认 Provider catalog 仅保留 Codex/Grok；创建 Thread 选择器与 Agent 管理页对旧 Cursor
+  配置做二次过滤，Cursor 安装、检测、配置、日志和 Beta 支持入口均不可见。
+- 组合断开：`app.dart`、默认 factory、Agent 管理组合和 bootstrap 迁移不再构造或引用 Cursor
+  provider、session index、CLI locator、process starter 或 management repository；Phase 3B 实现文件仍保留。
+- 兼容与数据：旧 Cursor 配置和最后选择值继续容错解码；运行时仅内存回退并展示 unavailable 原因，
+  不自动保存；临时目录回归证明用户 Cursor 目录、项目 `.cursor`、Cursor session index 和旧 Provider
+  配置内容前后不变，legacy Cursor index preference 也不会被读取或迁移。
+- 不可达性：Provider 选择、Agent 管理自动检测、旧配置启动、deep link、工作区恢复、历史入口和
+  Provider 聚合均有 negative/process-spy 断言，Cursor provider 创建、CLI locator、进程启动和
+  session-index 写入计数均为 0；H6、H7、H8 的软下线场景可自动验证。
+- 验证：`dart format .`、`flutter analyze`（0 issues）、11 个相关测试文件（141 tests）通过；
+  Phase 3B 前保留的 Cursor provider/locator/starter/index/management 实现测试（47 tests）通过；
+  完整 `flutter test` 的非 golden 测试通过，8 个既有 Workbench/AgentPane golden 在当前 Windows
+  渲染环境存在 0.09%–0.62% 像素差异，单独串行复跑可复现，未更新与本阶段无关的 golden 基线。
+
+#### Phase 3B：删除实现
+
+必须在 Phase 3A 全部门禁通过后开始。
+
+| 任务 | 范围 | 实施内容 | 测试/审计 |
+|------|------|----------|-----------|
+| P3B-1 | CodeGraph + `rg` 引用清单 | 审计 Cursor 生产引用、测试引用、共享 ACP 调用方和用户数据边界 | 删除前 blast-radius 记录 |
+| P3B-2 | Cursor 运行实现 | 删除 provider、CLI locator、process starter、extension mapper、diagnostics store、session index store 与 management repository | 编译 + 引用审计 |
+| P3B-3 | Cursor replay/load | 删除 Cursor 的 live/replay/load 路径；`AcpSessionReplayCollector` 仅在确认无其他调用方时删除 | ACP provider tests |
+| P3B-4 | Cursor 专属测试与 fake | 删除运行实现测试；保留旧配置 decode/fallback、不可达性和数据未改写回归 | retirement compatibility tests |
+| P3B-5 | fixture 与文档 | synthetic fixture、identity analysis 作为历史证据保留；更新支持列表和设计文档 | docs/fixture review |
+
+Phase 3B 门禁：
+
+- [ ] 生产代码不再引用 Cursor provider、CLI、ACP 扩展、诊断、session index 或 management repository。
+- [ ] 仓库不存在 `cursor-agent`/Cursor ACP 进程启动路径；provider catalog 与 UI 仍无 Cursor。
+- [ ] 只允许保留明确列入白名单的 legacy 配置兼容标识，以及 fixture/分析等退役证据。
+- [ ] 共享 ACP 文件经调用图证明仍被活跃 Provider 使用，或已随最后一个调用方安全删除。
+- [ ] 旧配置 fallback、运行时不可达和用户数据未改写测试通过；`flutter analyze` 通过。
+
+Phase 3 只有按顺序完成 3A 和 3B 才算通过。Cursor 真实 fixture 缺失不再阻塞 Phase 3；
+任何未来重新支持 Cursor 的需求必须另立方案并重新采集真实协议 fixture。
 
 ### Phase 4：统一层原子性简化（1–1.5 人日）
 
-依赖：Phase 2、Phase 3 全部门禁通过。
+依赖：Phase 2 已完成，Phase 3A、3B 全部门禁通过。
 
-目标：删除统一层叙事推断，并一次性验证 Grok/Cursor/Codex。
+目标：删除统一层叙事推断，并一次性验证 Grok/Codex 以及 Cursor 退役兼容路径。
 
 | 任务 | 文件 | 实施内容 | 测试 |
 |------|------|----------|------|
@@ -762,7 +804,7 @@ Phase 3 门禁：
 
 禁止事项：
 
-- 不增加 `providerId == grok/cursor` 分支。
+- 不增加任何 `providerId` 特判；Cursor 退役逻辑只存在于配置兼容与组合边界。
 - 不读取 `raw['_legacyStreamSegment']`。
 - 不保留默认关闭但无人负责删除的 legacy path。
 - 不在 EventBuffer 中实现“最后条目是否开放”的替代启发式。
@@ -772,8 +814,8 @@ Phase 4 门禁：
 - [ ] `rg "#seg|_openAgentMessage|_resolveStreamingAgentMessageId" lib/src/features/agent/application` 无生产代码命中。
 - [ ] Store 同 id 合并、异 id 新建测试通过。
 - [ ] EventBuffer `Message(seg1), Tool(pending), Message(seg2)` 顺序测试通过。
-- [ ] Grok、Cursor、Codex provider 定向测试全部通过。
-- [ ] H1、H3、H6、H9 手测通过。
+- [ ] Grok、Codex provider 定向测试与 Cursor 退役兼容测试全部通过。
+- [ ] H1、H3、H6、H7、H8、H9 手测通过。
 
 ### Phase 5：History 对齐与共享层收口（1–2 人日）
 
@@ -790,8 +832,8 @@ Phase 4 门禁：
 Phase 5 门禁：
 
 - [ ] Grok live/history canonical signature 一致。
-- [ ] Cursor replay/live adapter 使用相同实现、不同实例。
-- [ ] 共享 ACP 文件不包含 Grok/Cursor/eventId 叙事假设。
+- [ ] 生产代码不包含 Cursor live/replay/ACP 运行引用。
+- [ ] 共享 ACP 文件不包含 Grok/Cursor eventId 叙事假设，也不含已退役 Cursor 分支。
 - [ ] 新增 Provider 文档说明只需实现 adapter/reducer，无需修改 Store。
 
 ### Phase 6：全量回归与发布验收（0.5–1 人日）
@@ -821,6 +863,7 @@ Phase 5 门禁：
 | Store test | 同 id/异 id、metadata update、无启发式 | 厂商策略 |
 | ViewModel/Widget | 最终 entry 类型和顺序、展开态/滚动回归 | 协议字段解析 |
 | history golden | live/history canonical signature | runtime epoch |
+| retirement compatibility | 旧 Provider 配置回退、运行时不可达、用户数据未改写 | 已退役 Provider 协议语义 |
 
 ### 11.2 必须覆盖的交错矩阵
 
@@ -839,15 +882,15 @@ Phase 5 门禁：
 | terminal, late text | 无新增条目，diagnostic +1 |
 | turn1 source=A, turn2 source=A | 两个不同 entryId |
 
-### 11.3 并发与隔离矩阵
+### 11.3 隔离与 Cursor 退役兼容矩阵
 
 | 场景 | 断言 |
 |------|------|
-| live session A + replay session A | mapper/reducer 非同一实例 |
-| live session A + replay session B | 状态完全隔离 |
+| 旧配置最后选择 Cursor | 可容错读取，显示 unavailable，并安全回退；不创建 provider |
+| 应用启动与 Provider 探测 | 不调用 Cursor CLI locator，不启动 `cursor-agent` |
+| 软下线与删除实现前后 | `~/.cursor`、项目 `.cursor`、`cursor_sessions.json` 内容不变 |
 | connection epoch 1 关闭后 epoch 2 | epoch 1 事件被拒绝 |
 | turn generation 1 terminal 后 generation 2 | generation 1 迟到内容不能进入 generation 2 |
-| replay build 抛错 | collector/factory state 仍释放 |
 
 ### 11.4 Codex 回归矩阵
 
@@ -900,9 +943,9 @@ flutter test
 | H3 | Grok | 思考、工具、继续思考 | Reasoning, Tool, Reasoning |
 | H4 | Grok | 多工具连续更新 | 每个 tool id 一张卡，状态原地更新 |
 | H5 | Grok | turn 结束后重开会话 | 与 live canonical 顺序一致 |
-| H6 | Cursor | 普通 prompt + 工具 | 正文不碎片、工具不沉底 |
-| H7 | Cursor | 恢复已有 session | replay 不污染后续 live turn |
-| H8 | Cursor | 连续两个 turn | raw id 复用时不覆盖前一 turn |
+| H6 | Cursor 退役 | 打开 Provider 选择、设置和 Agent 管理 | 不显示 Cursor 可选项或安装/配置入口 |
+| H7 | Cursor 退役 | 使用最后选择 Cursor 的旧配置启动 | 显示 unavailable 原因并安全回退，不创建 Cursor provider |
+| H8 | Cursor 退役 | 启动、恢复工作区并退出应用 | 不启动 `cursor-agent`；Cursor 目录与本地 session index 未改写 |
 | H9 | Codex | item→tool→item | Message, Tool, Message |
 | H10 | Codex | 多 agentMessage item + completed | 不粘连、不重复、终态正确 |
 
@@ -922,7 +965,7 @@ flutter test
 | `missingTurnScopeDropped` | 无法安全解析 turn scope | warning |
 | `identityCollisionDetected` | 新 entryId 与已关闭/其他 turn 冲突 | error |
 | `conflictingTerminalIgnored` | 第二终态与首个终态冲突 | warning |
-| `replayStateLeakPrevented` | replay/live 实例误复用被 assert/guard 拒绝 | error |
+| `historyStateLeakPrevented` | history/live 实例误复用被 assert/guard 拒绝 | error |
 
 ### 13.2 隐私约束
 
@@ -935,7 +978,7 @@ flutter test
 开发模式建议断言：
 
 - closed entryId 不再接收 delta。
-- replay mapper 与 live mapper 不为同一实例。
+- history mapper/reducer 与 live mapper/reducer 不为同一实例。
 - active turn state 的 connection epoch 与当前 peer 一致。
 - completed update 能解析到现有 source→entry 映射。
 
@@ -947,14 +990,14 @@ release 模式不得因断言条件导致崩溃，应降级为诊断和安全丢
 
 | ID | 风险 | 影响 | 缓解 |
 |----|------|------|------|
-| R1 | Cursor fixture 不足，错误解释 eventId | 碎卡或沉底 | Phase 0 将 fixture 设为 Phase 3 门禁 |
-| R2 | replay 与 live 共用 mutable mapper | live segment 被重置 | factory + fresh instance + isolation test |
+| R1 | 旧配置最后选择 Cursor，软下线后启动失败 | 用户无法进入应用或配置丢失 | 宽容解码、明确 unavailable、安全回退，保留原配置 |
+| R2 | 只隐藏 UI，Cursor 仍可从组合/恢复路径启动 | 已退役进程仍运行 | catalog、factory、bootstrap、deep link/恢复入口联合审计与 process-spy 测试 |
 | R3 | 显式 source id 在 tool 前后复用 | 更新旧气泡 | sourceId/entryId 分离，segment ordinal |
 | R4 | turn_completed 与 RPC 返回竞态 | 重复完成、状态丢失 | first-terminal-wins + generation guard |
 | R5 | terminal 后迟到内容 | 写入下一 turn | terminal tombstone + late drop |
 | R6 | 完整 snapshot 跨多个 segment | 文本重复或顺序扁平化 | 多 segment 时只更新 metadata，禁止盲 replace |
-| R7 | 先删 Store 再迁 Cursor | Cursor 回归 | Phase 4 强依赖 Phase 2+3 门禁 |
-| R8 | 完整复制 ACP mapper | Grok/Cursor 协议修复漂移 | 共享 typed decoder，厂商 reducer |
+| R7 | 退役时删除或重写 Cursor 用户数据 | 会话索引或用户配置丢失 | 明确禁止迁移/删除，受保护路径前后快照回归 |
+| R8 | 删除 Cursor 时误删 Grok 仍使用的共享 ACP 代码 | 活跃 Provider 回归 | CodeGraph 调用图 + `rg` 引用审计，只删除 Cursor 专属或已无调用方的代码 |
 | R9 | legacy 开关长期残留 | 双轨不可维护 | 不使用 raw 开关；回滚以 PR revert 为主 |
 | R10 | 新 kind/source 字段改动面扩大 | 编译和测试成本 | 默认值兼容旧构造，分 PR 迁移 |
 
@@ -975,7 +1018,8 @@ release 模式不得因断言条件导致崩溃，应降级为诊断和安全丢
 |---------|----------|----------|
 | Phase 1 Domain/decoder | revert 对应 PR；字段有默认值时可单独保留 | 无持久数据迁移 |
 | Phase 2 Grok | revert Grok adapter 接线，恢复迁移期 mapper | 仅 live 展示变化 |
-| Phase 3 Cursor | revert Cursor adapter/factory，恢复旧 live/replay 路径 | Cursor session index 不改格式 |
+| Phase 3A Cursor 软下线 | revert 软下线 PR，恢复原目录/组合入口；不得借回滚改写用户数据 | 无数据迁移，Cursor session index 保持原样 |
+| Phase 3B Cursor 删除 | revert 删除实现 PR；如需重新启用，必须先恢复完整实现和测试，再恢复入口 | 无数据迁移，外部 Cursor 数据保持原样 |
 | Phase 4 Store | 整体 revert Store/EventBuffer PR | 恢复 open/`#segN`；不得只恢复一半 |
 | Phase 5 history | revert parser；保留 live adapter | 不重写用户原始 history 文件 |
 
@@ -993,6 +1037,7 @@ enum ProviderStreamIdentityMode { legacy, normalized }
 - 默认 `normalized` 前必须完成全部门禁。
 - 创建时同时登记删除日期和负责人。
 - Store 仍不得包含 provider-specific 分支；legacy 逻辑留在对应 provider adapter。
+- 该开关不得用于重新启用 Cursor；Cursor 只能通过新的、具备真实协议证据的独立方案恢复支持。
 
 ---
 
@@ -1002,10 +1047,11 @@ enum ProviderStreamIdentityMode { legacy, normalized }
 
 | PR | 内容 | 依赖 | 可并行 | 合并条件 |
 |----|------|------|--------|----------|
-| PR-A | Phase 0 + Domain kind/source 字段 + ACP decoder | 无 | 否 | 基线 fixture、domain/decoder tests |
-| PR-B | Grok reducer/mapper/provider lifecycle | PR-A | 与 PR-C 并行 | Phase 2 门禁 |
-| PR-C | Cursor reducer/mapper/replay factory | PR-A | 与 PR-B 并行 | Phase 3 门禁 |
-| PR-D | Store/EventBuffer dumb merge + Codex/ViewModel 回归 | PR-B、PR-C | 否 | Phase 4 全部门禁 |
+| PR-A | Phase 0 + Domain kind/source 字段 + ACP decoder（已完成） | 无 | 否 | 基线 fixture、domain/decoder tests |
+| PR-B | Grok reducer/mapper/provider lifecycle（已完成） | PR-A | 否 | Phase 2 门禁 |
+| PR-C1 | Cursor 软下线：目录/UI/组合/启动/旧配置回退 | PR-B | 否 | Phase 3A 门禁 |
+| PR-C2 | Cursor 实现与专属测试删除 | PR-C1 | 否 | Phase 3B 门禁 |
+| PR-D | Store/EventBuffer dumb merge + Codex/ViewModel 回归 | PR-B、PR-C2 | 否 | Phase 4 全部门禁 |
 | PR-E | Grok history golden、共享 mapper 清理、工程文档 | PR-D；部分 history 工作可提前 | 部分 | Phase 5 门禁 |
 | PR-F | 全量回归和必要的小修 | PR-E | 否 | Phase 6 发布验收 |
 
@@ -1013,16 +1059,18 @@ enum ProviderStreamIdentityMode { legacy, normalized }
 
 | Phase | 估时 |
 |-------|------|
-| Phase 0 | 1–1.5 人日 |
-| Phase 1 | 1–2 人日 |
-| Phase 2 | 1.5–2.5 人日 |
-| Phase 3 | 1.5–2.5 人日 |
+| Phase 0（已完成） | 1–1.5 人日 |
+| Phase 1（已完成） | 1–2 人日 |
+| Phase 2（已完成） | 1.5–2.5 人日 |
+| Phase 3 | 1.5–3 人日 |
 | Phase 4 | 1–1.5 人日 |
 | Phase 5 | 1–2 人日 |
 | Phase 6 | 0.5–1 人日 |
-| 合计 | 约 7.5–13 人日 |
+| 总计 | 约 7.5–13.5 人日 |
+| 剩余 Phase 3–6 | 约 4–7.5 人日 |
 
-若 PR-B、PR-C 由两名开发并行，日历时间可缩短，但 PR-D 必须等待两者全部完成。
+PR-C2 必须等待 PR-C1 的软下线门禁通过；PR-D 必须等待 PR-C2 完成，不能把运行入口删除和
+Store 行为切换放进同一个不可独立回滚的 PR。
 
 ### 16.3 排期登记表
 
@@ -1030,9 +1078,10 @@ enum ProviderStreamIdentityMode { legacy, normalized }
 
 | PR | 开发负责人 | 评审负责人 | 计划开始 | 计划完成 | 状态 |
 |----|------------|------------|----------|----------|------|
-| PR-A | 待分配 | 待分配 | 待定 | 待定 | 未开始 |
-| PR-B | 待分配 | 待分配 | 待定 | 待定 | 未开始 |
-| PR-C | 待分配 | 待分配 | 待定 | 待定 | 未开始 |
+| PR-A | 已完成 | 已完成 | 2026-07-17 | 2026-07-17 | 已完成 |
+| PR-B | 已完成 | 已完成 | 2026-07-17 | 2026-07-17 | 已完成 |
+| PR-C1 | 已完成 | 已完成 | 2026-07-17 | 2026-07-17 | 已完成 |
+| PR-C2 | 待分配 | 待分配 | 待定 | 待定 | 未开始 |
 | PR-D | 待分配 | 待分配 | 待定 | 待定 | 未开始 |
 | PR-E | 待分配 | 待分配 | 待定 | 待定 | 未开始 |
 | PR-F | 待分配 | 待分配 | 待定 | 待定 | 未开始 |
@@ -1045,14 +1094,15 @@ enum ProviderStreamIdentityMode { legacy, normalized }
 - [ ] 输入字段与预期 boundary 已写清。
 - [ ] 涉及的 Provider/CLI 版本已记录。
 - [ ] 测试文件和验收场景已指定。
-- [ ] 无未决的“eventId 是否表示消息边界”等协议问题。
+- [ ] 活跃 Provider 无未决的“eventId 是否表示消息边界”等协议问题；已退役 Provider 的协议未知项不构成门禁。
 
 ### 16.5 Definition of Done
 
 - [ ] 代码与 feature-sliced 目录归属一致。
 - [ ] 新公共 API 有中文 `///` 注释。
 - [ ] 无 Provider raw 语义泄漏到 Store/ViewModel/UI。
-- [ ] live/replay/history mutable state 隔离。
+- [ ] 活跃 Provider 的 live/replay/history mutable state 隔离。
+- [ ] 已退役 Provider 不可从 UI、配置恢复或组合路径进入运行时，且用户数据未改写。
 - [ ] 定向测试、`flutter analyze`、最终 `flutter test` 通过。
 - [ ] 手测记录包含版本和诊断结果。
 - [ ] 对应工程文档同步。
@@ -1064,9 +1114,9 @@ enum ProviderStreamIdentityMode { legacy, normalized }
 
 | 文档 | 必须更新的内容 |
 |------|----------------|
-| `docs/engineering_standards.md` | sourceId/entryId、Provider adapter 边界、Store dumb merge、state isolation |
-| `docs/developer_guide.md` | 新增 Provider 的 decoder/adapter/reducer 接入步骤和测试要求 |
-| `docs/design_document.md` | AgentEvent 流、EventBuffer、TimelineStore 的目标架构 |
+| `docs/engineering_standards.md` | sourceId/entryId、Provider adapter 边界、Store dumb merge、state isolation、Cursor 退役边界 |
+| `docs/developer_guide.md` | 活跃 Provider 列表、新增 Provider 的 decoder/adapter/reducer 接入步骤和测试要求 |
+| `docs/design_document.md` | AgentEvent 流、EventBuffer、TimelineStore 的目标架构及 Cursor 不再参与运行时组合 |
 | `AGENTS.md` | 简短规则：厂商 quirks 留在 data adapter；统一层不得猜 identity |
 | 本方案 | PR 合并后勾选任务、记录偏差和最终结果 |
 
@@ -1076,28 +1126,28 @@ enum ProviderStreamIdentityMode { legacy, normalized }
 
 ### 契约与共享层
 
-- [ ] `AgentMessageKind` 已加入 domain。
-- [ ] message delta/updated 已区分 entryId 与 sourceMessageId。
-- [ ] reasoning 已区分 entry itemId 与 sourceItemId。
-- [ ] ACP decoder 无状态且不决定叙事边界。
+- [x] `AgentMessageKind` 已加入 domain。
+- [x] message delta/updated 已区分 entryId 与 sourceMessageId。
+- [x] reasoning 已区分 entry itemId 与 sourceItemId。
+- [x] ACP decoder 无状态且不决定叙事边界。
 - [ ] Store/ViewModel 不从 raw 判断 plan/identity。
 
 ### Grok
 
-- [ ] Grok reducer 按 session/turn/epoch 隔离。
-- [ ] text/tool/text 输出两个 message entryId。
-- [ ] 连续 thought 不按 eventId 碎卡。
-- [ ] thought/tool/thought 输出两个 reasoning phase。
-- [ ] 标准 ACP 与 xAI 终态 first-terminal-wins。
-- [ ] cancel/error/peer close/dispose 正确 invalidate。
+- [x] Grok reducer 按 session/turn/epoch 隔离。
+- [x] text/tool/text 输出两个 message entryId。
+- [x] 连续 thought 不按 eventId 碎卡。
+- [x] thought/tool/thought 输出两个 reasoning phase。
+- [x] 标准 ACP 与 xAI 终态 first-terminal-wins。
+- [x] cancel/error/peer close/dispose 正确 invalidate。
 
-### Cursor
+### Cursor 退役
 
-- [ ] Cursor reducer 不依赖 Grok 类。
-- [ ] eventId 规则有 fixture 证据。
-- [ ] live mapper 与 replay mapper 是不同实例。
-- [ ] replay build/失败均释放状态。
-- [ ] live 与 replay canonical 输出一致。
+- [ ] Provider 目录、设置、创建会话和 Agent 管理 UI 不再显示 Cursor。
+- [ ] app 组合、bootstrap、恢复路径不创建 Cursor provider 或启动 `cursor-agent`。
+- [ ] 旧 Cursor 配置可容错读取、明确 unavailable 并安全回退。
+- [ ] Cursor 专属运行实现与测试已删除，只保留必要兼容和退役证据。
+- [ ] `~/.cursor`、项目 `.cursor`、`cursor_sessions.json` 与用户旧配置未被改写。
 
 ### Codex
 
@@ -1105,7 +1155,7 @@ enum ProviderStreamIdentityMode { legacy, normalized }
 - [ ] 不同 itemId 不粘连。
 - [ ] delta/completed 更新同一 entry。
 - [ ] reasoning index 行为无回归。
-- [ ] 基线明确为本机 0.144.1 stable schema。
+- [x] 基线明确为本机 0.144.1 stable schema。
 
 ### 统一层与 UI
 
@@ -1151,3 +1201,4 @@ enum ProviderStreamIdentityMode { legacy, normalized }
 |------|------|------|
 | 2026-07-17 | 1.0 | 初版：提出 Grok identity 下沉和 Store dumb merge |
 | 2026-07-17 | 2.0 | 补齐 source/entry 身份、typed decoder、Cursor 先迁移、replay 隔离、reasoning phase、生命周期、EventBuffer、测试门禁、排期与回滚，升级为可直接安排开发的实施规格 |
+| 2026-07-17 | 2.1 | 标记 Phase 0–2 已完成；Cursor 改为 Phase 3A 软下线、Phase 3B 删除实现，并同步后续门禁、测试、风险和回滚 |

@@ -128,7 +128,7 @@ void main() {
       },
     );
 
-    test('removes local-only provider thread without remote delete', () async {
+    test('retired Cursor local removal path remains unreachable', () async {
       // Arrange
       final provider = _FakeAgentProvider(
         config: AgentProviderConfig.defaultCursor.copyWith(enabled: true),
@@ -154,7 +154,8 @@ void main() {
       );
 
       // Assert
-      expect(provider.removedLocalThreads, <String>['cursor-local']);
+      expect(provider.listQueries, isEmpty);
+      expect(provider.removedLocalThreads, isEmpty);
       expect(provider.deletedThreads, isEmpty);
       expect(controller.stateFor('/repo').threads, isEmpty);
     });
@@ -396,47 +397,57 @@ void main() {
       expect(grok.listQueries, isNotEmpty);
     });
 
-    test('keeps an older Cursor thread visible on the first page', () async {
-      // Arrange：10 条较新的 Codex 会话不应把 Cursor 完全挤出首页。
-      final codex = _FakeAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
-        pages: <AgentThreadPage>[_page(_threads(10), nextCursor: null)],
-      );
-      final grok = _FakeAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
-        pages: <AgentThreadPage>[
-          _page(const <AgentThreadSummary>[], nextCursor: null),
-        ],
-      );
-      final cursor = _FakeAgentProvider(
-        config: AgentProviderConfig.defaultCursor.copyWith(enabled: true),
-        declaredCapabilities: AgentProviderCapabilities.cursorAcp,
-        pages: <AgentThreadPage>[
-          _page(<AgentThreadSummary>[
-            _thread(
-              id: 'cursor-old',
-              providerId: cursorAgentProviderId,
-              updatedAt: DateTime.fromMillisecondsSinceEpoch(-1),
-            ),
-          ], nextCursor: null),
-        ],
-      );
-      final controller = _createMultiProviderController(
-        codex: codex,
-        grok: grok,
-        cursor: cursor,
-      );
+    test(
+      'does not create or query retired Cursor during aggregation',
+      () async {
+        // Arrange
+        final codex = _FakeAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          pages: <AgentThreadPage>[_page(_threads(10), nextCursor: null)],
+        );
+        final grok = _FakeAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          pages: <AgentThreadPage>[
+            _page(const <AgentThreadSummary>[], nextCursor: null),
+          ],
+        );
+        final cursor = _FakeAgentProvider(
+          config: AgentProviderConfig.defaultCursor.copyWith(enabled: true),
+          declaredCapabilities: AgentProviderCapabilities.cursorAcp,
+          pages: <AgentThreadPage>[
+            _page(<AgentThreadSummary>[
+              _thread(
+                id: 'cursor-old',
+                providerId: cursorAgentProviderId,
+                updatedAt: DateTime.fromMillisecondsSinceEpoch(-1),
+              ),
+            ], nextCursor: null),
+          ],
+        );
+        final createdProviderIds = <String>[];
+        final controller = _createMultiProviderController(
+          codex: codex,
+          grok: grok,
+          cursor: cursor,
+          createdProviderIds: createdProviderIds,
+        );
 
-      // Act
-      controller.activateProject('/repo');
-      await _flushAsync();
+        // Act
+        controller.activateProject('/repo');
+        await _flushAsync();
 
-      // Assert
-      final state = controller.stateFor('/repo');
-      expect(state.threads, hasLength(5));
-      expect(state.threads[1].id, 'cursor-old');
-      expect(state.nextCursor, 'agg:5');
-    });
+        // Assert
+        final state = controller.stateFor('/repo');
+        expect(state.threads, hasLength(5));
+        expect(
+          state.threads.map((thread) => thread.providerId),
+          everyElement(defaultAgentProviderId),
+        );
+        expect(state.nextCursor, 'agg:5');
+        expect(cursor.listQueries, isEmpty);
+        expect(createdProviderIds, isNot(contains(cursorAgentProviderId)));
+      },
+    );
   });
 
   group('Project Threads session snapshot', () {
@@ -934,6 +945,7 @@ ProjectThreadsController _createMultiProviderController({
   required _FakeAgentProvider codex,
   required _FakeAgentProvider grok,
   _FakeAgentProvider? cursor,
+  List<String>? createdProviderIds,
   ProjectThreadsViewModel? viewModel,
 }) {
   final providerController = ActiveAgentProviderController(
@@ -941,6 +953,7 @@ ProjectThreadsController _createMultiProviderController({
       codex: codex,
       grok: grok,
       cursor: cursor,
+      createdProviderIds: createdProviderIds,
     ),
     configStore: MemoryAgentProviderConfigStore(
       AgentProviderSettings(
@@ -1020,18 +1033,21 @@ class _FakeAgentProviderFactory implements AgentProviderFactory {
 }
 
 class _MultiAgentProviderFactory implements AgentProviderFactory {
-  const _MultiAgentProviderFactory({
+  _MultiAgentProviderFactory({
     required this.codex,
     required this.grok,
     this.cursor,
-  });
+    List<String>? createdProviderIds,
+  }) : createdProviderIds = createdProviderIds ?? <String>[];
 
   final _FakeAgentProvider codex;
   final _FakeAgentProvider grok;
   final _FakeAgentProvider? cursor;
+  final List<String> createdProviderIds;
 
   @override
   AgentProvider create(AgentProviderConfig config) {
+    createdProviderIds.add(config.id);
     return switch (config.id) {
       grokAgentProviderId => grok,
       cursorAgentProviderId => cursor ?? codex,

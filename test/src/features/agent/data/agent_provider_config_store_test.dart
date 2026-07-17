@@ -33,20 +33,10 @@ void main() {
       expect(settings.activeProvider.id, defaultAgentProviderId);
       expect(settings.activeProvider.command, 'codex');
       expect(settings.activeProvider.arguments, <String>['app-server']);
-      expect(
-        settings.providers.map((provider) => provider.id),
-        containsAll(<String>[
-          defaultAgentProviderId,
-          grokAgentProviderId,
-          cursorAgentProviderId,
-        ]),
-      );
-      expect(
-        settings.providers
-            .singleWhere((provider) => provider.id == cursorAgentProviderId)
-            .enabled,
-        isFalse,
-      );
+      expect(settings.providers.map((provider) => provider.id), <String>[
+        defaultAgentProviderId,
+        grokAgentProviderId,
+      ]);
     });
 
     test('saves provider settings as versioned JSON', () async {
@@ -159,25 +149,72 @@ void main() {
       );
     });
 
+    test('does not add Cursor to existing non-Cursor settings', () {
+      final settings = AgentProviderSettings.tryDecode(<String, Object?>{
+        'version': 1,
+        'activeProviderId': grokAgentProviderId,
+        'providers': <Object?>[
+          AgentProviderConfig.defaultCodex.toJson(),
+          AgentProviderConfig.defaultGrok.toJson(),
+        ],
+      });
+
+      expect(settings.activeProviderId, grokAgentProviderId);
+      expect(
+        settings.providers.map((provider) => provider.id),
+        isNot(contains(cursorAgentProviderId)),
+      );
+    });
+
     test(
-      'adds disabled Cursor to existing v1 settings without changing active',
+      'decodes and round-trips legacy Cursor settings without migration',
       () {
-        final settings = AgentProviderSettings.tryDecode(<String, Object?>{
+        final legacyCursor = AgentProviderConfig.defaultCursor.copyWith(
+          enabled: true,
+          command: '/legacy/cursor-agent',
+          extra: const <String, Object?>{'legacyMarker': 'keep-me'},
+        );
+        final original = <String, Object?>{
           'version': 1,
-          'activeProviderId': grokAgentProviderId,
+          'activeProviderId': cursorAgentProviderId,
           'providers': <Object?>[
             AgentProviderConfig.defaultCodex.toJson(),
             AgentProviderConfig.defaultGrok.toJson(),
+            legacyCursor.toJson(),
           ],
+        };
+
+        final settings = AgentProviderSettings.tryDecode(<String, Object?>{
+          ...original,
         });
 
-        expect(settings.activeProviderId, grokAgentProviderId);
+        expect(settings.activeProviderId, cursorAgentProviderId);
         final cursor = settings.providers.singleWhere(
           (provider) => provider.id == cursorAgentProviderId,
         );
         expect(cursor.kind, AgentProviderKind.cursorAcp);
-        expect(cursor.enabled, isFalse);
+        expect(cursor.enabled, isTrue);
+        expect(cursor.command, '/legacy/cursor-agent');
+        expect(cursor.extra['legacyMarker'], 'keep-me');
+        expect(settings.toJson(), original);
       },
     );
+
+    test('preserves a missing legacy Cursor active id for safe fallback', () {
+      final settings = AgentProviderSettings.tryDecode(<String, Object?>{
+        'version': 1,
+        'activeProviderId': cursorAgentProviderId,
+        'providers': <Object?>[
+          AgentProviderConfig.defaultCodex.toJson(),
+          AgentProviderConfig.defaultGrok.toJson(),
+        ],
+      });
+
+      expect(settings.activeProviderId, cursorAgentProviderId);
+      expect(
+        settings.providers.map((provider) => provider.id),
+        isNot(contains(cursorAgentProviderId)),
+      );
+    });
   });
 }

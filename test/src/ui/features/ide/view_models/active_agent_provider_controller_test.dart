@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 
 import '../../../../testing/ide_test_harness.dart';
@@ -55,6 +56,37 @@ void main() {
       },
     );
 
+    test('never chooses Cursor through the fallback list index', () async {
+      // Arrange
+      final factory = _RuntimePathSpyFactory();
+      final controller = ActiveAgentProviderController(
+        providerFactory: factory,
+        configStore: MemoryAgentProviderConfigStore(
+          AgentProviderSettings(
+            providers: <AgentProviderConfig>[
+              AgentProviderConfig.defaultCodex,
+              AgentProviderConfig.defaultCursor.copyWith(enabled: true),
+              AgentProviderConfig.defaultGrok,
+            ],
+          ),
+        ),
+      );
+      addTearDown(controller.dispose);
+      await controller.activeProvider();
+
+      // Act
+      await controller.setProviderEnabled(defaultAgentProviderId, false);
+      await controller.activeProvider();
+
+      // Assert
+      expect(controller.activeProviderId, grokAgentProviderId);
+      expect(factory.createdProviderIds, <String>[
+        defaultAgentProviderId,
+        grokAgentProviderId,
+      ]);
+      expect(factory.cursorProviderCreations, 0);
+    });
+
     test('rejects and disposes a provider with the wrong identity', () async {
       // Arrange
       final mismatchedProvider = _TrackingFakeAgentProvider(
@@ -83,6 +115,95 @@ void main() {
       );
       expect(mismatchedProvider.disposeCount, 1);
     });
+
+    test(
+      'falls back from legacy Cursor without saving or reaching Cursor paths',
+      () async {
+        // Arrange
+        final store = _RecordingConfigStore(
+          AgentProviderSettings(
+            providers: <AgentProviderConfig>[
+              AgentProviderConfig.defaultCodex,
+              AgentProviderConfig.defaultGrok,
+              AgentProviderConfig.defaultCursor.copyWith(
+                enabled: true,
+                extra: const <String, Object?>{'legacyMarker': 'keep-me'},
+              ),
+            ],
+            activeProviderId: cursorAgentProviderId,
+          ),
+        );
+        final factory = _RuntimePathSpyFactory();
+        final controller = ActiveAgentProviderController(
+          providerFactory: factory,
+          configStore: store,
+        );
+        addTearDown(controller.dispose);
+        final before = store.settings.toJson();
+
+        // Act
+        await controller.loadSettings();
+        await controller.activeProvider();
+
+        // Assert
+        expect(controller.settings.activeProviderId, cursorAgentProviderId);
+        expect(controller.activeProviderId, defaultAgentProviderId);
+        expect(controller.unavailableSelectionReason, contains('已临时回退'));
+        expect(
+          controller.enabledProviders.map((provider) => provider.id),
+          isNot(contains(cursorAgentProviderId)),
+        );
+        expect(store.saveCount, 0);
+        expect(store.settings.toJson(), before);
+        expect(factory.createdProviderIds, <String>[defaultAgentProviderId]);
+        expect(factory.cursorProviderCreations, 0);
+        expect(factory.cursorCliLocatorCalls, 0);
+        expect(factory.cursorProcessStarts, 0);
+        expect(factory.cursorSessionIndexWrites, 0);
+        await expectLater(
+          controller.setActiveProvider(cursorAgentProviderId),
+          throwsUnsupportedError,
+        );
+      },
+    );
+
+    test(
+      'keeps a stable unavailable state when Cursor has no fallback',
+      () async {
+        // Arrange
+        final store = _RecordingConfigStore(
+          AgentProviderSettings(
+            providers: <AgentProviderConfig>[
+              AgentProviderConfig.defaultCodex.copyWith(enabled: false),
+              AgentProviderConfig.defaultGrok.copyWith(enabled: false),
+              AgentProviderConfig.defaultCursor.copyWith(enabled: true),
+            ],
+            activeProviderId: cursorAgentProviderId,
+          ),
+        );
+        final factory = _RuntimePathSpyFactory();
+        final controller = ActiveAgentProviderController(
+          providerFactory: factory,
+          configStore: store,
+        );
+        addTearDown(controller.dispose);
+
+        // Act
+        await controller.loadSettings();
+
+        // Assert
+        expect(controller.hasRuntimeProvider, isFalse);
+        expect(controller.enabledProviders, isEmpty);
+        expect(controller.unavailableSelectionReason, contains('没有已启用'));
+        await expectLater(controller.activeProvider(), throwsStateError);
+        await expectLater(controller.activeProvider(), throwsStateError);
+        expect(factory.createdProviderIds, isEmpty);
+        expect(factory.cursorCliLocatorCalls, 0);
+        expect(factory.cursorProcessStarts, 0);
+        expect(factory.cursorSessionIndexWrites, 0);
+        expect(store.saveCount, 0);
+      },
+    );
   });
 }
 
@@ -97,5 +218,42 @@ class _TrackingFakeAgentProvider extends FakeAgentProvider {
   Future<void> dispose() async {
     disposeCount += 1;
     await super.dispose();
+  }
+}
+
+class _RecordingConfigStore implements AgentProviderConfigStore {
+  _RecordingConfigStore(this.settings);
+
+  AgentProviderSettings settings;
+  int saveCount = 0;
+
+  @override
+  Future<AgentProviderSettings> load() async => settings;
+
+  @override
+  Future<void> save(AgentProviderSettings settings) async {
+    saveCount += 1;
+    this.settings = settings;
+  }
+}
+
+class _RuntimePathSpyFactory implements AgentProviderFactory {
+  final List<String> createdProviderIds = <String>[];
+  int cursorProviderCreations = 0;
+  int cursorCliLocatorCalls = 0;
+  int cursorProcessStarts = 0;
+  int cursorSessionIndexWrites = 0;
+
+  @override
+  AgentProvider create(AgentProviderConfig config) {
+    createdProviderIds.add(config.id);
+    if (CursorRetirementPolicy.isRetiredProvider(config)) {
+      cursorProviderCreations += 1;
+      cursorCliLocatorCalls += 1;
+      cursorProcessStarts += 1;
+      cursorSessionIndexWrites += 1;
+      throw StateError('Cursor runtime path must remain unreachable');
+    }
+    return _TrackingFakeAgentProvider(config);
   }
 }

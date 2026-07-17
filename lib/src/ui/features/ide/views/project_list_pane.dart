@@ -150,7 +150,9 @@ class _AgentProviderSelectionPopoverState
     return FutureBuilder<List<AgentProviderConfig>>(
       future: _providersFuture,
       builder: (context, snapshot) {
-        final providers = snapshot.data ?? const <AgentProviderConfig>[];
+        final providers = CursorRetirementPolicy.supportedProviders(
+          snapshot.data ?? const <AgentProviderConfig>[],
+        );
         final selectedProvider = _selectedProvider(providers);
         final colors = IdeColors.of(context);
         final textStyles = IdeTextStyles.of(context);
@@ -361,7 +363,7 @@ class _AgentProviderSelectionPopoverState
     return switch (kind) {
       AgentProviderKind.codexAppServer => Icons.code_rounded,
       AgentProviderKind.acp => Icons.smart_toy_outlined,
-      AgentProviderKind.cursorAcp => Icons.auto_awesome_outlined,
+      AgentProviderKind.cursorAcp => Icons.block_rounded,
       AgentProviderKind.claudeCode => Icons.terminal_rounded,
     };
   }
@@ -370,7 +372,7 @@ class _AgentProviderSelectionPopoverState
     return switch (kind) {
       AgentProviderKind.codexAppServer => 'Codex app-server',
       AgentProviderKind.acp => 'Agent Client Protocol',
-      AgentProviderKind.cursorAcp => 'Cursor ACP',
+      AgentProviderKind.cursorAcp => 'Unavailable provider',
       AgentProviderKind.claudeCode => 'Claude Code CLI',
     };
   }

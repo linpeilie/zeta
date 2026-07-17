@@ -2375,7 +2375,7 @@ void main() {
     );
 
     test(
-      'switchActiveProvider defers workspace-scoped Cursor initialization',
+      'switchActiveProvider rejects retired Cursor before initialization',
       () async {
         // Arrange
         final cursorConfig = AgentProviderConfig.defaultCursor.copyWith(
@@ -2386,13 +2386,12 @@ void main() {
           providerConfig: cursorConfig,
           declaredCapabilities: AgentProviderCapabilities.cursorAcp,
         );
+        final factory = _MultiFakeAgentProviderFactory(<String, AgentProvider>{
+          defaultAgentProviderId: codex,
+          cursorAgentProviderId: cursor,
+        });
         final controller = ActiveAgentProviderController(
-          providerFactory: _MultiFakeAgentProviderFactory(
-            <String, AgentProvider>{
-              defaultAgentProviderId: codex,
-              cursorAgentProviderId: cursor,
-            },
-          ),
+          providerFactory: factory,
           configStore: MemoryAgentProviderConfigStore(
             AgentProviderSettings(
               providers: <AgentProviderConfig>[
@@ -2411,16 +2410,142 @@ void main() {
 
         // Act
         await viewModel.loadModels();
-        await viewModel.switchActiveProvider(cursorAgentProviderId);
+        final switchFuture = viewModel.switchActiveProvider(
+          cursorAgentProviderId,
+        );
 
         // Assert
+        await expectLater(switchFuture, throwsUnsupportedError);
         expect(codex.initializeCalls, 1);
         expect(cursor.initializeCalls, 0);
+        expect(viewModel.activeProviderId, defaultAgentProviderId);
+        expect(factory.createdProviderIds, <String>[defaultAgentProviderId]);
       },
     );
 
+    test(
+      'legacy Cursor selection shows unavailable reason while using fallback',
+      () async {
+        // Arrange
+        final codex = _FakeAgentProvider();
+        final cursorConfig = AgentProviderConfig.defaultCursor.copyWith(
+          enabled: true,
+        );
+        final factory = _MultiFakeAgentProviderFactory(<String, AgentProvider>{
+          defaultAgentProviderId: codex,
+        });
+        final controller = ActiveAgentProviderController(
+          providerFactory: factory,
+          configStore: MemoryAgentProviderConfigStore(
+            AgentProviderSettings(
+              providers: <AgentProviderConfig>[
+                AgentProviderConfig.defaultCodex,
+                cursorConfig,
+              ],
+              activeProviderId: cursorAgentProviderId,
+            ),
+          ),
+        );
+        addTearDown(controller.dispose);
+        final viewModel = AgentConversationViewModel(
+          providerController: controller,
+        );
+        addTearDown(viewModel.dispose);
+
+        // Act
+        await viewModel.loadModels();
+
+        // Assert
+        expect(
+          viewModel.status.state,
+          AgentProviderConnectionState.unavailable,
+        );
+        expect(viewModel.status.message, 'Cursor Agent unavailable');
+        expect(viewModel.status.details, contains('已临时回退'));
+        expect(viewModel.activeProviderId, defaultAgentProviderId);
+        expect(factory.createdProviderIds, <String>[defaultAgentProviderId]);
+      },
+    );
+
+    test('Cursor deep link is fail-closed before provider creation', () async {
+      // Arrange
+      final codex = _FakeAgentProvider();
+      final cursor = _FakeAgentProvider(
+        providerConfig: AgentProviderConfig.defaultCursor.copyWith(
+          enabled: true,
+        ),
+        declaredCapabilities: AgentProviderCapabilities.cursorAcp,
+      );
+      final factory = _MultiFakeAgentProviderFactory(<String, AgentProvider>{
+        defaultAgentProviderId: codex,
+        cursorAgentProviderId: cursor,
+      });
+      final controller = ActiveAgentProviderController(
+        providerFactory: factory,
+        configStore: MemoryAgentProviderConfigStore(
+          AgentProviderSettings(
+            providers: <AgentProviderConfig>[
+              AgentProviderConfig.defaultCodex,
+              cursor.config,
+            ],
+          ),
+        ),
+      );
+      addTearDown(controller.dispose);
+      final viewModel = AgentConversationViewModel(
+        providerController: controller,
+      );
+      addTearDown(viewModel.dispose);
+
+      // Act：switchThread 是 deep link / 历史入口共享的语义入口。
+      await viewModel.switchThread(
+        AgentThreadSummary(
+          id: 'cursor-deep-link',
+          providerId: cursorAgentProviderId,
+          projectPath: '/repo',
+          title: 'Legacy Cursor thread',
+          preview: 'legacy',
+          createdAt: DateTime.utc(2026),
+          updatedAt: DateTime.utc(2026),
+          status: AgentThreadRuntimeStatus.idle,
+        ),
+      );
+
+      // Assert
+      expect(viewModel.status.state, AgentProviderConnectionState.unavailable);
+      expect(viewModel.status.details, contains('已软下线'));
+      expect(factory.createdProviderIds, isEmpty);
+      expect(cursor.calls, isEmpty);
+      expect(cursor.initializeCalls, 0);
+    });
+
     test('selectModel updates selection and persists to config', () async {
-      final provider = _FakeAgentProvider();
+      final provider = _FakeAgentProvider(
+        availableModels: const AgentModelList(
+          models: <AgentModelInfo>[
+            AgentModelInfo(
+              id: 'gpt-5.5',
+              model: 'gpt-5.5',
+              displayName: 'GPT-5.5',
+              isDefault: true,
+              supportedReasoningEfforts: <AgentModelReasoningEffort>[
+                AgentModelReasoningEffort(effort: 'low'),
+                AgentModelReasoningEffort(effort: 'medium'),
+              ],
+              defaultReasoningEffort: 'medium',
+            ),
+            AgentModelInfo(
+              id: 'gpt-5.4-mini',
+              model: 'gpt-5.4-mini',
+              displayName: 'GPT-5.4-Mini',
+              supportedReasoningEfforts: <AgentModelReasoningEffort>[
+                AgentModelReasoningEffort(effort: 'low'),
+              ],
+              defaultReasoningEffort: 'low',
+            ),
+          ],
+        ),
+      );
       final controller = ActiveAgentProviderController(
         providerFactory: _FakeAgentProviderFactory(provider),
         configStore: MemoryAgentProviderConfigStore(),
@@ -2433,35 +2558,11 @@ void main() {
       viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
 
       await viewModel.loadModels();
-      provider.emit(
-        const AgentModelListEvent(
-          AgentModelList(
-            models: <AgentModelInfo>[
-              AgentModelInfo(
-                id: 'gpt-5.5',
-                model: 'gpt-5.5',
-                displayName: 'GPT-5.5',
-                isDefault: true,
-                supportedReasoningEfforts: <AgentModelReasoningEffort>[
-                  AgentModelReasoningEffort(effort: 'low'),
-                  AgentModelReasoningEffort(effort: 'medium'),
-                ],
-                defaultReasoningEffort: 'medium',
-              ),
-              AgentModelInfo(
-                id: 'gpt-5.4-mini',
-                model: 'gpt-5.4-mini',
-                displayName: 'GPT-5.4-Mini',
-                supportedReasoningEfforts: <AgentModelReasoningEffort>[
-                  AgentModelReasoningEffort(effort: 'low'),
-                ],
-                defaultReasoningEffort: 'low',
-              ),
-            ],
-          ),
-        ),
+      expect(provider.initializeCalls, 1);
+      expect(
+        viewModel.models.map((model) => model.id),
+        contains('gpt-5.4-mini'),
       );
-      await Future<void>.delayed(Duration.zero);
 
       await viewModel.selectModel('gpt-5.4-mini');
 
@@ -2758,12 +2859,16 @@ class _FakeAgentProviderFactory implements AgentProviderFactory {
 }
 
 class _MultiFakeAgentProviderFactory implements AgentProviderFactory {
-  const _MultiFakeAgentProviderFactory(this.providers);
+  _MultiFakeAgentProviderFactory(this.providers);
 
   final Map<String, AgentProvider> providers;
+  final List<String> createdProviderIds = <String>[];
 
   @override
-  AgentProvider create(AgentProviderConfig config) => providers[config.id]!;
+  AgentProvider create(AgentProviderConfig config) {
+    createdProviderIds.add(config.id);
+    return providers[config.id]!;
+  }
 }
 
 class _FakeAgentProvider

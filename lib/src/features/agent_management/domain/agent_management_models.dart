@@ -111,7 +111,7 @@ class AgentDefinition {
     npmPackage: '',
   );
 
-  /// 内置 Cursor Agent（官方 ACP stdio）定义。
+  /// 旧 Cursor Agent 定义，仅供兼容模型与 Phase 3B 删除前留档。
   static const AgentDefinition cursor = AgentDefinition(
     id: cursorAgentProviderId,
     displayName: 'Cursor Agent',
@@ -126,11 +126,7 @@ class AgentDefinition {
   );
 
   /// 应用当前支持的全部 Agent 定义。
-  static const List<AgentDefinition> all = <AgentDefinition>[
-    codex,
-    grok,
-    cursor,
-  ];
+  static const List<AgentDefinition> all = <AgentDefinition>[codex, grok];
 
   /// 按 id 查找定义；未知 id 返回 null。
   static AgentDefinition? byId(String id) {

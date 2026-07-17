@@ -53,48 +53,49 @@ void main() {
     });
   });
 
-  test(
-    'Cursor can only be enabled after a successful connection test',
-    () async {
-      // Arrange
-      final provider = FakeAgentProvider();
-      final providerFactory = FakeAgentProviderFactory(provider);
-      final providerController = ActiveAgentProviderController(
-        providerFactory: providerFactory,
-        configStore: MemoryAgentProviderConfigStore(
-          const AgentProviderSettings(
-            providers: <AgentProviderConfig>[
-              AgentProviderConfig.defaultCodex,
-              AgentProviderConfig.defaultCursor,
-            ],
-          ),
+  test('filters Cursor before Agent management auto detection', () async {
+    // Arrange
+    final provider = FakeAgentProvider();
+    final providerFactory = FakeAgentProviderFactory(provider);
+    final cursorRepository = _FakeCursorManagementRepository();
+    final providerController = ActiveAgentProviderController(
+      providerFactory: providerFactory,
+      configStore: MemoryAgentProviderConfigStore(
+        const AgentProviderSettings(
+          providers: <AgentProviderConfig>[
+            AgentProviderConfig.defaultCodex,
+            AgentProviderConfig.defaultCursor,
+          ],
         ),
-      );
-      final controller = AgentManagementController(
-        repositories: <String, AgentCliManagementRepository>{
-          cursorAgentProviderId: _FakeCursorManagementRepository(),
-        },
-        providerController: providerController,
-      );
-      addTearDown(controller.dispose);
-      addTearDown(providerController.dispose);
-      await controller.initialize();
+      ),
+    );
+    final controller = AgentManagementController(
+      repositories: <String, AgentCliManagementRepository>{
+        cursorAgentProviderId: cursorRepository,
+      },
+      providerController: providerController,
+    );
+    addTearDown(controller.dispose);
+    addTearDown(providerController.dispose);
 
-      // Act / Assert: 未测试时拒绝启用。
-      await controller.setEnabled(true);
-      expect(controller.agent.enabled, isFalse);
-      expect(controller.operationError, contains('连接测试'));
+    // Act
+    await controller.initialize(autoDetect: true);
+    await Future<void>.delayed(Duration.zero);
+    final available = await controller.loadAvailableThreadProviders();
 
-      // Act / Assert: 检测中的无计费握手成功后允许启用。
-      await controller.detect();
-      await controller.setEnabled(true);
-      expect(controller.agent.enabled, isTrue);
-      expect(
-        providerController.isProviderEnabled(cursorAgentProviderId),
-        isTrue,
-      );
-    },
-  );
+    // Assert
+    expect(controller.agents, isEmpty);
+    expect(available, isEmpty);
+    expect(cursorRepository.detectCalls, 0);
+    expect(
+      providerController.providerConfigById(cursorAgentProviderId),
+      isNotNull,
+    );
+    expect(
+      providerController.isProviderEnabled(cursorAgentProviderId),
+      isFalse,
+    );
+  });
 }
 
 class _ManagementHarness {
@@ -152,6 +153,8 @@ class _ManagementHarness {
 }
 
 class _FakeCursorManagementRepository implements AgentCliManagementRepository {
+  int detectCalls = 0;
+
   @override
   String get agentId => cursorAgentProviderId;
 
@@ -164,6 +167,7 @@ class _FakeCursorManagementRepository implements AgentCliManagementRepository {
     required bool enabled,
     AgentDetectionProgressCallback? onProgress,
   }) async {
+    detectCalls += 1;
     return ManagedAgent.cursor(enabled: enabled).copyWith(
       installationState: AgentInstallationState.installed,
       accountState: AgentAccountState.loggedIn,

@@ -6,8 +6,6 @@ import 'package:zeta/src/features/agent/data/codex_cli_locator.dart'
     show looksLikeCodexCliPath;
 import 'package:zeta/src/features/agent/data/grok_cli_locator.dart'
     show looksLikeGrokCliPath;
-import 'package:zeta/src/features/agent/data/cursor_cli_locator.dart'
-    show looksLikeCursorCliPath;
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart'
     show isNewerVersion;
@@ -23,13 +21,13 @@ class AgentManagementController extends ChangeNotifier {
     this.runtimeStateProvider,
     this.runtimeListenable,
   }) : _repositories = Map<String, AgentCliManagementRepository>.unmodifiable(
-         repositories,
+         _supportedRepositories(repositories),
        ),
-       _selectedAgentId = repositories.keys.isEmpty
+       _selectedAgentId = _supportedRepositories(repositories).keys.isEmpty
            ? defaultAgentProviderId
-           : repositories.keys.first,
+           : _supportedRepositories(repositories).keys.first,
        _agents = <String, ManagedAgent>{
-         for (final entry in repositories.entries)
+         for (final entry in _supportedRepositories(repositories).entries)
            entry.key: ManagedAgent.forDefinition(
              definition:
                  AgentDefinition.byId(entry.key) ??
@@ -108,13 +106,6 @@ class AgentManagementController extends ChangeNotifier {
   AgentDetectionProgress? get detectionProgress => _detectionProgress;
   AgentConfigurationDocument? get configuration => _configuration;
   List<AgentLogEntry> get logs => List<AgentLogEntry>.unmodifiable(_logs);
-  bool get betaCompatibilityWarningAcknowledged {
-    return _configForAgent(
-          _selectedAgentId,
-        ).extra['betaCompatibilityWarningAcknowledged'] ==
-        true;
-  }
-
   bool get initialized => _initialized;
   bool get detecting => _detecting;
   bool get testing => _testing;
@@ -240,13 +231,6 @@ class AgentManagementController extends ChangeNotifier {
       return;
     }
     _operationError = null;
-    if (enabled &&
-        current.definition.id == cursorAgentProviderId &&
-        current.connectionTest?.success != true) {
-      _operationError = '启用 Cursor 前必须先完成一次成功的无计费 ACP 连接测试。';
-      _notify();
-      return;
-    }
     try {
       await providerController.setProviderEnabled(
         current.definition.id,
@@ -262,23 +246,6 @@ class AgentManagementController extends ChangeNotifier {
       _operationError =
           '无法${enabled ? '启用' : '禁用'} ${current.definition.displayName}：$error';
     }
-    _notify();
-  }
-
-  /// 记录用户已阅读当前 Beta provider 的一次性兼容性说明。
-  Future<void> acknowledgeBetaCompatibilityWarning() async {
-    final current = _configForAgent(_selectedAgentId);
-    if (current.extra['betaCompatibilityWarningAcknowledged'] == true) {
-      return;
-    }
-    await providerController.updateProviderConfig(
-      current.copyWith(
-        extra: <String, Object?>{
-          ...current.extra,
-          'betaCompatibilityWarningAcknowledged': true,
-        },
-      ),
-    );
     _notify();
   }
 
@@ -338,7 +305,6 @@ class AgentManagementController extends ChangeNotifier {
       );
       final sourceLabel = switch (id) {
         grokAgentProviderId => 'Grok ACP',
-        cursorAgentProviderId => 'Cursor ACP',
         _ => 'Codex app-server',
       };
       _agents[id] = agent.copyWith(
@@ -491,9 +457,6 @@ class AgentManagementController extends ChangeNotifier {
         'lastDetectedAt': detected.lastDetectedAt?.toIso8601String(),
         if (detected.connectionTest?.protocolVersion != null)
           'detectedProtocolVersion': detected.connectionTest!.protocolVersion,
-        if (detected.connectionTest?.capabilityFingerprint != null)
-          'cursorCapabilityFingerprint':
-              detected.connectionTest!.capabilityFingerprint,
         if (path != null && _pathBelongsToAgent(agentId, path)) 'cliPath': path,
       },
     );
@@ -578,9 +541,6 @@ class AgentManagementController extends ChangeNotifier {
     if (agentId == grokAgentProviderId) {
       return AgentProviderConfig.defaultGrok;
     }
-    if (agentId == cursorAgentProviderId) {
-      return AgentProviderConfig.defaultCursor;
-    }
     return AgentProviderConfig.defaultCodex;
   }
 
@@ -594,9 +554,6 @@ class AgentManagementController extends ChangeNotifier {
     }
     if (agentId == defaultAgentProviderId) {
       return _sanitizeCodexConfig(config);
-    }
-    if (agentId == cursorAgentProviderId) {
-      return _sanitizeCursorConfig(config);
     }
     return config.copyWith(id: agentId);
   }
@@ -674,50 +631,12 @@ class AgentManagementController extends ChangeNotifier {
     );
   }
 
-  AgentProviderConfig _sanitizeCursorConfig(AgentProviderConfig config) {
-    final extra = Map<String, Object?>.from(config.extra);
-    final cliPath = extra['cliPath'] is String
-        ? extra['cliPath'] as String
-        : null;
-    final commandIsPath = _looksLikeFilePath(config.command);
-    final commandWrong =
-        commandIsPath && !looksLikeCursorCliPath(config.command);
-    final cliPathWrong = cliPath != null && !looksLikeCursorCliPath(cliPath);
-    final kindWrong = config.kind != AgentProviderKind.cursorAcp;
-
-    if (cliPathWrong) {
-      extra.remove('cliPath');
-      extra.remove('detectedCurrentVersion');
-      extra.remove('detectedLatestVersion');
-    }
-    final needsDefaultCommand =
-        kindWrong ||
-        commandWrong ||
-        config.command.trim().isEmpty ||
-        (cliPathWrong && config.command == cliPath);
-    return config.copyWith(
-      id: cursorAgentProviderId,
-      displayName: AgentProviderConfig.defaultCursor.displayName,
-      kind: AgentProviderKind.cursorAcp,
-      command: needsDefaultCommand
-          ? AgentProviderConfig.defaultCursor.command
-          : config.command,
-      arguments: kindWrong || needsDefaultCommand
-          ? AgentProviderConfig.defaultCursor.arguments
-          : config.arguments,
-      extra: extra,
-    );
-  }
-
   bool _pathBelongsToAgent(String agentId, String path) {
     if (agentId == grokAgentProviderId) {
       return looksLikeGrokCliPath(path);
     }
     if (agentId == defaultAgentProviderId) {
       return looksLikeCodexCliPath(path);
-    }
-    if (agentId == cursorAgentProviderId) {
-      return looksLikeCursorCliPath(path);
     }
     return true;
   }
@@ -799,4 +718,14 @@ class AgentManagementController extends ChangeNotifier {
     runtimeListenable?.removeListener(refreshRuntimeState);
     super.dispose();
   }
+}
+
+Map<String, AgentCliManagementRepository> _supportedRepositories(
+  Map<String, AgentCliManagementRepository> repositories,
+) {
+  return <String, AgentCliManagementRepository>{
+    for (final entry in repositories.entries)
+      if (!CursorRetirementPolicy.isRetiredProviderId(entry.key))
+        entry.key: entry.value,
+  };
 }

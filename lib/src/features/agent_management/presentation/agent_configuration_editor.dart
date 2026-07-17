@@ -137,23 +137,6 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
             children: [
               _buildFileHeader(context, document),
               const SizedBox(height: IdeSpacing.space12),
-              if (widget.controller.agent.definition.id ==
-                  AgentDefinition.cursor.id) ...[
-                IdeStatusCard(
-                  key: const ValueKey('cursor-config-boundary-notice'),
-                  tone: IdeStatusCardTone.info,
-                  title: 'Cursor 配置边界',
-                  body: Text(
-                    '此处只编辑全局 ~/.cursor/cli-config.json。项目内的 '
-                    '.cursor/cli.json、.cursor/mcp.json、规则和 AGENTS.md '
-                    '随工作区加载，不会在此页面读取、合并或改写。',
-                    style: textStyles.bodySmall.copyWith(
-                      color: colors.textSecondary,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: IdeSpacing.space8),
-              ],
               if (!_revealed)
                 IdeStatusCard(
                   tone: IdeStatusCardTone.warning,

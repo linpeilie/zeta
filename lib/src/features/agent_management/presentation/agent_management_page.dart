@@ -434,20 +434,12 @@ class AgentManagementPageState extends State<AgentManagementPage> {
                 ),
                 sf.OutlineButton(
                   key: const ValueKey('agent-open-logs-button'),
-                  onPressed:
-                      agent.logPaths.isEmpty &&
-                          agent.definition.id != cursorAgentProviderId
-                      ? null
-                      : _openLogs,
+                  onPressed: agent.logPaths.isEmpty ? null : _openLogs,
                   size: sf.ButtonSize.small,
                   child: const Text('查看运行日志'),
                 ),
                 sf.OutlineButton(
-                  onPressed:
-                      agent.installed &&
-                          (agent.definition.id != cursorAgentProviderId ||
-                              agent.enabled ||
-                              agent.connectionTest?.success == true)
+                  onPressed: agent.installed
                       ? () => _setEnabled(agent.definition.id, !agent.enabled)
                       : null,
                   size: sf.ButtonSize.small,
@@ -658,39 +650,6 @@ class AgentManagementPageState extends State<AgentManagementPage> {
   Future<void> _setEnabled(String agentId, bool enabled) async {
     widget.controller.selectAgent(agentId);
     final agent = widget.controller.agent;
-    if (enabled &&
-        agent.definition.isBeta &&
-        !widget.controller.betaCompatibilityWarningAcknowledged) {
-      final confirmed = await showIdeDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => IdeDialog(
-          title: Text('${agent.definition.displayName} Beta 兼容性说明'),
-          content: const Text(
-            'Cursor Agent 仍为默认关闭的 Beta Provider。Cursor CLI 自动更新后，'
-            '协议能力可能变化；出现异常时请先在 Agent 管理页重新检测。Zeta 不会自动更新 CLI。',
-          ),
-          actions: <IdeDialogAction>[
-            IdeDialogAction.cancel(
-              onPressed: () =>
-                  Navigator.of(context, rootNavigator: true).pop(false),
-            ),
-            IdeDialogAction.confirm(
-              label: '了解并启用',
-              onPressed: () =>
-                  Navigator.of(context, rootNavigator: true).pop(true),
-            ),
-          ],
-        ),
-      );
-      if (confirmed != true) {
-        return;
-      }
-      await widget.controller.acknowledgeBetaCompatibilityWarning();
-      if (!mounted) {
-        return;
-      }
-    }
     if (!enabled && agent.runtimeState == AgentRuntimeState.running) {
       final confirmed = await showIdeDialog<bool>(
         context: context,

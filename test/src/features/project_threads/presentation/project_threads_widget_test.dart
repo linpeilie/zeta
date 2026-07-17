@@ -574,6 +574,7 @@ void main() {
             const <AgentProviderConfig>[
               AgentProviderConfig.defaultCodex,
               AgentProviderConfig.defaultGrok,
+              AgentProviderConfig.defaultCursor,
             ],
       ),
     );
@@ -618,6 +619,11 @@ void main() {
     );
     expect(find.text('Codex CLI'), findsOneWidget);
     expect(find.text('Grok CLI'), findsOneWidget);
+    expect(find.text('Cursor Agent'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('new-thread-provider-option-cursor')),
+      findsNothing,
+    );
     expect(headerTitleText(tester), 'Initial thread');
 
     final codexOption = find.byKey(
@@ -994,32 +1000,38 @@ void main() {
     expect(find.text('Renamed thread'), findsOneWidget);
   });
 
-  testWidgets('labels Cursor local index removal without implying deletion', (
+  testWidgets('keeps restored Cursor history unavailable and read-only', (
     tester,
   ) async {
     // Arrange
-    final session = MemorySessionStore();
     final directory = Directory.systemTemp.createTempSync('zeta_test_');
     tempDirectories.add(directory);
     final cursorConfig = AgentProviderConfig.defaultCursor.copyWith(
       enabled: true,
     );
-    final provider = FakeAgentProvider(
-      config: cursorConfig,
-      declaredCapabilities: AgentProviderCapabilities.cursorAcp,
-      threadPages: <AgentThreadPage>[
-        AgentThreadPage(
-          threads: <AgentThreadSummary>[
-            agentThread(
-              id: 'cursor-thread',
-              projectPath: directory.path,
-              title: 'Cursor thread',
-            ).copyWith(providerId: cursorAgentProviderId),
-          ],
-          nextCursor: null,
-        ),
-      ],
+    final cursorThread = agentThread(
+      id: 'cursor-thread',
+      projectPath: directory.path,
+      title: 'Cursor thread',
+    ).copyWith(providerId: cursorAgentProviderId);
+    final session = MemorySessionStore(
+      IdeSessionState(
+        projectPaths: <String>[directory.path],
+        activeProjectPath: directory.path,
+        activeAgentProviderId: cursorAgentProviderId,
+        agentThreadIdsByProject: <String, String>{
+          directory.path: cursorThread.id,
+        },
+        projectThreadExpansionByProject: <String, bool>{directory.path: true},
+        cachedThreadsByProject: <String, List<AgentThreadSummary>>{
+          directory.path: <AgentThreadSummary>[cursorThread],
+        },
+        selectedThreadIdsByProject: <String, String>{
+          directory.path: cursorThread.id,
+        },
+      ).encode(),
     );
+    final provider = FakeAgentProvider();
     await tester.pumpWidget(
       MainApp(
         enableNativeWindowFrame: false,
@@ -1029,15 +1041,19 @@ void main() {
         agentProviderFactory: FakeAgentProviderFactory(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(
           AgentProviderSettings(
-            providers: <AgentProviderConfig>[cursorConfig],
+            providers: <AgentProviderConfig>[
+              AgentProviderConfig.defaultCodex,
+              cursorConfig,
+            ],
             activeProviderId: cursorAgentProviderId,
           ),
         ),
       ),
     );
-    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
     await tester.runAsync(waitForIo);
     await tester.pumpAndSettle();
+
+    // Assert：历史摘要仍可见，但入口不得读取 Cursor 历史或暴露写操作。
     expect(
       find.byKey(
         ValueKey<String>(
@@ -1047,44 +1063,24 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Cursor'), findsOneWidget);
+    expect(find.textContaining('Cursor Agent unavailable'), findsWidgets);
+    expect(provider.readHistories, isEmpty);
+    expect(provider.resumedSessions, isEmpty);
     final mouse = await hoverThreadTile(
       tester,
       directory.path,
       'cursor-thread',
     );
     addTearDown(mouse.removePointer);
-
-    // Act
-    await tester.tap(
+    expect(
       find.byKey(
         ValueKey<String>(
           'project-thread-more-menu-${directory.path}-cursor-thread',
         ),
       ),
+      findsNothing,
     );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-
-    // Assert
-    expect(find.text('仅从 Zeta 列表移除'), findsOneWidget);
-    expect(find.text('删除'), findsNothing);
-
-    await tester.tap(
-      find.byKey(
-        ValueKey<String>(
-          'project-thread-delete-${directory.path}-cursor-thread',
-        ),
-      ),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(find.textContaining('Cursor 端历史仍会保留'), findsOneWidget);
-
-    await tester.tap(find.text('移除'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(provider.removedLocalThreads, <String>['cursor-thread']);
-    expect(find.text('Cursor thread'), findsNothing);
+    expect(provider.removedLocalThreads, isEmpty);
   });
 
   testWidgets('hides thread action menu when Grok lacks lifecycle support', (
