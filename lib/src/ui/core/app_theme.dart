@@ -5,15 +5,25 @@ import 'package:zeta/src/core/constants/app_typography.dart';
 
 import 'ide_colors.dart';
 
-/// Graphite 深色主题共享的真值常量。[IdeColors.dark] 直接复用，避免在多处
-/// 重复书写同一颜色字面量。
+/// Graphite 深色主题共享的强调色真值常量。
+///
+/// 生效位置：`IdeColors.dark.accent` / `focusRing` 直接复用；
+/// 避免在深色调色板与其它处重复书写同一字面量。
 const Color ideAccentColor = Color(0xFF1B84FF);
+
+/// Graphite 深色主题共享的警告色真值常量。
+///
+/// 生效位置：`IdeColors.dark.warning` 直接复用。
 const Color ideWarningColor = Color(0xFFE6B450);
 
 /// Graphite 运行时主题真源。
 ///
 /// 这层只持有项目自己的语义 token 与字体选择；第三方主题对象由它投影生成，
 /// 但不再反向成为 token 来源。
+///
+/// 装配入口：[buildIdeThemeData]（`MainApp` / 外观设置变更时重建 light/dark）。
+/// 消费入口：`IdeThemeScope.of` → `IdeColors.of` / `IdeTextStyles.of`，
+/// 以及 [buildShadcnTheme] / [buildMaterialTheme] 投影。
 @immutable
 class IdeThemeData {
   const IdeThemeData({
@@ -25,15 +35,42 @@ class IdeThemeData {
     this.codeFontSize = defaultCodeFontSize,
   });
 
+  /// 物理亮度（light/dark），与 [IdeColors.light] / [IdeColors.dark] 对应。
   final Brightness brightness;
+
+  /// 当前亮度下的语义调色板。
+  ///
+  /// 生效位置：全应用 `IdeColors.of(context)`；并投影到 Material/shadcn。
   final IdeColors colors;
+
+  /// UI 字体族；`null` 表示跟随系统默认。
+  ///
+  /// 生效位置：`IdeTextStyles` 非代码样式；Material / shadcn 的 sans 字体投影。
+  /// 来源：外观设置 `AppearanceSettings.uiFontFamily`。
   final String? uiFontFamily;
+
+  /// 代码字体族（默认 [bundledCodeFontFamily]）。
+  ///
+  /// 生效位置：`IdeTextStyles` 的 code* 样式；shadcn mono / inlineCode。
+  /// 来源：外观设置 `AppearanceSettings.codeFontFamily`。
   final String codeFontFamily;
+
+  /// UI 基准字号（逻辑 px），驱动界面排版整体缩放。
+  ///
+  /// 生效位置：`IdeTextStyles` UI 字号；Material/shadcn UI 字号 factor。
+  /// 来源：外观设置 `uiFontSize`（设置页滑块，范围见 `minUiFontSize` 等）。
   final double uiFontSize;
+
+  /// 代码基准字号（逻辑 px），驱动代码排版缩放。
+  ///
+  /// 生效位置：`IdeTextStyles` code* 字号；shadcn mono 字号 factor。
   final double codeFontSize;
 }
 
 /// 在应用根部提供 Graphite light/dark token，并在运行时解析当前有效主题。
+///
+/// 生效位置：`MainApp` 根部包裹；子树通过 [of] / [maybeOf] 读取。
+/// [themeMode] 来自外观设置，决定 system/light/dark 如何映射到 light/dark 主题。
 class IdeThemeScope extends InheritedWidget {
   const IdeThemeScope({
     required this.themeMode,
@@ -43,8 +80,13 @@ class IdeThemeScope extends InheritedWidget {
     super.key,
   });
 
+  /// 用户选择的主题模式（含 system）。
   final ThemeMode themeMode;
+
+  /// 浅色 Graphite 主题数据。
   final IdeThemeData lightTheme;
+
+  /// 深色 Graphite 主题数据。
   final IdeThemeData darkTheme;
 
   static IdeThemeScope? maybeOf(BuildContext context) {
@@ -109,6 +151,10 @@ sf.ThemeMode resolveShadcnThemeMode(ThemeMode themeMode) {
 }
 
 /// 构建 Graphite light/dark 主题数据；这是项目语义 token 的唯一装配入口。
+///
+/// 生效位置：`MainApp` 根据 `AppearanceSettings` 分别构建 light/dark 实例，
+/// 再交给 [IdeThemeScope]。颜色始终来自 [IdeColors.light]/[IdeColors.dark]，
+/// 字体与字号来自参数（用户可改）。
 IdeThemeData buildIdeThemeData({
   required Brightness brightness,
   String? uiFontFamily,
@@ -128,6 +174,9 @@ IdeThemeData buildIdeThemeData({
 }
 
 /// 将项目主题投影到 `shadcn_flutter` 根主题。
+///
+/// 生效位置：`MainApp` 中 `sf.Theme`；影响 shadcn 按钮、输入、Popover、
+/// Toast 等第三方组件的颜色与字体。Graphite 精确圆角仍由 [IdeRadius] 驱动。
 sf.ThemeData buildShadcnTheme(IdeThemeData ideTheme) {
   return sf.ThemeData(
     colorScheme: _buildShadcnColorScheme(ideTheme),
@@ -142,6 +191,9 @@ sf.ThemeData buildShadcnTheme(IdeThemeData ideTheme) {
 }
 
 /// 为仍在使用 Material widget 的区域提供最小主题投影。
+///
+/// 生效位置：`MainApp` 中 `MaterialApp` / `Theme`；Scaffold 背景、图标色、
+/// 分隔线、hover/focus 等走 Material 默认样式的区域。
 ThemeData buildMaterialTheme(IdeThemeData ideTheme) {
   final colors = ideTheme.colors;
   final baseTheme = ThemeData(

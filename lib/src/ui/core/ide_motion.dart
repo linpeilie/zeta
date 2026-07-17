@@ -1,15 +1,50 @@
 import 'package:flutter/animation.dart';
 
 /// IDE 动效 token。
+///
+/// 交互反馈、展开/收起、主题切换相关动画的时长与曲线统一从这里取，
+/// 避免各 feature 各自写 `Duration(milliseconds: …)`。
+/// 若系统开启「减少动态效果」，调用方应自行降为 `Duration.zero`（见 Composer、
+/// 模型配置等已有判断）。
 abstract final class IdeMotion {
+  /// 瞬时反馈：悬停高亮、窗口按钮 hover、小控件闪动。
+  ///
+  /// 生效位置：`WindowFrame` 窗口控制按钮 hover；拖拽手柄高亮
+  /// （`IdeResizeHandle` 使用别名 [fast]）；Composer / 模型配置中的
+  /// 快速状态切换。
   static const Duration durationFast = Duration(milliseconds: 100);
+
+  /// 常规交互：Tab 指示、折叠摘要、列表选中、多数 `AnimatedContainer`。
+  ///
+  /// 生效位置：`IdeTabs` 指示条与背景；`IdeCollapsibleCard` 摘要区；
+  /// `PaneInteractiveSurface` 状态过渡；项目列表选中；Composer 外卡与
+  /// 发送区切换；消息区展开/收起；模型配置面板动画等。
   static const Duration durationNormal = Duration(milliseconds: 160);
+
+  /// 较慢过渡：大块内容展开、弹出层进出。
+  ///
+  /// 生效位置：`IdeCollapsibleCard` 正文展开；Agent 时间线段落展开
+  /// （`agent_pane_sections`）；配合 [curvePopup] 的弹出感动画。
   static const Duration durationSlow = Duration(milliseconds: 260);
 
+  /// [durationFast] 的简短别名。
   static const Duration fast = durationFast;
+
+  /// [durationNormal] 的简短别名。
   static const Duration normal = durationNormal;
+
+  /// [durationSlow] 的简短别名。
   static const Duration slow = durationSlow;
 
+  /// 默认缓动：多数 IDE 内联动画。
+  ///
+  /// 生效位置：与 [durationNormal] / [durationFast] 配套的
+  /// `AnimatedContainer`、`AnimatedSwitcher`、选中态过渡等。
   static const Curve curveDefault = Curves.easeInOutCubic;
+
+  /// 弹出/展开缓动：结束段更利落，适合浮层与折叠正文。
+  ///
+  /// 生效位置：`IdeCollapsibleCard` 正文；消息区弹出式控件
+  /// （`agent_pane_messages` 中配合 [durationNormal]）。
   static const Curve curvePopup = Curves.easeOutQuint;
 }

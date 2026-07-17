@@ -199,21 +199,37 @@ class IdeColors {
   final Color closeHover;
 
   /// 普通可交互控件的悬停背景。
+  ///
+  /// 生效位置：`PaneInteractiveSurface` 默认 hover；设置页导航项 hover；
+  /// Agent 消息区可点击块 hover；Material `hoverColor` 投影。
   final Color hoverSurface;
 
   /// 普通可交互控件的按下背景。
+  ///
+  /// 生效位置：`PaneInteractiveSurface` 默认 pressed 态。
   final Color pressedSurface;
 
   /// 普通导航、列表和 Tab 的中性选中背景。
+  ///
+  /// 生效位置：`IdeActivityRail` / `IdeChoiceCard` 选中底；设置页导航选中；
+  /// `PaneInteractiveSurface` 默认 selected；shadcn `accent`（Zeta 中表示
+  /// 中性选中，而非品牌蓝）投影。
   final Color selectedSurface;
 
   /// 已选中控件的悬停背景。
+  ///
+  /// 生效位置：`PaneInteractiveSurface` 选中+hover；设置页导航选中项 hover。
   final Color selectedHoverSurface;
 
   /// 用户消息专用表面，不表达品牌或主操作。
+  ///
+  /// 生效位置：Agent 会话中用户气泡背景（`agent_pane_messages`）。
   final Color userMessageSurface;
 
   /// 键盘焦点和输入焦点的统一描边色。
+  ///
+  /// 生效位置：Composer 外卡聚焦边与 [IdeEffects.focusRing]；模型配置/控件
+  /// `focusBorderColor`；Material `focusColor` 与 shadcn `ring` 投影。
   final Color focusRing;
 
   /// 窗口框架、标题栏与面板间 gutter 表面。
