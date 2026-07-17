@@ -15,7 +15,7 @@ export 'package:zeta/src/features/agent/data/mappers/grok_stream_identity.dart'
 /// Grok ACP 通知适配门面。
 ///
 /// 标准 `session/update` 与 `_x.ai/session/update` 共用同一个有状态 Grok adapter，
-/// 不再委托共享 `AcpSessionUpdateMapper` 决定叙事 identity。
+/// 叙事 identity 完全由 Grok 专属 mapper/reducer 决定。
 final class GrokAcpNotificationMapper {
   GrokAcpNotificationMapper({GrokSessionUpdateMapper? sessionUpdateMapper})
     : sessionUpdateMapper = sessionUpdateMapper ?? GrokSessionUpdateMapper();

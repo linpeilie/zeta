@@ -230,6 +230,34 @@ void main() {
         expect(entries[1].text, 'legacy world');
       },
     );
+
+    test('reads updates history without rewriting the source file', () async {
+      const sessionId = 'grok-history-read-only-redacted';
+      final sessionDir = Directory(
+        '${tempRoot.path}${Platform.pathSeparator}sessions'
+        '${Platform.pathSeparator}manual'
+        '${Platform.pathSeparator}$sessionId',
+      );
+      await sessionDir.create(recursive: true);
+      final updates = File(
+        '${sessionDir.path}${Platform.pathSeparator}updates.jsonl',
+      );
+      await updates.writeAsString(
+        '{"method":"session/update","params":{"sessionId":"$sessionId","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"[AGENT_TEXT_REDACTED]"},"_meta":{"promptId":"turn-redacted"}},"_meta":{"eventId":"event-redacted"}}}\n'
+        '{"method":"_x.ai/session/update","params":{"sessionId":"$sessionId","update":{"sessionUpdate":"turn_completed","prompt_id":"turn-redacted","stop_reason":"end_turn"},"_meta":{"eventId":"terminal-redacted"}}}\n',
+      );
+      final before = await updates.readAsBytes();
+
+      final reader = GrokSessionHistoryReader(grokHome: tempRoot.path);
+      final snapshot = await reader.readThreadHistory(
+        threadId: sessionId,
+        providerId: 'grok',
+        sessionPath: sessionDir.path,
+      );
+
+      expect(snapshot.turns, hasLength(1));
+      expect(await updates.readAsBytes(), before);
+    });
   });
 }
 

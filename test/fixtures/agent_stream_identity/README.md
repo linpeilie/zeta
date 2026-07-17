@@ -15,7 +15,8 @@ Cursor fixture 是退役历史证据，不代表当前支持，也不得用于�
 
 机器可读的完整索引见 `manifest.json`。场景覆盖：
 
-- Grok：text → tool start/update → text、连续 thought、turn completed、updates history。
+- Grok：text → tool start/update → text、thought → tool → thought、重复 tool
+  update 原地更新、turn completed，以及 live/history 完整 canonical signature。
 - Cursor：live synthetic、`session/load` replay synthetic、messageId、缺失的 eventId
   证据、tool update。
 - Codex：agentMessage delta、item/completed、agentMessage item →

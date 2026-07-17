@@ -1,6 +1,6 @@
 # 产品需求文档
 
-最后更新：2026-07-14
+最后更新：2026-07-17
 
 ## 1. 产品概述
 
@@ -24,8 +24,8 @@ Zeta 是一个基于 Flutter Desktop 的本地 AI IDE 壳层。它面向需要�
 - 提供一个稳定的三栏 IDE 工作台：Projects、Agent、Files。
 - 支持选择本地项目目录，并在右侧浏览项目文件树。
 - 支持将当前项目路径和选中文件路径作为 Agent 上下文传递给 provider。
-- 支持通过 Codex CLI app-server、Grok ACP 和默认关闭的 Cursor ACP Beta 创建、恢复和继续
-  Agent thread，并按握手能力降级 UI。
+- 支持通过 Codex CLI app-server 与 Grok ACP 创建、恢复和继续 Agent thread，并按握手
+  能力降级 UI；Cursor 已退役，旧配置只用于 unavailable/fallback 兼容。
 - 支持展示 Agent 消息与工具调用状态，并把权限、提问和计划审批固定在输入框上方。
 - 支持持久化 IDE 会话状态，减少重启后的上下文丢失。
 
@@ -37,19 +37,19 @@ Zeta 是一个基于 Flutter Desktop 的本地 AI IDE 壳层。它面向需要�
 - 三栏布局：左侧项目与 thread，中间 Agent 时间线，右侧文件树。
 - 本地目录选择和文件树懒加载。
 - 忽略常见大目录：`.git`、`.dart_tool`、`build`、`node_modules` 等。
-- 使用 `~/.zeta` 下的版本化 JSON 文件保存 Zeta 自有 IDE 会话、Agent provider、外观设置、
-  Cursor 最小索引与使用统计派生索引；旧 SharedPreferences 仅用于一次性迁移。
+- 使用 `~/.zeta` 下的版本化 JSON 文件保存 Zeta 自有 IDE 会话、Agent provider、外观设置与
+  使用统计派生索引；旧 SharedPreferences 仅用于一次性迁移。退役遗留的
+  `cursor_sessions.json` 仅作为受保护用户数据原样保留，不参与运行时。
 - 应用日志按日期写入 `~/.zeta/logs`；Agent CLI 自有配置和 session 历史保持原位，
   不迁入 `~/.zeta`。
-- 内置 Codex CLI、Grok ACP 与 Cursor ACP provider；Codex 仍为默认 active provider，
-  Cursor 为默认关闭的 Beta。
-- Agent 管理页支持 CLI 身份、版本、账号、连接、配置和脱敏诊断；Cursor 同名 `agent`
-  必须经多信号身份校验。
-- Agent 事件统一映射为领域模型，UI 不直接绑定 Codex、xAI 或 Cursor 原始协议细节。
+- 内置活跃 Provider 为 Codex CLI 与 Grok ACP；Codex 仍为默认 active provider。Cursor
+  不出现在 catalog、设置、Agent 管理、会话恢复或运行时组合中。
+- Agent 管理页支持活跃 CLI 的身份、版本、账号、连接、配置和脱敏诊断。
+- Agent 事件统一映射为领域模型，UI 不直接绑定 Codex 或 xAI 原始协议细节。
 - 支持 capability 驱动的 thread 列表、历史、恢复、发送、取消、权限和动态 session 配置；
   不支持的 provider 操作不展示且不会静默成功。
-- Cursor session 在官方 list 能力缺失时使用仅含 id/workspace/title/time/status 的 Zeta
-  本地索引；prompt、回复、token 和完整 payload 不进入索引。
+- 旧 Cursor 配置可宽容解码并在内存中安全回退；不会启动 Cursor 进程，也不会读取或改写
+  `~/.cursor`、项目 `.cursor` 或 `cursor_sessions.json`。
 
 ### 暂不包含
 
@@ -85,7 +85,7 @@ Zeta 是一个基于 Flutter Desktop 的本地 AI IDE 壳层。它面向需要�
 4. Agent 时间线展示用户消息、Agent 消息和工具卡片，并允许用户滚动回看上下文。
 5. 如 provider 请求权限、用户输入或计划审批，输入框上方的固定交互区立即展示卡片，
    响应后自动移除且不在时间线重复显示。
-6. Cursor 提问和计划审批使用独立卡片；取消、超时、他端响应或 provider 退出时必须完成协议收尾。
+6. Provider 提问和计划审批使用独立卡片；取消、超时、他端响应或 provider 退出时必须完成协议收尾。
 
 ### 恢复会话
 
@@ -100,7 +100,8 @@ Zeta 是一个基于 Flutter Desktop 的本地 AI IDE 壳层。它面向需要�
 - 文件树必须避免一次性递归扫描大型仓库。
 - Provider 协议差异应隔离在 data 层实现中，UI 只依赖领域接口。
 - Agent 默认审批策略应保持保守，不能自动授权命令或文件写入。
-- Cursor 默认禁用；Zeta 不保存 Cursor API key/token，也不读取 Cursor 私有日志或会话库。
+- Cursor 已退役；Zeta 不启动 Cursor provider，不读取、迁移、改写或删除 Cursor 私有配置、
+  日志、会话库及遗留索引。
 - Beta 发布前必须执行自动化门禁与各声明平台真实 CLI smoke；无设备/凭据不得推断通过。
 - UI 需要适配桌面窗口大小变化，避免文本和面板明显溢出。
 - 新增行为需要配套单元测试或 widget 测试，至少覆盖风险最高的状态转换。

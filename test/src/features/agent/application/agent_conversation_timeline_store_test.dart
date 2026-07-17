@@ -824,6 +824,83 @@ void main() {
       expect(message.status, AgentMessageStatus.completed);
     });
 
+    test('applies history entries in canonical provider order', () {
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+
+      store.applyHistorySnapshot(
+        AgentThreadHistorySnapshot(
+          threadId: 'thread-1',
+          turns: <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-1',
+              entries: <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'message-segment-1',
+                  sourceMessageId: 'source-message',
+                  role: AgentMessageRole.agent,
+                  text: 'before',
+                ),
+                AgentHistoryToolEntry(
+                  toolCall: AgentToolCall(
+                    id: 'tool-1',
+                    title: 'Read',
+                    kind: AgentToolKind.read,
+                    status: AgentToolStatus.completed,
+                  ),
+                ),
+                AgentHistoryMessageEntry(
+                  id: 'message-segment-2',
+                  sourceMessageId: 'source-message',
+                  role: AgentMessageRole.agent,
+                  text: 'after',
+                ),
+              ],
+            ),
+            AgentHistoryTurn(
+              id: 'turn-2',
+              entries: <AgentHistoryEntry>[
+                AgentHistoryToolEntry(
+                  toolCall: AgentToolCall(
+                    id: 'reasoning-phase-1',
+                    title: 'Thinking',
+                    kind: AgentToolKind.think,
+                    status: AgentToolStatus.completed,
+                  ),
+                ),
+                AgentHistoryToolEntry(
+                  toolCall: AgentToolCall(
+                    id: 'tool-2',
+                    title: 'Search',
+                    kind: AgentToolKind.search,
+                    status: AgentToolStatus.completed,
+                  ),
+                ),
+                AgentHistoryToolEntry(
+                  toolCall: AgentToolCall(
+                    id: 'reasoning-phase-2',
+                    title: 'Thinking',
+                    kind: AgentToolKind.think,
+                    status: AgentToolStatus.completed,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        _thread(),
+      );
+
+      expect(store.timelineEntries.map((entry) => entry.id), <String>[
+        'message-message-segment-1',
+        'tool-tool-1',
+        'message-message-segment-2',
+        'tool-reasoning-phase-1',
+        'tool-tool-2',
+        'tool-reasoning-phase-2',
+      ]);
+    });
+
     test('completed snapshot only updates the same normalized entryId', () {
       final store = AgentConversationTimelineStore();
       addTearDown(store.dispose);

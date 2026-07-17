@@ -216,6 +216,12 @@ delta 追加，同 turn token/diff 快照取最新，同工具 progress 按协�
 和 Provider mapper 仍无损消费；完整 item、工具/turn 终态、审批、错误和连接状态会先 flush
 缓冲再立即发布。缓冲上限只产生不含正文的计数诊断，并触发即时 flush。
 
+流式身份链路固定为：Provider raw notification → 协议 decoder → Provider-local
+adapter/reducer → 语义完整的 `AgentEvent` → EventBuffer → TimelineStore。source id 保存协议
+身份，entryId 是统一层唯一合并键；TimelineStore 只执行同 entryId 更新、异 entryId 新建和
+同 tool id upsert，不猜开放条目或 narrative boundary。新增 Provider 只扩展 data adapter/
+reducer 及其契约测试，无需修改 Store。
+
 Agent Canvas 支持多 thread 常驻 entry（各自独立 conversation VM 与 provider controller）。
 Project Threads 侧栏对**已打开** thread 的执行中/等待指示，以 entry 的
 `AgentConversationThreadSnapshot` 为真源，经 shell 调用 `syncRuntimeSnapshot` 更新
@@ -245,6 +251,9 @@ Grok provider 使用 ACP stdio、本地历史和 xAI 扩展。标准 ACP
 确定流式身份；permission、content block 和 session config 分别复用
 `AcpPermissionMapper`、`AcpContentCodec` 与 `AcpSessionConfigMapper`。session config option 与带稳定 id、
 可多选的用户问答选项使用中立领域模型，供后续 ACP provider 共用。
+`updates.jsonl` history 每次解析都会创建 fresh Grok mapper/reducer；messageId/eventId 仅作
+source metadata，正文按 boundary 分段，reasoning 按连续 phase 聚合，tool update 按 id 在
+原位置更新。History 与 live 不共享 epoch 或 mutable state，只以 canonical signature 对齐。
 
 Cursor 不再参与运行时组合。旧 `cursor` id 与 `cursorAcp` kind 只用于配置 decode、
 unavailable 展示和安全 fallback；`DefaultAgentProviderFactory` 对二者 fail-closed。
@@ -392,8 +401,8 @@ IDE 会话状态目前版本为 2，持久化内容包括：
   保存失败回滚/重试，以及 Popover 键盘、动画与下一回合提示。
 - JSON-RPC stdio transport。
 - Codex provider 事件映射。
-- Cursor CLI 身份冲突、workspace peer 重建、session 索引与恢复、ACP 流式映射、动态配置、
-  权限/提问/计划响应，以及超时、取消、dispose 和进程早退收尾。
+- Grok decoder/adapter/reducer、live/history 状态隔离、canonical ordering golden、history
+  reader 只读性，以及 TimelineStore 的 dumb merge/history 应用顺序。
 - Cursor 旧配置 fallback、运行时不可达、process spy 与用户数据未改写回归；历史证据
   见 `docs/cursor_acp_release_validation.md`。
 - AgentConversationViewModel 状态机。

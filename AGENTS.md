@@ -55,6 +55,11 @@
 - 将 Codex app-server JSON-RPC、JSONL 历史解析、provider 配置等具体协议细节
   保留在 agent 数据层和 mapper 中。UI 代码应消费中立的 domain 事件和 provider
   契约。
+- Provider 原始 sourceId 只作协议 metadata；entryId、message segment、reasoning
+  phase 和 narrative boundary 必须由对应 data adapter/reducer 决定。共享 decoder
+  保持无状态，EventBuffer/TimelineStore 只按规范化 id dumb merge，不得猜 identity、
+  增加厂商分支或要求新增 Provider 修改 Store。live/history/replay 必须使用隔离的
+  reducer 实例。
 - 对于简单的本地 UI 状态，优先使用 Flutter 内建能力，例如 `StatefulWidget`、
   `ValueNotifier`、`ValueListenableBuilder`、`FutureBuilder` 和
   `StreamBuilder`。

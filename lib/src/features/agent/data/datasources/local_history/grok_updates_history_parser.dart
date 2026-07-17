@@ -1,22 +1,19 @@
 import 'dart:convert';
 
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_user_content_parser.dart';
-import 'package:zeta/src/features/agent/data/mappers/context_window_codec.dart';
+import 'package:zeta/src/features/agent/data/mappers/acp_session_update_decoder.dart';
+import 'package:zeta/src/features/agent/data/mappers/grok_session_update_mapper.dart';
+import 'package:zeta/src/features/agent/data/mappers/grok_stream_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 /// 从 Grok `updates.jsonl` 重建多回合历史快照。
 ///
-/// 每行形如：
-/// `{"timestamp":...,"method":"session/update","params":{sessionId,update,_meta}}`
-///
-/// 回合边界：
-/// - 新的逻辑用户消息开启新 turn；同 `promptId` / `promptIndex` 的 chunk 合并
-/// - `turn_completed`（含 `_x.ai/session/update`）结束当前 turn
-/// - 无 user 时按 `promptId` 切换也可开启 turn
+/// 每次 [parse] 都创建独立的 Grok mapper/reducer。History 与 live 只复用相同
+/// boundary 算法，不共享 current segment、seen event/tool 或 terminal 状态。
 class GrokUpdatesHistoryParser {
   const GrokUpdatesHistoryParser();
 
-  /// 解析完整 JSONL 文本。
+  /// 解析完整 JSONL 文本，不修改或重写来源文件。
   AgentThreadHistorySnapshot parse({
     required String threadId,
     required String content,
@@ -24,27 +21,18 @@ class GrokUpdatesHistoryParser {
   }) {
     final turns = <_TurnBuilder>[];
     _TurnBuilder? current;
-    final toolById = <String, AgentToolCall>{};
     String? currentModelId;
 
-    void ensureTurn({String? promptId, String? fallbackId, DateTime? at}) {
-      if (current != null) {
-        current!.noteTime(at);
-        return;
-      }
-      final id =
-          promptId ??
-          fallbackId ??
-          'grok-turn-${turns.length + 1}-$threadId'.hashCode
-              .toUnsigned(32)
-              .toRadixString(16);
-      current = _TurnBuilder(id: id, model: currentModelId)..noteTime(at);
-      turns.add(current!);
-    }
+    // History reducer 必须是本次 parse 私有实例；epoch 只用于状态隔离，
+    // canonical 对比不要求它与 live 相同。
+    final mapper = GrokSessionUpdateMapper();
+    const runtimeScope = AgentRuntimeScope(
+      runtimeId: 'grok-history-parser',
+      connectionEpoch: 0,
+    );
 
     void closeTurn({
       AgentHistoryTurnStatus status = AgentHistoryTurnStatus.completed,
-      AgentTokenUsage? usage,
       Duration? duration,
       DateTime? at,
       String? errorMessage,
@@ -56,9 +44,6 @@ class GrokUpdatesHistoryParser {
       turn.status = status;
       turn.noteTime(at);
       turn.completedAt ??= at;
-      if (usage != null) {
-        turn.tokenUsage = usage;
-      }
       if (duration != null) {
         turn.duration = duration;
       } else if (turn.duration == null &&
@@ -70,375 +55,238 @@ class GrokUpdatesHistoryParser {
       if (errorMessage != null) {
         turn.errorMessage = errorMessage;
       }
-      // 将仍挂起的工具写入当前 turn（若尚未写入）。
+      if (!turn.identityTerminal) {
+        mapper.invalidateTurn(
+          runtimeScope: runtimeScope,
+          sessionId: turn.sessionId,
+          runningTurnId: turn.id,
+          promptId: turn.stablePromptId,
+          reason: GrokIdentityInvalidationReason.newTurn,
+        );
+      }
       current = null;
     }
 
-    for (final line in const LineSplitter().convert(content)) {
-      final trimmed = line.trim();
-      if (trimmed.isEmpty) {
-        continue;
+    void ensureTurn({
+      required String sessionId,
+      String? promptId,
+      DateTime? at,
+    }) {
+      final active = current;
+      if (active != null &&
+          (active.sessionId != sessionId ||
+              active.hasDifferentStablePrompt(promptId))) {
+        closeTurn(at: at);
       }
-      Map<String, Object?> root;
-      try {
-        final decoded = jsonDecode(trimmed);
-        if (decoded is! Map) {
+      if (current != null) {
+        current!
+          ..noteTime(at)
+          ..notePromptId(promptId);
+        return;
+      }
+
+      final ordinal = turns.length + 1;
+      final turnId = promptId ?? _historyTurnId(threadId, ordinal);
+      final next = _TurnBuilder(
+        id: turnId,
+        sessionId: sessionId,
+        stablePromptId: promptId,
+        model: currentModelId,
+      )..noteTime(at);
+      turns.add(next);
+      current = next;
+      mapper.beginTurn(
+        runtimeScope: runtimeScope,
+        sessionId: sessionId,
+        turnId: turnId,
+      );
+    }
+
+    try {
+      for (final line in const LineSplitter().convert(content)) {
+        final trimmed = line.trim();
+        if (trimmed.isEmpty) {
           continue;
         }
-        root = decoded.map(
-          (key, value) => MapEntry(key.toString(), value as Object?),
-        );
-      } catch (_) {
-        continue;
-      }
+        Map<String, Object?> root;
+        try {
+          final decoded = jsonDecode(trimmed);
+          if (decoded is! Map) {
+            continue;
+          }
+          root = decoded.map(
+            (key, value) => MapEntry(key.toString(), value as Object?),
+          );
+        } catch (_) {
+          continue;
+        }
 
-      final method = root['method']?.toString() ?? '';
-      final params = _asMap(root['params']) ?? const <String, Object?>{};
-      final update = _asMap(params['update']) ?? const <String, Object?>{};
-      final paramsMeta = _asMap(params['_meta']) ?? const <String, Object?>{};
-      final updateMeta = _asMap(update['_meta']) ?? const <String, Object?>{};
-      final kind =
-          update['sessionUpdate']?.toString() ??
-          (method.contains('turn_completed') ? 'turn_completed' : '');
+        final method = root['method']?.toString() ?? '';
+        final params = _asMap(root['params']) ?? const <String, Object?>{};
+        final sourceUpdate =
+            _asMap(params['update']) ?? const <String, Object?>{};
+        final update =
+            sourceUpdate['sessionUpdate'] == null &&
+                method.contains('turn_completed')
+            ? <String, Object?>{
+                ...sourceUpdate,
+                'sessionUpdate': 'turn_completed',
+              }
+            : sourceUpdate;
+        final normalizedParams = identical(update, sourceUpdate)
+            ? params
+            : <String, Object?>{...params, 'update': update};
+        final updateMeta = _asMap(update['_meta']) ?? const <String, Object?>{};
+        final paramsMeta = _asMap(params['_meta']) ?? const <String, Object?>{};
 
-      final promptId =
-          updateMeta['promptId']?.toString() ??
-          paramsMeta['promptId']?.toString() ??
-          update['prompt_id']?.toString() ??
-          update['promptId']?.toString();
-      final eventId =
-          paramsMeta['eventId']?.toString() ??
-          updateMeta['eventId']?.toString();
-      final userPromptKey = _userPromptKey(
-        promptId: promptId,
-        promptIndex:
-            updateMeta['promptIndex'] ??
-            paramsMeta['promptIndex'] ??
-            update['prompt_index'] ??
-            update['promptIndex'],
-        messageId: update['messageId']?.toString(),
-      );
-      // 事件时刻：优先 agentTimestampMs（毫秒），否则行级 timestamp（多为秒）。
-      // turnStartMs 只用于校准 startedAt，不当作 completedAt。
-      final eventAt =
-          _dateTimeFromMs(updateMeta['agentTimestampMs']) ??
-          _dateTimeFromMs(paramsMeta['agentTimestampMs']) ??
-          _dateTimeFromTimestamp(root['timestamp']);
+        // 事件时刻优先 agentTimestampMs；行级 timestamp 通常为 Unix 秒。
+        final eventAt =
+            _dateTimeFromMs(updateMeta['agentTimestampMs']) ??
+            _dateTimeFromMs(paramsMeta['agentTimestampMs']) ??
+            _dateTimeFromTimestamp(root['timestamp']);
 
-      final reportedModelId = _firstNonEmpty(<Object?>[
-        update['modelId'],
-        update['model_id'],
-        updateMeta['modelId'],
-        paramsMeta['modelId'],
-        params['modelId'],
-      ]);
-      if (reportedModelId != null) {
-        currentModelId = reportedModelId;
-        current?.model ??= reportedModelId;
-      }
+        final reportedModelId = _firstNonEmpty(<Object?>[
+          update['modelId'],
+          update['model_id'],
+          updateMeta['modelId'],
+          paramsMeta['modelId'],
+          params['modelId'],
+        ]);
+        if (reportedModelId != null) {
+          currentModelId = reportedModelId;
+          current?.model ??= reportedModelId;
+        }
 
-      switch (kind) {
-        case 'user_message_chunk':
-          // Grok 会把同一次 prompt 的文字和本地图片拆成多个 chunk。
-          // 只有逻辑 prompt 变化时才关闭上一 turn。
+        final decoded = mapper.decoder.decode(normalizedParams);
+        final sessionId = decoded.sessionId ?? threadId;
+        final promptId = decoded.promptId;
+
+        if (decoded case final AcpUserMessageChunk user) {
+          final userPromptKey = _userPromptKey(
+            promptId: promptId,
+            promptIndex:
+                updateMeta['promptIndex'] ??
+                paramsMeta['promptIndex'] ??
+                update['prompt_index'] ??
+                update['promptIndex'],
+            messageId: user.sourceMessageId,
+          );
           if (current != null &&
               current!.hasContent &&
               !current!.acceptsUserPrompt(userPromptKey)) {
             closeTurn(at: eventAt);
           }
-          ensureTurn(
-            promptId: promptId,
-            fallbackId: eventId ?? 'user-${turns.length}',
-            at: eventAt,
-          );
+          ensureTurn(sessionId: sessionId, promptId: promptId, at: eventAt);
           current!.noteUserPrompt(userPromptKey);
-          final parsed = parseGrokUserContent(
-            _contentText(update['content']) ?? '',
-          );
+          final parsed = parseGrokUserContent(_contentText(user.content) ?? '');
           if (parsed.text.isNotEmpty || parsed.localImagePaths.isNotEmpty) {
-            final messageId =
-                update['messageId']?.toString() ??
-                eventId ??
-                'user-${current!.id}-${current!.entries.length}';
             current!.addOrMergeUserMessage(
-              id: messageId,
+              sourceMessageId: user.sourceMessageId,
               text: parsed.text,
               localImagePaths: parsed.localImagePaths,
-              raw: update,
+              raw: user.raw,
             );
           }
+          continue;
+        }
 
-        case 'agent_message_chunk':
-          ensureTurn(promptId: promptId, fallbackId: eventId, at: eventAt);
-          // 回合边界只认 user_message / turn_completed；promptId 仅用于对齐 id。
-          if (promptId != null && current != null) {
-            current!.preferId(promptId);
-          }
-          // 流式 chunk 的 turnStartMs 是整轮开始时刻，优先作 startedAt。
-          current?.noteTurnStartMs(updateMeta['turnStartMs']);
-          final text = _contentText(update['content']);
-          if (text == null || text.trim().isEmpty) {
-            break;
-          }
-          final messageId =
-              update['messageId']?.toString() ??
-              eventId ??
-              'agent-${current!.id}-${current!.entries.length}';
-          current!.addOrMergeAgentMessage(
-            id: messageId,
-            text: text,
-            raw: update,
-          );
+        if (decoded is AcpUnknownUpdate) {
+          continue;
+        }
 
-        case 'agent_thought_chunk':
-          ensureTurn(promptId: promptId, fallbackId: eventId, at: eventAt);
-          if (promptId != null && current != null) {
-            current!.preferId(promptId);
-          }
-          current?.noteTurnStartMs(updateMeta['turnStartMs']);
-          final text = _contentText(update['content']) ?? '';
-          if (text.trim().isEmpty) {
-            break;
-          }
-          final itemId =
-              update['messageId']?.toString() ??
-              eventId ??
-              'thought-${current!.id}-${current!.entries.length}';
-          current!.addOrMergeThought(id: itemId, text: text, raw: update);
+        ensureTurn(sessionId: sessionId, promptId: promptId, at: eventAt);
+        current?.noteTurnStartMs(updateMeta['turnStartMs']);
+        final mapped = mapper.mapSessionUpdate(
+          params: normalizedParams,
+          runningTurnId: current!.id,
+          runtimeScope: runtimeScope,
+          terminalSource: method.startsWith('_x.ai/')
+              ? GrokTerminalSource.xaiNotification
+              : GrokTerminalSource.standardNotification,
+        );
 
-        case 'tool_call':
-        case 'tool_call_update':
-          ensureTurn(promptId: promptId, fallbackId: eventId, at: eventAt);
-          if (promptId != null && current != null) {
-            current!.preferId(promptId);
+        AgentTurnCompletedEvent? terminal;
+        for (final event in mapped.events) {
+          switch (event) {
+            case AgentMessageDeltaEvent():
+              current!.addOrMergeAgentMessage(
+                id: event.messageId,
+                sourceMessageId: event.sourceMessageId,
+                text: event.delta,
+                raw: event.raw,
+              );
+            case AgentReasoningDeltaEvent():
+              current!.addOrMergeThought(
+                id: event.itemId,
+                sourceItemId: event.sourceItemId,
+                text: event.delta,
+                raw: event.raw,
+              );
+            case AgentToolCallEvent():
+              current!.upsertTool(event.toolCall);
+            case AgentPlanUpdatedEvent():
+              current!.addPlan(event.entries, raw: update);
+            case AgentTokenUsageEvent():
+              // Grok turn_completed usage 是本回合绝对用量；usage_update 则是
+              // session 累计进度，不能冒充当前 turn 用量。
+              if (!event.isSessionCumulative) {
+                current!.tokenUsage = event.tokenUsage;
+              }
+            case AgentTurnCompletedEvent():
+              terminal = event;
+            default:
+              break;
           }
-          final tool = _mapToolCall(update: update, sessionId: threadId);
-          if (tool == null) {
-            break;
-          }
-          final merged = _mergeTool(toolById[tool.id], tool);
-          toolById[tool.id] = merged;
-          current!.upsertTool(merged);
+        }
 
-        case 'plan':
-          ensureTurn(promptId: promptId, fallbackId: eventId, at: eventAt);
-          final planText = _planText(update['entries']);
-          if (planText.isEmpty) {
-            break;
-          }
-          final planId =
-              eventId ?? 'plan-${current!.id}-${current!.entries.length}';
-          current!.addMessage(
-            AgentHistoryMessageEntry(
-              id: planId,
-              role: AgentMessageRole.agent,
-              text: planText,
-              kind: AgentMessageKind.plan,
-              status: AgentMessageStatus.completed,
-              raw: <String, Object?>{'type': 'plan', ...update},
-            ),
-          );
-
-        case 'turn_completed':
-          final stop =
-              update['stop_reason']?.toString() ??
-              update['stopReason']?.toString() ??
-              'end_turn';
-          final usageMap = _asMap(update['usage']);
-          AgentTokenUsage? usage;
-          Duration? duration;
-          if (usageMap != null) {
-            usage = AgentTokenUsage(
-              inputTokens: _asInt(usageMap['inputTokens']),
-              outputTokens: _asInt(usageMap['outputTokens']),
-              totalTokens: _asInt(usageMap['totalTokens']),
-              cachedInputTokens: _asInt(usageMap['cachedReadTokens']),
-              reasoningOutputTokens: _asInt(usageMap['reasoningTokens']),
-              modelContextWindow: ContextWindowCodec.positiveWindow(usageMap),
-            );
-            final apiDurationMs = _asInt(usageMap['apiDurationMs']);
-            if (apiDurationMs != null && apiDurationMs >= 0) {
-              duration = Duration(milliseconds: apiDurationMs);
-            }
-          }
-          if (current == null) {
-            ensureTurn(
-              promptId: update['prompt_id']?.toString() ?? promptId,
-              fallbackId: eventId,
-              at: eventAt,
-            );
-          }
+        if (terminal != null) {
+          current!.identityTerminal = true;
           closeTurn(
-            status: _stopReasonToStatus(stop),
-            usage: usage,
-            duration: duration,
+            status: terminal.status,
+            duration: terminal.duration,
             at: eventAt,
-            errorMessage: _isFailedStop(stop) ? stop : null,
+            errorMessage: terminal.errorMessage,
           );
-
-        default:
-          break;
-      }
-    }
-
-    // 文件末尾未 close 的 turn 视为 completed。
-    if (current != null) {
-      closeTurn();
-    }
-
-    final built = turns
-        .where((turn) => turn.hasContent)
-        .map((turn) => turn.build())
-        .toList(growable: false);
-
-    return AgentThreadHistorySnapshot(
-      threadId: threadId,
-      turns: List<AgentHistoryTurn>.unmodifiable(built),
-      currentTurn: built.isEmpty ? null : built.last,
-      raw: raw,
-    );
-  }
-
-  AgentToolCall? _mapToolCall({
-    required Map<String, Object?> update,
-    required String sessionId,
-  }) {
-    final id = update['toolCallId']?.toString();
-    if (id == null || id.isEmpty) {
-      return null;
-    }
-    final kind = parseAgentToolKind(update['kind']?.toString());
-    final status = switch (update['status']?.toString()) {
-      'pending' => AgentToolStatus.pending,
-      'in_progress' => AgentToolStatus.inProgress,
-      'completed' => AgentToolStatus.completed,
-      'failed' => AgentToolStatus.failed,
-      'cancelled' => AgentToolStatus.cancelled,
-      _ => AgentToolStatus.completed,
-    };
-    final locations = <String>[];
-    final rawLocations = update['locations'];
-    if (rawLocations is List) {
-      for (final item in rawLocations) {
-        if (item is Map && item['path'] != null) {
-          locations.add(item['path'].toString());
-        } else if (item is String && item.isNotEmpty) {
-          locations.add(item);
         }
       }
-    }
-    final rawInput = _asMap(update['rawInput']) ?? const <String, Object?>{};
-    final rawOutput = _asMap(update['rawOutput']) ?? const <String, Object?>{};
-    final title = buildAgentToolCallDisplayTitle(
-      toolCallId: id,
-      title: update['title']?.toString(),
-      kind: kind,
-      kindRaw: update['kind']?.toString(),
-      locations: locations,
-      rawInput: rawInput,
-    );
-    return AgentToolCall(
-      id: id,
-      title: title,
-      kind: kind,
-      status: status,
-      content: _toolContentText(update['content']),
-      locations: List<String>.unmodifiable(locations),
-      sessionId: sessionId,
-      rawInput: rawInput,
-      rawOutput: rawOutput,
-      raw: update,
-    );
-  }
 
-  AgentToolCall _mergeTool(AgentToolCall? previous, AgentToolCall next) {
-    if (previous == null) {
-      return next;
-    }
-    final nextTitleNonInformative = isNonInformativeAgentToolCallTitle(
-      next.title,
-      toolCallId: next.id,
-    );
-    final previousTitleNonInformative = isNonInformativeAgentToolCallTitle(
-      previous.title,
-      toolCallId: previous.id,
-    );
-    return AgentToolCall(
-      id: next.id,
-      title: nextTitleNonInformative && !previousTitleNonInformative
-          ? previous.title
-          : (next.title.isNotEmpty ? next.title : previous.title),
-      kind: next.kind == AgentToolKind.other ? previous.kind : next.kind,
-      status: next.status,
-      content: (next.content != null && next.content!.isNotEmpty)
-          ? next.content
-          : previous.content,
-      locations: next.locations.isNotEmpty
-          ? next.locations
-          : previous.locations,
-      sessionId: next.sessionId ?? previous.sessionId,
-      turnId: next.turnId ?? previous.turnId,
-      rawInput: next.rawInput.isNotEmpty ? next.rawInput : previous.rawInput,
-      rawOutput: next.rawOutput.isNotEmpty
-          ? next.rawOutput
-          : previous.rawOutput,
-      raw: next.raw.isNotEmpty ? next.raw : previous.raw,
-    );
-  }
+      if (current != null) {
+        closeTurn();
+      }
 
-  String _planText(Object? entries) {
-    if (entries is! List) {
-      return '';
-    }
-    final lines = <String>[];
-    for (final item in entries) {
-      if (item is! Map) {
-        continue;
-      }
-      final content = (item['content']?.toString() ?? '').trim();
-      if (content.isEmpty) {
-        continue;
-      }
-      final status = item['status']?.toString();
-      lines.add(
-        status == null || status.isEmpty
-            ? '- $content'
-            : '- [$status] $content',
+      final built = turns
+          .where((turn) => turn.hasContent)
+          .map((turn) => turn.build())
+          .toList(growable: false);
+      return AgentThreadHistorySnapshot(
+        threadId: threadId,
+        turns: List<AgentHistoryTurn>.unmodifiable(built),
+        currentTurn: built.isEmpty ? null : built.last,
+        raw: raw,
       );
+    } finally {
+      mapper.dispose();
     }
-    return lines.join('\n');
-  }
-
-  AgentHistoryTurnStatus _stopReasonToStatus(String stopReason) {
-    final normalized = stopReason.toLowerCase();
-    if (normalized.contains('cancel')) {
-      return AgentHistoryTurnStatus.interrupted;
-    }
-    if (_isFailedStop(normalized)) {
-      return AgentHistoryTurnStatus.failed;
-    }
-    return AgentHistoryTurnStatus.completed;
-  }
-
-  bool _isFailedStop(String stopReason) {
-    final normalized = stopReason.toLowerCase();
-    return normalized.contains('refus') ||
-        normalized.contains('error') ||
-        normalized.contains('fail') ||
-        normalized.contains('max_token') ||
-        normalized.contains('max_turn');
   }
 }
 
 class _TurnBuilder {
-  _TurnBuilder({required this.id, this.model});
+  _TurnBuilder({
+    required this.id,
+    required this.sessionId,
+    this.stablePromptId,
+    this.model,
+  });
 
-  String id;
+  final String id;
+  final String sessionId;
+  String? stablePromptId;
   final List<AgentHistoryEntry> entries = <AgentHistoryEntry>[];
   final Map<String, int> _messageIndexById = <String, int>{};
   final Map<String, int> _toolIndexById = <String, int>{};
   String? _userPromptKey;
   int? _userMessageIndex;
+  int? _planMessageIndex;
   AgentHistoryTurnStatus status = AgentHistoryTurnStatus.completed;
   AgentTokenUsage? tokenUsage;
   String? errorMessage;
@@ -446,11 +294,23 @@ class _TurnBuilder {
   DateTime? completedAt;
   Duration? duration;
   String? model;
+  bool identityTerminal = false;
 
   bool get hasContent => entries.isNotEmpty;
 
   bool acceptsUserPrompt(String? promptKey) {
     return promptKey != null && promptKey == _userPromptKey;
+  }
+
+  bool hasDifferentStablePrompt(String? promptId) {
+    final stable = stablePromptId;
+    return stable != null && promptId != null && stable != promptId;
+  }
+
+  void notePromptId(String? promptId) {
+    if (promptId != null && promptId.isNotEmpty) {
+      stablePromptId ??= promptId;
+    }
   }
 
   void noteUserPrompt(String? promptKey) {
@@ -459,27 +319,17 @@ class _TurnBuilder {
     }
   }
 
-  void preferId(String preferred) {
-    if (preferred.isNotEmpty) {
-      id = preferred;
-    }
-  }
-
   /// 记录事件时间；首次出现作为 [startedAt]。
   void noteTime(DateTime? at) {
-    if (at == null) {
-      return;
+    if (at != null) {
+      startedAt ??= at;
     }
-    startedAt ??= at;
   }
 
-  /// 用流式 `_meta.turnStartMs` 校正回合真实开始时间（可早于首条 user chunk）。
+  /// 用流式 `_meta.turnStartMs` 校正回合真实开始时间。
   void noteTurnStartMs(Object? value) {
     final at = _dateTimeFromMs(value);
-    if (at == null) {
-      return;
-    }
-    if (startedAt == null || at.isBefore(startedAt!)) {
+    if (at != null && (startedAt == null || at.isBefore(startedAt!))) {
       startedAt = at;
     }
   }
@@ -496,7 +346,7 @@ class _TurnBuilder {
 
   /// 合并同一次 Grok prompt 拆分出的文字块和本地图片块。
   void addOrMergeUserMessage({
-    required String id,
+    required String? sourceMessageId,
     required String text,
     required List<String> localImagePaths,
     required Map<String, Object?> raw,
@@ -504,25 +354,27 @@ class _TurnBuilder {
     final existingIndex = _userMessageIndex;
     if (existingIndex != null) {
       final existing = entries[existingIndex] as AgentHistoryMessageEntry;
-      final mergedPaths = <String>{
-        ...existing.localImagePaths,
-        ...localImagePaths,
-      };
       entries[existingIndex] = AgentHistoryMessageEntry(
         id: existing.id,
+        sourceMessageId: sourceMessageId ?? existing.sourceMessageId,
         role: AgentMessageRole.user,
         text: _mergeUserText(existing.text, text),
         status: AgentMessageStatus.completed,
-        localImagePaths: List<String>.unmodifiable(mergedPaths),
+        localImagePaths: List<String>.unmodifiable(<String>{
+          ...existing.localImagePaths,
+          ...localImagePaths,
+        }),
         raw: raw,
       );
       return;
     }
 
+    final entryId = '$id:user:1';
     _userMessageIndex = entries.length;
     addMessage(
       AgentHistoryMessageEntry(
-        id: id,
+        id: entryId,
+        sourceMessageId: sourceMessageId,
         role: AgentMessageRole.user,
         text: text,
         status: AgentMessageStatus.completed,
@@ -532,27 +384,21 @@ class _TurnBuilder {
     );
   }
 
-  /// agent_message_chunk 可能是完整段落；同 id 合并文本。
+  /// 按 reducer 已规范化的 entryId 聚合同一正文 segment。
   void addOrMergeAgentMessage({
     required String id,
+    required String? sourceMessageId,
     required String text,
     required Map<String, Object?> raw,
   }) {
     final existingIndex = _messageIndexById[id];
     if (existingIndex != null) {
       final existing = entries[existingIndex] as AgentHistoryMessageEntry;
-      // 完整段落重复到达时去重；否则拼接流式增量。
-      final mergedText = existing.text == text
-          ? existing.text
-          : existing.text.endsWith(text)
-          ? existing.text
-          : text.startsWith(existing.text)
-          ? text
-          : '${existing.text}$text';
       entries[existingIndex] = AgentHistoryMessageEntry(
         id: id,
+        sourceMessageId: sourceMessageId ?? existing.sourceMessageId,
         role: AgentMessageRole.agent,
-        text: mergedText,
+        text: _mergeStreamText(existing.text, text),
         status: AgentMessageStatus.completed,
         raw: raw,
       );
@@ -561,6 +407,7 @@ class _TurnBuilder {
     addMessage(
       AgentHistoryMessageEntry(
         id: id,
+        sourceMessageId: sourceMessageId,
         role: AgentMessageRole.agent,
         text: text,
         status: AgentMessageStatus.completed,
@@ -569,30 +416,23 @@ class _TurnBuilder {
     );
   }
 
+  /// 按 reducer 已规范化的 entryId 聚合连续 reasoning phase。
   void addOrMergeThought({
     required String id,
+    required String? sourceItemId,
     required String text,
     required Map<String, Object?> raw,
   }) {
+    final historyRaw = sourceItemId == null
+        ? raw
+        : <String, Object?>{...raw, 'sourceItemId': sourceItemId};
     final existingIndex = _toolIndexById[id];
     if (existingIndex != null) {
       final existing = entries[existingIndex] as AgentHistoryToolEntry;
-      final prev = existing.toolCall.content ?? '';
-      final merged = prev == text
-          ? prev
-          : prev.endsWith(text)
-          ? prev
-          : text.startsWith(prev)
-          ? text
-          : '$prev$text';
       entries[existingIndex] = AgentHistoryToolEntry(
-        toolCall: AgentToolCall(
-          id: id,
-          title: existing.toolCall.title,
-          kind: AgentToolKind.think,
-          status: AgentToolStatus.completed,
-          content: merged,
-          raw: raw,
+        toolCall: existing.toolCall.copyWith(
+          content: _mergeStreamText(existing.toolCall.content ?? '', text),
+          raw: historyRaw,
         ),
       );
       return;
@@ -606,7 +446,9 @@ class _TurnBuilder {
           kind: AgentToolKind.think,
           status: AgentToolStatus.completed,
           content: text,
-          raw: raw,
+          sessionId: sessionId,
+          turnId: this.id,
+          raw: historyRaw,
         ),
       ),
     );
@@ -615,11 +457,39 @@ class _TurnBuilder {
   void upsertTool(AgentToolCall tool) {
     final existingIndex = _toolIndexById[tool.id];
     if (existingIndex != null) {
-      entries[existingIndex] = AgentHistoryToolEntry(toolCall: tool);
+      final existing = entries[existingIndex] as AgentHistoryToolEntry;
+      entries[existingIndex] = AgentHistoryToolEntry(
+        toolCall: _mergeTool(existing.toolCall, tool),
+      );
       return;
     }
     _toolIndexById[tool.id] = entries.length;
     entries.add(AgentHistoryToolEntry(toolCall: tool));
+  }
+
+  void addPlan(
+    List<AgentPlanEntry> planEntries, {
+    required Map<String, Object?> raw,
+  }) {
+    final text = _planText(planEntries);
+    if (text.isEmpty) {
+      return;
+    }
+    final entry = AgentHistoryMessageEntry(
+      id: '$id:plan',
+      role: AgentMessageRole.agent,
+      text: text,
+      kind: AgentMessageKind.plan,
+      status: AgentMessageStatus.completed,
+      raw: <String, Object?>{'type': 'plan', ...raw},
+    );
+    final existingIndex = _planMessageIndex;
+    if (existingIndex != null) {
+      entries[existingIndex] = entry;
+      return;
+    }
+    _planMessageIndex = entries.length;
+    addMessage(entry);
   }
 
   AgentHistoryTurn build() {
@@ -637,6 +507,49 @@ class _TurnBuilder {
       errorMessage: errorMessage,
     );
   }
+}
+
+AgentToolCall _mergeTool(AgentToolCall previous, AgentToolCall next) {
+  final nextTitleNonInformative = isNonInformativeAgentToolCallTitle(
+    next.title,
+    toolCallId: next.id,
+  );
+  final previousTitleNonInformative = isNonInformativeAgentToolCallTitle(
+    previous.title,
+    toolCallId: previous.id,
+  );
+  return AgentToolCall(
+    id: next.id,
+    title: nextTitleNonInformative && !previousTitleNonInformative
+        ? previous.title
+        : (next.title.isNotEmpty ? next.title : previous.title),
+    kind: next.kind == AgentToolKind.other ? previous.kind : next.kind,
+    status: next.status,
+    content: (next.content != null && next.content!.isNotEmpty)
+        ? next.content
+        : previous.content,
+    locations: next.locations.isNotEmpty ? next.locations : previous.locations,
+    sessionId: next.sessionId ?? previous.sessionId,
+    turnId: next.turnId ?? previous.turnId,
+    rawInput: next.rawInput.isNotEmpty ? next.rawInput : previous.rawInput,
+    rawOutput: next.rawOutput.isNotEmpty ? next.rawOutput : previous.rawOutput,
+    raw: next.raw.isNotEmpty ? next.raw : previous.raw,
+  );
+}
+
+String _historyTurnId(String threadId, int ordinal) {
+  return 'grok-history:${Uri.encodeComponent(threadId)}:turn:$ordinal';
+}
+
+String _planText(List<AgentPlanEntry> entries) {
+  return entries
+      .where((entry) => entry.content.trim().isNotEmpty)
+      .map(
+        (entry) => entry.status == null || entry.status!.isEmpty
+            ? '- ${entry.content.trim()}'
+            : '- [${entry.status}] ${entry.content.trim()}',
+      )
+      .join('\n');
 }
 
 Map<String, Object?>? _asMap(Object? value) {
@@ -683,6 +596,16 @@ String _mergeUserText(String previous, String next) {
   return '$previous\n$next';
 }
 
+String _mergeStreamText(String previous, String next) {
+  if (previous == next || previous.endsWith(next)) {
+    return previous;
+  }
+  if (next.startsWith(previous)) {
+    return next;
+  }
+  return '$previous$next';
+}
+
 String? _contentText(Object? content) {
   if (content is String) {
     return content;
@@ -694,45 +617,6 @@ String? _contentText(Object? content) {
     return map['text']?.toString();
   }
   return null;
-}
-
-String? _toolContentText(Object? content) {
-  if (content == null) {
-    return null;
-  }
-  if (content is String) {
-    return content;
-  }
-  if (content is List) {
-    final buffer = StringBuffer();
-    for (final item in content) {
-      if (item is! Map) {
-        continue;
-      }
-      final map = item.map(
-        (key, value) => MapEntry(key.toString(), value as Object?),
-      );
-      final type = map['type']?.toString();
-      if (type == 'content') {
-        final nested = _contentText(map['content']);
-        if (nested != null) {
-          if (buffer.isNotEmpty) {
-            buffer.writeln();
-          }
-          buffer.write(nested);
-        }
-      } else if (type == 'diff') {
-        final path = map['path']?.toString() ?? 'file';
-        if (buffer.isNotEmpty) {
-          buffer.writeln();
-        }
-        buffer.write('diff: $path');
-      }
-    }
-    final text = buffer.toString();
-    return text.isEmpty ? null : text;
-  }
-  return content.toString();
 }
 
 int? _asInt(Object? value) {
@@ -748,7 +632,6 @@ int? _asInt(Object? value) {
   return null;
 }
 
-/// 毫秒时间戳 → UTC DateTime。
 DateTime? _dateTimeFromMs(Object? value) {
   final ms = _asInt(value);
   if (ms == null || ms <= 0) {
@@ -757,13 +640,11 @@ DateTime? _dateTimeFromMs(Object? value) {
   return DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
 }
 
-/// Grok updates.jsonl 行级 `timestamp`：常见为 Unix 秒，偶发毫秒。
 DateTime? _dateTimeFromTimestamp(Object? value) {
   final raw = _asInt(value);
   if (raw == null || raw <= 0) {
     return null;
   }
-  // 10 位量级按秒，13 位按毫秒。
   final ms = raw.abs() < 1000000000000
       ? raw * Duration.millisecondsPerSecond
       : raw;

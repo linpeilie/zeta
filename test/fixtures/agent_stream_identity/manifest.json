@@ -53,7 +53,7 @@
     {
       "path": "grok_history.json",
       "provider": "grok",
-      "scenario": "updates history containing prompt placeholder, thought, text, tool update, text, and terminal"
+      "scenario": "live/history canonical golden covering text-tool-text, thought-tool-thought, and repeated tool updates"
     },
     {
       "path": "cursor_live_synthetic.json",

@@ -152,10 +152,14 @@ windows/
    获取端口化能力。
 4. 把 provider 原始事件映射成 `AgentEvent`、`AgentToolCall`、
    `AgentPermissionRequest`、`AgentThreadSummary`、`AgentSessionConfigOption` 等中立模型。
+   Provider 原始 `sourceItemId` / `sourceMessageId` 只作为 source metadata；进入 application
+   前必须由 adapter/reducer 生成最终 entryId。
 5. 如果出现新的可选能力域，优先新增 bundle 可选端口及其测试，再决定是否保留
    兼容门面；不要把非通用能力直接做成所有 provider 的必选方法。
-6. ACP provider 优先复用 `AcpSessionUpdateMapper`、`AcpPermissionMapper`、
-   `AcpContentCodec` 和 `AcpSessionConfigMapper`；厂商通知与阻塞扩展单独留在薄适配层。
+6. ACP provider 复用无状态 `AcpSessionUpdateDecoder`、`AcpPermissionMapper`、
+   `AcpContentCodec` 和 `AcpSessionConfigMapper`；每个厂商自行实现 adapter/reducer，决定
+   message segment、reasoning phase、tool upsert、去重和 lifecycle。共享 ACP 文件不得
+   包含厂商分支或 eventId/turn scope 叙事策略。
 7. 在 factory 中接入 provider kind。
 8. JSON-RPC provider 必须把裸 peer 包装为 `ProviderRuntimeJsonRpcPeer`，在握手成功后
    `markReady`、失败时 `markFailed`；dispose 先 `beginClosing`，再收尾 pending 交互和关闭 peer。
@@ -165,6 +169,9 @@ windows/
 10. 添加单元测试覆盖初始化、session、turn、权限请求、capability gate、生命周期门控、
     调度顺序和错误映射；已迁移能力域至少补 `AgentProviderBundle` 端口一致性测试，并
     回归 `AgentConversationViewModel` / `ProjectThreadsController` 的使用路径。
+11. 为流式 Provider 增加 adapter/reducer 序列测试；若同时支持 history/replay，必须使用
+    独立 reducer 实例，并用完整 canonical signature golden 比较相对顺序。Store 只按
+    entryId/tool id dumb merge，新增 Provider 不得修改 Store 来补叙事规则。
 
 注意：默认策略应保持保守，不自动授权命令执行或文件写入。
 未支持操作必须 capability=false，并抛出 `UnsupportedError`；不得静默成功。
@@ -175,9 +182,11 @@ Agent 管理适配与会话 provider 适配保持分层：管理 data 层可以�
 `CodexAgentManagementRepository` 的校验、冲突检测、备份和临时文件替换流程；
 日志必须在 data 层脱敏后再交给 presentation。
 
-Cursor 退役兼容必须遵守以下约束：旧 `cursor` id 与 `cursorAcp` kind 可宽容解码，但
+当前活跃 Provider 只有 Codex 与 Grok。Cursor 退役兼容必须遵守以下约束：旧 `cursor` id
+与 `cursorAcp` kind 可宽容解码，但
 `CursorRetirementPolicy` 必须在 catalog、选择、恢复和 factory 边界 fail-closed；fallback
-只存在内存，不得保存覆盖旧设置。不得读取、迁移、改写或删除 Cursor 自有目录和遗留索引。
+只存在内存，不得保存覆盖旧设置。Cursor 不参与 live/replay/load、ACP 扩展、进程启动或
+运行时组合；不得读取、迁移、改写或删除 Cursor 自有目录和遗留索引。
 - 对话详情与 Project Threads 的 provider 事件订阅统一经过
   `AgentProviderEventListenerGate`；切换 Thread/Provider 时先废弃旧 generation，再安装或
   复用新监听。Provider 若实现 `AgentRuntimeScopeProvider`，监听还必须校验 runtime/epoch；

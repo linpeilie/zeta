@@ -113,8 +113,9 @@ main -> app -> presentation/application -> domain
 - mapper 文件负责字段兼容、默认值和协议名称转换；不要在 widget 中写散落的 JSON key。
 - 模型目录的 Reasoning 和 service tier 在 data mapper 中转为中立领域模型，保留服务端顺序和
   精确 tier id；Fast 等产品语义可在 domain/application 层识别，但不得改写 provider 协议值。
-- 标准 ACP 的 session update、content block、permission option 和 session config 优先复用
-  公共 mapper；厂商扩展保留在对应 adapter，不得污染 presentation。
+- 标准 ACP 的 session update 语法只通过无状态 `AcpSessionUpdateDecoder` 解码；content
+  block、permission option 和 session config 继续复用各自 codec/mapper。厂商 source id、
+  segment/phase、去重和终态策略必须留在对应 Provider adapter/reducer，不得放回共享层。
 - 厂商阻塞请求必须覆盖成功、拒绝/跳过、取消、超时和 provider 清理路径；每条路径都要
   回包、释放 timer 并移除 presentation pending state，未知 request 明确返回 `-32601`。
 - 通用 CLI 名称（例如 Cursor 的 `agent`）不得只按 basename 判定产品身份；定位器必须
@@ -166,9 +167,11 @@ phase；被正文、tool、plan 或交互打断后的 reasoning 必须使用新 
 
 身份决策与状态隔离遵循以下边界：
 
-- 共享 ACP decoder 只能解析协议语法和 typed 字段，必须无状态；Grok、Cursor 等
-  Provider data adapter/reducer 负责解释 source id、delta/snapshot、segment、phase、
-  去重和 lifecycle。Store/ViewModel/UI 不得读取 raw payload 推断 identity 或 plan。
+- 当前活跃 Provider 只有 Codex 与 Grok。共享 ACP decoder 只能解析协议语法和 typed
+  字段，必须无状态；Grok data adapter/reducer 负责解释 source id、segment/phase、去重
+  和 lifecycle，Codex mapper 按 app-server item 生命周期确定 entryId。共享层不得提供带
+  eventId/turn scope 叙事假设的 identity mapper；Store/ViewModel/UI 不得读取 raw payload
+  推断 identity 或 plan。
 - live、replay、history 可以复用同一 reducer 算法和 entry-id builder，但必须使用不同
   实例，不得共享 current segment、seen event/tool、terminal 或 generation 状态。
 - live 状态至少按 `(runtimeId, connectionEpoch, providerId, sessionId, turnId)` 隔离；
@@ -176,11 +179,18 @@ phase；被正文、tool、plan 或交互打断后的 reasoning 必须使用新 
   删除/切换必须使旧状态失效。replay/history 在 build、失败或取消后也必须释放状态。
 - EventBuffer 只允许合并同 entryId、同事件 kind 和同必要 detail 的事件；任一非合并
   事件先 flush。它不得推断“最后一个开放气泡”或替代 Provider boundary 状态机。
-- TimelineStore 的目标行为是同 entryId 更新、异 entryId 新建，不改写 id、不分配
-  segment。迁移期现有 open/`#segN` 兜底必须保留到 Grok identity 与 Cursor 退役门禁
-  全部通过，但不得新增 Provider-specific 分支或扩大该兜底职责。
+- TimelineStore 只执行 dumb merge：同 entryId 更新、异 entryId 新建、同 tool id 原地
+  upsert，不读取最后条目猜边界、不改写 id、不分配 segment，也不包含 Provider 分支。
+  新增 Provider 只需在 data 层实现 decoder/adapter/reducer 并输出完整 `AgentEvent`，无需
+  修改 EventBuffer 或 TimelineStore。
 - eventId、messageId 稳定性和 delta/snapshot 语义必须由带 Provider/CLI 版本的脱敏
   fixture 证明；缺少真实证据时明确阻塞对应门禁，禁止复制其他 Provider 的假设。
+- History parser 只能只读来源文件；Grok 每次解析必须创建 fresh reducer，缺少稳定 turn id
+  时使用确定性的 history turn ordinal。live/history golden 必须逐位置比较 turn/entry
+  ordinal、entry type、message/reasoning phase、source id、规范化文本和 tool kind/status。
+- Cursor 已退役，不参与 catalog、UI、Provider 组合、live/replay/load、ACP 扩展或进程启动。
+  仅允许保留旧配置 decode/fallback、明确 unavailable、退役证据和用户数据未改写回归；
+  `~/.cursor`、项目 `.cursor` 与 `cursor_sessions.json` 不得读取、迁移、改写或删除。
 
 ## 5. 持久化与恢复
 

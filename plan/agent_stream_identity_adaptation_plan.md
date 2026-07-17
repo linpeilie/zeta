@@ -1,7 +1,7 @@
 # Agent 流式身份与 Provider 适配层边界整改实施方案
 
-> 状态：Phase 0–3 已完成；Phase 4 实现与自动化门禁已完成，H1/H3/H6/H7/H8/H9 本轮手测待执行
-> 版本：2.3
+> 状态：Phase 0–5 实现与自动化门禁已完成；Phase 4 记录中的未复测手工项保持原状
+> 版本：2.4
 > 编制日期：2026-07-17
 > 目标版本：当前主干；Codex app-server 以本机 `0.144.1` stable schema 为实现基线
 > 关联问题：Grok 实时时间线操作沉底、思考按 eventId 碎片化、共享层承担 Provider 叙事策略
@@ -856,18 +856,50 @@ Phase 4 执行记录（2026-07-17）：
 
 | 任务 | 文件 | 实施内容 | 测试 |
 |------|------|----------|------|
-| P5-1 | `grok_updates_history_parser.dart` | 使用 fresh history reducer；正文/reasoning/tool 顺序对齐 live | history fixture tests |
-| P5-2 | golden comparator | 比较 canonical signature，而非只比较数量 | live/history golden tests |
-| P5-3 | `acp_session_update_mapper.dart` | 删除或降级为无状态 decoder facade；移除 eventId/turn scope identity 代码 | mapper references audit |
-| P5-4 | docs | 更新 engineering standards、developer guide、design document | 文档 review |
-| P5-5 | 注释/命名 | 修正 `messageId`、Store、replay 的旧语义注释 | `rg` 审计 |
+| [x] P5-1 | `grok_updates_history_parser.dart` | 使用 fresh history reducer；正文/reasoning/tool 顺序对齐 live | history fixture tests |
+| [x] P5-2 | golden comparator | 比较 canonical signature，而非只比较数量 | live/history golden tests |
+| [x] P5-3 | `acp_session_update_mapper.dart` | 删除或降级为无状态 decoder facade；移除 eventId/turn scope identity 代码 | mapper references audit |
+| [x] P5-4 | docs | 更新 engineering standards、developer guide、design document | 文档 review |
+| [x] P5-5 | 注释/命名 | 修正 `messageId`、Store、replay 的旧语义注释 | `rg` 审计 |
 
 Phase 5 门禁：
 
-- [ ] Grok live/history canonical signature 一致。
-- [ ] 生产代码不包含 Cursor live/replay/ACP 运行引用。
-- [ ] 共享 ACP 文件不包含 Grok/Cursor eventId 叙事假设，也不含已退役 Cursor 分支。
-- [ ] 新增 Provider 文档说明只需实现 adapter/reducer，无需修改 Store。
+- [x] Grok live/history canonical signature 一致。
+- [x] 生产代码不包含 Cursor live/replay/ACP 运行引用。
+- [x] 共享 ACP 文件不包含 Grok/Cursor eventId 叙事假设，也不含已退役 Cursor 分支。
+- [x] 新增 Provider 文档说明只需实现 adapter/reducer，无需修改 Store。
+
+Phase 5 执行记录（2026-07-17）：
+
+- Grok `updates.jsonl` parser 每次 `parse` 内创建 fresh `GrokSessionUpdateMapper` / reducer；
+  live 与 history 复用 boundary 算法但不共享 mutable state。messageId/eventId 不再生成 history
+  entryId；缺少稳定 turn id 时使用 `grok-history:<thread>:turn:<ordinal>` 确定性顺序 id。
+  正文按 boundary 分段，连续 reasoning 聚合为 phase，tool start/progress/completed 按 tool id
+  在原位置 upsert；reader 只读回归证明来源 `updates.jsonl` 字节不变。
+- 新增完整 canonical comparator 与脱敏 golden。它逐位置比较 turn ordinal、entry ordinal、
+  entry type、message/reasoning phase ordinal、存在时的 source id、normalized text、tool
+  kind/status；覆盖 text→tool→text、thought→tool→thought 和同 tool id 三次更新。live 使用
+  epoch 73、history 使用 parser 私有 epoch 0，最终类型顺序严格为
+  `T1: Message, Tool, Message; T2: Reasoning, Tool, Reasoning`，两侧均与 golden 完全一致。
+- CodeGraph 与 `rg` 证明迁移期 `AcpSessionUpdateMapper` 无生产调用方，唯一调用方是其自身
+  兼容测试，因此文件与测试一并删除。保留的 `AcpSessionUpdateDecoder` 仍为无状态语法
+  decoder；content、permission、session config、runtime peer 与 stdio transport 仍由 Grok
+  或其他活跃链路使用，未误删。
+- Cursor 运行残留精确审计无 `CursorAcpAgentProvider`、replay/load collector、Cursor ACP
+  extension、CLI locator/process starter 或 `cursor-agent` 命中。白名单仅保留旧 `cursor` id /
+  `cursorAcp` kind/default config 的宽容 decode、`CursorRetirementPolicy` fallback/unavailable、
+  factory fail-closed、受保护 `cursor_sessions.json` 路径、UI 退役展示、兼容测试和 synthetic
+  退役证据；未读取或改写真实 Cursor 用户数据。
+- 同步 `engineering_standards.md`、`developer_guide.md`、`design_document.md`、`AGENTS.md`
+  与 `product_requirements.md`：明确 sourceId/entryId、Provider adapter/reducer 边界、Store
+  dumb merge、live/history 状态隔离、Codex/Grok 活跃列表、Cursor 不参与运行时，以及新增
+  Provider 无需修改 Store。
+- `dart format .` 与 `flutter analyze`（0 issues）通过；PR-E 定向矩阵 184 tests 与共享
+  transport 21 tests 全部通过，其中包含 decoder/Grok mapper/provider、history
+  parser/reader/golden、TimelineStore、旧配置 fallback、运行时不可达和用户数据未改写。
+  H5 的当前 canonical reopen 自动化等价门禁通过，
+  并保留 Phase 2 已记录的真实 Grok H5 smoke 结果。本轮完整 `flutter test` 为 584 passed、
+  22 skipped；仅前序报告已记录的 8 个 Windows golden 像素差异失败，未更新无关基线。
 
 ### Phase 6：全量回归与发布验收（0.5–1 人日）
 
@@ -1115,8 +1147,8 @@ Store 行为切换放进同一个不可独立回滚的 PR。
 | PR-B | 已完成 | 已完成 | 2026-07-17 | 2026-07-17 | 已完成 |
 | PR-C1 | 已完成 | 已完成 | 2026-07-17 | 2026-07-17 | 已完成 |
 | PR-C2 | 已完成 | 已完成 | 2026-07-17 | 2026-07-17 | 已完成 |
-| PR-D | 待分配 | 待分配 | 待定 | 待定 | 未开始 |
-| PR-E | 待分配 | 待分配 | 待定 | 待定 | 未开始 |
+| PR-D | 已完成 | 已完成 | 2026-07-17 | 2026-07-17 | 已完成 |
+| PR-E | 已完成 | 已完成 | 2026-07-17 | 2026-07-17 | 已完成 |
 | PR-F | 待分配 | 待分配 | 待定 | 待定 | 未开始 |
 
 ### 16.4 Definition of Ready
@@ -1200,8 +1232,8 @@ Store 行为切换放进同一个不可独立回滚的 PR。
 
 ### History、质量与发布
 
-- [ ] Grok live/history canonical golden 一致。
-- [ ] 诊断不记录敏感正文/raw payload。
+- [x] Grok live/history canonical golden 一致。
+- [x] 诊断不记录敏感正文/raw payload。
 - [x] `dart format .` 已执行。
 - [x] `flutter analyze` 已通过。
 - [ ] 定向测试与 `flutter test` 已通过。
@@ -1237,3 +1269,4 @@ Store 行为切换放进同一个不可独立回滚的 PR。
 | 2026-07-17 | 2.1 | 标记 Phase 0–2 已完成；Cursor 改为 Phase 3A 软下线、Phase 3B 删除实现，并同步后续门禁、测试、风险和回滚 |
 | 2026-07-17 | 2.2 | 完成 Phase 3A/3B Cursor 退役，记录实现删除、兼容白名单、共享 ACP 调用图与验证结果 |
 | 2026-07-17 | 2.3 | 完成 Phase 4 P4-1 至 P4-6 与自动化门禁；保留未重新执行的 H1/H3/H6/H7/H8/H9 手测项未勾选 |
+| 2026-07-17 | 2.4 | 完成 Phase 5 P5-1 至 P5-5：Grok live/history canonical golden、fresh history reducer、共享 mapper 删除、Cursor 残留审计与文档收口 |
