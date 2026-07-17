@@ -1,0 +1,59 @@
+{
+  "_fixture": {
+    "formatVersion": 1,
+    "provider": "codex",
+    "protocol": "Codex app-server stable API",
+    "cliVersion": "0.144.1",
+    "schemaSha256": "dccfd1613ab9393fb2f5287686f74cc5961c22b3a4542d37983047cc622cefa2",
+    "experimentalApiUsed": false,
+    "scenario": "Freeze one agentMessage item lifecycle: item/started, two item/agentMessage/delta notifications, and item/completed.",
+    "provenance": "Constructed from the Codex 0.144.1 stable schema and current provider tests.",
+    "privacy": "All text and identifiers are placeholders; no prompt or model output is retained."
+  },
+  "events": [
+    {
+      "method": "item/started",
+      "params": {
+        "threadId": "codex-thread-redacted",
+        "turnId": "codex-turn-redacted",
+        "startedAtMs": 1700000000000,
+        "item": {
+          "id": "codex-message-redacted",
+          "type": "agentMessage",
+          "text": ""
+        }
+      }
+    },
+    {
+      "method": "item/agentMessage/delta",
+      "params": {
+        "threadId": "codex-thread-redacted",
+        "turnId": "codex-turn-redacted",
+        "itemId": "codex-message-redacted",
+        "delta": "[AGENT_DELTA_1]"
+      }
+    },
+    {
+      "method": "item/agentMessage/delta",
+      "params": {
+        "threadId": "codex-thread-redacted",
+        "turnId": "codex-turn-redacted",
+        "itemId": "codex-message-redacted",
+        "delta": "[AGENT_DELTA_2]"
+      }
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "threadId": "codex-thread-redacted",
+        "turnId": "codex-turn-redacted",
+        "completedAtMs": 1700000000100,
+        "item": {
+          "id": "codex-message-redacted",
+          "type": "agentMessage",
+          "text": "[AGENT_MESSAGE_COMPLETE]"
+        }
+      }
+    }
+  ]
+}

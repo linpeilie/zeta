@@ -1,0 +1,120 @@
+{
+  "_fixture": {
+    "formatVersion": 1,
+    "provider": "codex",
+    "protocol": "Codex app-server stable API",
+    "cliVersion": "0.144.1",
+    "schemaSha256": "dccfd1613ab9393fb2f5287686f74cc5961c22b3a4542d37983047cc622cefa2",
+    "experimentalApiUsed": false,
+    "scenario": "Freeze agentMessage item -> commandExecution tool item -> agentMessage item ordering.",
+    "provenance": "Constructed from the Codex 0.144.1 stable ThreadItem and lifecycle notification schemas.",
+    "privacy": "Message, command, output, cwd, and identifiers are placeholders."
+  },
+  "events": [
+    {
+      "method": "item/started",
+      "params": {
+        "threadId": "codex-thread-redacted",
+        "turnId": "codex-turn-redacted",
+        "startedAtMs": 1700000000000,
+        "item": {
+          "id": "codex-message-redacted-1",
+          "type": "agentMessage",
+          "text": ""
+        }
+      }
+    },
+    {
+      "method": "item/agentMessage/delta",
+      "params": {
+        "threadId": "codex-thread-redacted",
+        "turnId": "codex-turn-redacted",
+        "itemId": "codex-message-redacted-1",
+        "delta": "[AGENT_MESSAGE_1]"
+      }
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "threadId": "codex-thread-redacted",
+        "turnId": "codex-turn-redacted",
+        "completedAtMs": 1700000000050,
+        "item": {
+          "id": "codex-message-redacted-1",
+          "type": "agentMessage",
+          "text": "[AGENT_MESSAGE_1]"
+        }
+      }
+    },
+    {
+      "method": "item/started",
+      "params": {
+        "threadId": "codex-thread-redacted",
+        "turnId": "codex-turn-redacted",
+        "startedAtMs": 1700000000100,
+        "item": {
+          "id": "codex-tool-redacted",
+          "type": "commandExecution",
+          "command": "[COMMAND_REDACTED]",
+          "commandActions": [],
+          "cwd": "<WORKSPACE_REDACTED>",
+          "status": "inProgress"
+        }
+      }
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "threadId": "codex-thread-redacted",
+        "turnId": "codex-turn-redacted",
+        "completedAtMs": 1700000000200,
+        "item": {
+          "id": "codex-tool-redacted",
+          "type": "commandExecution",
+          "command": "[COMMAND_REDACTED]",
+          "commandActions": [],
+          "cwd": "<WORKSPACE_REDACTED>",
+          "status": "completed",
+          "aggregatedOutput": "[TOOL_OUTPUT_REDACTED]",
+          "exitCode": 0,
+          "durationMs": 100
+        }
+      }
+    },
+    {
+      "method": "item/started",
+      "params": {
+        "threadId": "codex-thread-redacted",
+        "turnId": "codex-turn-redacted",
+        "startedAtMs": 1700000000250,
+        "item": {
+          "id": "codex-message-redacted-2",
+          "type": "agentMessage",
+          "text": ""
+        }
+      }
+    },
+    {
+      "method": "item/agentMessage/delta",
+      "params": {
+        "threadId": "codex-thread-redacted",
+        "turnId": "codex-turn-redacted",
+        "itemId": "codex-message-redacted-2",
+        "delta": "[AGENT_MESSAGE_2]"
+      }
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "threadId": "codex-thread-redacted",
+        "turnId": "codex-turn-redacted",
+        "completedAtMs": 1700000000300,
+        "item": {
+          "id": "codex-message-redacted-2",
+          "type": "agentMessage",
+          "text": "[AGENT_MESSAGE_2]"
+        }
+      }
+    }
+  ]
+}

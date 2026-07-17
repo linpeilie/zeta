@@ -1,0 +1,133 @@
+{
+  "_fixture": {
+    "formatVersion": 1,
+    "provider": "cursor",
+    "protocol": "ACP protocolVersion 1 session/load replay ordering",
+    "cliVersion": "unknown for payload; local executable is 2026.07.09-a3815c0",
+    "scenario": "Synthetic session/load notifications delivered before the response, including message and tool updates.",
+    "provenance": "Combined from current fake Cursor session/load test and AcpSessionReplayCollector test; this is not a real Cursor capture.",
+    "identityEvidence": {
+      "messageId": "The synthetic collector test reuses one messageId for two chunks; real stability is unverified.",
+      "eventId": "Absent from available replay tests; semantics are unknown.",
+      "contentPayload": "The synthetic collector test expects append deltas, while its implementation also tolerates repeated/prefix snapshots; real semantics are unknown."
+    },
+    "privacy": "The prompt marker, agent text, tool output, workspace, and identifiers are placeholders."
+  },
+  "request": {
+    "method": "session/load",
+    "params": {
+      "sessionId": "cursor-session-redacted",
+      "cwd": "<WORKSPACE_REDACTED>",
+      "mcpServers": []
+    }
+  },
+  "notificationsBeforeResponse": [
+    {
+      "method": "session/update",
+      "params": {
+        "sessionId": "cursor-session-redacted",
+        "update": {
+          "sessionUpdate": "user_message_chunk",
+          "messageId": "cursor-user-redacted",
+          "content": {
+            "type": "text",
+            "text": "[PROMPT_REDACTED]"
+          },
+          "_meta": {
+            "promptId": "cursor-turn-redacted"
+          }
+        }
+      }
+    },
+    {
+      "method": "session/update",
+      "params": {
+        "sessionId": "cursor-session-redacted",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "messageId": "cursor-message-redacted",
+          "content": {
+            "type": "text",
+            "text": "[AGENT_DELTA_1]"
+          },
+          "_meta": {
+            "promptId": "cursor-turn-redacted"
+          }
+        }
+      }
+    },
+    {
+      "method": "session/update",
+      "params": {
+        "sessionId": "cursor-session-redacted",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "messageId": "cursor-message-redacted",
+          "content": {
+            "type": "text",
+            "text": "[AGENT_DELTA_2]"
+          },
+          "_meta": {
+            "promptId": "cursor-turn-redacted"
+          }
+        }
+      }
+    },
+    {
+      "method": "session/update",
+      "params": {
+        "sessionId": "cursor-session-redacted",
+        "update": {
+          "sessionUpdate": "tool_call",
+          "toolCallId": "cursor-tool-redacted",
+          "title": "[TOOL_TITLE_REDACTED]",
+          "kind": "read",
+          "status": "in_progress",
+          "_meta": {
+            "promptId": "cursor-turn-redacted"
+          }
+        }
+      }
+    },
+    {
+      "method": "session/update",
+      "params": {
+        "sessionId": "cursor-session-redacted",
+        "update": {
+          "sessionUpdate": "tool_call_update",
+          "toolCallId": "cursor-tool-redacted",
+          "title": "[TOOL_TITLE_REDACTED]",
+          "kind": "read",
+          "status": "completed",
+          "content": {
+            "type": "content",
+            "content": {
+              "type": "text",
+              "text": "[TOOL_OUTPUT_REDACTED]"
+            }
+          },
+          "_meta": {
+            "promptId": "cursor-turn-redacted"
+          }
+        }
+      }
+    },
+    {
+      "method": "session/update",
+      "params": {
+        "sessionId": "cursor-session-redacted",
+        "update": {
+          "sessionUpdate": "turn_completed",
+          "stopReason": "end_turn",
+          "_meta": {
+            "promptId": "cursor-turn-redacted"
+          }
+        }
+      }
+    }
+  ],
+  "response": {
+    "sessionId": "cursor-session-redacted",
+    "title": "[SESSION_TITLE_REDACTED]"
+  }
+}

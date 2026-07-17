@@ -1,0 +1,170 @@
+{
+  "_fixture": {
+    "formatVersion": 1,
+    "provider": "grok",
+    "protocol": "ACP updates history JSONL record shape",
+    "cliVersion": "0.2.101",
+    "localCliVersionChecked": "0.2.102 (ab5ebf69ac)",
+    "scenario": "Freeze one history turn with a redacted prompt marker, consecutive thought, text, tool update, later text, and terminal.",
+    "provenance": "Sanitized synthesis from existing redacted Grok updates fixtures and GrokUpdatesHistoryParser tests.",
+    "privacy": "The user prompt, agent text, tool output, identifiers, and timestamps are placeholders."
+  },
+  "records": [
+    {
+      "timestamp": 1700000000,
+      "method": "session/update",
+      "params": {
+        "sessionId": "grok-session-redacted",
+        "update": {
+          "sessionUpdate": "user_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "[PROMPT_REDACTED]"
+          },
+          "_meta": {
+            "promptIndex": 1
+          }
+        },
+        "_meta": {
+          "eventId": "grok-history-user"
+        }
+      }
+    },
+    {
+      "timestamp": 1700000001,
+      "method": "session/update",
+      "params": {
+        "sessionId": "grok-session-redacted",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "[THOUGHT_DELTA_1]"
+          },
+          "_meta": {
+            "promptId": "grok-turn-redacted"
+          }
+        },
+        "_meta": {
+          "eventId": "grok-history-thought-1"
+        }
+      }
+    },
+    {
+      "timestamp": 1700000002,
+      "method": "session/update",
+      "params": {
+        "sessionId": "grok-session-redacted",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "[THOUGHT_DELTA_2]"
+          },
+          "_meta": {
+            "promptId": "grok-turn-redacted"
+          }
+        },
+        "_meta": {
+          "eventId": "grok-history-thought-2"
+        }
+      }
+    },
+    {
+      "timestamp": 1700000003,
+      "method": "session/update",
+      "params": {
+        "sessionId": "grok-session-redacted",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "messageId": "grok-source-message-redacted",
+          "content": {
+            "type": "text",
+            "text": "[AGENT_TEXT_SEGMENT_1]"
+          },
+          "_meta": {
+            "promptId": "grok-turn-redacted"
+          }
+        },
+        "_meta": {
+          "eventId": "grok-history-agent-1"
+        }
+      }
+    },
+    {
+      "timestamp": 1700000004,
+      "method": "session/update",
+      "params": {
+        "sessionId": "grok-session-redacted",
+        "update": {
+          "sessionUpdate": "tool_call",
+          "toolCallId": "grok-history-tool-redacted",
+          "title": "[TOOL_TITLE_REDACTED]",
+          "kind": "read",
+          "status": "pending"
+        },
+        "_meta": {
+          "eventId": "grok-history-tool-start"
+        }
+      }
+    },
+    {
+      "timestamp": 1700000005,
+      "method": "session/update",
+      "params": {
+        "sessionId": "grok-session-redacted",
+        "update": {
+          "sessionUpdate": "tool_call_update",
+          "toolCallId": "grok-history-tool-redacted",
+          "status": "completed",
+          "content": {
+            "type": "content",
+            "content": {
+              "type": "text",
+              "text": "[TOOL_OUTPUT_REDACTED]"
+            }
+          }
+        },
+        "_meta": {
+          "eventId": "grok-history-tool-complete"
+        }
+      }
+    },
+    {
+      "timestamp": 1700000006,
+      "method": "session/update",
+      "params": {
+        "sessionId": "grok-session-redacted",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "messageId": "grok-source-message-redacted",
+          "content": {
+            "type": "text",
+            "text": "[AGENT_TEXT_SEGMENT_2]"
+          },
+          "_meta": {
+            "promptId": "grok-turn-redacted"
+          }
+        },
+        "_meta": {
+          "eventId": "grok-history-agent-2"
+        }
+      }
+    },
+    {
+      "timestamp": 1700000007,
+      "method": "_x.ai/session/update",
+      "params": {
+        "sessionId": "grok-session-redacted",
+        "update": {
+          "sessionUpdate": "turn_completed",
+          "prompt_id": "grok-turn-redacted",
+          "stop_reason": "end_turn"
+        },
+        "_meta": {
+          "eventId": "grok-history-terminal"
+        }
+      }
+    }
+  ]
+}

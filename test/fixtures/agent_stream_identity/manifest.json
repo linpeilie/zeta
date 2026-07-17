@@ -1,0 +1,78 @@
+{
+  "formatVersion": 1,
+  "createdAt": "2026-07-17",
+  "baselineCommit": "f33b14f00ea67de922b3655666a4b07a07861d37",
+  "purpose": "Freeze redacted provider input shapes before stream identity behavior changes.",
+  "privacyContract": [
+    "No prompt body",
+    "No credential or token",
+    "No real filesystem path",
+    "No user file content",
+    "All message, command, output, session, turn, item, and event values are placeholders"
+  ],
+  "providers": [
+    {
+      "provider": "grok",
+      "protocol": "ACP protocolVersion 1 with xAI session update extension",
+      "fixtureVersion": "0.2.101",
+      "localCliVersionChecked": "0.2.102 (ab5ebf69ac)",
+      "versionEvidence": "test/fixtures/grok/acp/initialize_0_2_101_redacted.json",
+      "provenance": "Sanitized synthesis from the existing 0.2.101 redacted capture shape and current mapper/provider/history tests."
+    },
+    {
+      "provider": "cursor",
+      "protocol": "ACP protocolVersion 1 plus Cursor extensions",
+      "fixtureVersion": "unknown; no real capture is available",
+      "localCliVersionChecked": "2026.07.09-a3815c0",
+      "versionEvidence": "Local cursor-agent --version output only; it does not establish payload semantics.",
+      "provenance": "Synthetic baseline copied from current fake provider and replay collector test shapes.",
+      "realFixtureAvailable": false
+    },
+    {
+      "provider": "codex",
+      "protocol": "Codex app-server stable API",
+      "fixtureVersion": "0.144.1",
+      "localCliVersionChecked": "codex-cli 0.144.1",
+      "stableSchemaSha256": "dccfd1613ab9393fb2f5287686f74cc5961c22b3a4542d37983047cc622cefa2",
+      "experimentalApiUsed": false,
+      "provenance": "Constructed from the version-matched stable schema and current app-server provider tests."
+    }
+  ],
+  "fixtures": [
+    {
+      "path": "grok_live_text_tool_text.json",
+      "provider": "grok",
+      "scenario": "agent text, tool start/update, agent text, turn completed"
+    },
+    {
+      "path": "grok_live_consecutive_thought.json",
+      "provider": "grok",
+      "scenario": "consecutive thought chunks with distinct event ids"
+    },
+    {
+      "path": "grok_history.json",
+      "provider": "grok",
+      "scenario": "updates history containing prompt placeholder, thought, text, tool update, text, and terminal"
+    },
+    {
+      "path": "cursor_live_synthetic.json",
+      "provider": "cursor",
+      "scenario": "synthetic live message chunks and tool update; event id evidence absent"
+    },
+    {
+      "path": "cursor_session_load_replay_synthetic.json",
+      "provider": "cursor",
+      "scenario": "synthetic session/load notifications emitted before response; event id evidence absent"
+    },
+    {
+      "path": "codex_agent_message_lifecycle.json",
+      "provider": "codex",
+      "scenario": "one agentMessage item with two deltas and item/completed"
+    },
+    {
+      "path": "codex_item_tool_item.json",
+      "provider": "codex",
+      "scenario": "agentMessage item, commandExecution tool item, agentMessage item"
+    }
+  ]
+}

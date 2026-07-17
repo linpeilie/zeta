@@ -140,6 +140,48 @@ main -> app -> presentation/application -> domain
   快照为准；升级 CLI 时先用 `tool/gen_codex_schema.*` 导出并 diff，再改
   适配层。流程见 `docs/codex_app_server_protocol.md`。
 
+### 4.1 Agent 流式身份与叙事边界
+
+Agent 时间线必须区分 Provider 原始身份和 Zeta 展示身份：
+
+- `sourceItemId` / `sourceMessageId`（统称 source id）保存 Provider 协议给出的
+  message/item/event 身份，用于关联、去重和诊断；它不是 UI 合并键。
+- `entryId` 是 Zeta 规范化时间线条目身份，也是 EventBuffer、TimelineStore 和 UI
+  的唯一合并键。迁移期内 `AgentMessageDeltaEvent.messageId`、
+  `AgentMessageUpdatedEvent.messageId` 和 `AgentReasoningDeltaEvent.itemId` 字段名暂时
+  保留，但语义均为 entryId。
+- 同一连续可见条目的 delta 必须复用 entryId；条目被关闭后不得复用。两个 turn
+  即使复用同一个 source id，也必须得到不同 entryId；不得用固定 `unknown` 作为
+  message/reasoning entryId。
+- Provider 的 completed/snapshot 必须通过 source→entry 关联更新已有条目。若一个
+  source message 已被拆成多个 segment 且协议没有 segment 信息，完整 snapshot 不得
+  猜测性覆盖任一 segment，只能更新可安全关联的 metadata。
+
+`narrative boundary` 是会改变可见时间线顺序、并关闭当前 message segment 或
+reasoning phase 的事件。边界至少包括：source message id 改变、正文与 reasoning
+互相切换、首次出现的 tool、plan、permission/user question/plan approval、实际进入
+时间线的 warning/system 条目以及 turn terminal。以下情况不额外创建边界：同一 tool id
+的状态更新、usage/status/config 更新和重复 raw event。连续 reasoning chunk 属于同一
+phase；被正文、tool、plan 或交互打断后的 reasoning 必须使用新 entryId。
+
+身份决策与状态隔离遵循以下边界：
+
+- 共享 ACP decoder 只能解析协议语法和 typed 字段，必须无状态；Grok、Cursor 等
+  Provider data adapter/reducer 负责解释 source id、delta/snapshot、segment、phase、
+  去重和 lifecycle。Store/ViewModel/UI 不得读取 raw payload 推断 identity 或 plan。
+- live、replay、history 可以复用同一 reducer 算法和 entry-id builder，但必须使用不同
+  实例，不得共享 current segment、seen event/tool、terminal 或 generation 状态。
+- live 状态至少按 `(runtimeId, connectionEpoch, providerId, sessionId, turnId)` 隔离；
+  新 turn、cancel、prompt 失败、peer close、provider dispose、epoch 变化和 session
+  删除/切换必须使旧状态失效。replay/history 在 build、失败或取消后也必须释放状态。
+- EventBuffer 只允许合并同 entryId、同事件 kind 和同必要 detail 的事件；任一非合并
+  事件先 flush。它不得推断“最后一个开放气泡”或替代 Provider boundary 状态机。
+- TimelineStore 的目标行为是同 entryId 更新、异 entryId 新建，不改写 id、不分配
+  segment。迁移期现有 open/`#segN` 兜底必须保留到 Grok 与 Cursor live/replay 门禁
+  全部通过，但不得新增 Provider-specific 分支或扩大该兜底职责。
+- eventId、messageId 稳定性和 delta/snapshot 语义必须由带 Provider/CLI 版本的脱敏
+  fixture 证明；缺少真实证据时明确阻塞对应门禁，禁止复制其他 Provider 的假设。
+
 ## 5. 持久化与恢复
 
 持久化数据必须可演进、可恢复、可容错。
