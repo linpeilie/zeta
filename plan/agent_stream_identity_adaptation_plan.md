@@ -1,7 +1,7 @@
 # Agent 流式身份与 Provider 适配层边界整改实施方案
 
-> 状态：Phase 0–3 已完成；Phase 4 待实施
-> 版本：2.2
+> 状态：Phase 0–3 已完成；Phase 4 实现与自动化门禁已完成，H1/H3/H6/H7/H8/H9 本轮手测待执行
+> 版本：2.3
 > 编制日期：2026-07-17
 > 目标版本：当前主干；Codex app-server 以本机 `0.144.1` stable schema 为实现基线
 > 关联问题：Grok 实时时间线操作沉底、思考按 eventId 碎片化、共享层承担 Provider 叙事策略
@@ -811,12 +811,12 @@ Phase 3 只有按顺序完成 3A 和 3B 才算通过。Cursor 真实 fixture 缺
 
 | 任务 | 文件 | 实施内容 | 测试 |
 |------|------|----------|------|
-| P4-1 | `agent_conversation_timeline_store.dart` | 删除 `_resolveStreamingAgentMessageId`、open stream、segment seq、`#segN` | Store unit tests |
-| P4-2 | 同上 | `appendMessageDelta` 只按 `event.messageId` create/append；`updateMessage` 按相同 entryId 更新 | delta/update tests |
-| P4-3 | Store/ViewModel | 使用 domain `AgentMessageKind`，删除 raw plan sniff，并移除/替换 application 层重复枚举 | plan tests |
-| P4-4 | `agent_event_stream_buffer.dart` | coalescing key 纳入 message kind；merge 必须保留 source id/kind；reasoning merge 保留 source item id | EventBuffer tests |
-| P4-5 | Codex mapper/provider | 增加不同 itemId、item/tool/item、delta/completed 测试 | app-server tests |
-| P4-6 | ViewModel/Widget | 验证最终 `Message, Tool, Message` 和 reasoning phase 顺序 | view model/widget tests |
+| [x] P4-1 | `agent_conversation_timeline_store.dart` | 删除 `_resolveStreamingAgentMessageId`、open stream、segment seq、`#segN` | Store unit tests |
+| [x] P4-2 | 同上 | `appendMessageDelta` 只按 `event.messageId` create/append；`updateMessage` 按相同 entryId 更新 | delta/update tests |
+| [x] P4-3 | Store/ViewModel | 使用 domain `AgentMessageKind`，删除 raw plan sniff，并移除/替换 application 层重复枚举 | plan tests |
+| [x] P4-4 | `agent_event_stream_buffer.dart` | coalescing key 纳入 message kind；merge 必须保留 source id/kind；reasoning merge 保留 source item id | EventBuffer tests |
+| [x] P4-5 | Codex mapper/provider | 增加不同 itemId、item/tool/item、delta/completed 测试 | app-server tests |
+| [x] P4-6 | ViewModel/Widget | 验证最终 `Message, Tool, Message` 和 reasoning phase 顺序 | view model/widget tests |
 
 禁止事项：
 
@@ -827,11 +827,28 @@ Phase 3 只有按顺序完成 3A 和 3B 才算通过。Cursor 真实 fixture 缺
 
 Phase 4 门禁：
 
-- [ ] `rg "#seg|_openAgentMessage|_resolveStreamingAgentMessageId" lib/src/features/agent/application` 无生产代码命中。
-- [ ] Store 同 id 合并、异 id 新建测试通过。
-- [ ] EventBuffer `Message(seg1), Tool(pending), Message(seg2)` 顺序测试通过。
-- [ ] Grok、Codex provider 定向测试与 Cursor 退役兼容测试全部通过。
+- [x] `rg "#seg|_openAgentMessage|_resolveStreamingAgentMessageId" lib/src/features/agent/application` 无生产代码命中。
+- [x] Store 同 id 合并、异 id 新建测试通过。
+- [x] EventBuffer `Message(seg1), Tool(pending), Message(seg2)` 顺序测试通过。
+- [x] Grok、Codex provider 定向测试与 Cursor 退役兼容测试全部通过。
 - [ ] H1、H3、H6、H7、H8、H9 手测通过。
+
+Phase 4 执行记录（2026-07-17）：
+
+- 前置门禁：Phase 2、Phase 3A、Phase 3B 的执行记录与门禁均为通过；生产代码审计未发现
+  Cursor live/replay/ACP、`cursor-agent` 或 Cursor provider 实例化路径，因此才删除 Store 兜底。
+- Store 只按 normalized entryId create/append/update，删除 open message、last-entry、segment seq 和
+  `#segN`；未知 completed snapshot 不创建新消息。Store/ViewModel 使用 domain
+  `AgentMessageKind`，raw payload 不再控制 identity 或 plan kind。
+- EventBuffer 的 message key 包含 `AgentMessageKind`，message/reasoning merge 保留 source id、
+  kind、phase、status、duration 与 index；不同 normalized entryId 不合并。
+- Codex 基线为本机 `codex-cli 0.144.1` stable schema，schema 与已安装版本匹配；验证了
+  `item/agentMessage/delta`、`item/completed`、reasoning text/summary/index 和未知未来 item type，
+  未升级 CLI、未使用 experimental API。
+- `dart format .`、`flutter analyze` 和 §11.5 全部定向测试通过；额外通过页面切换状态测试及
+  Cursor 退役兼容 147 tests。精确 `rg` 审计无禁用符号命中。
+- H1/H3、H6–H9 均有自动化等价回归覆盖，Phase 2/3 记录也包含此前 smoke 证据；但当前环境
+  未重新执行真实外部 Provider/桌面手测，因此本轮 Phase 4 手测门禁保持未勾选，不以自动化冒充手测。
 
 ### Phase 5：History 对齐与共享层收口（1–2 人日）
 
@@ -1146,7 +1163,7 @@ Store 行为切换放进同一个不可独立回滚的 PR。
 - [x] message delta/updated 已区分 entryId 与 sourceMessageId。
 - [x] reasoning 已区分 entry itemId 与 sourceItemId。
 - [x] ACP decoder 无状态且不决定叙事边界。
-- [ ] Store/ViewModel 不从 raw 判断 plan/identity。
+- [x] Store/ViewModel 不从 raw 判断 plan/identity。
 
 ### Grok
 
@@ -1167,19 +1184,19 @@ Store 行为切换放进同一个不可独立回滚的 PR。
 
 ### Codex
 
-- [ ] 同 itemId delta 正确拼接。
-- [ ] 不同 itemId 不粘连。
-- [ ] delta/completed 更新同一 entry。
-- [ ] reasoning index 行为无回归。
+- [x] 同 itemId delta 正确拼接。
+- [x] 不同 itemId 不粘连。
+- [x] delta/completed 更新同一 entry。
+- [x] reasoning index 行为无回归。
 - [x] 基线明确为本机 0.144.1 stable schema。
 
 ### 统一层与 UI
 
-- [ ] TimelineStore 无 open/`#segN`。
-- [ ] EventBuffer 不跨 normalized entryId 合并。
-- [ ] `Message, Tool, Message` Widget/VM 测试通过。
-- [ ] reasoning phase 顺序测试通过。
-- [ ] 页面切换、草稿、滚动和展开态无回归。
+- [x] TimelineStore 无 open/`#segN`。
+- [x] EventBuffer 不跨 normalized entryId 合并。
+- [x] `Message, Tool, Message` Widget/VM 测试通过。
+- [x] reasoning phase 顺序测试通过。
+- [x] 页面切换、草稿、滚动和展开态无回归。
 
 ### History、质量与发布
 
@@ -1219,3 +1236,4 @@ Store 行为切换放进同一个不可独立回滚的 PR。
 | 2026-07-17 | 2.0 | 补齐 source/entry 身份、typed decoder、Cursor 先迁移、replay 隔离、reasoning phase、生命周期、EventBuffer、测试门禁、排期与回滚，升级为可直接安排开发的实施规格 |
 | 2026-07-17 | 2.1 | 标记 Phase 0–2 已完成；Cursor 改为 Phase 3A 软下线、Phase 3B 删除实现，并同步后续门禁、测试、风险和回滚 |
 | 2026-07-17 | 2.2 | 完成 Phase 3A/3B Cursor 退役，记录实现删除、兼容白名单、共享 ACP 调用图与验证结果 |
+| 2026-07-17 | 2.3 | 完成 Phase 4 P4-1 至 P4-6 与自动化门禁；保留未重新执行的 H1/H3/H6/H7/H8/H9 手测项未勾选 |

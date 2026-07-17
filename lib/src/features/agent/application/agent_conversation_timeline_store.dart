@@ -46,12 +46,7 @@ class AgentConversationTimelineStore {
   final List<String> _liveTurnOrder = <String>[];
   final Map<String, AgentConversationTurnState> _turnGroups =
       <String, AgentConversationTurnState>{};
-  final Map<String, int> _messageIndexesByProviderId = <String, int>{};
-
-  /// 同一逻辑 messageId 在 tool 等条目打断后再次流式输出时的段序号。
-  ///
-  /// key 为 provider/mapper 给出的基础 id；value 为已分配的最大段号（从 1 起）。
-  final Map<String, int> _agentMessageSegmentSeqByBaseId = <String, int>{};
+  final Map<String, int> _messageIndexesByEntryId = <String, int>{};
 
   /// reasoning itemId → 摘要/原文双缓冲，供流式 delta 聚合。
   final Map<String, _ReasoningStreamBuffers> _reasoningBuffersByItemId =
@@ -344,8 +339,7 @@ class AgentConversationTimelineStore {
     _liveTurnOrder.clear();
     _turnGroups.clear();
     _liveTurnNotifier.value = null;
-    _messageIndexesByProviderId.clear();
-    _agentMessageSegmentSeqByBaseId.clear();
+    _messageIndexesByEntryId.clear();
     _reasoningBuffersByItemId.clear();
     _expandedToolCallIds.clear();
     _expandedPlanMessageIds.clear();
@@ -414,19 +408,22 @@ class AgentConversationTimelineStore {
       for (final entry in turn.entries) {
         switch (entry) {
           case AgentHistoryMessageEntry():
-            _messageIndexesByProviderId[entry.id] = _messages.length;
             addConversationMessage(
               AgentConversationMessage(
                 id: entry.id,
+                sourceMessageId: entry.sourceMessageId,
                 role: entry.role,
                 text: entry.text,
-                kind: _messageKindFromRaw(role: entry.role, raw: entry.raw),
+                kind: entry.kind,
                 phase: entry.phase,
                 status: entry.status,
                 duration: entry.duration,
                 localImagePaths: entry.localImagePaths,
                 raw: entry.raw,
               ),
+            );
+            _messageIndexesByEntryId[entry.id] = _messages.indexWhere(
+              (message) => message.id == entry.id,
             );
           case AgentHistoryToolEntry():
             upsertToolCall(entry.toolCall);
@@ -614,38 +611,31 @@ class AgentConversationTimelineStore {
     }
   }
 
-  /// 合并流式消息增量。
+  /// 按 Provider 已规范化的 entryId 合并流式消息增量。
   ///
-  /// 同一个 provider messageId 首次出现时创建气泡，后续 delta 追加到同一条消息。
-  /// `item/plan/delta` 会带上 `type: plan`，首次创建时自动展开计划卡。
-  ///
-  /// Grok/ACP 常无稳定 messageId 或每 chunk 换 eventId。此处额外：
-  /// 1. 若当前 turn 末尾仍是同角色普通 agent 消息 → 并入该开放段（避免 chunk 碎片）；
-  /// 2. 若基础 id 已存在但末尾已被 tool 等打断 → 分配新段 id，保留交错顺序。
+  /// 相同 [AgentMessageDeltaEvent.messageId] 只追加到同一条消息；不同 id 始终
+  /// 创建新条目。叙事边界和 segment identity 必须在 data adapter 中完成。
   void appendMessageDelta(AgentMessageDeltaEvent event) {
-    final kind = _messageKindFromRaw(role: event.role, raw: event.raw);
-    final messageId = _resolveStreamingAgentMessageId(
-      preferredId: event.messageId,
-      role: event.role,
-      turnId: event.turnId,
-      kind: kind,
-    );
-    final existingIndex = _messageIndexesByProviderId[messageId];
+    final messageId = event.messageId;
+    final existingIndex = _messageIndexesByEntryId[messageId];
     if (existingIndex == null) {
-      _messageIndexesByProviderId[messageId] = _messages.length;
       addConversationMessage(
         AgentConversationMessage(
           id: messageId,
+          sourceMessageId: event.sourceMessageId,
           role: event.role,
           text: event.delta,
-          kind: kind,
+          kind: event.kind,
           phase: event.phase,
           status: event.status,
           duration: event.duration,
           raw: event.raw,
         ),
       );
-      if (kind == AgentConversationMessageKind.plan && event.delta.isNotEmpty) {
+      _messageIndexesByEntryId[messageId] = _messages.indexWhere(
+        (message) => message.id == messageId,
+      );
+      if (event.kind == AgentMessageKind.plan && event.delta.isNotEmpty) {
         _expandedPlanMessageIds.add(messageId);
       }
       _noteRespondingActivity(event.role);
@@ -657,8 +647,9 @@ class AgentConversationTimelineStore {
         existing.text.trim().isEmpty &&
         event.delta.isNotEmpty;
     final updated = existing.copyWith(
+      sourceMessageId: event.sourceMessageId,
       text: '${existing.text}${event.delta}',
-      kind: kind == AgentConversationMessageKind.plan ? kind : existing.kind,
+      kind: event.kind,
       phase: event.phase,
       status: event.status,
       duration: event.duration,
@@ -667,7 +658,7 @@ class AgentConversationTimelineStore {
     _messages[existingIndex] = updated;
     replaceTimelineMessage(updated);
     if (wasEmptyPlan ||
-        (kind == AgentConversationMessageKind.plan &&
+        (event.kind == AgentMessageKind.plan &&
             !existing.isPlan &&
             event.delta.isNotEmpty)) {
       _expandedPlanMessageIds.add(messageId);
@@ -675,124 +666,19 @@ class AgentConversationTimelineStore {
     _noteRespondingActivity(event.role);
   }
 
-  /// 解析流式 agent 文本应写入的 message id。
-  ///
-  /// 优先并入当前 turn 末尾仍开放的 agent 文本气泡；否则在基础 id 已被旧气泡
-  /// 占用且中间插入了其它条目时开新段。
-  String _resolveStreamingAgentMessageId({
-    required String preferredId,
-    required AgentMessageRole role,
-    required String? turnId,
-    required AgentConversationMessageKind kind,
-  }) {
-    // plan / 用户消息保持原 id 语义，不做 ACP 文本段切分。
-    if (role != AgentMessageRole.agent ||
-        kind == AgentConversationMessageKind.plan) {
-      return preferredId;
-    }
-
-    final openId = _openAgentMessageStreamId(
-      role: role,
-      turnId: turnId,
-      kind: kind,
-    );
-    if (openId != null) {
-      return openId;
-    }
-
-    // 末尾不是开放 agent 文本：若 preferredId 仍指向更早的气泡，开新段以免
-    // 把 tool 之后的正文追加到 tool 之前的位置。
-    if (_messageIndexesByProviderId.containsKey(preferredId)) {
-      return _allocateAgentMessageSegmentId(preferredId);
-    }
-    return preferredId;
-  }
-
-  /// 当前 turn 末尾若是同角色、同计划/非计划属性的 agent 消息，返回其 id。
-  String? _openAgentMessageStreamId({
-    required AgentMessageRole role,
-    required String? turnId,
-    required AgentConversationMessageKind kind,
-  }) {
-    final last = _lastTimelineEntryForTurn(turnId);
-    if (last is! AgentMessageTimelineEntry) {
-      return null;
-    }
-    final message = last.message;
-    if (message.role != role) {
-      return null;
-    }
-    final lastIsPlan = message.isPlan;
-    final wantPlan = kind == AgentConversationMessageKind.plan;
-    if (lastIsPlan != wantPlan) {
-      return null;
-    }
-    return message.id;
-  }
-
-  /// 读取指定 turn（缺省为当前 live/standby）时间线的最后一条原始条目。
-  AgentTimelineEntry? _lastTimelineEntryForTurn(String? turnId) {
-    final resolvedTurnId = _resolveTurnIdForStreamLookup(turnId);
-    final turnState = _turnGroups[resolvedTurnId];
-    if (turnState != null && turnState.entries.isNotEmpty) {
-      return turnState.entries.last;
-    }
-    // turn 状态尚未建立时回退全局时间线末尾（并校验 turn 归属）。
-    for (var index = _timelineEntries.length - 1; index >= 0; index -= 1) {
-      if (_timelineEntryTurnIds[index] != resolvedTurnId) {
-        continue;
-      }
-      return _timelineEntries[index];
-    }
-    return null;
-  }
-
-  /// 流式写入时解析 turn：优先已存在的分组，否则回退 live/pending/standby。
-  String _resolveTurnIdForStreamLookup(String? turnId) {
-    if (turnId != null && _turnGroups.containsKey(turnId)) {
-      return turnId;
-    }
-    return currentTurnGroupId ?? _pendingTurnGroupId ?? turnId ?? standbyTurnId;
-  }
-
-  /// 为被打断的流式 agent 文本分配新段 id：`baseId#segN`。
-  String _allocateAgentMessageSegmentId(String baseId) {
-    final next = (_agentMessageSegmentSeqByBaseId[baseId] ?? 1) + 1;
-    _agentMessageSegmentSeqByBaseId[baseId] = next;
-    return '$baseId#seg$next';
-  }
-
   /// 用 completed item 通知更新已有消息 metadata。
   void updateMessage(AgentMessageUpdatedEvent event) {
-    final existingIndex = _messageIndexesByProviderId[event.messageId];
-    final role = event.role ?? AgentMessageRole.agent;
-    final kind = _messageKindFromRaw(role: role, raw: event.raw);
+    final existingIndex = _messageIndexesByEntryId[event.messageId];
     if (existingIndex == null) {
-      final text = event.text?.trim();
-      if (text == null || text.isEmpty) {
-        return;
-      }
-      _messageIndexesByProviderId[event.messageId] = _messages.length;
-      addConversationMessage(
-        AgentConversationMessage(
-          id: event.messageId,
-          role: role,
-          text: text,
-          kind: kind,
-          phase: event.phase,
-          status: event.status,
-          duration: event.duration,
-          raw: event.raw,
-        ),
-      );
       return;
     }
 
     final existing = _messages[existingIndex];
     final updated = existing.copyWith(
+      sourceMessageId: event.sourceMessageId,
       role: event.role,
       text: event.text,
-      kind: kind == AgentConversationMessageKind.plan ? kind : existing.kind,
+      kind: event.kind,
       phase: event.phase,
       status: event.status,
       duration: event.duration,
@@ -809,7 +695,7 @@ class AgentConversationTimelineStore {
       id: messageId,
       role: AgentMessageRole.agent,
       text: _planMarkdownFromEntries(event.entries),
-      kind: AgentConversationMessageKind.plan,
+      kind: AgentMessageKind.plan,
       raw: <String, Object?>{
         'type': 'plan',
         'entries': <Map<String, String?>>[
@@ -822,10 +708,12 @@ class AgentConversationTimelineStore {
         ],
       },
     );
-    final existingIndex = _messageIndexesByProviderId[messageId];
+    final existingIndex = _messageIndexesByEntryId[messageId];
     if (existingIndex == null) {
-      _messageIndexesByProviderId[messageId] = _messages.length;
       addConversationMessage(message);
+      _messageIndexesByEntryId[messageId] = _messages.indexWhere(
+        (item) => item.id == messageId,
+      );
       return;
     }
     _messages[existingIndex] = message;
@@ -1643,36 +1531,6 @@ class AgentConversationTimelineStore {
   }
 }
 
-AgentConversationMessageKind _messageKindFromRaw({
-  required AgentMessageRole role,
-  required Map<String, Object?> raw,
-}) {
-  if (role != AgentMessageRole.agent) {
-    return AgentConversationMessageKind.regular;
-  }
-  return _rawContainsPlanType(raw)
-      ? AgentConversationMessageKind.plan
-      : AgentConversationMessageKind.regular;
-}
-
-bool _rawContainsPlanType(Map<String, Object?> raw) {
-  return _normalizedMessageType(_stringFromObject(raw['type'])) == 'plan' ||
-      _normalizedMessageType(
-            _stringFromObject(_mapFromObject(raw['item'])['type']),
-          ) ==
-          'plan' ||
-      _normalizedMessageType(
-            _stringFromObject(_mapFromObject(raw['payload'])['type']),
-          ) ==
-          'plan' ||
-      _normalizedMessageType(
-            _stringFromObject(
-              _mapFromObject(_mapFromObject(raw['payload'])['item'])['type'],
-            ),
-          ) ==
-          'plan';
-}
-
 String _planMarkdownFromEntries(List<AgentPlanEntry> entries) {
   if (entries.isEmpty) {
     return 'Plan';
@@ -1697,34 +1555,14 @@ String? _normalizedMessageType(String? value) {
   return trimmed.replaceAll(RegExp(r'[^a-zA-Z]'), '').toLowerCase();
 }
 
-String? _stringFromObject(Object? value) {
-  return value is String ? value : null;
-}
-
-Map<String, Object?> _mapFromObject(Object? value) {
-  if (value is! Map) {
-    return const <String, Object?>{};
-  }
-  final map = <String, Object?>{};
-  for (final entry in value.entries) {
-    final key = entry.key;
-    if (key is String) {
-      map[key] = entry.value;
-    }
-  }
-  return map;
-}
-
-/// Agent 消息在 UI 中的展示类型。
-enum AgentConversationMessageKind { regular, plan }
-
 /// Agent 面板中的单条对话消息。
 class AgentConversationMessage {
   const AgentConversationMessage({
     required this.id,
     required this.role,
     required this.text,
-    this.kind = AgentConversationMessageKind.regular,
+    this.sourceMessageId,
+    this.kind = AgentMessageKind.regular,
     this.phase,
     this.status,
     this.duration,
@@ -1733,9 +1571,13 @@ class AgentConversationMessage {
   });
 
   final String id;
+
+  /// Provider 原始消息身份，仅用于诊断和上下文展示。
+  final String? sourceMessageId;
+
   final AgentMessageRole role;
   final String text;
-  final AgentConversationMessageKind kind;
+  final AgentMessageKind kind;
   final AgentMessagePhase? phase;
   final AgentMessageStatus? status;
   final Duration? duration;
@@ -1744,7 +1586,7 @@ class AgentConversationMessage {
   final List<String> localImagePaths;
   final Map<String, Object?> raw;
 
-  bool get isPlan => kind == AgentConversationMessageKind.plan;
+  bool get isPlan => kind == AgentMessageKind.plan;
 
   /// 是否为 Agent 完成汇总（Codex `phase=final_answer` → [AgentMessagePhase.response]）。
   bool get isFinalAnswer {
@@ -1760,9 +1602,10 @@ class AgentConversationMessage {
   }
 
   AgentConversationMessage copyWith({
+    String? sourceMessageId,
     AgentMessageRole? role,
     String? text,
-    AgentConversationMessageKind? kind,
+    AgentMessageKind? kind,
     AgentMessagePhase? phase,
     AgentMessageStatus? status,
     Duration? duration,
@@ -1771,6 +1614,7 @@ class AgentConversationMessage {
   }) {
     return AgentConversationMessage(
       id: id,
+      sourceMessageId: sourceMessageId ?? this.sourceMessageId,
       role: role ?? this.role,
       text: text ?? this.text,
       kind: kind ?? this.kind,

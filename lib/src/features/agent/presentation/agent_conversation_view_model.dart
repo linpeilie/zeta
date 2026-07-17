@@ -2318,7 +2318,7 @@ class AgentConversationViewModel extends ChangeNotifier {
         )) {
           break;
         }
-        final isPlanDelta = _rawLooksLikePlan(event.raw);
+        final isPlanDelta = event.kind == AgentMessageKind.plan;
         _timeline.appendMessageDelta(event);
         _scheduleStreamFlush(
           header: _consumeActivityDirty(),
@@ -2733,22 +2733,6 @@ class AgentConversationViewModel extends ChangeNotifier {
           turnId == _timeline.pendingTurnGroupId;
     }
     return true;
-  }
-
-  /// 粗判 raw 是否来自 plan 流，用于决定是否刷新展开态。
-  bool _rawLooksLikePlan(Map<String, Object?> raw) {
-    final type = raw['type'];
-    if (type is String && type.toLowerCase().contains('plan')) {
-      return true;
-    }
-    final item = raw['item'];
-    if (item is Map) {
-      final itemType = item['type'];
-      if (itemType is String && itemType.toLowerCase().contains('plan')) {
-        return true;
-      }
-    }
-    return false;
   }
 
   bool _isStillSelectedThread(int switchToken, String? expectedThreadId) {

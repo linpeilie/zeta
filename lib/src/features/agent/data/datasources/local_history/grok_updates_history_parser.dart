@@ -233,6 +233,7 @@ class GrokUpdatesHistoryParser {
               id: planId,
               role: AgentMessageRole.agent,
               text: planText,
+              kind: AgentMessageKind.plan,
               status: AgentMessageStatus.completed,
               raw: <String, Object?>{'type': 'plan', ...update},
             ),

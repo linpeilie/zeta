@@ -812,6 +812,111 @@ void main() {
       expect(think.content, 'final summary');
     });
 
+    test(
+      'preserves normalized message tool and reasoning phase order',
+      () async {
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.sendMessage('hello');
+        provider
+          ..emit(
+            const AgentMessageDeltaEvent(
+              messageId: 'message-seg1',
+              sourceMessageId: 'provider-message-a',
+              delta: 'Before tool',
+              role: AgentMessageRole.agent,
+              sessionId: 'thread-1',
+              turnId: 'turn-1',
+            ),
+          )
+          ..emit(
+            const AgentToolCallEvent(
+              AgentToolCall(
+                id: 'tool-read',
+                title: 'Read file',
+                kind: AgentToolKind.read,
+                status: AgentToolStatus.pending,
+                sessionId: 'thread-1',
+                turnId: 'turn-1',
+              ),
+            ),
+          )
+          ..emit(
+            const AgentMessageDeltaEvent(
+              messageId: 'message-seg2',
+              sourceMessageId: 'provider-message-a',
+              delta: 'After tool',
+              role: AgentMessageRole.agent,
+              sessionId: 'thread-1',
+              turnId: 'turn-1',
+            ),
+          )
+          ..emit(
+            const AgentReasoningDeltaEvent(
+              itemId: 'reasoning-phase1',
+              sourceItemId: 'provider-reasoning-a',
+              kind: AgentReasoningDeltaKind.text,
+              delta: 'Think before run',
+              sessionId: 'thread-1',
+              turnId: 'turn-1',
+            ),
+          )
+          ..emit(
+            const AgentToolCallEvent(
+              AgentToolCall(
+                id: 'tool-run',
+                title: 'Run tests',
+                kind: AgentToolKind.execute,
+                status: AgentToolStatus.pending,
+                sessionId: 'thread-1',
+                turnId: 'turn-1',
+              ),
+            ),
+          )
+          ..emit(
+            const AgentReasoningDeltaEvent(
+              itemId: 'reasoning-phase2',
+              sourceItemId: 'provider-reasoning-a',
+              kind: AgentReasoningDeltaKind.text,
+              delta: 'Think after run',
+              sessionId: 'thread-1',
+              turnId: 'turn-1',
+            ),
+          );
+        await Future<void>.delayed(const Duration(milliseconds: 24));
+
+        final orderedIds = viewModel.liveTurnState!.entries
+            .map(
+              (entry) => switch (entry) {
+                AgentMessageTimelineEntry(:final message) => message.id,
+                AgentToolTimelineEntry(:final toolCall) => toolCall.id,
+                _ => null,
+              },
+            )
+            .whereType<String>()
+            .where(
+              (id) => const <String>{
+                'message-seg1',
+                'tool-read',
+                'message-seg2',
+                'reasoning-phase1',
+                'tool-run',
+                'reasoning-phase2',
+              }.contains(id),
+            );
+        expect(orderedIds, <String>[
+          'message-seg1',
+          'tool-read',
+          'message-seg2',
+          'reasoning-phase1',
+          'tool-run',
+          'reasoning-phase2',
+        ]);
+      },
+    );
+
     test('streams plan deltas into an expanded plan card', () async {
       final provider = _FakeAgentProvider();
       final viewModel = _createViewModel(provider);
@@ -823,8 +928,9 @@ void main() {
           messageId: 'plan-1',
           delta: '# Plan\n',
           role: AgentMessageRole.agent,
+          kind: AgentMessageKind.plan,
           status: AgentMessageStatus.streaming,
-          raw: <String, Object?>{'type': 'plan'},
+          raw: <String, Object?>{'type': 'agentMessage'},
           sessionId: 'thread-1',
           turnId: 'turn-1',
         ),
@@ -834,8 +940,9 @@ void main() {
           messageId: 'plan-1',
           delta: '- Step one',
           role: AgentMessageRole.agent,
+          kind: AgentMessageKind.plan,
           status: AgentMessageStatus.streaming,
-          raw: <String, Object?>{'type': 'plan'},
+          raw: <String, Object?>{'type': 'agentMessage'},
           sessionId: 'thread-1',
           turnId: 'turn-1',
         ),
@@ -846,7 +953,7 @@ void main() {
           .whereType<AgentMessageTimelineEntry>()
           .map((entry) => entry.message)
           .firstWhere((message) => message.id == 'plan-1');
-      expect(plan.kind, AgentConversationMessageKind.plan);
+      expect(plan.kind, AgentMessageKind.plan);
       expect(plan.text, '# Plan\n- Step one');
       expect(viewModel.isPlanMessageExpanded(plan.id), isTrue);
 
@@ -854,10 +961,11 @@ void main() {
       provider.emit(
         const AgentMessageUpdatedEvent(
           messageId: 'plan-1',
+          kind: AgentMessageKind.plan,
           text: '# Final Plan\n\n- Step one\n- Step two',
           role: AgentMessageRole.agent,
           status: AgentMessageStatus.completed,
-          raw: <String, Object?>{'type': 'plan'},
+          raw: <String, Object?>{'type': 'agentMessage'},
           sessionId: 'thread-1',
           turnId: 'turn-1',
         ),
@@ -870,7 +978,7 @@ void main() {
           .firstWhere((message) => message.id == 'plan-1');
       expect(completed.text, '# Final Plan\n\n- Step one\n- Step two');
       expect(completed.status, AgentMessageStatus.completed);
-      expect(completed.kind, AgentConversationMessageKind.plan);
+      expect(completed.kind, AgentMessageKind.plan);
     });
 
     test('upserts turn-level aggregated diff into the live timeline', () async {
@@ -1252,7 +1360,7 @@ void main() {
             .whereType<AgentMessageTimelineEntry>()
             .map((entry) => entry.message)
             .firstWhere((message) => message.id == 'turn-1-plan');
-        expect(planMessage.kind, AgentConversationMessageKind.plan);
+        expect(planMessage.kind, AgentMessageKind.plan);
         expect(
           planMessage.text,
           '- [x] Inspect timeline\n- [ ] Render markdown card',

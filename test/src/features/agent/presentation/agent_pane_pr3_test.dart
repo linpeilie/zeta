@@ -490,6 +490,7 @@ void main() {
                           id: 'history-plan-1',
                           role: AgentMessageRole.agent,
                           text: '- [x] Inspect timeline\n- [ ] Split cards',
+                          kind: AgentMessageKind.plan,
                           raw: const <String, Object?>{'type': 'plan'},
                         ),
                       ],

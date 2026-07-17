@@ -637,73 +637,7 @@ void main() {
       expect(tool.content, 'found 42 matches');
     });
 
-    test(
-      'segments agent text after tools when stream reuses turn-scoped message id',
-      () {
-        final store = AgentConversationTimelineStore();
-        addTearDown(store.dispose);
-
-        store.startPendingLiveTurn();
-        store.beginLiveTurnGroup(
-          const AgentTurn(id: 'turn-1', sessionId: 'thread-1'),
-        );
-
-        const streamId = 'acp-agent_message_chunk-turn-1';
-        store.appendMessageDelta(
-          const AgentMessageDeltaEvent(
-            messageId: streamId,
-            delta: 'Before tool. ',
-            role: AgentMessageRole.agent,
-            turnId: 'turn-1',
-          ),
-        );
-        store.appendMessageDelta(
-          const AgentMessageDeltaEvent(
-            messageId: streamId,
-            delta: 'Still before. ',
-            role: AgentMessageRole.agent,
-            turnId: 'turn-1',
-          ),
-        );
-        store.upsertToolCall(
-          const AgentToolCall(
-            id: 'tool-read',
-            title: 'Read file',
-            kind: AgentToolKind.read,
-            status: AgentToolStatus.completed,
-            turnId: 'turn-1',
-          ),
-        );
-        store.appendMessageDelta(
-          const AgentMessageDeltaEvent(
-            messageId: streamId,
-            delta: 'After tool.',
-            role: AgentMessageRole.agent,
-            turnId: 'turn-1',
-          ),
-        );
-
-        final entries = _liveTimelineEntries(store);
-        expect(entries, hasLength(3));
-        expect(entries[0], isA<AgentMessageTimelineEntry>());
-        expect(
-          (entries[0] as AgentMessageTimelineEntry).message.text,
-          'Before tool. Still before. ',
-        );
-        expect(entries[1], isA<AgentToolTimelineEntry>());
-        expect(entries[2], isA<AgentMessageTimelineEntry>());
-        expect(
-          (entries[2] as AgentMessageTimelineEntry).message.text,
-          'After tool.',
-        );
-        expect(
-          (entries[2] as AgentMessageTimelineEntry).message.id,
-          '$streamId#seg2',
-        );
-      },
-    );
-
-    test('coalesces consecutive eventId chunks until a tool interrupts', () {
+    test('appends deltas only when normalized entryId is identical', () {
       final store = AgentConversationTimelineStore();
       addTearDown(store.dispose);
 
@@ -714,16 +648,52 @@ void main() {
 
       store.appendMessageDelta(
         const AgentMessageDeltaEvent(
-          messageId: 'acp-agent_message_chunk-event-e1',
+          messageId: 'message-a',
+          sourceMessageId: 'provider-message-a',
           delta: 'A',
           role: AgentMessageRole.agent,
+          phase: AgentMessagePhase.commentary,
+          status: AgentMessageStatus.streaming,
           turnId: 'turn-1',
         ),
       );
       store.appendMessageDelta(
         const AgentMessageDeltaEvent(
-          messageId: 'acp-agent_message_chunk-event-e2',
+          messageId: 'message-a',
+          sourceMessageId: 'provider-message-a',
           delta: 'B',
+          role: AgentMessageRole.agent,
+          phase: AgentMessagePhase.commentary,
+          status: AgentMessageStatus.streaming,
+          turnId: 'turn-1',
+        ),
+      );
+
+      final entries = _liveTimelineEntries(store);
+      expect(entries, hasLength(1));
+      final message = (entries.single as AgentMessageTimelineEntry).message;
+      expect(message.id, 'message-a');
+      expect(message.sourceMessageId, 'provider-message-a');
+      expect(message.text, 'AB');
+      expect(message.kind, AgentMessageKind.regular);
+      expect(message.phase, AgentMessagePhase.commentary);
+      expect(message.status, AgentMessageStatus.streaming);
+    });
+
+    test('keeps Message Tool Message for different normalized entryIds', () {
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+
+      store.startPendingLiveTurn();
+      store.beginLiveTurnGroup(
+        const AgentTurn(id: 'turn-1', sessionId: 'thread-1'),
+      );
+
+      store.appendMessageDelta(
+        const AgentMessageDeltaEvent(
+          messageId: 'message-seg1',
+          sourceMessageId: 'provider-message-a',
+          delta: 'Before tool.',
           role: AgentMessageRole.agent,
           turnId: 'turn-1',
         ),
@@ -731,16 +701,17 @@ void main() {
       store.upsertToolCall(
         const AgentToolCall(
           id: 'tool-1',
-          title: 'Run',
-          kind: AgentToolKind.execute,
-          status: AgentToolStatus.completed,
+          title: 'Read file',
+          kind: AgentToolKind.read,
+          status: AgentToolStatus.pending,
           turnId: 'turn-1',
         ),
       );
       store.appendMessageDelta(
         const AgentMessageDeltaEvent(
-          messageId: 'acp-agent_message_chunk-event-e3',
-          delta: 'C',
+          messageId: 'message-seg2',
+          sourceMessageId: 'provider-message-a',
+          delta: 'After tool.',
           role: AgentMessageRole.agent,
           turnId: 'turn-1',
         ),
@@ -748,16 +719,194 @@ void main() {
 
       final entries = _liveTimelineEntries(store);
       expect(entries, hasLength(3));
-      expect((entries[0] as AgentMessageTimelineEntry).message.text, 'AB');
       expect(
         (entries[0] as AgentMessageTimelineEntry).message.id,
-        'acp-agent_message_chunk-event-e1',
+        'message-seg1',
       );
       expect(entries[1], isA<AgentToolTimelineEntry>());
-      expect((entries[2] as AgentMessageTimelineEntry).message.text, 'C');
       expect(
         (entries[2] as AgentMessageTimelineEntry).message.id,
-        'acp-agent_message_chunk-event-e3',
+        'message-seg2',
+      );
+      expect(
+        store.messages
+            .where((message) => message.sourceMessageId == 'provider-message-a')
+            .map((message) => message.text),
+        <String>['Before tool.', 'After tool.'],
+      );
+    });
+
+    test('keeps reused sourceMessageId isolated across turns', () {
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+
+      store.startPendingLiveTurn();
+      store.beginLiveTurnGroup(
+        const AgentTurn(id: 'turn-1', sessionId: 'thread-1'),
+      );
+      store.appendMessageDelta(
+        const AgentMessageDeltaEvent(
+          messageId: 'turn-1-message-a',
+          sourceMessageId: 'provider-message-a',
+          delta: 'Turn one',
+          role: AgentMessageRole.agent,
+          turnId: 'turn-1',
+        ),
+      );
+      store.completeLiveTurnGroup('turn-1');
+
+      store.startPendingLiveTurn();
+      store.beginLiveTurnGroup(
+        const AgentTurn(id: 'turn-2', sessionId: 'thread-1'),
+      );
+      store.appendMessageDelta(
+        const AgentMessageDeltaEvent(
+          messageId: 'turn-2-message-a',
+          sourceMessageId: 'provider-message-a',
+          delta: 'Turn two',
+          role: AgentMessageRole.agent,
+          turnId: 'turn-2',
+        ),
+      );
+
+      final messages = store.messages
+          .where((message) => message.sourceMessageId == 'provider-message-a')
+          .toList();
+      expect(messages.map((message) => message.id), <String>[
+        'turn-1-message-a',
+        'turn-2-message-a',
+      ]);
+      expect(messages.map((message) => message.text), <String>[
+        'Turn one',
+        'Turn two',
+      ]);
+    });
+
+    test('updates restored history by the same normalized entryId', () {
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+
+      store.applyHistorySnapshot(
+        const AgentThreadHistorySnapshot(
+          threadId: 'thread-1',
+          turns: <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-1',
+              entries: <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'history-message-a',
+                  sourceMessageId: 'provider-message-a',
+                  role: AgentMessageRole.agent,
+                  text: 'partial',
+                  kind: AgentMessageKind.plan,
+                  status: AgentMessageStatus.streaming,
+                ),
+              ],
+            ),
+          ],
+        ),
+        _thread(),
+      );
+      store.updateMessage(
+        const AgentMessageUpdatedEvent(
+          messageId: 'history-message-a',
+          kind: AgentMessageKind.plan,
+          text: 'complete',
+          status: AgentMessageStatus.completed,
+        ),
+      );
+
+      final message = store.messages.single;
+      expect(message.id, 'history-message-a');
+      expect(message.sourceMessageId, 'provider-message-a');
+      expect(message.kind, AgentMessageKind.plan);
+      expect(message.text, 'complete');
+      expect(message.status, AgentMessageStatus.completed);
+    });
+
+    test('completed snapshot only updates the same normalized entryId', () {
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+
+      store.appendMessageDelta(
+        const AgentMessageDeltaEvent(
+          messageId: 'message-a',
+          sourceMessageId: 'provider-message-a',
+          delta: 'partial',
+          role: AgentMessageRole.agent,
+          kind: AgentMessageKind.plan,
+          phase: AgentMessagePhase.commentary,
+          status: AgentMessageStatus.streaming,
+          duration: Duration(seconds: 1),
+          raw: <String, Object?>{'type': 'not-a-plan'},
+        ),
+      );
+      store.updateMessage(
+        const AgentMessageUpdatedEvent(
+          messageId: 'message-a',
+          kind: AgentMessageKind.plan,
+          text: 'complete',
+          phase: AgentMessagePhase.response,
+          status: AgentMessageStatus.completed,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      store.updateMessage(
+        const AgentMessageUpdatedEvent(
+          messageId: 'unknown-message',
+          text: 'must not create a duplicate',
+          status: AgentMessageStatus.completed,
+        ),
+      );
+
+      final message = store.messages.singleWhere(
+        (message) => message.id == 'message-a',
+      );
+      expect(message.sourceMessageId, 'provider-message-a');
+      expect(message.kind, AgentMessageKind.plan);
+      expect(message.text, 'complete');
+      expect(message.phase, AgentMessagePhase.response);
+      expect(message.status, AgentMessageStatus.completed);
+      expect(message.duration, const Duration(seconds: 2));
+      expect(
+        store.messages.where((message) => message.id == 'unknown-message'),
+        isEmpty,
+      );
+    });
+
+    test('raw payload cannot control message kind', () {
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+
+      store.appendMessageDelta(
+        const AgentMessageDeltaEvent(
+          messageId: 'regular-message',
+          delta: 'regular',
+          role: AgentMessageRole.agent,
+          raw: <String, Object?>{'type': 'plan'},
+        ),
+      );
+      store.appendMessageDelta(
+        const AgentMessageDeltaEvent(
+          messageId: 'plan-message',
+          delta: 'plan',
+          role: AgentMessageRole.agent,
+          kind: AgentMessageKind.plan,
+          raw: <String, Object?>{'type': 'agentMessage'},
+        ),
+      );
+
+      expect(
+        store.messages
+            .singleWhere((message) => message.id == 'regular-message')
+            .kind,
+        AgentMessageKind.regular,
+      );
+      expect(
+        store.messages
+            .singleWhere((message) => message.id == 'plan-message')
+            .kind,
+        AgentMessageKind.plan,
       );
     });
   });

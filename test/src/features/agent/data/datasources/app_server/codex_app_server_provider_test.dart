@@ -130,6 +130,130 @@ void main() {
       await provider.dispose();
     });
 
+    test(
+      'preserves stable item identity through message tool message',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+
+        await provider.initialize();
+        peer.emitNotification('item/agentMessage/delta', <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'itemId': 'message-a',
+          'delta': 'A1',
+        });
+        peer.emitNotification('item/agentMessage/delta', <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'itemId': 'message-a',
+          'delta': 'A2',
+        });
+        peer.emitNotification('item/started', <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'startedAtMs': 1000,
+          'item': <String, Object?>{
+            'id': 'tool-1',
+            'type': 'commandExecution',
+            'command': 'flutter test',
+            'status': 'inProgress',
+          },
+        });
+        peer.emitNotification('item/agentMessage/delta', <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'itemId': 'message-b',
+          'delta': 'B',
+        });
+        peer.emitNotification('item/completed', <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'completedAtMs': 2000,
+          'item': <String, Object?>{
+            'id': 'message-a',
+            'type': 'agentMessage',
+            'text': 'A1A2',
+            'status': 'completed',
+          },
+        });
+        await Future<void>.delayed(Duration.zero);
+
+        final itemEvents = events
+            .where(
+              (event) =>
+                  event is AgentMessageDeltaEvent ||
+                  event is AgentToolCallEvent ||
+                  event is AgentMessageUpdatedEvent,
+            )
+            .toList();
+        expect(itemEvents, hasLength(5));
+        final first = itemEvents[0] as AgentMessageDeltaEvent;
+        final second = itemEvents[1] as AgentMessageDeltaEvent;
+        final tool = itemEvents[2] as AgentToolCallEvent;
+        final third = itemEvents[3] as AgentMessageDeltaEvent;
+        final completed = itemEvents[4] as AgentMessageUpdatedEvent;
+        expect(first.messageId, 'message-a');
+        expect(second.messageId, first.messageId);
+        expect('${first.delta}${second.delta}', 'A1A2');
+        expect(tool.toolCall.id, 'tool-1');
+        expect(third.messageId, 'message-b');
+        expect(third.messageId, isNot(first.messageId));
+        expect(completed.messageId, first.messageId);
+        expect(completed.sourceMessageId, first.sourceMessageId);
+        expect(completed.text, 'A1A2');
+        expect(completed.status, AgentMessageStatus.completed);
+
+        await subscription.cancel();
+        await provider.dispose();
+      },
+    );
+
+    test('tolerates a future item type and continues the connection', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+
+      await provider.initialize();
+      peer.emitNotification('item/started', <String, Object?>{
+        'threadId': 'thread-1',
+        'turnId': 'turn-1',
+        'startedAtMs': 1000,
+        'item': <String, Object?>{
+          'id': 'future-1',
+          'type': 'futureCapability',
+          'status': 'inProgress',
+        },
+      });
+      peer.emitNotification('item/agentMessage/delta', <String, Object?>{
+        'threadId': 'thread-1',
+        'turnId': 'turn-1',
+        'itemId': 'message-after-future',
+        'delta': 'still connected',
+      });
+      await Future<void>.delayed(Duration.zero);
+
+      final futureItem = events.whereType<AgentToolCallEvent>().single.toolCall;
+      expect(futureItem.id, 'future-1');
+      expect(futureItem.kind, AgentToolKind.other);
+      expect(
+        events.whereType<AgentMessageDeltaEvent>().single.messageId,
+        'message-after-future',
+      );
+
+      await subscription.cancel();
+      await provider.dispose();
+    });
+
     test('maps local turn_aborted into an interrupted history turn', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
@@ -557,7 +681,7 @@ void main() {
       expect(deltas[0].kind, AgentMessageKind.plan);
       expect(deltas[0].delta, '# Plan\n');
       expect(deltas[0].status, AgentMessageStatus.streaming);
-      expect(deltas[0].raw['type'], 'plan');
+      expect(deltas[0].raw['type'], isNull);
       expect(deltas[0].sessionId, 'thread-1');
       expect(deltas[0].turnId, 'turn-1');
       expect(deltas[1].delta, '- Step one');

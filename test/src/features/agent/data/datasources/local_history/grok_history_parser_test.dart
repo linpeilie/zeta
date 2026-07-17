@@ -105,6 +105,7 @@ void main() {
       final plan = snapshot.turns.single.entries
           .whereType<AgentHistoryMessageEntry>()
           .firstWhere((e) => e.raw['type'] == 'plan');
+      expect(plan.kind, AgentMessageKind.plan);
       expect(plan.text, contains('Step A'));
       expect(plan.text, contains('Step B'));
     });

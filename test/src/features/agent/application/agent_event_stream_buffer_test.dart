@@ -9,12 +9,107 @@ void main() {
       final buffer = AgentEventStreamBuffer(onEvent: events.add);
 
       buffer
-        ..add(_messageDelta('Hello'))
-        ..add(_messageDelta(' world'));
+        ..add(
+          _messageDelta(
+            'Hello',
+            sourceMessageId: 'source-message-1',
+            kind: AgentMessageKind.plan,
+            phase: AgentMessagePhase.commentary,
+            status: AgentMessageStatus.streaming,
+          ),
+        )
+        ..add(
+          _messageDelta(
+            ' world',
+            sourceMessageId: 'source-message-1',
+            kind: AgentMessageKind.plan,
+            phase: AgentMessagePhase.commentary,
+            status: AgentMessageStatus.completed,
+          ),
+        );
       await Future<void>.delayed(Duration.zero);
 
       expect(events, hasLength(1));
-      expect((events.single as AgentMessageDeltaEvent).delta, 'Hello world');
+      final event = events.single as AgentMessageDeltaEvent;
+      expect(event.delta, 'Hello world');
+      expect(event.sourceMessageId, 'source-message-1');
+      expect(event.kind, AgentMessageKind.plan);
+      expect(event.phase, AgentMessagePhase.commentary);
+      expect(event.status, AgentMessageStatus.completed);
+    });
+
+    test('does not coalesce the same entryId across message kinds', () async {
+      final events = <AgentEvent>[];
+      final buffer = AgentEventStreamBuffer(onEvent: events.add);
+
+      buffer
+        ..add(_messageDelta('regular'))
+        ..add(_messageDelta('plan', kind: AgentMessageKind.plan));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(events, hasLength(2));
+      expect(
+        events.whereType<AgentMessageDeltaEvent>().map((event) => event.kind),
+        <AgentMessageKind>[AgentMessageKind.regular, AgentMessageKind.plan],
+      );
+    });
+
+    test('keeps Message Tool Message order for different entryIds', () {
+      final events = <AgentEvent>[];
+      final buffer = AgentEventStreamBuffer(onEvent: events.add);
+
+      buffer
+        ..add(_messageDelta('before', messageId: 'message-seg1'))
+        ..add(
+          _toolEvent(
+            id: 'tool-1',
+            status: AgentToolStatus.pending,
+            content: 'pending',
+          ),
+        )
+        ..add(_messageDelta('after', messageId: 'message-seg2'))
+        ..flush();
+
+      expect(events, hasLength(3));
+      expect((events[0] as AgentMessageDeltaEvent).messageId, 'message-seg1');
+      expect((events[1] as AgentToolCallEvent).toolCall.id, 'tool-1');
+      expect((events[2] as AgentMessageDeltaEvent).messageId, 'message-seg2');
+    });
+
+    test('reasoning merge preserves source item kind and index', () async {
+      final events = <AgentEvent>[];
+      final buffer = AgentEventStreamBuffer(onEvent: events.add);
+
+      buffer
+        ..add(
+          const AgentReasoningDeltaEvent(
+            itemId: 'reasoning-phase-1',
+            sourceItemId: 'provider-reasoning-1',
+            kind: AgentReasoningDeltaKind.summaryText,
+            delta: 'summary ',
+            summaryIndex: 2,
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+        )
+        ..add(
+          const AgentReasoningDeltaEvent(
+            itemId: 'reasoning-phase-1',
+            sourceItemId: 'provider-reasoning-1',
+            kind: AgentReasoningDeltaKind.summaryText,
+            delta: 'continued',
+            summaryIndex: 2,
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+        );
+      await Future<void>.delayed(Duration.zero);
+
+      final event = events.single as AgentReasoningDeltaEvent;
+      expect(event.delta, 'summary continued');
+      expect(event.sourceItemId, 'provider-reasoning-1');
+      expect(event.kind, AgentReasoningDeltaKind.summaryText);
+      expect(event.summaryIndex, 2);
     });
 
     test('同 turn 的 token 与 diff 快照只发布最新值', () async {
@@ -177,23 +272,32 @@ void main() {
 AgentMessageDeltaEvent _messageDelta(
   String delta, {
   String messageId = 'message-1',
+  String? sourceMessageId,
+  AgentMessageKind kind = AgentMessageKind.regular,
+  AgentMessagePhase? phase,
+  AgentMessageStatus? status,
 }) {
   return AgentMessageDeltaEvent(
     messageId: messageId,
+    sourceMessageId: sourceMessageId,
+    kind: kind,
     delta: delta,
     role: AgentMessageRole.agent,
+    phase: phase,
+    status: status,
     sessionId: 'thread-1',
     turnId: 'turn-1',
   );
 }
 
 AgentToolCallEvent _toolEvent({
+  String id = 'tool-1',
   required AgentToolStatus status,
   required String content,
 }) {
   return AgentToolCallEvent(
     AgentToolCall(
-      id: 'tool-1',
+      id: id,
       title: 'Command',
       status: status,
       content: content,

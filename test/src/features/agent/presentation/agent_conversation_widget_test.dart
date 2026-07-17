@@ -1999,6 +1999,149 @@ void main() {
     expect(controller.offset, lessThan(40));
   });
 
+  testWidgets('renders normalized message tool and reasoning order', (
+    tester,
+  ) async {
+    final session = MemorySessionStore();
+    final provider = FakeAgentProvider(completeTurns: false);
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('agent-message-input')),
+      'Check normalized order',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+    await pumpLiveAgentUi(tester);
+
+    provider
+      ..emit(
+        const AgentMessageDeltaEvent(
+          messageId: 'message-seg1',
+          sourceMessageId: 'provider-message-a',
+          delta: 'Before tool',
+          role: AgentMessageRole.agent,
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      )
+      ..emit(
+        const AgentToolCallEvent(
+          AgentToolCall(
+            id: 'tool-read',
+            title: 'Read file',
+            kind: AgentToolKind.read,
+            status: AgentToolStatus.pending,
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+        ),
+      )
+      ..emit(
+        const AgentMessageDeltaEvent(
+          messageId: 'message-seg2',
+          sourceMessageId: 'provider-message-a',
+          delta: 'After tool',
+          role: AgentMessageRole.agent,
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      )
+      ..emit(
+        const AgentReasoningDeltaEvent(
+          itemId: 'reasoning-phase1',
+          sourceItemId: 'provider-reasoning-a',
+          kind: AgentReasoningDeltaKind.text,
+          delta: 'Think before run',
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      )
+      ..emit(
+        const AgentToolCallEvent(
+          AgentToolCall(
+            id: 'tool-run',
+            title: 'Run tests',
+            kind: AgentToolKind.execute,
+            status: AgentToolStatus.pending,
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+        ),
+      )
+      ..emit(
+        const AgentReasoningDeltaEvent(
+          itemId: 'reasoning-phase2',
+          sourceItemId: 'provider-reasoning-a',
+          kind: AgentReasoningDeltaKind.text,
+          delta: 'Think after run',
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      );
+    await pumpLiveAgentUi(tester);
+
+    final message1 = find.byKey(
+      const ValueKey<String>('turn-block-turn-1-message-message-seg1'),
+    );
+    final toolGroup = find.byKey(
+      const ValueKey<String>(
+        'turn-block-turn-1-command-group-turn-1-tool-tool-read',
+      ),
+    );
+    final message2 = find.byKey(
+      const ValueKey<String>('turn-block-turn-1-message-message-seg2'),
+    );
+    expect(message1, findsOneWidget);
+    expect(toolGroup, findsOneWidget);
+    expect(message2, findsOneWidget);
+    expect(
+      tester.getTopLeft(message1).dy,
+      lessThan(tester.getTopLeft(toolGroup).dy),
+    );
+    expect(
+      tester.getTopLeft(toolGroup).dy,
+      lessThan(tester.getTopLeft(message2).dy),
+    );
+
+    const reasoningGroupId = 'command-group-turn-1-tool-reasoning-phase1';
+    await tester.tap(
+      find.byKey(
+        const ValueKey<String>('agent-command-group-header-$reasoningGroupId'),
+      ),
+    );
+    await pumpLiveAgentUi(tester);
+
+    final reasoning1 = find.byKey(
+      const ValueKey<String>('agent-command-group-item-tool-reasoning-phase1'),
+    );
+    final runTool = find.byKey(
+      const ValueKey<String>('agent-command-group-item-tool-tool-run'),
+    );
+    final reasoning2 = find.byKey(
+      const ValueKey<String>('agent-command-group-item-tool-reasoning-phase2'),
+    );
+    expect(reasoning1, findsOneWidget);
+    expect(runTool, findsOneWidget);
+    expect(reasoning2, findsOneWidget);
+    expect(
+      tester.getTopLeft(reasoning1).dy,
+      lessThan(tester.getTopLeft(runTool).dy),
+    );
+    expect(
+      tester.getTopLeft(runTool).dy,
+      lessThan(tester.getTopLeft(reasoning2).dy),
+    );
+  });
+
   testWidgets('merges live tool calls into a single command group', (
     tester,
   ) async {
@@ -2383,6 +2526,7 @@ void main() {
                   role: AgentMessageRole.agent,
                   text:
                       '# 命令集折叠分组\n\n## Summary\n\n- 第一项\n\n```dart\nvoid main() {}\n```',
+                  kind: AgentMessageKind.plan,
                   status: AgentMessageStatus.completed,
                   raw: <String, Object?>{'type': 'plan'},
                 ),

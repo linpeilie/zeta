@@ -215,6 +215,7 @@ class _JsonlHistoryParser {
         id: _string(item['id']) ?? _nextHistoryId('history-plan'),
         role: AgentMessageRole.agent,
         text: text,
+        kind: AgentMessageKind.plan,
         status: AgentMessageStatus.completed,
         raw: raw,
       ),

@@ -105,7 +105,7 @@ _AgentEventKey? _coalescingKey(AgentEvent event) {
       sessionId: event.sessionId,
       turnId: event.turnId,
       itemId: event.messageId,
-      detail: '${event.role.name}:${event.phase?.name}',
+      detail: '${event.role.name}:${event.kind.name}:${event.phase?.name}',
     ),
     AgentReasoningDeltaEvent() => (
       kind: 'reasoningDelta',
@@ -144,6 +144,8 @@ AgentEvent _merge(AgentEvent previous, AgentEvent next) {
     (AgentMessageDeltaEvent previous, AgentMessageDeltaEvent next) =>
       AgentMessageDeltaEvent(
         messageId: next.messageId,
+        sourceMessageId: next.sourceMessageId ?? previous.sourceMessageId,
+        kind: next.kind,
         delta: '${previous.delta}${next.delta}',
         role: next.role,
         phase: next.phase ?? previous.phase,
@@ -156,6 +158,7 @@ AgentEvent _merge(AgentEvent previous, AgentEvent next) {
     (AgentReasoningDeltaEvent previous, AgentReasoningDeltaEvent next) =>
       AgentReasoningDeltaEvent(
         itemId: next.itemId,
+        sourceItemId: next.sourceItemId ?? previous.sourceItemId,
         kind: next.kind,
         delta: '${previous.delta}${next.delta}',
         contentIndex: next.contentIndex ?? previous.contentIndex,

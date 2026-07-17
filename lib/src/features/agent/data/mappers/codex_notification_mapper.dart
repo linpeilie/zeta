@@ -217,8 +217,7 @@ class _CodexNotificationMapper {
               delta: delta,
               role: AgentMessageRole.agent,
               status: AgentMessageStatus.streaming,
-              // 迁移期仍保留 raw type，直到 Store/ViewModel 改为只读显式 kind。
-              raw: <String, Object?>{...notification.params, 'type': 'plan'},
+              raw: notification.params,
               sessionId: _string(notification.params['threadId']),
               turnId: _string(notification.params['turnId']),
             ),
