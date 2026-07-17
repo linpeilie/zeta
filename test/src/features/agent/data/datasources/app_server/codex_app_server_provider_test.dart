@@ -104,7 +104,11 @@ void main() {
       });
       await Future<void>.delayed(Duration.zero);
 
-      expect(events.whereType<AgentMessageDeltaEvent>().single.delta, 'Hello');
+      final messageDelta = events.whereType<AgentMessageDeltaEvent>().single;
+      expect(messageDelta.messageId, 'message-1');
+      expect(messageDelta.sourceMessageId, 'message-1');
+      expect(messageDelta.kind, AgentMessageKind.regular);
+      expect(messageDelta.delta, 'Hello');
       expect(
         events.whereType<AgentToolCallEvent>().single.toolCall.id,
         'tool-1',
@@ -225,12 +229,15 @@ void main() {
         final deltas = events.whereType<AgentReasoningDeltaEvent>().toList();
         expect(deltas, hasLength(3));
         expect(deltas[0].kind, AgentReasoningDeltaKind.text);
+        expect(deltas[0].sourceItemId, 'reasoning-1');
         expect(deltas[0].delta, 'raw thought');
         expect(deltas[0].contentIndex, 0);
         expect(deltas[1].kind, AgentReasoningDeltaKind.summaryText);
+        expect(deltas[1].sourceItemId, 'reasoning-1');
         expect(deltas[1].delta, 'summary A');
         expect(deltas[1].summaryIndex, 0);
         expect(deltas[2].kind, AgentReasoningDeltaKind.summaryPart);
+        expect(deltas[2].sourceItemId, 'reasoning-1');
         expect(deltas[2].delta, isEmpty);
         expect(deltas[2].summaryIndex, 1);
 
@@ -451,10 +458,15 @@ void main() {
         await Future<void>.delayed(Duration.zero);
 
         final delta = events.whereType<AgentMessageDeltaEvent>().single;
+        expect(delta.messageId, 'message-1');
+        expect(delta.sourceMessageId, 'message-1');
+        expect(delta.kind, AgentMessageKind.regular);
         expect(delta.phase, AgentMessagePhase.commentary);
 
         final update = events.whereType<AgentMessageUpdatedEvent>().single;
-        expect(update.messageId, 'message-1');
+        expect(update.messageId, delta.messageId);
+        expect(update.sourceMessageId, delta.sourceMessageId);
+        expect(update.kind, delta.kind);
         expect(update.phase, AgentMessagePhase.commentary);
         expect(update.status, AgentMessageStatus.completed);
         expect(update.duration, const Duration(seconds: 102));
@@ -498,10 +510,14 @@ void main() {
         await Future<void>.delayed(Duration.zero);
 
         final delta = events.whereType<AgentMessageDeltaEvent>().single;
+        expect(delta.sourceMessageId, 'message-final');
+        expect(delta.kind, AgentMessageKind.regular);
         expect(delta.phase, AgentMessagePhase.response);
 
         final update = events.whereType<AgentMessageUpdatedEvent>().single;
-        expect(update.messageId, 'message-final');
+        expect(update.messageId, delta.messageId);
+        expect(update.sourceMessageId, delta.sourceMessageId);
+        expect(update.kind, delta.kind);
         expect(update.phase, AgentMessagePhase.response);
         expect(update.status, AgentMessageStatus.completed);
 
@@ -537,12 +553,17 @@ void main() {
       final deltas = events.whereType<AgentMessageDeltaEvent>().toList();
       expect(deltas, hasLength(2));
       expect(deltas[0].messageId, 'plan-1');
+      expect(deltas[0].sourceMessageId, 'plan-1');
+      expect(deltas[0].kind, AgentMessageKind.plan);
       expect(deltas[0].delta, '# Plan\n');
       expect(deltas[0].status, AgentMessageStatus.streaming);
       expect(deltas[0].raw['type'], 'plan');
       expect(deltas[0].sessionId, 'thread-1');
       expect(deltas[0].turnId, 'turn-1');
       expect(deltas[1].delta, '- Step one');
+      expect(deltas[1].messageId, deltas[0].messageId);
+      expect(deltas[1].sourceMessageId, deltas[0].sourceMessageId);
+      expect(deltas[1].kind, deltas[0].kind);
 
       await subscription.cancel();
       await provider.dispose();
@@ -875,6 +896,8 @@ void main() {
 
       final update = events.whereType<AgentMessageUpdatedEvent>().single;
       expect(update.messageId, 'turn-1-plan');
+      expect(update.sourceMessageId, 'turn-1-plan');
+      expect(update.kind, AgentMessageKind.plan);
       expect(update.text, '# Summary\n\n- First item');
       expect(update.role, AgentMessageRole.agent);
       expect(update.status, AgentMessageStatus.completed);

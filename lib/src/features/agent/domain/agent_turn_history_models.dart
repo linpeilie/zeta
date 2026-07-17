@@ -476,6 +476,8 @@ class AgentHistoryMessageEntry extends AgentHistoryEntry {
     required super.id,
     required this.role,
     required this.text,
+    this.sourceMessageId,
+    this.kind = AgentMessageKind.regular,
     this.phase,
     this.status,
     this.duration,
@@ -485,6 +487,12 @@ class AgentHistoryMessageEntry extends AgentHistoryEntry {
 
   /// 消息角色。
   final AgentMessageRole role;
+
+  /// Provider 原始消息身份；不作为历史时间线的合并键。
+  final String? sourceMessageId;
+
+  /// 消息的显式展示语义。
+  final AgentMessageKind kind;
 
   /// 消息文本。
   final String text;

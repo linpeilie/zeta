@@ -289,6 +289,8 @@ class AgentMessageDeltaEvent extends AgentEvent {
     required this.messageId,
     required this.delta,
     required this.role,
+    this.sourceMessageId,
+    this.kind = AgentMessageKind.regular,
     this.phase,
     this.status,
     this.duration,
@@ -297,8 +299,16 @@ class AgentMessageDeltaEvent extends AgentEvent {
     this.turnId,
   });
 
-  /// provider 消息 id，用于合并同一条消息的多个 delta。
+  /// Zeta 规范化 entryId，用于合并同一可见消息的多个 delta。
+  ///
+  /// 字段名在迁移期保留为 `messageId`，不得再将它解释为 Provider 原始身份。
   final String messageId;
+
+  /// Provider 原始消息身份；不作为 UI 合并键。
+  final String? sourceMessageId;
+
+  /// 消息的显式展示语义。
+  final AgentMessageKind kind;
 
   /// 本次增量文本。
   final String delta;
@@ -341,6 +351,7 @@ class AgentReasoningDeltaEvent extends AgentEvent {
   const AgentReasoningDeltaEvent({
     required this.itemId,
     required this.kind,
+    this.sourceItemId,
     this.delta = '',
     this.contentIndex,
     this.summaryIndex,
@@ -349,8 +360,11 @@ class AgentReasoningDeltaEvent extends AgentEvent {
     this.raw = const <String, Object?>{},
   });
 
-  /// Reasoning item id，用于合并同一思考卡片的多个 delta。
+  /// Zeta 规范化 reasoning entryId，用于合并同一思考卡片的多个 delta。
   final String itemId;
+
+  /// Provider 原始 reasoning item 身份；不作为 UI 合并键。
+  final String? sourceItemId;
 
   /// 增量种类。
   final AgentReasoningDeltaKind kind;
@@ -378,6 +392,8 @@ class AgentReasoningDeltaEvent extends AgentEvent {
 class AgentMessageUpdatedEvent extends AgentEvent {
   const AgentMessageUpdatedEvent({
     required this.messageId,
+    this.sourceMessageId,
+    this.kind = AgentMessageKind.regular,
     this.text,
     this.role,
     this.phase,
@@ -388,8 +404,16 @@ class AgentMessageUpdatedEvent extends AgentEvent {
     this.turnId,
   });
 
-  /// provider 消息 id。
+  /// Zeta 规范化 entryId，必须与对应 delta 的 [AgentMessageDeltaEvent.messageId] 相同。
+  ///
+  /// 字段名在迁移期保留为 `messageId`，不得再将它解释为 Provider 原始身份。
   final String messageId;
+
+  /// Provider 原始消息身份；不作为 UI 合并键。
+  final String? sourceMessageId;
+
+  /// 消息的显式展示语义。
+  final AgentMessageKind kind;
 
   /// 可选完整文本。
   final String? text;

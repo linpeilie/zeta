@@ -26,6 +26,8 @@ void main() {
 
       final event = mapped.events.single as AgentMessageDeltaEvent;
       expect(event.messageId, 'message-1');
+      expect(event.sourceMessageId, 'message-1');
+      expect(event.kind, AgentMessageKind.regular);
       expect(event.delta, 'Hello from ACP');
       expect(event.sessionId, 'session-1');
       expect(event.turnId, 'turn-1');
@@ -46,6 +48,7 @@ void main() {
 
       final event = mapped.events.single as AgentMessageDeltaEvent;
       expect(event.messageId, 'acp-agent_message_chunk-event-evt-42');
+      expect(event.sourceMessageId, isNull);
       expect(event.delta, 'Chunk');
     });
 
@@ -89,6 +92,7 @@ void main() {
         // 不同 eventId 必须落到同一 itemId，timeline 才能拼成一张思考卡。
         expect(first.itemId, 'acp-agent_thought_chunk-turn-1');
         expect(second.itemId, first.itemId);
+        expect(first.sourceItemId, isNull);
         expect(first.delta, 'Thinking a');
         expect(second.delta, ' and b');
       },

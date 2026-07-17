@@ -1,5 +1,5 @@
 import 'package:zeta/src/features/agent/data/mappers/acp_content_codec.dart';
-import 'package:zeta/src/features/agent/data/mappers/context_window_codec.dart';
+import 'package:zeta/src/features/agent/data/mappers/acp_session_update_decoder.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 /// 标准 ACP `session/update` 到领域事件的映射结果。
@@ -16,45 +16,43 @@ class AcpMappedUpdate {
 /// 兼容现有调用方的映射结果别名。
 typedef GrokAcpMappedUpdate = AcpMappedUpdate;
 
-/// 将标准 ACP `session/update` 通知映射为 [AgentEvent]。
+/// 迁移期标准 ACP `session/update` 兼容 mapper。
+///
+/// 原始字段先由无状态 [AcpSessionUpdateDecoder] 解码。本类暂时保留旧 entryId
+/// 合成规则，直到 Grok/Cursor 各自的 identity adapter 完成迁移；不得在此新增
+/// Provider 叙事策略。
 class AcpSessionUpdateMapper {
-  const AcpSessionUpdateMapper();
+  const AcpSessionUpdateMapper({
+    this.decoder = const AcpSessionUpdateDecoder(),
+  });
+
+  final AcpSessionUpdateDecoder decoder;
 
   /// 映射标准 `session/update` 通知。
   AcpMappedUpdate mapSessionUpdate({
     required Map<String, Object?> params,
     required String? runningTurnId,
   }) {
-    final sessionId = params['sessionId']?.toString();
-    final updateRaw = params['update'];
-    if (updateRaw is! Map) {
-      return const AcpMappedUpdate(unmatchedKind: 'session/update:missing');
-    }
-    final update = updateRaw.map(
-      (key, value) => MapEntry(key.toString(), value as Object?),
-    );
-    final kind = update['sessionUpdate']?.toString() ?? '';
+    final decoded = decoder.decode(params);
     final turnId = runningTurnId;
 
-    switch (kind) {
-      case 'user_message_chunk':
+    switch (decoded) {
+      case AcpUserMessageChunk():
         // 直播时间线已由 ViewModel 乐观插入用户消息；再映射会重复一条。
         // 历史回放走本地 updates.jsonl 解析，不经过此 live mapper。
         return const AcpMappedUpdate(unmatchedKind: 'user_message_chunk');
-
-      case 'agent_message_chunk':
-        final text = AcpContentCodec.textFromContent(update['content']);
+      case AcpAgentMessageChunk():
+        final text = AcpContentCodec.textFromContent(decoded.content);
         if (text == null || text.isEmpty) {
-          return AcpMappedUpdate(unmatchedKind: kind);
+          return AcpMappedUpdate(unmatchedKind: decoded.kind);
         }
-        // 部分 ACP agent（如 Grok）的流式 chunk 无 messageId。
-        // id 解析对齐历史 parser：messageId → eventId → turn/prompt 作用域，
-        // 以便 tool 打断后可开新文本段；连续 chunk 的合并由 timeline store 负责。
+        // 迁移期保留旧 identity 优先级，避免尚未迁移的 Grok/Cursor 行为变化。
         final messageId = _stableStreamMessageId(
-          update: update,
-          params: params,
-          kind: kind,
-          sessionId: sessionId,
+          sourceMessageId: decoded.sourceMessageId,
+          eventId: decoded.eventId,
+          promptId: decoded.promptId,
+          kind: decoded.kind,
+          sessionId: decoded.sessionId,
           turnId: turnId,
         );
         // 标准 ACP 无 Codex final_answer 语义；不设 response phase，
@@ -63,106 +61,82 @@ class AcpSessionUpdateMapper {
           events: <AgentEvent>[
             AgentMessageDeltaEvent(
               messageId: messageId,
+              sourceMessageId: decoded.sourceMessageId,
+              kind: AgentMessageKind.regular,
               delta: text,
               role: AgentMessageRole.agent,
               status: AgentMessageStatus.streaming,
-              sessionId: sessionId,
+              sessionId: decoded.sessionId,
               turnId: turnId,
-              raw: update,
+              raw: decoded.raw,
             ),
           ],
         );
-
-      case 'agent_thought_chunk':
-        final text = AcpContentCodec.textFromContent(update['content']) ?? '';
-        // 思考是整段连续流，不能按 eventId 切成多张「思考」卡。
-        // 仅 messageId（若有）或 turn/prompt 作用域聚合；与 agent_message 的
-        // eventId 分段策略刻意分离。
+      case AcpAgentThoughtChunk():
+        final text = AcpContentCodec.textFromContent(decoded.content) ?? '';
+        // 迁移期保留现有 thought identity；decoder 本身不参与该决策。
         final itemId = _stableThoughtItemId(
-          update: update,
-          params: params,
-          sessionId: sessionId,
+          sourceItemId: decoded.sourceItemId,
+          promptId: decoded.promptId,
+          sessionId: decoded.sessionId,
           turnId: turnId,
         );
         return AcpMappedUpdate(
           events: <AgentEvent>[
             AgentReasoningDeltaEvent(
               itemId: itemId,
+              sourceItemId: decoded.sourceItemId,
               kind: AgentReasoningDeltaKind.text,
               delta: text,
-              sessionId: sessionId,
+              sessionId: decoded.sessionId,
               turnId: turnId,
-              raw: update,
+              raw: decoded.raw,
             ),
           ],
         );
-
-      case 'tool_call':
-      case 'tool_call_update':
+      case AcpToolCallUpdate():
         final toolCall = _mapToolCall(
-          update: update,
-          sessionId: sessionId,
+          update: decoded,
+          sessionId: decoded.sessionId,
           turnId: turnId,
         );
-        if (toolCall == null) {
-          return AcpMappedUpdate(unmatchedKind: kind);
-        }
         return AcpMappedUpdate(
           events: <AgentEvent>[AgentToolCallEvent(toolCall)],
         );
-
-      case 'plan':
-        final entries = _mapPlanEntries(update['entries']);
+      case AcpPlanUpdate():
+        final entries = _mapPlanEntries(decoded.entries);
         return AcpMappedUpdate(
           events: <AgentEvent>[
             AgentPlanUpdatedEvent(
               entries: entries,
-              sessionId: sessionId,
+              sessionId: decoded.sessionId,
               turnId: turnId,
             ),
           ],
         );
-
-      case 'usage_update':
+      case AcpUsageUpdate():
         // ACP 上下文占用进度：按会话级累计处理，供 header/composer 使用。
-        final used = _asInt(update['used']);
-        if (used == null) {
-          return AcpMappedUpdate(unmatchedKind: kind);
-        }
         return AcpMappedUpdate(
           events: <AgentEvent>[
             AgentTokenUsageEvent(
-              sessionId: sessionId,
+              sessionId: decoded.sessionId,
               turnId: turnId,
               isSessionCumulative: true,
               tokenUsage: AgentTokenUsage(
-                totalTokens: used,
-                inputTokens: used,
+                totalTokens: decoded.used,
+                inputTokens: decoded.used,
                 outputTokens: 0,
-                modelContextWindow: ContextWindowCodec.positiveWindow(update),
+                modelContextWindow: decoded.modelContextWindow,
               ),
-              raw: update,
+              raw: decoded.raw,
             ),
           ],
         );
-
-      case 'turn_completed':
+      case AcpTurnCompletedUpdate():
         // 兼容通过标准 session/update 通道发送的 turn_completed 扩展。
-        return mapTurnCompleted(
-          params: params,
-          update: update,
-          runningTurnId: turnId,
-        );
-
-      // 命令列表、模式切换等暂不驱动主时间线。
-      case 'available_commands_update':
-      case 'current_mode_update':
-      case 'config_option_update':
-      case 'session_info_update':
-        return AcpMappedUpdate(unmatchedKind: kind);
-
-      default:
-        return AcpMappedUpdate(unmatchedKind: kind);
+        return _mapTurnCompleted(update: decoded, runningTurnId: turnId);
+      case AcpUnknownUpdate():
+        return AcpMappedUpdate(unmatchedKind: decoded.kind);
     }
   }
 
@@ -172,46 +146,46 @@ class AcpSessionUpdateMapper {
     required Map<String, Object?> update,
     required String? runningTurnId,
   }) {
-    final sessionId = params['sessionId']?.toString();
-    final updateMeta = _asStringKeyedMap(update['_meta']);
-    final paramsMeta = _asStringKeyedMap(params['_meta']);
+    final decoded = decoder.decode(<String, Object?>{
+      ...params,
+      'update': update,
+    });
+    if (decoded is! AcpTurnCompletedUpdate) {
+      return AcpMappedUpdate(unmatchedKind: decoded.kind);
+    }
+    return _mapTurnCompleted(update: decoded, runningTurnId: runningTurnId);
+  }
+
+  AcpMappedUpdate _mapTurnCompleted({
+    required AcpTurnCompletedUpdate update,
+    required String? runningTurnId,
+  }) {
     // 优先本地 running turn id（与 pending/live 分组一致）；否则读取扩展 prompt id。
-    final turnId =
-        runningTurnId ??
-        updateMeta?['promptId']?.toString() ??
-        paramsMeta?['promptId']?.toString() ??
-        update['prompt_id']?.toString() ??
-        update['promptId']?.toString();
+    final turnId = runningTurnId ?? update.promptId;
+    final sessionId = update.sessionId;
     if (sessionId == null || turnId == null) {
       return const AcpMappedUpdate(unmatchedKind: 'turn_completed');
     }
 
-    final stopReason =
-        update['stop_reason']?.toString() ??
-        update['stopReason']?.toString() ??
-        'end_turn';
+    final stopReason = update.stopReason;
     final status = _stopReasonToStatus(stopReason);
 
     // turn_completed 携带的 usage 按本回合绝对用量处理，并兼容 apiDurationMs。
     Duration? duration;
     AgentTokenUsage? tokenUsage;
-    Map<String, Object?>? usageMap;
-    final usage = update['usage'];
-    if (usage is Map) {
-      usageMap = usage.map(
-        (key, value) => MapEntry(key.toString(), value as Object?),
-      );
-      final apiDurationMs = _asInt(usageMap['apiDurationMs']);
+    final usage = update.usage;
+    if (usage != null) {
+      final apiDurationMs = usage.apiDurationMs;
       if (apiDurationMs != null && apiDurationMs >= 0) {
         duration = Duration(milliseconds: apiDurationMs);
       }
       tokenUsage = AgentTokenUsage(
-        inputTokens: _asInt(usageMap['inputTokens']) ?? 0,
-        outputTokens: _asInt(usageMap['outputTokens']) ?? 0,
-        totalTokens: _asInt(usageMap['totalTokens']),
-        cachedInputTokens: _asInt(usageMap['cachedReadTokens']),
-        reasoningOutputTokens: _asInt(usageMap['reasoningTokens']),
-        modelContextWindow: ContextWindowCodec.positiveWindow(usageMap),
+        inputTokens: usage.inputTokens ?? 0,
+        outputTokens: usage.outputTokens ?? 0,
+        totalTokens: usage.totalTokens,
+        cachedInputTokens: usage.cachedReadTokens,
+        reasoningOutputTokens: usage.reasoningTokens,
+        modelContextWindow: usage.modelContextWindow,
       );
     }
 
@@ -223,7 +197,7 @@ class AcpSessionUpdateMapper {
           turnId: turnId,
           isSessionCumulative: false,
           tokenUsage: tokenUsage,
-          raw: usageMap ?? const <String, Object?>{},
+          raw: usage?.raw ?? const <String, Object?>{},
         ),
       AgentTurnCompletedEvent(
         sessionId: sessionId,
@@ -233,7 +207,7 @@ class AcpSessionUpdateMapper {
         errorMessage: status == AgentHistoryTurnStatus.failed
             ? stopReason
             : null,
-        raw: update,
+        raw: update.raw,
       ),
     ];
 
@@ -251,25 +225,20 @@ class AcpSessionUpdateMapper {
   /// **不要**用于 `agent_thought_chunk`：思考 chunk 常带独立 eventId，
   /// 按 event 切分会拆成多张思考卡（见 [_stableThoughtItemId]）。
   String _stableStreamMessageId({
-    required Map<String, Object?> update,
-    required Map<String, Object?> params,
+    required String? sourceMessageId,
+    required String? eventId,
+    required String? promptId,
     required String kind,
     required String? sessionId,
     required String? turnId,
   }) {
-    final explicit = update['messageId']?.toString();
-    if (explicit != null && explicit.isNotEmpty) {
-      return explicit;
+    if (sourceMessageId != null) {
+      return sourceMessageId;
     }
-    final updateMeta = _asStringKeyedMap(update['_meta']);
-    final paramsMeta = _asStringKeyedMap(params['_meta']);
-    final eventId =
-        updateMeta?['eventId']?.toString() ??
-        paramsMeta?['eventId']?.toString();
-    if (eventId != null && eventId.isNotEmpty) {
+    if (eventId != null) {
       return 'acp-$kind-event-$eventId';
     }
-    return 'acp-$kind-${_streamScopeId(update: update, params: params, sessionId: sessionId, turnId: turnId)}';
+    return 'acp-$kind-${_streamScopeId(promptId: promptId, sessionId: sessionId, turnId: turnId)}';
   }
 
   /// 思考流的稳定 itemId：整 turn（或显式 messageId）聚合为一张「思考」卡。
@@ -277,18 +246,16 @@ class AcpSessionUpdateMapper {
   /// Grok 每个 `agent_thought_chunk` 通常带不同 `_meta.eventId`，若走正文的
   /// eventId 分段策略，会在 timeline 上出现多条互不相关的思考卡片。
   String _stableThoughtItemId({
-    required Map<String, Object?> update,
-    required Map<String, Object?> params,
+    required String? sourceItemId,
+    required String? promptId,
     required String? sessionId,
     required String? turnId,
   }) {
-    final explicit = update['messageId']?.toString();
-    if (explicit != null && explicit.isNotEmpty) {
-      return explicit;
+    if (sourceItemId != null) {
+      return sourceItemId;
     }
     final scope = _streamScopeId(
-      update: update,
-      params: params,
+      promptId: promptId,
       sessionId: sessionId,
       turnId: turnId,
     );
@@ -297,65 +264,32 @@ class AcpSessionUpdateMapper {
 
   /// promptId → runningTurnId → session 的流式作用域。
   String _streamScopeId({
-    required Map<String, Object?> update,
-    required Map<String, Object?> params,
+    required String? promptId,
     required String? sessionId,
     required String? turnId,
   }) {
-    final updateMeta = _asStringKeyedMap(update['_meta']);
-    final paramsMeta = _asStringKeyedMap(params['_meta']);
-    final promptId =
-        updateMeta?['promptId']?.toString() ??
-        paramsMeta?['promptId']?.toString() ??
-        update['promptId']?.toString() ??
-        update['prompt_id']?.toString();
     return promptId ?? turnId ?? sessionId ?? 'unknown';
   }
 
-  AgentToolCall? _mapToolCall({
-    required Map<String, Object?> update,
+  AgentToolCall _mapToolCall({
+    required AcpToolCallUpdate update,
     required String? sessionId,
     required String? turnId,
   }) {
-    final id = update['toolCallId']?.toString();
-    if (id == null || id.isEmpty) {
-      return null;
-    }
-    final kind = _mapToolKind(update['kind']?.toString());
-    final status = _mapToolStatus(update['status']?.toString());
-    final content = AcpContentCodec.toolContentText(update['content']);
-    final locations = <String>[];
-    final rawLocations = update['locations'];
-    if (rawLocations is List) {
-      for (final item in rawLocations) {
-        if (item is Map) {
-          final path = item['path']?.toString();
-          if (path != null && path.isNotEmpty) {
-            locations.add(path);
-          }
-        } else if (item is String && item.isNotEmpty) {
-          locations.add(item);
-        }
-      }
-    }
-
-    final rawInput = update['rawInput'] is Map
-        ? (update['rawInput'] as Map).map(
-            (key, value) => MapEntry(key.toString(), value as Object?),
-          )
-        : const <String, Object?>{};
-    final rawOutput = update['rawOutput'] is Map
-        ? (update['rawOutput'] as Map).map(
-            (key, value) => MapEntry(key.toString(), value as Object?),
-          )
-        : const <String, Object?>{};
+    final id = update.toolCallId;
+    final kind = _mapToolKind(update.toolKind);
+    final status = _mapToolStatus(update.status);
+    final content = AcpContentCodec.toolContentText(update.content);
+    final locations = update.locations;
+    final rawInput = update.rawInput;
+    final rawOutput = update.rawOutput;
 
     // 不要把 toolCallId（call-...）当标题；用类型 + 路径/命令合成可读文案。
     final title = buildAgentToolCallDisplayTitle(
       toolCallId: id,
-      title: update['title']?.toString(),
+      title: update.title,
       kind: kind,
-      kindRaw: update['kind']?.toString(),
+      kindRaw: update.toolKind,
       locations: locations,
       rawInput: rawInput,
     );
@@ -366,39 +300,25 @@ class AcpSessionUpdateMapper {
       kind: kind,
       status: status,
       content: content,
-      locations: List<String>.unmodifiable(locations),
+      locations: locations,
       sessionId: sessionId,
       turnId: turnId,
       rawInput: rawInput,
       rawOutput: rawOutput,
-      raw: update,
+      raw: update.raw,
     );
   }
 
-  List<AgentPlanEntry> _mapPlanEntries(Object? value) {
-    if (value is! List) {
-      return const <AgentPlanEntry>[];
-    }
-    final entries = <AgentPlanEntry>[];
-    for (final item in value) {
-      if (item is! Map) {
-        continue;
-      }
-      final map = item.map(
-        (key, value) => MapEntry(key.toString(), value as Object?),
-      );
-      final content = map['content']?.toString() ?? '';
-      if (content.isEmpty) {
-        continue;
-      }
-      entries.add(
-        AgentPlanEntry(
-          content: content,
-          status: map['status']?.toString(),
-          priority: map['priority']?.toString(),
-        ),
-      );
-    }
+  List<AgentPlanEntry> _mapPlanEntries(List<AcpPlanEntry> value) {
+    final entries = value
+        .map(
+          (entry) => AgentPlanEntry(
+            content: entry.content,
+            status: entry.status,
+            priority: entry.priority,
+          ),
+        )
+        .toList(growable: false);
     return List<AgentPlanEntry>.unmodifiable(entries);
   }
 
@@ -443,25 +363,5 @@ class AcpSessionUpdateMapper {
       return AgentHistoryTurnStatus.failed;
     }
     return AgentHistoryTurnStatus.completed;
-  }
-
-  int? _asInt(Object? value) {
-    if (value is int) {
-      return value;
-    }
-    if (value is num) {
-      return value.toInt();
-    }
-    if (value is String) {
-      return int.tryParse(value);
-    }
-    return null;
-  }
-
-  Map<String, Object?>? _asStringKeyedMap(Object? value) {
-    if (value is! Map) {
-      return null;
-    }
-    return value.map((key, item) => MapEntry(key.toString(), item as Object?));
   }
 }

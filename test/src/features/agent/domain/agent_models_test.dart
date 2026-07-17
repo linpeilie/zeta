@@ -2,6 +2,60 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 void main() {
+  group('Agent message identity contract', () {
+    test('message events keep backward-compatible defaults', () {
+      const delta = AgentMessageDeltaEvent(
+        messageId: 'entry-1',
+        delta: 'hello',
+        role: AgentMessageRole.agent,
+      );
+      const updated = AgentMessageUpdatedEvent(messageId: 'entry-1');
+      const reasoning = AgentReasoningDeltaEvent(
+        itemId: 'reasoning-entry-1',
+        kind: AgentReasoningDeltaKind.text,
+      );
+
+      expect(delta.kind, AgentMessageKind.regular);
+      expect(delta.sourceMessageId, isNull);
+      expect(updated.kind, AgentMessageKind.regular);
+      expect(updated.sourceMessageId, isNull);
+      expect(reasoning.sourceItemId, isNull);
+    });
+
+    test(
+      'message events expose normalized and source identities separately',
+      () {
+        const delta = AgentMessageDeltaEvent(
+          messageId: 'entry-1',
+          sourceMessageId: 'provider-message-1',
+          kind: AgentMessageKind.plan,
+          delta: 'plan delta',
+          role: AgentMessageRole.agent,
+        );
+        const updated = AgentMessageUpdatedEvent(
+          messageId: 'entry-1',
+          sourceMessageId: 'provider-message-1',
+          kind: AgentMessageKind.plan,
+          text: 'full plan',
+        );
+        const reasoning = AgentReasoningDeltaEvent(
+          itemId: 'reasoning-entry-1',
+          sourceItemId: 'provider-reasoning-1',
+          kind: AgentReasoningDeltaKind.summaryText,
+        );
+
+        expect(delta.messageId, 'entry-1');
+        expect(delta.sourceMessageId, 'provider-message-1');
+        expect(delta.kind, AgentMessageKind.plan);
+        expect(updated.messageId, delta.messageId);
+        expect(updated.sourceMessageId, delta.sourceMessageId);
+        expect(updated.kind, delta.kind);
+        expect(reasoning.itemId, 'reasoning-entry-1');
+        expect(reasoning.sourceItemId, 'provider-reasoning-1');
+      },
+    );
+  });
+
   group('AgentThreadSummary', () {
     test('normalizes display name from title, preview, and id', () {
       final baseTime = DateTime.fromMillisecondsSinceEpoch(1);

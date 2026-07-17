@@ -1,7 +1,34 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/domain/agent_turn_history_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 void main() {
+  group('AgentHistoryMessageEntry identity contract', () {
+    test('keeps existing constructors compatible through defaults', () {
+      const entry = AgentHistoryMessageEntry(
+        id: 'entry-1',
+        role: AgentMessageRole.agent,
+        text: 'hello',
+      );
+
+      expect(entry.kind, AgentMessageKind.regular);
+      expect(entry.sourceMessageId, isNull);
+    });
+
+    test('constructs explicit plan and source identity metadata', () {
+      const entry = AgentHistoryMessageEntry(
+        id: 'entry-1',
+        sourceMessageId: 'provider-message-1',
+        kind: AgentMessageKind.plan,
+        role: AgentMessageRole.agent,
+        text: '# Plan',
+      );
+
+      expect(entry.id, 'entry-1');
+      expect(entry.sourceMessageId, 'provider-message-1');
+      expect(entry.kind, AgentMessageKind.plan);
+    });
+  });
+
   group('AgentTokenUsage display getters', () {
     test('returns null for missing values and keeps sub-1k values raw', () {
       const usage = AgentTokenUsage(inputTokens: 999);

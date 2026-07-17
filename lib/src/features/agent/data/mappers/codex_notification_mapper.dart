@@ -166,6 +166,8 @@ class _CodexNotificationMapper {
           events: <AgentEvent>[
             AgentMessageDeltaEvent(
               messageId: itemId,
+              sourceMessageId: itemId,
+              kind: AgentMessageKind.regular,
               delta: delta,
               role: AgentMessageRole.agent,
               phase: _messagePhase(
@@ -210,10 +212,12 @@ class _CodexNotificationMapper {
           events: <AgentEvent>[
             AgentMessageDeltaEvent(
               messageId: itemId,
+              sourceMessageId: itemId,
+              kind: AgentMessageKind.plan,
               delta: delta,
               role: AgentMessageRole.agent,
               status: AgentMessageStatus.streaming,
-              // 注入 type=plan，让 timeline 走计划卡片而非普通气泡。
+              // 迁移期仍保留 raw type，直到 Store/ViewModel 改为只读显式 kind。
               raw: <String, Object?>{...notification.params, 'type': 'plan'},
               sessionId: _string(notification.params['threadId']),
               turnId: _string(notification.params['turnId']),
@@ -542,6 +546,7 @@ class _CodexNotificationMapper {
       events: <AgentEvent>[
         AgentReasoningDeltaEvent(
           itemId: itemId,
+          sourceItemId: itemId,
           kind: kind,
           delta: delta,
           contentIndex: _numberToInt(notification.params['contentIndex']),
@@ -613,6 +618,10 @@ class _CodexNotificationMapper {
 
     return AgentMessageUpdatedEvent(
       messageId: id,
+      sourceMessageId: id,
+      kind: normalizedType == 'plan'
+          ? AgentMessageKind.plan
+          : AgentMessageKind.regular,
       text: _string(item['text']) ?? _string(notification.params['text']),
       role: AgentMessageRole.agent,
       phase: _messagePhase(

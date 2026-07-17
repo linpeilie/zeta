@@ -640,19 +640,19 @@ Phase 0 总状态：**blocked by Cursor real fixture**。Phase 1/2 可开始；P
 
 | 任务 | 文件 | 实施内容 | 测试 |
 |------|------|----------|------|
-| P1-1 | `agent_message_models.dart` | 新增 `AgentMessageKind` | domain model test |
-| P1-2 | `agent_event_models.dart` | message delta/updated 增加 kind/source id；reasoning 增加 source item id；更新文档注释 | constructor/copy/event tests |
-| P1-3 | `agent_turn_history_models.dart` | history message 增加显式 kind/source id，默认兼容旧调用方 | history parser tests |
-| P1-4 | `acp_session_update_decoder.dart` | 定义 typed decoded update；宽容未知 kind/字段 | decoder fixture tests |
-| P1-5 | `acp_session_update_mapper.dart` | 暂时改为兼容 wrapper，内部调用 decoder；不得新增叙事逻辑 | 现有 mapper tests 继续通过 |
-| P1-6 | Codex mapper | 显式设置 kind/source id，delta/completed id 保持 itemId | app-server provider tests |
+| [x] P1-1 | `agent_message_models.dart` | 新增 `AgentMessageKind` | domain model test |
+| [x] P1-2 | `agent_event_models.dart` | message delta/updated 增加 kind/source id；reasoning 增加 source item id；更新文档注释 | constructor/copy/event tests |
+| [x] P1-3 | `agent_turn_history_models.dart` | history message 增加显式 kind/source id，默认兼容旧调用方 | history parser tests |
+| [x] P1-4 | `acp_session_update_decoder.dart` | 定义 typed decoded update；宽容未知 kind/字段 | decoder fixture tests |
+| [x] P1-5 | `acp_session_update_mapper.dart` | 暂时改为兼容 wrapper，内部调用 decoder；不得新增叙事逻辑 | 现有 mapper tests 继续通过 |
+| [x] P1-6 | Codex mapper | 显式设置 kind/source id，delta/completed id 保持 itemId | app-server provider tests |
 
 Phase 1 门禁：
 
-- [ ] decoder 是无状态类，可使用 `const` 或纯函数。
-- [ ] decoder 不生成 message/reasoning entryId。
-- [ ] 未知 ACP kind 返回 typed unknown/diagnostic，不抛出导致 Provider 断连。
-- [ ] Store 仍保持现状，避免尚未迁移的 Provider 回归。
+- [x] decoder 是无状态类，可使用 `const` 或纯函数。
+- [x] decoder 不生成 message/reasoning entryId。
+- [x] 未知 ACP kind 返回 typed unknown/diagnostic，不抛出导致 Provider 断连。
+- [x] Store 仍保持现状，避免尚未迁移的 Provider 回归。
 
 ### Phase 2：Grok identity 下沉（1.5–2.5 人日）
 
