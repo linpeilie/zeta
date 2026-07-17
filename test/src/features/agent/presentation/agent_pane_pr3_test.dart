@@ -24,8 +24,6 @@ import 'package:zeta/src/features/agent/presentation/agent_conversation_view_mod
 
 import '../../../testing/agent_provider_stub_base.dart';
 
-bool get _skipWindowsActiveHistoryPr3 => Platform.isWindows;
-
 void main() {
   group('AgentPane PR3', () {
     testWidgets('uses the canvas surface and one responsive content axis', (
@@ -152,7 +150,6 @@ void main() {
           IdeMetrics.contentMaxWidth,
         );
       },
-      skip: _skipWindowsActiveHistoryPr3,
     );
 
     testWidgets('disables layout and focus-ring motion for reduce motion', (
@@ -186,9 +183,7 @@ void main() {
       );
     });
 
-    // Windows + Flutter 3.44 的 widget test 环境中，AgentPane 一旦挂载
-    // 带 history 且 composer 可见的 active state，会在首帧/流式帧上卡死。
-    group('advanced', skip: _skipWindowsActiveHistoryPr3, () {
+    group('advanced', () {
       testWidgets(
         'renders heavy history markdown fully without collapse toggle',
         (tester) async {
@@ -252,136 +247,131 @@ void main() {
           );
           expect(find.text('展开正文'), findsNothing);
         },
-        skip: _skipWindowsActiveHistoryPr3,
       );
 
-      testWidgets(
-        'renders end-of-turn footer with duration and token usage',
-        (tester) async {
-          await tester.binding.setSurfaceSize(const Size(800, 800));
-          addTearDown(() => tester.binding.setSurfaceSize(null));
-          final viewModel = _createViewModel(
-            _FakeAgentProvider(
-              historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
-                'thread-footer': AgentThreadHistorySnapshot(
-                  threadId: 'thread-footer',
-                  turns: <AgentHistoryTurn>[
-                    AgentHistoryTurn(
-                      id: 'turn-footer-1',
-                      status: AgentHistoryTurnStatus.completed,
-                      duration: const Duration(seconds: 95),
-                      model: 'gpt-5.5',
-                      tokenUsage: const AgentTokenUsage(
-                        inputTokens: 1000,
-                        outputTokens: 240,
-                        totalTokens: 1240,
-                      ),
-                      raw: const <String, Object?>{
-                        'turnContext': <String, Object?>{
-                          'model': 'gpt-5.5',
-                          'effort': 'high',
-                          'serviceTier': 'priority',
-                        },
-                      },
-                      entries: const <AgentHistoryEntry>[
-                        AgentHistoryMessageEntry(
-                          id: 'history-user-footer-1',
-                          role: AgentMessageRole.user,
-                          text: 'Do the work',
-                        ),
-                        AgentHistoryMessageEntry(
-                          id: 'history-agent-footer-1',
-                          role: AgentMessageRole.agent,
-                          text: 'Done.',
-                          phase: AgentMessagePhase.response,
-                        ),
-                      ],
+      testWidgets('renders end-of-turn footer with duration and token usage', (
+        tester,
+      ) async {
+        await tester.binding.setSurfaceSize(const Size(800, 800));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final viewModel = _createViewModel(
+          _FakeAgentProvider(
+            historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+              'thread-footer': AgentThreadHistorySnapshot(
+                threadId: 'thread-footer',
+                turns: <AgentHistoryTurn>[
+                  AgentHistoryTurn(
+                    id: 'turn-footer-1',
+                    status: AgentHistoryTurnStatus.completed,
+                    duration: const Duration(seconds: 95),
+                    model: 'gpt-5.5',
+                    tokenUsage: const AgentTokenUsage(
+                      inputTokens: 1000,
+                      outputTokens: 240,
+                      totalTokens: 1240,
                     ),
-                  ],
-                ),
-              },
-            ),
-          );
-          addTearDown(viewModel.dispose);
-
-          await tester.pumpWidget(_TestApp(viewModel: viewModel));
-          await viewModel.switchThread(
-            _thread(id: 'thread-footer', title: 'Footer turn'),
-          );
-          await _pumpAgentPaneUi(tester);
-
-          final footer = find.byKey(
-            const ValueKey<String>('agent-turn-footer-turn-footer-1'),
-          );
-          expect(footer, findsOneWidget);
-          expect(
-            find.descendant(of: footer, matching: find.text('1m 35s')),
-            findsOneWidget,
-          );
-          expect(
-            find.descendant(of: footer, matching: find.text('gpt-5.5')),
-            findsOneWidget,
-          );
-          expect(
-            find.descendant(of: footer, matching: find.text('高')),
-            findsOneWidget,
-          );
-          expect(
-            find.descendant(of: footer, matching: find.text('Fast')),
-            findsOneWidget,
-          );
-          expect(
-            find.descendant(of: footer, matching: find.text('1.2k tokens')),
-            findsOneWidget,
-          );
-          // 宽布局给元数据留出足够空间，各项以带留白的 • 分隔。
-          expect(
-            find.descendant(
-              of: footer,
-              matching: find.byKey(
-                const ValueKey<String>(
-                  'agent-turn-footer-inline-turn-footer-1',
-                ),
+                    raw: const <String, Object?>{
+                      'turnContext': <String, Object?>{
+                        'model': 'gpt-5.5',
+                        'effort': 'high',
+                        'serviceTier': 'priority',
+                      },
+                    },
+                    entries: const <AgentHistoryEntry>[
+                      AgentHistoryMessageEntry(
+                        id: 'history-user-footer-1',
+                        role: AgentMessageRole.user,
+                        text: 'Do the work',
+                      ),
+                      AgentHistoryMessageEntry(
+                        id: 'history-agent-footer-1',
+                        role: AgentMessageRole.agent,
+                        text: 'Done.',
+                        phase: AgentMessagePhase.response,
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ),
-            findsOneWidget,
-          );
-          expect(
-            find.descendant(of: footer, matching: find.text('•')),
-            findsNWidgets(4),
-          );
-          final firstSeparator = tester.widget<Padding>(
-            find.byKey(
-              const ValueKey<String>(
-                'agent-turn-footer-separator-turn-footer-1-0',
-              ),
-            ),
-          );
-          expect(
-            firstSeparator.padding,
-            const EdgeInsets.symmetric(horizontal: IdeSpacing.space8),
-          );
-          expect(
-            find.descendant(
-              of: footer,
-              matching: find.byIcon(Icons.bolt_outlined),
-            ),
-            findsNothing,
-          );
+            },
+          ),
+        );
+        addTearDown(viewModel.dispose);
 
-          await tester.binding.setSurfaceSize(const Size(480, 800));
-          await _pumpAgentPaneUi(tester);
+        await tester.pumpWidget(_TestApp(viewModel: viewModel));
+        await viewModel.switchThread(
+          _thread(id: 'thread-footer', title: 'Footer turn'),
+        );
+        await _pumpAgentPaneUi(tester);
 
-          expect(
-            find.byKey(
-              const ValueKey<String>('agent-turn-footer-stacked-turn-footer-1'),
+        final footer = find.byKey(
+          const ValueKey<String>('agent-turn-footer-turn-footer-1'),
+        );
+        expect(footer, findsOneWidget);
+        expect(
+          find.descendant(of: footer, matching: find.text('1m 35s')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: footer, matching: find.text('gpt-5.5')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: footer, matching: find.text('高')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: footer, matching: find.text('Fast')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: footer, matching: find.text('1.2k tokens')),
+          findsOneWidget,
+        );
+        // 宽布局给元数据留出足够空间，各项以带留白的 • 分隔。
+        expect(
+          find.descendant(
+            of: footer,
+            matching: find.byKey(
+              const ValueKey<String>('agent-turn-footer-inline-turn-footer-1'),
             ),
-            findsOneWidget,
-          );
-          expect(tester.takeException(), isNull);
-        },
-        skip: _skipWindowsActiveHistoryPr3,
-      );
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: footer, matching: find.text('•')),
+          findsNWidgets(4),
+        );
+        final firstSeparator = tester.widget<Padding>(
+          find.byKey(
+            const ValueKey<String>(
+              'agent-turn-footer-separator-turn-footer-1-0',
+            ),
+          ),
+        );
+        expect(
+          firstSeparator.padding,
+          const EdgeInsets.symmetric(horizontal: IdeSpacing.space8),
+        );
+        expect(
+          find.descendant(
+            of: footer,
+            matching: find.byIcon(Icons.bolt_outlined),
+          ),
+          findsNothing,
+        );
+
+        await tester.binding.setSurfaceSize(const Size(480, 800));
+        await _pumpAgentPaneUi(tester);
+
+        expect(
+          find.byKey(
+            const ValueKey<String>('agent-turn-footer-stacked-turn-footer-1'),
+          ),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+      });
 
       testWidgets(
         'expands history plan card through view model state without bumping history version',
@@ -453,7 +443,6 @@ void main() {
             findsOneWidget,
           );
         },
-        skip: _skipWindowsActiveHistoryPr3,
       );
 
       testWidgets(
@@ -674,120 +663,117 @@ void main() {
             findsOneWidget,
           );
         },
-        skip: _skipWindowsActiveHistoryPr3,
       );
 
-      testWidgets(
-        'uses ui font for正文 and code font for code-like content',
-        (tester) async {
-          final provider = _FakeAgentProvider(
-            historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
-              'thread-fonts': AgentThreadHistorySnapshot(
-                threadId: 'thread-fonts',
-                turns: <AgentHistoryTurn>[
-                  AgentHistoryTurn(
-                    id: 'turn-fonts-1',
-                    status: AgentHistoryTurnStatus.running,
-                    entries: <AgentHistoryEntry>[
-                      const AgentHistoryMessageEntry(
-                        id: 'history-user-fonts-1',
-                        role: AgentMessageRole.user,
-                        text: 'Check fonts',
-                      ),
-                      const AgentHistoryMessageEntry(
-                        id: 'history-markdown-fonts-1',
-                        role: AgentMessageRole.agent,
-                        text:
-                            'Paragraph text for font check.\n\n```dart\nconst answer = 42;\n```',
-                      ),
-                      const AgentHistoryEventEntry(
-                        id: 'history-event-fonts-1',
-                        kind: AgentHistoryEventKind.system,
-                        title: 'Search query',
-                        content: 'site:zeta.dev fonts',
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            },
-          );
-          final viewModel = _createViewModel(provider);
-          addTearDown(provider.dispose);
-          addTearDown(viewModel.dispose);
-
-          await tester.pumpWidget(
-            _TestApp(
-              viewModel: viewModel,
-              uiFontFamily: 'UiFont',
-              codeFontFamily: 'CodeFont',
+      testWidgets('uses ui font for正文 and code font for code-like content', (
+        tester,
+      ) async {
+        final provider = _FakeAgentProvider(
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'thread-fonts': AgentThreadHistorySnapshot(
+              threadId: 'thread-fonts',
+              turns: <AgentHistoryTurn>[
+                AgentHistoryTurn(
+                  id: 'turn-fonts-1',
+                  status: AgentHistoryTurnStatus.running,
+                  entries: <AgentHistoryEntry>[
+                    const AgentHistoryMessageEntry(
+                      id: 'history-user-fonts-1',
+                      role: AgentMessageRole.user,
+                      text: 'Check fonts',
+                    ),
+                    const AgentHistoryMessageEntry(
+                      id: 'history-markdown-fonts-1',
+                      role: AgentMessageRole.agent,
+                      text:
+                          'Paragraph text for font check.\n\n```dart\nconst answer = 42;\n```',
+                    ),
+                    const AgentHistoryEventEntry(
+                      id: 'history-event-fonts-1',
+                      kind: AgentHistoryEventKind.system,
+                      title: 'Search query',
+                      content: 'site:zeta.dev fonts',
+                    ),
+                  ],
+                ),
+              ],
             ),
-          );
-          await viewModel.switchThread(
-            _thread(id: 'thread-fonts', title: 'Font thread'),
-          );
-          await _pumpLiveAgentUi(tester);
+          },
+        );
+        final viewModel = _createViewModel(provider);
+        addTearDown(provider.dispose);
+        addTearDown(viewModel.dispose);
 
-          final markdownParagraphFinder = find.textContaining(
+        await tester.pumpWidget(
+          _TestApp(
+            viewModel: viewModel,
+            uiFontFamily: 'UiFont',
+            codeFontFamily: 'CodeFont',
+          ),
+        );
+        await viewModel.switchThread(
+          _thread(id: 'thread-fonts', title: 'Font thread'),
+        );
+        await _pumpLiveAgentUi(tester);
+
+        final markdownParagraphFinder = find.textContaining(
+          'Paragraph text for font check.',
+          findRichText: true,
+        );
+        expect(markdownParagraphFinder, findsOneWidget);
+        expect(
+          _fontFamilyForRenderedText(
+            tester,
+            markdownParagraphFinder,
             'Paragraph text for font check.',
-            findRichText: true,
-          );
-          expect(markdownParagraphFinder, findsOneWidget);
-          expect(
-            _fontFamilyForRenderedText(
-              tester,
-              markdownParagraphFinder,
-              'Paragraph text for font check.',
+          ),
+          'UiFont',
+        );
+
+        final markdownCodeFinder = find.textContaining(
+          'answer',
+          findRichText: true,
+        );
+        expect(markdownCodeFinder, findsOneWidget);
+        expect(
+          _fontFamilyForRenderedText(tester, markdownCodeFinder, 'answer'),
+          'CodeFont',
+        );
+
+        provider.emitEvent(
+          const AgentPermissionRequestedEvent(
+            AgentPermissionRequest(
+              id: 'permission-fonts-1',
+              title: 'Run command',
+              kind: AgentPermissionKind.commandExecution,
+              command: 'tool output line',
             ),
-            'UiFont',
-          );
+          ),
+        );
+        await _pumpLiveAgentUi(tester);
 
-          final markdownCodeFinder = find.textContaining(
-            'answer',
-            findRichText: true,
-          );
-          expect(markdownCodeFinder, findsOneWidget);
-          expect(
-            _fontFamilyForRenderedText(tester, markdownCodeFinder, 'answer'),
-            'CodeFont',
-          );
+        final permissionCommandFinder = find.text('tool output line');
+        expect(permissionCommandFinder, findsOneWidget);
+        expect(
+          tester.widget<Text>(permissionCommandFinder).style?.fontFamily,
+          'CodeFont',
+        );
 
-          provider.emitEvent(
-            const AgentPermissionRequestedEvent(
-              AgentPermissionRequest(
-                id: 'permission-fonts-1',
-                title: 'Run command',
-                kind: AgentPermissionKind.commandExecution,
-                command: 'tool output line',
-              ),
-            ),
-          );
-          await _pumpLiveAgentUi(tester);
+        final historyEventContentFinder = find.text('site:zeta.dev fonts');
+        expect(historyEventContentFinder, findsOneWidget);
+        expect(
+          tester.widget<Text>(historyEventContentFinder).style?.fontFamily,
+          'CodeFont',
+        );
 
-          final permissionCommandFinder = find.text('tool output line');
-          expect(permissionCommandFinder, findsOneWidget);
-          expect(
-            tester.widget<Text>(permissionCommandFinder).style?.fontFamily,
-            'CodeFont',
-          );
-
-          final historyEventContentFinder = find.text('site:zeta.dev fonts');
-          expect(historyEventContentFinder, findsOneWidget);
-          expect(
-            tester.widget<Text>(historyEventContentFinder).style?.fontFamily,
-            'CodeFont',
-          );
-
-          provider.emitEvent(
-            const AgentTurnCompletedEvent(
-              sessionId: 'thread-fonts',
-              turnId: 'turn-fonts-1',
-            ),
-          );
-          await tester.pump();
-        },
-        skip: _skipWindowsActiveHistoryPr3,
-      );
+        provider.emitEvent(
+          const AgentTurnCompletedEvent(
+            sessionId: 'thread-fonts',
+            turnId: 'turn-fonts-1',
+          ),
+        );
+        await tester.pump();
+      });
 
       testWidgets('model config expands inline and keeps popover open', (
         tester,
@@ -1380,83 +1366,79 @@ void main() {
         );
       });
 
-      testWidgets(
-        'user input supports stable option ids and multi-select',
-        (tester) async {
-          final provider = _FakeAgentProvider();
-          final viewModel = _createViewModel(provider);
-          addTearDown(provider.dispose);
-          addTearDown(viewModel.dispose);
-          await tester.pumpWidget(_TestApp(viewModel: viewModel));
-          await viewModel.loadModels();
-          await viewModel.switchThread(
-            _thread(id: 'thread-question', title: 'Question thread'),
-          );
+      testWidgets('user input supports stable option ids and multi-select', (
+        tester,
+      ) async {
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(provider.dispose);
+        addTearDown(viewModel.dispose);
+        await tester.pumpWidget(_TestApp(viewModel: viewModel));
+        await viewModel.loadModels();
+        await viewModel.switchThread(
+          _thread(id: 'thread-question', title: 'Question thread'),
+        );
 
-          provider.emitEvent(
-            const AgentPermissionRequestedEvent(
-              AgentPermissionRequest(
-                id: 'question-1',
-                title: 'Choose scope',
-                kind: AgentPermissionKind.userInput,
-                sessionId: 'thread-question',
-                questions: <AgentUserInputQaPair>[
-                  AgentUserInputQaPair(
-                    questionId: 'scope',
-                    question: 'Select scopes',
-                    allowMultiple: true,
-                    optionItems: <AgentUserInputOption>[
-                      AgentUserInputOption(id: 'source', label: 'Source code'),
-                      AgentUserInputOption(id: 'tests', label: 'Tests'),
-                    ],
-                  ),
-                ],
-              ),
+        provider.emitEvent(
+          const AgentPermissionRequestedEvent(
+            AgentPermissionRequest(
+              id: 'question-1',
+              title: 'Choose scope',
+              kind: AgentPermissionKind.userInput,
+              sessionId: 'thread-question',
+              questions: <AgentUserInputQaPair>[
+                AgentUserInputQaPair(
+                  questionId: 'scope',
+                  question: 'Select scopes',
+                  allowMultiple: true,
+                  optionItems: <AgentUserInputOption>[
+                    AgentUserInputOption(id: 'source', label: 'Source code'),
+                    AgentUserInputOption(id: 'tests', label: 'Tests'),
+                  ],
+                ),
+              ],
             ),
-          );
-          await tester.pump();
+          ),
+        );
+        await tester.pump();
 
-          final dock = find.byKey(
-            const ValueKey('agent-pending-interaction-dock'),
-          );
-          final messageList = find.byKey(const ValueKey('agent-message-list'));
-          final submitButton = find.byKey(
-            const ValueKey('agent-permission-approve-question-1'),
-          );
-          expect(dock, findsOneWidget);
-          expect(
-            find.descendant(of: dock, matching: submitButton),
-            findsOneWidget,
-          );
-          expect(
-            find.descendant(of: messageList, matching: submitButton),
-            findsNothing,
-          );
+        final dock = find.byKey(
+          const ValueKey('agent-pending-interaction-dock'),
+        );
+        final messageList = find.byKey(const ValueKey('agent-message-list'));
+        final submitButton = find.byKey(
+          const ValueKey('agent-permission-approve-question-1'),
+        );
+        expect(dock, findsOneWidget);
+        expect(
+          find.descendant(of: dock, matching: submitButton),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: messageList, matching: submitButton),
+          findsNothing,
+        );
 
-          await tester.tap(
-            find.byKey(
-              const ValueKey('agent-user-input-question-1-scope-source'),
-            ),
-          );
-          await tester.tap(
-            find.byKey(
-              const ValueKey('agent-user-input-question-1-scope-tests'),
-            ),
-          );
-          await tester.tap(
-            find.byKey(const ValueKey('agent-permission-approve-question-1')),
-          );
-          await tester.pump();
+        await tester.tap(
+          find.byKey(
+            const ValueKey('agent-user-input-question-1-scope-source'),
+          ),
+        );
+        await tester.tap(
+          find.byKey(const ValueKey('agent-user-input-question-1-scope-tests')),
+        );
+        await tester.tap(
+          find.byKey(const ValueKey('agent-permission-approve-question-1')),
+        );
+        await tester.pump();
 
-          expect(provider.permissionDecisions, hasLength(1));
-          expect(provider.permissionDecisions.single.answers['scope'], <String>[
-            'source',
-            'tests',
-          ]);
-          expect(dock, findsNothing);
-        },
-        skip: _skipWindowsActiveHistoryPr3,
-      );
+        expect(provider.permissionDecisions, hasLength(1));
+        expect(provider.permissionDecisions.single.answers['scope'], <String>[
+          'source',
+          'tests',
+        ]);
+        expect(dock, findsNothing);
+      });
 
       testWidgets(
         'renders dynamic session config options and sends stable values',
@@ -1511,70 +1493,67 @@ void main() {
             ('thread-config', 'cursor-model', 'smart'),
           ]);
         },
-        skip: _skipWindowsActiveHistoryPr3,
       );
 
-      testWidgets(
-        'renders and accepts an independent plan approval card',
-        (tester) async {
-          final provider = _FakeAgentProvider();
-          final viewModel = _createViewModel(provider);
-          addTearDown(provider.dispose);
-          addTearDown(viewModel.dispose);
-          await tester.pumpWidget(_TestApp(viewModel: viewModel));
-          await viewModel.loadModels();
-          await viewModel.switchThread(
-            _thread(id: 'thread-plan', title: 'Plan thread'),
-          );
-          provider.emitEvent(
-            const AgentPlanApprovalRequestedEvent(
-              AgentPlanApprovalRequest(
-                id: 'plan-1',
-                title: 'Refactor tabs',
-                overview: 'Preserve behavior',
-                markdown: '1. Inspect\n2. Update',
-                todos: <AgentPlanEntry>[
-                  AgentPlanEntry(
-                    id: 'todo-1',
-                    content: 'Inspect current layout',
-                    status: 'completed',
-                  ),
-                ],
-                sessionId: 'thread-plan',
-              ),
+      testWidgets('renders and accepts an independent plan approval card', (
+        tester,
+      ) async {
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(provider.dispose);
+        addTearDown(viewModel.dispose);
+        await tester.pumpWidget(_TestApp(viewModel: viewModel));
+        await viewModel.loadModels();
+        await viewModel.switchThread(
+          _thread(id: 'thread-plan', title: 'Plan thread'),
+        );
+        provider.emitEvent(
+          const AgentPlanApprovalRequestedEvent(
+            AgentPlanApprovalRequest(
+              id: 'plan-1',
+              title: 'Refactor tabs',
+              overview: 'Preserve behavior',
+              markdown: '1. Inspect\n2. Update',
+              todos: <AgentPlanEntry>[
+                AgentPlanEntry(
+                  id: 'todo-1',
+                  content: 'Inspect current layout',
+                  status: 'completed',
+                ),
+              ],
+              sessionId: 'thread-plan',
             ),
-          );
-          await tester.pump();
+          ),
+        );
+        await tester.pump();
 
-          expect(find.text('Refactor tabs'), findsOneWidget);
-          expect(find.text('Inspect current layout'), findsOneWidget);
-          expect(
-            find.byKey(const ValueKey('agent-plan-accept-plan-1')),
-            findsOneWidget,
-          );
-          expect(
-            find.descendant(
-              of: find.byKey(const ValueKey('agent-message-list')),
-              matching: find.byKey(const ValueKey('agent-plan-accept-plan-1')),
-            ),
-            findsNothing,
-          );
-          await tester.tap(
-            find.byKey(const ValueKey('agent-plan-accept-plan-1')),
-          );
-          await tester.pump();
+        expect(find.text('Refactor tabs'), findsOneWidget);
+        expect(find.text('Inspect current layout'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('agent-plan-accept-plan-1')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('agent-message-list')),
+            matching: find.byKey(const ValueKey('agent-plan-accept-plan-1')),
+          ),
+          findsNothing,
+        );
+        await tester.tap(
+          find.byKey(const ValueKey('agent-plan-accept-plan-1')),
+        );
+        await tester.pump();
 
-          expect(
-            provider.planDecisions.single.kind,
-            AgentPlanApprovalDecisionKind.accepted,
-          );
-          expect(
-            find.byKey(const ValueKey('agent-plan-accept-plan-1')),
-            findsNothing,
-          );
-        },
-        skip: _skipWindowsActiveHistoryPr3,
-      );
+        expect(
+          provider.planDecisions.single.kind,
+          AgentPlanApprovalDecisionKind.accepted,
+        );
+        expect(
+          find.byKey(const ValueKey('agent-plan-accept-plan-1')),
+          findsNothing,
+        );
+      });
 
       testWidgets(
         'stacks permissions before plans and keeps composer visible in a short window',
@@ -1637,7 +1616,6 @@ void main() {
           expect(tester.getSize(dock).height, lessThanOrEqualTo(140));
           expect(tester.getBottomLeft(composer).dy, lessThanOrEqualTo(400));
         },
-        skip: _skipWindowsActiveHistoryPr3,
       );
     });
   });
