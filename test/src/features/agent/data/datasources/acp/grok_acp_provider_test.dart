@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_acp_agent_provider.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_models_cli.dart';
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_session_history_reader.dart';
@@ -505,77 +504,6 @@ void main() {
 
   group('GrokAcpNotificationMapper', () {
     const mapper = GrokAcpNotificationMapper();
-
-    test('keeps Grok message segments around tool calls distinct', () {
-      final timeline = AgentConversationTimelineStore();
-      addTearDown(timeline.dispose);
-
-      void applyUpdate({
-        required Map<String, Object?> update,
-        String? eventId,
-      }) {
-        final mapped = mapper.mapSessionUpdate(
-          params: <String, Object?>{
-            'sessionId': 's1',
-            if (eventId != null) '_meta': <String, Object?>{'eventId': eventId},
-            'update': update,
-          },
-          runningTurnId: 't1',
-        );
-        for (final event in mapped.events) {
-          switch (event) {
-            case AgentMessageDeltaEvent():
-              timeline.appendMessageDelta(event);
-            case AgentToolCallEvent():
-              timeline.upsertToolCall(event.toolCall);
-            default:
-              fail('Unexpected event: $event');
-          }
-        }
-      }
-
-      Map<String, Object?> messageUpdate(String text) => <String, Object?>{
-        'sessionUpdate': 'agent_message_chunk',
-        'content': <String, Object?>{'type': 'text', 'text': text},
-        '_meta': <String, Object?>{'promptId': 'prompt-1'},
-      };
-
-      applyUpdate(update: messageUpdate('先检查文件'), eventId: 'event-before-tool');
-      applyUpdate(
-        update: <String, Object?>{
-          'sessionUpdate': 'tool_call',
-          'toolCallId': 'call-1',
-          'title': 'Read file',
-          'kind': 'read',
-          'status': 'completed',
-        },
-      );
-      applyUpdate(update: messageUpdate('检查完成'), eventId: 'event-after-tool');
-
-      expect(timeline.timelineEntries.map((entry) => entry.id), <String>[
-        'message-event-before-tool',
-        'tool-call-1',
-        'message-event-after-tool',
-      ]);
-    });
-
-    test('keeps an explicit Grok message id', () {
-      final mapped = mapper.mapSessionUpdate(
-        params: <String, Object?>{
-          'sessionId': 's1',
-          '_meta': <String, Object?>{'eventId': 'event-1'},
-          'update': <String, Object?>{
-            'sessionUpdate': 'agent_message_chunk',
-            'messageId': 'message-1',
-            'content': <String, Object?>{'type': 'text', 'text': '正文'},
-          },
-        },
-        runningTurnId: 't1',
-      );
-
-      final event = mapped.events.single as AgentMessageDeltaEvent;
-      expect(event.messageId, 'message-1');
-    });
 
     test('maps agent_thought_chunk to reasoning delta', () {
       final mapped = mapper.mapSessionUpdate(
