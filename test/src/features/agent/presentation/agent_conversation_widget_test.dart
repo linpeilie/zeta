@@ -1533,9 +1533,9 @@ void main() {
       expect(tooltip.message, contains('Usage: 60%'));
       expect(tooltip.message, contains('Used: 1.2k'));
       expect(tooltip.message, contains('Total: 2k'));
-      expect(tooltip.message, contains('input_tokens: 900'));
-      expect(tooltip.message, contains('output_tokens: 320'));
-      expect(tooltip.message, contains('cached_input_tokens: 180'));
+      expect(tooltip.message, isNot(contains('input_tokens')));
+      expect(tooltip.message, isNot(contains('output_tokens')));
+      expect(tooltip.message, isNot(contains('cached_input_tokens')));
     },
   );
 

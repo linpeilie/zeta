@@ -428,7 +428,7 @@ double? _contextWindowTokenUsageProgressValue(AgentTokenUsage? usage) {
   return (total / window).clamp(0.0, 1.0);
 }
 
-/// 当前上下文窗口 token 用量的悬停明细。
+/// 当前上下文窗口 token 用量的悬停明细（仅已用 / 上限 / 占比）。
 String _contextWindowTokenUsageTooltip(AgentTokenUsage? usage) {
   final total = usage?.totalTokens;
   final window = usage?.modelContextWindow;
@@ -437,21 +437,11 @@ String _contextWindowTokenUsageTooltip(AgentTokenUsage? usage) {
   }
   final tokenUsage = usage!;
   final percent = ((total / window) * 100).round();
-  final parts = <String>[
+  return [
     'Usage: $percent%',
     'Used: ${tokenUsage.displayTotalTokens}',
     'Total: ${tokenUsage.displayModelContextWindow}',
-  ];
-  if (tokenUsage.displayInputTokens case final value?) {
-    parts.add('input_tokens: $value');
-  }
-  if (tokenUsage.displayOutputTokens case final value?) {
-    parts.add('output_tokens: $value');
-  }
-  if (tokenUsage.displayCachedInputTokens case final value?) {
-    parts.add('cached_input_tokens: $value');
-  }
-  return parts.join('\n');
+  ].join('\n');
 }
 
 /// 悬停时展示的 token 明细，含输入/缓存/输出/推理分项。
