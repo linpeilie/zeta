@@ -192,6 +192,43 @@ phase；被正文、tool、plan 或交互打断后的 reasoning 必须使用新 
   仅允许保留旧配置 decode/fallback、明确 unavailable、退役证据和用户数据未改写回归；
   `~/.cursor`、项目 `.cursor` 与 `cursor_sessions.json` 不得读取、迁移、改写或删除。
 
+### 4.2 共享适配层纯度门禁
+
+本节中的“共享适配层”包括共享协议 decoder/codec/transport、
+`AgentEventStreamBuffer`、`AgentConversationTimelineStore`，以及消费中立
+`AgentEvent` 的 application/presentation 投影。它们是 Provider 无关的机制层，
+不是安放厂商兼容逻辑的兜底层。Grok、Codex 等 Provider 自有的 mapper、adapter、
+reducer 和 history parser 不属于共享适配层。
+
+共享适配层只允许承担以下职责：
+
+- 按公开的通用协议契约做无状态语法解码，并输出 typed protocol update；
+- 按中立 domain 字段执行可由类型直接证明的通用行为，例如同 entryId 合并、
+  同 tool id upsert、按事件 kind 维持 flush barrier；
+- 执行与 Provider 无关的生命周期、缓冲、存储和 UI 投影，不补充任何协议语义。
+
+以下行为一律禁止：
+
+- import 或依赖 Grok、Codex、已退役 Cursor 等具体 Provider 实现；
+- 根据 `providerId`、Provider kind、实现类型、显示名称或 CLI 名称分支；
+- 从 raw/extra payload、厂商字段、eventId 或 source id 猜测 entryId、message segment、
+  reasoning phase、plan、叙事边界、去重、终态或错误恢复策略；
+- 在 EventBuffer、TimelineStore、ViewModel 或 UI 中为某个 Provider 修复乱序、缺 id、
+  delta/snapshot 差异或终态竞态；
+- 为接入新 Provider 修改 Store 的合并规则，或在共享层增加以 `unknown`、最后开放条目、
+  `#segN` 等启发式生成/修复身份。
+
+如果共享层确实需要新的行为，必须先把它建模为名称和语义均与 Provider 无关的 typed
+domain contract，并证明至少是协议级或跨 Provider 的共同语义。仅由单个 Provider 原始字段
+驱动的行为不得通过 raw map、魔法字符串或隐藏 flag 穿透到共享层；它应由该 Provider
+adapter/reducer 消化后输出语义完整的 `AgentEvent`。共享 decoder 的协议版本兼容也只能基于
+通用协议证据，不得以 Provider 名称作为条件。
+
+该边界是新增 Provider 和流式改动的评审门禁：正常接入只修改 Provider data 层、组合边界和
+Provider 契约测试。若 PR 因 Provider 差异修改 EventBuffer/TimelineStore，必须先证明这是中立
+契约缺口；否则应退回 Provider adapter/reducer。共享层测试应使用 Provider 无关 fixture，
+并持续断言无具体 Provider import、kind/id 分支和 raw identity 推断。
+
 ## 5. 持久化与恢复
 
 持久化数据必须可演进、可恢复、可容错。

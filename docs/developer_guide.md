@@ -173,6 +173,38 @@ windows/
     独立 reducer 实例，并用完整 canonical signature regression 比较相对顺序。Store 只按
     entryId/tool id dumb merge，新增 Provider 不得修改 Store 来补叙事规则。
 
+### 共享适配层修改判定
+
+实现 Provider 差异时，先按下表确定代码归属。共享层只实现机制，不解释某个 Provider
+“这条事件真正代表什么”。
+
+| 变化 | 归属 | 共享层要求 |
+|------|------|------------|
+| 通用 ACP/JSON-RPC 字段的语法解析 | 无状态 decoder/codec/transport | 只输出 typed 值，不保存 turn/segment 状态，不按 Provider 分支 |
+| 厂商扩展字段、source id 稳定性、eventId/messageId 复用 | 对应 Provider mapper/adapter | 在进入 application 前完成兼容和证据校验 |
+| entryId、message segment、reasoning phase、boundary、去重、first-terminal-wins | 对应 Provider reducer | 输出语义完整的 `AgentEvent`，不得要求 Store 二次猜测 |
+| live/history/replay 对齐 | 对应 Provider history/replay adapter | 复用算法但创建独立 reducer 实例 |
+| 连续事件批内合并与 barrier 顺序 | `AgentEventStreamBuffer` | 只按 typed entryId/kind/detail 合并，不读 Provider raw 字段 |
+| 时间线新增、更新和 tool upsert | `AgentConversationTimelineStore` | 只按 normalized id dumb merge，不识别 Provider |
+| Provider capability 与启动时机 | Provider 实现、bundle 和 app 组合层 | 通过中立 capability/policy 暴露，不把协议判断放入 UI |
+
+新增 Provider 的正常改动范围应是：Provider 自有 data 文件、必要的中立 domain contract、
+factory/catalog 组合以及 Provider 契约测试。`AgentEventStreamBuffer` 和
+`AgentConversationTimelineStore` 不应因为新增 Provider 而改变；确有跨 Provider 的新语义时，
+先设计 typed domain 字段和通用测试，再修改共享层。
+
+提交评审前逐项确认：
+
+1. 搜索共享层是否新增具体 Provider import、名称、kind、id 或实现类型判断。
+2. 搜索 Store/ViewModel/UI 是否新增 raw/extra key、eventId、source id 或“最后开放条目”推断。
+3. 使用 Provider-local 序列测试证明 `raw update → AgentEvent` 已完成身份、边界和终态决策。
+4. 使用 Provider 无关 fixture 回归 EventBuffer/TimelineStore；新增 Provider 时这些测试不应依赖
+   新 Provider 的类或 fixture。
+
+任一项不满足时，不得以“兼容性”或“临时兜底”为由合入共享层；应先回到对应 Provider
+adapter/reducer 修正。完整规范见
+[工程规范 §4.2](./engineering_standards.md#42-共享适配层纯度门禁)。
+
 注意：默认策略应保持保守，不自动授权命令执行或文件写入。
 未支持操作必须 capability=false，并抛出 `UnsupportedError`；不得静默成功。
 
@@ -320,6 +352,10 @@ Agent CLI 的数据不属于这套目录：Codex/Grok/Cursor 配置与 session �
 - 纯逻辑、JSON 编解码和状态机使用单元测试。
 - Widget 渲染和用户交互使用 `flutter_test`。
 - 外部 CLI、文件系统和持久化优先使用 fake 或 callback 注入。
+- 共享 decoder、EventBuffer 和 TimelineStore 使用 Provider 无关 fixture，并增加架构守卫，
+  防止具体 Provider import、kind/id 分支或 raw identity 推断回流。
+- Provider adapter/reducer 使用带 Provider/CLI 版本的脱敏 fixture 覆盖 source id 复用、
+  message/tool/reasoning 交错、重复事件、终态竞态和迟到事件。
 - 对乐观配置增加“运行态更新→持久化失败→确认态回滚→重试”测试，
   并用可控 Completer 覆盖快速连续修改的最终快照语义。
 - 只有端到端用户流程稳定后再添加 integration test。

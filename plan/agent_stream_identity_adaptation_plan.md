@@ -1,11 +1,12 @@
 # Agent 流式身份与 Provider 适配层边界整改实施方案
 
-> 状态：Phase 0–6 已执行；PR-F 发布验收结论为**不可发布**，阻断项见 Phase 6 执行记录
-> 版本：2.5
+> 状态：Phase 0–6 架构改造与实施后文档固化已完成；Phase 6 原始发布验收和已知限制保留在执行记录中
+> 版本：2.6
 > 编制日期：2026-07-17
 > 目标版本：当前主干；Codex app-server 以本机 `0.144.1` stable schema 为实现基线
 > 关联问题：Grok 实时时间线操作沉底、思考按 eventId 碎片化、共享层承担 Provider 叙事策略
-> 核心约束：Cursor 必须先从运行时软下线、再删除实现；Phase 3 全部门禁完成前，禁止删除 TimelineStore 现有兜底
+> 核心约束：统一适配层只能实现 Provider 无关机制；Provider 身份、叙事边界和协议差异必须由 Grok/Codex 各自 data adapter/reducer 完成
+> 退役约束：Cursor 不得重新进入 catalog、运行时或历史加载链路，也不得读取、迁移、改写或删除用户 Cursor 数据
 
 ---
 
@@ -1264,13 +1265,18 @@ Store 行为切换放进同一个不可独立回滚的 PR。
 
 ## 17. 文档同步清单
 
-| 文档 | 必须更新的内容 |
-|------|----------------|
-| `docs/engineering_standards.md` | sourceId/entryId、Provider adapter 边界、Store dumb merge、state isolation、Cursor 退役边界 |
-| `docs/developer_guide.md` | 活跃 Provider 列表、新增 Provider 的 decoder/adapter/reducer 接入步骤和测试要求 |
-| `docs/design_document.md` | AgentEvent 流、EventBuffer、TimelineStore 的目标架构及 Cursor 不再参与运行时组合 |
-| `AGENTS.md` | 简短规则：厂商 quirks 留在 data adapter；统一层不得猜 identity |
-| 本方案 | PR 合并后勾选任务、记录偏差和最终结果 |
+| 文档 | 必须更新的内容 | 状态 |
+|------|----------------|------|
+| `docs/engineering_standards.md` | sourceId/entryId、Provider adapter 边界、Store dumb merge、state isolation、Cursor 退役边界，以及共享适配层纯度门禁 | [x] |
+| `docs/developer_guide.md` | 活跃 Provider 列表、新增 Provider 的 decoder/adapter/reducer 接入步骤、代码归属判定和评审清单 | [x] |
+| `docs/design_document.md` | AgentEvent 流、职责矩阵、EventBuffer/TimelineStore 的 Provider 无关目标架构及 Cursor 不再参与运行时组合 | [x] |
+| `AGENTS.md` | 厂商 quirks 留在 data adapter/reducer；统一层不得猜 identity、增加 Provider 分支或要求 Store 配合 | [x] |
+| 本方案 | 记录实施结果、偏差、发布验收历史和实施后长期约束 | [x] |
+
+本方案自 2.6 起作为实施历史和设计决策记录，不再作为运行时行为的唯一规范来源。后续开发以
+`docs/engineering_standards.md` §4.1–§4.2 为强制规范，以 `docs/developer_guide.md` §7 的归属判定和
+评审清单为执行入口，以 `docs/design_document.md` §5 的职责矩阵为架构说明。若三者冲突，必须在
+同一 PR 中先完成一致性修订，不得以本方案中的迁移期兜底恢复 Provider-specific 共享层逻辑。
 
 ---
 
@@ -1283,6 +1289,8 @@ Store 行为切换放进同一个不可独立回滚的 PR。
 - [x] reasoning 已区分 entry itemId 与 sourceItemId。
 - [x] ACP decoder 无状态且不决定叙事边界。
 - [x] Store/ViewModel 不从 raw 判断 plan/identity。
+- [x] 共享层不 import 具体 Provider，也不按 providerId/kind/type 分支。
+- [x] 新增 Provider 的正常接入不要求修改 EventBuffer/TimelineStore。
 
 ### Grok
 
@@ -1358,3 +1366,4 @@ Store 行为切换放进同一个不可独立回滚的 PR。
 | 2026-07-17 | 2.3 | 完成 Phase 4 P4-1 至 P4-6 与自动化门禁；保留未重新执行的 H1/H3/H6/H7/H8/H9 手测项未勾选 |
 | 2026-07-17 | 2.4 | 完成 Phase 5 P5-1 至 P5-5：Grok live/history canonical golden、fresh history reducer、共享 mapper 删除、Cursor 残留审计与文档收口 |
 | 2026-07-17 | 2.5 | 执行 Phase 6 PR-F：完成定向回归、H1–H10、诊断/隐私/静态审计并修复日志泄漏与 H7 提示；因 8 个 Windows golden 失败及 H8 严格证据受并发 Cursor 写入污染，结论为不可发布 |
+| 2026-07-17 | 2.6 | 架构改造完成后固化长期约束：新增共享适配层纯度门禁、职责矩阵、Provider 接入归属判定和评审守卫，并明确计划转为实施历史记录 |

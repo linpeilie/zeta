@@ -222,6 +222,25 @@ adapter/reducer → 语义完整的 `AgentEvent` → EventBuffer → TimelineSto
 同 tool id upsert，不猜开放条目或 narrative boundary。新增 Provider 只扩展 data adapter/
 reducer 及其契约测试，无需修改 Store。
 
+#### 流式适配职责矩阵
+
+| 层级 | 输入与输出 | 拥有的决策 | 明确禁止 |
+|------|------------|------------|----------|
+| shared transport / decoder / codec | 原始帧 → typed protocol update | 通用协议语法、传输生命周期、字段类型 | mutable identity 状态、Provider 名称/kind/id 分支 |
+| Provider mapper / adapter / reducer | typed/raw Provider update → 完整 `AgentEvent` | 厂商字段兼容、source→entry、segment/phase、boundary、去重、终态和迟到事件 | 把未决语义交给 Store/ViewModel 猜测 |
+| `AgentEventStreamBuffer` | `AgentEvent` → 有序事件批 | 同 normalized identity/kind/detail 的合并与 barrier flush | 读取 Provider raw 字段、修复 Provider 乱序或重建 identity |
+| `AgentConversationTimelineStore` | 有序 `AgentEvent` → timeline state | 同 entryId 更新、异 entryId 新建、同 tool id upsert | Provider 分支、开放条目推断、segment 分配、id 改写 |
+| ViewModel / UI | timeline/domain state → 展示 | 中立状态投影与交互 | 解析协议 payload、根据 Provider 猜 identity/plan |
+
+依赖方向是单向的：共享层定义中立机制和契约，Provider data 层依赖这些契约并产出完整语义；
+共享层不得反向 import Provider 实现，也不得通过 raw map、魔法字符串或隐藏 flag 接收单一
+Provider 的业务策略。只有经过建模、命名与测试证明为协议级或跨 Provider 共性的 typed 语义，
+才允许扩展共享契约。否则差异必须保留在 Grok/Codex 各自的 adapter/reducer 内。
+
+因此，“新增一个 Provider 是否需要修改 EventBuffer/TimelineStore”也是架构健康度指标：正常
+答案应为否。若答案为是，设计评审必须先证明是共享 domain contract 缺失，而不是 Provider
+quirk、协议证据不足或 mapper/reducer 未完成归一化。
+
 Agent Canvas 支持多 thread 常驻 entry（各自独立 conversation VM 与 provider controller）。
 Project Threads 侧栏对**已打开** thread 的执行中/等待指示，以 entry 的
 `AgentConversationThreadSnapshot` 为真源，经 shell 调用 `syncRuntimeSnapshot` 更新
@@ -403,6 +422,10 @@ IDE 会话状态目前版本为 2，持久化内容包括：
 - Codex provider 事件映射。
 - Grok decoder/adapter/reducer、live/history 状态隔离、canonical ordering regression、history
   reader 只读性，以及 TimelineStore 的 dumb merge/history 应用顺序。
+- 共享层架构守卫：decoder/EventBuffer/TimelineStore 不 import 具体 Provider，不按
+  providerId/kind/type 分支，也不从 raw/source/eventId 推断 identity 或 narrative boundary。
+- Provider-local 序列契约：每个 Provider 在进入共享层前完成 source→entry、segment/phase、
+  tool upsert、终态竞态和迟到事件决策；共享层 fixture 保持 Provider 无关。
 - Cursor 旧配置 fallback、运行时不可达、process spy 与用户数据未改写回归；历史证据
   见 `docs/cursor_acp_release_validation.md`。
 - AgentConversationViewModel 状态机。
