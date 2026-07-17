@@ -394,12 +394,19 @@ class _AgentTurnSection extends StatelessWidget {
 
   Widget _buildTimelineEntry(AgentTimelineEntry entry) {
     final isLiveTurn = viewModel.liveTurnState?.id == turn.id;
+    // Grok 会在工具调用前后产生多个独立消息段。只有时间线尾部消息仍可能
+    // 继续追加 delta；旧消息若继续使用 streaming controller，会一直保留为
+    // Markdown 草稿，并在后续工具组出现时发生异常的窄宽度排版。
+    final useStreamingMarkdown =
+        isLiveTurn &&
+        turn.entries.isNotEmpty &&
+        turn.entries.last.id == entry.id;
     return switch (entry) {
       AgentMessageTimelineEntry(:final message) => _AgentMessageEntry(
         message: message,
         // 历史与 live 的普通 Markdown 正文均不折叠；plan / 完成汇总等特殊卡自有样式。
         collapseHeavyContent: false,
-        useStreamingMarkdown: isLiveTurn,
+        useStreamingMarkdown: useStreamingMarkdown,
         viewModel: viewModel,
       ),
       AgentToolTimelineEntry(:final toolCall) => _AgentToolCallCard(

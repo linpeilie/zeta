@@ -63,6 +63,23 @@ void main() {
       );
     });
 
+    test('aggregates thought events from the same prompt', () {
+      const content = r'''
+{"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"inspect theme"}},"_meta":{"eventId":"u1"}}}
+{"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"先检查颜色配置"},"_meta":{"promptId":"p1"}},"_meta":{"eventId":"thought-1"}}}
+{"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"，再检查尺寸配置"},"_meta":{"promptId":"p1"}},"_meta":{"eventId":"thought-2"}}}
+''';
+
+      final snapshot = parser.parse(threadId: 's1', content: content);
+      final thoughts = snapshot.turns.single.entries
+          .whereType<AgentHistoryToolEntry>()
+          .where((entry) => entry.toolCall.kind == AgentToolKind.think)
+          .toList(growable: false);
+
+      expect(thoughts, hasLength(1));
+      expect(thoughts.single.toolCall.content, '先检查颜色配置，再检查尺寸配置');
+    });
+
     test('keeps concrete Grok title across status-only updates', () {
       const content = r'''
 {"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"find it"}},"_meta":{"eventId":"u1"}}}

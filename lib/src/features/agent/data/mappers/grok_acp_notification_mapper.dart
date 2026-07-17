@@ -24,7 +24,7 @@ class GrokAcpNotificationMapper {
     );
   }
 
-  /// Grok 不发送 `messageId`，但会用 `eventId` 标识每段独立输出。
+  /// Grok 不发送 `messageId`，但会用 `eventId` 标识每段独立正文。
   ///
   /// 若直接回退到 prompt/turn id，工具调用前后的文字会被合并回第一条消息，
   /// 导致中间工具卡片最终全部落在完整回复之后。这里与本地历史解析保持一致，
@@ -38,7 +38,9 @@ class GrokAcpNotificationMapper {
       (key, value) => MapEntry(key.toString(), value as Object?),
     );
     final kind = update['sessionUpdate']?.toString();
-    if (kind != 'agent_message_chunk' && kind != 'agent_thought_chunk') {
+    // thought chunk 必须继续按 prompt/turn 聚合；eventId 是单次事件标识，
+    // 用它切分会把一次连续推理膨胀成几十个「思考」条目。
+    if (kind != 'agent_message_chunk') {
       return params;
     }
     final messageId = update['messageId']?.toString().trim();
