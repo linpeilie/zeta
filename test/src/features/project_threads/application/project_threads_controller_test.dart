@@ -91,6 +91,43 @@ void main() {
       expect(state.isLoadingInitial, isFalse);
     });
 
+    test(
+      'keeps a current session when an earlier initial load omits it',
+      () async {
+        final pendingPage = Completer<AgentThreadPage>();
+        final provider = _FakeAgentProvider(pages: const <AgentThreadPage>[])
+          ..nextListCompleter = pendingPage;
+        final controller = _createController(provider);
+
+        final loading = controller.loadInitial('/repo');
+        controller.registerSession(
+          '/repo',
+          const AgentSession(
+            id: 'current-thread',
+            providerId: grokAgentProviderId,
+            title: 'Current Grok thread',
+          ),
+          preview: '刚刚活跃的会话',
+          markRunning: true,
+        );
+        pendingPage.complete(
+          const AgentThreadPage(
+            threads: <AgentThreadSummary>[],
+            nextCursor: null,
+          ),
+        );
+        await loading;
+
+        final state = controller.stateFor('/repo');
+        expect(state.threads.map((thread) => thread.id), <String>[
+          'current-thread',
+        ]);
+        expect(state.selectedThreadId, 'current-thread');
+        expect(state.runningThreadIds, <String>{'current-thread'});
+        expect(state.hasLoaded, isTrue);
+      },
+    );
+
     test('removes local-only provider thread without remote delete', () async {
       // Arrange
       final provider = _FakeAgentProvider(
@@ -1017,6 +1054,7 @@ class _FakeAgentProvider
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
   bool failNextList = false;
+  Completer<AgentThreadPage>? nextListCompleter;
   final List<String> removedLocalThreads = <String>[];
 
   @override
@@ -1041,6 +1079,11 @@ class _FakeAgentProvider
     if (failNextList) {
       failNextList = false;
       throw StateError('list failed');
+    }
+    final completer = nextListCompleter;
+    if (completer != null) {
+      nextListCompleter = null;
+      return completer.future;
     }
     return _pages.isEmpty
         ? const AgentThreadPage(

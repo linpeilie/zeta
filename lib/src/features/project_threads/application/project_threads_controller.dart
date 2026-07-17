@@ -608,7 +608,11 @@ class ProjectThreadsController {
       _registerThreadSummaries(projectPath, page.threads);
       final threads = append
           ? _appendUnique(latest.threads, page.threads)
-          : page.threads;
+          : _replaceWithPageKeepingRuntimeThreads(
+              current: latest,
+              incoming: page.threads,
+              preserveRuntimeThreads: !current.archived && searchTerm.isEmpty,
+            );
       viewModel.setStateFor(
         projectPath,
         latest.copyWith(
@@ -1105,6 +1109,35 @@ class ProjectThreadsController {
       ...existing,
       for (final thread in incoming)
         if (seen.add(thread.id)) thread,
+    ];
+  }
+
+  /// 首屏刷新时保留 Provider 尚未落盘的本地运行态 thread。
+  ///
+  /// 新 session 会先乐观插入列表，Grok 等 Provider 的本地索引可能稍后才可见。
+  /// 若更早发起的首屏请求随后返回，不能用缺少该 session 的页面覆盖当前状态。
+  List<AgentThreadSummary> _replaceWithPageKeepingRuntimeThreads({
+    required ProjectThreadListState current,
+    required List<AgentThreadSummary> incoming,
+    required bool preserveRuntimeThreads,
+  }) {
+    if (!preserveRuntimeThreads || current.threads.isEmpty) {
+      return incoming;
+    }
+    final retainedIds = <String>{
+      ...current.runningThreadIds,
+      ...current.completedThreadIds,
+      ?current.selectedThreadId,
+    };
+    if (retainedIds.isEmpty) {
+      return incoming;
+    }
+    final incomingIds = incoming.map((thread) => thread.id).toSet();
+    return <AgentThreadSummary>[
+      for (final thread in current.threads)
+        if (retainedIds.contains(thread.id) && !incomingIds.contains(thread.id))
+          thread,
+      ...incoming,
     ];
   }
 }
