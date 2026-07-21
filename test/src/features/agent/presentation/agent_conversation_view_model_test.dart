@@ -2832,6 +2832,63 @@ void main() {
       },
     );
 
+    test('waits for provider settings before opening a Codex thread', () async {
+      // Arrange：模拟应用启动时配置仍在读取，持久化 active provider 为 Grok。
+      final settingsCompleter = Completer<AgentProviderSettings>();
+      final configStore = _DelayedAgentProviderConfigStore(settingsCompleter);
+      final codex = _FakeAgentProvider(
+        historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+          'thread-1': _historySnapshot(
+            threadId: 'thread-1',
+            userText: 'Codex history',
+          ),
+        },
+      );
+      final grok = _FakeAgentProvider(
+        providerConfig: AgentProviderConfig.defaultGrok,
+      );
+      final factory = _MultiFakeAgentProviderFactory(<String, AgentProvider>{
+        defaultAgentProviderId: codex,
+        grokAgentProviderId: grok,
+      });
+      final controller = ActiveAgentProviderController(
+        providerFactory: factory,
+        configStore: configStore,
+      );
+      addTearDown(controller.dispose);
+      final viewModel = AgentConversationViewModel(
+        providerController: controller,
+      );
+      addTearDown(viewModel.dispose);
+      viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
+
+      // Act：workspace 创建会先异步加载配置，session restore 紧接着打开 thread。
+      final settingsFuture = viewModel.loadSettings();
+      final switchFuture = viewModel.switchThread(_thread());
+      settingsCompleter.complete(
+        const AgentProviderSettings(
+          providers: <AgentProviderConfig>[
+            AgentProviderConfig.defaultCodex,
+            AgentProviderConfig.defaultGrok,
+          ],
+          activeProviderId: grokAgentProviderId,
+        ),
+      );
+      await Future.wait(<Future<void>>[settingsFuture, switchFuture]);
+
+      // Assert：Codex thread 不得落到稍后加载完成的 Grok provider。
+      expect(viewModel.activeProviderId, defaultAgentProviderId);
+      expect(factory.createdProviderIds, <String>[defaultAgentProviderId]);
+      expect(codex.calls, <String>['read:thread-1']);
+      expect(grok.calls, isEmpty);
+      expect(
+        viewModel.timelineEntries.whereType<AgentMessageTimelineEntry>().map(
+          (entry) => entry.message.text,
+        ),
+        contains('Codex history'),
+      );
+    });
+
     test(
       'context-only workspace update keeps requiresResumed for open thread',
       () async {
@@ -2976,6 +3033,23 @@ class _MultiFakeAgentProviderFactory implements AgentProviderFactory {
   AgentProvider create(AgentProviderConfig config) {
     createdProviderIds.add(config.id);
     return providers[config.id]!;
+  }
+}
+
+class _DelayedAgentProviderConfigStore implements AgentProviderConfigStore {
+  _DelayedAgentProviderConfigStore(this.settingsCompleter);
+
+  final Completer<AgentProviderSettings> settingsCompleter;
+  AgentProviderSettings? savedSettings;
+
+  @override
+  Future<AgentProviderSettings> load() async {
+    return savedSettings ?? await settingsCompleter.future;
+  }
+
+  @override
+  Future<void> save(AgentProviderSettings settings) async {
+    savedSettings = settings;
   }
 }
 

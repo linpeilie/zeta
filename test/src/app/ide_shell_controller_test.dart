@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -276,6 +277,110 @@ void main() {
       expect(configStore.settings.toJson(), configBefore);
     },
   );
+
+  test('restores Codex history after delayed settings select Grok', () async {
+    // Arrange
+    final directory = Directory.systemTemp.createTempSync('zeta_shell_');
+    tempDirectories.add(directory);
+    final thread = _thread(
+      id: 'codex-restored',
+      providerId: defaultAgentProviderId,
+      projectPath: directory.path,
+    );
+    final restoredSession = IdeSessionState(
+      projectPaths: <String>[directory.path],
+      activeProjectPath: directory.path,
+      activeAgentProviderId: grokAgentProviderId,
+      agentThreadIdsByProject: <String, String>{directory.path: thread.id},
+      cachedThreadsByProject: <String, List<AgentThreadSummary>>{
+        directory.path: <AgentThreadSummary>[thread],
+      },
+      selectedThreadIdsByProject: <String, String>{directory.path: thread.id},
+    );
+    final settingsCompleter = Completer<AgentProviderSettings>();
+    final configStore = _DelayedAgentProviderConfigStore(settingsCompleter);
+    final codexBackend = _ProviderBackend(
+      config: AgentProviderConfig.defaultCodex,
+      threadPages: const <AgentThreadPage>[],
+      threadHistories: <String, AgentThreadHistorySnapshot>{
+        thread.id: AgentThreadHistorySnapshot(
+          threadId: thread.id,
+          turns: const <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'codex-turn',
+              entries: <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'codex-message',
+                  role: AgentMessageRole.agent,
+                  text: 'Restored Codex history',
+                ),
+              ],
+            ),
+          ],
+        ),
+      },
+    );
+    final grokBackend = _ProviderBackend(
+      config: AgentProviderConfig.defaultGrok,
+      threadPages: const <AgentThreadPage>[],
+    );
+    final shell = IdeShellController(
+      directoryPicker: () async => directory.path,
+      sessionStore: CallbackIdeSessionStore(
+        loadJson: () async => restoredSession.encode(),
+        saveJson: _saveDiscardedSession,
+      ),
+      agentProviderFactory: _RecordingAgentProviderFactory(
+        <String, _ProviderBackend>{
+          defaultAgentProviderId: codexBackend,
+          grokAgentProviderId: grokBackend,
+        },
+      ),
+      agentProviderConfigStore: configStore,
+    );
+    addTearDown(shell.dispose);
+
+    // Act：等待恢复流程创建 thread workspace，再让磁盘配置返回 Grok。
+    for (
+      var attempt = 0;
+      attempt < 20 && shell.agentWorkspaceEntries.length < 2;
+      attempt += 1
+    ) {
+      await _flushAsync();
+    }
+    expect(shell.agentWorkspaceEntries, hasLength(2));
+    settingsCompleter.complete(
+      const AgentProviderSettings(
+        providers: <AgentProviderConfig>[
+          AgentProviderConfig.defaultCodex,
+          AgentProviderConfig.defaultGrok,
+        ],
+        activeProviderId: grokAgentProviderId,
+      ),
+    );
+    for (
+      var attempt = 0;
+      attempt < 20 && !shell.initialRestoreCompleted;
+      attempt += 1
+    ) {
+      await _flushAsync();
+    }
+
+    // Assert
+    expect(shell.initialRestoreCompleted, isTrue);
+    expect(
+      shell.selectedAgentViewModel.activeProviderId,
+      defaultAgentProviderId,
+    );
+    expect(codexBackend.readThreadIds, <String>[thread.id]);
+    expect(grokBackend.readThreadIds, isEmpty);
+    expect(
+      shell.selectedAgentViewModel.timelineEntries
+          .whereType<AgentMessageTimelineEntry>()
+          .map((entry) => entry.message.text),
+      contains('Restored Codex history'),
+    );
+  });
 
   test(
     'project navigation enters home while current project tap keeps thread',
@@ -607,6 +712,23 @@ class _RecordingAgentProviderConfigStore implements AgentProviderConfigStore {
   }
 }
 
+class _DelayedAgentProviderConfigStore implements AgentProviderConfigStore {
+  _DelayedAgentProviderConfigStore(this.settingsCompleter);
+
+  final Completer<AgentProviderSettings> settingsCompleter;
+  AgentProviderSettings? savedSettings;
+
+  @override
+  Future<AgentProviderSettings> load() async {
+    return savedSettings ?? await settingsCompleter.future;
+  }
+
+  @override
+  Future<void> save(AgentProviderSettings settings) async {
+    savedSettings = settings;
+  }
+}
+
 class _ProviderBackend {
   _ProviderBackend({
     required this.config,
@@ -620,6 +742,7 @@ class _ProviderBackend {
   final Map<String, AgentThreadHistorySnapshot> threadHistories;
   final bool completeTurns;
   final List<_ShellTestAgentProvider> instances = <_ShellTestAgentProvider>[];
+  final List<String> readThreadIds = <String>[];
 
   bool anyUnsubscribed(String threadId) {
     return instances.any(
@@ -712,6 +835,7 @@ class _ShellTestAgentProvider
     String? sessionPath,
     String? projectPath,
   }) async {
+    backend.readThreadIds.add(threadId);
     return backend.threadHistories[threadId] ??
         AgentThreadHistorySnapshot(
           threadId: threadId,

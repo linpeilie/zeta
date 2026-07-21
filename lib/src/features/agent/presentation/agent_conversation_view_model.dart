@@ -90,7 +90,7 @@ class AgentConversationViewModel extends ChangeNotifier {
   String? _selectedProviderId;
   AgentThreadOpenPhase _threadOpenPhase = AgentThreadOpenPhase.idle;
   bool _requiresResumedSelectedThread = false;
-  bool _settingsLoaded = false;
+  Future<void>? _settingsLoadFuture;
   bool _disposed = false;
   int _threadSwitchToken = 0;
 
@@ -660,11 +660,18 @@ class AgentConversationViewModel extends ChangeNotifier {
   /// 加载全局 provider 设置。
   ///
   /// 这个方法允许重复调用，但实际只加载一次；加载失败会转成 UI 状态，不向外抛。
-  Future<void> loadSettings() async {
-    if (_settingsLoaded) {
-      return;
+  Future<void> loadSettings() {
+    final existing = _settingsLoadFuture;
+    if (existing != null) {
+      return existing;
     }
-    _settingsLoaded = true;
+
+    final future = _loadSettings();
+    _settingsLoadFuture = future;
+    return future;
+  }
+
+  Future<void> _loadSettings() async {
     try {
       await providerController.loadSettings();
       final unavailableReason = providerController.unavailableSelectionReason;
@@ -1398,6 +1405,12 @@ class AgentConversationViewModel extends ChangeNotifier {
     final switchToken = ++_threadSwitchToken;
     // 在第一个 await 前让旧 thread listener 失效，避免其微任务事件污染新时间线。
     _invalidateProviderEventListener();
+    // Provider 配置可能仍在应用启动阶段读取；必须等待其完成后再判断 thread 归属，
+    // 否则会先看到内置 Codex、随后却从磁盘加载出 Grok，并用错误后端读取历史。
+    await loadSettings();
+    if (!_isCurrentSwitch(switchToken)) {
+      return;
+    }
     // 跨 provider thread：先切 active backend，再加载历史。
     // 失败必须 fail-closed，禁止用错误 provider 读历史 / 后续 resume。
     if (thread.providerId != activeProviderId) {
@@ -1867,6 +1880,15 @@ class AgentConversationViewModel extends ChangeNotifier {
     }
 
     final provider = await providerController.activeProvider();
+    if (targetId != null &&
+        targetId.isNotEmpty &&
+        provider.config.id != targetId) {
+      // 配置在异步获取 provider 期间发生变化时 fail-closed，禁止把 thread id
+      // 和 sessionPath 交给错误协议的历史读取器。
+      throw StateError(
+        'Expected provider $targetId but received ${provider.config.id}',
+      );
+    }
     if (identical(_provider, provider) &&
         _hasCurrentProviderEventListener(
           provider,
