@@ -203,6 +203,11 @@ class ProjectThreadsController {
     viewModel.clearSelectedThreadId(projectPath);
   }
 
+  /// 进入项目首页时清除全局唯一的 thread 高亮。
+  void clearAllSelectedThreads() {
+    viewModel.clearAllSelectedThreadIds();
+  }
+
   /// 显式登记 thread 所属项目，供实时事件反查列表分组。
   void registerThreadMapping(String projectPath, String threadId) {
     _registerThreadMapping(projectPath, threadId);

@@ -103,6 +103,22 @@ class ProjectThreadsViewModel extends ChangeNotifier {
     );
   }
 
+  /// 清除所有项目的 thread 选中态，并只发送一次刷新通知。
+  void clearAllSelectedThreadIds() {
+    var changed = false;
+    for (final path in _states.keys.toList(growable: false)) {
+      final current = _states[path]!;
+      if (current.selectedThreadId == null) {
+        continue;
+      }
+      _states[path] = current.copyWith(selectedThreadId: null);
+      changed = true;
+    }
+    if (changed) {
+      _notify();
+    }
+  }
+
   /// 只更新执行中的 thread 集合，避免影响其它项目列表状态。
   void setRunningThreadIds(String projectPath, Set<String> runningThreadIds) {
     updateState(

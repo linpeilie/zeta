@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
-const int sessionStateVersion = 2;
+const int sessionStateVersion = 3;
 
 /// IDE 会话快照。
 ///
@@ -20,6 +20,7 @@ class IdeSessionState {
     this.projectThreadExpansionByProject = const <String, bool>{},
     this.cachedThreadsByProject = const <String, List<AgentThreadSummary>>{},
     this.selectedThreadIdsByProject = const <String, String>{},
+    this.projectHomeActive = false,
   });
 
   final List<String> projectPaths;
@@ -48,6 +49,11 @@ class IdeSessionState {
   /// 每个项目当前选中的 thread id。
   final Map<String, String> selectedThreadIdsByProject;
 
+  /// 当前活动项目是否停留在不带输入框的项目首页。
+  ///
+  /// 它用于区分同样没有真实 thread id 的项目首页与新建 Thread 草稿。
+  final bool projectHomeActive;
+
   /// 编码成持久化 JSON。
   String encode() => jsonEncode(toJson());
 
@@ -69,6 +75,7 @@ class IdeSessionState {
           entry.key: entry.value.map((thread) => thread.toJson()).toList(),
       },
       'selectedThreadIdsByProject': selectedThreadIdsByProject,
+      'projectHomeActive': projectHomeActive,
     };
   }
 
@@ -87,7 +94,7 @@ class IdeSessionState {
       }
 
       final version = decoded['version'];
-      if (version != 1 && version != sessionStateVersion) {
+      if (version != 1 && version != 2 && version != sessionStateVersion) {
         return const IdeSessionState();
       }
 
@@ -112,6 +119,9 @@ class IdeSessionState {
         selectedThreadIdsByProject: _stringMap(
           decoded['selectedThreadIdsByProject'],
         ),
+        projectHomeActive:
+            version == sessionStateVersion &&
+            decoded['projectHomeActive'] == true,
       );
     } catch (_) {
       return const IdeSessionState();

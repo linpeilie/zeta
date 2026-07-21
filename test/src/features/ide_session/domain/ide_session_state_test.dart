@@ -42,5 +42,21 @@ void main() {
         '/tmp/legacy-thread.jsonl',
       );
     });
+
+    test('round-trips project home state and defaults legacy snapshots', () {
+      const state = IdeSessionState(
+        projectPaths: <String>['/repo'],
+        activeProjectPath: '/repo',
+        projectHomeActive: true,
+      );
+
+      final restored = IdeSessionState.tryDecode(state.encode());
+      final legacy = IdeSessionState.tryDecode(
+        '{"version":2,"projectPaths":["/repo"],"activeProjectPath":"/repo"}',
+      );
+
+      expect(restored?.projectHomeActive, isTrue);
+      expect(legacy?.projectHomeActive, isFalse);
+    });
   });
 }

@@ -16,6 +16,7 @@ IdeSessionState buildIdeSessionState({
   required ProjectThreadsSessionSnapshot projectThreadsSessionSnapshot,
   required String? currentProjectPath,
   required String? currentSessionId,
+  required bool projectHomeActive,
 }) {
   final mergedAgentThreadIds = Map<String, String>.from(
     agentThreadIdsByProject,
@@ -23,7 +24,12 @@ IdeSessionState buildIdeSessionState({
   final mergedSelectedThreadIds = Map<String, String>.from(
     projectThreadsSessionSnapshot.selectedThreadIdsByProject,
   );
-  if (currentProjectPath != null && currentSessionId != null) {
+  if (projectHomeActive) {
+    mergedSelectedThreadIds.clear();
+  }
+  if (!projectHomeActive &&
+      currentProjectPath != null &&
+      currentSessionId != null) {
     // 保存当前项目对应的 Agent thread，方便下次启动尝试恢复同一会话。
     mergedAgentThreadIds[currentProjectPath] = currentSessionId;
     mergedSelectedThreadIds[currentProjectPath] = currentSessionId;
@@ -42,6 +48,7 @@ IdeSessionState buildIdeSessionState({
     cachedThreadsByProject:
         projectThreadsSessionSnapshot.cachedThreadsByProject,
     selectedThreadIdsByProject: mergedSelectedThreadIds,
+    projectHomeActive: projectHomeActive && activeProjectPath != null,
   );
 }
 
@@ -73,8 +80,13 @@ IdeSessionState sanitizeIdeSessionState(IdeSessionState state) {
     state.selectedThreadIdsByProject,
     existingProjectSet,
   );
-  for (final entry in agentThreadIdsByProject.entries) {
-    selectedThreadIdsByProject.putIfAbsent(entry.key, () => entry.value);
+  if (!state.projectHomeActive) {
+    for (final entry in agentThreadIdsByProject.entries) {
+      selectedThreadIdsByProject.putIfAbsent(entry.key, () => entry.value);
+    }
+  } else {
+    // 项目首页显式表示当前没有选中 thread，不能让兼容映射重新制造高亮。
+    selectedThreadIdsByProject.clear();
   }
 
   return IdeSessionState(
@@ -94,6 +106,7 @@ IdeSessionState sanitizeIdeSessionState(IdeSessionState state) {
       existingProjectSet,
     ),
     selectedThreadIdsByProject: selectedThreadIdsByProject,
+    projectHomeActive: activeProjectPath != null && state.projectHomeActive,
   );
 }
 

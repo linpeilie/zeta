@@ -276,6 +276,157 @@ void main() {
       expect(configStore.settings.toJson(), configBefore);
     },
   );
+
+  test(
+    'project navigation enters home while current project tap keeps thread',
+    () async {
+      // Arrange
+      final firstDirectory = Directory.systemTemp.createTempSync('zeta_shell_');
+      final secondDirectory = Directory.systemTemp.createTempSync(
+        'zeta_shell_',
+      );
+      tempDirectories.addAll(<Directory>[firstDirectory, secondDirectory]);
+      final thread = _thread(
+        id: 'thread-a',
+        providerId: defaultAgentProviderId,
+        projectPath: firstDirectory.path,
+      );
+      final backend = _ProviderBackend(
+        config: AgentProviderConfig.defaultCodex,
+        threadPages: <AgentThreadPage>[
+          AgentThreadPage(
+            threads: <AgentThreadSummary>[thread],
+            nextCursor: null,
+          ),
+          const AgentThreadPage(
+            threads: <AgentThreadSummary>[],
+            nextCursor: null,
+          ),
+        ],
+      );
+      final shell = IdeShellController(
+        directoryPicker: () async => firstDirectory.path,
+        sessionStore: const CallbackIdeSessionStore(
+          loadJson: _loadEmptySession,
+          saveJson: _saveDiscardedSession,
+        ),
+        agentProviderFactory: _RecordingAgentProviderFactory(
+          <String, _ProviderBackend>{defaultAgentProviderId: backend},
+        ),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      );
+      addTearDown(shell.dispose);
+
+      // Act + Assert: opening a project lands on its home.
+      await shell.openProject();
+      await _flushAsync();
+      expect(shell.isProjectHomeActive, isTrue);
+      expect(shell.selectedAgentWorkspaceEntryId, isNull);
+      expect(
+        shell.projectThreadStateFor(firstDirectory.path).selectedThreadId,
+        isNull,
+      );
+
+      await shell.selectProjectThread(firstDirectory.path, thread);
+      expect(shell.isProjectHomeActive, isFalse);
+      expect(
+        shell.projectThreadStateFor(firstDirectory.path).selectedThreadId,
+        thread.id,
+      );
+
+      // Clicking the active project only toggles expansion and keeps the thread.
+      await shell.selectKnownProject(firstDirectory.path);
+      expect(shell.isProjectHomeActive, isFalse);
+      expect(
+        shell.projectThreadStateFor(firstDirectory.path).selectedThreadId,
+        thread.id,
+      );
+
+      // Switching projects enters the new project's home and clears highlights.
+      await shell.selectKnownProject(secondDirectory.path);
+      await _flushAsync();
+      expect(shell.activeProjectPath, secondDirectory.path);
+      expect(shell.isProjectHomeActive, isTrue);
+      expect(shell.selectedAgentWorkspaceEntryId, isNull);
+      expect(
+        shell.projectThreadsViewModel.states.values.every(
+          (state) => state.selectedThreadId == null,
+        ),
+        isTrue,
+      );
+
+      await shell.startNewThreadForProject(
+        secondDirectory.path,
+        providerId: defaultAgentProviderId,
+      );
+      expect(shell.isProjectHomeActive, isFalse);
+      expect(shell.selectedAgentWorkspaceEntryId, isNotNull);
+      expect(
+        shell.projectThreadStateFor(secondDirectory.path).selectedThreadId,
+        isNull,
+      );
+    },
+  );
+
+  test('restores and persists the explicit project home state', () async {
+    final directory = Directory.systemTemp.createTempSync('zeta_shell_');
+    tempDirectories.add(directory);
+    final thread = _thread(
+      id: 'remembered-thread',
+      providerId: defaultAgentProviderId,
+      projectPath: directory.path,
+    );
+    final restoredSession = IdeSessionState(
+      projectPaths: <String>[directory.path],
+      activeProjectPath: directory.path,
+      agentThreadIdsByProject: <String, String>{directory.path: thread.id},
+      cachedThreadsByProject: <String, List<AgentThreadSummary>>{
+        directory.path: <AgentThreadSummary>[thread],
+      },
+      selectedThreadIdsByProject: <String, String>{directory.path: thread.id},
+      projectHomeActive: true,
+    );
+    String? savedJson;
+    final backend = _ProviderBackend(
+      config: AgentProviderConfig.defaultCodex,
+      threadPages: <AgentThreadPage>[
+        const AgentThreadPage(
+          threads: <AgentThreadSummary>[],
+          nextCursor: null,
+        ),
+      ],
+    );
+    final shell = IdeShellController(
+      directoryPicker: () async => directory.path,
+      sessionStore: CallbackIdeSessionStore(
+        loadJson: () async => restoredSession.encode(),
+        saveJson: (value) async {
+          savedJson = value;
+        },
+      ),
+      agentProviderFactory: _RecordingAgentProviderFactory(
+        <String, _ProviderBackend>{defaultAgentProviderId: backend},
+      ),
+      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+    );
+    addTearDown(shell.dispose);
+
+    await _flushAsync();
+    await _flushAsync();
+
+    expect(shell.activeProjectPath, directory.path);
+    expect(shell.isProjectHomeActive, isTrue);
+    expect(shell.selectedAgentWorkspaceEntryId, isNull);
+    expect(
+      shell.projectThreadStateFor(directory.path).selectedThreadId,
+      isNull,
+    );
+
+    await shell.saveNow();
+    final saved = IdeSessionState.tryDecode(savedJson);
+    expect(saved?.projectHomeActive, isTrue);
+    expect(saved?.selectedThreadIdsByProject, isEmpty);
+  });
 }
 
 Future<String?> _loadEmptySession() async => null;

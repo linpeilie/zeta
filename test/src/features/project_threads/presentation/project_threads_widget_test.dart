@@ -171,8 +171,16 @@ void main() {
     expect(provider.listQueries, hasLength(2));
     expect(provider.listQueries.first.limit, 10);
     expect(provider.listQueries.last.cursor, 'next');
-    expect(find.text('Initial thread'), findsOneWidget);
-    expect(find.text('Hidden preview text'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(
+          ValueKey<String>('project-thread-${directory.path}-thread-a'),
+        ),
+        matching: find.text('Initial thread'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Hidden preview text'), findsOneWidget);
     expect(find.text('5m'), findsOneWidget);
     expect(find.text('3d'), findsNothing);
     final projectTile = find.byKey(
@@ -228,13 +236,25 @@ void main() {
       find.byKey(ValueKey<String>('project-tile-${directory.path}')),
     );
     await tester.pump();
-    expect(find.text('Initial thread'), findsNothing);
+    expect(
+      find.byKey(ValueKey<String>('project-thread-${directory.path}-thread-a')),
+      findsNothing,
+    );
+    expect(find.text('Initial thread'), findsOneWidget);
 
     await tester.tap(
       find.byKey(ValueKey<String>('project-tile-${directory.path}')),
     );
     await tester.pump();
-    expect(find.text('Initial thread'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(
+          ValueKey<String>('project-thread-${directory.path}-thread-a'),
+        ),
+        matching: find.text('Initial thread'),
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(
       find.byKey(const ValueKey<String>('project-thread-load-more-button')),
@@ -819,7 +839,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(provider.listQueries, hasLength(1));
-    expect(find.text('Initial thread'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(
+          ValueKey<String>('project-thread-${directory.path}-thread-a'),
+        ),
+        matching: find.text('Initial thread'),
+      ),
+      findsOneWidget,
+    );
 
     final mouse = await hoverProjectTile(tester, directory.path);
     addTearDown(mouse.removePointer);
@@ -842,7 +870,15 @@ void main() {
     expect(provider.listQueries.last.limit, 10);
     expect(provider.listQueries.last.cursor, isNull);
     expect(find.text('Initial thread'), findsNothing);
-    expect(find.text('Refreshed thread'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(
+          ValueKey<String>('project-thread-${directory.path}-thread-b'),
+        ),
+        matching: find.text('Refreshed thread'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets(
@@ -1023,7 +1059,15 @@ void main() {
     expect(provider.renamedThreads, hasLength(1));
     expect(provider.renamedThreads.single.threadId, 'thread-a');
     expect(provider.renamedThreads.single.name, 'Renamed thread');
-    expect(find.text('Renamed thread'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(
+          ValueKey<String>('project-thread-${directory.path}-thread-a'),
+        ),
+        matching: find.text('Renamed thread'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('keeps restored Cursor history unavailable and read-only', (

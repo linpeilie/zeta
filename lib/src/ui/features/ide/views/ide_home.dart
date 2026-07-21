@@ -34,6 +34,7 @@ import 'package:zeta/src/ui/core/ide_toast.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/window_frame.dart';
 import 'package:zeta/src/ui/core/workbench/ide_workbench_scaffold.dart';
+import 'package:zeta/src/ui/features/ide/views/project_home_page.dart';
 import 'package:zeta/src/ui/features/ide/views/project_list_pane.dart';
 
 typedef AgentProviderAvailabilityLoader =
@@ -322,20 +323,51 @@ class _IdeHomeState extends State<IdeHome> {
 
   Widget _buildRetainedAgentPaneStack() {
     final entries = _shellController.agentWorkspaceEntries;
-    if (entries.isEmpty) {
+    final projectPath = _shellController.activeProjectPath;
+    if (entries.isEmpty && projectPath == null) {
       return const SizedBox.shrink();
     }
     final selectedEntryId = _shellController.selectedAgentWorkspaceEntryId;
-    var selectedIndex = entries.indexWhere(
+    final selectedEntryIndex = entries.indexWhere(
       (entry) => entry.entryId == selectedEntryId,
     );
-    if (selectedIndex < 0) {
-      selectedIndex = 0;
-    }
+    final selectedIndex = _shellController.isProjectHomeActive
+        ? 0
+        : selectedEntryIndex < 0
+        ? 0
+        : selectedEntryIndex + 1;
     return IndexedStack(
       key: const ValueKey('agent-pane-entry-stack'),
       index: selectedIndex,
       children: [
+        projectPath == null || !_shellController.isProjectHomeActive
+            ? const SizedBox.shrink()
+            : KeyedSubtree(
+                key: ValueKey<String>('project-home-$projectPath'),
+                child: ProjectHomePage(
+                  projectPath: projectPath,
+                  threadState: _shellController.projectThreadStateFor(
+                    projectPath,
+                  ),
+                  loadAvailableProviders: _loadAvailableAgentProviders,
+                  onNewThread: (providerId) {
+                    unawaited(
+                      _shellController.startNewThreadForProject(
+                        projectPath,
+                        providerId: providerId,
+                      ),
+                    );
+                  },
+                  onSelectThread: (thread) {
+                    unawaited(
+                      _shellController.selectProjectThread(projectPath, thread),
+                    );
+                  },
+                  onRetryThreads: () {
+                    unawaited(_shellController.retryThreads(projectPath));
+                  },
+                ),
+              ),
         for (final entry in entries)
           KeyedSubtree(
             key: ValueKey<String>('agent-pane-entry-${entry.entryId}'),

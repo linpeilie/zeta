@@ -41,12 +41,33 @@ void main() {
         projectThreadsSessionSnapshot: const ProjectThreadsSessionSnapshot(),
         currentProjectPath: '/repo',
         currentSessionId: 'thread-1',
+        projectHomeActive: false,
       );
 
       expect(snapshot.agentThreadIdsByProject['/repo'], 'thread-1');
       expect(snapshot.selectedThreadIdsByProject['/repo'], 'thread-1');
     },
   );
+
+  test('project home does not persist a hidden current thread', () {
+    final snapshot = buildIdeSessionState(
+      projectPaths: const <String>['/repo'],
+      activeProjectPath: '/repo',
+      currentFilePath: null,
+      expandedDirectoryPaths: const <String>{},
+      selectedTreeKey: null,
+      activeAgentProviderId: defaultAgentProviderId,
+      agentThreadIdsByProject: const <String, String>{'/repo': 'thread-1'},
+      projectThreadsSessionSnapshot: const ProjectThreadsSessionSnapshot(),
+      currentProjectPath: '/repo',
+      currentSessionId: 'hidden-thread',
+      projectHomeActive: true,
+    );
+
+    expect(snapshot.projectHomeActive, isTrue);
+    expect(snapshot.agentThreadIdsByProject['/repo'], 'thread-1');
+    expect(snapshot.selectedThreadIdsByProject, isEmpty);
+  });
 
   test('restore sanitizes invalid paths and merges selected thread ids', () async {
     final projectDirectory = Directory.systemTemp.createTempSync(

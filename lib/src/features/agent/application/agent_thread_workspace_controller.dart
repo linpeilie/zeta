@@ -321,6 +321,18 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     _notify();
   }
 
+  /// 清除当前画布选择，但保留所有 workspace 条目及其运行时状态。
+  ///
+  /// 项目首页使用该状态暂时隐藏 Agent 画布；再次选中原条目时，草稿、滚动位置
+  /// 和进行中的会话仍可继续复用。
+  void clearSelection() {
+    if (_selectedEntryId == null) {
+      return;
+    }
+    _selectedEntryId = null;
+    _notify();
+  }
+
   bool removeEntry(String entryId) {
     for (var index = 0; index < _entries.length; index += 1) {
       final entry = _entries[index];

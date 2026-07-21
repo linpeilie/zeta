@@ -482,6 +482,97 @@ void main() {
       failureMessage: 'Thread B draft was not retained',
     );
   });
+
+  testWidgets('selected project without a thread shows the project home', (
+    tester,
+  ) async {
+    final directory = Directory.systemTemp.createTempSync(
+      'zeta_project_home_test_',
+    );
+    addTearDown(() {
+      if (directory.existsSync()) {
+        directory.deleteSync(recursive: true);
+      }
+    });
+    final threads = <AgentThreadSummary>[
+      for (var index = 0; index < 6; index += 1)
+        agentThread(
+          id: 'home-thread-$index',
+          projectPath: directory.path,
+          title: 'Home thread $index',
+          lastActiveAt: DateTime.utc(
+            2026,
+            7,
+            21,
+          ).subtract(Duration(hours: index)),
+        ),
+    ];
+    final provider = FakeAgentProvider(
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(threads: threads, nextCursor: null),
+      ],
+    );
+    await _pumpIde(
+      tester,
+      directoryPicker: () async => directory.path,
+      agentProviderFactory: FakeAgentProviderFactory(provider),
+      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+    );
+
+    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await tester.runAsync(waitForIo);
+    await pumpUntilCondition(
+      tester,
+      () =>
+          find
+              .byKey(const ValueKey<String>('project-home-header'))
+              .hitTestable()
+              .evaluate()
+              .isNotEmpty &&
+          find
+              .byKey(
+                const ValueKey<String>('project-home-thread-home-thread-0'),
+              )
+              .evaluate()
+              .isNotEmpty,
+      failureMessage: 'Project home did not become ready',
+    );
+
+    expect(find.text(directory.path), findsOneWidget);
+    expect(
+      find
+          .byKey(const ValueKey<String>('project-home-new-thread-button'))
+          .hitTestable(),
+      findsOneWidget,
+    );
+    expect(_agentMessageInput().hitTestable(), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('project-home-thread-home-thread-4')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('project-home-thread-home-thread-5')),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('project-home-thread-home-thread-0')),
+    );
+    await pumpUntilCondition(
+      tester,
+      () =>
+          headerTitleText(tester) == 'Home thread 0' &&
+          _agentMessageInput().hitTestable().evaluate().isNotEmpty,
+      failureMessage: 'Recent thread did not open its Agent pane',
+    );
+
+    await tester.tap(
+      find.byKey(ValueKey<String>('project-tile-${directory.path}')),
+    );
+    await tester.pump();
+    expect(headerTitleText(tester), 'Home thread 0');
+    expect(_agentMessageInput().hitTestable(), findsOneWidget);
+  });
 }
 
 Future<void> _pumpIde(

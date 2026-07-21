@@ -103,6 +103,7 @@ class IdeShellController extends ChangeNotifier {
   String? _currentFilePath;
   String? _selectedTreePath;
   bool _isLoadingProject = false;
+  bool _projectHomeActive = false;
   bool _isDisposed = false;
 
   List<AgentThreadWorkspaceEntry> get agentWorkspaceEntries =>
@@ -110,6 +111,9 @@ class IdeShellController extends ChangeNotifier {
 
   String? get selectedAgentWorkspaceEntryId =>
       agentWorkspaceController.selectedEntryId;
+
+  /// 当前是否在活动项目的不带 Composer 首页。
+  bool get isProjectHomeActive => _projectHomeActive && _projectPath != null;
 
   AgentConversationViewModel get selectedAgentViewModel =>
       agentWorkspaceController.selectedEntry?.viewModel ??
@@ -416,7 +420,7 @@ class IdeShellController extends ChangeNotifier {
       if (activateThreads) {
         projectThreadsController.activateProject(path);
       }
-      await _syncSelectedAgentWorkspace();
+      _enterProjectHome(refreshThreads: true);
       _requestSessionSave();
       _log.info('Opened project folder: $path');
       _notifyStateChanged();
@@ -506,7 +510,11 @@ class IdeShellController extends ChangeNotifier {
       }
       projectThreadsController.registerThreadMapping(entry.key, thread.id);
     }
-    await _syncSelectedAgentWorkspace();
+    if (session.projectHomeActive && _projectPath != null) {
+      _enterProjectHome(refreshThreads: true);
+    } else {
+      await _syncSelectedAgentWorkspace();
+    }
     _log.info(
       'Restored IDE session with ${session.projectPaths.length} projects',
     );
@@ -552,6 +560,7 @@ class IdeShellController extends ChangeNotifier {
 
   void _clearActiveWorkspace() {
     _projectPath = null;
+    _projectHomeActive = false;
     _currentFilePath = null;
     _selectedTreePath = null;
     _expandedDirectoryPaths = <String>{};
@@ -578,12 +587,30 @@ class IdeShellController extends ChangeNotifier {
       agentThreadIdsByProject: _agentThreadIdsByProject,
       projectThreadsSessionSnapshot: projectThreadsController.sessionSnapshot,
       currentProjectPath: _projectPath,
-      currentSessionId: selectedAgentViewModel.sessionId,
+      currentSessionId: isProjectHomeActive
+          ? null
+          : selectedAgentViewModel.sessionId,
+      projectHomeActive: isProjectHomeActive,
     );
   }
 
   Set<String> _currentExpandedDirectoryPaths() {
     return Set<String>.unmodifiable(_expandedDirectoryPaths);
+  }
+
+  void _enterProjectHome({required bool refreshThreads}) {
+    final projectPath = _projectPath;
+    if (projectPath == null) {
+      return;
+    }
+
+    _projectHomeActive = true;
+    agentWorkspaceController.clearSelection();
+    projectThreadsController.clearAllSelectedThreads();
+    if (refreshThreads) {
+      // 首页与侧栏共享未归档首屏；保留缓存并在后台刷新最新五条。
+      unawaited(projectThreadsController.loadInitial(projectPath));
+    }
   }
 
   WorkspaceNode? _findTreeNode(String path) {
@@ -593,6 +620,7 @@ class IdeShellController extends ChangeNotifier {
   Future<void> _syncSelectedAgentWorkspace() async {
     final projectPath = _projectPath;
     if (projectPath == null) {
+      _projectHomeActive = false;
       agentWorkspaceController.selectEntry(_bootstrapAgentEntry.entryId);
       _bootstrapAgentEntry.applyDraftIdentity(
         projectPath: _bootstrapProjectPath,
@@ -650,6 +678,7 @@ class IdeShellController extends ChangeNotifier {
     required String providerId,
     bool persistSelection = true,
   }) async {
+    _projectHomeActive = false;
     final entry = agentWorkspaceController.ensureDraftEntry(
       projectPath: projectPath,
       providerId: providerId,
@@ -690,6 +719,7 @@ class IdeShellController extends ChangeNotifier {
     required AgentThreadSummary thread,
     bool persistSelection = true,
   }) async {
+    _projectHomeActive = false;
     final entry = agentWorkspaceController.ensureThreadEntry(
       projectPath: projectPath,
       providerId: thread.providerId,
@@ -992,12 +1022,7 @@ class IdeShellController extends ChangeNotifier {
       agentWorkspaceController.removeEntry(entryId);
     }
     if (removedSelected && projectPath == _projectPath) {
-      unawaited(
-        _selectWorkspaceDraftEntry(
-          projectPath: projectPath,
-          providerId: _preferredDraftProviderId(),
-        ),
-      );
+      _enterProjectHome(refreshThreads: true);
     }
     _requestSessionSave();
     _notifyStateChanged();
