@@ -1587,6 +1587,10 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('agent-composer-running-glow')),
+        findsNothing,
+      );
 
       await tester.enterText(
         find.byKey(const ValueKey('agent-message-input')),
@@ -1609,6 +1613,10 @@ void main() {
       expect(headerRunning, findsOneWidget);
       expect(listRunning, findsOneWidget);
       expect(
+        find.byKey(const ValueKey('agent-composer-running-glow')),
+        findsOneWidget,
+      );
+      expect(
         find.descendant(
           of: headerRunning,
           matching: find.byType(CircularProgressIndicator),
@@ -1629,6 +1637,10 @@ void main() {
 
       expect(headerRunning, findsNothing);
       expect(listRunning, findsNothing);
+      expect(
+        find.byKey(const ValueKey('agent-composer-running-glow')),
+        findsNothing,
+      );
     },
   );
 

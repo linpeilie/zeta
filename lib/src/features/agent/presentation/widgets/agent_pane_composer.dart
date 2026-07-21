@@ -183,7 +183,7 @@ class _AgentComposer extends StatelessWidget {
               ? IdeEffects.focusRing(brightness, accent: colors.focusRing)
               : const <BoxShadow>[];
 
-          return AnimatedContainer(
+          final composer = AnimatedContainer(
             key: const ValueKey('agent-composer-focus-ring'),
             duration: MediaQuery.disableAnimationsOf(context)
                 ? Duration.zero
@@ -364,6 +364,12 @@ class _AgentComposer extends StatelessWidget {
               ),
             ),
           );
+          return _ComposerRunningGlowBorder(
+            active: isTurnRunning,
+            color: colors.focusRing,
+            brightness: brightness,
+            child: composer,
+          );
         },
       ),
     );
@@ -524,6 +530,173 @@ class _AgentComposer extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+/// 当前回合运行时覆盖在 Composer 外卡上的单色扫光边框。
+///
+/// 装饰层不参与布局、命中测试或语义树；系统要求减少动态效果时保留静态提示，
+/// 但停止旋转。
+class _ComposerRunningGlowBorder extends StatefulWidget {
+  const _ComposerRunningGlowBorder({
+    required this.active,
+    required this.color,
+    required this.brightness,
+    required this.child,
+  });
+
+  final bool active;
+  final Color color;
+  final Brightness brightness;
+  final Widget child;
+
+  @override
+  State<_ComposerRunningGlowBorder> createState() =>
+      _ComposerRunningGlowBorderState();
+}
+
+class _ComposerRunningGlowBorderState extends State<_ComposerRunningGlowBorder>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  bool _reduceMotion = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: IdeMotion.durationRunningGlow,
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    if (_reduceMotion != reduceMotion) {
+      _reduceMotion = reduceMotion;
+    }
+    _syncAnimation();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ComposerRunningGlowBorder oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.active != widget.active) {
+      _syncAnimation();
+    }
+  }
+
+  void _syncAnimation() {
+    if (widget.active && !_reduceMotion) {
+      if (!_controller.isAnimating) {
+        _controller.repeat();
+      }
+      return;
+    }
+    _controller
+      ..stop()
+      ..value = 0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      key: const ValueKey('agent-composer-running-glow-animation'),
+      animation: _controller,
+      child: widget.child,
+      builder: (context, child) {
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            child!,
+            if (widget.active)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: ExcludeSemantics(
+                    child: CustomPaint(
+                      key: const ValueKey('agent-composer-running-glow'),
+                      painter: _ComposerRunningGlowPainter(
+                        progress: _controller.value,
+                        color: widget.color,
+                        brightness: widget.brightness,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+}
+
+class _ComposerRunningGlowPainter extends CustomPainter {
+  const _ComposerRunningGlowPainter({
+    required this.progress,
+    required this.color,
+    required this.brightness,
+  });
+
+  final double progress;
+  final Color color;
+  final Brightness brightness;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) {
+      return;
+    }
+    const edgeStrokeWidth = 1.5;
+    final rect = (Offset.zero & size).deflate(edgeStrokeWidth / 2);
+    final border = RRect.fromRectAndRadius(
+      rect,
+      const Radius.circular(IdeRadius.medium - edgeStrokeWidth / 2),
+    );
+    final transparent = color.withValues(alpha: 0);
+    final shader = SweepGradient(
+      transform: GradientRotation((progress * math.pi * 2) - (math.pi / 2)),
+      colors: <Color>[
+        transparent,
+        transparent,
+        color.withValues(alpha: 0.12),
+        color.withValues(alpha: 0.94),
+        color.withValues(alpha: 0.24),
+        transparent,
+        transparent,
+      ],
+      stops: const <double>[0, 0.64, 0.74, 0.82, 0.9, 0.97, 1],
+    ).createShader(rect);
+    final glowPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = brightness == Brightness.dark ? 4 : 3
+      ..shader = shader
+      ..maskFilter = MaskFilter.blur(
+        BlurStyle.normal,
+        brightness == Brightness.dark ? 5 : 4,
+      );
+    final edgePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = edgeStrokeWidth
+      ..shader = shader;
+
+    canvas
+      ..drawRRect(border, glowPaint)
+      ..drawRRect(border, edgePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ComposerRunningGlowPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.color != color ||
+        oldDelegate.brightness != brightness;
   }
 }
 

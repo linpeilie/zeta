@@ -152,7 +152,44 @@ void main() {
       },
     );
 
-    testWidgets('disables layout and focus-ring motion for reduce motion', (
+    testWidgets('shows a rotating composer glow only while a turn is running', (
+      tester,
+    ) async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(provider.dispose);
+      addTearDown(viewModel.dispose);
+
+      await tester.pumpWidget(_TestApp(viewModel: viewModel));
+      const glowKey = ValueKey('agent-composer-running-glow');
+      final glowFinder = find.byKey(glowKey);
+      expect(glowFinder, findsNothing);
+
+      await viewModel.sendMessage('Keep working');
+      await tester.pump();
+
+      expect(glowFinder, findsOneWidget);
+      final animationBuilder = find.byKey(
+        const ValueKey('agent-composer-running-glow-animation'),
+      );
+      final controller =
+          tester.widget<AnimatedBuilder>(animationBuilder).animation
+              as AnimationController;
+      final initialProgress = controller.value;
+      await tester.pump(IdeMotion.durationRunningGlow * 0.25);
+      expect(controller.value, isNot(closeTo(initialProgress, 0.001)));
+
+      provider.emitEvent(
+        const AgentTurnCompletedEvent(sessionId: 'session-1', turnId: 'turn-1'),
+      );
+      await tester.pump();
+
+      expect(glowFinder, findsNothing);
+      expect(controller.isAnimating, isFalse);
+      expect(controller.value, 0);
+    });
+
+    testWidgets('disables layout and composer motion for reduce motion', (
       tester,
     ) async {
       final provider = _FakeAgentProvider();
@@ -181,6 +218,30 @@ void main() {
             .duration,
         Duration.zero,
       );
+
+      await viewModel.sendMessage('Keep working');
+      await tester.pump();
+
+      final glowFinder = find.byKey(
+        const ValueKey('agent-composer-running-glow'),
+      );
+      expect(glowFinder, findsOneWidget);
+      final animationBuilder = find.byKey(
+        const ValueKey('agent-composer-running-glow-animation'),
+      );
+      final controller =
+          tester.widget<AnimatedBuilder>(animationBuilder).animation
+              as AnimationController;
+      final staticProgress = controller.value;
+      expect(controller.isAnimating, isFalse);
+
+      await tester.pump(IdeMotion.durationRunningGlow);
+
+      expect(controller.value, staticProgress);
+      provider.emitEvent(
+        const AgentTurnCompletedEvent(sessionId: 'session-1', turnId: 'turn-1'),
+      );
+      await tester.pump();
     });
 
     group('advanced', () {

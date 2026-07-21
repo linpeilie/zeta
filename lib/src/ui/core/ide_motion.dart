@@ -30,6 +30,11 @@ abstract final class IdeMotion {
   /// 持续加载提示的呼吸周期，例如 Provider Tab 的文字透明度脉冲。
   static const Duration durationLoadingPulse = Duration(milliseconds: 900);
 
+  /// Agent Composer 在回合运行期间的边框扫光周期。
+  ///
+  /// 该动效用于持续状态提示，速度应低于常规交互动画，避免干扰正文阅读。
+  static const Duration durationRunningGlow = Duration(milliseconds: 2400);
+
   /// [durationFast] 的简短别名。
   static const Duration fast = durationFast;
 
