@@ -559,7 +559,6 @@ class _IdeHomeState extends State<IdeHome> {
   Widget _buildProjectsPanel() {
     return PanelCard(
       key: const ValueKey('projects-panel-card'),
-      showBorder: false,
       child: ProjectListPane(
         projects: _shellController.projects,
         activeProject: _shellController.activeProjectPath,
@@ -641,7 +640,6 @@ class _IdeHomeState extends State<IdeHome> {
   Widget _buildFilesPanel() {
     return PanelCard(
       key: const ValueKey('files-panel-card'),
-      showBorder: false,
       child: FileTreePane(
         nodes: _shellController.workspaceTree,
         expandedPaths: _shellController.expandedDirectoryPaths,
@@ -684,7 +682,6 @@ class _IdeHomeState extends State<IdeHome> {
     final colors = IdeColors.of(context);
     return PanelCard(
       key: key,
-      showBorder: false,
       child: Pane(
         title: title,
         trailing: Icon(icon, size: 16, color: colors.mutedText),

@@ -118,7 +118,7 @@ class IdeWorkbenchScaffold extends StatelessWidget {
               SizedBox(
                 key: const ValueKey('workbench-navigation-inline'),
                 width: resolvedNavigationWidth,
-                child: IdeSurface.pane(child: navigation),
+                child: navigation,
               ),
               _PaneSeparator(child: navigationResizeHandle),
             ],
@@ -134,7 +134,7 @@ class IdeWorkbenchScaffold extends StatelessWidget {
               SizedBox(
                 key: const ValueKey('workbench-inspector-inline'),
                 width: resolvedInspectorWidth,
-                child: IdeSurface.pane(child: inspector),
+                child: inspector,
               ),
             ],
             if (trailingRail case final Widget rail) ...[
@@ -306,7 +306,7 @@ class _WorkbenchOverlaySurface extends StatelessWidget {
         borderRadius: IdeRadius.allMedium,
         boxShadow: IdeEffects.overlayShadow(brightness),
       ),
-      child: IdeSurface.pane(child: child),
+      child: child,
     );
   }
 }

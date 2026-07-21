@@ -9,6 +9,8 @@ import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
+import 'package:zeta/src/ui/core/pane_widgets.dart';
+import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 
 import '../testing/ide_test_harness.dart';
 
@@ -108,6 +110,30 @@ void main() {
       find.byKey(const ValueKey('workbench-inspector-inline')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('side panel cards own borders without workbench pane wrappers', (
+    tester,
+  ) async {
+    await _pumpIde(tester);
+    await tester.tap(find.byKey(const ValueKey('left-context-action')));
+    await tester.tap(find.byKey(const ValueKey('right-files-action')));
+    await tester.tap(find.byKey(const ValueKey('right-tools-action')));
+    await tester.pump();
+
+    for (final panelKey in <String>[
+      'projects-panel-card',
+      'context-panel-card',
+      'files-panel-card',
+      'tools-panel-card',
+    ]) {
+      final panel = find.byKey(ValueKey<String>(panelKey));
+      expect(tester.widget<PanelCard>(panel).showBorder, isTrue);
+      expect(
+        find.ancestor(of: panel, matching: find.byType(IdeSurface)),
+        findsNothing,
+      );
+    }
   });
 
   testWidgets('horizontal resize handles clamp side widths', (tester) async {

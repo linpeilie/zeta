@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
+import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/ui/core/workbench/ide_workbench_scaffold.dart';
 
 import 'ide_component_test_harness.dart';
@@ -36,6 +37,20 @@ void main() {
     expect(find.byKey(const ValueKey('workbench-navigation-inline')), findsOne);
     expect(find.byKey(const ValueKey('workbench-inspector-inline')), findsOne);
     expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('workbench-navigation-inline')),
+        matching: find.byType(IdeSurface),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('workbench-inspector-inline')),
+        matching: find.byType(IdeSurface),
+      ),
+      findsNothing,
+    );
+    expect(
       tester.getSize(find.byKey(const ValueKey('workbench-canvas'))).width,
       greaterThanOrEqualTo(IdeMetrics.mainEditorMinWidth),
     );
@@ -52,6 +67,13 @@ void main() {
       findsNothing,
     );
     expect(find.byKey(const ValueKey('workbench-inspector-overlay')), findsOne);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('workbench-inspector-overlay')),
+        matching: find.byType(IdeSurface),
+      ),
+      findsNothing,
+    );
     expect(
       tester.getSize(find.byKey(const ValueKey('workbench-canvas'))).width,
       greaterThanOrEqualTo(IdeMetrics.mainEditorMinWidth),

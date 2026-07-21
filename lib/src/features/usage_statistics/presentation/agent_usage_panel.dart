@@ -36,7 +36,6 @@ class _AgentUsagePanelState extends State<AgentUsagePanel> {
   Widget build(BuildContext context) {
     return PanelCard(
       key: const ValueKey('context-panel-card'),
-      showBorder: false,
       child: Pane(
         title: 'Agent 统计',
         trailing: ListenableBuilder(
