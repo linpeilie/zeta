@@ -99,6 +99,17 @@ void main() {
       expect(firstRun, contains('first record'));
       expect(firstRun, contains('second record'));
       expect(
+        firstRun.trim().split('\n'),
+        everyElement(
+          matches(
+            RegExp(
+              r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} '
+              r'\[(INFO|WARNING)\] \[zeta\.test\] ',
+            ),
+          ),
+        ),
+      );
+      expect(
         firstRun.indexOf('first record'),
         lessThan(firstRun.indexOf('second record')),
       );

@@ -67,7 +67,7 @@ Future<void> shutdownAppLogging() async {
 
 void _writeDeveloperLog(LogRecord record) {
   developer.log(
-    record.message,
+    '${_formatLogHeader(record)} ${record.message}',
     time: record.time,
     sequenceNumber: record.sequenceNumber,
     level: record.level.value,
@@ -148,15 +148,10 @@ String _dailyLogFileName(DateTime localTime) {
 }
 
 String _formatFileLogRecord(LogRecord record) {
-  final localTime = record.time.toLocal().toIso8601String();
   final message = _escapeLogValue(redactSensitiveText(record.message));
   final buffer = StringBuffer()
-    ..write(localTime)
-    ..write(' [')
-    ..write(record.level.name)
-    ..write('] [')
-    ..write(record.loggerName)
-    ..write('] ')
+    ..write(_formatLogHeader(record))
+    ..write(' ')
     ..write(message);
   final error = record.error;
   if (error != null) {
@@ -172,6 +167,23 @@ String _formatFileLogRecord(LogRecord record) {
       ..write(_escapeLogValue(redactSensitiveText(stackTrace.toString())));
   }
   return buffer.toString();
+}
+
+String _formatLogHeader(LogRecord record) {
+  return '${_formatLogTime(record.time)} '
+      '[${record.level.name}] [${record.loggerName}]';
+}
+
+String _formatLogTime(DateTime time) {
+  final localTime = time.toLocal();
+  final year = localTime.year.toString().padLeft(4, '0');
+  final month = localTime.month.toString().padLeft(2, '0');
+  final day = localTime.day.toString().padLeft(2, '0');
+  final hour = localTime.hour.toString().padLeft(2, '0');
+  final minute = localTime.minute.toString().padLeft(2, '0');
+  final second = localTime.second.toString().padLeft(2, '0');
+  final millisecond = localTime.millisecond.toString().padLeft(3, '0');
+  return '$year-$month-$day $hour:$minute:$second.$millisecond';
 }
 
 String _escapeLogValue(String value) {
