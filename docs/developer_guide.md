@@ -256,6 +256,8 @@ Fast 是产品语义，运行时仍必须传递 provider 的精确 `serviceTierI
 - 保持三栏工作台的职责边界：Projects 管项目和 threads，Agent 管对话，Files 管文件上下文。
 - 复杂交互逻辑优先放入 view model，widget 层负责渲染和用户输入。
 - 桌面工具界面需要保持信息密度，但文本必须可读，按钮和状态提示不能挤压变形。
+- Projects 侧栏的项目项与 thread 项只使用水平 padding；不要为条目增加上下
+  padding，行高由内容和稳定点击区域 token 决定。
 - 非文本按钮应提供 tooltip。
 - 新增面板或重复项时优先复用 `Pane`、`PanelCard`、主题常量和现有间距。
 - UI 组件库使用 `shadcn_flutter`，必须 `as sf` 导入；Graphite 语义 token 通过

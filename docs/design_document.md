@@ -114,7 +114,8 @@ Workbench 的 Canvas Flex slot 自身也使用稳定 Key，保证 Navigation/Ins
 
 ### 三栏工作台
 
-- Projects：展示已打开项目、当前项目状态和项目下的 Agent threads。
+- Projects：展示已打开项目、当前项目状态和项目下的 Agent threads；项目项与
+  thread 项仅保留水平 padding，不设置垂直 padding，以维持紧凑的桌面列表密度。
 - Agent：展示上下文栏、状态胶囊、流式消息/思考/计划时间线、回合 diff、工具与审批卡片、本地图片输入区。
 - Files：展示当前项目文件树，目录按需展开，文件选择只更新 Agent 上下文。
 

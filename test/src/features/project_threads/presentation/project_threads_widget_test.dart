@@ -9,6 +9,9 @@ import 'package:zeta/main.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
+import 'package:zeta/src/ui/core/ide_metrics.dart';
+import 'package:zeta/src/ui/core/ide_spacing.dart';
+import 'package:zeta/src/ui/core/pane_widgets.dart';
 
 import '../../../testing/ide_test_harness.dart';
 
@@ -172,6 +175,29 @@ void main() {
     expect(find.text('Hidden preview text'), findsNothing);
     expect(find.text('5m'), findsOneWidget);
     expect(find.text('3d'), findsNothing);
+    final projectTile = find.byKey(
+      ValueKey<String>('project-tile-${directory.path}'),
+    );
+    final projectTilePadding = find.byKey(
+      ValueKey<String>('project-tile-padding-${directory.path}'),
+    );
+    final threadTile = find.byKey(
+      ValueKey<String>('project-thread-${directory.path}-thread-a'),
+    );
+    expect(
+      tester.widget<Padding>(projectTilePadding).padding,
+      IdeSpacing.horizontal6,
+    );
+    expect(
+      tester.widget<PaneInteractiveSurface>(projectTile).padding,
+      IdeSpacing.horizontal8,
+    );
+    expect(
+      tester.widget<PaneInteractiveSurface>(threadTile).padding,
+      IdeSpacing.horizontal8,
+    );
+    expect(tester.getSize(projectTile).height, IdeMetrics.iconButtonHitSize);
+    expect(tester.getSize(threadTile).height, IdeMetrics.iconButtonHitSize);
     expect(
       find.byKey(ValueKey<String>('project-tile-new-thread-${directory.path}')),
       findsNothing,

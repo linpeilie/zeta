@@ -1,5 +1,13 @@
 # 开发记录
 
+## 2026-07-21
+
+### 收紧 Projects 列表条目垂直间距
+
+- 项目项与项目 thread 项移除外层和交互表面的垂直 padding，仅保留水平 padding。
+- loading、empty 与 error 状态行同步采用仅水平 padding，并补充 widget 回归断言及
+  Projects 侧栏 UI 规范。
+
 ## 2026-07-16
 
 ### 侧栏 thread 执行中指示与详情 runtime 对齐

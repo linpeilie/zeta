@@ -617,10 +617,8 @@ class _ProjectTileState extends State<_ProjectTile> {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: IdeSpacing.space6,
-        vertical: IdeSpacing.space2,
-      ),
+      key: ValueKey<String>('project-tile-padding-${widget.path}'),
+      padding: IdeSpacing.horizontal6,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -628,10 +626,7 @@ class _ProjectTileState extends State<_ProjectTile> {
             key: ValueKey<String>('project-tile-${widget.path}'),
             onPressed: widget.onTap,
             selected: widget.selected,
-            padding: const EdgeInsets.symmetric(
-              horizontal: IdeSpacing.space8,
-              vertical: 7,
-            ),
+            padding: IdeSpacing.horizontal8,
             onHoverChanged: (value) {
               setState(() {
                 _hovered = value;
@@ -1135,159 +1130,153 @@ class _ThreadTileState extends State<_ThreadTile> {
       thread.lastActiveAt,
       DateTime.now(),
     );
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 1),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          PaneInteractiveSurface(
-            key: ValueKey<String>(
-              'project-thread-${widget.projectPath}-${thread.id}',
-            ),
-            onPressed: widget.onTap,
-            selected: widget.selected,
-            padding: const EdgeInsets.symmetric(
-              horizontal: IdeSpacing.space8,
-              vertical: IdeSpacing.space6,
-            ),
-            borderRadius: IdeRadius.allSmall,
-            onHoverChanged: (value) {
-              setState(() {
-                _hovered = value;
-              });
-            },
-            onFocusChanged: (value) {
-              setState(() {
-                _focused = value;
-              });
-            },
-            child: Row(
-              children: [
-                Icon(
-                  _threadIcon(thread.status),
-                  size: 14,
-                  color: widget.selected ? colors.accent : colors.textSecondary,
-                ),
-                const SizedBox(width: IdeSpacing.space8),
-                Expanded(
-                  child: Text(
-                    thread.displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textStyles.bodySmall.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        PaneInteractiveSurface(
+          key: ValueKey<String>(
+            'project-thread-${widget.projectPath}-${thread.id}',
+          ),
+          onPressed: widget.onTap,
+          selected: widget.selected,
+          padding: IdeSpacing.horizontal8,
+          borderRadius: IdeRadius.allSmall,
+          onHoverChanged: (value) {
+            setState(() {
+              _hovered = value;
+            });
+          },
+          onFocusChanged: (value) {
+            setState(() {
+              _focused = value;
+            });
+          },
+          child: Row(
+            children: [
+              Icon(
+                _threadIcon(thread.status),
+                size: 14,
+                color: widget.selected ? colors.accent : colors.textSecondary,
+              ),
+              const SizedBox(width: IdeSpacing.space8),
+              Expanded(
+                child: Text(
+                  thread.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textStyles.bodySmall.copyWith(
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                if (_providerShortLabel(thread.providerId)
-                    case final providerLabel?) ...[
-                  const SizedBox(width: IdeSpacing.space6),
-                  Text(
-                    providerLabel,
-                    key: ValueKey<String>(
-                      'project-thread-provider-${widget.projectPath}-${thread.id}',
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textStyles.caption.copyWith(
-                      color: colors.mutedText.withValues(alpha: 0.85),
-                      fontWeight: FontWeight.w500,
-                    ),
+              ),
+              if (_providerShortLabel(thread.providerId)
+                  case final providerLabel?) ...[
+                const SizedBox(width: IdeSpacing.space6),
+                Text(
+                  providerLabel,
+                  key: ValueKey<String>(
+                    'project-thread-provider-${widget.projectPath}-${thread.id}',
                   ),
-                ],
-                if (waitingLabel != null) ...[
-                  const SizedBox(width: IdeSpacing.space8),
-                  Text(
-                    waitingLabel,
-                    key: ValueKey<String>(
-                      'project-thread-waiting-${widget.projectPath}-${thread.id}',
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textStyles.caption.copyWith(
-                      color: colors.warning,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textStyles.caption.copyWith(
+                    color: colors.mutedText.withValues(alpha: 0.85),
+                    fontWeight: FontWeight.w500,
                   ),
-                ] else if (isBusy) ...[
-                  const SizedBox(width: IdeSpacing.space8),
-                  IdeBusySpinner(
-                    key: ValueKey<String>(
-                      'project-thread-running-icon-${widget.projectPath}-${thread.id}',
-                    ),
-                    size: 12,
-                    strokeWidth: 1.8,
-                    semanticsLabel: 'Thread running',
-                  ),
-                ] else if (widget.showCompleted) ...[
-                  const SizedBox(width: IdeSpacing.space8),
-                  IdeTooltip(
-                    message: '执行完毕，点击关闭',
-                    child: sf.IconButton.ghost(
-                      key: ValueKey<String>(
-                        'project-thread-completed-icon-${widget.projectPath}-${thread.id}',
-                      ),
-                      onPressed: widget.onDismissCompleted,
-                      size: sf.ButtonSize.xSmall,
-                      density: sf.ButtonDensity.iconDense,
-                      icon: Icon(
-                        Icons.check_circle_rounded,
-                        size: 12,
-                        color: colors.success,
-                      ),
-                    ),
-                  ),
-                ] else if (lastActiveLabel != null) ...[
-                  const SizedBox(width: IdeSpacing.space8),
-                  Text(
-                    lastActiveLabel,
-                    maxLines: 1,
-                    style: textStyles.caption.copyWith(
-                      color: colors.textSecondary,
-                    ),
-                  ),
-                ],
-                AnimatedSize(
-                  duration: IdeMotion.durationNormal,
-                  curve: IdeMotion.curveDefault,
-                  alignment: Alignment.centerRight,
-                  child: _showActions && _hasMenuActions
-                      ? SizedBox(
-                          key: ValueKey<String>(
-                            'project-thread-actions-${widget.projectPath}-${thread.id}',
-                          ),
-                          width: IdeMetrics.iconButtonHitSize,
-                          height: IdeMetrics.iconButtonHitSize,
-                          child: IdeTooltip(
-                            message: '更多',
-                            child: sf.IconButton.ghost(
-                              key: ValueKey<String>(
-                                'project-thread-more-menu-${widget.projectPath}-${thread.id}',
-                              ),
-                              onPressed: _toggleMoreMenu,
-                              size: sf.ButtonSize.xSmall,
-                              density: sf.ButtonDensity.iconDense,
-                              icon: Icon(
-                                Icons.more_horiz_rounded,
-                                size: _actionIconSize,
-                                color: _menuOpen
-                                    ? colors.textPrimary
-                                    : colors.textSecondary,
-                              ),
-                            ),
-                          ),
-                        )
-                      // 用 AnimatedSize 直接收展，避免 AnimatedSwitcher 在快速切换时堆叠旧 child。
-                      : const SizedBox(
-                          width: 0,
-                          height: IdeMetrics.iconButtonHitSize,
-                        ),
                 ),
               ],
-            ),
+              if (waitingLabel != null) ...[
+                const SizedBox(width: IdeSpacing.space8),
+                Text(
+                  waitingLabel,
+                  key: ValueKey<String>(
+                    'project-thread-waiting-${widget.projectPath}-${thread.id}',
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textStyles.caption.copyWith(
+                    color: colors.warning,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ] else if (isBusy) ...[
+                const SizedBox(width: IdeSpacing.space8),
+                IdeBusySpinner(
+                  key: ValueKey<String>(
+                    'project-thread-running-icon-${widget.projectPath}-${thread.id}',
+                  ),
+                  size: 12,
+                  strokeWidth: 1.8,
+                  semanticsLabel: 'Thread running',
+                ),
+              ] else if (widget.showCompleted) ...[
+                const SizedBox(width: IdeSpacing.space8),
+                IdeTooltip(
+                  message: '执行完毕，点击关闭',
+                  child: sf.IconButton.ghost(
+                    key: ValueKey<String>(
+                      'project-thread-completed-icon-${widget.projectPath}-${thread.id}',
+                    ),
+                    onPressed: widget.onDismissCompleted,
+                    size: sf.ButtonSize.xSmall,
+                    density: sf.ButtonDensity.iconDense,
+                    icon: Icon(
+                      Icons.check_circle_rounded,
+                      size: 12,
+                      color: colors.success,
+                    ),
+                  ),
+                ),
+              ] else if (lastActiveLabel != null) ...[
+                const SizedBox(width: IdeSpacing.space8),
+                Text(
+                  lastActiveLabel,
+                  maxLines: 1,
+                  style: textStyles.caption.copyWith(
+                    color: colors.textSecondary,
+                  ),
+                ),
+              ],
+              AnimatedSize(
+                duration: IdeMotion.durationNormal,
+                curve: IdeMotion.curveDefault,
+                alignment: Alignment.centerRight,
+                child: _showActions && _hasMenuActions
+                    ? SizedBox(
+                        key: ValueKey<String>(
+                          'project-thread-actions-${widget.projectPath}-${thread.id}',
+                        ),
+                        width: IdeMetrics.iconButtonHitSize,
+                        height: IdeMetrics.iconButtonHitSize,
+                        child: IdeTooltip(
+                          message: '更多',
+                          child: sf.IconButton.ghost(
+                            key: ValueKey<String>(
+                              'project-thread-more-menu-${widget.projectPath}-${thread.id}',
+                            ),
+                            onPressed: _toggleMoreMenu,
+                            size: sf.ButtonSize.xSmall,
+                            density: sf.ButtonDensity.iconDense,
+                            icon: Icon(
+                              Icons.more_horiz_rounded,
+                              size: _actionIconSize,
+                              color: _menuOpen
+                                  ? colors.textPrimary
+                                  : colors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      )
+                    // 用 AnimatedSize 直接收展，避免 AnimatedSwitcher 在快速切换时堆叠旧 child。
+                    : const SizedBox(
+                        width: 0,
+                        height: IdeMetrics.iconButtonHitSize,
+                      ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -1302,10 +1291,7 @@ class _ThreadListMessage extends StatelessWidget {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: IdeSpacing.space8,
-        vertical: IdeSpacing.space6,
-      ),
+      padding: IdeSpacing.horizontal8,
       child: Align(
         alignment: Alignment.centerLeft,
         child: Text(
@@ -1327,10 +1313,7 @@ class _ThreadErrorRow extends StatelessWidget {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: IdeSpacing.space4,
-        vertical: IdeSpacing.space4,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space4),
       child: Row(
         children: [
           Expanded(
