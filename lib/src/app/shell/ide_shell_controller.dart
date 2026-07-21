@@ -15,6 +15,7 @@ import 'package:zeta/src/features/ide_session/application/ide_session_restore_re
 import 'package:zeta/src/features/ide_session/application/ide_session_state_builder.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
+import 'package:zeta/src/features/ide_session/domain/recent_project_summary.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_controller.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_session_snapshot_codec.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
@@ -28,6 +29,23 @@ final _log = loggerFor('zeta.app.ide_shell_controller');
 
 typedef IdeDirectoryPicker = Future<String?> Function();
 typedef IdeShellStatusReporter = void Function(String message);
+
+int _compareThreadRecency(AgentThreadSummary left, AgentThreadSummary right) {
+  final leftTime = left.lastActiveAt;
+  final rightTime = right.lastActiveAt;
+  if (leftTime != null && rightTime != null) {
+    final byTime = rightTime.compareTo(leftTime);
+    if (byTime != 0) {
+      return byTime;
+    }
+  } else if (leftTime != null) {
+    return -1;
+  } else if (rightTime != null) {
+    return 1;
+  }
+  final byProvider = left.providerId.compareTo(right.providerId);
+  return byProvider != 0 ? byProvider : left.id.compareTo(right.id);
+}
 
 /// IDE shell 的应用级协调器。
 ///
@@ -43,6 +61,7 @@ class IdeShellController extends ChangeNotifier {
     required AgentProviderConfigStore agentProviderConfigStore,
     this._projectLocationOpener = openPathInSystemFileManager,
     this._statusReporter,
+    DateTime Function()? now,
   }) : agentProviderController = ActiveAgentProviderController(
          providerFactory: agentProviderFactory,
          configStore: agentProviderConfigStore,
@@ -51,7 +70,8 @@ class IdeShellController extends ChangeNotifier {
        _sessionCoordinator = IdeSessionPersistenceCoordinator(
          store: sessionStore,
          saveDelay: sessionSaveDelay,
-       ) {
+       ),
+       _now = now ?? DateTime.now {
     agentWorkspaceController = AgentThreadWorkspaceController(
       providerFactory: agentProviderFactory,
       configStore: agentProviderConfigStore,
@@ -80,6 +100,7 @@ class IdeShellController extends ChangeNotifier {
   final ProjectLocationOpener _projectLocationOpener;
   final IdeShellStatusReporter? _statusReporter;
   final IdeSessionPersistenceCoordinator _sessionCoordinator;
+  final DateTime Function() _now;
 
   final ActiveAgentProviderController agentProviderController;
   late final AgentThreadWorkspaceController agentWorkspaceController;
@@ -99,11 +120,14 @@ class IdeShellController extends ChangeNotifier {
   Set<String> _expandedDirectoryPaths = <String>{};
   final List<String> _projects = <String>[];
   final Map<String, String> _agentThreadIdsByProject = <String, String>{};
+  final Map<String, DateTime> _projectLastOpenedAtByPath = <String, DateTime>{};
   String? _projectPath;
   String? _currentFilePath;
   String? _selectedTreePath;
   bool _isLoadingProject = false;
   bool _projectHomeActive = false;
+  bool _initialRestoreCompleted = false;
+  int _homeRefreshToken = 0;
   bool _isDisposed = false;
 
   List<AgentThreadWorkspaceEntry> get agentWorkspaceEntries =>
@@ -123,6 +147,78 @@ class IdeShellController extends ChangeNotifier {
   AgentConversationViewModel get agentViewModel => selectedAgentViewModel;
 
   List<String> get projects => List<String>.unmodifiable(_projects);
+
+  /// 初始会话恢复已完成；此后无活动项目时可以稳定展示全局首页。
+  bool get initialRestoreCompleted => _initialRestoreCompleted;
+
+  /// 近期项目按最后访问时间排序；旧数据没有时间时保持原项目顺序。
+  List<RecentProjectSummary> get recentProjects {
+    final indexed = <({int index, RecentProjectSummary project})>[
+      for (final (index, path) in _projects.indexed)
+        (
+          index: index,
+          project: RecentProjectSummary(
+            path: path,
+            lastOpenedAt: _projectLastOpenedAtByPath[path],
+          ),
+        ),
+    ];
+    indexed.sort((left, right) {
+      final leftTime = left.project.lastOpenedAt;
+      final rightTime = right.project.lastOpenedAt;
+      if (leftTime != null && rightTime != null) {
+        final byTime = rightTime.compareTo(leftTime);
+        if (byTime != 0) {
+          return byTime;
+        }
+      } else if (leftTime != null) {
+        return -1;
+      } else if (rightTime != null) {
+        return 1;
+      }
+      return left.index.compareTo(right.index);
+    });
+    return List<RecentProjectSummary>.unmodifiable(
+      indexed.map((entry) => entry.project),
+    );
+  }
+
+  /// 所有已知项目缓存中的近期未归档会话，按最近活跃时间降序。
+  List<AgentThreadSummary> get recentThreads {
+    final byIdentity = <String, AgentThreadSummary>{};
+    for (final projectPath in _projects) {
+      final state = projectThreadsController.stateFor(projectPath);
+      if (state.archived) {
+        continue;
+      }
+      for (final thread in state.threads) {
+        final key = '${thread.providerId}\u0000${thread.id}';
+        final existing = byIdentity[key];
+        if (existing == null || _compareThreadRecency(thread, existing) < 0) {
+          byIdentity[key] = thread;
+        }
+      }
+    }
+    final threads = byIdentity.values.toList(growable: false)
+      ..sort(_compareThreadRecency);
+    return List<AgentThreadSummary>.unmodifiable(threads);
+  }
+
+  /// 首页近期会话是否仍在后台刷新。
+  bool get isRefreshingRecentHomeData => recentProjects
+      .take(5)
+      .any((project) => projectThreadStateFor(project.path).isLoadingInitial);
+
+  /// 首页近期项目刷新中最后一个非阻断错误。
+  String? get recentHomeRefreshError {
+    for (final project in recentProjects.take(5)) {
+      final error = projectThreadStateFor(project.path).errorMessage;
+      if (error != null && error.isNotEmpty) {
+        return error;
+      }
+    }
+    return null;
+  }
 
   String? get activeProjectPath => _projectPath;
 
@@ -158,10 +254,37 @@ class IdeShellController extends ChangeNotifier {
     await _loadProject(path);
   }
 
+  /// 从全局首页打开一个已知项目，不改变左侧项目树的展开状态。
+  Future<void> openRecentProject(String path) async {
+    if (!_projects.contains(path)) {
+      return;
+    }
+    _sessionCoordinator.cancelPendingRestore();
+    await _loadProject(path, activateThreads: false);
+  }
+
+  /// 使用缓存先显策略，顺序刷新首页可见的近期项目会话。
+  Future<void> refreshRecentHomeData({int projectLimit = 5}) async {
+    final token = ++_homeRefreshToken;
+    final paths = recentProjects
+        .take(projectLimit)
+        .map((project) => project.path)
+        .toList(growable: false);
+    for (final path in paths) {
+      if (_isDisposed || token != _homeRefreshToken || _projectPath != null) {
+        return;
+      }
+      await projectThreadsController.loadInitial(path);
+    }
+  }
+
   Future<void> selectKnownProject(String path) async {
     _sessionCoordinator.cancelPendingRestore();
     if (path != _projectPath) {
       await _loadProject(path, activateThreads: false);
+    }
+    if (_projectPath == path) {
+      _markProjectOpened(path);
     }
     await projectThreadsController.toggleProject(path);
     _requestSessionSave();
@@ -281,6 +404,7 @@ class IdeShellController extends ChangeNotifier {
         return;
       }
     }
+    _markProjectOpened(projectPath);
     try {
       await _selectWorkspaceDraftEntry(
         projectPath: projectPath,
@@ -318,6 +442,7 @@ class IdeShellController extends ChangeNotifier {
 
     _projects.removeAt(index);
     _agentThreadIdsByProject.remove(path);
+    _projectLastOpenedAtByPath.remove(path);
     projectThreadsController.retainProjects(_projects);
     agentWorkspaceController.removeEntriesForProject(path);
 
@@ -347,6 +472,7 @@ class IdeShellController extends ChangeNotifier {
     if (_projectPath != projectPath) {
       return;
     }
+    _markProjectOpened(projectPath);
     await _selectWorkspaceThreadEntry(
       projectPath: projectPath,
       thread: thread,
@@ -389,6 +515,7 @@ class IdeShellController extends ChangeNotifier {
   }
 
   Future<void> _loadProject(String path, {bool activateThreads = true}) async {
+    _homeRefreshToken += 1;
     _log.info('Opening project folder: $path');
     _isLoadingProject = true;
     _notifyStateChanged();
@@ -415,6 +542,7 @@ class IdeShellController extends ChangeNotifier {
       if (!_projects.contains(path)) {
         _projects.insert(0, path);
       }
+      _markProjectOpened(path);
 
       projectThreadsController.retainProjects(_projects);
       if (activateThreads) {
@@ -436,92 +564,105 @@ class IdeShellController extends ChangeNotifier {
   }
 
   Future<void> _restoreSession() async {
-    final result = await _sessionCoordinator.restore();
-    if (_isDisposed) {
-      return;
-    }
-
-    switch (result.status) {
-      case IdeSessionRestoreStatus.cancelled:
-      case IdeSessionRestoreStatus.empty:
+    try {
+      final result = await _sessionCoordinator.restore();
+      if (_isDisposed) {
         return;
-      case IdeSessionRestoreStatus.failed:
-        _currentFilePath = null;
-        await _syncSelectedAgentWorkspace();
-        _notifyStateChanged();
-        if (result.shouldRequestSave) {
-          _requestSessionSave();
-        }
-        return;
-      case IdeSessionRestoreStatus.restored:
-        break;
-    }
-
-    final session = result.snapshot;
-    if (session == null) {
-      return;
-    }
-
-    var tree = const <WorkspaceNode>[];
-    var selectedTreePath = session.selectedTreeKey;
-    if (session.activeProjectPath != null) {
-      // 文件树按需加载，只恢复用户已经展开过的目录。
-      final projectChildren = buildWorkspaceDirectoryChildren(
-        Directory(session.activeProjectPath!),
-        expandedPaths: session.expandedDirectoryPaths,
-      );
-      tree = projectChildren;
-
-      if (selectedTreePath == session.activeProjectPath) {
-        selectedTreePath = null;
-      } else if (selectedTreePath != null &&
-          WorkspaceNode.findByPath(projectChildren, selectedTreePath) == null) {
-        selectedTreePath = null;
       }
-    }
 
-    _projects
-      ..clear()
-      ..addAll(session.projectPaths);
-    _projectPath = session.activeProjectPath;
-    _workspaceTree = tree;
-    _expandedDirectoryPaths = Set<String>.from(session.expandedDirectoryPaths);
-    _currentFilePath = session.currentFilePath;
-    _selectedTreePath = selectedTreePath;
-    _agentThreadIdsByProject
-      ..clear()
-      ..addAll(session.agentThreadIdsByProject);
+      switch (result.status) {
+        case IdeSessionRestoreStatus.cancelled:
+        case IdeSessionRestoreStatus.empty:
+          return;
+        case IdeSessionRestoreStatus.failed:
+          _currentFilePath = null;
+          await _syncSelectedAgentWorkspace();
+          _notifyStateChanged();
+          if (result.shouldRequestSave) {
+            _requestSessionSave();
+          }
+          return;
+        case IdeSessionRestoreStatus.restored:
+          break;
+      }
 
-    projectThreadsController.restoreSession(
-      projectPaths: session.projectPaths,
-      activeProjectPath: session.activeProjectPath,
-      snapshot: projectThreadsSessionSnapshotFromIdeSessionState(session),
-    );
-    for (final entry in _agentThreadIdsByProject.entries.toList()) {
-      final thread = _threadSummaryFor(entry.key, entry.value);
-      if (thread == null) {
-        // provider 归属只存在于完整摘要；缺失时不能猜测 active provider。
-        _log.warning(
-          'Discarding restored thread ${entry.value} without provider ownership',
+      final session = result.snapshot;
+      if (session == null) {
+        return;
+      }
+
+      var tree = const <WorkspaceNode>[];
+      var selectedTreePath = session.selectedTreeKey;
+      if (session.activeProjectPath != null) {
+        // 文件树按需加载，只恢复用户已经展开过的目录。
+        final projectChildren = buildWorkspaceDirectoryChildren(
+          Directory(session.activeProjectPath!),
+          expandedPaths: session.expandedDirectoryPaths,
         );
-        _agentThreadIdsByProject.remove(entry.key);
-        projectThreadsController.clearSelectedThread(entry.key);
-        continue;
+        tree = projectChildren;
+
+        if (selectedTreePath == session.activeProjectPath) {
+          selectedTreePath = null;
+        } else if (selectedTreePath != null &&
+            WorkspaceNode.findByPath(projectChildren, selectedTreePath) ==
+                null) {
+          selectedTreePath = null;
+        }
       }
-      projectThreadsController.registerThreadMapping(entry.key, thread.id);
+
+      _projects
+        ..clear()
+        ..addAll(session.projectPaths);
+      _projectPath = session.activeProjectPath;
+      _workspaceTree = tree;
+      _expandedDirectoryPaths = Set<String>.from(
+        session.expandedDirectoryPaths,
+      );
+      _currentFilePath = session.currentFilePath;
+      _selectedTreePath = selectedTreePath;
+      _agentThreadIdsByProject
+        ..clear()
+        ..addAll(session.agentThreadIdsByProject);
+      _projectLastOpenedAtByPath
+        ..clear()
+        ..addAll(session.projectLastOpenedAtByPath);
+
+      projectThreadsController.restoreSession(
+        projectPaths: session.projectPaths,
+        activeProjectPath: session.activeProjectPath,
+        snapshot: projectThreadsSessionSnapshotFromIdeSessionState(session),
+      );
+      for (final entry in _agentThreadIdsByProject.entries.toList()) {
+        final thread = _threadSummaryFor(entry.key, entry.value);
+        if (thread == null) {
+          // provider 归属只存在于完整摘要；缺失时不能猜测 active provider。
+          _log.warning(
+            'Discarding restored thread ${entry.value} without provider ownership',
+          );
+          _agentThreadIdsByProject.remove(entry.key);
+          projectThreadsController.clearSelectedThread(entry.key);
+          continue;
+        }
+        projectThreadsController.registerThreadMapping(entry.key, thread.id);
+      }
+      if (session.projectHomeActive && _projectPath != null) {
+        _enterProjectHome(refreshThreads: true);
+      } else {
+        await _syncSelectedAgentWorkspace();
+      }
+      _log.info(
+        'Restored IDE session with ${session.projectPaths.length} projects',
+      );
+      if (result.shouldRequestSave) {
+        _requestSessionSave();
+      }
+      _notifyStateChanged();
+    } finally {
+      if (!_isDisposed) {
+        _initialRestoreCompleted = true;
+        _notifyStateChanged();
+      }
     }
-    if (session.projectHomeActive && _projectPath != null) {
-      _enterProjectHome(refreshThreads: true);
-    } else {
-      await _syncSelectedAgentWorkspace();
-    }
-    _log.info(
-      'Restored IDE session with ${session.projectPaths.length} projects',
-    );
-    if (result.shouldRequestSave) {
-      _requestSessionSave();
-    }
-    _notifyStateChanged();
   }
 
   void _setDirectoryExpanded(String path, bool expanded) {
@@ -559,6 +700,7 @@ class IdeShellController extends ChangeNotifier {
   }
 
   void _clearActiveWorkspace() {
+    _homeRefreshToken += 1;
     _projectPath = null;
     _projectHomeActive = false;
     _currentFilePath = null;
@@ -585,6 +727,7 @@ class IdeShellController extends ChangeNotifier {
       selectedTreeKey: _selectedTreePath,
       activeAgentProviderId: selectedAgentViewModel.activeProviderId,
       agentThreadIdsByProject: _agentThreadIdsByProject,
+      projectLastOpenedAtByPath: _projectLastOpenedAtByPath,
       projectThreadsSessionSnapshot: projectThreadsController.sessionSnapshot,
       currentProjectPath: _projectPath,
       currentSessionId: isProjectHomeActive
@@ -611,6 +754,10 @@ class IdeShellController extends ChangeNotifier {
       // 首页与侧栏共享未归档首屏；保留缓存并在后台刷新最新五条。
       unawaited(projectThreadsController.loadInitial(projectPath));
     }
+  }
+
+  void _markProjectOpened(String path) {
+    _projectLastOpenedAtByPath[path] = _now();
   }
 
   WorkspaceNode? _findTreeNode(String path) {
@@ -1056,6 +1203,7 @@ class IdeShellController extends ChangeNotifier {
     }
     unawaited(saveNow());
     _isDisposed = true;
+    _homeRefreshToken += 1;
     _sessionCoordinator.dispose();
     agentWorkspaceController.removeListener(_handleAgentWorkspaceChanged);
     projectThreadsViewModel.removeListener(_handleProjectThreadsChanged);

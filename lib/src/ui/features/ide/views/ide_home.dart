@@ -38,11 +38,14 @@ import 'package:zeta/src/ui/core/ide_toast.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/window_frame.dart';
 import 'package:zeta/src/ui/core/workbench/ide_workbench_scaffold.dart';
+import 'package:zeta/src/ui/features/ide/views/global_home_page.dart';
 import 'package:zeta/src/ui/features/ide/views/project_home_page.dart';
 import 'package:zeta/src/ui/features/ide/views/project_list_pane.dart';
 
 typedef AgentProviderAvailabilityLoader =
     Future<List<AgentProviderConfig>> Function();
+
+typedef HomeProviderDetectionLoader = Future<List<ManagedAgent>> Function();
 
 /// IDE 主界面。
 ///
@@ -59,6 +62,7 @@ class IdeHome extends StatefulWidget {
     required this.projectLocationOpener,
     required this.appearanceController,
     this.agentProviderAvailabilityLoader,
+    this.homeProviderDetectionLoader,
     this.agentUsagePanelRepository,
     this.showWindowControls = true,
     super.key,
@@ -73,6 +77,7 @@ class IdeHome extends StatefulWidget {
   final ProjectLocationOpener projectLocationOpener;
   final AppearanceSettingsController appearanceController;
   final AgentProviderAvailabilityLoader? agentProviderAvailabilityLoader;
+  final HomeProviderDetectionLoader? homeProviderDetectionLoader;
   final AgentUsagePanelRepository? agentUsagePanelRepository;
   final bool showWindowControls;
 
@@ -99,6 +104,12 @@ class _IdeHomeState extends State<IdeHome> {
   bool _rightBottomVisible = false;
   bool _settingsPageMounted = false;
   bool _usageStatisticsPageMounted = false;
+  bool _globalHomeLoadRequested = false;
+  bool _homeProvidersLoading = false;
+  List<HomeProviderSummary> _installedHomeProviders =
+      const <HomeProviderSummary>[];
+  String? _homeProviderError;
+  int _globalHomeLoadToken = 0;
   IdeWorkbenchOverlay? _activeOverlay;
   FocusNode? _overlayTriggerFocusNode;
   double _leftPanelWidth = _initialPanelWidth;
@@ -150,7 +161,7 @@ class _IdeHomeState extends State<IdeHome> {
       providerController: _shellController.agentProviderController,
       runtimeStateProvider: _managementRuntimeState,
       runtimeListenable: _shellController,
-    );
+    )..addListener(_handleAgentManagementChanged);
     _usageStatisticsController = UsageStatisticsController(
       repository: CodexUsageStatisticsRepository(
         providerLoader: _shellController.agentProviderController.activeProvider,
@@ -183,6 +194,7 @@ class _IdeHomeState extends State<IdeHome> {
     _shellController.removeListener(_handleShellChanged);
     _usageStatisticsController.dispose();
     _agentUsagePanelController.dispose();
+    _agentManagementController.removeListener(_handleAgentManagementChanged);
     _agentManagementController.dispose();
     _shellController.dispose();
     _leftProjectsFocusNode.dispose();
@@ -344,8 +356,28 @@ class _IdeHomeState extends State<IdeHome> {
   Widget _buildRetainedAgentPaneStack() {
     final entries = _shellController.agentWorkspaceEntries;
     final projectPath = _shellController.activeProjectPath;
-    if (entries.isEmpty && projectPath == null) {
-      return const SizedBox.shrink();
+    if (projectPath == null) {
+      if (!_shellController.initialRestoreCompleted) {
+        return _buildGlobalHomeRestoringState();
+      }
+      return GlobalHomePage(
+        recentProjects: _shellController.recentProjects,
+        recentThreads: _shellController.recentThreads,
+        installedProviders: _installedHomeProviders,
+        onOpenProject: _openProject,
+        onSelectProject: (path) {
+          unawaited(_shellController.openRecentProject(path));
+        },
+        onSelectThread: (thread) {
+          unawaited(
+            _shellController.selectProjectThread(thread.projectPath, thread),
+          );
+        },
+        isLoadingRecentThreads: _shellController.isRefreshingRecentHomeData,
+        recentThreadsError: _shellController.recentHomeRefreshError,
+        isLoadingProviders: _homeProvidersLoading,
+        providerError: _homeProviderError,
+      );
     }
     final selectedEntryId = _shellController.selectedAgentWorkspaceEntryId;
     final selectedEntryIndex = entries.indexWhere(
@@ -360,7 +392,7 @@ class _IdeHomeState extends State<IdeHome> {
       key: const ValueKey('agent-pane-entry-stack'),
       index: selectedIndex,
       children: [
-        projectPath == null || !_shellController.isProjectHomeActive
+        !_shellController.isProjectHomeActive
             ? const SizedBox.shrink()
             : KeyedSubtree(
                 key: ValueKey<String>('project-home-$projectPath'),
@@ -394,6 +426,24 @@ class _IdeHomeState extends State<IdeHome> {
             child: AgentPane(viewModel: entry.viewModel),
           ),
       ],
+    );
+  }
+
+  Widget _buildGlobalHomeRestoringState() {
+    final colors = IdeColors.of(context);
+    return ColoredBox(
+      key: const ValueKey<String>('global-home-restoring'),
+      color: colors.canvasSurface,
+      child: Center(
+        child: SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: colors.accent,
+          ),
+        ),
+      ),
     );
   }
 
@@ -840,9 +890,114 @@ class _IdeHomeState extends State<IdeHome> {
   }
 
   void _handleShellChanged() {
+    _maybeStartGlobalHomeLoad();
     if (mounted) {
       setState(() {});
     }
+  }
+
+  void _maybeStartGlobalHomeLoad() {
+    final globalHomeVisible =
+        _shellController.initialRestoreCompleted &&
+        _shellController.activeProjectPath == null;
+    if (!globalHomeVisible) {
+      if (_shellController.activeProjectPath != null) {
+        _globalHomeLoadRequested = false;
+        _globalHomeLoadToken += 1;
+      }
+      return;
+    }
+    if (_globalHomeLoadRequested) {
+      return;
+    }
+    _globalHomeLoadRequested = true;
+    final token = ++_globalHomeLoadToken;
+    unawaited(_shellController.refreshRecentHomeData());
+    unawaited(_loadHomeProviders(token));
+  }
+
+  Future<void> _loadHomeProviders(int token) async {
+    if (!mounted || token != _globalHomeLoadToken) {
+      return;
+    }
+    setState(() {
+      _homeProvidersLoading = true;
+      _homeProviderError = null;
+    });
+
+    final cachedProviders = List<HomeProviderSummary>.from(
+      _installedHomeProviders,
+    );
+    try {
+      final injectedLoader = widget.homeProviderDetectionLoader;
+      if (injectedLoader != null) {
+        final agents = await injectedLoader();
+        if (!mounted || token != _globalHomeLoadToken) {
+          return;
+        }
+        _setInstalledHomeProviders(agents);
+      } else {
+        await _agentManagementController.initialize();
+        if (!mounted || token != _globalHomeLoadToken) {
+          return;
+        }
+        _setInstalledHomeProviders(_agentManagementController.agents);
+        cachedProviders
+          ..clear()
+          ..addAll(_installedHomeProviders);
+        setState(() {});
+
+        await _agentManagementController.detect();
+        if (!mounted || token != _globalHomeLoadToken) {
+          return;
+        }
+        final detectionError = _agentManagementController.operationError;
+        if (detectionError == null) {
+          _setInstalledHomeProviders(_agentManagementController.agents);
+        } else {
+          _installedHomeProviders = List<HomeProviderSummary>.unmodifiable(
+            cachedProviders,
+          );
+          _homeProviderError = detectionError;
+        }
+      }
+    } catch (error) {
+      if (!mounted || token != _globalHomeLoadToken) {
+        return;
+      }
+      _installedHomeProviders = List<HomeProviderSummary>.unmodifiable(
+        cachedProviders,
+      );
+      _homeProviderError = '无法检测 Provider：$error';
+    } finally {
+      if (mounted && token == _globalHomeLoadToken) {
+        setState(() {
+          _homeProvidersLoading = false;
+        });
+      }
+    }
+  }
+
+  void _setInstalledHomeProviders(Iterable<ManagedAgent> agents) {
+    _installedHomeProviders = List<HomeProviderSummary>.unmodifiable(
+      agents
+          .where(
+            (agent) =>
+                agent.installationState == AgentInstallationState.installed,
+          )
+          .map(HomeProviderSummary.fromManagedAgent),
+    );
+  }
+
+  void _handleAgentManagementChanged() {
+    if (!mounted ||
+        _homeProvidersLoading ||
+        widget.homeProviderDetectionLoader != null) {
+      return;
+    }
+    setState(() {
+      _setInstalledHomeProviders(_agentManagementController.agents);
+    });
   }
 
   void _showStatus(String message) {

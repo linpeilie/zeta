@@ -967,7 +967,14 @@ void main() {
         findsNothing,
       );
       expect(find.text('No folder opened'), findsOneWidget);
-      expect(headerTitleText(tester), 'New thread');
+      expect(
+        find.byKey(const ValueKey<String>('global-home-page')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('agent-header-title')),
+        findsNothing,
+      );
       expect(find.text('Previously asked question'), findsNothing);
     },
   );

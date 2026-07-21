@@ -10,6 +10,7 @@ import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/data/default_agent_provider_factory.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
@@ -36,6 +37,7 @@ class MainApp extends StatefulWidget {
     this.agentProviderFactory,
     this.agentProviderConfigStore,
     this.agentProviderAvailabilityLoader,
+    this.homeProviderDetectionLoader,
     this.projectLocationOpener,
     this.appearanceController,
     this.dataPaths,
@@ -53,6 +55,7 @@ class MainApp extends StatefulWidget {
   final AgentProviderFactory? agentProviderFactory;
   final AgentProviderConfigStore? agentProviderConfigStore;
   final AgentProviderAvailabilityLoader? agentProviderAvailabilityLoader;
+  final HomeProviderDetectionLoader? homeProviderDetectionLoader;
   final ProjectLocationOpener? projectLocationOpener;
 
   /// 全局外观控制器。测试可注入内存版本以避免触碰真实用户文件；
@@ -171,6 +174,11 @@ class MainAppState extends State<MainApp> {
                   _createAgentProviderConfigStore(),
               agentProviderAvailabilityLoader:
                   widget.agentProviderAvailabilityLoader,
+              homeProviderDetectionLoader:
+                  widget.homeProviderDetectionLoader ??
+                  (_usesCallbackPersistence
+                      ? _loadNoInstalledHomeProviders
+                      : null),
               projectLocationOpener:
                   widget.projectLocationOpener ?? openPathInSystemFileManager,
               appearanceController: _appearanceController,
@@ -219,8 +227,14 @@ class MainAppState extends State<MainApp> {
       widget.dataPaths != null &&
       widget.sessionLoader == null &&
       widget.sessionSaver == null;
+
+  bool get _usesCallbackPersistence =>
+      widget.sessionLoader != null || widget.sessionSaver != null;
 }
 
 Future<String?> _loadEmptySession() async => null;
 
 Future<void> _ignoreSessionSave(String _) async {}
+
+Future<List<ManagedAgent>> _loadNoInstalledHomeProviders() async =>
+    const <ManagedAgent>[];

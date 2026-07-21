@@ -58,5 +58,37 @@ void main() {
       expect(restored?.projectHomeActive, isTrue);
       expect(legacy?.projectHomeActive, isFalse);
     });
+
+    test('round-trips project recency and preserves v3 project home', () {
+      final openedAt = DateTime.utc(2026, 7, 21, 12, 30);
+      final state = IdeSessionState(
+        projectPaths: const <String>['/repo'],
+        activeProjectPath: '/repo',
+        projectLastOpenedAtByPath: <String, DateTime>{'/repo': openedAt},
+        projectHomeActive: true,
+      );
+
+      final restored = IdeSessionState.tryDecode(state.encode());
+      final version3 = IdeSessionState.tryDecode(
+        '{"version":3,"projectPaths":["/repo"],"activeProjectPath":"/repo","projectHomeActive":true}',
+      );
+
+      expect(restored?.projectLastOpenedAtByPath['/repo'], openedAt);
+      expect(version3?.projectHomeActive, isTrue);
+      expect(version3?.projectLastOpenedAtByPath, isEmpty);
+    });
+
+    test('ignores malformed project recency entries without losing session', () {
+      final restored = IdeSessionState.tryDecode(
+        '{"version":4,"projectPaths":["/repo","/other"],"projectLastOpenedAtByPath":{"/repo":"bad","/other":42}}',
+      );
+
+      expect(restored?.projectPaths, <String>['/repo', '/other']);
+      expect(restored?.projectLastOpenedAtByPath.keys, <String>['/other']);
+      expect(
+        restored?.projectLastOpenedAtByPath['/other'],
+        DateTime.fromMillisecondsSinceEpoch(42),
+      );
+    });
   });
 }

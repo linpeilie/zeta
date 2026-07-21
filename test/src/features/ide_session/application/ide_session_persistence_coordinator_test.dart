@@ -108,6 +108,10 @@ void main() {
           ],
         },
         selectedThreadIdsByProject: const <String, String>{},
+        projectLastOpenedAtByPath: <String, DateTime>{
+          projectDirectory.path: DateTime.utc(2026, 7, 21),
+          missingProjectPath: DateTime.utc(2026, 7, 20),
+        },
       ),
     );
     final coordinator = IdeSessionPersistenceCoordinator(
@@ -133,6 +137,9 @@ void main() {
       projectDirectory.path: 'thread-1',
     });
     expect(result.snapshot?.cachedThreadsByProject.keys, <String>[
+      projectDirectory.path,
+    ]);
+    expect(result.snapshot?.projectLastOpenedAtByPath.keys, <String>[
       projectDirectory.path,
     ]);
   });

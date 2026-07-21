@@ -11,6 +11,7 @@ import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
+import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
@@ -42,7 +43,7 @@ void main() {
     tester,
   ) async {
     // Arrange
-    final session = MemorySessionStore();
+    final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider();
     final configStore = MemoryAgentProviderConfigStore(
       AgentProviderSettings(
@@ -779,6 +780,7 @@ void main() {
   testWidgets('composer hides image and policy controls for Grok', (
     tester,
   ) async {
+    final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider(
       config: AgentProviderConfig.defaultGrok,
       declaredCapabilities: AgentProviderCapabilities.grokAcp,
@@ -787,8 +789,8 @@ void main() {
       MainApp(
         enableNativeWindowFrame: false,
         directoryPicker: () async => null,
-        sessionLoader: () async => null,
-        sessionSaver: (_) async {},
+        sessionLoader: session.load,
+        sessionSaver: session.save,
         agentProviderFactory: FakeAgentProviderFactory(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(
           const AgentProviderSettings(
@@ -1429,7 +1431,7 @@ void main() {
   testWidgets(
     'shows session total token usage in header and context window in composer while running',
     (tester) async {
-      final session = MemorySessionStore();
+      final session = activeProjectSessionStore(tempDirectories);
       final provider = FakeAgentProvider(
         completeTurns: false,
         sessionTitle: 'Running thread',
@@ -1456,6 +1458,7 @@ void main() {
         ),
       );
 
+      await pumpUntilAgentComposer(tester);
       await tester.enterText(
         find.byKey(const ValueKey('agent-message-input')),
         'Keep running',
@@ -1654,7 +1657,7 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
 
-    final session = MemorySessionStore();
+    final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider(
       completeTurns: false,
       sessionTitle: 'Long running thread title for narrow layout',
@@ -1681,6 +1684,7 @@ void main() {
       ),
     );
 
+    await pumpUntilAgentComposer(tester);
     await tester.enterText(
       find.byKey(const ValueKey('agent-message-input')),
       'Keep the layout stable',
@@ -1934,7 +1938,7 @@ void main() {
   });
 
   testWidgets('adds local agent messages from the composer', (tester) async {
-    final session = MemorySessionStore();
+    final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider();
 
     await tester.pumpWidget(
@@ -1947,6 +1951,7 @@ void main() {
       ),
     );
 
+    await pumpUntilAgentComposer(tester);
     await tester.enterText(
       find.byKey(const ValueKey('agent-message-input')),
       'Summarize the current work',
@@ -1973,7 +1978,7 @@ void main() {
   testWidgets('renders user messages as selectable text for copy', (
     tester,
   ) async {
-    final session = MemorySessionStore();
+    final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider();
 
     await tester.pumpWidget(
@@ -1986,6 +1991,7 @@ void main() {
       ),
     );
 
+    await pumpUntilAgentComposer(tester);
     await tester.enterText(
       find.byKey(const ValueKey('agent-message-input')),
       'Copy this user message',
@@ -2004,7 +2010,7 @@ void main() {
   testWidgets('keeps manual scroll position during live agent streaming', (
     tester,
   ) async {
-    final session = MemorySessionStore();
+    final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider(
       completeTurns: false,
       responseText: List<String>.generate(
@@ -2023,6 +2029,7 @@ void main() {
       ),
     );
 
+    await pumpUntilAgentComposer(tester);
     await tester.enterText(
       find.byKey(const ValueKey('agent-message-input')),
       'Keep streaming',
@@ -2061,7 +2068,7 @@ void main() {
   testWidgets('renders normalized message tool and reasoning order', (
     tester,
   ) async {
-    final session = MemorySessionStore();
+    final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider(completeTurns: false);
 
     await tester.pumpWidget(
@@ -2073,6 +2080,7 @@ void main() {
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
       ),
     );
+    await pumpUntilAgentComposer(tester);
     await tester.enterText(
       find.byKey(const ValueKey('agent-message-input')),
       'Check normalized order',
@@ -2204,7 +2212,7 @@ void main() {
   testWidgets('merges live tool calls into a single command group', (
     tester,
   ) async {
-    final session = MemorySessionStore();
+    final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider(completeTurns: false);
 
     await tester.pumpWidget(
@@ -2217,6 +2225,7 @@ void main() {
       ),
     );
 
+    await pumpUntilAgentComposer(tester);
     await tester.enterText(
       find.byKey(const ValueKey('agent-message-input')),
       'Run grouped tools',
@@ -2294,7 +2303,7 @@ void main() {
   testWidgets('renders live file edits as a separate expandable file edit group', (
     tester,
   ) async {
-    final session = MemorySessionStore();
+    final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider(completeTurns: false);
 
     await tester.pumpWidget(
@@ -2307,6 +2316,7 @@ void main() {
       ),
     );
 
+    await pumpUntilAgentComposer(tester);
     await tester.enterText(
       find.byKey(const ValueKey('agent-message-input')),
       'Apply a patch',
@@ -2438,7 +2448,7 @@ void main() {
   });
 
   testWidgets('shows completed commentary messages by default', (tester) async {
-    final session = MemorySessionStore();
+    final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider(
       responseText: 'Hidden commentary with `code`',
       emitCompletedCommentary: true,
@@ -2454,6 +2464,7 @@ void main() {
       ),
     );
 
+    await pumpUntilAgentComposer(tester);
     await tester.enterText(
       find.byKey(const ValueKey('agent-message-input')),
       'Explain internally',
@@ -2471,7 +2482,7 @@ void main() {
   testWidgets('renders final_answer agent messages as summary markdown cards', (
     tester,
   ) async {
-    final session = MemorySessionStore();
+    final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider(
       responseText:
           '- First markdown item\n\nInline `code` sample\n\n```dart\nvoid main() {}\n```',
@@ -2487,6 +2498,7 @@ void main() {
       ),
     );
 
+    await pumpUntilAgentComposer(tester);
     await tester.enterText(
       find.byKey(const ValueKey('agent-message-input')),
       'Render markdown',
@@ -2525,7 +2537,7 @@ void main() {
   testWidgets('does not render final-answer card for commentary-only turns', (
     tester,
   ) async {
-    final session = MemorySessionStore();
+    final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider(
       responseText: 'Only interim commentary',
       emitCompletedCommentary: true,
@@ -2541,6 +2553,7 @@ void main() {
       ),
     );
 
+    await pumpUntilAgentComposer(tester);
     await tester.enterText(
       find.byKey(const ValueKey('agent-message-input')),
       'Talk',
@@ -2675,7 +2688,7 @@ void main() {
   testWidgets('renders tool calls, approval cards, and approval responses', (
     tester,
   ) async {
-    final session = MemorySessionStore();
+    final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider(emitToolAndApproval: true);
 
     await tester.pumpWidget(
@@ -2688,6 +2701,7 @@ void main() {
       ),
     );
 
+    await pumpUntilAgentComposer(tester);
     await tester.enterText(
       find.byKey(const ValueKey('agent-message-input')),
       'Run the checks',
@@ -2772,7 +2786,7 @@ void main() {
   testWidgets('cancel button interrupts an active provider turn', (
     tester,
   ) async {
-    final session = MemorySessionStore();
+    final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider(completeTurns: false);
 
     await tester.pumpWidget(
@@ -2785,6 +2799,7 @@ void main() {
       ),
     );
 
+    await pumpUntilAgentComposer(tester);
     await tester.enterText(
       find.byKey(const ValueKey('agent-message-input')),
       'Keep working',
@@ -2804,7 +2819,7 @@ void main() {
   testWidgets('shows provider unavailable when the provider cannot start', (
     tester,
   ) async {
-    final session = MemorySessionStore();
+    final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider(unavailable: true);
 
     await tester.pumpWidget(
@@ -2817,6 +2832,7 @@ void main() {
       ),
     );
 
+    await pumpUntilAgentComposer(tester);
     await tester.enterText(
       find.byKey(const ValueKey('agent-message-input')),
       'Hello',
@@ -2827,6 +2843,31 @@ void main() {
 
     expect(find.textContaining('codex missing'), findsWidgets);
   });
+}
+
+MemorySessionStore activeProjectSessionStore(List<Directory> tempDirectories) {
+  final directory = Directory.systemTemp.createTempSync(
+    'zeta_agent_conversation_project_',
+  );
+  tempDirectories.add(directory);
+  return MemorySessionStore(
+    IdeSessionState(
+      projectPaths: <String>[directory.path],
+      activeProjectPath: directory.path,
+    ).encode(),
+  );
+}
+
+Future<void> pumpUntilAgentComposer(WidgetTester tester) {
+  return pumpUntilCondition(
+    tester,
+    () => find
+        .byKey(const ValueKey<String>('agent-message-input'))
+        .hitTestable()
+        .evaluate()
+        .isNotEmpty,
+    failureMessage: 'Agent composer did not become ready',
+  );
 }
 
 /// 运行中 turn 会持续播放 spinner；只推进足够渲染状态的有限帧。

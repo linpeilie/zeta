@@ -17,6 +17,7 @@ IdeSessionState buildIdeSessionState({
   required String? currentProjectPath,
   required String? currentSessionId,
   required bool projectHomeActive,
+  Map<String, DateTime> projectLastOpenedAtByPath = const <String, DateTime>{},
 }) {
   final mergedAgentThreadIds = Map<String, String>.from(
     agentThreadIdsByProject,
@@ -48,6 +49,9 @@ IdeSessionState buildIdeSessionState({
     cachedThreadsByProject:
         projectThreadsSessionSnapshot.cachedThreadsByProject,
     selectedThreadIdsByProject: mergedSelectedThreadIds,
+    projectLastOpenedAtByPath: Map<String, DateTime>.unmodifiable(
+      projectLastOpenedAtByPath,
+    ),
     projectHomeActive: projectHomeActive && activeProjectPath != null,
   );
 }
@@ -106,6 +110,10 @@ IdeSessionState sanitizeIdeSessionState(IdeSessionState state) {
       existingProjectSet,
     ),
     selectedThreadIdsByProject: selectedThreadIdsByProject,
+    projectLastOpenedAtByPath: _filterProjectMap(
+      state.projectLastOpenedAtByPath,
+      existingProjectSet,
+    ),
     projectHomeActive: activeProjectPath != null && state.projectHomeActive,
   );
 }

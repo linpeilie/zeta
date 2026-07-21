@@ -7,6 +7,8 @@ import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
+import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
@@ -17,6 +19,7 @@ import '../testing/ide_test_harness.dart';
 void main() {
   testWidgets('starts with the compact IDE panes', (tester) async {
     await _pumpIde(tester);
+    await tester.pump();
 
     expect(find.text('Zeta IDE'), findsNothing);
     expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
@@ -30,8 +33,9 @@ void main() {
     expect(find.byKey(const ValueKey('right-files-action')), findsOneWidget);
     expect(find.byKey(const ValueKey('right-tools-action')), findsOneWidget);
     expect(find.text('Projects'), findsOneWidget);
-    expect(find.byKey(const ValueKey('agent-header-title')), findsOneWidget);
-    expect(headerTitleText(tester), 'New thread');
+    expect(find.byKey(const ValueKey('global-home-page')), findsOneWidget);
+    expect(find.text('欢迎使用 Zeta'), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-header-title')), findsNothing);
     expect(find.text('Agent'), findsNothing);
     expect(find.text('Files'), findsNothing);
     expect(find.text('No folder opened'), findsOneWidget);
@@ -642,6 +646,167 @@ void main() {
     expect(headerTitleText(tester), 'Home thread 0');
     expect(_agentMessageInput().hitTestable(), findsOneWidget);
   });
+
+  testWidgets('opens a recent project from the global home', (tester) async {
+    final directory = Directory.systemTemp.createTempSync(
+      'zeta_global_home_project_',
+    );
+    addTearDown(() {
+      if (directory.existsSync()) {
+        directory.deleteSync(recursive: true);
+      }
+    });
+    final thread = agentThread(
+      id: 'recent-project-thread',
+      projectPath: directory.path,
+      title: 'Recent project thread',
+      lastActiveAt: DateTime.utc(2026, 7, 21, 12),
+    );
+    final session = IdeSessionState(
+      projectPaths: <String>[directory.path],
+      projectLastOpenedAtByPath: <String, DateTime>{
+        directory.path: DateTime.utc(2026, 7, 21, 13),
+      },
+      projectThreadExpansionByProject: <String, bool>{directory.path: false},
+      cachedThreadsByProject: <String, List<AgentThreadSummary>>{
+        directory.path: <AgentThreadSummary>[thread],
+      },
+    );
+    final provider = FakeAgentProvider(
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[thread],
+          nextCursor: null,
+        ),
+      ],
+    );
+
+    await _pumpIde(
+      tester,
+      initialSessionJson: session.encode(),
+      agentProviderFactory: FakeAgentProviderFactory(provider),
+      agentProviderConfigStore: MemoryAgentProviderConfigStore(
+        const AgentProviderSettings(
+          providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
+        ),
+      ),
+      homeProviderDetectionLoader: () async => <ManagedAgent>[
+        _installedAgent(AgentDefinition.codex),
+        ManagedAgent.forDefinition(
+          definition: AgentDefinition.grok,
+          enabled: true,
+        ).copyWith(installationState: AgentInstallationState.notInstalled),
+      ],
+    );
+    await pumpUntilCondition(
+      tester,
+      () => find
+          .byKey(ValueKey<String>('global-home-project-${directory.path}'))
+          .evaluate()
+          .isNotEmpty,
+      failureMessage: 'Global home recent project did not become ready',
+    );
+
+    expect(find.text('Codex CLI'), findsOneWidget);
+    expect(find.text('Grok CLI'), findsNothing);
+    await tester.tap(
+      find.byKey(ValueKey<String>('global-home-project-${directory.path}')),
+    );
+    await tester.runAsync(waitForIo);
+    await pumpUntilCondition(
+      tester,
+      () => find
+          .byKey(const ValueKey<String>('project-home-header'))
+          .evaluate()
+          .isNotEmpty,
+      failureMessage: 'Recent project did not open its project home',
+    );
+
+    expect(find.text(directory.path), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-header-title')), findsNothing);
+  });
+
+  testWidgets('opens a recent thread from the global home', (tester) async {
+    final directory = Directory.systemTemp.createTempSync(
+      'zeta_global_home_thread_',
+    );
+    addTearDown(() {
+      if (directory.existsSync()) {
+        directory.deleteSync(recursive: true);
+      }
+    });
+    final thread = agentThread(
+      id: 'recent-home-thread',
+      projectPath: directory.path,
+      title: 'Recent home thread',
+      lastActiveAt: DateTime.utc(2026, 7, 21, 14),
+    );
+    final session = IdeSessionState(
+      projectPaths: <String>[directory.path],
+      projectThreadExpansionByProject: <String, bool>{directory.path: false},
+      cachedThreadsByProject: <String, List<AgentThreadSummary>>{
+        directory.path: <AgentThreadSummary>[thread],
+      },
+    );
+    final provider = FakeAgentProvider(
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[thread],
+          nextCursor: null,
+        ),
+      ],
+      threadHistories: <String, AgentThreadHistorySnapshot>{
+        thread.id: AgentThreadHistorySnapshot(
+          threadId: thread.id,
+          turns: <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'recent-home-turn',
+              status: AgentHistoryTurnStatus.completed,
+              entries: const <AgentHistoryEntry>[],
+            ),
+          ],
+        ),
+      },
+    );
+
+    await _pumpIde(
+      tester,
+      initialSessionJson: session.encode(),
+      agentProviderFactory: FakeAgentProviderFactory(provider),
+      agentProviderConfigStore: MemoryAgentProviderConfigStore(
+        const AgentProviderSettings(
+          providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
+        ),
+      ),
+    );
+    final recentThread = find.byKey(
+      const ValueKey<String>('global-home-thread-codex-recent-home-thread'),
+    );
+    await pumpUntilCondition(
+      tester,
+      () => recentThread.evaluate().isNotEmpty,
+      failureMessage: 'Global home recent thread did not become ready',
+    );
+
+    await tester.tap(recentThread);
+    await tester.runAsync(waitForIo);
+    await pumpUntilCondition(
+      tester,
+      () =>
+          find
+              .byKey(const ValueKey('agent-header-title'))
+              .evaluate()
+              .isNotEmpty &&
+          headerTitleText(tester) == 'Recent home thread',
+      failureMessage: 'Recent thread did not open its Agent canvas',
+    );
+
+    expect(_agentMessageInput().hitTestable(), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('global-home-page')),
+      findsNothing,
+    );
+  });
 }
 
 Future<void> _pumpIde(
@@ -652,6 +817,8 @@ Future<void> _pumpIde(
   AgentProviderFactory? agentProviderFactory,
   AgentProviderConfigStore? agentProviderConfigStore,
   AgentUsagePanelRepository? agentUsagePanelRepository,
+  String? initialSessionJson,
+  Future<List<ManagedAgent>> Function()? homeProviderDetectionLoader,
 }) async {
   tester.view
     ..physicalSize = size
@@ -662,7 +829,7 @@ Future<void> _pumpIde(
       ..resetDevicePixelRatio();
   });
 
-  final session = MemorySessionStore();
+  final session = MemorySessionStore(initialSessionJson);
 
   await tester.pumpWidget(
     MainApp(
@@ -673,9 +840,21 @@ Future<void> _pumpIde(
       sessionSaver: session.save,
       agentProviderFactory: agentProviderFactory,
       agentProviderConfigStore: agentProviderConfigStore,
+      homeProviderDetectionLoader: homeProviderDetectionLoader,
       agentUsagePanelRepository:
           agentUsagePanelRepository ?? const _EmptyAgentUsageRepository(),
     ),
+  );
+}
+
+ManagedAgent _installedAgent(AgentDefinition definition) {
+  return ManagedAgent.forDefinition(
+    definition: definition,
+    enabled: true,
+  ).copyWith(
+    installationState: AgentInstallationState.installed,
+    runtimeState: AgentRuntimeState.idle,
+    currentVersion: '1.0.0',
   );
 }
 

@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
-const int sessionStateVersion = 3;
+const int sessionStateVersion = 4;
 
 /// IDE 会话快照。
 ///
@@ -20,6 +20,7 @@ class IdeSessionState {
     this.projectThreadExpansionByProject = const <String, bool>{},
     this.cachedThreadsByProject = const <String, List<AgentThreadSummary>>{},
     this.selectedThreadIdsByProject = const <String, String>{},
+    this.projectLastOpenedAtByPath = const <String, DateTime>{},
     this.projectHomeActive = false,
   });
 
@@ -49,6 +50,9 @@ class IdeSessionState {
   /// 每个项目当前选中的 thread id。
   final Map<String, String> selectedThreadIdsByProject;
 
+  /// 项目最近一次成功进入的时间，用于全局首页按 MRU 排序。
+  final Map<String, DateTime> projectLastOpenedAtByPath;
+
   /// 当前活动项目是否停留在不带输入框的项目首页。
   ///
   /// 它用于区分同样没有真实 thread id 的项目首页与新建 Thread 草稿。
@@ -75,6 +79,10 @@ class IdeSessionState {
           entry.key: entry.value.map((thread) => thread.toJson()).toList(),
       },
       'selectedThreadIdsByProject': selectedThreadIdsByProject,
+      'projectLastOpenedAtByPath': <String, String>{
+        for (final entry in projectLastOpenedAtByPath.entries)
+          entry.key: entry.value.toIso8601String(),
+      },
       'projectHomeActive': projectHomeActive,
     };
   }
@@ -94,7 +102,10 @@ class IdeSessionState {
       }
 
       final version = decoded['version'];
-      if (version != 1 && version != 2 && version != sessionStateVersion) {
+      if (version != 1 &&
+          version != 2 &&
+          version != 3 &&
+          version != sessionStateVersion) {
         return const IdeSessionState();
       }
 
@@ -119,8 +130,11 @@ class IdeSessionState {
         selectedThreadIdsByProject: _stringMap(
           decoded['selectedThreadIdsByProject'],
         ),
+        projectLastOpenedAtByPath: _dateTimeMap(
+          decoded['projectLastOpenedAtByPath'],
+        ),
         projectHomeActive:
-            version == sessionStateVersion &&
+            (version == 3 || version == sessionStateVersion) &&
             decoded['projectHomeActive'] == true,
       );
     } catch (_) {
@@ -175,6 +189,33 @@ class IdeSessionState {
       final item = entry.value;
       if (entry.key.isNotEmpty && item is bool) {
         result[entry.key] = item;
+      }
+    }
+    return result;
+  }
+
+  static Map<String, DateTime> _dateTimeMap(Object? value) {
+    if (value is! Map<String, Object?>) {
+      return const <String, DateTime>{};
+    }
+
+    final result = <String, DateTime>{};
+    for (final entry in value.entries) {
+      final encoded = entry.value;
+      if (entry.key.isEmpty) {
+        continue;
+      }
+      try {
+        final decoded = switch (encoded) {
+          final String value => DateTime.tryParse(value),
+          final int value => DateTime.fromMillisecondsSinceEpoch(value),
+          _ => null,
+        };
+        if (decoded != null) {
+          result[entry.key] = decoded;
+        }
+      } on ArgumentError {
+        // 单个损坏时间字段不应让整个 IDE 会话失效。
       }
     }
     return result;
