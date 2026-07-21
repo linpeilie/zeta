@@ -140,31 +140,40 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
     return ColoredBox(
       key: const ValueKey<String>('project-home-header'),
       color: colors.canvasSurface,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(
-            projectName,
-            key: const ValueKey<String>('project-home-name'),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.start,
-            style: textStyles.pageTitle,
-          ),
-          const SizedBox(height: IdeSpacing.space6),
-          IdeTooltip(
-            message: widget.projectPath,
-            child: Text(
-              widget.projectPath,
-              key: const ValueKey<String>('project-home-path'),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.start,
-              style: textStyles.codeSmall.copyWith(color: colors.textSecondary),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  projectName,
+                  key: const ValueKey<String>('project-home-name'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.start,
+                  style: textStyles.pageTitle,
+                ),
+                const SizedBox(height: IdeSpacing.space6),
+                IdeTooltip(
+                  message: widget.projectPath,
+                  child: Text(
+                    widget.projectPath,
+                    key: const ValueKey<String>('project-home-path'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.start,
+                    style: textStyles.codeSmall.copyWith(
+                      color: colors.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: IdeSpacing.space16),
+          const SizedBox(width: IdeSpacing.space20),
           KeyedSubtree(
             key: _newThreadButtonKey,
             child: _FlatActionButton(

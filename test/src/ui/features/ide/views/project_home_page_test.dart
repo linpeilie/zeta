@@ -57,7 +57,7 @@ void main() {
   });
 
   testWidgets(
-    'centers the flat module while keeping its content left aligned',
+    'centers the flat module and keeps the new thread action at the header end',
     (tester) async {
       await pumpIdeComponent(
         tester,
@@ -89,6 +89,11 @@ void main() {
             find.byKey(const ValueKey<String>('project-home-centered-content')),
           )
           .dx;
+      final contentRight = tester
+          .getTopRight(
+            find.byKey(const ValueKey<String>('project-home-centered-content')),
+          )
+          .dx;
       for (final key in <String>[
         'project-home-name',
         'project-home-path',
@@ -111,6 +116,19 @@ void main() {
         tester.widget<Text>(find.text('Thread 0')).textAlign,
         TextAlign.start,
       );
+
+      final nameRect = tester.getRect(
+        find.byKey(const ValueKey<String>('project-home-name')),
+      );
+      final pathRect = tester.getRect(
+        find.byKey(const ValueKey<String>('project-home-path')),
+      );
+      final newThreadButtonRect = tester.getRect(
+        find.byKey(const ValueKey<String>('project-home-new-thread-button')),
+      );
+      expect(newThreadButtonRect.right, closeTo(contentRight, 0.5));
+      expect(newThreadButtonRect.bottom, greaterThan(nameRect.top));
+      expect(newThreadButtonRect.top, lessThan(pathRect.bottom));
       expect(
         find.descendant(
           of: find.byType(ProjectHomePage),
