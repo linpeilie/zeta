@@ -27,6 +27,9 @@ abstract final class IdeMotion {
   /// （`agent_pane_sections`）；配合 [curvePopup] 的弹出感动画。
   static const Duration durationSlow = Duration(milliseconds: 260);
 
+  /// 持续加载提示的呼吸周期，例如 Provider Tab 的文字透明度脉冲。
+  static const Duration durationLoadingPulse = Duration(milliseconds: 900);
+
   /// [durationFast] 的简短别名。
   static const Duration fast = durationFast;
 

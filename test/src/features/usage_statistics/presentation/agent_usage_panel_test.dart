@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
@@ -12,41 +14,7 @@ import 'package:zeta/src/ui/core/app_theme.dart';
 void main() {
   testWidgets('按 Provider Tab 展示今日 Token，并只展示可用套餐', (tester) async {
     final controller = AgentUsagePanelController(
-      repository: _PanelRepository(
-        AgentUsagePanelSnapshot(
-          refreshedAt: DateTime(2026, 7, 21, 12),
-          entries: <AgentUsagePanelEntry>[
-            AgentUsagePanelEntry(
-              providerId: 'codex-work',
-              providerName: 'Codex Work',
-              todayTokens: const UsageTokenBreakdown(
-                inputTokens: 1200,
-                cachedInputTokens: 300,
-                outputTokens: 400,
-                reasoningTokens: 100,
-                totalTokens: 1600,
-              ),
-              quota: AgentUsageQuotaSnapshot(
-                providerId: 'codex-work',
-                providerName: 'Codex Work',
-                planType: 'plus',
-                windows: <AgentUsageWindow>[
-                  AgentUsageWindow(
-                    label: '5 小时',
-                    usedPercent: 25,
-                    resetsAt: DateTime(2026, 7, 21, 15),
-                  ),
-                  const AgentUsageWindow(label: '周', usedPercent: 40),
-                ],
-              ),
-            ),
-            const AgentUsagePanelEntry(
-              providerId: 'grok-personal',
-              providerName: 'Grok Personal',
-            ),
-          ],
-        ),
-      ),
+      repository: _ImmediatePanelRepository(_usageEntries),
     );
     addTearDown(controller.dispose);
 
@@ -73,7 +41,162 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('失败时提供重试入口', (tester) async {
+  testWidgets('目录到达即展示 Tabs，单项完成后独立停止呼吸动画', (tester) async {
+    final repository = _ControlledPanelRepository();
+    final controller = AgentUsagePanelController(repository: repository);
+    addTearDown(controller.dispose);
+    await _pumpPanel(tester, controller);
+
+    final events = repository.controllers.single;
+    events.add(_directoryFor(_usageEntries));
+    await tester.pump();
+
+    final codexTab = find.byKey(const ValueKey('agent-usage-tab-codex-work'));
+    final grokTab = find.byKey(const ValueKey('agent-usage-tab-grok-personal'));
+    expect(find.byKey(const ValueKey('agent-usage-tabs')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: codexTab,
+        matching: find.byKey(const ValueKey('ide-tab-loading-label')),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: grokTab,
+        matching: find.byKey(const ValueKey('ide-tab-loading-label')),
+      ),
+      findsOneWidget,
+    );
+    expect(find.bySemanticsLabel('Codex Work，正在加载'), findsOneWidget);
+
+    events.add(AgentUsagePanelProviderLoaded(_usageEntries.first));
+    await tester.pump();
+    expect(
+      find.descendant(
+        of: codexTab,
+        matching: find.byKey(const ValueKey('ide-tab-loading-label')),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: grokTab,
+        matching: find.byKey(const ValueKey('ide-tab-loading-label')),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(grokTab);
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('agent-usage-provider-loading-grok-personal')),
+      findsOneWidget,
+    );
+    expect(find.text('正在读取 Grok Personal 用量…'), findsOneWidget);
+
+    events
+      ..add(AgentUsagePanelProviderLoaded(_usageEntries.last))
+      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21, 12)))
+      ..close();
+    await tester.pump();
+  });
+
+  testWidgets('可容纳的 Provider Tab 组在面板内水平居中', (tester) async {
+    final controller = AgentUsagePanelController(
+      repository: _ImmediatePanelRepository(_usageEntries),
+    );
+    addTearDown(controller.dispose);
+    await _pumpPanel(tester, controller, width: 420);
+
+    final panelCenter = tester.getCenter(
+      find.byKey(const ValueKey('context-panel-card')),
+    );
+    final tabsCenter = tester.getCenter(find.byType(sf.Tabs));
+
+    expect(tabsCenter.dx, closeTo(panelCenter.dx, 1));
+  });
+
+  testWidgets('Provider Tabs 超宽时可横向滚动且不溢出', (tester) async {
+    final entries = <AgentUsagePanelEntry>[
+      for (var index = 0; index < 6; index++)
+        AgentUsagePanelEntry(
+          providerId: 'provider-$index',
+          providerName: 'Provider $index Very Long Name',
+        ),
+    ];
+    final controller = AgentUsagePanelController(
+      repository: _ImmediatePanelRepository(entries),
+    );
+    addTearDown(controller.dispose);
+    await _pumpPanel(tester, controller, width: 260);
+
+    final tabs = find.byKey(const ValueKey('agent-usage-tabs'));
+    final horizontalScroll = find.descendant(
+      of: tabs,
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is SingleChildScrollView &&
+            widget.scrollDirection == Axis.horizontal,
+      ),
+    );
+    expect(horizontalScroll, findsOneWidget);
+
+    await tester.drag(horizontalScroll, const Offset(-180, 0));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('刷新保留旧内容，并在失败后附加局部错误', (tester) async {
+    final repository = _RefreshPanelRepository(_usageEntries.first);
+    final controller = AgentUsagePanelController(repository: repository);
+    addTearDown(controller.dispose);
+    await _pumpPanel(tester, controller);
+    expect(find.text('1.6K'), findsOneWidget);
+
+    final refresh = controller.refresh();
+    await tester.pump();
+    expect(find.text('1.6K'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('agent-usage-provider-refreshing-codex-work')),
+      findsOneWidget,
+    );
+
+    final events = repository.refreshEvents;
+    events
+      ..add(_directoryFor(<AgentUsagePanelEntry>[_usageEntries.first]))
+      ..add(
+        const AgentUsagePanelProviderFailed(
+          provider: AgentUsagePanelProvider(
+            providerId: 'codex-work',
+            providerName: 'Codex Work',
+          ),
+          message: 'Codex 暂时不可用',
+        ),
+      )
+      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21, 13)))
+      ..close();
+    await refresh;
+    await tester.pump();
+
+    expect(find.text('1.6K'), findsOneWidget);
+    expect(find.text('Codex 暂时不可用'), findsOneWidget);
+  });
+
+  testWidgets('单 Provider 不显示 Tabs', (tester) async {
+    final controller = AgentUsagePanelController(
+      repository: _ImmediatePanelRepository(<AgentUsagePanelEntry>[
+        _usageEntries.first,
+      ]),
+    );
+    addTearDown(controller.dispose);
+    await _pumpPanel(tester, controller);
+
+    expect(find.byKey(const ValueKey('agent-usage-tabs')), findsNothing);
+    expect(find.text('Codex Work'), findsOneWidget);
+  });
+
+  testWidgets('目录加载失败时提供重试入口', (tester) async {
     final repository = _RetryRepository();
     final controller = AgentUsagePanelController(repository: repository);
     addTearDown(controller.dispose);
@@ -90,12 +213,58 @@ void main() {
   });
 }
 
+final _usageEntries = <AgentUsagePanelEntry>[
+  AgentUsagePanelEntry(
+    providerId: 'codex-work',
+    providerName: 'Codex Work',
+    todayTokens: const UsageTokenBreakdown(
+      inputTokens: 1200,
+      cachedInputTokens: 300,
+      outputTokens: 400,
+      reasoningTokens: 100,
+      totalTokens: 1600,
+    ),
+    quota: AgentUsageQuotaSnapshot(
+      providerId: 'codex-work',
+      providerName: 'Codex Work',
+      planType: 'plus',
+      windows: <AgentUsageWindow>[
+        AgentUsageWindow(
+          label: '5 小时',
+          usedPercent: 25,
+          resetsAt: DateTime(2026, 7, 21, 15),
+        ),
+        const AgentUsageWindow(label: '周', usedPercent: 40),
+      ],
+    ),
+  ),
+  const AgentUsagePanelEntry(
+    providerId: 'grok-personal',
+    providerName: 'Grok Personal',
+  ),
+];
+
+AgentUsagePanelProvidersDiscovered _directoryFor(
+  List<AgentUsagePanelEntry> entries,
+) {
+  return AgentUsagePanelProvidersDiscovered(
+    providers: <AgentUsagePanelProvider>[
+      for (final entry in entries)
+        AgentUsagePanelProvider(
+          providerId: entry.providerId,
+          providerName: entry.providerName,
+        ),
+    ],
+  );
+}
+
 Future<void> _pumpPanel(
   WidgetTester tester,
-  AgentUsagePanelController controller,
-) async {
+  AgentUsagePanelController controller, {
+  double width = 320,
+}) async {
   tester.view
-    ..physicalSize = const Size(320, 520)
+    ..physicalSize = Size(width, 520)
     ..devicePixelRatio = 1;
   addTearDown(() {
     tester.view
@@ -125,14 +294,48 @@ Future<void> _pumpPanel(
   await tester.pump();
 }
 
-class _PanelRepository implements AgentUsagePanelRepository {
-  const _PanelRepository(this.snapshot);
+class _ImmediatePanelRepository implements AgentUsagePanelRepository {
+  const _ImmediatePanelRepository(this.entries);
 
-  final AgentUsagePanelSnapshot snapshot;
+  final List<AgentUsagePanelEntry> entries;
 
   @override
-  Future<AgentUsagePanelSnapshot> load({bool forceRefresh = false}) async {
-    return snapshot;
+  Stream<AgentUsagePanelLoadEvent> load({bool forceRefresh = false}) async* {
+    yield _directoryFor(entries);
+    for (final entry in entries) {
+      yield AgentUsagePanelProviderLoaded(entry);
+    }
+    yield AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21, 12));
+  }
+}
+
+class _ControlledPanelRepository implements AgentUsagePanelRepository {
+  final List<StreamController<AgentUsagePanelLoadEvent>> controllers =
+      <StreamController<AgentUsagePanelLoadEvent>>[];
+
+  @override
+  Stream<AgentUsagePanelLoadEvent> load({bool forceRefresh = false}) {
+    final controller = StreamController<AgentUsagePanelLoadEvent>();
+    controllers.add(controller);
+    return controller.stream;
+  }
+}
+
+class _RefreshPanelRepository implements AgentUsagePanelRepository {
+  _RefreshPanelRepository(this.entry);
+
+  final AgentUsagePanelEntry entry;
+  var _loadCount = 0;
+  late final StreamController<AgentUsagePanelLoadEvent> refreshEvents;
+
+  @override
+  Stream<AgentUsagePanelLoadEvent> load({bool forceRefresh = false}) {
+    _loadCount += 1;
+    if (_loadCount == 1) {
+      return _ImmediatePanelRepository(<AgentUsagePanelEntry>[entry]).load();
+    }
+    refreshEvents = StreamController<AgentUsagePanelLoadEvent>();
+    return refreshEvents.stream;
   }
 }
 
@@ -140,14 +343,14 @@ class _RetryRepository implements AgentUsagePanelRepository {
   var loadCount = 0;
 
   @override
-  Future<AgentUsagePanelSnapshot> load({bool forceRefresh = false}) async {
+  Stream<AgentUsagePanelLoadEvent> load({bool forceRefresh = false}) async* {
     loadCount += 1;
     if (loadCount == 1) {
       throw StateError('offline');
     }
-    return AgentUsagePanelSnapshot(
-      entries: const <AgentUsagePanelEntry>[],
-      refreshedAt: DateTime(2026, 7, 21),
+    yield AgentUsagePanelProvidersDiscovered(
+      providers: const <AgentUsagePanelProvider>[],
     );
+    yield AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21));
   }
 }

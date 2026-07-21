@@ -49,6 +49,88 @@ void main() {
 
     await tester.pumpAndSettle();
   });
+
+  testWidgets('IdeTabs 加载项只让文字呼吸并补充加载语义', (tester) async {
+    await tester.pumpWidget(
+      _ThemeHarness(
+        child: IdeTabs<String>(
+          value: 'codex',
+          items: const <IdeTabItem<String>>[
+            IdeTabItem<String>(
+              key: ValueKey('loading-tab'),
+              value: 'codex',
+              label: 'Codex',
+              loading: true,
+            ),
+          ],
+          onChanged: (_) {},
+        ),
+      ),
+    );
+
+    final tab = find.byKey(const ValueKey('loading-tab'));
+    expect(find.bySemanticsLabel('Codex，正在加载'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: tab,
+        matching: find.byKey(const ValueKey('ide-tab-loading-label')),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: tab, matching: find.byType(AnimatedContainer)),
+      findsWidgets,
+    );
+
+    await tester.pumpWidget(
+      _ThemeHarness(
+        child: IdeTabs<String>(
+          value: 'codex',
+          items: const <IdeTabItem<String>>[
+            IdeTabItem<String>(
+              key: ValueKey('loading-tab'),
+              value: 'codex',
+              label: 'Codex',
+            ),
+          ],
+          onChanged: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.bySemanticsLabel('Codex'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: tab,
+        matching: find.byKey(const ValueKey('ide-tab-loading-label')),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('IdeTabs 在减少动态效果时静态弱化加载文字', (tester) async {
+    await tester.pumpWidget(
+      _ThemeHarness(
+        disableAnimations: true,
+        child: IdeTabs<String>(
+          value: 'codex',
+          items: const <IdeTabItem<String>>[
+            IdeTabItem<String>(value: 'codex', label: 'Codex', loading: true),
+          ],
+          onChanged: (_) {},
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('ide-tab-loading-label')), findsNothing);
+    final opacity = tester.widget<Opacity>(
+      find.byKey(const ValueKey('ide-tab-loading-label-reduced-motion')),
+    );
+    expect(opacity.opacity, 0.72);
+    await tester.pumpAndSettle();
+    expect(tester.binding.hasScheduledFrame, isFalse);
+  });
 }
 
 class _TabsHarness extends StatefulWidget {
@@ -137,9 +219,10 @@ class _StandaloneTabsHarnessState extends State<_StandaloneTabsHarness> {
 }
 
 class _ThemeHarness extends StatelessWidget {
-  const _ThemeHarness({required this.child});
+  const _ThemeHarness({required this.child, this.disableAnimations = false});
 
   final Widget child;
+  final bool disableAnimations;
 
   @override
   Widget build(BuildContext context) {
@@ -160,8 +243,28 @@ class _ThemeHarness extends StatelessWidget {
         darkTheme: buildShadcnTheme(darkIdeTheme),
         materialTheme: buildMaterialTheme(lightIdeTheme),
         themeMode: sf.ThemeMode.light,
-        home: sf.Scaffold(child: Center(child: child)),
+        home: _MotionHarness(
+          disableAnimations: disableAnimations,
+          child: sf.Scaffold(child: Center(child: child)),
+        ),
       ),
+    );
+  }
+}
+
+class _MotionHarness extends StatelessWidget {
+  const _MotionHarness({required this.disableAnimations, required this.child});
+
+  final bool disableAnimations;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return MediaQuery(
+      data: MediaQuery.of(
+        context,
+      ).copyWith(disableAnimations: disableAnimations),
+      child: child,
     );
   }
 }

@@ -683,11 +683,11 @@ class _EmptyAgentUsageRepository implements AgentUsagePanelRepository {
   const _EmptyAgentUsageRepository();
 
   @override
-  Future<AgentUsagePanelSnapshot> load({bool forceRefresh = false}) async {
-    return AgentUsagePanelSnapshot(
-      entries: const <AgentUsagePanelEntry>[],
-      refreshedAt: DateTime(2026, 7, 21),
+  Stream<AgentUsagePanelLoadEvent> load({bool forceRefresh = false}) async* {
+    yield AgentUsagePanelProvidersDiscovered(
+      providers: const <AgentUsagePanelProvider>[],
     );
+    yield AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21));
   }
 }
 

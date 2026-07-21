@@ -31,16 +31,28 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
   final DateTime Function() _clock;
 
   @override
-  Future<AgentUsagePanelSnapshot> load({bool forceRefresh = false}) async {
+  Stream<AgentUsagePanelLoadEvent> load({bool forceRefresh = false}) async* {
+    final seedFuture = _loadSeed();
     final configs = await enabledProviderLoader();
-    final seed = await _loadSeed();
-    final entries = <AgentUsagePanelEntry>[];
-    for (final config in configs) {
-      entries.add(
-        await _loadProvider(config, seed: seed, forceRefresh: forceRefresh),
-      );
+    final providers = <AgentUsagePanelProvider>[
+      for (final config in configs) _providerSummary(config),
+    ];
+
+    // 在发布目录前创建全部 Future，确保 UI 收到 Tabs 时各 Provider 已并行加载。
+    final providerLoads = <Future<AgentUsagePanelLoadEvent>>[
+      for (final config in configs)
+        _loadProvider(
+          config,
+          seedFuture: seedFuture,
+          forceRefresh: forceRefresh,
+        ),
+    ];
+
+    yield AgentUsagePanelProvidersDiscovered(providers: providers);
+    if (providerLoads.isNotEmpty) {
+      yield* Stream<AgentUsagePanelLoadEvent>.fromFutures(providerLoads);
     }
-    return AgentUsagePanelSnapshot(entries: entries, refreshedAt: _clock());
+    yield AgentUsagePanelLoadCompleted(_clock());
   }
 
   Future<UsageStatisticsIndexSnapshot> _loadSeed() async {
@@ -51,9 +63,9 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
     }
   }
 
-  Future<AgentUsagePanelEntry> _loadProvider(
+  Future<AgentUsagePanelLoadEvent> _loadProvider(
     AgentProviderConfig config, {
-    required UsageStatisticsIndexSnapshot seed,
+    required Future<UsageStatisticsIndexSnapshot> seedFuture,
     required bool forceRefresh,
   }) async {
     AgentProvider? provider;
@@ -61,16 +73,19 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
       provider = await providerLoader(config);
       final quota = await _readQuota(provider);
       if (config.kind != AgentProviderKind.codexAppServer) {
-        return AgentUsagePanelEntry(
-          providerId: config.id,
-          providerName: config.displayName,
-          quota: quota,
+        return AgentUsagePanelProviderLoaded(
+          AgentUsagePanelEntry(
+            providerId: config.id,
+            providerName: config.displayName,
+            quota: quota,
+          ),
         );
       }
 
       UsageTokenBreakdown? todayTokens;
       String? message;
       try {
+        final seed = await seedFuture;
         final memoryIndex = MemoryUsageStatisticsIndexStore()..snapshot = seed;
         final now = _clock();
         final source =
@@ -92,17 +107,18 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
       } catch (_) {
         message = '今日 Token 暂时无法读取';
       }
-      return AgentUsagePanelEntry(
-        providerId: config.id,
-        providerName: config.displayName,
-        todayTokens: todayTokens,
-        quota: quota,
-        message: message,
+      return AgentUsagePanelProviderLoaded(
+        AgentUsagePanelEntry(
+          providerId: config.id,
+          providerName: config.displayName,
+          todayTokens: todayTokens,
+          quota: quota,
+          message: message,
+        ),
       );
     } catch (_) {
-      return AgentUsagePanelEntry(
-        providerId: config.id,
-        providerName: config.displayName,
+      return AgentUsagePanelProviderFailed(
+        provider: _providerSummary(config),
         message: '当前 Agent 暂时无法连接',
       );
     } finally {
@@ -114,6 +130,13 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
         }
       }
     }
+  }
+
+  AgentUsagePanelProvider _providerSummary(AgentProviderConfig config) {
+    return AgentUsagePanelProvider(
+      providerId: config.id,
+      providerName: config.displayName,
+    );
   }
 
   Future<AgentUsageQuotaSnapshot?> _readQuota(AgentProvider provider) async {

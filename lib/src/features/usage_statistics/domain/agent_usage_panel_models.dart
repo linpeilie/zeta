@@ -29,18 +29,57 @@ class AgentUsagePanelEntry {
   }
 }
 
-/// Agent 统计面板的一次完整刷新结果。
-class AgentUsagePanelSnapshot {
-  AgentUsagePanelSnapshot({
-    required List<AgentUsagePanelEntry> entries,
-    required this.refreshedAt,
-  }) : entries = List<AgentUsagePanelEntry>.unmodifiable(entries);
+/// Agent 统计面板中可选择的 Provider 摘要。
+class AgentUsagePanelProvider {
+  const AgentUsagePanelProvider({
+    required this.providerId,
+    required this.providerName,
+  });
 
-  final List<AgentUsagePanelEntry> entries;
+  final String providerId;
+  final String providerName;
+}
+
+/// Agent 统计面板渐进式加载事件。
+sealed class AgentUsagePanelLoadEvent {
+  const AgentUsagePanelLoadEvent();
+}
+
+/// 已发现本轮所有可展示的 Provider。
+class AgentUsagePanelProvidersDiscovered extends AgentUsagePanelLoadEvent {
+  AgentUsagePanelProvidersDiscovered({
+    required List<AgentUsagePanelProvider> providers,
+  }) : providers = List<AgentUsagePanelProvider>.unmodifiable(providers);
+
+  final List<AgentUsagePanelProvider> providers;
+}
+
+/// 单个 Provider 已成功完成加载。
+class AgentUsagePanelProviderLoaded extends AgentUsagePanelLoadEvent {
+  const AgentUsagePanelProviderLoaded(this.entry);
+
+  final AgentUsagePanelEntry entry;
+}
+
+/// 单个 Provider 加载失败，不阻断其他 Provider。
+class AgentUsagePanelProviderFailed extends AgentUsagePanelLoadEvent {
+  const AgentUsagePanelProviderFailed({
+    required this.provider,
+    required this.message,
+  });
+
+  final AgentUsagePanelProvider provider;
+  final String message;
+}
+
+/// 本轮所有 Provider 均已结束加载。
+class AgentUsagePanelLoadCompleted extends AgentUsagePanelLoadEvent {
+  const AgentUsagePanelLoadCompleted(this.refreshedAt);
+
   final DateTime refreshedAt;
 }
 
 /// Agent 统计面板的数据契约。
 abstract interface class AgentUsagePanelRepository {
-  Future<AgentUsagePanelSnapshot> load({bool forceRefresh = false});
+  Stream<AgentUsagePanelLoadEvent> load({bool forceRefresh = false});
 }

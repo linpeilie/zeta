@@ -70,7 +70,7 @@ class _AgentUsagePanelBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (controller.entries.isEmpty) {
+    if (controller.providers.isEmpty) {
       if (controller.isLoading) {
         return const Center(
           child: Column(
@@ -92,11 +92,11 @@ class _AgentUsagePanelBody extends StatelessWidget {
       return const EmptyState(text: '暂无已启用的 Agent');
     }
 
-    final selected = controller.selectedEntry!;
+    final selected = controller.selectedProvider!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (controller.entries.length > 1)
+        if (controller.providers.length > 1)
           Padding(
             padding: const EdgeInsets.fromLTRB(
               IdeSpacing.space8,
@@ -106,23 +106,29 @@ class _AgentUsagePanelBody extends StatelessWidget {
             ),
             child: IdeTabs<String>(
               key: const ValueKey('agent-usage-tabs'),
-              value: selected.providerId,
+              value: selected.provider.providerId,
               semanticLabel: '选择 Agent 用量',
+              scrollContentAlignment: Alignment.center,
               items: [
-                for (final entry in controller.entries)
+                for (final state in controller.providers)
                   IdeTabItem<String>(
                     key: ValueKey<String>(
-                      'agent-usage-tab-${entry.providerId}',
+                      'agent-usage-tab-${state.provider.providerId}',
                     ),
-                    value: entry.providerId,
-                    label: entry.providerName,
+                    value: state.provider.providerId,
+                    label: state.provider.providerName,
+                    loading: state.isLoading,
                   ),
               ],
               onChanged: controller.selectProvider,
             ),
           ),
-        if (controller.isLoading)
-          const Padding(
+        if (selected.entry != null && selected.isLoading)
+          Padding(
+            key: ValueKey<String>(
+              'agent-usage-provider-refreshing-'
+              '${selected.provider.providerId}',
+            ),
             padding: EdgeInsets.only(top: IdeSpacing.space4),
             child: sf.Progress(progress: null),
           ),
@@ -141,22 +147,90 @@ class _AgentUsagePanelBody extends StatelessWidget {
               ).caption.copyWith(color: IdeColors.of(context).warning),
             ),
           ),
-        Expanded(
-          child: SingleChildScrollView(
-            key: PageStorageKey<String>(
-              'agent-usage-scroll-${selected.providerId}',
+        if (selected.entry != null && selected.loadError != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              IdeSpacing.space12,
+              IdeSpacing.space6,
+              IdeSpacing.space12,
+              0,
             ),
-            padding: const EdgeInsets.all(IdeSpacing.space12),
-            child: _ProviderUsage(
-              key: ValueKey<String>(
-                'agent-usage-provider-${selected.providerId}',
-              ),
-              entry: selected,
-              showProviderName: controller.entries.length == 1,
+            child: Text(
+              selected.loadError!,
+              style: IdeTextStyles.of(
+                context,
+              ).caption.copyWith(color: IdeColors.of(context).warning),
             ),
           ),
+        Expanded(
+          child: _SelectedProviderBody(state: selected, controller: controller),
         ),
       ],
+    );
+  }
+}
+
+class _SelectedProviderBody extends StatelessWidget {
+  const _SelectedProviderBody({required this.state, required this.controller});
+
+  final AgentUsagePanelProviderState state;
+  final AgentUsagePanelController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final entry = state.entry;
+    if (entry == null) {
+      if (state.isLoading) {
+        return _ProviderLoadingState(provider: state.provider);
+      }
+      if (state.loadError case final error?) {
+        return _RetryState(
+          message: error,
+          onRetry: () => unawaited(controller.refresh()),
+        );
+      }
+      return const EmptyState(text: '暂无统计');
+    }
+
+    return SingleChildScrollView(
+      key: PageStorageKey<String>(
+        'agent-usage-scroll-${state.provider.providerId}',
+      ),
+      padding: const EdgeInsets.all(IdeSpacing.space12),
+      child: _ProviderUsage(
+        key: ValueKey<String>(
+          'agent-usage-provider-${state.provider.providerId}',
+        ),
+        entry: entry,
+        providerName: state.provider.providerName,
+        showProviderName: controller.providers.length == 1,
+      ),
+    );
+  }
+}
+
+class _ProviderLoadingState extends StatelessWidget {
+  const _ProviderLoadingState({required this.provider});
+
+  final AgentUsagePanelProvider provider;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      key: ValueKey<String>(
+        'agent-usage-provider-loading-${provider.providerId}',
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const IdeLoadingIndicator(width: 40),
+          const SizedBox(height: IdeSpacing.space8),
+          Text(
+            '正在读取 ${provider.providerName} 用量…',
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -164,11 +238,13 @@ class _AgentUsagePanelBody extends StatelessWidget {
 class _ProviderUsage extends StatelessWidget {
   const _ProviderUsage({
     required this.entry,
+    required this.providerName,
     required this.showProviderName,
     super.key,
   });
 
   final AgentUsagePanelEntry entry;
+  final String providerName;
   final bool showProviderName;
 
   @override
@@ -180,7 +256,7 @@ class _ProviderUsage extends StatelessWidget {
       children: [
         if (showProviderName) ...[
           Text(
-            entry.providerName,
+            providerName,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: textStyles.titleSmall,

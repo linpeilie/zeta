@@ -9,6 +9,7 @@ import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/usage_statistics/data/codex_usage_statistics_repository.dart';
 import 'package:zeta/src/features/usage_statistics/data/provider_agent_usage_panel_repository.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_index_store.dart';
+import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 
 import '../../../testing/agent_provider_stub_base.dart';
@@ -131,16 +132,91 @@ void main() {
         clock: () => DateTime(2026, 7, 8, 12),
       );
 
-      final snapshot = await repository.load();
+      final events = await repository.load().toList();
+      final directory = events
+          .whereType<AgentUsagePanelProvidersDiscovered>()
+          .single;
+      final entries = events
+          .whereType<AgentUsagePanelProviderLoaded>()
+          .map((event) => event.entry)
+          .toList();
 
-      expect(snapshot.entries, hasLength(2));
-      expect(snapshot.entries.first.providerId, defaultAgentProviderId);
-      expect(snapshot.entries.first.todayTokens?.totalTokens, 110);
-      expect(snapshot.entries.first.quota?.planType, 'plus');
-      expect(snapshot.entries.last.providerId, grokAgentProviderId);
-      expect(snapshot.entries.last.todayTokens, isNull);
+      expect(events.first, same(directory));
+      expect(
+        directory.providers.map((provider) => provider.providerId),
+        <String>[defaultAgentProviderId, grokAgentProviderId],
+      );
+      expect(entries, hasLength(2));
+      final codex = entries.singleWhere(
+        (entry) => entry.providerId == defaultAgentProviderId,
+      );
+      final grok = entries.singleWhere(
+        (entry) => entry.providerId == grokAgentProviderId,
+      );
+      expect(codex.todayTokens?.totalTokens, 110);
+      expect(codex.quota?.planType, 'plus');
+      expect(grok.todayTokens, isNull);
+      expect(events.last, isA<AgentUsagePanelLoadCompleted>());
       expect(scanner.codexHomes, hasLength(1));
       expect(provider.quotaReadCount, 2);
+    },
+  );
+
+  test(
+    'panel repository starts providers in parallel and isolates failures',
+    () async {
+      final firstConfig = AgentProviderConfig.defaultGrok.copyWith(
+        id: 'grok-first',
+        displayName: 'Grok First',
+      );
+      final secondConfig = AgentProviderConfig.defaultGrok.copyWith(
+        id: 'grok-second',
+        displayName: 'Grok Second',
+      );
+      final providerLoads = <String, Completer<AgentProvider>>{
+        firstConfig.id: Completer<AgentProvider>(),
+        secondConfig.id: Completer<AgentProvider>(),
+      };
+      final startedProviders = <String>[];
+      final repository = ProviderAgentUsagePanelRepository(
+        enabledProviderLoader: () async => <AgentProviderConfig>[
+          firstConfig,
+          secondConfig,
+        ],
+        providerLoader: (config) {
+          startedProviders.add(config.id);
+          return providerLoads[config.id]!.future;
+        },
+        isSharedProvider: (_) => true,
+        seedIndexStore: MemoryUsageStatisticsIndexStore(),
+        scanner: _UsageScanner(const <String, CodexUsageSessionSnapshot>{}),
+        clock: () => DateTime(2026, 7, 8, 12),
+      );
+
+      final emitted = <AgentUsagePanelLoadEvent>[];
+      final completed = repository.load().forEach(emitted.add);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(startedProviders, <String>['grok-first', 'grok-second']);
+      expect(emitted, hasLength(1));
+      expect(emitted.single, isA<AgentUsagePanelProvidersDiscovered>());
+
+      providerLoads['grok-second']!.complete(_UsageProvider());
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        (emitted[1] as AgentUsagePanelProviderLoaded).entry.providerId,
+        'grok-second',
+      );
+
+      providerLoads['grok-first']!.completeError(StateError('offline'));
+      await completed;
+
+      expect(emitted[2], isA<AgentUsagePanelProviderFailed>());
+      expect(
+        (emitted[2] as AgentUsagePanelProviderFailed).provider.providerId,
+        'grok-first',
+      );
+      expect(emitted.last, isA<AgentUsagePanelLoadCompleted>());
     },
   );
 

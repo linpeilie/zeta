@@ -18,6 +18,7 @@ class IdeTabItem<T> {
     this.key,
     this.leadingIcon,
     this.semanticLabel,
+    this.loading = false,
   });
 
   /// 选中该项时回传的业务值。
@@ -34,6 +35,9 @@ class IdeTabItem<T> {
 
   /// 覆盖默认标签的无障碍名称。
   final String? semanticLabel;
+
+  /// 是否仅对标签文字展示加载呼吸效果。
+  final bool loading;
 }
 
 /// 面向桌面 IDE 的紧凑单选 Tab 组。
@@ -49,6 +53,7 @@ class IdeTabs<T> extends StatelessWidget {
     super.key,
     this.expand = false,
     this.semanticLabel,
+    this.scrollContentAlignment = AlignmentDirectional.centerStart,
   }) : assert(items.length > 0, 'IdeTabs 至少需要一个选项。');
 
   /// 当前选中的业务值。
@@ -65,6 +70,9 @@ class IdeTabs<T> extends StatelessWidget {
 
   /// 整个 Tab 组的无障碍名称。
   final String? semanticLabel;
+
+  /// 未扩展且内容短于视口时，Tab 组在滚动视口中的对齐方式。
+  final AlignmentGeometry scrollContentAlignment;
 
   @override
   Widget build(BuildContext context) {
@@ -101,8 +109,8 @@ class IdeTabs<T> extends StatelessWidget {
                   label: items[index].label,
                   leadingIcon: items[index].leadingIcon,
                   selected: index == selectedIndex,
-                  semanticLabel:
-                      items[index].semanticLabel ?? items[index].label,
+                  loading: items[index].loading,
+                  semanticLabel: _loadingSemanticLabel(items[index]),
                 ),
               ),
           ],
@@ -116,11 +124,29 @@ class IdeTabs<T> extends StatelessWidget {
       label: semanticLabel,
       child: expand
           ? tabs
-          : SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: tabs,
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final minWidth = constraints.hasBoundedWidth
+                    ? constraints.maxWidth
+                    : 0.0;
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minWidth: minWidth),
+                    child: Align(
+                      alignment: scrollContentAlignment,
+                      child: tabs,
+                    ),
+                  ),
+                );
+              },
             ),
     );
+  }
+
+  String _loadingSemanticLabel(IdeTabItem<T> item) {
+    final label = item.semanticLabel ?? item.label;
+    return item.loading ? '$label，正在加载' : label;
   }
 }
 
@@ -201,6 +227,7 @@ class _IdeTabContent extends StatelessWidget {
     this.trailingIcon,
     this.enabled = true,
     this.semanticLabel,
+    this.loading = false,
   });
 
   final String label;
@@ -209,6 +236,8 @@ class _IdeTabContent extends StatelessWidget {
   final bool selected;
   final bool enabled;
   final String? semanticLabel;
+
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
@@ -243,7 +272,7 @@ class _IdeTabContent extends StatelessWidget {
               Icon(leadingIcon),
               const SizedBox(width: IdeSpacing.space4),
             ],
-            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+            _IdeTabLabel(label: label, loading: loading),
             if (trailingIcon != null) ...[
               const SizedBox(width: IdeSpacing.space4),
               AnimatedRotation(
@@ -299,5 +328,90 @@ class _IdeTabContent extends StatelessWidget {
       excludeSemantics: true,
       child: animatedContent,
     );
+  }
+}
+
+class _IdeTabLabel extends StatefulWidget {
+  const _IdeTabLabel({required this.label, required this.loading});
+
+  final String label;
+  final bool loading;
+
+  @override
+  State<_IdeTabLabel> createState() => _IdeTabLabelState();
+}
+
+class _IdeTabLabelState extends State<_IdeTabLabel>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _opacity;
+  bool _reduceMotion = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: IdeMotion.durationLoadingPulse,
+      value: 1,
+    );
+    _opacity = Tween<double>(begin: 0.55, end: 1).animate(
+      CurvedAnimation(parent: _controller, curve: IdeMotion.curveDefault),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduceMotion = MediaQuery.disableAnimationsOf(context);
+    _syncAnimation();
+  }
+
+  @override
+  void didUpdateWidget(covariant _IdeTabLabel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.loading != widget.loading) {
+      _syncAnimation();
+    }
+  }
+
+  void _syncAnimation() {
+    if (widget.loading && !_reduceMotion) {
+      _controller.repeat(reverse: true);
+      return;
+    }
+    _controller
+      ..stop()
+      ..value = 1;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final label = Text(
+      widget.label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+    if (!widget.loading) {
+      return label;
+    }
+    if (_reduceMotion) {
+      return Opacity(
+        key: const ValueKey('ide-tab-loading-label-reduced-motion'),
+        opacity: 0.72,
+        child: label,
+      );
+    }
+    return FadeTransition(
+      key: const ValueKey('ide-tab-loading-label'),
+      opacity: _opacity,
+      child: label,
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 }
