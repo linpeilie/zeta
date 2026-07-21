@@ -1,15 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
-import 'package:zeta/src/ui/core/ide_chip.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_popover.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
-import 'package:zeta/src/ui/core/ide_status_card.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/features/ide/views/new_thread_provider_popover.dart';
@@ -38,8 +34,8 @@ class ProjectHomePage extends StatefulWidget {
 }
 
 class _ProjectHomePageState extends State<ProjectHomePage> {
-  static const double _compactHeaderBreakpoint = 640;
-  static const double _contentMaxWidth = 920;
+  static const double _compactBreakpoint = 640;
+  static const double _contentMaxWidth = 760;
 
   final GlobalKey _newThreadButtonKey = GlobalKey();
   IdePopoverHandle<AgentProviderConfig?>? _providerPopover;
@@ -98,26 +94,35 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
       color: colors.canvasSurface,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final compact = constraints.maxWidth < _compactHeaderBreakpoint;
+          final compact = constraints.maxWidth < _compactBreakpoint;
           final horizontalPadding = compact
               ? IdeSpacing.space16
               : IdeSpacing.space24;
           return SingleChildScrollView(
             key: const ValueKey<String>('project-home-scroll-view'),
-            padding: EdgeInsets.symmetric(
-              horizontal: horizontalPadding,
-              vertical: IdeSpacing.space24,
-            ),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: _contentMaxWidth),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildProjectHeader(context, compact: compact),
-                    const SizedBox(height: IdeSpacing.space24),
-                    _buildRecentThreads(context),
-                  ],
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: horizontalPadding,
+                    vertical: IdeSpacing.space24,
+                  ),
+                  child: SizedBox(
+                    width: _contentMaxWidth,
+                    child: Column(
+                      key: const ValueKey<String>(
+                        'project-home-centered-content',
+                      ),
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildProjectHeader(context),
+                        const SizedBox(height: IdeSpacing.space32),
+                        _buildRecentThreads(context),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -127,73 +132,50 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
     );
   }
 
-  Widget _buildProjectHeader(BuildContext context, {required bool compact}) {
+  Widget _buildProjectHeader(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final projectName = fileName(widget.projectPath);
-    final projectDetails = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          projectName,
-          key: const ValueKey<String>('project-home-name'),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: textStyles.pageTitle,
-        ),
-        const SizedBox(height: IdeSpacing.space6),
-        IdeTooltip(
-          message: widget.projectPath,
-          child: Text(
-            widget.projectPath,
-            key: const ValueKey<String>('project-home-path'),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: textStyles.codeSmall.copyWith(color: colors.textSecondary),
-          ),
-        ),
-      ],
-    );
-    final newThreadButton = KeyedSubtree(
-      key: _newThreadButtonKey,
-      child: Semantics(
-        button: true,
-        label: '为 $projectName 新建 Thread',
-        child: sf.PrimaryButton(
-          key: const ValueKey<String>('project-home-new-thread-button'),
-          onPressed: _toggleProviderPopover,
-          size: sf.ButtonSize.small,
-          leading: const Icon(Icons.add_comment_outlined, size: 16),
-          child: const Text('新建 Thread'),
-        ),
-      ),
-    );
 
-    return PanelCard(
+    return ColoredBox(
       key: const ValueKey<String>('project-home-header'),
-      color: colors.paneSurface,
-      child: Padding(
-        padding: IdeSpacing.all20,
-        child: compact
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  projectDetails,
-                  const SizedBox(height: IdeSpacing.space16),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: newThreadButton,
-                  ),
-                ],
-              )
-            : Row(
-                children: [
-                  Expanded(child: projectDetails),
-                  const SizedBox(width: IdeSpacing.space20),
-                  newThreadButton,
-                ],
-              ),
+      color: colors.canvasSurface,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            projectName,
+            key: const ValueKey<String>('project-home-name'),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.start,
+            style: textStyles.pageTitle,
+          ),
+          const SizedBox(height: IdeSpacing.space6),
+          IdeTooltip(
+            message: widget.projectPath,
+            child: Text(
+              widget.projectPath,
+              key: const ValueKey<String>('project-home-path'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.start,
+              style: textStyles.codeSmall.copyWith(color: colors.textSecondary),
+            ),
+          ),
+          const SizedBox(height: IdeSpacing.space16),
+          KeyedSubtree(
+            key: _newThreadButtonKey,
+            child: _FlatActionButton(
+              key: const ValueKey<String>('project-home-new-thread-button'),
+              label: '新建 Thread',
+              semanticLabel: '为 $projectName 新建 Thread',
+              icon: Icons.add_comment_outlined,
+              onPressed: _toggleProviderPopover,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -215,6 +197,7 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
               child: Text(
                 '近期会话',
                 key: const ValueKey<String>('project-home-recent-title'),
+                textAlign: TextAlign.start,
                 style: textStyles.sectionTitle,
               ),
             ),
@@ -236,21 +219,24 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
         else if (state.errorMessage != null && threads.isEmpty)
           _buildErrorState(context)
         else if (threads.isEmpty)
-          const IdeStatusCard(
+          const _FlatStateMessage(
             key: ValueKey<String>('project-home-empty-state'),
-            tone: IdeStatusCardTone.neutral,
+            icon: Icons.forum_outlined,
             title: '暂无近期会话',
-            body: Text('创建一个 Thread 后，它会显示在这里。'),
+            body: '创建一个 Thread 后，它会显示在这里。',
           )
         else ...[
-          if (state.errorMessage != null) _buildErrorState(context),
+          if (state.errorMessage != null) ...[
+            _buildErrorState(context),
+            const SizedBox(height: IdeSpacing.space8),
+          ],
           for (final thread in threads) ...[
-            _RecentThreadCard(
+            _RecentThreadRow(
               key: ValueKey<String>('project-home-thread-${thread.id}'),
               thread: thread,
               onPressed: () => widget.onSelectThread(thread),
             ),
-            const SizedBox(height: IdeSpacing.space8),
+            const SizedBox(height: IdeSpacing.space2),
           ],
         ],
       ],
@@ -260,65 +246,54 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
   Widget _buildLoadingState(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    return PanelCard(
+    return Padding(
       key: const ValueKey<String>('project-home-loading-state'),
-      color: colors.paneSurface,
-      child: Padding(
-        padding: IdeSpacing.all20,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: colors.accent,
-              ),
+      padding: IdeSpacing.all20,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: colors.accent,
             ),
-            const SizedBox(width: IdeSpacing.space10),
-            Flexible(
-              child: Text(
-                '正在加载近期会话…',
-                style: textStyles.bodySmall.copyWith(
-                  color: colors.textSecondary,
-                ),
-              ),
+          ),
+          const SizedBox(width: IdeSpacing.space10),
+          Flexible(
+            child: Text(
+              '正在加载近期会话…',
+              textAlign: TextAlign.start,
+              style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildErrorState(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
-    return IdeStatusCard(
+    return _FlatStateMessage(
       key: const ValueKey<String>('project-home-error-state'),
-      tone: IdeStatusCardTone.error,
+      icon: Icons.error_outline_rounded,
+      tone: _FlatStateTone.error,
       title: '无法加载近期会话',
-      body: Text(
-        widget.threadState.errorMessage ?? '请稍后重试。',
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
-      ),
-      footer: Align(
-        alignment: Alignment.centerLeft,
-        child: sf.OutlineButton(
-          key: const ValueKey<String>('project-home-retry-button'),
-          onPressed: widget.onRetryThreads,
-          size: sf.ButtonSize.small,
-          child: const Text('重试'),
-        ),
+      body: widget.threadState.errorMessage ?? '请稍后重试。',
+      action: _FlatActionButton(
+        key: const ValueKey<String>('project-home-retry-button'),
+        label: '重试',
+        semanticLabel: '重试加载近期会话',
+        icon: Icons.refresh_rounded,
+        onPressed: widget.onRetryThreads,
       ),
     );
   }
 }
 
-class _RecentThreadCard extends StatelessWidget {
-  const _RecentThreadCard({
+class _RecentThreadRow extends StatelessWidget {
+  const _RecentThreadRow({
     required this.thread,
     required this.onPressed,
     super.key,
@@ -338,107 +313,211 @@ class _RecentThreadCard extends StatelessWidget {
     );
     final preview = thread.preview.trim();
 
-    return PanelCard(
-      color: colors.paneSurface,
-      borderRadius: IdeRadius.allMedium,
-      child: PaneInteractiveSurface(
-        onPressed: onPressed,
-        semanticLabel: '打开会话 ${thread.displayName}',
-        alignment: Alignment.centerLeft,
-        padding: const EdgeInsets.symmetric(
-          horizontal: IdeSpacing.space16,
-          vertical: IdeSpacing.space12,
-        ),
-        borderRadius: IdeRadius.allMedium,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final compact = constraints.maxWidth < 560;
-            final details = _buildDetails(
-              context,
-              statusLabel: statusLabel,
-              lastActiveLabel: lastActiveLabel,
-            );
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Icon(
-                  _threadStatusIcon(thread),
-                  size: 18,
-                  color: _threadStatusColor(thread, colors),
-                ),
-                const SizedBox(width: IdeSpacing.space12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
+    return PaneInteractiveSurface(
+      onPressed: onPressed,
+      semanticLabel: '打开会话 ${thread.displayName}',
+      padding: const EdgeInsets.symmetric(
+        horizontal: IdeSpacing.space16,
+        vertical: IdeSpacing.space12,
+      ),
+      borderRadius: BorderRadius.zero,
+      backgroundColor: colors.canvasSurface,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 560;
+          final metadata = _buildMetadata(
+            context,
+            statusLabel: statusLabel,
+            lastActiveLabel: lastActiveLabel,
+          );
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(
+                _threadStatusIcon(thread),
+                size: 18,
+                color: _threadStatusColor(thread, colors),
+              ),
+              const SizedBox(width: IdeSpacing.space12),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      thread.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.start,
+                      style: textStyles.rowTitle,
+                    ),
+                    if (preview.isNotEmpty &&
+                        preview != thread.displayName) ...[
+                      const SizedBox(height: IdeSpacing.space4),
                       Text(
-                        thread.displayName,
+                        preview,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: textStyles.rowTitle,
-                      ),
-                      if (preview.isNotEmpty &&
-                          preview != thread.displayName) ...[
-                        const SizedBox(height: IdeSpacing.space4),
-                        Text(
-                          preview,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: textStyles.bodySmall.copyWith(
-                            color: colors.textSecondary,
-                          ),
+                        textAlign: TextAlign.start,
+                        style: textStyles.bodySmall.copyWith(
+                          color: colors.textSecondary,
                         ),
-                      ],
-                      if (compact) ...[
-                        const SizedBox(height: IdeSpacing.space8),
-                        details,
-                      ],
+                      ),
                     ],
-                  ),
+                    if (compact) ...[
+                      const SizedBox(height: IdeSpacing.space6),
+                      metadata,
+                    ],
+                  ],
                 ),
-                if (!compact) ...[
-                  const SizedBox(width: IdeSpacing.space16),
-                  details,
-                ],
-                const SizedBox(width: IdeSpacing.space8),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 18,
-                  color: colors.textTertiary,
-                ),
+              ),
+              if (!compact) ...[
+                const SizedBox(width: IdeSpacing.space16),
+                metadata,
               ],
-            );
-          },
-        ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildDetails(
+  Widget _buildMetadata(
     BuildContext context, {
     required String? statusLabel,
     required String? lastActiveLabel,
   }) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
+    final labels = <({String text, Color color})>[
+      (
+        text: _providerShortLabel(thread.providerId),
+        color: colors.textSecondary,
+      ),
+      if (statusLabel != null)
+        (text: statusLabel, color: _threadStatusColor(thread, colors)),
+      if (lastActiveLabel != null)
+        (text: lastActiveLabel, color: colors.textTertiary),
+    ];
+
     return Wrap(
-      spacing: IdeSpacing.space8,
-      runSpacing: IdeSpacing.space4,
+      alignment: WrapAlignment.start,
       crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: IdeSpacing.space6,
+      runSpacing: IdeSpacing.space4,
       children: [
-        IdeChip(
-          label: _providerShortLabel(thread.providerId),
-          variant: IdeChipVariant.ghost,
-        ),
-        if (statusLabel != null)
-          IdeChip(label: statusLabel, variant: IdeChipVariant.outline),
-        if (lastActiveLabel != null)
+        for (var index = 0; index < labels.length; index += 1) ...[
+          if (index > 0)
+            Text(
+              '·',
+              style: textStyles.meta.copyWith(color: colors.textTertiary),
+            ),
           Text(
-            lastActiveLabel,
-            style: textStyles.meta.copyWith(color: colors.textTertiary),
+            labels[index].text,
+            textAlign: TextAlign.start,
+            style: textStyles.meta.copyWith(color: labels[index].color),
           ),
+        ],
       ],
+    );
+  }
+}
+
+class _FlatActionButton extends StatelessWidget {
+  const _FlatActionButton({
+    required this.label,
+    required this.semanticLabel,
+    required this.icon,
+    required this.onPressed,
+    super.key,
+  });
+
+  final String label;
+  final String semanticLabel;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    return PaneInteractiveSurface(
+      onPressed: onPressed,
+      semanticLabel: semanticLabel,
+      borderRadius: BorderRadius.zero,
+      backgroundColor: colors.canvasSurface,
+      padding: const EdgeInsets.symmetric(
+        horizontal: IdeSpacing.space12,
+        vertical: IdeSpacing.space8,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: colors.accent),
+          const SizedBox(width: IdeSpacing.space6),
+          Text(
+            label,
+            style: textStyles.rowTitle.copyWith(color: colors.accent),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+enum _FlatStateTone { neutral, error }
+
+class _FlatStateMessage extends StatelessWidget {
+  const _FlatStateMessage({
+    required this.icon,
+    required this.title,
+    required this.body,
+    this.tone = _FlatStateTone.neutral,
+    this.action,
+    super.key,
+  });
+
+  final IconData icon;
+  final String title;
+  final String body;
+  final _FlatStateTone tone;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    final foreground = tone == _FlatStateTone.error
+        ? colors.error
+        : colors.textSecondary;
+
+    return Padding(
+      padding: IdeSpacing.all20,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: foreground),
+          const SizedBox(height: IdeSpacing.space8),
+          Text(
+            title,
+            textAlign: TextAlign.start,
+            style: textStyles.rowTitle.copyWith(color: foreground),
+          ),
+          const SizedBox(height: IdeSpacing.space4),
+          Text(
+            body,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.start,
+            style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
+          ),
+          if (action != null) ...[
+            const SizedBox(height: IdeSpacing.space8),
+            action!,
+          ],
+        ],
+      ),
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
+import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/features/ide/views/project_home_page.dart';
 
 import '../../../core/ide_component_test_harness.dart';
@@ -54,6 +55,86 @@ void main() {
     expect(selectedThread?.id, 'thread-0');
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'centers the flat module while keeping its content left aligned',
+    (tester) async {
+      await pumpIdeComponent(
+        tester,
+        size: const Size(900, 900),
+        child: ProjectHomePage(
+          projectPath: '/workspace/zeta',
+          threadState: ProjectThreadListState(
+            hasLoaded: true,
+            threads: <AgentThreadSummary>[
+              _thread(index: 0, providerId: defaultAgentProviderId),
+            ],
+          ),
+          loadAvailableProviders: () async => const <AgentProviderConfig>[],
+          onNewThread: (_) {},
+          onSelectThread: (_) {},
+          onRetryThreads: () {},
+        ),
+      );
+
+      final pageCenter = tester.getCenter(find.byType(ProjectHomePage));
+      final contentCenter = tester.getCenter(
+        find.byKey(const ValueKey<String>('project-home-centered-content')),
+      );
+      expect(contentCenter.dx, closeTo(pageCenter.dx, 0.5));
+      expect(contentCenter.dy, closeTo(pageCenter.dy, 0.5));
+
+      final contentLeft = tester
+          .getTopLeft(
+            find.byKey(const ValueKey<String>('project-home-centered-content')),
+          )
+          .dx;
+      for (final key in <String>[
+        'project-home-name',
+        'project-home-path',
+        'project-home-recent-title',
+      ]) {
+        expect(
+          tester.getTopLeft(find.byKey(ValueKey<String>(key))).dx,
+          closeTo(contentLeft, 0.5),
+        );
+      }
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey<String>('project-home-name')),
+            )
+            .textAlign,
+        TextAlign.start,
+      );
+      expect(
+        tester.widget<Text>(find.text('Thread 0')).textAlign,
+        TextAlign.start,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(ProjectHomePage),
+          matching: find.byType(PanelCard),
+        ),
+        findsNothing,
+      );
+
+      final flatSurfaces = tester.widgetList<PaneInteractiveSurface>(
+        find.descendant(
+          of: find.byType(ProjectHomePage),
+          matching: find.byType(PaneInteractiveSurface),
+        ),
+      );
+      expect(flatSurfaces, isNotEmpty);
+      expect(
+        flatSurfaces.every(
+          (surface) => surface.borderRadius == BorderRadius.zero,
+        ),
+        isTrue,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('provider selection opens a draft entry callback', (
     tester,
