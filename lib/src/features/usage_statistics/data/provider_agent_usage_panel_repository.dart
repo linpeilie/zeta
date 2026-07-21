@@ -1,7 +1,9 @@
 import 'package:zeta/src/features/agent/data/datasources/local_history/codex_usage_log_scanner.dart';
+import 'package:zeta/src/features/agent/data/datasources/local_history/grok_usage_log_scanner.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/usage_statistics/data/codex_usage_statistics_repository.dart';
+import 'package:zeta/src/features/usage_statistics/data/grok_usage_statistics_repository.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_index_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
@@ -20,6 +22,7 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
     required this.isSharedProvider,
     required this.seedIndexStore,
     this.scanner = const FileSystemCodexUsageLogScanner(),
+    this.grokScanner = const FileSystemGrokUsageLogScanner(),
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now;
 
@@ -28,6 +31,7 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
   final SharedAgentProviderPredicate isSharedProvider;
   final UsageStatisticsIndexStore seedIndexStore;
   final CodexUsageLogScanner scanner;
+  final GrokUsageLogScanner grokScanner;
   final DateTime Function() _clock;
 
   @override
@@ -72,7 +76,8 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
     try {
       provider = await providerLoader(config);
       final quota = await _readQuota(provider);
-      if (config.kind != AgentProviderKind.codexAppServer) {
+      if (config.kind != AgentProviderKind.codexAppServer &&
+          config.kind != AgentProviderKind.acp) {
         return AgentUsagePanelProviderLoaded(
           AgentUsagePanelEntry(
             providerId: config.id,
@@ -85,20 +90,23 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
       UsageTokenBreakdown? todayTokens;
       String? message;
       try {
-        final seed = await seedFuture;
-        final memoryIndex = MemoryUsageStatisticsIndexStore()..snapshot = seed;
         final now = _clock();
-        final source =
-            await CodexUsageStatisticsRepository(
-              providerLoader: () async => provider!,
-              indexStore: memoryIndex,
-              scanner: scanner,
-              includeQuota: false,
-              clock: _clock,
-            ).load(
-              earliest: DateTime(now.year, now.month, now.day),
-              forceRefresh: forceRefresh,
-            );
+        final earliest = DateTime(now.year, now.month, now.day);
+        final source = switch (config.kind) {
+          AgentProviderKind.codexAppServer => await _loadCodexUsage(
+            provider: provider,
+            seedFuture: seedFuture,
+            earliest: earliest,
+            forceRefresh: forceRefresh,
+          ),
+          AgentProviderKind.acp => await GrokUsageStatisticsRepository(
+            providerLoader: () async => provider!,
+            scanner: grokScanner,
+            includeQuota: false,
+            clock: _clock,
+          ).load(earliest: earliest, forceRefresh: forceRefresh),
+          _ => throw StateError('Unsupported usage provider: ${config.kind}'),
+        };
         todayTokens = _sumTokens(
           source.records
               .where((record) => !record.startedAt.isAfter(now))
@@ -130,6 +138,23 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
         }
       }
     }
+  }
+
+  Future<UsageStatisticsSourceSnapshot> _loadCodexUsage({
+    required AgentProvider provider,
+    required Future<UsageStatisticsIndexSnapshot> seedFuture,
+    required DateTime earliest,
+    required bool forceRefresh,
+  }) async {
+    final seed = await seedFuture;
+    final memoryIndex = MemoryUsageStatisticsIndexStore()..snapshot = seed;
+    return CodexUsageStatisticsRepository(
+      providerLoader: () async => provider,
+      indexStore: memoryIndex,
+      scanner: scanner,
+      includeQuota: false,
+      clock: _clock,
+    ).load(earliest: earliest, forceRefresh: forceRefresh);
   }
 
   AgentUsagePanelProvider _providerSummary(AgentProviderConfig config) {

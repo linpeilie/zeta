@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zeta/src/features/agent/data/datasources/local_history/codex_usage_log_scanner.dart';
+import 'package:zeta/src/features/agent/data/datasources/local_history/grok_usage_log_scanner.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/usage_statistics/data/codex_usage_statistics_repository.dart';
@@ -120,6 +121,9 @@ void main() {
     () async {
       final provider = _UsageProvider();
       final scanner = _UsageScanner(_sessions());
+      final grokScanner = _GrokUsageScanner(<GrokUsageSessionSnapshot>[
+        _grokUsageSession(),
+      ]);
       final repository = ProviderAgentUsagePanelRepository(
         enabledProviderLoader: () async => <AgentProviderConfig>[
           AgentProviderConfig.defaultCodex,
@@ -129,6 +133,7 @@ void main() {
         isSharedProvider: (_) => true,
         seedIndexStore: MemoryUsageStatisticsIndexStore(),
         scanner: scanner,
+        grokScanner: grokScanner,
         clock: () => DateTime(2026, 7, 8, 12),
       );
 
@@ -155,7 +160,11 @@ void main() {
       );
       expect(codex.todayTokens?.totalTokens, 110);
       expect(codex.quota?.planType, 'plus');
-      expect(grok.todayTokens, isNull);
+      expect(grok.todayTokens?.totalTokens, 60);
+      expect(grok.todayTokens?.inputTokens, 40);
+      expect(grok.todayTokens?.cachedInputTokens, 10);
+      expect(grok.todayTokens?.outputTokens, 8);
+      expect(grok.todayTokens?.reasoningTokens, 2);
       expect(events.last, isA<AgentUsagePanelLoadCompleted>());
       expect(scanner.codexHomes, hasLength(1));
       expect(provider.quotaReadCount, 2);
@@ -190,6 +199,7 @@ void main() {
         isSharedProvider: (_) => true,
         seedIndexStore: MemoryUsageStatisticsIndexStore(),
         scanner: _UsageScanner(const <String, CodexUsageSessionSnapshot>{}),
+        grokScanner: _GrokUsageScanner(const <GrokUsageSessionSnapshot>[]),
         clock: () => DateTime(2026, 7, 8, 12),
       );
 
@@ -449,6 +459,48 @@ class _UsageScanner implements CodexUsageLogScanner {
     cachedSessionCounts.add(cachedSessions.length);
     forceRefreshes.add(forceRefresh);
     return CodexUsageScanResult(sessions: sessions, warnings: const <String>[]);
+  }
+}
+
+GrokUsageSessionSnapshot _grokUsageSession() {
+  final startedAt = DateTime(2026, 7, 8, 10);
+  return GrokUsageSessionSnapshot(
+    sourcePath: '/grok/session/updates.jsonl',
+    threadId: 'grok-thread',
+    projectPath: '/work/grok',
+    modifiedAt: startedAt,
+    history: AgentThreadHistorySnapshot(
+      threadId: 'grok-thread',
+      turns: <AgentHistoryTurn>[
+        AgentHistoryTurn(
+          id: 'grok-turn',
+          status: AgentHistoryTurnStatus.completed,
+          startedAt: startedAt,
+          tokenUsage: const AgentTokenUsage(
+            inputTokens: 50,
+            cachedInputTokens: 10,
+            outputTokens: 10,
+            reasoningOutputTokens: 2,
+            totalTokens: 60,
+          ),
+          tokenUsageIsSessionCumulative: false,
+        ),
+      ],
+    ),
+  );
+}
+
+class _GrokUsageScanner implements GrokUsageLogScanner {
+  _GrokUsageScanner(this.sessions);
+
+  final List<GrokUsageSessionSnapshot> sessions;
+
+  @override
+  Future<GrokUsageScanResult> scan({
+    required String grokHome,
+    bool forceRefresh = false,
+  }) async {
+    return GrokUsageScanResult(sessions: sessions, warnings: const <String>[]);
   }
 }
 
