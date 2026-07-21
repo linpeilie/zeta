@@ -20,6 +20,7 @@ class CodexUsageStatisticsRepository implements UsageStatisticsRepository {
     this.scanner = const FileSystemCodexUsageLogScanner(),
     Map<String, String>? environment,
     this.homeDirectory,
+    this.includeQuota = true,
     DateTime Function()? clock,
   }) : _environment = environment ?? Platform.environment,
        _clock = clock ?? DateTime.now;
@@ -29,6 +30,7 @@ class CodexUsageStatisticsRepository implements UsageStatisticsRepository {
   final CodexUsageLogScanner scanner;
   final Map<String, String> _environment;
   final String? homeDirectory;
+  final bool includeQuota;
   final DateTime Function() _clock;
 
   @override
@@ -54,9 +56,9 @@ class CodexUsageStatisticsRepository implements UsageStatisticsRepository {
     }
 
     AgentUsageQuotaSnapshot? quota;
-    if (provider case final AgentUsageQuotaProvider quotaProvider) {
+    if (includeQuota && provider is AgentUsageQuotaProvider) {
       try {
-        quota = await quotaProvider.readUsageQuota();
+        quota = await (provider as AgentUsageQuotaProvider).readUsageQuota();
       } catch (_) {
         warnings.add('Codex 当前未返回套餐额度信息。');
       }

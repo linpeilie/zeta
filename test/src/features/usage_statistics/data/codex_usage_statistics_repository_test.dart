@@ -7,6 +7,7 @@ import 'package:zeta/src/features/agent/data/datasources/local_history/codex_usa
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/usage_statistics/data/codex_usage_statistics_repository.dart';
+import 'package:zeta/src/features/usage_statistics/data/provider_agent_usage_panel_repository.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_index_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 
@@ -112,6 +113,36 @@ void main() {
     expect(source.records, isNotEmpty);
     expect(source.warnings, contains('Codex 当前未返回套餐额度信息。'));
   });
+
+  test(
+    'panel repository groups enabled configs and limits tokens to today',
+    () async {
+      final provider = _UsageProvider();
+      final scanner = _UsageScanner(_sessions());
+      final repository = ProviderAgentUsagePanelRepository(
+        enabledProviderLoader: () async => <AgentProviderConfig>[
+          AgentProviderConfig.defaultCodex,
+          AgentProviderConfig.defaultGrok,
+        ],
+        providerLoader: (_) async => provider,
+        isSharedProvider: (_) => true,
+        seedIndexStore: MemoryUsageStatisticsIndexStore(),
+        scanner: scanner,
+        clock: () => DateTime(2026, 7, 8, 12),
+      );
+
+      final snapshot = await repository.load();
+
+      expect(snapshot.entries, hasLength(2));
+      expect(snapshot.entries.first.providerId, defaultAgentProviderId);
+      expect(snapshot.entries.first.todayTokens?.totalTokens, 110);
+      expect(snapshot.entries.first.quota?.planType, 'plus');
+      expect(snapshot.entries.last.providerId, grokAgentProviderId);
+      expect(snapshot.entries.last.todayTokens, isNull);
+      expect(scanner.codexHomes, hasLength(1));
+      expect(provider.quotaReadCount, 2);
+    },
+  );
 
   test('safe cached index preserves the derived error category', () async {
     final createdAt = DateTime.utc(2026, 7, 8, 9);
@@ -355,6 +386,7 @@ class _UsageProvider
 
   final String? configuredCodexHome;
   final bool quotaFails;
+  var quotaReadCount = 0;
 
   @override
   AgentProviderConfig get config => AgentProviderConfig.defaultCodex.copyWith(
@@ -380,6 +412,7 @@ class _UsageProvider
 
   @override
   Future<AgentUsageQuotaSnapshot?> readUsageQuota() async {
+    quotaReadCount += 1;
     if (quotaFails) {
       throw StateError('quota unavailable');
     }

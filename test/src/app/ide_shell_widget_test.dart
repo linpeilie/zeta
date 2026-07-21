@@ -7,6 +7,7 @@ import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
+import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 
 import '../testing/ide_test_harness.dart';
@@ -53,6 +54,7 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const ValueKey('context-panel-card')), findsOneWidget);
+    expect(find.text('Agent 统计'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('workbench-navigation-inline')),
       findsOneWidget,
@@ -582,6 +584,7 @@ Future<void> _pumpIde(
   Future<String?> Function()? directoryPicker,
   AgentProviderFactory? agentProviderFactory,
   AgentProviderConfigStore? agentProviderConfigStore,
+  AgentUsagePanelRepository? agentUsagePanelRepository,
 }) async {
   tester.view
     ..physicalSize = size
@@ -603,8 +606,22 @@ Future<void> _pumpIde(
       sessionSaver: session.save,
       agentProviderFactory: agentProviderFactory,
       agentProviderConfigStore: agentProviderConfigStore,
+      agentUsagePanelRepository:
+          agentUsagePanelRepository ?? const _EmptyAgentUsageRepository(),
     ),
   );
+}
+
+class _EmptyAgentUsageRepository implements AgentUsagePanelRepository {
+  const _EmptyAgentUsageRepository();
+
+  @override
+  Future<AgentUsagePanelSnapshot> load({bool forceRefresh = false}) async {
+    return AgentUsagePanelSnapshot(
+      entries: const <AgentUsagePanelEntry>[],
+      refreshedAt: DateTime(2026, 7, 21),
+    );
+  }
 }
 
 Future<_RetainedAgentState> _prepareRetainedAgentState(

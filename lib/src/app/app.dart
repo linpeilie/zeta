@@ -16,6 +16,7 @@ import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_index_store.dart';
+import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 
@@ -39,6 +40,7 @@ class MainApp extends StatefulWidget {
     this.appearanceController,
     this.dataPaths,
     this.usageStatisticsIndexStore,
+    this.agentUsagePanelRepository,
   });
 
   final Future<String?> Function()? directoryPicker;
@@ -64,6 +66,9 @@ class MainApp extends StatefulWidget {
 
   /// 使用统计索引存储注入点；默认按 [dataPaths] 选择文件或内存实现。
   final UsageStatisticsIndexStore? usageStatisticsIndexStore;
+
+  /// Context Agent 统计面板的数据注入点，供 Widget 测试隔离本机 Agent 历史。
+  final AgentUsagePanelRepository? agentUsagePanelRepository;
 
   @override
   State<MainApp> createState() => MainAppState();
@@ -170,6 +175,7 @@ class MainAppState extends State<MainApp> {
                   widget.projectLocationOpener ?? openPathInSystemFileManager,
               appearanceController: _appearanceController,
               usageStatisticsIndexStore: _usageStatisticsIndexStore,
+              agentUsagePanelRepository: widget.agentUsagePanelRepository,
             ),
           ),
         );

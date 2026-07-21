@@ -20,8 +20,12 @@ import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_controller.dart';
+import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_controller.dart';
 import 'package:zeta/src/features/usage_statistics/data/codex_usage_statistics_repository.dart';
+import 'package:zeta/src/features/usage_statistics/data/provider_agent_usage_panel_repository.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_index_store.dart';
+import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
+import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_panel.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_page.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/workspace/presentation/file_tree_pane.dart';
@@ -55,6 +59,7 @@ class IdeHome extends StatefulWidget {
     required this.projectLocationOpener,
     required this.appearanceController,
     this.agentProviderAvailabilityLoader,
+    this.agentUsagePanelRepository,
     this.showWindowControls = true,
     super.key,
   });
@@ -68,6 +73,7 @@ class IdeHome extends StatefulWidget {
   final ProjectLocationOpener projectLocationOpener;
   final AppearanceSettingsController appearanceController;
   final AgentProviderAvailabilityLoader? agentProviderAvailabilityLoader;
+  final AgentUsagePanelRepository? agentUsagePanelRepository;
   final bool showWindowControls;
 
   @override
@@ -85,6 +91,7 @@ class _IdeHomeState extends State<IdeHome> {
   late final IdeShellController _shellController;
   late final AgentManagementController _agentManagementController;
   late final UsageStatisticsController _usageStatisticsController;
+  late final AgentUsagePanelController _agentUsagePanelController;
 
   bool _leftTopVisible = true;
   bool _leftBottomVisible = false;
@@ -150,6 +157,18 @@ class _IdeHomeState extends State<IdeHome> {
         indexStore: widget.usageStatisticsIndexStore,
       ),
     );
+    _agentUsagePanelController = AgentUsagePanelController(
+      repository:
+          widget.agentUsagePanelRepository ??
+          ProviderAgentUsagePanelRepository(
+            enabledProviderLoader: _loadEnabledAgentProviders,
+            providerLoader:
+                _shellController.agentProviderController.openProvider,
+            isSharedProvider:
+                _shellController.agentProviderController.isSharedActiveProvider,
+            seedIndexStore: widget.usageStatisticsIndexStore,
+          ),
+    );
     // 生产环境注册原生菜单的「打开项目」回调，与工具栏按钮走同一逻辑。
     if (widget.enableNativeWindowFrame) {
       MenuActionBridge.instance.setOpenProject(_handleMenuOpenProject);
@@ -163,6 +182,7 @@ class _IdeHomeState extends State<IdeHome> {
     }
     _shellController.removeListener(_handleShellChanged);
     _usageStatisticsController.dispose();
+    _agentUsagePanelController.dispose();
     _agentManagementController.dispose();
     _shellController.dispose();
     _leftProjectsFocusNode.dispose();
@@ -614,12 +634,7 @@ class _IdeHomeState extends State<IdeHome> {
       },
       heightHandleKey: const ValueKey('left-height-resize-handle'),
       top: _buildProjectsPanel(),
-      bottom: _buildPlaceholderPanel(
-        key: const ValueKey('context-panel-card'),
-        title: 'Context',
-        icon: Icons.hub_rounded,
-        message: 'No file context',
-      ),
+      bottom: AgentUsagePanel(controller: _agentUsagePanelController),
     );
   }
 
@@ -688,6 +703,12 @@ class _IdeHomeState extends State<IdeHome> {
       return injectedLoader();
     }
     return _agentManagementController.loadAvailableThreadProviders();
+  }
+
+  Future<List<AgentProviderConfig>> _loadEnabledAgentProviders() async {
+    final controller = _shellController.agentProviderController;
+    await controller.loadSettings();
+    return controller.enabledProviders;
   }
 
   void _toggleLeftPanel({

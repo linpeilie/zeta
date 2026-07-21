@@ -1,0 +1,401 @@
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+
+import 'package:zeta/src/features/agent/domain/agent_usage_models.dart';
+import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_controller.dart';
+import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
+import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
+import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_formatters.dart';
+import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_spacing.dart';
+import 'package:zeta/src/ui/core/ide_tabs.dart';
+import 'package:zeta/src/ui/core/ide_text_styles.dart';
+import 'package:zeta/src/ui/core/pane_widgets.dart';
+
+/// 左侧 Context 槽位中的轻量 Agent 用量面板。
+class AgentUsagePanel extends StatefulWidget {
+  const AgentUsagePanel({required this.controller, super.key});
+
+  final AgentUsagePanelController controller;
+
+  @override
+  State<AgentUsagePanel> createState() => _AgentUsagePanelState();
+}
+
+class _AgentUsagePanelState extends State<AgentUsagePanel> {
+  @override
+  void initState() {
+    super.initState();
+    unawaited(widget.controller.refresh(forceRefresh: false));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PanelCard(
+      key: const ValueKey('context-panel-card'),
+      showBorder: false,
+      child: Pane(
+        title: 'Agent 统计',
+        trailing: ListenableBuilder(
+          listenable: widget.controller,
+          builder: (context, _) => IdeTooltip(
+            message: '刷新用量',
+            child: sf.IconButton.ghost(
+              key: const ValueKey('agent-usage-refresh-button'),
+              onPressed: widget.controller.isLoading
+                  ? null
+                  : () => unawaited(widget.controller.refresh()),
+              size: sf.ButtonSize.small,
+              density: sf.ButtonDensity.iconDense,
+              icon: const Icon(Icons.refresh_rounded, size: 16),
+            ),
+          ),
+        ),
+        child: ListenableBuilder(
+          listenable: widget.controller,
+          builder: (context, _) =>
+              _AgentUsagePanelBody(controller: widget.controller),
+        ),
+      ),
+    );
+  }
+}
+
+class _AgentUsagePanelBody extends StatelessWidget {
+  const _AgentUsagePanelBody({required this.controller});
+
+  final AgentUsagePanelController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    if (controller.entries.isEmpty) {
+      if (controller.isLoading) {
+        return const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IdeLoadingIndicator(width: 40),
+              SizedBox(height: IdeSpacing.space8),
+              Text('正在读取 Agent 用量…'),
+            ],
+          ),
+        );
+      }
+      if (controller.errorMessage != null) {
+        return _RetryState(
+          message: controller.errorMessage!,
+          onRetry: () => unawaited(controller.refresh()),
+        );
+      }
+      return const EmptyState(text: '暂无已启用的 Agent');
+    }
+
+    final selected = controller.selectedEntry!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (controller.entries.length > 1)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              IdeSpacing.space8,
+              IdeSpacing.space8,
+              IdeSpacing.space8,
+              0,
+            ),
+            child: IdeTabs<String>(
+              key: const ValueKey('agent-usage-tabs'),
+              value: selected.providerId,
+              semanticLabel: '选择 Agent 用量',
+              items: [
+                for (final entry in controller.entries)
+                  IdeTabItem<String>(
+                    key: ValueKey<String>(
+                      'agent-usage-tab-${entry.providerId}',
+                    ),
+                    value: entry.providerId,
+                    label: entry.providerName,
+                  ),
+              ],
+              onChanged: controller.selectProvider,
+            ),
+          ),
+        if (controller.isLoading)
+          const Padding(
+            padding: EdgeInsets.only(top: IdeSpacing.space4),
+            child: sf.Progress(progress: null),
+          ),
+        if (controller.errorMessage case final error?)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              IdeSpacing.space12,
+              IdeSpacing.space6,
+              IdeSpacing.space12,
+              0,
+            ),
+            child: Text(
+              error,
+              style: IdeTextStyles.of(
+                context,
+              ).caption.copyWith(color: IdeColors.of(context).warning),
+            ),
+          ),
+        Expanded(
+          child: SingleChildScrollView(
+            key: PageStorageKey<String>(
+              'agent-usage-scroll-${selected.providerId}',
+            ),
+            padding: const EdgeInsets.all(IdeSpacing.space12),
+            child: _ProviderUsage(
+              key: ValueKey<String>(
+                'agent-usage-provider-${selected.providerId}',
+              ),
+              entry: selected,
+              showProviderName: controller.entries.length == 1,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProviderUsage extends StatelessWidget {
+  const _ProviderUsage({
+    required this.entry,
+    required this.showProviderName,
+    super.key,
+  });
+
+  final AgentUsagePanelEntry entry;
+  final bool showProviderName;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showProviderName) ...[
+          Text(
+            entry.providerName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textStyles.titleSmall,
+          ),
+          const SizedBox(height: IdeSpacing.space12),
+        ],
+        _TokenSection(tokens: entry.todayTokens),
+        if (entry.hasSubscriptionPlan) ...[
+          const SizedBox(height: IdeSpacing.space12),
+          Divider(height: 1, color: colors.borderSubtle),
+          const SizedBox(height: IdeSpacing.space12),
+          _PlanSection(quota: entry.quota!),
+        ],
+        if (entry.message case final message?) ...[
+          const SizedBox(height: IdeSpacing.space12),
+          Text(
+            message,
+            style: textStyles.caption.copyWith(color: colors.textTertiary),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _TokenSection extends StatelessWidget {
+  const _TokenSection({required this.tokens});
+
+  final UsageTokenBreakdown? tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    final tokens = this.tokens;
+    return Column(
+      key: const ValueKey('agent-usage-token-section'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('今日 Token', style: textStyles.caption),
+        const SizedBox(height: IdeSpacing.space4),
+        Text(
+          tokens == null
+              ? '暂无统计'
+              : formatUsageCount(tokens.effectiveTotal ?? 0),
+          key: const ValueKey('agent-usage-today-total'),
+          style: textStyles.metricValue.copyWith(
+            color: tokens == null ? colors.textSecondary : colors.textPrimary,
+          ),
+        ),
+        if (tokens != null) ...[
+          const SizedBox(height: IdeSpacing.space10),
+          _MetricRow(label: '输入', value: tokens.inputTokens ?? 0),
+          _MetricRow(label: '缓存输入', value: tokens.cachedInputTokens ?? 0),
+          _MetricRow(label: '输出', value: tokens.outputTokens ?? 0),
+          _MetricRow(label: '推理', value: tokens.reasoningTokens ?? 0),
+        ],
+      ],
+    );
+  }
+}
+
+class _MetricRow extends StatelessWidget {
+  const _MetricRow({required this.label, required this.value});
+
+  final String label;
+  final int value;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: IdeSpacing.space2),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
+            ),
+          ),
+          Text(formatUsageCount(value), style: textStyles.codeSmall),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlanSection extends StatelessWidget {
+  const _PlanSection({required this.quota});
+
+  final AgentUsageQuotaSnapshot quota;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    return Column(
+      key: const ValueKey('agent-usage-plan-section'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('套餐', style: textStyles.caption),
+        const SizedBox(height: IdeSpacing.space4),
+        Text(
+          formatUsagePlanType(quota.planType),
+          key: const ValueKey('agent-usage-plan-name'),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: textStyles.titleLarge,
+        ),
+        if (quota.limitName case final limitName?) ...[
+          const SizedBox(height: IdeSpacing.space2),
+          Text(
+            limitName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textStyles.caption.copyWith(color: colors.textSecondary),
+          ),
+        ],
+        if (quota.windows.isNotEmpty) ...[
+          const SizedBox(height: IdeSpacing.space10),
+          for (var index = 0; index < quota.windows.length; index++) ...[
+            _QuotaWindow(
+              key: ValueKey<String>('agent-usage-window-$index'),
+              window: quota.windows[index],
+            ),
+            if (index != quota.windows.length - 1)
+              const SizedBox(height: IdeSpacing.space8),
+          ],
+        ],
+      ],
+    );
+  }
+}
+
+class _QuotaWindow extends StatelessWidget {
+  const _QuotaWindow({required this.window, super.key});
+
+  final AgentUsageWindow window;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    final used = window.usedPercent.clamp(0, 100);
+    final remaining = math.max(0, 100 - used);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                window.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textStyles.bodySmall,
+              ),
+            ),
+            const SizedBox(width: IdeSpacing.space8),
+            Text(
+              '剩余 $remaining%',
+              style: textStyles.caption.copyWith(color: colors.textSecondary),
+            ),
+          ],
+        ),
+        const SizedBox(height: IdeSpacing.space4),
+        sf.Progress(progress: used.toDouble(), min: 0, max: 100),
+        if (window.resetsAt case final resetsAt?) ...[
+          const SizedBox(height: IdeSpacing.space2),
+          Text(
+            '重置 ${formatUsageDateTime(resetsAt)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textStyles.caption.copyWith(color: colors.textTertiary),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _RetryState extends StatelessWidget {
+  const _RetryState({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyles = IdeTextStyles.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(IdeSpacing.space12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: textStyles.bodySmall,
+            ),
+            const SizedBox(height: IdeSpacing.space8),
+            sf.GhostButton(
+              key: const ValueKey('agent-usage-retry-button'),
+              onPressed: onRetry,
+              size: sf.ButtonSize.small,
+              density: sf.ButtonDensity.dense,
+              child: const Text('重试'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
