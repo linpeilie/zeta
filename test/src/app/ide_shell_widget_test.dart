@@ -195,6 +195,47 @@ void main() {
     );
   });
 
+  testWidgets('vertical resize handles preserve accumulated drag distance', (
+    tester,
+  ) async {
+    await _pumpIde(tester);
+    await tester.tap(find.byKey(const ValueKey('left-context-action')));
+    await tester.tap(find.byKey(const ValueKey('right-files-action')));
+    await tester.tap(find.byKey(const ValueKey('right-tools-action')));
+    await tester.pump();
+
+    Future<void> expectBurstDrag({
+      required String handleKey,
+      required String topPanelKey,
+    }) async {
+      final handle = find.byKey(ValueKey(handleKey));
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await gesture.moveBy(const Offset(0, 30));
+      await tester.pump();
+      final heightAfterDragStart = _heightOf(tester, topPanelKey);
+
+      for (var index = 0; index < 4; index += 1) {
+        await gesture.moveBy(const Offset(0, 12));
+      }
+      await gesture.up();
+      await tester.pump();
+
+      expect(
+        _heightOf(tester, topPanelKey),
+        moreOrLessEquals(heightAfterDragStart + 48, epsilon: 1),
+      );
+    }
+
+    await expectBurstDrag(
+      handleKey: 'left-height-resize-handle',
+      topPanelKey: 'projects-panel-card',
+    );
+    await expectBurstDrag(
+      handleKey: 'right-height-resize-handle',
+      topPanelKey: 'files-panel-card',
+    );
+  });
+
   testWidgets('right panels use overlay in medium and compact modes', (
     tester,
   ) async {

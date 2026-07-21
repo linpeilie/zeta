@@ -14,12 +14,18 @@ class IdeResizeHandle extends StatefulWidget {
     super.key,
     this.thickness = IdeSpacing.space8,
     this.semanticLabel,
+    this.onDragStart,
+    this.onDragEnd,
+    this.onDragCancel,
   });
 
   final IdeResizeHandleAxis axis;
   final GestureDragUpdateCallback onDragUpdate;
   final double thickness;
   final String? semanticLabel;
+  final GestureDragStartCallback? onDragStart;
+  final GestureDragEndCallback? onDragEnd;
+  final GestureDragCancelCallback? onDragCancel;
 
   @override
   State<IdeResizeHandle> createState() => _IdeResizeHandleState();
@@ -53,8 +59,14 @@ class _IdeResizeHandleState extends State<IdeResizeHandle> {
         onExit: (_) => _setHovered(false),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
+          onHorizontalDragStart: isHorizontal ? widget.onDragStart : null,
           onHorizontalDragUpdate: isHorizontal ? widget.onDragUpdate : null,
+          onHorizontalDragEnd: isHorizontal ? widget.onDragEnd : null,
+          onHorizontalDragCancel: isHorizontal ? widget.onDragCancel : null,
+          onVerticalDragStart: !isHorizontal ? widget.onDragStart : null,
           onVerticalDragUpdate: !isHorizontal ? widget.onDragUpdate : null,
+          onVerticalDragEnd: !isHorizontal ? widget.onDragEnd : null,
+          onVerticalDragCancel: !isHorizontal ? widget.onDragCancel : null,
           child: SizedBox(
             width: isHorizontal ? widget.thickness : null,
             height: !isHorizontal ? widget.thickness : null,

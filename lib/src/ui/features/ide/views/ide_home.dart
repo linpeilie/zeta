@@ -955,7 +955,7 @@ class _IdeHomeState extends State<IdeHome> {
 
 enum _IdeHomePage { home, settings, usageStatistics }
 
-class _ResizableColumn extends StatelessWidget {
+class _ResizableColumn extends StatefulWidget {
   const _ResizableColumn({
     required this.topVisible,
     required this.bottomVisible,
@@ -975,36 +975,62 @@ class _ResizableColumn extends StatelessWidget {
   final Key heightHandleKey;
 
   @override
+  State<_ResizableColumn> createState() => _ResizableColumnState();
+}
+
+class _ResizableColumnState extends State<_ResizableColumn> {
+  double? _dragStartTopHeight;
+  double? _dragStartGlobalY;
+
+  void _startDrag(DragStartDetails details, double resizableHeight) {
+    _dragStartTopHeight = resizableHeight * widget.topRatio.clamp(0.1, 0.9);
+    _dragStartGlobalY = details.globalPosition.dy;
+  }
+
+  void _updateDrag(DragUpdateDetails details, double resizableHeight) {
+    // 固定一次拖拽的起点，避免同一帧内的多次 update 都从旧布局高度计算。
+    _dragStartTopHeight ??= resizableHeight * widget.topRatio.clamp(0.1, 0.9);
+    _dragStartGlobalY ??= details.globalPosition.dy - details.delta.dy;
+    final topHeight =
+        _dragStartTopHeight! + details.globalPosition.dy - _dragStartGlobalY!;
+    widget.onTopRatioChanged(topHeight / resizableHeight);
+  }
+
+  void _finishDrag() {
+    _dragStartTopHeight = null;
+    _dragStartGlobalY = null;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (topVisible && !bottomVisible) {
-      return SizedBox.expand(child: top);
+    if (widget.topVisible && !widget.bottomVisible) {
+      return SizedBox.expand(child: widget.top);
     }
-    if (!topVisible && bottomVisible) {
-      return SizedBox.expand(child: bottom);
+    if (!widget.topVisible && widget.bottomVisible) {
+      return SizedBox.expand(child: widget.bottom);
     }
-    if (!topVisible && !bottomVisible) {
+    if (!widget.topVisible && !widget.bottomVisible) {
       return const SizedBox.shrink();
     }
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final resizableHeight = constraints.maxHeight - IdeSpacing.space8;
-        final topHeight = resizableHeight * topRatio.clamp(0.1, 0.9);
+        final topHeight = resizableHeight * widget.topRatio.clamp(0.1, 0.9);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SizedBox(height: topHeight, child: top),
+            SizedBox(height: topHeight, child: widget.top),
             IdeResizeHandle(
-              key: heightHandleKey,
+              key: widget.heightHandleKey,
               axis: IdeResizeHandleAxis.vertical,
               semanticLabel: 'Resize panel height',
-              onDragUpdate: (details) {
-                onTopRatioChanged(
-                  (topHeight + details.delta.dy) / resizableHeight,
-                );
-              },
+              onDragStart: (details) => _startDrag(details, resizableHeight),
+              onDragUpdate: (details) => _updateDrag(details, resizableHeight),
+              onDragEnd: (_) => _finishDrag(),
+              onDragCancel: _finishDrag,
             ),
-            Expanded(child: bottom),
+            Expanded(child: widget.bottom),
           ],
         );
       },
