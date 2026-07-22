@@ -291,6 +291,47 @@ void main() {
       expect(mapper.diagnostics.duplicateTerminalIgnored, 1);
     });
 
+    test('prompt failure keeps a friendly summary and ignores duplicates', () {
+      final first = mapper.mapPromptTerminal(
+        runtimeScope: runtimeScope,
+        sessionId: sessionId,
+        turnId: turnId,
+        stopReason: 'prompt_error',
+        source: GrokTerminalSource.promptError,
+        errorMessage: 'Grok rate limit reached. Please try again later.',
+        raw: const <String, Object?>{
+          'jsonRpcError': <String, Object?>{
+            'code': -32003,
+            'message': 'Rate limited',
+          },
+        },
+      );
+      final duplicate = mapper.mapPromptTerminal(
+        runtimeScope: runtimeScope,
+        sessionId: sessionId,
+        turnId: turnId,
+        stopReason: 'prompt_error',
+        source: GrokTerminalSource.promptError,
+        errorMessage: 'must not replace the first terminal',
+      );
+
+      final completed = first.events
+          .whereType<AgentTurnCompletedEvent>()
+          .single;
+      expect(completed.status, AgentHistoryTurnStatus.failed);
+      expect(
+        completed.errorMessage,
+        'Grok rate limit reached. Please try again later.',
+      );
+      expect(completed.raw['jsonRpcError'], const <String, Object?>{
+        'code': -32003,
+        'message': 'Rate limited',
+      });
+      expect(duplicate.events, isEmpty);
+      expect(mapper.diagnostics.terminalAccepted, 1);
+      expect(mapper.diagnostics.duplicateTerminalIgnored, 1);
+    });
+
     test('terminal permits known tool terminal update but no new tool', () {
       _mapTool(
         mapper,

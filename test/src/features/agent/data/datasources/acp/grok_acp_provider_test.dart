@@ -682,9 +682,53 @@ void main() {
       await provider.dispose();
     });
 
-    test(
-      'prompt error completes failed and invalidates identity state',
-      () async {
+    for (final scenario
+        in <({String name, Object error, String message, bool connectionLost})>[
+          (
+            name: 'rate-limit JSON-RPC error',
+            error: const JsonRpcException(
+              JsonRpcError(
+                code: -32003,
+                message: 'Rate limited',
+                data: <String, Object?>{'retryAfterSeconds': 30},
+              ),
+            ),
+            message: 'Grok rate limit reached. Please try again later.',
+            connectionLost: false,
+          ),
+          (
+            name: 'generic JSON-RPC error',
+            error: const JsonRpcException(
+              JsonRpcError(code: -32603, message: 'Provider rejected request'),
+            ),
+            message: 'Grok request failed: Provider rejected request',
+            connectionLost: false,
+          ),
+          (
+            name: 'timeout',
+            error: TimeoutException(
+              'JSON-RPC request timed out: session/prompt',
+              const Duration(seconds: 30),
+            ),
+            message: 'Grok request timed out. Please try again.',
+            connectionLost: false,
+          ),
+          (
+            name: 'connection close',
+            error: const JsonRpcTransportClosedException(
+              'JSON-RPC process exited with code 1',
+            ),
+            message: 'Grok connection closed. Reconnect and try again.',
+            connectionLost: true,
+          ),
+          (
+            name: 'unknown exception',
+            error: StateError('redacted failure'),
+            message: 'Grok request failed. Please try again.',
+            connectionLost: false,
+          ),
+        ]) {
+      test('normalizes prompt ${scenario.name} into one failed turn', () async {
         final peer = _FakeJsonRpcPeer();
         final mapper = GrokAcpNotificationMapper();
         final provider = GrokAcpAgentProvider(
@@ -692,8 +736,10 @@ void main() {
           peer: peer,
           notificationMapper: mapper,
         );
+        addTearDown(provider.dispose);
         final events = <AgentEvent>[];
         final subscription = provider.events.listen(events.add);
+        addTearDown(subscription.cancel);
 
         final session = await provider.startSession(
           context: const AgentContext(projectPath: r'D:\repo\zeta'),
@@ -705,30 +751,58 @@ void main() {
           message: 'ping',
         );
         await _waitUntil(() => peer.requestMethods.contains('session/prompt'));
-        final expectation = expectLater(promptFuture, throwsStateError);
-        peer.promptCompleter!.completeError(StateError('redacted failure'));
-        await expectation;
+        if (scenario.connectionLost) {
+          await peer.closeNotificationStream();
+        }
+        peer.promptCompleter!.completeError(scenario.error);
+        final turn = await promptFuture;
         await Future<void>.delayed(Duration.zero);
 
+        final started = events.whereType<AgentTurnStartedEvent>().last;
         final completed = events.whereType<AgentTurnCompletedEvent>().single;
+        final visibleError = events.whereType<AgentErrorEvent>().single;
+        expect(turn.id, started.turn.id);
         expect(completed.status, AgentHistoryTurnStatus.failed);
-        expect(mapper.diagnostics.terminalAccepted, 1);
-        final turnId = events.whereType<AgentTurnStartedEvent>().last.turn.id;
+        expect(completed.errorMessage, scenario.message);
+        expect(completed.raw['operation'], 'session/prompt');
+        expect(visibleError.message, scenario.message);
+        expect(visibleError.details, isNull);
+        expect(visibleError.sessionId, session.id);
+        expect(visibleError.turnId, started.turn.id);
+        expect(visibleError.raw, completed.raw);
         expect(
-          mapper
-              .snapshot(
-                runtimeScope: provider.runtimeScope!,
-                sessionId: session.id,
-                turnId: turnId,
-              )!
-              .terminal,
-          isTrue,
+          visibleError.raw['exceptionType'],
+          scenario.error.runtimeType.toString(),
         );
-
-        await subscription.cancel();
-        await provider.dispose();
-      },
-    );
+        final finalStatus = events.whereType<AgentStatusEvent>().last.status;
+        expect(
+          finalStatus.state,
+          scenario.connectionLost
+              ? AgentProviderConnectionState.unavailable
+              : AgentProviderConnectionState.ready,
+        );
+        expect(mapper.diagnostics.terminalAccepted, 1);
+        if (!scenario.connectionLost) {
+          expect(
+            mapper
+                .snapshot(
+                  runtimeScope: provider.runtimeScope!,
+                  sessionId: session.id,
+                  turnId: started.turn.id,
+                )!
+                .terminal,
+            isTrue,
+          );
+        }
+        if (scenario.error case JsonRpcException(:final error)) {
+          final rawRpcError =
+              visibleError.raw['jsonRpcError']! as Map<String, Object?>;
+          expect(rawRpcError['code'], error.code);
+          expect(rawRpcError['message'], error.message);
+          expect(rawRpcError['data'], error.data);
+        }
+      });
+    }
 
     test('peer close and dispose invalidate reducer lifecycle state', () async {
       final peer = _FakeJsonRpcPeer();

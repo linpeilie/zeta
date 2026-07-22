@@ -63,6 +63,7 @@ final class GrokAcpNotificationMapper {
     required String turnId,
     required String stopReason,
     required GrokTerminalSource source,
+    String? errorMessage,
     Map<String, Object?> raw = const <String, Object?>{},
   }) => sessionUpdateMapper.mapPromptTerminal(
     runtimeScope: runtimeScope,
@@ -70,6 +71,7 @@ final class GrokAcpNotificationMapper {
     turnId: turnId,
     stopReason: stopReason,
     source: source,
+    errorMessage: errorMessage,
     raw: raw,
   );
 

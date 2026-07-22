@@ -100,6 +100,7 @@ final class GrokSessionUpdateMapper {
     required String turnId,
     required String stopReason,
     required GrokTerminalSource source,
+    String? errorMessage,
     Map<String, Object?> raw = const <String, Object?>{},
   }) {
     final status = _stopReasonToStatus(stopReason);
@@ -122,7 +123,7 @@ final class GrokSessionUpdateMapper {
           turnId: terminal.turnId,
           status: terminal.status,
           errorMessage: terminal.status == AgentHistoryTurnStatus.failed
-              ? stopReason
+              ? errorMessage ?? stopReason
               : null,
           raw: raw,
         ),

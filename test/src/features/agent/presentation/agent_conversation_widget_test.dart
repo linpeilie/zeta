@@ -823,6 +823,64 @@ void main() {
     expect(mentionFileButton, findsOneWidget);
   });
 
+  testWidgets('renders one friendly Grok prompt error and allows retry', (
+    tester,
+  ) async {
+    const errorMessage = 'Grok rate limit reached. Please try again later.';
+    final session = activeProjectSessionStore(tempDirectories);
+    final provider = FakeAgentProvider(
+      config: AgentProviderConfig.defaultGrok,
+      declaredCapabilities: AgentProviderCapabilities.grokAcp,
+      turnErrorMessage: errorMessage,
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(
+          const AgentProviderSettings(
+            providers: <AgentProviderConfig>[AgentProviderConfig.defaultGrok],
+            activeProviderId: grokAgentProviderId,
+          ),
+        ),
+      ),
+    );
+    await pumpUntilAgentComposer(tester);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('agent-message-input')),
+      'Trigger the rate limit',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text(errorMessage), findsOneWidget);
+    expect(find.textContaining('Agent request failed'), findsNothing);
+    expect(find.textContaining('Turn failed'), findsNothing);
+    expect(find.textContaining('prompt_error'), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('agent-turn-footer-turn-1')),
+      findsOneWidget,
+    );
+
+    await pumpUntilAgentComposer(tester);
+    await tester.enterText(
+      find.byKey(const ValueKey('agent-message-input')),
+      'Retry manually',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+    await tester.pumpAndSettle();
+    expect(provider.sentMessages, <String>[
+      'Trigger the rate limit',
+      'Retry manually',
+    ]);
+  });
+
   testWidgets(
     'renders file edits in a separate file edit group with file-level details',
     (tester) async {

@@ -688,21 +688,13 @@ class GrokAcpAgentProvider
       );
     } catch (error) {
       _log.warning('session/prompt failed (${error.runtimeType})');
-      _notificationMapper.noteBoundary(
-        runtimeScope: currentRuntimeScope,
-        sessionId: session.id,
-        runningTurnId: turnId,
-        kind: GrokNarrativeBoundaryKind.warningOrSystem,
-      );
-      final mapped = _notificationMapper.mapPromptTerminal(
+      final failure = _normalizePromptFailure(error);
+      _emitPromptFailure(
         runtimeScope: currentRuntimeScope,
         sessionId: session.id,
         turnId: turnId,
-        stopReason: 'prompt_error',
-        source: GrokTerminalSource.promptError,
+        failure: failure,
       );
-      _noteTurnCompletedFromMapped(sessionId: session.id, mapped: mapped);
-      _emitMapped(mapped);
       _notificationMapper.invalidateTurn(
         runtimeScope: currentRuntimeScope,
         sessionId: session.id,
@@ -710,20 +702,22 @@ class GrokAcpAgentProvider
         promptId: null,
         reason: GrokIdentityInvalidationReason.promptError,
       );
-      _addEvent(
-        AgentErrorEvent(
-          message: 'Grok prompt failed',
-          details: error.toString(),
-        ),
-      );
-      _emitStatus(
-        AgentProviderStatus(
-          state: AgentProviderConnectionState.error,
-          message: 'Prompt failed',
-          details: error.toString(),
-        ),
-      );
-      rethrow;
+      if (failure.connectionLost) {
+        if (_runningTurnIdsBySessionId.isEmpty) {
+          _notificationMapper.invalidateRuntime(
+            runtimeScope: currentRuntimeScope,
+            reason: GrokIdentityInvalidationReason.peerClosed,
+          );
+        }
+        _emitConnectionUnavailableStatus();
+      } else {
+        _emitStatus(
+          AgentProviderStatus(
+            state: AgentProviderConnectionState.ready,
+            message: '${config.displayName} ready',
+          ),
+        );
+      }
     }
 
     return turn;
@@ -961,6 +955,105 @@ class GrokAcpAgentProvider
     }
   }
 
+  /// 将 prompt 异常收敛为一次 turn-scoped 错误与同摘要失败终态。
+  void _emitPromptFailure({
+    required AgentRuntimeScope runtimeScope,
+    required String sessionId,
+    required String turnId,
+    required _GrokPromptFailure failure,
+  }) {
+    _notificationMapper.noteBoundary(
+      runtimeScope: runtimeScope,
+      sessionId: sessionId,
+      runningTurnId: turnId,
+      kind: GrokNarrativeBoundaryKind.warningOrSystem,
+    );
+    final mapped = _notificationMapper.mapPromptTerminal(
+      runtimeScope: runtimeScope,
+      sessionId: sessionId,
+      turnId: turnId,
+      stopReason: 'prompt_error',
+      source: GrokTerminalSource.promptError,
+      errorMessage: failure.message,
+      raw: failure.raw,
+    );
+    final accepted = mapped.events.any(
+      (event) => event is AgentTurnCompletedEvent,
+    );
+    if (!accepted) {
+      return;
+    }
+
+    // 错误事件必须先于终态，ViewModel 才能用同摘要抑制 Turn failed 重复消息。
+    _addEvent(
+      AgentErrorEvent(
+        message: failure.message,
+        sessionId: sessionId,
+        turnId: turnId,
+        raw: failure.raw,
+      ),
+    );
+    _noteTurnCompletedFromMapped(sessionId: sessionId, mapped: mapped);
+    _emitMapped(mapped);
+  }
+
+  _GrokPromptFailure _normalizePromptFailure(Object error) {
+    final exceptionType = error.runtimeType.toString();
+    if (error is JsonRpcException) {
+      final rpcError = error.error;
+      final raw = <String, Object?>{
+        'operation': 'session/prompt',
+        'exceptionType': exceptionType,
+        'jsonRpcError': rpcError.toJson(),
+      };
+      if (rpcError.code == -32003) {
+        return _GrokPromptFailure(
+          message: 'Grok rate limit reached. Please try again later.',
+          raw: raw,
+        );
+      }
+      final serverMessage = rpcError.message.trim();
+      return _GrokPromptFailure(
+        message: serverMessage.isEmpty
+            ? 'Grok request failed. Please try again.'
+            : 'Grok request failed: $serverMessage',
+        raw: raw,
+      );
+    }
+    if (error is TimeoutException) {
+      return _GrokPromptFailure(
+        message: 'Grok request timed out. Please try again.',
+        raw: <String, Object?>{
+          'operation': 'session/prompt',
+          'exceptionType': exceptionType,
+          'message': error.message,
+          if (error.duration != null)
+            'durationMs': error.duration!.inMilliseconds,
+        },
+      );
+    }
+    if (error is JsonRpcTransportClosedException ||
+        error is ProviderConnectionClosedException) {
+      return _GrokPromptFailure(
+        message: 'Grok connection closed. Reconnect and try again.',
+        raw: <String, Object?>{
+          'operation': 'session/prompt',
+          'exceptionType': exceptionType,
+          'message': error.toString(),
+        },
+        connectionLost: true,
+      );
+    }
+    return _GrokPromptFailure(
+      message: 'Grok request failed. Please try again.',
+      raw: <String, Object?>{
+        'operation': 'session/prompt',
+        'exceptionType': exceptionType,
+        'message': error.toString(),
+      },
+    );
+  }
+
   /// 通知路径已完成回合时，清除 running 标记，避免 RPC 返回再 complete 一次。
   void _noteTurnCompletedFromMapped({
     required String? sessionId,
@@ -1171,14 +1264,15 @@ class GrokAcpAgentProvider
       return;
     }
     final closedRuntimeScope = _peer.runtimeScope;
-    if (closedRuntimeScope != null) {
+    // 活动 prompt 的 pending RPC 会携带真实关闭异常完成；暂缓 runtime
+    // invalidation，让对应 catch 能先生成带诊断信息的失败终态。
+    if (closedRuntimeScope != null && _runningTurnIdsBySessionId.isEmpty) {
       _notificationMapper.invalidateRuntime(
         runtimeScope: closedRuntimeScope,
         reason: GrokIdentityInvalidationReason.peerClosed,
       );
     }
     _initialized = false;
-    _runningTurnIdsBySessionId.clear();
     for (final pending in _pendingPermissions.values) {
       _addEvent(
         AgentPermissionResolvedEvent(
@@ -1189,7 +1283,7 @@ class GrokAcpAgentProvider
       );
     }
     _pendingPermissions.clear();
-    _emitUnavailable('Grok ACP 连接已关闭');
+    _emitConnectionUnavailableStatus();
   }
 
   Future<void> _handlePermissionRequest(JsonRpcRequest request) async {
@@ -1543,6 +1637,15 @@ class GrokAcpAgentProvider
     _addEvent(AgentStatusEvent(status));
   }
 
+  void _emitConnectionUnavailableStatus() {
+    _emitStatus(
+      const AgentProviderStatus(
+        state: AgentProviderConnectionState.unavailable,
+        message: 'Grok connection closed. Reconnect and try again.',
+      ),
+    );
+  }
+
   void _emitUnavailable(String message, {String? details}) {
     _emitStatus(
       AgentProviderStatus(
@@ -1582,4 +1685,16 @@ class _PendingAcpPermission {
   final String requestKey;
   final AgentRuntimeScope? runtimeScope;
   final AcpPermissionMapping mapping;
+}
+
+final class _GrokPromptFailure {
+  const _GrokPromptFailure({
+    required this.message,
+    required this.raw,
+    this.connectionLost = false,
+  });
+
+  final String message;
+  final Map<String, Object?> raw;
+  final bool connectionLost;
 }

@@ -132,6 +132,7 @@ class FakeAgentProvider
     this.sessionTitle,
     this.tokenUsageDuringTurn,
     this.responseText = 'Fake response from provider',
+    this.turnErrorMessage,
     this.onResumeSession,
     this.declaredCapabilities = AgentProviderCapabilities.codexAppServer,
     this.config = AgentProviderConfig.defaultCodex,
@@ -150,6 +151,7 @@ class FakeAgentProvider
   final String? sessionTitle;
   final AgentTokenUsage? tokenUsageDuringTurn;
   final String responseText;
+  final String? turnErrorMessage;
   final Future<AgentSession> Function(String sessionId)? onResumeSession;
   final AgentProviderCapabilities declaredCapabilities;
   @override
@@ -190,7 +192,7 @@ class FakeAgentProvider
     await initialize();
     return AgentSession(
       id: 'thread-1',
-      providerId: defaultAgentProviderId,
+      providerId: config.id,
       title: sessionTitle,
     );
   }
@@ -208,7 +210,7 @@ class FakeAgentProvider
     }
     return AgentSession(
       id: sessionId,
-      providerId: defaultAgentProviderId,
+      providerId: config.id,
       title: sessionTitle,
     );
   }
@@ -281,20 +283,39 @@ class FakeAgentProvider
         .join('\n');
     sentMessages.add(text);
     final turn = AgentTurn(id: 'turn-1', sessionId: session.id);
-    _events
-      ..add(AgentTurnStartedEvent(turn))
-      ..add(
-        AgentMessageDeltaEvent(
-          messageId: 'message-1',
-          delta: responseText,
-          role: AgentMessageRole.agent,
-          phase: emitCompletedCommentary
-              ? AgentMessagePhase.commentary
-              : AgentMessagePhase.response,
-          sessionId: session.id,
-          turnId: turn.id,
-        ),
-      );
+    _events.add(AgentTurnStartedEvent(turn));
+    final errorMessage = turnErrorMessage;
+    if (errorMessage != null) {
+      _events
+        ..add(
+          AgentErrorEvent(
+            message: errorMessage,
+            sessionId: session.id,
+            turnId: turn.id,
+          ),
+        )
+        ..add(
+          AgentTurnCompletedEvent(
+            sessionId: session.id,
+            turnId: turn.id,
+            status: AgentHistoryTurnStatus.failed,
+            errorMessage: errorMessage,
+          ),
+        );
+      return turn;
+    }
+    _events.add(
+      AgentMessageDeltaEvent(
+        messageId: 'message-1',
+        delta: responseText,
+        role: AgentMessageRole.agent,
+        phase: emitCompletedCommentary
+            ? AgentMessagePhase.commentary
+            : AgentMessagePhase.response,
+        sessionId: session.id,
+        turnId: turn.id,
+      ),
+    );
     if (tokenUsageDuringTurn != null) {
       _events.add(
         AgentTokenUsageEvent(
