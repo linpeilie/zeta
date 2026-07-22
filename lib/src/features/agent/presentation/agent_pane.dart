@@ -38,6 +38,7 @@ part 'widgets/agent_pane_composer.dart';
 part 'widgets/agent_pane_context_panel.dart';
 part 'widgets/agent_pane_header.dart';
 part 'widgets/agent_pane_messages.dart';
+part 'widgets/agent_pane_plan_panel.dart';
 part 'widgets/agent_model_config.dart';
 part 'widgets/agent_pane_sections.dart';
 part 'widgets/agent_pane_styles.dart';
@@ -173,6 +174,10 @@ class _AgentPaneState extends State<AgentPane> {
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
+                                _AgentActivePlanSection(
+                                  viewModel: widget.viewModel,
+                                  pagePadding: pagePadding,
+                                ),
                                 // 阻塞交互始终固定在输入框上方，并沿用原最大高度。
                                 _AgentPendingInteractionSection(
                                   viewModel: widget.viewModel,

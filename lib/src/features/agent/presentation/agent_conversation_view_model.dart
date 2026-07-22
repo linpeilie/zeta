@@ -163,6 +163,20 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   AgentConversationTurnState? get liveTurnState => _timeline.liveTurnState;
 
+  /// 当前 live turn 的结构化执行计划；不会进入历史时间线。
+  List<AgentPlanEntry> get activePlanEntries =>
+      liveTurnState?.planEntries ?? const <AgentPlanEntry>[];
+
+  /// Plan 面板只在非阻塞的可写运行回合中展示多步骤计划。
+  bool get shouldShowActivePlan =>
+      isTurnRunning &&
+      !isReadOnly &&
+      activePlanEntries.length >= 2 &&
+      permissionRequests.isEmpty &&
+      planApprovalRequests.isEmpty &&
+      !threadWaitingOnApproval &&
+      !threadWaitingOnUserInput;
+
   bool get hasOlderTurns => _timeline.hasOlderTurns;
 
   AgentProviderStatus get status => _status;
@@ -621,6 +635,10 @@ class AgentConversationViewModel extends ChangeNotifier {
     return _timeline.isPlanMessageExpanded(messageId);
   }
 
+  bool isActivePlanExpanded(String turnId) {
+    return _timeline.isActivePlanExpanded(turnId);
+  }
+
   bool isCommandGroupExpanded(String commandGroupId) {
     return _timeline.isCommandGroupExpanded(commandGroupId);
   }
@@ -644,6 +662,11 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   void togglePlanMessage(String messageId) {
     _timeline.togglePlanMessage(messageId);
+    _publishUiChanges(expansion: true);
+  }
+
+  void toggleActivePlan(String turnId) {
+    _timeline.toggleActivePlan(turnId);
     _publishUiChanges(expansion: true);
   }
 
@@ -2375,8 +2398,8 @@ class AgentConversationViewModel extends ChangeNotifier {
         )) {
           break;
         }
-        _timeline.upsertPlanMessage(event);
-        _flushStreamChangesNow(liveTurn: true, autoScroll: true);
+        _timeline.replaceActivePlan(event);
+        _flushStreamChangesNow(liveTurn: true);
       case AgentSessionConfigUpdatedEvent():
         if (!_shouldHandleEventForCurrentThread(sessionId: event.sessionId)) {
           break;

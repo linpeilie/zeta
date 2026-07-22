@@ -16,6 +16,9 @@ enum AgentToolKind {
 /// 工具调用生命周期状态。
 enum AgentToolStatus { pending, inProgress, completed, failed, cancelled }
 
+/// 计划步骤的中立状态。
+enum AgentPlanEntryStatus { pending, inProgress, completed, unknown }
+
 /// 计划列表中的单个条目。
 class AgentPlanEntry {
   const AgentPlanEntry({
@@ -36,6 +39,20 @@ class AgentPlanEntry {
 
   /// provider 原始优先级。
   final String? priority;
+
+  /// 将不同 Provider 的原始状态规范化为统一计划状态。
+  AgentPlanEntryStatus get normalizedStatus {
+    final normalized = status
+        ?.trim()
+        .replaceAll(RegExp(r'[^a-zA-Z]'), '')
+        .toLowerCase();
+    return switch (normalized) {
+      'pending' => AgentPlanEntryStatus.pending,
+      'inprogress' || 'running' || 'started' => AgentPlanEntryStatus.inProgress,
+      'completed' || 'complete' || 'done' => AgentPlanEntryStatus.completed,
+      _ => AgentPlanEntryStatus.unknown,
+    };
+  }
 }
 
 /// Provider 上报的工具调用。

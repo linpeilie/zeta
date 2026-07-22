@@ -362,6 +362,48 @@ Agent CLI 的数据不属于这套目录：Codex/Grok/Cursor 配置与 session �
   并用可控 Completer 覆盖快速连续修改的最终快照语义。
 - 只有端到端用户流程稳定后再添加 integration test。
 
+### 执行中 Plan 浮动面板的手动验收
+
+使用可写的 Codex thread，并保持在普通执行模式（非 Plan 审批模式）。在输入框中发送以下
+提示词：
+
+```text
+这是一次 Plan 面板 UI 测试。请只读检查当前项目，不修改任何文件。
+
+开始时先创建一个至少包含 4 个步骤的执行计划，并在执行过程中持续更新计划状态：
+同一时间只能有一个步骤处于 in_progress，每完成一步立即标记 completed，再开始下一步。
+
+任务步骤：
+1. 定位应用入口和组合边界
+2. 梳理 Agent feature 的目录结构
+3. 查找主要 Widget 测试及其覆盖范围
+4. 总结当前项目架构和测试现状
+
+请按计划逐步执行，最后给出简短总结。
+```
+
+收到首个包含不少于 2 个步骤的结构化计划更新后，按以下项目验收：
+
+1. 输入框上方出现水平居中的浮动 Plan 卡片，默认折叠，宽度不超过 340px；时间线滚动时
+   卡片保持在输入区上方。
+2. 折叠态显示 `Plan`、当前步骤序号/总数和单行当前步骤摘要；点击卡片后展开，再次点击
+   收起。
+3. 展开态显示步骤状态列表；步骤较多时仅列表区滚动，列表区高度不超过 200px，长文本
+   不造成横向溢出。
+4. 步骤推进时，已完成、执行中和待执行标记随结构化计划更新变化；全部步骤完成后卡片
+   仍保留到 turn 终态。
+5. 权限审批、计划审批或用户提问出现时卡片暂时隐藏；交互结束后恢复原折叠状态。
+6. turn 完成、取消或失败后卡片立即消失；结构化计划不会额外生成时间线 Plan 消息。
+
+窄视口和放大字体可分别通过缩窄应用窗口、提高系统文本缩放后重复上述流程检查。自动化
+回归可运行：
+
+```sh
+flutter test test/src/features/agent/presentation/agent_conversation_widget_test.dart
+flutter test test/src/features/agent/presentation/agent_conversation_view_model_test.dart
+flutter test test/src/features/agent/application/agent_conversation_timeline_store_test.dart
+```
+
 ## 12. 常见问题
 
 ### Codex provider 启动失败

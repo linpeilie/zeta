@@ -505,14 +505,25 @@ class _CodexNotificationMapper {
     if (entries is! List<Object?>) {
       return const <AgentPlanEntry>[];
     }
-    return entries.map((item) {
+    final mapped = <AgentPlanEntry>[];
+    for (final item in entries) {
       final map = _map(item);
-      return AgentPlanEntry(
-        content: _string(map['content']) ?? _string(map['text']) ?? '$item',
-        status: _string(map['status']),
-        priority: _string(map['priority']),
+      final content =
+          _string(map['step']) ??
+          _string(map['content']) ??
+          _string(map['text']);
+      if (content == null || content.trim().isEmpty) {
+        continue;
+      }
+      mapped.add(
+        AgentPlanEntry(
+          content: content.trim(),
+          status: _string(map['status']),
+          priority: _string(map['priority']),
+        ),
       );
-    }).toList();
+    }
+    return List<AgentPlanEntry>.unmodifiable(mapped);
   }
 
   /// 将仅含 `threadId` 的生命周期通知映射为对应事件。

@@ -986,6 +986,59 @@ void main() {
         AgentMessageKind.plan,
       );
     });
+
+    test('keeps structured plans only on the matching live turn', () {
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+      store.startPendingLiveTurn();
+      store.beginLiveTurnGroup(
+        const AgentTurn(id: 'turn-1', sessionId: 'thread-1'),
+      );
+      store.syncLiveTurnBinding();
+
+      store.replaceActivePlan(
+        const AgentPlanUpdatedEvent(
+          entries: <AgentPlanEntry>[
+            AgentPlanEntry(content: 'Inspect', status: 'completed'),
+            AgentPlanEntry(content: 'Implement', status: 'inProgress'),
+          ],
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      );
+
+      final live = store.liveTurnState!;
+      expect(live.planEntries.map((entry) => entry.content), <String>[
+        'Inspect',
+        'Implement',
+      ]);
+      expect(
+        store.timelineEntries.whereType<AgentMessageTimelineEntry>().where(
+          (entry) => entry.message.id == 'turn-1-plan',
+        ),
+        isEmpty,
+      );
+
+      store.replaceActivePlan(
+        const AgentPlanUpdatedEvent(
+          entries: <AgentPlanEntry>[
+            AgentPlanEntry(content: 'Stale', status: 'inProgress'),
+            AgentPlanEntry(content: 'Ignored', status: 'pending'),
+          ],
+          sessionId: 'thread-1',
+          turnId: 'turn-stale',
+        ),
+      );
+      expect(live.planEntries.first.content, 'Inspect');
+
+      store.toggleActivePlan('turn-1');
+      expect(store.isActivePlanExpanded('turn-1'), isTrue);
+      store.completeLiveTurnGroup('turn-1');
+      store.syncLiveTurnBinding();
+      expect(live.planEntries, isEmpty);
+      expect(store.liveTurnState, isNull);
+      expect(store.isActivePlanExpanded('turn-1'), isFalse);
+    });
   });
 }
 

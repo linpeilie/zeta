@@ -2573,6 +2573,174 @@ void main() {
     );
   });
 
+  testWidgets(
+    'shows a responsive active plan above the composer and preserves expansion',
+    (tester) async {
+      final session = activeProjectSessionStore(tempDirectories);
+      final provider = FakeAgentProvider(completeTurns: false);
+
+      await tester.pumpWidget(
+        MainApp(
+          enableNativeWindowFrame: false,
+          sessionLoader: session.load,
+          sessionSaver: session.save,
+          agentProviderFactory: FakeAgentProviderFactory(provider),
+          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        ),
+      );
+      await pumpUntilAgentComposer(tester);
+      await tester.enterText(
+        find.byKey(const ValueKey('agent-message-input')),
+        'Run a multi-step task',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      provider.emit(
+        const AgentPlanUpdatedEvent(
+          entries: <AgentPlanEntry>[
+            AgentPlanEntry(content: 'Only step', status: 'inProgress'),
+          ],
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('agent-active-plan-card-turn-1')),
+        findsNothing,
+      );
+
+      final entries = <AgentPlanEntry>[
+        const AgentPlanEntry(content: 'Inspect code', status: 'completed'),
+        const AgentPlanEntry(
+          content: 'Build the compact floating plan panel',
+          status: 'inProgress',
+        ),
+        for (var index = 3; index <= 12; index += 1)
+          AgentPlanEntry(content: 'Pending step $index', status: 'pending'),
+      ];
+      provider.emit(
+        AgentPlanUpdatedEvent(
+          entries: entries,
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      final card = find.byKey(
+        const ValueKey<String>('agent-active-plan-card-turn-1'),
+      );
+      final summary = find.byKey(
+        const ValueKey<String>('agent-active-plan-summary-turn-1'),
+      );
+      final body = find.byKey(
+        const ValueKey<String>('agent-active-plan-body-turn-1'),
+      );
+      final progress = find.byKey(
+        const ValueKey<String>('agent-active-plan-progress-turn-1'),
+      );
+      expect(card, findsOneWidget);
+      expect(summary, findsOneWidget);
+      expect(body, findsNothing);
+      expect(
+        find.descendant(of: progress, matching: find.text('2/12')),
+        findsOneWidget,
+      );
+      expect(tester.getSize(card).width, lessThanOrEqualTo(340));
+      expect(
+        tester.getCenter(card).dx,
+        closeTo(
+          tester
+              .getCenter(
+                find.byKey(const ValueKey('agent-composer-focus-ring')),
+              )
+              .dx,
+          0.5,
+        ),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('agent-active-plan-toggle-turn-1')),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final scroll = find.byKey(
+        const ValueKey<String>('agent-active-plan-scroll-turn-1'),
+      );
+      expect(summary, findsNothing);
+      expect(body, findsOneWidget);
+      expect(scroll, findsOneWidget);
+      expect(tester.getSize(scroll).height, lessThanOrEqualTo(200));
+      expect(find.bySemanticsLabel('已完成：Inspect code'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('进行中：Build the compact floating plan panel'),
+        findsOneWidget,
+      );
+
+      await tester.binding.setSurfaceSize(const Size(460, 720));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      tester.platformDispatcher.textScaleFactorTestValue = 1.6;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(tester.getSize(card).width, lessThanOrEqualTo(340));
+      expect(tester.takeException(), isNull);
+
+      provider.emit(
+        const AgentPermissionRequestedEvent(
+          AgentPermissionRequest(
+            id: 'plan-blocker',
+            title: 'Approve task',
+            kind: AgentPermissionKind.commandExecution,
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(card, findsNothing);
+
+      provider.emit(
+        const AgentPermissionResolvedEvent(
+          requestId: 'plan-blocker',
+          threadId: 'thread-1',
+        ),
+      );
+      await tester.pump();
+      expect(card, findsOneWidget);
+      expect(body, findsOneWidget);
+
+      provider.emit(
+        AgentPlanUpdatedEvent(
+          entries: <AgentPlanEntry>[
+            for (final entry in entries)
+              AgentPlanEntry(content: entry.content, status: 'completed'),
+          ],
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.descendant(of: progress, matching: find.text('12/12')),
+        findsOneWidget,
+      );
+      expect(card, findsOneWidget);
+
+      provider.emit(
+        const AgentTurnCompletedEvent(sessionId: 'thread-1', turnId: 'turn-1'),
+      );
+      await tester.pump();
+      expect(card, findsNothing);
+    },
+  );
+
   testWidgets('renders plan messages as collapsible markdown cards', (
     tester,
   ) async {

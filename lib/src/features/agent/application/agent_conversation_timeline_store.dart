@@ -53,6 +53,7 @@ class AgentConversationTimelineStore {
       <String, _ReasoningStreamBuffers>{};
   final Set<String> _expandedToolCallIds = <String>{};
   final Set<String> _expandedPlanMessageIds = <String>{};
+  final Set<String> _expandedActivePlanTurnIds = <String>{};
   final Set<String> _expandedCommandGroupIds = <String>{};
   final Set<String> _expandedFileEditItemIds = <String>{};
   final ValueNotifier<AgentConversationTurnState?> _liveTurnNotifier =
@@ -200,6 +201,10 @@ class AgentConversationTimelineStore {
     return _expandedPlanMessageIds.contains(messageId);
   }
 
+  bool isActivePlanExpanded(String turnId) {
+    return _expandedActivePlanTurnIds.contains(turnId);
+  }
+
   bool isCommandGroupExpanded(String commandGroupId) {
     return _expandedCommandGroupIds.contains(commandGroupId);
   }
@@ -266,6 +271,12 @@ class AgentConversationTimelineStore {
   void togglePlanMessage(String messageId) {
     if (!_expandedPlanMessageIds.add(messageId)) {
       _expandedPlanMessageIds.remove(messageId);
+    }
+  }
+
+  void toggleActivePlan(String turnId) {
+    if (!_expandedActivePlanTurnIds.add(turnId)) {
+      _expandedActivePlanTurnIds.remove(turnId);
     }
   }
 
@@ -343,6 +354,7 @@ class AgentConversationTimelineStore {
     _reasoningBuffersByItemId.clear();
     _expandedToolCallIds.clear();
     _expandedPlanMessageIds.clear();
+    _expandedActivePlanTurnIds.clear();
     _expandedCommandGroupIds.clear();
     _expandedFileEditItemIds.clear();
     currentTurnGroupId = null;
@@ -688,36 +700,18 @@ class AgentConversationTimelineStore {
     replaceTimelineMessage(updated);
   }
 
-  /// 将 Agent 计划更新渲染为可折叠的 markdown 消息。
-  void upsertPlanMessage(AgentPlanUpdatedEvent event) {
-    final messageId = '${event.turnId ?? 'current'}-plan';
-    final message = AgentConversationMessage(
-      id: messageId,
-      role: AgentMessageRole.agent,
-      text: _planMarkdownFromEntries(event.entries),
-      kind: AgentMessageKind.plan,
-      raw: <String, Object?>{
-        'type': 'plan',
-        'entries': <Map<String, String?>>[
-          for (final entry in event.entries)
-            <String, String?>{
-              'content': entry.content,
-              'status': entry.status,
-              'priority': entry.priority,
-            },
-        ],
-      },
-    );
-    final existingIndex = _messageIndexesByEntryId[messageId];
-    if (existingIndex == null) {
-      addConversationMessage(message);
-      _messageIndexesByEntryId[messageId] = _messages.indexWhere(
-        (item) => item.id == messageId,
-      );
+  /// 用最新结构化计划整体替换当前 live turn 的瞬时计划状态。
+  void replaceActivePlan(AgentPlanUpdatedEvent event) {
+    final runningTurnId = selectedRunningTurnId;
+    if (runningTurnId == null ||
+        (event.turnId != null && event.turnId != runningTurnId)) {
       return;
     }
-    _messages[existingIndex] = message;
-    replaceTimelineMessage(message);
+    final turnState = _turnGroups[runningTurnId];
+    if (turnState == null || !turnState.isRunning) {
+      return;
+    }
+    turnState.replacePlanEntries(event.entries);
   }
 
   /// 插入或更新工具卡片。
@@ -1049,11 +1043,14 @@ class AgentConversationTimelineStore {
   }) {
     final turnState = _turnGroups[turnId];
     if (turnState == null) {
+      _expandedActivePlanTurnIds.remove(turnId);
       currentTurnGroupId = null;
       _pendingTurnGroupId = null;
       _clearActivity();
       return;
     }
+    turnState.clearPlanEntries();
+    _expandedActivePlanTurnIds.remove(turnId);
     final oldHistoryLength = _historicalTurnOrder.length;
     final oldDefaultStartIndex = _defaultVisibleHistoryStartIndexForLength(
       oldHistoryLength,
@@ -1382,6 +1379,9 @@ class AgentConversationTimelineStore {
     if (_pendingTurnGroupId == oldId) {
       _pendingTurnGroupId = newId;
     }
+    if (_expandedActivePlanTurnIds.remove(oldId)) {
+      _expandedActivePlanTurnIds.add(newId);
+    }
   }
 
   void _registerHistoryTurn(
@@ -1529,30 +1529,6 @@ class AgentConversationTimelineStore {
     }
     return null;
   }
-}
-
-String _planMarkdownFromEntries(List<AgentPlanEntry> entries) {
-  if (entries.isEmpty) {
-    return 'Plan';
-  }
-  return entries
-      .map((entry) {
-        final marker = switch (_normalizedMessageType(entry.status)) {
-          'completed' || 'complete' || 'done' => '- [x]',
-          'pending' || 'inprogress' || 'running' || 'started' => '- [ ]',
-          _ => '-',
-        };
-        return '$marker ${entry.content}';
-      })
-      .join('\n');
-}
-
-String? _normalizedMessageType(String? value) {
-  final trimmed = value?.trim();
-  if (trimmed == null || trimmed.isEmpty) {
-    return null;
-  }
-  return trimmed.replaceAll(RegExp(r'[^a-zA-Z]'), '').toLowerCase();
 }
 
 /// Agent 面板中的单条对话消息。
@@ -1738,6 +1714,7 @@ class AgentConversationTurnState extends ChangeNotifier {
   String id;
   final bool isStandby;
   final List<AgentTimelineEntry> _entries = <AgentTimelineEntry>[];
+  final List<AgentPlanEntry> _planEntries = <AgentPlanEntry>[];
   AgentHistoryTurnStatus? _status;
   DateTime? _startedAt;
   DateTime? _completedAt;
@@ -1747,6 +1724,8 @@ class AgentConversationTurnState extends ChangeNotifier {
   bool _dirty = false;
 
   List<AgentTimelineEntry> get entries => UnmodifiableListView(_entries);
+
+  List<AgentPlanEntry> get planEntries => UnmodifiableListView(_planEntries);
 
   AgentHistoryTurnStatus? get status => _status;
 
@@ -1787,6 +1766,33 @@ class AgentConversationTurnState extends ChangeNotifier {
     if (_entries.length != removedCount) {
       _dirty = true;
     }
+  }
+
+  /// 计划更新是权威快照；不按索引或文本猜测增量身份。
+  void replacePlanEntries(Iterable<AgentPlanEntry> entries) {
+    _planEntries
+      ..clear()
+      ..addAll(
+        entries
+            .where((entry) => entry.content.trim().isNotEmpty)
+            .map(
+              (entry) => AgentPlanEntry(
+                id: entry.id,
+                content: entry.content.trim(),
+                status: entry.status,
+                priority: entry.priority,
+              ),
+            ),
+      );
+    _dirty = true;
+  }
+
+  void clearPlanEntries() {
+    if (_planEntries.isEmpty) {
+      return;
+    }
+    _planEntries.clear();
+    _dirty = true;
   }
 
   void rename(String nextId) {

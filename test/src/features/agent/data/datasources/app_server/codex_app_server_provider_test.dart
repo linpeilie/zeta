@@ -712,6 +712,56 @@ void main() {
       await provider.dispose();
     });
 
+    test(
+      'maps turn/plan/updated schema steps into active plan entries',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+
+        await provider.initialize();
+        peer.emitNotification('turn/plan/updated', <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'plan': <Object?>[
+            <String, Object?>{'step': 'Inspect code', 'status': 'completed'},
+            <String, Object?>{'step': 'Build panel', 'status': 'inProgress'},
+            <String, Object?>{'content': 'Run tests', 'status': 'pending'},
+            <String, Object?>{'text': '  Legacy text  ', 'status': 'pending'},
+            <String, Object?>{'step': '   ', 'status': 'pending'},
+            <String, Object?>{'status': 'pending'},
+          ],
+        });
+        await Future<void>.delayed(Duration.zero);
+
+        final update = events.whereType<AgentPlanUpdatedEvent>().single;
+        expect(update.sessionId, 'thread-1');
+        expect(update.turnId, 'turn-1');
+        expect(update.entries.map((entry) => entry.content), <String>[
+          'Inspect code',
+          'Build panel',
+          'Run tests',
+          'Legacy text',
+        ]);
+        expect(
+          update.entries.map((entry) => entry.normalizedStatus),
+          <AgentPlanEntryStatus>[
+            AgentPlanEntryStatus.completed,
+            AgentPlanEntryStatus.inProgress,
+            AgentPlanEntryStatus.pending,
+            AgentPlanEntryStatus.pending,
+          ],
+        );
+
+        await subscription.cancel();
+        await provider.dispose();
+      },
+    );
+
     test('maps turn/diff/updated into AgentTurnDiffEvent', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(

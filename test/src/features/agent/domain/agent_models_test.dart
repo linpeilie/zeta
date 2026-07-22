@@ -56,6 +56,46 @@ void main() {
     );
   });
 
+  group('AgentPlanEntry', () {
+    test('normalizes provider plan status variants', () {
+      expect(
+        const AgentPlanEntry(
+          content: 'Pending',
+          status: 'pending',
+        ).normalizedStatus,
+        AgentPlanEntryStatus.pending,
+      );
+      expect(
+        const AgentPlanEntry(
+          content: 'Current',
+          status: 'inProgress',
+        ).normalizedStatus,
+        AgentPlanEntryStatus.inProgress,
+      );
+      expect(
+        const AgentPlanEntry(
+          content: 'Current ACP',
+          status: 'in_progress',
+        ).normalizedStatus,
+        AgentPlanEntryStatus.inProgress,
+      );
+      expect(
+        const AgentPlanEntry(
+          content: 'Done',
+          status: 'completed',
+        ).normalizedStatus,
+        AgentPlanEntryStatus.completed,
+      );
+      expect(
+        const AgentPlanEntry(
+          content: 'Future',
+          status: 'blocked',
+        ).normalizedStatus,
+        AgentPlanEntryStatus.unknown,
+      );
+    });
+  });
+
   group('AgentThreadSummary', () {
     test('normalizes display name from title, preview, and id', () {
       final baseTime = DateTime.fromMillisecondsSinceEpoch(1);

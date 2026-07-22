@@ -1334,7 +1334,7 @@ void main() {
     });
 
     test(
-      'stores plan updates as plan messages instead of tool calls',
+      'stores structured plans on the live turn without timeline messages',
       () async {
         final provider = _FakeAgentProvider();
         final viewModel = _createViewModel(provider);
@@ -1345,10 +1345,8 @@ void main() {
           const AgentPlanUpdatedEvent(
             entries: <AgentPlanEntry>[
               AgentPlanEntry(content: 'Inspect timeline', status: 'completed'),
-              AgentPlanEntry(
-                content: 'Render markdown card',
-                status: 'pending',
-              ),
+              AgentPlanEntry(content: 'Render panel', status: 'inProgress'),
+              AgentPlanEntry(content: 'Run tests', status: 'pending'),
             ],
             sessionId: 'thread-1',
             turnId: 'turn-1',
@@ -1356,27 +1354,48 @@ void main() {
         );
         await Future<void>.delayed(Duration.zero);
 
-        final planMessage = viewModel.timelineEntries
-            .whereType<AgentMessageTimelineEntry>()
-            .map((entry) => entry.message)
-            .firstWhere((message) => message.id == 'turn-1-plan');
-        expect(planMessage.kind, AgentMessageKind.plan);
         expect(
-          planMessage.text,
-          '- [x] Inspect timeline\n- [ ] Render markdown card',
+          viewModel.activePlanEntries.map((entry) => entry.content),
+          <String>['Inspect timeline', 'Render panel', 'Run tests'],
         );
+        expect(viewModel.shouldShowActivePlan, isTrue);
         expect(
-          viewModel.timelineEntries.whereType<AgentToolTimelineEntry>(),
+          viewModel.timelineEntries
+              .whereType<AgentMessageTimelineEntry>()
+              .where((entry) => entry.message.id == 'turn-1-plan'),
           isEmpty,
         );
 
         final historyVersion = viewModel.historyVersion;
         final expansionVersion = viewModel.expansionVersion;
-        expect(viewModel.isPlanMessageExpanded(planMessage.id), isFalse);
-        viewModel.togglePlanMessage(planMessage.id);
+        expect(viewModel.isActivePlanExpanded('turn-1'), isFalse);
+        viewModel.toggleActivePlan('turn-1');
         expect(viewModel.historyVersion, historyVersion);
         expect(viewModel.expansionVersion, greaterThan(expansionVersion));
-        expect(viewModel.isPlanMessageExpanded(planMessage.id), isTrue);
+        expect(viewModel.isActivePlanExpanded('turn-1'), isTrue);
+
+        provider.emit(
+          const AgentPlanUpdatedEvent(
+            entries: <AgentPlanEntry>[
+              AgentPlanEntry(content: 'Wrong turn', status: 'inProgress'),
+              AgentPlanEntry(content: 'Must be ignored', status: 'pending'),
+            ],
+            sessionId: 'thread-1',
+            turnId: 'turn-stale',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(viewModel.activePlanEntries, hasLength(3));
+
+        provider.emit(
+          const AgentTurnCompletedEvent(
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(viewModel.activePlanEntries, isEmpty);
+        expect(viewModel.shouldShowActivePlan, isFalse);
       },
     );
 
