@@ -310,6 +310,60 @@ void main() {
         },
       );
 
+      testWidgets('restores a historical Grok failure reason and footer', (
+        tester,
+      ) async {
+        const errorMessage = 'Grok rate limit reached. Please try again later.';
+        await tester.binding.setSurfaceSize(const Size(800, 800));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final viewModel = _createViewModel(
+          _FakeAgentProvider(
+            historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+              'thread-grok-failed': const AgentThreadHistorySnapshot(
+                threadId: 'thread-grok-failed',
+                turns: <AgentHistoryTurn>[
+                  AgentHistoryTurn(
+                    id: 'turn-grok-failed',
+                    status: AgentHistoryTurnStatus.failed,
+                    duration: Duration(seconds: 9),
+                    model: 'grok-4.5',
+                    errorMessage: errorMessage,
+                    entries: <AgentHistoryEntry>[
+                      AgentHistoryMessageEntry(
+                        id: 'history-user-grok-failed',
+                        role: AgentMessageRole.user,
+                        text: 'Trigger rate limit',
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            },
+          ),
+        );
+        addTearDown(viewModel.dispose);
+
+        await tester.pumpWidget(_TestApp(viewModel: viewModel));
+        await viewModel.switchThread(
+          _thread(id: 'thread-grok-failed', title: 'Failed Grok turn'),
+        );
+        await _pumpAgentPaneUi(tester);
+
+        expect(find.text(errorMessage), findsOneWidget);
+        final footer = find.byKey(
+          const ValueKey<String>('agent-turn-footer-turn-grok-failed'),
+        );
+        expect(footer, findsOneWidget);
+        expect(
+          find.descendant(of: footer, matching: find.text('失败 · 9s')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: footer, matching: find.text('grok-4.5')),
+          findsOneWidget,
+        );
+      });
+
       testWidgets('renders end-of-turn footer with duration and token usage', (
         tester,
       ) async {

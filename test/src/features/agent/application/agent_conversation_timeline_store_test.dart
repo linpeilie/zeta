@@ -50,6 +50,71 @@ void main() {
       ]);
     });
 
+    test('restores one system error for each failed historical turn', () {
+      const errorMessage = 'Grok rate limit reached. Please try again later.';
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+
+      store.applyHistorySnapshot(
+        const AgentThreadHistorySnapshot(
+          threadId: 'thread-1',
+          turns: <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-generated',
+              status: AgentHistoryTurnStatus.failed,
+              errorMessage: errorMessage,
+              entries: <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'user-generated',
+                  role: AgentMessageRole.user,
+                  text: 'First request',
+                ),
+              ],
+            ),
+            AgentHistoryTurn(
+              id: 'turn-existing',
+              status: AgentHistoryTurnStatus.failed,
+              errorMessage: errorMessage,
+              entries: <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'user-existing',
+                  role: AgentMessageRole.user,
+                  text: 'Second request',
+                ),
+                AgentHistoryMessageEntry(
+                  id: 'existing-error',
+                  role: AgentMessageRole.system,
+                  text: errorMessage,
+                ),
+              ],
+            ),
+          ],
+        ),
+        _thread(),
+      );
+
+      expect(
+        store.messages.where((message) => message.text == errorMessage),
+        hasLength(2),
+      );
+      expect(
+        store.conversationTurns
+            .singleWhere((turn) => turn.id == 'turn-generated')
+            .entries
+            .whereType<AgentMessageTimelineEntry>()
+            .where((entry) => entry.message.text == errorMessage),
+        hasLength(1),
+      );
+      expect(
+        store.conversationTurns
+            .singleWhere((turn) => turn.id == 'turn-existing')
+            .entries
+            .whereType<AgentMessageTimelineEntry>()
+            .where((entry) => entry.message.text == errorMessage),
+        hasLength(1),
+      );
+    });
+
     test('stores session total and per-turn token deltas', () {
       final store = AgentConversationTimelineStore();
       addTearDown(store.dispose);

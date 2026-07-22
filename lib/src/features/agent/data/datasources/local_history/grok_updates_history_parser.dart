@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_user_content_parser.dart';
 import 'package:zeta/src/features/agent/data/mappers/acp_session_update_decoder.dart';
+import 'package:zeta/src/features/agent/data/mappers/grok_error_normalizer.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_session_update_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_stream_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -32,7 +33,7 @@ class GrokUpdatesHistoryParser {
     );
 
     void closeTurn({
-      AgentHistoryTurnStatus status = AgentHistoryTurnStatus.completed,
+      AgentHistoryTurnStatus? status,
       Duration? duration,
       DateTime? at,
       String? errorMessage,
@@ -41,7 +42,9 @@ class GrokUpdatesHistoryParser {
       if (turn == null) {
         return;
       }
-      turn.status = status;
+      if (status != null) {
+        turn.status = status;
+      }
       turn.noteTime(at);
       turn.completedAt ??= at;
       if (duration != null) {
@@ -190,6 +193,12 @@ class GrokUpdatesHistoryParser {
           continue;
         }
 
+        if (update['sessionUpdate'] == 'retry_state') {
+          ensureTurn(sessionId: sessionId, promptId: promptId, at: eventAt);
+          current!.noteRetryState(update);
+          continue;
+        }
+
         if (decoded is AcpUnknownUpdate) {
           continue;
         }
@@ -241,6 +250,7 @@ class GrokUpdatesHistoryParser {
 
         if (terminal != null) {
           current!.identityTerminal = true;
+          current!.noteTerminalRaw(terminal.raw);
           closeTurn(
             status: terminal.status,
             duration: terminal.duration,
@@ -290,6 +300,8 @@ class _TurnBuilder {
   AgentHistoryTurnStatus status = AgentHistoryTurnStatus.completed;
   AgentTokenUsage? tokenUsage;
   String? errorMessage;
+  Map<String, Object?>? retryStateRaw;
+  Map<String, Object?>? terminalRaw;
   DateTime? startedAt;
   DateTime? completedAt;
   Duration? duration;
@@ -317,6 +329,25 @@ class _TurnBuilder {
     if (promptKey != null) {
       _userPromptKey ??= promptKey;
     }
+  }
+
+  /// 保存 Grok 重试诊断；耗尽状态可在缺少 turn_completed 时作为失败兜底。
+  void noteRetryState(Map<String, Object?> raw) {
+    retryStateRaw = Map<String, Object?>.unmodifiable(raw);
+    final type = raw['type']?.toString().toLowerCase();
+    final isRateLimited = raw['is_rate_limited'] == true;
+    if (type != 'exhausted' && !isRateLimited) {
+      return;
+    }
+    status = AgentHistoryTurnStatus.failed;
+    errorMessage = grokRetryFailureMessage(
+      reason: raw['reason']?.toString(),
+      isRateLimited: isRateLimited,
+    );
+  }
+
+  void noteTerminalRaw(Map<String, Object?> raw) {
+    terminalRaw = Map<String, Object?>.unmodifiable(raw);
   }
 
   /// 记录事件时间；首次出现作为 [startedAt]。
@@ -505,6 +536,10 @@ class _TurnBuilder {
       // Grok turn_completed.usage 是本回合绝对用量，不是会话累计。
       tokenUsageIsSessionCumulative: false,
       errorMessage: errorMessage,
+      raw: Map<String, Object?>.unmodifiable(<String, Object?>{
+        if (retryStateRaw != null) 'retryState': retryStateRaw,
+        if (terminalRaw != null) 'turnCompleted': terminalRaw,
+      }),
     );
   }
 }

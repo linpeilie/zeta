@@ -332,6 +332,27 @@ void main() {
       expect(mapper.diagnostics.duplicateTerminalIgnored, 1);
     });
 
+    test('maps rate-limit terminal updates to a friendly failed status', () {
+      final mapped = mapper.mapXaiSessionUpdate(
+        params: _params(<String, Object?>{
+          'sessionUpdate': 'turn_completed',
+          'prompt_id': promptId,
+          'stop_reason': 'rate_limit',
+        }, eventId: 'rate-limit-terminal'),
+        runningTurnId: turnId,
+        runtimeScope: runtimeScope,
+      );
+
+      final completed = mapped.events
+          .whereType<AgentTurnCompletedEvent>()
+          .single;
+      expect(completed.status, AgentHistoryTurnStatus.failed);
+      expect(
+        completed.errorMessage,
+        'Grok rate limit reached. Please try again later.',
+      );
+    });
+
     test('terminal permits known tool terminal update but no new tool', () {
       _mapTool(
         mapper,

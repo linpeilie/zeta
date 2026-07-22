@@ -13,6 +13,7 @@ import 'package:zeta/src/features/agent/data/datasources/transport/provider_runt
 import 'package:zeta/src/features/agent/data/mappers/acp_content_codec.dart';
 import 'package:zeta/src/features/agent/data/mappers/acp_permission_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_acp_notification_mapper.dart';
+import 'package:zeta/src/features/agent/data/mappers/grok_error_normalizer.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 
@@ -1007,15 +1008,12 @@ class GrokAcpAgentProvider
         'jsonRpcError': rpcError.toJson(),
       };
       if (rpcError.code == -32003) {
-        return _GrokPromptFailure(
-          message: 'Grok rate limit reached. Please try again later.',
-          raw: raw,
-        );
+        return _GrokPromptFailure(message: grokRateLimitErrorMessage, raw: raw);
       }
       final serverMessage = rpcError.message.trim();
       return _GrokPromptFailure(
         message: serverMessage.isEmpty
-            ? 'Grok request failed. Please try again.'
+            ? grokRequestFailedErrorMessage
             : 'Grok request failed: $serverMessage',
         raw: raw,
       );
@@ -1045,7 +1043,7 @@ class GrokAcpAgentProvider
       );
     }
     return _GrokPromptFailure(
-      message: 'Grok request failed. Please try again.',
+      message: grokRequestFailedErrorMessage,
       raw: <String, Object?>{
         'operation': 'session/prompt',
         'exceptionType': exceptionType,

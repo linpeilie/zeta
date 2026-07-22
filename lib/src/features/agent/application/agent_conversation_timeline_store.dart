@@ -443,12 +443,41 @@ class AgentConversationTimelineStore {
             appendTimelineEntry(AgentHistoryEventTimelineEntry(event: entry));
         }
       }
+      _appendHistoryTurnFailure(turn);
     }
     _visibleHistoryStartIndex = _defaultVisibleHistoryStartIndexForLength(
       _historicalTurnOrder.length,
     );
     currentTurnGroupId = runningTurnId;
     syncLiveTurnBinding();
+  }
+
+  /// 历史快照只保存 turn 级错误时，将其恢复为该回合内的一条系统消息。
+  void _appendHistoryTurnFailure(AgentHistoryTurn turn) {
+    final errorMessage = turn.errorMessage?.trim();
+    if (turn.status != AgentHistoryTurnStatus.failed ||
+        errorMessage == null ||
+        errorMessage.isEmpty) {
+      return;
+    }
+    final alreadyIncluded = turn.entries
+        .whereType<AgentHistoryMessageEntry>()
+        .any(
+          (entry) =>
+              entry.role == AgentMessageRole.system &&
+              entry.text.trim() == errorMessage,
+        );
+    if (alreadyIncluded) {
+      return;
+    }
+    addConversationMessage(
+      AgentConversationMessage(
+        id: 'history-turn-error:${turn.id}',
+        role: AgentMessageRole.system,
+        text: errorMessage,
+        raw: const <String, Object?>{'historyTurnError': true},
+      ),
+    );
   }
 
   String addConversationMessage(AgentConversationMessage message) {

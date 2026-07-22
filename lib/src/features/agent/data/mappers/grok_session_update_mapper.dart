@@ -1,5 +1,6 @@
 import 'package:zeta/src/features/agent/data/mappers/acp_content_codec.dart';
 import 'package:zeta/src/features/agent/data/mappers/acp_session_update_decoder.dart';
+import 'package:zeta/src/features/agent/data/mappers/grok_error_normalizer.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_stream_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
@@ -410,7 +411,7 @@ final class GrokSessionUpdateMapper {
           status: terminal.status,
           duration: duration,
           errorMessage: terminal.status == AgentHistoryTurnStatus.failed
-              ? update.stopReason
+              ? grokTerminalErrorMessage(update.stopReason)
               : null,
           raw: update.raw,
         ),
@@ -478,6 +479,8 @@ final class GrokSessionUpdateMapper {
     if (normalized.contains('refus') ||
         normalized.contains('error') ||
         normalized.contains('fail') ||
+        normalized.contains('rate_limit') ||
+        normalized.contains('rate limit') ||
         normalized.contains('max_token') ||
         normalized.contains('max_turn')) {
       return AgentHistoryTurnStatus.failed;

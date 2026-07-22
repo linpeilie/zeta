@@ -144,6 +144,42 @@ void main() {
       expect(user.localImagePaths, <String>['/tmp/only.png']);
     });
 
+    test('restores rate-limit failure and keeps retry diagnostics raw', () {
+      const content = r'''
+{"timestamp":1000,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"trigger limit"}},"_meta":{"eventId":"u1","agentTimestampMs":1000000}}}
+{"timestamp":1001,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"retry_state","type":"retrying","attempt":1,"max_retries":2,"reason":"API error (status 429 Too Many Requests): subscription:free-usage-exhausted"},"_meta":{"eventId":"r1","agentTimestampMs":1001000}}}
+{"timestamp":1002,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"retry_state","type":"exhausted","attempts":2,"reason":"API error (status 429 Too Many Requests): subscription:free-usage-exhausted","is_rate_limited":true},"_meta":{"eventId":"r2","agentTimestampMs":1002000}}}
+{"timestamp":1003,"method":"_x.ai/session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"turn_completed","prompt_id":"p1","stop_reason":"rate_limit"},"_meta":{"eventId":"done","agentTimestampMs":1003000}}}
+''';
+
+      final turn = parser.parse(threadId: 's1', content: content).turns.single;
+
+      expect(turn.status, AgentHistoryTurnStatus.failed);
+      expect(
+        turn.errorMessage,
+        'Grok rate limit reached. Please try again later.',
+      );
+      expect(turn.duration, const Duration(seconds: 3));
+      final retryState = turn.raw['retryState'] as Map<String, Object?>;
+      expect(retryState['type'], 'exhausted');
+      expect(retryState['is_rate_limited'], isTrue);
+      expect(retryState['reason'], contains('429 Too Many Requests'));
+      final terminal = turn.raw['turnCompleted'] as Map<String, Object?>;
+      expect(terminal['stop_reason'], 'rate_limit');
+    });
+
+    test('treats an exhausted retry without a terminal update as failed', () {
+      const content = r'''
+{"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"trigger failure"}},"_meta":{"eventId":"u1"}}}
+{"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"retry_state","type":"exhausted","reason":"provider unavailable","is_rate_limited":false},"_meta":{"eventId":"r1"}}}
+''';
+
+      final turn = parser.parse(threadId: 's1', content: content).turns.single;
+
+      expect(turn.status, AgentHistoryTurnStatus.failed);
+      expect(turn.errorMessage, 'Grok request failed. Please try again.');
+    });
+
     test('ignores malformed lines from the redacted updates fixture', () {
       final snapshot = parser.parse(
         threadId: 'sess-fixture',
