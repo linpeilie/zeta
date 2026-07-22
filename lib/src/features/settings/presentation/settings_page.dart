@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
+import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
+import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
@@ -22,12 +24,13 @@ import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/ui/core/workbench/ide_page_body.dart';
 import 'package:zeta/src/ui/core/workbench/ide_page_header.dart';
 
-enum SettingsSection { appearance, agents }
+enum SettingsSection { general, appearance, agents }
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
     required this.activeSection,
     required this.appearanceController,
+    required this.generalSettingsController,
     required this.onBackPressed,
     required this.onSectionSelected,
     this.agentManagementController,
@@ -36,6 +39,7 @@ class SettingsPage extends StatefulWidget {
 
   final SettingsSection activeSection;
   final AppearanceSettingsController appearanceController;
+  final GeneralSettingsController generalSettingsController;
   final AgentManagementController? agentManagementController;
   final VoidCallback onBackPressed;
   final ValueChanged<SettingsSection> onSectionSelected;
@@ -74,6 +78,7 @@ class _SettingsPageState extends State<SettingsPage> {
             key: _canvasKey,
             activeSection: widget.activeSection,
             appearanceController: widget.appearanceController,
+            generalSettingsController: widget.generalSettingsController,
             agentManagementController: widget.agentManagementController,
           ),
         ),
@@ -147,6 +152,14 @@ class SettingsNavigationPane extends StatelessWidget {
               padding: IdeSpacing.all8,
               children: [
                 IdeListRow(
+                  key: const ValueKey('settings-nav-general'),
+                  title: '常规',
+                  leading: const Icon(Icons.tune_rounded),
+                  selected: activeSection == SettingsSection.general,
+                  onPressed: () => onSectionSelected(SettingsSection.general),
+                  showDivider: false,
+                ),
+                IdeListRow(
                   key: const ValueKey('settings-nav-appearance'),
                   title: '外观',
                   leading: const Icon(Icons.palette_outlined),
@@ -178,12 +191,14 @@ class SettingsPageCanvas extends StatefulWidget {
   const SettingsPageCanvas({
     required this.activeSection,
     required this.appearanceController,
+    required this.generalSettingsController,
     required this.agentManagementController,
     super.key,
   });
 
   final SettingsSection activeSection;
   final AppearanceSettingsController appearanceController;
+  final GeneralSettingsController generalSettingsController;
   final AgentManagementController? agentManagementController;
 
   @override
@@ -206,6 +221,9 @@ class SettingsPageCanvasState extends State<SettingsPageCanvas> {
   @override
   Widget build(BuildContext context) {
     return switch (widget.activeSection) {
+      SettingsSection.general => _GeneralSettingsPane(
+        generalSettingsController: widget.generalSettingsController,
+      ),
       SettingsSection.appearance => _AppearanceSettingsPane(
         appearanceController: widget.appearanceController,
       ),
@@ -217,6 +235,116 @@ class SettingsPageCanvasState extends State<SettingsPageCanvas> {
                 controller: widget.agentManagementController!,
               ),
     };
+  }
+}
+
+class _GeneralSettingsPane extends StatelessWidget {
+  const _GeneralSettingsPane({required this.generalSettingsController});
+
+  final GeneralSettingsController generalSettingsController;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
+    final modifierLabel = isMacOS ? 'Cmd + Enter 发送' : 'Ctrl + Enter 发送';
+    return IdeSurface.canvas(
+      key: const ValueKey('settings-detail-panel'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          IdePageHeader(
+            title: '常规',
+            subtitle: '配置消息输入与发送行为',
+            leading: Icon(
+              Icons.tune_rounded,
+              size: 18,
+              color: colors.textSecondary,
+            ),
+          ),
+          Expanded(
+            child: ValueListenableBuilder<GeneralSettings>(
+              valueListenable: generalSettingsController.listenable,
+              builder: (context, settings, _) {
+                final textStyles = IdeTextStyles.of(context);
+                final colors = IdeColors.of(context);
+                final description = switch (settings.sendMessageShortcut) {
+                  MessageSendShortcut.enter =>
+                    '按 Enter 发送消息，按 Shift + Enter 换行。',
+                  MessageSendShortcut.primaryModifierEnter =>
+                    isMacOS
+                        ? '按 Cmd + Enter 发送消息，按 Enter 换行。'
+                        : '按 Ctrl + Enter 发送消息，按 Enter 换行。',
+                };
+                return IdePageBody(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        '设置会立即应用，并保留到下次启动。',
+                        style: textStyles.bodySmall.copyWith(
+                          color: colors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: IdeSpacing.space12),
+                      IdeSurface.pane(
+                        key: const ValueKey('settings-general-group'),
+                        child: IdeSettingsRow(
+                          key: const ValueKey(
+                            'settings-send-message-shortcut-row',
+                          ),
+                          label: '发送快捷键',
+                          description: description,
+                          showDivider: false,
+                          control: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 380),
+                            child: IdeTabs<MessageSendShortcut>(
+                              key: const ValueKey(
+                                'settings-send-message-shortcut-tabs',
+                              ),
+                              value: settings.sendMessageShortcut,
+                              semanticLabel: '发送快捷键',
+                              items: <IdeTabItem<MessageSendShortcut>>[
+                                const IdeTabItem<MessageSendShortcut>(
+                                  key: ValueKey(
+                                    'settings-send-message-shortcut-enter',
+                                  ),
+                                  value: MessageSendShortcut.enter,
+                                  label: 'Enter 发送',
+                                  leadingIcon: Icons.keyboard_return_rounded,
+                                  semanticLabel: 'Enter 发送',
+                                ),
+                                IdeTabItem<MessageSendShortcut>(
+                                  key: const ValueKey(
+                                    'settings-send-message-shortcut-modifier',
+                                  ),
+                                  value:
+                                      MessageSendShortcut.primaryModifierEnter,
+                                  label: modifierLabel,
+                                  leadingIcon:
+                                      Icons.keyboard_command_key_rounded,
+                                  semanticLabel: modifierLabel,
+                                ),
+                              ],
+                              onChanged: (value) {
+                                unawaited(
+                                  generalSettingsController
+                                      .setMessageSendShortcut(value),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

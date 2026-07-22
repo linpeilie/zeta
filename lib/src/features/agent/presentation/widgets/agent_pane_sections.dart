@@ -439,7 +439,6 @@ class _AgentComposerSection extends StatelessWidget {
     required this.draftImagePaths,
     required this.onAttachImages,
     required this.onRemoveImage,
-    required this.onPasteImages,
     required this.onSend,
     required this.onInsertMention,
     required this.pagePadding,
@@ -453,7 +452,6 @@ class _AgentComposerSection extends StatelessWidget {
   final List<String> draftImagePaths;
   final VoidCallback onAttachImages;
   final ValueChanged<String> onRemoveImage;
-  final Future<bool> Function() onPasteImages;
   final VoidCallback onSend;
   final ValueChanged<WorkspaceNode> onInsertMention;
   final EdgeInsets pagePadding;
@@ -480,7 +478,6 @@ class _AgentComposerSection extends StatelessWidget {
                   draftImagePaths: draftImagePaths,
                   onAttachImages: onAttachImages,
                   onRemoveImage: onRemoveImage,
-                  onPasteImages: onPasteImages,
                   onSend: onSend,
                   onCancel: viewModel.cancelActiveTurn,
                   showImageAttachment: viewModel.canAttachImages,

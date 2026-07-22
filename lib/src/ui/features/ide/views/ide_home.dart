@@ -18,6 +18,8 @@ import 'package:zeta/src/features/agent_management/domain/agent_cli_management_r
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
+import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
+import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_controller.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_controller.dart';
@@ -61,6 +63,7 @@ class IdeHome extends StatefulWidget {
     required this.usageStatisticsIndexStore,
     required this.projectLocationOpener,
     required this.appearanceController,
+    required this.generalSettingsController,
     this.agentProviderAvailabilityLoader,
     this.homeProviderDetectionLoader,
     this.agentUsagePanelRepository,
@@ -76,6 +79,7 @@ class IdeHome extends StatefulWidget {
   final UsageStatisticsIndexStore usageStatisticsIndexStore;
   final ProjectLocationOpener projectLocationOpener;
   final AppearanceSettingsController appearanceController;
+  final GeneralSettingsController generalSettingsController;
   final AgentProviderAvailabilityLoader? agentProviderAvailabilityLoader;
   final HomeProviderDetectionLoader? homeProviderDetectionLoader;
   final AgentUsagePanelRepository? agentUsagePanelRepository;
@@ -118,7 +122,7 @@ class _IdeHomeState extends State<IdeHome> {
   double _rightTopRatio = _initialPanelRatio;
   sf.ToastOverlay? _statusToast;
   _IdeHomePage _page = _IdeHomePage.home;
-  SettingsSection _settingsSection = SettingsSection.appearance;
+  SettingsSection _settingsSection = SettingsSection.general;
   final FocusNode _leftProjectsFocusNode = FocusNode(
     debugLabel: 'LeftProjectsRailAction',
   );
@@ -141,6 +145,7 @@ class _IdeHomeState extends State<IdeHome> {
   void initState() {
     super.initState();
     unawaited(widget.appearanceController.load());
+    unawaited(widget.generalSettingsController.load());
     _shellController = IdeShellController(
       directoryPicker: widget.directoryPicker,
       sessionStore: widget.sessionStore,
@@ -334,6 +339,7 @@ class _IdeHomeState extends State<IdeHome> {
                   key: _settingsCanvasKey,
                   activeSection: _settingsSection,
                   appearanceController: widget.appearanceController,
+                  generalSettingsController: widget.generalSettingsController,
                   agentManagementController: _agentManagementController,
                 )
               : const SizedBox.shrink(),
@@ -388,44 +394,55 @@ class _IdeHomeState extends State<IdeHome> {
         : selectedEntryIndex < 0
         ? 0
         : selectedEntryIndex + 1;
-    return IndexedStack(
-      key: const ValueKey('agent-pane-entry-stack'),
-      index: selectedIndex,
-      children: [
-        !_shellController.isProjectHomeActive
-            ? const SizedBox.shrink()
-            : KeyedSubtree(
-                key: ValueKey<String>('project-home-$projectPath'),
-                child: ProjectHomePage(
-                  projectPath: projectPath,
-                  threadState: _shellController.projectThreadStateFor(
-                    projectPath,
-                  ),
-                  loadAvailableProviders: _loadAvailableAgentProviders,
-                  onNewThread: (providerId) {
-                    unawaited(
-                      _shellController.startNewThreadForProject(
+    return ValueListenableBuilder<GeneralSettings>(
+      valueListenable: widget.generalSettingsController.listenable,
+      builder: (context, generalSettings, _) {
+        return IndexedStack(
+          key: const ValueKey('agent-pane-entry-stack'),
+          index: selectedIndex,
+          children: [
+            !_shellController.isProjectHomeActive
+                ? const SizedBox.shrink()
+                : KeyedSubtree(
+                    key: ValueKey<String>('project-home-$projectPath'),
+                    child: ProjectHomePage(
+                      projectPath: projectPath,
+                      threadState: _shellController.projectThreadStateFor(
                         projectPath,
-                        providerId: providerId,
                       ),
-                    );
-                  },
-                  onSelectThread: (thread) {
-                    unawaited(
-                      _shellController.selectProjectThread(projectPath, thread),
-                    );
-                  },
-                  onRetryThreads: () {
-                    unawaited(_shellController.retryThreads(projectPath));
-                  },
+                      loadAvailableProviders: _loadAvailableAgentProviders,
+                      onNewThread: (providerId) {
+                        unawaited(
+                          _shellController.startNewThreadForProject(
+                            projectPath,
+                            providerId: providerId,
+                          ),
+                        );
+                      },
+                      onSelectThread: (thread) {
+                        unawaited(
+                          _shellController.selectProjectThread(
+                            projectPath,
+                            thread,
+                          ),
+                        );
+                      },
+                      onRetryThreads: () {
+                        unawaited(_shellController.retryThreads(projectPath));
+                      },
+                    ),
+                  ),
+            for (final entry in entries)
+              KeyedSubtree(
+                key: ValueKey<String>('agent-pane-entry-${entry.entryId}'),
+                child: AgentPane(
+                  viewModel: entry.viewModel,
+                  messageSendShortcut: generalSettings.sendMessageShortcut,
                 ),
               ),
-        for (final entry in entries)
-          KeyedSubtree(
-            key: ValueKey<String>('agent-pane-entry-${entry.entryId}'),
-            child: AgentPane(viewModel: entry.viewModel),
-          ),
-      ],
+          ],
+        );
+      },
     );
   }
 
@@ -1031,7 +1048,7 @@ class _IdeHomeState extends State<IdeHome> {
     setState(() {
       _settingsPageMounted = true;
       _page = _IdeHomePage.settings;
-      _settingsSection = SettingsSection.appearance;
+      _settingsSection = SettingsSection.general;
       _activeOverlay = null;
       _overlayTriggerFocusNode = null;
     });

@@ -11,6 +11,7 @@ import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
+import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
@@ -26,6 +27,234 @@ import '../../../testing/agent_provider_stub_base.dart';
 
 void main() {
   group('AgentPane PR3', () {
+    testWidgets('Enter sends once by default and clears the draft', (
+      tester,
+    ) async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(provider.dispose);
+      addTearDown(viewModel.dispose);
+      await tester.pumpWidget(_TestApp(viewModel: viewModel));
+      await _pumpAgentPaneUi(tester);
+      final input = find.byKey(const ValueKey('agent-message-input'));
+
+      await tester.enterText(input, 'Send with Enter');
+      await tester.sendKeyRepeatEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(provider.sentMessages, isEmpty);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await _pumpUntilMessageSent(tester, provider);
+
+      expect(provider.sentMessages, <String>['Send with Enter']);
+      expect(
+        tester
+            .widget<EditableText>(
+              find.descendant(of: input, matching: find.byType(EditableText)),
+            )
+            .controller
+            .text,
+        isEmpty,
+      );
+      provider.emitEvent(
+        const AgentTurnCompletedEvent(sessionId: 'session-1', turnId: 'turn-1'),
+      );
+      await tester.pump();
+    });
+
+    testWidgets('numpad Enter uses the active send shortcut', (tester) async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(provider.dispose);
+      addTearDown(viewModel.dispose);
+      await tester.pumpWidget(_TestApp(viewModel: viewModel));
+      await _pumpAgentPaneUi(tester);
+      final input = find.byKey(const ValueKey('agent-message-input'));
+
+      await tester.enterText(input, 'Send with numpad');
+      await tester.sendKeyEvent(LogicalKeyboardKey.numpadEnter);
+      await _pumpUntilMessageSent(tester, provider);
+
+      expect(provider.sentMessages, <String>['Send with numpad']);
+      provider.emitEvent(
+        const AgentTurnCompletedEvent(sessionId: 'session-1', turnId: 'turn-1'),
+      );
+      await tester.pump();
+    });
+
+    testWidgets('Shift Enter inserts a newline without sending', (
+      tester,
+    ) async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(provider.dispose);
+      addTearDown(viewModel.dispose);
+      await tester.pumpWidget(_TestApp(viewModel: viewModel));
+      await _pumpAgentPaneUi(tester);
+      final input = find.byKey(const ValueKey('agent-message-input'));
+
+      await tester.enterText(input, 'First line');
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pump();
+
+      expect(provider.sentMessages, isEmpty);
+      expect(
+        tester
+            .widget<EditableText>(
+              find.descendant(of: input, matching: find.byType(EditableText)),
+            )
+            .controller
+            .text,
+        'First line\n',
+      );
+    });
+
+    testWidgets('Ctrl Enter mode keeps plain Enter for newline and sends', (
+      tester,
+    ) async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(provider.dispose);
+      addTearDown(viewModel.dispose);
+      await tester.pumpWidget(
+        _TestApp(
+          viewModel: viewModel,
+          messageSendShortcut: MessageSendShortcut.primaryModifierEnter,
+          platform: TargetPlatform.windows,
+        ),
+      );
+      await _pumpAgentPaneUi(tester);
+      final input = find.byKey(const ValueKey('agent-message-input'));
+
+      await tester.enterText(input, 'First line');
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(provider.sentMessages, isEmpty);
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await _pumpUntilMessageSent(tester, provider);
+
+      expect(provider.sentMessages, hasLength(1));
+      expect(
+        tester
+            .widget<EditableText>(
+              find.descendant(of: input, matching: find.byType(EditableText)),
+            )
+            .controller
+            .text,
+        isEmpty,
+      );
+      provider.emitEvent(
+        const AgentTurnCompletedEvent(sessionId: 'session-1', turnId: 'turn-1'),
+      );
+      await tester.pump();
+    });
+
+    testWidgets('macOS requires Command Enter instead of Ctrl Enter', (
+      tester,
+    ) async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(provider.dispose);
+      addTearDown(viewModel.dispose);
+      await tester.pumpWidget(
+        _TestApp(
+          viewModel: viewModel,
+          messageSendShortcut: MessageSendShortcut.primaryModifierEnter,
+          platform: TargetPlatform.macOS,
+        ),
+      );
+      await _pumpAgentPaneUi(tester);
+      final input = find.byKey(const ValueKey('agent-message-input'));
+
+      await tester.enterText(input, 'Send on macOS');
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      expect(provider.sentMessages, isEmpty);
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await _pumpUntilMessageSent(tester, provider);
+
+      expect(provider.sentMessages, hasLength(1));
+      provider.emitEvent(
+        const AgentTurnCompletedEvent(sessionId: 'session-1', turnId: 'turn-1'),
+      );
+      await tester.pump();
+    });
+
+    testWidgets('Enter does not send while IME composition is active', (
+      tester,
+    ) async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(provider.dispose);
+      addTearDown(viewModel.dispose);
+      await tester.pumpWidget(_TestApp(viewModel: viewModel));
+      await _pumpAgentPaneUi(tester);
+      final input = find.byKey(const ValueKey('agent-message-input'));
+      await tester.tap(input);
+      await tester.pump();
+      final editable = tester.widget<EditableText>(
+        find.descendant(of: input, matching: find.byType(EditableText)),
+      );
+      editable.controller.value = const TextEditingValue(
+        text: '拼',
+        selection: TextSelection.collapsed(offset: 1),
+        composing: TextRange(start: 0, end: 1),
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+
+      expect(provider.sentMessages, isEmpty);
+    });
+
+    testWidgets('send shortcut does nothing for empty or unavailable input', (
+      tester,
+    ) async {
+      final provider = _FakeAgentProvider(canSteerTurn: false);
+      final viewModel = _createViewModel(provider);
+      addTearDown(provider.dispose);
+      addTearDown(viewModel.dispose);
+      await tester.pumpWidget(_TestApp(viewModel: viewModel));
+      await _pumpAgentPaneUi(tester);
+      final input = find.byKey(const ValueKey('agent-message-input'));
+
+      await tester.tap(input);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(provider.sentMessages, isEmpty);
+
+      await viewModel.sendMessage('Already running');
+      await _pumpLiveAgentUi(tester);
+      expect(viewModel.canSubmitMessage, isFalse);
+      await tester.enterText(input, 'Keep this draft');
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+
+      expect(provider.sentMessages, <String>['Already running']);
+      expect(
+        tester
+            .widget<EditableText>(
+              find.descendant(of: input, matching: find.byType(EditableText)),
+            )
+            .controller
+            .text,
+        'Keep this draft',
+      );
+      provider.emitEvent(
+        const AgentTurnCompletedEvent(sessionId: 'session-1', turnId: 'turn-1'),
+      );
+      await tester.pump();
+    });
+
     testWidgets('uses the canvas surface and one responsive content axis', (
       tester,
     ) async {
@@ -1742,12 +1971,16 @@ class _TestApp extends StatelessWidget {
     this.uiFontFamily,
     this.codeFontFamily = 'CodeFont',
     this.disableAnimations = false,
+    this.messageSendShortcut = MessageSendShortcut.enter,
+    this.platform,
   });
 
   final AgentConversationViewModel viewModel;
   final String? uiFontFamily;
   final String codeFontFamily;
   final bool disableAnimations;
+  final MessageSendShortcut messageSendShortcut;
+  final TargetPlatform? platform;
 
   @override
   Widget build(BuildContext context) {
@@ -1768,14 +2001,21 @@ class _TestApp extends StatelessWidget {
       child: sf.ShadcnApp(
         theme: buildShadcnTheme(lightIdeTheme),
         darkTheme: buildShadcnTheme(darkIdeTheme),
-        materialTheme: buildMaterialTheme(darkIdeTheme),
+        materialTheme: buildMaterialTheme(
+          darkIdeTheme,
+        ).copyWith(platform: platform),
         themeMode: sf.ThemeMode.dark,
         home: Builder(
           builder: (context) => MediaQuery(
             data: MediaQuery.of(
               context,
             ).copyWith(disableAnimations: disableAnimations),
-            child: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+            child: sf.Scaffold(
+              child: AgentPane(
+                viewModel: viewModel,
+                messageSendShortcut: messageSendShortcut,
+              ),
+            ),
           ),
         ),
       ),
@@ -1980,12 +2220,14 @@ class _FakeAgentProvider
     Map<String, AgentThreadHistorySnapshot> historySnapshotsByThread =
         const <String, AgentThreadHistorySnapshot>{},
     this.models = const AgentModelList(models: <AgentModelInfo>[]),
+    this.canSteerTurn = true,
   }) : _historySnapshotsByThread = Map<String, AgentThreadHistorySnapshot>.from(
          historySnapshotsByThread,
        );
 
   final Map<String, AgentThreadHistorySnapshot> _historySnapshotsByThread;
   final AgentModelList models;
+  final bool canSteerTurn;
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
   final List<AgentPermissionDecision> permissionDecisions =
@@ -1994,6 +2236,7 @@ class _FakeAgentProvider
       <(String, String, Object)>[];
   final List<AgentPlanApprovalDecision> planDecisions =
       <AgentPlanApprovalDecision>[];
+  final List<String> sentMessages = <String>[];
 
   void emitEvent(AgentEvent event) {
     _events.add(event);
@@ -2001,6 +2244,11 @@ class _FakeAgentProvider
 
   @override
   AgentProviderConfig get config => AgentProviderConfig.defaultCodex;
+
+  @override
+  AgentProviderCapabilities get capabilities => AgentProviderCapabilities
+      .codexAppServer
+      .copyWith(canForkThreadAtTurn: true, canSteerTurn: canSteerTurn);
 
   @override
   Stream<AgentEvent> get events => _events.stream;
@@ -2083,6 +2331,15 @@ class _FakeAgentProvider
     List<AgentUserInput>? inputs,
     String? clientUserMessageId,
   }) async {
+    final sentText =
+        message ??
+        inputs
+            ?.whereType<AgentTextUserInput>()
+            .map((input) => input.text)
+            .join();
+    if (sentText != null) {
+      sentMessages.add(sentText);
+    }
     return AgentTurn(id: 'turn-1', sessionId: session.id);
   }
 
@@ -2141,4 +2398,16 @@ Future<void> _pumpAgentPaneUi(WidgetTester tester) async {
 Future<void> _pumpLiveAgentUi(WidgetTester tester) async {
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 300));
+}
+
+Future<void> _pumpUntilMessageSent(
+  WidgetTester tester,
+  _FakeAgentProvider provider,
+) async {
+  for (var attempt = 0; attempt < 20; attempt += 1) {
+    await tester.pump(const Duration(milliseconds: 10));
+    if (provider.sentMessages.isNotEmpty) {
+      return;
+    }
+  }
 }

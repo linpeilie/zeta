@@ -68,6 +68,10 @@ class ZetaDataPaths {
   File get appearanceFile =>
       File(_joinPath(configDirectory.path, 'appearance.json'));
 
+  /// 全局常规设置文件。
+  File get generalSettingsFile =>
+      File(_joinPath(configDirectory.path, 'general.json'));
+
   /// IDE 会话状态文件。
   File get ideSessionFile =>
       File(_joinPath(stateDirectory.path, 'ide_session.json'));

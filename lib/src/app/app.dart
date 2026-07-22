@@ -13,7 +13,9 @@ import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
+import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
+import 'package:zeta/src/features/settings/data/general_settings_store.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_index_store.dart';
@@ -40,6 +42,7 @@ class MainApp extends StatefulWidget {
     this.homeProviderDetectionLoader,
     this.projectLocationOpener,
     this.appearanceController,
+    this.generalSettingsController,
     this.dataPaths,
     this.usageStatisticsIndexStore,
     this.agentUsagePanelRepository,
@@ -62,6 +65,10 @@ class MainApp extends StatefulWidget {
   /// 生产环境由 [MainAppState.appearanceController] 自动创建并加载持久化偏好。
   final AppearanceSettingsController? appearanceController;
 
+  /// 全局常规设置控制器。测试可注入内存版本；生产环境自动使用
+  /// `~/.zeta/config/general.json`。
+  final GeneralSettingsController? generalSettingsController;
+
   /// 生产启动阶段解析并初始化的 Zeta 自有数据路径。
   ///
   /// 未传入时使用内存/回调存储，避免测试或嵌入式宿主意外写入真实 HOME。
@@ -79,13 +86,19 @@ class MainApp extends StatefulWidget {
 
 class MainAppState extends State<MainApp> {
   late final AppearanceSettingsController _appearanceController;
+  late final GeneralSettingsController _generalSettingsController;
   late final AgentProviderFactory _defaultAgentProviderFactory;
   late final UsageStatisticsIndexStore _usageStatisticsIndexStore;
   bool _ownsAppearanceController = false;
+  bool _ownsGeneralSettingsController = false;
 
   /// 全局外观控制器引用，供设置面板和主题构建共享。
   AppearanceSettingsController get appearanceController =>
       _appearanceController;
+
+  /// 全局常规设置控制器引用，供设置页面和 Agent 输入框共享。
+  GeneralSettingsController get generalSettingsController =>
+      _generalSettingsController;
 
   @override
   void initState() {
@@ -115,13 +128,27 @@ class MainAppState extends State<MainApp> {
       );
       _ownsAppearanceController = true;
     }
+    if (widget.generalSettingsController != null) {
+      _generalSettingsController = widget.generalSettingsController!;
+      _ownsGeneralSettingsController = false;
+    } else {
+      final store = useFilePersistence
+          ? FileGeneralSettingsStore(file: dataPaths!.generalSettingsFile)
+          : MemoryGeneralSettingsStore();
+      _generalSettingsController = GeneralSettingsController(store: store);
+      _ownsGeneralSettingsController = true;
+    }
     unawaited(_appearanceController.load());
+    unawaited(_generalSettingsController.load());
   }
 
   @override
   void dispose() {
     if (_ownsAppearanceController) {
       _appearanceController.dispose();
+    }
+    if (_ownsGeneralSettingsController) {
+      _generalSettingsController.dispose();
     }
     super.dispose();
   }
@@ -182,6 +209,7 @@ class MainAppState extends State<MainApp> {
               projectLocationOpener:
                   widget.projectLocationOpener ?? openPathInSystemFileManager,
               appearanceController: _appearanceController,
+              generalSettingsController: _generalSettingsController,
               usageStatisticsIndexStore: _usageStatisticsIndexStore,
               agentUsagePanelRepository: widget.agentUsagePanelRepository,
             ),

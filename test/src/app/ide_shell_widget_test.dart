@@ -9,6 +9,7 @@ import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
+import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
@@ -369,6 +370,26 @@ void main() {
         findsOneWidget,
       );
       expect(retained.agentPaneElement.mounted, isTrue);
+      expect(
+        find.byKey(const ValueKey('settings-general-group')),
+        findsOneWidget,
+      );
+      expect(
+        (retained.agentPaneElement.widget as AgentPane).messageSendShortcut,
+        MessageSendShortcut.enter,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('settings-send-message-shortcut-modifier')),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        (retained.agentPaneElement.widget as AgentPane).messageSendShortcut,
+        MessageSendShortcut.primaryModifierEnter,
+      );
+      expect(retained.inputController.text, retained.draft);
 
       await tester.tap(find.byKey(const ValueKey('settings-nav-agents')));
       await tester.pump();

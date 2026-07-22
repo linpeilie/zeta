@@ -32,6 +32,10 @@ void main() {
         _join(homeDirectory.path, '.zeta', 'config', 'providers.json'),
       );
       expect(
+        paths.generalSettingsFile.path,
+        _join(homeDirectory.path, '.zeta', 'config', 'general.json'),
+      );
+      expect(
         paths.usageStatisticsIndexFile.path,
         _join(
           homeDirectory.path,

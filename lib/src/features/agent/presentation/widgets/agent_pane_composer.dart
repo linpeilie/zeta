@@ -17,7 +17,6 @@ class _AgentComposer extends StatelessWidget {
     required this.draftImagePaths,
     required this.onAttachImages,
     required this.onRemoveImage,
-    required this.onPasteImages,
     required this.onSend,
     required this.onCancel,
     required this.showImageAttachment,
@@ -50,7 +49,6 @@ class _AgentComposer extends StatelessWidget {
   final List<String> draftImagePaths;
   final VoidCallback onAttachImages;
   final ValueChanged<String> onRemoveImage;
-  final Future<bool> Function() onPasteImages;
   final VoidCallback onSend;
   final VoidCallback onCancel;
   final bool showImageAttachment;
@@ -156,222 +154,196 @@ class _AgentComposer extends StatelessWidget {
         ),
       );
     }
-    return Focus(
-      onKeyEvent: (node, event) {
-        if (event is! KeyDownEvent) {
-          return KeyEventResult.ignored;
-        }
-        final isPaste =
-            (HardwareKeyboard.instance.isControlPressed ||
-                HardwareKeyboard.instance.isMetaPressed) &&
-            event.logicalKey == LogicalKeyboardKey.keyV;
-        if (!isPaste) {
-          return KeyEventResult.ignored;
-        }
-        // 拦截默认粘贴：优先图片，否则手动插入文本，避免图文重复粘贴。
-        onPasteImages();
-        return KeyEventResult.handled;
-      },
-      child: ListenableBuilder(
-        listenable: focusNode,
-        builder: (context, _) {
-          final brightness = sf.Theme.of(context).brightness;
-          final isFocused = focusNode.hasFocus;
-          // 焦点是键盘状态而非高度：用无方向的 ring，而不是下坠投影。
-          final cardBorder = isFocused ? colors.focusRing : colors.border;
-          final focusRing = isFocused
-              ? IdeEffects.focusRing(brightness, accent: colors.focusRing)
-              : const <BoxShadow>[];
+    return ListenableBuilder(
+      listenable: focusNode,
+      builder: (context, _) {
+        final brightness = sf.Theme.of(context).brightness;
+        final isFocused = focusNode.hasFocus;
+        // 焦点是键盘状态而非高度：用无方向的 ring，而不是下坠投影。
+        final cardBorder = isFocused ? colors.focusRing : colors.border;
+        final focusRing = isFocused
+            ? IdeEffects.focusRing(brightness, accent: colors.focusRing)
+            : const <BoxShadow>[];
 
-          final composer = AnimatedContainer(
-            key: const ValueKey('agent-composer-focus-ring'),
-            duration: MediaQuery.disableAnimationsOf(context)
-                ? Duration.zero
-                : IdeMotion.durationNormal,
-            curve: IdeMotion.curveDefault,
-            decoration: BoxDecoration(
-              borderRadius: IdeRadius.allMedium,
-              boxShadow: focusRing,
-            ),
-            child: PanelCard(
-              color: colors.panel,
-              borderColor: cardBorder,
-              borderRadius: IdeRadius.allMedium,
-              showBorder: true,
-              child: Padding(
-                padding: IdeSpacing.composerPadding,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (draftImagePaths.isNotEmpty) ...[
-                      _ComposerImageDraftStrip(
-                        paths: draftImagePaths,
-                        onRemove: onRemoveImage,
-                      ),
-                      const SizedBox(height: IdeSpacing.space8),
-                    ],
-                    Stack(
-                      children: [
-                        ListenableBuilder(
-                          listenable: controller,
-                          builder: (context, _) {
-                            // key 挂在外层：sf.TextArea.copyWith 会把同一 key
-                            // 传给内部 TextField，直接挂在 TextArea 上会导致测试
-                            // find.byKey 命中两个 widget。
-                            return KeyedSubtree(
-                              key: const ValueKey('agent-message-input'),
-                              // 关掉 TextArea 默认 FocusOutline，避免焦点环割裂卡片。
-                              child: sf.ComponentTheme<sf.FocusOutlineTheme>(
-                                data: const sf.FocusOutlineTheme(
-                                  border: Border.fromBorderSide(
+        final composer = AnimatedContainer(
+          key: const ValueKey('agent-composer-focus-ring'),
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : IdeMotion.durationNormal,
+          curve: IdeMotion.curveDefault,
+          decoration: BoxDecoration(
+            borderRadius: IdeRadius.allMedium,
+            boxShadow: focusRing,
+          ),
+          child: PanelCard(
+            color: colors.panel,
+            borderColor: cardBorder,
+            borderRadius: IdeRadius.allMedium,
+            showBorder: true,
+            child: Padding(
+              padding: IdeSpacing.composerPadding,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (draftImagePaths.isNotEmpty) ...[
+                    _ComposerImageDraftStrip(
+                      paths: draftImagePaths,
+                      onRemove: onRemoveImage,
+                    ),
+                    const SizedBox(height: IdeSpacing.space8),
+                  ],
+                  Stack(
+                    children: [
+                      ListenableBuilder(
+                        listenable: controller,
+                        builder: (context, _) {
+                          // key 挂在外层：sf.TextArea.copyWith 会把同一 key
+                          // 传给内部 TextField，直接挂在 TextArea 上会导致测试
+                          // find.byKey 命中两个 widget。
+                          return KeyedSubtree(
+                            key: const ValueKey('agent-message-input'),
+                            // 关掉 TextArea 默认 FocusOutline，避免焦点环割裂卡片。
+                            child: sf.ComponentTheme<sf.FocusOutlineTheme>(
+                              data: const sf.FocusOutlineTheme(
+                                border: Border.fromBorderSide(BorderSide.none),
+                              ),
+                              child: sf.TextArea(
+                                controller: controller,
+                                focusNode: focusNode,
+                                placeholder: Text(
+                                  'Message Agent',
+                                  style: textStyles.bodyMedium.copyWith(
+                                    color: colors.textTertiary,
+                                  ),
+                                ),
+                                style: inputTextStyle,
+                                padding: EdgeInsets.zero,
+                                // 显式 decoration：底色跟 PanelCard 一致，无独立边框。
+                                decoration: BoxDecoration(
+                                  color: colors.panel,
+                                  border: const Border.fromBorderSide(
                                     BorderSide.none,
                                   ),
+                                  borderRadius: BorderRadius.zero,
                                 ),
-                                child: sf.TextArea(
-                                  controller: controller,
-                                  focusNode: focusNode,
-                                  placeholder: Text(
-                                    'Message Agent',
-                                    style: textStyles.bodyMedium.copyWith(
-                                      color: colors.textTertiary,
-                                    ),
-                                  ),
-                                  style: inputTextStyle,
-                                  padding: EdgeInsets.zero,
-                                  // 显式 decoration：底色跟 PanelCard 一致，无独立边框。
-                                  decoration: BoxDecoration(
-                                    color: colors.panel,
-                                    border: const Border.fromBorderSide(
-                                      BorderSide.none,
-                                    ),
-                                    borderRadius: BorderRadius.zero,
-                                  ),
-                                  initialHeight: _textAreaHeight(
-                                    controller.text,
-                                    lineHeight,
-                                    minTextAreaHeight,
-                                    maxTextAreaHeight,
-                                  ),
-                                  minHeight: minTextAreaHeight,
-                                  maxHeight: maxTextAreaHeight,
-                                  onSubmitted: (_) {
-                                    if (canSubmit) {
-                                      onSend();
-                                    }
-                                  },
+                                initialHeight: _textAreaHeight(
+                                  controller.text,
+                                  lineHeight,
+                                  minTextAreaHeight,
+                                  maxTextAreaHeight,
                                 ),
+                                minHeight: minTextAreaHeight,
+                                maxHeight: maxTextAreaHeight,
                               ),
-                            );
-                          },
-                        ),
-                        // `sf.TextArea` 当前总会绘制右下拖拽角；composer 不支持手动缩放，
-                        // 这里用面板底色遮掉，避免视觉回归。
-                        Positioned(
-                          right: 0,
-                          bottom: 0,
-                          child: IgnorePointer(
-                            child: ColoredBox(
-                              color: colors.panel,
-                              child: const SizedBox(width: 12, height: 12),
                             ),
+                          );
+                        },
+                      ),
+                      // `sf.TextArea` 当前总会绘制右下拖拽角；composer 不支持手动缩放，
+                      // 这里用面板底色遮掉，避免视觉回归。
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: IgnorePointer(
+                          child: ColoredBox(
+                            color: colors.panel,
+                            child: const SizedBox(width: 12, height: 12),
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: IdeSpacing.space6),
-                    // 宽窗保持一行工具栏；空间不足时，将低频选择器收进可横滑的第二行。
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final attachmentActions = _buildAttachmentActions(
-                          context,
-                        );
-                        final submitAction = _buildSubmitAction(
-                          context,
-                          showCancel: showCancel,
-                          showSend: showSend,
-                        );
-                        final tokenUsage = contextWindowTokenProgress == null
-                            ? null
-                            : Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: IdeSpacing.space8,
-                                ),
-                                child: _ComposerContextWindowUsage(
-                                  tooltip: contextWindowTokenTooltip,
-                                  progress: contextWindowTokenProgress,
-                                ),
-                              );
-                        final useCompactToolbar =
-                            constraints.maxWidth < _compactToolbarBreakpoint;
-
-                        if (useCompactToolbar) {
-                          return Column(
-                            key: const ValueKey(
-                              'agent-composer-compact-toolbar',
-                            ),
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Row(
-                                children: [
-                                  attachmentActions,
-                                  const Spacer(),
-                                  if (tokenUsage case final Widget usage) usage,
-                                  submitAction,
-                                ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: IdeSpacing.space6),
+                  // 宽窗保持一行工具栏；空间不足时，将低频选择器收进可横滑的第二行。
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final attachmentActions = _buildAttachmentActions(
+                        context,
+                      );
+                      final submitAction = _buildSubmitAction(
+                        context,
+                        showCancel: showCancel,
+                        showSend: showSend,
+                      );
+                      final tokenUsage = contextWindowTokenProgress == null
+                          ? null
+                          : Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: IdeSpacing.space8,
                               ),
-                              if (selectorControls.isNotEmpty) ...[
-                                const SizedBox(height: IdeSpacing.space6),
-                                SingleChildScrollView(
-                                  key: const ValueKey(
-                                    'agent-composer-selector-scroll',
-                                  ),
-                                  scrollDirection: Axis.horizontal,
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: selectorControls,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          );
-                        }
+                              child: _ComposerContextWindowUsage(
+                                tooltip: contextWindowTokenTooltip,
+                                progress: contextWindowTokenProgress,
+                              ),
+                            );
+                      final useCompactToolbar =
+                          constraints.maxWidth < _compactToolbarBreakpoint;
 
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
+                      if (useCompactToolbar) {
+                        return Column(
+                          key: const ValueKey('agent-composer-compact-toolbar'),
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            attachmentActions,
+                            Row(
+                              children: [
+                                attachmentActions,
+                                const Spacer(),
+                                if (tokenUsage case final Widget usage) usage,
+                                submitAction,
+                              ],
+                            ),
                             if (selectorControls.isNotEmpty) ...[
-                              const SizedBox(width: IdeSpacing.space4),
-                              ...selectorControls,
-                            ],
-                            const Spacer(),
-                            if (tokenUsage case final Widget usage)
-                              Flexible(
-                                fit: FlexFit.loose,
-                                child: Align(
-                                  alignment: Alignment.centerRight,
-                                  child: usage,
+                              const SizedBox(height: IdeSpacing.space6),
+                              SingleChildScrollView(
+                                key: const ValueKey(
+                                  'agent-composer-selector-scroll',
+                                ),
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: selectorControls,
                                 ),
                               ),
-                            submitAction,
+                            ],
                           ],
                         );
-                      },
-                    ),
-                  ],
-                ),
+                      }
+
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          attachmentActions,
+                          if (selectorControls.isNotEmpty) ...[
+                            const SizedBox(width: IdeSpacing.space4),
+                            ...selectorControls,
+                          ],
+                          const Spacer(),
+                          if (tokenUsage case final Widget usage)
+                            Flexible(
+                              fit: FlexFit.loose,
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: usage,
+                              ),
+                            ),
+                          submitAction,
+                        ],
+                      );
+                    },
+                  ),
+                ],
               ),
             ),
-          );
-          return _ComposerRunningGlowBorder(
-            active: isTurnRunning,
-            color: colors.focusRing,
-            brightness: brightness,
-            child: composer,
-          );
-        },
-      ),
+          ),
+        );
+        return _ComposerRunningGlowBorder(
+          active: isTurnRunning,
+          color: colors.focusRing,
+          brightness: brightness,
+          child: composer,
+        );
+      },
     );
   }
 

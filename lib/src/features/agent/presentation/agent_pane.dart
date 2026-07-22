@@ -14,6 +14,7 @@ import 'package:pasteboard/pasteboard.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/core/ide_collapsible_card.dart';
@@ -54,9 +55,16 @@ typedef _TurnSectionBuilder = Widget Function(AgentConversationTurnGroup turn);
 /// 当前文件只保留页面壳、滚动协作与组合关系；实际 header、timeline、
 /// composer 以及各类卡片都已拆到独立组件文件。
 class AgentPane extends StatefulWidget {
-  const AgentPane({required this.viewModel, super.key});
+  const AgentPane({
+    required this.viewModel,
+    this.messageSendShortcut = MessageSendShortcut.enter,
+    super.key,
+  });
 
   final AgentConversationViewModel viewModel;
+
+  /// 当前消息输入框使用的发送快捷键。
+  final MessageSendShortcut messageSendShortcut;
 
   @override
   State<AgentPane> createState() => _AgentPaneState();
@@ -70,7 +78,7 @@ class _AgentPaneState extends State<AgentPane> {
   );
 
   final TextEditingController _inputController = TextEditingController();
-  final FocusNode _composerFocusNode = FocusNode();
+  late final FocusNode _composerFocusNode;
   final ScrollController _scrollController = ScrollController();
   final ValueNotifier<bool> _canSendNotifier = ValueNotifier<bool>(false);
   final List<String> _draftImagePaths = <String>[];
@@ -82,6 +90,10 @@ class _AgentPaneState extends State<AgentPane> {
   @override
   void initState() {
     super.initState();
+    _composerFocusNode = FocusNode(
+      debugLabel: 'AgentMessageComposer',
+      onKeyEvent: _handleComposerKeyEvent,
+    );
     _inputController.addListener(_handleInputChanged);
     _scrollController.addListener(_handleScrollChanged);
     _lastAutoScrollTick = widget.viewModel.autoScrollTick;
@@ -223,8 +235,6 @@ class _AgentPaneState extends State<AgentPane> {
                                             pagePadding: pagePadding,
                                             onAttachImages: _pickImages,
                                             onRemoveImage: _removeDraftImage,
-                                            onPasteImages:
-                                                _pasteImagesFromClipboard,
                                             onSend: _sendMessage,
                                             onInsertMention: _insertMention,
                                           ),
@@ -277,6 +287,73 @@ class _AgentPaneState extends State<AgentPane> {
       return;
     }
     _canSendNotifier.value = canSend;
+  }
+
+  KeyEventResult _handleComposerKeyEvent(FocusNode node, KeyEvent event) {
+    if (!node.hasPrimaryFocus || event is! KeyDownEvent) {
+      return KeyEventResult.ignored;
+    }
+
+    final isEnter =
+        event.logicalKey == LogicalKeyboardKey.enter ||
+        event.logicalKey == LogicalKeyboardKey.numpadEnter;
+    if (isEnter) {
+      final composing = _inputController.value.composing;
+      if (composing.isValid && !composing.isCollapsed) {
+        // Enter 应先交给输入法确认组合文本，不能在候选仍激活时误发。
+        return KeyEventResult.ignored;
+      }
+      if (_matchesMessageSendShortcut(Theme.of(context).platform)) {
+        if (_canSendNotifier.value && widget.viewModel.canSubmitMessage) {
+          _sendMessage();
+        }
+      } else {
+        _insertComposerNewline();
+      }
+      return KeyEventResult.handled;
+    }
+
+    final isPaste =
+        (HardwareKeyboard.instance.isControlPressed ||
+            HardwareKeyboard.instance.isMetaPressed) &&
+        event.logicalKey == LogicalKeyboardKey.keyV;
+    if (!isPaste) {
+      return KeyEventResult.ignored;
+    }
+    // 拦截默认粘贴：优先图片，否则手动插入文本，避免图文重复粘贴。
+    unawaited(_pasteImagesFromClipboard());
+    return KeyEventResult.handled;
+  }
+
+  bool _matchesMessageSendShortcut(TargetPlatform platform) {
+    final keyboard = HardwareKeyboard.instance;
+    final controlPressed = keyboard.isControlPressed;
+    final metaPressed = keyboard.isMetaPressed;
+    final shiftPressed = keyboard.isShiftPressed;
+    final altPressed = keyboard.isAltPressed;
+    return switch (widget.messageSendShortcut) {
+      MessageSendShortcut.enter =>
+        !controlPressed && !metaPressed && !shiftPressed && !altPressed,
+      MessageSendShortcut.primaryModifierEnter =>
+        !shiftPressed &&
+            !altPressed &&
+            (platform == TargetPlatform.macOS
+                ? metaPressed && !controlPressed
+                : controlPressed && !metaPressed),
+    };
+  }
+
+  void _insertComposerNewline() {
+    final value = _inputController.value;
+    final selection = value.selection;
+    final start = selection.isValid ? selection.start : value.text.length;
+    final end = selection.isValid ? selection.end : value.text.length;
+    final nextText = value.text.replaceRange(start, end, '\n');
+    _inputController.value = value.copyWith(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: start + 1),
+      composing: TextRange.empty,
+    );
   }
 
   Future<void> _pickImages() async {

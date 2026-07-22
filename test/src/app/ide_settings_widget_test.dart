@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
+import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
+import 'package:zeta/src/features/settings/data/general_settings_store.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
+import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
@@ -12,6 +15,76 @@ import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/core/rows/ide_row_divider.dart';
 
 void main() {
+  testWidgets('general settings defaults to Enter and updates shortcut', (
+    tester,
+  ) async {
+    final generalController = GeneralSettingsController(
+      store: MemoryGeneralSettingsStore(),
+    );
+    await _pumpSettingsPage(
+      tester,
+      activeSection: SettingsSection.general,
+      generalController: generalController,
+      platform: TargetPlatform.windows,
+    );
+
+    expect(find.byKey(const ValueKey('settings-nav-general')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('settings-general-group')),
+      findsOneWidget,
+    );
+    expect(find.text('发送快捷键'), findsOneWidget);
+    expect(find.text('Enter 发送'), findsOneWidget);
+    expect(find.text('Ctrl + Enter 发送'), findsOneWidget);
+    expect(
+      tester
+          .widget<IdeTabs<MessageSendShortcut>>(
+            find.byKey(const ValueKey('settings-send-message-shortcut-tabs')),
+          )
+          .value,
+      MessageSendShortcut.enter,
+    );
+    expect(find.text('按 Enter 发送消息，按 Shift + Enter 换行。'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('settings-send-message-shortcut-modifier')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      generalController.settings.sendMessageShortcut,
+      MessageSendShortcut.primaryModifierEnter,
+    );
+    expect(find.text('按 Ctrl + Enter 发送消息，按 Enter 换行。'), findsOneWidget);
+  });
+
+  testWidgets('general settings uses Cmd label on macOS', (tester) async {
+    await _pumpSettingsPage(
+      tester,
+      activeSection: SettingsSection.general,
+      platform: TargetPlatform.macOS,
+    );
+
+    expect(find.text('Cmd + Enter 发送'), findsOneWidget);
+    expect(find.text('Ctrl + Enter 发送'), findsNothing);
+  });
+
+  testWidgets('general settings row stacks in a narrow detail pane', (
+    tester,
+  ) async {
+    await _pumpSettingsPage(
+      tester,
+      activeSection: SettingsSection.general,
+      size: const Size(820, 720),
+    );
+
+    expect(
+      find.byKey(const ValueKey('ide-settings-row-stacked')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('settings page renders navigation and appearance detail', (
     tester,
   ) async {
@@ -365,6 +438,9 @@ void main() {
 Future<void> _pumpSettingsPage(
   WidgetTester tester, {
   AppearanceSettingsController? controller,
+  GeneralSettingsController? generalController,
+  SettingsSection activeSection = SettingsSection.appearance,
+  TargetPlatform? platform,
   VoidCallback? onBackPressed,
   Size size = const Size(1400, 900),
 }) async {
@@ -385,6 +461,11 @@ Future<void> _pumpSettingsPage(
       );
   addTearDown(appearanceController.dispose);
   await appearanceController.load();
+  final resolvedGeneralController =
+      generalController ??
+      GeneralSettingsController(store: MemoryGeneralSettingsStore());
+  addTearDown(resolvedGeneralController.dispose);
+  await resolvedGeneralController.load();
 
   await tester.pumpWidget(
     ValueListenableBuilder<AppearanceSettings>(
@@ -417,12 +498,15 @@ Future<void> _pumpSettingsPage(
           child: sf.ShadcnApp(
             theme: buildShadcnTheme(lightIdeTheme),
             darkTheme: buildShadcnTheme(darkIdeTheme),
-            materialTheme: buildMaterialTheme(materialIdeTheme),
+            materialTheme: buildMaterialTheme(
+              materialIdeTheme,
+            ).copyWith(platform: platform),
             themeMode: resolveShadcnThemeMode(settings.themeMode),
             home: sf.Scaffold(
               child: SettingsPage(
-                activeSection: SettingsSection.appearance,
+                activeSection: activeSection,
                 appearanceController: appearanceController,
+                generalSettingsController: resolvedGeneralController,
                 onBackPressed: onBackPressed ?? () {},
                 onSectionSelected: (_) {},
               ),
