@@ -2123,7 +2123,7 @@ void main() {
     expect(controller.offset, lessThan(40));
   });
 
-  testWidgets('renders normalized message tool and reasoning order', (
+  testWidgets('hides reasoning data while preserving live thinking status', (
     tester,
   ) async {
     final session = activeProjectSessionStore(tempDirectories);
@@ -2238,32 +2238,38 @@ void main() {
     );
 
     const reasoningGroupId = 'command-group-turn-1-tool-reasoning-phase1';
-    await tester.tap(
-      find.byKey(
-        const ValueKey<String>('agent-command-group-header-$reasoningGroupId'),
+    expect(
+      find.byKey(const ValueKey<String>('turn-block-turn-1-$reasoningGroupId')),
+      findsNothing,
+    );
+    expect(find.text('Think before run'), findsNothing);
+    expect(find.text('Think after run'), findsNothing);
+    final runToolGroup = find.byKey(
+      const ValueKey<String>(
+        'turn-block-turn-1-command-group-turn-1-tool-tool-run',
       ),
+    );
+    expect(runToolGroup, findsOneWidget);
+    final activityStatus = find.byKey(
+      const ValueKey<String>('agent-live-activity-status'),
+    );
+    expect(activityStatus, findsOneWidget);
+    expect(
+      find.descendant(of: activityStatus, matching: find.textContaining('思考中')),
+      findsOneWidget,
+    );
+
+    provider.emit(
+      const AgentTurnCompletedEvent(sessionId: 'thread-1', turnId: 'turn-1'),
     );
     await pumpLiveAgentUi(tester);
 
-    final reasoning1 = find.byKey(
-      const ValueKey<String>('agent-command-group-item-tool-reasoning-phase1'),
-    );
-    final runTool = find.byKey(
-      const ValueKey<String>('agent-command-group-item-tool-tool-run'),
-    );
-    final reasoning2 = find.byKey(
-      const ValueKey<String>('agent-command-group-item-tool-reasoning-phase2'),
-    );
-    expect(reasoning1, findsOneWidget);
-    expect(runTool, findsOneWidget);
-    expect(reasoning2, findsOneWidget);
+    expect(activityStatus, findsNothing);
+    expect(find.text('Think before run'), findsNothing);
+    expect(find.text('Think after run'), findsNothing);
     expect(
-      tester.getTopLeft(reasoning1).dy,
-      lessThan(tester.getTopLeft(runTool).dy),
-    );
-    expect(
-      tester.getTopLeft(runTool).dy,
-      lessThan(tester.getTopLeft(reasoning2).dy),
+      find.byKey(const ValueKey<String>('turn-block-turn-1-$reasoningGroupId')),
+      findsNothing,
     );
   });
 

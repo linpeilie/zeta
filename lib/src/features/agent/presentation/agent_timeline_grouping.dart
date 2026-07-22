@@ -126,6 +126,7 @@ enum _AgentTimelineOperationGroupKind { command, fileEdit }
 ///
 /// - 连续 1 条及以上的非编辑操作会合并为命令集
 /// - 连续 1 条及以上的编辑操作会合并为文件编辑组
+/// - 思考条目仅用于驱动实时活动状态，不生成可见渲染块
 /// - 其他条目会打断分组并按原样单独渲染
 List<AgentTimelineRenderBlock> buildAgentTimelineRenderBlocks({
   required String turnId,
@@ -531,6 +532,9 @@ Map<String, Object?> _mapValue(Object? value) {
 
 bool _shouldSkipTimelineEntry(AgentTimelineEntry entry) {
   return switch (entry) {
+    AgentToolTimelineEntry(:final toolCall)
+        when toolCall.kind == AgentToolKind.think =>
+      true,
     AgentHistoryEventTimelineEntry(:final event)
         when event.kind == AgentHistoryEventKind.search =>
       _shouldSkipSearchEvent(event),

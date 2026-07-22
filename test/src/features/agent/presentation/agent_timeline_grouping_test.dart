@@ -56,6 +56,37 @@ void main() {
       expect(single.group.items.single.title, 'Run tests');
     });
 
+    test('skips reasoning without splitting visible command groups', () {
+      final blocks = buildAgentTimelineRenderBlocks(
+        turnId: 'turn-a',
+        entries: <AgentTimelineEntry>[
+          _toolEntry(
+            id: 'tool-1',
+            kind: AgentToolKind.execute,
+            title: 'Run tests',
+          ),
+          _toolEntry(
+            id: 'reasoning-1',
+            kind: AgentToolKind.think,
+            title: '思考',
+            content: 'private reasoning summary',
+          ),
+          _toolEntry(
+            id: 'tool-2',
+            kind: AgentToolKind.read,
+            title: 'Read result',
+          ),
+        ],
+      );
+
+      expect(blocks, hasLength(1));
+      final group = blocks.single as AgentTimelineCommandGroupRenderBlock;
+      expect(group.group.items.map((item) => item.id), <String>[
+        'tool-tool-1',
+        'tool-tool-2',
+      ]);
+    });
+
     test('creates a file edit group for a single edit tool', () {
       final blocks = buildAgentTimelineRenderBlocks(
         turnId: 'turn-a',

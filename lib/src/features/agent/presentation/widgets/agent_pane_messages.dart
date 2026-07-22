@@ -43,7 +43,7 @@ class _AgentMessageEntry extends StatelessWidget {
 /// 对话流内的进行中状态条（Codex 风格）。
 ///
 /// 挂在 live turn 条目之后、footer 之前：展示主活动段 + 时长，
-/// 不依赖是否已有思考/工具卡（Grok 仅回复流时也可见）。
+/// 思考数据本身不进入可见时间线，但仍通过此状态条反馈当前活动相位。
 class _AgentLiveActivityStatus extends StatelessWidget {
   const _AgentLiveActivityStatus({required this.viewModel});
 
