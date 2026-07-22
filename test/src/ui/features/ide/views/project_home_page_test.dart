@@ -46,6 +46,22 @@ void main() {
       find.byKey(const ValueKey<String>('project-home-thread-thread-5')),
       findsNothing,
     );
+    final firstThread = find.byKey(
+      const ValueKey<String>('project-home-thread-thread-0'),
+    );
+    expect(
+      find.descendant(
+        of: firstThread,
+        matching: find.byKey(
+          const ValueKey<String>('agent-provider-icon-svg-codex'),
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: firstThread, matching: find.text('Codex')),
+      findsNothing,
+    );
 
     await tester.tap(
       find.byKey(const ValueKey<String>('project-home-thread-thread-0')),

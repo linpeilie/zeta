@@ -71,13 +71,48 @@ void main() {
     );
     expect(find.text('Codex CLI'), findsOneWidget);
     expect(find.text('需登录'), findsOneWidget);
+    final codexProvider = find.byKey(
+      const ValueKey<String>('global-home-provider-codex'),
+    );
+    final grokProvider = find.byKey(
+      const ValueKey<String>('global-home-provider-grok'),
+    );
     expect(
-      find.byKey(const ValueKey<String>('agent-provider-icon-svg-codex')),
+      find.descendant(
+        of: codexProvider,
+        matching: find.byKey(
+          const ValueKey<String>('agent-provider-icon-svg-codex'),
+        ),
+      ),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey<String>('agent-provider-icon-svg-grok')),
+      find.descendant(
+        of: grokProvider,
+        matching: find.byKey(
+          const ValueKey<String>('agent-provider-icon-svg-grok'),
+        ),
+      ),
       findsOneWidget,
+    );
+    final firstRecentThread = find.byKey(
+      const ValueKey<String>('global-home-thread-codex-thread-0'),
+    );
+    expect(
+      find.descendant(
+        of: firstRecentThread,
+        matching: find.byKey(
+          const ValueKey<String>('agent-provider-icon-svg-codex'),
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: firstRecentThread,
+        matching: find.textContaining('Codex'),
+      ),
+      findsNothing,
     );
 
     final projectsTopLeft = tester.getTopLeft(

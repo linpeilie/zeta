@@ -474,14 +474,13 @@ class _RecentThreadRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final metadata = <String>[
       _fileName(thread.projectPath),
-      _providerShortLabel(thread.providerId),
       if (_relativeTime(thread.lastActiveAt, now) case final String value)
         value,
     ];
     return IdeListRow(
       title: thread.displayName,
       subtitle: metadata.join(' · '),
-      leading: Icon(_threadIcon(thread)),
+      leading: AgentProviderIcon(providerId: thread.providerId, size: 18),
       trailing: const Icon(Icons.chevron_right_rounded, size: 16),
       showDivider: showDivider,
       semanticLabel: '打开近期会话 ${thread.displayName}',
@@ -680,26 +679,6 @@ IdeChipVariant _providerChipVariant(HomeProviderStatus status) =>
       HomeProviderStatus.available ||
       HomeProviderStatus.running => IdeChipVariant.primary,
     };
-
-IconData _threadIcon(AgentThreadSummary thread) {
-  if (thread.waitingOnApproval || thread.waitingOnUserInput) {
-    return Icons.pending_actions_outlined;
-  }
-  return switch (thread.status) {
-    AgentThreadRuntimeStatus.active => Icons.sync_rounded,
-    AgentThreadRuntimeStatus.systemError => Icons.error_outline_rounded,
-    AgentThreadRuntimeStatus.notLoaded => Icons.history_toggle_off_rounded,
-    AgentThreadRuntimeStatus.idle => Icons.chat_bubble_outline_rounded,
-    AgentThreadRuntimeStatus.unknown => Icons.help_outline_rounded,
-  };
-}
-
-String _providerShortLabel(String providerId) => switch (providerId.trim()) {
-  defaultAgentProviderId => 'Codex',
-  grokAgentProviderId => 'Grok',
-  final String value when value.isEmpty => 'Agent',
-  final String value => value.length <= 12 ? value : value.substring(0, 12),
-};
 
 String _fileName(String path) {
   final parts = path

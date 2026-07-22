@@ -6,6 +6,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_context_menu.dart';
@@ -905,8 +906,8 @@ class _ThreadTileState extends State<_ThreadTile> {
           },
           child: Row(
             children: [
-              Icon(
-                _threadIcon(thread.status),
+              AgentProviderIcon(
+                providerId: thread.providerId,
                 size: 14,
                 color: widget.selected ? colors.accent : colors.textSecondary,
               ),
@@ -921,22 +922,6 @@ class _ThreadTileState extends State<_ThreadTile> {
                   ),
                 ),
               ),
-              if (_providerShortLabel(thread.providerId)
-                  case final providerLabel?) ...[
-                const SizedBox(width: IdeSpacing.space6),
-                Text(
-                  providerLabel,
-                  key: ValueKey<String>(
-                    'project-thread-provider-${widget.projectPath}-${thread.id}',
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: textStyles.caption.copyWith(
-                    color: colors.mutedText.withValues(alpha: 0.85),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
               if (waitingLabel != null) ...[
                 const SizedBox(width: IdeSpacing.space8),
                 Text(
@@ -1121,28 +1106,6 @@ class _LoadMoreThreadsButton extends StatelessWidget {
       ),
     );
   }
-}
-
-IconData _threadIcon(AgentThreadRuntimeStatus status) {
-  return switch (status) {
-    AgentThreadRuntimeStatus.active => Icons.play_circle_outline_rounded,
-    AgentThreadRuntimeStatus.systemError => Icons.error_outline_rounded,
-    _ => Icons.chat_bubble_outline_rounded,
-  };
-}
-
-/// 项目 thread 行上的短 provider 标签；未知 id 回退显示原 id 截断。
-String? _providerShortLabel(String providerId) {
-  final trimmed = providerId.trim();
-  if (trimmed.isEmpty) {
-    return null;
-  }
-  return switch (trimmed) {
-    defaultAgentProviderId || 'codex' => 'Codex',
-    grokAgentProviderId || 'grok' => 'Grok',
-    cursorAgentProviderId || 'cursor' => 'Cursor',
-    _ => trimmed.length <= 10 ? trimmed : trimmed.substring(0, 10),
-  };
 }
 
 String? _relativeThreadTime(DateTime? value, DateTime now) {

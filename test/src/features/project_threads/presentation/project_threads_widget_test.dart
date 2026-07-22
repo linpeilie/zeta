@@ -204,6 +204,19 @@ void main() {
       tester.widget<PaneInteractiveSurface>(threadTile).padding,
       IdeSpacing.horizontal8,
     );
+    expect(
+      find.descendant(
+        of: threadTile,
+        matching: find.byKey(
+          const ValueKey<String>('agent-provider-icon-svg-codex'),
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: threadTile, matching: find.text('Codex')),
+      findsNothing,
+    );
     expect(tester.getSize(projectTile).height, IdeMetrics.iconButtonHitSize);
     expect(tester.getSize(threadTile).height, IdeMetrics.iconButtonHitSize);
     expect(
@@ -666,11 +679,25 @@ void main() {
     expect(find.text('Codex CLI'), findsOneWidget);
     expect(find.text('Grok CLI'), findsOneWidget);
     expect(
-      find.byKey(const ValueKey<String>('agent-provider-icon-svg-codex')),
+      find.descendant(
+        of: find.byKey(
+          const ValueKey<String>('new-thread-provider-option-codex'),
+        ),
+        matching: find.byKey(
+          const ValueKey<String>('agent-provider-icon-svg-codex'),
+        ),
+      ),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey<String>('agent-provider-icon-svg-grok')),
+      find.descendant(
+        of: find.byKey(
+          const ValueKey<String>('new-thread-provider-option-grok'),
+        ),
+        matching: find.byKey(
+          const ValueKey<String>('agent-provider-icon-svg-grok'),
+        ),
+      ),
       findsOneWidget,
     );
     expect(find.text('Cursor Agent'), findsNothing);
@@ -1140,14 +1167,17 @@ void main() {
 
     // Assert：历史摘要仍可见，但入口不得读取 Cursor 历史或暴露写操作。
     expect(
-      find.byKey(
-        ValueKey<String>(
-          'project-thread-provider-${directory.path}-cursor-thread',
+      find.descendant(
+        of: find.byKey(
+          ValueKey<String>('project-thread-${directory.path}-cursor-thread'),
+        ),
+        matching: find.byKey(
+          const ValueKey<String>('agent-provider-icon-fallback-cursor'),
         ),
       ),
       findsOneWidget,
     );
-    expect(find.text('Cursor'), findsOneWidget);
+    expect(find.text('Cursor'), findsNothing);
     expect(find.textContaining('Cursor Agent unavailable'), findsWidgets);
     expect(provider.readHistories, isEmpty);
     expect(provider.resumedSessions, isEmpty);

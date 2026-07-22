@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_popover.dart';
@@ -342,10 +343,10 @@ class _RecentThreadRow extends StatelessWidget {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(
-                _threadStatusIcon(thread),
+              AgentProviderIcon(
+                providerId: thread.providerId,
                 size: 18,
-                color: _threadStatusColor(thread, colors),
+                color: colors.textSecondary,
               ),
               const SizedBox(width: IdeSpacing.space12),
               Expanded(
@@ -399,10 +400,6 @@ class _RecentThreadRow extends StatelessWidget {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final labels = <({String text, Color color})>[
-      (
-        text: _providerShortLabel(thread.providerId),
-        color: colors.textSecondary,
-      ),
       if (statusLabel != null)
         (text: statusLabel, color: _threadStatusColor(thread, colors)),
       if (lastActiveLabel != null)
@@ -531,17 +528,6 @@ class _FlatStateMessage extends StatelessWidget {
   }
 }
 
-String _providerShortLabel(String providerId) {
-  final trimmed = providerId.trim();
-  return switch (trimmed) {
-    defaultAgentProviderId || 'codex' => 'Codex',
-    grokAgentProviderId || 'grok' => 'Grok',
-    cursorAgentProviderId || 'cursor' => 'Cursor',
-    _ when trimmed.isEmpty => 'Agent',
-    _ => trimmed.length <= 10 ? trimmed : trimmed.substring(0, 10),
-  };
-}
-
 String? _threadStatusLabel(AgentThreadSummary thread) {
   if (thread.waitingOnApproval) {
     return '等待审批';
@@ -556,19 +542,6 @@ String? _threadStatusLabel(AgentThreadSummary thread) {
     return '系统错误';
   }
   return null;
-}
-
-IconData _threadStatusIcon(AgentThreadSummary thread) {
-  if (thread.waitingOnApproval || thread.waitingOnUserInput) {
-    return Icons.pending_actions_outlined;
-  }
-  return switch (thread.status) {
-    AgentThreadRuntimeStatus.active => Icons.sync_rounded,
-    AgentThreadRuntimeStatus.systemError => Icons.error_outline_rounded,
-    AgentThreadRuntimeStatus.notLoaded => Icons.history_toggle_off_rounded,
-    AgentThreadRuntimeStatus.idle => Icons.chat_bubble_outline_rounded,
-    AgentThreadRuntimeStatus.unknown => Icons.help_outline_rounded,
-  };
 }
 
 Color _threadStatusColor(AgentThreadSummary thread, IdeColors colors) {
