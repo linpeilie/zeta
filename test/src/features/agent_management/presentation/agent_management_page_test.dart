@@ -44,6 +44,10 @@ void main() {
     expect(find.byType(IdeToolbar), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-list-pane')), findsOneWidget);
     expect(
+      find.byKey(const ValueKey<String>('agent-provider-icon-svg-codex')),
+      findsOneWidget,
+    );
+    expect(
       find.byKey(const ValueKey('agent-row-status-compact')),
       findsOneWidget,
     );

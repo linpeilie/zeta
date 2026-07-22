@@ -8,6 +8,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_configuration_editor.dart';
@@ -786,7 +787,7 @@ class _AgentDetailStatusSummary extends StatelessWidget {
       key: const ValueKey('agent-detail-status-summary'),
       mainAxisSize: MainAxisSize.min,
       children: [
-        _AgentLogo(installed: agent.installed),
+        _AgentLogo(providerId: agent.definition.id, installed: agent.installed),
         const SizedBox(width: IdeSpacing.space8),
         _AgentStatusText(status: _priorityAgentStatus(colors, agent)),
       ],
@@ -866,7 +867,10 @@ class _AgentListRow extends StatelessWidget {
           key: ValueKey('agent-row-${agent.definition.id}'),
           title: agent.definition.displayName,
           subtitle: agent.definition.commandName,
-          leading: _AgentLogo(installed: agent.installed),
+          leading: _AgentLogo(
+            providerId: agent.definition.id,
+            installed: agent.installed,
+          ),
           trailing: _AgentRowStatus(
             agent: agent,
             compact: compact,
@@ -1087,8 +1091,9 @@ _AgentStatus _priorityAgentStatus(IdeColors colors, ManagedAgent agent) {
 }
 
 class _AgentLogo extends StatelessWidget {
-  const _AgentLogo({required this.installed});
+  const _AgentLogo({required this.providerId, required this.installed});
 
+  final String providerId;
   final bool installed;
 
   @override
@@ -1103,8 +1108,8 @@ class _AgentLogo extends StatelessWidget {
         border: Border.all(color: colors.borderSubtle),
       ),
       alignment: Alignment.center,
-      child: Icon(
-        Icons.auto_awesome_rounded,
+      child: AgentProviderIcon(
+        providerId: providerId,
         size: 17,
         color: installed ? colors.textSecondary : colors.textTertiary,
       ),

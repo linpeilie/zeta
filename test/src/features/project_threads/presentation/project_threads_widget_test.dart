@@ -665,6 +665,14 @@ void main() {
     );
     expect(find.text('Codex CLI'), findsOneWidget);
     expect(find.text('Grok CLI'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('agent-provider-icon-svg-codex')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('agent-provider-icon-svg-grok')),
+      findsOneWidget,
+    );
     expect(find.text('Cursor Agent'), findsNothing);
     expect(
       find.byKey(const ValueKey('new-thread-provider-option-cursor')),

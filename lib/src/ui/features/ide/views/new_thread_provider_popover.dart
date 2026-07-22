@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
@@ -187,8 +188,9 @@ class _NewThreadProviderPopoverState extends State<NewThreadProviderPopover> {
                   ),
                   child: Row(
                     children: [
-                      Icon(
-                        _providerIcon(provider.kind),
+                      AgentProviderIcon(
+                        providerId: provider.id,
+                        kind: provider.kind,
                         size: 18,
                         color: selected ? colors.accent : colors.textSecondary,
                       ),
@@ -241,15 +243,6 @@ class _NewThreadProviderPopoverState extends State<NewThreadProviderPopover> {
       }
     }
     return null;
-  }
-
-  IconData _providerIcon(AgentProviderKind kind) {
-    return switch (kind) {
-      AgentProviderKind.codexAppServer => Icons.code_rounded,
-      AgentProviderKind.acp => Icons.smart_toy_outlined,
-      AgentProviderKind.cursorAcp => Icons.block_rounded,
-      AgentProviderKind.claudeCode => Icons.terminal_rounded,
-    };
   }
 
   String _providerKindLabel(AgentProviderKind kind) {

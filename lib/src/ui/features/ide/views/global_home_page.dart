@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/ide_session/domain/recent_project_summary.dart';
 import 'package:zeta/src/ui/core/ide_chip.dart';
@@ -511,8 +512,8 @@ class _ProviderStatusItem extends StatelessWidget {
           padding: IdeSpacing.all12,
           child: Row(
             children: [
-              Icon(
-                _providerIcon(provider.id),
+              AgentProviderIcon(
+                providerId: provider.id,
                 size: 18,
                 color: colors.textSecondary,
               ),
@@ -679,12 +680,6 @@ IdeChipVariant _providerChipVariant(HomeProviderStatus status) =>
       HomeProviderStatus.available ||
       HomeProviderStatus.running => IdeChipVariant.primary,
     };
-
-IconData _providerIcon(String providerId) => switch (providerId) {
-  defaultAgentProviderId => Icons.code_rounded,
-  grokAgentProviderId => Icons.smart_toy_outlined,
-  _ => Icons.extension_outlined,
-};
 
 IconData _threadIcon(AgentThreadSummary thread) {
   if (thread.waitingOnApproval || thread.waitingOnUserInput) {

@@ -71,6 +71,14 @@ void main() {
     );
     expect(find.text('Codex CLI'), findsOneWidget);
     expect(find.text('需登录'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('agent-provider-icon-svg-codex')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('agent-provider-icon-svg-grok')),
+      findsOneWidget,
+    );
 
     final projectsTopLeft = tester.getTopLeft(
       find.byKey(const ValueKey<String>('global-home-projects-section')),
