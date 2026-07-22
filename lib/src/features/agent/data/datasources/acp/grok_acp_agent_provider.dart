@@ -687,14 +687,15 @@ class GrokAcpAgentProvider
           message: '${config.displayName} ready',
         ),
       );
-    } catch (error) {
-      _log.warning('session/prompt failed (${error.runtimeType})');
+    } catch (error, stackTrace) {
       final failure = _normalizePromptFailure(error);
       _emitPromptFailure(
         runtimeScope: currentRuntimeScope,
         sessionId: session.id,
         turnId: turnId,
         failure: failure,
+        error: error,
+        stackTrace: stackTrace,
       );
       _notificationMapper.invalidateTurn(
         runtimeScope: currentRuntimeScope,
@@ -962,6 +963,8 @@ class GrokAcpAgentProvider
     required String sessionId,
     required String turnId,
     required _GrokPromptFailure failure,
+    required Object error,
+    required StackTrace stackTrace,
   }) {
     _notificationMapper.noteBoundary(
       runtimeScope: runtimeScope,
@@ -991,6 +994,8 @@ class GrokAcpAgentProvider
         message: failure.message,
         sessionId: sessionId,
         turnId: turnId,
+        exception: error,
+        stackTrace: stackTrace,
         raw: failure.raw,
       ),
     );

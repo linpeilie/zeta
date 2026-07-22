@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:logging/logging.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -1966,6 +1968,83 @@ void main() {
       },
     );
 
+    test('logs normalized error events for every provider', () async {
+      final records = <LogRecord>[];
+      final subscription = Logger.root.onRecord.listen(records.add);
+      addTearDown(subscription.cancel);
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.sendMessage('private user prompt');
+      provider.emit(
+        const AgentErrorEvent(
+          message: 'Provider rejected the request',
+          code: 'rateLimited',
+          willRetry: false,
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          raw: <String, Object?>{
+            'jsonRpcError': <String, Object?>{
+              'code': -32003,
+              'accessToken': 'event-secret',
+            },
+          },
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final record = records.singleWhere(
+        (record) => record.message.startsWith('Agent provider error event: '),
+      );
+      final context = _structuredLogContext(
+        record,
+        prefix: 'Agent provider error event: ',
+      );
+      expect(context['providerId'], defaultAgentProviderId);
+      expect(context['operation'], 'provider/event');
+      expect(context['sessionId'], 'thread-1');
+      expect(context['turnId'], 'turn-1');
+      expect(context['code'], 'rateLimited');
+      final diagnostic = context['diagnostic']! as Map<String, Object?>;
+      final rpc = diagnostic['jsonRpcError']! as Map<String, Object?>;
+      expect(rpc['code'], -32003);
+      expect(rpc['accessToken'], '••••••');
+      expect(record.message, isNot(contains('event-secret')));
+      expect(record.message, isNot(contains('private user prompt')));
+    });
+
+    test('logs exceptions thrown by any provider conversation call', () async {
+      final records = <LogRecord>[];
+      final subscription = Logger.root.onRecord.listen(records.add);
+      addTearDown(subscription.cancel);
+      final error = StateError('request failed token=operation-secret');
+      final provider = _FakeAgentProvider(sendError: error);
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.sendMessage('private user prompt');
+
+      final record = records.singleWhere(
+        (record) =>
+            record.message.startsWith('Agent provider operation failed: '),
+      );
+      final context = _structuredLogContext(
+        record,
+        prefix: 'Agent provider operation failed: ',
+      );
+      expect(record.error, same(error));
+      expect(record.stackTrace, isNotNull);
+      expect(context['providerId'], defaultAgentProviderId);
+      expect(context['operation'], 'conversation/sendMessage');
+      expect(context['sessionId'], 'thread-1');
+      expect(context['category'], 'request');
+      final exception = context['exception']! as Map<String, Object?>;
+      expect(exception['type'], 'StateError');
+      expect(exception['message'], isNot(contains('operation-secret')));
+      expect(record.message, isNot(contains('private user prompt')));
+    });
+
     test('keeps unique ids for consecutive error events', () async {
       final provider = _FakeAgentProvider();
       final viewModel = _createViewModel(provider);
@@ -3078,6 +3157,7 @@ class _FakeAgentProvider
   _FakeAgentProvider({
     this.failHistory = false,
     this.failResume = false,
+    this.sendError,
     this.startSessionTitle,
     this.resumeSessionTitle,
     this.providerConfig = AgentProviderConfig.defaultCodex,
@@ -3109,6 +3189,7 @@ class _FakeAgentProvider
 
   final bool failHistory;
   final bool failResume;
+  final Object? sendError;
   final String? startSessionTitle;
   final String? resumeSessionTitle;
   final AgentProviderConfig providerConfig;
@@ -3243,6 +3324,10 @@ class _FakeAgentProvider
     List<AgentUserInput>? inputs,
     String? clientUserMessageId,
   }) async {
+    final error = sendError;
+    if (error != null) {
+      Error.throwWithStackTrace(error, StackTrace.current);
+    }
     final resolved =
         inputs ?? <AgentUserInput>[AgentUserInput.text(message ?? '')];
     calls.add('send:${session.id}');
@@ -3322,6 +3407,14 @@ class _FakeAgentProvider
   void emit(AgentEvent event) {
     _events.add(event);
   }
+}
+
+Map<String, Object?> _structuredLogContext(
+  LogRecord record, {
+  required String prefix,
+}) {
+  return jsonDecode(record.message.substring(prefix.length))
+      as Map<String, Object?>;
 }
 
 class _RuntimeScopedFakeAgentProvider extends _FakeAgentProvider

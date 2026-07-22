@@ -629,6 +629,8 @@ class AgentErrorEvent extends AgentEvent {
     this.willRetry,
     this.sessionId,
     this.turnId,
+    this.exception,
+    this.stackTrace,
     this.raw = const <String, Object?>{},
   });
 
@@ -653,6 +655,12 @@ class AgentErrorEvent extends AgentEvent {
 
   /// 可选回合 id；全局 stderr / protocol 错误为空。
   final String? turnId;
+
+  /// Provider 捕获到的原始异常；仅用于通用诊断日志，不进入用户可见文本。
+  final Object? exception;
+
+  /// 捕获异常时的堆栈；仅用于通用诊断日志。
+  final StackTrace? stackTrace;
 
   /// 原始错误 payload。
   final Map<String, Object?> raw;

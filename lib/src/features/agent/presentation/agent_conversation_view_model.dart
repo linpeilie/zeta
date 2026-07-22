@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/core/logging/structured_error_logging.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_permission_selection_controller.dart';
@@ -1295,6 +1296,9 @@ class AgentConversationViewModel extends ChangeNotifier {
     final clientUserMessageId = _nextClientUserMessageId();
 
     final isNewTurn = runningTurnId == null;
+    var providerOperation = 'provider/settings';
+    AgentProvider? requestProvider;
+    AgentSession? requestSession;
     if (isNewTurn) {
       // 在发送瞬间冻结本回合模型配置，避免 footer 被后续改配置污染。
       _timeline.startPendingLiveTurn(modelConfig: _currentTurnModelConfig());
@@ -1325,20 +1329,24 @@ class AgentConversationViewModel extends ChangeNotifier {
 
     try {
       await loadSettings();
+      providerOperation = 'provider/ensure';
       // 已选中 thread 时必须落到该 thread 所属 provider，避免用 Codex 去 resume Grok id。
       final provider = await _ensureProvider(
         preferredProviderId: _selectedProviderId,
       );
+      requestProvider = provider;
       final context = AgentContext(
         projectPath: _projectPath,
         filePath: _contextFilePath,
       );
+      providerOperation = 'session/ensure';
       final session = await _ensureSession(
         provider,
         context,
         switchToken: switchToken,
         expectedThreadId: selectedThreadId,
       );
+      requestSession = session;
       final conversation = provider.bundle.conversation;
       // 新会话在 Grok 异步 generated_title 出现前，先用首条用户消息作临时标题。
       if (_isStillSelectedThread(switchToken, session.id) &&
@@ -1349,6 +1357,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       }
       _log.info('Sending Agent request with provider ${provider.config.id}');
       if (isNewTurn) {
+        providerOperation = 'conversation/sendMessage';
         final turn = await conversation.sendMessage(
           session: session,
           inputs: inputs,
@@ -1367,6 +1376,7 @@ class AgentConversationViewModel extends ChangeNotifier {
           );
         }
       } else {
+        providerOperation = 'turn/steer';
         final turnSteering = provider.bundle.turnSteering;
         if (turnSteering == null) {
           throw UnsupportedError(
@@ -1381,24 +1391,53 @@ class AgentConversationViewModel extends ChangeNotifier {
           clientUserMessageId: clientUserMessageId,
         );
       }
-    } on ProcessException catch (error) {
-      _log.warning(
-        'Agent provider process failed (errorCode=${error.errorCode})',
+    } on ProcessException catch (error, stackTrace) {
+      _logProviderOperationFailure(
+        error: error,
+        stackTrace: stackTrace,
+        operation: providerOperation,
+        provider: requestProvider,
+        session: requestSession,
+        selectedThreadId: selectedThreadId,
+        runningTurnId: runningTurnId,
+        extra: <String, Object?>{
+          'category': 'process',
+          'errorCode': error.errorCode,
+          'executable': error.executable,
+        },
       );
       if (!_isStillSelectedThread(switchToken, selectedThreadId)) {
         return;
       }
       _failPendingLiveTurn();
       _markUnavailable(error.message, details: error.toString());
-    } on UnsupportedError catch (error) {
-      _log.warning('Unsupported Agent provider (${error.runtimeType})');
+    } on UnsupportedError catch (error, stackTrace) {
+      _logProviderOperationFailure(
+        error: error,
+        stackTrace: stackTrace,
+        operation: providerOperation,
+        provider: requestProvider,
+        session: requestSession,
+        selectedThreadId: selectedThreadId,
+        runningTurnId: runningTurnId,
+        extra: const <String, Object?>{'category': 'unsupported'},
+      );
       if (!_isStillSelectedThread(switchToken, selectedThreadId)) {
         return;
       }
       _failPendingLiveTurn();
       _markError(error.message ?? 'Provider is not supported');
-    } catch (error) {
-      _log.warning('Agent request failed (${error.runtimeType})');
+    } catch (error, stackTrace) {
+      _logProviderOperationFailure(
+        error: error,
+        stackTrace: stackTrace,
+        operation: providerOperation,
+        provider: requestProvider,
+        session: requestSession,
+        selectedThreadId: selectedThreadId,
+        runningTurnId: runningTurnId,
+        extra: const <String, Object?>{'category': 'request'},
+      );
       if (!_isStillSelectedThread(switchToken, selectedThreadId)) {
         return;
       }
@@ -1407,6 +1446,32 @@ class AgentConversationViewModel extends ChangeNotifier {
     } finally {
       _timeline.clearPendingTurnGroupId();
     }
+  }
+
+  /// 记录任意 Provider 调用抛出的异常；不包含本次用户输入正文。
+  void _logProviderOperationFailure({
+    required Object error,
+    required StackTrace stackTrace,
+    required String operation,
+    required AgentProvider? provider,
+    required AgentSession? session,
+    required String? selectedThreadId,
+    required String? runningTurnId,
+    Map<String, Object?> extra = const <String, Object?>{},
+  }) {
+    logStructuredFailure(
+      _log,
+      message: 'Agent provider operation failed',
+      error: error,
+      stackTrace: stackTrace,
+      context: <String, Object?>{
+        ..._providerRuntimeLogContext(provider),
+        'operation': operation,
+        'sessionId': session?.id ?? selectedThreadId,
+        'turnId': runningTurnId ?? _timeline.pendingTurnGroupId,
+        ...extra,
+      },
+    );
   }
 
   /// 取消正在运行的回合。
@@ -2537,6 +2602,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       case AgentModelListEvent():
         _handleModelList(event.models);
       case AgentErrorEvent():
+        _logProviderErrorEvent(event);
         if (!_shouldHandleEventForCurrentThread(
           sessionId: event.sessionId,
           turnId: event.turnId,
@@ -2558,6 +2624,41 @@ class AgentConversationViewModel extends ChangeNotifier {
           autoScroll: true,
         );
     }
+  }
+
+  /// Provider 已将异常归一化为事件时统一记录，覆盖 Codex、Grok 和未来实现。
+  void _logProviderErrorEvent(AgentErrorEvent event) {
+    logStructuredFailure(
+      _log,
+      message: 'Agent provider error event',
+      error: event.exception,
+      stackTrace: event.stackTrace,
+      context: <String, Object?>{
+        ..._providerRuntimeLogContext(_provider),
+        'operation': 'provider/event',
+        'eventType': event.runtimeType.toString(),
+        'sessionId': event.sessionId,
+        'turnId': event.turnId,
+        'message': event.message,
+        'details': event.details,
+        'code': event.code,
+        'willRetry': event.willRetry,
+        'diagnostic': event.raw,
+      },
+    );
+  }
+
+  Map<String, Object?> _providerRuntimeLogContext(AgentProvider? provider) {
+    final runtime = provider?.bundle.runtime;
+    final scope = runtime?.runtimeScope;
+    return <String, Object?>{
+      'providerId': provider?.config.id ?? _selectedProviderId ?? 'unknown',
+      if (runtime != null) 'lifecycleState': runtime.lifecycleState.name,
+      if (scope != null) ...<String, Object?>{
+        'runtimeId': scope.runtimeId,
+        'connectionEpoch': scope.connectionEpoch,
+      },
+    };
   }
 
   /// 时间线中最近一条用户消息（用于编辑重试）。

@@ -769,6 +769,8 @@ void main() {
         expect(visibleError.details, isNull);
         expect(visibleError.sessionId, session.id);
         expect(visibleError.turnId, started.turn.id);
+        expect(visibleError.exception, same(scenario.error));
+        expect(visibleError.stackTrace, isNotNull);
         expect(visibleError.raw, completed.raw);
         expect(
           visibleError.raw['exceptionType'],

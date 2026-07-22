@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/core/logging/structured_error_logging.dart';
 import 'package:zeta/src/features/agent/domain/agent_runtime_models.dart';
 
 final _log = loggerFor('zeta.agent.json_rpc_stdio');
@@ -129,10 +130,15 @@ class JsonRpcError {
 }
 
 /// JSON-RPC 错误响应。
-class JsonRpcException implements Exception {
+class JsonRpcException implements Exception, StructuredLogDiagnostic {
   const JsonRpcException(this.error);
 
   final JsonRpcError error;
+
+  @override
+  Map<String, Object?> get logDiagnostic => <String, Object?>{
+    'jsonRpcError': error.toJson(),
+  };
 
   @override
   String toString() => 'JSON-RPC error ${error.code}: ${error.message}';
