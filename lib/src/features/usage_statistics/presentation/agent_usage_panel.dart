@@ -263,13 +263,13 @@ class _ProviderUsage extends StatelessWidget {
           ),
           const SizedBox(height: IdeSpacing.space12),
         ],
-        _TokenSection(tokens: entry.todayTokens),
         if (entry.hasSubscriptionPlan) ...[
+          _PlanSection(quota: entry.quota!),
           const SizedBox(height: IdeSpacing.space12),
           Divider(height: 1, color: colors.borderSubtle),
           const SizedBox(height: IdeSpacing.space12),
-          _PlanSection(quota: entry.quota!),
         ],
+        _TokenSection(tokens: entry.todayTokens),
         if (entry.message case final message?) ...[
           const SizedBox(height: IdeSpacing.space12),
           Text(

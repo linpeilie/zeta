@@ -46,6 +46,16 @@ void main() {
     expect(find.text('5 小时'), findsOneWidget);
     expect(find.text('剩余 75%'), findsOneWidget);
     expect(find.text('周'), findsOneWidget);
+    expect(
+      tester
+          .getTopLeft(find.byKey(const ValueKey('agent-usage-plan-section')))
+          .dy,
+      lessThan(
+        tester
+            .getTopLeft(find.byKey(const ValueKey('agent-usage-token-section')))
+            .dy,
+      ),
+    );
 
     await tester.tap(
       find.byKey(const ValueKey('agent-usage-tab-grok-personal')),
