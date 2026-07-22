@@ -170,14 +170,14 @@ class _AgentPaneState extends State<AgentPane> {
                               onLoadOlder: _loadOlderTurns,
                               buildTurnSection: _buildTurnSection,
                             ),
+                            floatingPanel: _AgentActivePlanSection(
+                              viewModel: widget.viewModel,
+                              pagePadding: pagePadding,
+                            ),
                             footer: Column(
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                _AgentActivePlanSection(
-                                  viewModel: widget.viewModel,
-                                  pagePadding: pagePadding,
-                                ),
                                 // 阻塞交互始终固定在输入框上方，并沿用原最大高度。
                                 _AgentPendingInteractionSection(
                                   viewModel: widget.viewModel,

@@ -2577,7 +2577,13 @@ void main() {
     'shows a responsive active plan above the composer and preserves expansion',
     (tester) async {
       final session = activeProjectSessionStore(tempDirectories);
-      final provider = FakeAgentProvider(completeTurns: false);
+      final provider = FakeAgentProvider(
+        completeTurns: false,
+        responseText: List<String>.generate(
+          80,
+          (index) => 'Scrollable response line $index',
+        ).join('\n'),
+      );
 
       await tester.pumpWidget(
         MainApp(
@@ -2663,6 +2669,20 @@ void main() {
           0.5,
         ),
       );
+
+      final messageList = find.byKey(const ValueKey('agent-message-list'));
+      final timelineController = tester
+          .widget<SingleChildScrollView>(messageList)
+          .controller!;
+      expect(timelineController.position.maxScrollExtent, greaterThan(100));
+      timelineController.jumpTo(0);
+      await tester.pump();
+      final cardRect = tester.getRect(card);
+      final sidePoint = Offset(cardRect.left - 12, cardRect.center.dy);
+      expect(tester.getRect(messageList).contains(sidePoint), isTrue);
+      await tester.dragFrom(sidePoint, const Offset(0, -120));
+      await tester.pump();
+      expect(timelineController.offset, greaterThan(0));
 
       await tester.tap(
         find.byKey(const ValueKey<String>('agent-active-plan-toggle-turn-1')),

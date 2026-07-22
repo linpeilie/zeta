@@ -3,18 +3,21 @@ part of '../agent_pane.dart';
 /// 对话时间线与 Composer 的统一布局壳。
 ///
 /// Footer 始终是同一棵带稳定 Key 的子树；空会话时靠近 Canvas 视觉中心，
-/// 首个 turn 出现后落到底部。时间线按 Footer 实际高度让位，避免覆盖审批 Dock。
+/// 首个 turn 出现后落到底部。时间线只按 Composer 与阻塞交互的实际高度让位；
+/// 紧凑浮层独立叠放，避免其窄卡片制造整行空白。
 class _AgentConversationLayout extends StatefulWidget {
   const _AgentConversationLayout({
     required this.hasConversation,
     required this.reduceMotion,
     required this.timeline,
+    required this.floatingPanel,
     required this.footer,
   });
 
   final bool hasConversation;
   final bool reduceMotion;
   final Widget timeline;
+  final Widget floatingPanel;
   final Widget footer;
 
   @override
@@ -80,6 +83,15 @@ class _AgentConversationLayoutState extends State<_AgentConversationLayout> {
               ),
             ),
           ),
+        ),
+        AnimatedPositioned(
+          key: const ValueKey('agent-floating-panel-position'),
+          left: 0,
+          right: 0,
+          bottom: widget.hasConversation ? _footerHeight : 0,
+          duration: duration,
+          curve: IdeMotion.curveDefault,
+          child: widget.floatingPanel,
         ),
       ],
     );
