@@ -2653,6 +2653,10 @@ void main() {
       expect(card, findsOneWidget);
       expect(summary, findsOneWidget);
       expect(body, findsNothing);
+      final planSurface = tester.widget<PanelCard>(
+        find.descendant(of: card, matching: find.byType(PanelCard)),
+      );
+      expect(planSurface.color!.a, closeTo(0.8, 0.001));
       expect(
         find.descendant(of: progress, matching: find.text('2/12')),
         findsOneWidget,

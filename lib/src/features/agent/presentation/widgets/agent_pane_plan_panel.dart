@@ -101,7 +101,8 @@ class _AgentActivePlanCardState extends State<_AgentActivePlanCard> {
 
     return RepaintBoundary(
       child: PanelCard(
-        color: colors.surfaceElevated,
+        // 仅降低浮层背景不透明度，保留文字与状态标记的完整对比度。
+        color: colors.surfaceElevated.withValues(alpha: 0.8),
         borderColor: colors.border,
         borderRadius: IdeRadius.allMedium,
         child: Column(
