@@ -2,6 +2,7 @@
 
 import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
@@ -2640,6 +2641,8 @@ void main() {
   testWidgets(
     'shows a responsive active plan above the composer and preserves expansion',
     (tester) async {
+      const longPlanStep =
+          'Build the compact floating plan panel and verify its overflow tooltip';
       final session = activeProjectSessionStore(tempDirectories);
       final provider = FakeAgentProvider(
         completeTurns: false,
@@ -2684,11 +2687,8 @@ void main() {
       );
 
       final entries = <AgentPlanEntry>[
-        const AgentPlanEntry(content: 'Inspect code', status: 'completed'),
-        const AgentPlanEntry(
-          content: 'Build the compact floating plan panel',
-          status: 'inProgress',
-        ),
+        const AgentPlanEntry(content: 'Inspect code', status: 'pending'),
+        const AgentPlanEntry(content: longPlanStep, status: 'inProgress'),
         for (var index = 3; index <= 12; index += 1)
           AgentPlanEntry(content: 'Pending step $index', status: 'pending'),
       ];
@@ -2725,6 +2725,15 @@ void main() {
         find.descendant(of: progress, matching: find.text('2/12')),
         findsOneWidget,
       );
+      final summaryText = find.descendant(
+        of: summary,
+        matching: find.text(longPlanStep),
+      );
+      final summaryTooltip = find.ancestor(
+        of: summaryText,
+        matching: find.byType(IdeTooltip),
+      );
+      expect(tester.widget<IdeTooltip>(summaryTooltip).enabled, isTrue);
       expect(tester.getSize(card).width, lessThanOrEqualTo(340));
       expect(
         tester.getCenter(card).dx,
@@ -2752,6 +2761,21 @@ void main() {
       await tester.pump();
       expect(timelineController.offset, greaterThan(0));
 
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(mouse.removePointer);
+      await mouse.addPointer(location: Offset.zero);
+      await mouse.moveTo(tester.getCenter(summaryText));
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(
+        find.descendant(
+          of: find.byType(sf.TooltipContainer),
+          matching: find.text(longPlanStep),
+        ),
+        findsOneWidget,
+      );
+      await mouse.moveTo(Offset.zero);
+      await tester.pump();
+
       await tester.tap(
         find.byKey(const ValueKey<String>('agent-active-plan-toggle-turn-1')),
       );
@@ -2766,10 +2790,36 @@ void main() {
       expect(scroll, findsOneWidget);
       expect(tester.getSize(scroll).height, lessThanOrEqualTo(200));
       expect(find.bySemanticsLabel('已完成：Inspect code'), findsOneWidget);
+      expect(find.bySemanticsLabel('进行中：$longPlanStep'), findsOneWidget);
+      final shortStepText = find.descendant(
+        of: body,
+        matching: find.text('Inspect code'),
+      );
+      final shortStepTooltip = find.ancestor(
+        of: shortStepText,
+        matching: find.byType(IdeTooltip),
+      );
+      expect(tester.widget<IdeTooltip>(shortStepTooltip).enabled, isFalse);
+      final longStepText = find.descendant(
+        of: body,
+        matching: find.text(longPlanStep),
+      );
+      final longStepTooltip = find.ancestor(
+        of: longStepText,
+        matching: find.byType(IdeTooltip),
+      );
+      expect(tester.widget<IdeTooltip>(longStepTooltip).enabled, isTrue);
+      await mouse.moveTo(tester.getCenter(longStepText));
+      await tester.pump(const Duration(milliseconds: 600));
       expect(
-        find.bySemanticsLabel('进行中：Build the compact floating plan panel'),
+        find.descendant(
+          of: find.byType(sf.TooltipContainer),
+          matching: find.text(longPlanStep),
+        ),
         findsOneWidget,
       );
+      await mouse.moveTo(Offset.zero);
+      await tester.pump();
 
       await tester.binding.setSurfaceSize(const Size(460, 720));
       addTearDown(() => tester.binding.setSurfaceSize(null));
