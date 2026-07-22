@@ -106,7 +106,7 @@ class AgentProviderConfig {
   /// V1 通过 stdio 启动 app-server，不额外引入 JSON-RPC 第三方依赖。
   static const AgentProviderConfig defaultCodex = AgentProviderConfig(
     id: defaultAgentProviderId,
-    displayName: 'Codex CLI',
+    displayName: 'Codex',
     kind: AgentProviderKind.codexAppServer,
     command: 'codex',
     arguments: <String>['app-server'],
@@ -117,11 +117,20 @@ class AgentProviderConfig {
   /// 启动 `grok agent stdio`，通过标准 ACP JSON-RPC 与 Zeta 对话。
   static const AgentProviderConfig defaultGrok = AgentProviderConfig(
     id: grokAgentProviderId,
-    displayName: 'Grok CLI',
+    displayName: 'Grok',
     kind: AgentProviderKind.acp,
     command: 'grok',
     arguments: <String>['agent', 'stdio'],
   );
+
+  /// 将内置 Provider 的历史展示名称归一化为当前产品名称。
+  static String normalizeDisplayName(String id, String displayName) {
+    return switch (id) {
+      defaultAgentProviderId => defaultCodex.displayName,
+      grokAgentProviderId => defaultGrok.displayName,
+      _ => displayName,
+    };
+  }
 
   /// 旧 Cursor CLI ACP stdio 配置，仅供旧配置解码与退役回归测试。
   ///
@@ -188,7 +197,7 @@ class AgentProviderConfig {
   }) {
     return AgentProviderConfig(
       id: id,
-      displayName: displayName,
+      displayName: normalizeDisplayName(id, displayName),
       kind: kind,
       command: command,
       arguments: arguments,
@@ -254,7 +263,7 @@ class AgentProviderConfig {
 
     return AgentProviderConfig(
       id: id,
-      displayName: displayName,
+      displayName: normalizeDisplayName(id, displayName),
       kind: kind,
       command: command,
       arguments: decodeStringList(map['arguments']),

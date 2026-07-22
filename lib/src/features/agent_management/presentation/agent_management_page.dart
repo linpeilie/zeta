@@ -113,7 +113,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
           children: [
             IdePageHeader(
               title: 'Agent 管理',
-              subtitle: '管理本机已安装及当前应用支持的 Agent CLI',
+              subtitle: '管理本机已安装及当前应用支持的 Agent',
               leading: Icon(
                 Icons.smart_toy_outlined,
                 size: 20,
@@ -378,7 +378,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
     if (installedTab && !anyInstalled && noQuery) {
       return _ActionEmptyState(
         icon: Icons.travel_explore_rounded,
-        title: '暂未检测到已安装的 Agent CLI',
+        title: '暂未检测到已安装的 Agent',
         description: '可以自动检测本机环境，或者前往“全部支持”查看当前应用支持的 Agent。',
         primaryLabel: '自动检测 Agent',
         onPrimary: widget.controller.detect,
@@ -509,7 +509,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
             onOpenExecutableDirectory: _openExecutableDirectory,
             onSaveTimeout: _saveTimeout,
             onCopyCommand: () =>
-                _copyText(agent.definition.commandName, '已复制 CLI 命令。'),
+                _copyText(agent.definition.commandName, '已复制启动命令。'),
           );
           final diagnostics = _AgentDiagnosticsCard(
             agent: agent,
@@ -547,7 +547,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
         icon: Icons.view_in_ar_outlined,
         title: '无法加载模型列表',
         description: agent.accountState == AgentAccountState.loggedOut
-            ? '当前账号尚未登录。登录 Codex CLI 后重新加载。'
+            ? '当前账号尚未登录。登录 Codex 后重新加载。'
             : 'Codex app-server 未返回模型，或当前配置无法完成握手。',
         primaryLabel: '重新加载',
         onPrimary: _testConnection,
@@ -711,7 +711,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
       if (mounted) {
         showIdeToast(
           context,
-          message: '无法使用所选 CLI 文件：$error',
+          message: '无法使用所选可执行文件：$error',
           tone: IdeToastTone.error,
         );
       }
@@ -729,7 +729,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
       if (mounted) {
         showIdeToast(
           context,
-          message: '无法打开 CLI 目录：$error',
+          message: '无法打开可执行文件目录：$error',
           tone: IdeToastTone.error,
         );
       }
@@ -1222,7 +1222,7 @@ class _AgentInformationCard extends StatelessWidget {
             _InfoRow(label: '名称', value: agent.definition.displayName),
             _InfoRow(label: '厂商', value: agent.definition.vendor),
             _InfoRow(
-              label: 'Agent CLI',
+              label: '启动命令',
               value: agent.definition.commandName,
               trailing: sf.IconButton.ghost(
                 onPressed: onCopyCommand,
@@ -1376,7 +1376,7 @@ class _AgentDiagnosticsCard extends StatelessWidget {
         agent.accountState == AgentAccountState.loggedIn;
     final diagnostics = <_DiagnosticEntry>[
       _DiagnosticEntry(
-        label: 'CLI',
+        label: '程序',
         value: agent.installed ? '可执行文件存在且可调用' : '未找到可执行文件',
       ),
       _DiagnosticEntry(label: '账号', value: _accountLabel(agent.accountState)),
@@ -1642,7 +1642,7 @@ String _runtimeLabel(AgentRuntimeState state) {
 String _diagnosticStageLabel(AgentDiagnosticStage stage) {
   return switch (stage) {
     AgentDiagnosticStage.fileDetection => '文件检测',
-    AgentDiagnosticStage.cliStartup => 'CLI 启动',
+    AgentDiagnosticStage.cliStartup => '进程启动',
     AgentDiagnosticStage.versionDetection => '版本检测',
     AgentDiagnosticStage.accountAuthentication => '账号认证',
     AgentDiagnosticStage.protocolHandshake => '协议握手',

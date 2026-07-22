@@ -96,7 +96,7 @@ void main() {
 
     // Assert
     expect(viewModel.activeProviderId, grokAgentProviderId);
-    expect(viewModel.activeProviderName, 'Grok CLI');
+    expect(viewModel.activeProviderName, 'Grok');
     expect(find.byKey(const ValueKey('agent-read-only-notice')), findsNothing);
     expect(find.byKey(const ValueKey('agent-message-input')), findsOneWidget);
   });

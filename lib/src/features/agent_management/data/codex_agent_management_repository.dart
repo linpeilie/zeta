@@ -65,7 +65,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
       );
     }
 
-    publish(0, '正在定位 Codex CLI');
+    publish(0, '正在定位 Codex');
     final resolved = await _locator.locate(providerConfig);
     if (resolved == null) {
       final configInfo = await _configurationInfo();
@@ -79,10 +79,10 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
         logPaths: await discoverLogPaths(),
         lastDetectedAt: _now(),
         errorStage: AgentDiagnosticStage.fileDetection,
-        errorMessage: '未找到 Codex CLI',
-        suggestion: '请先安装 Codex CLI，或手动选择可执行文件。',
+        errorMessage: '未找到 Codex',
+        suggestion: '请先安装 Codex，或手动选择可执行文件。',
       );
-      publish(total, '未找到 Codex CLI');
+      publish(total, '未找到 Codex');
       return current;
     }
 
@@ -97,7 +97,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
       errorDetails: null,
       suggestion: null,
     );
-    publish(1, '已找到 Codex CLI');
+    publish(1, '已找到 Codex');
 
     final version = await _readVersion(resolved);
     current = current.copyWith(
@@ -214,7 +214,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
           accountValid: false,
           protocolReady: false,
           failureStage: AgentDiagnosticStage.fileDetection,
-          message: '未找到 Codex CLI 可执行文件。',
+          message: '未找到 Codex 可执行文件。',
         ),
         const <AgentModelInfo>[],
       );
@@ -508,11 +508,11 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
         r'\b(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)\b',
       ).firstMatch(output);
       if (!result.succeeded || match == null) {
-        return _VersionRead(error: '无法识别 Codex CLI 版本。', details: output);
+        return _VersionRead(error: '无法识别 Codex 版本。', details: output);
       }
       return _VersionRead(version: match.group(1));
     } catch (error) {
-      return _VersionRead(error: 'Codex CLI 版本检测失败。', details: '$error');
+      return _VersionRead(error: 'Codex 版本检测失败。', details: '$error');
     }
   }
 
@@ -536,7 +536,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
           normalized.contains('login required')) {
         return const _AccountRead(
           state: AgentAccountState.loggedOut,
-          error: 'Codex CLI 尚未登录。',
+          error: 'Codex 尚未登录。',
           suggestion: '请在终端运行 codex login 后重新检测。',
           failureStage: AgentDiagnosticStage.accountAuthentication,
         );
@@ -561,7 +561,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
         state: AgentAccountState.unavailable,
         error: '账号状态检测失败。',
         details: '$error',
-        suggestion: '请确认 Codex CLI 可以在终端中正常运行。',
+        suggestion: '请确认 Codex 可以在终端中正常运行。',
         failureStage: AgentDiagnosticStage.accountAuthentication,
       );
     }

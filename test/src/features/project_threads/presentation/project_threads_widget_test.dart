@@ -676,8 +676,8 @@ void main() {
       tester.getRect(providerPopover).top,
       greaterThanOrEqualTo(tester.getRect(newThreadButton).bottom - 1),
     );
-    expect(find.text('Codex CLI'), findsOneWidget);
-    expect(find.text('Grok CLI'), findsOneWidget);
+    expect(find.text('Codex'), findsOneWidget);
+    expect(find.text('Grok'), findsOneWidget);
     expect(
       find.descendant(
         of: find.byKey(

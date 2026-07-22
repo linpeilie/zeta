@@ -12,6 +12,22 @@ import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_pane
 import 'package:zeta/src/ui/core/app_theme.dart';
 
 void main() {
+  testWidgets('默认 Provider Tab 仅展示 Codex 和 Grok', (tester) async {
+    final controller = AgentUsagePanelController(
+      repository: _ImmediatePanelRepository(const <AgentUsagePanelEntry>[
+        AgentUsagePanelEntry(providerId: 'codex', providerName: 'Codex'),
+        AgentUsagePanelEntry(providerId: 'grok', providerName: 'Grok'),
+      ]),
+    );
+    addTearDown(controller.dispose);
+
+    await _pumpPanel(tester, controller);
+
+    expect(find.text('Codex'), findsOneWidget);
+    expect(find.text('Grok'), findsOneWidget);
+    expect(find.textContaining('CLI'), findsNothing);
+  });
+
   testWidgets('按 Provider Tab 展示今日 Token，并只展示可用套餐', (tester) async {
     final controller = AgentUsagePanelController(
       repository: _ImmediatePanelRepository(_usageEntries),
@@ -22,6 +38,9 @@ void main() {
 
     expect(find.text('Agent 统计'), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-usage-tabs')), findsOneWidget);
+    expect(find.text('Codex Work'), findsOneWidget);
+    expect(find.text('Grok Personal'), findsOneWidget);
+    expect(find.textContaining('CLI'), findsNothing);
     expect(find.text('1.6K'), findsOneWidget);
     expect(find.text('ChatGPT Plus'), findsOneWidget);
     expect(find.text('5 小时'), findsOneWidget);

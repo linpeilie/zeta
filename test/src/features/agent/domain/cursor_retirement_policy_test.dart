@@ -22,7 +22,7 @@ void main() {
       expect(resolution.effectiveProvider.id, defaultAgentProviderId);
       expect(resolution.hasRuntimeProvider, isTrue);
       expect(resolution.unavailableReason, contains('已退役'));
-      expect(resolution.unavailableReason, contains('Codex CLI'));
+      expect(resolution.unavailableReason, contains('Codex'));
       expect(settings.toJson(), before);
     });
 

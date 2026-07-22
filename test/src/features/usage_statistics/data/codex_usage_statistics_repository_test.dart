@@ -158,6 +158,8 @@ void main() {
       final grok = entries.singleWhere(
         (entry) => entry.providerId == grokAgentProviderId,
       );
+      expect(codex.providerName, 'Codex');
+      expect(grok.providerName, 'Grok');
       expect(codex.todayTokens?.totalTokens, 110);
       expect(codex.quota?.planType, 'plus');
       expect(grok.todayTokens?.totalTokens, 60);
@@ -303,7 +305,8 @@ void main() {
     });
 
     expect(record, isNotNull);
-    expect(record!.tokens.reasoningTokens, 7);
+    expect(record!.providerName, 'Codex');
+    expect(record.tokens.reasoningTokens, 7);
     expect(
       record.startedAt.toUtc(),
       DateTime.parse('2026-07-04T06:00:00.000Z'),
@@ -546,7 +549,7 @@ class _UsageProvider
     }
     return const AgentUsageQuotaSnapshot(
       providerId: 'codex',
-      providerName: 'Codex CLI',
+      providerName: 'Codex',
       planType: 'plus',
       windows: <AgentUsageWindow>[
         AgentUsageWindow(label: '主要额度', usedPercent: 25),

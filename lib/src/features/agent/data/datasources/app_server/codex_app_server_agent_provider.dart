@@ -221,7 +221,7 @@ class CodexAppServerAgentProvider
     _emitStatus(
       const AgentProviderStatus(
         state: AgentProviderConnectionState.connecting,
-        message: 'Starting Codex CLI',
+        message: 'Starting Codex',
       ),
     );
 

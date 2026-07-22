@@ -250,7 +250,7 @@ class _NewThreadProviderPopoverState extends State<NewThreadProviderPopover> {
       AgentProviderKind.codexAppServer => 'Codex app-server',
       AgentProviderKind.acp => 'Agent Client Protocol',
       AgentProviderKind.cursorAcp => 'Unavailable provider',
-      AgentProviderKind.claudeCode => 'Claude Code CLI',
+      AgentProviderKind.claudeCode => 'Claude Code',
     };
   }
 }

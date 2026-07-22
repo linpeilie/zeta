@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:zeta/src/features/agent/domain/agent_provider_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_usage_models.dart';
 
 /// 使用统计支持的时间范围。
@@ -130,7 +131,7 @@ enum UsageErrorCategory { account, cli, network, timeout, cancelled, other }
 extension UsageErrorCategoryLabel on UsageErrorCategory {
   String get label => switch (this) {
     UsageErrorCategory.account => '账号异常',
-    UsageErrorCategory.cli => 'CLI 异常',
+    UsageErrorCategory.cli => '运行时异常',
     UsageErrorCategory.network => '网络错误',
     UsageErrorCategory.timeout => '超时',
     UsageErrorCategory.cancelled => '用户取消',
@@ -139,7 +140,7 @@ extension UsageErrorCategoryLabel on UsageErrorCategory {
 
   String get nextAction => switch (this) {
     UsageErrorCategory.account => '检查 Codex 登录状态与当前套餐额度。',
-    UsageErrorCategory.cli => '检查 Codex CLI 版本、配置和运行日志。',
+    UsageErrorCategory.cli => '检查 Codex 版本、配置和运行日志。',
     UsageErrorCategory.network => '检查网络、代理设置后重试。',
     UsageErrorCategory.timeout => '缩小任务范围或提高 Agent 超时时间。',
     UsageErrorCategory.cancelled => '如需继续，请重新发起该任务。',
@@ -296,7 +297,10 @@ class AgentUsageRecord {
       threadId: threadId,
       turnId: turnId,
       providerId: providerId,
-      providerName: providerName,
+      providerName: AgentProviderConfig.normalizeDisplayName(
+        providerId,
+        providerName,
+      ),
       projectPath: projectPath,
       sourceKind: sourceKind,
       startedAt: startedAt,

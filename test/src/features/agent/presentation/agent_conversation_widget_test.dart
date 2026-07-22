@@ -1443,7 +1443,7 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('agent-context-panel')),
-        matching: find.text('Codex CLI'),
+        matching: find.text('Codex'),
       ),
       findsOneWidget,
     );

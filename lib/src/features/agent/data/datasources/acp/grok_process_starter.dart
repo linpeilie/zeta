@@ -40,7 +40,7 @@ Future<ResolvedGrokProcessCommand> resolveGrokProcessCommand(
     throw ProcessException(
       config.command,
       config.arguments,
-      'Grok CLI executable was not found',
+      'Grok executable was not found',
     );
   }
 

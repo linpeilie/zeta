@@ -1341,7 +1341,7 @@ class _TaskDetailDrawer extends StatelessWidget {
           _DetailRow(label: '项目路径', value: record.projectPath),
           _DetailRow(label: 'Agent', value: record.providerName),
           _DetailRow(label: '模型', value: record.model ?? '未知模型'),
-          _DetailRow(label: '来源', value: record.sourceKind),
+          _DetailRow(label: '来源', value: _sourceKindLabel(record.sourceKind)),
           _DetailRow(
             label: '开始时间',
             value: formatUsageDateTime(record.startedAt),
@@ -1490,6 +1490,14 @@ class _DetailRow extends StatelessWidget {
       ),
     );
   }
+}
+
+String _sourceKindLabel(String sourceKind) {
+  return switch (sourceKind) {
+    'cli' => '本地记录',
+    'appServer' => 'App Server',
+    _ => sourceKind,
+  };
 }
 
 class _EmptyUsageState extends StatelessWidget {

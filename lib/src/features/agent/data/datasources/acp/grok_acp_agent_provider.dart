@@ -198,7 +198,7 @@ class GrokAcpAgentProvider
     _emitStatus(
       const AgentProviderStatus(
         state: AgentProviderConnectionState.connecting,
-        message: 'Starting Grok CLI',
+        message: 'Starting Grok',
       ),
     );
 

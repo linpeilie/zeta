@@ -38,7 +38,7 @@ Future<ResolvedCodexProcessCommand> resolveCodexProcessCommand(
     throw ProcessException(
       config.command,
       config.arguments,
-      'Codex CLI executable was not found',
+      'Codex executable was not found',
     );
   }
 

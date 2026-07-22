@@ -178,7 +178,7 @@ void main() {
       threadId: 'thread-1',
       turnId: 'turn-1',
       providerId: 'codex',
-      providerName: 'Codex CLI',
+      providerName: 'Codex',
       projectPath: r'C:\work\zeta',
       sourceKind: 'appServer',
       startedAt: DateTime(2026, 7, 10, 10),
@@ -311,7 +311,7 @@ UsageStatisticsSourceSnapshot _source(DateTime now) {
     refreshedAt: now,
     quota: AgentUsageQuotaSnapshot(
       providerId: 'codex',
-      providerName: 'Codex CLI',
+      providerName: 'Codex',
       planType: 'plus',
       windows: <AgentUsageWindow>[
         AgentUsageWindow(
@@ -326,7 +326,7 @@ UsageStatisticsSourceSnapshot _source(DateTime now) {
         threadId: 'thread-1',
         turnId: 'turn-1',
         providerId: 'codex',
-        providerName: 'Codex CLI',
+        providerName: 'Codex',
         projectPath: r'C:\work\zeta',
         sourceKind: 'appServer',
         startedAt: DateTime(2026, 7, 10, 9),
@@ -347,7 +347,7 @@ UsageStatisticsSourceSnapshot _source(DateTime now) {
         threadId: 'thread-2',
         turnId: 'turn-2',
         providerId: 'codex',
-        providerName: 'Codex CLI',
+        providerName: 'Codex',
         projectPath: r'C:\work\other',
         sourceKind: 'cli',
         startedAt: DateTime(2026, 7, 9, 9),

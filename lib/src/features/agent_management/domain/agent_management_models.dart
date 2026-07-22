@@ -88,7 +88,7 @@ class AgentDefinition {
   /// 内置 Codex CLI 定义。
   static const AgentDefinition codex = AgentDefinition(
     id: defaultAgentProviderId,
-    displayName: 'Codex CLI',
+    displayName: 'Codex',
     vendor: 'OpenAI',
     commandName: 'codex',
     protocol: 'JSON-RPC',
@@ -101,7 +101,7 @@ class AgentDefinition {
   /// 内置 Grok CLI（ACP stdio）定义。
   static const AgentDefinition grok = AgentDefinition(
     id: grokAgentProviderId,
-    displayName: 'Grok CLI',
+    displayName: 'Grok',
     vendor: 'xAI',
     commandName: 'grok',
     protocol: 'ACP JSON-RPC',

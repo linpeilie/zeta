@@ -420,7 +420,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
       showIdeToast(
         context,
         message: result.backupPath == null
-            ? '配置已保存。请重新启动 Codex CLI 以应用新配置。'
+            ? '配置已保存。请重新启动 Codex 以应用新配置。'
             : '配置已保存，并已创建原文件备份。',
         tone: IdeToastTone.success,
       );

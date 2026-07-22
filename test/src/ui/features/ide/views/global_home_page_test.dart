@@ -27,14 +27,14 @@ void main() {
         installedProviders: const <HomeProviderSummary>[
           HomeProviderSummary(
             id: defaultAgentProviderId,
-            displayName: 'Codex CLI',
+            displayName: 'Codex',
             vendor: 'OpenAI',
             version: '0.42.0',
             status: HomeProviderStatus.available,
           ),
           HomeProviderSummary(
             id: grokAgentProviderId,
-            displayName: 'Grok CLI',
+            displayName: 'Grok',
             vendor: 'xAI',
             status: HomeProviderStatus.needsLogin,
           ),
@@ -69,7 +69,7 @@ void main() {
       find.byKey(const ValueKey<String>('global-home-thread-grok-thread-5')),
       findsNothing,
     );
-    expect(find.text('Codex CLI'), findsOneWidget);
+    expect(find.text('Codex'), findsOneWidget);
     expect(find.text('需登录'), findsOneWidget);
     final codexProvider = find.byKey(
       const ValueKey<String>('global-home-provider-codex'),
@@ -164,7 +164,7 @@ void main() {
           installedProviders: const <HomeProviderSummary>[
             HomeProviderSummary(
               id: defaultAgentProviderId,
-              displayName: 'Codex CLI With A Very Long Display Name',
+              displayName: 'Codex With A Very Long Display Name',
               vendor: 'OpenAI',
               version: '0.42.0',
               status: HomeProviderStatus.updateAvailable,
@@ -226,7 +226,7 @@ void main() {
         installedProviders: const <HomeProviderSummary>[
           HomeProviderSummary(
             id: defaultAgentProviderId,
-            displayName: 'Codex CLI',
+            displayName: 'Codex',
             vendor: 'OpenAI',
             status: HomeProviderStatus.available,
           ),
@@ -241,7 +241,7 @@ void main() {
     );
 
     expect(find.text('Thread 0'), findsOneWidget);
-    expect(find.text('Codex CLI'), findsOneWidget);
+    expect(find.text('Codex'), findsOneWidget);
     expect(find.text('刷新失败'), findsOneWidget);
     expect(find.text('检测失败'), findsOneWidget);
     expect(tester.takeException(), isNull);

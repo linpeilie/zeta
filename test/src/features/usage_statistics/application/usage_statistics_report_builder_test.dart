@@ -180,7 +180,7 @@ AgentUsageRecord _record({
     threadId: 'thread-$turnId',
     turnId: turnId,
     providerId: 'codex',
-    providerName: 'Codex CLI',
+    providerName: 'Codex',
     projectPath: projectPath,
     sourceKind: 'appServer',
     startedAt: startedAt,

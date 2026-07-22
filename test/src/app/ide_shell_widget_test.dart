@@ -728,8 +728,8 @@ void main() {
       failureMessage: 'Global home recent project did not become ready',
     );
 
-    expect(find.text('Codex CLI'), findsOneWidget);
-    expect(find.text('Grok CLI'), findsNothing);
+    expect(find.text('Codex'), findsOneWidget);
+    expect(find.text('Grok'), findsNothing);
     await tester.tap(
       find.byKey(ValueKey<String>('global-home-project-${directory.path}')),
     );

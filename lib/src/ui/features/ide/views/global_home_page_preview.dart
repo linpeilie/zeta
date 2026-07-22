@@ -106,14 +106,14 @@ Widget _preview(Brightness brightness) {
           installedProviders: const <HomeProviderSummary>[
             HomeProviderSummary(
               id: defaultAgentProviderId,
-              displayName: 'Codex CLI',
+              displayName: 'Codex',
               vendor: 'OpenAI',
               version: '0.42.0',
               status: HomeProviderStatus.available,
             ),
             HomeProviderSummary(
               id: grokAgentProviderId,
-              displayName: 'Grok CLI',
+              displayName: 'Grok',
               vendor: 'xAI',
               version: '1.8.2',
               status: HomeProviderStatus.needsLogin,

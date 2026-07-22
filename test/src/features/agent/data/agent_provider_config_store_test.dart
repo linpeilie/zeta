@@ -101,6 +101,28 @@ void main() {
   });
 
   group('AgentProviderSettings', () {
+    test('normalizes legacy built-in provider display names', () {
+      final settings = AgentProviderSettings.tryDecode(<String, Object?>{
+        'version': 1,
+        'activeProviderId': defaultAgentProviderId,
+        'providers': <Object?>[
+          <String, Object?>{
+            ...AgentProviderConfig.defaultCodex.toJson(),
+            'displayName': 'Codex CLI',
+          },
+          <String, Object?>{
+            ...AgentProviderConfig.defaultGrok.toJson(),
+            'displayName': 'Grok CLI',
+          },
+        ],
+      });
+
+      expect(
+        settings.providers.map((provider) => provider.displayName),
+        <String>['Codex', 'Grok'],
+      );
+    });
+
     test('round-trips versioned model preferences tolerantly', () {
       final updatedAt = DateTime.utc(2026, 7, 15, 8);
       final config = AgentProviderConfig.defaultCodex.withModelConfiguration(

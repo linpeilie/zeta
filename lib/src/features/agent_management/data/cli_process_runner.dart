@@ -61,7 +61,7 @@ class CliProcessRunner {
         timeout,
         onTimeout: () {
           process.kill();
-          throw TimeoutException('CLI command timed out', timeout);
+          throw TimeoutException('Agent command timed out', timeout);
         },
       );
       await Future.wait(<Future<void>>[stdoutDone, stderrDone]);

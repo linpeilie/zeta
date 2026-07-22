@@ -39,7 +39,7 @@ void main() {
     expect(find.byKey(const ValueKey('agent-management-page')), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-row-codex')), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-detect-button')), findsOneWidget);
-    expect(find.text('Codex CLI'), findsOneWidget);
+    expect(find.text('Codex'), findsOneWidget);
     expect(find.byType(CompactMetricBar), findsOneWidget);
     expect(find.byType(IdeToolbar), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-list-pane')), findsOneWidget);
