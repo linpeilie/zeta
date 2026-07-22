@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:toml/toml.dart';
 
 import 'package:zeta/src/core/security/sensitive_data_redactor.dart';
+import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/data/codex_cli_locator.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
@@ -22,6 +23,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
     HttpClient Function()? httpClientFactory,
     DateTime Function()? now,
     String Function()? codexHomeProvider,
+    this._modelCatalogRepository,
   }) : _processRunner = processRunner ?? const CliProcessRunner(),
        _locator = locator ?? const CodexCliLocator(),
        _httpClientFactory = httpClientFactory ?? HttpClient.new,
@@ -34,6 +36,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
   final HttpClient Function() _httpClientFactory;
   final DateTime Function() _now;
   final String Function() _codexHomeProvider;
+  final AgentModelCatalogRepository? _modelCatalogRepository;
 
   @override
   String get agentId => AgentDefinition.codex.id;
@@ -171,6 +174,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
     final probe = await _probeProvider(
       effectiveConfig,
       accountState: current.accountState,
+      forceModelRefresh: false,
     );
     current = current.copyWith(
       models: probe.models,
@@ -229,6 +233,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
     final probe = await _probeProvider(
       effectiveConfig,
       accountState: account.state,
+      forceModelRefresh: true,
     );
     stopwatch.stop();
     return (
@@ -570,6 +575,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
   Future<_ProviderProbe> _probeProvider(
     AgentProviderConfig config, {
     required AgentAccountState accountState,
+    required bool forceModelRefresh,
   }) async {
     AgentProvider? provider;
     try {
@@ -578,11 +584,12 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
         Duration(seconds: _timeoutSeconds(config)),
       );
       final modelCatalog = provider.bundle.modelCatalog;
-      final models = modelCatalog == null
-          ? const AgentModelList(models: <AgentModelInfo>[])
-          : await modelCatalog.listModels().timeout(
-              Duration(seconds: _timeoutSeconds(config)),
-            );
+      final models = await _loadModels(
+        config: config,
+        provider: provider,
+        hasModelCatalog: modelCatalog != null,
+        forceRefresh: forceModelRefresh,
+      ).timeout(Duration(seconds: _timeoutSeconds(config)));
       return _ProviderProbe(
         success: true,
         models: models.models,
@@ -602,6 +609,29 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
     } finally {
       await provider?.dispose();
     }
+  }
+
+  Future<AgentModelList> _loadModels({
+    required AgentProviderConfig config,
+    required AgentProvider provider,
+    required bool hasModelCatalog,
+    required bool forceRefresh,
+  }) async {
+    if (!hasModelCatalog) {
+      return const AgentModelList(models: <AgentModelInfo>[]);
+    }
+    final repository = _modelCatalogRepository;
+    if (repository == null) {
+      return fetchAgentProviderModels(provider, forceRefresh: forceRefresh);
+    }
+    final result = await repository.load(
+      config: config,
+      source: 'Codex app-server',
+      forceRefresh: forceRefresh,
+      refreshLoader: () =>
+          fetchAgentProviderModels(provider, forceRefresh: true),
+    );
+    return result.models;
   }
 
   Future<_LatestVersionRead> _latestVersion() async {

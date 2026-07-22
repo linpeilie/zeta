@@ -35,7 +35,8 @@ class CodexAppServerAgentProvider
         AgentUsageQuotaProvider,
         AgentRuntimeInfoProvider,
         AgentRuntimeLifecycleProvider,
-        AgentRuntimeScopeProvider {
+        AgentRuntimeScopeProvider,
+        AgentRefreshableModelCatalogProvider {
   /// 创建 Codex app-server provider 实例。
   ///
   /// [config] 包含命令、参数、环境变量等 provider 配置。
@@ -111,8 +112,8 @@ class CodexAppServerAgentProvider
 
   AgentRuntimeInfo? _runtimeInfo;
 
-  /// 缓存的模型列表，initialize 握手后自动拉取。
-  AgentModelList? _modelList;
+  /// 按是否包含隐藏项区分的实例内模型目录缓存。
+  final Map<bool, AgentModelList> _modelLists = <bool, AgentModelList>{};
 
   /// 是否已完成 initialize 握手。
   bool _initialized = false;
@@ -270,8 +271,6 @@ class CodexAppServerAgentProvider
         ),
       );
       _log.info('Agent provider ${config.id} initialized');
-
-      await _fetchModelList();
     } on ProcessException catch (error) {
       _peer.markFailed();
       _log.warning(
@@ -384,12 +383,25 @@ class CodexAppServerAgentProvider
     int limit = 20,
     bool includeHidden = false,
   }) async {
-    final cached = _modelList;
+    final cached = _modelLists[includeHidden];
     if (cached != null) {
       return cached;
     }
     await initialize();
-    return _modelList ?? const AgentModelList(models: <AgentModelInfo>[]);
+    final initializedCache = _modelLists[includeHidden];
+    if (initializedCache != null) {
+      return initializedCache;
+    }
+    return _fetchModelList(limit: limit, includeHidden: includeHidden);
+  }
+
+  @override
+  Future<AgentModelList> refreshModels({
+    int limit = 20,
+    bool includeHidden = false,
+  }) async {
+    await initialize();
+    return _fetchModelList(limit: limit, includeHidden: includeHidden);
   }
 
   @override
@@ -426,16 +438,19 @@ class CodexAppServerAgentProvider
     await _client.approveGuardianDeniedAction(threadId: threadId, event: event);
   }
 
-  /// 向 Codex app-server 发送 `model/list` 请求并缓存结果。
-  Future<void> _fetchModelList() async {
-    try {
-      final list = await _client.fetchModelList();
-      _modelList = list;
-      _events.add(AgentModelListEvent(list));
-      _log.fine('Fetched ${list.models.length} models from Codex');
-    } catch (error) {
-      _log.warning('Could not fetch Codex model list (${error.runtimeType})');
-    }
+  /// 向 Codex app-server 分页读取完整 `model/list` 并缓存结果。
+  Future<AgentModelList> _fetchModelList({
+    required int limit,
+    required bool includeHidden,
+  }) async {
+    final list = await _client.fetchModelList(
+      limit: limit,
+      includeHidden: includeHidden,
+    );
+    _modelLists[includeHidden] = list;
+    _events.add(AgentModelListEvent(list));
+    _log.fine('Fetched ${list.models.length} models from Codex');
+    return list;
   }
 
   @override

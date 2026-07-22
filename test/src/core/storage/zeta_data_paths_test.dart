@@ -45,6 +45,10 @@ void main() {
         ),
       );
       expect(
+        paths.agentModelCatalogCacheFile.path,
+        _join(homeDirectory.path, '.zeta', 'cache', 'agent_models_v1.json'),
+      );
+      expect(
         Directory(_join(homeDirectory.path, '.codex')).existsSync(),
         isFalse,
       );

@@ -30,7 +30,8 @@ class GrokAcpAgentProvider
     implements
         AgentProvider,
         AgentRuntimeLifecycleProvider,
-        AgentRuntimeScopeProvider {
+        AgentRuntimeScopeProvider,
+        AgentRefreshableModelCatalogProvider {
   GrokAcpAgentProvider({
     required this.config,
     JsonRpcPeer? peer,
@@ -252,9 +253,6 @@ class GrokAcpAgentProvider
         ),
       );
       _log.info('Grok ACP provider ${config.id} initialized');
-
-      // 模型列表在 session/new 时更完整；此处先 CLI 降级预填。
-      unawaited(_prefetchModelsFromCli());
     } on ProcessException catch (error) {
       _peer.markFailed();
       _log.warning('Could not start Grok CLI (errorCode=${error.errorCode})');
@@ -312,21 +310,6 @@ class GrokAcpAgentProvider
         'Grok ACP authenticate($methodId) failed; continuing '
         '(${error.runtimeType})',
       );
-    }
-  }
-
-  Future<void> _prefetchModelsFromCli() async {
-    if (_modelList != null && _modelList!.models.isNotEmpty) {
-      return;
-    }
-    try {
-      final list = await _modelsCli.listModels(config);
-      if (_disposed || list.models.isEmpty) {
-        return;
-      }
-      _setModelList(list);
-    } catch (error, stackTrace) {
-      _log.fine('CLI model prefetch failed', error, stackTrace);
     }
   }
 
@@ -527,6 +510,20 @@ class GrokAcpAgentProvider
       _setModelList(fromCli);
     }
     return fromCli;
+  }
+
+  @override
+  Future<AgentModelList> refreshModels({
+    int limit = 20,
+    bool includeHidden = false,
+  }) async {
+    await initialize();
+    final fromCli = await _modelsCli.listModels(config);
+    if (!_disposed && fromCli.models.isNotEmpty) {
+      _setModelList(fromCli);
+      return _modelList!;
+    }
+    return _modelList ?? fromCli;
   }
 
   @override

@@ -55,6 +55,12 @@
 - 将 Codex app-server JSON-RPC、JSONL 历史解析、provider 配置等具体协议细节
   保留在 agent 数据层和 mapper 中。UI 代码应消费中立的 domain 事件和 provider
   契约。
+- 模型目录由 app 级 `AgentModelCatalogRepository` 在首页、常驻 thread 与 Agent 管理
+  入口之间共享。启动只非阻塞预热 active provider；普通读取使用 stale-while-revalidate
+  和 single-flight；共享仓储是 TTL 的唯一真源，其 refresh loader 必须绕过 provider
+  内存缓存。single-flight key 必须包含安全配置指纹，配置失效后旧代刷新不得回写。
+  Codex `model/list` 必须完整处理 cursor 分页，失败不得用空目录覆盖旧缓存；相同目录
+  的 response/event 不得重复持久化。
 - Provider 原始 sourceId 只作协议 metadata；entryId、message segment、reasoning
   phase 和 narrative boundary 必须由对应 data adapter/reducer 决定。共享 decoder
   保持无状态，EventBuffer/TimelineStore 只按规范化 id dumb merge，不得猜 identity、
@@ -127,6 +133,9 @@
 - 全局 provider 配置必须与项目/会话状态分离。
 - 由 Zeta 拥有的配置、状态、派生索引、日志和保留缓存都放在 `~/.zeta`
   下；feature store 通过 `app` 组合层接收具体文件，而不是自行解析 HOME。
+- 模型目录缓存固定为 `~/.zeta/cache/agent_models_v1.json`，必须版本化、宽容读取，
+  且只保存规范化的 domain 白名单字段和不含密钥的配置指纹；不得保存 provider raw
+  payload、环境变量值或凭证。
 - 将旧版 Zeta 的 SharedPreferences key 仅视作迁移输入。迁移必须幂等、以目标
   文件优先，并记录在 `~/.zeta/state/migration_marker.json` 中。
 - 严禁移动或重写 `~/.codex`、`~/.grok`、`~/.cursor`、项目 `.cursor`

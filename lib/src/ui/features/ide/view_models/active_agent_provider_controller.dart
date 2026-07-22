@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -17,10 +19,16 @@ class ActiveAgentProviderController extends ChangeNotifier {
   ActiveAgentProviderController({
     required this.providerFactory,
     required this.configStore,
-  });
+    AgentModelCatalogRepository? modelCatalogRepository,
+  }) : modelCatalogRepository =
+           modelCatalogRepository ??
+           AgentModelCatalogRepository(
+             store: MemoryAgentModelCatalogCacheStore(),
+           );
 
   final AgentProviderFactory providerFactory;
   final AgentProviderConfigStore configStore;
+  final AgentModelCatalogRepository modelCatalogRepository;
 
   AgentProviderSettings _settings = const AgentProviderSettings();
   CursorRetirementResolution _runtimeSelection = CursorRetirementPolicy.resolve(
@@ -134,6 +142,14 @@ class ActiveAgentProviderController extends ChangeNotifier {
     bool restartProvider = false,
   }) async {
     await loadSettings();
+    final previousConfig = providerConfigById(updated.id);
+    // 环境变量值不进入可持久化指纹；在本次配置更新中仍要直接比较并失效，
+    // 避免切换账号或 endpoint 后短暂复用旧目录。
+    final invalidatesModelCatalog =
+        previousConfig == null ||
+        !mapEquals(previousConfig.environment, updated.environment) ||
+        modelCatalogRepository.configFingerprint(previousConfig) !=
+            modelCatalogRepository.configFingerprint(updated);
     final providers = <AgentProviderConfig>[
       for (final provider in _settings.providers)
         if (provider.id == updated.id) updated else provider,
@@ -150,6 +166,11 @@ class ActiveAgentProviderController extends ChangeNotifier {
 
     final shouldRestartActiveProvider =
         restartProvider && updated.id == previousActiveProviderId;
+    // Repository 会在首个 await 前推进 provider generation；立即发起失效，并让
+    // 缓存 I/O 与可能较慢的运行实例关闭、配置落盘并行执行。
+    final Future<void> modelCatalogInvalidation = invalidatesModelCatalog
+        ? modelCatalogRepository.invalidateProvider(updated.id)
+        : Future<void>.value();
     if (shouldRestartActiveProvider) {
       final creating = _providerFuture;
       if (creating != null) {
@@ -165,6 +186,7 @@ class ActiveAgentProviderController extends ChangeNotifier {
     }
 
     await configStore.save(_settings);
+    await modelCatalogInvalidation;
     _notify();
   }
 
@@ -360,6 +382,31 @@ class ActiveAgentProviderController extends ChangeNotifier {
     }
   }
 
+  /// 使用应用级缓存读取并按需后台刷新当前 Provider 的模型目录。
+  Future<AgentModelCatalogLoadResult> loadActiveModelCatalog({
+    bool forceRefresh = false,
+    void Function(AgentModelCatalogSnapshot snapshot)? onCacheHit,
+  }) async {
+    await loadSettings();
+    final config = activeProviderConfig;
+    return modelCatalogRepository.load(
+      config: config,
+      source: _modelCatalogSource(config),
+      forceRefresh: forceRefresh,
+      onCacheHit: onCacheHit,
+      refreshLoader: () async {
+        final provider = await activeProvider();
+        if (provider.config.id != config.id) {
+          throw StateError(
+            'Expected provider ${config.id} but received ${provider.config.id}',
+          );
+        }
+        await provider.initialize();
+        return fetchAgentProviderModels(provider, forceRefresh: true);
+      },
+    );
+  }
+
   Future<AgentProvider> _createProvider() async {
     final existing = _provider;
     _provider = null;
@@ -414,4 +461,12 @@ class ActiveAgentProviderController extends ChangeNotifier {
       notifyListeners();
     }
   }
+}
+
+String _modelCatalogSource(AgentProviderConfig config) {
+  return switch (config.kind) {
+    AgentProviderKind.codexAppServer => 'Codex app-server',
+    AgentProviderKind.acp => 'Grok ACP',
+    _ => config.displayName,
+  };
 }

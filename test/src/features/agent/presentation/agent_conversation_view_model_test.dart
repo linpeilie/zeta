@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logging/logging.dart';
+import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -2443,6 +2444,65 @@ void main() {
       expect(viewModel.showServiceTier, isTrue);
     });
 
+    test('lets the shared catalog own provider refresh decisions', () async {
+      // Arrange
+      final provider = _FakeAgentProvider(
+        availableModels: const AgentModelList(
+          models: <AgentModelInfo>[
+            AgentModelInfo(
+              id: 'fresh-model',
+              model: 'fresh-model',
+              displayName: 'Fresh model',
+            ),
+          ],
+        ),
+      );
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      // Act
+      await viewModel.loadModels();
+      await viewModel.loadModels();
+
+      // Assert
+      expect(provider.refreshModelsCalls, 1);
+      expect(provider.listModelsCalls, 0);
+      expect(viewModel.models.single.id, 'fresh-model');
+    });
+
+    test(
+      'persists a model response only once when an event is also emitted',
+      () async {
+        // Arrange
+        final store = _ConversationModelCatalogStore();
+        final repository = AgentModelCatalogRepository(store: store);
+        final provider = _FakeAgentProvider(
+          emitModelEventOnRefresh: true,
+          availableModels: const AgentModelList(
+            models: <AgentModelInfo>[
+              AgentModelInfo(
+                id: 'event-model',
+                model: 'event-model',
+                displayName: 'Event model',
+              ),
+            ],
+          ),
+        );
+        final viewModel = _createViewModel(
+          provider,
+          modelCatalogRepository: repository,
+        );
+        addTearDown(viewModel.dispose);
+
+        // Act
+        await viewModel.loadModels();
+        await Future<void>.delayed(Duration.zero);
+
+        // Assert
+        expect(store.saveCalls, 1);
+      },
+    );
+
     test(
       'switchThread prefers current session selection and falls back to the latest turn model',
       () async {
@@ -3042,10 +3102,14 @@ void main() {
   });
 }
 
-AgentConversationViewModel _createViewModel(_FakeAgentProvider provider) {
+AgentConversationViewModel _createViewModel(
+  _FakeAgentProvider provider, {
+  AgentModelCatalogRepository? modelCatalogRepository,
+}) {
   final controller = ActiveAgentProviderController(
     providerFactory: _FakeAgentProviderFactory(provider),
     configStore: MemoryAgentProviderConfigStore(),
+    modelCatalogRepository: modelCatalogRepository,
   );
   addTearDown(controller.dispose);
   final viewModel = AgentConversationViewModel(providerController: controller);
@@ -3153,7 +3217,7 @@ class _DelayedAgentProviderConfigStore implements AgentProviderConfigStore {
 
 class _FakeAgentProvider
     with AgentProviderThreadLifecycleStub
-    implements AgentProvider {
+    implements AgentProvider, AgentRefreshableModelCatalogProvider {
   _FakeAgentProvider({
     this.failHistory = false,
     this.failResume = false,
@@ -3162,6 +3226,7 @@ class _FakeAgentProvider
     this.resumeSessionTitle,
     this.providerConfig = AgentProviderConfig.defaultCodex,
     this.availableModels = const AgentModelList(models: <AgentModelInfo>[]),
+    this.emitModelEventOnRefresh = false,
     this.eventCancellationGate,
     AgentProviderCapabilities? declaredCapabilities,
     AgentThreadHistorySnapshot? historySnapshot,
@@ -3194,6 +3259,7 @@ class _FakeAgentProvider
   final String? resumeSessionTitle;
   final AgentProviderConfig providerConfig;
   final AgentModelList availableModels;
+  final bool emitModelEventOnRefresh;
   final Future<void>? eventCancellationGate;
   final AgentProviderCapabilities declaredCapabilities;
   final AgentThreadHistorySnapshot _defaultHistorySnapshot;
@@ -3208,6 +3274,8 @@ class _FakeAgentProvider
   AgentModelSelection? lastModelSelection;
   bool disposed = false;
   int initializeCalls = 0;
+  int listModelsCalls = 0;
+  int refreshModelsCalls = 0;
 
   @override
   AgentProviderConfig get config => providerConfig;
@@ -3243,6 +3311,19 @@ class _FakeAgentProvider
     int limit = 20,
     bool includeHidden = false,
   }) async {
+    listModelsCalls += 1;
+    return availableModels;
+  }
+
+  @override
+  Future<AgentModelList> refreshModels({
+    int limit = 20,
+    bool includeHidden = false,
+  }) async {
+    refreshModelsCalls += 1;
+    if (emitModelEventOnRefresh) {
+      _events.add(AgentModelListEvent(availableModels));
+    }
     return availableModels;
   }
 
@@ -3406,6 +3487,21 @@ class _FakeAgentProvider
 
   void emit(AgentEvent event) {
     _events.add(event);
+  }
+}
+
+class _ConversationModelCatalogStore implements AgentModelCatalogCacheStore {
+  List<AgentModelCatalogSnapshot> snapshots =
+      const <AgentModelCatalogSnapshot>[];
+  int saveCalls = 0;
+
+  @override
+  Future<List<AgentModelCatalogSnapshot>> load() async => snapshots;
+
+  @override
+  Future<void> save(List<AgentModelCatalogSnapshot> snapshots) async {
+    saveCalls += 1;
+    this.snapshots = List<AgentModelCatalogSnapshot>.from(snapshots);
   }
 }
 

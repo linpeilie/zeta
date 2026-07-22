@@ -341,6 +341,16 @@ Profile 仍仅承诺稳定的发现能力，不承诺实验性选择能力。
   `~/.zeta/config/providers.json`；老版单一 selection 在首次模型列表归一化时迁移，
   损坏或过期的偏好条目被宽容忽略或降级到服务端默认值。
 
+模型目录由 app 组合层创建的 `AgentModelCatalogRepository` 跨首页、常驻 thread 和 Agent
+管理入口共享。IDE 载入 provider 设置后只对 active provider 发起非阻塞预热；新鲜缓存
+直接使用，超过 1 小时的缓存先发布给 Composer，再通过 single-flight 刷新，最长保留
+7 天作为离线降级。显式“测试连接/刷新”会绕过内存缓存强制请求 provider。Codex 的
+`initialize` 只完成协议握手，`model/list` 在目录真正需要时按 cursor 拉完所有分页；失败
+不会写入空目录，后续请求仍可重试。共享仓储是 TTL 的唯一真源：一旦决定刷新，loader
+必须绕过 provider 实例缓存。刷新任务按配置指纹和 provider generation 隔离，旧配置完成
+后不得覆盖新配置；Provider 运行时主动推送的完整目录只在内容变化时回写，目录请求自身
+产生的事件不重复落盘。
+
 ### 上下文策略
 
 当前仍只自动传递：
@@ -359,8 +369,10 @@ Profile 仍仅承诺稳定的发现能力，不承诺实验性选择能力。
 Zeta 通过 `ZetaDataPaths` 统一解析 `~/.zeta`，由 app 装配层把文件注入 feature data
 store。配置位于 `config/providers.json` 与 `config/appearance.json`；IDE 会话、使用统计
 派生索引和迁移 marker 位于 `state/`；应用日志按本地日期写入
-`logs/zeta-YYYY-MM-DD.log`，并创建空 `cache/` 预留目录。JSON store 使用同目录临时
-文件、flush 与 rename 替换，并在读取损坏或 I/O 失败时按 feature 语义降级。
+`logs/zeta-YYYY-MM-DD.log`；规范化模型目录缓存位于
+`cache/agent_models_v1.json`。JSON store 使用同目录临时文件、flush 与 rename 替换，
+并在读取损坏或 I/O 失败时按 feature 语义降级。模型缓存只保存中立白名单字段，不保存
+provider 原始 payload、环境变量值或凭证。
 
 启动迁移只读取 Zeta 旧版 SharedPreferences key，目标文件存在时不覆盖，全部处理成功
 后才写 `migration_marker.json`。迁移不会删除旧值，以便旧版应用临时降级；新版本运行时

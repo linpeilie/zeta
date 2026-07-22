@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -31,6 +33,50 @@ void main() {
         expect(controller.activeProviderId, defaultAgentProviderId);
       },
     );
+
+    test('invalidates model cache when an environment value changes', () async {
+      // Arrange
+      final initial = AgentProviderConfig.defaultCodex.copyWith(
+        environment: const <String, String>{'ZETA_TOKEN': 'old'},
+      );
+      final updated = initial.copyWith(
+        environment: const <String, String>{'ZETA_TOKEN': 'new'},
+      );
+      final catalog = AgentModelCatalogRepository(
+        store: MemoryAgentModelCatalogCacheStore(),
+      );
+      await catalog.record(
+        config: initial,
+        models: _modelList('cached'),
+        source: 'test',
+      );
+      final controller = ActiveAgentProviderController(
+        providerFactory: FakeAgentProviderFactory(
+          _TrackingFakeAgentProvider(initial),
+        ),
+        configStore: MemoryAgentProviderConfigStore(
+          AgentProviderSettings(providers: <AgentProviderConfig>[initial]),
+        ),
+        modelCatalogRepository: catalog,
+      );
+      addTearDown(controller.dispose);
+      var loaderCalls = 0;
+
+      // Act
+      await controller.updateProviderConfig(updated);
+      final result = await catalog.load(
+        config: updated,
+        source: 'test',
+        refreshLoader: () async {
+          loaderCalls += 1;
+          return _modelList('remote');
+        },
+      );
+
+      // Assert
+      expect(loaderCalls, 1);
+      expect(result.models.models.single.id, 'remote');
+    });
 
     test(
       'moves active provider to an enabled fallback when disabled',
@@ -256,4 +302,12 @@ class _RuntimePathSpyFactory implements AgentProviderFactory {
     }
     return _TrackingFakeAgentProvider(config);
   }
+}
+
+AgentModelList _modelList(String id) {
+  return AgentModelList(
+    models: <AgentModelInfo>[
+      AgentModelInfo(id: id, model: id, displayName: id),
+    ],
+  );
 }

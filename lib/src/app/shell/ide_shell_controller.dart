@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_thread_workspace_controller.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
@@ -61,21 +62,24 @@ class IdeShellController extends ChangeNotifier {
     required AgentProviderConfigStore agentProviderConfigStore,
     this._projectLocationOpener = openPathInSystemFileManager,
     this._statusReporter,
+    AgentModelCatalogRepository? agentModelCatalogRepository,
     DateTime Function()? now,
-  }) : agentProviderController = ActiveAgentProviderController(
-         providerFactory: agentProviderFactory,
-         configStore: agentProviderConfigStore,
-       ),
-       projectThreadsViewModel = ProjectThreadsViewModel(),
+  }) : projectThreadsViewModel = ProjectThreadsViewModel(),
        _sessionCoordinator = IdeSessionPersistenceCoordinator(
          store: sessionStore,
          saveDelay: sessionSaveDelay,
        ),
        _now = now ?? DateTime.now {
+    agentProviderController = ActiveAgentProviderController(
+      providerFactory: agentProviderFactory,
+      configStore: agentProviderConfigStore,
+      modelCatalogRepository: agentModelCatalogRepository,
+    );
     agentWorkspaceController = AgentThreadWorkspaceController(
       providerFactory: agentProviderFactory,
       configStore: agentProviderConfigStore,
       workspaceFilesProvider: () => _workspaceTree,
+      modelCatalogRepository: agentProviderController.modelCatalogRepository,
     );
     _bootstrapAgentEntry = agentWorkspaceController.ensureDraftEntry(
       projectPath: _bootstrapProjectPath,
@@ -93,7 +97,18 @@ class IdeShellController extends ChangeNotifier {
     _bindSelectedWorkspaceRuntime();
     unawaited(agentProviderController.loadSettings());
     unawaited(selectedAgentViewModel.loadSettings());
+    unawaited(_prewarmActiveModelCatalog());
     unawaited(_restoreSession());
+  }
+
+  Future<void> _prewarmActiveModelCatalog() async {
+    try {
+      await agentProviderController.loadActiveModelCatalog();
+    } catch (error) {
+      _log.fine(
+        'Could not prewarm active Agent model catalog (${error.runtimeType})',
+      );
+    }
   }
 
   final IdeDirectoryPicker _directoryPicker;
@@ -102,7 +117,7 @@ class IdeShellController extends ChangeNotifier {
   final IdeSessionPersistenceCoordinator _sessionCoordinator;
   final DateTime Function() _now;
 
-  final ActiveAgentProviderController agentProviderController;
+  late final ActiveAgentProviderController agentProviderController;
   late final AgentThreadWorkspaceController agentWorkspaceController;
   late final AgentThreadWorkspaceEntry _bootstrapAgentEntry;
   late final ProjectThreadsController projectThreadsController;

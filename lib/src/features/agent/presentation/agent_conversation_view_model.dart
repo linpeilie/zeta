@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/core/logging/structured_error_logging.dart';
+import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_permission_selection_controller.dart';
@@ -24,6 +25,14 @@ import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_contr
 export 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
 
 final _log = loggerFor('zeta.agent.conversation');
+
+String _modelCatalogSource(AgentProviderConfig config) {
+  return switch (config.kind) {
+    AgentProviderKind.codexAppServer => 'Codex app-server',
+    AgentProviderKind.acp => 'Grok ACP',
+    _ => config.displayName,
+  };
+}
 
 /// Agent 面板的状态协调器。
 ///
@@ -728,7 +737,7 @@ class AgentConversationViewModel extends ChangeNotifier {
   ///
   /// 在 IDE 启动时调用，触发 provider initialize 握手并拉取 `model/list`，
   /// 使输入框下方的模型/思考/速率控件在用户发送消息前就可用。
-  Future<void> loadModels() async {
+  Future<void> loadModels({bool forceRefresh = false}) async {
     await loadSettings();
     if (!providerController.hasRuntimeProvider) {
       _modelsRefreshing = false;
@@ -762,16 +771,26 @@ class AgentConversationViewModel extends ChangeNotifier {
     _modelRefreshError = null;
     _publishUiChanges(composer: true);
     try {
-      final provider = await _ensureProvider();
-      await provider.initialize();
-      await _replaceProviderEventSubscription(
-        provider,
-        threadId: _selectedThreadId,
+      AgentProvider? initializedProvider;
+      final result = await providerController.modelCatalogRepository.load(
+        config: config,
+        source: _modelCatalogSource(config),
+        forceRefresh: forceRefresh,
+        onCacheHit: (snapshot) => _handleModelList(snapshot.models),
+        refreshLoader: () async {
+          final provider = await _ensureProvider();
+          await provider.initialize();
+          initializedProvider = provider;
+          return fetchAgentProviderModels(provider, forceRefresh: true);
+        },
       );
-      final modelCatalog = provider.bundle.modelCatalog;
-      if (_modelSelectionController.modelList == null && modelCatalog != null) {
-        final models = await modelCatalog.listModels();
-        _handleModelList(models);
+      _handleModelList(result.models);
+      if (result.refreshError != null) {
+        _modelRefreshError = '模型目录刷新失败，正在使用本地缓存。';
+      }
+      final provider = initializedProvider ?? await _ensureProvider();
+      if (initializedProvider == null) {
+        await provider.initialize();
       }
       await _permissionSelectionController.refreshProfiles();
     } catch (error) {
@@ -2601,6 +2620,17 @@ class AgentConversationViewModel extends ChangeNotifier {
         );
       case AgentModelListEvent():
         _handleModelList(event.models);
+        // loadModels 的 refreshLoader 会负责落盘；这里仅记录会话期间 Provider
+        // 主动推送的新目录，避免同一次 model/list 响应写入两次。
+        if (!_modelsRefreshing) {
+          unawaited(
+            providerController.modelCatalogRepository.record(
+              config: providerController.activeProviderConfig,
+              models: event.models,
+              source: '$activeProviderName runtime',
+            ),
+          );
+        }
       case AgentErrorEvent():
         _logProviderErrorEvent(event);
         if (!_shouldHandleEventForCurrentThread(

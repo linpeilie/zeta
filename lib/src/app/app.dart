@@ -7,6 +7,8 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
+import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/data/default_agent_provider_factory.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -46,6 +48,7 @@ class MainApp extends StatefulWidget {
     this.dataPaths,
     this.usageStatisticsIndexStore,
     this.agentUsagePanelRepository,
+    this.agentModelCatalogRepository,
   });
 
   final Future<String?> Function()? directoryPicker;
@@ -80,6 +83,9 @@ class MainApp extends StatefulWidget {
   /// Context Agent 统计面板的数据注入点，供 Widget 测试隔离本机 Agent 历史。
   final AgentUsagePanelRepository? agentUsagePanelRepository;
 
+  /// 应用级共享模型目录；生产默认持久化到 `~/.zeta/cache`。
+  final AgentModelCatalogRepository? agentModelCatalogRepository;
+
   @override
   State<MainApp> createState() => MainAppState();
 }
@@ -89,6 +95,7 @@ class MainAppState extends State<MainApp> {
   late final GeneralSettingsController _generalSettingsController;
   late final AgentProviderFactory _defaultAgentProviderFactory;
   late final UsageStatisticsIndexStore _usageStatisticsIndexStore;
+  late final AgentModelCatalogRepository _agentModelCatalogRepository;
   bool _ownsAppearanceController = false;
   bool _ownsGeneralSettingsController = false;
 
@@ -113,6 +120,15 @@ class MainAppState extends State<MainApp> {
                 file: dataPaths!.usageStatisticsIndexFile,
               )
             : MemoryUsageStatisticsIndexStore());
+    _agentModelCatalogRepository =
+        widget.agentModelCatalogRepository ??
+        AgentModelCatalogRepository(
+          store: useFilePersistence
+              ? FileAgentModelCatalogCacheStore(
+                  file: dataPaths!.agentModelCatalogCacheFile,
+                )
+              : MemoryAgentModelCatalogCacheStore(),
+        );
     if (widget.appearanceController != null) {
       _appearanceController = widget.appearanceController!;
       _ownsAppearanceController = false;
@@ -212,6 +228,7 @@ class MainAppState extends State<MainApp> {
               generalSettingsController: _generalSettingsController,
               usageStatisticsIndexStore: _usageStatisticsIndexStore,
               agentUsagePanelRepository: widget.agentUsagePanelRepository,
+              agentModelCatalogRepository: _agentModelCatalogRepository,
             ),
           ),
         );

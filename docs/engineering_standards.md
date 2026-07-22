@@ -236,7 +236,8 @@ Provider 契约测试。若 PR 因 Provider 差异修改 EventBuffer/TimelineSto
 - Zeta 自有配置、状态、派生索引、日志和预留缓存统一位于 `~/.zeta`：
   `config/providers.json`、`config/appearance.json`、`state/ide_session.json`、
   `state/cursor_sessions.json`、`state/usage_statistics_index.json`、
-  `state/migration_marker.json`、`logs/zeta-YYYY-MM-DD.log` 与 `cache/`。
+  `state/migration_marker.json`、`logs/zeta-YYYY-MM-DD.log` 与
+  `cache/agent_models_v1.json`。
 - HOME 解析、目录布局和安全文本替换属于 `core`；各 feature 的 data store 只接收
   app 注入的具体文件并负责自身 codec，presentation/application 不拼接 `~/.zeta` 路径。
 - 旧 SharedPreferences 仅由 app 启动迁移器读取。迁移以已存在的目标文件为准，全部
@@ -248,6 +249,16 @@ Provider 契约测试。若 PR 因 Provider 差异修改 EventBuffer/TimelineSto
 - provider 全局配置和项目级 session/thread 状态必须分开存储。
 - provider 模型偏好按 `modelId` 保存为版本化条目；当前 selection 和偏好 map 必须同快照写入，
   宽容解码忽略损坏条目并用最新 capability 重新归一化。
+- provider 模型目录由 app 级共享仓储统一读取和缓存。启动预热不得阻塞主界面，只预热
+  active provider；普通读取采用 stale-while-revalidate 与 single-flight，显式刷新绕过
+  provider 内存缓存。共享仓储是 TTL 的唯一真源；refresh loader 必须读取 Provider 权威
+  来源。single-flight identity 必须包含安全配置指纹，并以 generation/version 守卫阻止
+  失效配置的旧任务回写。协议分页必须完整拉取，失败不得覆盖最近一次可用目录。
+- 相同模型目录的 response 与 runtime event 不得重复持久化；实际内容未变化的主动事件应
+  保留现有快照，成功的 TTL 刷新即使目录未变化也必须更新获取时间并持久化。
+- 模型目录缓存只持久化规范化 domain 白名单字段、不含密钥的配置指纹与获取时间；不得
+  保存 provider raw payload、环境变量值或凭证。损坏、版本不兼容、配置变化和超期均应
+  宽容失效。
 - 路径不存在、目录不可读、权限失败等文件系统异常应转换为可理解状态或日志。
 - Agent 配置保存必须先校验语法、检测外部修改、写入同目录临时文件并保留原文件
   备份；不得直接覆盖符号链接或在失败后破坏原配置。

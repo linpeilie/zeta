@@ -36,7 +36,7 @@ abstract class AgentProvider {
 
   /// 拉取 provider 支持的模型列表。
   ///
-  /// 对 Codex 而言会在 initialize 握手后自动拉取，其他 provider 可返回空列表。
+  /// 对 Codex 而言会在 initialize 握手后按需拉取，其他 provider 可返回空列表。
   Future<AgentModelList> listModels({
     int limit = 20,
     bool includeHidden = false,
@@ -143,6 +143,14 @@ abstract interface class AgentRuntimeLifecycleProvider {
 /// 暴露当前连接 scope，供 application 隔离旧 listener 事件。
 abstract interface class AgentRuntimeScopeProvider {
   AgentRuntimeScope? get runtimeScope;
+}
+
+/// 支持绕过实例内存缓存、重新读取模型目录的 Provider 可选接口。
+abstract interface class AgentRefreshableModelCatalogProvider {
+  Future<AgentModelList> refreshModels({
+    int limit = 20,
+    bool includeHidden = false,
+  });
 }
 
 /// Provider 拥有本地会话索引时，可只移除客户端列表记录而不删除服务端历史。

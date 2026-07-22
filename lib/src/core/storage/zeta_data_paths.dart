@@ -84,6 +84,10 @@ class ZetaDataPaths {
   File get usageStatisticsIndexFile =>
       File(_joinPath(stateDirectory.path, 'usage_statistics_index.json'));
 
+  /// 可丢弃、可重建的 Agent 模型目录缓存。
+  File get agentModelCatalogCacheFile =>
+      File(_joinPath(cacheDirectory.path, 'agent_models_v1.json'));
+
   /// 一次性存储迁移完成标记文件。
   File get migrationMarkerFile =>
       File(_joinPath(stateDirectory.path, 'migration_marker.json'));

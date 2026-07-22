@@ -32,7 +32,6 @@ void main() {
       expect(turn.id, 'turn-1');
       expect(peer.requestMethods, <String>[
         'initialize',
-        'model/list',
         'thread/start',
         'turn/start',
       ]);
@@ -1448,11 +1447,7 @@ void main() {
         ),
       );
 
-      expect(peer.requestMethods, <String>[
-        'initialize',
-        'model/list',
-        'thread/list',
-      ]);
+      expect(peer.requestMethods, <String>['initialize', 'thread/list']);
       expect(peer.requestParams.last, <String, Object?>{
         'cwd': '/repo',
         'limit': 5,
@@ -1705,11 +1700,7 @@ void main() {
 
       final history = await provider.readThreadHistory(threadId: 'thread-1');
 
-      expect(peer.requestMethods, <String>[
-        'initialize',
-        'model/list',
-        'thread/read',
-      ]);
+      expect(peer.requestMethods, <String>['initialize', 'thread/read']);
       expect(peer.requestParams.last, <String, Object?>{
         'threadId': 'thread-1',
         'includeTurns': true,
@@ -1897,7 +1888,7 @@ void main() {
         sessionPath: sessionFile.path,
       );
 
-      expect(peer.requestMethods, <String>['initialize', 'model/list']);
+      expect(peer.requestMethods, <String>['initialize']);
       expect(history.threadId, 'thread-1');
       expect(_historyEntries(history), hasLength(4));
       expect(history.turns.map((turn) => turn.id), <String>['turn-local']);
@@ -2032,7 +2023,7 @@ void main() {
           sessionPath: sessionFile.path,
         );
 
-        expect(peer.requestMethods, <String>['initialize', 'model/list']);
+        expect(peer.requestMethods, <String>['initialize']);
         expect(_historyEntries(history), hasLength(4));
         expect(
           _historyEntries(
@@ -2248,7 +2239,7 @@ void main() {
         sessionPath: file.path,
       );
 
-      expect(peer.requestMethods, <String>['initialize', 'model/list']);
+      expect(peer.requestMethods, <String>['initialize']);
       expect(_historyEntries(history), hasLength(2));
       expect(
         (_historyEntries(history)[0] as AgentHistoryToolEntry).toolCall.title,
@@ -2273,11 +2264,7 @@ void main() {
 
         final history = await provider.readThreadHistory(threadId: 'thread-1');
 
-        expect(peer.requestMethods, <String>[
-          'initialize',
-          'model/list',
-          'thread/read',
-        ]);
+        expect(peer.requestMethods, <String>['initialize', 'thread/read']);
         expect(_historyEntries(history), isNotEmpty);
         await provider.dispose();
       },
@@ -2305,11 +2292,7 @@ void main() {
         sessionPath: sessionFile.path,
       );
 
-      expect(peer.requestMethods, <String>[
-        'initialize',
-        'model/list',
-        'thread/read',
-      ]);
+      expect(peer.requestMethods, <String>['initialize', 'thread/read']);
       expect(_historyEntries(history), hasLength(8));
       await provider.dispose();
     });
@@ -2771,7 +2754,7 @@ void main() {
       await provider.dispose();
     });
 
-    test('fetches model list after initialize and emits event', () async {
+    test('fetches model list on demand and emits event', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
         config: AgentProviderConfig.defaultCodex,
@@ -2782,7 +2765,7 @@ void main() {
       addTearDown(sub.cancel);
       addTearDown(provider.dispose);
 
-      await provider.initialize();
+      await provider.listModels();
       await Future<void>.delayed(Duration.zero);
 
       expect(
@@ -2873,6 +2856,106 @@ void main() {
       expect(
         peer.requestMethods.where((method) => method == 'model/list'),
         hasLength(1),
+      );
+
+      await provider.refreshModels();
+      expect(
+        peer.requestMethods.where((method) => method == 'model/list'),
+        hasLength(2),
+      );
+    });
+
+    test('paginates and caches the complete model catalog', () async {
+      final peer = _FakeJsonRpcPeer(
+        modelListResponseProvider: (params) {
+          final map = params! as Map<String, Object?>;
+          if (map['cursor'] == null) {
+            return <String, Object?>{
+              'data': <Object?>[
+                <String, Object?>{
+                  'id': 'model-a',
+                  'model': 'model-a',
+                  'displayName': 'Model A',
+                },
+              ],
+              'nextCursor': 'page-2',
+            };
+          }
+          return <String, Object?>{
+            'data': <Object?>[
+              <String, Object?>{
+                'id': 'model-a',
+                'model': 'model-a',
+                'displayName': 'Model A',
+              },
+              <String, Object?>{
+                'id': 'model-b',
+                'model': 'model-b',
+                'displayName': 'Model B',
+              },
+            ],
+            'nextCursor': null,
+          };
+        },
+      );
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+
+      final models = await provider.listModels(limit: 1);
+      final cached = await provider.listModels(limit: 1);
+
+      expect(models.models.map((model) => model.id), <String>[
+        'model-a',
+        'model-b',
+      ]);
+      expect(cached.models, hasLength(2));
+      expect(
+        peer.requestMethods.where((method) => method == 'model/list'),
+        hasLength(2),
+      );
+      expect(
+        peer.requestParams.whereType<Map<String, Object?>>().last['cursor'],
+        'page-2',
+      );
+    });
+
+    test('retries model discovery after a failed request', () async {
+      var attempts = 0;
+      final peer = _FakeJsonRpcPeer(
+        modelListResponseProvider: (_) {
+          attempts += 1;
+          if (attempts == 1) {
+            throw StateError('model endpoint unavailable');
+          }
+          return <String, Object?>{
+            'data': <Object?>[
+              <String, Object?>{
+                'id': 'model-after-retry',
+                'model': 'model-after-retry',
+                'displayName': 'Model after retry',
+              },
+            ],
+            'nextCursor': null,
+          };
+        },
+      );
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+
+      await expectLater(provider.listModels(), throwsStateError);
+      final models = await provider.listModels();
+
+      expect(models.models.single.id, 'model-after-retry');
+      expect(attempts, 2);
+      expect(
+        peer.requestMethods.where((method) => method == 'model/list'),
+        hasLength(2),
       );
     });
 
@@ -3492,6 +3575,7 @@ Future<File> _writeJsonlFile(List<Object?> records) async {
 class _FakeJsonRpcPeer implements JsonRpcPeer {
   _FakeJsonRpcPeer({
     this._startCompleter,
+    this.modelListResponseProvider,
     this.initializeResponse = const <String, Object?>{
       'codexHome': '/home/test/.codex',
       'platformFamily': 'unix',
@@ -3518,6 +3602,7 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
       <String, List<Completer<void>>>{};
   final Completer<void>? _startCompleter;
   final Map<String, Object?> initializeResponse;
+  final Object? Function(Object? params)? modelListResponseProvider;
   int startCalls = 0;
   int _threadStartCount = 0;
   bool _closed = false;
@@ -3716,56 +3801,58 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
       'turn/start' => <String, Object?>{
         'turn': <String, Object?>{'id': 'turn-1'},
       },
-      'model/list' => <String, Object?>{
-        'data': <Object?>[
-          <String, Object?>{
-            'id': 'gpt-5.5',
-            'model': 'gpt-5.5',
-            'displayName': 'GPT-5.5',
-            'description': 'Frontier model',
-            'hidden': false,
-            'supportedReasoningEfforts': <Object?>[
-              <String, Object?>{
-                'reasoningEffort': 'low',
-                'description': 'Fast responses with lighter reasoning',
-              },
-              <String, Object?>{
-                'reasoningEffort': 'medium',
-                'description': 'Balances speed and reasoning depth',
-              },
-              <String, Object?>{
-                'reasoningEffort': 'high',
-                'description': 'Greater reasoning depth',
-              },
-            ],
-            'defaultReasoningEffort': 'medium',
-            'serviceTiers': <Object?>[
-              <String, Object?>{
-                'id': 'priority',
-                'name': 'Fast',
-                'description': '1.5x speed, increased usage',
-              },
-            ],
-            'defaultServiceTier': null,
-            'isDefault': true,
-          },
-          <String, Object?>{
-            'id': 'gpt-5.4-mini',
-            'model': 'gpt-5.4-mini',
-            'displayName': 'GPT-5.4-Mini',
-            'hidden': false,
-            'supportedReasoningEfforts': <Object?>[
-              <String, Object?>{'reasoningEffort': 'low'},
-              <String, Object?>{'reasoningEffort': 'medium'},
-            ],
-            'defaultReasoningEffort': 'medium',
-            'serviceTiers': <Object?>[],
-            'defaultServiceTier': null,
-            'isDefault': false,
-          },
-        ],
-        'nextCursor': null,
-      },
+      'model/list' =>
+        modelListResponseProvider?.call(params) ??
+            <String, Object?>{
+              'data': <Object?>[
+                <String, Object?>{
+                  'id': 'gpt-5.5',
+                  'model': 'gpt-5.5',
+                  'displayName': 'GPT-5.5',
+                  'description': 'Frontier model',
+                  'hidden': false,
+                  'supportedReasoningEfforts': <Object?>[
+                    <String, Object?>{
+                      'reasoningEffort': 'low',
+                      'description': 'Fast responses with lighter reasoning',
+                    },
+                    <String, Object?>{
+                      'reasoningEffort': 'medium',
+                      'description': 'Balances speed and reasoning depth',
+                    },
+                    <String, Object?>{
+                      'reasoningEffort': 'high',
+                      'description': 'Greater reasoning depth',
+                    },
+                  ],
+                  'defaultReasoningEffort': 'medium',
+                  'serviceTiers': <Object?>[
+                    <String, Object?>{
+                      'id': 'priority',
+                      'name': 'Fast',
+                      'description': '1.5x speed, increased usage',
+                    },
+                  ],
+                  'defaultServiceTier': null,
+                  'isDefault': true,
+                },
+                <String, Object?>{
+                  'id': 'gpt-5.4-mini',
+                  'model': 'gpt-5.4-mini',
+                  'displayName': 'GPT-5.4-Mini',
+                  'hidden': false,
+                  'supportedReasoningEfforts': <Object?>[
+                    <String, Object?>{'reasoningEffort': 'low'},
+                    <String, Object?>{'reasoningEffort': 'medium'},
+                  ],
+                  'defaultReasoningEffort': 'medium',
+                  'serviceTiers': <Object?>[],
+                  'defaultServiceTier': null,
+                  'isDefault': false,
+                },
+              ],
+              'nextCursor': null,
+            },
       _ => <String, Object?>{},
     };
   }

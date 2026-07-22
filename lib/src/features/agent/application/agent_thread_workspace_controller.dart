@@ -3,6 +3,7 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 
+import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -204,11 +205,13 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     required this._providerFactory,
     required this._configStore,
     required this._workspaceFilesProvider,
+    required this._modelCatalogRepository,
   });
 
   final AgentProviderFactory _providerFactory;
   final AgentProviderConfigStore _configStore;
   final List<WorkspaceNode> Function() _workspaceFilesProvider;
+  final AgentModelCatalogRepository _modelCatalogRepository;
 
   final List<AgentThreadWorkspaceEntry> _entries =
       <AgentThreadWorkspaceEntry>[];
@@ -396,6 +399,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     final providerController = ActiveAgentProviderController(
       providerFactory: _providerFactory,
       configStore: _configStore,
+      modelCatalogRepository: _modelCatalogRepository,
     );
     final viewModel = AgentConversationViewModel(
       providerController: providerController,

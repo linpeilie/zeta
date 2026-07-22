@@ -18,11 +18,35 @@ class _CodexAppServerClient {
     int limit = 20,
     bool includeHidden = false,
   }) async {
-    final result = await _peer.sendRequest(
-      'model/list',
-      params: <String, Object?>{'limit': limit, 'includeHidden': includeHidden},
-    );
-    return _modelListMapper.modelListFromResult(result);
+    final models = <AgentModelInfo>[];
+    final seenModelIds = <String>{};
+    final seenCursors = <String>{};
+    String? cursor;
+    do {
+      final result = await _peer.sendRequest(
+        'model/list',
+        params: <String, Object?>{
+          'limit': limit,
+          'includeHidden': includeHidden,
+          'cursor': ?cursor,
+        },
+      );
+      final page = _modelListMapper.modelListFromResult(result);
+      for (final model in page.models) {
+        if (seenModelIds.add(model.id)) {
+          models.add(model);
+        }
+      }
+      final nextCursor = page.nextCursor;
+      if (nextCursor == null ||
+          nextCursor.isEmpty ||
+          !seenCursors.add(nextCursor)) {
+        cursor = null;
+      } else {
+        cursor = nextCursor;
+      }
+    } while (cursor != null);
+    return AgentModelList(models: List<AgentModelInfo>.unmodifiable(models));
   }
 
   Future<AgentSession> startSession({

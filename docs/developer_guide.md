@@ -214,6 +214,15 @@ Agent 管理适配与会话 provider 适配保持分层：管理 data 层可以�
 `CodexAgentManagementRepository` 的校验、冲突检测、备份和临时文件替换流程；
 日志必须在 data 层脱敏后再交给 presentation。
 
+模型目录读取必须经过 app 注入的 `AgentModelCatalogRepository`，不要让首页、thread 或
+管理页各自维护缓存。默认读取采用 1 小时 fresh / 7 天 max-stale 的
+stale-while-revalidate：先发布可用旧目录，再以 single-flight 刷新；用户显式测试连接或
+刷新时传 `forceRefresh`。Codex `initialize` 不应隐式请求 `model/list`，目录请求必须处理
+全部 cursor 分页并在成功后一次性写缓存；失败不得用空列表污染旧缓存。仓储调用
+`refreshLoader` 时必须绕过 provider 实例缓存；single-flight identity 包含安全配置指纹，
+配置更新通过 generation 使旧任务失效。Provider 主动推送的完整 `AgentModelListEvent`
+只在非目录刷新阶段记录到同一仓储，且内容未变化时跳过持久化。
+
 当前活跃 Provider 只有 Codex 与 Grok。Cursor 退役兼容必须遵守以下约束：旧 `cursor` id
 与 `cursorAcp` kind 可宽容解码，但
 `CursorRetirementPolicy` 必须在 catalog、选择、恢复和 factory 边界 fail-closed；fallback
@@ -316,6 +325,7 @@ Zeta 自有数据统一写入用户主目录下的以下结构：
   logs/
     zeta-YYYY-MM-DD.log
   cache/
+    agent_models_v1.json
 ```
 
 `main` 在 `runApp` 前解析 HOME、配置文件日志并执行一次性迁移；`app` 把具体文件
@@ -335,6 +345,10 @@ Zeta 自有数据统一写入用户主目录下的以下结构：
 `reasoningEffort`、`fastEnabled`、`serviceTierId`、`updatedAt` 和条目 `version`。
 解码时忽略损坏条目并兼容旧版单一 selection；写入时 selection 与完整偏好 map
 必须作为同一快照保存。
+
+`cache/agent_models_v1.json` 是可丢弃、可重建的版本化缓存，只保存规范化后的
+`AgentModelInfo` 白名单字段和不含密钥的配置指纹。损坏、版本不兼容、配置指纹变化或
+超过最长离线期限时视为空缓存；不得持久化 provider raw payload、环境变量值或凭证。
 
 Agent CLI 的数据不属于这套目录：Codex/Grok/Cursor 配置与 session 历史继续保留在
 `~/.codex`、`~/.grok`、`~/.cursor` 或项目 `.cursor/*`，迁移器不会扫描、复制或改写。
