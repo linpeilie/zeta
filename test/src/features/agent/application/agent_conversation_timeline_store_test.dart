@@ -519,6 +519,44 @@ void main() {
       );
     });
 
+    test('removeQuestionRequest drops pending card and timeline entry', () {
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+
+      store.startPendingLiveTurn();
+      store.beginLiveTurnGroup(
+        const AgentTurn(id: 'turn-1', sessionId: 'thread-1'),
+      );
+      store.addQuestionRequest(
+        const AgentQuestionRequest(
+          id: 'question-1',
+          title: 'Choose scope',
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          questions: <AgentUserInputQaPair>[
+            AgentUserInputQaPair(
+              questionId: 'scope',
+              question: 'Select a scope',
+            ),
+          ],
+        ),
+      );
+
+      expect(store.questionRequests, hasLength(1));
+      expect(
+        store.timelineEntries.whereType<AgentQuestionTimelineEntry>(),
+        hasLength(1),
+      );
+
+      store.removeQuestionRequest('question-1');
+
+      expect(store.questionRequests, isEmpty);
+      expect(
+        store.timelineEntries.whereType<AgentQuestionTimelineEntry>(),
+        isEmpty,
+      );
+    });
+
     test('appends MCP tool progress onto existing tool card content', () {
       final store = AgentConversationTimelineStore();
       addTearDown(store.dispose);

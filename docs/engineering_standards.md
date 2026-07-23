@@ -93,10 +93,12 @@ main -> app -> presentation/application -> domain
 迁移期内，`AgentProviderBundle` 是 application / presentation 首选能力边界；
 `AgentProvider` 保留为 data adapter 的兼容门面。
 
-- UI 只消费 `AgentEvent`、`AgentThreadSummary`、`AgentPermissionRequest`、`AgentToolCall` 等中立模型。
+- UI 只消费 `AgentEvent`、`AgentThreadSummary`、`AgentPermissionRequest`、
+  `AgentQuestionRequest`、`AgentToolCall` 等中立模型。
 - 已迁移能力域（`conversation`、`threadCatalog`、`threadMutations`、
   `threadBranching`、`turnSteering`、`interactions`、`modelCatalog`、
-  `localThreadList`、`sessionConfiguration`、`planApproval`）优先通过 bundle 端口访问；
+  `localThreadList`、`sessionConfiguration`、`planApproval`、`conversationModes`）
+  优先通过 bundle 端口访问；
   controller / view model 不再通过 provider kind、`is SomeProvider` 或直接调用
   已迁移旧方法做分支。
 - 每个 provider 必须通过不可变 `AgentProviderCapabilities` 声明真实能力；presentation
@@ -106,6 +108,13 @@ main -> app -> presentation/application -> domain
 - 启动时机由 `AgentProviderBootstrapPolicy` 描述；需要项目目录的 provider 不得在获得
   workspace 前启动，也不得参与 eager model preload。
 - Codex app-server 的 JSON-RPC、通知、审批 payload 和历史 JSONL 解析必须留在 agent data 层。
+- 权限审批、用户提问和计划审批必须保持独立领域语义：
+  `respondToPermission` 只接受 approve/deny/cancel 决策，
+  `respondToQuestion` 只接受结构化 answers（空 map 表示 Skip），计划审批继续通过
+  `AgentPlanApprovalPort` 回写。三者可以共享 Pending Interaction Dock，但不得复用
+  request/decision 模型或 pending registry。
+- 只有支持独立用户提问协议的 Provider 才实现 `AgentQuestionResponseProvider`；
+  permission-only Provider 不得用空 answers、no-op 或权限拒绝伪造提问能力。
 - 新 provider 应先评估现有 bundle 端口是否足够；不足时优先扩展可选端口，再在 data 层
   实现具体协议。只有明确需要兼容旧调用面时，才同步补 `AgentProvider` 门面。
 - 非所有 provider 都具备的账号能力使用可选接口（例如
@@ -113,6 +122,15 @@ main -> app -> presentation/application -> domain
 - mapper 文件负责字段兼容、默认值和协议名称转换；不要在 widget 中写散落的 JSON key。
 - 模型目录的 Reasoning 和 service tier 在 data mapper 中转为中立领域模型，保留服务端顺序和
   精确 tier id；Fast 等产品语义可在 domain/application 层识别，但不得改写 provider 协议值。
+- Conversation mode 通过可选 `conversationModes` 端口和运行时目录发现，不按 provider kind
+  或 CLI 版本硬编码。模式是 thread 粘性、逐 turn 提交的状态，由 application controller
+  管理 draft / confirmed / pending；不得写入 Provider 全局可变配置。
+- 显式 mode 必须冻结进 `AgentTurnConfiguration`。活动 turn 中修改 draft 只影响下一次
+  `turn/start`；退出 sticky Plan 必须显式发送 Default。Codex data encoder 负责嵌套
+  `collaborationMode.settings`，且 mode 存在时不得再发送冲突的顶层 model / effort。
+- experimental 模式目录探测失败时只禁用模式入口，不影响普通 Default 对话。临时 transport
+  失败可重试，method-not-found 或损坏目录在当前 runtime generation 内保守降级；重建
+  Provider 后重新探测。
 - 标准 ACP 的 session update 语法只通过无状态 `AcpSessionUpdateDecoder` 解码；content
   block、permission option 和 session config 继续复用各自 codec/mapper。厂商 source id、
   segment/phase、去重和终态策略必须留在对应 Provider adapter/reducer，不得放回共享层。
@@ -325,7 +343,10 @@ Zeta 是桌面工具，不是营销页。界面应紧凑、克制、可扫描。
   非零滚动位置、Pane 宽度和 Pane 可见状态保持。
 - 简单视觉调整可以只运行分析和相关 widget test，但行为变化必须补测试。
 - 外部 CLI 的自动化测试不能替代真实平台验收。Beta provider 发布前使用脱敏 smoke，分别
-  记录 OS/架构、CLI 版本、包装器类型和结果；没有设备或凭据时必须标记“待执行/阻塞”，
+  记录 OS/架构、CLI 版本、Schema/包装器类型和结果；没有设备或凭据时必须标记“待执行/阻塞”，
   不得推断通过。真实 smoke 使用临时 workspace、最小权限和非破坏性 prompt。
+- smoke 记录不得包含 Prompt、回复、文件内容、凭证、原始协议 payload、thread/turn id 或
+  stderr 原文；实验协议缺少预期事件时必须记录实际差异并返回失败，不能用 stable Schema
+  或 fake peer 结果替代。
 
 评审时优先检查依赖方向、协议泄漏、异步竞态、持久化兼容性、文件系统性能和 UI 溢出风险。

@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent/domain/agent_conversation_mode_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_message_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_tool_models.dart';
 
@@ -24,6 +25,23 @@ class AgentThreadHistorySnapshot {
 
   /// 原始 provider payload，便于调试和未来补齐字段。
   final Map<String, Object?> raw;
+
+  /// 从当前 turn 开始向历史回溯得到的最新有效协作模式。
+  ///
+  /// 缺失或损坏的后续记录不会把先前已知模式错误清空；未知非空模式仍会原样保留。
+  AgentConversationModeId? get latestCollaborationMode {
+    final currentMode = currentTurn?.collaborationMode;
+    if (currentMode != null) {
+      return currentMode;
+    }
+    for (var index = turns.length - 1; index >= 0; index -= 1) {
+      final mode = turns[index].collaborationMode;
+      if (mode != null) {
+        return mode;
+      }
+    }
+    return null;
+  }
 }
 
 /// 一个 turn 的历史聚合结果。
@@ -77,8 +95,8 @@ class AgentHistoryTurn {
   /// 模型上下文窗口大小。
   final int? modelContextWindow;
 
-  /// 协作模式。
-  final String? collaborationMode;
+  /// 归一化后的协作模式；未知非空值以 [AgentConversationModeKind.unknown] 保留。
+  final AgentConversationModeId? collaborationMode;
 
   /// 该 turn 的 token 消耗统计，来自 `token_count` 事件。
   final AgentTokenUsage? tokenUsage;

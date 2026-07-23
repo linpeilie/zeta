@@ -39,6 +39,54 @@ void main() {
       await provider.dispose();
     });
 
+    test('rejects unknown turn mode before sending a request', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+
+      await expectLater(
+        provider.sendMessage(
+          session: const AgentSession(
+            id: 'thread-1',
+            providerId: defaultAgentProviderId,
+          ),
+          context: const AgentContext(projectPath: '/repo'),
+          message: 'hello',
+          configuration: AgentTurnConfiguration(
+            conversationMode: AgentConversationModeSelection(
+              modeId: AgentConversationModeId.fromRaw('future-mode'),
+              effectiveModelId: 'model-1',
+            ),
+          ),
+        ),
+        throwsA(
+          isA<CodexTurnStartEncodingException>().having(
+            (error) => error.message,
+            'message',
+            contains('future-mode'),
+          ),
+        ),
+      );
+
+      expect(peer.requestMethods, isEmpty);
+    });
+
+    test('rejects blank collaboration mode model before any RPC', () {
+      final peer = _FakeJsonRpcPeer();
+
+      expect(
+        () => AgentConversationModeSelection(
+          modeId: AgentConversationModeId.plan,
+          effectiveModelId: '   ',
+        ),
+        throwsArgumentError,
+      );
+      expect(peer.requestMethods, isEmpty);
+    });
+
     test('declares client capabilities during initialize', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
@@ -74,6 +122,296 @@ void main() {
       expect(optOut, isNot(contains('account/rateLimits/updated')));
       await provider.dispose();
     });
+
+    test(
+      'lists collaboration modes with exact params and enables capability',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+
+        expect(provider.capabilities.supportsModeSelection, isFalse);
+
+        final first = await provider.listConversationModes();
+        final second = await provider.listConversationModes();
+
+        final requestIndex = peer.requestMethods.indexOf(
+          'collaborationMode/list',
+        );
+        expect(requestIndex, isNonNegative);
+        expect(peer.requestParams[requestIndex], const <String, Object?>{});
+        expect(
+          peer.requestMethods
+              .where((method) => method == 'collaborationMode/list')
+              .length,
+          1,
+        );
+        expect(second, same(first));
+        expect(
+          first.presets.map((preset) => preset.id),
+          <AgentConversationModeId>[
+            AgentConversationModeId.defaultMode,
+            AgentConversationModeId.plan,
+          ],
+        );
+        final plan = first.presets.last;
+        expect(plan.displayName, 'Plan');
+        expect(plan.suggestedModelId, isNull);
+        expect(plan.suggestedReasoningEffort, 'medium');
+        expect(provider.capabilities.supportsModeSelection, isTrue);
+      },
+    );
+
+    test(
+      'keeps unknown modes while skipping malformed and duplicate entries',
+      () async {
+        final peer = _FakeJsonRpcPeer(
+          collaborationModeListResponseProvider: (_) => <String, Object?>{
+            'data': <Object?>[
+              <String, Object?>{
+                'name': ' Default first ',
+                'mode': ' DEFAULT ',
+                'model': null,
+                'reasoning_effort': null,
+              },
+              <String, Object?>{
+                'name': 'Default duplicate',
+                'mode': 'default',
+                'model': 'ignored-model',
+              },
+              <String, Object?>{
+                'name': ' Future mode ',
+                'mode': ' FUTURE ',
+                'model': ' future-model ',
+                'reasoning_effort': ' ultra ',
+              },
+              <String, Object?>{
+                'name': 'Broken mode',
+                'mode': ' ',
+                'model': null,
+              },
+              <String, Object?>{
+                'name': 'Broken model',
+                'mode': 'other',
+                'model': 7,
+              },
+              42,
+              <String, Object?>{
+                'name': 'Plan',
+                'mode': 'plan',
+                'model': null,
+                'reasoning_effort': ' medium ',
+              },
+            ],
+          },
+        );
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+
+        final catalog = await provider.listConversationModes();
+
+        expect(catalog.presets.map((preset) => preset.id.rawValue), <String>[
+          'default',
+          'future',
+          'plan',
+        ]);
+        expect(catalog.presets.first.displayName, 'Default first');
+        expect(catalog.presets[1].id.kind, AgentConversationModeKind.unknown);
+        expect(catalog.presets[1].suggestedModelId, 'future-model');
+        expect(catalog.presets[1].suggestedReasoningEffort, 'ultra');
+        expect(catalog.presets.last.suggestedReasoningEffort, 'medium');
+        expect(provider.capabilities.supportsModeSelection, isTrue);
+      },
+    );
+
+    test('retries a malformed collaboration mode response', () async {
+      var responseCalls = 0;
+      final peer = _FakeJsonRpcPeer(
+        collaborationModeListResponseProvider: (_) {
+          responseCalls += 1;
+          if (responseCalls == 1) {
+            return <String, Object?>{'data': <String, Object?>{}};
+          }
+          return _conversationModeListResponse();
+        },
+      );
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+
+      await expectLater(
+        provider.listConversationModes(),
+        throwsA(isA<FormatException>()),
+      );
+      expect(provider.capabilities.supportsModeSelection, isFalse);
+
+      final catalog = await provider.listConversationModes();
+
+      expect(catalog.presets, hasLength(2));
+      expect(responseCalls, 2);
+      expect(provider.capabilities.supportsModeSelection, isTrue);
+    });
+
+    test(
+      'marks method-not-found unsupported without breaking normal turns',
+      () async {
+        final peer = _FakeJsonRpcPeer(
+          collaborationModeListResponseProvider: (_) {
+            throw const JsonRpcException(
+              JsonRpcError(code: -32601, message: 'Method not found'),
+            );
+          },
+        );
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+
+        await expectLater(
+          provider.listConversationModes(),
+          throwsA(isA<UnsupportedError>()),
+        );
+        await expectLater(
+          provider.listConversationModes(),
+          throwsA(isA<UnsupportedError>()),
+        );
+        final turn = await provider.sendMessage(
+          session: const AgentSession(
+            id: 'thread-1',
+            providerId: defaultAgentProviderId,
+          ),
+          context: const AgentContext(projectPath: '/repo'),
+          message: 'continue normally',
+        );
+
+        expect(turn.id, 'turn-1');
+        expect(
+          peer.requestMethods
+              .where((method) => method == 'collaborationMode/list')
+              .length,
+          1,
+        );
+        expect(peer.requestMethods, contains('turn/start'));
+        expect(provider.capabilities.supportsModeSelection, isFalse);
+      },
+    );
+
+    test(
+      'keeps an incomplete catalog cached but capability disabled',
+      () async {
+        var responseCalls = 0;
+        final peer = _FakeJsonRpcPeer(
+          collaborationModeListResponseProvider: (_) {
+            responseCalls += 1;
+            return <String, Object?>{
+              'data': <Object?>[
+                <String, Object?>{
+                  'name': 'Default',
+                  'mode': 'default',
+                  'model': null,
+                  'reasoning_effort': null,
+                },
+              ],
+            };
+          },
+        );
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+
+        final first = await provider.listConversationModes();
+        final second = await provider.listConversationModes();
+
+        expect(second, same(first));
+        expect(first.presets, hasLength(1));
+        expect(responseCalls, 1);
+        expect(provider.capabilities.supportsModeSelection, isFalse);
+      },
+    );
+
+    test('coalesces concurrent collaboration mode catalog requests', () async {
+      final gate = Completer<void>();
+      final peer = _FakeJsonRpcPeer();
+      peer.blockNextRequest('collaborationMode/list', gate);
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+
+      final firstFuture = provider.listConversationModes();
+      await _waitUntil(
+        () => peer.requestMethods.contains('collaborationMode/list'),
+      );
+      final secondFuture = provider.listConversationModes();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        peer.requestMethods
+            .where((method) => method == 'collaborationMode/list')
+            .length,
+        1,
+      );
+
+      gate.complete();
+      final catalogs = await Future.wait(<Future<AgentConversationModeCatalog>>[
+        firstFuture,
+        secondFuture,
+      ]);
+
+      expect(catalogs[1], same(catalogs[0]));
+    });
+
+    test(
+      'drops a disposed epoch catalog and reloads in a new runtime',
+      () async {
+        final gate = Completer<void>();
+        final firstPeer = _FakeJsonRpcPeer();
+        firstPeer.blockNextRequest('collaborationMode/list', gate);
+        final firstProvider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: firstPeer,
+        );
+
+        final staleCatalog = firstProvider.listConversationModes();
+        await _waitUntil(
+          () => firstPeer.requestMethods.contains('collaborationMode/list'),
+        );
+        final disposeFuture = firstProvider.dispose();
+        gate.complete();
+        await staleCatalog;
+        await disposeFuture;
+
+        expect(firstProvider.capabilities.supportsModeSelection, isFalse);
+
+        final secondPeer = _FakeJsonRpcPeer(
+          collaborationModeListResponseProvider: (_) =>
+              _conversationModeListResponse(planName: 'Plan next runtime'),
+        );
+        final secondProvider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: secondPeer,
+        );
+        addTearDown(secondProvider.dispose);
+
+        final currentCatalog = await secondProvider.listConversationModes();
+
+        expect(currentCatalog.presets.last.displayName, 'Plan next runtime');
+        expect(secondPeer.requestMethods, contains('collaborationMode/list'));
+        expect(secondProvider.capabilities.supportsModeSelection, isTrue);
+      },
+    );
 
     test('maps notifications to unified AgentEvents', () async {
       final peer = _FakeJsonRpcPeer();
@@ -1323,10 +1661,9 @@ void main() {
         await Future<void>.delayed(Duration.zero);
 
         final requests = events
-            .whereType<AgentPermissionRequestedEvent>()
+            .whereType<AgentQuestionRequestedEvent>()
             .toList();
         expect(requests, hasLength(2));
-        expect(requests.first.request.kind, AgentPermissionKind.userInput);
         expect(requests.first.request.questions, hasLength(2));
         expect(requests.first.request.questions.first.questionId, 'q1');
         expect(requests.first.request.questions.first.options, <String>[
@@ -1336,21 +1673,19 @@ void main() {
         expect(requests.first.request.questions.first.isOther, isTrue);
         expect(requests.first.request.questions[1].isSecret, isTrue);
 
-        await provider.respondToPermission(
-          AgentPermissionDecision(
+        expect(events.whereType<AgentPermissionRequestedEvent>(), isEmpty);
+
+        await provider.respondToQuestion(
+          AgentQuestionResponse(
             requestId: requests[0].request.id,
-            approved: true,
             answers: const <String, List<String>>{
               'q1': <String>['stdout'],
               'q2': <String>['secret-token'],
             },
           ),
         );
-        await provider.respondToPermission(
-          AgentPermissionDecision(
-            requestId: requests[1].request.id,
-            approved: false,
-          ),
+        await provider.respondToQuestion(
+          AgentQuestionResponse(requestId: requests[1].request.id),
         );
 
         expect(peer.responses['input-1'], <String, Object?>{
@@ -1366,6 +1701,52 @@ void main() {
         expect(peer.responses['input-2'], <String, Object?>{
           'answers': <String, Object?>{},
         });
+
+        await subscription.cancel();
+        await provider.dispose();
+      },
+    );
+
+    test(
+      'clears pending user question on serverRequest/resolved without responding',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+
+        await provider.initialize();
+        peer.emitServerRequest(
+          id: 'input-resolved',
+          method: 'item/tool/requestUserInput',
+          params: const <String, Object?>{
+            'threadId': 'thread-1',
+            'turnId': 'turn-1',
+            'itemId': 'item-1',
+            'questions': <Object?>[],
+          },
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(events.whereType<AgentQuestionRequestedEvent>(), hasLength(1));
+
+        peer.emitNotification('serverRequest/resolved', <String, Object?>{
+          'requestId': 'input-resolved',
+          'threadId': 'thread-1',
+        });
+        await Future<void>.delayed(Duration.zero);
+
+        final resolved = events.whereType<AgentQuestionResolvedEvent>().single;
+        expect(resolved.requestId, 'input-resolved');
+        expect(resolved.threadId, 'thread-1');
+        expect(events.whereType<AgentPermissionResolvedEvent>(), isEmpty);
+
+        await provider.respondToQuestion(
+          const AgentQuestionResponse(requestId: 'input-resolved'),
+        );
+        expect(peer.responses.containsKey('input-resolved'), isFalse);
 
         await subscription.cancel();
         await provider.dispose();
@@ -1635,6 +2016,111 @@ void main() {
     });
 
     test(
+      'maps scoped thread settings collaboration modes into typed events',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+        addTearDown(subscription.cancel);
+        await provider.initialize();
+
+        peer.emitNotification('thread/settings/updated', <String, Object?>{
+          'threadId': 'thread-plan',
+          'threadSettings': <String, Object?>{
+            'model': 'gpt-5.4',
+            'effort': 'high',
+            'serviceTier': 'priority',
+            'collaborationMode': <String, Object?>{
+              'mode': ' PLAN ',
+              'settings': <String, Object?>{
+                'model': ' gpt-5.4 ',
+                'reasoning_effort': ' medium ',
+              },
+            },
+          },
+        });
+        peer.emitNotification('thread/settings/updated', <String, Object?>{
+          'threadId': 'thread-default',
+          'threadSettings': <String, Object?>{
+            'collaborationMode': <String, Object?>{
+              'mode': 'default',
+              'settings': <String, Object?>{
+                'model': 'gpt-5.4',
+                'reasoning_effort': null,
+              },
+            },
+          },
+        });
+        peer.emitNotification('thread/settings/updated', <String, Object?>{
+          'threadId': 'thread-future',
+          'threadSettings': <String, Object?>{
+            'collaborationMode': <String, Object?>{
+              'mode': 'Future-Mode',
+              'settings': <String, Object?>{
+                'model': 'gpt-next',
+                'reasoning_effort': 'xhigh',
+              },
+            },
+          },
+        });
+        peer.emitNotification('thread/settings/updated', <String, Object?>{
+          'threadId': 'thread-malformed',
+          'threadSettings': <String, Object?>{
+            'model': 'gpt-5.4',
+            'collaborationMode': <String, Object?>{
+              'mode': 'plan',
+              'settings': <String, Object?>{'model': '   '},
+            },
+          },
+        });
+        peer.emitNotification('thread/settings/updated', <String, Object?>{
+          'threadSettings': <String, Object?>{
+            'collaborationMode': <String, Object?>{
+              'mode': 'plan',
+              'settings': <String, Object?>{'model': 'gpt-5.4'},
+            },
+          },
+        });
+        await Future<void>.delayed(Duration.zero);
+
+        final updates = events
+            .whereType<AgentThreadSettingsUpdatedEvent>()
+            .toList();
+        expect(updates.map((event) => event.threadId), <String>[
+          'thread-plan',
+          'thread-default',
+          'thread-future',
+          'thread-malformed',
+        ]);
+        final plan = updates[0];
+        expect(plan.model, 'gpt-5.4');
+        expect(plan.reasoningEffort, 'high');
+        expect(plan.serviceTierId, 'priority');
+        expect(plan.collaborationMode?.modeId, AgentConversationModeId.plan);
+        expect(plan.collaborationMode?.effectiveModelId, 'gpt-5.4');
+        expect(plan.collaborationMode?.effectiveReasoningEffort, 'medium');
+
+        expect(
+          updates[1].collaborationMode?.modeId,
+          AgentConversationModeId.defaultMode,
+        );
+        expect(updates[1].collaborationMode?.effectiveReasoningEffort, isNull);
+        expect(
+          updates[2].collaborationMode?.modeId.kind,
+          AgentConversationModeKind.unknown,
+        );
+        expect(updates[2].collaborationMode?.modeId.rawValue, 'future-mode');
+        expect(updates[3].model, 'gpt-5.4');
+        expect(updates[3].collaborationMode, isNull);
+      },
+    );
+
+    test(
       'serializes mutations per thread while allowing different threads',
       () async {
         final peer = _FakeJsonRpcPeer();
@@ -1719,7 +2205,11 @@ void main() {
       expect(turn.cwd, '/repo');
       expect(turn.model, 'gpt-5');
       expect(turn.modelContextWindow, 258400);
-      expect(turn.collaborationMode, 'Default');
+      expect(turn.collaborationMode, AgentConversationModeId.defaultMode);
+      expect(
+        history.latestCollaborationMode,
+        AgentConversationModeId.defaultMode,
+      );
 
       final userMessage =
           _historyEntries(history)[0] as AgentHistoryMessageEntry;
@@ -1904,7 +2394,11 @@ void main() {
       expect(turn.cwd, '/repo');
       expect(turn.model, 'gpt-5');
       expect(turn.modelContextWindow, 258400);
-      expect(turn.collaborationMode, 'Default');
+      expect(turn.collaborationMode, AgentConversationModeId.defaultMode);
+      expect(
+        history.latestCollaborationMode,
+        AgentConversationModeId.defaultMode,
+      );
 
       final userMessage =
           _historyEntries(history)[0] as AgentHistoryMessageEntry;
@@ -1930,6 +2424,139 @@ void main() {
 
       await provider.dispose();
     });
+
+    test(
+      'normalizes online history modes and keeps the latest valid value',
+      () async {
+        final peer = _FakeJsonRpcPeer(
+          threadReadResponseProvider: (_) => <String, Object?>{
+            'thread': <String, Object?>{
+              'id': 'thread-history',
+              'turns': <Object?>[
+                <String, Object?>{
+                  'id': 'turn-plan',
+                  'status': 'completed',
+                  'collaborationMode': ' PLAN ',
+                  'items': <Object?>[],
+                },
+                <String, Object?>{
+                  'id': 'turn-default',
+                  'status': 'completed',
+                  'collaborationMode': <String, Object?>{'mode': ' Default '},
+                  'items': <Object?>[],
+                },
+                <String, Object?>{
+                  'id': 'turn-future',
+                  'status': 'completed',
+                  'collaboration_mode': <String, Object?>{
+                    'mode': ' Future-Mode ',
+                  },
+                  'items': <Object?>[],
+                },
+                <String, Object?>{
+                  'id': 'turn-missing',
+                  'status': 'completed',
+                  'items': <Object?>[],
+                },
+                <String, Object?>{
+                  'id': 'turn-malformed',
+                  'status': 'completed',
+                  'collaborationMode': <String, Object?>{'mode': 42},
+                  'items': <Object?>[],
+                },
+              ],
+            },
+          },
+        );
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+
+        final history = await provider.readThreadHistory(
+          threadId: 'thread-history',
+        );
+
+        expect(
+          history.turns.map((turn) => turn.collaborationMode),
+          <AgentConversationModeId?>[
+            AgentConversationModeId.plan,
+            AgentConversationModeId.defaultMode,
+            AgentConversationModeId.fromRaw('future-mode'),
+            null,
+            null,
+          ],
+        );
+        expect(
+          history.latestCollaborationMode,
+          AgentConversationModeId.fromRaw('future-mode'),
+        );
+      },
+    );
+
+    test(
+      'normalizes JSONL history modes without losing the last valid value',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+        final sessionFile = await _writeJsonlFile(<Object?>[
+          <String, Object?>{
+            'type': 'session_meta',
+            'payload': <String, Object?>{'session_id': 'thread-jsonl-modes'},
+          },
+          <String, Object?>{
+            'type': 'turn_context',
+            'payload': <String, Object?>{
+              'turn_id': 'turn-plan',
+              'collaboration_mode': ' PLAN ',
+            },
+          },
+          <String, Object?>{
+            'type': 'turn_context',
+            'payload': <String, Object?>{
+              'turn_id': 'turn-future',
+              'collaboration_mode': <String, Object?>{'mode': ' Future-Mode '},
+            },
+          },
+          <String, Object?>{
+            'type': 'turn_context',
+            'payload': <String, Object?>{
+              'turn_id': 'turn-future',
+              'collaboration_mode': <String, Object?>{'mode': '   '},
+            },
+          },
+          <String, Object?>{
+            'type': 'turn_context',
+            'payload': <String, Object?>{'turn_id': 'turn-missing'},
+          },
+        ]);
+        addTearDown(() => sessionFile.parent.delete(recursive: true));
+
+        final history = await provider.readThreadHistory(
+          threadId: 'thread-jsonl-modes',
+          sessionPath: sessionFile.path,
+        );
+
+        expect(peer.requestMethods, <String>['initialize']);
+        expect(
+          _historyTurn(history, 'turn-plan').collaborationMode,
+          AgentConversationModeId.plan,
+        );
+        final unknownMode = _historyTurn(
+          history,
+          'turn-future',
+        ).collaborationMode;
+        expect(unknownMode?.kind, AgentConversationModeKind.unknown);
+        expect(unknownMode?.rawValue, 'future-mode');
+        expect(_historyTurn(history, 'turn-missing').collaborationMode, isNull);
+        expect(history.latestCollaborationMode, unknownMode);
+      },
+    );
 
     test(
       'maps permission warning and search entries from local session jsonl',
@@ -3092,6 +3719,204 @@ void main() {
       ]);
     });
 
+    test('keeps legacy turn/start params unchanged without mode', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+      provider.updateModelSelection(
+        const AgentModelSelection(
+          modelId: 'gpt-5.4-mini',
+          reasoningEffort: 'high',
+          serviceTierId: 'priority',
+        ),
+      );
+      provider.updatePermissionSelection(
+        const AgentPermissionSelection(
+          approvalPolicy: 'never',
+          sandboxPolicy: 'dangerFullAccess',
+        ),
+      );
+
+      await provider.sendMessage(
+        session: const AgentSession(
+          id: 'thread-legacy',
+          providerId: defaultAgentProviderId,
+        ),
+        message: 'hello',
+        context: const AgentContext(projectPath: '/repo'),
+        clientUserMessageId: 'client-legacy',
+      );
+
+      final turnStartIndex = peer.requestMethods.indexOf('turn/start');
+      expect(peer.requestParams[turnStartIndex], <String, Object?>{
+        'threadId': 'thread-legacy',
+        'input': <Object?>[
+          <String, Object?>{'type': 'text', 'text': 'hello'},
+        ],
+        'cwd': '/repo',
+        'model': 'gpt-5.4-mini',
+        'effort': 'high',
+        'serviceTier': 'priority',
+        'approvalPolicy': 'never',
+        'sandboxPolicy': <String, Object?>{'type': 'dangerFullAccess'},
+        'clientUserMessageId': 'client-legacy',
+      });
+    });
+
+    test(
+      'encodes Plan mode without conflicting top-level model settings',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+        provider.updateModelSelection(
+          const AgentModelSelection(
+            modelId: 'legacy-model',
+            reasoningEffort: 'high',
+            serviceTierId: 'priority',
+          ),
+        );
+        provider.updatePermissionSelection(
+          const AgentPermissionSelection(
+            approvalPolicy: 'on-request',
+            sandboxPolicy: 'workspaceWrite',
+            permissionProfileId: ':workspace',
+          ),
+        );
+
+        await provider.sendMessage(
+          session: const AgentSession(
+            id: 'thread-plan',
+            providerId: defaultAgentProviderId,
+          ),
+          inputs: const <AgentUserInput>[
+            AgentUserInput.text(
+              'inspect @main.dart',
+              textElements: <AgentTextElement>[
+                AgentTextElement(start: 8, end: 17, placeholder: 'main.dart'),
+              ],
+            ),
+            AgentUserInput.localImage(path: r'D:\tmp\shot.png', detail: 'high'),
+            AgentUserInput.mention(
+              name: 'main.dart',
+              path: '/repo/lib/main.dart',
+            ),
+          ],
+          context: const AgentContext(projectPath: '/repo'),
+          clientUserMessageId: 'client-plan',
+          configuration: AgentTurnConfiguration(
+            conversationMode: AgentConversationModeSelection(
+              modeId: AgentConversationModeId.plan,
+              effectiveModelId: 'gpt-5.4',
+              effectiveReasoningEffort: 'medium',
+            ),
+          ),
+        );
+
+        final turnStartIndex = peer.requestMethods.indexOf('turn/start');
+        expect(peer.requestParams[turnStartIndex], <String, Object?>{
+          'threadId': 'thread-plan',
+          'input': <Object?>[
+            <String, Object?>{
+              'type': 'text',
+              'text': 'inspect @main.dart',
+              'text_elements': <Object?>[
+                <String, Object?>{
+                  'byteRange': <int>[8, 17],
+                  'placeholder': 'main.dart',
+                },
+              ],
+            },
+            <String, Object?>{
+              'type': 'localImage',
+              'path': r'D:\tmp\shot.png',
+              'detail': 'high',
+            },
+            <String, Object?>{
+              'type': 'mention',
+              'name': 'main.dart',
+              'path': '/repo/lib/main.dart',
+            },
+          ],
+          'cwd': '/repo',
+          'collaborationMode': <String, Object?>{
+            'mode': 'plan',
+            'settings': <String, Object?>{
+              'model': 'gpt-5.4',
+              'reasoning_effort': 'medium',
+              'developer_instructions': null,
+            },
+          },
+          'serviceTier': 'priority',
+          'approvalPolicy': 'on-request',
+          'permissions': ':workspace',
+          'clientUserMessageId': 'client-plan',
+        });
+        final params =
+            peer.requestParams[turnStartIndex]! as Map<String, Object?>;
+        expect(params.containsKey('model'), isFalse);
+        expect(params.containsKey('effort'), isFalse);
+        expect(params.containsKey('sandboxPolicy'), isFalse);
+      },
+    );
+
+    test('encodes explicit Default mode after Plan mode', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+      const session = AgentSession(
+        id: 'thread-mode-switch',
+        providerId: defaultAgentProviderId,
+      );
+
+      await provider.sendMessage(
+        session: session,
+        message: 'plan first',
+        context: const AgentContext(projectPath: '/repo'),
+        configuration: AgentTurnConfiguration(
+          conversationMode: AgentConversationModeSelection(
+            modeId: AgentConversationModeId.plan,
+            effectiveModelId: 'gpt-5.4',
+            effectiveReasoningEffort: 'medium',
+          ),
+        ),
+      );
+      await provider.sendMessage(
+        session: session,
+        message: 'return to default',
+        context: const AgentContext(projectPath: '/repo'),
+        configuration: AgentTurnConfiguration(
+          conversationMode: AgentConversationModeSelection(
+            modeId: AgentConversationModeId.defaultMode,
+            effectiveModelId: 'gpt-5.4',
+          ),
+        ),
+      );
+
+      final turnStartIndex = peer.requestMethods.lastIndexOf('turn/start');
+      final params =
+          peer.requestParams[turnStartIndex]! as Map<String, Object?>;
+      expect(params['collaborationMode'], <String, Object?>{
+        'mode': 'default',
+        'settings': <String, Object?>{
+          'model': 'gpt-5.4',
+          'reasoning_effort': null,
+          'developer_instructions': null,
+        },
+      });
+      expect(params.containsKey('model'), isFalse);
+      expect(params.containsKey('effort'), isFalse);
+    });
+
     test(
       'turn/start carries permission selection and clientUserMessageId',
       () async {
@@ -3576,6 +4401,8 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
   _FakeJsonRpcPeer({
     this._startCompleter,
     this.modelListResponseProvider,
+    this.collaborationModeListResponseProvider,
+    this.threadReadResponseProvider,
     this.initializeResponse = const <String, Object?>{
       'codexHome': '/home/test/.codex',
       'platformFamily': 'unix',
@@ -3603,6 +4430,9 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
   final Completer<void>? _startCompleter;
   final Map<String, Object?> initializeResponse;
   final Object? Function(Object? params)? modelListResponseProvider;
+  final FutureOr<Object?> Function(Object? params)?
+  collaborationModeListResponseProvider;
+  final FutureOr<Object?> Function(Object? params)? threadReadResponseProvider;
   int startCalls = 0;
   int _threadStartCount = 0;
   bool _closed = false;
@@ -3640,6 +4470,19 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
     final paramsMap = params is Map<String, Object?>
         ? params
         : const <String, Object?>{};
+    if (method == 'collaborationMode/list') {
+      final responseProvider = collaborationModeListResponseProvider;
+      if (responseProvider != null) {
+        return await responseProvider(params);
+      }
+      return _conversationModeListResponse();
+    }
+    if (method == 'thread/read') {
+      final responseProvider = threadReadResponseProvider;
+      if (responseProvider != null) {
+        return await responseProvider(params);
+      }
+    }
     return switch (method) {
       'initialize' => initializeResponse,
       'thread/start' => () {
@@ -3924,6 +4767,35 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
 
   void completeStart() {
     _startCompleter?.complete();
+  }
+}
+
+Map<String, Object?> _conversationModeListResponse({String planName = 'Plan'}) {
+  return <String, Object?>{
+    'data': <Object?>[
+      <String, Object?>{
+        'name': 'Default',
+        'mode': 'default',
+        'model': null,
+        'reasoning_effort': null,
+      },
+      <String, Object?>{
+        'name': planName,
+        'mode': 'plan',
+        'model': null,
+        'reasoning_effort': 'medium',
+      },
+    ],
+  };
+}
+
+Future<void> _waitUntil(bool Function() condition) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 2));
+  while (!condition()) {
+    if (DateTime.now().isAfter(deadline)) {
+      fail('Timed out waiting for condition');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 1));
   }
 }
 

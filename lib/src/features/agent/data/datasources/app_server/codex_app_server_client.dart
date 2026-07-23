@@ -6,12 +6,16 @@ class _CodexAppServerClient {
     required this._peer,
     required this._config,
     required this._modelListMapper,
+    required this._collaborationModeMapper,
+    required this._turnStartParamsEncoder,
     required this._threadHistoryReader,
   });
 
   final JsonRpcPeer _peer;
   final AgentProviderConfig _config;
   final _CodexModelListMapper _modelListMapper;
+  final _CodexCollaborationModeMapper _collaborationModeMapper;
+  final _CodexTurnStartParamsEncoder _turnStartParamsEncoder;
   final _CodexThreadHistoryReader _threadHistoryReader;
 
   Future<AgentModelList> fetchModelList({
@@ -47,6 +51,22 @@ class _CodexAppServerClient {
       }
     } while (cursor != null);
     return AgentModelList(models: List<AgentModelInfo>.unmodifiable(models));
+  }
+
+  Future<AgentConversationModeCatalog> fetchCollaborationModeCatalog() async {
+    final result = await _peer.sendRequest(
+      'collaborationMode/list',
+      params: const <String, Object?>{},
+    );
+    final mapping = _collaborationModeMapper.catalogFromResult(result);
+    if (mapping.invalidEntryCount > 0 || mapping.duplicateEntryCount > 0) {
+      _log.fine(
+        'Normalized Codex collaboration mode catalog '
+        '(invalid=${mapping.invalidEntryCount}, '
+        'duplicates=${mapping.duplicateEntryCount})',
+      );
+    }
+    return mapping.catalog;
   }
 
   Future<AgentSession> startSession({
@@ -268,32 +288,27 @@ class _CodexAppServerClient {
     required AgentContext context,
     required AgentModelSelection selection,
     required AgentPermissionSelection permissionSelection,
+    required AgentTurnConfiguration turnConfiguration,
     String? clientUserMessageId,
   }) async {
-    final model = selection.modelId ?? _config.defaultModel;
-    final permissionProfileId = permissionSelection.protocolPermissionProfileId;
     final result = await _peer.sendRequest(
       'turn/start',
-      params: <String, Object?>{
-        'threadId': session.id,
-        'input': _encodeUserInputs(inputs),
-        if (context.projectPath != null) 'cwd': context.projectPath,
-        'model': ?model,
-        // 协议字段名是 `effort`(TurnStartParams），域模型内仍叫
-        // reasoningEffort；`summary`（推理摘要模式）暂无 UI 来源，不发送。
-        'effort': ?selection.reasoningEffort,
-        'serviceTier': ?selection.serviceTierId,
-        'approvalPolicy': AgentPermissionSelection.normalizeApprovalPolicy(
-          permissionSelection.approvalPolicy,
-        ),
-        'permissions': ?permissionProfileId,
-        'sandboxPolicy': ?(permissionProfileId == null
-            ? permissionSelection.toTurnSandboxPolicy()
-            : null),
-        'clientUserMessageId': ?clientUserMessageId,
-      },
+      params: _turnStartParamsEncoder.encode(
+        session: session,
+        inputs: inputs,
+        context: context,
+        modelSelection: selection,
+        permissionSelection: permissionSelection,
+        turnConfiguration: turnConfiguration,
+        clientUserMessageId: clientUserMessageId,
+      ),
     );
     return _turnFromResult(result, session.id);
+  }
+
+  /// 在启动运行时之前校验回合级模式，保证无效配置不产生 RPC 副作用。
+  void validateTurnConfiguration(AgentTurnConfiguration turnConfiguration) {
+    _turnStartParamsEncoder.validate(turnConfiguration);
   }
 
   Future<void> steerTurn({
@@ -306,44 +321,11 @@ class _CodexAppServerClient {
       'turn/steer',
       params: <String, Object?>{
         'threadId': session.id,
-        'input': _encodeUserInputs(inputs),
+        'input': _encodeCodexUserInputs(inputs),
         'expectedTurnId': expectedTurnId,
         'clientUserMessageId': ?clientUserMessageId,
       },
     );
-  }
-
-  /// 将领域输入项编码为协议 `UserInput[]`。
-  List<Object?> _encodeUserInputs(List<AgentUserInput> inputs) {
-    return <Object?>[
-      for (final input in inputs)
-        switch (input) {
-          AgentTextUserInput(:final text, :final textElements) =>
-            <String, Object?>{
-              'type': 'text',
-              'text': text,
-              if (textElements.isNotEmpty)
-                'text_elements': <Object?>[
-                  for (final element in textElements)
-                    <String, Object?>{
-                      'byteRange': <int>[element.start, element.end],
-                      'placeholder': ?element.placeholder,
-                    },
-                ],
-            },
-          AgentLocalImageUserInput(:final path, :final detail) =>
-            <String, Object?>{
-              'type': 'localImage',
-              'path': path,
-              'detail': ?detail,
-            },
-          AgentMentionUserInput(:final name, :final path) => <String, Object?>{
-            'type': 'mention',
-            'name': name,
-            'path': path,
-          },
-        },
-    ];
   }
 
   Future<void> cancelTurn(AgentTurn turn) {

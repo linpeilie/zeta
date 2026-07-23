@@ -5,6 +5,7 @@ class _CodexNotificationMapper {
   const _CodexNotificationMapper({required this._providerId});
 
   final String _providerId;
+  static const _conversationModeCodec = _CodexConversationModeCodec();
 
   _NotificationMapping map(
     JsonRpcNotification notification, {
@@ -116,10 +117,14 @@ class _CodexNotificationMapper {
             AgentThreadSettingsUpdatedEvent(
               threadId: threadId,
               model: _string(settings['model']),
+              reasoningEffort: _string(settings['effort']),
+              serviceTierId: _string(settings['serviceTier']),
+              collaborationMode: _conversationModeCodec.selectionFromValue(
+                settings['collaborationMode'],
+              ),
               approvalPolicy: approvalPolicy,
               sandboxPolicy: sandboxPolicy,
               activePermissionProfileId: _string(activeProfile['id']),
-              raw: notification.params,
             ),
           ],
         );

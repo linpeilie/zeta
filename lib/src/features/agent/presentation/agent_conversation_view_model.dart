@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/core/logging/structured_error_logging.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
@@ -43,6 +44,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     required this.providerController,
     AgentConversationTimelineStore? timelineStore,
     AgentConversationModelSelectionController? modelSelectionController,
+    AgentConversationModeController? conversationModeController,
     AgentConversationPermissionSelectionController?
     permissionSelectionController,
     this.workspaceFilesProvider,
@@ -53,6 +55,9 @@ class AgentConversationViewModel extends ChangeNotifier {
            AgentConversationModelSelectionController(
              persistSelection: providerController.persistModelSelection,
            ),
+       _ownsConversationModeController = conversationModeController == null,
+       _conversationModeController =
+           conversationModeController ?? AgentConversationModeController(),
        _permissionSelectionController =
            permissionSelectionController ??
            AgentConversationPermissionSelectionController(
@@ -64,6 +69,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       isDisposed: () => _disposed,
     );
     _modelSelectionController.addListener(_handleModelSelectionChanged);
+    _conversationModeController.addListener(_handleConversationModeChanged);
     providerController.addListener(_handleProviderSettingsChanged);
     _threadSnapshotListenable = ValueNotifier<AgentConversationThreadSnapshot>(
       _buildThreadSnapshot(),
@@ -79,6 +85,8 @@ class AgentConversationViewModel extends ChangeNotifier {
   final AgentConversationTimelineStore _timeline;
   final bool _ownsModelSelectionController;
   final AgentConversationModelSelectionController _modelSelectionController;
+  final bool _ownsConversationModeController;
+  final AgentConversationModeController _conversationModeController;
   final AgentConversationPermissionSelectionController
   _permissionSelectionController;
   late final AgentConversationUiSignals _uiSignals;
@@ -103,6 +111,9 @@ class AgentConversationViewModel extends ChangeNotifier {
   Future<void>? _settingsLoadFuture;
   bool _disposed = false;
   int _threadSwitchToken = 0;
+  int _conversationModeCatalogLoadGeneration = 0;
+  AgentProvider? _conversationModeCatalogProvider;
+  AgentRuntimeScope? _conversationModeCatalogRuntimeScope;
 
   String _currentThreadTitle = defaultThreadTitle;
   AgentProviderStatus _status = const AgentProviderStatus.idle();
@@ -154,6 +165,8 @@ class AgentConversationViewModel extends ChangeNotifier {
   List<AgentPermissionRequest> get permissionRequests =>
       _timeline.permissionRequests;
 
+  List<AgentQuestionRequest> get questionRequests => _timeline.questionRequests;
+
   List<AgentPlanApprovalRequest> get planApprovalRequests =>
       _timeline.planApprovalRequests;
 
@@ -183,6 +196,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       !isReadOnly &&
       activePlanEntries.length >= 2 &&
       permissionRequests.isEmpty &&
+      questionRequests.isEmpty &&
       planApprovalRequests.isEmpty &&
       !threadWaitingOnApproval &&
       !threadWaitingOnUserInput;
@@ -278,6 +292,60 @@ class AgentConversationViewModel extends ChangeNotifier {
     return providerController.capabilitiesForProviderId(providerId);
   }
 
+  /// 当前 Provider 是否提供可选择的完整对话模式目录。
+  bool get canSelectConversationMode =>
+      _conversationModeController.state.status ==
+      AgentConversationModeLoadStatus.ready;
+
+  /// 当前 Provider 的对话模式目录加载状态。
+  AgentConversationModeLoadStatus get conversationModeLoadStatus =>
+      _conversationModeController.state.status;
+
+  /// 用于隔离模式选择浮层的 Provider 与 thread 上下文。
+  ///
+  /// presentation 只把该值作为相等性标识，不依赖内部字段；上下文切换时 Selector
+  /// 可据此关闭旧浮层，避免把旧 thread 的选择写入新会话。
+  Object get conversationModeContextId => (
+    providerId: _session?.providerId ?? _selectedProviderId ?? activeProviderId,
+    threadId: _selectedThreadId,
+  );
+
+  /// Provider 中立的对话模式选项。
+  List<AgentConversationModePreset> get conversationModeOptions =>
+      _conversationModeController.state.presets;
+
+  /// 用户为下一新 turn 选择的模式。
+  AgentConversationModeId? get selectedConversationMode =>
+      _conversationModeController.state.draftMode;
+
+  /// 模式目录加载或降级状态的简短提示。
+  String? get conversationModeStatusMessage {
+    final state = _conversationModeController.state;
+    return switch (state.status) {
+      AgentConversationModeLoadStatus.unavailable => null,
+      AgentConversationModeLoadStatus.loading => '正在加载对话模式…',
+      AgentConversationModeLoadStatus.error => state.errorMessage,
+      AgentConversationModeLoadStatus.ready
+          when state.draftMode?.kind == AgentConversationModeKind.unknown =>
+        '当前模式暂不支持主动选择',
+      AgentConversationModeLoadStatus.ready => null,
+    };
+  }
+
+  /// 当前选择是否只应用于下一新 turn。
+  bool get conversationModeAppliesToNextTurn =>
+      _conversationModeController.state.appliesToNextTurn;
+
+  /// 更新下一新 turn 的对话模式。
+  void selectConversationMode(AgentConversationModeId modeId) {
+    _conversationModeController.selectMode(modeId);
+  }
+
+  /// 重试当前 Provider 的模式目录探测。
+  Future<void> retryConversationModes() {
+    return _conversationModeController.retryCatalog();
+  }
+
   List<AgentModelInfo> get models => _modelSelectionController.models;
 
   /// 当前 session 可直接渲染的动态配置；未知类型按 ACP 约定忽略。
@@ -355,6 +423,14 @@ class AgentConversationViewModel extends ChangeNotifier {
     return config.hasDisplayable ? config : null;
   }
 
+  String _effectiveConversationModeModelId() {
+    final protocolModel = selectedModel?.model.trim();
+    if (protocolModel != null && protocolModel.isNotEmpty) {
+      return protocolModel;
+    }
+    return selectedModelId?.trim() ?? '';
+  }
+
   /// Provider 支持会话级审批/沙箱策略时显示选择器。
   bool get showPermissionPolicy =>
       activeCapabilities.supportsPermissionPolicySelection;
@@ -396,6 +472,13 @@ class AgentConversationViewModel extends ChangeNotifier {
     }
     _flushPendingStreamChangesNow();
     _invalidateProviderEventListener();
+    _conversationModeCatalogLoadGeneration += 1;
+    _conversationModeCatalogProvider = null;
+    _conversationModeCatalogRuntimeScope = null;
+    await _conversationModeController.loadCatalog(
+      providerId: providerId,
+      port: null,
+    );
     await providerController.setActiveProvider(providerId);
     await _eventSubscription?.cancel();
     _eventSubscription = null;
@@ -1236,6 +1319,9 @@ class AgentConversationViewModel extends ChangeNotifier {
       _selectedProviderId = effectiveRestoredSessionId == null
           ? null
           : normalizedProviderId;
+      _conversationModeController.bindThread(
+        threadId: effectiveRestoredSessionId,
+      );
       _threadOpenPhase = AgentThreadOpenPhase.idle;
       _requiresResumedSelectedThread = false;
       _currentThreadTitle = defaultThreadTitle;
@@ -1269,6 +1355,9 @@ class AgentConversationViewModel extends ChangeNotifier {
       _invalidateProviderEventListener();
       _restoredSessionId = effectiveRestoredSessionId;
       _selectedProviderId = normalizedProviderId;
+      _conversationModeController.bindThread(
+        threadId: effectiveRestoredSessionId,
+      );
       _threadOpenPhase = AgentThreadOpenPhase.idle;
       _requiresResumedSelectedThread = false;
     }
@@ -1318,9 +1407,12 @@ class AgentConversationViewModel extends ChangeNotifier {
     var providerOperation = 'provider/settings';
     AgentProvider? requestProvider;
     AgentSession? requestSession;
+    AgentConversationModeSelection? requestModeSelection;
+    var modeRequestAccepted = false;
     if (isNewTurn) {
       // 在发送瞬间冻结本回合模型配置，避免 footer 被后续改配置污染。
       _timeline.startPendingLiveTurn(modelConfig: _currentTurnModelConfig());
+      _conversationModeController.setTurnRunning(true);
       _consumeActivityDirty();
     } else {
       _timeline.currentTurnGroupId = runningTurnId;
@@ -1367,6 +1459,13 @@ class AgentConversationViewModel extends ChangeNotifier {
       );
       requestSession = session;
       final conversation = provider.bundle.conversation;
+      final turnConfiguration = isNewTurn
+          ? _conversationModeController.snapshotForNewTurn(
+              effectiveModelId: _effectiveConversationModeModelId(),
+              selectedReasoningEffort: selectedReasoningEffort,
+            )
+          : const AgentTurnConfiguration();
+      requestModeSelection = turnConfiguration.conversationMode;
       // 新会话在 Grok 异步 generated_title 出现前，先用首条用户消息作临时标题。
       if (_isStillSelectedThread(switchToken, session.id) &&
           _currentThreadTitle == defaultThreadTitle &&
@@ -1382,7 +1481,13 @@ class AgentConversationViewModel extends ChangeNotifier {
           inputs: inputs,
           context: context,
           clientUserMessageId: clientUserMessageId,
+          configuration: turnConfiguration,
         );
+        _conversationModeController.markTurnAccepted(
+          threadId: session.id,
+          selection: requestModeSelection,
+        );
+        modeRequestAccepted = true;
         final pendingId = _timeline.pendingTurnGroupId;
         if (pendingId != null &&
             _isStillSelectedThread(switchToken, session.id)) {
@@ -1463,6 +1568,12 @@ class AgentConversationViewModel extends ChangeNotifier {
       _failPendingLiveTurn();
       _markError('Agent request failed', details: error.toString());
     } finally {
+      if (isNewTurn && !modeRequestAccepted && requestSession != null) {
+        _conversationModeController.markTurnFailed(
+          threadId: requestSession.id,
+          selection: requestModeSelection,
+        );
+      }
       _timeline.clearPendingTurnGroupId();
     }
   }
@@ -1512,6 +1623,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     final switchToken = ++_threadSwitchToken;
     // 在第一个 await 前让旧 thread listener 失效，避免其微任务事件污染新时间线。
     _invalidateProviderEventListener();
+    _conversationModeController.bindThread(threadId: thread.id);
     // Provider 配置可能仍在应用启动阶段读取；必须等待其完成后再判断 thread 归属，
     // 否则会先看到内置 Codex、随后却从磁盘加载出 Grok，并用错误后端读取历史。
     await loadSettings();
@@ -1582,6 +1694,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     _sessionConfigOptions = const <AgentSessionConfigOption>[];
     _restoredSessionId = thread.id;
     _selectedProviderId = thread.providerId;
+    _conversationModeController.bindThread(threadId: thread.id);
     _requiresResumedSelectedThread = true;
     _threadOpenPhase = AgentThreadOpenPhase.loadingHistory;
     _currentThreadTitle = thread.displayName;
@@ -1634,6 +1747,11 @@ class AgentConversationViewModel extends ChangeNotifier {
       }
       _timeline.applyHistorySnapshot(history, thread);
       _applyThreadSelectionFromHistory(history);
+      _conversationModeController.bindThread(
+        threadId: thread.id,
+        historyMode: history.latestCollaborationMode,
+      );
+      _conversationModeController.setTurnRunning(isTurnRunning);
       // 再次锁定 resume：避免异步路径把 requiresResumed 清掉。
       _restoredSessionId = thread.id;
       _selectedProviderId = thread.providerId;
@@ -1663,14 +1781,13 @@ class AgentConversationViewModel extends ChangeNotifier {
     }
   }
 
-  /// 处理审批卡片的 approve/deny / 结构化答案。
+  /// 处理审批卡片的 approve/deny。
   ///
   /// UI 先移除卡片，再异步回写 provider，避免按钮点击后卡片停留造成重复提交。
   Future<void> respondToPermission(
     AgentPermissionRequest request, {
     required bool approved,
     bool cancelTurn = false,
-    Map<String, List<String>> answers = const <String, List<String>>{},
     AgentCommandApprovalDecisionKind? commandDecision,
     List<String> execpolicyAmendment = const <String>[],
   }) async {
@@ -1688,10 +1805,31 @@ class AgentConversationViewModel extends ChangeNotifier {
         requestId: request.id,
         approved: approved,
         cancelTurn: cancelTurn,
-        answers: answers,
         commandDecision: commandDecision,
         execpolicyAmendment: execpolicyAmendment,
       ),
+    );
+  }
+
+  /// 回答或跳过独立用户提问。
+  ///
+  /// UI 先移除卡片，再通过 question 响应方法回写结构化 answers。
+  Future<void> respondToQuestion(
+    AgentQuestionRequest request, {
+    Map<String, List<String>> answers = const <String, List<String>>{},
+  }) async {
+    _timeline.removeQuestionRequest(request.id);
+    _publishUiChanges(history: true, liveTurn: true, pendingInteraction: true);
+    _log.info(
+      'Responding to Agent question '
+      '(${answers.length} answered questions)',
+    );
+    final interactions = _provider?.bundle.interactions;
+    if (interactions == null) {
+      return;
+    }
+    await interactions.respondToQuestion(
+      AgentQuestionResponse(requestId: request.id, answers: answers),
     );
   }
 
@@ -1934,8 +2072,12 @@ class AgentConversationViewModel extends ChangeNotifier {
     _invalidateProviderEventListener();
     providerController.removeListener(_handleProviderSettingsChanged);
     _modelSelectionController.removeListener(_handleModelSelectionChanged);
+    _conversationModeController.removeListener(_handleConversationModeChanged);
     if (_ownsModelSelectionController) {
       _modelSelectionController.dispose();
+    }
+    if (_ownsConversationModeController) {
+      _conversationModeController.dispose();
     }
     _elapsedTicker.dispose();
     _uiSignals.dispose();
@@ -1974,6 +2116,13 @@ class AgentConversationViewModel extends ChangeNotifier {
     _publishUiChanges(composer: true);
   }
 
+  void _handleConversationModeChanged() {
+    if (_disposed) {
+      return;
+    }
+    _publishUiChanges(composer: true);
+  }
+
   /// 确保拿到正确的共享 provider 实例。
   ///
   /// [preferredProviderId] 非空且与当前 active 不同时，会先切换 active（不清理
@@ -2001,6 +2150,7 @@ class AgentConversationViewModel extends ChangeNotifier {
           provider,
           threadId: _selectedThreadId,
         )) {
+      await _ensureConversationModeCatalog(provider);
       return provider;
     }
 
@@ -2014,7 +2164,46 @@ class AgentConversationViewModel extends ChangeNotifier {
       provider,
       threadId: _selectedThreadId,
     );
+    await _ensureConversationModeCatalog(provider);
     return provider;
+  }
+
+  Future<void> _ensureConversationModeCatalog(AgentProvider provider) async {
+    final runtimeScope = _runtimeScopeOf(provider);
+    if (identical(_conversationModeCatalogProvider, provider) &&
+        _conversationModeCatalogRuntimeScope == runtimeScope) {
+      return;
+    }
+
+    final generation = ++_conversationModeCatalogLoadGeneration;
+    final preservesCurrentMode =
+        _conversationModeCatalogProvider?.config.id == provider.config.id;
+    final restoredMode = preservesCurrentMode
+        ? _conversationModeController.state.confirmedMode
+        : null;
+    final restoredDraft = preservesCurrentMode
+        ? _conversationModeController.state.draftMode
+        : null;
+    await _conversationModeController.loadCatalog(
+      providerId: provider.config.id,
+      port: provider.bundle.conversationModes,
+    );
+    if (_disposed ||
+        generation != _conversationModeCatalogLoadGeneration ||
+        !identical(_provider, provider)) {
+      return;
+    }
+
+    _conversationModeCatalogProvider = provider;
+    _conversationModeCatalogRuntimeScope = _runtimeScopeOf(provider);
+    _conversationModeController.bindThread(
+      threadId: _selectedThreadId,
+      historyMode: restoredMode,
+    );
+    if (restoredDraft != null) {
+      _conversationModeController.selectMode(restoredDraft);
+    }
+    _conversationModeController.setTurnRunning(isTurnRunning);
   }
 
   /// 切换 active provider，但保留当前时间线与待 resume 的 thread id。
@@ -2037,6 +2226,13 @@ class AgentConversationViewModel extends ChangeNotifier {
       'Rebinding active provider to $providerId without clearing conversation',
     );
     _invalidateProviderEventListener();
+    _conversationModeCatalogLoadGeneration += 1;
+    _conversationModeCatalogProvider = null;
+    _conversationModeCatalogRuntimeScope = null;
+    await _conversationModeController.loadCatalog(
+      providerId: providerId,
+      port: null,
+    );
     await providerController.setActiveProvider(providerId);
     await _eventSubscription?.cancel();
     _eventSubscription = null;
@@ -2064,6 +2260,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     _timeline.clearPendingTurnGroupId();
     _consumeActivityDirty();
     _syncElapsedTicker();
+    _conversationModeController.setTurnRunning(isTurnRunning);
     _publishUiChanges(
       history: true,
       syncLiveTurn: true,
@@ -2100,6 +2297,11 @@ class AgentConversationViewModel extends ChangeNotifier {
         if (_isStillSelectedThread(switchToken, expectedThreadId)) {
           _session = session;
           _restoredSessionId = session.id;
+          _bindConversationModeThreadPreservingDraft(
+            threadId: session.id,
+            historyMode: _conversationModeController.state.confirmedMode,
+          );
+          _conversationModeController.setTurnRunning(isTurnRunning);
           _threadOpenPhase = AgentThreadOpenPhase.idle;
           _requiresResumedSelectedThread = false;
           _applySessionTitle(session);
@@ -2134,12 +2336,31 @@ class AgentConversationViewModel extends ChangeNotifier {
     if (_isStillSelectedThread(switchToken, expectedThreadId)) {
       _session = session;
       _restoredSessionId = session.id;
+      _bindConversationModeThreadPreservingDraft(
+        threadId: session.id,
+        historyMode: _conversationModeController.state.confirmedMode,
+      );
+      _conversationModeController.setTurnRunning(isTurnRunning);
       _threadOpenPhase = AgentThreadOpenPhase.idle;
       _requiresResumedSelectedThread = false;
       _applySessionTitle(session);
       _publishUiChanges(header: true, composer: true);
     }
     return session;
+  }
+
+  void _bindConversationModeThreadPreservingDraft({
+    required String threadId,
+    required AgentConversationModeId? historyMode,
+  }) {
+    final draftMode = _conversationModeController.state.draftMode;
+    _conversationModeController.bindThread(
+      threadId: threadId,
+      historyMode: historyMode,
+    );
+    if (draftMode != null) {
+      _conversationModeController.selectMode(draftMode);
+    }
   }
 
   AgentRuntimeScope? _runtimeScopeOf(AgentProvider provider) {
@@ -2276,8 +2497,16 @@ class AgentConversationViewModel extends ChangeNotifier {
         if (!_shouldAcceptSessionStarted(event.session.id)) {
           break;
         }
+        final wasCurrentSession = _session?.id == event.session.id;
         _session = event.session;
         _restoredSessionId = event.session.id;
+        if (!wasCurrentSession) {
+          _bindConversationModeThreadPreservingDraft(
+            threadId: event.session.id,
+            historyMode: _conversationModeController.state.confirmedMode,
+          );
+          _conversationModeController.setTurnRunning(isTurnRunning);
+        }
         _threadOpenPhase = AgentThreadOpenPhase.idle;
         _requiresResumedSelectedThread = false;
         _applySessionTitle(event.session);
@@ -2319,6 +2548,7 @@ class AgentConversationViewModel extends ChangeNotifier {
             status: AgentHistoryTurnStatus.interrupted,
           );
         }
+        _conversationModeController.setTurnRunning(isTurnRunning);
         _consumeActivityDirty();
         _syncElapsedTicker();
         _publishUiChanges(
@@ -2343,6 +2573,7 @@ class AgentConversationViewModel extends ChangeNotifier {
           sandboxPolicy: event.sandboxPolicy,
           permissionProfileId: event.activePermissionProfileId,
         );
+        _conversationModeController.applyThreadSettings(event);
         _publishUiChanges(composer: true);
       case AgentAutoApprovalReviewEvent():
         if (!_shouldHandleEventForCurrentThread(
@@ -2369,6 +2600,7 @@ class AgentConversationViewModel extends ChangeNotifier {
         }
         _lastShownErrorMessage = null;
         _timeline.beginLiveTurnGroup(event.turn);
+        _conversationModeController.setTurnRunning(true);
         _consumeActivityDirty();
         _syncElapsedTicker();
         _flushStreamChangesNow(
@@ -2391,6 +2623,7 @@ class AgentConversationViewModel extends ChangeNotifier {
           status: event.status,
           duration: event.duration,
         );
+        _conversationModeController.setTurnRunning(isTurnRunning);
         // 回合结束后清除改道头栏提示，避免残留到下一回合。
         _modelRerouteNotice = null;
         if (!isTurnRunning &&
@@ -2542,6 +2775,21 @@ class AgentConversationViewModel extends ChangeNotifier {
           break;
         }
         _timeline.removePermissionRequest(event.requestId);
+        _flushStreamChangesNow(liveTurn: true, pendingInteraction: true);
+      case AgentQuestionRequestedEvent():
+        if (!_shouldHandleEventForCurrentThread(
+          sessionId: event.request.sessionId,
+          turnId: event.request.turnId,
+        )) {
+          break;
+        }
+        _timeline.addQuestionRequest(event.request);
+        _flushStreamChangesNow(liveTurn: true, pendingInteraction: true);
+      case AgentQuestionResolvedEvent():
+        if (!_shouldHandleEventForCurrentThread(sessionId: event.threadId)) {
+          break;
+        }
+        _timeline.removeQuestionRequest(event.requestId);
         _flushStreamChangesNow(liveTurn: true, pendingInteraction: true);
       case AgentPlanApprovalRequestedEvent():
         if (!_shouldHandleEventForCurrentThread(

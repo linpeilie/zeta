@@ -13,6 +13,7 @@ import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:pasteboard/pasteboard.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
+import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
@@ -41,6 +42,7 @@ part 'widgets/agent_pane_header.dart';
 part 'widgets/agent_pane_messages.dart';
 part 'widgets/agent_pane_plan_panel.dart';
 part 'widgets/agent_model_config.dart';
+part 'widgets/agent_mode_selector.dart';
 part 'widgets/agent_pane_sections.dart';
 part 'widgets/agent_pane_styles.dart';
 

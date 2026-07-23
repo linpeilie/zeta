@@ -475,6 +475,32 @@ List<_ContextRawItem> _buildContextRawItems({
                   },
           ),
         );
+      case AgentQuestionTimelineEntry(:final request):
+        if (filterNonChat) {
+          continue;
+        }
+        items.add(
+          _ContextRawItem(
+            id: request.id,
+            displayId: request.id,
+            kindLabel: '提问',
+            raw: request.raw.isNotEmpty
+                ? request.raw
+                : <String, Object?>{
+                    'id': request.id,
+                    'title': request.title,
+                    'description': ?request.description,
+                    'questions': request.questions
+                        .map(
+                          (question) => <String, Object?>{
+                            'id': question.questionId,
+                            'question': question.question,
+                          },
+                        )
+                        .toList(growable: false),
+                  },
+          ),
+        );
       case AgentPlanApprovalTimelineEntry(:final request):
         if (filterNonChat) {
           continue;

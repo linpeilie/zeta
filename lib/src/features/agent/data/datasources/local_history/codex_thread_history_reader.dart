@@ -2,6 +2,8 @@ part of '../app_server/codex_app_server_agent_provider.dart';
 
 /// 负责读取远端 thread/read 与本地 session jsonl 两类历史来源。
 class _CodexThreadHistoryReader {
+  static const _conversationModeCodec = _CodexConversationModeCodec();
+
   Future<AgentThreadHistorySnapshot?> threadHistoryFromSessionFile(
     String threadId,
     String? sessionPath,
@@ -92,8 +94,12 @@ class _CodexThreadHistoryReader {
               _numberToInt(turn['modelContextWindow']) ??
               _numberToInt(turn['model_context_window']),
           collaborationMode:
-              _string(turn['collaborationMode']) ??
-              _string(turn['collaboration_mode']),
+              _conversationModeCodec.modeIdFromValue(
+                turn['collaborationMode'],
+              ) ??
+              _conversationModeCodec.modeIdFromValue(
+                turn['collaboration_mode'],
+              ),
           tokenUsage: _tokenUsageFromTurnPayload(turn),
           errorMessage: _string(error['message']),
           errorCode: _codexErrorCode(error['codexErrorInfo']),

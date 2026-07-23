@@ -9,6 +9,7 @@ class _JsonlHistoryParser {
 
   final String fallbackThreadId;
   final String sessionPath;
+  static const _conversationModeCodec = _CodexConversationModeCodec();
 
   late final String _unscopedTurnId = '${fallbackThreadId}__unscoped__';
   late String _threadId = fallbackThreadId;
@@ -240,7 +241,10 @@ class _JsonlHistoryParser {
           _numberToInt(payload['model_context_window']) ??
           turn.modelContextWindow
       ..collaborationMode =
-          _string(payload['collaboration_mode_kind']) ?? turn.collaborationMode;
+          _conversationModeCodec.modeIdFromValue(
+            payload['collaboration_mode_kind'],
+          ) ??
+          turn.collaborationMode;
     turn.raw['taskStarted'] = payload;
   }
 
@@ -302,7 +306,10 @@ class _JsonlHistoryParser {
           _numberToInt(payload['model_context_window']) ??
           turn.modelContextWindow
       ..collaborationMode =
-          _string(payload['collaboration_mode']) ?? turn.collaborationMode;
+          _conversationModeCodec.modeIdFromValue(
+            payload['collaboration_mode'],
+          ) ??
+          turn.collaborationMode;
     turn.raw['turnContext'] = payload;
   }
 
@@ -816,7 +823,7 @@ class _JsonlTurnBuilder {
   String? model;
   String? effort;
   int? modelContextWindow;
-  String? collaborationMode;
+  AgentConversationModeId? collaborationMode;
   AgentTokenUsage? tokenUsage;
   String? errorMessage;
   String? errorCode;

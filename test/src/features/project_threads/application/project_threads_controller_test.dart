@@ -1147,6 +1147,7 @@ class _FakeAgentProvider
     String? message,
     List<AgentUserInput>? inputs,
     String? clientUserMessageId,
+    AgentTurnConfiguration configuration = const AgentTurnConfiguration(),
   }) async {
     return AgentTurn(id: 'turn-1', sessionId: session.id);
   }

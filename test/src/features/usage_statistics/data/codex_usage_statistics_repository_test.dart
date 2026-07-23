@@ -599,6 +599,7 @@ class _UsageProvider
     String? message,
     List<AgentUserInput>? inputs,
     String? clientUserMessageId,
+    AgentTurnConfiguration configuration = const AgentTurnConfiguration(),
   }) => throw UnimplementedError();
 
   @override

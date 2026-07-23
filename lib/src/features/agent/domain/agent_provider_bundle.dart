@@ -15,6 +15,7 @@ final class AgentProviderBundle {
     this.turnSteering,
     this.interactions,
     this.modelCatalog,
+    this.conversationModes,
     this.localThreadList,
     this.sessionConfiguration,
     this.planApproval,
@@ -45,7 +46,10 @@ final class AgentProviderBundle {
       interactions:
           capabilities.supportsPermissionRequests ||
               capabilities.supportsUserQuestions
-          ? _LegacyAgentInteractionPort(provider)
+          ? _LegacyAgentInteractionPort(provider, switch (provider) {
+              final AgentQuestionResponseProvider responder => responder,
+              _ => null,
+            })
           : null,
       modelCatalog:
           capabilities.supportsModelSelection ||
@@ -53,6 +57,11 @@ final class AgentProviderBundle {
               capabilities.supportsServiceTierSelection
           ? _LegacyAgentModelCatalogPort(provider)
           : null,
+      conversationModes: switch (provider) {
+        final AgentConversationModeCatalogProvider modeCatalogProvider =>
+          _LegacyAgentConversationModeCatalogPort(modeCatalogProvider),
+        _ => null,
+      },
       localThreadList: switch (provider) {
         final AgentLocalThreadListProvider localThreadListProvider =>
           _LegacyAgentLocalThreadListPort(localThreadListProvider),
@@ -79,6 +88,7 @@ final class AgentProviderBundle {
   final AgentTurnSteeringPort? turnSteering;
   final AgentInteractionPort? interactions;
   final AgentModelCatalogPort? modelCatalog;
+  final AgentConversationModeCatalogPort? conversationModes;
   final AgentLocalThreadListPort? localThreadList;
   final AgentSessionConfigurationPort? sessionConfiguration;
   final AgentPlanApprovalPort? planApproval;
@@ -123,12 +133,14 @@ abstract interface class AgentConversationPort {
     required AgentContext context,
   });
 
+  /// 发起新回合，并把 [configuration] 作为该次调用独占的不可变快照传给 Provider。
   Future<AgentTurn> sendMessage({
     required AgentSession session,
     required AgentContext context,
     String? message,
     List<AgentUserInput>? inputs,
     String? clientUserMessageId,
+    AgentTurnConfiguration configuration = const AgentTurnConfiguration(),
   });
 
   Future<void> cancelTurn(AgentTurn turn);
@@ -185,6 +197,8 @@ abstract interface class AgentTurnSteeringPort {
 abstract interface class AgentInteractionPort {
   Future<void> respondToPermission(AgentPermissionDecision decision);
 
+  Future<void> respondToQuestion(AgentQuestionResponse response);
+
   Future<void> approveGuardianDeniedAction({
     required String threadId,
     required Object event,
@@ -197,6 +211,12 @@ abstract interface class AgentModelCatalogPort {
     int limit = 20,
     bool includeHidden = false,
   });
+}
+
+/// Provider 中立的对话模式目录端口。
+abstract interface class AgentConversationModeCatalogPort {
+  /// 读取当前运行时可用的对话模式预设。
+  Future<AgentConversationModeCatalog> listConversationModes();
 }
 
 /// 只移除 Zeta 本地 thread 列表记录的可选端口。
@@ -292,6 +312,7 @@ final class _LegacyAgentConversationPort implements AgentConversationPort {
     String? message,
     List<AgentUserInput>? inputs,
     String? clientUserMessageId,
+    AgentTurnConfiguration configuration = const AgentTurnConfiguration(),
   }) {
     return _provider.sendMessage(
       session: session,
@@ -299,6 +320,7 @@ final class _LegacyAgentConversationPort implements AgentConversationPort {
       message: message,
       inputs: inputs,
       clientUserMessageId: clientUserMessageId,
+      configuration: configuration,
     );
   }
 
@@ -415,9 +437,10 @@ final class _LegacyAgentTurnSteeringPort implements AgentTurnSteeringPort {
 }
 
 final class _LegacyAgentInteractionPort implements AgentInteractionPort {
-  const _LegacyAgentInteractionPort(this._provider);
+  const _LegacyAgentInteractionPort(this._provider, this._questionResponder);
 
   final AgentProvider _provider;
+  final AgentQuestionResponseProvider? _questionResponder;
 
   @override
   Future<void> approveGuardianDeniedAction({
@@ -434,6 +457,17 @@ final class _LegacyAgentInteractionPort implements AgentInteractionPort {
   Future<void> respondToPermission(AgentPermissionDecision decision) {
     return _provider.respondToPermission(decision);
   }
+
+  @override
+  Future<void> respondToQuestion(AgentQuestionResponse response) {
+    final responder = _questionResponder;
+    if (responder == null) {
+      return Future<void>.error(
+        UnsupportedError('Provider does not support user questions'),
+      );
+    }
+    return responder.respondToQuestion(response);
+  }
 }
 
 final class _LegacyAgentModelCatalogPort implements AgentModelCatalogPort {
@@ -447,6 +481,18 @@ final class _LegacyAgentModelCatalogPort implements AgentModelCatalogPort {
     bool includeHidden = false,
   }) {
     return _provider.listModels(limit: limit, includeHidden: includeHidden);
+  }
+}
+
+final class _LegacyAgentConversationModeCatalogPort
+    implements AgentConversationModeCatalogPort {
+  const _LegacyAgentConversationModeCatalogPort(this._provider);
+
+  final AgentConversationModeCatalogProvider _provider;
+
+  @override
+  Future<AgentConversationModeCatalog> listConversationModes() {
+    return _provider.listConversationModes();
   }
 }
 

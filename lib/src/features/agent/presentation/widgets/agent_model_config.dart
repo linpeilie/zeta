@@ -399,7 +399,7 @@ class _ModelConfigTrigger extends StatelessWidget {
   }
 }
 
-/// Composer 选择器共用触发器：模型与权限使用同一套尺寸和交互反馈。
+/// Composer 选择器共用触发器：模式、模型与权限使用同一套尺寸和交互反馈。
 class _ComposerSelectorTrigger extends StatelessWidget {
   const _ComposerSelectorTrigger({
     required this.surfaceKey,

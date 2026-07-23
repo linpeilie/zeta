@@ -123,7 +123,10 @@ class FakeAgentProviderFactory implements AgentProviderFactory {
 
 class FakeAgentProvider
     with AgentProviderThreadLifecycleStub
-    implements AgentProvider, AgentLocalThreadListProvider {
+    implements
+        AgentProvider,
+        AgentLocalThreadListProvider,
+        AgentQuestionResponseProvider {
   FakeAgentProvider({
     this.emitToolAndApproval = false,
     this.emitCompletedCommentary = false,
@@ -171,8 +174,14 @@ class FakeAgentProvider
   final List<String> unsubscribedThreads = <String>[];
   final List<String> approvedRequests = <String>[];
   final List<String> deniedRequests = <String>[];
+  final List<AgentPermissionDecision> permissionDecisions =
+      <AgentPermissionDecision>[];
+  final List<AgentQuestionResponse> questionResponses =
+      <AgentQuestionResponse>[];
   final List<String> cancelledTurns = <String>[];
   final List<String> removedLocalThreads = <String>[];
+  final List<AgentTurnConfiguration> turnConfigurations =
+      <AgentTurnConfiguration>[];
 
   @override
   AgentProviderCapabilities get capabilities => declaredCapabilities;
@@ -274,7 +283,9 @@ class FakeAgentProvider
     String? message,
     List<AgentUserInput>? inputs,
     String? clientUserMessageId,
+    AgentTurnConfiguration configuration = const AgentTurnConfiguration(),
   }) async {
+    turnConfigurations.add(configuration);
     final resolved = _resolveInputs(message: message, inputs: inputs);
     sentInputs.add(resolved);
     final text = resolved
@@ -439,11 +450,17 @@ class FakeAgentProvider
 
   @override
   Future<void> respondToPermission(AgentPermissionDecision decision) async {
+    permissionDecisions.add(decision);
     if (decision.approved) {
       approvedRequests.add(decision.requestId);
     } else {
       deniedRequests.add(decision.requestId);
     }
+  }
+
+  @override
+  Future<void> respondToQuestion(AgentQuestionResponse response) async {
+    questionResponses.add(response);
   }
 
   @override

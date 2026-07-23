@@ -34,6 +34,13 @@ void main() {
         );
 
         final bundle = provider.bundle;
+        final turnConfiguration = AgentTurnConfiguration(
+          conversationMode: AgentConversationModeSelection(
+            modeId: AgentConversationModeId.plan,
+            effectiveModelId: 'model-1',
+            effectiveReasoningEffort: 'high',
+          ),
+        );
 
         expect(bundle.provider, same(provider));
         expect(bundle.runtime.config, same(provider.config));
@@ -51,6 +58,7 @@ void main() {
         expect(bundle.turnSteering, isNotNull);
         expect(bundle.interactions, isNotNull);
         expect(bundle.modelCatalog, isNotNull);
+        expect(bundle.conversationModes, isNotNull);
         expect(bundle.localThreadList, isNotNull);
         expect(bundle.sessionConfiguration, isNotNull);
         expect(bundle.planApproval, isNotNull);
@@ -66,6 +74,7 @@ void main() {
           session: started,
           context: const AgentContext(projectPath: '/workspace'),
           inputs: const <AgentUserInput>[AgentUserInput.text('hello')],
+          configuration: turnConfiguration,
         );
         await bundle.conversation.cancelTurn(turn);
         final page = await bundle.threadCatalog!.listThreads(
@@ -105,11 +114,21 @@ void main() {
             approved: true,
           ),
         );
+        await bundle.interactions!.respondToQuestion(
+          const AgentQuestionResponse(
+            requestId: 'question-1',
+            answers: <String, List<String>>{
+              'scope': <String>['source'],
+            },
+          ),
+        );
         await bundle.interactions!.approveGuardianDeniedAction(
           threadId: 'thread-1',
           event: 'guardian-event',
         );
         final models = await bundle.modelCatalog!.listModels();
+        final conversationModes = await bundle.conversationModes!
+            .listConversationModes();
         await bundle.localThreadList!.removeThreadFromList('thread-1');
         await bundle.sessionConfiguration!.setSessionConfigOption(
           sessionId: 'thread-1',
@@ -133,6 +152,7 @@ void main() {
         expect(provider.startedContexts.single.projectPath, '/workspace');
         expect(provider.resumedSessions, <String>['thread-2']);
         expect(provider.sentMessages, <String>['hello']);
+        expect(provider.sentConfigurations.single, same(turnConfiguration));
         expect(provider.cancelledTurns, <String>['turn-1']);
         expect(provider.listQueries, hasLength(1));
         expect(provider.listQueries.single.projectPath, '/workspace');
@@ -156,8 +176,26 @@ void main() {
         expect(provider.permissionDecisions, hasLength(1));
         expect(provider.permissionDecisions.single.requestId, 'permission-1');
         expect(provider.permissionDecisions.single.approved, isTrue);
+        expect(provider.questionResponses, const <AgentQuestionResponse>[
+          AgentQuestionResponse(
+            requestId: 'question-1',
+            answers: <String, List<String>>{
+              'scope': <String>['source'],
+            },
+          ),
+        ]);
         expect(provider.guardianApprovals, <String>['thread-1:guardian-event']);
         expect(provider.modelListCalls, 1);
+        expect(conversationModes.presets, hasLength(2));
+        expect(
+          conversationModes.presets.map((preset) => preset.id),
+          <AgentConversationModeId>[
+            AgentConversationModeId.defaultMode,
+            AgentConversationModeId.plan,
+          ],
+        );
+        expect(provider.conversationModeListCalls, 1);
+        expect(bundle.capabilities.supportsModeSelection, isFalse);
         expect(provider.removedThreads, <String>['thread-1']);
         expect(
           provider.sessionConfigWrites,
@@ -186,6 +224,7 @@ void main() {
       expect(bundle.turnSteering, isNull);
       expect(bundle.interactions, isNull);
       expect(bundle.modelCatalog, isNull);
+      expect(bundle.conversationModes, isNull);
       expect(bundle.localThreadList, isNull);
       expect(bundle.sessionConfiguration, isNull);
       expect(bundle.planApproval, isNull);
@@ -197,6 +236,48 @@ void main() {
       expect(bundle.runtime.runtimeScope, isNull);
     });
 
+    test('keeps concurrent turn configurations isolated by call', () async {
+      final provider = _MinimalBundleFakeProvider();
+      final bundle = provider.bundle;
+      final planConfiguration = AgentTurnConfiguration(
+        conversationMode: AgentConversationModeSelection(
+          modeId: AgentConversationModeId.plan,
+          effectiveModelId: 'model-plan',
+          effectiveReasoningEffort: 'high',
+        ),
+      );
+      final defaultConfiguration = AgentTurnConfiguration(
+        conversationMode: AgentConversationModeSelection(
+          modeId: AgentConversationModeId.defaultMode,
+          effectiveModelId: 'model-default',
+        ),
+      );
+
+      await Future.wait(<Future<AgentTurn>>[
+        bundle.conversation.sendMessage(
+          session: const AgentSession(
+            id: 'thread-plan',
+            providerId: defaultAgentProviderId,
+          ),
+          context: const AgentContext(projectPath: '/workspace/plan'),
+          message: 'plan',
+          configuration: planConfiguration,
+        ),
+        bundle.conversation.sendMessage(
+          session: const AgentSession(
+            id: 'thread-default',
+            providerId: defaultAgentProviderId,
+          ),
+          context: const AgentContext(projectPath: '/workspace/default'),
+          message: 'answer',
+          configuration: defaultConfiguration,
+        ),
+      ]);
+
+      expect(provider.sentConfigurations[0], same(planConfiguration));
+      expect(provider.sentConfigurations[1], same(defaultConfiguration));
+    });
+
     test('maps active provider capability domains to ports', () {
       final codex = _MinimalBundleFakeProvider(
         capabilities: AgentProviderCapabilities.codexAppServer,
@@ -205,12 +286,22 @@ void main() {
         config: AgentProviderConfig.defaultGrok,
         capabilities: AgentProviderCapabilities.grokAcp,
       ).bundle;
+      final cursor = _MinimalBundleFakeProvider(
+        config: const AgentProviderConfig(
+          id: cursorAgentProviderId,
+          displayName: 'Cursor',
+          kind: AgentProviderKind.cursorAcp,
+          command: 'cursor-agent',
+        ),
+        capabilities: AgentProviderCapabilities.unsupported,
+      ).bundle;
       expect(codex.threadCatalog, isNotNull);
       expect(codex.threadMutations, isNotNull);
       expect(codex.threadBranching, isNotNull);
       expect(codex.turnSteering, isNotNull);
       expect(codex.interactions, isNotNull);
       expect(codex.modelCatalog, isNotNull);
+      expect(codex.conversationModes, isNull);
 
       expect(grok.threadCatalog, isNotNull);
       expect(grok.threadMutations, isNull);
@@ -218,6 +309,9 @@ void main() {
       expect(grok.turnSteering, isNull);
       expect(grok.interactions, isNotNull);
       expect(grok.modelCatalog, isNotNull);
+      expect(grok.conversationModes, isNull);
+
+      expect(cursor.conversationModes, isNull);
     });
   });
 }
@@ -234,6 +328,8 @@ class _MinimalBundleFakeProvider implements AgentProvider {
   final List<AgentContext> startedContexts = <AgentContext>[];
   final List<String> resumedSessions = <String>[];
   final List<String> sentMessages = <String>[];
+  final List<AgentTurnConfiguration> sentConfigurations =
+      <AgentTurnConfiguration>[];
   final List<String> steeredMessages = <String>[];
   final List<String> cancelledTurns = <String>[];
   final List<AgentThreadListQuery> listQueries = <AgentThreadListQuery>[];
@@ -390,7 +486,9 @@ class _MinimalBundleFakeProvider implements AgentProvider {
     String? message,
     List<AgentUserInput>? inputs,
     String? clientUserMessageId,
+    AgentTurnConfiguration configuration = const AgentTurnConfiguration(),
   }) async {
+    sentConfigurations.add(configuration);
     sentMessages.add(
       (inputs ?? <AgentUserInput>[AgentUserInput.text(message ?? '')])
           .whereType<AgentTextUserInput>()
@@ -438,9 +536,11 @@ class _BundleFakeProvider extends _MinimalBundleFakeProvider
         AgentLocalThreadListProvider,
         AgentSessionConfigProvider,
         AgentPlanApprovalProvider,
+        AgentConversationModeCatalogProvider,
         AgentRuntimeInfoProvider,
         AgentRuntimeLifecycleProvider,
-        AgentRuntimeScopeProvider {
+        AgentRuntimeScopeProvider,
+        AgentQuestionResponseProvider {
   _BundleFakeProvider({
     this.runtimeInfo,
     this.runtimeScope,
@@ -452,6 +552,9 @@ class _BundleFakeProvider extends _MinimalBundleFakeProvider
   sessionConfigWrites = <({String sessionId, String configId, Object value})>[];
   final List<AgentPlanApprovalDecision> planDecisions =
       <AgentPlanApprovalDecision>[];
+  final List<AgentQuestionResponse> questionResponses =
+      <AgentQuestionResponse>[];
+  int conversationModeListCalls = 0;
 
   @override
   final AgentRuntimeInfo? runtimeInfo;
@@ -462,6 +565,24 @@ class _BundleFakeProvider extends _MinimalBundleFakeProvider
   @override
   AgentProviderLifecycleState get lifecycleState =>
       AgentProviderLifecycleState.ready;
+
+  @override
+  Future<AgentConversationModeCatalog> listConversationModes() async {
+    conversationModeListCalls += 1;
+    return AgentConversationModeCatalog(
+      presets: const <AgentConversationModePreset>[
+        AgentConversationModePreset(
+          id: AgentConversationModeId.defaultMode,
+          displayName: 'Default',
+        ),
+        AgentConversationModePreset(
+          id: AgentConversationModeId.plan,
+          displayName: 'Plan',
+          suggestedReasoningEffort: 'medium',
+        ),
+      ],
+    );
+  }
 
   @override
   Future<void> removeThreadFromList(String threadId) async {
@@ -489,5 +610,10 @@ class _BundleFakeProvider extends _MinimalBundleFakeProvider
   @override
   Future<void> respondToPlanApproval(AgentPlanApprovalDecision decision) async {
     planDecisions.add(decision);
+  }
+
+  @override
+  Future<void> respondToQuestion(AgentQuestionResponse response) async {
+    questionResponses.add(response);
   }
 }

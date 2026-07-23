@@ -1,8 +1,10 @@
 import 'package:zeta/src/features/agent/domain/agent_message_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_conversation_mode_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_model_selection_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_permission_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_plan_approval_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_question_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_session_config_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_session_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_thread_models.dart';
@@ -159,10 +161,12 @@ class AgentThreadSettingsUpdatedEvent extends AgentEvent {
   const AgentThreadSettingsUpdatedEvent({
     required this.threadId,
     this.model,
+    this.reasoningEffort,
+    this.serviceTierId,
+    this.collaborationMode,
     this.approvalPolicy,
     this.sandboxPolicy,
     this.activePermissionProfileId,
-    this.raw = const <String, Object?>{},
   });
 
   /// 线程 id。
@@ -170,6 +174,15 @@ class AgentThreadSettingsUpdatedEvent extends AgentEvent {
 
   /// 服务端当前生效的模型 id（若有）。
   final String? model;
+
+  /// 服务端当前生效的顶层推理深度（若有）。
+  final String? reasoningEffort;
+
+  /// 服务端当前生效的 service tier（若有）。
+  final String? serviceTierId;
+
+  /// 服务端确认的当前协作模式及其有效模型配置。
+  final AgentConversationModeSelection? collaborationMode;
 
   /// 审批策略字符串变体（若有）。
   final String? approvalPolicy;
@@ -179,9 +192,6 @@ class AgentThreadSettingsUpdatedEvent extends AgentEvent {
 
   /// 当前生效的 permission profile id。
   final String? activePermissionProfileId;
-
-  /// 原始通知 payload（含完整 `threadSettings`）。
-  final Map<String, Object?> raw;
 }
 
 /// Guardian 自动审批评审状态（`item/autoApprovalReview/*`）。
@@ -519,7 +529,7 @@ class AgentToolCallEvent extends AgentEvent {
   final AgentToolCall toolCall;
 }
 
-/// Provider 请求用户审批或输入。
+/// Provider 请求用户审批。
 class AgentPermissionRequestedEvent extends AgentEvent {
   const AgentPermissionRequestedEvent(this.request);
 
@@ -538,6 +548,32 @@ class AgentPermissionResolvedEvent extends AgentEvent {
   });
 
   /// 被解决的 JSON-RPC 请求 id，与 [AgentPermissionRequest.id] 对齐。
+  final String requestId;
+
+  /// 所属线程 id。
+  final String threadId;
+
+  /// 原始通知 payload。
+  final Map<String, Object?> raw;
+}
+
+/// Provider 请求用户回答一个或多个问题。
+class AgentQuestionRequestedEvent extends AgentEvent {
+  const AgentQuestionRequestedEvent(this.request);
+
+  /// 等待用户处理的提问请求。
+  final AgentQuestionRequest request;
+}
+
+/// 服务端提问已被他端解决，本端应撤销对应提问卡片。
+class AgentQuestionResolvedEvent extends AgentEvent {
+  const AgentQuestionResolvedEvent({
+    required this.requestId,
+    required this.threadId,
+    this.raw = const <String, Object?>{},
+  });
+
+  /// 被解决的请求 id，与 [AgentQuestionRequest.id] 对齐。
   final String requestId;
 
   /// 所属线程 id。

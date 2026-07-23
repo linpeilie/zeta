@@ -12,11 +12,16 @@ import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 part 'codex_app_server_client.dart';
+part 'codex_collaboration_mode_catalog_failure.dart';
 part 'codex_app_server_runtime_info.dart';
 part '../../mappers/codex_app_server_helpers.dart';
 part '../../mappers/codex_approval_mapper.dart';
+part '../../mappers/codex_collaboration_mode_mapper.dart';
+part '../../mappers/codex_conversation_mode_codec.dart';
 part '../../mappers/codex_model_list_mapper.dart';
 part '../../mappers/codex_notification_mapper.dart';
+part '../../mappers/codex_question_mapper.dart';
+part '../../mappers/codex_turn_start_params_encoder.dart';
 part '../local_history/codex_jsonl_history_parser.dart';
 part '../local_history/codex_thread_history_reader.dart';
 
@@ -36,7 +41,9 @@ class CodexAppServerAgentProvider
         AgentRuntimeInfoProvider,
         AgentRuntimeLifecycleProvider,
         AgentRuntimeScopeProvider,
-        AgentRefreshableModelCatalogProvider {
+        AgentRefreshableModelCatalogProvider,
+        AgentQuestionResponseProvider,
+        AgentConversationModeCatalogProvider {
   /// 创建 Codex app-server provider 实例。
   ///
   /// [config] 包含命令、参数、环境变量等 provider 配置。
@@ -66,14 +73,21 @@ class CodexAppServerAgentProvider
     );
     final threadHistoryReader = _CodexThreadHistoryReader();
     final modelListMapper = _CodexModelListMapper();
+    final collaborationModeMapper = _CodexCollaborationModeMapper();
+    final turnStartParamsEncoder = _CodexTurnStartParamsEncoder(
+      defaultModelId: config.defaultModel,
+    );
     _client = _CodexAppServerClient(
       peer: _peer,
       config: config,
       modelListMapper: modelListMapper,
+      collaborationModeMapper: collaborationModeMapper,
+      turnStartParamsEncoder: turnStartParamsEncoder,
       threadHistoryReader: threadHistoryReader,
     );
     _notificationMapper = _CodexNotificationMapper(providerId: config.id);
     _approvalMapper = _CodexApprovalMapper();
+    _questionMapper = _CodexQuestionMapper();
   }
 
   /// JSON-RPC 通信对等体，负责与 Codex app-server 进程交换消息。
@@ -82,6 +96,7 @@ class CodexAppServerAgentProvider
   late final _CodexAppServerClient _client;
   late final _CodexNotificationMapper _notificationMapper;
   late final _CodexApprovalMapper _approvalMapper;
+  late final _CodexQuestionMapper _questionMapper;
 
   /// 广播事件流控制器，所有 Agent 事件通过此流发出。
   final StreamController<AgentEvent> _events =
@@ -94,6 +109,10 @@ class CodexAppServerAgentProvider
   /// 等待用户审批的服务端 JSON-RPC 请求。
   final Map<String, _PendingApproval> _pendingApprovals =
       <String, _PendingApproval>{};
+
+  /// 等待用户回答的服务端 JSON-RPC 请求。
+  final Map<String, _PendingQuestion> _pendingQuestions =
+      <String, _PendingQuestion>{};
 
   /// 当前活跃的 Agent 会话，由 thread/start 或 thread/resume 设置。
   AgentSession? _session;
@@ -114,6 +133,17 @@ class CodexAppServerAgentProvider
 
   /// 按是否包含隐藏项区分的实例内模型目录缓存。
   final Map<bool, AgentModelList> _modelLists = <bool, AgentModelList>{};
+
+  /// 当前连接 epoch 已成功读取的对话模式目录。
+  AgentConversationModeCatalog? _conversationModeCatalog;
+  AgentRuntimeScope? _conversationModeCatalogScope;
+
+  /// 同一连接 epoch 内的目录请求只允许一个在途操作。
+  Future<AgentConversationModeCatalog>? _conversationModeCatalogOperation;
+  AgentRuntimeScope? _conversationModeCatalogOperationScope;
+
+  /// 服务端明确不支持实验方法后，同一 epoch 不再自动重试。
+  AgentRuntimeScope? _unsupportedConversationModeCatalogScope;
 
   /// 是否已完成 initialize 握手。
   bool _initialized = false;
@@ -405,6 +435,105 @@ class CodexAppServerAgentProvider
   }
 
   @override
+  Future<AgentConversationModeCatalog> listConversationModes() async {
+    await initialize();
+    final scope = _peer.runtimeScope;
+    if (scope == null) {
+      throw const ProviderConnectionClosedException(
+        'Codex Provider has no active runtime scope',
+      );
+    }
+
+    if (_conversationModeCatalogScope == scope) {
+      final cached = _conversationModeCatalog;
+      if (cached != null) {
+        return cached;
+      }
+    }
+    if (_unsupportedConversationModeCatalogScope == scope) {
+      throw UnsupportedError('${config.displayName} 当前运行时不支持对话模式目录');
+    }
+    if (_conversationModeCatalogOperationScope == scope) {
+      final inFlight = _conversationModeCatalogOperation;
+      if (inFlight != null) {
+        return inFlight;
+      }
+    }
+
+    final operation = _fetchConversationModeCatalog(scope);
+    _conversationModeCatalogOperation = operation;
+    _conversationModeCatalogOperationScope = scope;
+    try {
+      return await operation;
+    } finally {
+      if (identical(_conversationModeCatalogOperation, operation)) {
+        _conversationModeCatalogOperation = null;
+        _conversationModeCatalogOperationScope = null;
+      }
+    }
+  }
+
+  Future<AgentConversationModeCatalog> _fetchConversationModeCatalog(
+    AgentRuntimeScope scope,
+  ) async {
+    try {
+      final catalog = await _client.fetchCollaborationModeCatalog();
+      if (!_canCommitConversationModeCatalog(scope)) {
+        return catalog;
+      }
+
+      _conversationModeCatalog = catalog;
+      _conversationModeCatalogScope = scope;
+      final supportsModeSelection = _hasRequiredConversationModes(catalog);
+      _capabilities = _capabilities.copyWith(
+        supportsModeSelection: supportsModeSelection,
+      );
+      _log.fine(
+        'Loaded ${catalog.presets.length} Codex collaboration modes '
+        '(selectable=$supportsModeSelection)',
+      );
+      return catalog;
+    } catch (error) {
+      final failure = _classifyConversationModeCatalogFailure(error);
+      if (_canCommitConversationModeCatalog(scope) &&
+          failure ==
+              _CodexConversationModeCatalogFailureKind.unsupportedRuntime) {
+        _unsupportedConversationModeCatalogScope = scope;
+        _capabilities = _capabilities.copyWith(supportsModeSelection: false);
+      }
+      _log.warning(
+        'Could not load Codex collaboration modes '
+        '(failure=${failure.name}, error=${error.runtimeType})',
+      );
+      if (failure ==
+          _CodexConversationModeCatalogFailureKind.unsupportedRuntime) {
+        throw UnsupportedError('${config.displayName} 当前运行时不支持对话模式目录');
+      }
+      rethrow;
+    }
+  }
+
+  bool _canCommitConversationModeCatalog(AgentRuntimeScope scope) {
+    return !_disposed && _peer.runtimeScope == scope;
+  }
+
+  bool _hasRequiredConversationModes(AgentConversationModeCatalog catalog) {
+    var hasDefault = false;
+    var hasPlan = false;
+    for (final preset in catalog.presets) {
+      switch (preset.id.kind) {
+        case AgentConversationModeKind.defaultMode:
+          hasDefault = true;
+        case AgentConversationModeKind.plan:
+          hasPlan = true;
+        case AgentConversationModeKind.unknown:
+          break;
+      }
+    }
+    return hasDefault && hasPlan;
+  }
+
+  @override
   void updateModelSelection(AgentModelSelection selection) {
     _modelSelection = selection;
     _log.fine(
@@ -588,7 +717,10 @@ class CodexAppServerAgentProvider
     String? message,
     List<AgentUserInput>? inputs,
     String? clientUserMessageId,
+    AgentTurnConfiguration configuration = const AgentTurnConfiguration(),
   }) async {
+    // 编码前置校验必须发生在 initialize 之前，非法模式不得触发任何 RPC。
+    _client.validateTurnConfiguration(configuration);
     await initialize();
     final resolvedInputs = _resolveUserInputs(message: message, inputs: inputs);
     _log.info('Starting Codex turn for thread ${session.id}');
@@ -605,6 +737,7 @@ class CodexAppServerAgentProvider
       context: context,
       selection: _modelSelection,
       permissionSelection: _permissionSelection,
+      turnConfiguration: configuration,
       clientUserMessageId: clientUserMessageId,
     );
     _markRunningTurn(session.id, turn.id);
@@ -687,6 +820,27 @@ class CodexAppServerAgentProvider
   }
 
   @override
+  Future<void> respondToQuestion(AgentQuestionResponse response) async {
+    final pending = _pendingQuestions.remove(response.requestId);
+    if (pending == null) {
+      _log.warning(
+        'Ignoring response for unknown Codex question ${response.requestId}',
+      );
+      return;
+    }
+
+    _log.info(
+      'Responding to Codex user question '
+      '(${response.answers.length} answered questions)',
+    );
+    await _peer.sendScopedResponse(
+      pending.requestId,
+      runtimeScope: pending.runtimeScope,
+      result: _questionMapper.response(response),
+    );
+  }
+
+  @override
   Future<void> dispose() {
     final existing = _disposeOperation;
     if (existing != null) {
@@ -700,10 +854,11 @@ class CodexAppServerAgentProvider
   Future<void> _disposeOnce() async {
     _log.fine('Disposing Agent provider ${config.id}');
     _disposed = true;
+    _clearConversationModeCatalogState();
     _operationScheduler.beginClosing();
     _peer.beginClosing();
 
-    _resolvePendingApprovalsOnConnectionClosed();
+    _resolvePendingInteractionsOnConnectionClosed();
 
     await _notificationSubscription?.cancel();
     await _serverRequestSubscription?.cancel();
@@ -712,6 +867,15 @@ class CodexAppServerAgentProvider
     await _peer.close();
     await _operationScheduler.close();
     await _events.close();
+  }
+
+  void _clearConversationModeCatalogState() {
+    _conversationModeCatalog = null;
+    _conversationModeCatalogScope = null;
+    _conversationModeCatalogOperation = null;
+    _conversationModeCatalogOperationScope = null;
+    _unsupportedConversationModeCatalogScope = null;
+    _capabilities = _capabilities.copyWith(supportsModeSelection: false);
   }
 
   /// 订阅 JSON-RPC 对等体的各事件流。
@@ -827,9 +991,24 @@ class CodexAppServerAgentProvider
       }
     }
 
-    // 他端已解决审批：只清本地 pending，不再向服务端回写响应。
+    // 他端已解决交互：只清本地 pending，不再向服务端回写响应。
     for (final event in mapping.events) {
       if (event is AgentPermissionResolvedEvent) {
+        final pendingQuestion = _pendingQuestions.remove(event.requestId);
+        if (pendingQuestion != null) {
+          _log.info(
+            'Codex user question ${event.requestId} resolved externally; '
+            'dismissing local question',
+          );
+          _events.add(
+            AgentQuestionResolvedEvent(
+              requestId: event.requestId,
+              threadId: event.threadId,
+              raw: event.raw,
+            ),
+          );
+          continue;
+        }
         final pending = _pendingApprovals.remove(event.requestId);
         if (pending != null) {
           _log.info(
@@ -872,6 +1051,13 @@ class CodexAppServerAgentProvider
 
   /// 将服务端审批请求委托给审批映射器，再由 provider 保存待处理状态。
   Future<void> _handleServerRequest(JsonRpcRequest request) async {
+    if (request.method == 'item/tool/requestUserInput') {
+      final mapped = _questionMapper.mapRequest(request);
+      _pendingQuestions[mapped.pendingQuestion.id] = mapped.pendingQuestion;
+      _events.add(mapped.event);
+      return;
+    }
+
     // 未知或不支持的请求立即回 JSON-RPC error，不进 UI；伪造 `{}`/null
     // 成功应答会违反响应 schema，可能让服务端 turn 永久卡住。
     final rejection = _approvalMapper.rejectionFor(request);
@@ -901,11 +1087,11 @@ class CodexAppServerAgentProvider
     }
     _initialized = false;
     _runningTurnIdsBySessionId.clear();
-    _resolvePendingApprovalsOnConnectionClosed();
+    _resolvePendingInteractionsOnConnectionClosed();
     _emitUnavailable('Codex App Server 连接已关闭');
   }
 
-  void _resolvePendingApprovalsOnConnectionClosed() {
+  void _resolvePendingInteractionsOnConnectionClosed() {
     for (final pending in _pendingApprovals.values) {
       _events.add(
         AgentPermissionResolvedEvent(
@@ -916,6 +1102,16 @@ class CodexAppServerAgentProvider
       );
     }
     _pendingApprovals.clear();
+    for (final pending in _pendingQuestions.values) {
+      _events.add(
+        AgentQuestionResolvedEvent(
+          requestId: pending.id,
+          threadId: _string(pending.params['threadId']) ?? '',
+          raw: const <String, Object?>{'reason': 'connectionClosed'},
+        ),
+      );
+    }
+    _pendingQuestions.clear();
   }
 
   /// 发出 provider 连接状态事件。

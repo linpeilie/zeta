@@ -74,6 +74,35 @@ void main() {
       },
     );
 
+    test('rejects turn mode configuration before sending a request', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+
+      await expectLater(
+        provider.sendMessage(
+          session: const AgentSession(
+            id: 'sess-1',
+            providerId: grokAgentProviderId,
+          ),
+          context: const AgentContext(projectPath: '/repo'),
+          message: 'hello',
+          configuration: AgentTurnConfiguration(
+            conversationMode: AgentConversationModeSelection(
+              modeId: AgentConversationModeId.plan,
+              effectiveModelId: 'grok-4.5',
+            ),
+          ),
+        ),
+        throwsA(isA<UnsupportedError>()),
+      );
+
+      expect(peer.requestMethods, isEmpty);
+    });
+
     test(
       'enriches restored Grok history with initialize model context window',
       () async {

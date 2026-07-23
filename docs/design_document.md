@@ -1,6 +1,6 @@
 # 设计文档
 
-最后更新：2026-07-17
+最后更新：2026-07-23
 
 ## 1. 设计目标
 
@@ -57,11 +57,13 @@ AgentConversationViewModel
   -> AgentConversationTimelineStore
   -> AgentConversationUiSignals
   -> AgentConversationModelSelectionController
+  -> AgentConversationModeController
   -> AgentProviderBundle
     -> AgentRuntimePort / AgentConversationPort
     -> AgentThreadCatalogPort? / AgentThreadMutationsPort? / AgentThreadBranchingPort?
     -> AgentTurnSteeringPort? / AgentInteractionPort? / AgentModelCatalogPort?
     -> AgentLocalThreadListPort? / AgentSessionConfigurationPort? / AgentPlanApprovalPort?
+    -> AgentConversationModeCatalogPort?
     -> AgentProvider
       -> CodexAppServerAgentProvider | GrokAcpAgentProvider
         -> JsonRpcPeer
@@ -295,14 +297,16 @@ repository；协议 transport 不记录 prompt、文件内容或 stderr 原文�
 功能缺口与分阶段适配见
 [`plan/codex_app_server_adaptation_plan.md`](../plan/codex_app_server_adaptation_plan.md)。
 
-**适配进度（截至 2026-07-16 / Phase 2）：** Phase 0 完成协议对齐；Phase 1 完成
+**适配进度（截至 2026-07-23）：** Phase 0 完成协议对齐；Phase 1 完成
 核心流式体验；Phase 2 已完成 Provider Bundle 与多 Provider 能力端口迁移，并覆盖：
 
 - thread 生命周期管理（重命名/归档/删除/分叉/按历史 turn 创建分支/压缩）。
-- `AgentConversationViewModel` 的会话、历史、steer、权限响应、Guardian 放行、
-  模型目录与计划审批路由。
+- `AgentConversationViewModel` 的会话、历史、steer、权限响应、独立用户提问响应、
+  Guardian 放行、模型目录与计划审批路由。
 - `ProjectThreadsController` 的列表、重命名、归档、删除与分叉。
 - Codex / Grok 的 bundle 端口一致性契约测试，以及 Cursor 退役不可达性测试。
+- Codex Default / Plan 运行时目录、逐 turn mode 快照、settings/history 回写与
+  Composer 紧凑选择器；不支持 mode 的 Provider 保持原布局和普通发送路径。
 
 当前剩余的收口项是：从旧 `AgentProvider` 删除已迁移的方法和静态布尔字段。Permission
 Profile 仍仅承诺稳定的发现能力，不承诺实验性选择能力。
@@ -313,16 +317,40 @@ Profile 仍仅承诺稳定的发现能力，不承诺实验性选择能力。
 - 回合级聚合 diff（「本回合改动」）。
 - 线程状态胶囊：等待审批 / 等待输入；列表侧同步 waiting 标志。
 - 权限、用户提问与计划审批统一显示在 Composer 上方的 Pending Interaction Dock；
+  `AgentPermissionRequest`、`AgentQuestionRequest` 与 `AgentPlanApprovalRequest` 分属三条
+  领域链，只共享 Dock 布局；对应结果分别经 permission decision、question answers
+  和 plan approval decision 回写。提问 Skip 是空 answers，不等价于 deny/cancel。
   Dock 使用独立 pending 列表、按权限优先顺序展示，限高为 Agent 面板高度的 35%
   （最高 360px）并内部滚动，时间线不重复渲染待处理卡片。
 - 模型改道、弃用通知等系统提示；token 用量含 `modelContextWindow` 占用比例。
 - Composer 使用单一模型配置入口：Popover 以模型列表为一级信息，选中后在该行下
   内嵌 Reasoning effort 与 Fast，运行中更改明确标记为下一回合生效。
+- Composer 在 Provider 支持时显示 Default / Plan 模式选择器。模式选择是 thread 粘性、
+  下一回合生效的 draft，不覆盖用户保存的模型偏好；显式 Plan 使用 preset 的有效模型与
+  reasoning，切回 Default 通过下一次 turn 明确提交。
 - 18 种 ThreadItem 在实时路径与 `thread/read` / JSONL 历史中一致映射。
 - 输入区支持本地图片（选图 / 粘贴落盘）随 turn 发送，时间线气泡预览。
 - Thread 列表：搜索、活动/归档切换、右键重命名/归档/删除/分叉。
 - 编辑上一条用户消息时保留原 thread，并通过 `thread/fork.lastTurnId` 创建分支后
   重发；工作区文件改动不会随会话分支而回滚。
+
+### Conversation mode 配置
+
+Conversation mode 遵循“运行时能力目录 → application 状态机 → turn 不可变快照 →
+data 精确编码”的单向流：
+
+- Domain 用 `AgentConversationModeId`、preset、selection 和 catalog 表达 Provider 中立
+  语义；`AgentProviderBundle.conversationModes` 是可选能力端口。
+- `AgentConversationModeController` 按 Provider/thread scope 管理 draft、confirmed、
+  pending、错误和 generation。快速切换 Provider/thread 时，旧异步结果不得覆盖新上下文。
+- `AgentConversationViewModel` 在发送前冻结 mode 与有效模型配置到
+  `AgentTurnConfiguration`。活动 turn 中改变选择只更新下一回合 draft，不修改当前 turn。
+- Codex data 层独占 `collaborationMode/list`、`turn/start.collaborationMode` 和
+  `thread/settings/updated` JSON；显式 mode 与顶层 model / effort 互斥。
+- 本地 thread 快照是重启恢复的真源之一，服务端 settings 是确认态。`thread/read` 缺少
+  mode 时不覆盖本地值；收到有效 settings 后收敛。未知 mode 可只读展示但不可主动选择。
+- experimental 探测失败只关闭 mode 入口；普通 Default 会话不依赖该端口，Grok/Cursor
+  不通过 Prompt 或全局 Provider 状态伪造 Plan。
 
 ### 输入框模型配置
 

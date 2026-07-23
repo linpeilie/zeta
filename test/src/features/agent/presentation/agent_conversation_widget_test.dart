@@ -9,6 +9,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/main.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
@@ -2823,6 +2824,184 @@ void main() {
     },
   );
 
+  testWidgets(
+    'keeps Plan output and request_user_input usable in a narrow viewport',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(460, 720));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      tester.platformDispatcher.textScaleFactorTestValue = 1.4;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final session = activeProjectSessionStore(tempDirectories);
+      final provider = _ModeCapableFakeAgentProvider(completeTurns: false);
+
+      await tester.pumpWidget(
+        MainApp(
+          enableNativeWindowFrame: false,
+          sessionLoader: session.load,
+          sessionSaver: session.save,
+          agentProviderFactory: FakeAgentProviderFactory(provider),
+          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        ),
+      );
+      await pumpUntilAgentComposer(tester);
+      final modeSelector = find.byKey(
+        const ValueKey<String>('agent-mode-selector'),
+      );
+      await pumpUntilCondition(
+        tester,
+        () => modeSelector.evaluate().isNotEmpty,
+        failureMessage: 'Conversation mode selector did not become ready',
+      );
+
+      await tester.tap(modeSelector);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('agent-mode-option-plan')),
+      );
+      await pumpUntilCondition(
+        tester,
+        () => find
+            .byKey(const ValueKey<String>('agent-mode-selector-popover'))
+            .evaluate()
+            .isEmpty,
+        failureMessage: 'Conversation mode selector did not close',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('agent-message-input')),
+        'Plan this change',
+      );
+      await tester.pump();
+      final sendButton = find.byKey(
+        const ValueKey<String>('agent-send-button'),
+      );
+      await pumpUntilCondition(
+        tester,
+        () => sendButton.hitTestable().evaluate().isNotEmpty,
+        failureMessage: 'Plan message did not become submittable',
+      );
+      await tester.tap(sendButton);
+      await pumpUntilCondition(
+        tester,
+        () => provider.turnConfigurations.isNotEmpty,
+        failureMessage: 'Plan turn configuration was not sent',
+      );
+      await pumpLiveAgentUi(tester);
+
+      final selection = provider.turnConfigurations.single.conversationMode!;
+      expect(selection.modeId, AgentConversationModeId.plan);
+      expect(selection.effectiveReasoningEffort, 'medium');
+
+      provider
+        ..emit(
+          const AgentMessageDeltaEvent(
+            messageId: 'plan-live',
+            delta: '# Live plan\n',
+            role: AgentMessageRole.agent,
+            kind: AgentMessageKind.plan,
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+        )
+        ..emit(
+          const AgentMessageDeltaEvent(
+            messageId: 'plan-live',
+            delta: '\n- Inspect\n- Implement',
+            role: AgentMessageRole.agent,
+            kind: AgentMessageKind.plan,
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+        )
+        ..emit(
+          const AgentPlanUpdatedEvent(
+            entries: <AgentPlanEntry>[
+              AgentPlanEntry(content: 'Inspect', status: 'completed'),
+              AgentPlanEntry(content: 'Implement', status: 'inProgress'),
+            ],
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+        );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(
+        find.byKey(const ValueKey<String>('agent-plan-card-plan-live')),
+        findsOneWidget,
+      );
+      expect(find.text('Live plan'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('agent-active-plan-card-turn-1')),
+        findsOneWidget,
+      );
+
+      provider.emit(
+        const AgentQuestionRequestedEvent(
+          AgentQuestionRequest(
+            id: 'question-live',
+            title: 'Choose scope',
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+            questions: <AgentUserInputQaPair>[
+              AgentUserInputQaPair(
+                questionId: 'scope',
+                question: 'Select scopes',
+                allowMultiple: true,
+                optionItems: <AgentUserInputOption>[
+                  AgentUserInputOption(id: 'source', label: 'Source code'),
+                  AgentUserInputOption(id: 'tests', label: 'Tests'),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('agent-question-question-live-scope-source'),
+        ),
+      );
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('agent-question-question-live-scope-tests'),
+        ),
+      );
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('agent-question-submit-question-live'),
+        ),
+      );
+      await tester.pump();
+
+      expect(provider.questionResponses, hasLength(1));
+      expect(provider.questionResponses.single.answers['scope'], <String>[
+        'source',
+        'tests',
+      ]);
+      expect(provider.permissionDecisions, isEmpty);
+
+      provider.emit(
+        const AgentMessageUpdatedEvent(
+          messageId: 'plan-live',
+          kind: AgentMessageKind.plan,
+          text: '# Final plan\n\n- Inspect\n- Implement\n- Verify',
+          role: AgentMessageRole.agent,
+          status: AgentMessageStatus.completed,
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Final plan'), findsOneWidget);
+      expect(find.text('Live plan'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('renders plan messages as collapsible markdown cards', (
     tester,
   ) async {
@@ -3124,4 +3303,53 @@ Future<void> pumpUntilAgentComposer(WidgetTester tester) {
 Future<void> pumpLiveAgentUi(WidgetTester tester) async {
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 300));
+}
+
+class _ModeCapableFakeAgentProvider extends FakeAgentProvider
+    implements AgentConversationModeCatalogProvider {
+  _ModeCapableFakeAgentProvider({required super.completeTurns})
+    : super(
+        declaredCapabilities: AgentProviderCapabilities.codexAppServer.copyWith(
+          supportsModeSelection: true,
+        ),
+      );
+
+  @override
+  Future<AgentModelList> listModels({
+    int limit = 20,
+    bool includeHidden = false,
+  }) async {
+    return const AgentModelList(
+      models: <AgentModelInfo>[
+        AgentModelInfo(
+          id: 'gpt-5.6',
+          model: 'gpt-5.6',
+          displayName: 'GPT-5.6',
+          supportedReasoningEfforts: <AgentModelReasoningEffort>[
+            AgentModelReasoningEffort(effort: 'medium'),
+            AgentModelReasoningEffort(effort: 'high'),
+          ],
+          defaultReasoningEffort: 'high',
+          isDefault: true,
+        ),
+      ],
+    );
+  }
+
+  @override
+  Future<AgentConversationModeCatalog> listConversationModes() async {
+    return AgentConversationModeCatalog(
+      presets: const <AgentConversationModePreset>[
+        AgentConversationModePreset(
+          id: AgentConversationModeId.defaultMode,
+          displayName: 'Default',
+        ),
+        AgentConversationModePreset(
+          id: AgentConversationModeId.plan,
+          displayName: 'Plan',
+          suggestedReasoningEffort: 'medium',
+        ),
+      ],
+    );
+  }
 }

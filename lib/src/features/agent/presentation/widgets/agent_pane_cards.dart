@@ -579,7 +579,6 @@ class _AgentPermissionCard extends StatefulWidget {
   final void Function({
     required bool approved,
     bool cancelTurn,
-    Map<String, List<String>> answers,
     AgentCommandApprovalDecisionKind? commandDecision,
     List<String> execpolicyAmendment,
   })
@@ -592,39 +591,10 @@ class _AgentPermissionCard extends StatefulWidget {
 }
 
 class _AgentPermissionCardState extends State<_AgentPermissionCard> {
-  /// questionId → 已选答案（选项标签或自由文本）。
-  late final Map<String, List<String>> _answers = <String, List<String>>{};
-  late final Map<String, TextEditingController> _otherControllers =
-      <String, TextEditingController>{};
-
   AgentPermissionRequest get request => widget.request;
 
   @override
-  void initState() {
-    super.initState();
-    for (final question in request.questions) {
-      if (question.isOther || question.resolvedOptions.isEmpty) {
-        _otherControllers[question.questionId] = TextEditingController();
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    for (final controller in _otherControllers.values) {
-      controller.dispose();
-    }
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (request.kind == AgentPermissionKind.userInput &&
-        request.questions.isNotEmpty) {
-      return _buildUserInputForm(context);
-    }
-    return _buildApprovalCard(context);
-  }
+  Widget build(BuildContext context) => _buildApprovalCard(context);
 
   Widget _buildApprovalCard(BuildContext context) {
     final colors = IdeColors.of(context);
@@ -775,7 +745,61 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
     );
   }
 
-  Widget _buildUserInputForm(BuildContext context) {
+  String _autoReviewLabel(AgentAutoApprovalReviewEvent review) {
+    final status = switch (review.status) {
+      'inProgress' => 'Auto-reviewing…',
+      'approved' => 'Auto-review approved',
+      'denied' => 'Auto-review denied',
+      'timedOut' => 'Auto-review timed out',
+      'aborted' => 'Auto-review aborted',
+      _ => 'Auto-review: ${review.status}',
+    };
+    final rationale = review.rationale?.trim();
+    if (rationale == null || rationale.isEmpty) {
+      return status;
+    }
+    return '$status · $rationale';
+  }
+}
+
+/// 独立用户提问卡；只表达提交 answers 或跳过，不复用 approve/deny。
+class _AgentQuestionCard extends StatefulWidget {
+  const _AgentQuestionCard({required this.request, required this.onRespond});
+
+  final AgentQuestionRequest request;
+  final ValueChanged<Map<String, List<String>>> onRespond;
+
+  @override
+  State<_AgentQuestionCard> createState() => _AgentQuestionCardState();
+}
+
+class _AgentQuestionCardState extends State<_AgentQuestionCard> {
+  final Map<String, List<String>> _answers = <String, List<String>>{};
+  final Map<String, TextEditingController> _otherControllers =
+      <String, TextEditingController>{};
+
+  AgentQuestionRequest get request => widget.request;
+
+  @override
+  void initState() {
+    super.initState();
+    for (final question in request.questions) {
+      if (question.isOther || question.resolvedOptions.isEmpty) {
+        _otherControllers[question.questionId] = TextEditingController();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _otherControllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     return IdeStatusCard(
@@ -812,23 +836,16 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
         spacing: IdeSpacing.space8,
         runSpacing: IdeSpacing.space6,
         children: [
-          sf.GhostButton(
-            key: ValueKey('agent-permission-cancel-${request.id}'),
-            onPressed: () =>
-                widget.onRespond(approved: false, cancelTurn: true),
-            size: sf.ButtonSize.small,
-            child: const Text('Cancel turn'),
-          ),
           sf.OutlineButton(
-            key: ValueKey('agent-permission-deny-${request.id}'),
-            onPressed: () => widget.onRespond(approved: false),
+            key: ValueKey('agent-question-skip-${request.id}'),
+            onPressed: () => widget.onRespond(const <String, List<String>>{}),
             size: sf.ButtonSize.small,
             leading: const Icon(Icons.close_rounded, size: 16),
             child: const Text('Skip'),
           ),
           sf.PrimaryButton(
-            key: ValueKey('agent-permission-approve-${request.id}'),
-            onPressed: _submitUserInput,
+            key: ValueKey('agent-question-submit-${request.id}'),
+            onPressed: _submit,
             size: sf.ButtonSize.small,
             leading: const Icon(Icons.check_rounded, size: 16),
             child: const Text('Submit'),
@@ -868,7 +885,7 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
               for (final option in question.resolvedOptions)
                 IdeTab(
                   key: ValueKey(
-                    'agent-user-input-${request.id}-${question.questionId}-${option.id}',
+                    'agent-question-${request.id}-${question.questionId}-${option.id}',
                   ),
                   label: option.label,
                   selected: selected.contains(option.id),
@@ -882,7 +899,7 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
           const SizedBox(height: IdeSpacing.space6),
           sf.TextField(
             key: ValueKey(
-              'agent-user-input-other-${request.id}-${question.questionId}',
+              'agent-question-other-${request.id}-${question.questionId}',
             ),
             controller: otherController,
             placeholder: Text(
@@ -924,14 +941,13 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
     final trimmed = value.trim();
     setState(() {
       if (trimmed.isEmpty) {
-        // 保留已选选项；仅清掉自由文本。
         final current = _answers[questionId];
         if (current != null) {
           final optionsOnly = current
               .where(
                 (answer) => request.questions
-                    .where((q) => q.questionId == questionId)
-                    .expand((q) => q.options)
+                    .where((question) => question.questionId == questionId)
+                    .expand((question) => question.options)
                     .contains(answer),
               )
               .toList();
@@ -947,7 +963,7 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
     });
   }
 
-  void _submitUserInput() {
+  void _submit() {
     final answers = <String, List<String>>{};
     for (final question in request.questions) {
       final selected = _answers[question.questionId];
@@ -960,23 +976,7 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
         answers[question.questionId] = <String>[other];
       }
     }
-    widget.onRespond(approved: true, answers: answers);
-  }
-
-  String _autoReviewLabel(AgentAutoApprovalReviewEvent review) {
-    final status = switch (review.status) {
-      'inProgress' => 'Auto-reviewing…',
-      'approved' => 'Auto-review approved',
-      'denied' => 'Auto-review denied',
-      'timedOut' => 'Auto-review timed out',
-      'aborted' => 'Auto-review aborted',
-      _ => 'Auto-review: ${review.status}',
-    };
-    final rationale = review.rationale?.trim();
-    if (rationale == null || rationale.isEmpty) {
-      return status;
-    }
-    return '$status · $rationale';
+    widget.onRespond(answers);
   }
 }
 

@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -1267,6 +1268,180 @@ void main() {
       });
 
       testWidgets(
+        'mode selector leads composer controls and dispatches one selection',
+        (tester) async {
+          final provider = _ModeFakeAgentProvider(models: _modelConfigList);
+          final modeController = AgentConversationModeController();
+          final viewModel = _createViewModel(
+            provider,
+            conversationModeController: modeController,
+          );
+          addTearDown(provider.dispose);
+          addTearDown(modeController.dispose);
+          addTearDown(viewModel.dispose);
+          await viewModel.loadModels();
+          await tester.pumpWidget(_TestApp(viewModel: viewModel));
+          await viewModel.switchThread(
+            _thread(id: 'thread-mode', title: 'Mode thread'),
+          );
+          provider.emitEvent(
+            const AgentSessionConfigUpdatedEvent(
+              sessionId: 'thread-mode',
+              options: <AgentSessionConfigOption>[
+                AgentSessionConfigOption(
+                  id: 'cursor-model',
+                  name: 'Session model',
+                  category: 'model',
+                  kind: AgentSessionConfigOptionKind.select,
+                  currentValue: 'fast',
+                  values: <AgentSessionConfigValue>[
+                    AgentSessionConfigValue(id: 'fast', label: 'Fast'),
+                    AgentSessionConfigValue(id: 'smart', label: 'Smart'),
+                  ],
+                ),
+              ],
+            ),
+          );
+          await _pumpUntilFinder(
+            tester,
+            find.byKey(const ValueKey('agent-mode-selector')),
+          );
+
+          final modeSelector = find.byKey(
+            const ValueKey('agent-mode-selector'),
+          );
+          final sessionSelector = find.byKey(
+            const ValueKey('agent-session-config-cursor-model'),
+          );
+          final modelSelector = find.byKey(
+            const ValueKey('agent-model-selector'),
+          );
+          final permissionSelector = find.byKey(
+            const ValueKey('agent-permission-policy-selector'),
+          );
+          expect(modeSelector, findsOneWidget);
+          expect(sessionSelector, findsOneWidget);
+          expect(modelSelector, findsOneWidget);
+          expect(permissionSelector, findsOneWidget);
+          expect(
+            tester.getTopLeft(modeSelector).dx,
+            lessThan(tester.getTopLeft(sessionSelector).dx),
+          );
+          expect(
+            tester.getTopLeft(sessionSelector).dx,
+            lessThan(tester.getTopLeft(modelSelector).dx),
+          );
+          expect(
+            tester.getTopLeft(modelSelector).dx,
+            lessThan(tester.getTopLeft(permissionSelector).dx),
+          );
+
+          var selectionNotifications = 0;
+          modeController.addListener(() {
+            selectionNotifications += 1;
+          });
+          await tester.tap(modeSelector);
+          await tester.pump(const Duration(milliseconds: 300));
+          await tester.tap(
+            find.byKey(const ValueKey('agent-mode-option-plan')),
+          );
+          await tester.pump();
+
+          expect(
+            viewModel.selectedConversationMode,
+            AgentConversationModeId.plan,
+          );
+          expect(selectionNotifications, 1);
+        },
+      );
+
+      testWidgets(
+        'unsupported provider keeps composer free of mode placeholders',
+        (tester) async {
+          final provider = _FakeAgentProvider(models: _modelConfigList);
+          final viewModel = _createViewModel(provider);
+          addTearDown(provider.dispose);
+          addTearDown(viewModel.dispose);
+          await viewModel.loadModels();
+          await tester.pumpWidget(_TestApp(viewModel: viewModel));
+          await _pumpAgentPaneUi(tester);
+
+          expect(
+            find.byKey(const ValueKey('agent-mode-selector')),
+            findsNothing,
+          );
+          expect(
+            find.byKey(const ValueKey('agent-model-selector')),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(const ValueKey('agent-permission-policy-selector')),
+            findsOneWidget,
+          );
+          expect(tester.takeException(), isNull);
+        },
+      );
+
+      testWidgets(
+        'mode selector stays in the horizontal toolbar on narrow windows',
+        (tester) async {
+          tester.view.devicePixelRatio = 1;
+          tester.view.physicalSize = const Size(360, 560);
+          addTearDown(() {
+            tester.view.resetPhysicalSize();
+            tester.view.resetDevicePixelRatio();
+          });
+          final provider = _ModeFakeAgentProvider(models: _modelConfigList);
+          final viewModel = _createViewModel(provider);
+          addTearDown(provider.dispose);
+          addTearDown(viewModel.dispose);
+          await viewModel.loadModels();
+          await tester.pumpWidget(_TestApp(viewModel: viewModel));
+          await viewModel.switchThread(
+            _thread(id: 'thread-narrow-mode', title: 'Narrow mode thread'),
+          );
+          provider.emitEvent(
+            const AgentSessionConfigUpdatedEvent(
+              sessionId: 'thread-narrow-mode',
+              options: <AgentSessionConfigOption>[
+                AgentSessionConfigOption(
+                  id: 'cursor-model',
+                  name: 'Session model',
+                  category: 'model',
+                  kind: AgentSessionConfigOptionKind.select,
+                  currentValue: 'fast',
+                  values: <AgentSessionConfigValue>[
+                    AgentSessionConfigValue(id: 'fast', label: 'Fast'),
+                  ],
+                ),
+              ],
+            ),
+          );
+          await _pumpUntilFinder(
+            tester,
+            find.byKey(const ValueKey('agent-mode-selector')),
+          );
+
+          final selectorScroll = find.byKey(
+            const ValueKey('agent-composer-selector-scroll'),
+          );
+          expect(
+            find.byKey(const ValueKey('agent-composer-compact-toolbar')),
+            findsOneWidget,
+          );
+          expect(selectorScroll, findsOneWidget);
+          expect(
+            find.descendant(
+              of: selectorScroll,
+              matching: find.byKey(const ValueKey('agent-mode-selector')),
+            ),
+            findsOneWidget,
+          );
+          expect(tester.takeException(), isNull);
+        },
+      );
+
+      testWidgets(
         'permission policy matches model selector style and updates selection',
         (tester) async {
           final provider = _FakeAgentProvider(models: _modelConfigList);
@@ -1724,11 +1899,10 @@ void main() {
         );
 
         provider.emitEvent(
-          const AgentPermissionRequestedEvent(
-            AgentPermissionRequest(
+          const AgentQuestionRequestedEvent(
+            AgentQuestionRequest(
               id: 'question-1',
               title: 'Choose scope',
-              kind: AgentPermissionKind.userInput,
               sessionId: 'thread-question',
               questions: <AgentUserInputQaPair>[
                 AgentUserInputQaPair(
@@ -1751,7 +1925,7 @@ void main() {
         );
         final messageList = find.byKey(const ValueKey('agent-message-list'));
         final submitButton = find.byKey(
-          const ValueKey('agent-permission-approve-question-1'),
+          const ValueKey('agent-question-submit-question-1'),
         );
         expect(dock, findsOneWidget);
         expect(
@@ -1762,25 +1936,36 @@ void main() {
           find.descendant(of: messageList, matching: submitButton),
           findsNothing,
         );
+        expect(
+          find.byKey(const ValueKey('agent-question-skip-question-1')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('agent-permission-deny-question-1')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const ValueKey('agent-permission-cancel-question-1')),
+          findsNothing,
+        );
 
         await tester.tap(
-          find.byKey(
-            const ValueKey('agent-user-input-question-1-scope-source'),
-          ),
+          find.byKey(const ValueKey('agent-question-question-1-scope-source')),
         );
         await tester.tap(
-          find.byKey(const ValueKey('agent-user-input-question-1-scope-tests')),
+          find.byKey(const ValueKey('agent-question-question-1-scope-tests')),
         );
         await tester.tap(
-          find.byKey(const ValueKey('agent-permission-approve-question-1')),
+          find.byKey(const ValueKey('agent-question-submit-question-1')),
         );
         await tester.pump();
 
-        expect(provider.permissionDecisions, hasLength(1));
-        expect(provider.permissionDecisions.single.answers['scope'], <String>[
+        expect(provider.questionResponses, hasLength(1));
+        expect(provider.questionResponses.single.answers['scope'], <String>[
           'source',
           'tests',
         ]);
+        expect(provider.permissionDecisions, isEmpty);
         expect(dock, findsNothing);
       });
 
@@ -2065,20 +2250,31 @@ const AgentModelList _modelConfigList = AgentModelList(
   ],
 );
 
-AgentConversationViewModel _createViewModel(_FakeAgentProvider provider) {
-  return _createViewModelWithStore(provider, MemoryAgentProviderConfigStore());
+AgentConversationViewModel _createViewModel(
+  _FakeAgentProvider provider, {
+  AgentConversationModeController? conversationModeController,
+}) {
+  return _createViewModelWithStore(
+    provider,
+    MemoryAgentProviderConfigStore(),
+    conversationModeController: conversationModeController,
+  );
 }
 
 AgentConversationViewModel _createViewModelWithStore(
   _FakeAgentProvider provider,
-  AgentProviderConfigStore configStore,
-) {
+  AgentProviderConfigStore configStore, {
+  AgentConversationModeController? conversationModeController,
+}) {
   final controller = ActiveAgentProviderController(
     providerFactory: _FakeAgentProviderFactory(provider),
     configStore: configStore,
   );
   addTearDown(controller.dispose);
-  final viewModel = AgentConversationViewModel(providerController: controller);
+  final viewModel = AgentConversationViewModel(
+    providerController: controller,
+    conversationModeController: conversationModeController,
+  );
   viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
   return viewModel;
 }
@@ -2215,7 +2411,8 @@ class _FakeAgentProvider
     implements
         AgentProvider,
         AgentSessionConfigProvider,
-        AgentPlanApprovalProvider {
+        AgentPlanApprovalProvider,
+        AgentQuestionResponseProvider {
   _FakeAgentProvider({
     Map<String, AgentThreadHistorySnapshot> historySnapshotsByThread =
         const <String, AgentThreadHistorySnapshot>{},
@@ -2232,6 +2429,8 @@ class _FakeAgentProvider
       StreamController<AgentEvent>.broadcast();
   final List<AgentPermissionDecision> permissionDecisions =
       <AgentPermissionDecision>[];
+  final List<AgentQuestionResponse> questionResponses =
+      <AgentQuestionResponse>[];
   final List<(String, String, Object)> sessionConfigSelections =
       <(String, String, Object)>[];
   final List<AgentPlanApprovalDecision> planDecisions =
@@ -2330,6 +2529,7 @@ class _FakeAgentProvider
     String? message,
     List<AgentUserInput>? inputs,
     String? clientUserMessageId,
+    AgentTurnConfiguration configuration = const AgentTurnConfiguration(),
   }) async {
     final sentText =
         message ??
@@ -2362,6 +2562,11 @@ class _FakeAgentProvider
   }
 
   @override
+  Future<void> respondToQuestion(AgentQuestionResponse response) async {
+    questionResponses.add(response);
+  }
+
+  @override
   List<AgentSessionConfigOption> sessionConfigOptions(String sessionId) {
     return const <AgentSessionConfigOption>[];
   }
@@ -2386,6 +2591,34 @@ class _FakeAgentProvider
   }
 }
 
+class _ModeFakeAgentProvider extends _FakeAgentProvider
+    implements AgentConversationModeCatalogProvider {
+  _ModeFakeAgentProvider({
+    super.models = const AgentModelList(models: <AgentModelInfo>[]),
+  });
+
+  @override
+  AgentProviderCapabilities get capabilities =>
+      super.capabilities.copyWith(supportsModeSelection: true);
+
+  @override
+  Future<AgentConversationModeCatalog> listConversationModes() async {
+    return AgentConversationModeCatalog(
+      presets: const <AgentConversationModePreset>[
+        AgentConversationModePreset(
+          id: AgentConversationModeId.defaultMode,
+          displayName: 'Default',
+        ),
+        AgentConversationModePreset(
+          id: AgentConversationModeId.plan,
+          displayName: 'Plan',
+          suggestedReasoningEffort: 'medium',
+        ),
+      ],
+    );
+  }
+}
+
 /// AgentPane 含有输入光标、浮层和 footer 测量等持续 frame 源，`pumpAndSettle()`
 /// 在该文件里容易永久等待；测试统一用有限帧推进到稳定视觉状态。
 Future<void> _pumpAgentPaneUi(WidgetTester tester) async {
@@ -2398,6 +2631,16 @@ Future<void> _pumpAgentPaneUi(WidgetTester tester) async {
 Future<void> _pumpLiveAgentUi(WidgetTester tester) async {
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 300));
+}
+
+Future<void> _pumpUntilFinder(WidgetTester tester, Finder finder) async {
+  for (var attempt = 0; attempt < 20; attempt += 1) {
+    await tester.pump(const Duration(milliseconds: 20));
+    if (finder.evaluate().isNotEmpty) {
+      return;
+    }
+  }
+  throw TestFailure('Widget did not become ready: $finder');
 }
 
 Future<void> _pumpUntilMessageSent(

@@ -855,6 +855,7 @@ class _ShellTestAgentProvider
     String? message,
     List<AgentUserInput>? inputs,
     String? clientUserMessageId,
+    AgentTurnConfiguration configuration = const AgentTurnConfiguration(),
   }) async {
     final turn = AgentTurn(id: 'turn-${session.id}', sessionId: session.id);
     _events.add(AgentTurnStartedEvent(turn));

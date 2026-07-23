@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Phase 1 smoke against a real `codex app-server --stdio`.
+"""Core smoke against a real `codex app-server --stdio`.
 
 Validates handshake, turn streaming signals, interrupt, unsubscribe, and
-localImage encoding against the pinned Codex CLI (0.144.5).
+localImage encoding. The caller may require an exact CLI version with
+``--expected-version``; otherwise the harness reports the discovered version.
 """
 
 from __future__ import annotations
@@ -60,6 +61,7 @@ class Peer:
     server_requests: list[dict[str, Any]] = field(default_factory=list)
     stderr_lines: list[str] = field(default_factory=list)
     raw_lines: list[str] = field(default_factory=list)
+    user_input_answers_sent: int = 0
     _next_id: int = 1
     _lock: threading.Lock = field(default_factory=threading.Lock)
     _cv: threading.Condition = field(init=False)
@@ -87,6 +89,7 @@ class Peer:
                     self._cv.notify_all()
                 elif "method" in msg and "id" in msg:
                     self.server_requests.append(msg)
+                    self._cv.notify_all()
                     self._reply_server_request(msg)
                 elif "method" in msg:
                     self.notifications.append(msg)
@@ -106,7 +109,8 @@ class Peer:
         method = msg.get("method")
         req_id = msg.get("id")
         if method == "item/tool/requestUserInput":
-            result: Any = {"answers": {}}
+            result: Any = {"answers": self._user_input_answers(msg.get("params"))}
+            self.user_input_answers_sent += 1
         elif method == "mcpServer/elicitation/request":
             result = {"action": "decline"}
         elif method in {
@@ -128,6 +132,32 @@ class Peer:
         else:
             result = {"decision": "denied"}
         self._write({"jsonrpc": "2.0", "id": req_id, "result": result})
+
+    def _user_input_answers(self, params: Any) -> dict[str, Any]:
+        if not isinstance(params, dict):
+            return {}
+        questions = params.get("questions")
+        if not isinstance(questions, list):
+            return {}
+        answers: dict[str, Any] = {}
+        for question in questions:
+            if not isinstance(question, dict):
+                continue
+            question_id = question.get("id")
+            if not isinstance(question_id, str) or not question_id.strip():
+                continue
+            selected = "continue"
+            options = question.get("options")
+            if isinstance(options, list) and options:
+                first = options[0]
+                if isinstance(first, dict):
+                    label = first.get("label")
+                    if isinstance(label, str) and label.strip():
+                        selected = label.strip()
+                elif isinstance(first, str) and first.strip():
+                    selected = first.strip()
+            answers[question_id] = {"answers": [selected]}
+        return answers
 
     def request(
         self, method: str, params: dict[str, Any] | None = None, timeout: float = 30
@@ -210,18 +240,26 @@ def resolve_codex(preferred: str | None) -> Path:
     for candidate in candidates:
         if not candidate.exists():
             continue
-        version = subprocess.check_output(
-            [str(candidate), "--version"], text=True, stderr=subprocess.STDOUT
-        ).strip()
-        if "0.142." in version:
+        try:
+            subprocess.check_output(
+                [str(candidate), "--version"], text=True, stderr=subprocess.STDOUT
+            )
+        except (OSError, subprocess.CalledProcessError):
+            continue
+        else:
             return candidate
-    raise SystemExit("未找到 codex-cli 0.142.x，请用 --codex-bin 指定。")
+    raise SystemExit("未找到可执行的 Codex CLI，请用 --codex-bin 指定。")
+
+
+def normalized_codex_version(raw: str) -> str:
+    prefix = "codex-cli "
+    return raw[len(prefix) :].strip() if raw.startswith(prefix) else raw.strip()
 
 
 def check(checks: list[Check], name: str, ok: bool, detail: str = "") -> None:
     checks.append(Check(name=name, ok=ok, detail=detail))
     mark = "PASS" if ok else "FAIL"
-    suffix = f" — {detail}" if detail else ""
+    suffix = f" - {detail}" if detail else ""
     print(f"[{mark}] {name}{suffix}")
 
 
@@ -243,6 +281,11 @@ def main() -> int:
     parser.add_argument("--codex-bin", default="")
     parser.add_argument("--cwd", default=str(Path(__file__).resolve().parents[1]))
     parser.add_argument("--timeout", type=float, default=180)
+    parser.add_argument(
+        "--expected-version",
+        default="",
+        help="Require an exact Codex CLI version, for example 0.144.5.",
+    )
     args = parser.parse_args()
 
     codex = resolve_codex(args.codex_bin or None)
@@ -259,6 +302,15 @@ def main() -> int:
     peer: Peer | None = None
 
     try:
+        if args.expected_version:
+            check(
+                checks,
+                "Codex version",
+                normalized_codex_version(version) == args.expected_version,
+                f"actual={normalized_codex_version(version)}; "
+                f"expected={args.expected_version}",
+            )
+
         proc = subprocess.Popen(
             [str(codex), "app-server", "--stdio"],
             cwd=cwd,
@@ -590,9 +642,7 @@ def main() -> int:
     print()
     print(f"Smoke summary: {len(passed)} passed, {len(failed)} failed")
     if peer and peer.stderr_lines:
-        print("--- stderr (tail) ---")
-        for line in peer.stderr_lines[-20:]:
-            print(line)
+        print(f"stderr lines captured (content suppressed): {len(peer.stderr_lines)}")
     if failed:
         print("--- failures ---")
         for item in failed:

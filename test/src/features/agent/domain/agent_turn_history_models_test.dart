@@ -166,4 +166,29 @@ void main() {
       expect(agentReasoningEffortFooterLabel('custom'), 'custom');
     });
   });
+
+  group('Agent history collaboration mode', () {
+    test('returns the latest typed mode while skipping missing turns', () {
+      final unknownMode = AgentConversationModeId.fromRaw('future-mode');
+      final snapshot = AgentThreadHistorySnapshot(
+        threadId: 'thread-1',
+        turns: <AgentHistoryTurn>[
+          const AgentHistoryTurn(
+            id: 'turn-plan',
+            collaborationMode: AgentConversationModeId.plan,
+          ),
+          const AgentHistoryTurn(id: 'turn-missing'),
+          AgentHistoryTurn(id: 'turn-future', collaborationMode: unknownMode),
+          const AgentHistoryTurn(id: 'turn-latest-missing'),
+        ],
+        currentTurn: const AgentHistoryTurn(id: 'turn-latest-missing'),
+      );
+
+      expect(snapshot.latestCollaborationMode, unknownMode);
+      expect(
+        snapshot.latestCollaborationMode?.kind,
+        AgentConversationModeKind.unknown,
+      );
+    });
+  });
 }

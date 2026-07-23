@@ -1,6 +1,6 @@
 # Codex app-server 协议版本锁定
 
-最后更新：2026-07-16
+最后更新：2026-07-23
 
 ## 1. 目的
 
@@ -26,6 +26,18 @@ Zeta 的默认 Agent provider（`CodexAppServerAgentProvider`）按 Codex CLI
 
 运行时仍通过 PATH / 安装目录解析 `codex`；**运行时 CLI 版本不必与 pin
 完全一致**，但升级前应先做 schema diff，确认适配层仍覆盖关键方法。
+
+Plan 模式目录、`turn/start.collaborationMode`、`thread/settings/updated`、
+`item/plan/delta` 和 `item/tool/requestUserInput` 属于 experimental surface；
+`turn/plan/updated` 是既有通知。稳定快照与实验验证采用双基线：
+
+| 基线 | 版本 / 模式 | 用途 |
+| --- | --- | --- |
+| 仓库契约 | `0.144.5` stable | 代码评审、稳定方法 diff，不包含实验字段 |
+| 真实运行验证 | 实际 CLI 生成的 experimental Schema + smoke | 运行时探测 Plan 能力，记录实际版本与结果 |
+
+低于 pin 的本机 experimental Schema 只能作为兼容性证据，**不得**覆盖
+`third_party/codex_app_server_schema` 的 stable pin。
 
 ## 3. Schema 快照内容
 
@@ -84,10 +96,13 @@ Windows 上若 PATH 里的 npm 全局 `codex` 偏旧，脚本会优先尝试
 4. 按 diff 更新 `lib/src/features/agent` 适配层与测试。
 5. 更新本文件的 pinned 版本说明，以及
    `plan/codex_app_server_adaptation_plan.md` 中的协议基准段落。
-6. 用真实 `codex app-server --stdio` 做冒烟（发消息、中断、错误路径）。
-   仓库脚本：`python tool/smoke_codex_app_server.py`（目标版本 `0.144.5`）。
+6. 用真实 `codex app-server --stdio` 做冒烟：
+   - 核心链路：`python tool/smoke_codex_app_server.py --expected-version 0.144.5`
+   - Plan 实验链路：`python tool/smoke_codex_plan_mode.py --expected-version 0.144.5`
+7. 若本机版本不是目标版本，可省略 `--expected-version` 做兼容性诊断，但结果不能
+   代替目标版本发布门禁，且不得据此覆盖 stable Schema。
 
-## 7. 0.142.5 → 0.144.5 适配结论
+## 6. 0.142.5 → 0.144.5 适配结论
 
 - `turn/steer` 必须发送活动回合的 `expectedTurnId`，不得发送 `cwd`。
 - `thread/read` 只发送 `threadId` 与 `includeTurns`，不再夹带 `itemsView`。
@@ -98,9 +113,60 @@ Windows 上若 PATH 里的 npm 全局 `codex` 偏旧，脚本会优先尝试
 - `initialize` 返回值被映射为运行时版本、兼容状态与动态能力，未知或旧版本
   采用保守降级。
 
-## 6. 与适配层的关系
+## 7. 与适配层的关系
 
 - UI / domain 只消费中立 `AgentEvent` 等模型，不直接读 schema JSON。
 - Schema 快照是 **人工与 CI 可 diff 的协议真相源**，不是运行时依赖。
 - 未匹配通知的 fine 日志与诊断计数（A7）用于发现 pin 之外的新方法；
   一旦确认需要适配，应同步更新快照与 mapper。
+
+## 8. Plan experimental 协议与降级
+
+Plan 能力只能在唯一一次 `initialize` 中通过 `experimentalApi: true` 协商。
+握手后调用无分页、空参数的 `collaborationMode/list`，目录至少包含 Default / Plan
+时才向 UI 暴露选择器。显式模式随每个新 `turn/start` 发送；发送
+`collaborationMode.settings` 时不再发送冲突的顶层 model / effort。退出 sticky
+Plan 必须显式发送 Default，不能用省略字段代替。
+
+降级规则：
+
+- `initialize` 拒绝 experimental capability、目录方法返回 method-not-found、响应损坏或
+  缺少内置模式：本次 runtime generation 将模式端口视为不可用，隐藏选择器，沿用原有
+  Default 发送路径；普通对话、模型选择和历史读取继续可用。
+- transport / timeout 属于临时不可用，可由用户重试；Provider 或进程重建后重新探测，
+  不把旧 generation 的失败写成永久能力。
+- 已进入 Plan 但未收到 `turn/plan/updated` 时，时间线仍可使用
+  `item/plan/delta` / completed Plan item；不得伪造结构化步骤。
+- collaboration mode 是 Zeta 本地 thread 快照的粘性状态。`thread/read` 不回放该设置时，
+  重启后先恢复本地快照，再由下一次 `turn/start` 和
+  `thread/settings/updated` 收敛服务端确认态。
+
+### 8.1 用户提问响应语义
+
+`item/tool/requestUserInput` 是独立的用户提问请求，不属于权限审批：
+
+- data 层通过 question mapper 映射为 `AgentQuestionRequest`，并保存在独立 pending
+  question registry；不得放入 approval mapper 或 permission registry。
+- 客户端响应固定为 `{answers: {questionId: {answers: [...]}}}`；空 `answers` 表示
+  Skip。该协议没有 approve、deny 或 cancel turn 响应变体。
+- `serverRequest/resolved` 和连接关闭必须按请求所属 registry 清理提问状态，避免
+  回写已由其他客户端解决的请求。
+- 计划审批继续使用独立的 `AgentPlanApprovalRequest/Decision`，不与用户提问互转。
+
+### 8.2 真实 smoke 记录
+
+2026-07-23 使用 `tool/smoke_codex_plan_mode.py` 完成一次脱敏兼容性运行：
+
+| 项 | 结果 |
+| --- | --- |
+| OS / 架构 | Windows / AMD64 |
+| 实际 Codex CLI | `0.144.1` |
+| 仓库 stable pin | `0.144.5` |
+| Schema 模式 | experimental（由实际 CLI 生成并核对） |
+| 结果 | 18/19 通过；`turn/plan/updated` 未出现，严格 smoke 返回失败 |
+| 已验证 | experimental initialize、Default/Plan 目录、Plan/Default settings、Plan delta、用户提问应答、下一 turn 才切模式、重启 resume、本地 mode 恢复与 settings 收敛 |
+| 未替代的门禁 | `0.144.5` experimental 真实运行仍需在具备对应 CLI 的环境执行 |
+
+smoke 只输出平台、版本、Schema 模式、检查项、方法名和计数；不输出或持久化
+Prompt、回复、文件内容、凭证、原始 JSONL、thread/turn id 或 stderr 原文。脚本使用临时
+空 workspace、只读 sandbox，并默认归档自己创建的 thread。

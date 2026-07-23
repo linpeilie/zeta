@@ -1,6 +1,6 @@
 # Codex app-server 适配清单与适配计划
 
-最后更新:2026-07-16
+最后更新:2026-07-23
 
 ## 0. 文档目的与协议基准
 
@@ -14,7 +14,7 @@
 
 | 协议面 | 协议总数 | 已适配 | 部分适配 | 未适配 |
 | --- | --- | --- | --- | --- |
-| 客户端请求(client → server,带 id) | 87 | 19 | 1(`turn/start` 已用 text/localImage/mention + 策略/幂等;skill/image URL 等未用) | 67 |
+| 客户端请求(client → server,带 id) | 87 stable（另有 1 experimental） | 19 stable + 1 experimental | 1 stable（`turn/start` 已用 text/localImage/mention + 策略/幂等/mode；skill/image URL 等未用） | 67 stable |
 | 客户端通知(client → server) | 1 | 1 | 0 | 0 |
 | 服务端通知(server → client) | 68 | 35 | 1(`mcpServer/startupStatus/updated` 仍显式忽略,Phase 3 启用) | 32 |
 | 服务端请求(server → client,需应答) | 10 | 6 | 1(`mcpServer/elicitation/request` 默认应答,表单 UI 见 Phase 3.8) | 3(`item/tool/call`、`account/chatgptAuthTokens/refresh`、`attestation/generate` 回 `-32601`) |
@@ -25,12 +25,13 @@
 
 ## 1. 已适配能力清单(现状)
 
-### 1.1 客户端请求(19 个)
+### 1.1 客户端请求（19 stable + 1 experimental）
 
 | 方法 | 位置 | 备注 |
 | --- | --- | --- |
 | `initialize` | `codex_app_server_agent_provider.dart` | 发送 `clientInfo` + 显式 `capabilities`(A6 已完成,含 P4~P5 通知 opt-out 清单) |
 | `model/list` | `codex_app_server_client.dart` | 握手后自动拉取并缓存 |
+| `collaborationMode/list` | 同上 | experimental；空参数、无分页，映射为 Provider 中立目录 |
 | `thread/start` | 同上 | 仅传 `cwd`/`model`/`approvalPolicy: on-request` |
 | `thread/resume` | 同上 | 同上 |
 | `thread/list` | 同上 | 支持 `archived` / `searchTerm`;未用 `modelProviders`(Phase 3+) |
@@ -44,7 +45,7 @@
 | `thread/compact/start` | 同上 | 上下文占用提示条(2.5) |
 | `permissionProfile/list` | 同上 | 审批/沙箱预设选择器(2.7) |
 | `thread/approveGuardianDeniedAction` | 同上 | Guardian 拒绝后人工放行(2.9) |
-| `turn/start` | 同上 | `text`/`localImage`/`mention`+`text_elements`;`effort`/`approvalPolicy`/`sandboxPolicy`/`clientUserMessageId`(2.7/2.10) |
+| `turn/start` | 同上 | `text`/`localImage`/`mention`+`text_elements`;`effort`/`approvalPolicy`/`sandboxPolicy`/`clientUserMessageId`；可选 experimental `collaborationMode` |
 | `turn/steer` | 同上 | 运行中追加指令(同样支持 `inputs` + `clientUserMessageId`) |
 | `turn/interrupt` | 同上 | 取消回合 |
 
@@ -54,7 +55,7 @@
 
 ### 1.3 服务端请求(审批,5 个显式 + 用户输入表单 + 降级/拒绝)
 
-`item/commandExecution/requestApproval`、`item/fileChange/requestApproval`、`item/permissions/requestApproval`、`execCommandApproval`(legacy)、`applyPatchApproval`(legacy)已完整走 UI 审批(命令审批含 `commandActions`/`acceptForSession`/`acceptWithExecpolicyAmendment`,2.8);`item/tool/requestUserInput` 渲染问题表单并回传结构化 `answers`(2.6);`mcpServer/elicitation/request` 仍走默认应答(表单 UI 见 Phase 3.8);`item/tool/call`、`account/chatgptAuthTokens/refresh`、`attestation/generate` 与其余未知方法立即回 `-32601` JSON-RPC error(A5 已完成)。
+`item/commandExecution/requestApproval`、`item/fileChange/requestApproval`、`item/permissions/requestApproval`、`execCommandApproval`(legacy)、`applyPatchApproval`(legacy)已完整走 UI 审批(命令审批含 `commandActions`/`acceptForSession`/`acceptWithExecpolicyAmendment`,2.8);`item/tool/requestUserInput` 由独立 question mapper/模型/响应端口渲染问题表单并回传结构化 `answers`(2.6、PLAN-601);`mcpServer/elicitation/request` 保留自身 accept/decline/cancel 语义(表单 UI 见 Phase 3.8);`item/tool/call`、`account/chatgptAuthTokens/refresh`、`attestation/generate` 与其余未知方法立即回 `-32601` JSON-RPC error(A5 已完成)。
 
 ### 1.4 本地 JSONL 历史
 
@@ -99,8 +100,8 @@
 - 风险:`item/tool/call`(动态工具调用)与 `account/chatgptAuthTokens/refresh` 的响应有严格 schema,`{}`/`null` 属于非法应答,可能让服务端 turn 卡住或报协议错误。
 - 修复:对未识别的服务端请求返回 JSON-RPC error(如 `-32601 method not found`),而不是伪造成功;为已知但暂不支持的请求返回结构化拒绝。
 - 实施记录:
-  - `_CodexApprovalMapper.rejectionFor` 对服务端请求分类:7 个可交互方法(5 个审批 + `item/tool/requestUserInput` + `mcpServer/elicitation/request`)进 UI 卡片;`item/tool/call`、`account/chatgptAuthTokens/refresh`、`attestation/generate` 与未知方法立即回 `-32601` JSON-RPC error(带定制 message),不再产生审批卡片,`_handleServerRequest` 记 warning 日志。
-  - 修复输入类响应结构:`item/tool/requestUserInput` 统一回 `{answers: {}}`(schema 必填、协议无拒绝变体,表单收集 UI 属 3.8);`mcpServer/elicitation/request` 按决定回 `{action: accept, content: {}}` / `{action: decline}` / `{action: cancel}`。
+  - `_CodexApprovalMapper.rejectionFor` 对审批/MCP elicitation 请求分类；`item/tool/requestUserInput` 由独立 `_CodexQuestionMapper` 处理，不进入 permission registry；`item/tool/call`、`account/chatgptAuthTokens/refresh`、`attestation/generate` 与未知方法立即回 `-32601` JSON-RPC error(带定制 message),不产生交互卡片,`_handleServerRequest` 记 warning 日志。
+  - 修复输入类响应结构:`item/tool/requestUserInput` 统一回 `{answers: ...}`，空 map 表示 Skip(schema 必填、协议无拒绝/取消变体);`mcpServer/elicitation/request` 按决定回 `{action: accept, content: {}}` / `{action: decline}` / `{action: cancel}`。
   - `approvalResponse` 兜底分支不再返回 `null`,保留 `{}` 作为最后防线(分类改造后正常不可达)。
   - transport 无需改动:`JsonRpcPeer.sendResponse` 本就支持 `error: JsonRpcError`。
   - 测试:fake peer 新增 `errorResponses` 记录;覆盖未知方法/动态工具/token 刷新自动拒绝(无审批事件)、requestUserInput 空答案、elicitation 三种 action。
@@ -110,7 +111,7 @@
 - `InitializeParams.capabilities` 支持 `experimentalApi`、`optOutNotificationMethods`、`requestAttestation`、`mcpServerOpenaiFormElicitation`。
 - 建议:显式声明 capabilities;用 `optOutNotificationMethods` 屏蔽当前不消费的高频通知(如 `thread/realtime/*`),减少 stdio 流量与解析开销;部分新 API(如动态工具)可能需要 `experimentalApi: true` 才会下发。
 - 实施记录:
-  - `initialize` 现在显式发送 `capabilities`:`experimentalApi: false`、`requestAttestation: false`、`mcpServerOpenaiFormElicitation: false`(表单渲染见 3.8),以及 `optOutNotificationMethods` 清单。
+  - `initialize` 现在显式发送 `capabilities`:`experimentalApi: true`（用于运行时 mode 目录）、`requestAttestation: false`、`mcpServerOpenaiFormElicitation: false`(表单渲染见 3.8),以及 `optOutNotificationMethods` 清单。
   - opt-out 清单只含近期路线图之外(P4~P5)的通知:`thread/realtime/*` 全部 8 个、`remoteControl/status/changed`、`app/list/updated`、`windows/worldWritableWarning`、`windowsSandbox/setupCompleted`、`model/safetyBuffering/updated`、`model/verification`、`turn/moderationMetadata`。Phase 1~3 计划消费的通知(reasoning/plan/diff、account、mcp、skills 等)不屏蔽;适配对应功能时需同步维护该清单(常量在 `codex_app_server_agent_provider.dart`)。
   - 已用真实 app-server(0.142.3)验证:完整 capabilities 握手成功;`capabilities`/`optOutNotificationMethods` 传非法类型报反序列化错误(字段被识别);功能对比实验确认 opt-out 后 `remoteControl/status/changed`、`thread/started` 等通知不再下发。
   - 测试:新增 `declares client capabilities during initialize`,断言三个布尔能力与 opt-out 清单,并守护已消费通知(`thread/tokenUsage/updated`、`turn/completed` 等)不得出现在清单中。
@@ -329,6 +330,15 @@
 
 冒烟记录(2026-07-09,`tool/smoke_codex_app_server.py`,CLI `0.142.5`):17/17 通过。已验证 handshake、`turn/start` 接受 `text`+`localImage`(item 通知可见)、`thread/status/changed`、`thread/tokenUsage/updated`(`modelContextWindow`)、agent 消息流、`turn/interrupt`→`interrupted`、`thread/unsubscribe`。本轮短回复未触发 reasoning/plan/`turn/diff`(脚本记 optional);他端解决审批需双客户端,未覆盖。
 
+Plan experimental 冒烟记录(2026-07-23,`tool/smoke_codex_plan_mode.py`,Windows
+AMD64,CLI `0.144.1`,experimental Schema):18/19 通过。已验证 experimental handshake、
+`collaborationMode/list` 的 Default/Plan、Plan/Default settings、Plan delta、
+`requestUserInput` 结构化应答、active turn 不被下一模式修改、重启 resume、本地 mode
+恢复和 settings 收敛；未收到 `turn/plan/updated`，脚本按严格门禁返回失败。本机版本低于
+stable pin `0.144.5`，该结果只作为兼容性与降级证据，不替代目标版本 smoke，也不覆盖
+stable Schema。记录不包含 Prompt、回复、文件内容、凭证、原始 payload、thread/turn id
+或 stderr 原文。
+
 ### Phase 2:Thread 管理与审批深化(约 2 周)
 
 | # | 任务 | 落点 |
@@ -338,7 +348,7 @@
 | 2.3 ✅ | 配套通知(`thread/archived|unarchived|deleted|closed|name/updated|compacted|settings/updated`)→ 列表与会话状态同步 | mapper + threads controller |
 | 2.4 ✅ | 基于 `thread/fork.lastTurnId` 实现“创建分支并重试”；原 thread 与工作区文件保持不变 | conversation view model + UI |
 | 2.5 ✅ | 上下文用量接近 `modelContextWindow` 时提示 `thread/compact/start` | timeline store + 状态条 |
-| 2.6 ✅ | `item/tool/requestUserInput` 表单卡片(问题列表 + 选项 + 自由文本),答案结构化回传(已完成 2026-07-09: questions 解析/`answers` 编码;可交互表单卡;Deny 回空答案) | approval mapper、permission 模型、`_AgentPermissionCard` |
+| 2.6 ✅ | `item/tool/requestUserInput` 表单卡片(问题列表 + 选项 + 自由文本),答案结构化回传；PLAN-601 已拆为独立 question request/response、mapper、pending registry 与 Submit/Skip 卡片，不再借用 permission/Deny 语义 | question mapper、question 模型、`_AgentQuestionCard` |
 | 2.7 ✅ | `permissionProfile/list` 驱动审批/沙箱预设选择器;`turn/start`/`thread/start` 携带所选策略;`thread/settings/updated` 同步(已完成 2026-07-09) | client、`AgentPermissionSelection` controller、composer 策略按钮 |
 | 2.8 ✅ | 命令审批卡片增强:展示 `commandActions` 语义、支持 `acceptForSession`/`acceptWithExecpolicyAmendment`(已完成 2026-07-09) | approval mapper、审批卡片 |
 | 2.9 ✅ | `item/autoApprovalReview/*` 指示器;`thread/approveGuardianDeniedAction` 放行入口(已完成 2026-07-09) | mapper + UI |
@@ -387,7 +397,9 @@
 3. **测试策略**:
    - 每个新通知/请求映射:fixture JSON → mapper 单测(Arrange-Act-Assert);
    - provider 级:fake `JsonRpcPeer` 集成测试(复用现有 `codex_app_server_provider_test.dart` 基建);
-   - 阶段收尾:真实 `codex app-server --stdio` 冒烟清单(手动或 integration test)。
+   - 阶段收尾:真实 `codex app-server --stdio` 冒烟清单(手动或 integration test)；
+     experimental Plan 使用 `tool/smoke_codex_plan_mode.py`，缺失事件必须严格失败并记录
+     OS/架构、CLI、Schema 模式与降级结论。
 4. **历史与实时一致性**:每次新增实时 item 类型,同步检查 `codex_jsonl_history_parser.dart` 与 `thread/read` 映射,保证刷新/重开会话后渲染一致。
 5. **文档同步**:每阶段完成后更新 `docs/design_document.md`(Agent 设计节)与本计划的状态标记。
 

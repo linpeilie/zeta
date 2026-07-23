@@ -18,6 +18,16 @@ void main() {
       expect(capabilities.supportsPermissionProfileDiscovery, isTrue);
       expect(capabilities.supportsPermissionProfileSelection, isTrue);
       expect(capabilities.supportsPlanApproval, isFalse);
+      expect(capabilities.supportsModeSelection, isFalse);
+    });
+
+    test('enables mode selection only on an effective capability copy', () {
+      const declared = AgentProviderCapabilities.codexAppServer;
+
+      final effective = declared.copyWith(supportsModeSelection: true);
+
+      expect(declared.supportsModeSelection, isFalse);
+      expect(effective.supportsModeSelection, isTrue);
     });
 
     test('reports only Grok operations that have real implementations', () {

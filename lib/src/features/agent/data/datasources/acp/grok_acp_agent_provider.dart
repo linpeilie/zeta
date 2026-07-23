@@ -621,7 +621,11 @@ class GrokAcpAgentProvider
     String? message,
     List<AgentUserInput>? inputs,
     String? clientUserMessageId,
+    AgentTurnConfiguration configuration = const AgentTurnConfiguration(),
   }) async {
+    if (configuration.conversationMode != null) {
+      throw UnsupportedError('${config.displayName} 不支持回合级对话模式配置');
+    }
     await initialize();
     final cwd = context.projectPath?.trim();
     if (cwd != null && cwd.isNotEmpty) {

@@ -1,6 +1,6 @@
 # 开发者文档
 
-最后更新：2026-07-17
+最后更新：2026-07-23
 
 ## 1. 项目简介
 
@@ -37,12 +37,20 @@ flutter run -d macos
 ./tool/gen_codex_schema.ps1
 ```
 
-对真实 `codex app-server --stdio` 做 Phase 1 冒烟（需本机 pinned `0.142.x`）：
+对真实 `codex app-server --stdio` 做核心链路与 Plan experimental 冒烟：
 
 ```sh
-python tool/smoke_codex_app_server.py
-# 可选：python tool/smoke_codex_app_server.py --codex-bin "C:\...\codex.exe" --timeout 180
+python tool/smoke_codex_app_server.py --expected-version 0.144.5
+python tool/smoke_codex_plan_mode.py --expected-version 0.144.5
+
+# 兼容性诊断可指定其他本机 CLI；省略 expected version 不等于通过目标版本门禁
+python tool/smoke_codex_plan_mode.py --codex-bin "C:\...\codex.exe" --timeout 180
 ```
+
+Plan smoke 会开启 experimental API、探测模式目录、发送 Plan / Default turn、结构化回答
+一次用户提问，并模拟重启恢复。它使用临时只读 workspace，默认归档测试 thread，输出不含
+Prompt、回复、文件内容、凭证、原始 JSONL、thread/turn id 或 stderr 原文。若
+`turn/plan/updated` 等实验事件缺失，脚本会保留实际方法名级诊断并返回失败。
 
 Cursor 的旧 smoke 与发布材料只作为
 [退役历史证据](./cursor_acp_release_validation.md) 保留，当前版本没有 Cursor 启动工具。
@@ -143,7 +151,7 @@ windows/
 1. 先确认现有 `AgentProviderBundle` 端口是否足够。已迁移的能力域优先接到
    `conversation`、`threadCatalog`、`threadMutations`、`threadBranching`、
    `turnSteering`、`interactions`、`modelCatalog`、`localThreadList`、
-   `sessionConfiguration`、`planApproval` 等端口，不要继续优先扩张
+   `sessionConfiguration`、`planApproval`、`conversationModes` 等端口，不要继续优先扩张
    `AgentProvider` 旧必选接口。
 2. 在领域层定义初始化前可判断的静态 `AgentProviderCapabilities` 与 bootstrap
    policy；握手后若能力发生变化，应返回更精确的动态 capabilities。
@@ -151,7 +159,8 @@ windows/
    `AgentProviderFactory` 当前仍返回 `AgentProvider`，应用层通过 `provider.bundle`
    获取端口化能力。
 4. 把 provider 原始事件映射成 `AgentEvent`、`AgentToolCall`、
-   `AgentPermissionRequest`、`AgentThreadSummary`、`AgentSessionConfigOption` 等中立模型。
+   `AgentPermissionRequest`、`AgentQuestionRequest`、`AgentThreadSummary`、
+   `AgentSessionConfigOption` 等中立模型。
    Provider 原始 `sourceItemId` / `sourceMessageId` 只作为 source metadata；进入 application
    前必须由 adapter/reducer 生成最终 entryId。
 5. 如果出现新的可选能力域，优先新增 bundle 可选端口及其测试，再决定是否保留
@@ -172,6 +181,26 @@ windows/
 11. 为流式 Provider 增加 adapter/reducer 序列测试；若同时支持 history/replay，必须使用
     独立 reducer 实例，并用完整 canonical signature regression 比较相对顺序。Store 只按
     entryId/tool id dumb merge，新增 Provider 不得修改 Store 来补叙事规则。
+
+交互响应按领域语义拆分：权限请求调用 `respondToPermission`；结构化用户提问仅由实现
+`AgentQuestionResponseProvider` 的 Provider 通过 `respondToQuestion` 回写，空 answers
+表示 Skip；计划审批仍使用 `AgentPlanApprovalPort`。三类请求可以共享 Pending Interaction
+Dock，但不得共享 request/decision 模型或 pending registry。
+
+### Plan conversation mode 开发与验证
+
+- Domain 只使用 `AgentConversationMode*`；Codex 的 `collaborationMode` JSON 只存在于
+  data client / mapper / encoder。
+- `AgentConversationModeController` 管理目录、draft、confirmed、pending 和 generation；
+  ViewModel 只负责绑定 Provider/thread 与冻结 `AgentTurnConfiguration`，Widget 不直接发 RPC。
+- 模式来自 `bundle.conversationModes` 的运行时目录。端口为空、method-not-found、目录损坏
+  或缺少 Default/Plan 时隐藏选择器，继续使用原有普通对话，不用 Prompt 伪造 Plan。
+- 模式选择是“下一回合”配置。活动 turn 使用 `turn/steer` 时不修改 mode；切回 Default
+  必须在下一次 `turn/start` 显式提交。
+- 重启后先从 Zeta thread 快照恢复 draft/confirmed；`thread/read` 若没有 mode，不得清空
+  本地已知值，随后以 settings notification 收敛确认态。
+- 协议升级时先运行 fake contract tests，再执行 `tool/smoke_codex_plan_mode.py`；记录实际
+  OS、CLI、Schema 模式和通过/失败项，不记录业务内容。
 
 ### 共享适配层修改判定
 

@@ -270,9 +270,12 @@ class _AgentPendingInteractionSection extends StatelessWidget {
 
   Widget _buildDock(BuildContext context) {
     final permissionRequests = viewModel.permissionRequests;
+    final questionRequests = viewModel.questionRequests;
     final planApprovalRequests = viewModel.planApprovalRequests;
     if (viewModel.isReadOnly ||
-        (permissionRequests.isEmpty && planApprovalRequests.isEmpty)) {
+        (permissionRequests.isEmpty &&
+            questionRequests.isEmpty &&
+            planApprovalRequests.isEmpty)) {
       return const SizedBox.shrink();
     }
 
@@ -297,11 +300,32 @@ class _AgentPendingInteractionSection extends StatelessWidget {
                     padding: EdgeInsets.only(
                       bottom:
                           index < permissionRequests.length - 1 ||
+                              questionRequests.isNotEmpty ||
                               planApprovalRequests.isNotEmpty
                           ? IdeSpacing.space8
                           : 0,
                     ),
                     child: _buildPermissionCard(permissionRequests[index]),
+                  ),
+                for (var index = 0; index < questionRequests.length; index++)
+                  Padding(
+                    key: ValueKey(
+                      'agent-pending-question-${questionRequests[index].id}',
+                    ),
+                    padding: EdgeInsets.only(
+                      bottom:
+                          index < questionRequests.length - 1 ||
+                              planApprovalRequests.isNotEmpty
+                          ? IdeSpacing.space8
+                          : 0,
+                    ),
+                    child: _AgentQuestionCard(
+                      request: questionRequests[index],
+                      onRespond: (answers) => viewModel.respondToQuestion(
+                        questionRequests[index],
+                        answers: answers,
+                      ),
+                    ),
                   ),
                 for (
                   var index = 0;
@@ -344,14 +368,12 @@ class _AgentPendingInteractionSection extends StatelessWidget {
           ({
             required bool approved,
             bool cancelTurn = false,
-            Map<String, List<String>> answers = const <String, List<String>>{},
             AgentCommandApprovalDecisionKind? commandDecision,
             List<String> execpolicyAmendment = const <String>[],
           }) => viewModel.respondToPermission(
             request,
             approved: approved,
             cancelTurn: cancelTurn,
-            answers: answers,
             commandDecision: commandDecision,
             execpolicyAmendment: execpolicyAmendment,
           ),
@@ -420,6 +442,7 @@ class _AgentTurnSection extends StatelessWidget {
       ),
       // pending 交互只在 Composer 上方的 dock 渲染，避免时间线出现重复卡片。
       AgentPermissionTimelineEntry() => const SizedBox.shrink(),
+      AgentQuestionTimelineEntry() => const SizedBox.shrink(),
       AgentPlanApprovalTimelineEntry() => const SizedBox.shrink(),
       // 正常路径会在 grouping 中转成文件编辑组；此处仅作兜底。
       AgentTurnDiffTimelineEntry() => const SizedBox.shrink(),
@@ -482,6 +505,18 @@ class _AgentComposerSection extends StatelessWidget {
                   onCancel: viewModel.cancelActiveTurn,
                   showImageAttachment: viewModel.canAttachImages,
                   showResourceMention: viewModel.canMentionResources,
+                  conversationModeStatus: _modeSelectorStatus(
+                    viewModel.conversationModeLoadStatus,
+                  ),
+                  conversationModeOptions: viewModel.conversationModeOptions,
+                  selectedConversationMode: viewModel.selectedConversationMode,
+                  conversationModeAppliesToNextTurn:
+                      viewModel.conversationModeAppliesToNextTurn,
+                  conversationModeStatusMessage:
+                      viewModel.conversationModeStatusMessage,
+                  conversationModeContextId:
+                      viewModel.conversationModeContextId,
+                  onSelectConversationMode: viewModel.selectConversationMode,
                   showModelSelection: viewModel.showModelSelection,
                   modelConfigState: viewModel.modelConfigUiState,
                   showPermissionPolicy: viewModel.showPermissionPolicy,
@@ -512,6 +547,18 @@ class _AgentComposerSection extends StatelessWidget {
       ),
     );
   }
+}
+
+AgentModeSelectorStatus _modeSelectorStatus(
+  AgentConversationModeLoadStatus status,
+) {
+  return switch (status) {
+    AgentConversationModeLoadStatus.unavailable =>
+      AgentModeSelectorStatus.unavailable,
+    AgentConversationModeLoadStatus.loading => AgentModeSelectorStatus.loading,
+    AgentConversationModeLoadStatus.ready => AgentModeSelectorStatus.ready,
+    AgentConversationModeLoadStatus.error => AgentModeSelectorStatus.error,
+  };
 }
 
 class _AgentContentAlign extends StatelessWidget {

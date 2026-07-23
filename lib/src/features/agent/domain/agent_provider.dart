@@ -100,12 +100,14 @@ abstract class AgentProvider {
   ///
   /// [message] 为纯文本快捷参数；若同时提供 [inputs]，以 [inputs] 为准。
   /// [inputs] 可包含文本与本地图片等多项用户输入。
+  /// [configuration] 是仅属于本回合的不可变配置快照；空配置保持 Provider 原有行为。
   Future<AgentTurn> sendMessage({
     required AgentSession session,
     required AgentContext context,
     String? message,
     List<AgentUserInput>? inputs,
     String? clientUserMessageId,
+    AgentTurnConfiguration configuration = const AgentTurnConfiguration(),
   });
 
   /// 在正在运行的回合中追加用户指令。
@@ -145,12 +147,28 @@ abstract interface class AgentRuntimeScopeProvider {
   AgentRuntimeScope? get runtimeScope;
 }
 
+/// 支持独立用户提问回写的 Provider 可选接口。
+///
+/// Permission-only Provider 无需实现，避免把空 answers 伪装成审批决定。
+abstract interface class AgentQuestionResponseProvider {
+  Future<void> respondToQuestion(AgentQuestionResponse response);
+}
+
 /// 支持绕过实例内存缓存、重新读取模型目录的 Provider 可选接口。
 abstract interface class AgentRefreshableModelCatalogProvider {
   Future<AgentModelList> refreshModels({
     int limit = 20,
     bool includeHidden = false,
   });
+}
+
+/// 支持发现对话运行模式目录的 Provider 可选接口。
+///
+/// 实现该接口只表示适配器具备目录探测入口；运行时是否已确认可用仍由
+/// [AgentProviderCapabilities.supportsModeSelection] 表达。
+abstract interface class AgentConversationModeCatalogProvider {
+  /// 读取当前 Provider 运行时可用的对话模式预设。
+  Future<AgentConversationModeCatalog> listConversationModes();
 }
 
 /// Provider 拥有本地会话索引时，可只移除客户端列表记录而不删除服务端历史。

@@ -904,7 +904,7 @@ Future<_RetainedAgentState> _prepareRetainedAgentState(
     '${directory.path}${Platform.pathSeparator}sample.txt',
   ).writeAsStringSync('workbench retention');
 
-  final provider = FakeAgentProvider(
+  final provider = _ModeCapableFakeAgentProvider(
     threadHistories: <String, AgentThreadHistorySnapshot>{
       'retained-thread': AgentThreadHistorySnapshot(
         threadId: 'retained-thread',
@@ -990,6 +990,24 @@ Future<_RetainedAgentState> _prepareRetainedAgentState(
   scrollController.jumpTo(scrollController.position.maxScrollExtent / 2);
   await tester.pump();
 
+  final modeSelector = find.byKey(const ValueKey('agent-mode-selector'));
+  await pumpUntilCondition(
+    tester,
+    () => modeSelector.evaluate().isNotEmpty,
+    failureMessage: 'Conversation mode selector did not become ready',
+  );
+  await tester.tap(modeSelector);
+  await tester.pump(const Duration(milliseconds: 300));
+  await tester.tap(find.byKey(const ValueKey('agent-mode-option-plan')));
+  await pumpUntilCondition(
+    tester,
+    () => find
+        .byKey(const ValueKey('agent-mode-selector-popover'))
+        .evaluate()
+        .isEmpty,
+    failureMessage: 'Conversation mode selector did not close',
+  );
+
   const draft = 'Draft retained across workbench pages';
   final input = _agentMessageInput();
   await tester.enterText(input, draft);
@@ -1009,6 +1027,7 @@ Future<_RetainedAgentState> _prepareRetainedAgentState(
     navigationWidth: _widthOf(tester, 'workbench-navigation-inline'),
     inspectorWidth: _widthOf(tester, 'workbench-inspector-inline'),
     draft: draft,
+    selectedMode: AgentConversationModeId.plan,
   );
 }
 
@@ -1051,6 +1070,19 @@ void _expectRetainedAgentState(
   expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
   expect(find.byKey(const ValueKey('files-panel-card')), findsOneWidget);
   expect(headerTitleText(tester), 'Retained thread');
+  expect(
+    (retained.agentPaneElement.widget as AgentPane)
+        .viewModel
+        .selectedConversationMode,
+    retained.selectedMode,
+  );
+  expect(
+    find.descendant(
+      of: find.byKey(const ValueKey('agent-mode-selector')),
+      matching: find.textContaining('Plan'),
+    ),
+    findsOneWidget,
+  );
   expect(tester.takeException(), isNull);
 }
 
@@ -1072,6 +1104,7 @@ class _RetainedAgentState {
     required this.navigationWidth,
     required this.inspectorWidth,
     required this.draft,
+    required this.selectedMode,
   });
 
   final Element windowFrameElement;
@@ -1083,6 +1116,35 @@ class _RetainedAgentState {
   final double navigationWidth;
   final double inspectorWidth;
   final String draft;
+  final AgentConversationModeId selectedMode;
+}
+
+class _ModeCapableFakeAgentProvider extends FakeAgentProvider
+    implements AgentConversationModeCatalogProvider {
+  _ModeCapableFakeAgentProvider({
+    required super.threadHistories,
+    required super.threadPages,
+  }) : super(
+         declaredCapabilities: AgentProviderCapabilities.codexAppServer
+             .copyWith(supportsModeSelection: true),
+       );
+
+  @override
+  Future<AgentConversationModeCatalog> listConversationModes() async {
+    return AgentConversationModeCatalog(
+      presets: const <AgentConversationModePreset>[
+        AgentConversationModePreset(
+          id: AgentConversationModeId.defaultMode,
+          displayName: 'Default',
+        ),
+        AgentConversationModePreset(
+          id: AgentConversationModeId.plan,
+          displayName: 'Plan',
+          suggestedReasoningEffort: 'medium',
+        ),
+      ],
+    );
+  }
 }
 
 double _widthOf(WidgetTester tester, String key) {

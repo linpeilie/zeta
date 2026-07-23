@@ -21,6 +21,13 @@ class _AgentComposer extends StatelessWidget {
     required this.onCancel,
     required this.showImageAttachment,
     required this.showResourceMention,
+    required this.conversationModeStatus,
+    required this.conversationModeOptions,
+    required this.selectedConversationMode,
+    required this.conversationModeAppliesToNextTurn,
+    required this.conversationModeStatusMessage,
+    required this.conversationModeContextId,
+    required this.onSelectConversationMode,
     required this.showModelSelection,
     required this.modelConfigState,
     required this.showPermissionPolicy,
@@ -53,6 +60,28 @@ class _AgentComposer extends StatelessWidget {
   final VoidCallback onCancel;
   final bool showImageAttachment;
   final bool showResourceMention;
+
+  /// 当前 Provider 的模式目录状态；不可用时不占用 Composer 布局。
+  final AgentModeSelectorStatus conversationModeStatus;
+
+  /// Provider 中立的可选模式目录。
+  final List<AgentConversationModePreset> conversationModeOptions;
+
+  /// 用户为下一新 turn 选择的模式。
+  final AgentConversationModeId? selectedConversationMode;
+
+  /// 当前选择是否只在下一新 turn 生效。
+  final bool conversationModeAppliesToNextTurn;
+
+  /// 加载、错误或只读模式的简短提示。
+  final String? conversationModeStatusMessage;
+
+  /// Provider/thread 切换时用于关闭旧模式浮层的稳定上下文标识。
+  final Object conversationModeContextId;
+
+  /// 用户选择模式后的单次回调。
+  final ValueChanged<AgentConversationModeId> onSelectConversationMode;
+
   final bool showModelSelection;
 
   final AgentModelConfigUiState modelConfigState;
@@ -122,6 +151,19 @@ class _AgentComposer extends StatelessWidget {
       selectorControls.add(control);
     }
 
+    if (conversationModeStatus != AgentModeSelectorStatus.unavailable) {
+      addSelector(
+        AgentModeSelector(
+          status: conversationModeStatus,
+          presets: conversationModeOptions,
+          selectedMode: selectedConversationMode,
+          appliesToNextTurn: conversationModeAppliesToNextTurn,
+          statusMessage: conversationModeStatusMessage,
+          contextId: conversationModeContextId,
+          onChanged: onSelectConversationMode,
+        ),
+      );
+    }
     for (final option in sessionConfigOptions) {
       addSelector(
         _SessionConfigOptionControl(

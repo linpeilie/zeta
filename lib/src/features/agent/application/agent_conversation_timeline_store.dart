@@ -8,7 +8,7 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 /// Agent 对话时间线与 turn 分组的运行时状态仓库。
 ///
 /// 它负责管理：
-/// - 对话消息、工具调用、审批卡片和历史事件的统一时间线
+/// - 对话消息、工具调用、审批/提问卡片和历史事件的统一时间线
 /// - 历史 turn 的分页窗口
 /// - live turn / history turn / standby turn 的分组状态
 /// - token 汇总与 UI 展开态
@@ -35,6 +35,7 @@ class AgentConversationTimelineStore {
   final List<AgentToolCall> _toolCalls = <AgentToolCall>[];
   final List<AgentPermissionRequest> _permissionRequests =
       <AgentPermissionRequest>[];
+  final List<AgentQuestionRequest> _questionRequests = <AgentQuestionRequest>[];
   final List<AgentPlanApprovalRequest> _planApprovalRequests =
       <AgentPlanApprovalRequest>[];
   final List<AgentTimelineEntry> _timelineEntries = <AgentTimelineEntry>[
@@ -80,6 +81,9 @@ class AgentConversationTimelineStore {
 
   List<AgentPermissionRequest> get permissionRequests =>
       List<AgentPermissionRequest>.unmodifiable(_permissionRequests);
+
+  List<AgentQuestionRequest> get questionRequests =>
+      List<AgentQuestionRequest>.unmodifiable(_questionRequests);
 
   List<AgentPlanApprovalRequest> get planApprovalRequests =>
       List<AgentPlanApprovalRequest>.unmodifiable(_planApprovalRequests);
@@ -342,6 +346,7 @@ class AgentConversationTimelineStore {
     _messages.clear();
     _toolCalls.clear();
     _permissionRequests.clear();
+    _questionRequests.clear();
     _planApprovalRequests.clear();
     _timelineEntries.clear();
     _timelineEntryTurnIds.clear();
@@ -562,6 +567,11 @@ class AgentConversationTimelineStore {
     return appendTimelineEntry(AgentPermissionTimelineEntry(request: request));
   }
 
+  String addQuestionRequest(AgentQuestionRequest request) {
+    _questionRequests.add(request);
+    return appendTimelineEntry(AgentQuestionTimelineEntry(request: request));
+  }
+
   String addPlanApprovalRequest(AgentPlanApprovalRequest request) {
     _planApprovalRequests.add(request);
     return appendTimelineEntry(
@@ -622,6 +632,24 @@ class AgentConversationTimelineStore {
     while (index < _timelineEntries.length) {
       final entry = _timelineEntries[index];
       if (entry is AgentPermissionTimelineEntry &&
+          entry.request.id == requestId) {
+        final turnId = _timelineEntryTurnIds[index];
+        _timelineEntries.removeAt(index);
+        _timelineEntryTurnIds.removeAt(index);
+        _turnIdsByTimelineEntryId.remove(entry.id);
+        _turnGroups[turnId]?.removeEntry(entry.id);
+      } else {
+        index += 1;
+      }
+    }
+  }
+
+  void removeQuestionRequest(String requestId) {
+    _questionRequests.removeWhere((item) => item.id == requestId);
+    var index = 0;
+    while (index < _timelineEntries.length) {
+      final entry = _timelineEntries[index];
+      if (entry is AgentQuestionTimelineEntry &&
           entry.request.id == requestId) {
         final turnId = _timelineEntryTurnIds[index];
         _timelineEntries.removeAt(index);
@@ -1665,6 +1693,14 @@ class AgentPermissionTimelineEntry extends AgentTimelineEntry {
     : super(id: 'permission-${request.id}');
 
   final AgentPermissionRequest request;
+}
+
+/// 时间线用户提问请求条目。
+class AgentQuestionTimelineEntry extends AgentTimelineEntry {
+  AgentQuestionTimelineEntry({required this.request})
+    : super(id: 'question-${request.id}');
+
+  final AgentQuestionRequest request;
 }
 
 /// 时间线独立计划审批条目。

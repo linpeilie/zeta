@@ -7,7 +7,6 @@ class _CodexApprovalMapper {
     'item/commandExecution/requestApproval',
     'item/fileChange/requestApproval',
     'item/permissions/requestApproval',
-    'item/tool/requestUserInput',
     'mcpServer/elicitation/request',
     'execCommandApproval',
     'applyPatchApproval',
@@ -57,9 +56,9 @@ class _CodexApprovalMapper {
         AgentPermissionKind.permissions,
         'Grant additional permissions',
       ),
-      'item/tool/requestUserInput' || 'mcpServer/elicitation/request' => (
-        AgentPermissionKind.userInput,
-        'Agent requests input',
+      'mcpServer/elicitation/request' => (
+        AgentPermissionKind.other,
+        'MCP server requests input',
       ),
       _ => (AgentPermissionKind.other, request.method),
     };
@@ -73,9 +72,6 @@ class _CodexApprovalMapper {
       params: request.params,
     );
     final reason = _string(request.params['reason']);
-    final questions = request.method == 'item/tool/requestUserInput'
-        ? _userInputQaPairs(request.params)
-        : const <AgentUserInputQaPair>[];
     final commandActions =
         request.method == 'item/commandExecution/requestApproval' ||
             request.method == 'execCommandApproval'
@@ -96,7 +92,6 @@ class _CodexApprovalMapper {
         sessionId: _string(request.params['threadId']),
         turnId: _string(request.params['turnId']),
         fileChanges: _map(request.params['fileChanges']),
-        questions: questions,
         commandActions: commandActions,
         proposedExecpolicyAmendment: proposedAmendment,
         raw: request.params,
@@ -134,13 +129,6 @@ class _CodexApprovalMapper {
       'applyPatchApproval' => <String, Object?>{
         'decision': decision.approved ? 'approved' : 'denied',
       },
-      // ToolRequestUserInputResponse 的 answers 为必填且协议无拒绝变体；
-      // 同意时回传结构化答案，拒绝时回空 answers。
-      'item/tool/requestUserInput' => <String, Object?>{
-        'answers': decision.approved
-            ? _encodeUserInputAnswers(decision.answers)
-            : <String, Object?>{},
-      },
       // McpServerElicitationRequestResponse 要求 action 字段；
       // decline/cancel 无 content，accept 暂以空表单内容应答。
       'mcpServer/elicitation/request' => switch ((
@@ -158,22 +146,6 @@ class _CodexApprovalMapper {
       // 避免返回 null 触碰严格 schema。
       _ => const <String, Object?>{},
     };
-  }
-
-  /// 编码 `ToolRequestUserInputResponse.answers`。
-  Map<String, Object?> _encodeUserInputAnswers(
-    Map<String, List<String>> answers,
-  ) {
-    final encoded = <String, Object?>{};
-    for (final entry in answers.entries) {
-      if (entry.key.isEmpty || entry.value.isEmpty) {
-        continue;
-      }
-      encoded[entry.key] = <String, Object?>{
-        'answers': List<String>.unmodifiable(entry.value),
-      };
-    }
-    return encoded;
   }
 
   /// 编码命令执行审批决策（含 session / execpolicy 变体）。

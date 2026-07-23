@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logging/logging.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -142,6 +143,95 @@ void main() {
 
       expect(viewModel.currentThreadTitle, 'Started title');
       expect(provider.calls, contains('start'));
+    });
+
+    test(
+      'sends an immutable Plan snapshot without changing model preference',
+      () async {
+        final modeController = AgentConversationModeController();
+        addTearDown(modeController.dispose);
+        final provider = _ModeFakeAgentProvider(
+          availableModels: _conversationModeModels,
+          emitSessionStartedDuringSend: true,
+        );
+        final viewModel = _createViewModel(
+          provider,
+          conversationModeController: modeController,
+        );
+        addTearDown(viewModel.dispose);
+
+        await viewModel.loadModels();
+        expect(viewModel.canSelectConversationMode, isTrue);
+        expect(
+          viewModel.conversationModeOptions.map((preset) => preset.id),
+          <AgentConversationModeId>[
+            AgentConversationModeId.defaultMode,
+            AgentConversationModeId.plan,
+          ],
+        );
+        expect(
+          viewModel.selectedConversationMode,
+          AgentConversationModeId.defaultMode,
+        );
+        expect(viewModel.selectedReasoningEffort, 'high');
+
+        viewModel.selectConversationMode(AgentConversationModeId.plan);
+        await viewModel.sendMessage('plan this change');
+
+        final selection = provider.turnConfigurations.single.conversationMode!;
+        expect(selection.modeId, AgentConversationModeId.plan);
+        expect(selection.effectiveModelId, 'gpt-5.6');
+        expect(selection.effectiveReasoningEffort, 'medium');
+        expect(provider.lastModelSelection?.reasoningEffort, 'high');
+        expect(
+          modeController.state.confirmedMode,
+          AgentConversationModeId.plan,
+        );
+        expect(modeController.state.pendingTurnMode, isNull);
+        expect(viewModel.conversationModeAppliesToNextTurn, isTrue);
+      },
+    );
+
+    test('sends Default explicitly for a mode-capable new thread', () async {
+      final provider = _ModeFakeAgentProvider(
+        availableModels: _conversationModeModels,
+      );
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.loadModels();
+      await viewModel.sendMessage('continue normally');
+
+      final selection = provider.turnConfigurations.single.conversationMode!;
+      expect(selection.modeId, AgentConversationModeId.defaultMode);
+      expect(selection.effectiveModelId, 'gpt-5.6');
+      expect(selection.effectiveReasoningEffort, 'high');
+    });
+
+    test('failed mode send preserves draft and clears pending state', () async {
+      final modeController = AgentConversationModeController();
+      addTearDown(modeController.dispose);
+      final provider = _ModeFakeAgentProvider(
+        availableModels: _conversationModeModels,
+        sendError: StateError('send failed'),
+      );
+      final viewModel = _createViewModel(
+        provider,
+        conversationModeController: modeController,
+      );
+      addTearDown(viewModel.dispose);
+
+      await viewModel.loadModels();
+      viewModel.selectConversationMode(AgentConversationModeId.plan);
+      await viewModel.sendMessage('plan this change');
+
+      expect(modeController.state.draftMode, AgentConversationModeId.plan);
+      expect(
+        modeController.state.confirmedMode,
+        AgentConversationModeId.defaultMode,
+      );
+      expect(modeController.state.pendingTurnMode, isNull);
+      expect(viewModel.conversationModeAppliesToNextTurn, isFalse);
     });
 
     test(
@@ -443,6 +533,249 @@ void main() {
         ),
         contains('hello while running'),
       );
+    });
+
+    test('running turn keeps mode changes for the next new turn', () async {
+      final provider = _ModeFakeAgentProvider(
+        availableModels: _conversationModeModels,
+        historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+          'thread-1': const AgentThreadHistorySnapshot(
+            threadId: 'thread-1',
+            turns: <AgentHistoryTurn>[
+              AgentHistoryTurn(
+                id: 'turn-running',
+                status: AgentHistoryTurnStatus.running,
+                collaborationMode: AgentConversationModeId.plan,
+              ),
+            ],
+          ),
+        },
+      );
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.loadModels();
+      await viewModel.switchThread(_thread());
+      expect(viewModel.selectedConversationMode, AgentConversationModeId.plan);
+      expect(viewModel.conversationModeAppliesToNextTurn, isTrue);
+
+      viewModel.selectConversationMode(AgentConversationModeId.defaultMode);
+      await viewModel.sendMessage('adjust the active plan');
+
+      expect(provider.calls, contains('steer:thread-1'));
+      expect(provider.turnConfigurations, isEmpty);
+
+      provider.emit(
+        const AgentTurnCompletedEvent(
+          sessionId: 'thread-1',
+          turnId: 'turn-running',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(viewModel.conversationModeAppliesToNextTurn, isFalse);
+
+      await viewModel.sendMessage('start the next turn');
+      expect(
+        provider.turnConfigurations.single.conversationMode!.modeId,
+        AgentConversationModeId.defaultMode,
+      );
+    });
+
+    test(
+      'restores history mode and scopes settings updates to current thread',
+      () async {
+        final provider = _ModeFakeAgentProvider(
+          availableModels: _conversationModeModels,
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'thread-1': const AgentThreadHistorySnapshot(
+              threadId: 'thread-1',
+              turns: <AgentHistoryTurn>[
+                AgentHistoryTurn(
+                  id: 'turn-1',
+                  collaborationMode: AgentConversationModeId.plan,
+                ),
+              ],
+            ),
+            'thread-2': const AgentThreadHistorySnapshot(
+              threadId: 'thread-2',
+              turns: <AgentHistoryTurn>[
+                AgentHistoryTurn(
+                  id: 'turn-2',
+                  collaborationMode: AgentConversationModeId.defaultMode,
+                ),
+              ],
+            ),
+          },
+        );
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.loadModels();
+        await viewModel.switchThread(_thread(id: 'thread-1'));
+        expect(
+          viewModel.selectedConversationMode,
+          AgentConversationModeId.plan,
+        );
+
+        await viewModel.switchThread(
+          _thread(id: 'thread-2', title: 'Thread two'),
+        );
+        expect(
+          viewModel.selectedConversationMode,
+          AgentConversationModeId.defaultMode,
+        );
+
+        provider.emit(
+          AgentThreadSettingsUpdatedEvent(
+            threadId: 'thread-1',
+            collaborationMode: AgentConversationModeSelection(
+              modeId: AgentConversationModeId.plan,
+              effectiveModelId: 'gpt-5.6',
+              effectiveReasoningEffort: 'medium',
+            ),
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          viewModel.selectedConversationMode,
+          AgentConversationModeId.defaultMode,
+        );
+
+        provider.emit(
+          AgentThreadSettingsUpdatedEvent(
+            threadId: 'thread-2',
+            collaborationMode: AgentConversationModeSelection(
+              modeId: AgentConversationModeId.plan,
+              effectiveModelId: 'gpt-5.6',
+              effectiveReasoningEffort: 'medium',
+            ),
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          viewModel.selectedConversationMode,
+          AgentConversationModeId.plan,
+        );
+      },
+    );
+
+    test('rapid thread switch discards a late history mode', () async {
+      final threadAHistory = Completer<AgentThreadHistorySnapshot>();
+      final provider = _ModeFakeAgentProvider(
+        availableModels: _conversationModeModels,
+        historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+          'thread-2': const AgentThreadHistorySnapshot(
+            threadId: 'thread-2',
+            turns: <AgentHistoryTurn>[
+              AgentHistoryTurn(
+                id: 'turn-2',
+                collaborationMode: AgentConversationModeId.defaultMode,
+                entries: <AgentHistoryEntry>[
+                  AgentHistoryMessageEntry(
+                    id: 'thread-2-message',
+                    role: AgentMessageRole.agent,
+                    text: 'Current thread history',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        },
+        historyCompleters: <String, Completer<AgentThreadHistorySnapshot>>{
+          'thread-1': threadAHistory,
+        },
+      );
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.loadModels();
+      final threadASwitch = viewModel.switchThread(_thread(id: 'thread-1'));
+      while (!provider.calls.contains('read:thread-1')) {
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      await viewModel.switchThread(
+        _thread(id: 'thread-2', title: 'Thread two'),
+      );
+      threadAHistory.complete(
+        const AgentThreadHistorySnapshot(
+          threadId: 'thread-1',
+          turns: <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-1',
+              collaborationMode: AgentConversationModeId.plan,
+              entries: <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'thread-1-message',
+                  role: AgentMessageRole.agent,
+                  text: 'Stale thread history',
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+      await threadASwitch;
+
+      expect(viewModel.currentThreadTitle, 'Thread two');
+      expect(
+        viewModel.selectedConversationMode,
+        AgentConversationModeId.defaultMode,
+      );
+      final messages = viewModel.timelineEntries
+          .whereType<AgentMessageTimelineEntry>()
+          .map((entry) => entry.message.text);
+      expect(messages, contains('Current thread history'));
+      expect(messages, isNot(contains('Stale thread history')));
+    });
+
+    test('thread switch rejects a late accepted mode snapshot', () async {
+      final modeController = AgentConversationModeController();
+      addTearDown(modeController.dispose);
+      final sendResult = Completer<AgentTurn>();
+      final provider = _ModeFakeAgentProvider(
+        availableModels: _conversationModeModels,
+        sendResult: sendResult,
+        historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+          'thread-2': const AgentThreadHistorySnapshot(
+            threadId: 'thread-2',
+            turns: <AgentHistoryTurn>[
+              AgentHistoryTurn(
+                id: 'turn-2',
+                collaborationMode: AgentConversationModeId.defaultMode,
+              ),
+            ],
+          ),
+        },
+      );
+      final viewModel = _createViewModel(
+        provider,
+        conversationModeController: modeController,
+      );
+      addTearDown(viewModel.dispose);
+
+      await viewModel.loadModels();
+      viewModel.selectConversationMode(AgentConversationModeId.plan);
+      final oldSend = viewModel.sendMessage('plan on thread one');
+      while (provider.turnConfigurations.isEmpty) {
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      await viewModel.switchThread(
+        _thread(id: 'thread-2', title: 'Thread two'),
+      );
+      sendResult.complete(const AgentTurn(id: 'turn-1', sessionId: 'thread-1'));
+      await oldSend;
+
+      expect(
+        modeController.state.confirmedMode,
+        AgentConversationModeId.defaultMode,
+      );
+      expect(
+        modeController.state.draftMode,
+        AgentConversationModeId.defaultMode,
+      );
+      expect(modeController.state.pendingTurnMode, isNull);
     });
 
     test(
@@ -1200,6 +1533,58 @@ void main() {
           greaterThan(requestedPendingVersion),
         );
         expect(viewModel.autoScrollTick, autoScrollTick);
+      },
+    );
+
+    test(
+      'keeps user questions independent and dismisses them when resolved',
+      () async {
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.sendMessage('hello');
+        await Future<void>.delayed(Duration.zero);
+        provider.emit(
+          const AgentQuestionRequestedEvent(
+            AgentQuestionRequest(
+              id: 'question-1',
+              title: 'Choose scope',
+              sessionId: 'thread-1',
+              turnId: 'turn-1',
+              questions: <AgentUserInputQaPair>[
+                AgentUserInputQaPair(
+                  questionId: 'scope',
+                  question: 'Select a scope',
+                ),
+              ],
+            ),
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(viewModel.permissionRequests, isEmpty);
+        expect(viewModel.questionRequests.map((item) => item.id), <String>[
+          'question-1',
+        ]);
+        expect(
+          viewModel.timelineEntries.whereType<AgentQuestionTimelineEntry>(),
+          hasLength(1),
+        );
+
+        provider.emit(
+          const AgentQuestionResolvedEvent(
+            requestId: 'question-1',
+            threadId: 'thread-1',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(viewModel.questionRequests, isEmpty);
+        expect(
+          viewModel.timelineEntries.whereType<AgentQuestionTimelineEntry>(),
+          isEmpty,
+        );
       },
     );
 
@@ -3105,6 +3490,7 @@ void main() {
 AgentConversationViewModel _createViewModel(
   _FakeAgentProvider provider, {
   AgentModelCatalogRepository? modelCatalogRepository,
+  AgentConversationModeController? conversationModeController,
 }) {
   final controller = ActiveAgentProviderController(
     providerFactory: _FakeAgentProviderFactory(provider),
@@ -3112,7 +3498,10 @@ AgentConversationViewModel _createViewModel(
     modelCatalogRepository: modelCatalogRepository,
   );
   addTearDown(controller.dispose);
-  final viewModel = AgentConversationViewModel(providerController: controller);
+  final viewModel = AgentConversationViewModel(
+    providerController: controller,
+    conversationModeController: conversationModeController,
+  );
   viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
   return viewModel;
 }
@@ -3224,6 +3613,8 @@ class _FakeAgentProvider
     this.sendError,
     this.startSessionTitle,
     this.resumeSessionTitle,
+    this.emitSessionStartedDuringSend = false,
+    this.sendResult,
     this.providerConfig = AgentProviderConfig.defaultCodex,
     this.availableModels = const AgentModelList(models: <AgentModelInfo>[]),
     this.emitModelEventOnRefresh = false,
@@ -3234,6 +3625,8 @@ class _FakeAgentProvider
         const <String, AgentThreadHistorySnapshot>{},
     Map<String, Completer<AgentSession>> resumeCompleters =
         const <String, Completer<AgentSession>>{},
+    Map<String, Completer<AgentThreadHistorySnapshot>> historyCompleters =
+        const <String, Completer<AgentThreadHistorySnapshot>>{},
   }) : declaredCapabilities =
            declaredCapabilities ??
            AgentProviderCapabilities.codexAppServer.copyWith(
@@ -3250,13 +3643,19 @@ class _FakeAgentProvider
        ),
        _resumeCompleters = Map<String, Completer<AgentSession>>.from(
          resumeCompleters,
-       );
+       ),
+       _historyCompleters =
+           Map<String, Completer<AgentThreadHistorySnapshot>>.from(
+             historyCompleters,
+           );
 
   final bool failHistory;
   final bool failResume;
   final Object? sendError;
   final String? startSessionTitle;
   final String? resumeSessionTitle;
+  final bool emitSessionStartedDuringSend;
+  final Completer<AgentTurn>? sendResult;
   final AgentProviderConfig providerConfig;
   final AgentModelList availableModels;
   final bool emitModelEventOnRefresh;
@@ -3265,6 +3664,7 @@ class _FakeAgentProvider
   final AgentThreadHistorySnapshot _defaultHistorySnapshot;
   final Map<String, AgentThreadHistorySnapshot> _historySnapshotsByThread;
   final Map<String, Completer<AgentSession>> _resumeCompleters;
+  final Map<String, Completer<AgentThreadHistorySnapshot>> _historyCompleters;
   final List<String> calls = <String>[];
   final List<String?> readSessionPaths = <String?>[];
   final List<String?> readProjectPaths = <String?>[];
@@ -3276,6 +3676,8 @@ class _FakeAgentProvider
   int initializeCalls = 0;
   int listModelsCalls = 0;
   int refreshModelsCalls = 0;
+  final List<AgentTurnConfiguration> turnConfigurations =
+      <AgentTurnConfiguration>[];
 
   @override
   AgentProviderConfig get config => providerConfig;
@@ -3358,6 +3760,10 @@ class _FakeAgentProvider
     if (failHistory) {
       throw StateError('history failed');
     }
+    final completer = _historyCompleters[threadId];
+    if (completer != null) {
+      return completer.future;
+    }
     return _historySnapshotsByThread[threadId] ?? _defaultHistorySnapshot;
   }
 
@@ -3404,7 +3810,13 @@ class _FakeAgentProvider
     String? message,
     List<AgentUserInput>? inputs,
     String? clientUserMessageId,
+    AgentTurnConfiguration configuration = const AgentTurnConfiguration(),
   }) async {
+    turnConfigurations.add(configuration);
+    if (emitSessionStartedDuringSend) {
+      emit(AgentSessionStartedEvent(session));
+      await Future<void>.delayed(Duration.zero);
+    }
     final error = sendError;
     if (error != null) {
       Error.throwWithStackTrace(error, StackTrace.current);
@@ -3416,6 +3828,10 @@ class _FakeAgentProvider
       if (input is AgentLocalImageUserInput) {
         calls.add('image:${input.path}');
       }
+    }
+    final pendingResult = sendResult;
+    if (pendingResult != null) {
+      return pendingResult.future;
     }
     return AgentTurn(id: 'turn-1', sessionId: session.id);
   }
@@ -3489,6 +3905,54 @@ class _FakeAgentProvider
     _events.add(event);
   }
 }
+
+class _ModeFakeAgentProvider extends _FakeAgentProvider
+    implements AgentConversationModeCatalogProvider {
+  _ModeFakeAgentProvider({
+    super.sendError,
+    super.availableModels,
+    super.historySnapshotsByThread,
+    super.historyCompleters,
+    super.emitSessionStartedDuringSend,
+    super.sendResult,
+  });
+
+  int listConversationModesCalls = 0;
+
+  @override
+  Future<AgentConversationModeCatalog> listConversationModes() async {
+    listConversationModesCalls += 1;
+    return AgentConversationModeCatalog(
+      presets: const <AgentConversationModePreset>[
+        AgentConversationModePreset(
+          id: AgentConversationModeId.defaultMode,
+          displayName: 'Default',
+        ),
+        AgentConversationModePreset(
+          id: AgentConversationModeId.plan,
+          displayName: 'Plan',
+          suggestedReasoningEffort: 'medium',
+        ),
+      ],
+    );
+  }
+}
+
+const AgentModelList _conversationModeModels = AgentModelList(
+  models: <AgentModelInfo>[
+    AgentModelInfo(
+      id: 'gpt-5.6',
+      model: 'gpt-5.6',
+      displayName: 'GPT-5.6',
+      supportedReasoningEfforts: <AgentModelReasoningEffort>[
+        AgentModelReasoningEffort(effort: 'medium'),
+        AgentModelReasoningEffort(effort: 'high'),
+      ],
+      defaultReasoningEffort: 'high',
+      isDefault: true,
+    ),
+  ],
+);
 
 class _ConversationModelCatalogStore implements AgentModelCatalogCacheStore {
   List<AgentModelCatalogSnapshot> snapshots =
