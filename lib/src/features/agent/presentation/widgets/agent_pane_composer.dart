@@ -2,8 +2,8 @@ part of '../agent_pane.dart';
 
 /// 底部输入面板。
 ///
-/// 上半部分是多行输入框，下半部分是操作行：左侧通过一个模型配置入口渐进
-/// 展示模型、思考程度和 Fast，右侧放发送/取消按钮。
+/// 上半部分是多行输入框，下半部分是操作行：左侧通过“更多操作”菜单承载文件、
+/// 图片和 Plan 快捷入口，并渐进展示模型、思考程度和 Fast，右侧放发送/取消按钮。
 class _AgentComposer extends StatelessWidget {
   static const double _compactToolbarBreakpoint = 560;
 
@@ -300,9 +300,7 @@ class _AgentComposer extends StatelessWidget {
                   // 宽窗保持一行工具栏；空间不足时，将低频选择器收进可横滑的第二行。
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      final attachmentActions = _buildAttachmentActions(
-                        context,
-                      );
+                      final moreActions = _buildMoreActions(context);
                       final submitAction = _buildSubmitAction(
                         context,
                         showCancel: showCancel,
@@ -329,7 +327,7 @@ class _AgentComposer extends StatelessWidget {
                           children: [
                             Row(
                               children: [
-                                attachmentActions,
+                                moreActions,
                                 const Spacer(),
                                 if (tokenUsage case final Widget usage) usage,
                                 submitAction,
@@ -355,7 +353,7 @@ class _AgentComposer extends StatelessWidget {
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          attachmentActions,
+                          moreActions,
                           if (selectorControls.isNotEmpty) ...[
                             const SizedBox(width: IdeSpacing.space4),
                             ...selectorControls,
@@ -389,44 +387,23 @@ class _AgentComposer extends StatelessWidget {
     );
   }
 
-  Widget _buildAttachmentActions(BuildContext context) {
-    final colors = IdeColors.of(context);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (showResourceMention)
-          IdeTooltip(
-            message: 'Mention file',
-            child: sf.IconButton.ghost(
-              key: const ValueKey('agent-mention-file-button'),
-              onPressed: () => _showMentionPicker(context),
-              size: sf.ButtonSize.small,
-              density: sf.ButtonDensity.iconDense,
-              icon: Icon(
-                Icons.alternate_email_rounded,
-                size: 16,
-                color: colors.textSecondary,
-              ),
-            ),
-          ),
-        if (showResourceMention && showImageAttachment)
-          const SizedBox(width: IdeSpacing.space4),
-        if (showImageAttachment)
-          IdeTooltip(
-            message: 'Attach image',
-            child: sf.IconButton.ghost(
-              key: const ValueKey('agent-attach-image-button'),
-              onPressed: onAttachImages,
-              size: sf.ButtonSize.small,
-              density: sf.ButtonDensity.iconDense,
-              icon: Icon(
-                Icons.image_outlined,
-                size: 16,
-                color: colors.textSecondary,
-              ),
-            ),
-          ),
-      ],
+  Widget _buildMoreActions(BuildContext context) {
+    final showPlan =
+        conversationModeStatus == AgentModeSelectorStatus.ready &&
+        conversationModeOptions.any(
+          (preset) =>
+              preset.id == AgentConversationModeId.plan && preset.isSelectable,
+        );
+    return _ComposerMoreActionsButton(
+      showPlan: showPlan,
+      planSelected: selectedConversationMode == AgentConversationModeId.plan,
+      showMentionFile: showResourceMention,
+      showAttachImage: showImageAttachment,
+      contextId: conversationModeContextId,
+      onSelectPlan: () =>
+          onSelectConversationMode(AgentConversationModeId.plan),
+      onMentionFile: () => _showMentionPicker(context),
+      onAttachImage: onAttachImages,
     );
   }
 
@@ -543,6 +520,209 @@ class _AgentComposer extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Composer 左下角的能力感知“更多操作”菜单。
+class _ComposerMoreActionsButton extends StatefulWidget {
+  const _ComposerMoreActionsButton({
+    required this.showPlan,
+    required this.planSelected,
+    required this.showMentionFile,
+    required this.showAttachImage,
+    required this.contextId,
+    required this.onSelectPlan,
+    required this.onMentionFile,
+    required this.onAttachImage,
+  });
+
+  final bool showPlan;
+  final bool planSelected;
+  final bool showMentionFile;
+  final bool showAttachImage;
+  final Object contextId;
+  final VoidCallback onSelectPlan;
+  final VoidCallback onMentionFile;
+  final VoidCallback onAttachImage;
+
+  @override
+  State<_ComposerMoreActionsButton> createState() =>
+      _ComposerMoreActionsButtonState();
+}
+
+class _ComposerMoreActionsButtonState
+    extends State<_ComposerMoreActionsButton> {
+  static const double _preferredWidth = 196;
+  static const double _maxHeight = 240;
+
+  final FocusNode _triggerFocusNode = FocusNode(
+    debugLabel: 'agent-more-actions-trigger',
+  );
+  IdePopoverHandle<void>? _popoverEntry;
+
+  bool get _hasActions =>
+      widget.showPlan || widget.showMentionFile || widget.showAttachImage;
+
+  @override
+  void didUpdateWidget(covariant _ComposerMoreActionsButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final shouldDismiss =
+        _popoverEntry != null &&
+        (oldWidget.contextId != widget.contextId ||
+            oldWidget.showPlan != widget.showPlan ||
+            oldWidget.planSelected != widget.planSelected ||
+            oldWidget.showMentionFile != widget.showMentionFile ||
+            oldWidget.showAttachImage != widget.showAttachImage);
+    if (!shouldDismiss) {
+      return;
+    }
+    final entry = _popoverEntry;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && identical(_popoverEntry, entry)) {
+        entry?.dismiss();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _popoverEntry?.dismiss();
+    _triggerFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _togglePopover() {
+    final entry = _popoverEntry;
+    if (entry != null) {
+      entry.dismiss();
+      return;
+    }
+    _showPopover();
+  }
+
+  void _showPopover() {
+    if (_popoverEntry != null || !_hasActions) {
+      return;
+    }
+    final mediaQuery = MediaQuery.of(context);
+    final viewport = mediaQuery.size;
+    final renderBox = context.findRenderObject() as RenderBox?;
+    final origin = renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+    final availableHeight = origin.dy - IdeSpacing.space6 - IdeSpacing.space12;
+    final width = math.max(
+      1.0,
+      math.min(_preferredWidth, viewport.width - IdeSpacing.space12 * 2),
+    );
+    final maxHeight = math.max(1.0, math.min(_maxHeight, availableHeight));
+    final reduceMotion = mediaQuery.disableAnimations;
+
+    final entry = showIdePopover<void>(
+      context: context,
+      alignment: Alignment.bottomLeft,
+      anchorAlignment: Alignment.topLeft,
+      widthConstraint: IdePopoverConstraint.intrinsic,
+      heightConstraint: IdePopoverConstraint.flexible,
+      key: const ValueKey('agent-more-actions-popover'),
+      offset: const Offset(0, -IdeSpacing.space6),
+      margin: const EdgeInsets.all(IdeSpacing.space12),
+      allowInvertVertical: false,
+      showDuration: reduceMotion
+          ? const Duration(milliseconds: 80)
+          : IdeMotion.durationFast,
+      dismissDuration: reduceMotion
+          ? const Duration(milliseconds: 80)
+          : IdeMotion.durationFast,
+      builder: (context) => SizedBox(
+        width: width,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: SingleChildScrollView(
+            child: IdeContextMenu(
+              minWidth: width,
+              closeOnActivate: false,
+              actions: _buildActions(),
+            ),
+          ),
+        ),
+      ),
+    );
+    _popoverEntry = entry;
+    setState(() {});
+    unawaited(
+      entry.future.whenComplete(() {
+        if (!mounted || !identical(_popoverEntry, entry)) {
+          return;
+        }
+        _popoverEntry = null;
+        setState(() {});
+        if (_hasActions) {
+          _triggerFocusNode.requestFocus();
+        }
+      }),
+    );
+  }
+
+  void _activateAction(VoidCallback action) {
+    final entry = _popoverEntry;
+    if (entry == null) {
+      action();
+      return;
+    }
+    entry.dismiss();
+    unawaited(entry.future.whenComplete(action));
+  }
+
+  List<IdeContextMenuAction> _buildActions() {
+    return <IdeContextMenuAction>[
+      if (widget.showPlan)
+        IdeContextMenuAction(
+          key: const ValueKey('agent-more-actions-plan'),
+          label: 'Plan',
+          leadingIcon: widget.planSelected
+              ? Icons.check_rounded
+              : Icons.alt_route_rounded,
+          semanticLabel: widget.planSelected ? 'Plan, selected' : 'Plan',
+          onPressed: () => _activateAction(() {
+            if (!widget.planSelected) {
+              widget.onSelectPlan();
+            }
+          }),
+        ),
+      if (widget.showMentionFile)
+        IdeContextMenuAction(
+          key: const ValueKey('agent-mention-file-button'),
+          label: 'Mention file',
+          leadingIcon: Icons.alternate_email_rounded,
+          dividerAbove: widget.showPlan,
+          onPressed: () => _activateAction(widget.onMentionFile),
+        ),
+      if (widget.showAttachImage)
+        IdeContextMenuAction(
+          key: const ValueKey('agent-attach-image-button'),
+          label: 'Attach image',
+          leadingIcon: Icons.image_outlined,
+          dividerAbove: widget.showPlan && !widget.showMentionFile,
+          onPressed: () => _activateAction(widget.onAttachImage),
+        ),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_hasActions) {
+      return const SizedBox.shrink();
+    }
+    final colors = IdeColors.of(context);
+    final open = _popoverEntry != null;
+    return _ComposerSelectorTrigger(
+      surfaceKey: const ValueKey('agent-more-actions-button'),
+      tooltip: 'More actions',
+      semanticLabel: open ? 'More actions, expanded' : 'More actions',
+      open: open,
+      focusNode: _triggerFocusNode,
+      onPressed: _togglePopover,
+      child: Icon(Icons.add_rounded, size: 18, color: colors.textSecondary),
     );
   }
 }

@@ -12,6 +12,7 @@ import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
+import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
@@ -1356,6 +1357,132 @@ void main() {
       );
 
       testWidgets(
+        'more actions opens above composer and Plan configures the next turn',
+        (tester) async {
+          final provider = _ModeFakeAgentProvider(models: _modelConfigList);
+          final viewModel = _createViewModel(provider);
+          addTearDown(provider.dispose);
+          addTearDown(viewModel.dispose);
+          await viewModel.loadModels();
+          await tester.pumpWidget(_TestApp(viewModel: viewModel));
+          await viewModel.switchThread(
+            _thread(id: 'thread-more-actions', title: 'More actions thread'),
+          );
+          await _pumpUntilFinder(
+            tester,
+            find.byKey(const ValueKey('agent-mode-selector')),
+          );
+
+          final moreActionsButton = find.byKey(
+            const ValueKey('agent-more-actions-button'),
+          );
+          expect(moreActionsButton, findsOneWidget);
+          expect(
+            find.byKey(const ValueKey('agent-mention-file-button')),
+            findsNothing,
+          );
+          expect(
+            find.byKey(const ValueKey('agent-attach-image-button')),
+            findsNothing,
+          );
+
+          await tester.tap(moreActionsButton);
+          await tester.pump(const Duration(milliseconds: 300));
+
+          final popover = find.byKey(
+            const ValueKey('agent-more-actions-popover'),
+          );
+          final planAction = find.byKey(
+            const ValueKey('agent-more-actions-plan'),
+          );
+          expect(popover, findsOneWidget);
+          expect(planAction, findsOneWidget);
+          expect(
+            find.byKey(const ValueKey('agent-mention-file-button')),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(const ValueKey('agent-attach-image-button')),
+            findsOneWidget,
+          );
+          expect(
+            tester.getRect(popover).bottom,
+            lessThanOrEqualTo(tester.getRect(moreActionsButton).top),
+          );
+
+          await tester.tap(planAction);
+          await _pumpUntilFinderAbsent(tester, popover);
+          await tester.pump();
+
+          expect(popover, findsNothing);
+          expect(
+            viewModel.selectedConversationMode,
+            AgentConversationModeId.plan,
+          );
+
+          await tester.enterText(
+            find.byKey(const ValueKey('agent-message-input')),
+            'Plan from more actions',
+          );
+          await tester.pump();
+          await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+          await _pumpUntilMessageSent(tester, provider);
+
+          expect(
+            provider.turnConfigurations.single.conversationMode!.modeId,
+            AgentConversationModeId.plan,
+          );
+          provider.emitEvent(
+            const AgentTurnCompletedEvent(
+              sessionId: 'thread-more-actions',
+              turnId: 'turn-1',
+            ),
+          );
+          await tester.pump();
+        },
+      );
+
+      testWidgets(
+        'Mention file closes more actions before opening the picker',
+        (tester) async {
+          const mentionFile = WorkspaceNode(
+            path: '/repo/lib/main.dart',
+            name: 'main.dart',
+            type: WorkspaceNodeType.file,
+          );
+          final provider = _FakeAgentProvider();
+          final viewModel = _createViewModel(
+            provider,
+            workspaceFilesProvider: () => const <WorkspaceNode>[mentionFile],
+          );
+          addTearDown(provider.dispose);
+          addTearDown(viewModel.dispose);
+          await tester.pumpWidget(_TestApp(viewModel: viewModel));
+          await _pumpAgentPaneUi(tester);
+
+          await tester.tap(
+            find.byKey(const ValueKey('agent-more-actions-button')),
+          );
+          await tester.pump(const Duration(milliseconds: 300));
+          await tester.tap(
+            find.byKey(const ValueKey('agent-mention-file-button')),
+          );
+          await _pumpUntilFinder(
+            tester,
+            find.byKey(
+              const ValueKey('agent-mention-option-/repo/lib/main.dart'),
+            ),
+          );
+
+          expect(
+            find.byKey(const ValueKey('agent-more-actions-popover')),
+            findsNothing,
+          );
+          expect(find.text('Mention file'), findsOneWidget);
+        },
+      );
+
+      testWidgets(
         'completed Plan shows local handoff and Run plan starts Default turn',
         (tester) async {
           final provider = _ModeFakeAgentProvider(models: _modelConfigList);
@@ -1460,9 +1587,11 @@ void main() {
         (tester) async {
           tester.view.devicePixelRatio = 1;
           tester.view.physicalSize = const Size(360, 560);
+          tester.platformDispatcher.textScaleFactorTestValue = 1.4;
           addTearDown(() {
             tester.view.resetPhysicalSize();
             tester.view.resetDevicePixelRatio();
+            tester.platformDispatcher.clearTextScaleFactorTestValue();
           });
           final provider = _ModeFakeAgentProvider(models: _modelConfigList);
           final viewModel = _createViewModel(provider);
@@ -1495,6 +1624,9 @@ void main() {
             find.byKey(const ValueKey('agent-mode-selector')),
           );
 
+          final moreActionsButton = find.byKey(
+            const ValueKey('agent-more-actions-button'),
+          );
           final selectorScroll = find.byKey(
             const ValueKey('agent-composer-selector-scroll'),
           );
@@ -1502,6 +1634,7 @@ void main() {
             find.byKey(const ValueKey('agent-composer-compact-toolbar')),
             findsOneWidget,
           );
+          expect(moreActionsButton, findsOneWidget);
           expect(selectorScroll, findsOneWidget);
           expect(
             find.descendant(
@@ -1509,6 +1642,10 @@ void main() {
               matching: find.byKey(const ValueKey('agent-mode-selector')),
             ),
             findsOneWidget,
+          );
+          expect(
+            find.descendant(of: selectorScroll, matching: moreActionsButton),
+            findsNothing,
           );
           expect(tester.takeException(), isNull);
         },
@@ -2326,11 +2463,13 @@ const AgentModelList _modelConfigList = AgentModelList(
 AgentConversationViewModel _createViewModel(
   _FakeAgentProvider provider, {
   AgentConversationModeController? conversationModeController,
+  List<WorkspaceNode> Function()? workspaceFilesProvider,
 }) {
   return _createViewModelWithStore(
     provider,
     MemoryAgentProviderConfigStore(),
     conversationModeController: conversationModeController,
+    workspaceFilesProvider: workspaceFilesProvider,
   );
 }
 
@@ -2338,6 +2477,7 @@ AgentConversationViewModel _createViewModelWithStore(
   _FakeAgentProvider provider,
   AgentProviderConfigStore configStore, {
   AgentConversationModeController? conversationModeController,
+  List<WorkspaceNode> Function()? workspaceFilesProvider,
 }) {
   final controller = ActiveAgentProviderController(
     providerFactory: _FakeAgentProviderFactory(provider),
@@ -2347,6 +2487,7 @@ AgentConversationViewModel _createViewModelWithStore(
   final viewModel = AgentConversationViewModel(
     providerController: controller,
     conversationModeController: conversationModeController,
+    workspaceFilesProvider: workspaceFilesProvider,
   );
   viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
   return viewModel;
@@ -2717,6 +2858,16 @@ Future<void> _pumpUntilFinder(WidgetTester tester, Finder finder) async {
     }
   }
   throw TestFailure('Widget did not become ready: $finder');
+}
+
+Future<void> _pumpUntilFinderAbsent(WidgetTester tester, Finder finder) async {
+  for (var attempt = 0; attempt < 20; attempt += 1) {
+    await tester.pump(const Duration(milliseconds: 20));
+    if (finder.evaluate().isEmpty) {
+      return;
+    }
+  }
+  throw TestFailure('Widget did not close: $finder');
 }
 
 Future<void> _pumpUntilMessageSent(

@@ -779,7 +779,7 @@ void main() {
     },
   );
 
-  testWidgets('composer hides image and policy controls for Grok', (
+  testWidgets('composer more actions filters unsupported Grok controls', (
     tester,
   ) async {
     final session = activeProjectSessionStore(tempDirectories);
@@ -802,6 +802,9 @@ void main() {
         ),
       ),
     );
+    final moreActionsButton = find.byKey(
+      const ValueKey('agent-more-actions-button'),
+    );
     final attachImageButton = find.byKey(
       const ValueKey('agent-attach-image-button'),
     );
@@ -811,17 +814,29 @@ void main() {
     final mentionFileButton = find.byKey(
       const ValueKey('agent-mention-file-button'),
     );
+    final planAction = find.byKey(const ValueKey('agent-more-actions-plan'));
     await pumpUntilCondition(
       tester,
       () =>
-          attachImageButton.evaluate().isEmpty &&
-          permissionPolicySelector.evaluate().isEmpty &&
-          mentionFileButton.evaluate().isNotEmpty,
+          moreActionsButton.evaluate().isNotEmpty &&
+          permissionPolicySelector.evaluate().isEmpty,
       failureMessage: 'Grok composer controls did not become ready',
     );
 
     expect(attachImageButton, findsNothing);
+    expect(mentionFileButton, findsNothing);
+    expect(planAction, findsNothing);
+
+    await tester.tap(moreActionsButton);
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(
+      find.byKey(const ValueKey('agent-more-actions-popover')),
+      findsOneWidget,
+    );
+    expect(attachImageButton, findsNothing);
     expect(permissionPolicySelector, findsNothing);
+    expect(planAction, findsNothing);
     expect(mentionFileButton, findsOneWidget);
   });
 
