@@ -278,7 +278,7 @@ void main() {
     },
   );
 
-  test('restores Codex history after delayed settings select Grok', () async {
+  test('restored thread starts on project home', () async {
     // Arrange
     final directory = Directory.systemTemp.createTempSync('zeta_shell_');
     tempDirectories.add(directory);
@@ -340,15 +340,28 @@ void main() {
     );
     addTearDown(shell.dispose);
 
-    // Act：等待恢复流程创建 thread workspace，再让磁盘配置返回 Grok。
+    // Act：恢复项目时不自动创建或选中旧 Thread workspace。
     for (
       var attempt = 0;
-      attempt < 20 && shell.agentWorkspaceEntries.length < 2;
+      attempt < 20 && !shell.initialRestoreCompleted;
       attempt += 1
     ) {
       await _flushAsync();
     }
-    expect(shell.agentWorkspaceEntries, hasLength(2));
+
+    // Assert：启动落在项目首页，旧会话详情尚未加载。
+    expect(shell.initialRestoreCompleted, isTrue);
+    expect(shell.activeProjectPath, directory.path);
+    expect(shell.isProjectHomeActive, isTrue);
+    expect(shell.selectedAgentWorkspaceEntryId, isNull);
+    expect(
+      shell.projectThreadStateFor(directory.path).selectedThreadId,
+      isNull,
+    );
+    expect(shell.agentWorkspaceEntries, hasLength(1));
+    expect(codexBackend.readThreadIds, isEmpty);
+
+    // Act：配置加载完成后，由用户显式打开缓存中的 Codex 会话。
     settingsCompleter.complete(
       const AgentProviderSettings(
         providers: <AgentProviderConfig>[
@@ -360,14 +373,17 @@ void main() {
     );
     for (
       var attempt = 0;
-      attempt < 20 && !shell.initialRestoreCompleted;
+      attempt < 20 &&
+          shell.agentProviderController.activeProviderId != grokAgentProviderId;
       attempt += 1
     ) {
       await _flushAsync();
     }
+    await shell.selectProjectThread(directory.path, thread);
+    await _flushAsync();
 
-    // Assert
-    expect(shell.initialRestoreCompleted, isTrue);
+    // Assert：会话自身的 Provider 归属仍优先于当前全局 Provider。
+    expect(shell.isProjectHomeActive, isFalse);
     expect(
       shell.selectedAgentViewModel.activeProviderId,
       defaultAgentProviderId,

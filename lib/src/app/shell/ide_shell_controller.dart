@@ -660,7 +660,8 @@ class IdeShellController extends ChangeNotifier {
         }
         projectThreadsController.registerThreadMapping(entry.key, thread.id);
       }
-      if (session.projectHomeActive && _projectPath != null) {
+      if (_projectPath != null) {
+        // 启动只恢复项目上下文和会话列表，避免自动进入上次打开的会话详情。
         _enterProjectHome(refreshThreads: true);
       } else {
         await _syncSelectedAgentWorkspace();
