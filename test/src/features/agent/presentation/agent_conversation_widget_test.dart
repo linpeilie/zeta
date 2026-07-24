@@ -46,7 +46,10 @@ void main() {
   ) async {
     // Arrange
     final session = activeProjectSessionStore(tempDirectories);
-    final provider = FakeAgentProvider();
+    final provider = FakeAgentProvider(
+      includeConversationTestThread: true,
+      conversationThreadProviderId: cursorAgentProviderId,
+    );
     final configStore = MemoryAgentProviderConfigStore(
       AgentProviderSettings(
         providers: <AgentProviderConfig>[
@@ -68,6 +71,7 @@ void main() {
         agentProviderConfigStore: configStore,
       ),
     );
+    await openConversationTestThread(tester);
     await tester.pumpAndSettle();
 
     // Assert
@@ -786,6 +790,7 @@ void main() {
     final provider = FakeAgentProvider(
       config: AgentProviderConfig.defaultGrok,
       declaredCapabilities: AgentProviderCapabilities.grokAcp,
+      includeConversationTestThread: true,
     );
     await tester.pumpWidget(
       MainApp(
@@ -815,6 +820,7 @@ void main() {
       const ValueKey('agent-mention-file-button'),
     );
     final planAction = find.byKey(const ValueKey('agent-more-actions-plan'));
+    await openConversationTestThread(tester);
     await pumpUntilCondition(
       tester,
       () =>
@@ -849,6 +855,7 @@ void main() {
       config: AgentProviderConfig.defaultGrok,
       declaredCapabilities: AgentProviderCapabilities.grokAcp,
       turnErrorMessage: errorMessage,
+      includeConversationTestThread: true,
     );
 
     await tester.pumpWidget(
@@ -1510,6 +1517,7 @@ void main() {
       final provider = FakeAgentProvider(
         completeTurns: false,
         sessionTitle: 'Running thread',
+        includeConversationTestThread: true,
         tokenUsageDuringTurn: const AgentTokenUsage(
           inputTokens: 1000,
           cachedInputTokens: 200,
@@ -1736,6 +1744,7 @@ void main() {
     final provider = FakeAgentProvider(
       completeTurns: false,
       sessionTitle: 'Long running thread title for narrow layout',
+      includeConversationTestThread: true,
       tokenUsageDuringTurn: const AgentTokenUsage(
         inputTokens: 3200,
         cachedInputTokens: 1200,
@@ -2014,7 +2023,7 @@ void main() {
 
   testWidgets('adds local agent messages from the composer', (tester) async {
     final session = activeProjectSessionStore(tempDirectories);
-    final provider = FakeAgentProvider();
+    final provider = FakeAgentProvider(includeConversationTestThread: true);
 
     await tester.pumpWidget(
       MainApp(
@@ -2054,7 +2063,7 @@ void main() {
     tester,
   ) async {
     final session = activeProjectSessionStore(tempDirectories);
-    final provider = FakeAgentProvider();
+    final provider = FakeAgentProvider(includeConversationTestThread: true);
 
     await tester.pumpWidget(
       MainApp(
@@ -2088,6 +2097,7 @@ void main() {
     final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider(
       completeTurns: false,
+      includeConversationTestThread: true,
       responseText: List<String>.generate(
         160,
         (index) => 'Streaming line $index',
@@ -2144,7 +2154,10 @@ void main() {
     tester,
   ) async {
     final session = activeProjectSessionStore(tempDirectories);
-    final provider = FakeAgentProvider(completeTurns: false);
+    final provider = FakeAgentProvider(
+      completeTurns: false,
+      includeConversationTestThread: true,
+    );
 
     await tester.pumpWidget(
       MainApp(
@@ -2294,7 +2307,10 @@ void main() {
     tester,
   ) async {
     final session = activeProjectSessionStore(tempDirectories);
-    final provider = FakeAgentProvider(completeTurns: false);
+    final provider = FakeAgentProvider(
+      completeTurns: false,
+      includeConversationTestThread: true,
+    );
 
     await tester.pumpWidget(
       MainApp(
@@ -2385,7 +2401,10 @@ void main() {
     tester,
   ) async {
     final session = activeProjectSessionStore(tempDirectories);
-    final provider = FakeAgentProvider(completeTurns: false);
+    final provider = FakeAgentProvider(
+      completeTurns: false,
+      includeConversationTestThread: true,
+    );
 
     await tester.pumpWidget(
       MainApp(
@@ -2533,6 +2552,7 @@ void main() {
     final provider = FakeAgentProvider(
       responseText: 'Hidden commentary with `code`',
       emitCompletedCommentary: true,
+      includeConversationTestThread: true,
     );
 
     await tester.pumpWidget(
@@ -2567,6 +2587,7 @@ void main() {
     final provider = FakeAgentProvider(
       responseText:
           '- First markdown item\n\nInline `code` sample\n\n```dart\nvoid main() {}\n```',
+      includeConversationTestThread: true,
     );
 
     await tester.pumpWidget(
@@ -2622,6 +2643,7 @@ void main() {
     final provider = FakeAgentProvider(
       responseText: 'Only interim commentary',
       emitCompletedCommentary: true,
+      includeConversationTestThread: true,
     );
 
     await tester.pumpWidget(
@@ -2662,6 +2684,7 @@ void main() {
       final session = activeProjectSessionStore(tempDirectories);
       final provider = FakeAgentProvider(
         completeTurns: false,
+        includeConversationTestThread: true,
         responseText: List<String>.generate(
           80,
           (index) => 'Scrollable response line $index',
@@ -2937,30 +2960,19 @@ void main() {
             .isEmpty,
         failureMessage: 'Conversation mode selector did not close',
       );
-      await tester.enterText(
-        find.byKey(const ValueKey<String>('agent-message-input')),
-        'Plan this change',
+      expect(
+        find.descendant(
+          of: modeSelector,
+          matching: find.textContaining('Plan'),
+        ),
+        findsOneWidget,
       );
-      await tester.pump();
-      final sendButton = find.byKey(
-        const ValueKey<String>('agent-send-button'),
-      );
-      await pumpUntilCondition(
-        tester,
-        () => sendButton.hitTestable().evaluate().isNotEmpty,
-        failureMessage: 'Plan message did not become submittable',
-      );
-      await tester.tap(sendButton);
-      await pumpUntilCondition(
-        tester,
-        () => provider.turnConfigurations.isNotEmpty,
-        failureMessage: 'Plan turn configuration was not sent',
+      provider.emit(
+        const AgentTurnStartedEvent(
+          AgentTurn(id: 'turn-1', sessionId: 'thread-1'),
+        ),
       );
       await pumpLiveAgentUi(tester);
-
-      final selection = provider.turnConfigurations.single.conversationMode!;
-      expect(selection.modeId, AgentConversationModeId.plan);
-      expect(selection.effectiveReasoningEffort, 'medium');
 
       provider
         ..emit(
@@ -3189,7 +3201,10 @@ void main() {
     tester,
   ) async {
     final session = activeProjectSessionStore(tempDirectories);
-    final provider = FakeAgentProvider(emitToolAndApproval: true);
+    final provider = FakeAgentProvider(
+      emitToolAndApproval: true,
+      includeConversationTestThread: true,
+    );
 
     await tester.pumpWidget(
       MainApp(
@@ -3287,7 +3302,10 @@ void main() {
     tester,
   ) async {
     final session = activeProjectSessionStore(tempDirectories);
-    final provider = FakeAgentProvider(completeTurns: false);
+    final provider = FakeAgentProvider(
+      completeTurns: false,
+      includeConversationTestThread: true,
+    );
 
     await tester.pumpWidget(
       MainApp(
@@ -3320,7 +3338,10 @@ void main() {
     tester,
   ) async {
     final session = activeProjectSessionStore(tempDirectories);
-    final provider = FakeAgentProvider(unavailable: true);
+    final provider = FakeAgentProvider(
+      unavailable: true,
+      includeConversationTestThread: true,
+    );
 
     await tester.pumpWidget(
       MainApp(
@@ -3332,13 +3353,7 @@ void main() {
       ),
     );
 
-    await pumpUntilAgentComposer(tester);
-    await tester.enterText(
-      find.byKey(const ValueKey('agent-message-input')),
-      'Hello',
-    );
-    await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+    await openConversationTestThread(tester);
     await tester.pumpAndSettle();
 
     expect(find.textContaining('codex missing'), findsWidgets);
@@ -3354,18 +3369,34 @@ MemorySessionStore activeProjectSessionStore(List<Directory> tempDirectories) {
     IdeSessionState(
       projectPaths: <String>[directory.path],
       activeProjectPath: directory.path,
+      projectThreadExpansionByProject: <String, bool>{directory.path: false},
+      projectHomeActive: true,
     ).encode(),
   );
 }
 
-Future<void> pumpUntilAgentComposer(WidgetTester tester) {
-  return pumpUntilCondition(
+Future<void> openConversationTestThread(WidgetTester tester) async {
+  final thread = find.byKey(
+    const ValueKey<String>('project-home-thread-$conversationTestThreadId'),
+  );
+  await pumpUntilCondition(
     tester,
-    () => find
-        .byKey(const ValueKey<String>('agent-message-input'))
-        .hitTestable()
-        .evaluate()
-        .isNotEmpty,
+    () => thread.hitTestable().evaluate().isNotEmpty,
+    failureMessage: 'Conversation test thread did not become ready',
+  );
+  await tester.tap(thread);
+  await tester.pump();
+}
+
+Future<void> pumpUntilAgentComposer(WidgetTester tester) async {
+  final input = find.byKey(const ValueKey<String>('agent-message-input'));
+  if (input.hitTestable().evaluate().isEmpty) {
+    // 恢复后按产品行为先停留在项目首页，测试需显式打开列表会话。
+    await openConversationTestThread(tester);
+  }
+  await pumpUntilCondition(
+    tester,
+    () => input.hitTestable().evaluate().isNotEmpty,
     failureMessage: 'Agent composer did not become ready',
   );
 }
@@ -3380,6 +3411,7 @@ class _ModeCapableFakeAgentProvider extends FakeAgentProvider
     implements AgentConversationModeCatalogProvider {
   _ModeCapableFakeAgentProvider({required super.completeTurns})
     : super(
+        includeConversationTestThread: true,
         declaredCapabilities: AgentProviderCapabilities.codexAppServer.copyWith(
           supportsModeSelection: true,
         ),

@@ -9,6 +9,8 @@ import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 
 import 'agent_provider_stub_base.dart';
 
+const String conversationTestThreadId = 'thread-1';
+
 ValueKey<String> fileNodeKey(String label) {
   return ValueKey<String>('file-node-$label');
 }
@@ -139,6 +141,8 @@ class FakeAgentProvider
     this.onResumeSession,
     this.declaredCapabilities = AgentProviderCapabilities.codexAppServer,
     this.config = AgentProviderConfig.defaultCodex,
+    this.includeConversationTestThread = false,
+    this.conversationThreadProviderId,
     List<AgentThreadPage> threadPages = const <AgentThreadPage>[],
     Map<String, AgentThreadHistorySnapshot> threadHistories =
         const <String, AgentThreadHistorySnapshot>{},
@@ -159,8 +163,11 @@ class FakeAgentProvider
   final AgentProviderCapabilities declaredCapabilities;
   @override
   final AgentProviderConfig config;
+  final bool includeConversationTestThread;
+  final String? conversationThreadProviderId;
   final List<AgentThreadPage> _threadPages;
   final Map<String, AgentThreadHistorySnapshot> _threadHistories;
+  bool _conversationTestThreadReturned = false;
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
   final List<String> sentMessages = <String>[];
@@ -228,6 +235,31 @@ class FakeAgentProvider
   Future<AgentThreadPage> listThreads({
     required AgentThreadListQuery query,
   }) async {
+    if (includeConversationTestThread &&
+        !_conversationTestThreadReturned &&
+        _threadPages.isEmpty) {
+      _conversationTestThreadReturned = true;
+      listQueries.add(query);
+      final timestamp = DateTime.fromMillisecondsSinceEpoch(1, isUtc: true);
+      final projectPath = query.projectPath ?? '';
+      return AgentThreadPage(
+        threads: <AgentThreadSummary>[
+          AgentThreadSummary(
+            id: conversationTestThreadId,
+            providerId: conversationThreadProviderId ?? config.id,
+            projectPath: projectPath,
+            title: sessionTitle ?? 'Conversation test thread',
+            sessionPath: '$projectPath/$conversationTestThreadId.jsonl',
+            preview: sessionTitle ?? 'Conversation test thread',
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            recencyAt: timestamp,
+            status: AgentThreadRuntimeStatus.idle,
+          ),
+        ],
+        nextCursor: null,
+      );
+    }
     await initialize();
     listQueries.add(query);
     if (_threadPages.isEmpty) {

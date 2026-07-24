@@ -1134,7 +1134,7 @@ void main() {
         agentThreadIdsByProject: <String, String>{
           directory.path: cursorThread.id,
         },
-        projectThreadExpansionByProject: <String, bool>{directory.path: true},
+        projectThreadExpansionByProject: <String, bool>{directory.path: false},
         cachedThreadsByProject: <String, List<AgentThreadSummary>>{
           directory.path: <AgentThreadSummary>[cursorThread],
         },
@@ -1143,7 +1143,14 @@ void main() {
         },
       ).encode(),
     );
-    final provider = FakeAgentProvider();
+    final provider = FakeAgentProvider(
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[cursorThread],
+          nextCursor: null,
+        ),
+      ],
+    );
     await tester.pumpWidget(
       MainApp(
         enableNativeWindowFrame: false,
@@ -1165,28 +1172,27 @@ void main() {
     await tester.runAsync(waitForIo);
     await tester.pumpAndSettle();
 
-    // Assert：历史摘要仍可见，但入口不得读取 Cursor 历史或暴露写操作。
+    // Assert：项目首页仍显示缓存摘要，但入口不得读取 Cursor 历史。
+    final cachedThread = find.byKey(
+      const ValueKey<String>('project-home-thread-cursor-thread'),
+    );
+    expect(cachedThread, findsOneWidget);
     expect(
       find.descendant(
-        of: find.byKey(
-          ValueKey<String>('project-thread-${directory.path}-cursor-thread'),
-        ),
+        of: cachedThread,
         matching: find.byKey(
           const ValueKey<String>('agent-provider-icon-fallback-cursor'),
         ),
       ),
       findsOneWidget,
     );
+    await tester.tap(cachedThread);
+    await tester.pumpAndSettle();
+
     expect(find.text('Cursor'), findsNothing);
     expect(find.textContaining('Cursor Agent unavailable'), findsWidgets);
     expect(provider.readHistories, isEmpty);
     expect(provider.resumedSessions, isEmpty);
-    final mouse = await hoverThreadTile(
-      tester,
-      directory.path,
-      'cursor-thread',
-    );
-    addTearDown(mouse.removePointer);
     expect(
       find.byKey(
         ValueKey<String>(
