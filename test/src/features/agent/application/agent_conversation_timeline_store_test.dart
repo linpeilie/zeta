@@ -1142,6 +1142,71 @@ void main() {
       expect(store.liveTurnState, isNull);
       expect(store.isActivePlanExpanded('turn-1'), isFalse);
     });
+
+    test('fills entries before the furthest progressed plan step', () {
+      final turnState = AgentConversationTurnState(
+        id: 'turn-1',
+        isStandby: false,
+      );
+      addTearDown(turnState.dispose);
+
+      turnState.replacePlanEntries(const <AgentPlanEntry>[
+        AgentPlanEntry(content: 'Inspect', status: 'pending'),
+        AgentPlanEntry(content: 'Draft', status: 'mystery'),
+        AgentPlanEntry(content: 'Implement', status: 'inProgress'),
+        AgentPlanEntry(content: 'Verify', status: 'pending'),
+      ]);
+
+      expect(
+        turnState.planEntries.map((entry) => entry.normalizedStatus),
+        <AgentPlanEntryStatus>[
+          AgentPlanEntryStatus.completed,
+          AgentPlanEntryStatus.completed,
+          AgentPlanEntryStatus.inProgress,
+          AgentPlanEntryStatus.pending,
+        ],
+      );
+
+      turnState.replacePlanEntries(const <AgentPlanEntry>[
+        AgentPlanEntry(content: 'Inspect', status: 'pending'),
+        AgentPlanEntry(content: 'Draft', status: 'inProgress'),
+        AgentPlanEntry(content: 'Implement', status: 'pending'),
+        AgentPlanEntry(content: 'Verify', status: 'completed'),
+        AgentPlanEntry(content: 'Report', status: 'pending'),
+      ]);
+
+      expect(
+        turnState.planEntries.map((entry) => entry.normalizedStatus),
+        <AgentPlanEntryStatus>[
+          AgentPlanEntryStatus.completed,
+          AgentPlanEntryStatus.completed,
+          AgentPlanEntryStatus.completed,
+          AgentPlanEntryStatus.completed,
+          AgentPlanEntryStatus.pending,
+        ],
+      );
+    });
+
+    test('keeps plan statuses when no step has progressed', () {
+      final turnState = AgentConversationTurnState(
+        id: 'turn-1',
+        isStandby: false,
+      );
+      addTearDown(turnState.dispose);
+
+      turnState.replacePlanEntries(const <AgentPlanEntry>[
+        AgentPlanEntry(content: 'Inspect', status: 'pending'),
+        AgentPlanEntry(content: 'Draft', status: 'mystery'),
+      ]);
+
+      expect(
+        turnState.planEntries.map((entry) => entry.normalizedStatus),
+        <AgentPlanEntryStatus>[
+          AgentPlanEntryStatus.pending,
+          AgentPlanEntryStatus.unknown,
+        ],
+      );
+    });
   });
 }
 

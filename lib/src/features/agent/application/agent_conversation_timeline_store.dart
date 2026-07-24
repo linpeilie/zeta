@@ -1833,22 +1833,43 @@ class AgentConversationTurnState extends ChangeNotifier {
     }
   }
 
-  /// 计划更新是权威快照；不按索引或文本猜测增量身份。
+  /// 计划更新是权威快照；仅在当前快照内按执行顺序补齐前序完成态。
+  ///
+  /// 不跨快照按索引或文本猜测条目身份。若后序条目已经进行中或完成，则此前
+  /// 条目必然已经越过执行边界，即使 Provider 遗漏了对应的完成通知也应展示为
+  /// 已完成。
   void replacePlanEntries(Iterable<AgentPlanEntry> entries) {
+    final nextEntries = entries
+        .where((entry) => entry.content.trim().isNotEmpty)
+        .map(
+          (entry) => AgentPlanEntry(
+            id: entry.id,
+            content: entry.content.trim(),
+            status: entry.status,
+            priority: entry.priority,
+          ),
+        )
+        .toList(growable: false);
+    final executionFrontier = nextEntries.lastIndexWhere((entry) {
+      final status = entry.normalizedStatus;
+      return status == AgentPlanEntryStatus.inProgress ||
+          status == AgentPlanEntryStatus.completed;
+    });
+    for (var index = 0; index < executionFrontier; index += 1) {
+      final entry = nextEntries[index];
+      if (entry.normalizedStatus == AgentPlanEntryStatus.completed) {
+        continue;
+      }
+      nextEntries[index] = AgentPlanEntry(
+        id: entry.id,
+        content: entry.content,
+        status: 'completed',
+        priority: entry.priority,
+      );
+    }
     _planEntries
       ..clear()
-      ..addAll(
-        entries
-            .where((entry) => entry.content.trim().isNotEmpty)
-            .map(
-              (entry) => AgentPlanEntry(
-                id: entry.id,
-                content: entry.content.trim(),
-                status: entry.status,
-                priority: entry.priority,
-              ),
-            ),
-      );
+      ..addAll(nextEntries);
     _dirty = true;
   }
 

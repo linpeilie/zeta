@@ -204,10 +204,8 @@ class _AgentActivePlanCardState extends State<_AgentActivePlanCard> {
                       ),
                       const SizedBox(width: IdeSpacing.space8),
                       Expanded(
-                        child: Text(
-                          current.content,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        child: _AgentPlanOverflowText(
+                          content: current.content,
                           style: textStyles.bodyMedium.copyWith(
                             color: colors.textPrimary,
                           ),
@@ -297,10 +295,8 @@ class _AgentActivePlanStepRow extends StatelessWidget {
             _AgentActivePlanStatusMarker(status: entry.normalizedStatus),
             const SizedBox(width: IdeSpacing.space10),
             Expanded(
-              child: Text(
-                entry.content,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: _AgentPlanOverflowText(
+                content: entry.content,
                 style: textStyles.bodyMedium.copyWith(
                   color:
                       entry.normalizedStatus == AgentPlanEntryStatus.completed
@@ -312,6 +308,42 @@ class _AgentActivePlanStepRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 保持单行紧凑布局，并仅在内容实际被截断时提供完整文本 Tooltip。
+class _AgentPlanOverflowText extends StatelessWidget {
+  const _AgentPlanOverflowText({required this.content, required this.style});
+
+  final String content;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final painter = TextPainter(
+          text: TextSpan(text: content, style: style),
+          maxLines: 1,
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+          locale: Localizations.maybeLocaleOf(context),
+        )..layout(maxWidth: constraints.maxWidth);
+        final didOverflow = painter.didExceedMaxLines;
+        painter.dispose();
+
+        return IdeTooltip(
+          message: content,
+          enabled: didOverflow,
+          child: Text(
+            content,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: style,
+          ),
+        );
+      },
     );
   }
 }
