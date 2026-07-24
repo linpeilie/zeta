@@ -113,6 +113,11 @@ main -> app -> presentation/application -> domain
   `respondToQuestion` 只接受结构化 answers（空 map 表示 Skip），计划审批继续通过
   `AgentPlanApprovalPort` 回写。三者可以共享 Pending Interaction Dock，但不得复用
   request/decision 模型或 pending registry。
+- Plan 回合完成后的“是否执行”属于 Zeta 本地 application 交接，不属于 Provider
+  计划审批。它使用独立的 `AgentPlanExecutionRequest`，不调用 approval/permission/question
+  端口，不持久化，并在 thread、workspace、provider 或可写性边界变化时清除。
+- 本地交接只能由成功的 Plan 终态和非空计划内容触发。执行动作必须通过新的 Default
+  `turn/start` 发起；继续规划保持 Plan draft；任何动作都不得预授权后续工具或文件修改。
 - 只有支持独立用户提问协议的 Provider 才实现 `AgentQuestionResponseProvider`；
   permission-only Provider 不得用空 answers、no-op 或权限拒绝伪造提问能力。
 - 新 provider 应先评估现有 bundle 端口是否足够；不足时优先扩展可选端口，再在 data 层

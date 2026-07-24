@@ -1804,6 +1804,60 @@ plan/codex_app_server_adaptation_plan.md
 - 新增 Domain、Bundle、Codex fake peer、Timeline、ViewModel 与 Widget 回归测试；
   `flutter analyze`、263 项聚焦测试和 772 项全量测试通过。
 
+### Phase 7：Plan 完成后的本地执行交接
+
+#### PLAN-602：补充“生成计划 → 用户确认 → Default 执行”工作流
+
+- 状态：`[x]`
+- 优先级：P1
+- 预计工作量：1 人日
+- 依赖：PLAN-302、PLAN-402、PLAN-601
+
+目标：
+
+- Plan 回合成功生成非空计划后，在 Composer 上方明确询问用户是否执行。
+- 保持本地产品工作流与 Provider 计划审批、权限审批、用户提问完全解耦。
+
+状态与职责：
+
+```text
+AgentTurnCompletedEvent(completed)
+  -> ViewModel 在 live turn 归档前提取 plan message / structured plan
+  -> AgentPlanExecutionHandoffController 校验 Plan 模式与非空内容
+  -> AgentPlanExecutionRequest（本地、单实例、非持久化）
+  -> Pending Interaction Dock
+       Run plan      -> select Default -> 新 turn/start
+       Keep planning -> select Plan -> Composer focus
+       Dismiss       -> 仅清理本地请求
+```
+
+实现约束：
+
+- `completeLiveTurnGroup` 会清空 live structured plan，交接快照必须在其之前生成。
+- 只接受 `completed + Plan + 非空计划`；failed/interrupted、Default、空内容、只读状态不展示。
+- thread、workspace、provider 切换，thread 关闭或 Provider 变为只读时清除请求。
+- Run plan 创建新的 Default 回合，不使用 steer，不调用 `AgentPlanApprovalPort`，不预授权工具。
+- Provider 独立计划审批仍使用 `AgentPlanApprovalRequest/Decision`；两者只共享 Dock 布局。
+
+开发文件：
+
+```text
+lib/src/features/agent/domain/agent_plan_execution_models.dart
+lib/src/features/agent/application/agent_plan_execution_handoff_controller.dart
+lib/src/features/agent/presentation/agent_conversation_view_model.dart
+lib/src/features/agent/presentation/widgets/agent_pane_sections.dart
+lib/src/features/agent/presentation/widgets/agent_pane_cards.dart
+```
+
+验收：
+
+- [x] 成功 Plan 回合显示 Plan ready 卡片及 Run plan / Keep planning / Dismiss。
+- [x] Run plan 的下一回合携带显式 Default mode snapshot。
+- [x] Keep planning 清卡并让 Composer 保持 Plan。
+- [x] Dismiss 不产生 Provider 请求或权限决策。
+- [x] failed/interrupted/空计划不创建交接。
+- [x] Controller、ViewModel 与 Widget 测试覆盖主要路径和陈旧请求保护。
+
 ## 14. 任务依赖与并行关系
 
 ```mermaid
@@ -1822,6 +1876,7 @@ flowchart TD
     P501["PLAN-501<br/>全链路测试"]
     P502["PLAN-502<br/>Smoke/文档"]
     P601["PLAN-601<br/>交互语义拆分"]
+    P602["PLAN-602<br/>本地执行交接"]
 
     P001 --> P101
     P101 --> P102
@@ -1841,6 +1896,7 @@ flowchart TD
     P302 --> P501
     P501 --> P502
     P502 --> P601
+    P601 --> P602
 ```
 
 可并行：
@@ -1865,6 +1921,7 @@ flowchart TD
 | PR 4 | PLAN-401、402 | Composer UI | `feat(agent): add Plan mode selector` |
 | PR 5 | PLAN-501、502 | 回归、smoke、文档 | `test(agent): cover Plan mode adaptation` |
 | PR 6 | PLAN-601 | 用户提问与权限审批解耦 | `refactor(agent): split questions from permissions` |
+| PR 7 | PLAN-602 | Plan 完成后的本地执行交接 | `feat(agent): add Plan execution handoff` |
 
 每个 PR 应满足：
 
@@ -1911,6 +1968,10 @@ flowchart TD
 | 选择 Plan → send → 选择 Default → 旧通知到达 | draft 保持 Default |
 | active turn 选择 Plan → steer | 当前 turn 不变 |
 | active turn 完成 → 新 send | 使用 Plan |
+| Plan completed + 非空计划 | 创建本地执行交接 |
+| Plan failed/interrupted/空计划 | 不创建执行交接 |
+| Run plan | 新回合显式使用 Default |
+| 旧交接回调晚于新请求 | 不清除新请求 |
 | dispose → catalog 返回 | 不 notify |
 
 ### 16.4 Widget
@@ -1925,6 +1986,9 @@ flowchart TD
 | textScale 放大 | 无裁切/overflow |
 | 窄视口 | toolbar 可滚动 |
 | 页面切换 | draft 和 Canvas 状态保留 |
+| Plan 完成 | Pending Dock 显示三个本地交接动作 |
+| Keep planning | 卡片关闭且 Composer 获得焦点 |
+| Run plan | 卡片关闭并启动 Default 回合 |
 
 ### 16.5 现有能力回归
 
@@ -1974,6 +2038,9 @@ flutter test
 - [ ] structured plan 面板正常更新。
 - [ ] 用户问题表单可回答。
 - [ ] 下一回合选择 Default 后实际退出 Plan。
+- [ ] Plan 成功结束后出现 Plan ready 执行交接卡。
+- [ ] Run plan 启动新 Default 回合，Keep planning 返回输入框，Dismiss 只关卡。
+- [ ] 执行交接不替代后续命令、文件或网络权限审批。
 
 ### 18.2 Thread 与 Provider
 
@@ -2160,6 +2227,7 @@ plan/codex_app_server_adaptation_plan.md
 14. `dart format .`、`flutter analyze`、相关测试和全量测试通过。
 15. 真实目标版本 App Server smoke 通过。
 16. 协议、工程规范、开发指南和设计文档同步。
+17. Plan 成功终态具有本地执行交接，且与 Provider 计划审批、权限、提问语义隔离。
 
 ## 25. 开发领取表
 

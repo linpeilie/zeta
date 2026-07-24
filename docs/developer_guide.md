@@ -193,6 +193,13 @@ Dock，但不得共享 request/decision 模型或 pending registry。
   data client / mapper / encoder。
 - `AgentConversationModeController` 管理目录、draft、confirmed、pending 和 generation；
   ViewModel 只负责绑定 Provider/thread 与冻结 `AgentTurnConfiguration`，Widget 不直接发 RPC。
+- Plan 终态的执行确认由 `AgentPlanExecutionHandoffController` 管理，是非持久化的本地
+  application 状态。必须在 `completeLiveTurnGroup` 清除 structured plan 之前捕获快照；
+  Widget 只渲染请求并调用 ViewModel 的 start/revise/dismiss 动作。
+- Run plan 必须先选择 Default，再创建一个新的 turn；不得把它实现成当前 turn steer，
+  也不得调用 `AgentPlanApprovalPort`。Keep planning 显式保留 Plan，Dismiss 不改变权限状态。
+- 新增或修改该流程时至少覆盖：成功 Plan 展示、失败/中断不展示、结构化步骤回退、
+  Default 执行快照、继续规划模式、陈旧请求与 thread/provider/workspace 切换清理。
 - 模式来自 `bundle.conversationModes` 的运行时目录。端口为空、method-not-found、目录损坏
   或缺少 Default/Plan 时隐藏选择器，继续使用原有普通对话，不用 Prompt 伪造 Plan。
 - 模式选择是“下一回合”配置。活动 turn 使用 `turn/steer` 时不修改 mode；切回 Default

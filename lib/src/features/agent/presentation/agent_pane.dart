@@ -197,6 +197,8 @@ class _AgentPaneState extends State<AgentPane> {
                                   viewModel: widget.viewModel,
                                   panelHeight: constraints.maxHeight,
                                   pagePadding: pagePadding,
+                                  onPlanRevisionRequested:
+                                      _composerFocusNode.requestFocus,
                                 ),
                                 ListenableBuilder(
                                   listenable: widget

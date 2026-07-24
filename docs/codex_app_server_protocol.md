@@ -153,7 +153,20 @@ Plan 必须显式发送 Default，不能用省略字段代替。
   回写已由其他客户端解决的请求。
 - 计划审批继续使用独立的 `AgentPlanApprovalRequest/Decision`，不与用户提问互转。
 
-### 8.2 真实 smoke 记录
+### 8.2 Plan 完成后的本地执行交接
+
+当前 App Server 协议没有“Plan 回合完成后请求用户确认是否执行”的 server request。
+Zeta 在 application 层根据成功的 Plan turn 和已归一化的 Plan 内容创建本地
+`AgentPlanExecutionRequest`；该请求不进入 JSON-RPC、JSONL 历史或 Provider pending
+registry。
+
+- Run plan：先把下一回合 draft 切到 Default，再通过正常 `turn/start` 发送本地交接提示。
+- Keep planning：清除交接卡、保持 Plan，并返回 Composer；不会产生 RPC。
+- Dismiss：仅清除本地请求；不会向服务端发送 accepted/rejected/cancelled。
+- 命令、文件、网络等权限仍由既有审批请求逐项处理，Run plan 不构成预授权。
+- `AgentPlanApprovalRequest` 仍只表示 Provider 主动发起的独立计划审批，不能用于本地交接。
+
+### 8.3 真实 smoke 记录
 
 2026-07-23 使用 `tool/smoke_codex_plan_mode.py` 完成一次脱敏兼容性运行：
 

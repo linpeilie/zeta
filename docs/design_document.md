@@ -58,6 +58,7 @@ AgentConversationViewModel
   -> AgentConversationUiSignals
   -> AgentConversationModelSelectionController
   -> AgentConversationModeController
+  -> AgentPlanExecutionHandoffController
   -> AgentProviderBundle
     -> AgentRuntimePort / AgentConversationPort
     -> AgentThreadCatalogPort? / AgentThreadMutationsPort? / AgentThreadBranchingPort?
@@ -322,6 +323,11 @@ Profile 仍仅承诺稳定的发现能力，不承诺实验性选择能力。
   和 plan approval decision 回写。提问 Skip 是空 answers，不等价于 deny/cancel。
   Dock 使用独立 pending 列表、按权限优先顺序展示，限高为 Agent 面板高度的 35%
   （最高 360px）并内部滚动，时间线不重复渲染待处理卡片。
+- 成功的 Plan 回合在归档 live turn 前捕获最终 Plan 消息或结构化步骤，由
+  `AgentPlanExecutionHandoffController` 创建一次性的本地执行交接。Pending Dock
+  提供 Run plan、Keep planning 与 Dismiss：Run plan 显式把下一回合切到 Default 并发送
+  本地执行提示；Keep planning 保持 Plan 并把焦点交回 Composer；Dismiss 只关闭卡片。
+  该状态不持久化、不回写 Provider，也不代表任何命令、文件或网络权限已获批准。
 - 模型改道、弃用通知等系统提示；token 用量含 `modelContextWindow` 占用比例。
 - Composer 使用单一模型配置入口：Popover 以模型列表为一级信息，选中后在该行下
   内嵌 Reasoning effort 与 Fast，运行中更改明确标记为下一回合生效。
@@ -351,6 +357,10 @@ data 精确编码”的单向流：
   mode 时不覆盖本地值；收到有效 settings 后收敛。未知 mode 可只读展示但不可主动选择。
 - experimental 探测失败只关闭 mode 入口；普通 Default 会话不依赖该端口，Grok/Cursor
   不通过 Prompt 或全局 Provider 状态伪造 Plan。
+- “Plan 已生成，是否执行”是 Zeta application 层工作流，不是 App Server approval。
+  只有成功终态、已确认 Plan 模式且存在非空 Plan 内容时才创建请求；失败、中断、空计划、
+  只读会话、thread/workspace/provider 切换都必须清除。Provider 独立计划审批继续经
+  `AgentPlanApprovalPort` 回写，两者不得共享 request/decision 模型。
 
 ### 输入框模型配置
 

@@ -1356,6 +1356,79 @@ void main() {
       );
 
       testWidgets(
+        'completed Plan shows local handoff and Run plan starts Default turn',
+        (tester) async {
+          final provider = _ModeFakeAgentProvider(models: _modelConfigList);
+          final viewModel = _createViewModel(provider);
+          addTearDown(provider.dispose);
+          addTearDown(viewModel.dispose);
+          await viewModel.loadModels();
+          await tester.pumpWidget(_TestApp(viewModel: viewModel));
+          await _pumpAgentPaneUi(tester);
+
+          viewModel.selectConversationMode(AgentConversationModeId.plan);
+          await viewModel.sendMessage('plan this change');
+          provider.emitEvent(
+            const AgentMessageDeltaEvent(
+              messageId: 'plan-final',
+              delta: '# Final plan\n\n- Implement the change',
+              role: AgentMessageRole.agent,
+              kind: AgentMessageKind.plan,
+              status: AgentMessageStatus.completed,
+              sessionId: 'session-1',
+              turnId: 'turn-1',
+            ),
+          );
+          provider.emitEvent(
+            const AgentTurnCompletedEvent(
+              sessionId: 'session-1',
+              turnId: 'turn-1',
+            ),
+          );
+
+          await _pumpUntilFinder(tester, find.text('Run plan'));
+
+          expect(find.text('Plan ready'), findsOneWidget);
+          expect(find.text('Dismiss'), findsOneWidget);
+          expect(find.text('Keep planning'), findsOneWidget);
+          expect(find.text('Run plan'), findsOneWidget);
+          expect(
+            find.byKey(
+              const ValueKey(
+                'agent-plan-execution-start-'
+                'plan-execution:session-1:turn-1',
+              ),
+            ),
+            findsOneWidget,
+          );
+
+          await tester.tap(find.text('Run plan'));
+          await _pumpLiveAgentUi(tester);
+
+          expect(viewModel.planExecutionRequest, isNull);
+          expect(
+            viewModel.selectedConversationMode,
+            AgentConversationModeId.defaultMode,
+          );
+          expect(
+            provider.sentMessages,
+            contains(AgentConversationViewModel.planExecutionPrompt),
+          );
+          expect(
+            provider.turnConfigurations.last.conversationMode!.modeId,
+            AgentConversationModeId.defaultMode,
+          );
+          provider.emitEvent(
+            const AgentTurnCompletedEvent(
+              sessionId: 'session-1',
+              turnId: 'turn-1',
+            ),
+          );
+          await tester.pump();
+        },
+      );
+
+      testWidgets(
         'unsupported provider keeps composer free of mode placeholders',
         (tester) async {
           final provider = _FakeAgentProvider(models: _modelConfigList);
@@ -2436,6 +2509,8 @@ class _FakeAgentProvider
   final List<AgentPlanApprovalDecision> planDecisions =
       <AgentPlanApprovalDecision>[];
   final List<String> sentMessages = <String>[];
+  final List<AgentTurnConfiguration> turnConfigurations =
+      <AgentTurnConfiguration>[];
 
   void emitEvent(AgentEvent event) {
     _events.add(event);
@@ -2531,6 +2606,7 @@ class _FakeAgentProvider
     String? clientUserMessageId,
     AgentTurnConfiguration configuration = const AgentTurnConfiguration(),
   }) async {
+    turnConfigurations.add(configuration);
     final sentText =
         message ??
         inputs

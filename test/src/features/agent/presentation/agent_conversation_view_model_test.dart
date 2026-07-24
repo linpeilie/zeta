@@ -208,6 +208,132 @@ void main() {
       expect(selection.effectiveReasoningEffort, 'high');
     });
 
+    test(
+      'offers a local handoff after Plan completion and starts Default execution',
+      () async {
+        final provider = _ModeFakeAgentProvider(
+          availableModels: _conversationModeModels,
+        );
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.loadModels();
+        viewModel.selectConversationMode(AgentConversationModeId.plan);
+        await viewModel.sendMessage('plan this change');
+        await _emitCompletedPlan(provider);
+
+        final request = viewModel.planExecutionRequest;
+        expect(request, isNotNull);
+        expect(request!.sessionId, 'thread-1');
+        expect(request.turnId, 'turn-1');
+        expect(request.markdown, '# Final plan\n\n- Implement the change');
+
+        await viewModel.startPlanExecution(request);
+
+        expect(viewModel.planExecutionRequest, isNull);
+        expect(
+          viewModel.selectedConversationMode,
+          AgentConversationModeId.defaultMode,
+        );
+        expect(provider.turnConfigurations, hasLength(2));
+        expect(
+          provider.turnConfigurations.last.conversationMode!.modeId,
+          AgentConversationModeId.defaultMode,
+        );
+        expect(
+          viewModel.messages.map((message) => message.text),
+          contains(AgentConversationViewModel.planExecutionPrompt),
+        );
+      },
+    );
+
+    test('keeps Plan selected when revising the local handoff', () async {
+      final provider = _ModeFakeAgentProvider(
+        availableModels: _conversationModeModels,
+      );
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.loadModels();
+      viewModel.selectConversationMode(AgentConversationModeId.plan);
+      await viewModel.sendMessage('plan this change');
+      // 用户在 Plan 运行期间改了下一回合草稿；“继续规划”必须显式切回 Plan。
+      viewModel.selectConversationMode(AgentConversationModeId.defaultMode);
+      await _emitCompletedPlan(provider);
+      final request = viewModel.planExecutionRequest!;
+
+      viewModel.revisePlanExecution(request);
+
+      expect(viewModel.planExecutionRequest, isNull);
+      expect(viewModel.selectedConversationMode, AgentConversationModeId.plan);
+      expect(provider.turnConfigurations, hasLength(1));
+    });
+
+    test(
+      'dismisses the local handoff without sending or changing mode',
+      () async {
+        final provider = _ModeFakeAgentProvider(
+          availableModels: _conversationModeModels,
+        );
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.loadModels();
+        viewModel.selectConversationMode(AgentConversationModeId.plan);
+        await viewModel.sendMessage('plan this change');
+        await _emitCompletedPlan(provider);
+        final request = viewModel.planExecutionRequest!;
+
+        viewModel.dismissPlanExecution(request);
+
+        expect(viewModel.planExecutionRequest, isNull);
+        expect(
+          viewModel.selectedConversationMode,
+          AgentConversationModeId.plan,
+        );
+        expect(provider.turnConfigurations, hasLength(1));
+      },
+    );
+
+    test('clears the local handoff when the workspace changes', () async {
+      final provider = _ModeFakeAgentProvider(
+        availableModels: _conversationModeModels,
+      );
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.loadModels();
+      viewModel.selectConversationMode(AgentConversationModeId.plan);
+      await viewModel.sendMessage('plan this change');
+      await _emitCompletedPlan(provider);
+      expect(viewModel.planExecutionRequest, isNotNull);
+
+      viewModel.updateWorkspace(
+        projectPath: '/another-project',
+        contextFilePath: null,
+      );
+
+      expect(viewModel.planExecutionRequest, isNull);
+    });
+
+    test('does not offer execution for an interrupted Plan turn', () async {
+      final provider = _ModeFakeAgentProvider(
+        availableModels: _conversationModeModels,
+      );
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.loadModels();
+      viewModel.selectConversationMode(AgentConversationModeId.plan);
+      await viewModel.sendMessage('plan this change');
+      await _emitCompletedPlan(
+        provider,
+        status: AgentHistoryTurnStatus.interrupted,
+      );
+
+      expect(viewModel.planExecutionRequest, isNull);
+    });
+
     test('failed mode send preserves draft and clears pending state', () async {
       final modeController = AgentConversationModeController();
       addTearDown(modeController.dispose);
@@ -3936,6 +4062,31 @@ class _ModeFakeAgentProvider extends _FakeAgentProvider
       ],
     );
   }
+}
+
+Future<void> _emitCompletedPlan(
+  _FakeAgentProvider provider, {
+  AgentHistoryTurnStatus status = AgentHistoryTurnStatus.completed,
+}) async {
+  provider.emit(
+    const AgentMessageDeltaEvent(
+      messageId: 'plan-final',
+      delta: '# Final plan\n\n- Implement the change',
+      role: AgentMessageRole.agent,
+      kind: AgentMessageKind.plan,
+      status: AgentMessageStatus.completed,
+      sessionId: 'thread-1',
+      turnId: 'turn-1',
+    ),
+  );
+  provider.emit(
+    AgentTurnCompletedEvent(
+      sessionId: 'thread-1',
+      turnId: 'turn-1',
+      status: status,
+    ),
+  );
+  await Future<void>.delayed(const Duration(milliseconds: 24));
 }
 
 const AgentModelList _conversationModeModels = AgentModelList(

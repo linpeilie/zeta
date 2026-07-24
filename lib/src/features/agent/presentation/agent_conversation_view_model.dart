@@ -8,6 +8,7 @@ import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/core/logging/structured_error_logging.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/application/agent_plan_execution_handoff_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_permission_selection_controller.dart';
@@ -78,6 +79,11 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   static const String defaultThreadTitle = 'New thread';
 
+  /// 用户确认执行计划后，用于启动 Default 回合的本地交接提示。
+  static const String planExecutionPrompt =
+      'Execute the plan from the previous turn. Work through it step by step '
+      'and run the relevant verification before finishing.';
+
   /// 可选：从 shell 注入工作区文件列表，供 @mention 选择器使用。
   final List<WorkspaceNode> Function()? workspaceFilesProvider;
 
@@ -89,6 +95,8 @@ class AgentConversationViewModel extends ChangeNotifier {
   final AgentConversationModeController _conversationModeController;
   final AgentConversationPermissionSelectionController
   _permissionSelectionController;
+  final AgentPlanExecutionHandoffController _planExecutionHandoffController =
+      AgentPlanExecutionHandoffController();
   late final AgentConversationUiSignals _uiSignals;
   final AgentElapsedTicker _elapsedTicker = AgentElapsedTicker();
   late final ValueNotifier<AgentConversationThreadSnapshot>
@@ -170,6 +178,10 @@ class AgentConversationViewModel extends ChangeNotifier {
   List<AgentPlanApprovalRequest> get planApprovalRequests =>
       _timeline.planApprovalRequests;
 
+  /// Plan 回合完成后等待用户决定是否进入执行阶段的本地交接请求。
+  AgentPlanExecutionRequest? get planExecutionRequest =>
+      _planExecutionHandoffController.pendingRequest;
+
   List<AgentTimelineEntry> get timelineEntries => _timeline.timelineEntries;
 
   List<AgentConversationTurnGroup> get conversationTurns =>
@@ -198,6 +210,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       permissionRequests.isEmpty &&
       questionRequests.isEmpty &&
       planApprovalRequests.isEmpty &&
+      planExecutionRequest == null &&
       !threadWaitingOnApproval &&
       !threadWaitingOnUserInput;
 
@@ -243,7 +256,7 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   int get composerVersion => _uiSignals.composerVersion;
 
-  /// 待处理权限、提问或计划审批列表的变更版本。
+  /// 待处理权限、提问、计划审批或本地执行交接的变更版本。
   int get pendingInteractionVersion => _uiSignals.pendingInteractionVersion;
 
   int get expansionVersion => _uiSignals.expansionVersion;
@@ -339,6 +352,40 @@ class AgentConversationViewModel extends ChangeNotifier {
   /// 更新下一新 turn 的对话模式。
   void selectConversationMode(AgentConversationModeId modeId) {
     _conversationModeController.selectMode(modeId);
+  }
+
+  /// 确认上一 Plan 回合，并用 Default 模式启动新的执行回合。
+  Future<void> startPlanExecution(AgentPlanExecutionRequest request) async {
+    if (!_canResolvePlanExecution(request) ||
+        isTurnRunning ||
+        !canSubmitMessage) {
+      return;
+    }
+    if (!_planExecutionHandoffController.resolve(request)) {
+      return;
+    }
+    _conversationModeController.selectMode(AgentConversationModeId.defaultMode);
+    _publishUiChanges(pendingInteraction: true, composer: true);
+    await sendMessage(planExecutionPrompt);
+  }
+
+  /// 返回 Composer 继续修改计划，并确保下一回合仍使用 Plan 模式。
+  void revisePlanExecution(AgentPlanExecutionRequest request) {
+    if (!_canResolvePlanExecution(request) ||
+        !_planExecutionHandoffController.resolve(request)) {
+      return;
+    }
+    _conversationModeController.selectMode(AgentConversationModeId.plan);
+    _publishUiChanges(pendingInteraction: true, composer: true);
+  }
+
+  /// 关闭本地执行提示，不向 Provider 回写任何审批结果。
+  void dismissPlanExecution(AgentPlanExecutionRequest request) {
+    if (!_canResolvePlanExecution(request) ||
+        !_planExecutionHandoffController.resolve(request)) {
+      return;
+    }
+    _publishUiChanges(pendingInteraction: true, composer: true);
   }
 
   /// 重试当前 Provider 的模式目录探测。
@@ -471,6 +518,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       return;
     }
     _flushPendingStreamChangesNow();
+    _planExecutionHandoffController.clear();
     _invalidateProviderEventListener();
     _conversationModeCatalogLoadGeneration += 1;
     _conversationModeCatalogProvider = null;
@@ -503,6 +551,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       syncLiveTurn: true,
       header: true,
       composer: true,
+      pendingInteraction: true,
     );
     await loadModels();
   }
@@ -1314,6 +1363,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       _invalidateProviderEventListener();
       _threadSwitchToken += 1;
       _session = null;
+      _planExecutionHandoffController.clear();
       _sessionConfigOptions = const <AgentSessionConfigOption>[];
       _restoredSessionId = effectiveRestoredSessionId;
       _selectedProviderId = effectiveRestoredSessionId == null
@@ -1346,6 +1396,7 @@ class AgentConversationViewModel extends ChangeNotifier {
         syncLiveTurn: true,
         header: true,
         composer: true,
+        pendingInteraction: true,
       );
       return;
     }
@@ -1404,6 +1455,8 @@ class AgentConversationViewModel extends ChangeNotifier {
     final clientUserMessageId = _nextClientUserMessageId();
 
     final isNewTurn = runningTurnId == null;
+    final clearedPlanExecution =
+        isNewTurn && _planExecutionHandoffController.clear();
     var providerOperation = 'provider/settings';
     AgentProvider? requestProvider;
     AgentSession? requestSession;
@@ -1435,6 +1488,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       liveTurn: true,
       header: true,
       composer: true,
+      pendingInteraction: clearedPlanExecution,
       autoScroll: true,
     );
 
@@ -1621,6 +1675,9 @@ class AgentConversationViewModel extends ChangeNotifier {
   /// 切换到项目列表中选中的 thread。
   Future<void> switchThread(AgentThreadSummary thread) async {
     final switchToken = ++_threadSwitchToken;
+    if (_planExecutionHandoffController.clear()) {
+      _publishUiChanges(pendingInteraction: true, composer: true);
+    }
     // 在第一个 await 前让旧 thread listener 失效，避免其微任务事件污染新时间线。
     _invalidateProviderEventListener();
     _conversationModeController.bindThread(threadId: thread.id);
@@ -2106,7 +2163,13 @@ class AgentConversationViewModel extends ChangeNotifier {
     if (_disposed) {
       return;
     }
-    _publishUiChanges(header: true, composer: true);
+    final planExecutionCleared =
+        isReadOnly && _planExecutionHandoffController.clear();
+    _publishUiChanges(
+      header: true,
+      composer: true,
+      pendingInteraction: planExecutionCleared,
+    );
   }
 
   void _handleModelSelectionChanged() {
@@ -2541,6 +2604,7 @@ class AgentConversationViewModel extends ChangeNotifier {
           break;
         }
         _clearThreadRuntimeStatus();
+        final planExecutionCleared = _planExecutionHandoffController.clear();
         if (isTurnRunning) {
           // 服务端关闭线程时清本地运行态，避免卡在 running。
           _timeline.completeLiveTurnGroup(
@@ -2556,6 +2620,7 @@ class AgentConversationViewModel extends ChangeNotifier {
           syncLiveTurn: true,
           header: true,
           composer: true,
+          pendingInteraction: planExecutionCleared,
         );
       case AgentThreadCompactedEvent():
         if (!_shouldHandleEventForCurrentThread(sessionId: event.threadId)) {
@@ -2616,6 +2681,9 @@ class AgentConversationViewModel extends ChangeNotifier {
         )) {
           break;
         }
+        // completeLiveTurnGroup 会清空 live planEntries；必须先生成本地交接快照。
+        final planExecutionChanged =
+            _updatePlanExecutionRequestForCompletedTurn(event);
         // 先插失败原因，让消息归入该回合分组，再收尾分组。
         _addTurnFailureMessage(event);
         _timeline.completeLiveTurnGroup(
@@ -2650,6 +2718,7 @@ class AgentConversationViewModel extends ChangeNotifier {
           syncLiveTurn: true,
           header: true,
           composer: true,
+          pendingInteraction: planExecutionChanged,
           autoScroll: true,
         );
       case AgentTokenUsageEvent():
@@ -2937,6 +3006,50 @@ class AgentConversationViewModel extends ChangeNotifier {
         'connectionEpoch': scope.connectionEpoch,
       },
     };
+  }
+
+  bool _canResolvePlanExecution(AgentPlanExecutionRequest request) {
+    return planExecutionRequest?.id == request.id &&
+        sessionId == request.sessionId;
+  }
+
+  /// 在 live turn 被归档前捕获计划正文，生成与 Provider 审批无关的本地交接请求。
+  bool _updatePlanExecutionRequestForCompletedTurn(
+    AgentTurnCompletedEvent event,
+  ) {
+    final previousId = planExecutionRequest?.id;
+    final liveTurn = _timeline.liveTurnState;
+    if (isReadOnly ||
+        !activeCapabilities.canPrompt ||
+        planApprovalRequests.isNotEmpty ||
+        liveTurn == null ||
+        liveTurn.id != event.turnId) {
+      _planExecutionHandoffController.clear();
+      return previousId != null;
+    }
+
+    String? planMarkdown;
+    for (final entry in liveTurn.entries.reversed) {
+      if (entry case AgentMessageTimelineEntry(:final message)
+          when message.role == AgentMessageRole.agent &&
+              message.isPlan &&
+              message.text.trim().isNotEmpty) {
+        planMarkdown = message.text;
+        break;
+      }
+    }
+    final modeState = _conversationModeController.state;
+    final completedMode =
+        modeState.pendingTurnMode?.modeId ?? modeState.confirmedMode;
+    final request = _planExecutionHandoffController.offerCompletedPlan(
+      sessionId: event.sessionId,
+      turnId: event.turnId,
+      status: event.status,
+      modeId: completedMode,
+      planMarkdown: planMarkdown,
+      planEntries: List<AgentPlanEntry>.of(liveTurn.planEntries),
+    );
+    return previousId != request?.id;
   }
 
   /// 时间线中最近一条用户消息（用于编辑重试）。

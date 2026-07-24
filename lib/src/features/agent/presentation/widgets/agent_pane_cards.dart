@@ -504,6 +504,79 @@ class _AgentPlanApprovalCard extends StatelessWidget {
   }
 }
 
+/// Zeta 本地的 Plan → Default 执行交接卡片。
+///
+/// 与 Provider 计划审批不同，本卡片不会向服务端回写审批，也不会预先授予任何权限。
+class _AgentPlanExecutionCard extends StatelessWidget {
+  const _AgentPlanExecutionCard({
+    required this.request,
+    required this.onDismiss,
+    required this.onRevise,
+    required this.onStart,
+    super.key,
+  });
+
+  final AgentPlanExecutionRequest request;
+  final VoidCallback onDismiss;
+  final VoidCallback onRevise;
+  final VoidCallback onStart;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    return IdeStatusCard(
+      tone: IdeStatusCardTone.success,
+      title: request.title,
+      leading: Icon(
+        Icons.playlist_add_check_circle_outlined,
+        size: 16,
+        color: colors.success,
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Review the generated plan, then run it in a new Default turn or '
+            'keep planning. Tool and file permissions are still requested '
+            'separately when needed.',
+            style: textStyles.bodyMedium.copyWith(color: colors.textSecondary),
+          ),
+          const SizedBox(height: IdeSpacing.space8),
+          _AgentMarkdownBody(data: request.markdown),
+        ],
+      ),
+      footer: Wrap(
+        alignment: WrapAlignment.end,
+        spacing: IdeSpacing.space8,
+        runSpacing: IdeSpacing.space6,
+        children: [
+          sf.GhostButton(
+            key: ValueKey<String>('agent-plan-execution-dismiss-${request.id}'),
+            onPressed: onDismiss,
+            size: sf.ButtonSize.small,
+            child: const Text('Dismiss'),
+          ),
+          sf.OutlineButton(
+            key: ValueKey<String>('agent-plan-execution-revise-${request.id}'),
+            onPressed: onRevise,
+            size: sf.ButtonSize.small,
+            child: const Text('Keep planning'),
+          ),
+          sf.PrimaryButton(
+            key: ValueKey<String>('agent-plan-execution-start-${request.id}'),
+            onPressed: onStart,
+            size: sf.ButtonSize.small,
+            leading: const Icon(Icons.play_arrow_rounded, size: 16),
+            child: const Text('Run plan'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AgentPlanTodoList extends StatelessWidget {
   const _AgentPlanTodoList({required this.title, required this.todos});
 

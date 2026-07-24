@@ -244,17 +244,19 @@ class _AgentLiveTurnSection extends StatelessWidget {
 
 /// 固定在 Composer 上方的待处理交互区。
 ///
-/// 权限、用户提问和计划审批都从独立 pending 列表读取，不依赖时间线 entry。
+/// 权限、用户提问、Provider 计划审批和本地执行交接都从独立 pending 状态读取。
 class _AgentPendingInteractionSection extends StatelessWidget {
   const _AgentPendingInteractionSection({
     required this.viewModel,
     required this.panelHeight,
     required this.pagePadding,
+    required this.onPlanRevisionRequested,
   });
 
   final AgentConversationViewModel viewModel;
   final double panelHeight;
   final EdgeInsets pagePadding;
+  final VoidCallback onPlanRevisionRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -272,10 +274,12 @@ class _AgentPendingInteractionSection extends StatelessWidget {
     final permissionRequests = viewModel.permissionRequests;
     final questionRequests = viewModel.questionRequests;
     final planApprovalRequests = viewModel.planApprovalRequests;
+    final planExecutionRequest = viewModel.planExecutionRequest;
     if (viewModel.isReadOnly ||
         (permissionRequests.isEmpty &&
             questionRequests.isEmpty &&
-            planApprovalRequests.isEmpty)) {
+            planApprovalRequests.isEmpty &&
+            planExecutionRequest == null)) {
       return const SizedBox.shrink();
     }
 
@@ -301,7 +305,8 @@ class _AgentPendingInteractionSection extends StatelessWidget {
                       bottom:
                           index < permissionRequests.length - 1 ||
                               questionRequests.isNotEmpty ||
-                              planApprovalRequests.isNotEmpty
+                              planApprovalRequests.isNotEmpty ||
+                              planExecutionRequest != null
                           ? IdeSpacing.space8
                           : 0,
                     ),
@@ -315,7 +320,8 @@ class _AgentPendingInteractionSection extends StatelessWidget {
                     padding: EdgeInsets.only(
                       bottom:
                           index < questionRequests.length - 1 ||
-                              planApprovalRequests.isNotEmpty
+                              planApprovalRequests.isNotEmpty ||
+                              planExecutionRequest != null
                           ? IdeSpacing.space8
                           : 0,
                     ),
@@ -337,7 +343,9 @@ class _AgentPendingInteractionSection extends StatelessWidget {
                       'agent-pending-plan-${planApprovalRequests[index].id}',
                     ),
                     padding: EdgeInsets.only(
-                      bottom: index < planApprovalRequests.length - 1
+                      bottom:
+                          index < planApprovalRequests.length - 1 ||
+                              planExecutionRequest != null
                           ? IdeSpacing.space8
                           : 0,
                     ),
@@ -348,6 +356,20 @@ class _AgentPendingInteractionSection extends StatelessWidget {
                         kind,
                       ),
                     ),
+                  ),
+                if (planExecutionRequest case final request?)
+                  _AgentPlanExecutionCard(
+                    key: ValueKey<String>(
+                      'agent-pending-plan-execution-${request.id}',
+                    ),
+                    request: request,
+                    onDismiss: () => viewModel.dismissPlanExecution(request),
+                    onRevise: () {
+                      viewModel.revisePlanExecution(request);
+                      onPlanRevisionRequested();
+                    },
+                    onStart: () =>
+                        unawaited(viewModel.startPlanExecution(request)),
                   ),
               ],
             ),

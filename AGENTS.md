@@ -55,6 +55,9 @@
 - 将 Codex app-server JSON-RPC、JSONL 历史解析、provider 配置等具体协议细节
   保留在 agent 数据层和 mapper 中。UI 代码应消费中立的 domain 事件和 provider
   契约。
+- Plan 完成后的执行确认是 Zeta 本地 application 工作流，不是 Provider 计划审批。
+  仅成功 Plan 终态和非空计划可创建交接；执行必须新建显式 Default 回合，且不得
+  预授权命令、文件或网络操作。该状态与 permission/question/plan approval 模型隔离。
 - 模型目录由 app 级 `AgentModelCatalogRepository` 在首页、常驻 thread 与 Agent 管理
   入口之间共享。启动只非阻塞预热 active provider；普通读取使用 stale-while-revalidate
   和 single-flight；共享仓储是 TTL 的唯一真源，其 refresh loader 必须绕过 provider
