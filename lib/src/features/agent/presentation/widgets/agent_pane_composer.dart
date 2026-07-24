@@ -5,8 +5,6 @@ part of '../agent_pane.dart';
 /// 上半部分是多行输入框，下半部分是操作行：左侧通过“更多操作”菜单承载文件、
 /// 图片和 Plan 快捷入口，并渐进展示模型、思考程度和 Fast，右侧放发送/取消按钮。
 class _AgentComposer extends StatelessWidget {
-  static const double _compactToolbarBreakpoint = 560;
-
   const _AgentComposer({
     required this.controller,
     required this.focusNode,
@@ -297,9 +295,9 @@ class _AgentComposer extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: IdeSpacing.space6),
-                  // 宽窗保持一行工具栏；空间不足时，将低频选择器收进可横滑的第二行。
-                  LayoutBuilder(
-                    builder: (context, constraints) {
+                  // 工具栏始终保持单行；空间不足时裁切右侧选择器，不移动已有控件。
+                  Builder(
+                    builder: (context) {
                       final moreActions = _buildMoreActions(context);
                       final submitAction = _buildSubmitAction(
                         context,
@@ -317,56 +315,35 @@ class _AgentComposer extends StatelessWidget {
                                 progress: contextWindowTokenProgress,
                               ),
                             );
-                      final useCompactToolbar =
-                          constraints.maxWidth < _compactToolbarBreakpoint;
-
-                      if (useCompactToolbar) {
-                        return Column(
-                          key: const ValueKey('agent-composer-compact-toolbar'),
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Row(
-                              children: [
-                                moreActions,
-                                const Spacer(),
-                                if (tokenUsage case final Widget usage) usage,
-                                submitAction,
-                              ],
-                            ),
-                            if (selectorControls.isNotEmpty) ...[
-                              const SizedBox(height: IdeSpacing.space6),
-                              SingleChildScrollView(
-                                key: const ValueKey(
-                                  'agent-composer-selector-scroll',
-                                ),
-                                scrollDirection: Axis.horizontal,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: selectorControls,
-                                ),
-                              ),
-                            ],
-                          ],
-                        );
-                      }
 
                       return Row(
+                        key: const ValueKey('agent-composer-toolbar'),
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           moreActions,
                           if (selectorControls.isNotEmpty) ...[
                             const SizedBox(width: IdeSpacing.space4),
-                            ...selectorControls,
-                          ],
-                          const Spacer(),
-                          if (tokenUsage case final Widget usage)
-                            Flexible(
-                              fit: FlexFit.loose,
-                              child: Align(
-                                alignment: Alignment.centerRight,
-                                child: usage,
+                            Expanded(
+                              child: SizedBox(
+                                height: 28,
+                                child: ClipRect(
+                                  key: const ValueKey(
+                                    'agent-composer-selectors',
+                                  ),
+                                  child: OverflowBox(
+                                    alignment: Alignment.centerLeft,
+                                    maxWidth: double.infinity,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: selectorControls,
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
+                          ] else
+                            const Spacer(),
+                          if (tokenUsage case final Widget usage) usage,
                           submitAction,
                         ],
                       );

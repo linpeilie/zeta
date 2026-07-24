@@ -1583,10 +1583,10 @@ void main() {
       );
 
       testWidgets(
-        'mode selector stays in the horizontal toolbar on narrow windows',
+        'composer toolbar stays on one line without scrolling in narrow windows',
         (tester) async {
           tester.view.devicePixelRatio = 1;
-          tester.view.physicalSize = const Size(360, 560);
+          tester.view.physicalSize = const Size(900, 560);
           tester.platformDispatcher.textScaleFactorTestValue = 1.4;
           addTearDown(() {
             tester.view.resetPhysicalSize();
@@ -1627,26 +1627,103 @@ void main() {
           final moreActionsButton = find.byKey(
             const ValueKey('agent-more-actions-button'),
           );
-          final selectorScroll = find.byKey(
-            const ValueKey('agent-composer-selector-scroll'),
+          final selectors = find.byKey(
+            const ValueKey('agent-composer-selectors'),
           );
+          final toolbar = find.byKey(const ValueKey('agent-composer-toolbar'));
+          final sendButton = find.byKey(const ValueKey('agent-send-button'));
+          final selectorControls = <Finder>[
+            find.byKey(const ValueKey('agent-mode-selector')),
+            find.byKey(const ValueKey('agent-session-config-cursor-model')),
+            find.byKey(const ValueKey('agent-model-selector')),
+            find.byKey(const ValueKey('agent-permission-policy-selector')),
+          ];
+          final wideSelectorsLeft = tester.getTopLeft(selectors).dx;
+          final wideOffsets = <double>[
+            for (final control in selectorControls)
+              tester.getTopLeft(control).dx - wideSelectorsLeft,
+          ];
+          final wideWidths = <double>[
+            for (final control in selectorControls)
+              tester.getSize(control).width,
+          ];
+
+          tester.view.physicalSize = const Size(360, 560);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 300));
+
           expect(
             find.byKey(const ValueKey('agent-composer-compact-toolbar')),
-            findsOneWidget,
+            findsNothing,
           );
+          expect(toolbar, findsOneWidget);
           expect(moreActionsButton, findsOneWidget);
-          expect(selectorScroll, findsOneWidget);
+          expect(selectors, findsOneWidget);
+          expect(sendButton, findsOneWidget);
+          expect(
+            find.byKey(const ValueKey('agent-composer-selector-scroll')),
+            findsNothing,
+          );
           expect(
             find.descendant(
-              of: selectorScroll,
+              of: selectors,
               matching: find.byKey(const ValueKey('agent-mode-selector')),
             ),
             findsOneWidget,
           );
           expect(
-            find.descendant(of: selectorScroll, matching: moreActionsButton),
+            find.descendant(of: selectors, matching: moreActionsButton),
             findsNothing,
           );
+          expect(
+            find.descendant(of: selectors, matching: find.byType(Scrollable)),
+            findsNothing,
+          );
+          expect(
+            find.descendant(of: selectors, matching: find.byType(Flexible)),
+            findsNothing,
+          );
+          expect(
+            find.descendant(of: selectors, matching: find.byType(OverflowBox)),
+            findsOneWidget,
+          );
+          expect(
+            find.descendant(of: toolbar, matching: moreActionsButton),
+            findsOneWidget,
+          );
+          expect(
+            find.descendant(of: toolbar, matching: selectors),
+            findsOneWidget,
+          );
+          expect(
+            find.descendant(of: toolbar, matching: sendButton),
+            findsOneWidget,
+          );
+          final toolbarCenterY = tester.getCenter(toolbar).dy;
+          expect(
+            tester.getCenter(moreActionsButton).dy,
+            moreOrLessEquals(toolbarCenterY, epsilon: 0.5),
+          );
+          expect(
+            tester.getCenter(selectors).dy,
+            moreOrLessEquals(toolbarCenterY, epsilon: 0.5),
+          );
+          expect(
+            tester.getCenter(sendButton).dy,
+            moreOrLessEquals(toolbarCenterY, epsilon: 0.5),
+          );
+          final narrowSelectorsLeft = tester.getTopLeft(selectors).dx;
+          for (var index = 0; index < selectorControls.length; index++) {
+            expect(
+              tester.getTopLeft(selectorControls[index]).dx -
+                  narrowSelectorsLeft,
+              moreOrLessEquals(wideOffsets[index], epsilon: 0.5),
+            );
+            expect(
+              tester.getSize(selectorControls[index]).width,
+              moreOrLessEquals(wideWidths[index], epsilon: 0.5),
+            );
+          }
           expect(tester.takeException(), isNull);
         },
       );
