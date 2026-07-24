@@ -650,7 +650,7 @@ class ProjectThreadsController {
     }
   }
 
-  /// 从所有已启用 provider 拉取 thread，保证首页可见后再按 recency 分页。
+  /// 从所有已启用 provider 拉取 thread，合并后按 recency 统一分页。
   Future<_AggregatedThreadPage> _listThreadsAcrossProviders({
     required String projectPath,
     required int limit,
@@ -706,23 +706,10 @@ class ProjectThreadsController {
       }),
     );
 
-    final merged = _prioritizeProviderHeads(
-      enabled: enabled,
-      threadsByProviderId: threadsByProviderId,
-    );
+    final merged = _mergeThreadsByRecency(threadsByProviderId.values);
 
     final offset = appendOffsetFromCursor(cursor);
-    // Provider 数量超过默认页大小时仍保证每个有结果的 provider 至少出现一条。
-    final providerCount = threadsByProviderId.values
-        .where((threads) => threads.isNotEmpty)
-        .length;
-    final pageLimit = offset == 0 && providerCount > limit
-        ? providerCount
-        : limit;
-    final pageThreads = merged
-        .skip(offset)
-        .take(pageLimit)
-        .toList(growable: false);
+    final pageThreads = merged.skip(offset).take(limit).toList(growable: false);
     final nextOffset = offset + pageThreads.length;
     final nextCursor = nextOffset < merged.length
         ? '$_aggregateCursorPrefix$nextOffset'
@@ -837,29 +824,12 @@ class ProjectThreadsController {
     return a.id.compareTo(b.id);
   }
 
-  /// 先放入每个 provider 最新的一条，再按全局时间排列其余条目。
-  ///
-  /// 这样既保留统一时间线，也避免历史较旧的 Cursor/Grok 会话一直被 Codex 首页
-  /// 挤到后续分页。相同输入会得到稳定顺序，因此聚合游标仍可安全复用。
-  static List<AgentThreadSummary> _prioritizeProviderHeads({
-    required List<AgentProviderConfig> enabled,
-    required Map<String, List<AgentThreadSummary>> threadsByProviderId,
-  }) {
-    final heads = <AgentThreadSummary>[];
-    final remaining = <AgentThreadSummary>[];
-    for (final config in enabled) {
-      final threads = List<AgentThreadSummary>.from(
-        threadsByProviderId[config.id] ?? const <AgentThreadSummary>[],
-      )..sort(_compareThreadRecency);
-      if (threads.isEmpty) {
-        continue;
-      }
-      heads.add(threads.first);
-      remaining.addAll(threads.skip(1));
-    }
-    heads.sort(_compareThreadRecency);
-    remaining.sort(_compareThreadRecency);
-    return <AgentThreadSummary>[...heads, ...remaining];
+  /// 将所有 Provider 会话合并为一条稳定的全局时间线。
+  static List<AgentThreadSummary> _mergeThreadsByRecency(
+    Iterable<List<AgentThreadSummary>> groups,
+  ) {
+    return <AgentThreadSummary>[for (final threads in groups) ...threads]
+      ..sort(_compareThreadRecency);
   }
 
   Future<AgentProvider?> _ensureProviderEventSubscription() async {

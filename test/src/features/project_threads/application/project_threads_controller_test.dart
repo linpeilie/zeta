@@ -354,15 +354,20 @@ void main() {
       },
     );
 
-    test('merges threads from all enabled providers by recency', () async {
+    test('sorts all provider threads by global recency', () async {
       final codex = _FakeAgentProvider(
         config: AgentProviderConfig.defaultCodex,
         pages: <AgentThreadPage>[
           _page(<AgentThreadSummary>[
             _thread(
-              id: 'codex-old',
+              id: 'codex-new',
               providerId: defaultAgentProviderId,
-              updatedAt: DateTime.utc(2026, 1, 1),
+              updatedAt: DateTime.utc(2026, 6, 1),
+            ),
+            _thread(
+              id: 'codex-middle',
+              providerId: defaultAgentProviderId,
+              updatedAt: DateTime.utc(2026, 5, 1),
             ),
           ], nextCursor: null),
         ],
@@ -372,9 +377,9 @@ void main() {
         pages: <AgentThreadPage>[
           _page(<AgentThreadSummary>[
             _thread(
-              id: 'grok-new',
+              id: 'grok-old',
               providerId: grokAgentProviderId,
-              updatedAt: DateTime.utc(2026, 6, 1),
+              updatedAt: DateTime.utc(2026, 1, 1),
             ),
           ], nextCursor: null),
         ],
@@ -392,7 +397,7 @@ void main() {
           .threads
           .map((thread) => thread.id)
           .toList();
-      expect(ids, <String>['grok-new', 'codex-old']);
+      expect(ids, <String>['codex-new', 'codex-middle', 'grok-old']);
       expect(codex.listQueries, isNotEmpty);
       expect(grok.listQueries, isNotEmpty);
     });
