@@ -35,6 +35,9 @@ class _AgentActivePlanSection extends StatelessWidget {
             }
             final entries = viewModel.activePlanEntries;
             return _AgentContentAlign(
+              // CustomMultiChildLayout 会给浮层一个有界最大高度；这里必须按内容
+              // 收缩，否则 Align 会占满 Footer 上方空间并把卡片留在时间线顶部。
+              shrinkWrapHeight: true,
               child: Padding(
                 padding: pagePadding.copyWith(
                   top: IdeSpacing.space8,
@@ -42,6 +45,7 @@ class _AgentActivePlanSection extends StatelessWidget {
                 ),
                 child: Align(
                   alignment: Alignment.topCenter,
+                  heightFactor: 1,
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(
                       maxWidth: _activePlanPanelMaxWidth,

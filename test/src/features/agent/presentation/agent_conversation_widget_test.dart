@@ -2686,6 +2686,18 @@ void main() {
         find.descendant(of: card, matching: find.byType(PanelCard)),
       );
       expect(planSurface.color!.a, closeTo(0.8, 0.001));
+      final floatingPanel = find.byKey(
+        const ValueKey('agent-floating-panel-position'),
+      );
+      final footer = find.byKey(const ValueKey('agent-conversation-footer'));
+      expect(
+        tester.getRect(card).bottom,
+        closeTo(tester.getRect(floatingPanel).bottom, 0.5),
+      );
+      expect(
+        tester.getRect(card).bottom,
+        closeTo(tester.getRect(footer).top, 0.5),
+      );
       expect(
         find.descendant(of: progress, matching: find.text('2/12')),
         findsOneWidget,

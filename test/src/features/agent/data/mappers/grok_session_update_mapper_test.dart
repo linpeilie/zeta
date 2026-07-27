@@ -591,6 +591,72 @@ void main() {
       },
     );
 
+    test('late turn_completed supplements usage after prompt RPC terminal', () {
+      // Arrange：流式 chunk 已提供当前上下文占用与 prompt identity。
+      mapper.mapSessionUpdate(
+        params: <String, Object?>{
+          'sessionId': sessionId,
+          'update': <String, Object?>{
+            'sessionUpdate': 'agent_message_chunk',
+            'content': <String, Object?>{'type': 'text', 'text': 'ok'},
+            '_meta': <String, Object?>{'promptId': promptId},
+          },
+          '_meta': <String, Object?>{
+            'eventId': 'chunk-before-rpc',
+            'totalTokens': 1200,
+          },
+        },
+        runningTurnId: turnId,
+        runtimeScope: runtimeScope,
+      );
+
+      // Act：RPC 终态先结束生命周期，权威通知随后携带完整 usage。
+      final promptTerminal = mapper.mapPromptTerminal(
+        runtimeScope: runtimeScope,
+        sessionId: sessionId,
+        turnId: turnId,
+        stopReason: 'end_turn',
+        source: GrokTerminalSource.promptRpc,
+      );
+      final lateTerminal = mapper.mapXaiSessionUpdate(
+        params: <String, Object?>{
+          'sessionId': sessionId,
+          'update': <String, Object?>{
+            'sessionUpdate': 'turn_completed',
+            'prompt_id': promptId,
+            'stop_reason': 'end_turn',
+            'usage': <String, Object?>{
+              'inputTokens': 1000,
+              'outputTokens': 300,
+              'totalTokens': 1300,
+              'cachedReadTokens': 200,
+              'reasoningTokens': 50,
+            },
+          },
+          '_meta': <String, Object?>{'eventId': 'late-terminal'},
+        },
+        runningTurnId: null,
+        runtimeScope: runtimeScope,
+      );
+
+      // Assert：完成事件仍只有一次，迟到通知只补 token 元数据。
+      expect(
+        promptTerminal.events.whereType<AgentTurnCompletedEvent>(),
+        hasLength(1),
+      );
+      expect(lateTerminal.events.whereType<AgentTurnCompletedEvent>(), isEmpty);
+      final usage = lateTerminal.events
+          .whereType<AgentTokenUsageEvent>()
+          .single;
+      expect(usage.turnId, turnId);
+      expect(usage.isSessionCumulative, isFalse);
+      expect(usage.tokenUsage.totalTokens, 1300);
+      expect(usage.tokenUsage.inputTokens, 1000);
+      expect(usage.tokenUsage.cachedInputTokens, 200);
+      expect(usage.tokenUsage.lastTotalTokens, 1200);
+      expect(usage.tokenUsage.lastInputTokens, 1200);
+    });
+
     test('clears tracked context occupancy across turns', () {
       mapper.mapSessionUpdate(
         params: <String, Object?>{

@@ -137,6 +137,7 @@ void main() {
 
     test('does not log an unknown provider request id value', () async {
       const secretId = 'provider-secret-request-id';
+      final errors = <JsonRpcProtocolException>[];
       final transport = JsonRpcStdioTransport(
         command: 'fake-json-rpc-server',
         processStarter: _fakeProcessStarter((process, message) {
@@ -148,14 +149,44 @@ void main() {
             });
         }),
       );
+      final subscription = transport.protocolErrors.listen(errors.add);
 
       await transport.start();
       await transport.sendRequest('ping');
+      await Future<void>.delayed(Duration.zero);
+      expect(errors, hasLength(1));
+      expect(errors.single.kind, JsonRpcProtocolErrorKind.unexpectedResponse);
       await transport.close();
+      await subscription.cancel();
 
       final messages = records.map((record) => record.message).join('\n');
       expect(messages, contains('unknown request id (String)'));
       expect(messages, isNot(contains(secretId)));
+    });
+
+    test('matches a stringified numeric response id', () async {
+      final errors = <JsonRpcProtocolException>[];
+      final transport = JsonRpcStdioTransport(
+        command: 'fake-json-rpc-server',
+        processStarter: _fakeProcessStarter((process, message) {
+          process.writeStdout(<String, Object?>{
+            'id': '${message['id']}',
+            'result': 'pong',
+          });
+        }),
+      );
+      final subscription = transport.protocolErrors.listen(errors.add);
+
+      await transport.start();
+      final result = await transport.sendRequest(
+        'ping',
+        timeout: const Duration(milliseconds: 100),
+      );
+
+      expect(result, 'pong');
+      expect(errors, isEmpty);
+      await transport.close();
+      await subscription.cancel();
     });
 
     test('reports invalid stdout without closing the transport', () async {

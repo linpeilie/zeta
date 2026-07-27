@@ -876,6 +876,15 @@ class GrokAcpAgentProvider
       _log.fine('Grok stderr (${line.length} chars)');
     });
     _protocolErrorSubscription ??= _peer.protocolErrors.listen((error) {
+      if (error.kind == JsonRpcProtocolErrorKind.unexpectedResponse) {
+        // Grok 偶尔会补发已超时或已完成请求的响应。该诊断不影响当前 turn，
+        // 只保留在日志中，避免把 transport 噪声渲染成对话错误。
+        _log.fine(
+          'Ignored unmatched Grok response '
+          '(${error.message.length} characters)',
+        );
+        return;
+      }
       _log.warning(
         'Grok protocol warning (${error.message.length} characters; '
         'cause=${error.causeType ?? 'unknown'})',

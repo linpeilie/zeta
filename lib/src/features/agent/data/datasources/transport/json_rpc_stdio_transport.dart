@@ -144,6 +144,18 @@ class JsonRpcException implements Exception, StructuredLogDiagnostic {
   String toString() => 'JSON-RPC error ${error.code}: ${error.message}';
 }
 
+/// JSON-RPC 协议诊断类型，供 Provider 判断是否需要展示给用户。
+enum JsonRpcProtocolErrorKind {
+  /// 消息无法按 JSON-RPC 对象解析或形状不受支持。
+  invalidMessage,
+
+  /// 收到了无法匹配本地 pending 请求的响应。
+  unexpectedResponse,
+
+  /// 进程输出流本身发生错误。
+  streamFailure,
+}
+
 /// 协议层异常。
 ///
 /// 这类异常通常不会直接关闭连接，而是通过 [JsonRpcPeer.protocolErrors] 暴露给上层。
@@ -152,11 +164,13 @@ class JsonRpcProtocolException implements Exception {
     this.message, {
     this.payloadLength,
     this.causeType,
+    this.kind = JsonRpcProtocolErrorKind.invalidMessage,
   });
 
   final String message;
   final int? payloadLength;
   final String? causeType;
+  final JsonRpcProtocolErrorKind kind;
 
   @override
   String toString() {
@@ -492,8 +506,18 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
   }
 
   void _handleResponse(Object id, Map<String, Object?> raw) {
-    final completer = _pending.remove(id);
-    _pendingTimers.remove(id)?.cancel();
+    Object matchedId = id;
+    var completer = _pending.remove(matchedId);
+    if (completer == null && id is String) {
+      final numericId = int.tryParse(id);
+      if (numericId != null) {
+        matchedId = numericId;
+        completer = _pending.remove(matchedId);
+        if (completer != null) {
+          _log.fine('Matched stringified numeric JSON-RPC response id');
+        }
+      }
+    }
     if (completer == null) {
       _log.warning(
         'JSON-RPC response for unknown request id (${id.runtimeType})',
@@ -501,10 +525,12 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
       _protocolErrors.add(
         JsonRpcProtocolException(
           'Response for unknown request id (${id.runtimeType})',
+          kind: JsonRpcProtocolErrorKind.unexpectedResponse,
         ),
       );
       return;
     }
+    _pendingTimers.remove(matchedId)?.cancel();
 
     final error = raw['error'];
     if (error != null) {
@@ -544,6 +570,7 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
       JsonRpcProtocolException(
         'Process stream error',
         causeType: error.runtimeType.toString(),
+        kind: JsonRpcProtocolErrorKind.streamFailure,
       ),
     );
   }

@@ -712,14 +712,19 @@ AgentModeSelectorStatus _modeSelectorStatus(
 }
 
 class _AgentContentAlign extends StatelessWidget {
-  const _AgentContentAlign({required this.child});
+  const _AgentContentAlign({
+    required this.child,
+    this.shrinkWrapHeight = false,
+  });
 
   final Widget child;
+  final bool shrinkWrapHeight;
 
   @override
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.topCenter,
+      heightFactor: shrinkWrapHeight ? 1 : null,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: IdeMetrics.contentMaxWidth),
         child: SizedBox(width: double.infinity, child: child),

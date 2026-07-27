@@ -45,6 +45,34 @@ void main() {
       expect(provider.lifecycleState, AgentProviderLifecycleState.closed);
     });
 
+    test('keeps unmatched response diagnostics out of the timeline', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+      addTearDown(subscription.cancel);
+      addTearDown(provider.dispose);
+      await provider.initialize();
+
+      peer.emitProtocolError(
+        const JsonRpcProtocolException(
+          'Response for unknown request id (String)',
+          kind: JsonRpcProtocolErrorKind.unexpectedResponse,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(events.whereType<AgentErrorEvent>(), isEmpty);
+
+      peer.emitProtocolError(
+        const JsonRpcProtocolException('Invalid JSON on stdout'),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(events.whereType<AgentErrorEvent>(), hasLength(1));
+    });
+
     test(
       'fails explicitly for unsupported thread lifecycle operations',
       () async {
@@ -711,6 +739,82 @@ void main() {
       await provider.dispose();
     });
 
+    test(
+      'late xAI terminal supplements usage after prompt RPC completes',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final mapper = GrokAcpNotificationMapper();
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+          notificationMapper: mapper,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+        );
+        peer.promptCompleter = Completer<Object?>();
+        final promptFuture = provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+          message: 'ping',
+        );
+        await _waitUntil(() => peer.requestMethods.contains('session/prompt'));
+        peer.emitNotification('session/update', <String, Object?>{
+          'sessionId': 'sess-1',
+          'update': <String, Object?>{
+            'sessionUpdate': 'agent_message_chunk',
+            'messageId': 'message-before-rpc',
+            'content': <String, Object?>{'type': 'text', 'text': 'done'},
+            '_meta': <String, Object?>{'promptId': 'provider-prompt-1'},
+          },
+          '_meta': <String, Object?>{
+            'eventId': 'message-before-rpc',
+            'totalTokens': 1200,
+          },
+        });
+        await Future<void>.delayed(Duration.zero);
+
+        peer.promptCompleter!.complete(<String, Object?>{
+          'stopReason': 'end_turn',
+        });
+        await promptFuture;
+        await Future<void>.delayed(Duration.zero);
+        expect(events.whereType<AgentTurnCompletedEvent>(), hasLength(1));
+        expect(events.whereType<AgentTokenUsageEvent>(), isEmpty);
+
+        peer.emitNotification('_x.ai/session/update', <String, Object?>{
+          'sessionId': 'sess-1',
+          'update': <String, Object?>{
+            'sessionUpdate': 'turn_completed',
+            'prompt_id': 'provider-prompt-1',
+            'stop_reason': 'end_turn',
+            'usage': <String, Object?>{
+              'inputTokens': 1000,
+              'outputTokens': 300,
+              'totalTokens': 1300,
+              'cachedReadTokens': 200,
+              'reasoningTokens': 50,
+            },
+          },
+          '_meta': <String, Object?>{'eventId': 'late-xai-terminal'},
+        });
+        await Future<void>.delayed(Duration.zero);
+
+        expect(events.whereType<AgentTurnCompletedEvent>(), hasLength(1));
+        final usage = events.whereType<AgentTokenUsageEvent>().single;
+        expect(usage.tokenUsage.totalTokens, 1300);
+        expect(usage.tokenUsage.lastTotalTokens, 1200);
+        expect(mapper.diagnostics.terminalAccepted, 1);
+        expect(mapper.diagnostics.duplicateTerminalIgnored, 1);
+
+        await subscription.cancel();
+        await provider.dispose();
+      },
+    );
+
     for (final scenario
         in <({String name, Object error, String message, bool connectionLost})>[
           (
@@ -1240,6 +1344,10 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
     _notifications.add(
       JsonRpcNotification(method: method, params: params, raw: params),
     );
+  }
+
+  void emitProtocolError(JsonRpcProtocolException error) {
+    _protocolErrors.add(error);
   }
 
   void emitServerRequest({

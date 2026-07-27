@@ -124,8 +124,12 @@ final class GrokSessionUpdateMapper {
     String? errorMessage,
     Map<String, Object?> raw = const <String, Object?>{},
   }) {
-    // prompt 终态路径不携带 usage；丢弃占用跟踪，避免泄漏到下一 turn。
-    _latestContextTokens = null;
+    // 正常 prompt RPC 可能先于带 usage 的 turn_completed 通知返回。
+    // 保留本回合上下文占用，让迟到通知补全 token 元数据；取消与异常终态
+    // 不再等待权威通知，必须立即清理，避免泄漏到下一 turn。
+    if (source != GrokTerminalSource.promptRpc) {
+      _latestContextTokens = null;
+    }
     final status = _stopReasonToStatus(stopReason);
     final terminal = identity.completeTurn(
       runtimeScope: runtimeScope,
@@ -451,11 +455,16 @@ final class GrokSessionUpdateMapper {
       source: terminalSource,
       eventId: update.eventId,
     );
-    if (!terminal.accepted) {
+    final shouldEmitCompletion = terminal.accepted;
+    final canApplyTerminalMetadata =
+        shouldEmitCompletion ||
+        terminal.disposition == GrokTerminalDisposition.duplicate;
+    if (!canApplyTerminalMetadata) {
       return const GrokAcpMappedUpdate();
     }
 
-    // 回合结束：把跟踪到的上下文占用并入 last*，再清空，避免泄漏到下轮。
+    // 即使生命周期终态已由 prompt RPC 接受，迟到的权威通知仍可补全 usage；
+    // 仅抑制重复 AgentTurnCompletedEvent，不丢弃 token 元数据。
     final contextTokens = _takeLatestContextTokens();
 
     Duration? duration;
@@ -496,16 +505,17 @@ final class GrokSessionUpdateMapper {
             tokenUsage: tokenUsage,
             raw: usage?.raw ?? const <String, Object?>{},
           ),
-        AgentTurnCompletedEvent(
-          sessionId: terminal.sessionId,
-          turnId: terminal.turnId,
-          status: terminal.status,
-          duration: duration,
-          errorMessage: terminal.status == AgentHistoryTurnStatus.failed
-              ? grokTerminalErrorMessage(update.stopReason)
-              : null,
-          raw: update.raw,
-        ),
+        if (shouldEmitCompletion)
+          AgentTurnCompletedEvent(
+            sessionId: terminal.sessionId,
+            turnId: terminal.turnId,
+            status: terminal.status,
+            duration: duration,
+            errorMessage: terminal.status == AgentHistoryTurnStatus.failed
+                ? grokTerminalErrorMessage(update.stopReason)
+                : null,
+            raw: update.raw,
+          ),
       ],
     );
   }
