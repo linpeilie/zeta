@@ -297,6 +297,160 @@ void main() {
     });
 
     testWidgets(
+      'same width bucket resize keeps AgentPane controllers and draft',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(900, 800));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(provider.dispose);
+        addTearDown(viewModel.dispose);
+
+        await tester.pumpWidget(_TestApp(viewModel: viewModel));
+        await _pumpAgentPaneUi(tester);
+
+        expect(
+          find.byKey(const ValueKey('agent-pane-width-bucket')),
+          findsOneWidget,
+        );
+
+        final input = find.byKey(const ValueKey('agent-message-input'));
+        await tester.enterText(input, 'Bucket-stable draft');
+        await tester.pump();
+
+        final agentPaneElement = tester.element(find.byType(AgentPane));
+        final inputController = tester
+            .widget<EditableText>(
+              find.descendant(of: input, matching: find.byType(EditableText)),
+            )
+            .controller;
+        final composerSectionElement = tester.element(
+          find.byKey(const ValueKey('agent-composer-section')),
+        );
+        final conversationLayoutElement = tester.element(
+          find.byKey(const ValueKey('agent-conversation-layout')),
+        );
+
+        // 900 → 700 均在 regular（>=640）档位内，不应卸载 Composer / 对话壳。
+        for (var width = 900; width >= 700; width -= 5) {
+          await tester.binding.setSurfaceSize(Size(width.toDouble(), 800));
+          await tester.pump();
+        }
+
+        expect(tester.element(find.byType(AgentPane)), same(agentPaneElement));
+        expect(
+          tester.element(find.byKey(const ValueKey('agent-composer-section'))),
+          same(composerSectionElement),
+        );
+        expect(
+          tester.element(
+            find.byKey(const ValueKey('agent-conversation-layout')),
+          ),
+          same(conversationLayoutElement),
+        );
+        expect(
+          tester
+              .widget<EditableText>(
+                find.descendant(
+                  of: find.byKey(const ValueKey('agent-message-input')),
+                  matching: find.byType(EditableText),
+                ),
+              )
+              .controller,
+          same(inputController),
+        );
+        expect(inputController.text, 'Bucket-stable draft');
+        // 700 < contentMaxWidth，仍使用 regular pagePadding。
+        expect(
+          tester
+              .getSize(find.byKey(const ValueKey('agent-composer-focus-ring')))
+              .width,
+          700 - IdeSpacing.pagePadding.horizontal,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'crossing width breakpoint updates padding without losing controllers',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(800, 800));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(provider.dispose);
+        addTearDown(viewModel.dispose);
+
+        await tester.pumpWidget(_TestApp(viewModel: viewModel));
+        await _pumpAgentPaneUi(tester);
+
+        final input = find.byKey(const ValueKey('agent-message-input'));
+        await tester.enterText(input, 'Cross-breakpoint draft');
+        await tester.pump();
+        final inputController = tester
+            .widget<EditableText>(
+              find.descendant(of: input, matching: find.byType(EditableText)),
+            )
+            .controller;
+        final agentPaneElement = tester.element(find.byType(AgentPane));
+
+        expect(
+          tester
+              .getSize(find.byKey(const ValueKey('agent-composer-focus-ring')))
+              .width,
+          800 - IdeSpacing.pagePadding.horizontal,
+        );
+
+        // 跨 stackedRowBreakpoint(640)：结构可换 padding，但 State/controller 保留。
+        await tester.binding.setSurfaceSize(const Size(600, 800));
+        await _pumpAgentPaneUi(tester);
+
+        expect(tester.element(find.byType(AgentPane)), same(agentPaneElement));
+        expect(
+          tester
+              .widget<EditableText>(
+                find.descendant(
+                  of: find.byKey(const ValueKey('agent-message-input')),
+                  matching: find.byType(EditableText),
+                ),
+              )
+              .controller,
+          same(inputController),
+        );
+        expect(inputController.text, 'Cross-breakpoint draft');
+        expect(
+          tester
+              .getSize(find.byKey(const ValueKey('agent-composer-focus-ring')))
+              .width,
+          600 - IdeSpacing.pagePaddingCompact.horizontal,
+        );
+
+        await tester.binding.setSurfaceSize(const Size(800, 800));
+        await _pumpAgentPaneUi(tester);
+
+        expect(
+          tester
+              .widget<EditableText>(
+                find.descendant(
+                  of: find.byKey(const ValueKey('agent-message-input')),
+                  matching: find.byType(EditableText),
+                ),
+              )
+              .controller,
+          same(inputController),
+        );
+        expect(inputController.text, 'Cross-breakpoint draft');
+        expect(
+          tester
+              .getSize(find.byKey(const ValueKey('agent-composer-focus-ring')))
+              .width,
+          800 - IdeSpacing.pagePadding.horizontal,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
       'moves the same focused composer below an active neutral user message',
       (tester) async {
         await tester.binding.setSurfaceSize(const Size(1280, 800));

@@ -245,6 +245,7 @@ class _AgentLiveTurnSection extends StatelessWidget {
 /// 固定在 Composer 上方的待处理交互区。
 ///
 /// 权限、用户提问、Provider 计划审批和本地执行交接都从独立 pending 状态读取。
+/// [panelHeight] 由 AgentPane width-bucket 的约束旁路提供，不进入 bucket 身份。
 class _AgentPendingInteractionSection extends StatelessWidget {
   const _AgentPendingInteractionSection({
     required this.viewModel,
@@ -283,7 +284,9 @@ class _AgentPendingInteractionSection extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    final maxHeight = math.min<double>(360, panelHeight * 0.35);
+    final maxHeight = panelHeight.isFinite
+        ? math.min<double>(360, panelHeight * 0.35)
+        : 360.0;
     return _AgentContentAlign(
       child: Padding(
         padding: pagePadding.copyWith(top: IdeSpacing.space8, bottom: 0),
@@ -299,7 +302,8 @@ class _AgentPendingInteractionSection extends StatelessWidget {
                 for (var index = 0; index < permissionRequests.length; index++)
                   Padding(
                     key: ValueKey(
-                      'agent-pending-permission-${permissionRequests[index].id}',
+                      'agent-pending-permission-'
+                      '${permissionRequests[index].id}',
                     ),
                     padding: EdgeInsets.only(
                       bottom:
@@ -315,7 +319,8 @@ class _AgentPendingInteractionSection extends StatelessWidget {
                 for (var index = 0; index < questionRequests.length; index++)
                   Padding(
                     key: ValueKey(
-                      'agent-pending-question-${questionRequests[index].id}',
+                      'agent-pending-question-'
+                      '${questionRequests[index].id}',
                     ),
                     padding: EdgeInsets.only(
                       bottom:
@@ -340,7 +345,8 @@ class _AgentPendingInteractionSection extends StatelessWidget {
                 )
                   Padding(
                     key: ValueKey(
-                      'agent-pending-plan-${planApprovalRequests[index].id}',
+                      'agent-pending-plan-'
+                      '${planApprovalRequests[index].id}',
                     ),
                     padding: EdgeInsets.only(
                       bottom:

@@ -29,6 +29,7 @@ import 'package:zeta/src/ui/core/ide_popover.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_status_card.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
+import 'package:zeta/src/ui/core/layout/ide_constraint_bucket_builder.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
@@ -51,6 +52,15 @@ const int _markdownCollapseLengthThreshold = 420;
 const int _diffPreviewLineCount = 24;
 
 typedef _TurnSectionBuilder = Widget Function(AgentConversationTurnGroup turn);
+
+/// Agent 主列宽度档位：只影响 page padding 等布局语义，不随每像素宽度重建。
+enum _AgentPaneWidthClass { compact, regular }
+
+_AgentPaneWidthClass _selectAgentPaneWidthClass(BoxConstraints constraints) {
+  return constraints.maxWidth < IdeMetrics.stackedRowBreakpoint
+      ? _AgentPaneWidthClass.compact
+      : _AgentPaneWidthClass.regular;
+}
 
 /// 中间 Agent 面板。
 ///
@@ -88,6 +98,12 @@ class _AgentPaneState extends State<AgentPane> {
       <({String name, String path})>[];
   bool _stickToBottom = true;
   late int _lastAutoScrollTick;
+
+  /// Agent 主列最近一次有限高度；供 pending dock 计算 maxHeight。
+  ///
+  /// 在 width-bucket 的 [selectBucket] 中更新，不进入 bucket 身份，因此纵向
+  /// 尺寸变化不会使对话结构缓存失效。结构重建时会读到最新值。
+  double _panelHeight = 600;
 
   @override
   void initState() {
@@ -142,12 +158,15 @@ class _AgentPaneState extends State<AgentPane> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final pagePadding =
-                    constraints.maxWidth < IdeMetrics.stackedRowBreakpoint
-                    ? IdeSpacing.pagePaddingCompact
-                    : IdeSpacing.pagePadding;
+            // 仅在 Compact/Regular 档位变化时重建对话结构；panelHeight 不进 bucket。
+            child: IdeConstraintBucketBuilder<_AgentPaneWidthClass>(
+              key: const ValueKey('agent-pane-width-bucket'),
+              selectBucket: _selectWidthBucketAndTrackHeight,
+              builder: (context, widthClass) {
+                final pagePadding = switch (widthClass) {
+                  _AgentPaneWidthClass.compact => IdeSpacing.pagePaddingCompact,
+                  _AgentPaneWidthClass.regular => IdeSpacing.pagePadding,
+                };
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -192,10 +211,10 @@ class _AgentPaneState extends State<AgentPane> {
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                // 阻塞交互始终固定在输入框上方，并沿用原最大高度。
+                                // panelHeight 由 selectBucket 旁路缓存，不进入 bucket 身份。
                                 _AgentPendingInteractionSection(
                                   viewModel: widget.viewModel,
-                                  panelHeight: constraints.maxHeight,
+                                  panelHeight: _panelHeight,
                                   pagePadding: pagePadding,
                                   onPlanRevisionRequested:
                                       _composerFocusNode.requestFocus,
@@ -278,6 +297,20 @@ class _AgentPaneState extends State<AgentPane> {
       turn: turn,
       viewModel: widget.viewModel,
     );
+  }
+
+  /// 派生宽度档位，并旁路记录主列高度供 pending dock 使用。
+  ///
+  /// [IdeConstraintBucketBuilder] 每次 layout 都会调用 selectBucket，即使最终
+  /// 返回缓存 child；因此高度可以持续刷新，而不把高度并入 bucket 身份。
+  _AgentPaneWidthClass _selectWidthBucketAndTrackHeight(
+    BoxConstraints constraints,
+  ) {
+    final height = constraints.maxHeight;
+    if (height.isFinite && height > 0) {
+      _panelHeight = height;
+    }
+    return _selectAgentPaneWidthClass(constraints);
   }
 
   void _handleInputChanged() {
