@@ -315,6 +315,7 @@ class RenderIdeAnchoredDynamicSliverList extends RenderSliverMultiBoxAdaptor {
     if (correction.abs() > kIdeScrollCorrectionEpsilon &&
         _canCorrectThisFrame()) {
       _consumeCorrectionBudget();
+      controller.recordAnchorCorrection(correction);
       assert(() {
         debugPrint(
           'IdeAnchoredDynamicSliverList correction=$correction '
@@ -331,6 +332,13 @@ class RenderIdeAnchoredDynamicSliverList extends RenderSliverMultiBoxAdaptor {
 
     assert(firstChild != null);
     assert(debugAssertChildListIsNonEmptyAndContiguous());
+
+    // debug 可观测：当前存活 child 数。
+    var laidOut = 0;
+    for (var c = firstChild; c != null; c = childAfter(c)) {
+      laidOut += 1;
+    }
+    controller.debugLaidOutChildCount = laidOut;
 
     final scrollExtent = extentIndex.totalExtent;
     final leadingScrollOffset = childScrollOffset(firstChild!)!;
@@ -382,6 +390,7 @@ class RenderIdeAnchoredDynamicSliverList extends RenderSliverMultiBoxAdaptor {
       measuredExtent: measured,
       epoch: epoch,
     );
+    controller.recordMeasurementUpdate();
     final parentData = child.parentData! as SliverMultiBoxAdaptorParentData;
     parentData.layoutOffset = extentIndex.offsetOf(index);
     assert(parentData.index == index);

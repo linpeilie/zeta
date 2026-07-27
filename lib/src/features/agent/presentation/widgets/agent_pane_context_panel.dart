@@ -5,8 +5,8 @@ const double _agentContextPanelWidth = 360;
 
 /// Agent 面板右侧的上下文详情面板。
 ///
-/// 由 thread 详情头栏「上下文」菜单触发，展示会话元信息（名称、消息数、
-/// 提供商、上下文限制、token 占用、创建/活跃时间）与原始消息列表。
+/// 由 thread 详情头栏「上下文」菜单触发，展示会话元信息（名称、会话 ID、
+/// 消息数、提供商、上下文限制、token 占用、创建/活跃时间）与原始消息列表。
 /// 原始消息列表展示消息 ID、角色与时间，点击可展开查看 raw 协议原文。
 class _AgentContextPanel extends StatefulWidget {
   const _AgentContextPanel({required this.viewModel});
@@ -65,6 +65,7 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
                       children: [
                         _AgentContextSummaryCard(
                           title: viewModel.currentThreadTitle,
+                          sessionId: viewModel.sessionId,
                           messageCount: messages.length,
                           providerName: viewModel.activeProviderName,
                           contextLimit: usage?.displayModelContextWindow,
@@ -166,10 +167,11 @@ class _AgentContextPanelHeader extends StatelessWidget {
   }
 }
 
-/// 上下文概览信息卡：会话名称、消息数、提供商、token 与时间等键值对。
+/// 上下文概览信息卡：会话名称、会话 ID、消息数、提供商、token 与时间等键值对。
 class _AgentContextSummaryCard extends StatelessWidget {
   const _AgentContextSummaryCard({
     required this.title,
+    required this.sessionId,
     required this.messageCount,
     required this.providerName,
     required this.contextLimit,
@@ -182,6 +184,7 @@ class _AgentContextSummaryCard extends StatelessWidget {
   });
 
   final String title;
+  final String? sessionId;
   final int messageCount;
   final String providerName;
   final String? contextLimit;
@@ -196,6 +199,7 @@ class _AgentContextSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final rows = <_ContextSummaryRow>[
       _ContextSummaryRow('会话名称', title),
+      _ContextSummaryRow('会话 ID', sessionId ?? '—'),
       _ContextSummaryRow('消息数', '$messageCount'),
       _ContextSummaryRow('提供商', providerName),
       _ContextSummaryRow('上下文限制', contextLimit ?? '—'),

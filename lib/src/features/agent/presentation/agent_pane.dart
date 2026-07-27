@@ -104,7 +104,11 @@ class _AgentPaneState extends State<AgentPane> {
   final List<({String name, String path})> _draftMentions =
       <({String name, String path})>[];
 
-  /// 旧路径 stick-to-bottom；flag 开启时由 coordinator 接管，此字段仅回退使用。
+  /// 旧路径 stick-to-bottom；flag 开启时由 coordinator 接管。
+  ///
+  /// **保留策略（阶段 5）**：至少一个发布周期内不要删除；关闭
+  /// `kUseAnchoredDynamicTimelineSliver` 时仍依赖此字段与
+  /// [_scrollToEndLegacy] 完成回退。
   bool _stickToBottom = true;
   late int _lastAutoScrollTick;
 
@@ -666,6 +670,10 @@ class _AgentPaneState extends State<AgentPane> {
     );
   }
 
+  /// flag 关闭时的旧 stick-to-bottom 滚底实现。
+  ///
+  /// 新路径请使用 [_scrollCoordinator.onAutoScrollTick] /
+  /// [requestFollowEnd]。本方法保留用于 A/B 回退，勿在 flag 存在期间删除。
   void _scrollToEndLegacy() {
     // 新消息/工具卡出现后自动滚到底部，但不阻塞当前 build。
     WidgetsBinding.instance.addPostFrameCallback((_) {

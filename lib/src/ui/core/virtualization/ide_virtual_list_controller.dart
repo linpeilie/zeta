@@ -77,6 +77,67 @@ final class IdeVirtualListController {
   List<IdeVirtualItemDescriptor>? _pendingDescriptors;
   IdeLayoutEpoch? _pendingEpoch;
 
+  // --- debug/profile 可观测指标（详设 18.3；不进入业务逻辑） ---
+
+  /// 应用过的 scrollOffsetCorrection 次数。
+  int debugAnchorCorrectionCount = 0;
+
+  /// 单次 correction 绝对值峰值。
+  double debugMaxSingleCorrection = 0;
+
+  /// 应用过的实测 point update 次数（含亚像素未写入树的快照刷新）。
+  int debugMeasurementUpdateCount = 0;
+
+  /// 最近一次 layout 存活的 child 数。
+  int debugLaidOutChildCount = 0;
+
+  /// 重置 debug 计数器（测试/profile 场景使用）。
+  void resetDebugMetrics() {
+    debugAnchorCorrectionCount = 0;
+    debugMaxSingleCorrection = 0;
+    debugMeasurementUpdateCount = 0;
+    debugLaidOutChildCount = 0;
+  }
+
+  /// 由 RenderSliver 在 correction 路径记录。
+  void recordAnchorCorrection(double correction) {
+    final abs = correction.abs();
+    if (abs <= 0) {
+      return;
+    }
+    debugAnchorCorrectionCount += 1;
+    if (abs > debugMaxSingleCorrection) {
+      debugMaxSingleCorrection = abs;
+    }
+  }
+
+  /// 由 RenderSliver 在测量路径记录。
+  void recordMeasurementUpdate() {
+    debugMeasurementUpdateCount += 1;
+  }
+
+  /// 已测量（含 stale）的 record 数。
+  int get measuredCount {
+    var count = 0;
+    for (var i = 0; i < extentIndex.length; i++) {
+      if (extentIndex.recordAt(i).hasMeasuredExtent) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  /// fresh 测量数。
+  int get freshMeasurementCount {
+    var count = 0;
+    for (var i = 0; i < extentIndex.length; i++) {
+      if (extentIndex.recordAt(i).isMeasurementFresh) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
   /// 当前（含 pending）item 数量，供 delegate.childCount 使用。
   int get itemCount => _pendingDescriptors?.length ?? extentIndex.length;
 

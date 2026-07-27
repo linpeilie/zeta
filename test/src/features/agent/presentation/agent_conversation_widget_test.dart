@@ -1373,8 +1373,22 @@ void main() {
 
     expect(find.byKey(const ValueKey('agent-context-panel')), findsOneWidget);
 
-    // 概览信息：会话名称、消息数、提供商、token 与时间。
+    // 概览信息：会话名称、会话 ID、消息数、提供商、token 与时间。
     expect(find.text('Context thread'), findsWidgets);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('agent-context-panel')),
+        matching: find.text('会话 ID'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('agent-context-panel')),
+        matching: find.text('thread-ctx'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('2'), findsOneWidget);
     // 头栏 provider 切换器与上下文面板都会展示提供商名，限定在面板内断言。
     expect(
