@@ -697,8 +697,30 @@ class AgentConversationViewModel extends ChangeNotifier {
       _timeline.currentThreadTokenUsage;
 
   /// 当前 thread 最近一次请求的 token 用量。
-  AgentTokenUsage? get currentThreadLastTokenUsage =>
-      _timeline.currentThreadLastTokenUsage;
+  AgentTokenUsage? get currentThreadLastTokenUsage {
+    final usage = _timeline.currentThreadLastTokenUsage;
+    if (usage == null) {
+      return null;
+    }
+    final modelContextWindow =
+        usage.modelContextWindow ?? selectedModel?.contextWindowTokens;
+    if (modelContextWindow == usage.modelContextWindow) {
+      return usage;
+    }
+    return AgentTokenUsage(
+      inputTokens: usage.inputTokens,
+      cachedInputTokens: usage.cachedInputTokens,
+      outputTokens: usage.outputTokens,
+      reasoningOutputTokens: usage.reasoningOutputTokens,
+      totalTokens: usage.totalTokens,
+      lastInputTokens: usage.lastInputTokens,
+      lastCachedInputTokens: usage.lastCachedInputTokens,
+      lastOutputTokens: usage.lastOutputTokens,
+      lastReasoningOutputTokens: usage.lastReasoningOutputTokens,
+      lastTotalTokens: usage.lastTotalTokens,
+      modelContextWindow: modelContextWindow,
+    );
+  }
 
   /// 当前上下文窗口占用比例（0~1）。
   ///
@@ -2734,6 +2756,16 @@ class AgentConversationViewModel extends ChangeNotifier {
           // 无 turnId 或仍在 live 区时刷新 live footer。
           liveTurn: !usageOnHistory,
         );
+      case AgentContextWindowUsageEvent():
+        if (!_shouldHandleEventForCurrentThread(
+          sessionId: event.sessionId,
+          turnId: event.turnId,
+        )) {
+          break;
+        }
+        _timeline.updateContextWindowUsage(event);
+        // 高频上下文快照只刷新 composer；计费 header/footer 保持不变。
+        _scheduleStreamFlush(composer: true);
       case AgentMessageDeltaEvent():
         if (!_shouldHandleEventForCurrentThread(
           sessionId: event.sessionId,

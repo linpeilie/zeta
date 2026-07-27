@@ -294,6 +294,35 @@ class AgentTokenUsageEvent extends AgentEvent {
   final Map<String, Object?> raw;
 }
 
+/// 当前请求的上下文窗口占用快照。
+///
+/// 该事件只描述模型上下文中已经占用的 token，不是本回合或会话的计费用量，
+/// 因此不得写入 turn footer 或累计 token 统计。
+class AgentContextWindowUsageEvent extends AgentEvent {
+  const AgentContextWindowUsageEvent({
+    required this.usedTokens,
+    this.modelContextWindow,
+    this.sessionId,
+    this.turnId,
+    this.raw = const <String, Object?>{},
+  });
+
+  /// 当前上下文已经占用的 token。
+  final int usedTokens;
+
+  /// 模型上下文窗口上限；Provider 未随流式事件提供时可为空。
+  final int? modelContextWindow;
+
+  /// 所属会话 id。
+  final String? sessionId;
+
+  /// 所属回合 id。
+  final String? turnId;
+
+  /// 原始通知 payload。
+  final Map<String, Object?> raw;
+}
+
 /// Agent 消息的流式增量。
 class AgentMessageDeltaEvent extends AgentEvent {
   const AgentMessageDeltaEvent({

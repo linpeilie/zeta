@@ -258,6 +258,96 @@ void main() {
       await tester.pump();
     });
 
+    testWidgets(
+      'pins composer and shows agent icon loading while history loads',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(800, 800));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final historyGate = Completer<void>();
+        final provider = _FakeAgentProvider(
+          historyLoadGate: historyGate.future,
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'thread-loading': const AgentThreadHistorySnapshot(
+              threadId: 'thread-loading',
+              turns: <AgentHistoryTurn>[
+                AgentHistoryTurn(
+                  id: 'turn-1',
+                  entries: <AgentHistoryEntry>[
+                    AgentHistoryMessageEntry(
+                      id: 'user-1',
+                      role: AgentMessageRole.user,
+                      text: 'Loaded after gate',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          },
+        );
+        final viewModel = _createViewModel(provider);
+        addTearDown(provider.dispose);
+        addTearDown(viewModel.dispose);
+
+        await tester.pumpWidget(_TestApp(viewModel: viewModel));
+        await _pumpAgentPaneUi(tester);
+
+        // 未 await：停在 loadingHistory，便于断言加载 UI。
+        final openFuture = viewModel.switchThread(
+          _thread(id: 'thread-loading', title: 'Loading thread'),
+        );
+        // 加载态 pinFooter 应瞬时贴底（无需等动画）。
+        await tester.pump();
+        await tester.pump();
+
+        expect(viewModel.threadOpenPhase, AgentThreadOpenPhase.loadingHistory);
+        expect(
+          find.byKey(const ValueKey('agent-thread-history-loading')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('agent-thread-history-loading-label')),
+          findsOneWidget,
+        );
+        expect(find.text('正在加载会话…'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('agent-thread-history-loading-spinner')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(
+            ValueKey<String>(
+              'agent-thread-history-loading-icon-$defaultAgentProviderId',
+            ),
+          ),
+          findsOneWidget,
+        );
+
+        final layoutRect = tester.getRect(
+          find.byKey(const ValueKey('agent-conversation-layout')),
+        );
+        final footerRect = tester.getRect(
+          find.byKey(const ValueKey('agent-conversation-footer')),
+        );
+        // 加载态输入框贴底，而不是空草稿的垂直居中。
+        expect(footerRect.bottom, closeTo(layoutRect.bottom, 1.0));
+        expect(
+          find.byKey(const ValueKey('agent-composer-section')),
+          findsOneWidget,
+        );
+
+        historyGate.complete();
+        await openFuture;
+        await _pumpAgentPaneUi(tester);
+
+        expect(viewModel.threadOpenPhase, AgentThreadOpenPhase.idle);
+        expect(
+          find.byKey(const ValueKey('agent-thread-history-loading')),
+          findsNothing,
+        );
+        expect(find.text('Loaded after gate'), findsOneWidget);
+      },
+    );
+
     testWidgets('uses the canvas surface and one responsive content axis', (
       tester,
     ) async {
@@ -3103,6 +3193,7 @@ class _FakeAgentProvider
         const <String, AgentThreadHistorySnapshot>{},
     this.models = const AgentModelList(models: <AgentModelInfo>[]),
     this.canSteerTurn = true,
+    this.historyLoadGate,
   }) : _historySnapshotsByThread = Map<String, AgentThreadHistorySnapshot>.from(
          historySnapshotsByThread,
        );
@@ -3110,6 +3201,9 @@ class _FakeAgentProvider
   final Map<String, AgentThreadHistorySnapshot> _historySnapshotsByThread;
   final AgentModelList models;
   final bool canSteerTurn;
+
+  /// 非空时 [readThreadHistory] 会先 await 该 Future，便于测试加载态 UI。
+  final Future<void>? historyLoadGate;
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
   final List<AgentPermissionDecision> permissionDecisions =
@@ -3199,6 +3293,10 @@ class _FakeAgentProvider
     String? sessionPath,
     String? projectPath,
   }) async {
+    final gate = historyLoadGate;
+    if (gate != null) {
+      await gate;
+    }
     return _historySnapshotsByThread[threadId] ??
         AgentThreadHistorySnapshot(
           threadId: threadId,

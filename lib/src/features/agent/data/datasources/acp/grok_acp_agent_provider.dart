@@ -1515,6 +1515,22 @@ class GrokAcpAgentProvider
   }
 
   AgentEvent _enrichUsageEvent(AgentEvent event) {
+    if (event is AgentContextWindowUsageEvent) {
+      if (event.modelContextWindow != null) {
+        return event;
+      }
+      final window = _contextWindowForModel();
+      if (window == null) {
+        return event;
+      }
+      return AgentContextWindowUsageEvent(
+        usedTokens: event.usedTokens,
+        modelContextWindow: window,
+        sessionId: event.sessionId,
+        turnId: event.turnId,
+        raw: event.raw,
+      );
+    }
     if (event is! AgentTokenUsageEvent ||
         event.tokenUsage.modelContextWindow != null) {
       return event;

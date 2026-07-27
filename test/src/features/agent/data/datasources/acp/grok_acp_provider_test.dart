@@ -45,6 +45,59 @@ void main() {
       expect(provider.lifecycleState, AgentProviderLifecycleState.closed);
     });
 
+    test(
+      'enriches live context occupancy with the active model window',
+      () async {
+        final peer = _FakeJsonRpcPeer()..promptCompleter = Completer<Object?>();
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+        addTearDown(subscription.cancel);
+        addTearDown(provider.dispose);
+
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+        );
+        final turnFuture = provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+          message: 'track context',
+        );
+        await _waitUntil(
+          () => events.whereType<AgentTurnStartedEvent>().isNotEmpty,
+        );
+
+        peer.emitNotification('session/update', <String, Object?>{
+          'sessionId': session.id,
+          'update': <String, Object?>{
+            'sessionUpdate': 'agent_message_chunk',
+            'content': <String, Object?>{'type': 'text', 'text': 'working'},
+          },
+          '_meta': <String, Object?>{
+            'eventId': 'context-1',
+            'totalTokens': 125000,
+          },
+        });
+        await _waitUntil(
+          () => events.whereType<AgentContextWindowUsageEvent>().isNotEmpty,
+        );
+
+        final contextUsage = events
+            .whereType<AgentContextWindowUsageEvent>()
+            .single;
+        expect(contextUsage.usedTokens, 125000);
+        expect(contextUsage.modelContextWindow, 500000);
+
+        peer.promptCompleter!.complete(<String, Object?>{
+          'stopReason': 'end_turn',
+        });
+        await turnFuture;
+      },
+    );
+
     test('keeps unmatched response diagnostics out of the timeline', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(

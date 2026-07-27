@@ -3,20 +3,21 @@ part of '../agent_pane.dart';
 /// 对话时间线与 Composer 的统一布局壳。
 ///
 /// Footer 始终是同一棵带稳定 Key 的子树；空会话时靠近 Canvas 视觉中心，
-/// 首个 turn 出现后落到底部。时间线只按 Composer 与阻塞交互的实际高度让位；
-/// 紧凑浮层独立叠放，避免其窄卡片制造整行空白。
+/// 首个 turn 出现或正在加载历史时落到底部。时间线只按 Composer 与阻塞交互的
+/// 实际高度让位；紧凑浮层独立叠放，避免其窄卡片制造整行空白。
 enum _AgentConversationSlot { timeline, floatingPanel, footer }
 
 class _AgentConversationLayout extends StatefulWidget {
   const _AgentConversationLayout({
-    required this.hasConversation,
+    required this.pinFooterToBottom,
     required this.reduceMotion,
     required this.timeline,
     required this.floatingPanel,
     required this.footer,
   });
 
-  final bool hasConversation;
+  /// 为 true 时 Composer 贴底（已有对话 / 加载历史）；否则空草稿居中。
+  final bool pinFooterToBottom;
   final bool reduceMotion;
   final Widget timeline;
   final Widget floatingPanel;
@@ -33,7 +34,7 @@ class _AgentConversationLayoutState extends State<_AgentConversationLayout>
 
   late final AnimationController _footerPositionProgress;
 
-  double get _targetProgress => widget.hasConversation ? 1 : 0;
+  double get _targetProgress => widget.pinFooterToBottom ? 1 : 0;
 
   @override
   void initState() {
@@ -48,19 +49,28 @@ class _AgentConversationLayoutState extends State<_AgentConversationLayout>
   @override
   void didUpdateWidget(covariant _AgentConversationLayout oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.reduceMotion) {
+    if (oldWidget.pinFooterToBottom == widget.pinFooterToBottom) {
+      if (widget.reduceMotion &&
+          _footerPositionProgress.value != _targetProgress) {
+        _footerPositionProgress
+          ..stop()
+          ..value = _targetProgress;
+      }
+      return;
+    }
+    // 贴底（有对话 / 加载历史）瞬时到位；回到空草稿居中时可动画。
+    // 加载态若仍走居中→底部动画，会出现输入框悬空的中间帧。
+    if (widget.reduceMotion || widget.pinFooterToBottom) {
       _footerPositionProgress
         ..stop()
         ..value = _targetProgress;
       return;
     }
-    if (oldWidget.hasConversation != widget.hasConversation) {
-      _footerPositionProgress.animateTo(
-        _targetProgress,
-        duration: IdeMotion.durationSlow,
-        curve: IdeMotion.curveDefault,
-      );
-    }
+    _footerPositionProgress.animateTo(
+      _targetProgress,
+      duration: IdeMotion.durationSlow,
+      curve: IdeMotion.curveDefault,
+    );
   }
 
   @override
@@ -68,7 +78,7 @@ class _AgentConversationLayoutState extends State<_AgentConversationLayout>
     return CustomMultiChildLayout(
       key: const ValueKey('agent-conversation-layout'),
       delegate: _AgentConversationLayoutDelegate(
-        hasConversation: widget.hasConversation,
+        pinFooterToBottom: widget.pinFooterToBottom,
         footerPositionProgress: _footerPositionProgress,
         newConversationAlignment: _newConversationAlignment,
       ),
@@ -76,7 +86,8 @@ class _AgentConversationLayoutState extends State<_AgentConversationLayout>
         LayoutId(
           id: _AgentConversationSlot.timeline,
           child: IgnorePointer(
-            ignoring: !widget.hasConversation,
+            // 空草稿时时间线透明且不接收手势；加载态与有对话时需要可见/可测。
+            ignoring: !widget.pinFooterToBottom,
             child: FadeTransition(
               key: const ValueKey('agent-conversation-timeline'),
               opacity: _footerPositionProgress,
@@ -116,12 +127,12 @@ class _AgentConversationLayoutState extends State<_AgentConversationLayout>
 /// 同一轮 layout 内先测 Footer，再为 Timeline 与浮动计划分配真实剩余空间。
 class _AgentConversationLayoutDelegate extends MultiChildLayoutDelegate {
   _AgentConversationLayoutDelegate({
-    required this.hasConversation,
+    required this.pinFooterToBottom,
     required this.footerPositionProgress,
     required this.newConversationAlignment,
   }) : super(relayout: footerPositionProgress);
 
-  final bool hasConversation;
+  final bool pinFooterToBottom;
   final Animation<double> footerPositionProgress;
   final Alignment newConversationAlignment;
 
@@ -146,7 +157,8 @@ class _AgentConversationLayoutDelegate extends MultiChildLayoutDelegate {
         centeredFooterTop + ((bottomFooterTop - centeredFooterTop) * progress);
 
     if (hasChild(_AgentConversationSlot.timeline)) {
-      final timelineHeight = hasConversation ? bottomFooterTop : size.height;
+      // 贴底时时间线高度让位给 footer；居中空态时时间线铺满（自身透明）。
+      final timelineHeight = pinFooterToBottom ? bottomFooterTop : size.height;
       layoutChild(
         _AgentConversationSlot.timeline,
         BoxConstraints.tightFor(width: size.width, height: timelineHeight),
@@ -176,9 +188,110 @@ class _AgentConversationLayoutDelegate extends MultiChildLayoutDelegate {
 
   @override
   bool shouldRelayout(covariant _AgentConversationLayoutDelegate oldDelegate) {
-    return hasConversation != oldDelegate.hasConversation ||
+    return pinFooterToBottom != oldDelegate.pinFooterToBottom ||
         footerPositionProgress != oldDelegate.footerPositionProgress ||
         newConversationAlignment != oldDelegate.newConversationAlignment;
+  }
+}
+
+/// Thread 历史加载中的对话区占位：Agent 图标 + 进度环 + 文案。
+///
+/// 输入框由布局壳固定在底部；本组件只填充原时间线区域。
+class _AgentThreadHistoryLoading extends StatelessWidget {
+  const _AgentThreadHistoryLoading({
+    required this.providerId,
+    required this.providerKind,
+    required this.providerName,
+  });
+
+  final String providerId;
+  final AgentProviderKind providerKind;
+  final String providerName;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    return Semantics(
+      label: 'Loading thread history',
+      child: Center(
+        key: const ValueKey('agent-thread-history-loading'),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 72,
+                height: 72,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      width: 72,
+                      height: 72,
+                      child: CircularProgressIndicator(
+                        key: const ValueKey(
+                          'agent-thread-history-loading-spinner',
+                        ),
+                        strokeWidth: 2.2,
+                        color: colors.accent.withValues(alpha: 0.55),
+                        backgroundColor: colors.border.withValues(alpha: 0.28),
+                      ),
+                    ),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: colors.surfaceElevated,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: colors.borderSubtle.withValues(alpha: 0.9),
+                        ),
+                      ),
+                      child: SizedBox(
+                        width: 52,
+                        height: 52,
+                        child: Center(
+                          child: AgentProviderIcon(
+                            key: ValueKey<String>(
+                              'agent-thread-history-loading-icon-$providerId',
+                            ),
+                            providerId: providerId,
+                            kind: providerKind,
+                            size: 26,
+                            color: colors.textSecondary,
+                            semanticLabel: providerName,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: IdeSpacing.space16),
+              Text(
+                '正在加载会话…',
+                key: const ValueKey('agent-thread-history-loading-label'),
+                textAlign: TextAlign.center,
+                style: textStyles.bodyMedium.copyWith(
+                  color: colors.textPrimary.withValues(alpha: 0.9),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: IdeSpacing.space6),
+              Text(
+                providerName,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textStyles.caption.copyWith(
+                  color: colors.textSecondary.withValues(alpha: 0.78),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

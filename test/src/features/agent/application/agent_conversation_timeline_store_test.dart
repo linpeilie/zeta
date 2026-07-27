@@ -203,6 +203,44 @@ void main() {
       expect(store.currentThreadLastTokenUsage!.totalTokens, 1240);
     });
 
+    test('updates live context usage without changing billing totals', () {
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+
+      store.startPendingLiveTurn();
+      store.beginLiveTurnGroup(
+        const AgentTurn(id: 'turn-live', sessionId: 'thread-1'),
+      );
+      store.syncLiveTurnBinding();
+      store.updateContextWindowUsage(
+        const AgentContextWindowUsageEvent(
+          sessionId: 'thread-1',
+          turnId: 'turn-live',
+          usedTokens: 1200,
+          modelContextWindow: 4000,
+        ),
+      );
+
+      expect(store.currentThreadLastTokenUsage!.totalTokens, 1200);
+      expect(store.currentThreadLastTokenUsage!.modelContextWindow, 4000);
+      expect(store.currentTurnTokenUsage, isNull);
+      expect(store.currentThreadTokenUsage, isNull);
+      expect(store.liveTurnState!.tokenUsage, isNull);
+
+      store.updateContextWindowUsage(
+        const AgentContextWindowUsageEvent(
+          sessionId: 'thread-1',
+          turnId: 'turn-live',
+          usedTokens: 1500,
+        ),
+      );
+
+      expect(store.currentThreadLastTokenUsage!.totalTokens, 1500);
+      expect(store.currentThreadLastTokenUsage!.modelContextWindow, 4000);
+      expect(store.currentTurnTokenUsage, isNull);
+      expect(store.currentThreadTokenUsage, isNull);
+    });
+
     test('attaches model config from history and live pending turn', () {
       final store = AgentConversationTimelineStore();
       addTearDown(store.dispose);

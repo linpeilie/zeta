@@ -112,7 +112,7 @@ void main() {
       expect(event.summaryIndex, 2);
     });
 
-    test('同 turn 的 token 与 diff 快照只发布最新值', () async {
+    test('同 turn 的 token、上下文与 diff 快照只发布最新值', () async {
       final events = <AgentEvent>[];
       final buffer = AgentEventStreamBuffer(onEvent: events.add);
 
@@ -132,6 +132,20 @@ void main() {
           ),
         )
         ..add(
+          const AgentContextWindowUsageEvent(
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+            usedTokens: 100,
+          ),
+        )
+        ..add(
+          const AgentContextWindowUsageEvent(
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+            usedTokens: 150,
+          ),
+        )
+        ..add(
           const AgentTurnDiffEvent(
             sessionId: 'thread-1',
             turnId: 'turn-1',
@@ -147,9 +161,10 @@ void main() {
         );
       await Future<void>.delayed(Duration.zero);
 
-      expect(events, hasLength(2));
+      expect(events, hasLength(3));
       expect((events[0] as AgentTokenUsageEvent).tokenUsage.totalTokens, 20);
-      expect((events[1] as AgentTurnDiffEvent).diff, 'latest diff');
+      expect((events[1] as AgentContextWindowUsageEvent).usedTokens, 150);
+      expect((events[2] as AgentTurnDiffEvent).diff, 'latest diff');
     });
 
     test('工具进度可追加合并，终态会先 flush 进度且自身不丢失', () {

@@ -39,6 +39,7 @@ import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.d
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection_cache.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_virtualization_flag.dart';
 import 'package:zeta/src/features/agent/presentation/model_config_ui_state.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 import 'package:zeta/src/ui/core/virtualization/ide_dynamic_sliver_list.dart';
 import 'package:zeta/src/ui/core/virtualization/ide_virtual_item.dart';
 import 'package:zeta/src/ui/core/virtualization/ide_virtual_list_controller.dart';
@@ -273,23 +274,35 @@ class _AgentPaneState extends State<AgentPane> {
               final hasConversation =
                   widget.viewModel.visibleHistoryTurns.isNotEmpty ||
                   widget.viewModel.liveTurnState != null;
+              final isLoadingHistory =
+                  widget.viewModel.threadOpenPhase ==
+                  AgentThreadOpenPhase.loadingHistory;
+              // 加载历史时输入框固定底部（与已有对话一致），空草稿仍居中。
+              final pinFooterToBottom = hasConversation || isLoadingHistory;
               return _AgentConversationLayout(
-                hasConversation: hasConversation,
+                pinFooterToBottom: pinFooterToBottom,
                 reduceMotion: MediaQuery.disableAnimationsOf(context),
-                timeline: _AgentConversationTimeline(
-                  viewModel: widget.viewModel,
-                  scrollController: _scrollController,
-                  pagePadding: pagePadding,
-                  projectionCache: _projectionCache,
-                  virtualListController: _virtualListController,
-                  scrollCoordinator: _scrollCoordinator,
-                  scrollChromeTick: _scrollChromeTick,
-                  onLastItemIdChanged: (id) {
-                    _lastTimelineItemId = id;
-                  },
-                  onScrollToEndPressed: _requestScrollToEndFromButton,
-                  useAnchoredDynamicSliver: kUseAnchoredDynamicTimelineSliver,
-                ),
+                timeline: isLoadingHistory
+                    ? _AgentThreadHistoryLoading(
+                        providerId: widget.viewModel.threadProviderId,
+                        providerKind: widget.viewModel.activeProviderKind,
+                        providerName: widget.viewModel.activeProviderName,
+                      )
+                    : _AgentConversationTimeline(
+                        viewModel: widget.viewModel,
+                        scrollController: _scrollController,
+                        pagePadding: pagePadding,
+                        projectionCache: _projectionCache,
+                        virtualListController: _virtualListController,
+                        scrollCoordinator: _scrollCoordinator,
+                        scrollChromeTick: _scrollChromeTick,
+                        onLastItemIdChanged: (id) {
+                          _lastTimelineItemId = id;
+                        },
+                        onScrollToEndPressed: _requestScrollToEndFromButton,
+                        useAnchoredDynamicSliver:
+                            kUseAnchoredDynamicTimelineSliver,
+                      ),
                 floatingPanel: _AgentActivePlanSection(
                   viewModel: widget.viewModel,
                   pagePadding: pagePadding,

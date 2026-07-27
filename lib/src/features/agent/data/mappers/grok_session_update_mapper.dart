@@ -66,52 +66,65 @@ final class GrokSessionUpdateMapper {
     GrokTerminalSource terminalSource = GrokTerminalSource.standardNotification,
   }) {
     // 任意流式 chunk 都可能携带当前上下文占用，先于 kind 分支更新跟踪值。
-    _noteContextTokensFromParams(params);
+    final changedContextTokens = _noteContextTokensFromParams(params);
     final decoded = decoder.decode(params);
-    switch (decoded) {
-      case AcpUserMessageChunk():
+    final mapped = switch (decoded) {
+      AcpUserMessageChunk() =>
         // live 用户消息由 ViewModel 乐观插入，避免重复气泡。
-        return const GrokAcpMappedUpdate(unmatchedKind: 'user_message_chunk');
-      case AcpAgentMessageChunk():
-        return _mapMessage(
-          decoded,
-          runningTurnId: runningTurnId,
-          runtimeScope: runtimeScope,
-        );
-      case AcpAgentThoughtChunk():
-        return _mapReasoning(
-          decoded,
-          runningTurnId: runningTurnId,
-          runtimeScope: runtimeScope,
-        );
-      case AcpToolCallUpdate():
-        return _mapTool(
-          decoded,
-          runningTurnId: runningTurnId,
-          runtimeScope: runtimeScope,
-        );
-      case AcpPlanUpdate():
-        return _mapPlan(
-          decoded,
-          runningTurnId: runningTurnId,
-          runtimeScope: runtimeScope,
-        );
-      case AcpUsageUpdate():
-        return _mapUsage(
-          decoded,
-          runningTurnId: runningTurnId,
-          runtimeScope: runtimeScope,
-        );
-      case AcpTurnCompletedUpdate():
-        return _mapTurnCompleted(
-          decoded,
-          runningTurnId: runningTurnId,
-          runtimeScope: runtimeScope,
-          terminalSource: terminalSource,
-        );
-      case AcpUnknownUpdate():
-        return GrokAcpMappedUpdate(unmatchedKind: decoded.kind);
+        const GrokAcpMappedUpdate(unmatchedKind: 'user_message_chunk'),
+      AcpAgentMessageChunk() => _mapMessage(
+        decoded,
+        runningTurnId: runningTurnId,
+        runtimeScope: runtimeScope,
+      ),
+      AcpAgentThoughtChunk() => _mapReasoning(
+        decoded,
+        runningTurnId: runningTurnId,
+        runtimeScope: runtimeScope,
+      ),
+      AcpToolCallUpdate() => _mapTool(
+        decoded,
+        runningTurnId: runningTurnId,
+        runtimeScope: runtimeScope,
+      ),
+      AcpPlanUpdate() => _mapPlan(
+        decoded,
+        runningTurnId: runningTurnId,
+        runtimeScope: runtimeScope,
+      ),
+      AcpUsageUpdate() => _mapUsage(
+        decoded,
+        runningTurnId: runningTurnId,
+        runtimeScope: runtimeScope,
+      ),
+      AcpTurnCompletedUpdate() => _mapTurnCompleted(
+        decoded,
+        runningTurnId: runningTurnId,
+        runtimeScope: runtimeScope,
+        terminalSource: terminalSource,
+      ),
+      AcpUnknownUpdate() => GrokAcpMappedUpdate(unmatchedKind: decoded.kind),
+    };
+    // usage_update 与 turn_completed 已携带完整 token 事件；普通 chunk 才追加
+    // 独立的上下文占用事件，避免把实时占用混入计费 footer。
+    if (changedContextTokens == null ||
+        decoded.sessionId == null ||
+        decoded is AcpUsageUpdate ||
+        decoded is AcpTurnCompletedUpdate) {
+      return mapped;
     }
+    return GrokAcpMappedUpdate(
+      events: <AgentEvent>[
+        ...mapped.events,
+        AgentContextWindowUsageEvent(
+          usedTokens: changedContextTokens,
+          sessionId: decoded.sessionId,
+          turnId: runningTurnId,
+          raw: decoded.raw,
+        ),
+      ],
+      unmatchedKind: mapped.unmatchedKind,
+    );
   }
 
   /// 将 `session/prompt` RPC 的终态纳入同一 first-terminal-wins reducer。
@@ -219,7 +232,7 @@ final class GrokSessionUpdateMapper {
   ///
   /// Grok Build 用同一字段展示「当前上下文已使用」；优先 `params._meta`，
   /// 兼容嵌在 `update._meta` 的写法。
-  void _noteContextTokensFromParams(Map<String, Object?> params) {
+  int? _noteContextTokensFromParams(Map<String, Object?> params) {
     final paramsMeta = _stringKeyedMap(params['_meta']);
     final update = _stringKeyedMap(params['update']);
     final updateMeta = update == null ? null : _stringKeyedMap(update['_meta']);
@@ -228,9 +241,11 @@ final class GrokSessionUpdateMapper {
         _positiveInt(paramsMeta?['total_tokens']) ??
         _positiveInt(updateMeta?['totalTokens']) ??
         _positiveInt(updateMeta?['total_tokens']);
-    if (contextTokens != null) {
-      _latestContextTokens = contextTokens;
+    if (contextTokens == null || contextTokens == _latestContextTokens) {
+      return null;
     }
+    _latestContextTokens = contextTokens;
+    return contextTokens;
   }
 
   /// 取出并清空本回合跟踪的上下文占用。

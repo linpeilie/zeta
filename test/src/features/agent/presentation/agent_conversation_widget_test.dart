@@ -1558,6 +1558,77 @@ void main() {
   );
 
   testWidgets(
+    'updates composer context progress from live occupancy snapshots',
+    (tester) async {
+      final session = activeProjectSessionStore(tempDirectories);
+      final provider = FakeAgentProvider(
+        completeTurns: false,
+        sessionTitle: 'Live context thread',
+        includeConversationTestThread: true,
+      );
+
+      await tester.pumpWidget(
+        MainApp(
+          enableNativeWindowFrame: false,
+          sessionLoader: session.load,
+          sessionSaver: session.save,
+          agentProviderFactory: FakeAgentProviderFactory(provider),
+          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        ),
+      );
+
+      await pumpUntilAgentComposer(tester);
+      await tester.enterText(
+        find.byKey(const ValueKey('agent-message-input')),
+        'Track live context',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(
+        find.byKey(const ValueKey('agent-composer-token-progress')),
+        findsNothing,
+      );
+
+      provider.emit(
+        const AgentContextWindowUsageEvent(
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          usedTokens: 500,
+          modelContextWindow: 2000,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 20));
+
+      var progress = tester.widget<CircularProgressIndicator>(
+        find.byKey(const ValueKey('agent-composer-token-progress')),
+      );
+      expect(progress.value, closeTo(0.25, 0.001));
+      expect(find.byKey(const ValueKey('agent-header-token')), findsNothing);
+
+      provider.emit(
+        const AgentContextWindowUsageEvent(
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          usedTokens: 1000,
+          modelContextWindow: 2000,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 20));
+
+      progress = tester.widget<CircularProgressIndicator>(
+        find.byKey(const ValueKey('agent-composer-token-progress')),
+      );
+      expect(progress.value, closeTo(0.5, 0.001));
+      expect(find.byKey(const ValueKey('agent-header-token')), findsNothing);
+    },
+  );
+
+  testWidgets(
     'shows running icons in both the header and project thread list for an active thread',
     (tester) async {
       final session = MemorySessionStore();

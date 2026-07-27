@@ -532,6 +532,50 @@ void main() {
       expect(reasoning.first.itemId, reasoning.last.itemId);
     });
 
+    test('emits live context usage only when _meta.totalTokens changes', () {
+      GrokAcpMappedUpdate mapChunk(String eventId, int totalTokens) {
+        return mapper.mapSessionUpdate(
+          params: <String, Object?>{
+            'sessionId': sessionId,
+            'update': <String, Object?>{
+              'sessionUpdate': 'agent_message_chunk',
+              'content': <String, Object?>{'type': 'text', 'text': eventId},
+            },
+            '_meta': <String, Object?>{
+              'eventId': eventId,
+              'promptId': promptId,
+              'totalTokens': totalTokens,
+            },
+          },
+          runningTurnId: turnId,
+          runtimeScope: runtimeScope,
+        );
+      }
+
+      final first = mapChunk('chunk-1', 1200);
+      final unchanged = mapChunk('chunk-2', 1200);
+      final changed = mapChunk('chunk-3', 1350);
+
+      final firstUsage = first.events
+          .whereType<AgentContextWindowUsageEvent>()
+          .single;
+      expect(firstUsage.sessionId, sessionId);
+      expect(firstUsage.turnId, turnId);
+      expect(firstUsage.usedTokens, 1200);
+      expect(
+        unchanged.events.whereType<AgentContextWindowUsageEvent>(),
+        isEmpty,
+      );
+      expect(
+        changed.events
+            .whereType<AgentContextWindowUsageEvent>()
+            .single
+            .usedTokens,
+        1350,
+      );
+      expect(first.events.whereType<AgentTokenUsageEvent>(), isEmpty);
+    });
+
     test(
       'maps multi-call billing total separately from _meta context occupancy',
       () {

@@ -121,6 +121,13 @@ _AgentEventKey? _coalescingKey(AgentEvent event) {
       itemId: '<turn>',
       detail: event.isSessionCumulative.toString(),
     ),
+    AgentContextWindowUsageEvent() => (
+      kind: 'contextWindowSnapshot',
+      sessionId: event.sessionId,
+      turnId: event.turnId,
+      itemId: '<turn>',
+      detail: null,
+    ),
     AgentTurnDiffEvent() => (
       kind: 'diffSnapshot',
       sessionId: event.sessionId,

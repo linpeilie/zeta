@@ -63,6 +63,9 @@ class AgentConversationTimelineStore {
   /// 当前会话的累计 token 用量（直接来自 Codex `total` breakdown）。
   AgentTokenUsage? _threadTokenUsage;
 
+  /// 当前流式请求的上下文窗口占用；与 turn/footer 计费用量隔离。
+  AgentTokenUsage? _liveContextWindowUsage;
+
   /// 当前 live turn 主活动段；无 running turn 时为 idle。
   AgentTurnActivitySnapshot _currentActivity = AgentTurnActivitySnapshot.idle;
 
@@ -149,7 +152,7 @@ class AgentConversationTimelineStore {
   /// Grok multi-step turn 的 `totalTokens` 是计费合计，必须靠 mapper 写入
   /// `lastTotalTokens` 才能正确反映窗口占用；切勿在此把会话累计当占用。
   AgentTokenUsage? get currentThreadLastTokenUsage {
-    final usage = _latestAvailableTurnTokenUsage();
+    final usage = _liveContextWindowUsage ?? _latestAvailableTurnTokenUsage();
     if (usage == null) {
       return null;
     }
@@ -350,6 +353,7 @@ class AgentConversationTimelineStore {
     currentTurnGroupId = null;
     _pendingTurnGroupId = null;
     _threadTokenUsage = null;
+    _liveContextWindowUsage = null;
     _clearActivity();
   }
 
@@ -1084,6 +1088,7 @@ class AgentConversationTimelineStore {
       _expandedActivePlanTurnIds.remove(turnId);
       currentTurnGroupId = null;
       _pendingTurnGroupId = null;
+      _liveContextWindowUsage = null;
       _clearActivity();
       return;
     }
@@ -1108,7 +1113,20 @@ class AgentConversationTimelineStore {
     _freezeOpenToolDurations(completedAt);
     _promoteTurnToHistorical(turnId);
     currentTurnGroupId = null;
+    _liveContextWindowUsage = null;
     _clearActivity();
+  }
+
+  /// 更新当前请求的上下文占用，不修改 turn/footer 或会话累计计费用量。
+  void updateContextWindowUsage(AgentContextWindowUsageEvent event) {
+    _liveContextWindowUsage = AgentTokenUsage(
+      inputTokens: event.usedTokens,
+      totalTokens: event.usedTokens,
+      modelContextWindow:
+          event.modelContextWindow ??
+          _liveContextWindowUsage?.modelContextWindow ??
+          _threadTokenUsage?.modelContextWindow,
+    );
   }
 
   /// 用 provider 上报的 token 用量更新会话总量与对应回合增量。
