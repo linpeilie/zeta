@@ -8,6 +8,7 @@ const double _agentContextPanelWidth = 360;
 /// 由 thread 详情头栏「上下文」菜单触发，展示会话元信息（名称、会话 ID、
 /// 消息数、提供商、上下文限制、token 占用、创建/活跃时间）与原始消息列表。
 /// 原始消息列表展示消息 ID、角色与时间，点击可展开查看 raw 协议原文。
+/// 面板正文包在 [SelectionArea] 中，支持拖选文本与系统复制菜单。
 class _AgentContextPanel extends StatefulWidget {
   const _AgentContextPanel({required this.viewModel});
 
@@ -51,44 +52,49 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _AgentContextPanelHeader(onClose: viewModel.hideContextPanel),
+              // SelectionArea 覆盖概览与原始消息区，支持拖选 / 右键复制；
+              // 关闭按钮留在区外，避免与选择手势争用。
               Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(
-                    IdeSpacing.space16,
-                    IdeSpacing.space8,
-                    IdeSpacing.space16,
-                    IdeSpacing.space20,
-                  ),
-                  child: RepaintBoundary(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _AgentContextSummaryCard(
-                          title: viewModel.currentThreadTitle,
-                          sessionId: viewModel.sessionId,
-                          messageCount: messages.length,
-                          providerName: viewModel.activeProviderName,
-                          contextLimit: usage?.displayModelContextWindow,
-                          totalTokens: usage?.displayTotalTokens,
-                          inputTokens: usage?.displayInputTokens,
-                          outputTokens: usage?.displayOutputTokens,
-                          cachedTokens: usage?.displayCachedInputTokens,
-                          createdAt: viewModel.threadCreatedAt,
-                          lastActiveAt: viewModel.threadLastActiveAt,
-                        ),
-                        const SizedBox(height: IdeSpacing.space20),
-                        _AgentContextRawMessageList(
-                          items: rawItems,
-                          filterNonChat: _filterNonChatMessages,
-                          expandedIds: _expandedRawMessageIds,
-                          onToggle: _toggleRawMessage,
-                          onFilterChanged: (value) {
-                            setState(() {
-                              _filterNonChatMessages = value;
-                            });
-                          },
-                        ),
-                      ],
+                child: SelectionArea(
+                  key: const ValueKey('agent-context-panel-selection'),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(
+                      IdeSpacing.space16,
+                      IdeSpacing.space8,
+                      IdeSpacing.space16,
+                      IdeSpacing.space20,
+                    ),
+                    child: RepaintBoundary(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _AgentContextSummaryCard(
+                            title: viewModel.currentThreadTitle,
+                            sessionId: viewModel.sessionId,
+                            messageCount: messages.length,
+                            providerName: viewModel.activeProviderName,
+                            contextLimit: usage?.displayModelContextWindow,
+                            totalTokens: usage?.displayTotalTokens,
+                            inputTokens: usage?.displayInputTokens,
+                            outputTokens: usage?.displayOutputTokens,
+                            cachedTokens: usage?.displayCachedInputTokens,
+                            createdAt: viewModel.threadCreatedAt,
+                            lastActiveAt: viewModel.threadLastActiveAt,
+                          ),
+                          const SizedBox(height: IdeSpacing.space20),
+                          _AgentContextRawMessageList(
+                            items: rawItems,
+                            filterNonChat: _filterNonChatMessages,
+                            expandedIds: _expandedRawMessageIds,
+                            onToggle: _toggleRawMessage,
+                            onFilterChanged: (value) {
+                              setState(() {
+                                _filterNonChatMessages = value;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

@@ -1372,6 +1372,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.byKey(const ValueKey('agent-context-panel')), findsOneWidget);
+    // 正文支持文本选择复制。
+    expect(
+      find.byKey(const ValueKey('agent-context-panel-selection')),
+      findsOneWidget,
+    );
 
     // 概览信息：会话名称、会话 ID、消息数、提供商、token 与时间。
     expect(find.text('Context thread'), findsWidgets);
