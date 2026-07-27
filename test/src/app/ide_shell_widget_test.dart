@@ -527,6 +527,157 @@ void main() {
     _expectRetainedAgentState(tester, retained);
   });
 
+  testWidgets(
+    'inactive agent panes stay keep-alive without joining resize layout',
+    (tester) async {
+      final directory = Directory.systemTemp.createTempSync(
+        'zeta_inactive_layout_',
+      );
+      addTearDown(() {
+        if (directory.existsSync()) {
+          directory.deleteSync(recursive: true);
+        }
+      });
+      File(
+        '${directory.path}${Platform.pathSeparator}sample.txt',
+      ).writeAsStringSync('inactive layout');
+
+      final provider = FakeAgentProvider(
+        threadHistories: <String, AgentThreadHistorySnapshot>{
+          'thread-a': AgentThreadHistorySnapshot(
+            threadId: 'thread-a',
+            turns: <AgentHistoryTurn>[
+              AgentHistoryTurn(
+                id: 'turn-a-1',
+                entries: const <AgentHistoryEntry>[
+                  AgentHistoryMessageEntry(
+                    id: 'thread-a-history',
+                    role: AgentMessageRole.agent,
+                    text: 'Thread A history for inactive layout',
+                  ),
+                ],
+              ),
+            ],
+          ),
+          'thread-b': AgentThreadHistorySnapshot(
+            threadId: 'thread-b',
+            turns: <AgentHistoryTurn>[
+              AgentHistoryTurn(
+                id: 'turn-b-1',
+                entries: const <AgentHistoryEntry>[
+                  AgentHistoryMessageEntry(
+                    id: 'thread-b-history',
+                    role: AgentMessageRole.agent,
+                    text: 'Thread B history for inactive layout',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        },
+        threadPages: <AgentThreadPage>[
+          AgentThreadPage(
+            threads: <AgentThreadSummary>[
+              agentThread(
+                id: 'thread-a',
+                projectPath: directory.path,
+                title: 'Thread A',
+              ),
+              agentThread(
+                id: 'thread-b',
+                projectPath: directory.path,
+                title: 'Thread B',
+                lastActiveAt: DateTime.fromMillisecondsSinceEpoch(3),
+              ),
+            ],
+            nextCursor: null,
+          ),
+        ],
+      );
+
+      await _pumpIde(
+        tester,
+        directoryPicker: () async => directory.path,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      );
+
+      await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+      await tester.runAsync(waitForIo);
+
+      final threadARow = find.byKey(
+        ValueKey<String>('project-thread-${directory.path}-thread-a'),
+      );
+      final threadBRow = find.byKey(
+        ValueKey<String>('project-thread-${directory.path}-thread-b'),
+      );
+      await pumpUntilCondition(
+        tester,
+        () =>
+            threadARow.evaluate().isNotEmpty &&
+            threadBRow.evaluate().isNotEmpty,
+        failureMessage: 'Thread rows did not become ready',
+      );
+
+      await tester.tap(threadARow);
+      await pumpUntilCondition(
+        tester,
+        () => headerTitleText(tester) == 'Thread A',
+        failureMessage: 'Thread A did not open',
+      );
+      await tester.enterText(_agentMessageInput(), 'inactive-layout-draft-a');
+      await tester.pump();
+      final paneAElement = tester.element(find.byType(AgentPane));
+      final draftController = tester
+          .widget<EditableText>(_agentMessageInput())
+          .controller;
+
+      await tester.tap(threadBRow);
+      await pumpUntilCondition(
+        tester,
+        () => headerTitleText(tester) == 'Thread B',
+        failureMessage: 'Thread B did not open',
+      );
+
+      // keep-alive 离屏页默认 skipOffstage；需显式包含。
+      final allAgentPanes = find.byType(AgentPane, skipOffstage: false);
+      expect(allAgentPanes.evaluate().length, greaterThanOrEqualTo(2));
+      expect(paneAElement.mounted, isTrue);
+      expect(draftController.text, 'inactive-layout-draft-a');
+
+      // 横向 resize 不应丢弃 keep-alive 会话的 State。
+      for (var width = 1400; width >= 1100; width -= 20) {
+        tester.view.physicalSize = Size(width.toDouble(), 900);
+        await tester.pump();
+      }
+
+      expect(paneAElement.mounted, isTrue);
+      expect(
+        find.byType(AgentPane, skipOffstage: false).evaluate().length,
+        greaterThanOrEqualTo(2),
+      );
+      expect(draftController.text, 'inactive-layout-draft-a');
+
+      await tester.tap(threadARow);
+      await pumpUntilCondition(
+        tester,
+        () =>
+            headerTitleText(tester) == 'Thread A' &&
+            tester.widget<EditableText>(_agentMessageInput()).controller.text ==
+                'inactive-layout-draft-a',
+        failureMessage: 'Thread A draft was not retained after resize',
+      );
+      expect(
+        find
+            .byType(AgentPane, skipOffstage: false)
+            .evaluate()
+            .any((element) => identical(element, paneAElement)),
+        isTrue,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('switching threads keeps each pane draft isolated', (
     tester,
   ) async {

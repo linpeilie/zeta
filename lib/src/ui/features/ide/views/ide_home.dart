@@ -40,6 +40,7 @@ import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_toast.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/window_frame.dart';
+import 'package:zeta/src/ui/core/workbench/ide_retained_page_view.dart';
 import 'package:zeta/src/ui/core/workbench/ide_workbench_scaffold.dart';
 import 'package:zeta/src/ui/features/ide/views/global_home_page.dart';
 import 'package:zeta/src/ui/features/ide/views/project_home_page.dart';
@@ -326,45 +327,56 @@ class _IdeHomeState extends State<IdeHome> {
     );
   }
 
+  /// 页面级保留容器：只布局当前 Home / Settings / Usage，已访问页 keep-alive。
   Widget _buildRetainedCanvasStack() {
-    return IndexedStack(
+    return IdeRetainedPageView(
       key: const ValueKey('workbench-page-stack'),
-      index: _page.index,
-      children: [
-        TickerMode(
-          enabled: _page == _IdeHomePage.home,
-          child: KeyedSubtree(
-            key: const ValueKey('agent-pane-host'),
-            child: _buildRetainedAgentPaneStack(),
+      selectedId: _page.name,
+      pages: <IdeRetainedPage>[
+        IdeRetainedPage(
+          id: _IdeHomePage.home.name,
+          child: TickerMode(
+            enabled: _page == _IdeHomePage.home,
+            child: KeyedSubtree(
+              key: const ValueKey('agent-pane-host'),
+              child: _buildRetainedAgentPaneStack(),
+            ),
           ),
         ),
-        TickerMode(
-          enabled: _page == _IdeHomePage.settings,
-          child: _settingsPageMounted
-              ? SettingsPageCanvas(
-                  key: _settingsCanvasKey,
-                  activeSection: _settingsSection,
-                  appearanceController: widget.appearanceController,
-                  generalSettingsController: widget.generalSettingsController,
-                  agentManagementController: _agentManagementController,
-                )
-              : const SizedBox.shrink(),
+        IdeRetainedPage(
+          id: _IdeHomePage.settings.name,
+          child: TickerMode(
+            enabled: _page == _IdeHomePage.settings,
+            child: _settingsPageMounted
+                ? SettingsPageCanvas(
+                    key: _settingsCanvasKey,
+                    activeSection: _settingsSection,
+                    appearanceController: widget.appearanceController,
+                    generalSettingsController: widget.generalSettingsController,
+                    agentManagementController: _agentManagementController,
+                  )
+                : const SizedBox.shrink(),
+          ),
         ),
-        TickerMode(
-          enabled: _page == _IdeHomePage.usageStatistics,
-          child: _usageStatisticsPageMounted
-              ? UsageStatisticsPage(
-                  key: const ValueKey('usage-statistics-page-host'),
-                  controller: _usageStatisticsController,
-                  onBackPressed: _closeUsageStatisticsPage,
-                  onOpenAgentManagement: _openAgentManagementFromUsage,
-                )
-              : const SizedBox.shrink(),
+        IdeRetainedPage(
+          id: _IdeHomePage.usageStatistics.name,
+          child: TickerMode(
+            enabled: _page == _IdeHomePage.usageStatistics,
+            child: _usageStatisticsPageMounted
+                ? UsageStatisticsPage(
+                    key: const ValueKey('usage-statistics-page-host'),
+                    controller: _usageStatisticsController,
+                    onBackPressed: _closeUsageStatisticsPage,
+                    onOpenAgentManagement: _openAgentManagementFromUsage,
+                  )
+                : const SizedBox.shrink(),
+          ),
         ),
       ],
     );
   }
 
+  /// 会话级保留容器：Project Home + 各 Agent 会话，仅布局当前选中项。
   Widget _buildRetainedAgentPaneStack() {
     final entries = _shellController.agentWorkspaceEntries;
     final projectPath = _shellController.activeProjectPath;
@@ -391,59 +403,64 @@ class _IdeHomeState extends State<IdeHome> {
         providerError: _homeProviderError,
       );
     }
+
+    const projectHomeId = 'project-home';
     final selectedEntryId = _shellController.selectedAgentWorkspaceEntryId;
-    final selectedEntryIndex = entries.indexWhere(
-      (entry) => entry.entryId == selectedEntryId,
-    );
-    final selectedIndex = _shellController.isProjectHomeActive
-        ? 0
-        : selectedEntryIndex < 0
-        ? 0
-        : selectedEntryIndex + 1;
+    final selectedId = _shellController.isProjectHomeActive
+        ? projectHomeId
+        : (selectedEntryId ??
+              (entries.isNotEmpty ? entries.first.entryId : projectHomeId));
+
     return ValueListenableBuilder<GeneralSettings>(
       valueListenable: widget.generalSettingsController.listenable,
       builder: (context, generalSettings, _) {
-        return IndexedStack(
+        return IdeRetainedPageView(
           key: const ValueKey('agent-pane-entry-stack'),
-          index: selectedIndex,
-          children: [
-            !_shellController.isProjectHomeActive
-                ? const SizedBox.shrink()
-                : KeyedSubtree(
-                    key: ValueKey<String>('project-home-$projectPath'),
-                    child: ProjectHomePage(
-                      projectPath: projectPath,
-                      threadState: _shellController.projectThreadStateFor(
-                        projectPath,
+          selectedId: selectedId,
+          pages: <IdeRetainedPage>[
+            IdeRetainedPage(
+              id: projectHomeId,
+              child: !_shellController.isProjectHomeActive
+                  ? const SizedBox.shrink()
+                  : KeyedSubtree(
+                      key: ValueKey<String>('project-home-$projectPath'),
+                      child: ProjectHomePage(
+                        projectPath: projectPath,
+                        threadState: _shellController.projectThreadStateFor(
+                          projectPath,
+                        ),
+                        loadAvailableProviders: _loadAvailableAgentProviders,
+                        onNewThread: (providerId) {
+                          unawaited(
+                            _shellController.startNewThreadForProject(
+                              projectPath,
+                              providerId: providerId,
+                            ),
+                          );
+                        },
+                        onSelectThread: (thread) {
+                          unawaited(
+                            _shellController.selectProjectThread(
+                              projectPath,
+                              thread,
+                            ),
+                          );
+                        },
+                        onRetryThreads: () {
+                          unawaited(_shellController.retryThreads(projectPath));
+                        },
                       ),
-                      loadAvailableProviders: _loadAvailableAgentProviders,
-                      onNewThread: (providerId) {
-                        unawaited(
-                          _shellController.startNewThreadForProject(
-                            projectPath,
-                            providerId: providerId,
-                          ),
-                        );
-                      },
-                      onSelectThread: (thread) {
-                        unawaited(
-                          _shellController.selectProjectThread(
-                            projectPath,
-                            thread,
-                          ),
-                        );
-                      },
-                      onRetryThreads: () {
-                        unawaited(_shellController.retryThreads(projectPath));
-                      },
                     ),
-                  ),
+            ),
             for (final entry in entries)
-              KeyedSubtree(
-                key: ValueKey<String>('agent-pane-entry-${entry.entryId}'),
-                child: AgentPane(
-                  viewModel: entry.viewModel,
-                  messageSendShortcut: generalSettings.sendMessageShortcut,
+              IdeRetainedPage(
+                id: entry.entryId,
+                child: KeyedSubtree(
+                  key: ValueKey<String>('agent-pane-entry-${entry.entryId}'),
+                  child: AgentPane(
+                    viewModel: entry.viewModel,
+                    messageSendShortcut: generalSettings.sendMessageShortcut,
+                  ),
                 ),
               ),
           ],
