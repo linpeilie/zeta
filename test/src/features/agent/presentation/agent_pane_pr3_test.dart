@@ -275,10 +275,20 @@ void main() {
         find.byKey(const ValueKey('agent-canvas')),
       );
       expect(canvas.level, IdeSurfaceLevel.canvas);
-      final emptyAlignment = tester.widget<AnimatedAlign>(
-        find.byKey(const ValueKey('agent-composer-alignment')),
+      final emptyLayoutRect = tester.getRect(
+        find.byKey(const ValueKey('agent-conversation-layout')),
       );
-      expect(emptyAlignment.alignment, const Alignment(0, -0.12));
+      final emptyFooterRect = tester.getRect(
+        find.byKey(const ValueKey('agent-conversation-footer')),
+      );
+      expect(
+        emptyFooterRect.top,
+        closeTo(
+          emptyLayoutRect.top +
+              ((emptyLayoutRect.height - emptyFooterRect.height) * 0.44),
+          0.5,
+        ),
+      );
       expect(
         tester
             .getSize(find.byKey(const ValueKey('agent-composer-focus-ring')))
@@ -331,6 +341,8 @@ void main() {
         final conversationLayoutElement = tester.element(
           find.byKey(const ValueKey('agent-conversation-layout')),
         );
+        final transientCallbacksBeforeResize =
+            tester.binding.transientCallbackCount;
 
         // 900 → 700 均在 regular（>=640）档位内，不应卸载 Composer / 对话壳。
         for (var width = 900; width >= 700; width -= 5) {
@@ -367,6 +379,10 @@ void main() {
               .getSize(find.byKey(const ValueKey('agent-composer-focus-ring')))
               .width,
           700 - IdeSpacing.pagePadding.horizontal,
+        );
+        expect(
+          tester.binding.transientCallbackCount,
+          lessThanOrEqualTo(transientCallbacksBeforeResize),
         );
         expect(tester.takeException(), isNull);
       },
@@ -505,10 +521,13 @@ void main() {
         await tester.pump();
         await tester.pump(IdeMotion.durationSlow);
 
-        final activeAlignment = tester.widget<AnimatedAlign>(
-          find.byKey(const ValueKey('agent-composer-alignment')),
+        final activeLayoutRect = tester.getRect(
+          find.byKey(const ValueKey('agent-conversation-layout')),
         );
-        expect(activeAlignment.alignment, Alignment.bottomCenter);
+        final activeFooterRect = tester.getRect(
+          find.byKey(const ValueKey('agent-conversation-footer')),
+        );
+        expect(activeFooterRect.bottom, closeTo(activeLayoutRect.bottom, 0.5));
         final editableText = tester.widget<EditableText>(composerEditable);
         expect(editableText.controller.text, 'Preserve this draft');
         expect(editableText.focusNode.hasFocus, isTrue);
@@ -535,6 +554,87 @@ void main() {
               .width,
           IdeMetrics.contentMaxWidth,
         );
+      },
+    );
+
+    testWidgets(
+      'lays out growing composer, timeline, and active plan in one frame',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(900, 600));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(provider.dispose);
+        addTearDown(viewModel.dispose);
+
+        await tester.pumpWidget(
+          _TestApp(viewModel: viewModel, disableAnimations: true),
+        );
+        await viewModel.sendMessage('Start layout verification');
+        await tester.pump();
+
+        final layout = find.byKey(const ValueKey('agent-conversation-layout'));
+        final footer = find.byKey(const ValueKey('agent-conversation-footer'));
+        final timeline = find.byKey(const ValueKey('agent-message-list'));
+        final input = find.byKey(const ValueKey('agent-message-input'));
+        expect(
+          tester.getRect(footer).bottom,
+          closeTo(tester.getRect(layout).bottom, 0.5),
+        );
+
+        await tester.enterText(input, 'line 1\nline 2\nline 3');
+        await tester.pump();
+        final threeLineFooter = tester.getRect(footer);
+        expect(
+          tester.getRect(timeline).bottom,
+          closeTo(threeLineFooter.top, 0.5),
+        );
+
+        await tester.enterText(
+          input,
+          List<String>.generate(10, (index) => 'line ${index + 1}').join('\n'),
+        );
+        await tester.pump();
+        final tenLineFooter = tester.getRect(footer);
+        expect(tenLineFooter.height, greaterThan(threeLineFooter.height));
+        expect(
+          tester.getRect(timeline).bottom,
+          closeTo(tenLineFooter.top, 0.5),
+        );
+
+        final stableCallbacks = tester.binding.transientCallbackCount;
+        await tester.pump();
+        expect(tester.getRect(footer), tenLineFooter);
+        expect(tester.binding.transientCallbackCount, stableCallbacks);
+
+        provider.emitEvent(
+          const AgentPlanUpdatedEvent(
+            entries: <AgentPlanEntry>[
+              AgentPlanEntry(content: 'Inspect layout', status: 'completed'),
+              AgentPlanEntry(content: 'Verify layout', status: 'inProgress'),
+            ],
+            sessionId: 'session-1',
+            turnId: 'turn-1',
+          ),
+        );
+        await tester.pump();
+
+        final activePlan = find.byKey(
+          const ValueKey<String>('agent-active-plan-card-turn-1'),
+        );
+        expect(activePlan, findsOneWidget);
+        expect(
+          tester.getRect(activePlan).bottom,
+          lessThanOrEqualTo(tester.getRect(footer).top + 0.5),
+        );
+
+        provider.emitEvent(
+          const AgentTurnCompletedEvent(
+            sessionId: 'session-1',
+            turnId: 'turn-1',
+          ),
+        );
+        await tester.pump();
       },
     );
 
@@ -588,13 +688,21 @@ void main() {
       );
       await tester.pump();
 
+      final conversationLayout = find.byKey(
+        const ValueKey('agent-conversation-layout'),
+      );
+      final conversationFooter = find.byKey(
+        const ValueKey('agent-conversation-footer'),
+      );
+      final emptyLayoutRect = tester.getRect(conversationLayout);
+      final emptyFooterRect = tester.getRect(conversationFooter);
       expect(
-        tester
-            .widget<AnimatedAlign>(
-              find.byKey(const ValueKey('agent-composer-alignment')),
-            )
-            .duration,
-        Duration.zero,
+        emptyFooterRect.top,
+        closeTo(
+          emptyLayoutRect.top +
+              ((emptyLayoutRect.height - emptyFooterRect.height) * 0.44),
+          0.5,
+        ),
       );
       expect(
         tester
@@ -608,6 +716,10 @@ void main() {
       await viewModel.sendMessage('Keep working');
       await tester.pump();
 
+      expect(
+        tester.getRect(conversationFooter).bottom,
+        closeTo(tester.getRect(conversationLayout).bottom, 0.5),
+      );
       final glowFinder = find.byKey(
         const ValueKey('agent-composer-running-glow'),
       );
@@ -2431,6 +2543,12 @@ void main() {
         final dock = find.byKey(
           const ValueKey('agent-pending-interaction-dock'),
         );
+        final conversationFooter = find.byKey(
+          const ValueKey('agent-conversation-footer'),
+        );
+        final composerSurface = find.byKey(
+          const ValueKey('agent-composer-focus-ring'),
+        );
         final messageList = find.byKey(const ValueKey('agent-message-list'));
         final submitButton = find.byKey(
           const ValueKey('agent-question-submit-question-1'),
@@ -2456,6 +2574,13 @@ void main() {
           find.byKey(const ValueKey('agent-permission-cancel-question-1')),
           findsNothing,
         );
+        expect(
+          tester.getRect(dock).bottom,
+          lessThanOrEqualTo(tester.getRect(composerSurface).top),
+        );
+        final footerHeightWithPending = tester
+            .getSize(conversationFooter)
+            .height;
 
         await tester.tap(
           find.byKey(const ValueKey('agent-question-question-1-scope-source')),
@@ -2475,6 +2600,19 @@ void main() {
         ]);
         expect(provider.permissionDecisions, isEmpty);
         expect(dock, findsNothing);
+        final resolvedFooterRect = tester.getRect(conversationFooter);
+        expect(resolvedFooterRect.height, lessThan(footerHeightWithPending));
+        final layoutRect = tester.getRect(
+          find.byKey(const ValueKey('agent-conversation-layout')),
+        );
+        expect(
+          resolvedFooterRect.top,
+          closeTo(
+            layoutRect.top +
+                ((layoutRect.height - resolvedFooterRect.height) * 0.44),
+            0.5,
+          ),
+        );
       });
 
       testWidgets(

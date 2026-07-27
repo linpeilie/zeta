@@ -5,6 +5,8 @@ part of '../agent_pane.dart';
 /// Footer 始终是同一棵带稳定 Key 的子树；空会话时靠近 Canvas 视觉中心，
 /// 首个 turn 出现后落到底部。时间线只按 Composer 与阻塞交互的实际高度让位；
 /// 紧凑浮层独立叠放，避免其窄卡片制造整行空白。
+enum _AgentConversationSlot { timeline, floatingPanel, footer }
+
 class _AgentConversationLayout extends StatefulWidget {
   const _AgentConversationLayout({
     required this.hasConversation,
@@ -25,100 +27,158 @@ class _AgentConversationLayout extends StatefulWidget {
       _AgentConversationLayoutState();
 }
 
-class _AgentConversationLayoutState extends State<_AgentConversationLayout> {
+class _AgentConversationLayoutState extends State<_AgentConversationLayout>
+    with SingleTickerProviderStateMixin {
   static const Alignment _newConversationAlignment = Alignment(0, -0.12);
 
-  final GlobalKey _footerMeasureKey = GlobalKey(
-    debugLabel: 'agent-conversation-footer-measure',
-  );
-  double _footerHeight = 0;
-  bool _measurementScheduled = false;
+  late final AnimationController _footerPositionProgress;
+
+  double get _targetProgress => widget.hasConversation ? 1 : 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _footerPositionProgress = AnimationController(
+      vsync: this,
+      duration: IdeMotion.durationSlow,
+      value: _targetProgress,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _AgentConversationLayout oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.reduceMotion) {
+      _footerPositionProgress
+        ..stop()
+        ..value = _targetProgress;
+      return;
+    }
+    if (oldWidget.hasConversation != widget.hasConversation) {
+      _footerPositionProgress.animateTo(
+        _targetProgress,
+        duration: IdeMotion.durationSlow,
+        curve: IdeMotion.curveDefault,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    _scheduleFooterMeasurement();
-    final duration = widget.reduceMotion
-        ? Duration.zero
-        : IdeMotion.durationSlow;
-    final targetAlignment = widget.hasConversation
-        ? Alignment.bottomCenter
-        : _newConversationAlignment;
-
-    return Stack(
+    return CustomMultiChildLayout(
       key: const ValueKey('agent-conversation-layout'),
-      fit: StackFit.expand,
+      delegate: _AgentConversationLayoutDelegate(
+        hasConversation: widget.hasConversation,
+        footerPositionProgress: _footerPositionProgress,
+        newConversationAlignment: _newConversationAlignment,
+      ),
       children: [
-        IgnorePointer(
-          ignoring: !widget.hasConversation,
-          child: AnimatedOpacity(
-            key: const ValueKey('agent-conversation-timeline'),
-            opacity: widget.hasConversation ? 1 : 0,
-            duration: duration,
-            curve: IdeMotion.curveDefault,
-            child: AnimatedPadding(
-              duration: duration,
-              curve: IdeMotion.curveDefault,
-              padding: EdgeInsets.only(
-                bottom: widget.hasConversation ? _footerHeight : 0,
-              ),
+        LayoutId(
+          id: _AgentConversationSlot.timeline,
+          child: IgnorePointer(
+            ignoring: !widget.hasConversation,
+            child: FadeTransition(
+              key: const ValueKey('agent-conversation-timeline'),
+              opacity: _footerPositionProgress,
               child: widget.timeline,
             ),
           ),
         ),
-        AnimatedAlign(
-          key: const ValueKey('agent-composer-alignment'),
-          alignment: targetAlignment,
-          duration: duration,
-          curve: IdeMotion.curveDefault,
-          child: NotificationListener<SizeChangedLayoutNotification>(
-            onNotification: (_) {
-              _scheduleFooterMeasurement();
-              return false;
-            },
-            child: SizeChangedLayoutNotifier(
-              child: SizedBox(
-                key: _footerMeasureKey,
-                width: double.infinity,
-                child: widget.footer,
-              ),
-            ),
+        LayoutId(
+          id: _AgentConversationSlot.floatingPanel,
+          child: KeyedSubtree(
+            key: const ValueKey('agent-floating-panel-position'),
+            child: widget.floatingPanel,
           ),
         ),
-        AnimatedPositioned(
-          key: const ValueKey('agent-floating-panel-position'),
-          left: 0,
-          right: 0,
-          bottom: widget.hasConversation ? _footerHeight : 0,
-          duration: duration,
-          curve: IdeMotion.curveDefault,
-          child: widget.floatingPanel,
+        LayoutId(
+          id: _AgentConversationSlot.footer,
+          child: KeyedSubtree(
+            key: const ValueKey('agent-composer-alignment'),
+            child: SizedBox(
+              key: const ValueKey('agent-conversation-footer'),
+              width: double.infinity,
+              child: widget.footer,
+            ),
+          ),
         ),
       ],
     );
   }
 
-  void _scheduleFooterMeasurement() {
-    if (_measurementScheduled) {
-      return;
+  @override
+  void dispose() {
+    _footerPositionProgress.dispose();
+    super.dispose();
+  }
+}
+
+/// 同一轮 layout 内先测 Footer，再为 Timeline 与浮动计划分配真实剩余空间。
+class _AgentConversationLayoutDelegate extends MultiChildLayoutDelegate {
+  _AgentConversationLayoutDelegate({
+    required this.hasConversation,
+    required this.footerPositionProgress,
+    required this.newConversationAlignment,
+  }) : super(relayout: footerPositionProgress);
+
+  final bool hasConversation;
+  final Animation<double> footerPositionProgress;
+  final Alignment newConversationAlignment;
+
+  @override
+  void performLayout(Size size) {
+    final footerSize = hasChild(_AgentConversationSlot.footer)
+        ? layoutChild(
+            _AgentConversationSlot.footer,
+            BoxConstraints(
+              minWidth: size.width,
+              maxWidth: size.width,
+              maxHeight: size.height,
+            ),
+          )
+        : Size.zero;
+    final footerHeight = footerSize.height.clamp(0.0, size.height).toDouble();
+    final bottomFooterTop = math.max(0.0, size.height - footerHeight);
+    final centeredFooterTop =
+        bottomFooterTop * ((newConversationAlignment.y + 1) / 2);
+    final progress = footerPositionProgress.value.clamp(0.0, 1.0).toDouble();
+    final footerTop =
+        centeredFooterTop + ((bottomFooterTop - centeredFooterTop) * progress);
+
+    if (hasChild(_AgentConversationSlot.timeline)) {
+      final timelineHeight = hasConversation ? bottomFooterTop : size.height;
+      layoutChild(
+        _AgentConversationSlot.timeline,
+        BoxConstraints.tightFor(width: size.width, height: timelineHeight),
+      );
+      positionChild(_AgentConversationSlot.timeline, Offset.zero);
     }
-    _measurementScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _measurementScheduled = false;
-      if (!mounted) {
-        return;
-      }
-      final renderObject = _footerMeasureKey.currentContext?.findRenderObject();
-      if (renderObject is! RenderBox || !renderObject.hasSize) {
-        return;
-      }
-      final nextHeight = renderObject.size.height;
-      if ((nextHeight - _footerHeight).abs() < 0.5) {
-        return;
-      }
-      setState(() {
-        _footerHeight = nextHeight;
-      });
-    });
+
+    if (hasChild(_AgentConversationSlot.floatingPanel)) {
+      final floatingPanelSize = layoutChild(
+        _AgentConversationSlot.floatingPanel,
+        BoxConstraints(
+          minWidth: size.width,
+          maxWidth: size.width,
+          maxHeight: math.max(0.0, footerTop),
+        ),
+      );
+      positionChild(
+        _AgentConversationSlot.floatingPanel,
+        Offset(0, math.max(0.0, footerTop - floatingPanelSize.height)),
+      );
+    }
+
+    if (hasChild(_AgentConversationSlot.footer)) {
+      positionChild(_AgentConversationSlot.footer, Offset(0, footerTop));
+    }
+  }
+
+  @override
+  bool shouldRelayout(covariant _AgentConversationLayoutDelegate oldDelegate) {
+    return hasConversation != oldDelegate.hasConversation ||
+        footerPositionProgress != oldDelegate.footerPositionProgress ||
+        newConversationAlignment != oldDelegate.newConversationAlignment;
   }
 }
 
