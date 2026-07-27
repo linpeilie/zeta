@@ -5,6 +5,9 @@ import 'package:zeta/src/features/agent/application/agent_conversation_timeline_
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/ui/core/virtualization/ide_dynamic_sliver_list.dart';
+import 'package:zeta/src/ui/core/virtualization/ide_virtual_item.dart';
+import 'package:zeta/src/ui/core/virtualization/ide_virtual_list_controller.dart';
 
 void main() {
   testWidgets('SliverList 首帧只构建视口内 item，滚动后回收首屏', (tester) async {
@@ -90,6 +93,158 @@ void main() {
     expect(find.text('history-footer-t0:'), findsOneWidget);
     expect(find.text('history-footer-t1:anchor-t1'), findsOneWidget);
   });
+
+  testWidgets('19.5 IdeAnchoredDynamicSliverList 固定高度仍只构建视口+cache', (
+    tester,
+  ) async {
+    final builtIds = <String>{};
+    final items = <AgentTimelineViewportItem>[
+      for (var i = 0; i < 100; i += 1) _footerItem('d$i'),
+    ];
+    final controller = ScrollController();
+    final virtual = IdeVirtualListController();
+    const epoch = IdeLayoutEpoch(
+      crossAxisExtentInPhysicalPixels: 400,
+      textScaleKey: 1.0,
+      localeKey: 'zh',
+      typographyEpoch: 1,
+    );
+    virtual.setItems([
+      for (final item in items)
+        IdeVirtualItemDescriptor(
+          id: item.id,
+          kind: 'turnFooter',
+          layoutRevision: 1,
+          estimatedExtent: 80,
+        ),
+    ], epoch: epoch);
+    addTearDown(controller.dispose);
+
+    await _pumpDynamicTimeline(
+      tester,
+      controller: controller,
+      virtualListController: virtual,
+      items: items,
+      itemBuilder: (context, item) {
+        builtIds.add(item.id);
+        return _FixedHeightTile(label: item.id);
+      },
+    );
+
+    expect(builtIds.length, lessThan(30));
+    expect(virtual.totalExtent, closeTo(100 * 80, 1));
+    final render = tester.renderObject<RenderIdeAnchoredDynamicSliverList>(
+      find.byType(IdeAnchoredDynamicSliverList),
+    );
+    expect(render.geometry!.scrollExtent, closeTo(virtual.totalExtent, 1));
+  });
+
+  testWidgets('19.5 大幅动态高度：滚入后 total 只按单项 delta 变化', (tester) async {
+    final items = <AgentTimelineViewportItem>[
+      for (var i = 0; i < 40; i += 1) _footerItem('h$i'),
+    ];
+    final heights = List<double>.generate(40, (i) => i == 12 ? 400.0 : 50.0);
+    final controller = ScrollController();
+    final virtual = IdeVirtualListController();
+    const epoch = IdeLayoutEpoch(
+      crossAxisExtentInPhysicalPixels: 400,
+      textScaleKey: 1.0,
+      localeKey: 'zh',
+      typographyEpoch: 1,
+    );
+    // 第 12 项 estimate 故意偏小。
+    virtual.setItems([
+      for (var i = 0; i < items.length; i++)
+        IdeVirtualItemDescriptor(
+          id: items[i].id,
+          kind: 'turnFooter',
+          layoutRevision: 1,
+          estimatedExtent: 50,
+        ),
+    ], epoch: epoch);
+    addTearDown(controller.dispose);
+
+    await _pumpDynamicTimeline(
+      tester,
+      controller: controller,
+      virtualListController: virtual,
+      items: items,
+      itemBuilder: (context, item) {
+        final index = items.indexWhere((it) => it.id == item.id);
+        return SizedBox(
+          height: heights[index],
+          width: double.infinity,
+          child: Text(item.id),
+        );
+      },
+    );
+
+    final beforeAt12 = virtual.extentIndex.extentAt(12);
+    final beforeTotal = virtual.totalExtent;
+    controller.jumpTo(500);
+    await tester.pumpAndSettle();
+
+    final afterAt12 = virtual.extentIndex.extentAt(12);
+    final afterTotal = virtual.totalExtent;
+    expect(afterAt12, closeTo(400, 1));
+    expect(afterTotal - beforeTotal, closeTo(afterAt12 - beforeAt12, 1));
+  });
+}
+
+Future<void> _pumpDynamicTimeline(
+  WidgetTester tester, {
+  required List<AgentTimelineViewportItem> items,
+  required Widget Function(BuildContext, AgentTimelineViewportItem) itemBuilder,
+  required IdeVirtualListController virtualListController,
+  ScrollController? controller,
+}) async {
+  await tester.binding.setSurfaceSize(const Size(400, 600));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  await tester.pumpWidget(
+    _TimelineHost(
+      builder: (context, setState) {
+        return CustomScrollView(
+          key: const ValueKey('agent-message-list'),
+          controller: controller,
+          slivers: [
+            IdeAnchoredDynamicSliverList(
+              controller: virtualListController,
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final item = items[index];
+                  final child = itemBuilder(context, item);
+                  if (child.key != null) {
+                    return child;
+                  }
+                  return KeyedSubtree(
+                    key: ValueKey<String>(agentTimelineViewportItemKey(item)),
+                    child: child,
+                  );
+                },
+                childCount: items.length,
+                findChildIndexCallback: (Key key) {
+                  if (key is! ValueKey<String>) {
+                    return null;
+                  }
+                  final value = key.value;
+                  const prefix = 'timeline-viewport-';
+                  if (!value.startsWith(prefix)) {
+                    return null;
+                  }
+                  final id = value.substring(prefix.length);
+                  final index = items.indexWhere((item) => item.id == id);
+                  return index >= 0 ? index : null;
+                },
+                addAutomaticKeepAlives: false,
+                addRepaintBoundaries: true,
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+  await tester.pumpAndSettle();
 }
 
 AgentTurnFooterViewportItem _footerItem(String turnId) {

@@ -466,11 +466,14 @@ void main() {
         scrollView: scrollView,
         itemKey: anchorKey,
       );
+      // 阶段 4 接入 IdeAnchoredDynamicSliverList 后，锚点前增高应被
+      // scrollOffsetCorrection 消化；阶段 0 基线曾观测到约 50px 漂移。
       expect(
         (anchorTopAfterCommand - anchorTopBeforeCommand).abs(),
-        greaterThan(1),
+        lessThanOrEqualTo(1),
         reason:
-            '锚点前 command group 高度变化应暴露视觉漂移：'
+            '锚点前 command group 增高后 anchor 视口坐标应保持：'
+            'before=$anchorTopBeforeCommand after=$anchorTopAfterCommand '
             '$beforeCommand -> $commandMid -> $commandExpanded',
       );
 

@@ -33,10 +33,17 @@ import 'package:zeta/src/ui/core/layout/ide_constraint_bucket_builder.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descriptor.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection_cache.dart';
+import 'package:zeta/src/features/agent/presentation/agent_timeline_virtualization_flag.dart';
 import 'package:zeta/src/features/agent/presentation/model_config_ui_state.dart';
+import 'package:zeta/src/ui/core/virtualization/ide_dynamic_sliver_list.dart';
+import 'package:zeta/src/ui/core/virtualization/ide_virtual_item.dart';
+import 'package:zeta/src/ui/core/virtualization/ide_virtual_list_controller.dart';
+import 'package:zeta/src/ui/core/virtualization/ide_virtual_scroll_coordinator.dart';
+import 'package:zeta/src/ui/core/virtualization/ide_virtual_scrollbar.dart';
 
 part 'widgets/agent_pane_cards.dart';
 part 'widgets/agent_pane_composer.dart';
@@ -96,8 +103,22 @@ class _AgentPaneState extends State<AgentPane> {
   final List<String> _draftImagePaths = <String>[];
   final List<({String name, String path})> _draftMentions =
       <({String name, String path})>[];
+
+  /// 旧路径 stick-to-bottom；flag 开启时由 coordinator 接管，此字段仅回退使用。
   bool _stickToBottom = true;
   late int _lastAutoScrollTick;
+
+  /// 动态高度路径：extent index + follow/free 协调器（flag 开启时使用）。
+  final IdeVirtualListController _virtualListController =
+      IdeVirtualListController();
+  late final IdeVirtualScrollCoordinator _scrollCoordinator;
+  late final IdeScrollControllerDriver _scrollDriver;
+
+  /// 驱动滚到底部按钮可见性刷新（不触发全页 setState）。
+  final ValueNotifier<int> _scrollChromeTick = ValueNotifier<int>(0);
+
+  /// 最近一次 timeline 末项 ID，供 follow reveal 使用。
+  String? _lastTimelineItemId;
 
   /// Agent 主列最近一次有限高度；供 pending dock 计算 maxHeight。
   ///
@@ -120,6 +141,9 @@ class _AgentPaneState extends State<AgentPane> {
     );
     _responsiveBodyBuilder = _createResponsiveBodyBuilder();
     _inputController.addListener(_handleInputChanged);
+    _scrollDriver = IdeScrollControllerDriver(_scrollController);
+    _scrollCoordinator = IdeVirtualScrollCoordinator(driver: _scrollDriver)
+      ..onModeChanged = _notifyScrollChrome;
     _scrollController.addListener(_handleScrollChanged);
     _lastAutoScrollTick = widget.viewModel.autoScrollTick;
     widget.viewModel.autoScrollTickListenable.addListener(
@@ -139,8 +163,21 @@ class _AgentPaneState extends State<AgentPane> {
     // view model 真正替换时才使档位 child 失效；普通 resize 父重建继续复用。
     _responsiveBodyBuilder = _createResponsiveBodyBuilder();
     _projectionCache.clear();
+    // 新会话清空高度缓存，回到 follow 末尾。
+    _virtualListController.synchronizeNow(
+      const <IdeVirtualItemDescriptor>[],
+      epoch: const IdeLayoutEpoch(
+        crossAxisExtentInPhysicalPixels: 0,
+        textScaleKey: 1.0,
+        localeKey: 'und',
+        typographyEpoch: 0,
+      ),
+    );
     _stickToBottom = true;
+    _lastTimelineItemId = null;
     _lastAutoScrollTick = widget.viewModel.autoScrollTick;
+    // 重置 coordinator：重新 attach driver 并请求 follow。
+    unawaited(_scrollCoordinator.requestFollowEnd(animated: false));
     widget.viewModel.autoScrollTickListenable.addListener(
       _handleAutoScrollTickChanged,
     );
@@ -153,12 +190,18 @@ class _AgentPaneState extends State<AgentPane> {
     );
     _inputController.removeListener(_handleInputChanged);
     _scrollController.removeListener(_handleScrollChanged);
+    _scrollCoordinator.onModeChanged = null;
     _inputController.dispose();
     _composerFocusNode.dispose();
     _scrollController.dispose();
     _canSendNotifier.dispose();
+    _scrollChromeTick.dispose();
     _projectionCache.clear();
     super.dispose();
+  }
+
+  void _notifyScrollChrome() {
+    _scrollChromeTick.value += 1;
   }
 
   @override
@@ -234,6 +277,14 @@ class _AgentPaneState extends State<AgentPane> {
                   scrollController: _scrollController,
                   pagePadding: pagePadding,
                   projectionCache: _projectionCache,
+                  virtualListController: _virtualListController,
+                  scrollCoordinator: _scrollCoordinator,
+                  scrollChromeTick: _scrollChromeTick,
+                  onLastItemIdChanged: (id) {
+                    _lastTimelineItemId = id;
+                  },
+                  onScrollToEndPressed: _requestScrollToEndFromButton,
+                  useAnchoredDynamicSliver: kUseAnchoredDynamicTimelineSliver,
                 ),
                 floatingPanel: _AgentActivePlanSection(
                   viewModel: widget.viewModel,
@@ -563,14 +614,31 @@ class _AgentPaneState extends State<AgentPane> {
     if (nextTick == _lastAutoScrollTick) {
       return;
     }
-    final shouldScrollToEnd = _shouldStickToBottom();
     _lastAutoScrollTick = nextTick;
-    if (shouldScrollToEnd) {
-      _scrollToEnd();
+    if (kUseAnchoredDynamicTimelineSliver) {
+      // 新路径：只通知 coordinator，由 frame-coalesce 的 jump 完成 follow。
+      _scrollCoordinator.onAutoScrollTick(lastItemId: _lastTimelineItemId);
+      _notifyScrollChrome();
+      return;
+    }
+    // 旧路径回退。
+    if (_shouldStickToBottom()) {
+      _scrollToEndLegacy();
     }
   }
 
   void _handleScrollChanged() {
+    if (kUseAnchoredDynamicTimelineSliver) {
+      // 用户意图主要由 ScrollNotification 分发；此处刷新 chrome。
+      if (!_scrollCoordinator.isProgrammatic) {
+        final metrics = _currentScrollMetrics();
+        if (metrics != null) {
+          _scrollCoordinator.onUserScroll(metrics);
+        }
+      }
+      _notifyScrollChrome();
+      return;
+    }
     _stickToBottom = _shouldStickToBottom();
   }
 
@@ -586,7 +654,19 @@ class _AgentPaneState extends State<AgentPane> {
     return position.maxScrollExtent - position.pixels;
   }
 
-  void _scrollToEnd() {
+  IdeVirtualScrollMetricsSnapshot? _currentScrollMetrics() {
+    if (!_scrollController.hasClients) {
+      return null;
+    }
+    final position = _scrollController.position;
+    return IdeVirtualScrollMetricsSnapshot(
+      pixels: position.pixels,
+      maxScrollExtent: position.maxScrollExtent,
+      viewportDimension: position.viewportDimension,
+    );
+  }
+
+  void _scrollToEndLegacy() {
     // 新消息/工具卡出现后自动滚到底部，但不阻塞当前 build。
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) {
@@ -602,6 +682,13 @@ class _AgentPaneState extends State<AgentPane> {
         curve: Curves.easeOut,
       );
     });
+  }
+
+  Future<void> _requestScrollToEndFromButton() {
+    return _scrollCoordinator.requestFollowEnd(
+      lastItemId: _lastTimelineItemId,
+      animated: !MediaQuery.disableAnimationsOf(context),
+    );
   }
 }
 

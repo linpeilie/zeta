@@ -189,12 +189,27 @@ class _AgentConversationTimeline extends StatelessWidget {
     required this.scrollController,
     required this.pagePadding,
     required this.projectionCache,
+    required this.virtualListController,
+    required this.scrollCoordinator,
+    required this.scrollChromeTick,
+    required this.onLastItemIdChanged,
+    required this.onScrollToEndPressed,
+    required this.useAnchoredDynamicSliver,
   });
 
   final AgentConversationViewModel viewModel;
   final ScrollController scrollController;
   final EdgeInsets pagePadding;
   final AgentTimelineProjectionCache projectionCache;
+  final IdeVirtualListController virtualListController;
+  final IdeVirtualScrollCoordinator scrollCoordinator;
+  final ValueListenable<int> scrollChromeTick;
+  final ValueChanged<String?> onLastItemIdChanged;
+  final Future<void> Function() onScrollToEndPressed;
+  final bool useAnchoredDynamicSliver;
+
+  static const AgentTimelineExtentDescriptorFactory _descriptorFactory =
+      AgentTimelineExtentDescriptorFactory();
 
   @override
   Widget build(BuildContext context) {
@@ -203,6 +218,7 @@ class _AgentConversationTimeline extends StatelessWidget {
         listenable: Listenable.merge(<Listenable>[
           viewModel.historyVersionListenable,
           viewModel.liveTurnListenable,
+          viewModel.expansionVersionListenable,
           ?viewModel.liveTurnState,
         ]),
         builder: (context, _) {
@@ -226,7 +242,58 @@ class _AgentConversationTimeline extends StatelessWidget {
             if (liveSnapshot != null) liveSnapshot.id,
           });
 
-          return CustomScrollView(
+          onLastItemIdChanged(items.isEmpty ? null : items.last.id);
+
+          final media = MediaQuery.of(context);
+          final layoutContext = AgentTimelineLayoutContext(
+            crossAxisExtent: media.size.width - pagePadding.horizontal,
+            devicePixelRatio: media.devicePixelRatio,
+            textScale: media.textScaler.scale(1),
+            localeKey: Localizations.localeOf(context).toString(),
+          );
+
+          if (useAnchoredDynamicSliver) {
+            virtualListController.setItems(
+              _descriptorFactory.describeAll(
+                items,
+                expansion: (
+                  isCommandGroupExpanded: viewModel.isCommandGroupExpanded,
+                  isFileEditItemExpanded: viewModel.isFileEditItemExpanded,
+                ),
+                layoutContext: layoutContext,
+              ),
+              epoch: layoutContext.toEpoch(),
+            );
+          }
+
+          final delegate = SliverChildBuilderDelegate(
+            (context, index) {
+              final item = items[index];
+              return KeyedSubtree(
+                key: ValueKey<String>(agentTimelineViewportItemKey(item)),
+                child: _buildViewportItem(item),
+              );
+            },
+            childCount: items.length,
+            findChildIndexCallback: (Key key) {
+              if (key is! ValueKey<String>) {
+                return null;
+              }
+              final value = key.value;
+              const prefix = 'timeline-viewport-';
+              if (!value.startsWith(prefix)) {
+                return null;
+              }
+              final id = value.substring(prefix.length);
+              final index = items.indexWhere((item) => item.id == id);
+              return index >= 0 ? index : null;
+            },
+            // turn 内展开态由 viewModel 持有；允许回收视口外 turn。
+            addAutomaticKeepAlives: false,
+            addRepaintBoundaries: true,
+          );
+
+          final scrollView = CustomScrollView(
             key: const ValueKey('agent-message-list'),
             controller: scrollController,
             // 默认 cacheExtent 保留少量视口外 block，兼顾滚动流畅与虚拟化收益。
@@ -234,40 +301,60 @@ class _AgentConversationTimeline extends StatelessWidget {
               // 保留 pagePadding；内容最大宽由外层 _AgentContentAlign 约束。
               SliverPadding(
                 padding: pagePadding,
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final item = items[index];
-                      return KeyedSubtree(
-                        key: ValueKey<String>(
-                          agentTimelineViewportItemKey(item),
-                        ),
-                        child: _buildViewportItem(item),
-                      );
-                    },
-                    childCount: items.length,
-                    findChildIndexCallback: (Key key) {
-                      if (key is! ValueKey<String>) {
-                        return null;
-                      }
-                      final value = key.value;
-                      const prefix = 'timeline-viewport-';
-                      if (!value.startsWith(prefix)) {
-                        return null;
-                      }
-                      final id = value.substring(prefix.length);
-                      final index = items.indexWhere((item) => item.id == id);
-                      return index >= 0 ? index : null;
-                    },
-                    // turn 内展开态由 viewModel 持有；允许回收视口外 turn。
-                    addAutomaticKeepAlives: false,
-                    addRepaintBoundaries: true,
-                  ),
-                ),
+                sliver: useAnchoredDynamicSliver
+                    ? IdeAnchoredDynamicSliverList(
+                        controller: virtualListController,
+                        delegate: delegate,
+                      )
+                    : SliverList(delegate: delegate),
               ),
             ],
           );
+
+          if (!useAnchoredDynamicSliver) {
+            return scrollView;
+          }
+
+          return NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              return dispatchUserScrollToCoordinator(
+                coordinator: scrollCoordinator,
+                notification: notification,
+                controller: scrollController,
+              );
+            },
+            child: ListenableBuilder(
+              listenable: scrollChromeTick,
+              builder: (context, _) {
+                final showButton = _shouldShowScrollToEndButton();
+                return IdeVirtualScrollShell(
+                  controller: scrollController,
+                  semanticLabel: 'Agent 对话滚动条',
+                  showScrollToEndButton: showButton,
+                  hasNewContent: showButton && viewModel.liveTurnState != null,
+                  onScrollToEnd: () {
+                    unawaited(onScrollToEndPressed());
+                  },
+                  child: scrollView,
+                );
+              },
+            ),
+          );
         },
+      ),
+    );
+  }
+
+  bool _shouldShowScrollToEndButton() {
+    if (!scrollController.hasClients) {
+      return scrollCoordinator.mode == IdeVirtualScrollMode.free;
+    }
+    final position = scrollController.position;
+    return scrollCoordinator.shouldShowScrollToEndButton(
+      IdeVirtualScrollMetricsSnapshot(
+        pixels: position.pixels,
+        maxScrollExtent: position.maxScrollExtent,
+        viewportDimension: position.viewportDimension,
       ),
     );
   }
