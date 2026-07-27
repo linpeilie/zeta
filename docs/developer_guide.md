@@ -353,7 +353,8 @@ Fast 是产品语义，运行时仍必须传递 provider 的精确 `serviceTierI
 ### 使用统计开发约束
 
 - 新 provider 的套餐读取实现 `AgentUsageQuotaProvider` 可选能力；不要为不支持套餐的
-  provider 在通用 `AgentProvider` 上制造强制实现。
+  provider 在通用 `AgentProvider` 上制造强制实现。Grok 通过 `_x.ai/billing` 映射
+  到 `AgentUsageQuotaSnapshot`，原始 billing JSON 不得泄漏到 presentation。
 - 调用统计依赖中立 `AgentUsageRecord`，provider 原始 JSON key 只允许出现在 data 层。
 - Codex `token_count` 是 thread 累计值，写入 turn 记录前必须相对上一 turn 做非负差分。
 - `UsageStatisticsIndexStore` 的 JSON 必须保持版本化和宽容读取；索引损坏时从 provider

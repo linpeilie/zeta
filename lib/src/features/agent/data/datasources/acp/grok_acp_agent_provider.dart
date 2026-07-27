@@ -13,6 +13,7 @@ import 'package:zeta/src/features/agent/data/datasources/transport/provider_runt
 import 'package:zeta/src/features/agent/data/mappers/acp_content_codec.dart';
 import 'package:zeta/src/features/agent/data/mappers/acp_permission_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_acp_notification_mapper.dart';
+import 'package:zeta/src/features/agent/data/mappers/grok_billing_quota_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_error_normalizer.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -25,10 +26,12 @@ typedef JsonRpcPeerFactory = JsonRpcPeer Function(AgentProviderConfig config);
 /// Grok CLI ACP stdio provider。
 ///
 /// 启动 `grok agent stdio`，通过标准 ACP JSON-RPC 完成会话、流式回复与审批。
+/// 账号套餐额度通过 xAI 扩展 `_x.ai/billing` 读取。
 /// 不支持的 Codex 专有能力通过 [capabilities] 关闭，并在误调用时明确失败。
 class GrokAcpAgentProvider
     implements
         AgentProvider,
+        AgentUsageQuotaProvider,
         AgentRuntimeLifecycleProvider,
         AgentRuntimeScopeProvider,
         AgentRefreshableModelCatalogProvider {
@@ -541,6 +544,24 @@ class GrokAcpAgentProvider
     _log.fine(
       'Ignoring permission selection for Grok ACP '
       '(approval=${selection.approvalPolicy})',
+    );
+  }
+
+  /// 读取 Grok 账号套餐剩余与重置时间。
+  ///
+  /// 走 xAI 扩展 `_x.ai/billing`；失败时向上抛出，由 usage 层降级为无套餐展示。
+  @override
+  Future<AgentUsageQuotaSnapshot?> readUsageQuota() async {
+    await initialize();
+    final result = await _peer.sendRequest(
+      '_x.ai/billing',
+      params: const <String, Object?>{},
+      timeout: const Duration(seconds: 20),
+    );
+    return mapGrokBillingQuota(
+      result,
+      providerId: config.id,
+      providerName: config.displayName,
     );
   }
 

@@ -87,6 +87,9 @@ UsageStatisticsController
       -> 本地 Codex JSONL 历史
       -> account/rateLimits/read
       -> 版本化派生统计索引
+    -> GrokUsageStatisticsRepository
+      -> 本地 Grok updates.jsonl 历史
+      -> AgentUsageQuotaProvider / `_x.ai/billing`
 ```
 
 ## 4. UI 设计
@@ -147,8 +150,9 @@ projection 与 unified diff 以 turn render revision 缓存，代码高亮复用
   已归档 thread，排除子 Agent 以避免重复计数。
 - 历史 TTFT 只使用 Codex 明确返回的 `time_to_first_token_ms`；缺失样本不做
   近似，并在页面标明有效样本数。
-- 套餐仅展示 `account/rateLimits/read` 实际返回的套餐类型、百分比窗口、重置时间
-  与可选余额，不推算绝对 Token 总额度或到期日。
+- 套餐仅展示 Provider 实际返回的套餐类型、百分比窗口、重置时间与可选余额：Codex
+  走 `account/rateLimits/read`，Grok 走 ACP 扩展 `_x.ai/billing`；不推算绝对 Token
+  总额度或未提供的到期日。
 - 宽屏使用双栏分析区，窄窗口切换为单栏；表格可横向滚动，任务详情使用自适应
   侧边/底部抽屉。
 - `UsageStatisticsIndexStore` 只持久化 thread/turn ID、时间、项目、模型、状态、

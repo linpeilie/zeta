@@ -45,6 +45,28 @@ void main() {
       expect(provider.lifecycleState, AgentProviderLifecycleState.closed);
     });
 
+    test('reads Grok billing plan windows and reset time', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+
+      final quota = await provider.readUsageQuota();
+
+      expect(peer.requestMethods, contains('_x.ai/billing'));
+      expect(quota, isNotNull);
+      expect(quota!.planType, 'SuperGrok');
+      expect(quota.windows, hasLength(1));
+      expect(quota.windows.single.usedPercent, 35);
+      expect(quota.windows.single.label, '周额度');
+      expect(
+        quota.windows.single.resetsAt,
+        DateTime.parse('2026-08-01T08:38:01.643958+00:00').toLocal(),
+      );
+      await provider.dispose();
+    });
+
     test(
       'enriches live context occupancy with the active model window',
       () async {
@@ -1363,6 +1385,9 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
       }(),
       'session/prompt' => <String, Object?>{'stopReason': 'end_turn'},
       'session/set_model' => <String, Object?>{},
+      '_x.ai/billing' => readFixtureJsonMap(
+        'grok/acp/xai_billing_response_redacted.json',
+      ),
       _ => <String, Object?>{},
     };
   }

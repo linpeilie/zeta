@@ -74,20 +74,32 @@ String formatUsageRelativeTime(DateTime value, DateTime now) {
   return formatUsageDateTime(value);
 }
 
-String formatUsagePlanType(String? value) => switch (value) {
-  'free' => 'ChatGPT Free',
-  'go' => 'ChatGPT Go',
-  'plus' => 'ChatGPT Plus',
-  'pro' => 'ChatGPT Pro',
-  'prolite' => 'ChatGPT Pro Lite',
-  'team' => 'ChatGPT Team',
-  'self_serve_business_usage_based' => 'ChatGPT Business（按量）',
-  'business' => 'ChatGPT Business',
-  'enterprise_cbp_usage_based' => 'ChatGPT Enterprise（按量）',
-  'enterprise' => 'ChatGPT Enterprise',
-  'edu' => 'ChatGPT Edu',
-  _ => 'Codex 套餐',
-};
+String formatUsagePlanType(String? value) {
+  final cleaned = value?.trim();
+  if (cleaned == null || cleaned.isEmpty) {
+    return '未知套餐';
+  }
+  return switch (cleaned.toLowerCase()) {
+    'free' => 'ChatGPT Free',
+    'go' => 'ChatGPT Go',
+    'plus' => 'ChatGPT Plus',
+    'pro' => 'ChatGPT Pro',
+    'prolite' => 'ChatGPT Pro Lite',
+    'team' => 'ChatGPT Team',
+    'self_serve_business_usage_based' => 'ChatGPT Business（按量）',
+    'business' => 'ChatGPT Business',
+    'enterprise_cbp_usage_based' => 'ChatGPT Enterprise（按量）',
+    'enterprise' => 'ChatGPT Enterprise',
+    'edu' => 'ChatGPT Edu',
+    'supergrok' => 'SuperGrok',
+    'supergrok heavy' ||
+    'supergrokheavy' ||
+    'super_grok_heavy' => 'SuperGrok Heavy',
+    'x premium plus' || 'xpremiumplus' || 'x_premium_plus' => 'X Premium+',
+    'basic' || 'x basic' || 'xbasic' => 'X Basic',
+    _ => cleaned,
+  };
+}
 
 String _trimDecimal(double value, int digits) {
   final formatted = value.toStringAsFixed(digits);
