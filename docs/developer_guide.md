@@ -295,7 +295,20 @@ Fast 是产品语义，运行时仍必须传递 provider 的精确 `serviceTierI
 - Agent 首页、设置/Agent 管理和使用统计分别按设计文档中的 slot 矩阵组合：设置 Feature
   使用 `SettingsNavigationPane` + `SettingsPageCanvas`，使用统计只占用 Canvas。
 - 需要跨页面保持的 Canvas 应使用稳定位置、稳定 Key 和保活容器。Key 必须放在可能因
-  slot 增删而换位的 Flex 子节点上，不能只放在其内部后代；非活动页面应暂停 ticker。
+  slot 增删而换位的 Flex 子节点上，不能只放在其内部后代；保活容器必须只布局活动页，
+  非活动页面同时退出布局并暂停 ticker。
+- Agent 会话与主要页面统一使用 `IdeRetainedPageView`；不要用 `IndexedStack` 保留
+  长时间线，否则隐藏页面仍会参与 resize layout。
+- `IdeConstraintBucketBuilder` 的稳定回调可跨父级 resize 复用 child。若 builder 捕获
+  可变父配置，应让回调身份随配置变化；AgentPane 本身只在 compact / regular 档位或
+  view model 真正替换时重建响应式业务树。
+- Agent 时间线新增可见内容时应扩展稳定 viewport item（block / activity / footer），
+  保持 `SliverList.builder`、`findChildIndexCallback` 和 prepend 锚点修正；不要恢复
+  `SingleChildScrollView + Column` 或把整个长 turn 合并为一个 sliver child。
+- grouping、unified diff 与代码高亮必须分别受 render revision、projection cache 和
+  `HighlightView` identity 约束。窗口宽度变化不是数据变化，不得触发这些解析。
+- Composer、Pending interaction 与 Active plan 的高度关系必须在同一次 layout 中解决；
+  禁止重新引入 post-frame 测量、`GlobalKey` 查高或 layout 后 `setState` 反馈环。
 - 页面容器只负责切换 slot。搜索、筛选、未保存配置确认等业务状态继续归对应 Feature；
   例如离开 Agent 管理前通过 `SettingsPageCanvasState.confirmCanLeave()` 查询。
 - 保持三栏工作台的职责边界：Projects 管项目和 threads，Agent 管对话，Files 管文件上下文。
@@ -319,6 +332,10 @@ Fast 是产品语义，运行时仍必须传递 provider 的精确 `serviceTierI
 - 修改主要页面切换行为时，必须使用实际 `IdeHome` 补 Widget 测试，至少验证
   `WindowFrame`/Workbench/AgentPane Element、当前 Thread、草稿、对话滚动位置、
   Pane 宽度和可见状态没有被重置。
+- 修改 resize 热路径时，除 Widget 回归外还要在 Windows Profile 运行
+  1280→1000→1280 的 10 秒场景，并记录 UI/Raster p95、慢帧率、隐藏页
+  build/layout、viewport item、projection/diff/highlight 与 transient callback 计数。
+  Debug 数据不能作为性能通过结论；未达标数据必须如实保留。
 
 ### Composer 模型配置开发约束
 

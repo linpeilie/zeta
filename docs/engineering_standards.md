@@ -307,7 +307,17 @@ Zeta 是桌面工具，不是营销页。界面应紧凑、克制、可扫描。
   不把设置分区或 Agent 配置规则下沉到共享 Scaffold。
 - 跨页面保活的 Canvas 必须保证关键 State、`ScrollController`、输入控制器和当前 Thread
   不被销毁。可能因兄弟 slot 增删而换位的 Flex 子节点必须直接使用稳定 Key；仅给内部
-  Widget 加 Key 不足以保证父级 Element 复用。
+  Widget 加 Key 不足以保证父级 Element 复用。保活实现必须只布局活动页面；禁止用
+  `IndexedStack` 保留包含长时间线的页面或会话。
+- 连续 resize 只允许按布局语义档位更新业务树。`IdeConstraintBucketBuilder` 的稳定
+  callback 不得因父级每像素重建而失效；捕获了新配置的 callback 必须显式改变身份。
+- Agent 时间线必须使用 block / activity / footer 粒度的稳定 viewport item 与
+  `SliverList.builder`。隐藏会话 layout 增量必须为 0，可见 item 构建数必须受 viewport
+  限制，不得随全部历史长度线性增长。
+- turn grouping、unified diff 和代码高亮分别使用 render revision cache、projection
+  cache 与稳定 `HighlightView` identity；数据未变化的 resize 解析增量必须为 0。
+- Footer、Pending interaction 与 Active plan 必须在单次 layout 内定位；禁止
+  post-frame 读取高度后 `setState`。
 - 设计系统底层是 `shadcn_flutter`（固定 `0.0.52`）+ Graphite token。语义色/字号
   走 `IdeThemeScope` / `IdeColors` / `IdeTextStyles`；第三方组件走 `sf.*`。
 - 统一 `import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;`，禁止旧
@@ -343,6 +353,9 @@ Zeta 是桌面工具，不是营销页。界面应紧凑、克制、可扫描。
   确认态回滚、完整快照重试与损坏持久化输入。
 - provider datasource 和 transport 用 fake process、fake storage 或 callback 注入。
 - pane、timeline、file tree 等用户可见行为用 widget test。
+- resize 相关测试至少覆盖外窗 1197/1196/1195px、Agent Canvas 641/640/639px、隐藏
+  retained page 的 build/layout 增量、viewport item 构建上界、缓存命中和 transient
+  callback 不增长。
 - 主要页面切换必须使用实际 `IdeHome` 做集成级 Widget 测试。Agent → Settings → Agent
   与 Agent → Usage → Agent 至少验证常驻骨架、AgentPane Element、当前 Thread、草稿、
   非零滚动位置、Pane 宽度和 Pane 可见状态保持。
@@ -353,5 +366,8 @@ Zeta 是桌面工具，不是营销页。界面应紧凑、克制、可扫描。
 - smoke 记录不得包含 Prompt、回复、文件内容、凭证、原始协议 payload、thread/turn id 或
   stderr 原文；实验协议缺少预期事件时必须记录实际差异并返回失败，不能用 stable Schema
   或 fake peer 结果替代。
+- Windows resize 性能改动必须用 `flutter run -d windows --profile` 采样，不得以
+  Debug、估算或主观手感代替。固定场景记录 UI/Raster p95 与慢帧率；如未达 16.7ms /
+  5%，只能在同构基线和结构计数均满足时引用相对改善，缺失基线不得补值。
 
 评审时优先检查依赖方向、协议泄漏、异步竞态、持久化兼容性、文件系统性能和 UI 溢出风险。

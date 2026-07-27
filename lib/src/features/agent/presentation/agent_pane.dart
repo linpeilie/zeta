@@ -53,10 +53,10 @@ const int _markdownCollapseLineThreshold = 12;
 const int _markdownCollapseLengthThreshold = 420;
 const int _diffPreviewLineCount = 24;
 
-typedef _TurnSectionBuilder = Widget Function(AgentConversationTurnGroup turn);
-
 /// Agent 主列宽度档位：只影响 page padding 等布局语义，不随每像素宽度重建。
 enum _AgentPaneWidthClass { compact, regular }
+
+typedef _TimelineViewportAnchor = ({String itemKey, double globalTop});
 
 _AgentPaneWidthClass _selectAgentPaneWidthClass(BoxConstraints constraints) {
   return constraints.maxWidth < IdeMetrics.stackedRowBreakpoint
@@ -110,6 +110,8 @@ class _AgentPaneState extends State<AgentPane> {
   /// presentation 层 turn projection 缓存；不随窗口 constraints 失效。
   final AgentTimelineProjectionCache _projectionCache =
       AgentTimelineProjectionCache();
+  late Widget Function(BuildContext, _AgentPaneWidthClass)
+  _responsiveBodyBuilder;
 
   @override
   void initState() {
@@ -118,6 +120,7 @@ class _AgentPaneState extends State<AgentPane> {
       debugLabel: 'AgentMessageComposer',
       onKeyEvent: _handleComposerKeyEvent,
     );
+    _responsiveBodyBuilder = _createResponsiveBodyBuilder();
     _inputController.addListener(_handleInputChanged);
     _scrollController.addListener(_handleScrollChanged);
     _lastAutoScrollTick = widget.viewModel.autoScrollTick;
@@ -135,6 +138,8 @@ class _AgentPaneState extends State<AgentPane> {
     oldWidget.viewModel.autoScrollTickListenable.removeListener(
       _handleAutoScrollTickChanged,
     );
+    // view model 真正替换时才使档位 child 失效；普通 resize 父重建继续复用。
+    _responsiveBodyBuilder = _createResponsiveBodyBuilder();
     _projectionCache.clear();
     _stickToBottom = true;
     _lastAutoScrollTick = widget.viewModel.autoScrollTick;
@@ -170,119 +175,7 @@ class _AgentPaneState extends State<AgentPane> {
             child: IdeConstraintBucketBuilder<_AgentPaneWidthClass>(
               key: const ValueKey('agent-pane-width-bucket'),
               selectBucket: _selectWidthBucketAndTrackHeight,
-              builder: (context, widthClass) {
-                final pagePadding = switch (widthClass) {
-                  _AgentPaneWidthClass.compact => IdeSpacing.pagePaddingCompact,
-                  _AgentPaneWidthClass.regular => IdeSpacing.pagePadding,
-                };
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _AgentContentAlign(
-                      child: Padding(
-                        padding: pagePadding,
-                        child: ListenableBuilder(
-                          listenable: widget.viewModel.headerVersionListenable,
-                          builder: (context, _) {
-                            return _AgentHeader(viewModel: widget.viewModel);
-                          },
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: ListenableBuilder(
-                        listenable: Listenable.merge(<Listenable>[
-                          widget.viewModel.historyVersionListenable,
-                          widget.viewModel.liveTurnListenable,
-                        ]),
-                        builder: (context, _) {
-                          final hasConversation =
-                              widget.viewModel.visibleHistoryTurns.isNotEmpty ||
-                              widget.viewModel.liveTurnState != null;
-                          return _AgentConversationLayout(
-                            hasConversation: hasConversation,
-                            reduceMotion: MediaQuery.disableAnimationsOf(
-                              context,
-                            ),
-                            timeline: _AgentConversationTimeline(
-                              viewModel: widget.viewModel,
-                              scrollController: _scrollController,
-                              pagePadding: pagePadding,
-                              onLoadOlder: _loadOlderTurns,
-                              buildTurnSection: _buildTurnSection,
-                              projectionCache: _projectionCache,
-                            ),
-                            floatingPanel: _AgentActivePlanSection(
-                              viewModel: widget.viewModel,
-                              pagePadding: pagePadding,
-                            ),
-                            footer: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                // panelHeight 由 selectBucket 旁路缓存，不进入 bucket 身份。
-                                _AgentPendingInteractionSection(
-                                  viewModel: widget.viewModel,
-                                  panelHeight: _panelHeight,
-                                  pagePadding: pagePadding,
-                                  onPlanRevisionRequested:
-                                      _composerFocusNode.requestFocus,
-                                ),
-                                ListenableBuilder(
-                                  listenable: widget
-                                      .viewModel
-                                      .composerVersionListenable,
-                                  builder: (context, _) {
-                                    return Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        if (widget
-                                                .viewModel
-                                                .unavailableProviderReason
-                                            case final reason?)
-                                          _AgentProviderUnavailableNotice(
-                                            reason: reason,
-                                            pagePadding: pagePadding,
-                                          ),
-                                        if (widget.viewModel.isReadOnly)
-                                          _AgentReadOnlyNotice(
-                                            pagePadding: pagePadding,
-                                          )
-                                        else
-                                          _AgentComposerSection(
-                                            key: const ValueKey(
-                                              'agent-composer-section',
-                                            ),
-                                            viewModel: widget.viewModel,
-                                            inputController: _inputController,
-                                            composerFocusNode:
-                                                _composerFocusNode,
-                                            canSendListenable: _canSendNotifier,
-                                            draftImagePaths:
-                                                List<String>.unmodifiable(
-                                                  _draftImagePaths,
-                                                ),
-                                            pagePadding: pagePadding,
-                                            onAttachImages: _pickImages,
-                                            onRemoveImage: _removeDraftImage,
-                                            onSend: _sendMessage,
-                                            onInsertMention: _insertMention,
-                                          ),
-                                      ],
-                                    );
-                                  },
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                );
-              },
+              builder: _responsiveBodyBuilder,
             ),
           ),
           // 头栏「上下文」菜单触发的详情面板，默认隐藏。
@@ -300,12 +193,108 @@ class _AgentPaneState extends State<AgentPane> {
     );
   }
 
-  Widget _buildTurnSection(AgentConversationTurnGroup turn) {
-    return _AgentTurnSection(
-      key: ValueKey<String>('turn-${turn.id}'),
-      turn: turn,
-      viewModel: widget.viewModel,
-      projectionCache: _projectionCache,
+  Widget Function(BuildContext, _AgentPaneWidthClass)
+  _createResponsiveBodyBuilder() => _buildResponsiveBody;
+
+  Widget _buildResponsiveBody(
+    BuildContext context,
+    _AgentPaneWidthClass widthClass,
+  ) {
+    final pagePadding = switch (widthClass) {
+      _AgentPaneWidthClass.compact => IdeSpacing.pagePaddingCompact,
+      _AgentPaneWidthClass.regular => IdeSpacing.pagePadding,
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _AgentContentAlign(
+          child: Padding(
+            padding: pagePadding,
+            child: ListenableBuilder(
+              listenable: widget.viewModel.headerVersionListenable,
+              builder: (context, _) {
+                return _AgentHeader(viewModel: widget.viewModel);
+              },
+            ),
+          ),
+        ),
+        Expanded(
+          child: ListenableBuilder(
+            listenable: Listenable.merge(<Listenable>[
+              widget.viewModel.historyVersionListenable,
+              widget.viewModel.liveTurnListenable,
+            ]),
+            builder: (context, _) {
+              final hasConversation =
+                  widget.viewModel.visibleHistoryTurns.isNotEmpty ||
+                  widget.viewModel.liveTurnState != null;
+              return _AgentConversationLayout(
+                hasConversation: hasConversation,
+                reduceMotion: MediaQuery.disableAnimationsOf(context),
+                timeline: _AgentConversationTimeline(
+                  viewModel: widget.viewModel,
+                  scrollController: _scrollController,
+                  pagePadding: pagePadding,
+                  onLoadOlder: _loadOlderTurns,
+                  projectionCache: _projectionCache,
+                ),
+                floatingPanel: _AgentActivePlanSection(
+                  viewModel: widget.viewModel,
+                  pagePadding: pagePadding,
+                ),
+                footer: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // panelHeight 由 selectBucket 旁路缓存，不进入 bucket 身份。
+                    _AgentPendingInteractionSection(
+                      viewModel: widget.viewModel,
+                      panelHeight: _panelHeight,
+                      pagePadding: pagePadding,
+                      onPlanRevisionRequested: _composerFocusNode.requestFocus,
+                    ),
+                    ListenableBuilder(
+                      listenable: widget.viewModel.composerVersionListenable,
+                      builder: (context, _) {
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (widget.viewModel.unavailableProviderReason
+                                case final reason?)
+                              _AgentProviderUnavailableNotice(
+                                reason: reason,
+                                pagePadding: pagePadding,
+                              ),
+                            if (widget.viewModel.isReadOnly)
+                              _AgentReadOnlyNotice(pagePadding: pagePadding)
+                            else
+                              _AgentComposerSection(
+                                key: const ValueKey('agent-composer-section'),
+                                viewModel: widget.viewModel,
+                                inputController: _inputController,
+                                composerFocusNode: _composerFocusNode,
+                                canSendListenable: _canSendNotifier,
+                                draftImagePaths: List<String>.unmodifiable(
+                                  _draftImagePaths,
+                                ),
+                                pagePadding: pagePadding,
+                                onAttachImages: _pickImages,
+                                onRemoveImage: _removeDraftImage,
+                                onSend: _sendMessage,
+                                onInsertMention: _insertMention,
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -517,6 +506,8 @@ class _AgentPaneState extends State<AgentPane> {
     final oldMaxScrollExtent = hasClients
         ? controller.position.maxScrollExtent
         : 0.0;
+    final anchor = hasClients ? _captureTimelineViewportAnchor() : null;
+    final anchorGlobalTop = anchor?.globalTop;
     final changed = widget.viewModel.loadOlderTurns();
     if (!changed || !hasClients) {
       return;
@@ -525,13 +516,112 @@ class _AgentPaneState extends State<AgentPane> {
       if (!controller.hasClients) {
         return;
       }
-      final delta = controller.position.maxScrollExtent - oldMaxScrollExtent;
+      final compensatedMaxScrollExtent = controller.position.maxScrollExtent;
+      final delta = compensatedMaxScrollExtent - oldMaxScrollExtent;
       final targetOffset = (oldPixels + delta).clamp(
         0.0,
-        controller.position.maxScrollExtent,
+        compensatedMaxScrollExtent,
       );
       controller.jumpTo(targetOffset);
+      // block 级 Sliver 在首轮 prepend layout 后可能继续校正 max extent。
+      // 下一帧只补偿这部分估算差，避免动态 Markdown 高度让锚点产生像素级漂移。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!controller.hasClients) {
+          return;
+        }
+        final anchorTop = anchor == null
+            ? null
+            : _timelineViewportItemTop(anchor.itemKey);
+        if (anchorTop != null && anchorGlobalTop != null) {
+          final anchorCorrection = anchorTop - anchorGlobalTop;
+          if (anchorCorrection.abs() >= 0.01) {
+            controller.jumpTo(
+              (controller.position.pixels + anchorCorrection).clamp(
+                0.0,
+                controller.position.maxScrollExtent,
+              ),
+            );
+          }
+          return;
+        }
+        final correctedMaxScrollExtent = controller.position.maxScrollExtent;
+        final correction =
+            correctedMaxScrollExtent - compensatedMaxScrollExtent;
+        if (correction.abs() < 0.01) {
+          return;
+        }
+        controller.jumpTo(
+          (controller.position.pixels + correction).clamp(
+            0.0,
+            correctedMaxScrollExtent,
+          ),
+        );
+      });
     });
+  }
+
+  _TimelineViewportAnchor? _captureTimelineViewportAnchor() {
+    final viewportElement = _findDescendantByKey(
+      const ValueKey('agent-message-list'),
+    );
+    final viewportBox = viewportElement?.findRenderObject();
+    if (viewportBox is! RenderBox || !viewportBox.hasSize) {
+      return null;
+    }
+    final viewportTop = viewportBox.localToGlobal(Offset.zero).dy;
+    final viewportBottom = viewportTop + viewportBox.size.height;
+    _TimelineViewportAnchor? anchor;
+    var nearestTop = double.infinity;
+
+    void visit(Element element) {
+      final key = element.widget.key;
+      if (key case ValueKey<String>(:final value)
+          when value.startsWith('timeline-viewport-') &&
+              value != 'timeline-viewport-load-older') {
+        final renderObject = element.findRenderObject();
+        if (renderObject is RenderBox && renderObject.hasSize) {
+          final top = renderObject.localToGlobal(Offset.zero).dy;
+          final bottom = top + renderObject.size.height;
+          if (bottom > viewportTop &&
+              top < viewportBottom &&
+              top < nearestTop) {
+            nearestTop = top;
+            anchor = (itemKey: value, globalTop: top);
+          }
+        }
+      }
+      element.visitChildren(visit);
+    }
+
+    (context as Element).visitChildren(visit);
+    return anchor;
+  }
+
+  double? _timelineViewportItemTop(String itemKey) {
+    final element = _findDescendantByKey(ValueKey<String>(itemKey));
+    final renderObject = element?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return null;
+    }
+    return renderObject.localToGlobal(Offset.zero).dy;
+  }
+
+  Element? _findDescendantByKey(Key key) {
+    Element? result;
+
+    void visit(Element element) {
+      if (result != null) {
+        return;
+      }
+      if (element.widget.key == key) {
+        result = element;
+        return;
+      }
+      element.visitChildren(visit);
+    }
+
+    (context as Element).visitChildren(visit);
+    return result;
   }
 
   void _sendMessage() {

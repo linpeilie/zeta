@@ -141,6 +141,40 @@ void main() {
     expect(find.text('A-regular'), findsNothing);
   });
 
+  testWidgets('父级重建但回调身份稳定时继续复用 child', (tester) async {
+    var builderCalls = 0;
+    var parentRevision = 0;
+    late StateSetter setHostState;
+    Widget stableBuilder(BuildContext context, String bucket) {
+      builderCalls += 1;
+      return Text('stable-$bucket');
+    }
+
+    await pumpIdeComponent(
+      tester,
+      size: const Size(800, 600),
+      child: StatefulBuilder(
+        builder: (context, setState) {
+          setHostState = setState;
+          return Semantics(
+            label: 'revision-$parentRevision',
+            child: IdeConstraintBucketBuilder<String>(
+              selectBucket: _widthBucket,
+              builder: stableBuilder,
+            ),
+          );
+        },
+      ),
+    );
+
+    expect(builderCalls, 1);
+    setHostState(() => parentRevision += 1);
+    await tester.pump();
+
+    expect(builderCalls, 1);
+    expect(find.text('stable-regular'), findsOneWidget);
+  });
+
   testWidgets('主题变化时 child 仍能响应 InheritedWidget', (tester) async {
     await pumpIdeComponent(
       tester,

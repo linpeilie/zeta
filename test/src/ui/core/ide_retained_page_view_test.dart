@@ -165,6 +165,7 @@ void main() {
     await tester.pump();
 
     final layoutsOnBWhenHidden = stateB.layoutCount;
+    final buildsOnBWhenHidden = stateB.buildCount;
 
     for (var width = 400; width >= 320; width -= 8) {
       await tester.binding.setSurfaceSize(Size(width.toDouble(), 300));
@@ -173,6 +174,7 @@ void main() {
 
     // 离屏 keep-alive 页不应随父宽度持续 layout。
     expect(stateB.layoutCount, layoutsOnBWhenHidden);
+    expect(stateB.buildCount, buildsOnBWhenHidden);
     expect(find.text('count-a'), findsOneWidget);
   });
 }
@@ -217,10 +219,12 @@ class _LayoutCountingPage extends StatefulWidget {
 }
 
 class _LayoutCountingPageState extends State<_LayoutCountingPage> {
+  int buildCount = 0;
   int layoutCount = 0;
 
   @override
   Widget build(BuildContext context) {
+    buildCount += 1;
     return _LayoutCounter(
       onLayout: () => layoutCount += 1,
       child: Center(child: Text('count-${widget.label}')),

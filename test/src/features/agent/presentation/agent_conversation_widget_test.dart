@@ -172,9 +172,10 @@ void main() {
     );
     await tester.pump();
     await tester.pump();
+    await tester.pump();
 
     expect(controller.offset, greaterThan(0));
-    expect(tester.getTopLeft(anchorFinder).dy, closeTo(oldAnchorY, 2));
+    expect(tester.getTopLeft(anchorFinder).dy, closeTo(oldAnchorY, 1));
   });
 
   testWidgets('does not resume an existing thread until the first send', (

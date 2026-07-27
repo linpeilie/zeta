@@ -105,11 +105,18 @@ Agent 管理与使用统计只切换 Navigation、Canvas、Inspector slot 内容
 | 设置 / Agent 管理 | `SettingsNavigationPane` | `SettingsPageCanvas`，Agent 分区内承载 `AgentManagementPage` | 无 | Wide/Medium 内联设置导航；Compact 由 Rail 打开统一 Navigation Overlay |
 | 使用统计 | 无 | `UsageStatisticsPage` | 无 | 所有模式只占用 Canvas，左右 Rail 与 Workbench 骨架继续保留 |
 
-Canvas 使用延迟挂载的保活页面栈：`AgentPane` 始终挂载，设置和使用统计在首次访问后
-保留。页面切换只暂停非活动页 ticker，不销毁 Agent 的 State、输入控制器或滚动控制器。
+Canvas 与 Agent 会话都使用 `IdeRetainedPageView` 延迟挂载并保活已访问页面；任一时刻
+只布局活动页面和活动 `AgentPane`，离屏页保留 State、输入/滚动控制器并暂停 ticker。
 Workbench 的 Canvas Flex slot 自身也使用稳定 Key，保证 Navigation/Inspector slot
-增删导致 Canvas 在 `Row` 中换位时仍复用原 Element。Pane 宽度和用户控制的可见状态由
+增删或 Wide/Medium 断点切换时仍复用原 Element。Pane 宽度和用户控制的可见状态由
 `IdeHome` 持有，离开其他页面再返回时保持不变。
+
+`AgentPane` 以 compact / regular 离散宽度档位缓存结构，父级每像素 resize 只有在回调
+身份或档位变化时才使缓存失效。对话时间线使用 `CustomScrollView` +
+`SliverList.builder`，按稳定的 block、live activity 和 turn footer item 虚拟化；
+projection 与 unified diff 以 turn render revision 缓存，代码高亮复用
+`HighlightView` identity。Composer、Pending interaction 与 Active plan 在一次
+`CustomMultiChildLayout` 中确定位置，不使用 post-frame 高度反馈。
 
 设置 Feature 对 Workbench 暴露 `SettingsNavigationPane` 与 `SettingsPageCanvas`；
 `SettingsPageCanvasState.confirmCanLeave()` 继续负责 Agent 配置编辑器的未保存内容确认，

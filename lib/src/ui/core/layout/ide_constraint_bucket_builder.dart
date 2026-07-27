@@ -5,7 +5,7 @@ import 'package:flutter/widgets.dart';
 /// 仅在以下情况调用 [builder]：
 /// - 首次布局；
 /// - [selectBucket] 结果变化；
-/// - 父级重建导致本组件 [didUpdateWidget]（builder 可能已捕获新状态）。
+/// - 父级替换 [selectBucket] 或 [builder] 回调。
 ///
 /// 纯约束变化且 bucket 不变时返回**同一个 Widget 实例**，使 Flutter 跳过子树
 /// Element 更新。主题、文字缩放等 InheritedWidget 仍通过既有依赖通知更新子树。
@@ -38,9 +38,12 @@ class _IdeConstraintBucketBuilderState<T>
   @override
   void didUpdateWidget(covariant IdeConstraintBucketBuilder<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // 父级重建时 builder 闭包可能已捕获新状态；失效 child 缓存，
-    // 下次 LayoutBuilder 回调会按当前 bucket 重新构建。
-    _child = null;
+    // 稳定回调代表 builder 会从同一个 State 读取最新状态；父级仅因约束重建时
+    // 继续复用 child。捕获了新配置的闭包身份会变化，仍按原语义失效缓存。
+    if (oldWidget.selectBucket != widget.selectBucket ||
+        oldWidget.builder != widget.builder) {
+      _child = null;
+    }
   }
 
   @override

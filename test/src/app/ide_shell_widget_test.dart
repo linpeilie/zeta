@@ -462,6 +462,18 @@ void main() {
       find.byKey(const ValueKey('workbench-canvas-slot')),
     );
 
+    // 外窗 1197 / 1196 / 1195px 精确跨越 WindowFrame 内层 wide 断点。
+    for (final width in <double>[1197, 1196, 1195, 1196, 1197]) {
+      tester.view.physicalSize = Size(width, 900);
+      await tester.pump();
+      expect(
+        tester.element(find.byType(AgentPane)),
+        same(retained.agentPaneElement),
+      );
+      expect(retained.inputController.text, retained.draft);
+      expect(retained.agentPaneElement.mounted, isTrue);
+    }
+
     // Wide → Medium：选用仍能容纳 nav + canvas 最小宽的宽度，避免降级到 compact。
     // Inspector 退出 inline，Canvas State 必须保持。
     tester.view.physicalSize = const Size(1100, 900);

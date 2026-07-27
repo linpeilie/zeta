@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
+import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 
@@ -8,8 +10,7 @@ void main() {
   testWidgets('SliverList 首帧只构建视口内 item，滚动后回收首屏', (tester) async {
     final builtIds = <String>{};
     final items = <AgentTimelineViewportItem>[
-      for (var i = 0; i < 100; i += 1)
-        AgentTurnViewportItem(turnId: 't$i', isLive: false, isStandby: false),
+      for (var i = 0; i < 100; i += 1) _footerItem('t$i'),
     ];
     final controller = ScrollController();
     addTearDown(controller.dispose);
@@ -26,25 +27,23 @@ void main() {
 
     // 600px 视口 / 80px item ≈ 8 + cache，应远小于 100。
     expect(builtIds.length, lessThan(30));
-    expect(builtIds, contains('history-turn-t0'));
-    expect(builtIds, isNot(contains('history-turn-t99')));
+    expect(builtIds, contains('history-footer-t0'));
+    expect(builtIds, isNot(contains('history-footer-t99')));
 
     controller.jumpTo(controller.position.maxScrollExtent);
     await tester.pumpAndSettle();
 
-    expect(builtIds, contains('history-turn-t99'));
+    expect(builtIds, contains('history-footer-t99'));
     final visibleTiles = find.byType(_FixedHeightTile, skipOffstage: false);
     expect(visibleTiles.evaluate().length, lessThan(40));
   });
 
-  testWidgets('findChildIndexCallback 保证 prepend 后 State 不串位', (
-    tester,
-  ) async {
+  testWidgets('findChildIndexCallback 保证 prepend 后 State 不串位', (tester) async {
     // 保持少量 item 全部位于视口内，避免回收干扰 State 断言。
     var items = <AgentTimelineViewportItem>[
-      AgentTurnViewportItem(turnId: 't1', isLive: false, isStandby: false),
-      AgentTurnViewportItem(turnId: 't2', isLive: false, isStandby: false),
-      AgentTurnViewportItem(turnId: 't3', isLive: false, isStandby: false),
+      _footerItem('t1'),
+      _footerItem('t2'),
+      _footerItem('t3'),
     ];
     late StateSetter setHostState;
 
@@ -68,30 +67,42 @@ void main() {
     await tester.pumpAndSettle();
 
     final stateT1 = tester.state<_StatefulNoteTileState>(
-      find.byKey(const ValueKey<String>('timeline-viewport-history-turn-t1')),
+      find.byKey(const ValueKey<String>('timeline-viewport-history-footer-t1')),
     );
     stateT1.note = 'anchor-t1';
 
     setHostState(() {
       items = <AgentTimelineViewportItem>[
         const AgentLoadOlderViewportItem(),
-        AgentTurnViewportItem(turnId: 't0', isLive: false, isStandby: false),
-        AgentTurnViewportItem(turnId: 't1', isLive: false, isStandby: false),
-        AgentTurnViewportItem(turnId: 't2', isLive: false, isStandby: false),
-        AgentTurnViewportItem(turnId: 't3', isLive: false, isStandby: false),
+        _footerItem('t0'),
+        _footerItem('t1'),
+        _footerItem('t2'),
+        _footerItem('t3'),
       ];
     });
     await tester.pumpAndSettle();
 
     final stateAfter = tester.state<_StatefulNoteTileState>(
-      find.byKey(const ValueKey<String>('timeline-viewport-history-turn-t1')),
+      find.byKey(const ValueKey<String>('timeline-viewport-history-footer-t1')),
     );
     expect(stateAfter, same(stateT1));
     expect(stateAfter.note, 'anchor-t1');
     // 旧 index0 的 State 不应错误落到 load-older 或 t0 上。
-    expect(find.text('history-turn-t0:'), findsOneWidget);
-    expect(find.text('history-turn-t1:anchor-t1'), findsOneWidget);
+    expect(find.text('history-footer-t0:'), findsOneWidget);
+    expect(find.text('history-footer-t1:anchor-t1'), findsOneWidget);
   });
+}
+
+AgentTurnFooterViewportItem _footerItem(String turnId) {
+  return AgentTurnFooterViewportItem(
+    turn: AgentConversationTurnGroup(
+      id: turnId,
+      status: AgentHistoryTurnStatus.completed,
+      isStandby: false,
+      entries: const <AgentTimelineEntry>[],
+    ),
+    isLive: false,
+  );
 }
 
 Future<void> _pumpTimeline(

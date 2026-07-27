@@ -418,8 +418,28 @@ void main() {
           800 - IdeSpacing.pagePadding.horizontal,
         );
 
-        // 跨 stackedRowBreakpoint(640)：结构可换 padding，但 State/controller 保留。
-        await tester.binding.setSurfaceSize(const Size(600, 800));
+        // 精确覆盖 641 / 640 / 639px；只有 639px 进入 compact。
+        for (final width in <double>[641, 640]) {
+          await tester.binding.setSurfaceSize(Size(width, 800));
+          await _pumpAgentPaneUi(tester);
+          expect(
+            tester.element(find.byType(AgentPane)),
+            same(agentPaneElement),
+          );
+          expect(
+            tester
+                .widget<EditableText>(
+                  find.descendant(
+                    of: find.byKey(const ValueKey('agent-message-input')),
+                    matching: find.byType(EditableText),
+                  ),
+                )
+                .controller,
+            same(inputController),
+          );
+        }
+
+        await tester.binding.setSurfaceSize(const Size(639, 800));
         await _pumpAgentPaneUi(tester);
 
         expect(tester.element(find.byType(AgentPane)), same(agentPaneElement));
@@ -439,8 +459,18 @@ void main() {
           tester
               .getSize(find.byKey(const ValueKey('agent-composer-focus-ring')))
               .width,
-          600 - IdeSpacing.pagePaddingCompact.horizontal,
+          639 - IdeSpacing.pagePaddingCompact.horizontal,
         );
+
+        for (final width in <double>[640, 641]) {
+          await tester.binding.setSurfaceSize(Size(width, 800));
+          await _pumpAgentPaneUi(tester);
+          expect(
+            tester.element(find.byType(AgentPane)),
+            same(agentPaneElement),
+          );
+          expect(inputController.text, 'Cross-breakpoint draft');
+        }
 
         await tester.binding.setSurfaceSize(const Size(800, 800));
         await _pumpAgentPaneUi(tester);
@@ -1084,7 +1114,7 @@ void main() {
           await _pumpLiveAgentUi(tester);
 
           final liveSectionFinder = find.byKey(
-            const ValueKey<String>('agent-live-turn-section'),
+            const ValueKey<String>('turn-block-turn-1-message-message-1'),
           );
           final liveMarkdownWidget = _markdownWidgetUnder(
             tester,

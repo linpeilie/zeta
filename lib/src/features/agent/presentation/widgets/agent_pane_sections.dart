@@ -182,14 +182,13 @@ class _AgentConversationLayoutDelegate extends MultiChildLayoutDelegate {
   }
 }
 
-/// 共享 920px 内容轴的可滚动对话区（CustomScrollView + turn 级虚拟化）。
+/// 共享 920px 内容轴的可滚动对话区（CustomScrollView + block 级虚拟化）。
 class _AgentConversationTimeline extends StatelessWidget {
   const _AgentConversationTimeline({
     required this.viewModel,
     required this.scrollController,
     required this.pagePadding,
     required this.onLoadOlder,
-    required this.buildTurnSection,
     required this.projectionCache,
   });
 
@@ -197,7 +196,6 @@ class _AgentConversationTimeline extends StatelessWidget {
   final ScrollController scrollController;
   final EdgeInsets pagePadding;
   final VoidCallback onLoadOlder;
-  final _TurnSectionBuilder buildTurnSection;
   final AgentTimelineProjectionCache projectionCache;
 
   @override
@@ -207,6 +205,7 @@ class _AgentConversationTimeline extends StatelessWidget {
         listenable: Listenable.merge(<Listenable>[
           viewModel.historyVersionListenable,
           viewModel.liveTurnListenable,
+          ?viewModel.liveTurnState,
         ]),
         builder: (context, _) {
           final standby = viewModel.standbyTurnState;
@@ -221,22 +220,19 @@ class _AgentConversationTimeline extends StatelessWidget {
             standbyTurn: standbySnapshot,
             visibleHistoryTurns: historyTurns,
             liveTurn: liveSnapshot,
+            resolveBlocks: projectionCache.resolve,
           );
-          final turnsById = <String, AgentConversationTurnGroup>{
-            for (final turn in <AgentConversationTurnGroup>[
-              ?standbySnapshot,
-              ...historyTurns,
-              ?liveSnapshot,
-            ])
-              turn.id: turn,
-          };
           // 仅保留当前可见 turn 的投影缓存，避免历史窗口滑动后无限增长。
-          projectionCache.retainOnly(turnsById.keys.toSet());
+          projectionCache.retainOnly(<String>{
+            if (standbySnapshot != null) standbySnapshot.id,
+            for (final turn in historyTurns) turn.id,
+            if (liveSnapshot != null) liveSnapshot.id,
+          });
 
           return CustomScrollView(
             key: const ValueKey('agent-message-list'),
             controller: scrollController,
-            // 默认 cacheExtent 保留少量视口外 turn，兼顾滚动流畅与虚拟化收益。
+            // 默认 cacheExtent 保留少量视口外 block，兼顾滚动流畅与虚拟化收益。
             slivers: [
               // 保留 pagePadding；内容最大宽由外层 _AgentContentAlign 约束。
               SliverPadding(
@@ -249,11 +245,7 @@ class _AgentConversationTimeline extends StatelessWidget {
                         key: ValueKey<String>(
                           agentTimelineViewportItemKey(item),
                         ),
-                        child: _buildViewportItem(
-                          item: item,
-                          turnsById: turnsById,
-                          liveTurnState: liveTurnState,
-                        ),
+                        child: _buildViewportItem(item),
                       );
                     },
                     childCount: items.length,
@@ -283,39 +275,85 @@ class _AgentConversationTimeline extends StatelessWidget {
     );
   }
 
-  Widget _buildViewportItem({
-    required AgentTimelineViewportItem item,
-    required Map<String, AgentConversationTurnGroup> turnsById,
-    required AgentConversationTurnState? liveTurnState,
-  }) {
+  Widget _buildViewportItem(AgentTimelineViewportItem item) {
     switch (item) {
       case AgentLoadOlderViewportItem():
         return _AgentLoadOlderTurnsButton(
           onPressed: onLoadOlder,
           loading: false,
         );
-      case AgentTurnViewportItem(:final turnId, :final isLive):
-        if (isLive) {
-          final state = liveTurnState;
-          if (state == null) {
-            return const SizedBox.shrink();
-          }
-          return ListenableBuilder(
-            listenable: state,
-            builder: (context, _) {
-              return KeyedSubtree(
-                key: const ValueKey('agent-live-turn-section'),
-                child: buildTurnSection(state.snapshot()),
-              );
-            },
-          );
-        }
-        final turn = turnsById[turnId];
-        if (turn == null) {
-          return const SizedBox.shrink();
-        }
-        return buildTurnSection(turn);
+      case AgentBlockViewportItem(:final turn, :final block):
+        return _AgentTimelineBlockSection(
+          turn: turn,
+          block: block,
+          viewModel: viewModel,
+        );
+      case AgentLiveActivityViewportItem():
+        return KeyedSubtree(
+          key: const ValueKey('agent-live-turn-section'),
+          child: _AgentLiveActivityStatus(viewModel: viewModel),
+        );
+      case AgentTurnFooterViewportItem(:final turn):
+        return _AgentTurnFooter(turn: turn);
     }
+  }
+}
+
+/// 单个 Sliver item 只渲染一个 projection block。
+///
+/// resize 时 Sliver 只会重新布局视口和 cache extent 内的 block，不再为一个长
+/// turn 的全部 Markdown、命令和 diff 子树计算总高度。
+class _AgentTimelineBlockSection extends StatelessWidget {
+  const _AgentTimelineBlockSection({
+    required this.turn,
+    required this.block,
+    required this.viewModel,
+  });
+
+  final AgentConversationTurnGroup turn;
+  final AgentTimelineRenderBlock block;
+  final AgentConversationViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    return KeyedSubtree(
+      key: ValueKey<String>('turn-block-${turn.id}-${block.id}'),
+      child: switch (block) {
+        AgentTimelineEntryRenderBlock(:final entry) => _buildTimelineEntry(
+          entry,
+        ),
+        AgentTimelineCommandGroupRenderBlock(:final group) =>
+          _AgentCommandGroupCard(group: group, viewModel: viewModel),
+        AgentTimelineFileEditGroupRenderBlock(:final group) =>
+          _AgentFileEditGroupCard(group: group, viewModel: viewModel),
+      },
+    );
+  }
+
+  Widget _buildTimelineEntry(AgentTimelineEntry entry) {
+    final isLiveTurn = viewModel.liveTurnState?.id == turn.id;
+    return switch (entry) {
+      AgentMessageTimelineEntry(:final message) => _AgentMessageEntry(
+        message: message,
+        // 历史与 live 的普通 Markdown 正文均不折叠；plan / 完成汇总等特殊卡自有样式。
+        collapseHeavyContent: false,
+        useStreamingMarkdown: isLiveTurn,
+        viewModel: viewModel,
+      ),
+      AgentToolTimelineEntry(:final toolCall) => _AgentToolCallCard(
+        toolCall: toolCall,
+        viewModel: viewModel,
+      ),
+      // pending 交互只在 Composer 上方的 dock 渲染，避免时间线出现重复卡片。
+      AgentPermissionTimelineEntry() => const SizedBox.shrink(),
+      AgentQuestionTimelineEntry() => const SizedBox.shrink(),
+      AgentPlanApprovalTimelineEntry() => const SizedBox.shrink(),
+      // 正常路径会在 grouping 中转成文件编辑组；此处仅作兜底。
+      AgentTurnDiffTimelineEntry() => const SizedBox.shrink(),
+      AgentHistoryEventTimelineEntry(:final event) => _AgentHistoryEventCard(
+        event: event,
+      ),
+    };
   }
 }
 
@@ -483,78 +521,6 @@ class _AgentPendingInteractionSection extends StatelessWidget {
             execpolicyAmendment: execpolicyAmendment,
           ),
     );
-  }
-}
-
-class _AgentTurnSection extends StatelessWidget {
-  const _AgentTurnSection({
-    required this.turn,
-    required this.viewModel,
-    required this.projectionCache,
-    super.key,
-  });
-
-  final AgentConversationTurnGroup turn;
-  final AgentConversationViewModel viewModel;
-  final AgentTimelineProjectionCache projectionCache;
-
-  @override
-  Widget build(BuildContext context) {
-    // 数据未变（同 id + revision）时复用投影，避免 resize rebuild 重复 grouping/diff。
-    final renderBlocks = projectionCache.resolve(turn);
-    final isLiveRunning =
-        !turn.isStandby && turn.status == AgentHistoryTurnStatus.running;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        for (final block in renderBlocks)
-          KeyedSubtree(
-            key: ValueKey<String>('turn-block-${turn.id}-${block.id}'),
-            child: _buildBlock(block),
-          ),
-        // 对话流内进行中状态（与 header 同源；Grok/Codex 通用）。
-        if (isLiveRunning) _AgentLiveActivityStatus(viewModel: viewModel),
-        // 每个非 standby turn 末尾展示耗时与本 turn token 用量。
-        if (!turn.isStandby) _AgentTurnFooter(turn: turn),
-      ],
-    );
-  }
-
-  Widget _buildBlock(AgentTimelineRenderBlock block) {
-    return switch (block) {
-      AgentTimelineEntryRenderBlock(:final entry) => _buildTimelineEntry(entry),
-      AgentTimelineCommandGroupRenderBlock(:final group) =>
-        _AgentCommandGroupCard(group: group, viewModel: viewModel),
-      AgentTimelineFileEditGroupRenderBlock(:final group) =>
-        _AgentFileEditGroupCard(group: group, viewModel: viewModel),
-    };
-  }
-
-  Widget _buildTimelineEntry(AgentTimelineEntry entry) {
-    final isLiveTurn = viewModel.liveTurnState?.id == turn.id;
-    return switch (entry) {
-      AgentMessageTimelineEntry(:final message) => _AgentMessageEntry(
-        message: message,
-        // 历史与 live 的普通 Markdown 正文均不折叠；plan / 完成汇总等特殊卡自有样式。
-        collapseHeavyContent: false,
-        useStreamingMarkdown: isLiveTurn,
-        viewModel: viewModel,
-      ),
-      AgentToolTimelineEntry(:final toolCall) => _AgentToolCallCard(
-        toolCall: toolCall,
-        viewModel: viewModel,
-      ),
-      // pending 交互只在 Composer 上方的 dock 渲染，避免时间线出现重复卡片。
-      AgentPermissionTimelineEntry() => const SizedBox.shrink(),
-      AgentQuestionTimelineEntry() => const SizedBox.shrink(),
-      AgentPlanApprovalTimelineEntry() => const SizedBox.shrink(),
-      // 正常路径会在 grouping 中转成文件编辑组；此处仅作兜底。
-      AgentTurnDiffTimelineEntry() => const SizedBox.shrink(),
-      AgentHistoryEventTimelineEntry(:final event) => _AgentHistoryEventCard(
-        event: event,
-      ),
-    };
   }
 }
 
