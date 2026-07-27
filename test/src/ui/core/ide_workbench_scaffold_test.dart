@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/ui/core/workbench/ide_workbench_scaffold.dart';
@@ -203,6 +205,38 @@ void main() {
       same(probeState),
     );
     expect(probeState.mountCount, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('中央 Canvas 列仅增加圆角，保留原背景且无边框', (tester) async {
+    await pumpIdeComponent(
+      tester,
+      size: const Size(1200, 500),
+      child: _buildWorkbench(),
+    );
+
+    final canvasSurface = tester.widget<IdeSurface>(
+      find.descendant(
+        of: find.byKey(const ValueKey('workbench-canvas')),
+        matching: find.byType(IdeSurface),
+      ),
+    );
+    expect(canvasSurface.level, IdeSurfaceLevel.canvas);
+    expect(canvasSurface.borderRadius, IdeRadius.allMedium);
+
+    final decoration =
+        tester
+                .widget<Container>(
+                  find.descendant(
+                    of: find.byKey(const ValueKey('workbench-canvas')),
+                    matching: find.byType(Container),
+                  ),
+                )
+                .decoration!
+            as BoxDecoration;
+    expect(decoration.borderRadius, IdeRadius.allMedium);
+    expect(decoration.color, IdeColors.dark.canvasSurface);
+    expect(decoration.border, isNull);
     expect(tester.takeException(), isNull);
   });
 

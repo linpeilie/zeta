@@ -134,7 +134,12 @@ class IdeWorkbenchScaffold extends StatelessWidget {
               key: const ValueKey('workbench-canvas-slot'),
               child: KeyedSubtree(
                 key: const ValueKey('workbench-canvas'),
-                child: IdeSurface.canvas(child: canvas),
+                // 保留 canvas 背景与无边框语义，仅列级增加圆角裁剪。
+                child: IdeSurface(
+                  level: IdeSurfaceLevel.canvas,
+                  borderRadius: IdeRadius.allMedium,
+                  child: canvas,
+                ),
               ),
             ),
             if (inspectorInline) ...[
