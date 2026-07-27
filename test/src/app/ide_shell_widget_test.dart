@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/main.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
@@ -42,6 +43,26 @@ void main() {
     expect(find.text('No folder opened'), findsOneWidget);
     expect(find.text('No file context'), findsNothing);
     expect(find.text('No tools running'), findsNothing);
+  });
+
+  testWidgets('startup refreshes hidden Agent statistics at idle priority', (
+    tester,
+  ) async {
+    final repository = _TrackedAgentUsageRepository();
+
+    await _pumpIde(
+      tester,
+      agentUsagePanelRepository: repository,
+      flushInitialIdleTasks: false,
+    );
+
+    expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
+    expect(repository.forceRefreshValues, isEmpty);
+
+    await _flushInitialIdleTasks(tester);
+
+    expect(repository.forceRefreshValues, <bool>[true]);
+    expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
   });
 
   testWidgets('activity icons toggle side panel columns', (tester) async {
@@ -1087,6 +1108,7 @@ Future<void> _pumpIde(
   AgentUsagePanelRepository? agentUsagePanelRepository,
   String? initialSessionJson,
   Future<List<ManagedAgent>> Function()? homeProviderDetectionLoader,
+  bool flushInitialIdleTasks = true,
 }) async {
   tester.view
     ..physicalSize = size
@@ -1113,6 +1135,23 @@ Future<void> _pumpIde(
           agentUsagePanelRepository ?? const _EmptyAgentUsageRepository(),
     ),
   );
+  if (flushInitialIdleTasks) {
+    await _flushInitialIdleTasks(tester);
+  }
+}
+
+Future<void> _flushInitialIdleTasks(WidgetTester tester) async {
+  final scheduler = SchedulerBinding.instance;
+  final previousStrategy = scheduler.schedulingStrategy;
+  scheduler.schedulingStrategy =
+      ({required int priority, required SchedulerBinding scheduler}) => true;
+  try {
+    scheduler.handleEventLoopCallback();
+    await tester.idle();
+  } finally {
+    scheduler.schedulingStrategy = previousStrategy;
+  }
+  await tester.pump();
 }
 
 ManagedAgent _installedAgent(AgentDefinition definition) {
@@ -1131,6 +1170,19 @@ class _EmptyAgentUsageRepository implements AgentUsagePanelRepository {
 
   @override
   Stream<AgentUsagePanelLoadEvent> load({bool forceRefresh = false}) async* {
+    yield AgentUsagePanelProvidersDiscovered(
+      providers: const <AgentUsagePanelProvider>[],
+    );
+    yield AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21));
+  }
+}
+
+class _TrackedAgentUsageRepository implements AgentUsagePanelRepository {
+  final List<bool> forceRefreshValues = <bool>[];
+
+  @override
+  Stream<AgentUsagePanelLoadEvent> load({bool forceRefresh = false}) async* {
+    forceRefreshValues.add(forceRefresh);
     yield AgentUsagePanelProvidersDiscovered(
       providers: const <AgentUsagePanelProvider>[],
     );

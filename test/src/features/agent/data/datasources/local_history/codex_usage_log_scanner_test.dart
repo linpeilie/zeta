@@ -75,6 +75,7 @@ void main() {
       final result = await const FileSystemCodexUsageLogScanner().scan(
         codexHome: tempDirectory.path,
         cachedSessions: const <String, CodexUsageSessionSnapshot>{},
+        forceRefresh: true,
       );
 
       expect(result.warnings, isEmpty);

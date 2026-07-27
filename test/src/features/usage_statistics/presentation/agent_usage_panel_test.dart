@@ -292,6 +292,7 @@ Future<void> _pumpPanel(
   AgentUsagePanelController controller, {
   double width = 320,
 }) async {
+  unawaited(controller.refresh());
   tester.view
     ..physicalSize = Size(width, 520)
     ..devicePixelRatio = 1;

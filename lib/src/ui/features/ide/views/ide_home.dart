@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:window_manager/window_manager.dart';
 
@@ -67,6 +68,7 @@ class IdeHome extends StatefulWidget {
     required this.appearanceController,
     required this.generalSettingsController,
     required this.agentModelCatalogRepository,
+    this.enableInitialAgentUsageRefresh = true,
     this.agentProviderAvailabilityLoader,
     this.homeProviderDetectionLoader,
     this.agentUsagePanelRepository,
@@ -84,6 +86,9 @@ class IdeHome extends StatefulWidget {
   final AppearanceSettingsController appearanceController;
   final GeneralSettingsController generalSettingsController;
   final AgentModelCatalogRepository agentModelCatalogRepository;
+
+  /// 是否在首帧完成后以 idle 优先级刷新 Agent 用量。
+  final bool enableInitialAgentUsageRefresh;
   final AgentProviderAvailabilityLoader? agentProviderAvailabilityLoader;
   final HomeProviderDetectionLoader? homeProviderDetectionLoader;
   final AgentUsagePanelRepository? agentUsagePanelRepository;
@@ -192,6 +197,9 @@ class _IdeHomeState extends State<IdeHome> {
             seedIndexStore: widget.usageStatisticsIndexStore,
           ),
     );
+    if (widget.enableInitialAgentUsageRefresh) {
+      _scheduleInitialAgentUsageRefresh();
+    }
     // 生产环境注册原生菜单的「打开项目」回调，与工具栏按钮走同一逻辑。
     if (widget.enableNativeWindowFrame) {
       MenuActionBridge.instance.setOpenProject(_handleMenuOpenProject);
@@ -796,6 +804,22 @@ class _IdeHomeState extends State<IdeHome> {
     final controller = _shellController.agentProviderController;
     await controller.loadSettings();
     return controller.enabledProviders;
+  }
+
+  void _scheduleInitialAgentUsageRefresh() {
+    // 先交付首帧，再在没有动画工作时启动统计刷新，避免抢占启动渲染。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      SchedulerBinding.instance.scheduleTask<void>(
+        () {
+          if (!mounted) {
+            return;
+          }
+          unawaited(_agentUsagePanelController.refresh());
+        },
+        Priority.idle,
+        debugLabel: 'refresh Agent usage statistics',
+      );
+    });
   }
 
   void _toggleLeftPanel({

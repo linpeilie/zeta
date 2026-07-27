@@ -229,6 +229,10 @@ class MainAppState extends State<MainApp> {
               usageStatisticsIndexStore: _usageStatisticsIndexStore,
               agentUsagePanelRepository: widget.agentUsagePanelRepository,
               agentModelCatalogRepository: _agentModelCatalogRepository,
+              // 回调存储用于测试/嵌入宿主；未显式注入统计仓储时不读取本机 CLI 历史。
+              enableInitialAgentUsageRefresh:
+                  !_usesCallbackPersistence ||
+                  widget.agentUsagePanelRepository != null,
             ),
           ),
         );

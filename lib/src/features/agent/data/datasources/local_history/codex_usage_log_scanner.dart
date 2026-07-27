@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
@@ -309,6 +310,29 @@ class FileSystemCodexUsageLogScanner implements CodexUsageLogScanner {
     required String codexHome,
     required Map<String, CodexUsageSessionSnapshot> cachedSessions,
     bool forceRefresh = false,
+  }) {
+    if (forceRefresh) {
+      // 全量 JSONL 解码可能是 CPU 密集型工作，不能占用 Flutter UI isolate。
+      return Isolate.run(
+        () => _scan(
+          codexHome: codexHome,
+          cachedSessions: cachedSessions,
+          forceRefresh: true,
+        ),
+        debugName: 'zeta-codex-usage-scan',
+      );
+    }
+    return _scan(
+      codexHome: codexHome,
+      cachedSessions: cachedSessions,
+      forceRefresh: false,
+    );
+  }
+
+  Future<CodexUsageScanResult> _scan({
+    required String codexHome,
+    required Map<String, CodexUsageSessionSnapshot> cachedSessions,
+    required bool forceRefresh,
   }) async {
     final sessionsDirectory = Directory(_joinPath(codexHome, 'sessions'));
     if (!await sessionsDirectory.exists()) {

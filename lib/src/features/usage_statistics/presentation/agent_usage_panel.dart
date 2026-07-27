@@ -16,21 +16,10 @@ import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 
 /// 左侧 Context 槽位中的轻量 Agent 用量面板。
-class AgentUsagePanel extends StatefulWidget {
+class AgentUsagePanel extends StatelessWidget {
   const AgentUsagePanel({required this.controller, super.key});
 
   final AgentUsagePanelController controller;
-
-  @override
-  State<AgentUsagePanel> createState() => _AgentUsagePanelState();
-}
-
-class _AgentUsagePanelState extends State<AgentUsagePanel> {
-  @override
-  void initState() {
-    super.initState();
-    unawaited(widget.controller.refresh(forceRefresh: false));
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,14 +28,14 @@ class _AgentUsagePanelState extends State<AgentUsagePanel> {
       child: Pane(
         title: 'Agent 统计',
         trailing: ListenableBuilder(
-          listenable: widget.controller,
+          listenable: controller,
           builder: (context, _) => IdeTooltip(
             message: '刷新用量',
             child: sf.IconButton.ghost(
               key: const ValueKey('agent-usage-refresh-button'),
-              onPressed: widget.controller.isLoading
+              onPressed: controller.isLoading
                   ? null
-                  : () => unawaited(widget.controller.refresh()),
+                  : () => unawaited(controller.refresh()),
               size: sf.ButtonSize.small,
               density: sf.ButtonDensity.iconDense,
               icon: const Icon(Icons.refresh_rounded, size: 16),
@@ -54,9 +43,9 @@ class _AgentUsagePanelState extends State<AgentUsagePanel> {
           ),
         ),
         child: ListenableBuilder(
-          listenable: widget.controller,
+          listenable: controller,
           builder: (context, _) =>
-              _AgentUsagePanelBody(controller: widget.controller),
+              _AgentUsagePanelBody(controller: controller),
         ),
       ),
     );

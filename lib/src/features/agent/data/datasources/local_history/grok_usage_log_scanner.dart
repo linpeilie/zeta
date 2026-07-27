@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_updates_history_parser.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -53,8 +54,19 @@ class FileSystemGrokUsageLogScanner implements GrokUsageLogScanner {
   Future<GrokUsageScanResult> scan({
     required String grokHome,
     bool forceRefresh = false,
-  }) async {
-    // 当前 Grok 扫描器没有缓存，每次都读取最新文件；保留参数以统一刷新契约。
+  }) {
+    if (forceRefresh) {
+      // Grok parser 会同步归并完整历史，强制刷新时放到后台 isolate 执行。
+      return Isolate.run(
+        () => _scan(grokHome: grokHome),
+        debugName: 'zeta-grok-usage-scan',
+      );
+    }
+    return _scan(grokHome: grokHome);
+  }
+
+  Future<GrokUsageScanResult> _scan({required String grokHome}) async {
+    // 当前 Grok 扫描器没有缓存，每次都读取最新文件。
     final sessionsDirectory = Directory(_joinPath(grokHome, 'sessions'));
     if (!await sessionsDirectory.exists()) {
       return GrokUsageScanResult(
