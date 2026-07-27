@@ -141,10 +141,13 @@ class AgentConversationTimelineStore {
   /// 当前 thread 的会话累计 token 用量，直接取自最新上报，不再对各 turn 求和。
   AgentTokenUsage? get currentThreadTokenUsage => _threadTokenUsage;
 
-  /// 当前 thread 最近一次请求的 token 用量。
+  /// 当前 thread 最近一次请求的 token 用量（用于上下文窗口占用展示）。
   ///
-  /// 优先使用最新 turn 上报的 `last_*` breakdown；若 provider 没有拆分
-  /// `last_token_usage`，则回退到该 turn 的增量 breakdown。
+  /// 优先使用最新 turn 上报的 `last_*` breakdown（Grok 的上下文占用、Codex
+  /// 的 last_token_usage）。无 `last*` 时才回退到该 turn 的增量/绝对 breakdown。
+  ///
+  /// Grok multi-step turn 的 `totalTokens` 是计费合计，必须靠 mapper 写入
+  /// `lastTotalTokens` 才能正确反映窗口占用；切勿在此把会话累计当占用。
   AgentTokenUsage? get currentThreadLastTokenUsage {
     final usage = _latestAvailableTurnTokenUsage();
     if (usage == null) {
@@ -154,7 +157,9 @@ class AgentConversationTimelineStore {
       inputTokens: usage.lastInputTokens ?? usage.inputTokens,
       cachedInputTokens: usage.lastCachedInputTokens ?? usage.cachedInputTokens,
       outputTokens: usage.lastOutputTokens ?? usage.outputTokens,
-      totalTokens: usage.lastTotalTokens ?? usage.totalTokens,
+      // lastTotal 优先；仅有 lastInput 时也可作占用近似。
+      totalTokens:
+          usage.lastTotalTokens ?? usage.lastInputTokens ?? usage.totalTokens,
       modelContextWindow:
           usage.modelContextWindow ?? _threadTokenUsage?.modelContextWindow,
     );

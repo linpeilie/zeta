@@ -96,6 +96,32 @@ void main() {
       expect(turn.tokenUsage?.modelContextWindow, 500000);
     });
 
+    test(
+      'restores context occupancy from stream _meta, not multi-call billing total',
+      () {
+        // 回归：Grok Build 显示 ~379k 上下文占用，而 usage.totalTokens 为
+        // multi-call 计费合计 5.8m；历史回放必须把 _meta 写入 last*。
+        const content = r'''
+{"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"hello"}},"_meta":{"eventId":"u1"}}}
+{"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"working"},"messageId":"a1"},"_meta":{"eventId":"a1","promptId":"p1","totalTokens":350000}}}
+{"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"tool_call","toolCallId":"t1","title":"Read","kind":"read","status":"completed"},"_meta":{"eventId":"t1","promptId":"p1","totalTokens":378650}}}
+{"method":"_x.ai/session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"turn_completed","prompt_id":"p1","stop_reason":"end_turn","usage":{"inputTokens":5791874,"outputTokens":13088,"totalTokens":5804962,"cachedReadTokens":5755904,"reasoningTokens":11625,"modelCalls":16}},"_meta":{"eventId":"done"}}}
+''';
+
+        final turn = parser
+            .parse(threadId: 's1', content: content)
+            .turns
+            .single;
+        final usage = turn.tokenUsage;
+        expect(usage, isNotNull);
+        expect(usage!.totalTokens, 5804962);
+        expect(usage.inputTokens, 5791874);
+        expect(usage.lastTotalTokens, 378650);
+        expect(usage.lastInputTokens, 378650);
+        expect(turn.tokenUsageIsSessionCumulative, isFalse);
+      },
+    );
+
     test('maps plan entries to plan messages', () {
       const content = r'''
 {"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"plan this"}},"_meta":{"eventId":"u1"}}}

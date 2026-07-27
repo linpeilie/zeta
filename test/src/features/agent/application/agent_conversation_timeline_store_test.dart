@@ -392,6 +392,9 @@ void main() {
                 inputTokens: 500,
                 outputTokens: 50,
                 totalTokens: 550,
+                lastTotalTokens: 120,
+                lastInputTokens: 120,
+                modelContextWindow: 500000,
               ),
               tokenUsageIsSessionCumulative: false,
             ),
@@ -405,10 +408,14 @@ void main() {
                 ),
               ],
               duration: Duration(milliseconds: 4500),
+              // multi-call 计费合计 vs 上下文占用 last*。
               tokenUsage: AgentTokenUsage(
-                inputTokens: 200,
-                outputTokens: 30,
-                totalTokens: 230,
+                inputTokens: 5791874,
+                outputTokens: 13088,
+                totalTokens: 5804962,
+                lastTotalTokens: 378650,
+                lastInputTokens: 378650,
+                modelContextWindow: 500000,
               ),
               tokenUsageIsSessionCumulative: false,
             ),
@@ -419,12 +426,17 @@ void main() {
 
       final turns = store.conversationTurns;
       expect(turns, hasLength(2));
-      // 不得相对上一 turn 做差分（230 不能被 550 减成 0）。
+      // 不得相对上一 turn 做差分（计费合计原样保留）。
       expect(turns[0].tokenUsage!.totalTokens, 550);
-      expect(turns[1].tokenUsage!.totalTokens, 230);
+      expect(turns[1].tokenUsage!.totalTokens, 5804962);
       expect(turns[0].duration, const Duration(seconds: 12));
       expect(turns[1].duration, const Duration(milliseconds: 4500));
-      expect(store.currentThreadTokenUsage!.totalTokens, 780);
+      // 会话总 token = 各回合计费合计之和。
+      expect(store.currentThreadTokenUsage!.totalTokens, 550 + 5804962);
+      // 上下文占用取最新 turn 的 last*，不得用计费 5.8m。
+      expect(store.currentThreadLastTokenUsage!.totalTokens, 378650);
+      expect(store.currentThreadLastTokenUsage!.inputTokens, 378650);
+      expect(store.currentThreadLastTokenUsage!.modelContextWindow, 500000);
     });
 
     test(

@@ -19,6 +19,17 @@ class GrokAcpMappedUpdate {
 ///
 /// 共享 decoder 只解析协议；message/reasoning entryId、边界、去重与终态均由
 /// [GrokStreamIdentity] 决定，输出进入 application 层时已是最终身份。
+///
+/// ## Token 口径
+///
+/// Grok multi-step agent turn 在 `turn_completed.usage` 里上报的
+/// `totalTokens` / `inputTokens` 是本回合内**全部 model call 的计费合计**，
+/// 不是上下文窗口占用。真正的窗口占用出现在流式通知的
+/// `params._meta.totalTokens`（与 Grok Build「当前上下文」一致）。
+///
+/// 本 mapper 在回合内跟踪最新 `_meta.totalTokens`，并在 turn_completed 时
+/// 写入 [AgentTokenUsage.lastTotalTokens] / [AgentTokenUsage.lastInputTokens]，
+/// 供上下文进度环使用；计费字段仍保留在非 `last*` breakdown。
 final class GrokSessionUpdateMapper {
   GrokSessionUpdateMapper({
     this.decoder = const AcpSessionUpdateDecoder(),
@@ -28,17 +39,24 @@ final class GrokSessionUpdateMapper {
   final AcpSessionUpdateDecoder decoder;
   final GrokStreamIdentity identity;
 
+  /// 当前 turn 内最新的上下文窗口占用（来自 `_meta.totalTokens`）。
+  int? _latestContextTokens;
+
   GrokStreamIdentityDiagnostics get diagnostics => identity.diagnostics;
 
   int beginTurn({
     required AgentRuntimeScope runtimeScope,
     required String sessionId,
     required String turnId,
-  }) => identity.beginTurn(
-    runtimeScope: runtimeScope,
-    sessionId: sessionId,
-    turnId: turnId,
-  );
+  }) {
+    // 新回合开始时清空占用跟踪，避免串到上一 turn。
+    _latestContextTokens = null;
+    return identity.beginTurn(
+      runtimeScope: runtimeScope,
+      sessionId: sessionId,
+      turnId: turnId,
+    );
+  }
 
   /// 映射标准或 xAI 通道中的 typed ACP update。
   GrokAcpMappedUpdate mapSessionUpdate({
@@ -47,6 +65,8 @@ final class GrokSessionUpdateMapper {
     required AgentRuntimeScope runtimeScope,
     GrokTerminalSource terminalSource = GrokTerminalSource.standardNotification,
   }) {
+    // 任意流式 chunk 都可能携带当前上下文占用，先于 kind 分支更新跟踪值。
+    _noteContextTokensFromParams(params);
     final decoded = decoder.decode(params);
     switch (decoded) {
       case AcpUserMessageChunk():
@@ -104,6 +124,8 @@ final class GrokSessionUpdateMapper {
     String? errorMessage,
     Map<String, Object?> raw = const <String, Object?>{},
   }) {
+    // prompt 终态路径不携带 usage；丢弃占用跟踪，避免泄漏到下一 turn。
+    _latestContextTokens = null;
     final status = _stopReasonToStatus(stopReason);
     final terminal = identity.completeTurn(
       runtimeScope: runtimeScope,
@@ -184,7 +206,57 @@ final class GrokSessionUpdateMapper {
     turnId: turnId,
   );
 
-  void dispose() => identity.dispose();
+  void dispose() {
+    _latestContextTokens = null;
+    identity.dispose();
+  }
+
+  /// 从通知 envelope 的 `_meta.totalTokens` 更新上下文占用跟踪。
+  ///
+  /// Grok Build 用同一字段展示「当前上下文已使用」；优先 `params._meta`，
+  /// 兼容嵌在 `update._meta` 的写法。
+  void _noteContextTokensFromParams(Map<String, Object?> params) {
+    final paramsMeta = _stringKeyedMap(params['_meta']);
+    final update = _stringKeyedMap(params['update']);
+    final updateMeta = update == null ? null : _stringKeyedMap(update['_meta']);
+    final contextTokens =
+        _positiveInt(paramsMeta?['totalTokens']) ??
+        _positiveInt(paramsMeta?['total_tokens']) ??
+        _positiveInt(updateMeta?['totalTokens']) ??
+        _positiveInt(updateMeta?['total_tokens']);
+    if (contextTokens != null) {
+      _latestContextTokens = contextTokens;
+    }
+  }
+
+  /// 取出并清空本回合跟踪的上下文占用。
+  int? _takeLatestContextTokens() {
+    final value = _latestContextTokens;
+    _latestContextTokens = null;
+    return value;
+  }
+
+  static Map<String, Object?>? _stringKeyedMap(Object? value) {
+    if (value is! Map) {
+      return null;
+    }
+    return value.map(
+      (key, dynamic item) => MapEntry(key.toString(), item as Object?),
+    );
+  }
+
+  static int? _positiveInt(Object? value) {
+    final parsed = switch (value) {
+      final int number => number,
+      final num number => number.toInt(),
+      final String text => int.tryParse(text.trim()),
+      _ => null,
+    };
+    if (parsed == null || parsed <= 0) {
+      return null;
+    }
+    return parsed;
+  }
 
   GrokAcpMappedUpdate _mapMessage(
     AcpAgentMessageChunk update, {
@@ -339,6 +411,10 @@ final class GrokSessionUpdateMapper {
     if (resolved == null) {
       return const GrokAcpMappedUpdate();
     }
+    // usage_update.used 与 Grok 上下文进度一致时，同步刷新占用跟踪。
+    if (update.used > 0) {
+      _latestContextTokens = update.used;
+    }
     return GrokAcpMappedUpdate(
       events: <AgentEvent>[
         AgentTokenUsageEvent(
@@ -349,6 +425,8 @@ final class GrokSessionUpdateMapper {
             totalTokens: update.used,
             inputTokens: update.used,
             outputTokens: 0,
+            lastTotalTokens: update.used > 0 ? update.used : null,
+            lastInputTokens: update.used > 0 ? update.used : null,
             modelContextWindow: update.modelContextWindow,
           ),
           raw: update.raw,
@@ -377,6 +455,9 @@ final class GrokSessionUpdateMapper {
       return const GrokAcpMappedUpdate();
     }
 
+    // 回合结束：把跟踪到的上下文占用并入 last*，再清空，避免泄漏到下轮。
+    final contextTokens = _takeLatestContextTokens();
+
     Duration? duration;
     AgentTokenUsage? tokenUsage;
     final usage = update.usage;
@@ -385,13 +466,23 @@ final class GrokSessionUpdateMapper {
       if (apiDurationMs != null && apiDurationMs >= 0) {
         duration = Duration(milliseconds: apiDurationMs);
       }
+      // usage.* = 本回合计费合计（可含多次 model call）；
+      // last* = 上下文窗口占用（来自 _meta.totalTokens）。
       tokenUsage = AgentTokenUsage(
         inputTokens: usage.inputTokens ?? 0,
         outputTokens: usage.outputTokens ?? 0,
         totalTokens: usage.totalTokens,
         cachedInputTokens: usage.cachedReadTokens,
         reasoningOutputTokens: usage.reasoningTokens,
+        lastInputTokens: contextTokens,
+        lastTotalTokens: contextTokens,
         modelContextWindow: usage.modelContextWindow,
+      );
+    } else if (contextTokens != null) {
+      // 无计费 usage 时仍上报上下文占用，避免进度环空白。
+      tokenUsage = AgentTokenUsage(
+        lastInputTokens: contextTokens,
+        lastTotalTokens: contextTokens,
       );
     }
 

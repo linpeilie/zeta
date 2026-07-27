@@ -266,8 +266,9 @@ class AgentTurnCompletedEvent extends AgentEvent {
 /// breakdown 是整个会话累计；时间线层保存会话总量，并把 turn 用量差分后
 /// 写入回合分隔线。
 ///
-/// 当 [isSessionCumulative] 为 false（Grok）时，[tokenUsage] 是**本回合**
-/// 绝对用量，不得再相对上一 turn 做差分。
+/// 当 [isSessionCumulative] 为 false（Grok）时，[tokenUsage] 的非 `last*`
+/// breakdown 是**本回合计费绝对用量**（可含多次 model call 合计），不得再
+/// 相对上一 turn 做差分；上下文窗口占用应写在 `last*` 字段。
 class AgentTokenUsageEvent extends AgentEvent {
   const AgentTokenUsageEvent({
     required this.tokenUsage,

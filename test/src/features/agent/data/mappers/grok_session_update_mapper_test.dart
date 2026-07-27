@@ -531,6 +531,123 @@ void main() {
       expect(reasoning, hasLength(2));
       expect(reasoning.first.itemId, reasoning.last.itemId);
     });
+
+    test(
+      'maps multi-call billing total separately from _meta context occupancy',
+      () {
+        // 流式 chunk 携带上下文占用（与 Grok Build 一致）。
+        mapper.mapSessionUpdate(
+          params: <String, Object?>{
+            'sessionId': sessionId,
+            'update': <String, Object?>{
+              'sessionUpdate': 'agent_message_chunk',
+              'content': <String, Object?>{'type': 'text', 'text': 'ok'},
+            },
+            '_meta': <String, Object?>{
+              'eventId': 'chunk-1',
+              'promptId': promptId,
+              'totalTokens': 378650,
+            },
+          },
+          runningTurnId: turnId,
+          runtimeScope: runtimeScope,
+        );
+
+        // turn_completed.usage 是 multi-call 计费合计，远大于窗口占用。
+        final mapped = mapper.mapXaiSessionUpdate(
+          params: <String, Object?>{
+            'sessionId': sessionId,
+            'update': <String, Object?>{
+              'sessionUpdate': 'turn_completed',
+              'prompt_id': promptId,
+              'stop_reason': 'end_turn',
+              'usage': <String, Object?>{
+                'inputTokens': 5791874,
+                'outputTokens': 13088,
+                'totalTokens': 5804962,
+                'cachedReadTokens': 5755904,
+                'reasoningTokens': 11625,
+                'modelCalls': 16,
+                'numTurns': 16,
+              },
+            },
+            '_meta': <String, Object?>{'eventId': 'done'},
+          },
+          runningTurnId: turnId,
+          runtimeScope: runtimeScope,
+        );
+
+        final usageEvent = mapped.events
+            .whereType<AgentTokenUsageEvent>()
+            .single;
+        expect(usageEvent.isSessionCumulative, isFalse);
+        // 计费合计保留在非 last* 字段。
+        expect(usageEvent.tokenUsage.totalTokens, 5804962);
+        expect(usageEvent.tokenUsage.inputTokens, 5791874);
+        expect(usageEvent.tokenUsage.cachedInputTokens, 5755904);
+        // 上下文占用来自 _meta.totalTokens。
+        expect(usageEvent.tokenUsage.lastTotalTokens, 378650);
+        expect(usageEvent.tokenUsage.lastInputTokens, 378650);
+      },
+    );
+
+    test('clears tracked context occupancy across turns', () {
+      mapper.mapSessionUpdate(
+        params: <String, Object?>{
+          'sessionId': sessionId,
+          'update': <String, Object?>{
+            'sessionUpdate': 'agent_message_chunk',
+            'content': <String, Object?>{'type': 'text', 'text': 'a'},
+          },
+          '_meta': <String, Object?>{'eventId': 'c1', 'totalTokens': 100000},
+        },
+        runningTurnId: turnId,
+        runtimeScope: runtimeScope,
+      );
+      mapper.mapXaiSessionUpdate(
+        params: <String, Object?>{
+          'sessionId': sessionId,
+          'update': <String, Object?>{
+            'sessionUpdate': 'turn_completed',
+            'stop_reason': 'end_turn',
+            'usage': <String, Object?>{
+              'inputTokens': 500000,
+              'outputTokens': 10,
+              'totalTokens': 500010,
+            },
+          },
+        },
+        runningTurnId: turnId,
+        runtimeScope: runtimeScope,
+      );
+
+      // 下一 turn 无 _meta 占用时，不得继承上一 turn 的 last*。
+      mapper.beginTurn(
+        runtimeScope: runtimeScope,
+        sessionId: sessionId,
+        turnId: 'turn-2',
+      );
+      final second = mapper.mapXaiSessionUpdate(
+        params: <String, Object?>{
+          'sessionId': sessionId,
+          'update': <String, Object?>{
+            'sessionUpdate': 'turn_completed',
+            'stop_reason': 'end_turn',
+            'usage': <String, Object?>{
+              'inputTokens': 20,
+              'outputTokens': 5,
+              'totalTokens': 25,
+            },
+          },
+        },
+        runningTurnId: 'turn-2',
+        runtimeScope: runtimeScope,
+      );
+      final usage = second.events.whereType<AgentTokenUsageEvent>().single;
+      expect(usage.tokenUsage.totalTokens, 25);
+      expect(usage.tokenUsage.lastTotalTokens, isNull);
+      expect(usage.tokenUsage.lastInputTokens, isNull);
+    });
   });
 }
 
