@@ -1755,6 +1755,7 @@ class AgentConversationTurnGroup {
     this.duration,
     this.tokenUsage,
     this.modelConfig,
+    this.renderRevision = 0,
   });
 
   final String id;
@@ -1768,6 +1769,12 @@ class AgentConversationTurnGroup {
 
   /// 本回合使用的模型 / 思考程度 / Fast 配置（若有）。
   final AgentTurnModelConfig? modelConfig;
+
+  /// 可见内容修订号；与 [AgentConversationTurnState.renderRevision] 对齐。
+  ///
+  /// presentation 层 projection 缓存用 `(id, renderRevision)` 做命中判断。
+  /// 默认 `0` 便于测试构造；生产 [AgentConversationTurnState.snapshot] 必须传真值。
+  final int renderRevision;
 }
 
 /// 单个 turn 的运行时状态。
@@ -1788,6 +1795,9 @@ class AgentConversationTurnState extends ChangeNotifier {
   AgentTurnModelConfig? _modelConfig;
   bool _dirty = false;
 
+  /// 可见内容单调修订号；每次会改变渲染结果的 mutation 递增。
+  int _renderRevision = 0;
+
   List<AgentTimelineEntry> get entries => UnmodifiableListView(_entries);
 
   List<AgentPlanEntry> get planEntries => UnmodifiableListView(_planEntries);
@@ -1804,6 +1814,9 @@ class AgentConversationTurnState extends ChangeNotifier {
 
   AgentTurnModelConfig? get modelConfig => _modelConfig;
 
+  /// presentation 投影缓存的失效依据之一。
+  int get renderRevision => _renderRevision;
+
   bool get isRunning => _status == AgentHistoryTurnStatus.running;
 
   void appendEntry(AgentTimelineEntry entry) {
@@ -1813,7 +1826,7 @@ class AgentConversationTurnState extends ChangeNotifier {
     } else {
       _entries.add(entry);
     }
-    _dirty = true;
+    _markDirty();
   }
 
   void replaceEntry(AgentTimelineEntry entry) {
@@ -1822,14 +1835,14 @@ class AgentConversationTurnState extends ChangeNotifier {
       return;
     }
     _entries[index] = entry;
-    _dirty = true;
+    _markDirty();
   }
 
   void removeEntry(String entryId) {
     final removedCount = _entries.length;
     _entries.removeWhere((entry) => entry.id == entryId);
     if (_entries.length != removedCount) {
-      _dirty = true;
+      _markDirty();
     }
   }
 
@@ -1870,7 +1883,7 @@ class AgentConversationTurnState extends ChangeNotifier {
     _planEntries
       ..clear()
       ..addAll(nextEntries);
-    _dirty = true;
+    _markDirty();
   }
 
   void clearPlanEntries() {
@@ -1878,7 +1891,7 @@ class AgentConversationTurnState extends ChangeNotifier {
       return;
     }
     _planEntries.clear();
-    _dirty = true;
+    _markDirty();
   }
 
   void rename(String nextId) {
@@ -1886,7 +1899,7 @@ class AgentConversationTurnState extends ChangeNotifier {
       return;
     }
     id = nextId;
-    _dirty = true;
+    _markDirty();
   }
 
   void updateMetadata({
@@ -1903,11 +1916,11 @@ class AgentConversationTurnState extends ChangeNotifier {
     _duration = duration;
     _tokenUsage = tokenUsage;
     _modelConfig = modelConfig;
-    _dirty = true;
+    _markDirty();
   }
 
   void markDirty() {
-    _dirty = true;
+    _markDirty();
   }
 
   void flushNow() {
@@ -1929,7 +1942,14 @@ class AgentConversationTurnState extends ChangeNotifier {
       duration: _duration,
       tokenUsage: _tokenUsage,
       modelConfig: _modelConfig,
+      renderRevision: _renderRevision,
     );
+  }
+
+  /// 标记内容变更：推进 renderRevision 并请求后续 flush 通知。
+  void _markDirty() {
+    _renderRevision += 1;
+    _dirty = true;
   }
 }
 

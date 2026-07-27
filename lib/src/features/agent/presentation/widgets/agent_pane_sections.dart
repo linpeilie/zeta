@@ -130,6 +130,7 @@ class _AgentConversationTimeline extends StatelessWidget {
     required this.pagePadding,
     required this.onLoadOlder,
     required this.buildTurnSection,
+    required this.projectionCache,
   });
 
   final AgentConversationViewModel viewModel;
@@ -137,6 +138,7 @@ class _AgentConversationTimeline extends StatelessWidget {
   final EdgeInsets pagePadding;
   final VoidCallback onLoadOlder;
   final _TurnSectionBuilder buildTurnSection;
+  final AgentTimelineProjectionCache projectionCache;
 
   @override
   Widget build(BuildContext context) {
@@ -168,6 +170,8 @@ class _AgentConversationTimeline extends StatelessWidget {
             ])
               turn.id: turn,
           };
+          // 仅保留当前可见 turn 的投影缓存，避免历史窗口滑动后无限增长。
+          projectionCache.retainOnly(turnsById.keys.toSet());
 
           return CustomScrollView(
             key: const ValueKey('agent-message-list'),
@@ -426,18 +430,18 @@ class _AgentTurnSection extends StatelessWidget {
   const _AgentTurnSection({
     required this.turn,
     required this.viewModel,
+    required this.projectionCache,
     super.key,
   });
 
   final AgentConversationTurnGroup turn;
   final AgentConversationViewModel viewModel;
+  final AgentTimelineProjectionCache projectionCache;
 
   @override
   Widget build(BuildContext context) {
-    final renderBlocks = buildAgentTimelineRenderBlocks(
-      turnId: turn.id,
-      entries: turn.entries,
-    );
+    // 数据未变（同 id + revision）时复用投影，避免 resize rebuild 重复 grouping/diff。
+    final renderBlocks = projectionCache.resolve(turn);
     final isLiveRunning =
         !turn.isStandby && turn.status == AgentHistoryTurnStatus.running;
     return Column(
