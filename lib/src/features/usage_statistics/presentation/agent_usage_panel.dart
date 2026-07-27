@@ -44,8 +44,7 @@ class AgentUsagePanel extends StatelessWidget {
         ),
         child: ListenableBuilder(
           listenable: controller,
-          builder: (context, _) =>
-              _AgentUsagePanelBody(controller: controller),
+          builder: (context, _) => _AgentUsagePanelBody(controller: controller),
         ),
       ),
     );

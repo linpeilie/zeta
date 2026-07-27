@@ -49,6 +49,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     AgentConversationPermissionSelectionController?
     permissionSelectionController,
     this.workspaceFilesProvider,
+    this.onTurnCompleted,
   }) : _timeline = timelineStore ?? AgentConversationTimelineStore(),
        _ownsModelSelectionController = modelSelectionController == null,
        _modelSelectionController =
@@ -86,6 +87,9 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   /// 可选：从 shell 注入工作区文件列表，供 @mention 选择器使用。
   final List<WorkspaceNode> Function()? workspaceFilesProvider;
+
+  /// 当前会话的回合进入终态后通知应用组合层。
+  final VoidCallback? onTurnCompleted;
 
   final ActiveAgentProviderController providerController;
   final AgentConversationTimelineStore _timeline;
@@ -2736,6 +2740,7 @@ class AgentConversationViewModel extends ChangeNotifier {
           pendingInteraction: planExecutionChanged,
           autoScroll: true,
         );
+        onTurnCompleted?.call();
       case AgentTokenUsageEvent():
         if (!_shouldHandleEventForCurrentThread(
           sessionId: event.sessionId,

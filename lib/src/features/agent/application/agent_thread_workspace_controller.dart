@@ -206,12 +206,14 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     required this._configStore,
     required this._workspaceFilesProvider,
     required this._modelCatalogRepository,
+    this._onTurnCompleted,
   });
 
   final AgentProviderFactory _providerFactory;
   final AgentProviderConfigStore _configStore;
   final List<WorkspaceNode> Function() _workspaceFilesProvider;
   final AgentModelCatalogRepository _modelCatalogRepository;
+  final VoidCallback? _onTurnCompleted;
 
   final List<AgentThreadWorkspaceEntry> _entries =
       <AgentThreadWorkspaceEntry>[];
@@ -404,6 +406,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     final viewModel = AgentConversationViewModel(
       providerController: providerController,
       workspaceFilesProvider: _workspaceFilesProvider,
+      onTurnCompleted: _onTurnCompleted,
     );
     final entry = AgentThreadWorkspaceEntry(
       entryId: 'agent-workspace-entry-${_nextEntryId += 1}',

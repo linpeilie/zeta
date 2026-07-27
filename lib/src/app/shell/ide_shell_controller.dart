@@ -63,6 +63,7 @@ class IdeShellController extends ChangeNotifier {
     this._projectLocationOpener = openPathInSystemFileManager,
     this._statusReporter,
     AgentModelCatalogRepository? agentModelCatalogRepository,
+    VoidCallback? onAgentTurnCompleted,
     DateTime Function()? now,
   }) : projectThreadsViewModel = ProjectThreadsViewModel(),
        _sessionCoordinator = IdeSessionPersistenceCoordinator(
@@ -80,6 +81,7 @@ class IdeShellController extends ChangeNotifier {
       configStore: agentProviderConfigStore,
       workspaceFilesProvider: () => _workspaceTree,
       modelCatalogRepository: agentProviderController.modelCatalogRepository,
+      onTurnCompleted: onAgentTurnCompleted,
     );
     _bootstrapAgentEntry = agentWorkspaceController.ensureDraftEntry(
       projectPath: _bootstrapProjectPath,

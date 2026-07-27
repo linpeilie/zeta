@@ -68,7 +68,7 @@ class IdeHome extends StatefulWidget {
     required this.appearanceController,
     required this.generalSettingsController,
     required this.agentModelCatalogRepository,
-    this.enableInitialAgentUsageRefresh = true,
+    this.enableAgentUsageAutoRefresh = true,
     this.agentProviderAvailabilityLoader,
     this.homeProviderDetectionLoader,
     this.agentUsagePanelRepository,
@@ -87,8 +87,8 @@ class IdeHome extends StatefulWidget {
   final GeneralSettingsController generalSettingsController;
   final AgentModelCatalogRepository agentModelCatalogRepository;
 
-  /// 是否在首帧完成后以 idle 优先级刷新 Agent 用量。
-  final bool enableInitialAgentUsageRefresh;
+  /// 是否在启动及每个回合结束后以 idle 优先级刷新 Agent 用量。
+  final bool enableAgentUsageAutoRefresh;
   final AgentProviderAvailabilityLoader? agentProviderAvailabilityLoader;
   final HomeProviderDetectionLoader? homeProviderDetectionLoader;
   final AgentUsagePanelRepository? agentUsagePanelRepository;
@@ -110,6 +110,9 @@ class _IdeHomeState extends State<IdeHome> {
   late final AgentManagementController _agentManagementController;
   late final UsageStatisticsController _usageStatisticsController;
   late final AgentUsagePanelController _agentUsagePanelController;
+  bool _agentUsageRefreshScheduled = false;
+  bool _agentUsageRefreshRunning = false;
+  bool _agentUsageRefreshPending = false;
 
   bool _leftTopVisible = true;
   bool _leftBottomVisible = false;
@@ -163,6 +166,7 @@ class _IdeHomeState extends State<IdeHome> {
       projectLocationOpener: widget.projectLocationOpener,
       statusReporter: _showStatus,
       agentModelCatalogRepository: widget.agentModelCatalogRepository,
+      onAgentTurnCompleted: _handleAgentTurnCompleted,
     )..addListener(_handleShellChanged);
     _agentManagementController = AgentManagementController(
       repositories: <String, AgentCliManagementRepository>{
@@ -197,7 +201,7 @@ class _IdeHomeState extends State<IdeHome> {
             seedIndexStore: widget.usageStatisticsIndexStore,
           ),
     );
-    if (widget.enableInitialAgentUsageRefresh) {
+    if (widget.enableAgentUsageAutoRefresh) {
       _scheduleInitialAgentUsageRefresh();
     }
     // 生产环境注册原生菜单的「打开项目」回调，与工具栏按钮走同一逻辑。
@@ -807,19 +811,51 @@ class _IdeHomeState extends State<IdeHome> {
   }
 
   void _scheduleInitialAgentUsageRefresh() {
-    // 先交付首帧，再在没有动画工作时启动统计刷新，避免抢占启动渲染。
+    // 先交付首帧，再提交统一的低优先级刷新请求，避免抢占启动渲染。
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _requestAgentUsageRefresh();
+    });
+  }
+
+  void _handleAgentTurnCompleted() {
+    _requestAgentUsageRefresh();
+  }
+
+  void _requestAgentUsageRefresh() {
+    if (!mounted || !widget.enableAgentUsageAutoRefresh) {
+      return;
+    }
+    if (_agentUsageRefreshRunning) {
+      _agentUsageRefreshPending = true;
+      return;
+    }
+    if (_agentUsageRefreshScheduled) {
+      return;
+    }
+
+    _agentUsageRefreshScheduled = true;
+    unawaited(
       SchedulerBinding.instance.scheduleTask<void>(
-        () {
+        () async {
+          _agentUsageRefreshScheduled = false;
           if (!mounted) {
             return;
           }
-          unawaited(_agentUsagePanelController.refresh());
+          _agentUsageRefreshRunning = true;
+          try {
+            await _agentUsagePanelController.refresh();
+          } finally {
+            _agentUsageRefreshRunning = false;
+            if (_agentUsageRefreshPending) {
+              _agentUsageRefreshPending = false;
+              _requestAgentUsageRefresh();
+            }
+          }
         },
         Priority.idle,
         debugLabel: 'refresh Agent usage statistics',
-      );
-    });
+      ),
+    );
   }
 
   void _toggleLeftPanel({
