@@ -410,6 +410,18 @@ class _ProjectTileState extends State<_ProjectTile> {
                     ),
                   ),
                 ),
+                if (!widget.threadState.isExpanded &&
+                    widget.threadState.runningThreadIds.isNotEmpty) ...[
+                  const SizedBox(width: IdeSpacing.space8),
+                  IdeBusySpinner(
+                    key: ValueKey<String>(
+                      'project-tile-running-icon-${widget.path}',
+                    ),
+                    size: 12,
+                    strokeWidth: 1.8,
+                    semanticsLabel: 'Project has running threads',
+                  ),
+                ],
                 AnimatedSize(
                   duration: IdeMotion.durationNormal,
                   curve: IdeMotion.curveDefault,

@@ -389,6 +389,12 @@ void main() {
         ),
         findsNothing,
       );
+      expect(
+        find.byKey(
+          ValueKey<String>('project-tile-running-icon-${directory.path}'),
+        ),
+        findsNothing,
+      );
 
       provider.emit(
         const AgentTurnStartedEvent(
@@ -412,6 +418,44 @@ void main() {
         ),
         findsOneWidget,
       );
+      expect(
+        find.byKey(
+          ValueKey<String>('project-tile-running-icon-${directory.path}'),
+        ),
+        findsNothing,
+      );
+
+      await tester.tap(
+        find.byKey(ValueKey<String>('project-tile-${directory.path}')),
+      );
+      await tester.pump();
+
+      expect(listRunning, findsNothing);
+      final projectRunning = find.byKey(
+        ValueKey<String>('project-tile-running-icon-${directory.path}'),
+      );
+      expect(projectRunning, findsOneWidget);
+      expect(
+        find.descendant(
+          of: projectRunning,
+          matching: find.byType(CircularProgressIndicator),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(ValueKey<String>('project-tile-${directory.path}')),
+      );
+      await tester.pump();
+
+      expect(projectRunning, findsNothing);
+      expect(listRunning, findsOneWidget);
+
+      await tester.tap(
+        find.byKey(ValueKey<String>('project-tile-${directory.path}')),
+      );
+      await tester.pump();
+      expect(projectRunning, findsOneWidget);
 
       provider.emit(
         const AgentTurnCompletedEvent(sessionId: 'thread-a', turnId: 'turn-1'),
@@ -419,6 +463,7 @@ void main() {
       await tester.pump();
       await tester.pump();
 
+      expect(projectRunning, findsNothing);
       expect(
         find.byKey(
           ValueKey<String>(
@@ -427,6 +472,12 @@ void main() {
         ),
         findsNothing,
       );
+
+      await tester.tap(
+        find.byKey(ValueKey<String>('project-tile-${directory.path}')),
+      );
+      await tester.pump();
+
       // 后台完成：执行中 icon 替换为绿色完成提示，而非立刻回到相对时间。
       final listCompleted = find.byKey(
         ValueKey<String>(
@@ -445,6 +496,94 @@ void main() {
       expect(find.text('now'), findsOneWidget);
     },
   );
+
+  testWidgets('shows running indicators for each collapsed project', (
+    tester,
+  ) async {
+    final firstDirectory = Directory.systemTemp.createTempSync('zeta_test_');
+    final secondDirectory = Directory.systemTemp.createTempSync('zeta_test_');
+    tempDirectories.addAll(<Directory>[firstDirectory, secondDirectory]);
+    File(
+      '${firstDirectory.path}${Platform.pathSeparator}first.txt',
+    ).writeAsStringSync('first');
+    File(
+      '${secondDirectory.path}${Platform.pathSeparator}second.txt',
+    ).writeAsStringSync('second');
+
+    final firstThread = agentThread(
+      id: 'thread-first',
+      projectPath: firstDirectory.path,
+      title: 'First running thread',
+    );
+    final secondThread = agentThread(
+      id: 'thread-second',
+      projectPath: secondDirectory.path,
+      title: 'Second running thread',
+    );
+    final session = MemorySessionStore(
+      IdeSessionState(
+        projectPaths: <String>[firstDirectory.path, secondDirectory.path],
+        activeProjectPath: firstDirectory.path,
+        projectHomeActive: true,
+        projectThreadExpansionByProject: <String, bool>{
+          firstDirectory.path: false,
+          secondDirectory.path: false,
+        },
+        cachedThreadsByProject: <String, List<AgentThreadSummary>>{
+          firstDirectory.path: <AgentThreadSummary>[firstThread],
+          secondDirectory.path: <AgentThreadSummary>[secondThread],
+        },
+      ).encode(),
+    );
+    final provider = FakeAgentProvider();
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+    await tester.runAsync(waitForIo);
+    await tester.pumpAndSettle();
+
+    final firstProjectRunning = find.byKey(
+      ValueKey<String>('project-tile-running-icon-${firstDirectory.path}'),
+    );
+    final secondProjectRunning = find.byKey(
+      ValueKey<String>('project-tile-running-icon-${secondDirectory.path}'),
+    );
+
+    provider.emit(
+      const AgentTurnStartedEvent(
+        AgentTurn(id: 'turn-first', sessionId: 'thread-first'),
+      ),
+    );
+    provider.emit(
+      const AgentTurnStartedEvent(
+        AgentTurn(id: 'turn-second', sessionId: 'thread-second'),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(firstProjectRunning, findsOneWidget);
+    expect(secondProjectRunning, findsOneWidget);
+
+    provider.emit(
+      const AgentTurnCompletedEvent(
+        sessionId: 'thread-first',
+        turnId: 'turn-first',
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(firstProjectRunning, findsNothing);
+    expect(secondProjectRunning, findsOneWidget);
+  });
 
   testWidgets('shows project actions only while hovered', (tester) async {
     final session = MemorySessionStore();
