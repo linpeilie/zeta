@@ -188,14 +188,12 @@ class _AgentConversationTimeline extends StatelessWidget {
     required this.viewModel,
     required this.scrollController,
     required this.pagePadding,
-    required this.onLoadOlder,
     required this.projectionCache,
   });
 
   final AgentConversationViewModel viewModel;
   final ScrollController scrollController;
   final EdgeInsets pagePadding;
-  final VoidCallback onLoadOlder;
   final AgentTimelineProjectionCache projectionCache;
 
   @override
@@ -216,7 +214,6 @@ class _AgentConversationTimeline extends StatelessWidget {
           final liveTurnState = viewModel.liveTurnState;
           final liveSnapshot = liveTurnState?.snapshot();
           final items = projectAgentTimelineViewportItems(
-            hasOlderTurns: viewModel.hasOlderTurns,
             standbyTurn: standbySnapshot,
             visibleHistoryTurns: historyTurns,
             liveTurn: liveSnapshot,
@@ -277,11 +274,6 @@ class _AgentConversationTimeline extends StatelessWidget {
 
   Widget _buildViewportItem(AgentTimelineViewportItem item) {
     switch (item) {
-      case AgentLoadOlderViewportItem():
-        return _AgentLoadOlderTurnsButton(
-          onPressed: onLoadOlder,
-          loading: false,
-        );
       case AgentBlockViewportItem(:final turn, :final block):
         return _AgentTimelineBlockSection(
           turn: turn,
@@ -644,39 +636,6 @@ class _AgentContentAlign extends StatelessWidget {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: IdeMetrics.contentMaxWidth),
         child: SizedBox(width: double.infinity, child: child),
-      ),
-    );
-  }
-}
-
-class _AgentLoadOlderTurnsButton extends StatelessWidget {
-  const _AgentLoadOlderTurnsButton({
-    required this.onPressed,
-    required this.loading,
-  });
-
-  final VoidCallback onPressed;
-  final bool loading;
-
-  @override
-  Widget build(BuildContext context) {
-    final textStyles = IdeTextStyles.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: sf.GhostButton(
-          key: const ValueKey('agent-load-older-turns-button'),
-          onPressed: loading ? null : onPressed,
-          size: sf.ButtonSize.small,
-          leading: loading
-              ? const IdeLoadingIndicator(width: 16, height: 10, barHeight: 3)
-              : const Icon(Icons.history_rounded, size: 15),
-          child: Text(
-            loading ? 'Loading older turns' : 'Load older turns',
-            style: textStyles.bodySmall,
-          ),
-        ),
       ),
     );
   }

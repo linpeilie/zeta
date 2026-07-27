@@ -4,7 +4,7 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 void main() {
   group('AgentConversationTimelineStore', () {
-    test('pages historical turns into a visible window of 3', () {
+    test('exposes all historical turns without a page window', () {
       final store = AgentConversationTimelineStore();
       addTearDown(store.dispose);
 
@@ -28,19 +28,10 @@ void main() {
         _thread(),
       );
 
-      expect(store.hasOlderTurns, isTrue);
       expect(
         store.visibleHistoryTurns.map((turn) => turn.id).toList(),
-        <String>['turn-3', 'turn-4', 'turn-5'],
+        <String>['turn-1', 'turn-2', 'turn-3', 'turn-4', 'turn-5'],
       );
-      expect(store.conversationTurns.map((turn) => turn.id).toList(), <String>[
-        'turn-3',
-        'turn-4',
-        'turn-5',
-      ]);
-
-      expect(store.loadOlderTurns(), isTrue);
-      expect(store.hasOlderTurns, isFalse);
       expect(store.conversationTurns.map((turn) => turn.id).toList(), <String>[
         'turn-1',
         'turn-2',

@@ -56,8 +56,6 @@ const int _diffPreviewLineCount = 24;
 /// Agent 主列宽度档位：只影响 page padding 等布局语义，不随每像素宽度重建。
 enum _AgentPaneWidthClass { compact, regular }
 
-typedef _TimelineViewportAnchor = ({String itemKey, double globalTop});
-
 _AgentPaneWidthClass _selectAgentPaneWidthClass(BoxConstraints constraints) {
   return constraints.maxWidth < IdeMetrics.stackedRowBreakpoint
       ? _AgentPaneWidthClass.compact
@@ -235,7 +233,6 @@ class _AgentPaneState extends State<AgentPane> {
                   viewModel: widget.viewModel,
                   scrollController: _scrollController,
                   pagePadding: pagePadding,
-                  onLoadOlder: _loadOlderTurns,
                   projectionCache: _projectionCache,
                 ),
                 floatingPanel: _AgentActivePlanSection(
@@ -494,134 +491,6 @@ class _AgentPaneState extends State<AgentPane> {
         lower.endsWith('.gif') ||
         lower.endsWith('.webp') ||
         lower.endsWith('.bmp');
-  }
-
-  void _loadOlderTurns() {
-    if (!widget.viewModel.hasOlderTurns) {
-      return;
-    }
-    final controller = _scrollController;
-    final hasClients = controller.hasClients;
-    final oldPixels = hasClients ? controller.position.pixels : 0.0;
-    final oldMaxScrollExtent = hasClients
-        ? controller.position.maxScrollExtent
-        : 0.0;
-    final anchor = hasClients ? _captureTimelineViewportAnchor() : null;
-    final anchorGlobalTop = anchor?.globalTop;
-    final changed = widget.viewModel.loadOlderTurns();
-    if (!changed || !hasClients) {
-      return;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!controller.hasClients) {
-        return;
-      }
-      final compensatedMaxScrollExtent = controller.position.maxScrollExtent;
-      final delta = compensatedMaxScrollExtent - oldMaxScrollExtent;
-      final targetOffset = (oldPixels + delta).clamp(
-        0.0,
-        compensatedMaxScrollExtent,
-      );
-      controller.jumpTo(targetOffset);
-      // block 级 Sliver 在首轮 prepend layout 后可能继续校正 max extent。
-      // 下一帧只补偿这部分估算差，避免动态 Markdown 高度让锚点产生像素级漂移。
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!controller.hasClients) {
-          return;
-        }
-        final anchorTop = anchor == null
-            ? null
-            : _timelineViewportItemTop(anchor.itemKey);
-        if (anchorTop != null && anchorGlobalTop != null) {
-          final anchorCorrection = anchorTop - anchorGlobalTop;
-          if (anchorCorrection.abs() >= 0.01) {
-            controller.jumpTo(
-              (controller.position.pixels + anchorCorrection).clamp(
-                0.0,
-                controller.position.maxScrollExtent,
-              ),
-            );
-          }
-          return;
-        }
-        final correctedMaxScrollExtent = controller.position.maxScrollExtent;
-        final correction =
-            correctedMaxScrollExtent - compensatedMaxScrollExtent;
-        if (correction.abs() < 0.01) {
-          return;
-        }
-        controller.jumpTo(
-          (controller.position.pixels + correction).clamp(
-            0.0,
-            correctedMaxScrollExtent,
-          ),
-        );
-      });
-    });
-  }
-
-  _TimelineViewportAnchor? _captureTimelineViewportAnchor() {
-    final viewportElement = _findDescendantByKey(
-      const ValueKey('agent-message-list'),
-    );
-    final viewportBox = viewportElement?.findRenderObject();
-    if (viewportBox is! RenderBox || !viewportBox.hasSize) {
-      return null;
-    }
-    final viewportTop = viewportBox.localToGlobal(Offset.zero).dy;
-    final viewportBottom = viewportTop + viewportBox.size.height;
-    _TimelineViewportAnchor? anchor;
-    var nearestTop = double.infinity;
-
-    void visit(Element element) {
-      final key = element.widget.key;
-      if (key case ValueKey<String>(:final value)
-          when value.startsWith('timeline-viewport-') &&
-              value != 'timeline-viewport-load-older') {
-        final renderObject = element.findRenderObject();
-        if (renderObject is RenderBox && renderObject.hasSize) {
-          final top = renderObject.localToGlobal(Offset.zero).dy;
-          final bottom = top + renderObject.size.height;
-          if (bottom > viewportTop &&
-              top < viewportBottom &&
-              top < nearestTop) {
-            nearestTop = top;
-            anchor = (itemKey: value, globalTop: top);
-          }
-        }
-      }
-      element.visitChildren(visit);
-    }
-
-    (context as Element).visitChildren(visit);
-    return anchor;
-  }
-
-  double? _timelineViewportItemTop(String itemKey) {
-    final element = _findDescendantByKey(ValueKey<String>(itemKey));
-    final renderObject = element?.findRenderObject();
-    if (renderObject is! RenderBox || !renderObject.hasSize) {
-      return null;
-    }
-    return renderObject.localToGlobal(Offset.zero).dy;
-  }
-
-  Element? _findDescendantByKey(Key key) {
-    Element? result;
-
-    void visit(Element element) {
-      if (result != null) {
-        return;
-      }
-      if (element.widget.key == key) {
-        result = element;
-        return;
-      }
-      element.visitChildren(visit);
-    }
-
-    (context as Element).visitChildren(visit);
-    return result;
   }
 
   void _sendMessage() {

@@ -214,8 +214,6 @@ class AgentConversationViewModel extends ChangeNotifier {
       !threadWaitingOnApproval &&
       !threadWaitingOnUserInput;
 
-  bool get hasOlderTurns => _timeline.hasOlderTurns;
-
   AgentProviderStatus get status => _status;
 
   /// 旧 Cursor 选择被安全回退时需要持续展示的不可用原因。
@@ -787,14 +785,6 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   bool isFileEditItemExpanded(String fileEditItemId) {
     return _timeline.isFileEditItemExpanded(fileEditItemId);
-  }
-
-  bool loadOlderTurns() {
-    final changed = _timeline.loadOlderTurns();
-    if (changed) {
-      _publishUiChanges(history: true);
-    }
-    return changed;
   }
 
   void toggleToolCall(String toolCallId) {

@@ -6,9 +6,8 @@ import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.d
 
 void main() {
   group('projectAgentTimelineViewportItems', () {
-    test('按 Load older → standby → history → live 顺序投影', () {
+    test('按 standby → history → live 顺序投影', () {
       final items = projectAgentTimelineViewportItems(
-        hasOlderTurns: true,
         standbyTurn: _turn(id: 'standby', standby: true, withEntry: true),
         visibleHistoryTurns: <AgentConversationTurnGroup>[
           _turn(id: 'h1'),
@@ -19,7 +18,6 @@ void main() {
       );
 
       expect(items.map((item) => item.id).toList(growable: false), <String>[
-        'load-older',
         'standby-block-standby-message-standby-msg',
         'history-block-h1-message-h1-msg',
         'history-footer-h1',
@@ -30,9 +28,8 @@ void main() {
       ]);
     });
 
-    test('空 standby 与无更早历史时不生成对应 item', () {
+    test('空 standby 时不生成对应 item', () {
       final items = projectAgentTimelineViewportItems(
-        hasOlderTurns: false,
         standbyTurn: _turn(id: 'standby', standby: true, withEntry: false),
         visibleHistoryTurns: const <AgentConversationTurnGroup>[],
         liveTurn: null,
@@ -44,7 +41,6 @@ void main() {
     test('running live turn 在 block 与 footer 间生成 activity item', () {
       final live = _turn(id: 'live', status: AgentHistoryTurnStatus.running);
       final items = projectAgentTimelineViewportItems(
-        hasOlderTurns: false,
         standbyTurn: null,
         visibleHistoryTurns: const <AgentConversationTurnGroup>[],
         liveTurn: live,
@@ -59,17 +55,12 @@ void main() {
     });
 
     test('viewport key 稳定且包含 turn/block 身份', () {
-      const load = AgentLoadOlderViewportItem();
       final turn = _turn(id: 't1');
       final block = _blocks(turn).single;
       final item = AgentBlockViewportItem(
         turn: turn,
         block: block,
         isLive: false,
-      );
-      expect(
-        agentTimelineViewportItemKey(load),
-        'timeline-viewport-load-older',
       );
       expect(
         agentTimelineViewportItemKey(item),

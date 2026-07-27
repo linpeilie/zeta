@@ -73,7 +73,6 @@ void main() {
 
     setHostState(() {
       items = <AgentTimelineViewportItem>[
-        const AgentLoadOlderViewportItem(),
         _footerItem('t0'),
         _footerItem('t1'),
         _footerItem('t2'),
@@ -87,7 +86,7 @@ void main() {
     );
     expect(stateAfter, same(stateT1));
     expect(stateAfter.note, 'anchor-t1');
-    // 旧 index0 的 State 不应错误落到 load-older 或 t0 上。
+    // 旧 index0 的 State 不应错误落到 t0 上。
     expect(find.text('history-footer-t0:'), findsOneWidget);
     expect(find.text('history-footer-t1:anchor-t1'), findsOneWidget);
   });

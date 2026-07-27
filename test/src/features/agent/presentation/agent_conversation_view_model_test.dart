@@ -2002,7 +2002,7 @@ void main() {
       );
     });
 
-    test('pages historical turns into a visible window of 3', () async {
+    test('exposes all historical turns after loading a long thread', () async {
       final provider = _FakeAgentProvider(
         historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
           'thread-1': AgentThreadHistorySnapshot(
@@ -2029,14 +2029,13 @@ void main() {
       await viewModel.switchThread(_thread());
       await Future<void>.delayed(Duration.zero);
 
-      expect(viewModel.hasOlderTurns, isTrue);
       expect(
         viewModel.visibleHistoryTurns.map((turn) => turn.id).toList(),
-        <String>['turn-3', 'turn-4', 'turn-5'],
+        <String>['turn-1', 'turn-2', 'turn-3', 'turn-4', 'turn-5'],
       );
       expect(
         viewModel.conversationTurns.map((turn) => turn.id).toList(),
-        <String>['turn-3', 'turn-4', 'turn-5'],
+        <String>['turn-1', 'turn-2', 'turn-3', 'turn-4', 'turn-5'],
       );
       expect(
         viewModel.timelineEntries.whereType<AgentMessageTimelineEntry>().map(
@@ -2049,14 +2048,6 @@ void main() {
           'Request 4',
           'Request 5',
         ]),
-      );
-
-      expect(viewModel.loadOlderTurns(), isTrue);
-
-      expect(viewModel.hasOlderTurns, isFalse);
-      expect(
-        viewModel.conversationTurns.map((turn) => turn.id).toList(),
-        <String>['turn-1', 'turn-2', 'turn-3', 'turn-4', 'turn-5'],
       );
     });
 
@@ -2211,7 +2202,7 @@ void main() {
     );
 
     test(
-      'moves a completed live turn into the capped history window',
+      'moves a completed live turn into historical order after all prior turns',
       () async {
         final provider = _FakeAgentProvider(
           historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
@@ -2242,7 +2233,13 @@ void main() {
 
         expect(
           viewModel.visibleHistoryTurns.map((turn) => turn.id).toList(),
-          <String>['history-3', 'history-4', 'history-5'],
+          <String>[
+            'history-1',
+            'history-2',
+            'history-3',
+            'history-4',
+            'history-5',
+          ],
         );
         expect(viewModel.liveTurnState, isNotNull);
 
@@ -2257,7 +2254,14 @@ void main() {
         expect(viewModel.liveTurnState, isNull);
         expect(
           viewModel.visibleHistoryTurns.map((turn) => turn.id).toList(),
-          <String>['history-4', 'history-5', 'turn-1'],
+          <String>[
+            'history-1',
+            'history-2',
+            'history-3',
+            'history-4',
+            'history-5',
+            'turn-1',
+          ],
         );
       },
     );

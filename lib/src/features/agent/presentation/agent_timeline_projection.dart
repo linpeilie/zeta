@@ -13,11 +13,6 @@ sealed class AgentTimelineViewportItem {
   final String id;
 }
 
-/// 「加载更早历史」入口。
-final class AgentLoadOlderViewportItem extends AgentTimelineViewportItem {
-  const AgentLoadOlderViewportItem() : super(id: 'load-older');
-}
-
 /// 单个 turn 内的一个稳定渲染块。
 final class AgentBlockViewportItem extends AgentTimelineViewportItem {
   AgentBlockViewportItem({
@@ -59,11 +54,8 @@ typedef AgentTimelineBlocksResolver =
 
 /// 将当前可见会话状态投影为稳定有序的 block 级视口 item 列表。
 ///
-/// 顺序：
-/// Load older → standby blocks → history blocks/footer
-/// → live blocks/activity/footer
+/// 顺序：standby blocks → history blocks/footer → live blocks/activity/footer
 List<AgentTimelineViewportItem> projectAgentTimelineViewportItems({
-  required bool hasOlderTurns,
   required AgentConversationTurnGroup? standbyTurn,
   required List<AgentConversationTurnGroup> visibleHistoryTurns,
   required AgentConversationTurnGroup? liveTurn,
@@ -85,9 +77,6 @@ List<AgentTimelineViewportItem> projectAgentTimelineViewportItems({
     }
   }
 
-  if (hasOlderTurns) {
-    items.add(const AgentLoadOlderViewportItem());
-  }
   if (standbyTurn != null && standbyTurn.entries.isNotEmpty) {
     appendTurn(standbyTurn, isLive: false);
   }

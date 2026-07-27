@@ -1,5 +1,4 @@
 import 'dart:collection';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
@@ -9,7 +8,6 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 ///
 /// 它负责管理：
 /// - 对话消息、工具调用、审批/提问卡片和历史事件的统一时间线
-/// - 历史 turn 的分页窗口
 /// - live turn / history turn / standby turn 的分组状态
 /// - token 汇总与 UI 展开态
 class AgentConversationTimelineStore {
@@ -17,7 +15,6 @@ class AgentConversationTimelineStore {
     _seedInitialStandbyTimeline();
   }
 
-  static const int _historyPageSize = 3;
   static const AgentConversationMessage welcomeMessage =
       AgentConversationMessage(
         id: 'welcome',
@@ -62,7 +59,6 @@ class AgentConversationTimelineStore {
 
   String? currentTurnGroupId;
   String? _pendingTurnGroupId;
-  int _visibleHistoryStartIndex = 0;
 
   /// 当前会话的累计 token 用量（直接来自 Codex `total` breakdown）。
   AgentTokenUsage? _threadTokenUsage;
@@ -93,7 +89,7 @@ class AgentConversationTimelineStore {
 
   /// 按出现顺序排列的 turn 分组，每组携带自己的消息体列表。
   ///
-  /// 历史只显示当前可见窗口内的 turn；live turn 和 standby 分组始终可见。
+  /// 顺序：standby（若有内容）→ 全部历史 turn → live turn（若有）。
   List<AgentConversationTurnGroup> get conversationTurns {
     final visibleTurnIds = <String>[
       if (standbyTurnState case final standby? when standby.entries.isNotEmpty)
@@ -108,7 +104,7 @@ class AgentConversationTimelineStore {
     );
   }
 
-  /// 当前分页窗口内的历史 turn 集合，不包含 standby/live turn。
+  /// 全部历史 turn 集合，不包含 standby/live turn。
   List<AgentConversationTurnGroup> get visibleHistoryTurns =>
       List<AgentConversationTurnGroup>.unmodifiable(
         <AgentConversationTurnGroup>[
@@ -122,7 +118,6 @@ class AgentConversationTimelineStore {
   List<AgentConversationTurnState> get visibleHistoryTurnStates =>
       List<AgentConversationTurnState>.unmodifiable(
         _historicalTurnOrder
-            .skip(_visibleHistoryStartIndex)
             .map((turnId) => _turnGroups[turnId])
             .whereType<AgentConversationTurnState>(),
       );
@@ -131,8 +126,6 @@ class AgentConversationTimelineStore {
 
   ValueListenable<AgentConversationTurnState?> get liveTurnListenable =>
       _liveTurnNotifier;
-
-  bool get hasOlderTurns => _visibleHistoryStartIndex > 0;
 
   String? get pendingTurnGroupId => _pendingTurnGroupId;
 
@@ -253,19 +246,6 @@ class AgentConversationTimelineStore {
     return _historicalTurnOrder[targetIndex - 1];
   }
 
-  /// 扩大历史窗口，一次多显示固定页数的更早 turn。
-  bool loadOlderTurns() {
-    final nextStartIndex = math.max(
-      0,
-      _visibleHistoryStartIndex - _historyPageSize,
-    );
-    if (nextStartIndex == _visibleHistoryStartIndex) {
-      return false;
-    }
-    _visibleHistoryStartIndex = nextStartIndex;
-    return true;
-  }
-
   void toggleToolCall(String toolCallId) {
     if (!_expandedToolCallIds.add(toolCallId)) {
       _expandedToolCallIds.remove(toolCallId);
@@ -364,7 +344,6 @@ class AgentConversationTimelineStore {
     _expandedFileEditItemIds.clear();
     currentTurnGroupId = null;
     _pendingTurnGroupId = null;
-    _visibleHistoryStartIndex = 0;
     _threadTokenUsage = null;
     _clearActivity();
   }
@@ -450,9 +429,6 @@ class AgentConversationTimelineStore {
       }
       _appendHistoryTurnFailure(turn);
     }
-    _visibleHistoryStartIndex = _defaultVisibleHistoryStartIndexForLength(
-      _historicalTurnOrder.length,
-    );
     currentTurnGroupId = runningTurnId;
     syncLiveTurnBinding();
   }
@@ -1108,12 +1084,6 @@ class AgentConversationTimelineStore {
     }
     turnState.clearPlanEntries();
     _expandedActivePlanTurnIds.remove(turnId);
-    final oldHistoryLength = _historicalTurnOrder.length;
-    final oldDefaultStartIndex = _defaultVisibleHistoryStartIndexForLength(
-      oldHistoryLength,
-    );
-    final historyExpanded = _visibleHistoryStartIndex < oldDefaultStartIndex;
-    final previousVisibleCount = oldHistoryLength - _visibleHistoryStartIndex;
     final completedAt = DateTime.now();
     // 优先 provider 上报耗时（如 Grok apiDurationMs），其次已冻结值，最后本地估算。
     final resolvedDuration =
@@ -1132,16 +1102,6 @@ class AgentConversationTimelineStore {
     );
     _freezeOpenToolDurations(completedAt);
     _promoteTurnToHistorical(turnId);
-    if (historyExpanded) {
-      _visibleHistoryStartIndex = math.max(
-        0,
-        _historicalTurnOrder.length - previousVisibleCount,
-      );
-    } else {
-      _visibleHistoryStartIndex = _defaultVisibleHistoryStartIndexForLength(
-        _historicalTurnOrder.length,
-      );
-    }
     currentTurnGroupId = null;
     _clearActivity();
   }
@@ -1552,10 +1512,6 @@ class AgentConversationTimelineStore {
     if (!_historicalTurnOrder.contains(turnId)) {
       _historicalTurnOrder.add(turnId);
     }
-  }
-
-  int _defaultVisibleHistoryStartIndexForLength(int historyLength) {
-    return math.max(0, historyLength - _historyPageSize);
   }
 
   String? _selectedRunningTurnId() {
