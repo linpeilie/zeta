@@ -281,7 +281,7 @@ class _AgentDiffDetailsState extends State<_AgentDiffDetails> {
   }
 }
 
-class _AgentHighlightedCodeBlock extends StatelessWidget {
+class _AgentHighlightedCodeBlock extends StatefulWidget {
   const _AgentHighlightedCodeBlock({
     required this.code,
     required this.language,
@@ -291,24 +291,92 @@ class _AgentHighlightedCodeBlock extends StatelessWidget {
   final String language;
 
   @override
+  State<_AgentHighlightedCodeBlock> createState() =>
+      _AgentHighlightedCodeBlockState();
+}
+
+class _AgentHighlightedCodeBlockState
+    extends State<_AgentHighlightedCodeBlock> {
+  Widget? _cachedHighlight;
+  String? _cachedCode;
+  String? _cachedLanguage;
+  Object? _cachedThemeSignature;
+
+  @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
+    final highlightTheme = _agentHighlightTheme(context);
+    final codeTextStyle = _agentCodeTextStyle(context);
+    final textScaler = MediaQuery.textScalerOf(context);
+    final themeSignature = _AgentHighlightThemeSignature(
+      brightness: sf.Theme.of(context).brightness,
+      highlightTheme: highlightTheme,
+      codeTextStyle: codeTextStyle,
+      scaledCodeFontSize: textScaler.scale(codeTextStyle.fontSize ?? 1),
+    );
+    if (_cachedHighlight == null ||
+        _cachedCode != widget.code ||
+        _cachedLanguage != widget.language ||
+        _cachedThemeSignature != themeSignature) {
+      _cachedHighlight = HighlightView(
+        widget.code,
+        language: widget.language,
+        theme: highlightTheme,
+        padding: IdeSpacing.cardPadding,
+        textStyle: codeTextStyle,
+      );
+      _cachedCode = widget.code;
+      _cachedLanguage = widget.language;
+      _cachedThemeSignature = themeSignature;
+    }
+
     return RepaintBoundary(
       child: DecoratedBox(
         decoration: _agentCodeBlockDecoration(colors),
         child: ClipRRect(
           borderRadius: IdeRadius.allSmall,
-          child: HighlightView(
-            code,
-            language: language,
-            theme: _agentHighlightTheme(context),
-            padding: IdeSpacing.cardPadding,
-            textStyle: _agentCodeTextStyle(context),
-          ),
+          // 相同 Widget identity 会跳过 HighlightView.build，避免 resize 重复 parse。
+          child: _cachedHighlight!,
         ),
       ),
     );
   }
+}
+
+@immutable
+class _AgentHighlightThemeSignature {
+  const _AgentHighlightThemeSignature({
+    required this.brightness,
+    required this.highlightTheme,
+    required this.codeTextStyle,
+    required this.scaledCodeFontSize,
+  });
+
+  final Brightness brightness;
+  final Map<String, TextStyle> highlightTheme;
+  final TextStyle codeTextStyle;
+  final double scaledCodeFontSize;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _AgentHighlightThemeSignature &&
+        other.brightness == brightness &&
+        other.codeTextStyle == codeTextStyle &&
+        other.scaledCodeFontSize == scaledCodeFontSize &&
+        mapEquals(other.highlightTheme, highlightTheme);
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    brightness,
+    codeTextStyle,
+    scaledCodeFontSize,
+    Object.hashAllUnordered(
+      highlightTheme.entries.map(
+        (entry) => Object.hash(entry.key, entry.value),
+      ),
+    ),
+  );
 }
 
 /// 工具调用卡片。

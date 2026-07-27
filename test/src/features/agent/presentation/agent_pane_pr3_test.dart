@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
@@ -1061,7 +1062,7 @@ void main() {
       );
 
       testWidgets(
-        'keeps large diffs lazy and expanding all does not change history version',
+        'caches diff highlight identity and keeps expanding independent from history',
         (tester) async {
           final viewModel = _createViewModel(
             _FakeAgentProvider(
@@ -1145,6 +1146,65 @@ void main() {
             findsNothing,
           );
 
+          final highlightFinder = find.byType(HighlightView);
+          expect(highlightFinder, findsOneWidget);
+          final initialHighlight = tester.widget<HighlightView>(
+            highlightFinder,
+          );
+
+          // 即使父级重建，同一高亮输入也必须复用 HighlightView identity。
+          await tester.pumpWidget(_TestApp(viewModel: viewModel));
+          await _pumpAgentPaneUi(tester);
+          final parentRebuildHighlight = tester.widget<HighlightView>(
+            highlightFinder,
+          );
+          expect(identical(parentRebuildHighlight, initialHighlight), isTrue);
+
+          addTearDown(() {
+            tester.view.resetPhysicalSize();
+            tester.platformDispatcher.clearTextScaleFactorTestValue();
+          });
+          final physicalSize = tester.view.physicalSize;
+          tester.view.physicalSize = Size(
+            physicalSize.width + 120,
+            physicalSize.height,
+          );
+          await tester.pump();
+          final resizedHighlight = tester.widget<HighlightView>(
+            highlightFinder,
+          );
+          expect(identical(resizedHighlight, initialHighlight), isTrue);
+
+          tester.platformDispatcher.textScaleFactorTestValue = 1.25;
+          await tester.pump();
+          final scaledHighlight = tester.widget<HighlightView>(highlightFinder);
+          expect(identical(scaledHighlight, resizedHighlight), isFalse);
+
+          await tester.pumpWidget(
+            _TestApp(viewModel: viewModel, themeMode: ThemeMode.light),
+          );
+          await _pumpAgentPaneUi(tester);
+          final lightThemeHighlight = tester.widget<HighlightView>(
+            highlightFinder,
+          );
+          expect(identical(lightThemeHighlight, scaledHighlight), isFalse);
+
+          await tester.pumpWidget(
+            _TestApp(
+              viewModel: viewModel,
+              themeMode: ThemeMode.light,
+              codeFontFamily: 'AlternateCodeFont',
+            ),
+          );
+          await _pumpAgentPaneUi(tester);
+          final alternateStyleHighlight = tester.widget<HighlightView>(
+            highlightFinder,
+          );
+          expect(
+            identical(alternateStyleHighlight, lightThemeHighlight),
+            isFalse,
+          );
+
           final expandAllFinder = find.byKey(
             const ValueKey<String>(
               'agent-file-edit-item-expand-all-file-edit-history-edit-large-lib/main.dart',
@@ -1161,6 +1221,13 @@ void main() {
           expect(
             find.textContaining('+line 30', findRichText: true),
             findsOneWidget,
+          );
+          expect(
+            identical(
+              tester.widget<HighlightView>(highlightFinder),
+              alternateStyleHighlight,
+            ),
+            isFalse,
           );
         },
       );
@@ -2596,6 +2663,7 @@ class _TestApp extends StatelessWidget {
     required this.viewModel,
     this.uiFontFamily,
     this.codeFontFamily = 'CodeFont',
+    this.themeMode = ThemeMode.dark,
     this.disableAnimations = false,
     this.messageSendShortcut = MessageSendShortcut.enter,
     this.platform,
@@ -2604,6 +2672,7 @@ class _TestApp extends StatelessWidget {
   final AgentConversationViewModel viewModel;
   final String? uiFontFamily;
   final String codeFontFamily;
+  final ThemeMode themeMode;
   final bool disableAnimations;
   final MessageSendShortcut messageSendShortcut;
   final TargetPlatform? platform;
@@ -2620,17 +2689,20 @@ class _TestApp extends StatelessWidget {
       uiFontFamily: uiFontFamily,
       codeFontFamily: codeFontFamily,
     );
+    final activeIdeTheme = themeMode == ThemeMode.light
+        ? lightIdeTheme
+        : darkIdeTheme;
     return IdeThemeScope(
-      themeMode: ThemeMode.dark,
+      themeMode: themeMode,
       lightTheme: lightIdeTheme,
       darkTheme: darkIdeTheme,
       child: sf.ShadcnApp(
         theme: buildShadcnTheme(lightIdeTheme),
         darkTheme: buildShadcnTheme(darkIdeTheme),
         materialTheme: buildMaterialTheme(
-          darkIdeTheme,
+          activeIdeTheme,
         ).copyWith(platform: platform),
-        themeMode: sf.ThemeMode.dark,
+        themeMode: resolveShadcnThemeMode(themeMode),
         home: Builder(
           builder: (context) => MediaQuery(
             data: MediaQuery.of(
