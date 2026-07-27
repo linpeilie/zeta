@@ -39,8 +39,9 @@ void main() {
       expect(capabilities.canListThreads, isTrue);
       expect(capabilities.canPrompt, isTrue);
       expect(capabilities.canCancelTurn, isTrue);
-      expect(capabilities.canRenameThread, isFalse);
-      expect(capabilities.canDeleteThread, isFalse);
+      expect(capabilities.canRenameThread, isTrue);
+      expect(capabilities.canDeleteThread, isTrue);
+      expect(capabilities.canArchiveThread, isFalse);
       expect(capabilities.canForkThread, isFalse);
       expect(capabilities.canSteerTurn, isFalse);
       expect(capabilities.supportsLocalImageInput, isFalse);

@@ -602,9 +602,29 @@ class GrokAcpAgentProvider
   Future<void> renameThread({
     required String threadId,
     required String name,
-  }) async {
-    throw UnsupportedError('Grok ACP does not support renaming threads');
-  }
+  }) => _scheduleThreadOperation(
+    threadId,
+    ProviderOperationAccess.exclusive,
+    () async {
+      final trimmed = name.trim();
+      if (trimmed.isEmpty) {
+        throw ArgumentError.value(name, 'name', 'Thread title cannot be empty');
+      }
+      await initialize();
+      await _peer.sendRequest(
+        '_x.ai/session/rename',
+        params: <String, Object?>{'sessionId': threadId, 'title': trimmed},
+        timeout: const Duration(seconds: 20),
+      );
+      // 记录用户标题，避免后续 generated_title 轮询用旧值覆盖。
+      _emittedTitlesBySessionId[threadId] = trimmed;
+      _historyCache.remove(threadId);
+      _addEvent(
+        AgentThreadNameUpdatedEvent(threadId: threadId, threadName: trimmed),
+      );
+      _log.info('Renamed Grok session $threadId');
+    },
+  );
 
   @override
   Future<void> archiveThread(String threadId) async {
@@ -617,9 +637,30 @@ class GrokAcpAgentProvider
   }
 
   @override
-  Future<void> deleteThread(String threadId) async {
-    throw UnsupportedError('Grok ACP does not support deleting threads');
-  }
+  Future<void> deleteThread(String threadId) => _scheduleThreadOperation(
+    threadId,
+    ProviderOperationAccess.exclusive,
+    () async {
+      await initialize();
+      await _peer.sendRequest(
+        '_x.ai/session/delete',
+        params: <String, Object?>{'sessionId': threadId},
+        timeout: const Duration(seconds: 20),
+      );
+      _historyCache.remove(threadId);
+      _sessionPathBySessionId.remove(threadId);
+      _projectPathBySessionId.remove(threadId);
+      _emittedTitlesBySessionId.remove(threadId);
+      _titlePollTokensBySessionId[threadId] =
+          (_titlePollTokensBySessionId[threadId] ?? 0) + 1;
+      _runningTurnIdsBySessionId.remove(threadId);
+      if (_session?.id == threadId) {
+        _session = null;
+      }
+      _addEvent(AgentThreadDeletedEvent(threadId: threadId));
+      _log.info('Deleted Grok session $threadId');
+    },
+  );
 
   @override
   Future<AgentSession> forkThread({

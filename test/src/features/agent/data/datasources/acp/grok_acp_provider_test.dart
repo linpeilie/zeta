@@ -148,6 +148,49 @@ void main() {
       expect(events.whereType<AgentErrorEvent>(), hasLength(1));
     });
 
+    test('renames and deletes Grok sessions via xAI extensions', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+      addTearDown(subscription.cancel);
+      addTearDown(provider.dispose);
+
+      expect(provider.capabilities.canRenameThread, isTrue);
+      expect(provider.capabilities.canDeleteThread, isTrue);
+      expect(provider.capabilities.canArchiveThread, isFalse);
+
+      await provider.renameThread(threadId: 'sess-1', name: '  Renamed  ');
+      expect(peer.requestMethods, contains('_x.ai/session/rename'));
+      final renameIndex = peer.requestMethods.lastIndexOf(
+        '_x.ai/session/rename',
+      );
+      expect(peer.requestParams[renameIndex], <String, Object?>{
+        'sessionId': 'sess-1',
+        'title': 'Renamed',
+      });
+      expect(
+        events.whereType<AgentThreadNameUpdatedEvent>().single.threadName,
+        'Renamed',
+      );
+
+      await provider.deleteThread('sess-1');
+      expect(peer.requestMethods, contains('_x.ai/session/delete'));
+      final deleteIndex = peer.requestMethods.lastIndexOf(
+        '_x.ai/session/delete',
+      );
+      expect(peer.requestParams[deleteIndex], <String, Object?>{
+        'sessionId': 'sess-1',
+      });
+      expect(
+        events.whereType<AgentThreadDeletedEvent>().single.threadId,
+        'sess-1',
+      );
+    });
+
     test(
       'fails explicitly for unsupported thread lifecycle operations',
       () async {
@@ -157,10 +200,6 @@ void main() {
         );
         addTearDown(provider.dispose);
 
-        await expectLater(
-          provider.renameThread(threadId: 'session-1', name: 'New name'),
-          throwsA(isA<UnsupportedError>()),
-        );
         await expectLater(
           provider.archiveThread('session-1'),
           throwsA(isA<UnsupportedError>()),
@@ -172,7 +211,7 @@ void main() {
           ),
           throwsA(isA<UnsupportedError>()),
         );
-        expect(provider.capabilities.canRenameThread, isFalse);
+        expect(provider.capabilities.canArchiveThread, isFalse);
         expect(provider.capabilities.canForkThread, isFalse);
       },
     );
@@ -1388,6 +1427,8 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
       '_x.ai/billing' => readFixtureJsonMap(
         'grok/acp/xai_billing_response_redacted.json',
       ),
+      '_x.ai/session/rename' => <String, Object?>{'success': true},
+      '_x.ai/session/delete' => <String, Object?>{'success': true},
       _ => <String, Object?>{},
     };
   }

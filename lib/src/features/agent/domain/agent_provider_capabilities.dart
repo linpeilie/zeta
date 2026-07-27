@@ -223,15 +223,17 @@ class AgentProviderCapabilities {
 
   /// Grok ACP 当前真实可用能力。
   ///
-  /// 本地图片当前只会退化为路径文本，因此不声明图片输入能力；Codex 专属 thread
-  /// 操作也保持关闭，避免 UI 继续依赖静默 no-op。
+  /// 本地图片当前只会退化为路径文本，因此不声明图片输入能力。
+  /// 重命名/删除走 xAI 扩展 `_x.ai/session/rename|delete`；归档无协议支持，保持关闭。
   static const grokAcp = AgentProviderCapabilities(
     canCreateSession: true,
     canResumeSession: true,
     canListThreads: true,
     canReadHistory: true,
+    canDeleteThread: true,
     canPrompt: true,
     canCancelTurn: true,
+    canRenameThread: true,
     supportsResourceInput: true,
     supportsPermissionRequests: true,
     supportsModelSelection: true,
