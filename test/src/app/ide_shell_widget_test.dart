@@ -441,6 +441,92 @@ void main() {
     _expectRetainedAgentState(tester, retained);
   });
 
+  testWidgets('Wide ↔ Medium workbench breakpoints retain AgentPane state', (
+    tester,
+  ) async {
+    final retained = await _prepareRetainedAgentState(tester);
+
+    expect(find.byKey(const ValueKey('workbench-base')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('workbench-inspector-inline')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('workbench-navigation-inline')),
+      findsOneWidget,
+    );
+    final baseElement = tester.element(
+      find.byKey(const ValueKey('workbench-base')),
+    );
+    final canvasSlotElement = tester.element(
+      find.byKey(const ValueKey('workbench-canvas-slot')),
+    );
+
+    // Wide → Medium：选用仍能容纳 nav + canvas 最小宽的宽度，避免降级到 compact。
+    // Inspector 退出 inline，Canvas State 必须保持。
+    tester.view.physicalSize = const Size(1100, 900);
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('workbench-base')), findsOneWidget);
+    expect(
+      tester.element(find.byKey(const ValueKey('workbench-base'))),
+      same(baseElement),
+    );
+    expect(
+      tester.element(find.byKey(const ValueKey('workbench-canvas-slot'))),
+      same(canvasSlotElement),
+    );
+    expect(
+      tester.element(find.byType(AgentPane)),
+      same(retained.agentPaneElement),
+    );
+    expect(
+      tester.widget<EditableText>(_agentMessageInput()).controller,
+      same(retained.inputController),
+    );
+    expect(retained.inputController.text, retained.draft);
+    final mediumScrollController = tester
+        .widget<SingleChildScrollView>(
+          find.byKey(const ValueKey('agent-message-list')),
+        )
+        .controller!;
+    expect(mediumScrollController, same(retained.scrollController));
+    expect(mediumScrollController.offset, closeTo(retained.scrollOffset, 0.1));
+    expect(
+      find.byKey(const ValueKey('workbench-navigation-inline')),
+      findsOneWidget,
+    );
+    // Wide 下通过 inline 打开的 Inspector 不会在断点切换时自动升为 Overlay；
+    // 可见性意图仍保留，回到 Wide 后应恢复 inline。
+    expect(
+      find.byKey(const ValueKey('workbench-inspector-inline')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('workbench-inspector-overlay')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+
+    // Medium → Wide：恢复 inline Inspector，草稿/滚动/State 仍不变。
+    tester.view.physicalSize = const Size(1400, 900);
+    await tester.pump();
+
+    expect(
+      tester.element(find.byKey(const ValueKey('workbench-base'))),
+      same(baseElement),
+    );
+    expect(
+      find.byKey(const ValueKey('workbench-inspector-inline')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('workbench-inspector-overlay')),
+      findsNothing,
+    );
+    _expectRetainedAgentState(tester, retained);
+  });
+
   testWidgets('switching threads keeps each pane draft isolated', (
     tester,
   ) async {

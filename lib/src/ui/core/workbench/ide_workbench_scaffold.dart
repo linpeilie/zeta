@@ -102,8 +102,10 @@ class IdeWorkbenchScaffold extends StatelessWidget {
             inspectorVisible &&
             mode == IdeWorkbenchLayoutMode.wide;
 
+        // 基础 Row 使用稳定 key，避免 Wide/Medium/Compact 切换时卸载 Canvas。
+        // 所有直接 child 都带稳定 key，防止条件 slot 插入/删除时 Element 误匹配。
         final base = Row(
-          key: ValueKey('workbench-base-${mode.name}'),
+          key: const ValueKey('workbench-base'),
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (leadingRail case final Widget rail) ...[
@@ -112,7 +114,10 @@ class IdeWorkbenchScaffold extends StatelessWidget {
                 width: IdeMetrics.activityRailWidth,
                 child: rail,
               ),
-              const SizedBox(width: IdeSpacing.space8),
+              const SizedBox(
+                key: ValueKey('workbench-leading-rail-gap'),
+                width: IdeSpacing.space8,
+              ),
             ],
             if (navigationInline) ...[
               SizedBox(
@@ -120,7 +125,10 @@ class IdeWorkbenchScaffold extends StatelessWidget {
                 width: resolvedNavigationWidth,
                 child: navigation,
               ),
-              _PaneSeparator(child: navigationResizeHandle),
+              _PaneSeparator(
+                key: const ValueKey('workbench-navigation-separator'),
+                child: navigationResizeHandle,
+              ),
             ],
             Expanded(
               key: const ValueKey('workbench-canvas-slot'),
@@ -130,7 +138,10 @@ class IdeWorkbenchScaffold extends StatelessWidget {
               ),
             ),
             if (inspectorInline) ...[
-              _PaneSeparator(child: inspectorResizeHandle),
+              _PaneSeparator(
+                key: const ValueKey('workbench-inspector-separator'),
+                child: inspectorResizeHandle,
+              ),
               SizedBox(
                 key: const ValueKey('workbench-inspector-inline'),
                 width: resolvedInspectorWidth,
@@ -138,7 +149,10 @@ class IdeWorkbenchScaffold extends StatelessWidget {
               ),
             ],
             if (trailingRail case final Widget rail) ...[
-              const SizedBox(width: IdeSpacing.space8),
+              const SizedBox(
+                key: ValueKey('workbench-trailing-rail-gap'),
+                width: IdeSpacing.space8,
+              ),
               SizedBox(
                 key: const ValueKey('workbench-trailing-rail'),
                 width: IdeMetrics.activityRailWidth,
@@ -280,7 +294,7 @@ IdeWorkbenchLayoutMode _resolveEffectiveLayoutMode({
 }
 
 class _PaneSeparator extends StatelessWidget {
-  const _PaneSeparator({this.child});
+  const _PaneSeparator({super.key, this.child});
 
   final Widget? child;
 

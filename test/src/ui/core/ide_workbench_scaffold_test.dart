@@ -92,10 +92,7 @@ void main() {
       find.byKey(const ValueKey('workbench-navigation-inline')),
       findsNothing,
     );
-    expect(
-      find.byKey(const ValueKey('workbench-base-compact')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('workbench-base')), findsOneWidget);
     expect(
       tester.getSize(find.byKey(const ValueKey('workbench-canvas'))).width,
       greaterThanOrEqualTo(IdeMetrics.mainEditorMinWidth),
@@ -111,12 +108,127 @@ void main() {
       ),
     );
 
-    expect(find.byKey(const ValueKey('workbench-base-medium')), findsOneWidget);
+    // 基础 Row 使用稳定 key，模式变化后仍是同一个 workbench-base。
+    expect(find.byKey(const ValueKey('workbench-base')), findsOneWidget);
     expect(find.byKey(const ValueKey('workbench-inspector-overlay')), findsOne);
     expect(
       tester.getSize(find.byKey(const ValueKey('workbench-canvas'))).width,
       greaterThanOrEqualTo(IdeMetrics.mainEditorMinWidth),
     );
+  });
+
+  testWidgets('Wide ↔ Medium 切换保留 Canvas 子树 State identity', (tester) async {
+    // 在同一棵树上只改变约束，验证稳定 Row key 在断点切换时不卸载 Canvas。
+    await pumpIdeComponent(
+      tester,
+      size: const Size(1200, 500),
+      child: _buildWorkbench(canvas: const _CanvasProbe()),
+    );
+
+    expect(find.byKey(const ValueKey('workbench-base')), findsOneWidget);
+    expect(find.byKey(const ValueKey('workbench-inspector-inline')), findsOne);
+    expect(
+      find.byKey(const ValueKey('workbench-navigation-separator')),
+      findsOne,
+    );
+    expect(
+      find.byKey(const ValueKey('workbench-inspector-separator')),
+      findsOne,
+    );
+
+    final wideCanvasElement = tester.element(find.byType(_CanvasProbe));
+    final wideBaseElement = tester.element(
+      find.byKey(const ValueKey('workbench-base')),
+    );
+    final wideCanvasSlotElement = tester.element(
+      find.byKey(const ValueKey('workbench-canvas-slot')),
+    );
+    final wideCanvasKeyedElement = tester.element(
+      find.byKey(const ValueKey('workbench-canvas')),
+    );
+    final probeState = tester.state<_CanvasProbeState>(
+      find.byType(_CanvasProbe),
+    );
+    expect(probeState.mountCount, 1);
+
+    // Wide → Medium：Inspector 退出 inline，但不引入 Overlay Stack 父级变化。
+    await tester.binding.setSurfaceSize(const Size(900, 500));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('workbench-base')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('workbench-inspector-inline')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('workbench-inspector-overlay')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('workbench-navigation-inline')), findsOne);
+    expect(
+      tester.element(find.byKey(const ValueKey('workbench-base'))),
+      same(wideBaseElement),
+    );
+    expect(
+      tester.element(find.byKey(const ValueKey('workbench-canvas-slot'))),
+      same(wideCanvasSlotElement),
+    );
+    expect(
+      tester.element(find.byKey(const ValueKey('workbench-canvas'))),
+      same(wideCanvasKeyedElement),
+    );
+    expect(tester.element(find.byType(_CanvasProbe)), same(wideCanvasElement));
+    expect(
+      tester.state<_CanvasProbeState>(find.byType(_CanvasProbe)),
+      same(probeState),
+    );
+    expect(probeState.mountCount, 1);
+
+    // Medium → Wide：Inspector 重新 inline，Canvas State 仍保持。
+    await tester.binding.setSurfaceSize(const Size(1200, 500));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('workbench-inspector-inline')), findsOne);
+    expect(
+      find.byKey(const ValueKey('workbench-inspector-overlay')),
+      findsNothing,
+    );
+    expect(
+      tester.element(find.byKey(const ValueKey('workbench-base'))),
+      same(wideBaseElement),
+    );
+    expect(tester.element(find.byType(_CanvasProbe)), same(wideCanvasElement));
+    expect(
+      tester.state<_CanvasProbeState>(find.byType(_CanvasProbe)),
+      same(probeState),
+    );
+    expect(probeState.mountCount, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('条件 slot 插入删除时各直接 child 使用稳定 key', (tester) async {
+    await pumpIdeComponent(
+      tester,
+      size: const Size(1200, 500),
+      child: _buildWorkbench(),
+    );
+
+    expect(find.byKey(const ValueKey('workbench-leading-rail')), findsOne);
+    expect(find.byKey(const ValueKey('workbench-leading-rail-gap')), findsOne);
+    expect(find.byKey(const ValueKey('workbench-navigation-inline')), findsOne);
+    expect(
+      find.byKey(const ValueKey('workbench-navigation-separator')),
+      findsOne,
+    );
+    expect(find.byKey(const ValueKey('workbench-canvas-slot')), findsOne);
+    expect(find.byKey(const ValueKey('workbench-canvas')), findsOne);
+    expect(
+      find.byKey(const ValueKey('workbench-inspector-separator')),
+      findsOne,
+    );
+    expect(find.byKey(const ValueKey('workbench-inspector-inline')), findsOne);
+    expect(find.byKey(const ValueKey('workbench-trailing-rail-gap')), findsOne);
+    expect(find.byKey(const ValueKey('workbench-trailing-rail')), findsOne);
   });
 
   testWidgets('窄屏 Overlay 限制可用宽度且只有一个活动侧', (tester) async {
@@ -221,6 +333,7 @@ Widget _buildWorkbench({
   double navigationWidth = IdeMetrics.sidePaneDefaultWidth,
   double inspectorWidth = IdeMetrics.inspectorPaneWidth,
   FocusNode? triggerFocusNode,
+  Widget canvas = const ColoredBox(color: Colors.green),
   Widget navigationPane = const ColoredBox(color: Colors.orange),
   VoidCallback? onDismissOverlay,
 }) {
@@ -230,7 +343,7 @@ Widget _buildWorkbench({
       child: const ColoredBox(color: Colors.red),
     ),
     navigationPane: navigationPane,
-    canvas: const ColoredBox(color: Colors.green),
+    canvas: canvas,
     inspectorPane: const ColoredBox(color: Colors.blue),
     trailingRailBuilder: (context, mode) =>
         const ColoredBox(color: Colors.purple),
@@ -242,4 +355,27 @@ Widget _buildWorkbench({
         : (onDismissOverlay ?? () {}),
     overlayTriggerFocusNode: triggerFocusNode,
   );
+}
+
+/// 用于验证跨断点切换时 Canvas 子树 State 不会被卸载重建。
+class _CanvasProbe extends StatefulWidget {
+  const _CanvasProbe();
+
+  @override
+  State<_CanvasProbe> createState() => _CanvasProbeState();
+}
+
+class _CanvasProbeState extends State<_CanvasProbe> {
+  int mountCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    mountCount += 1;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const ColoredBox(color: Colors.green);
+  }
 }
