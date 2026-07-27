@@ -34,6 +34,7 @@ import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
+import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
 import 'package:zeta/src/features/agent/presentation/model_config_ui_state.dart';
 
 part 'widgets/agent_pane_cards.dart';

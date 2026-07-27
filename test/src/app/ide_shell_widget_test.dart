@@ -486,9 +486,7 @@ void main() {
     );
     expect(retained.inputController.text, retained.draft);
     final mediumScrollController = tester
-        .widget<SingleChildScrollView>(
-          find.byKey(const ValueKey('agent-message-list')),
-        )
+        .widget<ScrollView>(find.byKey(const ValueKey('agent-message-list')))
         .controller!;
     expect(mediumScrollController, same(retained.scrollController));
     expect(mediumScrollController.offset, closeTo(retained.scrollOffset, 0.1));
@@ -1208,9 +1206,7 @@ Future<_RetainedAgentState> _prepareRetainedAgentState(
         messageList.evaluate().isEmpty) {
       return false;
     }
-    final controller = tester
-        .widget<SingleChildScrollView>(messageList)
-        .controller;
+    final controller = tester.widget<ScrollView>(messageList).controller;
     return controller?.hasClients == true &&
         controller!.position.maxScrollExtent > 0;
   }, failureMessage: 'Retained thread history did not become ready');
@@ -1221,9 +1217,7 @@ Future<_RetainedAgentState> _prepareRetainedAgentState(
   );
   await tester.pump();
 
-  final scrollController = tester
-      .widget<SingleChildScrollView>(messageList)
-      .controller!;
+  final scrollController = tester.widget<ScrollView>(messageList).controller!;
   scrollController.jumpTo(scrollController.position.maxScrollExtent / 2);
   await tester.pump();
 
@@ -1290,9 +1284,7 @@ void _expectRetainedAgentState(
   );
   expect(retained.inputController.text, retained.draft);
   final currentScrollController = tester
-      .widget<SingleChildScrollView>(
-        find.byKey(const ValueKey('agent-message-list')),
-      )
+      .widget<ScrollView>(find.byKey(const ValueKey('agent-message-list')))
       .controller!;
   expect(currentScrollController, same(retained.scrollController));
   expect(currentScrollController.offset, closeTo(retained.scrollOffset, 0.1));

@@ -159,9 +159,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final listFinder = find.byKey(const ValueKey('agent-message-list'));
-    final controller = tester
-        .widget<SingleChildScrollView>(listFinder)
-        .controller!;
+    final controller = tester.widget<ScrollView>(listFinder).controller!;
     controller.jumpTo(0);
     await tester.pumpAndSettle();
 
@@ -1869,9 +1867,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final listFinder = find.byKey(const ValueKey('agent-message-list'));
-    final controller = tester
-        .widget<SingleChildScrollView>(listFinder)
-        .controller!;
+    final controller = tester.widget<ScrollView>(listFinder).controller!;
     controller.jumpTo(0);
     await tester.pumpAndSettle();
     expect(controller.offset, 0);
@@ -1989,9 +1985,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final listFinder = find.byKey(const ValueKey('agent-message-list'));
-    final controller = tester
-        .widget<SingleChildScrollView>(listFinder)
-        .controller!;
+    final controller = tester.widget<ScrollView>(listFinder).controller!;
     controller.jumpTo(0);
     await tester.pumpAndSettle();
     expect(controller.offset, 0);
@@ -2125,9 +2119,7 @@ void main() {
     await pumpLiveAgentUi(tester);
 
     final listFinder = find.byKey(const ValueKey('agent-message-list'));
-    final controller = tester
-        .widget<SingleChildScrollView>(listFinder)
-        .controller!;
+    final controller = tester.widget<ScrollView>(listFinder).controller!;
     expect(controller.position.maxScrollExtent, greaterThan(400));
 
     controller.jumpTo(0);
@@ -2788,7 +2780,7 @@ void main() {
 
       final messageList = find.byKey(const ValueKey('agent-message-list'));
       final timelineController = tester
-          .widget<SingleChildScrollView>(messageList)
+          .widget<ScrollView>(messageList)
           .controller!;
       expect(timelineController.position.maxScrollExtent, greaterThan(100));
       timelineController.jumpTo(0);

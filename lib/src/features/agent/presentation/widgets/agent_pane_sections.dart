@@ -122,7 +122,7 @@ class _AgentConversationLayoutState extends State<_AgentConversationLayout> {
   }
 }
 
-/// 共享 920px 内容轴的可滚动对话区。
+/// 共享 920px 内容轴的可滚动对话区（CustomScrollView + turn 级虚拟化）。
 class _AgentConversationTimeline extends StatelessWidget {
   const _AgentConversationTimeline({
     required this.viewModel,
@@ -141,104 +141,117 @@ class _AgentConversationTimeline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _AgentContentAlign(
-      child: SingleChildScrollView(
-        key: const ValueKey('agent-message-list'),
-        controller: scrollController,
-        padding: pagePadding,
-        // turn 卡片高度差异很大；精确内容高度可避免滚动条反复重估。
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _AgentHistoryTurnsSection(
-              viewModel: viewModel,
-              onLoadOlder: onLoadOlder,
-              buildTurnSection: buildTurnSection,
-            ),
-            _AgentLiveTurnSection(
-              viewModel: viewModel,
-              buildTurnSection: buildTurnSection,
-            ),
-          ],
-        ),
+      child: ListenableBuilder(
+        listenable: Listenable.merge(<Listenable>[
+          viewModel.historyVersionListenable,
+          viewModel.liveTurnListenable,
+        ]),
+        builder: (context, _) {
+          final standby = viewModel.standbyTurnState;
+          final standbySnapshot = standby != null && standby.entries.isNotEmpty
+              ? standby.snapshot()
+              : null;
+          final historyTurns = viewModel.visibleHistoryTurns;
+          final liveTurnState = viewModel.liveTurnState;
+          final liveSnapshot = liveTurnState?.snapshot();
+          final items = projectAgentTimelineViewportItems(
+            hasOlderTurns: viewModel.hasOlderTurns,
+            standbyTurn: standbySnapshot,
+            visibleHistoryTurns: historyTurns,
+            liveTurn: liveSnapshot,
+          );
+          final turnsById = <String, AgentConversationTurnGroup>{
+            for (final turn in <AgentConversationTurnGroup>[
+              ?standbySnapshot,
+              ...historyTurns,
+              ?liveSnapshot,
+            ])
+              turn.id: turn,
+          };
+
+          return CustomScrollView(
+            key: const ValueKey('agent-message-list'),
+            controller: scrollController,
+            // 默认 cacheExtent 保留少量视口外 turn，兼顾滚动流畅与虚拟化收益。
+            slivers: [
+              // 保留 pagePadding；内容最大宽由外层 _AgentContentAlign 约束。
+              SliverPadding(
+                padding: pagePadding,
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final item = items[index];
+                      return KeyedSubtree(
+                        key: ValueKey<String>(
+                          agentTimelineViewportItemKey(item),
+                        ),
+                        child: _buildViewportItem(
+                          item: item,
+                          turnsById: turnsById,
+                          liveTurnState: liveTurnState,
+                        ),
+                      );
+                    },
+                    childCount: items.length,
+                    findChildIndexCallback: (Key key) {
+                      if (key is! ValueKey<String>) {
+                        return null;
+                      }
+                      final value = key.value;
+                      const prefix = 'timeline-viewport-';
+                      if (!value.startsWith(prefix)) {
+                        return null;
+                      }
+                      final id = value.substring(prefix.length);
+                      final index = items.indexWhere((item) => item.id == id);
+                      return index >= 0 ? index : null;
+                    },
+                    // turn 内展开态由 viewModel 持有；允许回收视口外 turn。
+                    addAutomaticKeepAlives: false,
+                    addRepaintBoundaries: true,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
-}
 
-class _AgentHistoryTurnsSection extends StatelessWidget {
-  const _AgentHistoryTurnsSection({
-    required this.viewModel,
-    required this.onLoadOlder,
-    required this.buildTurnSection,
-  });
-
-  final AgentConversationViewModel viewModel;
-  final VoidCallback onLoadOlder;
-  final _TurnSectionBuilder buildTurnSection;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: viewModel.historyVersionListenable,
-      builder: (context, _) {
-        final turns = <AgentConversationTurnGroup>[
-          if (viewModel.standbyTurnState case final standby?
-              when standby.entries.isNotEmpty)
-            standby.snapshot(),
-          ...viewModel.visibleHistoryTurns,
-        ];
-        final children = <Widget>[];
-        if (viewModel.hasOlderTurns) {
-          children.add(
-            _AgentLoadOlderTurnsButton(onPressed: onLoadOlder, loading: false),
+  Widget _buildViewportItem({
+    required AgentTimelineViewportItem item,
+    required Map<String, AgentConversationTurnGroup> turnsById,
+    required AgentConversationTurnState? liveTurnState,
+  }) {
+    switch (item) {
+      case AgentLoadOlderViewportItem():
+        return _AgentLoadOlderTurnsButton(
+          onPressed: onLoadOlder,
+          loading: false,
+        );
+      case AgentTurnViewportItem(:final turnId, :final isLive):
+        if (isLive) {
+          final state = liveTurnState;
+          if (state == null) {
+            return const SizedBox.shrink();
+          }
+          return ListenableBuilder(
+            listenable: state,
+            builder: (context, _) {
+              return KeyedSubtree(
+                key: const ValueKey('agent-live-turn-section'),
+                child: buildTurnSection(state.snapshot()),
+              );
+            },
           );
         }
-        for (final turn in turns) {
-          children.add(buildTurnSection(turn));
-        }
-        return Column(
-          key: const ValueKey('agent-history-turns-section'),
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: children,
-        );
-      },
-    );
-  }
-}
-
-class _AgentLiveTurnSection extends StatelessWidget {
-  const _AgentLiveTurnSection({
-    required this.viewModel,
-    required this.buildTurnSection,
-  });
-
-  final AgentConversationViewModel viewModel;
-  final _TurnSectionBuilder buildTurnSection;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: Listenable.merge(<Listenable>[
-        viewModel.historyVersionListenable,
-        viewModel.liveTurnListenable,
-      ]),
-      builder: (context, _) {
-        final turnState = viewModel.liveTurnState;
-        if (turnState == null) {
+        final turn = turnsById[turnId];
+        if (turn == null) {
           return const SizedBox.shrink();
         }
-        return ListenableBuilder(
-          listenable: turnState,
-          builder: (context, _) {
-            final turn = turnState.snapshot();
-            return KeyedSubtree(
-              key: const ValueKey('agent-live-turn-section'),
-              child: buildTurnSection(turn),
-            );
-          },
-        );
-      },
-    );
+        return buildTurnSection(turn);
+    }
   }
 }
 
