@@ -181,6 +181,11 @@ class GrokUpdatesHistoryParser {
           }
           ensureTurn(sessionId: sessionId, promptId: promptId, at: eventAt);
           current!.noteUserPrompt(userPromptKey);
+          if (user.hideFromScrollback) {
+            // Grok 自动唤醒会把内部 system-reminder 回显写入历史；保留该
+            // turn 的后续 Agent 内容，但不要把内部上下文冒充真实用户输入。
+            continue;
+          }
           final parsed = parseGrokUserContent(_contentText(user.content) ?? '');
           if (parsed.text.isNotEmpty || parsed.localImagePaths.isNotEmpty) {
             current!.addOrMergeUserMessage(

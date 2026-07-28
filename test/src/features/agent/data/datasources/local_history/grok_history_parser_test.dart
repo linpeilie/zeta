@@ -63,6 +63,28 @@ void main() {
       );
     });
 
+    test('hides provider-only user echoes but keeps the agent response', () {
+      const content = r'''
+{"timestamp":1000,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"real question"}},"_meta":{"eventId":"u1","agentTimestampMs":1000000}}}
+{"timestamp":1001,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"main answer"},"_meta":{"promptId":"p1"}},"_meta":{"eventId":"a1","agentTimestampMs":1001000}}}
+{"timestamp":1002,"method":"_x.ai/session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"turn_completed","prompt_id":"p1","stop_reason":"end_turn"},"_meta":{"eventId":"c1","agentTimestampMs":1002000}}}
+{"timestamp":1003,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"<system-reminder>\nBackground task completed\n</system-reminder>"},"_meta":{"promptIndex":2,"hideFromScrollback":true}},"_meta":{"eventId":"u2","agentTimestampMs":1003000}}}
+{"timestamp":1004,"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"background follow-up"},"_meta":{"promptId":"task-completed-bg-1"}},"_meta":{"eventId":"a2","agentTimestampMs":1004000}}}
+{"timestamp":1005,"method":"_x.ai/session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"turn_completed","prompt_id":"task-completed-bg-1","stop_reason":"end_turn"},"_meta":{"eventId":"c2","agentTimestampMs":1005000}}}
+''';
+
+      final snapshot = parser.parse(threadId: 's1', content: content);
+
+      expect(snapshot.turns, hasLength(2));
+      final backgroundTurn = snapshot.turns.last;
+      final messages = backgroundTurn.entries
+          .whereType<AgentHistoryMessageEntry>()
+          .toList();
+      expect(messages, hasLength(1));
+      expect(messages.single.role, AgentMessageRole.agent);
+      expect(messages.single.text, 'background follow-up');
+    });
+
     test('keeps concrete Grok title across status-only updates', () {
       const content = r'''
 {"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"find it"}},"_meta":{"eventId":"u1"}}}

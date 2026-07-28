@@ -14,7 +14,10 @@ void main() {
             'sessionUpdate': 'user_message_chunk',
             'messageId': 'source-user-1',
             'content': <String, Object?>{'type': 'text', 'text': 'hello'},
-            '_meta': <String, Object?>{'promptId': 'prompt-1'},
+            '_meta': <String, Object?>{
+              'promptId': 'prompt-1',
+              'hideFromScrollback': true,
+            },
             'futureField': true,
           },
           '_meta': <String, Object?>{'eventId': 'event-1'},
@@ -27,7 +30,22 @@ void main() {
       expect(chunk.sourceMessageId, 'source-user-1');
       expect(chunk.promptId, 'prompt-1');
       expect(chunk.eventId, 'event-1');
+      expect(chunk.hideFromScrollback, isTrue);
       expect(chunk.raw['futureField'], isTrue);
+    });
+
+    test('keeps ordinary user message chunks visible by default', () {
+      final decoded =
+          decoder.decode(<String, Object?>{
+                'sessionId': 'session-1',
+                'update': <String, Object?>{
+                  'sessionUpdate': 'user_message_chunk',
+                  'content': <String, Object?>{'type': 'text', 'text': 'hello'},
+                },
+              })
+              as AcpUserMessageChunk;
+
+      expect(decoded.hideFromScrollback, isFalse);
     });
 
     test('decodes agent chunks without synthesizing an identity', () {

@@ -70,6 +70,7 @@ final class AcpSessionUpdateDecoder {
           sessionId: sessionId,
           content: update['content'],
           sourceMessageId: _nonEmptyString(update['messageId']),
+          hideFromScrollback: updateMeta?['hideFromScrollback'] == true,
           promptId: promptId,
           eventId: eventId,
           raw: raw,
@@ -256,6 +257,7 @@ final class AcpUserMessageChunk extends AcpSessionUpdate {
     required String sessionId,
     required this.content,
     this.sourceMessageId,
+    this.hideFromScrollback = false,
     super.promptId,
     super.eventId,
     super.raw,
@@ -263,6 +265,9 @@ final class AcpUserMessageChunk extends AcpSessionUpdate {
 
   final Object? content;
   final String? sourceMessageId;
+
+  /// Provider 标记为仅供模型消费、不应进入客户端滚动区的用户回显。
+  final bool hideFromScrollback;
 }
 
 /// Agent 正文 content chunk。
