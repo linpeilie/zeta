@@ -290,12 +290,17 @@ class _PaneInteractiveSurfaceState extends State<PaneInteractiveSurface> {
   bool _hovered = false;
   bool _focused = false;
   bool _pressed = false;
+  Duration _stateTransitionDuration = IdeMotion.durationNormal;
 
   bool get _interactive => widget.enabled && widget.onPressed != null;
 
   @override
   void didUpdateWidget(PaneInteractiveSurface oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (_hasAnimatedVisualChange(oldWidget)) {
+      // selected、禁用态和外部视觉配置变化继续使用常规过渡。
+      _stateTransitionDuration = IdeMotion.durationNormal;
+    }
     final wasInteractive = oldWidget.enabled && oldWidget.onPressed != null;
     if (wasInteractive && !_interactive) {
       // 手势进行中被业务状态禁用时，不能把瞬时交互态带到下一次启用。
@@ -305,12 +310,41 @@ class _PaneInteractiveSurfaceState extends State<PaneInteractiveSurface> {
     }
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 主题等继承配置变化不是 hover 事件，应保持常规视觉过渡。
+    _stateTransitionDuration = IdeMotion.durationNormal;
+  }
+
+  bool _hasAnimatedVisualChange(PaneInteractiveSurface oldWidget) {
+    return oldWidget.width != widget.width ||
+        oldWidget.height != widget.height ||
+        oldWidget.alignment != widget.alignment ||
+        oldWidget.padding != widget.padding ||
+        oldWidget.borderRadius != widget.borderRadius ||
+        oldWidget.backgroundColor != widget.backgroundColor ||
+        oldWidget.hoverBackgroundColor != widget.hoverBackgroundColor ||
+        oldWidget.pressedBackgroundColor != widget.pressedBackgroundColor ||
+        oldWidget.selectedBackgroundColor != widget.selectedBackgroundColor ||
+        oldWidget.selectedHoverBackgroundColor !=
+            widget.selectedHoverBackgroundColor ||
+        oldWidget.borderColor != widget.borderColor ||
+        oldWidget.focusBorderColor != widget.focusBorderColor ||
+        oldWidget.selectedBorderColor != widget.selectedBorderColor ||
+        oldWidget.selected != widget.selected ||
+        oldWidget.enabled != widget.enabled ||
+        (oldWidget.onPressed == null) != (widget.onPressed == null);
+  }
+
   void _setHovered(bool value) {
     if (_hovered == value) {
       return;
     }
     setState(() {
       _hovered = value;
+      // hover 进入只做快速反馈，退出立即清除，避免密集列表产生背景残影。
+      _stateTransitionDuration = value ? IdeMotion.durationFast : Duration.zero;
     });
     widget.onHoverChanged?.call(value);
   }
@@ -321,6 +355,7 @@ class _PaneInteractiveSurfaceState extends State<PaneInteractiveSurface> {
     }
     setState(() {
       _focused = value;
+      _stateTransitionDuration = IdeMotion.durationNormal;
     });
     widget.onFocusChanged?.call(value);
   }
@@ -331,6 +366,7 @@ class _PaneInteractiveSurfaceState extends State<PaneInteractiveSurface> {
     }
     setState(() {
       _pressed = value;
+      _stateTransitionDuration = IdeMotion.durationNormal;
     });
   }
 
@@ -398,7 +434,7 @@ class _PaneInteractiveSurfaceState extends State<PaneInteractiveSurface> {
             onTapUp: _interactive ? (_) => _setPressed(false) : null,
             onTapCancel: _interactive ? () => _setPressed(false) : null,
             child: AnimatedContainer(
-              duration: IdeMotion.durationNormal,
+              duration: _stateTransitionDuration,
               curve: IdeMotion.curveDefault,
               width: widget.width,
               height: widget.height,

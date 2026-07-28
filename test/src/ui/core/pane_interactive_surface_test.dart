@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_motion.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 
 void main() {
@@ -34,6 +35,8 @@ void main() {
       expect(_decorationOf(tester).color, colors.hoverSurface);
 
       final press = await tester.startGesture(tester.getCenter(_surfaceFinder));
+      await tester.pump();
+      expect(_animatedContainerOf(tester).duration, IdeMotion.durationNormal);
       await tester.pumpAndSettle();
       expect(_decorationOf(tester).color, colors.pressedSurface);
       await press.up();
@@ -46,6 +49,7 @@ void main() {
         focusNode: focusNode,
         selected: true,
       );
+      expect(_animatedContainerOf(tester).duration, IdeMotion.durationNormal);
       await tester.pumpAndSettle();
       expect(_decorationOf(tester).color, colors.selectedSurface);
 
@@ -78,6 +82,32 @@ void main() {
     });
   }
 
+  testWidgets('hover 进入使用快速动效且退出立即清除', (tester) async {
+    final focusNode = FocusNode();
+    addTearDown(focusNode.dispose);
+    await _pumpSurface(
+      tester,
+      themeMode: ThemeMode.light,
+      focusNode: focusNode,
+    );
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: Offset.zero);
+    await mouse.moveTo(tester.getCenter(_surfaceFinder));
+    await tester.pump();
+
+    expect(_animatedContainerOf(tester).duration, IdeMotion.durationFast);
+    await tester.pumpAndSettle();
+    expect(_decorationOf(tester).color, IdeColors.light.hoverSurface);
+
+    await mouse.moveTo(Offset.zero);
+    await tester.pump();
+
+    expect(_animatedContainerOf(tester).duration, Duration.zero);
+    expect(_decorationOf(tester).color, Colors.transparent);
+  });
+
   testWidgets('无点击回调的展示型表面不会进入 hover 状态', (tester) async {
     final focusNode = FocusNode();
     addTearDown(focusNode.dispose);
@@ -103,14 +133,17 @@ void main() {
 const _surfaceKey = ValueKey<String>('interactive-surface');
 final _surfaceFinder = find.byKey(_surfaceKey);
 
-BoxDecoration _decorationOf(WidgetTester tester) {
-  final container = tester.widget<AnimatedContainer>(
+AnimatedContainer _animatedContainerOf(WidgetTester tester) {
+  return tester.widget<AnimatedContainer>(
     find.descendant(
       of: _surfaceFinder,
       matching: find.byType(AnimatedContainer),
     ),
   );
-  return container.decoration! as BoxDecoration;
+}
+
+BoxDecoration _decorationOf(WidgetTester tester) {
+  return _animatedContainerOf(tester).decoration! as BoxDecoration;
 }
 
 Future<void> _pumpSurface(
