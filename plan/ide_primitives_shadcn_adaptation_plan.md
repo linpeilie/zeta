@@ -2,7 +2,7 @@
 
 > 版本：v1.0  
 > 日期：2026-07-28  
-> 状态：待实施  
+> 状态：P0/P1 已完成；P2 已实施并通过门禁；P3 未启动
 > 适用基线：`flutter` 分支；UI 库已切换为 `shadcn_flutter: 0.0.52`  
 > 相关历史文档：  
 > - `plan/shadcn_flutter_replacement_plan.md`（库切换落地计划，已完成路径）  
@@ -431,8 +431,8 @@ P3 **不设硬性工期**；不得阻塞 P0/P1。
 
 ### P2（可选）
 
-- [ ] `IdeContextMenu` 底层评估原型
-- [ ] 通过后替换实现并回归 more actions
+- [x] `IdeContextMenu` 底层评估原型
+- [x] 通过后替换实现并回归 more actions
 
 ### P3（按需）
 

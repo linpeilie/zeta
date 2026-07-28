@@ -1876,11 +1876,26 @@ void main() {
             lessThanOrEqualTo(tester.getRect(moreActionsButton).top),
           );
 
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+          await _pumpUntilFinderAbsent(tester, popover);
+          expect(
+            FocusManager.instance.primaryFocus?.debugLabel,
+            'agent-more-actions-trigger',
+          );
+
+          await tester.tap(moreActionsButton);
+          await tester.pump(const Duration(milliseconds: 300));
+          expect(popover, findsOneWidget);
+
           await tester.tap(planAction);
           await _pumpUntilFinderAbsent(tester, popover);
           await tester.pump();
 
           expect(popover, findsNothing);
+          expect(
+            FocusManager.instance.primaryFocus?.debugLabel,
+            'agent-more-actions-trigger',
+          );
           expect(
             viewModel.selectedConversationMode,
             AgentConversationModeId.plan,
@@ -2190,6 +2205,25 @@ void main() {
               moreOrLessEquals(wideWidths[index], epsilon: 0.5),
             );
           }
+          await tester.tap(moreActionsButton);
+          await tester.pump(const Duration(milliseconds: 300));
+          final moreActionsPopover = find.byKey(
+            const ValueKey('agent-more-actions-popover'),
+          );
+          final popoverRect = tester.getRect(moreActionsPopover);
+          expect(popoverRect.left, greaterThanOrEqualTo(IdeSpacing.space12));
+          expect(
+            popoverRect.right,
+            lessThanOrEqualTo(
+              tester.view.physicalSize.width - IdeSpacing.space12,
+            ),
+          );
+          expect(
+            popoverRect.bottom,
+            lessThanOrEqualTo(tester.getRect(moreActionsButton).top),
+          );
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+          await _pumpUntilFinderAbsent(tester, moreActionsPopover);
           expect(tester.takeException(), isNull);
         },
       );
