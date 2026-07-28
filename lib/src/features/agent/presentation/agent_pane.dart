@@ -319,7 +319,10 @@ class _AgentPaneState extends State<AgentPane> {
                       onPlanRevisionRequested: _composerFocusNode.requestFocus,
                     ),
                     ListenableBuilder(
-                      listenable: widget.viewModel.composerVersionListenable,
+                      listenable: Listenable.merge(<Listenable>[
+                        widget.viewModel.composerVersionListenable,
+                        widget.viewModel.pendingInteractionVersionListenable,
+                      ]),
                       builder: (context, _) {
                         return Column(
                           mainAxisSize: MainAxisSize.min,
@@ -333,7 +336,7 @@ class _AgentPaneState extends State<AgentPane> {
                               ),
                             if (widget.viewModel.isReadOnly)
                               _AgentReadOnlyNotice(pagePadding: pagePadding)
-                            else
+                            else if (widget.viewModel.questionRequests.isEmpty)
                               _AgentComposerSection(
                                 key: const ValueKey('agent-composer-section'),
                                 viewModel: widget.viewModel,

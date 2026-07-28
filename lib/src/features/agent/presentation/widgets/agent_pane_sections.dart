@@ -594,6 +594,12 @@ class _AgentPendingInteractionSection extends StatelessWidget {
     final maxHeight = panelHeight.isFinite
         ? math.min<double>(360, panelHeight * 0.35)
         : 360.0;
+    final scrollIdentity = <String>[
+      for (final request in permissionRequests) 'permission:${request.id}',
+      for (final request in questionRequests) 'question:${request.id}',
+      for (final request in planApprovalRequests) 'plan:${request.id}',
+      if (planExecutionRequest != null) 'execution:${planExecutionRequest.id}',
+    ].join('|');
     return _AgentContentAlign(
       child: Padding(
         padding: pagePadding.copyWith(top: IdeSpacing.space8, bottom: 0),
@@ -601,7 +607,9 @@ class _AgentPendingInteractionSection extends StatelessWidget {
           key: const ValueKey('agent-pending-interaction-dock'),
           constraints: BoxConstraints(maxHeight: maxHeight),
           child: SingleChildScrollView(
-            key: const ValueKey('agent-pending-interaction-scroll'),
+            key: ValueKey<String>(
+              'agent-pending-interaction-scroll-$scrollIdentity',
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,

@@ -16,6 +16,7 @@ import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_motion.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 
@@ -3049,6 +3050,10 @@ void main() {
         ),
       );
       await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('agent-message-input')),
+        findsNothing,
+      );
 
       await tester.tap(
         find.byKey(
@@ -3060,9 +3065,10 @@ void main() {
           const ValueKey<String>('agent-question-question-live-scope-tests'),
         ),
       );
+      await tester.pump(IdeMotion.durationFast);
       await tester.tap(
         find.byKey(
-          const ValueKey<String>('agent-question-submit-question-live'),
+          const ValueKey<String>('agent-question-submit-question-live-scope'),
         ),
       );
       await tester.pump();
@@ -3073,6 +3079,10 @@ void main() {
         'tests',
       ]);
       expect(provider.permissionDecisions, isEmpty);
+      expect(
+        find.byKey(const ValueKey<String>('agent-message-input')),
+        findsOneWidget,
+      );
 
       provider.emit(
         const AgentMessageUpdatedEvent(
