@@ -8,7 +8,9 @@ import 'package:window_manager/window_manager.dart';
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
+import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_motion.dart';
+import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 
@@ -125,54 +127,71 @@ class _TitleBar extends StatelessWidget {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final isMac = Platform.isMacOS;
-    return Container(
-      height: 28,
+    // 最小高度保证无菜单时仍可拖拽；有 Menubar 时由内容撑开，不再锁死固定像素。
+    // Column 给非 flex 子项无限高约束，不能用 CrossAxisAlignment.stretch。
+    return ColoredBox(
       color: colors.frame,
-      child: Row(
-        children: [
-          // macOS 下左侧让出交通灯按钮的空间，且不拦截点击。
-          if (isMac) const SizedBox(width: 76),
-          if (menus.isNotEmpty) _WindowMenuBar(menus: menus),
-          Expanded(
-            child: DragToMoveArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    appTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textStyles.bodyMedium.copyWith(
-                      color: colors.textSecondary,
+      child: ConstrainedBox(
+        key: const ValueKey('window-title-bar'),
+        constraints: const BoxConstraints(minHeight: IdeMetrics.titleBarHeight),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: IdeSpacing.space2),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // macOS 下左侧让出交通灯按钮的空间，且不拦截点击。
+              if (isMac) const SizedBox(width: 76),
+              if (menus.isNotEmpty) _WindowMenuBar(menus: menus),
+              Expanded(
+                child: DragToMoveArea(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: IdeSpacing.space10,
+                    ),
+                    // heightFactor 避免 Row 在无限高约束下把 Align 拉爆。
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      heightFactor: 1,
+                      child: Text(
+                        appTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textStyles.bodyMedium.copyWith(
+                          color: colors.textSecondary,
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
+              if (titleBarActions.isNotEmpty)
+                Padding(
+                  padding: EdgeInsets.only(
+                    left: IdeSpacing.space4,
+                    right: !isMac && showWindowControls
+                        ? IdeSpacing.space2
+                        : IdeSpacing.space6,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final action in titleBarActions)
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            left: IdeSpacing.space4,
+                          ),
+                          child: _TitleBarActionButton(
+                            key: action.key,
+                            action: action,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              if (!isMac && showWindowControls) const _WindowButtons(),
+            ],
           ),
-          if (titleBarActions.isNotEmpty)
-            Padding(
-              padding: EdgeInsets.only(
-                left: 4,
-                right: !isMac && showWindowControls ? 2 : 6,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final action in titleBarActions)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4),
-                      child: _TitleBarActionButton(
-                        key: action.key,
-                        action: action,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          if (!isMac && showWindowControls) const _WindowButtons(),
-        ],
+        ),
       ),
     );
   }
@@ -190,7 +209,7 @@ class _WindowMenuBar extends StatelessWidget {
     final textStyles = IdeTextStyles.of(context);
     final theme = sf.Theme.of(context);
 
-    // 标题栏高度仅 28px：压紧 menubar 密度，并沿用 IDE body 字号/次级色。
+    // 使用 Menubar 自然尺寸；仅对齐 IDE 字号与次级/主色语义。
     final menubarTextStyle = textStyles.bodyMedium.copyWith(
       color: colors.textSecondary,
     );
@@ -199,69 +218,63 @@ class _WindowMenuBar extends StatelessWidget {
     );
 
     return Padding(
-      padding: const EdgeInsets.only(left: 4),
-      child: sf.Theme(
-        data: theme.copyWith(density: () => sf.Density.compactDensity),
+      padding: const EdgeInsets.only(left: IdeSpacing.space4),
+      child: sf.ComponentTheme(
+        data: sf.MenubarButtonTheme(
+          textStyle: (context, states, value) {
+            final openOrHover =
+                states.contains(WidgetState.hovered) ||
+                states.contains(WidgetState.selected) ||
+                states.contains(WidgetState.focused);
+            return menubarTextStyle.copyWith(
+              color: openOrHover ? colors.textPrimary : colors.textSecondary,
+            );
+          },
+          decoration: (context, states, value) {
+            final openOrHover =
+                states.contains(WidgetState.hovered) ||
+                states.contains(WidgetState.selected) ||
+                states.contains(WidgetState.focused);
+            if (!openOrHover || states.contains(WidgetState.disabled)) {
+              return const BoxDecoration();
+            }
+            final isDark = theme.brightness == Brightness.dark;
+            return BoxDecoration(
+              color: colors.border.withValues(alpha: isDark ? 0.26 : 0.38),
+              borderRadius: IdeRadius.allSmall,
+            );
+          },
+        ),
         child: sf.ComponentTheme(
-          data: sf.MenubarButtonTheme(
-            padding: (context, states, value) {
-              return const EdgeInsets.symmetric(horizontal: 10, vertical: 2);
-            },
+          data: sf.MenuButtonTheme(
             textStyle: (context, states, value) {
-              final openOrHover =
-                  states.contains(WidgetState.hovered) ||
-                  states.contains(WidgetState.selected) ||
-                  states.contains(WidgetState.focused);
-              return menubarTextStyle.copyWith(
-                color: openOrHover ? colors.textPrimary : colors.textSecondary,
-              );
-            },
-            decoration: (context, states, value) {
-              final openOrHover =
-                  states.contains(WidgetState.hovered) ||
-                  states.contains(WidgetState.selected) ||
-                  states.contains(WidgetState.focused);
-              if (!openOrHover || states.contains(WidgetState.disabled)) {
-                return const BoxDecoration();
+              if (states.contains(WidgetState.disabled)) {
+                return menuItemTextStyle.copyWith(color: colors.textTertiary);
               }
-              final isDark = theme.brightness == Brightness.dark;
-              return BoxDecoration(
-                color: colors.border.withValues(alpha: isDark ? 0.26 : 0.38),
-                borderRadius: IdeRadius.allSmall,
-              );
+              return menuItemTextStyle;
             },
           ),
-          child: sf.ComponentTheme(
-            data: sf.MenuButtonTheme(
-              textStyle: (context, states, value) {
-                if (states.contains(WidgetState.disabled)) {
-                  return menuItemTextStyle.copyWith(color: colors.textTertiary);
-                }
-                return menuItemTextStyle;
-              },
-            ),
-            child: sf.Menubar(
-              border: false,
-              popoverOffset: const Offset(0, 4),
-              children: [
-                for (final menu in menus)
-                  sf.MenuButton(
-                    key: menu.key,
-                    subMenu: [
-                      for (final item in menu.items)
-                        sf.MenuButton(
-                          key: item.key,
-                          enabled: item.onPressed != null,
-                          onPressed: item.onPressed == null
-                              ? null
-                              : (context) => item.onPressed!.call(),
-                          child: Text(item.label),
-                        ),
-                    ],
-                    child: Text(menu.label),
-                  ),
-              ],
-            ),
+          child: sf.Menubar(
+            border: false,
+            popoverOffset: const Offset(0, IdeSpacing.space4),
+            children: [
+              for (final menu in menus)
+                sf.MenuButton(
+                  key: menu.key,
+                  subMenu: [
+                    for (final item in menu.items)
+                      sf.MenuButton(
+                        key: item.key,
+                        enabled: item.onPressed != null,
+                        onPressed: item.onPressed == null
+                            ? null
+                            : (context) => item.onPressed!.call(),
+                        child: Text(item.label),
+                      ),
+                  ],
+                  child: Text(menu.label),
+                ),
+            ],
           ),
         ),
       ),
@@ -364,8 +377,8 @@ class _TitleBarActionButton extends StatelessWidget {
         selected: action.active,
         button: true,
         semanticLabel: action.semanticLabel,
-        width: 28,
-        height: 28,
+        width: IdeMetrics.iconButtonHitSize,
+        height: IdeMetrics.iconButtonHitSize,
         padding: EdgeInsets.zero,
         borderRadius: IdeRadius.allSmall,
         hoverBackgroundColor: action.active
@@ -408,6 +421,8 @@ class _WindowButtonState extends State<_WindowButton> {
     final hoverColor = widget.isClose ? colors.closeHover : colors.windowHover;
     final idleIcon = colors.windowIcon;
     final hoverIcon = widget.isClose ? Colors.white : colors.textPrimary;
+    // 与标题栏 min 高度对齐（扣除上下 2px padding），Menubar 撑高时仍垂直居中。
+    const buttonHeight = IdeMetrics.titleBarHeight - IdeSpacing.space4;
     return IdeTooltip(
       message: widget.tooltip,
       child: MouseRegion(
@@ -418,17 +433,16 @@ class _WindowButtonState extends State<_WindowButton> {
           child: AnimatedContainer(
             duration: IdeMotion.durationFast,
             curve: IdeMotion.curveDefault,
-            width: 38,
-            height: 24,
+            width: 46,
+            height: buttonHeight,
             alignment: Alignment.center,
-            margin: const EdgeInsets.symmetric(horizontal: 1),
             decoration: BoxDecoration(
               color: _hover ? hoverColor : Colors.transparent,
               borderRadius: IdeRadius.allSmall,
             ),
             child: Icon(
               widget.icon,
-              size: 13,
+              size: 14,
               color: _hover ? hoverIcon : idleIcon,
             ),
           ),

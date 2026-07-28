@@ -11,12 +11,11 @@ abstract final class IdeMetrics {
   // 壳层高度
   // ---------------------------------------------------------------------------
 
-  /// 自定义窗口标题栏高度。
+  /// 自定义窗口标题栏最小高度。
   ///
-  /// 目标生效位置：`WindowFrame` 标题栏与窗口控制按钮区。
-  /// 当前未引用：`window_frame.dart` 仍硬编码 `height: 28`，改本值不会生效，
-  /// 需先把硬编码替换为 [titleBarHeight]。
-  static const double titleBarHeight = 28;
+  /// 生效位置：`WindowFrame` 标题栏；有 Menubar 时由内容撑开，不低于本值。
+  /// 窗口控制按钮在可伸展区域内垂直拉满标题栏高度。
+  static const double titleBarHeight = 32;
 
   /// 页面顶栏（标题 + 操作区）固定高度。
   ///
