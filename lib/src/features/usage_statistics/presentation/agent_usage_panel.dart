@@ -60,15 +60,14 @@ class _AgentUsagePanelBody extends StatelessWidget {
   Widget build(BuildContext context) {
     if (controller.providers.isEmpty) {
       if (controller.isLoading) {
-        return const Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IdeLoadingIndicator(width: 40),
-              SizedBox(height: IdeSpacing.space8),
-              Text('正在读取 Agent 用量…'),
-            ],
-          ),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: const [
+            _AgentUsageTopLoadingBar(
+              key: ValueKey<String>('agent-usage-panel-loading'),
+            ),
+            Expanded(child: Center(child: Text('正在读取 Agent 用量…'))),
+          ],
         );
       }
       if (controller.errorMessage != null) {
@@ -84,6 +83,16 @@ class _AgentUsagePanelBody extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // 加载中在面板顶部展示不定进度线性条（含刷新保留旧内容的场景）。
+        if (controller.isLoading)
+          _AgentUsageTopLoadingBar(
+            key: ValueKey<String>(
+              selected.entry != null && selected.isLoading
+                  ? 'agent-usage-provider-refreshing-'
+                        '${selected.provider.providerId}'
+                  : 'agent-usage-panel-loading',
+            ),
+          ),
         if (controller.providers.length > 1)
           Padding(
             padding: const EdgeInsets.fromLTRB(
@@ -110,15 +119,6 @@ class _AgentUsagePanelBody extends StatelessWidget {
               ],
               onChanged: controller.selectProvider,
             ),
-          ),
-        if (selected.entry != null && selected.isLoading)
-          Padding(
-            key: ValueKey<String>(
-              'agent-usage-provider-refreshing-'
-              '${selected.provider.providerId}',
-            ),
-            padding: EdgeInsets.only(top: IdeSpacing.space4),
-            child: sf.Progress(progress: null),
           ),
         if (controller.errorMessage case final error?)
           Padding(
@@ -154,6 +154,21 @@ class _AgentUsagePanelBody extends StatelessWidget {
           child: _SelectedProviderBody(state: selected, controller: controller),
         ),
       ],
+    );
+  }
+}
+
+/// Agent 统计面板顶部不定进度条，使用 shadcn [sf.LinearProgressIndicator]。
+class _AgentUsageTopLoadingBar extends StatelessWidget {
+  const _AgentUsageTopLoadingBar({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    return sf.LinearProgressIndicator(
+      minHeight: 2,
+      color: colors.accent,
+      backgroundColor: colors.borderSubtle,
     );
   }
 }
@@ -204,20 +219,14 @@ class _ProviderLoadingState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 顶部已由 [_AgentUsageTopLoadingBar] 展示线性进度，正文仅保留说明文案。
     return Center(
       key: ValueKey<String>(
         'agent-usage-provider-loading-${provider.providerId}',
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const IdeLoadingIndicator(width: 40),
-          const SizedBox(height: IdeSpacing.space8),
-          Text(
-            '正在读取 ${provider.providerName} 用量…',
-            textAlign: TextAlign.center,
-          ),
-        ],
+      child: Text(
+        '正在读取 ${provider.providerName} 用量…',
+        textAlign: TextAlign.center,
       ),
     );
   }
