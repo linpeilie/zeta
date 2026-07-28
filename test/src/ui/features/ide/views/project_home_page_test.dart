@@ -1,7 +1,10 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
+import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/features/ide/views/project_home_page.dart';
 
@@ -61,6 +64,32 @@ void main() {
     expect(
       find.descendant(of: firstThread, matching: find.text('Codex')),
       findsNothing,
+    );
+
+    final threadSurface = find.descendant(
+      of: firstThread,
+      matching: find.byType(PaneInteractiveSurface),
+    );
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    addTearDown(mouse.removePointer);
+    await mouse.moveTo(tester.getCenter(firstThread));
+    await tester.pumpAndSettle();
+
+    final hoverDecoration =
+        tester
+                .widget<AnimatedContainer>(
+                  find.descendant(
+                    of: threadSurface,
+                    matching: find.byType(AnimatedContainer),
+                  ),
+                )
+                .decoration
+            as BoxDecoration;
+    expect(hoverDecoration.borderRadius, IdeRadius.allSmall);
+    expect(
+      hoverDecoration.color,
+      IdeColors.of(tester.element(threadSurface)).hoverSurface,
     );
 
     await tester.tap(
@@ -153,16 +182,16 @@ void main() {
         findsNothing,
       );
 
-      final flatSurfaces = tester.widgetList<PaneInteractiveSurface>(
+      final interactiveSurfaces = tester.widgetList<PaneInteractiveSurface>(
         find.descendant(
           of: find.byType(ProjectHomePage),
           matching: find.byType(PaneInteractiveSurface),
         ),
       );
-      expect(flatSurfaces, isNotEmpty);
+      expect(interactiveSurfaces, isNotEmpty);
       expect(
-        flatSurfaces.every(
-          (surface) => surface.borderRadius == BorderRadius.zero,
+        interactiveSurfaces.every(
+          (surface) => surface.borderRadius == IdeRadius.allSmall,
         ),
         isTrue,
       );

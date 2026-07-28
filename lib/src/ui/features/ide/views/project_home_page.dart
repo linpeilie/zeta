@@ -5,6 +5,7 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_popover.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
@@ -330,7 +331,7 @@ class _RecentThreadRow extends StatelessWidget {
         horizontal: IdeSpacing.space16,
         vertical: IdeSpacing.space12,
       ),
-      borderRadius: BorderRadius.zero,
+      borderRadius: IdeRadius.allSmall,
       backgroundColor: colors.canvasSurface,
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -450,7 +451,7 @@ class _FlatActionButton extends StatelessWidget {
     return PaneInteractiveSurface(
       onPressed: onPressed,
       semanticLabel: semanticLabel,
-      borderRadius: BorderRadius.zero,
+      borderRadius: IdeRadius.allSmall,
       backgroundColor: colors.canvasSurface,
       padding: const EdgeInsets.symmetric(
         horizontal: IdeSpacing.space12,
