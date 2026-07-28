@@ -1,0 +1,58 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+import 'package:zeta/src/ui/core/window_frame.dart';
+
+import 'ide_component_test_harness.dart';
+
+void main() {
+  testWidgets('WindowFrame 使用 shadcn Menubar 渲染标题栏菜单并可激活项', (tester) async {
+    var openProjectPressed = 0;
+
+    await pumpIdeComponent(
+      tester,
+      size: const Size(960, 640),
+      child: WindowFrame(
+        enableNativeWindowFrame: true,
+        showWindowControls: false,
+        menus: [
+          WindowMenu(
+            key: const ValueKey('window-menu-file'),
+            label: '文件',
+            items: [
+              WindowMenuItem(
+                key: const ValueKey('window-menu-open-project'),
+                label: '打开项目',
+                onPressed: () => openProjectPressed += 1,
+              ),
+              const WindowMenuItem(
+                key: ValueKey('window-menu-exit'),
+                label: '退出',
+              ),
+            ],
+          ),
+        ],
+        child: const ColoredBox(color: Colors.black),
+      ),
+    );
+
+    expect(find.byType(sf.Menubar), findsOneWidget);
+    expect(find.byKey(const ValueKey('window-menu-file')), findsOneWidget);
+    expect(find.text('文件'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('window-menu-file')));
+    // Menubar / popover 可能持有持续动画，避免 pumpAndSettle。
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('打开项目'), findsOneWidget);
+    expect(find.text('退出'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('window-menu-open-project')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(openProjectPressed, 1);
+    expect(tester.takeException(), isNull);
+  });
+}

@@ -7,10 +7,8 @@ import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_context_menu.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_motion.dart';
-import 'package:zeta/src/ui/core/ide_popover.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 
@@ -180,6 +178,7 @@ class _TitleBar extends StatelessWidget {
   }
 }
 
+/// Windows/Linux 标题栏菜单，委托给 [sf.Menubar] 以获得标准悬停切换与键盘导航。
 class _WindowMenuBar extends StatelessWidget {
   const _WindowMenuBar({required this.menus});
 
@@ -187,127 +186,82 @@ class _WindowMenuBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [for (final menu in menus) _WindowMenuButton(menu: menu)],
-      ),
-    );
-  }
-}
-
-class _WindowMenuButton extends StatefulWidget {
-  const _WindowMenuButton({required this.menu});
-
-  final WindowMenu menu;
-
-  @override
-  State<_WindowMenuButton> createState() => _WindowMenuButtonState();
-}
-
-class _WindowMenuButtonState extends State<_WindowMenuButton> {
-  IdePopoverHandle<void>? _popoverEntry;
-  bool _menuOpen = false;
-
-  @override
-  void dispose() {
-    _popoverEntry?.dismiss();
-    _popoverEntry = null;
-    super.dispose();
-  }
-
-  void _toggleMenu() {
-    if (_menuOpen) {
-      _dismissMenu();
-      return;
-    }
-    _showMenu();
-  }
-
-  void _showMenu() {
-    if (_popoverEntry != null) {
-      return;
-    }
-    setState(() {
-      _menuOpen = true;
-    });
-    final entry = showIdePopover<void>(
-      context: context,
-      alignment: Alignment.topLeft,
-      anchorAlignment: Alignment.bottomLeft,
-      offset: const Offset(0, 4),
-      modal: false,
-      builder: (context) {
-        return ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 160),
-          child: IdeContextMenu(
-            actions: [
-              for (final item in widget.menu.items)
-                IdeContextMenuAction(
-                  key: item.key,
-                  label: item.label,
-                  enabled: item.onPressed != null,
-                  onPressed: item.onPressed ?? () {},
-                ),
-            ],
-          ),
-        );
-      },
-    );
-    _popoverEntry = entry;
-    entry.future.whenComplete(() {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        if (identical(_popoverEntry, entry)) {
-          _popoverEntry = null;
-        }
-        _menuOpen = false;
-      });
-    });
-  }
-
-  void _dismissMenu() {
-    final entry = _popoverEntry;
-    if (entry == null) {
-      return;
-    }
-    _popoverEntry = null;
-    setState(() {
-      _menuOpen = false;
-    });
-    entry.dismiss();
-  }
-
-  @override
-  Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final theme = sf.Theme.of(context);
-    final hoverBackground = colors.border.withValues(
-      alpha: theme.brightness == Brightness.dark ? 0.18 : 0.3,
+
+    // 标题栏高度仅 28px：压紧 menubar 密度，并沿用 IDE body 字号/次级色。
+    final menubarTextStyle = textStyles.bodyMedium.copyWith(
+      color: colors.textSecondary,
     );
-    final selectedBackground = colors.border.withValues(
-      alpha: theme.brightness == Brightness.dark ? 0.26 : 0.38,
+    final menuItemTextStyle = textStyles.bodyMedium.copyWith(
+      color: colors.textPrimary,
     );
-    return PaneInteractiveSurface(
-      key: widget.menu.key,
-      onPressed: _toggleMenu,
-      selected: _menuOpen,
-      height: 24,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      borderRadius: IdeRadius.allSmall,
-      hoverBackgroundColor: hoverBackground,
-      selectedBackgroundColor: selectedBackground,
-      child: Center(
-        child: Text(
-          widget.menu.label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: textStyles.bodyMedium.copyWith(
-            color: _menuOpen ? colors.textPrimary : colors.textSecondary,
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: sf.Theme(
+        data: theme.copyWith(density: () => sf.Density.compactDensity),
+        child: sf.ComponentTheme(
+          data: sf.MenubarButtonTheme(
+            padding: (context, states, value) {
+              return const EdgeInsets.symmetric(horizontal: 10, vertical: 2);
+            },
+            textStyle: (context, states, value) {
+              final openOrHover =
+                  states.contains(WidgetState.hovered) ||
+                  states.contains(WidgetState.selected) ||
+                  states.contains(WidgetState.focused);
+              return menubarTextStyle.copyWith(
+                color: openOrHover ? colors.textPrimary : colors.textSecondary,
+              );
+            },
+            decoration: (context, states, value) {
+              final openOrHover =
+                  states.contains(WidgetState.hovered) ||
+                  states.contains(WidgetState.selected) ||
+                  states.contains(WidgetState.focused);
+              if (!openOrHover || states.contains(WidgetState.disabled)) {
+                return const BoxDecoration();
+              }
+              final isDark = theme.brightness == Brightness.dark;
+              return BoxDecoration(
+                color: colors.border.withValues(alpha: isDark ? 0.26 : 0.38),
+                borderRadius: IdeRadius.allSmall,
+              );
+            },
+          ),
+          child: sf.ComponentTheme(
+            data: sf.MenuButtonTheme(
+              textStyle: (context, states, value) {
+                if (states.contains(WidgetState.disabled)) {
+                  return menuItemTextStyle.copyWith(color: colors.textTertiary);
+                }
+                return menuItemTextStyle;
+              },
+            ),
+            child: sf.Menubar(
+              border: false,
+              popoverOffset: const Offset(0, 4),
+              children: [
+                for (final menu in menus)
+                  sf.MenuButton(
+                    key: menu.key,
+                    subMenu: [
+                      for (final item in menu.items)
+                        sf.MenuButton(
+                          key: item.key,
+                          enabled: item.onPressed != null,
+                          onPressed: item.onPressed == null
+                              ? null
+                              : (context) => item.onPressed!.call(),
+                          child: Text(item.label),
+                        ),
+                    ],
+                    child: Text(menu.label),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
