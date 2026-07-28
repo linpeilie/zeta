@@ -1493,7 +1493,7 @@ void main() {
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('agent-header-running-icon')),
-          matching: find.byType(CircularProgressIndicator),
+          matching: find.byType(sf.CircularProgressIndicator),
         ),
         findsOneWidget,
       );
@@ -1709,14 +1709,14 @@ void main() {
       expect(
         find.descendant(
           of: headerRunning,
-          matching: find.byType(CircularProgressIndicator),
+          matching: find.byType(sf.CircularProgressIndicator),
         ),
         findsOneWidget,
       );
       expect(
         find.descendant(
           of: listRunning,
-          matching: find.byType(CircularProgressIndicator),
+          matching: find.byType(sf.CircularProgressIndicator),
         ),
         findsOneWidget,
       );

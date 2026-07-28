@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/main.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -414,7 +415,7 @@ void main() {
       expect(
         find.descendant(
           of: listRunning,
-          matching: find.byType(CircularProgressIndicator),
+          matching: find.byType(sf.CircularProgressIndicator),
         ),
         findsOneWidget,
       );
@@ -438,7 +439,7 @@ void main() {
       expect(
         find.descendant(
           of: projectRunning,
-          matching: find.byType(CircularProgressIndicator),
+          matching: find.byType(sf.CircularProgressIndicator),
         ),
         findsOneWidget,
       );

@@ -147,10 +147,9 @@ class _IdeTooltipState extends State<IdeTooltip> {
   }
 }
 
-/// 紧凑 loading 指示器。
+/// 线性 loading 门面，底层委托 `sf.Progress`。
 ///
-/// runtime 迁移后统一使用 shadcn 的线性进度条，避免继续依赖 Material
-/// CircularProgressIndicator。
+/// feature 应统一使用本门面，不要直接拼装 Material 或裸 `sf` 进度条。
 class IdeLoadingIndicator extends StatelessWidget {
   const IdeLoadingIndicator({
     super.key,
@@ -192,9 +191,10 @@ class IdeLoadingIndicator extends StatelessWidget {
   }
 }
 
-/// 线程执行中的紧凑圆形进度指示（不定进度）。
+/// 圆形 busy 门面，底层委托 `sf.CircularProgressIndicator`。
 ///
-/// 用于标题栏与 thread 列表等窄位布局，替代静态 `autorenew` 图标。
+/// 与 [IdeLoadingIndicator] 一样统一走 shadcn 门面，用于标题栏与 thread 列表等
+/// 窄位 running 态；feature 不应直接拼装 Material 或裸 `sf` 进度条。
 class IdeBusySpinner extends StatelessWidget {
   const IdeBusySpinner({
     super.key,
@@ -212,14 +212,18 @@ class IdeBusySpinner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
+    final indicatorColor = color ?? colors.accent;
     return Semantics(
       label: semanticsLabel,
       child: SizedBox(
         width: size,
         height: size,
-        child: CircularProgressIndicator(
+        child: sf.CircularProgressIndicator(
+          size: size,
           strokeWidth: strokeWidth,
-          color: color ?? colors.accent,
+          color: indicatorColor,
+          backgroundColor: Colors.transparent,
+          value: null,
         ),
       ),
     );
