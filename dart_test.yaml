@@ -1,0 +1,2 @@
+# 大型 Widget 测试单个 worker 会加载完整 IDE Shell，限制并发以避免内存峰值。
+concurrency: 2

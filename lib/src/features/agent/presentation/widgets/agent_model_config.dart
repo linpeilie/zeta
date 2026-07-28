@@ -440,33 +440,8 @@ class _ComposerSelectorTrigger extends StatelessWidget {
         pressedBackgroundColor: colors.border.withValues(alpha: 0.32),
         selectedBackgroundColor: colors.frame.withValues(alpha: 0.72),
         focusBorderColor: colors.focusRing,
-        selectedBorderColor: colors.borderSubtle,
         semanticLabel: semanticLabel,
-        child: Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.bottomCenter,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: IdeSpacing.space2),
-              child: child,
-            ),
-            Positioned(
-              bottom: 0,
-              child: AnimatedContainer(
-                duration: MediaQuery.disableAnimationsOf(context)
-                    ? Duration.zero
-                    : IdeMotion.durationNormal,
-                curve: IdeMotion.curveDefault,
-                width: open ? 18 : 0,
-                height: 2,
-                decoration: BoxDecoration(
-                  color: colors.accent,
-                  borderRadius: IdeRadius.allSmall,
-                ),
-              ),
-            ),
-          ],
-        ),
+        child: child,
       ),
     );
   }

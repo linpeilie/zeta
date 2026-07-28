@@ -304,7 +304,7 @@ void main() {
       expect(codex.conversationModes, isNull);
 
       expect(grok.threadCatalog, isNotNull);
-      expect(grok.threadMutations, isNull);
+      expect(grok.threadMutations, isNotNull);
       expect(grok.threadBranching, isNull);
       expect(grok.turnSteering, isNull);
       expect(grok.interactions, isNotNull);

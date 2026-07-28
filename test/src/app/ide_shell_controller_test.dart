@@ -105,6 +105,45 @@ void main() {
     },
   );
 
+  test('notifies when the selected Agent turn completes', () async {
+    // Arrange
+    var completedTurns = 0;
+    final backend = _ProviderBackend(
+      config: AgentProviderConfig.defaultCodex,
+      threadHistories: const <String, AgentThreadHistorySnapshot>{},
+      completeTurns: true,
+      threadPages: <AgentThreadPage>[],
+    );
+    final shell = IdeShellController(
+      directoryPicker: () async => null,
+      sessionStore: const CallbackIdeSessionStore(
+        loadJson: _loadEmptySession,
+        saveJson: _saveDiscardedSession,
+      ),
+      agentProviderFactory: _RecordingAgentProviderFactory(
+        <String, _ProviderBackend>{defaultAgentProviderId: backend},
+      ),
+      agentProviderConfigStore: MemoryAgentProviderConfigStore(
+        const AgentProviderSettings(
+          providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
+          activeProviderId: defaultAgentProviderId,
+        ),
+      ),
+      onAgentTurnCompleted: () {
+        completedTurns += 1;
+      },
+    );
+    addTearDown(shell.dispose);
+    await _flushAsync();
+
+    // Act
+    await shell.selectedAgentViewModel.sendMessage('run once');
+    await _flushAsync();
+
+    // Assert
+    expect(completedTurns, 1);
+  });
+
   test('allows cross-provider threads to run in parallel', () async {
     final directory = Directory.systemTemp.createTempSync('zeta_shell_');
     tempDirectories.add(directory);

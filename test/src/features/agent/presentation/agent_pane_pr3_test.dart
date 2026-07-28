@@ -1626,6 +1626,19 @@ void main() {
         expect(modelPopoverPanel.color, colors.panel);
         expect(modelPopoverPanel.borderRadius, IdeRadius.allSmall);
         expect(modelPopoverPanel.boxShadow, isEmpty);
+        final openSelectorSurface = tester.widget<PaneInteractiveSurface>(
+          modelSelector,
+        );
+        expect(openSelectorSurface.selected, isTrue);
+        expect(
+          openSelectorSurface.selectedBackgroundColor,
+          colors.frame.withValues(alpha: 0.72),
+        );
+        expect(openSelectorSurface.selectedBorderColor, isNull);
+        expect(
+          find.descendant(of: modelSelector, matching: find.byType(Stack)),
+          findsNothing,
+        );
         final selectedModelSurface = tester.widget<PaneInteractiveSurface>(
           find.byKey(const ValueKey('agent-model-option-gpt-5.5')),
         );

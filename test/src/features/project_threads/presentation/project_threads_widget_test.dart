@@ -1343,7 +1343,7 @@ void main() {
     expect(provider.removedLocalThreads, isEmpty);
   });
 
-  testWidgets('hides thread action menu when Grok lacks lifecycle support', (
+  testWidgets('shows only supported Grok thread lifecycle actions', (
     tester,
   ) async {
     final session = MemorySessionStore();
@@ -1387,6 +1387,43 @@ void main() {
         ValueKey<String>(
           'project-thread-more-menu-${directory.path}-grok-thread',
         ),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(
+        ValueKey<String>(
+          'project-thread-more-menu-${directory.path}-grok-thread',
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(
+      find.byKey(
+        ValueKey<String>('project-thread-rename-${directory.path}-grok-thread'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        ValueKey<String>('project-thread-delete-${directory.path}-grok-thread'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        ValueKey<String>(
+          'project-thread-archive-${directory.path}-grok-thread',
+        ),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.byKey(
+        ValueKey<String>('project-thread-fork-${directory.path}-grok-thread'),
       ),
       findsNothing,
     );

@@ -65,93 +65,6 @@ void main() {
     expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
   });
 
-  testWidgets(
-    'completed Agent turn refreshes all statistics at idle priority',
-    (tester) async {
-      final directory = Directory.systemTemp.createTempSync(
-        'zeta_agent_usage_refresh_',
-      );
-      addTearDown(() {
-        if (directory.existsSync()) {
-          directory.deleteSync(recursive: true);
-        }
-      });
-      final provider = FakeAgentProvider();
-      final repository = _TrackedAgentUsageRepository();
-
-      await _pumpIde(
-        tester,
-        directoryPicker: () async => directory.path,
-        agentProviderFactory: FakeAgentProviderFactory(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-        agentProviderAvailabilityLoader: () async => <AgentProviderConfig>[
-          AgentProviderConfig.defaultCodex,
-        ],
-        agentUsagePanelRepository: repository,
-      );
-      expect(repository.forceRefreshValues, <bool>[true]);
-
-      await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
-      await tester.runAsync(waitForIo);
-      final newThreadButton = find
-          .byKey(const ValueKey<String>('project-home-new-thread-button'))
-          .hitTestable();
-      await pumpUntilCondition(
-        tester,
-        () => newThreadButton.evaluate().isNotEmpty,
-        failureMessage: 'Project home did not become ready',
-      );
-      await tester.tap(newThreadButton);
-      final providerOption = find.byKey(
-        const ValueKey<String>('new-thread-provider-option-codex'),
-      );
-      await pumpUntilCondition(
-        tester,
-        () => providerOption.evaluate().isNotEmpty,
-        failureMessage: 'Agent provider options did not become ready',
-      );
-      await tester.tap(providerOption);
-      await tester.pump();
-      await tester.tap(find.text('创建 Thread'));
-      await pumpUntilCondition(
-        tester,
-        () => _agentMessageInput().hitTestable().evaluate().isNotEmpty,
-        failureMessage: 'Agent draft did not become ready',
-      );
-
-      final scheduler = SchedulerBinding.instance;
-      final previousStrategy = scheduler.schedulingStrategy;
-      scheduler.schedulingStrategy =
-          ({required int priority, required SchedulerBinding scheduler}) =>
-              false;
-      try {
-        await tester.enterText(_agentMessageInput(), 'refresh Agent usage');
-        await tester.pump();
-        await tester.tap(
-          find.byKey(const ValueKey<String>('agent-send-button')),
-        );
-        await pumpUntilCondition(
-          tester,
-          () =>
-              provider.sentMessages.isNotEmpty &&
-              !tester
-                  .widget<AgentPane>(find.byType(AgentPane))
-                  .viewModel
-                  .isTurnRunning,
-          failureMessage: 'Agent turn did not complete',
-        );
-
-        expect(repository.forceRefreshValues, <bool>[true]);
-      } finally {
-        scheduler.schedulingStrategy = previousStrategy;
-      }
-
-      await _flushInitialIdleTasks(tester);
-
-      expect(repository.forceRefreshValues, <bool>[true, true]);
-    },
-  );
-
   testWidgets('activity icons toggle side panel columns', (tester) async {
     await _pumpIde(tester);
 
@@ -1235,12 +1148,14 @@ Future<void> _flushInitialIdleTasks(WidgetTester tester) async {
   scheduler.schedulingStrategy =
       ({required int priority, required SchedulerBinding scheduler}) => true;
   try {
-    scheduler.handleEventLoopCallback();
+    // 通过正常事件循环执行 `scheduleTask`，避免直接调用
+    // `handleEventLoopCallback` 后遗留 scheduler 的待回调标记。
+    await tester.pump();
     await tester.idle();
+    await tester.pump();
   } finally {
     scheduler.schedulingStrategy = previousStrategy;
   }
-  await tester.pump();
 }
 
 ManagedAgent _installedAgent(AgentDefinition definition) {

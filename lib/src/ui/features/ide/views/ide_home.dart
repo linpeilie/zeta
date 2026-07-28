@@ -23,8 +23,9 @@ import 'package:zeta/src/features/settings/application/appearance_settings_contr
 import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
-import 'package:zeta/src/features/usage_statistics/application/usage_statistics_controller.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_controller.dart';
+import 'package:zeta/src/features/usage_statistics/application/agent_usage_refresh_coordinator.dart';
+import 'package:zeta/src/features/usage_statistics/application/usage_statistics_controller.dart';
 import 'package:zeta/src/features/usage_statistics/data/codex_usage_statistics_repository.dart';
 import 'package:zeta/src/features/usage_statistics/data/provider_agent_usage_panel_repository.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_index_store.dart';
@@ -110,9 +111,7 @@ class _IdeHomeState extends State<IdeHome> {
   late final AgentManagementController _agentManagementController;
   late final UsageStatisticsController _usageStatisticsController;
   late final AgentUsagePanelController _agentUsagePanelController;
-  bool _agentUsageRefreshScheduled = false;
-  bool _agentUsageRefreshRunning = false;
-  bool _agentUsageRefreshPending = false;
+  late final AgentUsageRefreshCoordinator _agentUsageRefreshCoordinator;
 
   bool _leftTopVisible = true;
   bool _leftBottomVisible = false;
@@ -201,6 +200,18 @@ class _IdeHomeState extends State<IdeHome> {
             seedIndexStore: widget.usageStatisticsIndexStore,
           ),
     );
+    _agentUsageRefreshCoordinator = AgentUsageRefreshCoordinator(
+      refresh: _agentUsagePanelController.refresh,
+      schedule: (task) {
+        unawaited(
+          SchedulerBinding.instance.scheduleTask<void>(
+            task,
+            Priority.idle,
+            debugLabel: 'refresh Agent usage statistics',
+          ),
+        );
+      },
+    );
     if (widget.enableAgentUsageAutoRefresh) {
       _scheduleInitialAgentUsageRefresh();
     }
@@ -217,6 +228,7 @@ class _IdeHomeState extends State<IdeHome> {
     }
     _shellController.removeListener(_handleShellChanged);
     _usageStatisticsController.dispose();
+    _agentUsageRefreshCoordinator.dispose();
     _agentUsagePanelController.dispose();
     _agentManagementController.removeListener(_handleAgentManagementChanged);
     _agentManagementController.dispose();
@@ -825,37 +837,7 @@ class _IdeHomeState extends State<IdeHome> {
     if (!mounted || !widget.enableAgentUsageAutoRefresh) {
       return;
     }
-    if (_agentUsageRefreshRunning) {
-      _agentUsageRefreshPending = true;
-      return;
-    }
-    if (_agentUsageRefreshScheduled) {
-      return;
-    }
-
-    _agentUsageRefreshScheduled = true;
-    unawaited(
-      SchedulerBinding.instance.scheduleTask<void>(
-        () async {
-          _agentUsageRefreshScheduled = false;
-          if (!mounted) {
-            return;
-          }
-          _agentUsageRefreshRunning = true;
-          try {
-            await _agentUsagePanelController.refresh();
-          } finally {
-            _agentUsageRefreshRunning = false;
-            if (_agentUsageRefreshPending) {
-              _agentUsageRefreshPending = false;
-              _requestAgentUsageRefresh();
-            }
-          }
-        },
-        Priority.idle,
-        debugLabel: 'refresh Agent usage statistics',
-      ),
-    );
+    _agentUsageRefreshCoordinator.requestRefresh();
   }
 
   void _toggleLeftPanel({
