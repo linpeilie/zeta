@@ -2245,17 +2245,25 @@ void main() {
           expect(permissionPopoverPanel.color, colors.panel);
           expect(permissionPopoverPanel.borderRadius, IdeRadius.allSmall);
           expect(permissionPopoverPanel.boxShadow, isEmpty);
-          final selectedOption = tester.widget<PaneInteractiveSurface>(
-            find.byKey(const ValueKey('agent-permission-preset-workspace')),
-          );
-          expect(selectedOption.height, 32);
-          expect(selectedOption.borderRadius, IdeRadius.allSmall);
-          expect(selectedOption.selected, isTrue);
           expect(
-            selectedOption.selectedBackgroundColor?.a,
-            closeTo(0.2, 0.001),
+            find.byType(sf.SelectPopup<AgentPermissionPreset>),
+            findsOneWidget,
           );
-          expect(selectedOption.focusBorderColor, colors.focusRing);
+          final selectedOption = tester
+              .widget<sf.SelectItemButton<AgentPermissionPreset>>(
+                find.byKey(const ValueKey('agent-permission-preset-workspace')),
+              );
+          expect(selectedOption.value.id, 'workspace');
+          expect(selectedOption.enabled, isNull);
+          expect(
+            find.descendant(
+              of: find.byKey(
+                const ValueKey('agent-permission-preset-workspace'),
+              ),
+              matching: find.text('Ask first'),
+            ),
+            findsOneWidget,
+          );
 
           await tester.tap(
             find.byKey(const ValueKey('agent-permission-preset-fullAccess')),
@@ -2266,6 +2274,24 @@ void main() {
           expect(viewModel.permissionSelection.matchedPresetId, 'fullAccess');
           expect(popover, findsNothing);
           expect(find.text('Full access · Never ask'), findsOneWidget);
+          expect(
+            FocusManager.instance.primaryFocus?.debugLabel,
+            'agent-permission-policy-trigger',
+          );
+
+          await tester.tap(permissionSelector);
+          await tester.pump(const Duration(milliseconds: 300));
+          await tester.pump();
+          expect(popover, findsOneWidget);
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 300));
+          await tester.pump();
+          expect(popover, findsNothing);
+          expect(
+            FocusManager.instance.primaryFocus?.debugLabel,
+            'agent-permission-policy-trigger',
+          );
         },
       );
 
@@ -3091,16 +3117,38 @@ void main() {
           );
           await tester.pump();
           await tester.pump(const Duration(milliseconds: 300));
+          expect(find.byType(sf.SelectPopup<Object>), findsOneWidget);
           await tester.tap(
             find.byKey(
               const ValueKey('agent-session-config-cursor-model-option-smart'),
             ),
           );
           await tester.pump();
+          await tester.pump(const Duration(milliseconds: 300));
 
           expect(provider.sessionConfigSelections, <(String, String, Object)>[
             ('thread-config', 'cursor-model', 'smart'),
           ]);
+          expect(
+            FocusManager.instance.primaryFocus?.debugLabel,
+            'agent-session-selector-trigger',
+          );
+
+          await tester.tap(
+            find.byKey(const ValueKey('agent-session-config-cursor-model')),
+          );
+          await tester.pump(const Duration(milliseconds: 300));
+          await tester.pump();
+          expect(find.byType(sf.SelectPopup<Object>), findsOneWidget);
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 300));
+          await tester.pump();
+          expect(find.byType(sf.SelectPopup<Object>), findsNothing);
+          expect(
+            FocusManager.instance.primaryFocus?.debugLabel,
+            'agent-session-selector-trigger',
+          );
         },
       );
 

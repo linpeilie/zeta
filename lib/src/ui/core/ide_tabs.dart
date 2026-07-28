@@ -165,6 +165,7 @@ class IdeTab extends StatelessWidget {
     this.enabled = true,
     this.onPressed,
     this.semanticLabel,
+    this.focusNode,
   });
 
   /// 控件中显示的短标签。
@@ -188,10 +189,14 @@ class IdeTab extends StatelessWidget {
   /// 覆盖标签文本的无障碍名称。
   final String? semanticLabel;
 
+  /// 用于关闭弹层后将键盘焦点还给该 Tab。
+  final FocusNode? focusNode;
+
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     return PaneInteractiveSurface(
+      focusNode: focusNode,
       onPressed: enabled ? onPressed : null,
       enabled: enabled,
       selected: selected,

@@ -64,7 +64,7 @@ class _AgentModeSelectorState extends State<AgentModeSelector> {
   final FocusNode _triggerFocusNode = FocusNode(
     debugLabel: 'agent-mode-selector-trigger',
   );
-  IdePopoverHandle<void>? _popoverEntry;
+  late final _ComposerSelectorPopoverController _popoverController;
 
   bool get _canOpen =>
       widget.status == AgentModeSelectorStatus.ready &&
@@ -72,10 +72,23 @@ class _AgentModeSelectorState extends State<AgentModeSelector> {
       widget.presets.any((preset) => preset.isSelectable);
 
   @override
+  void initState() {
+    super.initState();
+    _popoverController = _ComposerSelectorPopoverController(
+      triggerFocusNode: _triggerFocusNode,
+      onOpenChanged: () {
+        if (mounted) {
+          setState(() {});
+        }
+      },
+    );
+  }
+
+  @override
   void didUpdateWidget(covariant AgentModeSelector oldWidget) {
     super.didUpdateWidget(oldWidget);
     final shouldDismiss =
-        _popoverEntry != null &&
+        _popoverController.isOpen &&
         (!_canOpen ||
             oldWidget.contextId != widget.contextId ||
             oldWidget.status != widget.status ||
@@ -84,93 +97,37 @@ class _AgentModeSelectorState extends State<AgentModeSelector> {
     if (!shouldDismiss) {
       return;
     }
-    final entry = _popoverEntry;
+    final entry = _popoverController.handle;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && identical(_popoverEntry, entry)) {
-        entry?.dismiss();
+      if (mounted) {
+        _popoverController.dismiss(entry);
       }
     });
   }
 
   @override
   void dispose() {
-    _popoverEntry?.dismiss();
+    _popoverController.dispose();
     _triggerFocusNode.dispose();
     super.dispose();
   }
 
   void _togglePopover() {
-    final entry = _popoverEntry;
-    if (entry != null) {
-      entry.dismiss();
+    if (!_popoverController.isOpen && !_canOpen) {
       return;
     }
-    _showPopover();
-  }
-
-  void _showPopover() {
-    if (_popoverEntry != null || !_canOpen) {
-      return;
-    }
-    final mediaQuery = MediaQuery.of(context);
-    final viewport = mediaQuery.size;
-    final renderBox = context.findRenderObject() as RenderBox?;
-    final origin = renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
-    final triggerHeight = renderBox?.size.height ?? 28;
-    final spaceAbove = origin.dy;
-    final spaceBelow = viewport.height - origin.dy - triggerHeight;
-    final openAbove = spaceAbove > spaceBelow && spaceBelow < 180;
-    final availableHeight =
-        (openAbove ? spaceAbove : spaceBelow) -
-        IdeSpacing.space6 -
-        IdeSpacing.space12;
-    final width = math.max(
-      1.0,
-      math.min(
-        _agentModeSelectorPopoverPreferredWidth,
-        viewport.width - IdeSpacing.space12 * 2,
-      ),
-    );
-    final maxHeight = math.max(
-      1.0,
-      math.min(_agentModeSelectorPopoverMaxHeight, availableHeight),
-    );
-    final reduceMotion = mediaQuery.disableAnimations;
-
-    final entry = showIdePopover<void>(
+    _popoverController.toggle(
       context: context,
-      alignment: openAbove ? Alignment.bottomLeft : Alignment.topLeft,
-      anchorAlignment: openAbove ? Alignment.topLeft : Alignment.bottomLeft,
-      widthConstraint: IdePopoverConstraint.intrinsic,
-      heightConstraint: IdePopoverConstraint.flexible,
-      offset: Offset(0, openAbove ? -IdeSpacing.space6 : IdeSpacing.space6),
-      margin: const EdgeInsets.all(IdeSpacing.space12),
-      allowInvertVertical: false,
-      showDuration: reduceMotion
-          ? const Duration(milliseconds: 80)
-          : IdeMotion.durationFast,
-      dismissDuration: reduceMotion
-          ? const Duration(milliseconds: 80)
-          : IdeMotion.durationFast,
-      builder: (context) => _AgentModeSelectorPopover(
-        width: width,
-        maxHeight: maxHeight,
+      preferredWidth: _agentModeSelectorPopoverPreferredWidth,
+      preferredMaxHeight: _agentModeSelectorPopoverMaxHeight,
+      builder: (context, layout) => _AgentModeSelectorPopover(
+        width: layout.width,
+        maxHeight: layout.maxHeight,
         presets: widget.presets,
         selectedMode: widget.selectedMode,
         onSelect: _selectPreset,
-        onDismiss: () => _popoverEntry?.dismiss(),
       ),
     );
-    _popoverEntry = entry;
-    setState(() {});
-    entry.future.whenComplete(() {
-      if (!mounted || !identical(_popoverEntry, entry)) {
-        return;
-      }
-      _popoverEntry = null;
-      setState(() {});
-      _triggerFocusNode.requestFocus();
-    });
   }
 
   void _selectPreset(AgentConversationModePreset preset) {
@@ -180,7 +137,6 @@ class _AgentModeSelectorState extends State<AgentModeSelector> {
     if (preset.id != widget.selectedMode) {
       widget.onChanged?.call(preset.id);
     }
-    _popoverEntry?.dismiss();
   }
 
   @override
@@ -193,7 +149,7 @@ class _AgentModeSelectorState extends State<AgentModeSelector> {
     final textStyles = IdeTextStyles.of(context);
     final display = _agentModeSelectorDisplay(widget);
     final isLoading = widget.status == AgentModeSelectorStatus.loading;
-    final open = _popoverEntry != null;
+    final open = _popoverController.isOpen;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -271,14 +227,13 @@ class _AgentModeSelectorState extends State<AgentModeSelector> {
   }
 }
 
-class _AgentModeSelectorPopover extends StatefulWidget {
+class _AgentModeSelectorPopover extends StatelessWidget {
   const _AgentModeSelectorPopover({
     required this.width,
     required this.maxHeight,
     required this.presets,
     required this.selectedMode,
     required this.onSelect,
-    required this.onDismiss,
   });
 
   final double width;
@@ -286,247 +241,103 @@ class _AgentModeSelectorPopover extends StatefulWidget {
   final List<AgentConversationModePreset> presets;
   final AgentConversationModeId? selectedMode;
   final ValueChanged<AgentConversationModePreset> onSelect;
-  final VoidCallback onDismiss;
-
-  @override
-  State<_AgentModeSelectorPopover> createState() =>
-      _AgentModeSelectorPopoverState();
-}
-
-class _AgentModeSelectorPopoverState extends State<_AgentModeSelectorPopover> {
-  final Map<AgentConversationModeId, FocusNode> _focusNodes =
-      <AgentConversationModeId, FocusNode>{};
-  AgentConversationModeId? _focusedMode;
-
-  @override
-  void initState() {
-    super.initState();
-    final selectable = widget.presets
-        .where((preset) => preset.isSelectable)
-        .toList(growable: false);
-    _focusedMode = selectable.any((preset) => preset.id == widget.selectedMode)
-        ? widget.selectedMode
-        : selectable.firstOrNull?.id;
-    for (final preset in widget.presets) {
-      _focusNodes[preset.id] = FocusNode(
-        debugLabel: 'agent-mode-option-${preset.id.rawValue}',
-        canRequestFocus: preset.isSelectable && preset.id == _focusedMode,
-        onKeyEvent: (node, event) => _handleOptionKey(preset.id, event),
-      );
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _focusNodes[_focusedMode]?.requestFocus();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    for (final node in _focusNodes.values) {
-      node.dispose();
-    }
-    super.dispose();
-  }
-
-  KeyEventResult _handleOptionKey(
-    AgentConversationModeId currentMode,
-    KeyEvent event,
-  ) {
-    if (event is! KeyDownEvent) {
-      return KeyEventResult.ignored;
-    }
-    final key = event.logicalKey;
-    if (key == LogicalKeyboardKey.escape) {
-      widget.onDismiss();
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.arrowDown) {
-      _moveFocus(currentMode, 1);
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.arrowUp) {
-      _moveFocus(currentMode, -1);
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.home) {
-      _moveFocus(currentMode, 0, toEnd: false);
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.end) {
-      _moveFocus(currentMode, 0, toEnd: true);
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
-  }
-
-  void _moveFocus(
-    AgentConversationModeId currentMode,
-    int delta, {
-    bool? toEnd,
-  }) {
-    final selectable = widget.presets
-        .where((preset) => preset.isSelectable)
-        .toList(growable: false);
-    if (selectable.isEmpty) {
-      return;
-    }
-    final currentIndex = selectable.indexWhere(
-      (preset) => preset.id == currentMode,
-    );
-    final targetIndex = toEnd == null
-        ? (currentIndex + delta).clamp(0, selectable.length - 1)
-        : toEnd
-        ? selectable.length - 1
-        : 0;
-    final targetMode = selectable[targetIndex].id;
-    final targetNode = _focusNodes[targetMode];
-    if (targetNode == null) {
-      return;
-    }
-    targetNode.canRequestFocus = true;
-    targetNode.requestFocus();
-    if (currentMode != targetMode) {
-      _focusNodes[currentMode]?.canRequestFocus = false;
-    }
-    _focusedMode = targetMode;
-  }
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final unknownMode =
-        widget.selectedMode?.kind == AgentConversationModeKind.unknown;
+    final unknownMode = selectedMode?.kind == AgentConversationModeKind.unknown;
 
-    return _ComposerSelectorPanel(
-      child: Semantics(
-        label: '对话模式选项',
-        container: true,
-        child: SizedBox(
-          key: const ValueKey('agent-mode-selector-popover'),
-          width: widget.width,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: widget.maxHeight),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(vertical: IdeSpacing.space6),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (unknownMode) ...[
-                    Padding(
-                      key: const ValueKey('agent-mode-unknown-notice'),
-                      padding: const EdgeInsets.fromLTRB(
-                        IdeSpacing.space10,
-                        IdeSpacing.space6,
-                        IdeSpacing.space10,
-                        IdeSpacing.space8,
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            Icons.info_outline_rounded,
-                            size: 14,
-                            color: colors.warning,
-                          ),
-                          const SizedBox(width: IdeSpacing.space6),
-                          Expanded(
-                            child: Text(
-                              '当前为只读的自定义模式，可选择内置模式覆盖。',
-                              style: textStyles.bodySmall.copyWith(
-                                color: colors.textSecondary,
-                              ),
+    return Semantics(
+      label: '对话模式选项',
+      container: true,
+      child: SizedBox(
+        key: const ValueKey('agent-mode-selector-popover'),
+        width: width,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: _ComposerSelectorPanel(
+            child: _ComposerSelectPopup<AgentConversationModeId>(
+              value: selectedMode,
+              onChanged: (mode, selected) {
+                if (!selected) {
+                  return false;
+                }
+                final preset = presets
+                    .where((candidate) => candidate.id == mode)
+                    .firstOrNull;
+                if (preset == null || !preset.isSelectable) {
+                  return false;
+                }
+                onSelect(preset);
+                return true;
+              },
+              items: <Widget>[
+                if (unknownMode) ...[
+                  Padding(
+                    key: const ValueKey('agent-mode-unknown-notice'),
+                    padding: const EdgeInsets.fromLTRB(
+                      IdeSpacing.space10,
+                      IdeSpacing.space6,
+                      IdeSpacing.space10,
+                      IdeSpacing.space8,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.info_outline_rounded,
+                          size: 14,
+                          color: colors.warning,
+                        ),
+                        const SizedBox(width: IdeSpacing.space6),
+                        Expanded(
+                          child: Text(
+                            '当前为只读的自定义模式，可选择内置模式覆盖。',
+                            style: textStyles.bodySmall.copyWith(
+                              color: colors.textSecondary,
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                    Container(height: 1, color: colors.borderSubtle),
-                    const SizedBox(height: IdeSpacing.space4),
-                  ],
-                  for (final preset in widget.presets)
-                    _AgentModeSelectorOption(
-                      key: ValueKey<String>(
-                        'agent-mode-option-${preset.id.rawValue}',
-                      ),
-                      preset: preset,
-                      selected: preset.id == widget.selectedMode,
-                      focusNode: _focusNodes[preset.id]!,
-                      onPressed: preset.isSelectable
-                          ? () => widget.onSelect(preset)
-                          : null,
-                    ),
+                  ),
+                  Divider(height: 1, thickness: 1, color: colors.borderSubtle),
                 ],
-              ),
+                for (final preset in presets)
+                  sf.SelectItemButton<AgentConversationModeId>(
+                    key: ValueKey<String>(
+                      'agent-mode-option-${preset.id.rawValue}',
+                    ),
+                    value: preset.id,
+                    enabled: preset.isSelectable,
+                    child: Semantics(
+                      label:
+                          '${_agentModePresetLabel(preset)}，'
+                          '${preset.id == selectedMode
+                              ? '已选择'
+                              : preset.isSelectable
+                              ? '可选择'
+                              : '不可选择'}',
+                      child: Text(
+                        _agentModePresetLabel(preset),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: textStyles.bodyMedium.copyWith(
+                          color: preset.isSelectable
+                              ? colors.textPrimary
+                              : colors.textTertiary,
+                          fontWeight: preset.id == selectedMode
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _AgentModeSelectorOption extends StatelessWidget {
-  const _AgentModeSelectorOption({
-    required this.preset,
-    required this.selected,
-    required this.focusNode,
-    required this.onPressed,
-    super.key,
-  });
-
-  final AgentConversationModePreset preset;
-  final bool selected;
-  final FocusNode focusNode;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
-    final label = _agentModePresetLabel(preset);
-    final availability = preset.isSelectable ? '可选择' : '不可选择';
-
-    return PaneInteractiveSurface(
-      focusNode: focusNode,
-      onPressed: onPressed,
-      enabled: onPressed != null,
-      selected: selected,
-      padding: const EdgeInsets.symmetric(
-        horizontal: IdeSpacing.space10,
-        vertical: IdeSpacing.space8,
-      ),
-      borderRadius: IdeRadius.allSmall,
-      backgroundColor: Colors.transparent,
-      hoverBackgroundColor: colors.hoverSurface,
-      selectedBackgroundColor: colors.selectedSurface,
-      focusBorderColor: colors.focusRing,
-      semanticLabel: '$label，${selected ? '已选择' : availability}',
-      child: Row(
-        children: [
-          SizedBox(
-            width: 16,
-            child: selected
-                ? Icon(Icons.check_rounded, size: 14, color: colors.accent)
-                : null,
-          ),
-          const SizedBox(width: IdeSpacing.space6),
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: textStyles.bodyMedium.copyWith(
-                color: preset.isSelectable
-                    ? colors.textPrimary
-                    : colors.textTertiary,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -52,6 +52,7 @@ part 'widgets/agent_pane_context_panel.dart';
 part 'widgets/agent_pane_header.dart';
 part 'widgets/agent_pane_messages.dart';
 part 'widgets/agent_pane_plan_panel.dart';
+part 'widgets/composer_selector_popover.dart';
 part 'widgets/agent_model_config.dart';
 part 'widgets/agent_mode_selector.dart';
 part 'widgets/agent_pane_sections.dart';

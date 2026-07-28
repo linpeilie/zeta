@@ -126,6 +126,7 @@ IdePopoverHandle<T> showIdePopover<T>({
   bool allowInvertHorizontal = true,
   bool allowInvertVertical = true,
   bool dismissBackdropFocus = true,
+  AlignmentGeometry? transitionAlignment,
   Duration? showDuration,
   Duration? dismissDuration,
 }) {
@@ -153,6 +154,7 @@ IdePopoverHandle<T> showIdePopover<T>({
     allowInvertHorizontal: allowInvertHorizontal,
     allowInvertVertical: allowInvertVertical,
     dismissBackdropFocus: dismissBackdropFocus,
+    transitionAlignment: transitionAlignment,
     showDuration: showDuration,
     dismissDuration: dismissDuration,
   );

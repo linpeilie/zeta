@@ -82,6 +82,10 @@ void main() {
       find.byKey(const ValueKey('agent-mode-selector-popover')),
       findsOneWidget,
     );
+    expect(
+      find.byType(sf.SelectPopup<AgentConversationModeId>),
+      findsOneWidget,
+    );
     expect(find.text('Default'), findsWidgets);
     expect(find.text('Plan · Medium'), findsOneWidget);
 
@@ -97,6 +101,48 @@ void main() {
     await _pumpPopoverAnimation(tester);
 
     expect(selections, hasLength(1));
+  });
+
+  testWidgets('keeps unavailable presets disabled in SelectPopup', (
+    tester,
+  ) async {
+    final selections = <AgentConversationModeId>[];
+    await tester.pumpWidget(
+      _ThemeHarness(
+        child: AgentModeSelector(
+          status: AgentModeSelectorStatus.ready,
+          presets: const <AgentConversationModePreset>[
+            AgentConversationModePreset(
+              id: AgentConversationModeId.defaultMode,
+              displayName: 'Default',
+            ),
+            AgentConversationModePreset(
+              id: AgentConversationModeId.plan,
+              displayName: 'Plan',
+              isSelectable: false,
+            ),
+          ],
+          selectedMode: AgentConversationModeId.defaultMode,
+          onChanged: selections.add,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('agent-mode-selector')));
+    await _pumpPopoverAnimation(tester);
+    final planOption = tester
+        .widget<sf.SelectItemButton<AgentConversationModeId>>(
+          find.byKey(const ValueKey('agent-mode-option-plan')),
+        );
+    expect(planOption.enabled, isFalse);
+
+    await tester.tap(find.byKey(const ValueKey('agent-mode-option-plan')));
+    await tester.pump();
+    expect(selections, isEmpty);
+    expect(
+      find.byKey(const ValueKey('agent-mode-selector-popover')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('shows next-turn and unknown mode semantics', (tester) async {
@@ -175,11 +221,17 @@ void main() {
       findsOneWidget,
     );
 
+    // SelectPopup 内容层打开后由第一次方向键进入首项，再移动到 Plan。
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await _pumpPopoverAnimation(tester);
     expect(selections, <AgentConversationModeId>[AgentConversationModeId.plan]);
     expect(find.text('Plan · Medium'), findsOneWidget);
+    expect(
+      FocusManager.instance.primaryFocus?.debugLabel,
+      'agent-mode-selector-trigger',
+    );
 
     await tester.sendKeyEvent(LogicalKeyboardKey.space);
     await _pumpPopoverAnimation(tester);
@@ -192,6 +244,93 @@ void main() {
     expect(
       find.byKey(const ValueKey('agent-mode-selector-popover')),
       findsNothing,
+    );
+    expect(
+      FocusManager.instance.primaryFocus?.debugLabel,
+      'agent-mode-selector-trigger',
+    );
+  });
+
+  testWidgets('trigger toggle and outside tap close and refocus', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const _ThemeHarness(
+        child: AgentModeSelector(
+          status: AgentModeSelectorStatus.ready,
+          presets: _modePresets,
+          selectedMode: AgentConversationModeId.defaultMode,
+          onChanged: _ignoreModeSelection,
+        ),
+      ),
+    );
+    final trigger = find.byKey(const ValueKey('agent-mode-selector'));
+    final popover = find.byKey(const ValueKey('agent-mode-selector-popover'));
+
+    await tester.tap(trigger);
+    await _pumpPopoverAnimation(tester);
+    expect(popover, findsOneWidget);
+    await tester.tap(trigger);
+    await _pumpPopoverAnimation(tester);
+    expect(popover, findsNothing);
+    expect(
+      FocusManager.instance.primaryFocus?.debugLabel,
+      'agent-mode-selector-trigger',
+    );
+
+    await tester.tap(trigger);
+    await _pumpPopoverAnimation(tester);
+    expect(popover, findsOneWidget);
+    await tester.tapAt(const Offset(4, 4));
+    await _pumpPopoverAnimation(tester);
+    expect(popover, findsNothing);
+    expect(
+      FocusManager.instance.primaryFocus?.debugLabel,
+      'agent-mode-selector-trigger',
+    );
+  });
+
+  testWidgets('opens above near the bottom with zero-duration reduced motion', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(360, 260);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    await tester.pumpWidget(
+      const _ThemeHarness(
+        alignment: Alignment.bottomCenter,
+        disableAnimations: true,
+        child: Padding(
+          padding: EdgeInsets.only(bottom: 12),
+          child: AgentModeSelector(
+            status: AgentModeSelectorStatus.ready,
+            presets: _modePresets,
+            selectedMode: AgentConversationModeId.defaultMode,
+            onChanged: _ignoreModeSelection,
+          ),
+        ),
+      ),
+    );
+    final trigger = find.byKey(const ValueKey('agent-mode-selector'));
+    final popover = find.byKey(const ValueKey('agent-mode-selector-popover'));
+
+    await tester.tap(trigger);
+    await tester.pump();
+    await tester.pump();
+    expect(popover, findsOneWidget);
+    expect(
+      tester.getRect(popover).bottom,
+      lessThanOrEqualTo(tester.getRect(trigger).top),
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await tester.pump();
+    expect(popover, findsNothing);
+    expect(
+      FocusManager.instance.primaryFocus?.debugLabel,
+      'agent-mode-selector-trigger',
     );
   });
 
@@ -327,10 +466,14 @@ class _ThemeHarness extends StatelessWidget {
   const _ThemeHarness({
     required this.child,
     this.textScaler = TextScaler.noScaling,
+    this.alignment = Alignment.center,
+    this.disableAnimations = false,
   });
 
   final Widget child;
   final TextScaler textScaler;
+  final AlignmentGeometry alignment;
+  final bool disableAnimations;
 
   @override
   Widget build(BuildContext context) {
@@ -354,8 +497,13 @@ class _ThemeHarness extends StatelessWidget {
         home: Builder(
           builder: (context) {
             return MediaQuery(
-              data: MediaQuery.of(context).copyWith(textScaler: textScaler),
-              child: sf.Scaffold(child: Center(child: child)),
+              data: MediaQuery.of(context).copyWith(
+                textScaler: textScaler,
+                disableAnimations: disableAnimations,
+              ),
+              child: sf.Scaffold(
+                child: Align(alignment: alignment, child: child),
+              ),
             );
           },
         ),

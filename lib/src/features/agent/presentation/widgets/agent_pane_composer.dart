@@ -1011,76 +1011,73 @@ class _SelectorSelect<T extends Object> extends StatefulWidget {
 }
 
 class _SelectorSelectState<T extends Object> extends State<_SelectorSelect<T>> {
-  IdePopoverHandle<void>? _popoverEntry;
+  final FocusNode _triggerFocusNode = FocusNode(
+    debugLabel: 'agent-session-selector-trigger',
+  );
+  late final _ComposerSelectorPopoverController _popoverController;
+
+  @override
+  void initState() {
+    super.initState();
+    _popoverController = _ComposerSelectorPopoverController(
+      triggerFocusNode: _triggerFocusNode,
+      onOpenChanged: () {
+        if (mounted) {
+          setState(() {});
+        }
+      },
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _SelectorSelect<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_popoverController.isOpen &&
+        (oldWidget.value != widget.value || widget.options.isEmpty)) {
+      final entry = _popoverController.handle;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _popoverController.dismiss(entry);
+        }
+      });
+    }
+  }
 
   @override
   void dispose() {
-    _popoverEntry?.dismiss();
+    _popoverController.dispose();
+    _triggerFocusNode.dispose();
     super.dispose();
   }
 
   void _toggleMenu() {
-    if (_popoverEntry != null) {
-      _dismissMenu();
+    if (!_popoverController.isOpen && widget.options.isEmpty) {
       return;
     }
-    _showMenu();
-  }
-
-  void _showMenu() {
-    if (_popoverEntry != null || widget.options.isEmpty) {
-      return;
-    }
-    final entry = showIdePopover<void>(
+    _popoverController.toggle(
       context: context,
-      alignment: Alignment.topLeft,
-      anchorAlignment: Alignment.bottomLeft,
-      widthConstraint: IdePopoverConstraint.intrinsic,
-      offset: const Offset(0, 6),
-      builder: (context) {
+      preferredWidth: 280,
+      preferredMaxHeight: 320,
+      builder: (context, layout) {
         return ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 280, maxHeight: 320),
-          child: sf.Data.inherit(
-            data: sf.SelectData(
-              autoClose: true,
-              hasSelection: widget.value != null,
-              enabled: true,
-              isSelected: (value) => value == widget.value,
-              onChanged: (value, selected) {
-                if (!selected || value is! T) {
-                  return false;
-                }
-                widget.onChanged(value);
-                return true;
-              },
-            ),
-            child: sf.SelectPopup.noVirtualization(
-              items: sf.SelectItemList(children: widget.options),
-            ),
+          constraints: BoxConstraints(
+            maxWidth: layout.width,
+            maxHeight: layout.maxHeight,
+          ),
+          child: _ComposerSelectPopup<T>(
+            value: widget.value,
+            items: widget.options,
+            onChanged: (value, selected) {
+              if (!selected) {
+                return false;
+              }
+              widget.onChanged(value);
+              return true;
+            },
           ),
         );
       },
     );
-    _popoverEntry = entry;
-    setState(() {});
-    entry.future.whenComplete(() {
-      if (!mounted || !identical(_popoverEntry, entry)) {
-        return;
-      }
-      setState(() {
-        _popoverEntry = null;
-      });
-    });
-  }
-
-  void _dismissMenu() {
-    final entry = _popoverEntry;
-    if (entry == null) {
-      return;
-    }
-    _popoverEntry = null;
-    setState(() {});
-    entry.dismiss();
   }
 
   @override
@@ -1092,9 +1089,10 @@ class _SelectorSelectState<T extends Object> extends State<_SelectorSelect<T>> {
       message: widget.tooltip,
       child: IdeTab(
         key: widget.selectorKey,
+        focusNode: _triggerFocusNode,
         label: label,
         leadingIcon: widget.icon,
-        selected: _popoverEntry != null,
+        selected: _popoverController.isOpen,
         enabled: widget.options.isNotEmpty,
         onPressed: _toggleMenu,
         semanticLabel: widget.tooltip,
@@ -1198,88 +1196,63 @@ class _PermissionPolicyButtonState extends State<_PermissionPolicyButton> {
   final FocusNode _triggerFocusNode = FocusNode(
     debugLabel: 'agent-permission-policy-trigger',
   );
-  IdePopoverHandle<void>? _popoverEntry;
+  late final _ComposerSelectorPopoverController _popoverController;
+
+  @override
+  void initState() {
+    super.initState();
+    _popoverController = _ComposerSelectorPopoverController(
+      triggerFocusNode: _triggerFocusNode,
+      onOpenChanged: () {
+        if (mounted) {
+          setState(() {});
+        }
+      },
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _PermissionPolicyButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_popoverController.isOpen &&
+        (oldWidget.selectedPresetId != widget.selectedPresetId ||
+            widget.presets.isEmpty)) {
+      final entry = _popoverController.handle;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _popoverController.dismiss(entry);
+        }
+      });
+    }
+  }
 
   @override
   void dispose() {
-    _popoverEntry?.dismiss();
+    _popoverController.dispose();
     _triggerFocusNode.dispose();
     super.dispose();
   }
 
   void _togglePopover() {
-    if (_popoverEntry != null) {
-      _popoverEntry!.dismiss();
+    if (!_popoverController.isOpen && widget.presets.isEmpty) {
       return;
     }
-    _showPopover();
-  }
-
-  void _showPopover() {
-    if (_popoverEntry != null || widget.presets.isEmpty) {
-      return;
-    }
-    final mediaQuery = MediaQuery.of(context);
-    final viewport = mediaQuery.size;
-    final renderBox = context.findRenderObject() as RenderBox?;
-    final origin = renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
-    final triggerHeight = renderBox?.size.height ?? 28;
-    final spaceAbove = origin.dy;
-    final spaceBelow = viewport.height - origin.dy - triggerHeight;
-    final openAbove = spaceAbove > spaceBelow && spaceBelow < 180;
-    final availablePopoverHeight =
-        (openAbove ? spaceAbove : spaceBelow) -
-        IdeSpacing.space6 -
-        IdeSpacing.space12;
-    final width = math.max(
-      1.0,
-      math.min(_composerSelectorPopoverPreferredWidth, viewport.width - 24),
-    );
-    final maxHeight = math.max(
-      1.0,
-      math.min(_composerSelectorPopoverMaxHeight, availablePopoverHeight),
-    );
-    final reduceMotion = mediaQuery.disableAnimations;
-
-    final entry = showIdePopover<void>(
+    _popoverController.toggle(
       context: context,
-      alignment: openAbove ? Alignment.bottomLeft : Alignment.topLeft,
-      anchorAlignment: openAbove ? Alignment.topLeft : Alignment.bottomLeft,
-      widthConstraint: IdePopoverConstraint.intrinsic,
-      heightConstraint: IdePopoverConstraint.flexible,
-      offset: Offset(0, openAbove ? -6 : 6),
-      margin: const EdgeInsets.all(IdeSpacing.space12),
-      allowInvertVertical: false,
-      showDuration: reduceMotion
-          ? const Duration(milliseconds: 80)
-          : IdeMotion.durationFast,
-      dismissDuration: reduceMotion
-          ? const Duration(milliseconds: 80)
-          : IdeMotion.durationFast,
-      builder: (context) => _PermissionPolicyPopover(
-        width: width,
-        maxHeight: maxHeight,
+      preferredWidth: _composerSelectorPopoverPreferredWidth,
+      preferredMaxHeight: _composerSelectorPopoverMaxHeight,
+      builder: (context, layout) => _PermissionPolicyPopover(
+        width: layout.width,
+        maxHeight: layout.maxHeight,
         presets: widget.presets,
         selectedPresetId: widget.selectedPresetId,
         onSelect: _selectPreset,
-        onDismiss: () => _popoverEntry?.dismiss(),
       ),
     );
-    _popoverEntry = entry;
-    setState(() {});
-    entry.future.whenComplete(() {
-      if (!mounted || !identical(_popoverEntry, entry)) {
-        return;
-      }
-      _popoverEntry = null;
-      setState(() {});
-      _triggerFocusNode.requestFocus();
-    });
   }
 
   void _selectPreset(AgentPermissionPreset preset) {
     widget.onSelect(preset);
-    _popoverEntry?.dismiss();
   }
 
   String get _displayLabel {
@@ -1296,7 +1269,7 @@ class _PermissionPolicyButtonState extends State<_PermissionPolicyButton> {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final open = _popoverEntry != null;
+    final open = _popoverController.isOpen;
     final displayLabel = _displayLabel;
     return _ComposerSelectorTrigger(
       surfaceKey: const ValueKey('agent-permission-policy-selector'),
@@ -1348,7 +1321,6 @@ class _PermissionPolicyPopover extends StatelessWidget {
     required this.presets,
     required this.selectedPresetId,
     required this.onSelect,
-    required this.onDismiss,
   });
 
   final double width;
@@ -1356,136 +1328,100 @@ class _PermissionPolicyPopover extends StatelessWidget {
   final List<AgentPermissionPreset> presets;
   final String? selectedPresetId;
   final ValueChanged<AgentPermissionPreset> onSelect;
-  final VoidCallback onDismiss;
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    return Focus(
-      canRequestFocus: false,
-      onKeyEvent: (_, event) {
-        if (event is KeyDownEvent &&
-            event.logicalKey == LogicalKeyboardKey.escape) {
-          onDismiss();
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: Semantics(
-        container: true,
-        explicitChildNodes: true,
-        label: '审批与沙箱',
-        child: SizedBox(
-          key: const ValueKey('agent-permission-policy-popover'),
-          width: width,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: maxHeight),
-            child: _ComposerSelectorPanel(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(
-                    height: 28,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: IdeSpacing.space8,
-                      ),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          '审批与沙箱',
-                          style: IdeTextStyles.of(context).bodySmall.copyWith(
-                            color: colors.textTertiary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
+    final textStyles = IdeTextStyles.of(context);
+    final selectedPreset = presets
+        .where((preset) => preset.id == selectedPresetId)
+        .firstOrNull;
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      label: '审批与沙箱',
+      child: SizedBox(
+        key: const ValueKey('agent-permission-policy-popover'),
+        width: width,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: _ComposerSelectorPanel(
+            child: _ComposerSelectPopup<AgentPermissionPreset>(
+              value: selectedPreset,
+              onChanged: (preset, selected) {
+                // 保持旧行为：点击当前预设也先通知业务层，再由 Select 关层。
+                onSelect(preset);
+                return true;
+              },
+              items: <Widget>[
+                SizedBox(
+                  height: 28,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: IdeSpacing.space8,
+                    ),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '审批与沙箱',
+                        style: textStyles.bodySmall.copyWith(
+                          color: colors.textTertiary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
                   ),
-                  Divider(
-                    height: 1,
-                    thickness: 1,
-                    color: colors.borderSubtle.withValues(alpha: 0.6),
-                  ),
-                  Flexible(
-                    child: ListView.builder(
-                      key: const ValueKey('agent-permission-policy-list'),
-                      shrinkWrap: true,
-                      padding: IdeSpacing.all4,
-                      itemCount: presets.length,
-                      itemBuilder: (context, index) {
-                        final preset = presets[index];
-                        return _PermissionPolicyOption(
-                          preset: preset,
-                          selected: preset.id == selectedPresetId,
-                          onPressed: () => onSelect(preset),
-                        );
-                      },
+                ),
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: colors.borderSubtle.withValues(alpha: 0.6),
+                ),
+                for (final preset in presets)
+                  sf.SelectItemButton<AgentPermissionPreset>(
+                    key: ValueKey<String>(
+                      'agent-permission-preset-${preset.id}',
+                    ),
+                    value: preset,
+                    child: Semantics(
+                      label:
+                          '${preset.label}，'
+                          '${AgentPermissionSelection.approvalPolicyDisplayLabel(preset.approvalPolicy)}'
+                          '${preset.id == selectedPresetId ? '，已选择' : ''}',
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            preset.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: textStyles.bodySmall.copyWith(
+                              color: colors.textPrimary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          Text(
+                            AgentPermissionSelection.approvalPolicyDisplayLabel(
+                              preset.approvalPolicy,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: textStyles.bodySmall.copyWith(
+                              color: colors.textTertiary,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ],
-              ),
+              ],
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _PermissionPolicyOption extends StatelessWidget {
-  const _PermissionPolicyOption({
-    required this.preset,
-    required this.selected,
-    required this.onPressed,
-  });
-
-  final AgentPermissionPreset preset;
-  final bool selected;
-  final VoidCallback onPressed;
-
-  String get _displayLabel =>
-      '${preset.label} · '
-      '${AgentPermissionSelection.approvalPolicyDisplayLabel(preset.approvalPolicy)}';
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    return PaneInteractiveSurface(
-      key: ValueKey<String>('agent-permission-preset-${preset.id}'),
-      onPressed: onPressed,
-      selected: selected,
-      autofocus: selected,
-      height: _composerSelectorRowHeight,
-      padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space8),
-      borderRadius: IdeRadius.allSmall,
-      selectedBackgroundColor: colors.border.withValues(alpha: 0.2),
-      focusBorderColor: colors.focusRing,
-      semanticLabel: '$_displayLabel${selected ? '，已选择' : ''}',
-      child: Row(
-        children: [
-          SizedBox(
-            width: 14,
-            child: selected
-                ? Icon(Icons.check_rounded, size: 14, color: colors.accent)
-                : null,
-          ),
-          const SizedBox(width: IdeSpacing.space6),
-          Expanded(
-            child: Text(
-              _displayLabel,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: IdeTextStyles.of(context).bodySmall.copyWith(
-                color: colors.textPrimary,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
