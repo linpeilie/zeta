@@ -141,6 +141,7 @@ class IdeTextStyles {
     return resolve(
       colors: ideTheme.colors,
       uiFontFamily: ideTheme.uiFontFamily,
+      uiFontFamilyFallback: ideTheme.uiFontFamilyFallback,
       codeFontFamily: codeFontFamily == null || codeFontFamily.isEmpty
           ? ideTheme.codeFontFamily
           : codeFontFamily,
@@ -155,6 +156,7 @@ class IdeTextStyles {
   static IdeTextStyles resolve({
     required IdeColors colors,
     String? uiFontFamily,
+    List<String> uiFontFamilyFallback = const <String>[],
     String codeFontFamily = bundledCodeFontFamily,
     double uiFontSize = defaultUiFontSize,
     double codeFontSize = defaultCodeFontSize,
@@ -165,6 +167,7 @@ class IdeTextStyles {
       displayLarge: _textStyle(
         color: colors.textPrimary,
         fontFamily: uiFontFamily,
+        fontFamilyFallback: uiFontFamilyFallback,
         fontSize: 18 * uiScale,
         height: 1.3,
         fontWeight: FontWeight.w700,
@@ -172,6 +175,7 @@ class IdeTextStyles {
       displaySmall: _textStyle(
         color: colors.textPrimary,
         fontFamily: uiFontFamily,
+        fontFamilyFallback: uiFontFamilyFallback,
         fontSize: 15 * uiScale,
         height: 1.35,
         fontWeight: FontWeight.w700,
@@ -179,6 +183,7 @@ class IdeTextStyles {
       titleLarge: _textStyle(
         color: colors.textPrimary,
         fontFamily: uiFontFamily,
+        fontFamilyFallback: uiFontFamilyFallback,
         fontSize: 13 * uiScale,
         height: 1.35,
         fontWeight: FontWeight.w700,
@@ -186,6 +191,7 @@ class IdeTextStyles {
       titleSmall: _textStyle(
         color: colors.textPrimary,
         fontFamily: uiFontFamily,
+        fontFamilyFallback: uiFontFamilyFallback,
         fontSize: 12 * uiScale,
         height: 1.35,
         fontWeight: FontWeight.w600,
@@ -193,6 +199,7 @@ class IdeTextStyles {
       bodyMedium: _textStyle(
         color: colors.textPrimary,
         fontFamily: uiFontFamily,
+        fontFamilyFallback: uiFontFamilyFallback,
         fontSize: 12 * uiScale,
         height: 1.42,
         fontWeight: FontWeight.w400,
@@ -200,6 +207,7 @@ class IdeTextStyles {
       bodySmall: _textStyle(
         color: colors.textPrimary,
         fontFamily: uiFontFamily,
+        fontFamilyFallback: uiFontFamilyFallback,
         fontSize: 11 * uiScale,
         height: 1.35,
         fontWeight: FontWeight.w400,
@@ -207,6 +215,7 @@ class IdeTextStyles {
       caption: _textStyle(
         color: colors.textTertiary,
         fontFamily: uiFontFamily,
+        fontFamilyFallback: uiFontFamilyFallback,
         fontSize: 10 * uiScale,
         height: 1.3,
         fontWeight: FontWeight.w500,
@@ -214,6 +223,7 @@ class IdeTextStyles {
       codeMedium: _textStyle(
         color: colors.textPrimary,
         fontFamily: codeFontFamily,
+        fontFamilyFallback: uiFontFamilyFallback,
         fontSize: 12 * codeScale,
         height: 1.35,
         fontWeight: FontWeight.w500,
@@ -221,6 +231,7 @@ class IdeTextStyles {
       codeSmall: _textStyle(
         color: colors.textSecondary,
         fontFamily: codeFontFamily,
+        fontFamilyFallback: uiFontFamilyFallback,
         fontSize: 11 * codeScale,
         height: 1.35,
         fontWeight: FontWeight.w400,
@@ -228,6 +239,7 @@ class IdeTextStyles {
       pageTitle: _textStyle(
         color: colors.textPrimary,
         fontFamily: uiFontFamily,
+        fontFamilyFallback: uiFontFamilyFallback,
         fontSize: 15 * uiScale,
         height: 1.3,
         fontWeight: FontWeight.w600,
@@ -235,6 +247,7 @@ class IdeTextStyles {
       sectionTitle: _textStyle(
         color: colors.textPrimary,
         fontFamily: uiFontFamily,
+        fontFamilyFallback: uiFontFamilyFallback,
         fontSize: 13 * uiScale,
         height: 1.35,
         fontWeight: FontWeight.w600,
@@ -242,6 +255,7 @@ class IdeTextStyles {
       rowTitle: _textStyle(
         color: colors.textPrimary,
         fontFamily: uiFontFamily,
+        fontFamilyFallback: uiFontFamilyFallback,
         fontSize: 12 * uiScale,
         height: 1.35,
         fontWeight: FontWeight.w500,
@@ -249,6 +263,7 @@ class IdeTextStyles {
       toolbarLabel: _textStyle(
         color: colors.textSecondary,
         fontFamily: uiFontFamily,
+        fontFamilyFallback: uiFontFamilyFallback,
         fontSize: 11 * uiScale,
         height: 1.25,
         fontWeight: FontWeight.w500,
@@ -256,6 +271,7 @@ class IdeTextStyles {
       proseBody: _textStyle(
         color: colors.textPrimary,
         fontFamily: uiFontFamily,
+        fontFamilyFallback: uiFontFamilyFallback,
         fontSize: 13 * uiScale,
         height: 1.55,
         fontWeight: FontWeight.w400,
@@ -263,6 +279,7 @@ class IdeTextStyles {
       meta: _textStyle(
         color: colors.textTertiary,
         fontFamily: uiFontFamily,
+        fontFamilyFallback: uiFontFamilyFallback,
         fontSize: 10 * uiScale,
         height: 1.3,
         fontWeight: FontWeight.w400,
@@ -270,6 +287,7 @@ class IdeTextStyles {
       metricValue: _textStyle(
         color: colors.textPrimary,
         fontFamily: uiFontFamily,
+        fontFamilyFallback: uiFontFamilyFallback,
         fontSize: 18 * uiScale,
         height: 1.2,
         fontWeight: FontWeight.w600,
@@ -277,6 +295,7 @@ class IdeTextStyles {
       placeholder: _textStyle(
         color: colors.textTertiary,
         fontFamily: uiFontFamily,
+        fontFamilyFallback: uiFontFamilyFallback,
         fontSize: 12 * uiScale,
         height: 1.4,
         fontWeight: FontWeight.w400,
@@ -291,10 +310,12 @@ TextStyle _textStyle({
   required double height,
   required FontWeight fontWeight,
   String? fontFamily,
+  List<String>? fontFamilyFallback,
 }) {
   return TextStyle(
     color: color,
     fontFamily: fontFamily,
+    fontFamilyFallback: fontFamilyFallback,
     fontSize: fontSize,
     height: height,
     fontWeight: fontWeight,

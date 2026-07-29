@@ -59,20 +59,21 @@ class IdeColors {
     final amber = sf.Colors.amber;
     final green = sf.Colors.green;
     final sky = sf.Colors.sky;
+    final gray = sf.Colors.gray;
     // shadcn `.blue` recolor 在深浅下都指向 Colors.blue（500）；
     // IDE 按亮度拆阶梯，避免深浅主题 brand / ring 完全相同。
     final brand = isDark ? blue[500] : blue[600];
 
     if (isDark) {
       return IdeColors(
-        frame: scheme.background,
+        frame: neutral[700],
         // 画布略深于面板：background 与 zinc.900 拉开层级。
-        editor: zinc[950],
-        surface: zinc[900],
-        surfaceElevated: zinc[800],
+        editor: neutral[800],
+        surface: neutral[700],
+        surfaceElevated: neutral[800],
         surfaceOverlay: zinc[800],
         panel: zinc[900],
-        border: scheme.border,
+        border: neutral[600],
         borderSubtle: zinc[900],
         mutedText: scheme.mutedForeground,
         textPrimary: scheme.foreground,

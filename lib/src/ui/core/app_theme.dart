@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
@@ -19,6 +20,7 @@ class IdeThemeData {
     required this.brightness,
     required this.colors,
     this.uiFontFamily,
+    this.uiFontFamilyFallback = const <String>[],
     required this.codeFontFamily,
     this.uiFontSize = defaultUiFontSize,
     this.codeFontSize = defaultCodeFontSize,
@@ -32,11 +34,18 @@ class IdeThemeData {
   /// 生效位置：全应用 `IdeColors.of(context)`；并投影到 Material/shadcn。
   final IdeColors colors;
 
-  /// UI 字体族；`null` 表示跟随系统默认。
+  /// 已解析的 UI 主字体族；`null` 表示由平台字体引擎选择默认字体。
   ///
   /// 生效位置：`IdeTextStyles` 非代码样式；Material / shadcn 的 sans 字体投影。
-  /// 来源：外观设置 `AppearanceSettings.uiFontFamily`。
+  /// 来源：外观设置 `AppearanceSettings.uiFontFamily`；系统默认选项会映射为
+  /// 当前平台稳定公开的 UI 字体。
   final String? uiFontFamily;
+
+  /// 当前平台的 UI 备用字体族，主要承接主字体缺失的中日韩字符。
+  ///
+  /// 生效位置：`IdeTextStyles`、Material 与 shadcn 的所有文本样式。
+  /// 系统默认字体不再继承 GeistSans，而是由平台默认字体配合此列表解析。
+  final List<String> uiFontFamilyFallback;
 
   /// 代码字体族（默认 [bundledCodeFontFamily]）。
   ///
@@ -139,6 +148,40 @@ sf.ThemeMode resolveShadcnThemeMode(ThemeMode themeMode) {
   };
 }
 
+/// 返回当前平台用于承接中日韩字符的系统 UI 字体顺序。
+///
+/// 首选字体仍由系统或用户设置决定；列表仅在首选字体缺少字符时生效。
+List<String> resolvePlatformUiFontFamilyFallback(TargetPlatform platform) {
+  return switch (platform) {
+    TargetPlatform.windows => const <String>[
+      'Microsoft YaHei UI',
+      'Microsoft YaHei',
+    ],
+    TargetPlatform.macOS ||
+    TargetPlatform.iOS => const <String>['PingFang SC', 'Hiragino Sans GB'],
+    TargetPlatform.linux => const <String>[
+      'Noto Sans CJK SC',
+      'Noto Sans SC',
+      'WenQuanYi Micro Hei',
+    ],
+    TargetPlatform.android || TargetPlatform.fuchsia => const <String>[
+      'Noto Sans CJK SC',
+      'Noto Sans SC',
+    ],
+  };
+}
+
+/// 返回平台稳定公开的系统 UI 主字体；没有稳定名称的平台交给引擎解析。
+String? resolvePlatformUiFontFamily(TargetPlatform platform) {
+  return switch (platform) {
+    TargetPlatform.windows => 'Segoe UI',
+    TargetPlatform.macOS || TargetPlatform.iOS => '.AppleSystemUIFont',
+    TargetPlatform.linux ||
+    TargetPlatform.android ||
+    TargetPlatform.fuchsia => null,
+  };
+}
+
 /// 构建 Graphite light/dark 主题数据；这是项目语义 token 的唯一装配入口。
 ///
 /// 生效位置：`MainApp` 根据 `AppearanceSettings` 分别构建 light/dark 实例，
@@ -150,11 +193,17 @@ IdeThemeData buildIdeThemeData({
   required String codeFontFamily,
   double uiFontSize = defaultUiFontSize,
   double codeFontSize = defaultCodeFontSize,
+  TargetPlatform? platform,
 }) {
+  final resolvedPlatform = platform ?? defaultTargetPlatform;
+  final resolvedUiFontFamily =
+      _normalizeFontFamily(uiFontFamily) ??
+      resolvePlatformUiFontFamily(resolvedPlatform);
   return IdeThemeData(
     brightness: brightness,
     colors: _baseIdeColorsForBrightness(brightness),
-    uiFontFamily: _normalizeFontFamily(uiFontFamily),
+    uiFontFamily: resolvedUiFontFamily,
+    uiFontFamilyFallback: resolvePlatformUiFontFamilyFallback(resolvedPlatform),
     codeFontFamily:
         _normalizeFontFamily(codeFontFamily) ?? bundledCodeFontFamily,
     uiFontSize: uiFontSize,
@@ -197,50 +246,47 @@ ThemeData buildMaterialTheme(IdeThemeData ideTheme) {
     iconTheme: IconThemeData(color: colors.textSecondary),
   );
   final baseTextTheme = baseTheme.textTheme.apply(
-    fontFamily: ideTheme.uiFontFamily,
     bodyColor: colors.textPrimary,
     displayColor: colors.textPrimary,
   );
   final fontSizeFactor = ideTheme.uiFontSize / defaultUiFontSize;
-  return baseTheme.copyWith(
-    textTheme: baseTextTheme.copyWith(
-      displayLarge: _scaleTextStyle(baseTextTheme.displayLarge, fontSizeFactor),
-      displayMedium: _scaleTextStyle(
-        baseTextTheme.displayMedium,
-        fontSizeFactor,
-      ),
-      displaySmall: _scaleTextStyle(baseTextTheme.displaySmall, fontSizeFactor),
-      headlineLarge: _scaleTextStyle(
-        baseTextTheme.headlineLarge,
-        fontSizeFactor,
-      ),
-      headlineMedium: _scaleTextStyle(
-        baseTextTheme.headlineMedium,
-        fontSizeFactor,
-      ),
-      headlineSmall: _scaleTextStyle(
-        baseTextTheme.headlineSmall,
-        fontSizeFactor,
-      ),
-      titleLarge: _scaleTextStyle(baseTextTheme.titleLarge, fontSizeFactor),
-      titleMedium: _scaleTextStyle(baseTextTheme.titleMedium, fontSizeFactor),
-      titleSmall: _scaleTextStyle(baseTextTheme.titleSmall, fontSizeFactor),
-      bodyLarge: _scaleTextStyle(baseTextTheme.bodyLarge, fontSizeFactor),
-      bodyMedium: _scaleTextStyle(baseTextTheme.bodyMedium, fontSizeFactor),
-      bodySmall: _scaleTextStyle(baseTextTheme.bodySmall, fontSizeFactor),
-      labelLarge: _scaleTextStyle(baseTextTheme.labelLarge, fontSizeFactor),
-      labelMedium: _scaleTextStyle(baseTextTheme.labelMedium, fontSizeFactor),
-      labelSmall: _scaleTextStyle(baseTextTheme.labelSmall, fontSizeFactor),
-    ),
-  );
-}
 
-TextStyle? _scaleTextStyle(TextStyle? style, double factor) {
-  final fontSize = style?.fontSize;
-  if (style == null || fontSize == null || factor == 1) {
-    return style;
+  TextStyle? uiStyle(TextStyle? style) {
+    if (style == null) {
+      return null;
+    }
+    return _overrideTextStyle(
+      style,
+      fontFamily: ideTheme.uiFontFamily,
+      fontFamilyFallback: ideTheme.uiFontFamilyFallback,
+      fontSizeFactor: fontSizeFactor,
+    );
   }
-  return style.copyWith(fontSize: fontSize * factor);
+
+  TextTheme uiTextTheme(TextTheme textTheme) {
+    return textTheme.copyWith(
+      displayLarge: uiStyle(textTheme.displayLarge),
+      displayMedium: uiStyle(textTheme.displayMedium),
+      displaySmall: uiStyle(textTheme.displaySmall),
+      headlineLarge: uiStyle(textTheme.headlineLarge),
+      headlineMedium: uiStyle(textTheme.headlineMedium),
+      headlineSmall: uiStyle(textTheme.headlineSmall),
+      titleLarge: uiStyle(textTheme.titleLarge),
+      titleMedium: uiStyle(textTheme.titleMedium),
+      titleSmall: uiStyle(textTheme.titleSmall),
+      bodyLarge: uiStyle(textTheme.bodyLarge),
+      bodyMedium: uiStyle(textTheme.bodyMedium),
+      bodySmall: uiStyle(textTheme.bodySmall),
+      labelLarge: uiStyle(textTheme.labelLarge),
+      labelMedium: uiStyle(textTheme.labelMedium),
+      labelSmall: uiStyle(textTheme.labelSmall),
+    );
+  }
+
+  return baseTheme.copyWith(
+    textTheme: uiTextTheme(baseTextTheme),
+    primaryTextTheme: uiTextTheme(baseTheme.primaryTextTheme),
+  );
 }
 
 IdeColors _baseIdeColorsForBrightness(Brightness brightness) {
@@ -297,12 +343,14 @@ sf.Typography _buildShadcnTypography(IdeThemeData ideTheme) {
   TextStyle uiStyle(TextStyle style) => _overrideTextStyle(
     style,
     fontFamily: uiFontFamily,
+    fontFamilyFallback: ideTheme.uiFontFamilyFallback,
     fontSizeFactor: uiFontSizeFactor,
   );
 
   TextStyle codeStyle(TextStyle style) => _overrideTextStyle(
     style,
     fontFamily: codeFontFamily,
+    fontFamilyFallback: ideTheme.uiFontFamilyFallback,
     fontSizeFactor: codeFontSizeFactor,
   );
 
@@ -357,19 +405,10 @@ String? _normalizeFontFamily(String? fontFamily) {
 TextStyle _overrideTextStyle(
   TextStyle style, {
   required String? fontFamily,
+  required List<String> fontFamilyFallback,
   required double fontSizeFactor,
 }) {
   final normalizedFontFamily = _normalizeFontFamily(fontFamily);
-  if (normalizedFontFamily == null) {
-    if (fontSizeFactor == 1) {
-      return style;
-    }
-    return style.copyWith(
-      fontSize: style.fontSize == null
-          ? null
-          : style.fontSize! * fontSizeFactor,
-    );
-  }
   return TextStyle(
     inherit: style.inherit,
     color: style.color,
@@ -394,7 +433,7 @@ TextStyle _overrideTextStyle(
     decorationThickness: style.decorationThickness,
     debugLabel: style.debugLabel,
     fontFamily: normalizedFontFamily,
-    fontFamilyFallback: style.fontFamilyFallback,
+    fontFamilyFallback: fontFamilyFallback,
     package: null,
     overflow: style.overflow,
   );
