@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:window_manager/window_manager.dart';
 
@@ -17,8 +18,8 @@ import 'package:zeta/src/ui/core/pane_widgets.dart';
 /// 包裹主内容的窗口外框。
 ///
 /// 隐藏原生标题栏后由本组件提供自定义标题栏：macOS 下保留系统交通灯按钮并
-/// 提供拖拽区与标题；Windows/Linux 下可承载 Flutter 菜单，并额外绘制最小化/
-/// 最大化/关闭按钮。
+/// 提供拖拽区与标题；Windows 下在最左侧显示应用 Logo；Windows/Linux 下可承载
+/// Flutter 菜单，并额外绘制最小化/最大化/关闭按钮。
 @immutable
 class WindowMenu {
   const WindowMenu({required this.label, required this.items, this.key});
@@ -127,6 +128,7 @@ class _TitleBar extends StatelessWidget {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final isMac = Platform.isMacOS;
+    final isWindows = Platform.isWindows;
     // 最小高度保证无菜单时仍可拖拽；有 Menubar 时由内容撑开，不再锁死固定像素。
     // Column 给非 flex 子项无限高约束，不能用 CrossAxisAlignment.stretch。
     return ColoredBox(
@@ -141,27 +143,30 @@ class _TitleBar extends StatelessWidget {
             children: [
               // macOS 下左侧让出交通灯按钮的空间，且不拦截点击。
               if (isMac) const SizedBox(width: 76),
+              if (isWindows) const _WindowsTitleBarLogo(),
               if (menus.isNotEmpty) _WindowMenuBar(menus: menus),
               Expanded(
                 child: DragToMoveArea(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: IdeSpacing.space10,
-                    ),
-                    // heightFactor 避免 Row 在无限高约束下把 Align 拉爆。
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      heightFactor: 1,
-                      child: Text(
-                        appTitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: textStyles.bodyMedium.copyWith(
-                          color: colors.textSecondary,
+                  child: isWindows
+                      ? const SizedBox(height: IdeMetrics.titleBarHeight)
+                      : Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: IdeSpacing.space10,
+                          ),
+                          // heightFactor 避免 Row 在无限高约束下把 Align 拉爆。
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            heightFactor: 1,
+                            child: Text(
+                              appTitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: textStyles.bodyMedium.copyWith(
+                                color: colors.textSecondary,
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ),
                 ),
               ),
               if (titleBarActions.isNotEmpty)
@@ -191,6 +196,30 @@ class _TitleBar extends StatelessWidget {
               if (!isMac && showWindowControls) const _WindowButtons(),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WindowsTitleBarLogo extends StatelessWidget {
+  const _WindowsTitleBarLogo();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      key: const ValueKey('window-title-bar-logo'),
+      image: true,
+      label: 'Zeta Logo',
+      child: Padding(
+        padding: const EdgeInsets.only(
+          left: IdeSpacing.space6,
+          right: IdeSpacing.space4,
+        ),
+        child: SvgPicture.asset(
+          'assets/branding/zeta_logo.svg',
+          width: 20,
+          height: 20,
         ),
       ),
     );

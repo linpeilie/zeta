@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/window_frame.dart';
 
@@ -68,4 +71,33 @@ void main() {
     expect(openProjectPressed, 1);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('Windows 标题栏左侧显示 Logo 并隐藏应用标题', (tester) async {
+    await pumpIdeComponent(
+      tester,
+      size: const Size(960, 640),
+      child: WindowFrame(
+        enableNativeWindowFrame: true,
+        showWindowControls: false,
+        menus: const [
+          WindowMenu(
+            key: ValueKey('window-menu-file'),
+            label: '文件',
+            items: <WindowMenuItem>[],
+          ),
+        ],
+        child: const ColoredBox(color: Colors.black),
+      ),
+    );
+
+    final logoFinder = find.byKey(const ValueKey('window-title-bar-logo'));
+    final menuFinder = find.byKey(const ValueKey('window-menu-file'));
+    expect(logoFinder, findsOneWidget);
+    expect(find.text(appTitle), findsNothing);
+    expect(
+      tester.getTopLeft(logoFinder).dx,
+      lessThan(tester.getTopLeft(menuFinder).dx),
+    );
+    expect(tester.takeException(), isNull);
+  }, skip: !Platform.isWindows);
 }
