@@ -701,15 +701,6 @@ class _ModelConfigPopoverState extends State<_ModelConfigPopover> {
                             message: state.selectionNotice!,
                             colors: colors,
                           ),
-                        _ModelListLabel(
-                          refreshing: state.isRefreshing,
-                          refreshError: state.refreshError,
-                        ),
-                        Divider(
-                          height: 1,
-                          thickness: 1,
-                          color: colors.borderSubtle.withValues(alpha: 0.6),
-                        ),
                         Flexible(
                           child: Listener(
                             onPointerSignal: (event) {
@@ -855,56 +846,6 @@ class _ModelSelectionNoticeBanner extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ModelListLabel extends StatelessWidget {
-  const _ModelListLabel({required this.refreshing, required this.refreshError});
-
-  final bool refreshing;
-  final String? refreshError;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    return SizedBox(
-      height: 28,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space8),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                '选择模型',
-                style: IdeTextStyles.of(context).bodySmall.copyWith(
-                  color: colors.textTertiary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            if (refreshing)
-              SizedBox(
-                width: 12,
-                height: 12,
-                child: CircularProgressIndicator(
-                  strokeWidth: 1.5,
-                  color: colors.textSecondary,
-                ),
-              )
-            else if (refreshError != null)
-              IdeTooltip(
-                message: refreshError!,
-                child: Icon(
-                  Icons.info_outline_rounded,
-                  size: 14,
-                  color: colors.warning,
-                ),
-              ),
-          ],
-        ),
       ),
     );
   }
