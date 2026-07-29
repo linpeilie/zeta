@@ -210,7 +210,7 @@ void main() {
     expect(headingColor(), IdeColors.light.textPrimary);
   });
 
-  testWidgets('ui font picker shows system default and supports search', (
+  testWidgets('ui font select shows system default and supports search', (
     tester,
   ) async {
     final controller = AppearanceSettingsController(
@@ -227,47 +227,58 @@ void main() {
     );
     await _pumpSettingsPage(tester, controller: controller);
 
-    await tester.tap(find.text('界面字体'));
+    final selectFinder = find.byKey(const ValueKey('settings-ui-font-select'));
+    expect(selectFinder, findsOneWidget);
+    expect(
+      tester.widget<sf.Select<AppearanceFontChoice>>(selectFinder).value,
+      const AppearanceFontChoice.systemDefault(),
+    );
+
+    await tester.tap(selectFinder);
     await tester.pumpAndSettle();
 
-    final dialogFinder = find.byKey(
-      const ValueKey('settings-font-picker-dialog'),
+    final popupFinder = find.byKey(
+      const ValueKey('settings-ui-font-select-popup'),
     );
-    expect(dialogFinder, findsOneWidget);
+    expect(popupFinder, findsOneWidget);
     expect(
-      find.descendant(of: dialogFinder, matching: find.text('系统默认')),
+      find.descendant(of: popupFinder, matching: find.text('系统默认')),
       findsOneWidget,
     );
     expect(
-      find.descendant(of: dialogFinder, matching: find.text('Maple UI')),
+      find.descendant(of: popupFinder, matching: find.text('Maple UI')),
       findsOneWidget,
     );
     expect(
-      find.descendant(of: dialogFinder, matching: find.text('思源黑体')),
+      find.descendant(of: popupFinder, matching: find.text('思源黑体')),
       findsOneWidget,
     );
 
-    await tester.enterText(
-      find.byKey(const ValueKey('settings-font-search-field')),
-      'source',
+    final searchFinder = find.descendant(
+      of: popupFinder,
+      matching: find.byType(sf.TextField),
     );
+    expect(searchFinder, findsOneWidget);
+    await tester.enterText(searchFinder, 'source');
     await tester.pumpAndSettle();
 
     expect(
-      find.descendant(of: dialogFinder, matching: find.text('系统默认')),
+      find.descendant(of: popupFinder, matching: find.text('系统默认')),
       findsNothing,
     );
     expect(
-      find.descendant(of: dialogFinder, matching: find.text('Maple UI')),
+      find.descendant(of: popupFinder, matching: find.text('Maple UI')),
       findsNothing,
     );
     expect(
-      find.descendant(of: dialogFinder, matching: find.text('思源黑体')),
+      find.descendant(of: popupFinder, matching: find.text('思源黑体')),
       findsOneWidget,
     );
 
     await tester.tap(
-      find.descendant(of: dialogFinder, matching: find.text('思源黑体')),
+      find.byKey(
+        const ValueKey('settings-ui-font-option-system-Source Han Sans'),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -325,7 +336,7 @@ void main() {
   });
 
   testWidgets(
-    'code font picker keeps bundled default and only lists code fonts',
+    'code font select keeps bundled default and only lists code fonts',
     (tester) async {
       final controller = AppearanceSettingsController(
         store: MemoryAppearanceSettingsStore(),
@@ -342,56 +353,69 @@ void main() {
       );
       await _pumpSettingsPage(tester, controller: controller);
 
-      await tester.tap(find.text('代码字体'));
+      final selectFinder = find.byKey(
+        const ValueKey('settings-code-font-select'),
+      );
+      expect(selectFinder, findsOneWidget);
+      expect(
+        tester.widget<sf.Select<AppearanceFontChoice>>(selectFinder).value,
+        const AppearanceFontChoice.bundledJetBrainsMono(),
+      );
+
+      await tester.tap(selectFinder);
       await tester.pumpAndSettle();
 
-      final dialogFinder = find.byKey(
-        const ValueKey('settings-font-picker-dialog'),
+      final popupFinder = find.byKey(
+        const ValueKey('settings-code-font-select-popup'),
       );
       expect(
         find.descendant(
-          of: dialogFinder,
+          of: popupFinder,
           matching: find.text('JetBrainsMono（内置默认）'),
         ),
         findsOneWidget,
       );
       expect(
-        find.descendant(of: dialogFinder, matching: find.text('Cascadia Mono')),
+        find.descendant(of: popupFinder, matching: find.text('Cascadia Mono')),
         findsOneWidget,
       );
       expect(
-        find.descendant(of: dialogFinder, matching: find.text('Fira Code')),
+        find.descendant(of: popupFinder, matching: find.text('Fira Code')),
         findsOneWidget,
       );
       expect(
-        find.descendant(of: dialogFinder, matching: find.text('Maple UI')),
+        find.descendant(of: popupFinder, matching: find.text('Maple UI')),
         findsNothing,
       );
 
-      await tester.enterText(
-        find.byKey(const ValueKey('settings-font-search-field')),
-        'cascadia',
+      final searchFinder = find.descendant(
+        of: popupFinder,
+        matching: find.byType(sf.TextField),
       );
+      expect(searchFinder, findsOneWidget);
+      await tester.enterText(searchFinder, 'cascadia');
       await tester.pumpAndSettle();
 
       expect(
         find.descendant(
-          of: dialogFinder,
+          of: popupFinder,
           matching: find.text('JetBrainsMono（内置默认）'),
         ),
         findsNothing,
       );
       expect(
-        find.descendant(of: dialogFinder, matching: find.text('Cascadia Mono')),
+        find.descendant(of: popupFinder, matching: find.text('Cascadia Mono')),
         findsOneWidget,
       );
       expect(
-        find.descendant(of: dialogFinder, matching: find.text('Fira Code')),
+        find.descendant(of: popupFinder, matching: find.text('Fira Code')),
         findsNothing,
       );
 
       await tester.tap(
-        find.descendant(of: dialogFinder, matching: find.text('Cascadia Mono')),
+        find.byKey(
+          const ValueKey('settings-code-font-option-system-Cascadia Mono'),
+        ),
       );
       await tester.pumpAndSettle();
 
@@ -403,7 +427,7 @@ void main() {
     },
   );
 
-  testWidgets('font picker shows toast when selected font cannot load', (
+  testWidgets('font select shows toast when selected font cannot load', (
     tester,
   ) async {
     final controller = AppearanceSettingsController(
@@ -416,14 +440,11 @@ void main() {
     );
     await _pumpSettingsPage(tester, controller: controller);
 
-    await tester.tap(find.text('界面字体'));
+    await tester.tap(find.byKey(const ValueKey('settings-ui-font-select')));
     await tester.pumpAndSettle();
 
-    final dialogFinder = find.byKey(
-      const ValueKey('settings-font-picker-dialog'),
-    );
     await tester.tap(
-      find.descendant(of: dialogFinder, matching: find.text('Broken UI')),
+      find.byKey(const ValueKey('settings-ui-font-option-system-Broken UI')),
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));

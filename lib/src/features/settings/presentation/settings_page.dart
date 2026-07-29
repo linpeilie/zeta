@@ -10,7 +10,6 @@ import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_dialog.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_tabs.dart';
@@ -426,19 +425,21 @@ class _AppearanceSettingsPane extends StatelessWidget {
                               },
                             ),
                             const IdeRowDivider(),
-                            _AppearanceSettingRow(
+                            _FontChoiceSettingRow(
                               key: const ValueKey('settings-ui-font-row'),
+                              keyPrefix: 'settings-ui-font',
                               label: '界面字体',
                               description: '用于普通界面文本与非代码 Markdown 正文。',
-                              value: _fontChoiceLabel(
+                              selectedChoice: settings.uiFontChoice,
+                              selectedLabel: _fontChoiceLabel(
                                 settings.uiFontChoice,
                                 systemFontDisplayName: appearanceController
                                     .displayNameFor(settings.uiFontChoice),
                               ),
-                              onTap: () => _selectUiFont(
-                                context,
-                                currentChoice: settings.uiFontChoice,
-                              ),
+                              choicesLoader:
+                                  appearanceController.loadUiFontChoices,
+                              onChanged: appearanceController.setUiFontChoice,
+                              errorMessage: '无法加载所选界面字体。',
                             ),
                             const IdeRowDivider(),
                             _FontSizeSettingRow(
@@ -457,19 +458,21 @@ class _AppearanceSettingsPane extends StatelessWidget {
                               },
                             ),
                             const IdeRowDivider(),
-                            _AppearanceSettingRow(
+                            _FontChoiceSettingRow(
                               key: const ValueKey('settings-code-font-row'),
+                              keyPrefix: 'settings-code-font',
                               label: '代码字体',
                               description: '用于代码块、命令、Diff 和工具输出。',
-                              value: _fontChoiceLabel(
+                              selectedChoice: settings.codeFontChoice,
+                              selectedLabel: _fontChoiceLabel(
                                 settings.codeFontChoice,
                                 systemFontDisplayName: appearanceController
                                     .displayNameFor(settings.codeFontChoice),
                               ),
-                              onTap: () => _selectCodeFont(
-                                context,
-                                currentChoice: settings.codeFontChoice,
-                              ),
+                              choicesLoader:
+                                  appearanceController.loadCodeFontChoices,
+                              onChanged: appearanceController.setCodeFontChoice,
+                              errorMessage: '无法加载所选代码字体。',
                             ),
                             const IdeRowDivider(),
                             _FontSizeSettingRow(
@@ -501,46 +504,6 @@ class _AppearanceSettingsPane extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  Future<void> _selectUiFont(
-    BuildContext context, {
-    required AppearanceFontChoice currentChoice,
-  }) async {
-    final choice = await _showFontPicker(
-      context: context,
-      title: '界面字体',
-      searchHint: '搜索界面字体',
-      choicesFuture: appearanceController.loadUiFontChoices(),
-      selectedChoice: currentChoice,
-    );
-    if (choice == null || !context.mounted) {
-      return;
-    }
-    final updated = await appearanceController.setUiFontChoice(choice);
-    if (!updated && context.mounted) {
-      _showFontSelectionError(context, '无法加载所选界面字体。');
-    }
-  }
-
-  Future<void> _selectCodeFont(
-    BuildContext context, {
-    required AppearanceFontChoice currentChoice,
-  }) async {
-    final choice = await _showFontPicker(
-      context: context,
-      title: '代码字体',
-      searchHint: '搜索代码字体',
-      choicesFuture: appearanceController.loadCodeFontChoices(),
-      selectedChoice: currentChoice,
-    );
-    if (choice == null || !context.mounted) {
-      return;
-    }
-    final updated = await appearanceController.setCodeFontChoice(choice);
-    if (!updated && context.mounted) {
-      _showFontSelectionError(context, '无法加载所选代码字体。');
-    }
   }
 }
 
@@ -605,52 +568,157 @@ class _ThemeModeSection extends StatelessWidget {
   }
 }
 
-class _AppearanceSettingRow extends StatelessWidget {
-  const _AppearanceSettingRow({
+class _FontChoiceSettingRow extends StatefulWidget {
+  const _FontChoiceSettingRow({
+    required this.keyPrefix,
     required this.label,
     required this.description,
-    required this.value,
-    required this.onTap,
+    required this.selectedChoice,
+    required this.selectedLabel,
+    required this.choicesLoader,
+    required this.onChanged,
+    required this.errorMessage,
     super.key,
   });
 
+  final String keyPrefix;
   final String label;
   final String description;
-  final String value;
-  final VoidCallback onTap;
+  final AppearanceFontChoice selectedChoice;
+  final String selectedLabel;
+  final Future<List<AppearanceFontOption>> Function() choicesLoader;
+  final Future<bool> Function(AppearanceFontChoice choice) onChanged;
+  final String errorMessage;
+
+  @override
+  State<_FontChoiceSettingRow> createState() => _FontChoiceSettingRowState();
+}
+
+class _FontChoiceSettingRowState extends State<_FontChoiceSettingRow> {
+  Future<List<AppearanceFontOption>>? _choicesFuture;
+  bool _updating = false;
+
+  @override
+  void didUpdateWidget(covariant _FontChoiceSettingRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.choicesLoader != widget.choicesLoader) {
+      _choicesFuture = null;
+    }
+  }
+
+  Future<List<AppearanceFontOption>> _loadChoices() {
+    return _choicesFuture ??= widget.choicesLoader();
+  }
+
+  Future<void> _handleChanged(AppearanceFontChoice? choice) async {
+    if (choice == null || choice == widget.selectedChoice || _updating) {
+      return;
+    }
+    setState(() {
+      _updating = true;
+    });
+    final updated = await widget.onChanged(choice);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _updating = false;
+    });
+    if (!updated) {
+      _showFontSelectionError(context, widget.errorMessage);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    return PaneInteractiveSurface(
-      onPressed: onTap,
-      borderRadius: BorderRadius.zero,
-      child: IdeSettingsRow(
-        label: label,
-        description: description,
-        showDivider: false,
-        control: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Flexible(
-              child: Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: textStyles.bodyMedium.copyWith(
-                  color: colors.accent,
-                  fontWeight: FontWeight.w600,
+    return IdeSettingsRow(
+      label: widget.label,
+      description: widget.description,
+      showDivider: false,
+      control: Semantics(
+        label: '${widget.label}：${widget.selectedLabel}',
+        container: true,
+        child: sf.Select<AppearanceFontChoice>(
+          key: ValueKey<String>('${widget.keyPrefix}-select'),
+          value: widget.selectedChoice,
+          enabled: !_updating,
+          constraints: const BoxConstraints(minWidth: 220, maxWidth: 320),
+          popupConstraints: const BoxConstraints(maxHeight: 360),
+          itemBuilder: (context, choice) => Text(
+            widget.selectedLabel,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textStyles.bodyMedium.copyWith(
+              color: colors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          onChanged: (choice) {
+            unawaited(_handleChanged(choice));
+          },
+          popup: sf.SelectPopup<AppearanceFontChoice>.builder(
+            key: ValueKey<String>('${widget.keyPrefix}-select-popup'),
+            searchPlaceholder: Text('搜索${widget.label}'),
+            loadingBuilder: (context) => SizedBox(
+              height: 72,
+              child: Center(
+                child: IdeLoadingIndicator(
+                  key: ValueKey<String>('${widget.keyPrefix}-select-loading'),
+                  width: 28,
+                  height: 12,
+                  barHeight: 4,
                 ),
               ),
             ),
-            const SizedBox(width: IdeSpacing.space8),
-            Icon(
-              Icons.expand_more_rounded,
-              size: 18,
-              color: colors.textSecondary,
+            emptyBuilder: (context) => Padding(
+              padding: const EdgeInsets.all(IdeSpacing.space16),
+              child: Text(
+                '没有匹配的字体。',
+                textAlign: TextAlign.center,
+                style: textStyles.bodySmall.copyWith(
+                  color: colors.textSecondary,
+                ),
+              ),
             ),
-          ],
+            errorBuilder: (context, error, stackTrace) => Padding(
+              padding: const EdgeInsets.all(IdeSpacing.space16),
+              child: Text(
+                '字体列表加载失败。',
+                textAlign: TextAlign.center,
+                style: textStyles.bodySmall.copyWith(
+                  color: colors.textSecondary,
+                ),
+              ),
+            ),
+            builder: (context, searchQuery) async {
+              final choices = await _loadChoices();
+              final filtered = choices
+                  .where((option) => option.matches(searchQuery ?? ''))
+                  .toList(growable: false);
+              return sf.SelectItemList(
+                children: [
+                  for (final option in filtered)
+                    sf.SelectItemButton<AppearanceFontChoice>(
+                      key: ValueKey<String>(
+                        '${widget.keyPrefix}-option-'
+                        '${option.choice.stableId}',
+                      ),
+                      value: option.choice,
+                      child: Text(
+                        option.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textStyles.bodyMedium.copyWith(
+                          color: colors.textPrimary,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ).call,
         ),
       ),
     );
@@ -748,205 +816,6 @@ class _FontSizeSettingRow extends StatelessWidget {
       description: description,
       showDivider: false,
       control: controls,
-    );
-  }
-}
-
-Future<AppearanceFontChoice?> _showFontPicker({
-  required BuildContext context,
-  required String title,
-  required String searchHint,
-  required Future<List<AppearanceFontOption>> choicesFuture,
-  required AppearanceFontChoice selectedChoice,
-}) {
-  return showIdeDialog<AppearanceFontChoice>(
-    context: context,
-    builder: (context) {
-      return _FontChoiceDialog(
-        title: title,
-        searchHint: searchHint,
-        choicesFuture: choicesFuture,
-        selectedChoice: selectedChoice,
-      );
-    },
-  );
-}
-
-class _FontChoiceDialog extends StatefulWidget {
-  const _FontChoiceDialog({
-    required this.title,
-    required this.searchHint,
-    required this.choicesFuture,
-    required this.selectedChoice,
-  });
-
-  final String title;
-  final String searchHint;
-  final Future<List<AppearanceFontOption>> choicesFuture;
-  final AppearanceFontChoice selectedChoice;
-
-  @override
-  State<_FontChoiceDialog> createState() => _FontChoiceDialogState();
-}
-
-class _FontChoiceDialogState extends State<_FontChoiceDialog> {
-  late final TextEditingController _searchController;
-  String _query = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _searchController = TextEditingController();
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
-    // 字体选择不是纯确认弹窗：在 AlertDialog 壳内自建搜索 + 列表布局。
-    // 关闭按钮放在 title 行，避免 AlertDialog.trailing 被强制套 iconXLarge。
-    return IdeDialog(
-      key: const ValueKey('settings-font-picker-dialog'),
-      title: Row(
-        children: [
-          Expanded(child: Text(widget.title)),
-          sf.IconButton.ghost(
-            onPressed: () => Navigator.of(context).pop(),
-            size: sf.ButtonSize.small,
-            density: sf.ButtonDensity.iconDense,
-            icon: Icon(
-              Icons.close_rounded,
-              size: 18,
-              color: colors.textSecondary,
-            ),
-          ),
-        ],
-      ),
-      content: SizedBox(
-        width: 528,
-        height: 420,
-        child: DefaultTextStyle.merge(
-          style: textStyles.bodyMedium.copyWith(color: colors.textPrimary),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              sf.TextField(
-                key: const ValueKey('settings-font-search-field'),
-                controller: _searchController,
-                autofocus: true,
-                onChanged: (value) {
-                  setState(() {
-                    _query = value;
-                  });
-                },
-                placeholder: Text(widget.searchHint),
-                features: const [
-                  sf.InputFeature.leading(Icon(Icons.search_rounded, size: 18)),
-                ],
-              ),
-              const SizedBox(height: IdeSpacing.space12),
-              Expanded(
-                child: FutureBuilder<List<AppearanceFontOption>>(
-                  future: widget.choicesFuture,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState != ConnectionState.done) {
-                      return const Center(
-                        child: IdeLoadingIndicator(
-                          key: ValueKey('settings-font-picker-loading'),
-                          width: 28,
-                          height: 12,
-                          barHeight: 4,
-                        ),
-                      );
-                    }
-                    if (snapshot.hasError) {
-                      return Center(
-                        child: Text(
-                          '字体列表加载失败。',
-                          style: textStyles.bodySmall.copyWith(
-                            color: colors.textSecondary,
-                          ),
-                        ),
-                      );
-                    }
-
-                    final choices =
-                        snapshot.data ?? const <AppearanceFontOption>[];
-                    final filtered = choices
-                        .where((option) => option.matches(_query))
-                        .toList(growable: false);
-                    if (filtered.isEmpty) {
-                      return Center(
-                        child: Text(
-                          '没有匹配的字体。',
-                          style: textStyles.bodySmall.copyWith(
-                            color: colors.textSecondary,
-                          ),
-                        ),
-                      );
-                    }
-
-                    return ListView.builder(
-                      key: const ValueKey('settings-font-picker-list'),
-                      itemCount: filtered.length,
-                      itemBuilder: (context, index) {
-                        final option = filtered[index];
-                        final choice = option.choice;
-                        final selected = choice == widget.selectedChoice;
-                        final optionStyle =
-                            sf.ButtonStyle.ghost(
-                              size: sf.ButtonSize.normal,
-                              density: sf.ButtonDensity.dense,
-                            ).withBackgroundColor(
-                              color: selected
-                                  ? colors.selectedSurface
-                                  : Colors.transparent,
-                              hoverColor: selected
-                                  ? colors.selectedHoverSurface
-                                  : colors.hoverSurface,
-                            );
-                        return SizedBox(
-                          width: double.infinity,
-                          height: 36,
-                          child: sf.Button(
-                            key: ValueKey<String>(
-                              'settings-font-option-${choice.stableId}',
-                            ),
-                            onPressed: () => Navigator.of(context).pop(choice),
-                            style: optionStyle,
-                            alignment: Alignment.centerLeft,
-                            trailing: selected
-                                ? Icon(
-                                    Icons.check_rounded,
-                                    size: 18,
-                                    color: colors.accent,
-                                  )
-                                : null,
-                            child: Text(
-                              option.label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: textStyles.bodyMedium.copyWith(
-                                color: colors.textPrimary,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
