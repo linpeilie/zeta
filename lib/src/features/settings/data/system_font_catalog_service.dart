@@ -1,134 +1,89 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:system_fonts/system_fonts.dart';
+import 'package:zeta/src/features/settings/domain/system_font_family.dart';
+
+const String systemFontCatalogChannelName = 'zeta/system_fonts';
+
+typedef NativeFontFamilyLoader =
+    Future<List<Object?>> Function(String localeName);
 
 /// 桌面系统字体目录服务。
 abstract class SystemFontCatalogService {
-  Future<List<String>> uiFontFamilies();
+  Future<List<SystemFontFamily>> uiFontFamilies();
 
-  Future<List<String>> codeFontFamilies();
+  Future<List<SystemFontFamily>> codeFontFamilies();
 
-  Future<bool> ensureFontLoaded(String fontFamily);
+  /// 按真实家族名、本地化名称或旧版文件名解析字体。
+  Future<SystemFontFamily?> resolveFontFamily(String name);
 }
 
-/// 基于 `system_fonts` 的系统字体目录实现。
+/// 基于 DirectWrite、CoreText 和 Fontconfig 的系统字体目录实现。
 class DesktopSystemFontCatalogService implements SystemFontCatalogService {
   DesktopSystemFontCatalogService({
-    SystemFonts? systemFonts,
-    this.measurementText = 'iIl1WMmw0O._-',
-    this.fontSize = 20,
-    this.widthTolerance = 0.01,
-  }) : _systemFonts = systemFonts ?? SystemFonts();
+    NativeFontFamilyLoader? loader,
+    String? localeName,
+  }) : _loader = loader ?? _loadFromNativeChannel,
+       _localeName = localeName ?? Platform.localeName;
 
-  final SystemFonts _systemFonts;
-  final String measurementText;
-  final double fontSize;
-  final double widthTolerance;
-  final Set<String> _loadedFonts = <String>{};
-  final Map<String, bool> _monospaceCache = <String, bool>{};
-  Future<List<String>>? _uiFontFamiliesFuture;
-  Future<List<String>>? _codeFontFamiliesFuture;
+  final NativeFontFamilyLoader _loader;
+  final String _localeName;
+  Future<List<SystemFontFamily>>? _fontFamiliesFuture;
+  Future<List<SystemFontFamily>>? _codeFontFamiliesFuture;
 
   @override
-  Future<List<String>> uiFontFamilies() {
-    return _uiFontFamiliesFuture ??= Future<List<String>>.value(
-      _sortedFontFamilies(),
+  Future<List<SystemFontFamily>> uiFontFamilies() {
+    return _fontFamiliesFuture ??= _loadFontFamilies();
+  }
+
+  @override
+  Future<List<SystemFontFamily>> codeFontFamilies() {
+    return _codeFontFamiliesFuture ??= uiFontFamilies().then(
+      (families) => List<SystemFontFamily>.unmodifiable(
+        families.where((family) => family.isMonospace),
+      ),
     );
   }
 
   @override
-  Future<List<String>> codeFontFamilies() {
-    return _codeFontFamiliesFuture ??= _computeCodeFontFamilies();
-  }
-
-  @override
-  Future<bool> ensureFontLoaded(String fontFamily) async {
-    if (_loadedFonts.contains(fontFamily)) {
-      return true;
+  Future<SystemFontFamily?> resolveFontFamily(String name) async {
+    final normalized = name.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return null;
     }
-    final path = _systemFonts.getFontMap()[fontFamily];
-    if (path == null || !File(path).existsSync()) {
-      return false;
-    }
-
-    try {
-      final bytes = await File(path).readAsBytes();
-      final loader = FontLoader(fontFamily)
-        ..addFont(Future<ByteData>.value(ByteData.sublistView(bytes)));
-      await loader.load();
-      _loadedFonts.add(fontFamily);
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  Future<List<String>> _computeCodeFontFamilies() async {
-    final candidates = await uiFontFamilies();
-    final monospaceFonts = <String>[];
-    for (final fontFamily in candidates) {
-      final cached = _monospaceCache[fontFamily];
-      if (cached == true) {
-        monospaceFonts.add(fontFamily);
-        continue;
-      }
-      if (cached == false) {
-        continue;
-      }
-      final isMonospace = await _isMonospace(fontFamily);
-      _monospaceCache[fontFamily] = isMonospace;
-      if (isMonospace) {
-        monospaceFonts.add(fontFamily);
+    for (final family in await uiFontFamilies()) {
+      if (family.familyName.toLowerCase() == normalized ||
+          family.displayName.toLowerCase() == normalized ||
+          family.aliases.any((alias) => alias.toLowerCase() == normalized)) {
+        return family;
       }
     }
-    return monospaceFonts;
+    return null;
   }
 
-  Future<bool> _isMonospace(String fontFamily) async {
-    if (!await ensureFontLoaded(fontFamily)) {
-      return false;
-    }
-
-    final widths = measurementText
-        .split('')
-        .map((character) {
-          final painter = TextPainter(
-            text: TextSpan(
-              text: character,
-              style: TextStyle(fontFamily: fontFamily, fontSize: fontSize),
-            ),
-            textDirection: TextDirection.ltr,
-          )..layout();
-          return painter.width;
-        })
-        .toList(growable: false);
-
-    if (widths.isEmpty) {
-      return false;
-    }
-    final firstWidth = widths.first;
-    for (final width in widths.skip(1)) {
-      if ((width - firstWidth).abs() > widthTolerance) {
-        return false;
+  Future<List<SystemFontFamily>> _loadFontFamilies() async {
+    final rawFamilies = await _loader(_localeName);
+    final unique = <String, SystemFontFamily>{};
+    for (final raw in rawFamilies) {
+      final family = SystemFontFamily.tryDecode(raw);
+      if (family != null) {
+        unique.putIfAbsent(family.id.toLowerCase(), () => family);
       }
     }
-    return true;
+    final values = unique.values.toList(growable: false)
+      ..sort(
+        (a, b) =>
+            a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
+      );
+    return List<SystemFontFamily>.unmodifiable(values);
   }
+}
 
-  List<String> _sortedFontFamilies() {
-    final names = _systemFonts.getFontList();
-    final unique = <String, String>{};
-    for (final name in names) {
-      final normalized = name.trim();
-      if (normalized.isEmpty) {
-        continue;
-      }
-      unique.putIfAbsent(normalized.toLowerCase(), () => normalized);
-    }
-    final values = unique.values.toList(growable: false);
-    values.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    return values;
-  }
+Future<List<Object?>> _loadFromNativeChannel(String localeName) async {
+  const channel = MethodChannel(systemFontCatalogChannelName);
+  return await channel.invokeListMethod<Object?>(
+        'listFontFamilies',
+        <String, Object?>{'locale': localeName},
+      ) ??
+      const <Object?>[];
 }

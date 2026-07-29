@@ -430,7 +430,11 @@ class _AppearanceSettingsPane extends StatelessWidget {
                               key: const ValueKey('settings-ui-font-row'),
                               label: '界面字体',
                               description: '用于普通界面文本与非代码 Markdown 正文。',
-                              value: _fontChoiceLabel(settings.uiFontChoice),
+                              value: _fontChoiceLabel(
+                                settings.uiFontChoice,
+                                systemFontDisplayName: appearanceController
+                                    .displayNameFor(settings.uiFontChoice),
+                              ),
                               onTap: () => _selectUiFont(
                                 context,
                                 currentChoice: settings.uiFontChoice,
@@ -457,7 +461,11 @@ class _AppearanceSettingsPane extends StatelessWidget {
                               key: const ValueKey('settings-code-font-row'),
                               label: '代码字体',
                               description: '用于代码块、命令、Diff 和工具输出。',
-                              value: _fontChoiceLabel(settings.codeFontChoice),
+                              value: _fontChoiceLabel(
+                                settings.codeFontChoice,
+                                systemFontDisplayName: appearanceController
+                                    .displayNameFor(settings.codeFontChoice),
+                              ),
                               onTap: () => _selectCodeFont(
                                 context,
                                 currentChoice: settings.codeFontChoice,
@@ -748,7 +756,7 @@ Future<AppearanceFontChoice?> _showFontPicker({
   required BuildContext context,
   required String title,
   required String searchHint,
-  required Future<List<AppearanceFontChoice>> choicesFuture,
+  required Future<List<AppearanceFontOption>> choicesFuture,
   required AppearanceFontChoice selectedChoice,
 }) {
   return showIdeDialog<AppearanceFontChoice>(
@@ -774,7 +782,7 @@ class _FontChoiceDialog extends StatefulWidget {
 
   final String title;
   final String searchHint;
-  final Future<List<AppearanceFontChoice>> choicesFuture;
+  final Future<List<AppearanceFontOption>> choicesFuture;
   final AppearanceFontChoice selectedChoice;
 
   @override
@@ -844,7 +852,7 @@ class _FontChoiceDialogState extends State<_FontChoiceDialog> {
               ),
               const SizedBox(height: IdeSpacing.space12),
               Expanded(
-                child: FutureBuilder<List<AppearanceFontChoice>>(
+                child: FutureBuilder<List<AppearanceFontOption>>(
                   future: widget.choicesFuture,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState != ConnectionState.done) {
@@ -869,9 +877,9 @@ class _FontChoiceDialogState extends State<_FontChoiceDialog> {
                     }
 
                     final choices =
-                        snapshot.data ?? const <AppearanceFontChoice>[];
+                        snapshot.data ?? const <AppearanceFontOption>[];
                     final filtered = choices
-                        .where((choice) => _matchesFontQuery(choice, _query))
+                        .where((option) => option.matches(_query))
                         .toList(growable: false);
                     if (filtered.isEmpty) {
                       return Center(
@@ -888,7 +896,8 @@ class _FontChoiceDialogState extends State<_FontChoiceDialog> {
                       key: const ValueKey('settings-font-picker-list'),
                       itemCount: filtered.length,
                       itemBuilder: (context, index) {
-                        final choice = filtered[index];
+                        final option = filtered[index];
+                        final choice = option.choice;
                         final selected = choice == widget.selectedChoice;
                         final optionStyle =
                             sf.ButtonStyle.ghost(
@@ -920,7 +929,7 @@ class _FontChoiceDialogState extends State<_FontChoiceDialog> {
                                   )
                                 : null,
                             child: Text(
-                              _fontChoiceLabel(choice),
+                              option.label,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: textStyles.bodyMedium.copyWith(
@@ -942,19 +951,15 @@ class _FontChoiceDialogState extends State<_FontChoiceDialog> {
   }
 }
 
-bool _matchesFontQuery(AppearanceFontChoice choice, String query) {
-  final normalizedQuery = query.trim().toLowerCase();
-  if (normalizedQuery.isEmpty) {
-    return true;
-  }
-  return _fontChoiceLabel(choice).toLowerCase().contains(normalizedQuery);
-}
-
-String _fontChoiceLabel(AppearanceFontChoice choice) {
+String _fontChoiceLabel(
+  AppearanceFontChoice choice, {
+  String? systemFontDisplayName,
+}) {
   return switch (choice.kind) {
     AppearanceFontChoiceKind.systemDefault => '系统默认',
     AppearanceFontChoiceKind.bundledJetBrainsMono => 'JetBrainsMono（内置默认）',
-    AppearanceFontChoiceKind.system => choice.fontFamily!,
+    AppearanceFontChoiceKind.system =>
+      systemFontDisplayName ?? choice.fontFamily!,
   };
 }
 

@@ -4,6 +4,29 @@ import 'package:zeta/src/features/settings/application/appearance_settings_contr
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
+import 'package:zeta/src/features/settings/domain/system_font_family.dart';
+
+const _mapleUi = SystemFontFamily(
+  id: 'test:maple-ui',
+  familyName: 'Maple UI',
+  displayName: 'Maple UI',
+  aliases: <String>['Maple UI'],
+  isMonospace: false,
+);
+const _cascadiaMono = SystemFontFamily(
+  id: 'test:cascadia-mono',
+  familyName: 'Cascadia Mono',
+  displayName: 'Cascadia Mono',
+  aliases: <String>['Cascadia Mono'],
+  isMonospace: true,
+);
+const _fangSong = SystemFontFamily(
+  id: 'test:fangsong',
+  familyName: 'FangSong',
+  displayName: '仿宋',
+  aliases: <String>['FangSong', '仿宋', 'simfang'],
+  isMonospace: false,
+);
 
 void main() {
   test('loads persisted appearance settings', () async {
@@ -18,7 +41,7 @@ void main() {
         ),
       ),
       fontCatalog: const _FakeSystemFontCatalogService(
-        loadableFonts: <String>{'Maple UI', 'Cascadia Mono'},
+        families: <SystemFontFamily>[_mapleUi, _cascadiaMono],
       ),
     );
     addTearDown(controller.dispose);
@@ -56,13 +79,13 @@ void main() {
   });
 
   test(
-    'setUiFontChoice loads system font and persists the selection',
+    'setUiFontChoice resolves system font and persists the selection',
     () async {
       final store = MemoryAppearanceSettingsStore();
       final controller = AppearanceSettingsController(
         store: store,
         fontCatalog: const _FakeSystemFontCatalogService(
-          loadableFonts: <String>{'Maple UI'},
+          families: <SystemFontFamily>[_mapleUi],
         ),
       );
       addTearDown(controller.dispose);
@@ -87,7 +110,7 @@ void main() {
   );
 
   test(
-    'setCodeFontChoice keeps previous value when font loading fails',
+    'setCodeFontChoice keeps previous value when font resolution fails',
     () async {
       final controller = AppearanceSettingsController(
         store: MemoryAppearanceSettingsStore(),
@@ -145,21 +168,83 @@ void main() {
       expect(await store.load(), const AppearanceSettings());
     },
   );
+
+  test(
+    'load migrates legacy file name and keeps localized display name',
+    () async {
+      final store = MemoryAppearanceSettingsStore(
+        const AppearanceSettings(
+          uiFontChoice: AppearanceFontChoice.system('simfang'),
+        ),
+      );
+      final controller = AppearanceSettingsController(
+        store: store,
+        fontCatalog: const _FakeSystemFontCatalogService(
+          families: <SystemFontFamily>[_fangSong],
+        ),
+      );
+      addTearDown(controller.dispose);
+
+      final settings = await controller.load();
+
+      expect(
+        settings.uiFontChoice,
+        const AppearanceFontChoice.system('FangSong'),
+      );
+      expect(controller.displayNameFor(settings.uiFontChoice), '仿宋');
+      expect(
+        (await store.load()).uiFontChoice,
+        const AppearanceFontChoice.system('FangSong'),
+      );
+    },
+  );
+
+  test(
+    'load preserves stored font when native catalog is unavailable',
+    () async {
+      const stored = AppearanceSettings(
+        uiFontChoice: AppearanceFontChoice.system('Maple UI'),
+      );
+      final store = MemoryAppearanceSettingsStore(stored);
+      final controller = AppearanceSettingsController(
+        store: store,
+        fontCatalog: const _FakeSystemFontCatalogService(throwOnResolve: true),
+      );
+      addTearDown(controller.dispose);
+
+      expect(await controller.load(), stored);
+      expect(await store.load(), stored);
+    },
+  );
 }
 
 class _FakeSystemFontCatalogService implements SystemFontCatalogService {
-  const _FakeSystemFontCatalogService({this.loadableFonts = const <String>{}});
+  const _FakeSystemFontCatalogService({
+    this.families = const <SystemFontFamily>[],
+    this.throwOnResolve = false,
+  });
 
-  final Set<String> loadableFonts;
+  final List<SystemFontFamily> families;
+  final bool throwOnResolve;
 
   @override
-  Future<List<String>> codeFontFamilies() async => const <String>[];
+  Future<List<SystemFontFamily>> codeFontFamilies() async =>
+      families.where((family) => family.isMonospace).toList(growable: false);
 
   @override
-  Future<bool> ensureFontLoaded(String fontFamily) async {
-    return loadableFonts.contains(fontFamily);
+  Future<SystemFontFamily?> resolveFontFamily(String name) async {
+    if (throwOnResolve) {
+      throw StateError('Native font catalog unavailable');
+    }
+    final normalized = name.toLowerCase();
+    for (final family in families) {
+      if (family.aliases.any((alias) => alias.toLowerCase() == normalized)) {
+        return family;
+      }
+    }
+    return null;
   }
 
   @override
-  Future<List<String>> uiFontFamilies() async => const <String>[];
+  Future<List<SystemFontFamily>> uiFontFamilies() async => families;
 }

@@ -8,6 +8,7 @@ import 'package:zeta/src/features/settings/data/general_settings_store.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
+import 'package:zeta/src/features/settings/domain/system_font_family.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
@@ -218,6 +219,10 @@ void main() {
         uiFonts: <String>['Maple UI', 'Source Han Sans'],
         codeFonts: <String>['Cascadia Mono'],
         loadableFonts: <String>{'Maple UI', 'Source Han Sans', 'Cascadia Mono'},
+        displayNames: <String, String>{'Source Han Sans': '思源黑体'},
+        aliases: <String, List<String>>{
+          'Source Han Sans': <String>['Source Han Sans', 'sourcehansans'],
+        },
       ),
     );
     await _pumpSettingsPage(tester, controller: controller);
@@ -238,7 +243,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.descendant(of: dialogFinder, matching: find.text('Source Han Sans')),
+      find.descendant(of: dialogFinder, matching: find.text('思源黑体')),
       findsOneWidget,
     );
 
@@ -257,12 +262,12 @@ void main() {
       findsNothing,
     );
     expect(
-      find.descendant(of: dialogFinder, matching: find.text('Source Han Sans')),
+      find.descendant(of: dialogFinder, matching: find.text('思源黑体')),
       findsOneWidget,
     );
 
     await tester.tap(
-      find.descendant(of: dialogFinder, matching: find.text('Source Han Sans')),
+      find.descendant(of: dialogFinder, matching: find.text('思源黑体')),
     );
     await tester.pumpAndSettle();
 
@@ -270,7 +275,7 @@ void main() {
       controller.settings.uiFontChoice,
       const AppearanceFontChoice.system('Source Han Sans'),
     );
-    expect(find.text('Source Han Sans'), findsOneWidget);
+    expect(find.text('思源黑体'), findsOneWidget);
   });
 
   testWidgets('font size controls update settings and theme tokens', (
@@ -405,7 +410,7 @@ void main() {
       store: MemoryAppearanceSettingsStore(),
       fontCatalog: const _FakeSystemFontCatalogService(
         uiFonts: <String>['Broken UI'],
-        // 列表可见，但 ensureFontLoaded 拒绝加载，触发错误 toast。
+        // 列表可见，但选择时目录解析失败，触发错误 toast。
         loadableFonts: <String>{},
       ),
     );
@@ -524,20 +529,49 @@ class _FakeSystemFontCatalogService implements SystemFontCatalogService {
     this.uiFonts = const <String>[],
     this.codeFonts = const <String>[],
     this.loadableFonts = const <String>{},
+    this.displayNames = const <String, String>{},
+    this.aliases = const <String, List<String>>{},
   });
 
   final List<String> uiFonts;
   final List<String> codeFonts;
   final Set<String> loadableFonts;
+  final Map<String, String> displayNames;
+  final Map<String, List<String>> aliases;
 
   @override
-  Future<List<String>> codeFontFamilies() async => codeFonts;
+  Future<List<SystemFontFamily>> codeFontFamilies() async =>
+      codeFonts.map((name) => _family(name, isMonospace: true)).toList();
 
   @override
-  Future<bool> ensureFontLoaded(String fontFamily) async {
-    return loadableFonts.contains(fontFamily);
+  Future<SystemFontFamily?> resolveFontFamily(String name) async {
+    final normalized = name.toLowerCase();
+    for (final family in <SystemFontFamily>[
+      ...await uiFontFamilies(),
+      ...await codeFontFamilies(),
+    ]) {
+      if (!loadableFonts.contains(family.familyName)) {
+        continue;
+      }
+      if (family.aliases.any((alias) => alias.toLowerCase() == normalized)) {
+        return family;
+      }
+    }
+    return null;
   }
 
   @override
-  Future<List<String>> uiFontFamilies() async => uiFonts;
+  Future<List<SystemFontFamily>> uiFontFamilies() async => uiFonts
+      .map((name) => _family(name, isMonospace: codeFonts.contains(name)))
+      .toList();
+
+  SystemFontFamily _family(String name, {required bool isMonospace}) {
+    return SystemFontFamily(
+      id: 'test:${name.toLowerCase()}',
+      familyName: name,
+      displayName: displayNames[name] ?? name,
+      aliases: <String>{name, ...?aliases[name]}.toList(growable: false),
+      isMonospace: isMonospace,
+    );
+  }
 }

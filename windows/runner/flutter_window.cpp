@@ -24,6 +24,8 @@ bool FlutterWindow::OnCreate() {
   if (!flutter_controller_->engine() || !flutter_controller_->view()) {
     return false;
   }
+  system_font_catalog_channel_ = CreateSystemFontCatalogChannel(
+      flutter_controller_->engine()->messenger());
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
@@ -41,6 +43,7 @@ bool FlutterWindow::OnCreate() {
 
 void FlutterWindow::OnDestroy() {
   if (flutter_controller_) {
+    system_font_catalog_channel_ = nullptr;
     flutter_controller_ = nullptr;
   }
 

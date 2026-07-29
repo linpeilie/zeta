@@ -20,7 +20,6 @@ dependencies:
   pasteboard: ^0.5.0
   shadcn_flutter: 0.0.52
   shared_preferences: ^2.5.5
-  system_fonts: ^1.0.1
   toml: ^0.18.0
   window_manager: ^0.5.1
 
@@ -32,6 +31,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/branding/
     - assets/icons/agents/
   fonts:
     - family: JetBrainsMono
