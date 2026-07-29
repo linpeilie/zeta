@@ -1,6 +1,8 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/rows/ide_list_row.dart';
 
@@ -31,11 +33,39 @@ void main() {
       tester.getSize(find.byKey(const ValueKey('list-row'))).height,
       greaterThanOrEqualTo(IdeMetrics.listRowHeight),
     );
-    expect(_surfaceDecoration(tester).color, IdeColors.dark.selectedSurface);
+    final decoration = _surfaceDecoration(tester);
+    expect(decoration.color, IdeColors.dark.selectedSurface);
+    expect(decoration.borderRadius, IdeRadius.allSmall);
 
     await tester.tap(find.byKey(const ValueKey('list-row')));
     await tester.pump();
     expect(taps, 1);
+  });
+
+  testWidgets('IdeListRow hover 背景使用设计系统小圆角', (tester) async {
+    await pumpIdeComponent(
+      tester,
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: IdeListRow(
+          key: const ValueKey('list-row'),
+          title: 'Hover row',
+          onPressed: () {},
+        ),
+      ),
+    );
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: Offset.zero);
+    await mouse.moveTo(
+      tester.getCenter(find.byKey(const ValueKey('list-row'))),
+    );
+    await tester.pumpAndSettle();
+
+    final decoration = _surfaceDecoration(tester);
+    expect(decoration.color, IdeColors.dark.hoverSurface);
+    expect(decoration.borderRadius, IdeRadius.allSmall);
   });
 
   testWidgets('禁用的 IdeListRow 保留按钮语义但不会触发回调', (tester) async {

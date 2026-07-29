@@ -54,7 +54,6 @@ class IdeListRow extends StatelessWidget {
           enabled: enabled,
           semanticLabel: semanticLabel ?? title,
           padding: IdeSpacing.rowPadding,
-          borderRadius: BorderRadius.zero,
           child: Row(
             children: [
               if (leading case final Widget leadingWidget) ...[
