@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 /// IDE 设计系统圆角 token。
 ///
@@ -67,8 +68,8 @@ abstract final class IdeEffects {
     return [
       BoxShadow(
         color: brightness == Brightness.dark
-            ? const Color(0x59000000)
-            : const Color(0x24101114),
+            ? sf.Colors.black.withValues(alpha: 0.35)
+            : sf.Colors.zinc[900].withValues(alpha: 0.14),
         blurRadius: 24,
         offset: const Offset(0, 8),
       ),
@@ -102,7 +103,7 @@ abstract final class IdeEffects {
   /// navigation/inspector 时背后的 `ColoredBox` scrim。
   static Color scrim(Brightness brightness) {
     return brightness == Brightness.dark
-        ? const Color(0x8C060607)
-        : const Color(0x3D17181A);
+        ? sf.Colors.black.withValues(alpha: 0.55)
+        : sf.Colors.zinc[300].withValues(alpha: 0.24);
   }
 }

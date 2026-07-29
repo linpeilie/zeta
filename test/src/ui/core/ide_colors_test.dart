@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 
@@ -112,7 +113,7 @@ void main() {
     );
   });
 
-  test('主题投影只消费 Graphite 语义 Token', () {
+  test('主题投影消费 IdeColors 语义 Token（源自 shadcn Zinc/blue）', () {
     final ideTheme = buildIdeThemeData(
       brightness: Brightness.dark,
       codeFontFamily: 'monospace',
@@ -126,11 +127,45 @@ void main() {
     expect(shadcn.secondary, ideTheme.colors.controlSurface);
     expect(shadcn.accent, ideTheme.colors.selectedSurface);
     expect(shadcn.ring, ideTheme.colors.focusRing);
+    expect(shadcn.primary, ideTheme.colors.accent);
     expect(material.scaffoldBackgroundColor, ideTheme.colors.frameSurface);
     expect(material.canvasColor, ideTheme.colors.canvasSurface);
     expect(material.cardColor, ideTheme.colors.paneSurface);
     expect(material.focusColor, ideTheme.colors.focusRing);
     expect(material.hoverColor, ideTheme.colors.hoverSurface);
+  });
+
+  test('IdeColors 色值来自 shadcn ColorSchemes.zinc 与 Colors 色板', () {
+    final darkScheme = sf.ColorSchemes.darkZinc;
+    final lightScheme = sf.ColorSchemes.lightZinc;
+
+    expect(IdeColors.dark.frame, darkScheme.background);
+    expect(IdeColors.dark.textPrimary, darkScheme.foreground);
+    expect(IdeColors.dark.border, darkScheme.border);
+    expect(IdeColors.dark.selectedSurface, darkScheme.accent);
+    expect(IdeColors.dark.accent, sf.Colors.blue[500]);
+    expect(IdeColors.dark.focusRing, sf.Colors.blue[500]);
+    expect(IdeColors.dark.closeHover, sf.Colors.red[500]);
+    expect(IdeColors.dark.error, sf.Colors.red[400]);
+    expect(IdeColors.dark.warning, sf.Colors.amber[400]);
+    expect(IdeColors.dark.success, sf.Colors.green[400]);
+    expect(IdeColors.dark.info, sf.Colors.sky[400]);
+    expect(IdeColors.dark.surface, sf.Colors.zinc[900]);
+    expect(IdeColors.dark.surfaceElevated, sf.Colors.zinc[800]);
+
+    expect(IdeColors.light.frame, lightScheme.background);
+    expect(IdeColors.light.textPrimary, lightScheme.foreground);
+    expect(IdeColors.light.border, lightScheme.border);
+    expect(IdeColors.light.selectedSurface, lightScheme.accent);
+    expect(IdeColors.light.accent, sf.Colors.blue[600]);
+    expect(IdeColors.light.focusRing, sf.Colors.blue[600]);
+    expect(IdeColors.light.closeHover, sf.Colors.red[500]);
+    expect(IdeColors.light.error, sf.Colors.red[500]);
+    expect(IdeColors.light.warning, sf.Colors.amber[700]);
+    expect(IdeColors.light.success, sf.Colors.green[600]);
+    expect(IdeColors.light.info, sf.Colors.sky[600]);
+    expect(IdeColors.light.surface, sf.Colors.zinc[50]);
+    expect(IdeColors.light.surfaceElevated, sf.Colors.zinc[100]);
   });
 
   testWidgets('IdeThemeScope 在深浅模式提供对应状态 Token', (tester) async {

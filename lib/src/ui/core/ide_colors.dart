@@ -1,22 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'app_theme.dart';
 
-/// Windows/Linux 自绘窗口关闭按钮的共享悬停红色。
-///
-/// 生效位置：`WindowFrame` 右上角关闭按钮的 hover 背景；普通的
-/// 最小化和最大化按钮不使用该颜色。
-const _sharedCloseHoverColor = Color(0xFFE5484D);
-
 /// IDE 主题专用调色板。
 ///
-/// 这组颜色完全由 Graphite token 定义，并通过 [IdeThemeScope] 在运行时解析。
-/// 深色调色板中的 accent / warning 直接复用顶层真值常量（[ideAccentColor] /
-/// [ideWarningColor]）。
+/// 色值来自 `shadcn_flutter` 的 Zinc [sf.ColorSchemes] 与 [sf.Colors] 色板
+/// （blue / red / amber / green / sky 等），再映射为 IDE 语义字段。运行时通过
+/// [IdeThemeScope] 解析；`app_theme.dart` 还会将它们投影到 Material 和
+/// `shadcn_flutter` 主题，因此第三方组件也会间接生效。
 ///
 /// 每个字段都是跨功能的语义颜色，而不是某个组件的专用色。下方字段
-/// 注释中的“生效位置”列出当前主要消费者；`app_theme.dart` 还会将它们
-/// 投影到 Material 和 `shadcn_flutter` 主题，因此第三方组件也会间接生效。
+/// 注释中的“生效位置”列出当前主要消费者。
 @immutable
 class IdeColors {
   const IdeColors({
@@ -50,6 +45,94 @@ class IdeColors {
     required this.userMessageSurface,
     required this.focusRing,
   });
+
+  /// 从官方 Zinc 方案 + blue 品牌主色构建 IDE 语义调色板。
+  ///
+  /// 表面层级在 [sf.ColorScheme] 扁平字段之上用 [sf.Colors.zinc] 阶梯补全，
+  /// 以保持 IDE 的 frame / canvas / pane / control 明度顺序。
+  factory IdeColors.fromShadcnColorScheme(sf.ColorScheme scheme) {
+    final isDark = scheme.brightness == Brightness.dark;
+    final zinc = sf.Colors.zinc;
+    final neutral = sf.Colors.neutral;
+    final blue = sf.Colors.blue;
+    final red = sf.Colors.red;
+    final amber = sf.Colors.amber;
+    final green = sf.Colors.green;
+    final sky = sf.Colors.sky;
+    // shadcn `.blue` recolor 在深浅下都指向 Colors.blue（500）；
+    // IDE 按亮度拆阶梯，避免深浅主题 brand / ring 完全相同。
+    final brand = isDark ? blue[500] : blue[600];
+
+    if (isDark) {
+      return IdeColors(
+        frame: scheme.background,
+        // 画布略深于面板：background 与 zinc.900 拉开层级。
+        editor: zinc[950],
+        surface: zinc[900],
+        surfaceElevated: zinc[800],
+        surfaceOverlay: zinc[800],
+        panel: zinc[900],
+        border: scheme.border,
+        borderSubtle: zinc[900],
+        mutedText: scheme.mutedForeground,
+        textPrimary: scheme.foreground,
+        textSecondary: scheme.mutedForeground,
+        textTertiary: zinc[500],
+        accent: brand,
+        primaryMuted: brand.withValues(alpha: 0.32),
+        warning: amber[400],
+        // 深色下 destructive 方案色偏暗，状态文本改用更亮的 red 阶梯。
+        error: red[400],
+        success: green[400],
+        info: sky[400],
+        accentForeground: sf.Colors.white,
+        onAccent: sf.Colors.white,
+        windowHover: zinc[800],
+        windowIcon: zinc[400],
+        closeHover: red[500],
+        hoverSurface: zinc[800],
+        pressedSurface: zinc[700],
+        selectedSurface: scheme.accent,
+        selectedHoverSurface: zinc[700],
+        userMessageSurface: zinc[800],
+        focusRing: brand,
+      );
+    }
+
+    return IdeColors(
+      frame: neutral[50],
+      // 浅色：canvas 最亮，pane / control 依次略灰。
+      editor: sf.Colors.white,
+      surface: neutral[50],
+      surfaceElevated: zinc[100],
+      surfaceOverlay: scheme.popover,
+      panel: scheme.card,
+      border: scheme.border,
+      borderSubtle: zinc[100],
+      mutedText: scheme.mutedForeground,
+      textPrimary: scheme.foreground,
+      textSecondary: scheme.mutedForeground,
+      textTertiary: zinc[400],
+      accent: brand,
+      primaryMuted: brand.withValues(alpha: 0.24),
+      warning: amber[700],
+      error: red[500],
+      success: green[600],
+      info: sky[600],
+      // 浅色选中态落在浅灰底上，强调图标用品牌蓝而非白色。
+      accentForeground: brand,
+      onAccent: sf.Colors.white,
+      windowHover: zinc[200],
+      windowIcon: zinc[500],
+      closeHover: red[500],
+      hoverSurface: zinc[100],
+      pressedSurface: zinc[200],
+      selectedSurface: scheme.accent,
+      selectedHoverSurface: zinc[200],
+      userMessageSurface: zinc[100],
+      focusRing: brand,
+    );
+  }
 
   /// 应用最底层的框架背景，用于承托各个内容表面。
   ///
@@ -194,8 +277,8 @@ class IdeColors {
 
   /// Windows/Linux 自绘关闭按钮的破坏性悬停背景。
   ///
-  /// 生效位置：`WindowFrame` 右上角关闭按钮 hover。深浅主题均引用
-  /// [_sharedCloseHoverColor]，以保持平台操作语义一致。
+  /// 生效位置：`WindowFrame` 右上角关闭按钮 hover。深浅主题均使用
+  /// `sf.Colors.red[500]`，以保持平台操作语义一致。
   final Color closeHover;
 
   /// 普通可交互控件的悬停背景。
@@ -247,74 +330,18 @@ class IdeColors {
   /// Popover、菜单、Tooltip 与 Drawer 表面。
   Color get popoverSurface => surfaceOverlay;
 
-  /// 深色调色板「Graphite Night」：中性石墨底 + 蔚蓝强调，
-  /// 无色相偏移的灰阶层次，长时间注视友好。各参数的具体生效位置
-  /// 见上方同名字段注释。
-  static const IdeColors dark = IdeColors(
-    frame: Color(0xFF0A0A0B),
-    surface: Color(0xFF18191B),
-    surfaceElevated: Color(0xFF212225),
-    surfaceOverlay: Color(0xFF2C2D30),
-    panel: Color(0xFF18191B),
-    editor: Color(0xFF141517),
-    border: Color(0xFF2C2D31),
-    borderSubtle: Color(0xFF212225),
-    mutedText: Color(0xFF9EA1A7),
-    textPrimary: Color(0xFFECEDEF),
-    textSecondary: Color(0xFF9EA1A7),
-    textTertiary: Color(0xFF63666C),
-    accent: ideAccentColor,
-    primaryMuted: Color(0x521B84FF),
-    warning: ideWarningColor,
-    error: Color(0xFFF0616B),
-    success: Color(0xFF4EC583),
-    info: Color(0xFF55A8F5),
-    accentForeground: Colors.white,
-    onAccent: Colors.white,
-    windowHover: Color(0xFF2A2B2E),
-    windowIcon: Color(0xFFA6A9AE),
-    closeHover: _sharedCloseHoverColor,
-    hoverSurface: Color(0xFF242529),
-    pressedSurface: Color(0xFF2A2B30),
-    selectedSurface: Color(0xFF292A2E),
-    selectedHoverSurface: Color(0xFF303136),
-    userMessageSurface: Color(0xFF2B2C30),
-    focusRing: ideAccentColor,
+  /// 深色调色板：`ColorSchemes.darkZinc` + `Colors.blue` 品牌主色。
+  ///
+  /// 各参数的具体生效位置见上方同名字段注释。
+  static final IdeColors dark = IdeColors.fromShadcnColorScheme(
+    sf.ColorSchemes.darkZinc,
   );
 
-  /// 浅色调色板「Graphite Day」：中性浅灰白底 + 蔚蓝强调，扁平清爽，
-  /// 与深色主题共享同一套语义层级。各参数的具体生效位置见上方同名
-  /// 字段注释。
-  static const IdeColors light = IdeColors(
-    frame: Color(0xFFFFFFFF),
-    surface: Color(0xFFF9F9FA),
-    surfaceElevated: Color(0xFFF4F5F7),
-    surfaceOverlay: Color(0xFFFFFFFF),
-    panel: Color(0xFFFFFFFF),
-    editor: Color(0xFFFAFAFB),
-    border: Color(0xFFE4E5E9),
-    borderSubtle: Color(0xFFEFF0F2),
-    mutedText: Color(0xFF5B5E66),
-    textPrimary: Color(0xFF1C1D1F),
-    textSecondary: Color(0xFF5B5E66),
-    textTertiary: Color(0xFF8F929B),
-    accent: Color(0xFF0B76D8),
-    primaryMuted: Color(0x3D0B76D8),
-    warning: Color(0xFFB45309),
-    error: Color(0xFFDE3B4E),
-    success: Color(0xFF178A50),
-    info: Color(0xFF1173CF),
-    accentForeground: Color(0xFF0B76D8),
-    onAccent: Colors.white,
-    windowHover: Color(0xFFE1E2E6),
-    windowIcon: Color(0xFF5B5E66),
-    closeHover: _sharedCloseHoverColor,
-    hoverSurface: Color(0xFFF0F1F3),
-    pressedSurface: Color(0xFFE8EAED),
-    selectedSurface: Color(0xFFE9EAED),
-    selectedHoverSurface: Color(0xFFE2E4E8),
-    userMessageSurface: Color(0xFFECEDEF),
-    focusRing: Color(0xFF0B76D8),
+  /// 浅色调色板：`ColorSchemes.lightZinc` + `Colors.blue` 品牌主色。
+  ///
+  /// 与深色主题共享同一套语义层级；各参数的具体生效位置见上方同名字段注释。
+  static final IdeColors light = IdeColors.fromShadcnColorScheme(
+    sf.ColorSchemes.lightZinc,
   );
 
   /// 从 [context] 取出当前主题下的 [IdeColors]。

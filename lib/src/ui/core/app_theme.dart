@@ -5,21 +5,10 @@ import 'package:zeta/src/core/constants/app_typography.dart';
 
 import 'ide_colors.dart';
 
-/// Graphite 深色主题共享的强调色真值常量。
+/// IDE 运行时主题真源。
 ///
-/// 生效位置：`IdeColors.dark.accent` / `focusRing` 直接复用；
-/// 避免在深色调色板与其它处重复书写同一字面量。
-const Color ideAccentColor = Color(0xFF1B84FF);
-
-/// Graphite 深色主题共享的警告色真值常量。
-///
-/// 生效位置：`IdeColors.dark.warning` 直接复用。
-const Color ideWarningColor = Color(0xFFE6B450);
-
-/// Graphite 运行时主题真源。
-///
-/// 这层只持有项目自己的语义 token 与字体选择；第三方主题对象由它投影生成，
-/// 但不再反向成为 token 来源。
+/// 语义色来自 [IdeColors]（由 `shadcn_flutter` Zinc / blue 色板映射）；
+/// 本层持有语义 token 与字体选择，再投影为 Material / shadcn 主题。
 ///
 /// 装配入口：[buildIdeThemeData]（`MainApp` / 外观设置变更时重建 light/dark）。
 /// 消费入口：`IdeThemeScope.of` → `IdeColors.of` / `IdeTextStyles.of`，
@@ -176,12 +165,12 @@ IdeThemeData buildIdeThemeData({
 /// 将项目主题投影到 `shadcn_flutter` 根主题。
 ///
 /// 生效位置：`MainApp` 中 `sf.Theme`；影响 shadcn 按钮、输入、Popover、
-/// Toast 等第三方组件的颜色与字体。Graphite 精确圆角仍由 [IdeRadius] 驱动。
+/// Toast 等第三方组件的颜色与字体。精确圆角仍由 [IdeRadius] 驱动。
 sf.ThemeData buildShadcnTheme(IdeThemeData ideTheme) {
   return sf.ThemeData(
     colorScheme: _buildShadcnColorScheme(ideTheme),
     typography: _buildShadcnTypography(ideTheme),
-    // Graphite 的精确圆角继续由 IdeRadius 驱动，这里只给第三方组件一个中性基准。
+    // IDE 精确圆角继续由 IdeRadius 驱动，这里只给第三方组件一个中性基准。
     radius: 2 / 3,
     density: sf.Density.defaultDensity,
     scaling: 1,
@@ -258,37 +247,43 @@ IdeColors _baseIdeColorsForBrightness(Brightness brightness) {
   return brightness == Brightness.dark ? IdeColors.dark : IdeColors.light;
 }
 
+/// 以官方 Zinc + blue 方案为基线，再用 IDE 语义表面覆盖分层字段。
+///
+/// 这样 shadcn 控件与 [IdeColors] 共用同一套 zinc / blue / status 色源，
+/// 同时保留 IDE 需要的 canvas / pane / popover 层级。
 sf.ColorScheme _buildShadcnColorScheme(IdeThemeData ideTheme) {
   final colors = ideTheme.colors;
-  return sf.ColorScheme(
-    brightness: ideTheme.brightness,
-    background: colors.frameSurface,
-    foreground: colors.textPrimary,
-    card: colors.paneSurface,
-    cardForeground: colors.textPrimary,
-    popover: colors.popoverSurface,
-    popoverForeground: colors.textPrimary,
-    primary: colors.accent,
+  final base = ideTheme.brightness == Brightness.dark
+      ? sf.ColorSchemes.darkZinc
+      : sf.ColorSchemes.lightZinc;
+  return base.copyWith(
+    background: () => colors.frameSurface,
+    foreground: () => colors.textPrimary,
+    card: () => colors.paneSurface,
+    cardForeground: () => colors.textPrimary,
+    popover: () => colors.popoverSurface,
+    popoverForeground: () => colors.textPrimary,
+    primary: () => colors.accent,
     // 实心 primary 上的前景，必须用 onAccent；勿复用 accentForeground
     // （浅色选中态强调色与 accent 同蓝，会导致 Primary 按钮蓝底蓝字）。
-    primaryForeground: colors.onAccent,
-    secondary: colors.controlSurface,
-    secondaryForeground: colors.textPrimary,
-    muted: colors.controlSurface,
-    mutedForeground: colors.textSecondary,
+    primaryForeground: () => colors.onAccent,
+    secondary: () => colors.controlSurface,
+    secondaryForeground: () => colors.textPrimary,
+    muted: () => colors.controlSurface,
+    mutedForeground: () => colors.textSecondary,
     // shadcn 的 accent 在 Zeta 中表达普通选中，而不是品牌蓝。
-    accent: colors.selectedSurface,
-    accentForeground: colors.textPrimary,
-    destructive: colors.error,
-    destructiveForeground: Colors.white,
-    border: colors.border,
-    input: colors.borderSubtle,
-    ring: colors.focusRing,
-    chart1: colors.accent,
-    chart2: colors.info,
-    chart3: colors.warning,
-    chart4: colors.success,
-    chart5: colors.error,
+    accent: () => colors.selectedSurface,
+    accentForeground: () => colors.textPrimary,
+    destructive: () => colors.error,
+    destructiveForeground: () => sf.Colors.white,
+    border: () => colors.border,
+    input: () => colors.borderSubtle,
+    ring: () => colors.focusRing,
+    chart1: () => colors.accent,
+    chart2: () => colors.info,
+    chart3: () => colors.warning,
+    chart4: () => colors.success,
+    chart5: () => colors.error,
   );
 }
 
