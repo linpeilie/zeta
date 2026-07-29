@@ -44,29 +44,41 @@ void main() {
       _decorationOf(tester, 'canvas-surface').color,
       IdeColors.dark.editor,
     );
-    expect(_decorationOf(tester, 'canvas-surface').border, isNull);
+    expect(_foregroundDecorationOf(tester, 'canvas-surface'), isNull);
     expect(_decorationOf(tester, 'pane-surface').color, IdeColors.dark.surface);
-    expect(_decorationOf(tester, 'pane-surface').border, isNotNull);
+    expect(_foregroundDecorationOf(tester, 'pane-surface')?.border, isNotNull);
     expect(
-      _decorationOf(tester, 'pane-surface').borderRadius,
+      _foregroundDecorationOf(tester, 'pane-surface')?.borderRadius,
       IdeRadius.allMedium,
     );
     expect(_decorationOf(tester, 'row-surface').color, Colors.transparent);
-    expect(_decorationOf(tester, 'row-surface').border, isNull);
+    expect(_foregroundDecorationOf(tester, 'row-surface'), isNull);
     expect(
       _decorationOf(tester, 'popover-surface').borderRadius,
       IdeRadius.allLarge,
+    );
+    expect(
+      _foregroundDecorationOf(tester, 'popover-surface')?.border,
+      isNotNull,
     );
     expect(_decorationOf(tester, 'popover-surface').boxShadow, isNotEmpty);
   });
 }
 
 BoxDecoration _decorationOf(WidgetTester tester, String key) {
-  final container = tester.widget<Container>(
+  return _containerOf(tester, key).decoration! as BoxDecoration;
+}
+
+BoxDecoration? _foregroundDecorationOf(WidgetTester tester, String key) {
+  final decoration = _containerOf(tester, key).foregroundDecoration;
+  return decoration as BoxDecoration?;
+}
+
+Container _containerOf(WidgetTester tester, String key) {
+  return tester.widget<Container>(
     find.descendant(
       of: find.byKey(ValueKey(key)),
       matching: find.byType(Container),
     ),
   );
-  return container.decoration! as BoxDecoration;
 }

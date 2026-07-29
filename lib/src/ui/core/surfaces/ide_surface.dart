@@ -15,6 +15,7 @@ class IdeSurface extends StatelessWidget {
     super.key,
     this.padding,
     this.borderRadius,
+    this.showBorder,
     this.clipBehavior = Clip.antiAlias,
   });
 
@@ -22,10 +23,12 @@ class IdeSurface extends StatelessWidget {
     required Widget child,
     Key? key,
     EdgeInsetsGeometry? padding,
+    bool? showBorder,
   }) : this(
          key: key,
          level: IdeSurfaceLevel.canvas,
          padding: padding,
+         showBorder: showBorder,
          child: child,
        );
 
@@ -66,6 +69,11 @@ class IdeSurface extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry? padding;
   final BorderRadiusGeometry? borderRadius;
+
+  /// 是否绘制描边；为 null 时按 [level] 默认：pane/popover 有边框，canvas/row 无。
+  ///
+  /// 工作台中央 Canvas 列会显式传 `true`，与左右 [PanelCard] 对齐。
+  final bool? showBorder;
   final Clip clipBehavior;
 
   @override
@@ -85,20 +93,29 @@ class IdeSurface extends StatelessWidget {
           IdeSurfaceLevel.pane => IdeRadius.allMedium,
           IdeSurfaceLevel.popover => IdeRadius.allLarge,
         };
-    final showBorder =
-        level == IdeSurfaceLevel.pane || level == IdeSurfaceLevel.popover;
+    final resolvedShowBorder =
+        showBorder ??
+        (level == IdeSurfaceLevel.pane || level == IdeSurfaceLevel.popover);
 
+    // 边框必须放在 foregroundDecoration：decoration 边框画在 child 之下，
+    // Agent 等不透明子树（如内层 IdeSurface.canvas）会盖住圆角四角描边。
+    // 与 PanelCard 一致，保证描边始终浮在内容之上。
     return Container(
       clipBehavior: clipBehavior,
       padding: padding,
       decoration: BoxDecoration(
         color: background,
         borderRadius: resolvedRadius,
-        border: showBorder ? Border.all(color: colors.border) : null,
         boxShadow: level == IdeSurfaceLevel.popover
             ? IdeEffects.overlayShadow(brightness)
             : const <BoxShadow>[],
       ),
+      foregroundDecoration: resolvedShowBorder
+          ? BoxDecoration(
+              border: Border.all(color: colors.border),
+              borderRadius: resolvedRadius,
+            )
+          : null,
       child: child,
     );
   }

@@ -208,7 +208,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('中央 Canvas 列仅增加圆角，保留原背景且无边框', (tester) async {
+  testWidgets('中央 Canvas 列增加圆角与边框，并保留 canvas 背景', (tester) async {
     await pumpIdeComponent(
       tester,
       size: const Size(1200, 500),
@@ -223,20 +223,23 @@ void main() {
     );
     expect(canvasSurface.level, IdeSurfaceLevel.canvas);
     expect(canvasSurface.borderRadius, IdeRadius.allMedium);
+    expect(canvasSurface.showBorder, isTrue);
 
-    final decoration =
-        tester
-                .widget<Container>(
-                  find.descendant(
-                    of: find.byKey(const ValueKey('workbench-canvas')),
-                    matching: find.byType(Container),
-                  ),
-                )
-                .decoration!
-            as BoxDecoration;
+    final canvasContainer = tester.widget<Container>(
+      find.descendant(
+        of: find.byKey(const ValueKey('workbench-canvas')),
+        matching: find.byType(Container),
+      ),
+    );
+    final decoration = canvasContainer.decoration! as BoxDecoration;
+    final foreground = canvasContainer.foregroundDecoration! as BoxDecoration;
     expect(decoration.borderRadius, IdeRadius.allMedium);
     expect(decoration.color, IdeColors.dark.canvasSurface);
+    // 边框在 foreground，避免被 Agent 不透明内容盖住四角。
     expect(decoration.border, isNull);
+    expect(foreground.border, isNotNull);
+    expect(foreground.border!.top.color, IdeColors.dark.border);
+    expect(foreground.borderRadius, IdeRadius.allMedium);
     expect(tester.takeException(), isNull);
   });
 
