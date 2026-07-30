@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show SemanticsAction;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -1616,7 +1617,12 @@ void main() {
           const ValueKey('agent-model-config-popover'),
         );
         expect(tester.getSize(popover).width, 288);
-        expect(tester.getSize(popover).height, lessThan(160));
+        final popoverRect = tester.getRect(popover);
+        final viewportHeight =
+            tester.view.physicalSize.height / tester.view.devicePixelRatio;
+        expect(popoverRect.height, greaterThan(0));
+        expect(popoverRect.top, greaterThanOrEqualTo(0));
+        expect(popoverRect.bottom, lessThanOrEqualTo(viewportHeight));
         final popoverPanel = find.descendant(
           of: popover,
           matching: find.byType(PanelCard),
@@ -1662,11 +1668,11 @@ void main() {
         );
         expect(
           find.byKey(const ValueKey('agent-model-inline-config-gpt-5.5')),
-          findsNothing,
+          findsOneWidget,
         );
         expect(
           find.byKey(const ValueKey('agent-reasoning-segment-control')),
-          findsNothing,
+          findsOneWidget,
         );
         await tester.tap(
           find.byKey(const ValueKey('agent-model-option-gpt-5.4-mini')),
@@ -1683,6 +1689,7 @@ void main() {
           find.byKey(const ValueKey('agent-model-inline-config-gpt-5.4-mini')),
           findsOneWidget,
         );
+        await tester.pump(const Duration(milliseconds: 300));
         expect(
           find.byKey(const ValueKey('agent-reasoning-segment-control')),
           findsOneWidget,
@@ -1730,8 +1737,263 @@ void main() {
         );
         expect(
           find.byKey(const ValueKey('agent-model-inline-config-gpt-5.4-mini')),
-          findsNothing,
+          findsOneWidget,
         );
+        await tester.pump(const Duration(milliseconds: 300));
+      });
+
+      testWidgets(
+        'reasoning slider previews continuously and commits once on release',
+        (tester) async {
+          final provider = _FakeAgentProvider(models: _modelConfigList);
+          final store = _RecordingAgentProviderConfigStore();
+          final viewModel = _createViewModelWithStore(provider, store);
+          addTearDown(viewModel.dispose);
+          await viewModel.loadModels();
+          await tester.pumpWidget(_TestApp(viewModel: viewModel));
+          await _pumpAgentPaneUi(tester);
+
+          await tester.tap(find.byKey(const ValueKey('agent-model-selector')));
+          await tester.pump(const Duration(milliseconds: 300));
+          await tester.tap(
+            find.byKey(const ValueKey('agent-model-option-gpt-5.4-mini')),
+          );
+          await tester.pump(const Duration(milliseconds: 500));
+
+          expect(viewModel.selectedReasoningEffort, 'low');
+          final miniConfig = find.byKey(
+            const ValueKey('agent-model-inline-config-gpt-5.4-mini'),
+          );
+          final track = find.descendant(
+            of: miniConfig,
+            matching: find.byKey(
+              const ValueKey('agent-reasoning-slider-track'),
+            ),
+          );
+          final popover = find.byKey(
+            const ValueKey('agent-model-config-popover'),
+          );
+          final popoverScrollable = find
+              .descendant(of: popover, matching: find.byType(Scrollable))
+              .first;
+          await tester.scrollUntilVisible(
+            track,
+            80,
+            scrollable: popoverScrollable,
+          );
+          await tester.pump(const Duration(milliseconds: 200));
+          final trackRect = tester.getRect(track);
+          final popoverRect = tester.getRect(popover);
+          expect(
+            track.hitTestable(),
+            findsOneWidget,
+            reason: 'track=$trackRect, popover=$popoverRect',
+          );
+          expect(trackRect.width, greaterThan(100));
+          final thumb = find.descendant(
+            of: miniConfig,
+            matching: find.byKey(
+              const ValueKey('agent-reasoning-slider-thumb'),
+            ),
+          );
+          final initialThumbRect = tester.getRect(thumb);
+          final topInset = initialThumbRect.top - trackRect.top;
+          final bottomInset = trackRect.bottom - initialThumbRect.bottom;
+          final leftInset = initialThumbRect.left - trackRect.left;
+          expect(topInset, closeTo(bottomInset, 0.01));
+          expect(leftInset, closeTo(topInset, 0.01));
+          final saveCountBeforeDrag = store.saveCount;
+          final dragStart = Offset(trackRect.left + 14, trackRect.center.dy);
+          final dragEnd = Offset(trackRect.right - 14, trackRect.center.dy);
+          final gesture = await tester.startGesture(dragStart);
+          for (var step = 1; step <= 6; step += 1) {
+            await gesture.moveTo(
+              Offset.lerp(dragStart, dragEnd, step / 6)!,
+              timeStamp: Duration(milliseconds: step * 16),
+            );
+            await tester.pump(const Duration(milliseconds: 16));
+          }
+
+          expect(
+            tester
+                .widget<Text>(
+                  find.descendant(
+                    of: miniConfig,
+                    matching: find.byKey(
+                      const ValueKey('agent-reasoning-current-label'),
+                    ),
+                  ),
+                )
+                .data,
+            '极高',
+          );
+          expect(viewModel.selectedReasoningEffort, 'low');
+          expect(store.saveCount, saveCountBeforeDrag);
+
+          await gesture.up();
+          await tester.pump(const Duration(milliseconds: 500));
+
+          expect(viewModel.selectedReasoningEffort, 'xhigh');
+          expect(store.saveCount, saveCountBeforeDrag + 1);
+          final maximumThumbRect = tester.getRect(thumb);
+          final rightInset = trackRect.right - maximumThumbRect.right;
+          expect(rightInset, closeTo(topInset, 0.01));
+          expect(maximumThumbRect.top - trackRect.top, closeTo(topInset, 0.01));
+          expect(
+            trackRect.bottom - maximumThumbRect.bottom,
+            closeTo(topInset, 0.01),
+          );
+          final maxEffect = find.descendant(
+            of: miniConfig,
+            matching: find.byKey(const ValueKey('agent-reasoning-max-effect')),
+          );
+          final currentLabel = find.descendant(
+            of: miniConfig,
+            matching: find.byKey(
+              const ValueKey('agent-reasoning-current-label'),
+            ),
+          );
+          expect(tester.widget<AnimatedOpacity>(maxEffect).opacity, 1);
+          final shimmerBuilder = find.descendant(
+            of: maxEffect,
+            matching: find.byType(AnimatedBuilder),
+          );
+          final shimmerController =
+              tester.widget<AnimatedBuilder>(shimmerBuilder).animation
+                  as AnimationController;
+          expect(shimmerController.isAnimating, isTrue);
+          final labelStyle = tester.widget<AnimatedDefaultTextStyle>(
+            find
+                .ancestor(
+                  of: currentLabel,
+                  matching: find.byType(AnimatedDefaultTextStyle),
+                )
+                .first,
+          );
+          expect(
+            labelStyle.style.color,
+            IdeColors.of(tester.element(currentLabel)).intelligenceAccent,
+          );
+          expect(
+            find.byKey(const ValueKey('agent-model-config-popover')),
+            findsOneWidget,
+          );
+        },
+      );
+
+      testWidgets(
+        'reasoning slider exposes semantics and keeps max effect static '
+        'when motion is reduced',
+        (tester) async {
+          final provider = _FakeAgentProvider(models: _modelConfigList);
+          final viewModel = _createViewModel(provider);
+          addTearDown(viewModel.dispose);
+          await viewModel.loadModels();
+          await tester.pumpWidget(
+            _TestApp(viewModel: viewModel, disableAnimations: true),
+          );
+          await _pumpAgentPaneUi(tester);
+
+          await tester.tap(find.byKey(const ValueKey('agent-model-selector')));
+          await tester.pump(const Duration(milliseconds: 300));
+          await tester.tap(
+            find.byKey(const ValueKey('agent-model-option-gpt-5.5')),
+          );
+          await tester.pump(const Duration(milliseconds: 300));
+
+          final selectedConfig = find.byKey(
+            const ValueKey('agent-model-inline-config-gpt-5.5'),
+          );
+          final slider = find.descendant(
+            of: selectedConfig,
+            matching: find.byKey(
+              const ValueKey('agent-reasoning-segment-control'),
+            ),
+          );
+          final semantics = tester.getSemantics(slider);
+          expect(semantics.label, '思考程度');
+          expect(semantics.value, '中');
+          final sliderSemantics = find.semantics.byLabel('思考程度');
+          tester.semantics.increase(sliderSemantics);
+          await tester.pump();
+          expect(viewModel.selectedReasoningEffort, 'high');
+          tester.semantics.increase(sliderSemantics);
+          await tester.pump();
+
+          expect(viewModel.selectedReasoningEffort, 'xhigh');
+          final maxEffect = find.descendant(
+            of: selectedConfig,
+            matching: find.byKey(const ValueKey('agent-reasoning-max-effect')),
+          );
+          expect(tester.widget<AnimatedOpacity>(maxEffect).opacity, 1);
+          final shimmerBuilder = find.descendant(
+            of: maxEffect,
+            matching: find.byType(AnimatedBuilder),
+          );
+          final shimmerController =
+              tester.widget<AnimatedBuilder>(shimmerBuilder).animation
+                  as AnimationController;
+          expect(shimmerController.isAnimating, isFalse);
+          expect(shimmerController.value, closeTo(0.45, 0.001));
+
+          tester.semantics.decrease(sliderSemantics);
+          await tester.pump();
+          expect(viewModel.selectedReasoningEffort, 'high');
+          expect(tester.widget<AnimatedOpacity>(maxEffect).opacity, 0);
+        },
+      );
+
+      testWidgets('single reasoning effort stays fixed without max effect', (
+        tester,
+      ) async {
+        final provider = _FakeAgentProvider(models: _singleReasoningModelList);
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+        await viewModel.loadModels();
+        await tester.pumpWidget(_TestApp(viewModel: viewModel));
+        await _pumpAgentPaneUi(tester);
+
+        await tester.tap(find.byKey(const ValueKey('agent-model-selector')));
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.tap(
+          find.byKey(const ValueKey('agent-model-option-solo-reasoning')),
+        );
+        await tester.pump(const Duration(milliseconds: 300));
+
+        final selectedConfig = find.byKey(
+          const ValueKey('agent-model-inline-config-solo-reasoning'),
+        );
+        final slider = find.descendant(
+          of: selectedConfig,
+          matching: find.byKey(
+            const ValueKey('agent-reasoning-segment-control'),
+          ),
+        );
+        final semantics = tester.getSemantics(slider).getSemanticsData();
+        expect(semantics.value, '平衡');
+        expect(semantics.hasAction(SemanticsAction.increase), isFalse);
+        expect(semantics.hasAction(SemanticsAction.decrease), isFalse);
+        expect(
+          tester
+              .widget<AnimatedOpacity>(
+                find.descendant(
+                  of: selectedConfig,
+                  matching: find.byKey(
+                    const ValueKey('agent-reasoning-max-effect'),
+                  ),
+                ),
+              )
+              .opacity,
+          0,
+        );
+
+        final track = find.descendant(
+          of: selectedConfig,
+          matching: find.byKey(const ValueKey('agent-reasoning-slider-track')),
+        );
+        await tester.tap(track);
+        await tester.pump();
+        expect(viewModel.selectedReasoningEffort, 'balanced');
       });
 
       testWidgets(
@@ -3419,6 +3681,21 @@ const AgentModelList _modelConfigList = AgentModelList(
   ],
 );
 
+const AgentModelList _singleReasoningModelList = AgentModelList(
+  models: <AgentModelInfo>[
+    AgentModelInfo(
+      id: 'solo-reasoning',
+      model: 'solo-reasoning',
+      displayName: 'Solo Reasoning',
+      isDefault: true,
+      supportedReasoningEfforts: <AgentModelReasoningEffort>[
+        AgentModelReasoningEffort(effort: 'balanced', description: '平衡'),
+      ],
+      defaultReasoningEffort: 'balanced',
+    ),
+  ],
+);
+
 AgentConversationViewModel _createViewModel(
   _FakeAgentProvider provider, {
   AgentConversationModeController? conversationModeController,
@@ -3467,6 +3744,19 @@ class _ToggleFailAgentProviderConfigStore implements AgentProviderConfigStore {
       throw const FileSystemException('simulated model config save failure');
     }
     settings = next;
+  }
+}
+
+class _RecordingAgentProviderConfigStore
+    extends MemoryAgentProviderConfigStore {
+  _RecordingAgentProviderConfigStore();
+
+  int saveCount = 0;
+
+  @override
+  Future<void> save(AgentProviderSettings settings) async {
+    saveCount += 1;
+    await super.save(settings);
   }
 }
 

@@ -15,6 +15,7 @@ void main() {
     expect(dark.selectedHoverSurface, isNot(light.selectedHoverSurface));
     expect(dark.userMessageSurface, isNot(light.userMessageSurface));
     expect(dark.focusRing, isNot(light.focusRing));
+    expect(dark.intelligenceAccent, isNot(light.intelligenceAccent));
     expect(dark.selectedSurface, isNot(dark.accent));
     expect(light.selectedSurface, isNot(light.accent));
     expect(dark.userMessageSurface, isNot(dark.primaryMuted));
@@ -53,6 +54,7 @@ void main() {
       selectedHoverSurface: IdeColors.light.selectedHoverSurface,
       userMessageSurface: IdeColors.light.userMessageSurface,
       focusRing: IdeColors.light.focusRing,
+      intelligenceAccent: IdeColors.light.intelligenceAccent,
     );
 
     expect(copied.hoverSurface, IdeColors.light.hoverSurface);
@@ -61,6 +63,7 @@ void main() {
     expect(copied.selectedHoverSurface, IdeColors.light.selectedHoverSurface);
     expect(copied.userMessageSurface, IdeColors.light.userMessageSurface);
     expect(copied.focusRing, IdeColors.light.focusRing);
+    expect(copied.intelligenceAccent, IdeColors.light.intelligenceAccent);
   });
 
   test('lerp 插值全部新增状态字段', () {
@@ -110,6 +113,14 @@ void main() {
       midpoint.focusRing,
       Color.lerp(IdeColors.dark.focusRing, IdeColors.light.focusRing, 0.5),
     );
+    expect(
+      midpoint.intelligenceAccent,
+      Color.lerp(
+        IdeColors.dark.intelligenceAccent,
+        IdeColors.light.intelligenceAccent,
+        0.5,
+      ),
+    );
   });
 
   test('主题投影消费 IdeColors 语义 Token（源自 neutral/Zinc/blue）', () {
@@ -154,6 +165,7 @@ void main() {
     expect(IdeColors.dark.warning, sf.Colors.amber[400]);
     expect(IdeColors.dark.success, sf.Colors.green[400]);
     expect(IdeColors.dark.info, sf.Colors.sky[400]);
+    expect(IdeColors.dark.intelligenceAccent, sf.Colors.violet[400]);
     expect(IdeColors.light.frame, sf.Colors.neutral[50]);
     expect(IdeColors.light.editor, sf.Colors.white);
     expect(IdeColors.light.surface, sf.Colors.neutral[50]);
@@ -170,6 +182,7 @@ void main() {
     expect(IdeColors.light.warning, sf.Colors.amber[700]);
     expect(IdeColors.light.success, sf.Colors.green[600]);
     expect(IdeColors.light.info, sf.Colors.sky[600]);
+    expect(IdeColors.light.intelligenceAccent, sf.Colors.violet[500]);
   });
 
   testWidgets('IdeThemeScope 在深浅模式提供对应状态 Token', (tester) async {

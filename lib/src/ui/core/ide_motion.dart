@@ -35,6 +35,14 @@ abstract final class IdeMotion {
   /// 该动效用于持续状态提示，速度应低于常规交互动画，避免干扰正文阅读。
   static const Duration durationRunningGlow = Duration(milliseconds: 2400);
 
+  /// 最高思考档位的像素流光周期。
+  ///
+  /// 动效只用于持续表达增强推理状态；减少动态效果时由调用方停止循环，
+  /// 并保留静态渐变作为状态提示。
+  static const Duration durationIntelligenceShimmer = Duration(
+    milliseconds: 1800,
+  );
+
   /// [durationFast] 的简短别名。
   static const Duration fast = durationFast;
 

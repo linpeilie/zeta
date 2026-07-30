@@ -140,23 +140,26 @@ class _AgentModelConfigState extends State<_AgentModelConfig> {
       dismissDuration: reduceMotion
           ? const Duration(milliseconds: 80)
           : IdeMotion.durationFast,
-      builder: (context) => _ModelConfigPopover(
-        stateListenable: _popoverState,
-        width: width,
-        maxHeight: maxHeight,
-        expansionAlignment: openAbove
-            ? Alignment.bottomLeft
-            : Alignment.topLeft,
-        onSelectModel: _selectModel,
-        onSelectReasoningEffort: _selectReasoningEffort,
-        onSelectFastEnabled: _selectFastEnabled,
-        onResolveCompatibility: () {
-          unawaited(widget.onResolveCompatibility());
-        },
-        onRetrySave: () {
-          unawaited(widget.onRetrySave());
-        },
-        onDismiss: () => _popoverEntry?.dismiss(),
+      builder: (context) => MediaQuery(
+        data: mediaQuery,
+        child: _ModelConfigPopover(
+          stateListenable: _popoverState,
+          width: width,
+          maxHeight: maxHeight,
+          expansionAlignment: openAbove
+              ? Alignment.bottomLeft
+              : Alignment.topLeft,
+          onSelectModel: _selectModel,
+          onSelectReasoningEffort: _selectReasoningEffort,
+          onSelectFastEnabled: _selectFastEnabled,
+          onResolveCompatibility: () {
+            unawaited(widget.onResolveCompatibility());
+          },
+          onRetrySave: () {
+            unawaited(widget.onRetrySave());
+          },
+          onDismiss: () => _popoverEntry?.dismiss(),
+        ),
       ),
     );
     _popoverEntry = entry;
@@ -515,6 +518,7 @@ class _ModelConfigPopoverState extends State<_ModelConfigPopover> {
   String? _focusedModelId;
   String? _lastExpandedModelId;
   DateTime? _lastWheelScrollAt;
+  Timer? _ensureVisibleTimer;
 
   @override
   void initState() {
@@ -538,6 +542,7 @@ class _ModelConfigPopoverState extends State<_ModelConfigPopover> {
   @override
   void dispose() {
     widget.stateListenable.removeListener(_handleStateChanged);
+    _ensureVisibleTimer?.cancel();
     _scrollController.dispose();
     for (final node in _modelFocusNodes.values) {
       node.dispose();
@@ -648,6 +653,8 @@ class _ModelConfigPopoverState extends State<_ModelConfigPopover> {
   }
 
   void _ensureExpandedConfigVisible(String? modelId) {
+    _ensureVisibleTimer?.cancel();
+    _ensureVisibleTimer = null;
     if (modelId == null) {
       return;
     }
@@ -655,7 +662,8 @@ class _ModelConfigPopoverState extends State<_ModelConfigPopover> {
     final delay = reduceMotion
         ? const Duration(milliseconds: 80)
         : const Duration(milliseconds: 190);
-    Future<void>.delayed(delay, () {
+    _ensureVisibleTimer = Timer(delay, () {
+      _ensureVisibleTimer = null;
       if (!mounted || widget.stateListenable.value.expandedModelId != modelId) {
         return;
       }
@@ -1155,41 +1163,12 @@ class _ModelInlineConfig extends StatelessWidget {
                   ),
                 )
               else
-                Row(
-                  children: [
-                    SizedBox(
-                      width: 52,
-                      child: Text(
-                        '思考程度',
-                        style: textStyles.bodySmall.copyWith(
-                          color: colors.textSecondary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: IdeSpacing.space6),
-                    Expanded(
-                      child: _ReasoningSegmentControl(
-                        efforts: efforts,
-                        selectedEffort:
-                            state.selectedReasoningEffort ??
-                            efforts.first.effort,
-                        onChanged: onReasoningChanged,
-                      ),
-                    ),
-                    if (saving) ...[
-                      const SizedBox(width: IdeSpacing.space6),
-                      SizedBox(
-                        width: 10,
-                        height: 10,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 1.4,
-                          color: colors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ],
+                _ReasoningEffortSlider(
+                  efforts: efforts,
+                  selectedEffort:
+                      state.selectedReasoningEffort ?? efforts.first.effort,
+                  saving: saving,
+                  onChanged: onReasoningChanged,
                 ),
               // 不支持 Fast 时不展示开关，避免“禁用态”干扰扫读。
               if (fastSupported) ...[
@@ -1329,199 +1308,512 @@ class _ModelConfigInlineAlert extends StatelessWidget {
   }
 }
 
-class _ReasoningSegmentControl extends StatefulWidget {
-  const _ReasoningSegmentControl({
+class _ReasoningEffortSlider extends StatefulWidget {
+  const _ReasoningEffortSlider({
     required this.efforts,
     required this.selectedEffort,
+    required this.saving,
     required this.onChanged,
   });
 
   final List<AgentModelReasoningEffort> efforts;
   final String selectedEffort;
+  final bool saving;
   final ValueChanged<String> onChanged;
 
   @override
-  State<_ReasoningSegmentControl> createState() =>
-      _ReasoningSegmentControlState();
+  State<_ReasoningEffortSlider> createState() => _ReasoningEffortSliderState();
 }
 
-class _ReasoningSegmentControlState extends State<_ReasoningSegmentControl> {
-  final Map<String, FocusNode> _focusNodes = <String, FocusNode>{};
+class _ReasoningEffortSliderState extends State<_ReasoningEffortSlider>
+    with SingleTickerProviderStateMixin {
+  static const double _trackHeight = 28;
+  static const double _thumbWidth = 28;
+  static const double _thumbHeight = 24;
+  static const double _trackBorderWidth = 1;
+  static const double _thumbInset = (_trackHeight - _thumbHeight) / 2;
+  static const double _thumbInnerInset = _thumbInset - _trackBorderWidth;
+
+  late final FocusNode _focusNode;
+  late final AnimationController _shimmerController;
+  int? _activePointer;
+  double? _dragProgress;
+  bool _focused = false;
+  bool _reduceMotion = false;
 
   @override
   void initState() {
     super.initState();
-    _syncFocusNodes();
+    _focusNode = FocusNode(
+      debugLabel: 'agent-reasoning-effort-slider',
+      onKeyEvent: _handleKey,
+    );
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: IdeMotion.durationIntelligenceShimmer,
+    );
   }
 
   @override
-  void didUpdateWidget(covariant _ReasoningSegmentControl oldWidget) {
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduceMotion = MediaQuery.disableAnimationsOf(context);
+    _syncShimmer();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ReasoningEffortSlider oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _syncFocusNodes();
+    final optionsChanged = !listEquals(
+      oldWidget.efforts.map((effort) => effort.effort).toList(),
+      widget.efforts.map((effort) => effort.effort).toList(),
+    );
+    if (optionsChanged) {
+      _dragProgress = null;
+    }
+    _syncShimmer();
   }
 
   @override
   void dispose() {
-    for (final node in _focusNodes.values) {
-      node.dispose();
-    }
+    _focusNode.dispose();
+    _shimmerController.dispose();
     super.dispose();
   }
 
-  void _syncFocusNodes() {
-    final ids = widget.efforts.map((effort) => effort.effort).toSet();
-    final removed = _focusNodes.keys
-        .where((id) => !ids.contains(id))
-        .toList(growable: false);
-    for (final id in removed) {
-      _focusNodes.remove(id)?.dispose();
+  int get _selectedIndex {
+    final index = widget.efforts.indexWhere(
+      (effort) => effort.effort == widget.selectedEffort,
+    );
+    return index < 0 ? 0 : index;
+  }
+
+  int get _displayIndex {
+    final progress = _dragProgress;
+    if (progress == null || widget.efforts.length <= 1) {
+      return _selectedIndex;
     }
-    for (final effort in widget.efforts) {
-      _focusNodes.putIfAbsent(
-        effort.effort,
-        () => FocusNode(
-          debugLabel: 'agent-reasoning-${effort.effort}',
-          onKeyEvent: (node, event) => _handleKey(effort.effort, event),
-        ),
-      );
+    return (progress * (widget.efforts.length - 1)).round().clamp(
+      0,
+      widget.efforts.length - 1,
+    );
+  }
+
+  double get _displayProgress {
+    final progress = _dragProgress;
+    if (progress != null) {
+      return progress;
     }
-    for (final entry in _focusNodes.entries) {
-      entry.value.canRequestFocus = entry.key == widget.selectedEffort;
+    if (widget.efforts.length <= 1) {
+      return 0.5;
+    }
+    return _selectedIndex / (widget.efforts.length - 1);
+  }
+
+  bool get _isAtMaximum =>
+      widget.efforts.length > 1 && _displayIndex == widget.efforts.length - 1;
+
+  String get _displayLabel {
+    final effort = widget.efforts[_displayIndex];
+    return _reasoningEffortLabel(effort.effort, widget.efforts) ??
+        effort.effort;
+  }
+
+  void _syncShimmer() {
+    final animate =
+        _isAtMaximum && !_reduceMotion && TickerMode.valuesOf(context).enabled;
+    if (animate) {
+      if (!_shimmerController.isAnimating) {
+        _shimmerController.repeat();
+      }
+      return;
+    }
+    if (_shimmerController.isAnimating) {
+      _shimmerController.stop();
+    }
+    final staticPhase = _isAtMaximum ? 0.45 : 0.0;
+    if (_shimmerController.value != staticPhase) {
+      _shimmerController.value = staticPhase;
     }
   }
 
-  KeyEventResult _handleKey(String effortId, KeyEvent event) {
-    if (event is! KeyDownEvent ||
-        (event.logicalKey != LogicalKeyboardKey.arrowLeft &&
-            event.logicalKey != LogicalKeyboardKey.arrowRight)) {
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) {
       return KeyEventResult.ignored;
     }
-    final index = widget.efforts.indexWhere(
-      (effort) => effort.effort == effortId,
-    );
-    final delta = event.logicalKey == LogicalKeyboardKey.arrowLeft ? -1 : 1;
-    final targetIndex = (index + delta).clamp(0, widget.efforts.length - 1);
-    final target = widget.efforts[targetIndex].effort;
-    if (target == effortId) {
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      _step(-1);
       return KeyEventResult.handled;
     }
-    final targetNode = _focusNodes[target]!;
-    targetNode.canRequestFocus = true;
-    targetNode.requestFocus();
-    _focusNodes[effortId]?.canRequestFocus = false;
-    widget.onChanged(target);
-    return KeyEventResult.handled;
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      _step(1);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.home) {
+      _commitIndex(0);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.end) {
+      _commitIndex(widget.efforts.length - 1);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  void _step(int delta) {
+    _focusNode.requestFocus();
+    final target = (_selectedIndex + delta).clamp(0, widget.efforts.length - 1);
+    _commitIndex(target);
+  }
+
+  void _commitIndex(int index) {
+    final target = widget.efforts[index].effort;
+    if (target != widget.selectedEffort) {
+      widget.onChanged(target);
+    }
+  }
+
+  double _progressForPosition(double dx, double width) {
+    final thumbTravel = width - _thumbWidth - _thumbInset * 2;
+    if (widget.efforts.length <= 1 || thumbTravel <= 0) {
+      return 0.5;
+    }
+    return ((dx - _thumbInset - _thumbWidth / 2) / thumbTravel).clamp(0.0, 1.0);
+  }
+
+  void _updateDrag(double progress) {
+    setState(() {
+      _dragProgress = progress;
+    });
+    _syncShimmer();
+  }
+
+  void _finishDrag({required bool commit}) {
+    final targetIndex = _displayIndex;
+    setState(() {
+      _dragProgress = null;
+    });
+    if (commit) {
+      _commitIndex(targetIndex);
+    }
+    _syncShimmer();
+  }
+
+  void _handleFocusChanged(bool focused) {
+    if (_focused == focused) {
+      return;
+    }
+    setState(() {
+      _focused = focused;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final selectedIndex = widget.efforts.indexWhere(
-      (effort) => effort.effort == widget.selectedEffort,
-    );
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final textStyles = IdeTextStyles.of(context);
+    final maxActive = _isAtMaximum;
+    final duration = _reduceMotion ? Duration.zero : IdeMotion.durationNormal;
+    final currentIndex = _displayIndex;
+    final increasedValue = currentIndex < widget.efforts.length - 1
+        ? _reasoningEffortLabel(
+            widget.efforts[currentIndex + 1].effort,
+            widget.efforts,
+          )
+        : null;
+    final decreasedValue = currentIndex > 0
+        ? _reasoningEffortLabel(
+            widget.efforts[currentIndex - 1].effort,
+            widget.efforts,
+          )
+        : null;
+
     return Semantics(
+      key: const ValueKey('agent-reasoning-segment-control'),
       container: true,
-      explicitChildNodes: true,
+      slider: true,
       label: '思考程度',
-      child: Container(
-        key: const ValueKey('agent-reasoning-segment-control'),
-        height: 28,
-        padding: const EdgeInsets.all(IdeSpacing.space2),
-        decoration: BoxDecoration(
-          color: colors.surface,
-          border: Border.all(color: colors.borderSubtle),
-          borderRadius: IdeRadius.allMedium,
-        ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final segmentWidth = constraints.maxWidth / widget.efforts.length;
-            return Stack(
-              children: [
-                if (selectedIndex >= 0)
-                  AnimatedPositioned(
-                    duration: reduceMotion
-                        ? Duration.zero
-                        : const Duration(milliseconds: 150),
-                    curve: Curves.easeOutCubic,
-                    left: segmentWidth * selectedIndex,
-                    top: 0,
-                    bottom: 0,
-                    width: segmentWidth,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: colors.surfaceOverlay,
-                        borderRadius: IdeRadius.allSmall,
-                      ),
+      value: _displayLabel,
+      increasedValue: increasedValue,
+      decreasedValue: decreasedValue,
+      onIncrease: currentIndex < widget.efforts.length - 1
+          ? () => _step(1)
+          : null,
+      onDecrease: currentIndex > 0 ? () => _step(-1) : null,
+      excludeSemantics: true,
+      child: FocusableActionDetector(
+        focusNode: _focusNode,
+        onFocusChange: _handleFocusChanged,
+        mouseCursor: widget.efforts.length > 1
+            ? (_dragProgress == null
+                  ? SystemMouseCursors.grab
+                  : SystemMouseCursors.grabbing)
+            : SystemMouseCursors.basic,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              height: 22,
+              child: Row(
+                children: [
+                  Text(
+                    '思考程度',
+                    style: textStyles.bodySmall.copyWith(
+                      color: colors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                Row(
-                  children: [
-                    for (final effort in widget.efforts)
-                      Expanded(
-                        child: Semantics(
-                          selected: effort.effort == widget.selectedEffort,
-                          inMutuallyExclusiveGroup: true,
-                          label: _reasoningEffortLabel(
-                            effort.effort,
-                            widget.efforts,
-                          ),
-                          child: PaneInteractiveSurface(
-                            key: ValueKey<String>(
-                              'agent-reasoning-option-${effort.effort}',
-                            ),
-                            focusNode: _focusNodes[effort.effort],
-                            height: 24,
-                            onPressed: () => widget.onChanged(effort.effort),
-                            selected: effort.effort == widget.selectedEffort,
-                            selectedBackgroundColor: Colors.transparent,
-                            hoverBackgroundColor: colors.border.withValues(
-                              alpha: 0.22,
-                            ),
-                            pressedBackgroundColor: colors.border.withValues(
-                              alpha: 0.34,
-                            ),
-                            borderRadius: IdeRadius.allSmall,
-                            semanticLabel: null,
-                            child: Center(
-                              child: AnimatedDefaultTextStyle(
-                                duration: reduceMotion
-                                    ? Duration.zero
-                                    : IdeMotion.durationFast,
-                                style: IdeTextStyles.of(context).bodySmall
-                                    .copyWith(
-                                      color:
-                                          effort.effort == widget.selectedEffort
-                                          ? colors.textPrimary
-                                          : colors.textSecondary,
-                                      fontSize: 12,
-                                      fontWeight:
-                                          effort.effort == widget.selectedEffort
-                                          ? FontWeight.w600
-                                          : FontWeight.w400,
-                                    ),
-                                child: Text(
-                                  _reasoningEffortLabel(
-                                        effort.effort,
-                                        widget.efforts,
-                                      ) ??
-                                      effort.effort,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                  const Spacer(),
+                  AnimatedDefaultTextStyle(
+                    duration: duration,
+                    curve: IdeMotion.curveDefault,
+                    style: textStyles.bodySmall.copyWith(
+                      color: maxActive
+                          ? colors.intelligenceAccent
+                          : colors.textPrimary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    child: Text(
+                      _displayLabel,
+                      key: const ValueKey('agent-reasoning-current-label'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (widget.saving) ...[
+                    const SizedBox(width: IdeSpacing.space6),
+                    SizedBox(
+                      width: 10,
+                      height: 10,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.4,
+                        color: colors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: IdeSpacing.space4),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth;
+                // 可见区域四周统一为 _thumbInset；轨道边框会压缩子布局，
+                // 因此 Stack 内定位需扣除边框宽度。
+                final thumbTravel = math.max(
+                  0.0,
+                  width - _thumbWidth - _thumbInset * 2,
+                );
+                final thumbLeft =
+                    _thumbInnerInset + thumbTravel * _displayProgress;
+                return Listener(
+                  key: const ValueKey('agent-reasoning-slider-track'),
+                  behavior: HitTestBehavior.opaque,
+                  onPointerDown: widget.efforts.length > 1
+                      ? (event) {
+                          if (_activePointer != null) {
+                            return;
+                          }
+                          _activePointer = event.pointer;
+                          _focusNode.requestFocus();
+                          _updateDrag(
+                            _progressForPosition(event.localPosition.dx, width),
+                          );
+                        }
+                      : null,
+                  onPointerMove: widget.efforts.length > 1
+                      ? (event) {
+                          if (event.pointer != _activePointer) {
+                            return;
+                          }
+                          _updateDrag(
+                            _progressForPosition(event.localPosition.dx, width),
+                          );
+                        }
+                      : null,
+                  onPointerUp: widget.efforts.length > 1
+                      ? (event) {
+                          if (event.pointer != _activePointer) {
+                            return;
+                          }
+                          _activePointer = null;
+                          _finishDrag(commit: true);
+                        }
+                      : null,
+                  onPointerCancel: widget.efforts.length > 1
+                      ? (event) {
+                          if (event.pointer != _activePointer) {
+                            return;
+                          }
+                          _activePointer = null;
+                          _finishDrag(commit: false);
+                        }
+                      : null,
+                  child: AnimatedContainer(
+                    height: _trackHeight,
+                    duration: duration,
+                    curve: IdeMotion.curveDefault,
+                    decoration: BoxDecoration(
+                      color: colors.surface,
+                      border: Border.all(
+                        color: _focused
+                            ? colors.focusRing
+                            : colors.borderSubtle,
+                      ),
+                      borderRadius: IdeRadius.allMedium,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: IdeRadius.allSmall,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          AnimatedOpacity(
+                            key: const ValueKey('agent-reasoning-max-effect'),
+                            opacity: maxActive ? 1 : 0,
+                            duration: duration,
+                            curve: IdeMotion.curveDefault,
+                            child: RepaintBoundary(
+                              child: AnimatedBuilder(
+                                animation: _shimmerController,
+                                builder: (context, child) => CustomPaint(
+                                  painter: _ReasoningMaxEffectPainter(
+                                    color: colors.intelligenceAccent,
+                                    phase: _shimmerController.value,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: _thumbInnerInset + _thumbWidth / 2,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                for (
+                                  var index = 0;
+                                  index < widget.efforts.length;
+                                  index += 1
+                                )
+                                  DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: index == widget.efforts.length - 1
+                                          ? colors.intelligenceAccent
+                                          : colors.textTertiary.withValues(
+                                              alpha: 0.58,
+                                            ),
+                                      borderRadius: IdeRadius.pill,
+                                    ),
+                                    child: const SizedBox.square(dimension: 4),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              for (
+                                var index = 0;
+                                index < widget.efforts.length;
+                                index += 1
+                              )
+                                Expanded(
+                                  child: Listener(
+                                    key: ValueKey<String>(
+                                      'agent-reasoning-option-'
+                                      '${widget.efforts[index].effort}',
+                                    ),
+                                    behavior: HitTestBehavior.opaque,
+                                    onPointerDown: (_) {},
+                                    child: const SizedBox.expand(),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          AnimatedPositioned(
+                            duration: _dragProgress != null
+                                ? Duration.zero
+                                : duration,
+                            curve: IdeMotion.curveDefault,
+                            left: thumbLeft,
+                            top: _thumbInnerInset,
+                            width: _thumbWidth,
+                            height: _thumbHeight,
+                            child: IgnorePointer(
+                              child: DecoratedBox(
+                                key: const ValueKey(
+                                  'agent-reasoning-slider-thumb',
+                                ),
+                                decoration: BoxDecoration(
+                                  color: colors.surfaceOverlay,
+                                  border: Border.all(color: colors.border),
+                                  borderRadius: IdeRadius.allMedium,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                  ],
-                ),
-              ],
-            );
-          },
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
         ),
       ),
     );
+  }
+}
+
+class _ReasoningMaxEffectPainter extends CustomPainter {
+  const _ReasoningMaxEffectPainter({required this.color, required this.phase});
+
+  final Color color;
+  final double phase;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final bounds = Offset.zero & size;
+    final gradient = LinearGradient(
+      colors: <Color>[
+        color.withValues(alpha: 0),
+        color.withValues(alpha: 0.12),
+        color.withValues(alpha: 0.46),
+      ],
+      stops: const <double>[0.24, 0.58, 1],
+    );
+    canvas.drawRect(bounds, Paint()..shader = gradient.createShader(bounds));
+
+    const columns = 18;
+    const rows = 4;
+    for (var row = 0; row < rows; row += 1) {
+      for (var column = 0; column < columns; column += 1) {
+        if ((column * 3 + row * 5) % 7 == 0) {
+          continue;
+        }
+        final horizontal = 0.38 + (column / (columns - 1)) * 0.58;
+        final wave = (phase + column * 0.065 + row * 0.19) % 1;
+        final pulse = 1 - (wave - 0.5).abs() * 2;
+        final pixelSize = 1.5 + ((column + row) % 3) * 0.55;
+        final x =
+            size.width * horizontal +
+            math.sin((phase + row * 0.23) * math.pi * 2) * 2;
+        final y = size.height * (0.2 + row * 0.2);
+        canvas.drawRect(
+          Rect.fromLTWH(x, y, pixelSize, pixelSize),
+          Paint()..color = color.withValues(alpha: 0.12 + pulse * 0.44),
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ReasoningMaxEffectPainter oldDelegate) {
+    return oldDelegate.color != color || oldDelegate.phase != phase;
   }
 }
 

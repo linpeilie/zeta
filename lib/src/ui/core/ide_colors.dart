@@ -29,6 +29,7 @@ class IdeColors {
     required this.textSecondary,
     required this.textTertiary,
     required this.accent,
+    required this.intelligenceAccent,
     required this.primaryMuted,
     required this.warning,
     required this.error,
@@ -61,6 +62,7 @@ class IdeColors {
     final amber = sf.Colors.amber;
     final green = sf.Colors.green;
     final sky = sf.Colors.sky;
+    final violet = sf.Colors.violet;
     // shadcn `.blue` recolor 在深浅下都指向 Colors.blue（500）；
     // IDE 按亮度拆阶梯，避免深浅主题 brand / ring 完全相同。
     final brand = isDark ? blue[500] : blue[600];
@@ -81,6 +83,7 @@ class IdeColors {
         textSecondary: scheme.mutedForeground,
         textTertiary: zinc[500],
         accent: brand,
+        intelligenceAccent: violet[400],
         primaryMuted: brand.withValues(alpha: 0.32),
         warning: amber[400],
         // 深色下 destructive 方案色偏暗，状态文本改用更亮的 red 阶梯。
@@ -116,6 +119,7 @@ class IdeColors {
       textSecondary: scheme.mutedForeground,
       textTertiary: zinc[400],
       accent: brand,
+      intelligenceAccent: violet[500],
       primaryMuted: brand.withValues(alpha: 0.24),
       warning: amber[700],
       error: red[500],
@@ -219,6 +223,12 @@ class IdeColors {
   /// Markdown 链接、选择器勾选/底部指示线，并投影为 shadcn primary 和
   /// 图表 `chart1`。焦点描边统一使用 [focusRing]。
   final Color accent;
+
+  /// 高级智能能力与高计算强度状态的强调色。
+  ///
+  /// 生效位置：模型最高思考档位、未来需要表达增强推理能力的状态提示。
+  /// 与品牌主操作使用的 [accent] 分离，避免紫色能力提示改变全局交互语义。
+  final Color intelligenceAccent;
 
   /// [accent] 的半透明弱化背景，用于蓝色弱强调。
   ///
@@ -371,6 +381,7 @@ class IdeColors {
     Color? textSecondary,
     Color? textTertiary,
     Color? accent,
+    Color? intelligenceAccent,
     Color? primaryMuted,
     Color? warning,
     Color? error,
@@ -405,6 +416,7 @@ class IdeColors {
       textSecondary: resolvedTextSecondary,
       textTertiary: textTertiary ?? this.textTertiary,
       accent: accent ?? this.accent,
+      intelligenceAccent: intelligenceAccent ?? this.intelligenceAccent,
       primaryMuted: primaryMuted ?? this.primaryMuted,
       warning: warning ?? this.warning,
       error: error ?? this.error,
@@ -440,6 +452,11 @@ class IdeColors {
       textSecondary: Color.lerp(textSecondary, other.textSecondary, t)!,
       textTertiary: Color.lerp(textTertiary, other.textTertiary, t)!,
       accent: Color.lerp(accent, other.accent, t)!,
+      intelligenceAccent: Color.lerp(
+        intelligenceAccent,
+        other.intelligenceAccent,
+        t,
+      )!,
       primaryMuted: Color.lerp(primaryMuted, other.primaryMuted, t)!,
       warning: Color.lerp(warning, other.warning, t)!,
       error: Color.lerp(error, other.error, t)!,
