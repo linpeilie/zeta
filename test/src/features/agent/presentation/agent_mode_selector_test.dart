@@ -87,13 +87,13 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Default'), findsWidgets);
-    expect(find.text('Plan · Medium'), findsOneWidget);
+    expect(find.text('Plan · medium'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('agent-mode-option-plan')));
     await _pumpPopoverAnimation(tester);
 
     expect(selections, <AgentConversationModeId>[AgentConversationModeId.plan]);
-    expect(find.text('Plan · Medium'), findsOneWidget);
+    expect(find.text('Plan · medium'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('agent-mode-selector')));
     await _pumpPopoverAnimation(tester);
@@ -159,12 +159,12 @@ void main() {
       ),
     );
 
-    expect(find.text('Plan · Medium · 下一回合'), findsOneWidget);
+    expect(find.text('Plan · medium · 下一回合'), findsOneWidget);
     expect(
       tester
           .getSemantics(find.byKey(const ValueKey('agent-mode-selector')))
           .label,
-      contains('Plan · Medium，对话模式，下一回合生效'),
+      contains('Plan · medium，对话模式，下一回合生效'),
     );
     expect(
       find.byWidgetPredicate(
@@ -227,7 +227,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await _pumpPopoverAnimation(tester);
     expect(selections, <AgentConversationModeId>[AgentConversationModeId.plan]);
-    expect(find.text('Plan · Medium'), findsOneWidget);
+    expect(find.text('Plan · medium'), findsOneWidget);
     expect(
       FocusManager.instance.primaryFocus?.debugLabel,
       'agent-mode-selector-trigger',
@@ -397,7 +397,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Plan · Medium · 下一回合'), findsOneWidget);
+    expect(find.text('Plan · medium · 下一回合'), findsOneWidget);
     final triggerLabel = tester.widget<Text>(
       find.byKey(const ValueKey('agent-mode-selector-label')),
     );
@@ -407,7 +407,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('agent-mode-selector')));
     await _pumpPopoverAnimation(tester);
-    expect(find.text('Plan · Medium'), findsWidgets);
+    expect(find.text('Plan · medium'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 }

@@ -159,11 +159,12 @@ void main() {
       expect(AgentTurnModelConfig.fromHistoryTurn(turn), isNull);
     });
 
-    test('maps known reasoning effort labels for footer', () {
-      expect(agentReasoningEffortFooterLabel('high'), '高');
-      expect(agentReasoningEffortFooterLabel('xhigh'), '极高');
+    test('shows raw reasoning effort values for footer', () {
+      expect(agentReasoningEffortFooterLabel('high'), 'high');
+      expect(agentReasoningEffortFooterLabel('xhigh'), 'xhigh');
       expect(agentReasoningEffortFooterLabel(null), isNull);
-      expect(agentReasoningEffortFooterLabel('custom'), 'custom');
+      expect(agentReasoningEffortFooterLabel('  custom  '), 'custom');
+      expect(agentReasoningEffortFooterLabel('   '), isNull);
     });
   });
 

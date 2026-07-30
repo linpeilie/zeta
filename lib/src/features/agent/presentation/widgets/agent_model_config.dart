@@ -323,10 +323,10 @@ class _ModelConfigTrigger extends StatelessWidget {
     final textStyles = IdeTextStyles.of(context);
     final selectedModel = state.selectedModel;
     final modelLabel = selectedModel?.displayName ?? '模型';
-    final effortLabel = _reasoningEffortLabel(
-      state.selectedReasoningEffort,
-      selectedModel?.supportedReasoningEfforts,
-    );
+    final effortRaw = state.selectedReasoningEffort?.trim();
+    final effortLabel = (effortRaw == null || effortRaw.isEmpty)
+        ? null
+        : effortRaw;
     final fastTier = selectedModel != null && state.supportsServiceTierSelection
         ? agentFastServiceTier(selectedModel)
         : null;
@@ -1326,7 +1326,7 @@ class _ReasoningEffortSlider extends StatefulWidget {
 }
 
 class _ReasoningEffortSliderState extends State<_ReasoningEffortSlider>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   static const double _trackHeight = 28;
   static const double _thumbWidth = 28;
   static const double _thumbHeight = 24;
@@ -1335,11 +1335,13 @@ class _ReasoningEffortSliderState extends State<_ReasoningEffortSlider>
   static const double _thumbInnerInset = _thumbInset - _trackBorderWidth;
 
   late final FocusNode _focusNode;
-  late final AnimationController _shimmerController;
+  late final AnimationController _flowController;
+  late final AnimationController _impactController;
   int? _activePointer;
   double? _dragProgress;
   bool _focused = false;
   bool _reduceMotion = false;
+  bool _maximumWasActive = false;
 
   @override
   void initState() {
@@ -1348,9 +1350,13 @@ class _ReasoningEffortSliderState extends State<_ReasoningEffortSlider>
       debugLabel: 'agent-reasoning-effort-slider',
       onKeyEvent: _handleKey,
     );
-    _shimmerController = AnimationController(
+    _flowController = AnimationController(
       vsync: this,
       duration: IdeMotion.durationIntelligenceShimmer,
+    );
+    _impactController = AnimationController(
+      vsync: this,
+      duration: IdeMotion.durationIntelligenceImpact,
     );
   }
 
@@ -1358,7 +1364,7 @@ class _ReasoningEffortSliderState extends State<_ReasoningEffortSlider>
   void didChangeDependencies() {
     super.didChangeDependencies();
     _reduceMotion = MediaQuery.disableAnimationsOf(context);
-    _syncShimmer();
+    _syncMaximumEffect();
   }
 
   @override
@@ -1371,13 +1377,14 @@ class _ReasoningEffortSliderState extends State<_ReasoningEffortSlider>
     if (optionsChanged) {
       _dragProgress = null;
     }
-    _syncShimmer();
+    _syncMaximumEffect();
   }
 
   @override
   void dispose() {
     _focusNode.dispose();
-    _shimmerController.dispose();
+    _flowController.dispose();
+    _impactController.dispose();
     super.dispose();
   }
 
@@ -1413,27 +1420,39 @@ class _ReasoningEffortSliderState extends State<_ReasoningEffortSlider>
   bool get _isAtMaximum =>
       widget.efforts.length > 1 && _displayIndex == widget.efforts.length - 1;
 
-  String get _displayLabel {
-    final effort = widget.efforts[_displayIndex];
-    return _reasoningEffortLabel(effort.effort, widget.efforts) ??
-        effort.effort;
-  }
+  String get _displayLabel => widget.efforts[_displayIndex].effort;
 
-  void _syncShimmer() {
-    final animate =
-        _isAtMaximum && !_reduceMotion && TickerMode.valuesOf(context).enabled;
+  void _syncMaximumEffect() {
+    final maximumActive = _isAtMaximum;
+    final enteredMaximum = maximumActive && !_maximumWasActive;
+    _maximumWasActive = maximumActive;
+    final tickerEnabled = TickerMode.valuesOf(context).enabled;
+    final animate = maximumActive && !_reduceMotion && tickerEnabled;
+
     if (animate) {
-      if (!_shimmerController.isAnimating) {
-        _shimmerController.repeat();
+      if (!_flowController.isAnimating) {
+        _flowController.repeat();
+      }
+      if (enteredMaximum) {
+        _impactController.forward(from: 0);
       }
       return;
     }
-    if (_shimmerController.isAnimating) {
-      _shimmerController.stop();
+
+    if (_flowController.isAnimating) {
+      _flowController.stop();
     }
-    final staticPhase = _isAtMaximum ? 0.45 : 0.0;
-    if (_shimmerController.value != staticPhase) {
-      _shimmerController.value = staticPhase;
+    if (_impactController.isAnimating) {
+      _impactController.stop();
+    }
+    final staticPhase = maximumActive ? 0.45 : 0.0;
+    if (_flowController.value != staticPhase) {
+      _flowController.value = staticPhase;
+    }
+    // 减少动态效果时保留稳定的端点光晕，不停留在冲击波的中间帧。
+    final staticImpact = maximumActive ? 1.0 : 0.0;
+    if (_impactController.value != staticImpact) {
+      _impactController.value = staticImpact;
     }
   }
 
@@ -1485,18 +1504,23 @@ class _ReasoningEffortSliderState extends State<_ReasoningEffortSlider>
     setState(() {
       _dragProgress = progress;
     });
-    _syncShimmer();
+    _syncMaximumEffect();
   }
 
   void _finishDrag({required bool commit}) {
     final targetIndex = _displayIndex;
+    final selectionChanged =
+        widget.efforts[targetIndex].effort != widget.selectedEffort;
     setState(() {
       _dragProgress = null;
     });
     if (commit) {
       _commitIndex(targetIndex);
     }
-    _syncShimmer();
+    // 提交最高档时由外部状态接管显示，避免预览阶段已经播放的冲击波被重启。
+    if (!commit || !selectionChanged) {
+      _syncMaximumEffect();
+    }
   }
 
   void _handleFocusChanged(bool focused) {
@@ -1516,16 +1540,10 @@ class _ReasoningEffortSliderState extends State<_ReasoningEffortSlider>
     final duration = _reduceMotion ? Duration.zero : IdeMotion.durationNormal;
     final currentIndex = _displayIndex;
     final increasedValue = currentIndex < widget.efforts.length - 1
-        ? _reasoningEffortLabel(
-            widget.efforts[currentIndex + 1].effort,
-            widget.efforts,
-          )
+        ? widget.efforts[currentIndex + 1].effort
         : null;
     final decreasedValue = currentIndex > 0
-        ? _reasoningEffortLabel(
-            widget.efforts[currentIndex - 1].effort,
-            widget.efforts,
-          )
+        ? widget.efforts[currentIndex - 1].effort
         : null;
 
     return Semantics(
@@ -1677,11 +1695,26 @@ class _ReasoningEffortSliderState extends State<_ReasoningEffortSlider>
                             curve: IdeMotion.curveDefault,
                             child: RepaintBoundary(
                               child: AnimatedBuilder(
-                                animation: _shimmerController,
-                                builder: (context, child) => CustomPaint(
-                                  painter: _ReasoningMaxEffectPainter(
-                                    color: colors.intelligenceAccent,
-                                    phase: _shimmerController.value,
+                                key: const ValueKey(
+                                  'agent-reasoning-max-flow-animation',
+                                ),
+                                animation: _flowController,
+                                builder: (context, child) => AnimatedBuilder(
+                                  key: const ValueKey(
+                                    'agent-reasoning-max-impact-animation',
+                                  ),
+                                  animation: _impactController,
+                                  builder: (context, child) => CustomPaint(
+                                    key: const ValueKey(
+                                      'agent-reasoning-max-paint',
+                                    ),
+                                    painter: _ReasoningMaxEffectPainter(
+                                      color: colors.intelligenceAccent,
+                                      phase: _flowController.value,
+                                      impactProgress: _impactController.value,
+                                      endpointInset:
+                                          _thumbWidth / 2 + _thumbInnerInset,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -1770,10 +1803,17 @@ class _ReasoningEffortSliderState extends State<_ReasoningEffortSlider>
 }
 
 class _ReasoningMaxEffectPainter extends CustomPainter {
-  const _ReasoningMaxEffectPainter({required this.color, required this.phase});
+  const _ReasoningMaxEffectPainter({
+    required this.color,
+    required this.phase,
+    required this.impactProgress,
+    required this.endpointInset,
+  });
 
   final Color color;
   final double phase;
+  final double impactProgress;
+  final double endpointInset;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1781,31 +1821,117 @@ class _ReasoningMaxEffectPainter extends CustomPainter {
     final gradient = LinearGradient(
       colors: <Color>[
         color.withValues(alpha: 0),
-        color.withValues(alpha: 0.12),
+        color.withValues(alpha: 0.06),
+        color.withValues(alpha: 0.2),
         color.withValues(alpha: 0.46),
       ],
-      stops: const <double>[0.24, 0.58, 1],
+      stops: const <double>[0.16, 0.44, 0.74, 1],
     );
     canvas.drawRect(bounds, Paint()..shader = gradient.createShader(bounds));
 
-    const columns = 18;
-    const rows = 4;
-    for (var row = 0; row < rows; row += 1) {
-      for (var column = 0; column < columns; column += 1) {
-        if ((column * 3 + row * 5) % 7 == 0) {
-          continue;
-        }
-        final horizontal = 0.38 + (column / (columns - 1)) * 0.58;
-        final wave = (phase + column * 0.065 + row * 0.19) % 1;
-        final pulse = 1 - (wave - 0.5).abs() * 2;
-        final pixelSize = 1.5 + ((column + row) % 3) * 0.55;
-        final x =
-            size.width * horizontal +
-            math.sin((phase + row * 0.23) * math.pi * 2) * 2;
-        final y = size.height * (0.2 + row * 0.2);
-        canvas.drawRect(
-          Rect.fromLTWH(x, y, pixelSize, pixelSize),
-          Paint()..color = color.withValues(alpha: 0.12 + pulse * 0.44),
+    final endpoint = Offset(
+      math.max(endpointInset, size.width - endpointInset),
+      size.height / 2,
+    );
+    final glowBounds = Rect.fromCircle(
+      center: endpoint,
+      radius: size.height * 0.9,
+    );
+    final endpointGlow = RadialGradient(
+      colors: <Color>[
+        color.withValues(alpha: 0.42),
+        color.withValues(alpha: 0.12),
+        color.withValues(alpha: 0),
+      ],
+      stops: const <double>[0, 0.42, 1],
+    );
+    canvas.drawCircle(
+      endpoint,
+      size.height * 0.9,
+      Paint()..shader = endpointGlow.createShader(glowBounds),
+    );
+
+    const particleCount = 30;
+    for (var index = 0; index < particleCount; index += 1) {
+      // 固定种子式的分布让每帧只改变相位，避免随机闪烁。
+      final localPhase = (phase + index * 0.173) % 1;
+      final convergence = math.pow(localPhase, 2.6).toDouble();
+      final startX =
+          size.width * (0.18 + ((index * 37) % 43) / 100) - index % 3 * 2;
+      final lane = ((index * 7) % 9 - 4) / 4;
+      final startY = size.height / 2 + lane * size.height * 0.36;
+      final flutter =
+          math.sin((phase * 2 + index * 0.31) * math.pi * 2) *
+          (1 - convergence) *
+          1.1;
+      final x = startX + (endpoint.dx - startX) * convergence;
+      final y = startY + (endpoint.dy - startY) * convergence + flutter;
+      final visibility = math.sin(localPhase * math.pi);
+      final pixelSize = 1.15 + (index % 4) * 0.38;
+      final stretch = 1 + convergence * 1.5;
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(x, y),
+            width: pixelSize * stretch,
+            height: pixelSize,
+          ),
+          const Radius.circular(0.7),
+        ),
+        Paint()
+          ..color = color.withValues(
+            alpha: 0.1 + visibility * (0.28 + convergence * 0.32),
+          ),
+      );
+    }
+
+    if (impactProgress > 0 && impactProgress < 1) {
+      final expansion = Curves.easeOutCubic.transform(impactProgress);
+      final fade = math.pow(1 - impactProgress, 1.7).toDouble();
+      final flashRadius = size.height * (0.25 + expansion * 0.82);
+      final flashBounds = Rect.fromCircle(
+        center: endpoint,
+        radius: flashRadius,
+      );
+      final flash = RadialGradient(
+        colors: <Color>[
+          color.withValues(alpha: 0.48 * fade),
+          color.withValues(alpha: 0.14 * fade),
+          color.withValues(alpha: 0),
+        ],
+      );
+      canvas.drawCircle(
+        endpoint,
+        flashRadius,
+        Paint()..shader = flash.createShader(flashBounds),
+      );
+      canvas.drawCircle(
+        endpoint,
+        size.height * (0.18 + expansion * 0.72),
+        Paint()
+          ..color = color.withValues(alpha: 0.82 * fade)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.7 + (1 - expansion) * 1.3,
+      );
+
+      final streakLength = size.width * 0.24 * (1 - impactProgress);
+      final streakBounds = Rect.fromLTRB(
+        endpoint.dx - streakLength,
+        endpoint.dy - 0.8,
+        endpoint.dx,
+        endpoint.dy + 0.8,
+      );
+      if (streakBounds.width > 0) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(streakBounds, const Radius.circular(1)),
+          Paint()
+            ..shader = LinearGradient(
+              colors: <Color>[
+                color.withValues(alpha: 0),
+                color.withValues(alpha: 0.72 * fade),
+              ],
+            ).createShader(streakBounds),
         );
       }
     }
@@ -1813,34 +1939,9 @@ class _ReasoningMaxEffectPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ReasoningMaxEffectPainter oldDelegate) {
-    return oldDelegate.color != color || oldDelegate.phase != phase;
+    return oldDelegate.color != color ||
+        oldDelegate.phase != phase ||
+        oldDelegate.impactProgress != impactProgress ||
+        oldDelegate.endpointInset != endpointInset;
   }
-}
-
-String? _reasoningEffortLabel(
-  String? effort,
-  List<AgentModelReasoningEffort>? options,
-) {
-  if (effort == null) {
-    return null;
-  }
-  final normalized = effort.trim().toLowerCase();
-  final known = switch (normalized) {
-    'none' => '无',
-    'minimal' => '最低',
-    'low' => '低',
-    'medium' => '中',
-    'high' => '高',
-    'xhigh' => '极高',
-    _ => null,
-  };
-  if (known != null) {
-    return known;
-  }
-  for (final option in options ?? const <AgentModelReasoningEffort>[]) {
-    if (option.effort == effort) {
-      return option.description ?? effort;
-    }
-  }
-  return effort;
 }

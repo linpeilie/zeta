@@ -1051,7 +1051,7 @@ void main() {
           findsOneWidget,
         );
         expect(
-          find.descendant(of: footer, matching: find.text('高')),
+          find.descendant(of: footer, matching: find.text('high')),
           findsOneWidget,
         );
         expect(
@@ -1594,7 +1594,8 @@ void main() {
         final selectorSurface = tester.widget<PaneInteractiveSurface>(
           modelSelector,
         );
-        expect(tester.getSize(modelSelector).width, lessThan(180));
+        // effort 直接展示协议原值（如 medium），比中文单字略宽。
+        expect(tester.getSize(modelSelector).width, lessThan(240));
         expect(tester.getSize(modelSelector).height, 28);
         expect(selectorSurface.backgroundColor, Colors.transparent);
         expect(selectorSurface.borderColor, isNull);
@@ -1825,10 +1826,31 @@ void main() {
                   ),
                 )
                 .data,
-            '极高',
+            'xhigh',
           );
           expect(viewModel.selectedReasoningEffort, 'low');
           expect(store.saveCount, saveCountBeforeDrag);
+          final flowAnimation = find.descendant(
+            of: miniConfig,
+            matching: find.byKey(
+              const ValueKey('agent-reasoning-max-flow-animation'),
+            ),
+          );
+          final impactAnimation = find.descendant(
+            of: miniConfig,
+            matching: find.byKey(
+              const ValueKey('agent-reasoning-max-impact-animation'),
+            ),
+          );
+          final flowController =
+              tester.widget<AnimatedBuilder>(flowAnimation).animation
+                  as AnimationController;
+          final impactController =
+              tester.widget<AnimatedBuilder>(impactAnimation).animation
+                  as AnimationController;
+          expect(flowController.isAnimating, isTrue);
+          expect(impactController.isAnimating, isTrue);
+          expect(impactController.value, inExclusiveRange(0, 1));
 
           await gesture.up();
           await tester.pump(const Duration(milliseconds: 500));
@@ -1854,14 +1876,9 @@ void main() {
             ),
           );
           expect(tester.widget<AnimatedOpacity>(maxEffect).opacity, 1);
-          final shimmerBuilder = find.descendant(
-            of: maxEffect,
-            matching: find.byType(AnimatedBuilder),
-          );
-          final shimmerController =
-              tester.widget<AnimatedBuilder>(shimmerBuilder).animation
-                  as AnimationController;
-          expect(shimmerController.isAnimating, isTrue);
+          expect(flowController.isAnimating, isTrue);
+          expect(impactController.isAnimating, isFalse);
+          expect(impactController.value, 1);
           final labelStyle = tester.widget<AnimatedDefaultTextStyle>(
             find
                 .ancestor(
@@ -1912,7 +1929,7 @@ void main() {
           );
           final semantics = tester.getSemantics(slider);
           expect(semantics.label, '思考程度');
-          expect(semantics.value, '中');
+          expect(semantics.value, 'medium');
           final sliderSemantics = find.semantics.byLabel('思考程度');
           tester.semantics.increase(sliderSemantics);
           await tester.pump();
@@ -1926,20 +1943,35 @@ void main() {
             matching: find.byKey(const ValueKey('agent-reasoning-max-effect')),
           );
           expect(tester.widget<AnimatedOpacity>(maxEffect).opacity, 1);
-          final shimmerBuilder = find.descendant(
+          final flowAnimation = find.descendant(
             of: maxEffect,
-            matching: find.byType(AnimatedBuilder),
+            matching: find.byKey(
+              const ValueKey('agent-reasoning-max-flow-animation'),
+            ),
           );
-          final shimmerController =
-              tester.widget<AnimatedBuilder>(shimmerBuilder).animation
+          final flowController =
+              tester.widget<AnimatedBuilder>(flowAnimation).animation
                   as AnimationController;
-          expect(shimmerController.isAnimating, isFalse);
-          expect(shimmerController.value, closeTo(0.45, 0.001));
+          final impactAnimation = find.descendant(
+            of: maxEffect,
+            matching: find.byKey(
+              const ValueKey('agent-reasoning-max-impact-animation'),
+            ),
+          );
+          final impactController =
+              tester.widget<AnimatedBuilder>(impactAnimation).animation
+                  as AnimationController;
+          expect(flowController.isAnimating, isFalse);
+          expect(flowController.value, closeTo(0.45, 0.001));
+          expect(impactController.isAnimating, isFalse);
+          expect(impactController.value, 1);
 
           tester.semantics.decrease(sliderSemantics);
           await tester.pump();
           expect(viewModel.selectedReasoningEffort, 'high');
           expect(tester.widget<AnimatedOpacity>(maxEffect).opacity, 0);
+          expect(flowController.value, 0);
+          expect(impactController.value, 0);
         },
       );
 
@@ -1970,7 +2002,7 @@ void main() {
           ),
         );
         final semantics = tester.getSemantics(slider).getSemanticsData();
-        expect(semantics.value, '平衡');
+        expect(semantics.value, 'balanced');
         expect(semantics.hasAction(SemanticsAction.increase), isFalse);
         expect(semantics.hasAction(SemanticsAction.decrease), isFalse);
         expect(
@@ -2766,7 +2798,7 @@ void main() {
         );
 
         final resolveAction = find.byKey(
-          const ValueKey('agent-model-alert-切换到高并开启 Fast'),
+          const ValueKey('agent-model-alert-切换到 high 并开启 Fast'),
         );
         await tester.ensureVisible(resolveAction);
         await tester.pump(const Duration(milliseconds: 200));

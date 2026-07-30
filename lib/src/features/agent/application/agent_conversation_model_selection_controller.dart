@@ -278,10 +278,11 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
       return Future<bool>.value(false);
     }
     if (_isExtraHigh(effort) && selectedFastEnabled) {
+      final effortLabel = effort!.trim();
       _compatibilityConflict = AgentModelCompatibilityConflict(
         modelId: model.id,
-        message: 'Fast 与“极高”不兼容',
-        actionLabel: '关闭 Fast 并切换到极高',
+        message: 'Fast 与“$effortLabel”不兼容',
+        actionLabel: '关闭 Fast 并切换到 $effortLabel',
         resolution: AgentModelSelection(
           modelId: model.id,
           reasoningEffort: effort,
@@ -317,10 +318,11 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
       if (compatibleEffort == null) {
         return Future<bool>.value(false);
       }
+      final currentEffort = _modelSelection.reasoningEffort!.trim();
       _compatibilityConflict = AgentModelCompatibilityConflict(
         modelId: model.id,
-        message: 'Fast 与“极高”不兼容',
-        actionLabel: '切换到${_reasoningEffortLabel(compatibleEffort)}并开启 Fast',
+        message: 'Fast 与“$currentEffort”不兼容',
+        actionLabel: '切换到 $compatibleEffort 并开启 Fast',
         resolution: AgentModelSelection(
           modelId: model.id,
           reasoningEffort: compatibleEffort,
@@ -693,15 +695,6 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
   }
 
   bool _isExtraHigh(String? effort) => effort?.trim().toLowerCase() == 'xhigh';
-
-  String _reasoningEffortLabel(String effort) =>
-      switch (effort.trim().toLowerCase()) {
-        'low' => '低',
-        'medium' => '中',
-        'high' => '高',
-        'xhigh' => '极高',
-        _ => effort,
-      };
 
   void _clearTransientState() {
     if (_compatibilityConflict == null && _selectionNotice == null) {

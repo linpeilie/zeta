@@ -426,7 +426,8 @@ String _agentModePresetLabel(AgentConversationModePreset preset) {
   if (effort == null || effort.isEmpty) {
     return baseLabel;
   }
-  return '$baseLabel · ${_agentModeEffortLabel(effort)}';
+  // 直接展示协议/domain 中的 effort 原值，不做本地化映射。
+  return '$baseLabel · ${effort.trim().isEmpty ? effort : effort.trim()}';
 }
 
 String _agentModeFallbackLabel(AgentConversationModeId? modeId) {
@@ -435,17 +436,5 @@ String _agentModeFallbackLabel(AgentConversationModeId? modeId) {
     AgentConversationModeKind.plan => 'Plan',
     AgentConversationModeKind.unknown => 'Custom mode',
     null => 'Mode',
-  };
-}
-
-String _agentModeEffortLabel(String effort) {
-  final normalized = effort.trim().toLowerCase();
-  return switch (normalized) {
-    'low' => 'Low',
-    'medium' => 'Medium',
-    'high' => 'High',
-    'xhigh' => 'XHigh',
-    _ when normalized.isEmpty => effort,
-    _ => '${normalized[0].toUpperCase()}${normalized.substring(1)}',
   };
 }

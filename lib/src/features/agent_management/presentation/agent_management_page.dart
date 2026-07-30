@@ -1601,7 +1601,7 @@ class _ModelCard extends StatelessWidget {
               Text(
                 model.supportedReasoningEfforts.isEmpty
                     ? '思考能力：未知'
-                    : '思考能力：可调节（${orderedReasoningEffortsForDisplay(model.supportedReasoningEfforts).map((item) => _reasoningLabel(item.effort)).join('、')}）',
+                    : '思考能力：可调节（${orderedReasoningEffortsForDisplay(model.supportedReasoningEfforts).map((item) => item.effort).join('、')}）',
                 style: textStyles.bodySmall.copyWith(
                   color: colors.textSecondary,
                 ),
@@ -1650,18 +1650,6 @@ String _diagnosticStageLabel(AgentDiagnosticStage stage) {
     AgentDiagnosticStage.configurationRead => '配置读取',
     AgentDiagnosticStage.testRequest => '测试请求',
     AgentDiagnosticStage.processExit => '进程退出',
-  };
-}
-
-String _reasoningLabel(String value) {
-  return switch (value) {
-    'none' => '无',
-    'minimal' => '极低',
-    'low' => '低',
-    'medium' => '中',
-    'high' => '高',
-    'xhigh' => '极高',
-    _ => value,
   };
 }
 

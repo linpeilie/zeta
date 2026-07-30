@@ -43,6 +43,13 @@ abstract final class IdeMotion {
     milliseconds: 1800,
   );
 
+  /// 进入最高思考档位时，端点冲击波的一次性扩散时长。
+  ///
+  /// 该动效与持续流光分离，确保停留在最高档时不会反复闪烁。
+  static const Duration durationIntelligenceImpact = Duration(
+    milliseconds: 320,
+  );
+
   /// [durationFast] 的简短别名。
   static const Duration fast = durationFast;
 

@@ -107,7 +107,10 @@ void main() {
       expect(fastAccepted, isFalse);
       expect(controller.selectedReasoningEffort, 'xhigh');
       expect(controller.selectedFastEnabled, isFalse);
-      expect(controller.compatibilityConflict?.actionLabel, '切换到高并开启 Fast');
+      expect(
+        controller.compatibilityConflict?.actionLabel,
+        '切换到 high 并开启 Fast',
+      );
 
       expect(await controller.resolveCompatibilityConflict(), isTrue);
       expect(controller.selectedReasoningEffort, 'high');
@@ -116,7 +119,10 @@ void main() {
       final xhighAccepted = await controller.selectReasoningEffort('xhigh');
       expect(xhighAccepted, isFalse);
       expect(controller.selectedReasoningEffort, 'high');
-      expect(controller.compatibilityConflict?.actionLabel, '关闭 Fast 并切换到极高');
+      expect(
+        controller.compatibilityConflict?.actionLabel,
+        '关闭 Fast 并切换到 xhigh',
+      );
 
       expect(await controller.resolveCompatibilityConflict(), isTrue);
       expect(controller.selectedReasoningEffort, 'xhigh');

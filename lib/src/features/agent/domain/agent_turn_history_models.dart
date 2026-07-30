@@ -229,20 +229,14 @@ class AgentTurnModelConfig {
 }
 
 /// 将推理深度档位格式化为 footer 短标签。
+///
+/// 直接展示协议/domain 中的 [effort] 原值，不做本地化映射。
 String? agentReasoningEffortFooterLabel(String? effort) {
-  final normalized = effort?.trim().toLowerCase();
-  if (normalized == null || normalized.isEmpty) {
+  final trimmed = effort?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
     return null;
   }
-  return switch (normalized) {
-    'none' => '无',
-    'minimal' => '最低',
-    'low' => '低',
-    'medium' => '中',
-    'high' => '高',
-    'xhigh' => '极高',
-    _ => effort!.trim(),
-  };
+  return trimmed;
 }
 
 /// Token 消耗统计。
