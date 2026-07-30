@@ -1105,8 +1105,9 @@ class _ModelInlineConfig extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
+    // 展示顺序统一为低→高（左→右）；Grok 等 provider 的服务端顺序可能相反。
     final efforts = state.supportsReasoningOptions
-        ? model.supportedReasoningEfforts
+        ? orderedReasoningEffortsForDisplay(model.supportedReasoningEfforts)
         : const <AgentModelReasoningEffort>[];
     final fastTier = state.supportsServiceTierSelection
         ? agentFastServiceTier(model)

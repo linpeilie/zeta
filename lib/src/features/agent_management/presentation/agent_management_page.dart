@@ -1601,7 +1601,7 @@ class _ModelCard extends StatelessWidget {
               Text(
                 model.supportedReasoningEfforts.isEmpty
                     ? '思考能力：未知'
-                    : '思考能力：可调节（${model.supportedReasoningEfforts.map((item) => _reasoningLabel(item.effort)).join('、')}）',
+                    : '思考能力：可调节（${orderedReasoningEffortsForDisplay(model.supportedReasoningEfforts).map((item) => _reasoningLabel(item.effort)).join('、')}）',
                 style: textStyles.bodySmall.copyWith(
                   color: colors.textSecondary,
                 ),

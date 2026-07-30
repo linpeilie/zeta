@@ -250,3 +250,43 @@ AgentModelServiceTier? agentFastServiceTier(AgentModelInfo model) {
   }
   return model.serviceTiers.length == 1 ? model.serviceTiers.single : null;
 }
+
+/// 已知思考档位的强度序号：数值越大表示思考越深。
+///
+/// 用于 UI 从左到右展示「低 → 高」；协议侧仍可保留服务端原始数组顺序。
+const Map<String, int> _reasoningEffortDisplayRank = <String, int>{
+  'none': 0,
+  'minimal': 1,
+  'low': 2,
+  'medium': 3,
+  'high': 4,
+  'xhigh': 5,
+};
+
+/// 将思考档位按强度升序排列，便于分段控件左侧为低、右侧为高。
+///
+/// 未知档位排在已知档位之后，并保持彼此的相对顺序。
+List<AgentModelReasoningEffort> orderedReasoningEffortsForDisplay(
+  List<AgentModelReasoningEffort> efforts,
+) {
+  if (efforts.length <= 1) {
+    return efforts;
+  }
+  final indexed = <({int index, AgentModelReasoningEffort effort})>[
+    for (var i = 0; i < efforts.length; i++) (index: i, effort: efforts[i]),
+  ];
+  indexed.sort((a, b) {
+    final rankCompare = _reasoningEffortDisplayRankFor(
+      a.effort.effort,
+    ).compareTo(_reasoningEffortDisplayRankFor(b.effort.effort));
+    if (rankCompare != 0) {
+      return rankCompare;
+    }
+    return a.index.compareTo(b.index);
+  });
+  return <AgentModelReasoningEffort>[for (final item in indexed) item.effort];
+}
+
+int _reasoningEffortDisplayRankFor(String effort) {
+  return _reasoningEffortDisplayRank[effort.trim().toLowerCase()] ?? 1000;
+}
