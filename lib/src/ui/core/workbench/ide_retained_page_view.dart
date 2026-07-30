@@ -19,7 +19,7 @@ class IdeRetainedPage {
 /// 用于替代会布局全部 child 的 [IndexedStack]：
 /// - 不可手势滚动，索引由 [selectedId] 驱动并以 [PageController.jumpToPage] 同步；
 /// - 已访问页通过 [AutomaticKeepAliveClientMixin] 保留 State（草稿、滚动等）；
-/// - 离屏 keep-alive 子树不参与父约束的持续 layout。
+/// - 离屏 keep-alive 子树不参与父约束的持续 layout，并通过 [TickerMode] 暂停动画。
 class IdeRetainedPageView extends StatefulWidget {
   const IdeRetainedPageView({
     required this.pages,
@@ -96,6 +96,7 @@ class _IdeRetainedPageViewState extends State<IdeRetainedPageView> {
         final page = pages[index];
         return _IdeRetainedKeepAlivePage(
           key: ValueKey<String>(page.id),
+          active: index == safeIndex,
           child: page.child,
         );
       },
@@ -145,8 +146,13 @@ class _IdeRetainedPageViewState extends State<IdeRetainedPageView> {
 }
 
 class _IdeRetainedKeepAlivePage extends StatefulWidget {
-  const _IdeRetainedKeepAlivePage({required this.child, super.key});
+  const _IdeRetainedKeepAlivePage({
+    required this.active,
+    required this.child,
+    super.key,
+  });
 
+  final bool active;
   final Widget child;
 
   @override
@@ -163,6 +169,9 @@ class _IdeRetainedKeepAlivePageState extends State<_IdeRetainedKeepAlivePage>
   Widget build(BuildContext context) {
     super.build(context);
     // PageView 子项默认不强制撑满；expand 保证 Agent/Settings 获得有界约束。
-    return SizedBox.expand(child: widget.child);
+    return TickerMode(
+      enabled: widget.active,
+      child: SizedBox.expand(child: widget.child),
+    );
   }
 }

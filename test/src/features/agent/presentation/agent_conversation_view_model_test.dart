@@ -1602,6 +1602,34 @@ void main() {
       },
     );
 
+    test('provider event stream closing interrupts the active turn', () async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.sendMessage('hello');
+      provider.emit(
+        const AgentThreadStatusChangedEvent(
+          threadId: 'thread-1',
+          status: AgentThreadRuntimeStatus.active,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(viewModel.isTurnRunning, isTrue);
+      expect(viewModel.threadRuntimeStatus, AgentThreadRuntimeStatus.active);
+
+      await provider.dispose();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(viewModel.isTurnRunning, isFalse);
+      expect(viewModel.threadRuntimeStatus, isNull);
+      expect(viewModel.threadSnapshot.isTurnRunning, isFalse);
+      final interruptedTurn = viewModel.conversationTurns.singleWhere(
+        (turn) => turn.id == 'turn-1',
+      );
+      expect(interruptedTurn.status, AgentHistoryTurnStatus.interrupted);
+    });
+
     test(
       'dismisses approval card when serverRequest/resolved arrives',
       () async {

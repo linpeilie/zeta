@@ -2531,6 +2531,14 @@ class AgentConversationViewModel extends ChangeNotifier {
         if (identical(_eventSubscription, subscription)) {
           _eventSubscription = null;
         }
+        if (_disposed || !identical(_provider, provider)) {
+          return;
+        }
+        _log.warning(
+          'Agent provider event stream closed '
+          '(provider: ${provider.config.id}, thread: ${threadId ?? 'detached'})',
+        );
+        _settleInterruptedLiveTurn(fallbackTurnId: 'provider-disconnected');
       },
     );
     _eventSubscription = subscription;
@@ -2622,25 +2630,7 @@ class AgentConversationViewModel extends ChangeNotifier {
         if (!_shouldHandleEventForCurrentThread(sessionId: event.threadId)) {
           break;
         }
-        _clearThreadRuntimeStatus();
-        final planExecutionCleared = _planExecutionHandoffController.clear();
-        if (isTurnRunning) {
-          // 服务端关闭线程时清本地运行态，避免卡在 running。
-          _timeline.completeLiveTurnGroup(
-            _timeline.selectedRunningTurnId ?? 'closed',
-            status: AgentHistoryTurnStatus.interrupted,
-          );
-        }
-        _conversationModeController.setTurnRunning(isTurnRunning);
-        _consumeActivityDirty();
-        _syncElapsedTicker();
-        _publishUiChanges(
-          history: true,
-          syncLiveTurn: true,
-          header: true,
-          composer: true,
-          pendingInteraction: planExecutionCleared,
-        );
+        _settleInterruptedLiveTurn(fallbackTurnId: 'closed');
       case AgentThreadCompactedEvent():
         if (!_shouldHandleEventForCurrentThread(sessionId: event.threadId)) {
           break;
@@ -3001,6 +2991,28 @@ class AgentConversationViewModel extends ChangeNotifier {
           autoScroll: true,
         );
     }
+  }
+
+  /// 连接终止后将当前回合收敛为中断态，避免 UI 与计时器永久停留在 running。
+  void _settleInterruptedLiveTurn({required String fallbackTurnId}) {
+    _clearThreadRuntimeStatus();
+    final planExecutionCleared = _planExecutionHandoffController.clear();
+    if (isTurnRunning) {
+      _timeline.completeLiveTurnGroup(
+        _timeline.selectedRunningTurnId ?? fallbackTurnId,
+        status: AgentHistoryTurnStatus.interrupted,
+      );
+    }
+    _conversationModeController.setTurnRunning(isTurnRunning);
+    _consumeActivityDirty();
+    _syncElapsedTicker();
+    _publishUiChanges(
+      history: true,
+      syncLiveTurn: true,
+      header: true,
+      composer: true,
+      pendingInteraction: planExecutionCleared,
+    );
   }
 
   /// Provider 已将异常归一化为事件时统一记录，覆盖 Codex、Grok 和未来实现。

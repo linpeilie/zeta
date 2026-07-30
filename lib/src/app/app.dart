@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
@@ -90,7 +91,8 @@ class MainApp extends StatefulWidget {
   State<MainApp> createState() => MainAppState();
 }
 
-class MainAppState extends State<MainApp> {
+class MainAppState extends State<MainApp>
+    with WidgetsBindingObserver, WindowListener {
   late final AppearanceSettingsController _appearanceController;
   late final GeneralSettingsController _generalSettingsController;
   late final AgentProviderFactory _defaultAgentProviderFactory;
@@ -98,6 +100,8 @@ class MainAppState extends State<MainApp> {
   late final AgentModelCatalogRepository _agentModelCatalogRepository;
   bool _ownsAppearanceController = false;
   bool _ownsGeneralSettingsController = false;
+  AppLifecycleState? _appLifecycleState;
+  bool _nativeWindowSuspended = false;
 
   /// 全局外观控制器引用，供设置面板和主题构建共享。
   AppearanceSettingsController get appearanceController =>
@@ -110,6 +114,11 @@ class MainAppState extends State<MainApp> {
   @override
   void initState() {
     super.initState();
+    _appLifecycleState = WidgetsBinding.instance.lifecycleState;
+    WidgetsBinding.instance.addObserver(this);
+    if (widget.enableNativeWindowFrame) {
+      windowManager.addListener(this);
+    }
     final useFilePersistence = _useFilePersistence;
     final dataPaths = widget.dataPaths;
     _defaultAgentProviderFactory = const DefaultAgentProviderFactory();
@@ -159,7 +168,25 @@ class MainAppState extends State<MainApp> {
   }
 
   @override
+  void didUpdateWidget(covariant MainApp oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.enableNativeWindowFrame == widget.enableNativeWindowFrame) {
+      return;
+    }
+    if (widget.enableNativeWindowFrame) {
+      windowManager.addListener(this);
+      return;
+    }
+    windowManager.removeListener(this);
+    _nativeWindowSuspended = false;
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    if (widget.enableNativeWindowFrame) {
+      windowManager.removeListener(this);
+    }
     if (_ownsAppearanceController) {
       _appearanceController.dispose();
     }
@@ -168,6 +195,20 @@ class MainAppState extends State<MainApp> {
     }
     super.dispose();
   }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_appLifecycleState == state) {
+      return;
+    }
+    setState(() => _appLifecycleState = state);
+  }
+
+  @override
+  void onWindowMinimize() => _setNativeWindowSuspended(true);
+
+  @override
+  void onWindowRestore() => _setNativeWindowSuspended(false);
 
   @override
   Widget build(BuildContext context) {
@@ -194,50 +235,69 @@ class MainAppState extends State<MainApp> {
         final materialIdeTheme = materialBrightness == Brightness.dark
             ? darkIdeTheme
             : lightIdeTheme;
-        return IdeThemeScope(
-          themeMode: settings.themeMode,
-          lightTheme: lightIdeTheme,
-          darkTheme: darkIdeTheme,
-          child: sf.ShadcnApp(
-            debugShowCheckedModeBanner: false,
-            title: appTitle,
-            theme: buildShadcnTheme(lightIdeTheme),
-            darkTheme: buildShadcnTheme(darkIdeTheme),
-            materialTheme: buildMaterialTheme(materialIdeTheme),
-            themeMode: resolveShadcnThemeMode(settings.themeMode),
-            home: IdeHome(
-              directoryPicker: widget.directoryPicker ?? getDirectoryPath,
-              enableNativeWindowFrame: widget.enableNativeWindowFrame,
-              showWindowControls: widget.showWindowControls,
-              sessionStore: _createSessionStore(),
-              agentProviderFactory:
-                  widget.agentProviderFactory ?? _defaultAgentProviderFactory,
-              agentProviderConfigStore:
-                  widget.agentProviderConfigStore ??
-                  _createAgentProviderConfigStore(),
-              agentProviderAvailabilityLoader:
-                  widget.agentProviderAvailabilityLoader,
-              homeProviderDetectionLoader:
-                  widget.homeProviderDetectionLoader ??
-                  (_usesCallbackPersistence
-                      ? _loadNoInstalledHomeProviders
-                      : null),
-              projectLocationOpener:
-                  widget.projectLocationOpener ?? openPathInSystemFileManager,
-              appearanceController: _appearanceController,
-              generalSettingsController: _generalSettingsController,
-              usageStatisticsIndexStore: _usageStatisticsIndexStore,
-              agentUsagePanelRepository: widget.agentUsagePanelRepository,
-              agentModelCatalogRepository: _agentModelCatalogRepository,
-              // 回调存储用于测试/嵌入宿主；未显式注入统计仓储时不读取本机 CLI 历史。
-              enableAgentUsageAutoRefresh:
-                  !_usesCallbackPersistence ||
-                  widget.agentUsagePanelRepository != null,
+        return TickerMode(
+          enabled: _tickersEnabled,
+          child: IdeThemeScope(
+            themeMode: settings.themeMode,
+            lightTheme: lightIdeTheme,
+            darkTheme: darkIdeTheme,
+            child: sf.ShadcnApp(
+              debugShowCheckedModeBanner: false,
+              title: appTitle,
+              theme: buildShadcnTheme(lightIdeTheme),
+              darkTheme: buildShadcnTheme(darkIdeTheme),
+              materialTheme: buildMaterialTheme(materialIdeTheme),
+              themeMode: resolveShadcnThemeMode(settings.themeMode),
+              home: IdeHome(
+                directoryPicker: widget.directoryPicker ?? getDirectoryPath,
+                enableNativeWindowFrame: widget.enableNativeWindowFrame,
+                showWindowControls: widget.showWindowControls,
+                sessionStore: _createSessionStore(),
+                agentProviderFactory:
+                    widget.agentProviderFactory ?? _defaultAgentProviderFactory,
+                agentProviderConfigStore:
+                    widget.agentProviderConfigStore ??
+                    _createAgentProviderConfigStore(),
+                agentProviderAvailabilityLoader:
+                    widget.agentProviderAvailabilityLoader,
+                homeProviderDetectionLoader:
+                    widget.homeProviderDetectionLoader ??
+                    (_usesCallbackPersistence
+                        ? _loadNoInstalledHomeProviders
+                        : null),
+                projectLocationOpener:
+                    widget.projectLocationOpener ?? openPathInSystemFileManager,
+                appearanceController: _appearanceController,
+                generalSettingsController: _generalSettingsController,
+                usageStatisticsIndexStore: _usageStatisticsIndexStore,
+                agentUsagePanelRepository: widget.agentUsagePanelRepository,
+                agentModelCatalogRepository: _agentModelCatalogRepository,
+                // 回调存储用于测试/嵌入宿主；未显式注入统计仓储时不读取本机 CLI 历史。
+                enableAgentUsageAutoRefresh:
+                    !_usesCallbackPersistence ||
+                    widget.agentUsagePanelRepository != null,
+              ),
             ),
           ),
         );
       },
     );
+  }
+
+  bool get _tickersEnabled {
+    final state = _appLifecycleState;
+    final lifecycleAllowsTickers =
+        state == null ||
+        state == AppLifecycleState.resumed ||
+        state == AppLifecycleState.inactive;
+    return lifecycleAllowsTickers && !_nativeWindowSuspended;
+  }
+
+  void _setNativeWindowSuspended(bool suspended) {
+    if (_nativeWindowSuspended == suspended || !mounted) {
+      return;
+    }
+    setState(() => _nativeWindowSuspended = suspended);
   }
 
   IdeSessionStore _createSessionStore() {

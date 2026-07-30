@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/main.dart';
+import 'package:zeta/src/app/app.dart' show MainAppState;
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -43,6 +44,30 @@ void main() {
     expect(find.text('No folder opened'), findsOneWidget);
     expect(find.text('No file context'), findsNothing);
     expect(find.text('No tools running'), findsNothing);
+  });
+
+  testWidgets('应用生命周期和窗口最小化会暂停全局 ticker', (tester) async {
+    await _pumpIde(tester);
+    final appState = tester.state<MainAppState>(find.byType(MainApp));
+    final homeContext = tester.element(
+      find.byKey(const ValueKey('global-home-page')),
+    );
+
+    appState.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(TickerMode.valuesOf(homeContext).enabled, isTrue);
+
+    appState.onWindowMinimize();
+    await tester.pump();
+    expect(TickerMode.valuesOf(homeContext).enabled, isFalse);
+
+    appState.onWindowRestore();
+    await tester.pump();
+    expect(TickerMode.valuesOf(homeContext).enabled, isTrue);
+
+    appState.didChangeAppLifecycleState(AppLifecycleState.hidden);
+    await tester.pump();
+    expect(TickerMode.valuesOf(homeContext).enabled, isFalse);
   });
 
   testWidgets('startup refreshes hidden Agent statistics at idle priority', (

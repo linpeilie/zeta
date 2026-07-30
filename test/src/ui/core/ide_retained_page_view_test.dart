@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/ui/core/workbench/ide_retained_page_view.dart';
 
@@ -177,6 +178,70 @@ void main() {
     expect(stateB.buildCount, buildsOnBWhenHidden);
     expect(find.text('count-a'), findsOneWidget);
   });
+
+  testWidgets('离屏 keep-alive 页暂停 ticker，重新激活后继续', (tester) async {
+    var selectedId = 'a';
+    late StateSetter setHostState;
+
+    await pumpIdeComponent(
+      tester,
+      size: const Size(400, 300),
+      child: StatefulBuilder(
+        builder: (context, setState) {
+          setHostState = setState;
+          return IdeRetainedPageView(
+            selectedId: selectedId,
+            pages: const [
+              IdeRetainedPage(
+                id: 'a',
+                child: _TickerCountingPage(
+                  key: ValueKey('ticker-count-a'),
+                  label: 'a',
+                ),
+              ),
+              IdeRetainedPage(
+                id: 'b',
+                child: _TickerCountingPage(
+                  key: ValueKey('ticker-count-b'),
+                  label: 'b',
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    final stateA = tester.state<_TickerCountingPageState>(
+      find.byKey(const ValueKey('ticker-count-a')),
+    );
+
+    setHostState(() => selectedId = 'b');
+    await tester.pump();
+    await tester.pump();
+    final stateB = tester.state<_TickerCountingPageState>(
+      find.byKey(const ValueKey('ticker-count-b')),
+    );
+    await tester.pump(const Duration(milliseconds: 48));
+    expect(stateB.tickCount, greaterThan(0));
+
+    setHostState(() => selectedId = 'a');
+    await tester.pump();
+    await tester.pump();
+    final hiddenTickCount = stateB.tickCount;
+    final activeTickCount = stateA.tickCount;
+
+    await tester.pump(const Duration(milliseconds: 64));
+
+    expect(stateB.tickCount, hiddenTickCount);
+    expect(stateA.tickCount, greaterThan(activeTickCount));
+
+    setHostState(() => selectedId = 'b');
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 32));
+    expect(stateB.tickCount, greaterThan(hiddenTickCount));
+  });
 }
 
 class _ProbePage extends StatefulWidget {
@@ -229,6 +294,38 @@ class _LayoutCountingPageState extends State<_LayoutCountingPage> {
       onLayout: () => layoutCount += 1,
       child: Center(child: Text('count-${widget.label}')),
     );
+  }
+}
+
+class _TickerCountingPage extends StatefulWidget {
+  const _TickerCountingPage({required this.label, super.key});
+
+  final String label;
+
+  @override
+  State<_TickerCountingPage> createState() => _TickerCountingPageState();
+}
+
+class _TickerCountingPageState extends State<_TickerCountingPage>
+    with SingleTickerProviderStateMixin {
+  late final Ticker _ticker;
+  int tickCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = createTicker((_) => tickCount += 1)..start();
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(child: Text('ticker-${widget.label}'));
   }
 }
 
