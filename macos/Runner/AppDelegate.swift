@@ -1,13 +1,10 @@
 import Cocoa
-import CoreText
 import FlutterMacOS
 
 @main
 class AppDelegate: FlutterAppDelegate {
   /// 与 Flutter 侧 `zeta/menu` MethodChannel 对应的原生通道。
   private var menuChannel: FlutterMethodChannel?
-  /// 通过 CoreText 向 Flutter 暴露本地化系统字体家族。
-  private var systemFontCatalogChannel: FlutterMethodChannel?
 
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
     return true
@@ -20,7 +17,6 @@ class AppDelegate: FlutterAppDelegate {
   override func applicationDidFinishLaunching(_ notification: Notification) {
     super.applicationDidFinishLaunching(notification)
     setupMenuChannel()
-    setupSystemFontCatalogChannel()
     installFileMenu()
   }
 
@@ -34,75 +30,6 @@ class AppDelegate: FlutterAppDelegate {
       name: "zeta/menu",
       binaryMessenger: controller.engine.binaryMessenger
     )
-  }
-
-  /// 建立 `zeta/system_fonts` 通道，返回 CoreText 可见字体家族。
-  private func setupSystemFontCatalogChannel() {
-    guard let window = mainFlutterWindow,
-          let controller = window.contentViewController as? FlutterViewController else {
-      return
-    }
-    let channel = FlutterMethodChannel(
-      name: "zeta/system_fonts",
-      binaryMessenger: controller.engine.binaryMessenger
-    )
-    channel.setMethodCallHandler { call, result in
-      guard call.method == "listFontFamilies" else {
-        result(FlutterMethodNotImplemented)
-        return
-      }
-      result(Self.listSystemFontFamilies())
-    }
-    systemFontCatalogChannel = channel
-  }
-
-  /// 使用 CoreText 的家族、显示名称和固定字宽特征构造平台中立响应。
-  private static func listSystemFontFamilies() -> [[String: Any]] {
-    let visibleFamilies =
-      CTFontManagerCopyAvailableFontFamilyNames() as? [String] ?? []
-    var seen = Set<String>()
-    var result: [[String: Any]] = []
-
-    for visibleFamily in visibleFamilies {
-      let font = CTFontCreateWithName(visibleFamily as CFString, 12, nil)
-      let canonicalName = CTFontCopyFamilyName(font) as String
-      let normalizedCanonicalName = canonicalName
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !normalizedCanonicalName.isEmpty else { continue }
-
-      let identity = normalizedCanonicalName.lowercased()
-      guard seen.insert(identity).inserted else { continue }
-
-      let localizedName =
-        CTFontCopyLocalizedName(font, kCTFontFamilyNameKey, nil) as String?
-          ?? normalizedCanonicalName
-      var aliases = Set([visibleFamily, normalizedCanonicalName, localizedName])
-      let descriptor = CTFontDescriptorCreateWithAttributes([
-        kCTFontFamilyNameAttribute: normalizedCanonicalName
-      ] as CFDictionary)
-      let matchingDescriptors =
-        CTFontDescriptorCreateMatchingFontDescriptors(descriptor, nil)
-          as? [CTFontDescriptor] ?? []
-      for matchingDescriptor in matchingDescriptors {
-        if let fontURL =
-          CTFontDescriptorCopyAttribute(
-            matchingDescriptor,
-            kCTFontURLAttribute
-          ) as? URL {
-          aliases.insert(fontURL.deletingPathExtension().lastPathComponent)
-        }
-      }
-
-      result.append([
-        "id": "macos:\(identity)",
-        "familyName": normalizedCanonicalName,
-        "displayName": localizedName,
-        "aliases": aliases.sorted(),
-        "monospace": CTFontGetSymbolicTraits(font).contains(.traitMonoSpace),
-      ])
-    }
-
-    return result
   }
 
   /// 在应用菜单之后、Edit 菜单之前插入「File - Open Project…」菜单。

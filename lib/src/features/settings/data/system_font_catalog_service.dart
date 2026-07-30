@@ -33,7 +33,7 @@ class DesktopSystemFontCatalogService implements SystemFontCatalogService {
 
   @override
   Future<List<SystemFontFamily>> uiFontFamilies() {
-    return _fontFamiliesFuture ??= _loadFontFamilies();
+    return _fontFamiliesFuture ??= _loadFontFamiliesWithRecovery();
   }
 
   @override
@@ -76,6 +76,17 @@ class DesktopSystemFontCatalogService implements SystemFontCatalogService {
             a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
       );
     return List<SystemFontFamily>.unmodifiable(values);
+  }
+
+  Future<List<SystemFontFamily>> _loadFontFamiliesWithRecovery() async {
+    try {
+      return await _loadFontFamilies();
+    } on Exception {
+      // 原生通道的瞬时故障不应永久污染缓存，后续打开字体选择器时允许重试。
+      _fontFamiliesFuture = null;
+      _codeFontFamiliesFuture = null;
+      rethrow;
+    }
   }
 }
 

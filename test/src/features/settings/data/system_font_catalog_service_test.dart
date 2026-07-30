@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
 
@@ -70,6 +71,34 @@ void main() {
       await service.resolveFontFamily('Maple Mono');
 
       expect(loadCount, 1);
+    });
+
+    test('retries after a transient native catalog failure', () async {
+      var loadCount = 0;
+      final service = DesktopSystemFontCatalogService(
+        loader: (_) async {
+          loadCount += 1;
+          if (loadCount == 1) {
+            throw PlatformException(code: 'channel-unavailable');
+          }
+          return <Object?>[
+            <String, Object?>{
+              'id': 'macos:menlo',
+              'familyName': 'Menlo',
+              'displayName': 'Menlo',
+              'monospace': true,
+            },
+          ];
+        },
+      );
+
+      await expectLater(
+        service.uiFontFamilies(),
+        throwsA(isA<PlatformException>()),
+      );
+
+      expect((await service.uiFontFamilies()).single.familyName, 'Menlo');
+      expect(loadCount, 2);
     });
   });
 }
