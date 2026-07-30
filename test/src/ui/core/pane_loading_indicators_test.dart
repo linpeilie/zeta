@@ -7,7 +7,7 @@ import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'ide_component_test_harness.dart';
 
 void main() {
-  testWidgets('IdeBusySpinner 默认使用 shadcn 静态弧与主题强调色', (tester) async {
+  testWidgets('IdeBusySpinner 默认使用持续动画并隔离重绘', (tester) async {
     final semantics = tester.ensureSemantics();
     try {
       await pumpIdeComponent(
@@ -28,17 +28,21 @@ void main() {
       final indicator = tester.widget<sf.CircularProgressIndicator>(
         indicatorFinder,
       );
+      final repaintBoundaryElement = _singleChildElement(
+        _singleChildElement(tester.element(spinnerFinder)),
+      );
       final colors = IdeColors.of(tester.element(spinnerFinder));
 
       expect(spinnerFinder, findsOneWidget);
       expect(indicatorFinder, findsOneWidget);
+      expect(repaintBoundaryElement.widget, isA<RepaintBoundary>());
       expect(tester.getSize(spinnerFinder), const Size.square(14));
       expect(indicator.size, 14);
       expect(indicator.strokeWidth, 2);
       expect(indicator.color, colors.accent);
       expect(indicator.backgroundColor, Colors.transparent);
-      expect(indicator.value, 0.72);
-      expect(indicator.animated, isFalse);
+      expect(indicator.value, isNull);
+      expect(indicator.animated, isTrue);
       expect(find.bySemanticsLabel('Task running'), findsOneWidget);
       expect(tester.takeException(), isNull);
     } finally {
@@ -74,41 +78,44 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('IdeBusySpinner 单次旋转后停止调度帧且重建不重启', (tester) async {
-    var semanticsLabel = 'Running';
+  testWidgets('IdeBusySpinner 运行时持续调度帧并可随状态移除', (tester) async {
+    var running = true;
     late StateSetter rebuild;
     await pumpIdeComponent(
       tester,
       child: StatefulBuilder(
         builder: (context, setState) {
           rebuild = setState;
-          return Center(child: IdeBusySpinner(semanticsLabel: semanticsLabel));
+          return Center(
+            child: running
+                ? const IdeBusySpinner(semanticsLabel: 'Running')
+                : const SizedBox.shrink(),
+          );
         },
       ),
     );
 
     expect(tester.binding.hasScheduledFrame, isTrue);
 
-    final pumpCount = await tester.pumpAndSettle(
-      const Duration(milliseconds: 100),
-      EnginePhase.sendSemanticsUpdate,
-      const Duration(seconds: 2),
-    );
-
-    expect(pumpCount, greaterThan(0));
-    expect(tester.binding.hasScheduledFrame, isFalse);
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(tester.binding.hasScheduledFrame, isTrue);
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(tester.binding.hasScheduledFrame, isTrue);
     expect(find.byType(IdeBusySpinner), findsOneWidget);
 
     rebuild(() {
-      semanticsLabel = 'Still running';
+      running = false;
     });
     await tester.pump();
 
-    expect(tester.binding.hasScheduledFrame, isFalse);
-    expect(
-      tester.widget<IdeBusySpinner>(find.byType(IdeBusySpinner)).semanticsLabel,
-      'Still running',
-    );
+    expect(find.byType(IdeBusySpinner), findsNothing);
     expect(tester.takeException(), isNull);
   });
+}
+
+Element _singleChildElement(Element parent) {
+  final children = <Element>[];
+  parent.visitChildElements(children.add);
+  expect(children, hasLength(1));
+  return children.single;
 }
