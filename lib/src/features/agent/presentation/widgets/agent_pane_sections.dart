@@ -538,8 +538,7 @@ class _AgentTimelineBlockSection extends StatelessWidget {
     return switch (entry) {
       AgentMessageTimelineEntry(:final message) => _AgentMessageEntry(
         message: message,
-        // 历史长文默认折叠预览，降低离屏 markdown 解析成本；live 流式全文展开。
-        collapseHeavyContent: !isLiveTurn,
+        // 历史与 live 正文均全文渲染，禁止折叠预览。
         useStreamingMarkdown: isLiveTurn,
         viewModel: viewModel,
       ),

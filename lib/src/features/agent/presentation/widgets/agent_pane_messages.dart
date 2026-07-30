@@ -4,13 +4,11 @@ part of '../agent_pane.dart';
 class _AgentMessageEntry extends StatelessWidget {
   const _AgentMessageEntry({
     required this.message,
-    required this.collapseHeavyContent,
     required this.useStreamingMarkdown,
     required this.viewModel,
   });
 
   final AgentConversationMessage message;
-  final bool collapseHeavyContent;
   final bool useStreamingMarkdown;
   final AgentConversationViewModel viewModel;
 
@@ -32,7 +30,6 @@ class _AgentMessageEntry extends StatelessWidget {
     if (message.role == AgentMessageRole.agent) {
       return _AgentMarkdownMessage(
         message: message,
-        collapseHeavyContent: collapseHeavyContent,
         useStreamingMarkdown: useStreamingMarkdown,
       );
     }
@@ -492,18 +489,14 @@ class _AgentBubbleMessage extends StatelessWidget {
   }
 }
 
-/// 普通 Agent 正文使用全宽 Markdown 渲染。
-///
-/// 超长 markdown 默认先展示预览，避免历史区滚动时提前创建整段重组件。
+/// 普通 Agent 正文使用全宽 Markdown 渲染（全文，不折叠）。
 class _AgentMarkdownMessage extends StatefulWidget {
   const _AgentMarkdownMessage({
     required this.message,
-    required this.collapseHeavyContent,
     required this.useStreamingMarkdown,
   });
 
   final AgentConversationMessage message;
-  final bool collapseHeavyContent;
   final bool useStreamingMarkdown;
 
   @override
@@ -511,7 +504,6 @@ class _AgentMarkdownMessage extends StatefulWidget {
 }
 
 class _AgentMarkdownMessageState extends State<_AgentMarkdownMessage> {
-  bool _expanded = false;
   MarkdownController? _markdownController;
   bool _streamCommitted = false;
 
@@ -575,73 +567,12 @@ class _AgentMarkdownMessageState extends State<_AgentMarkdownMessage> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
     final markdown = widget.message.text;
     final useStreamingMarkdown = widget.useStreamingMarkdown;
-    if (!widget.collapseHeavyContent || !_shouldCollapseMarkdown(markdown)) {
-      return RepaintBoundary(
-        child: useStreamingMarkdown
-            ? _AgentMarkdownBody(controller: _ensureMarkdownController())
-            : _AgentMarkdownBody(data: markdown),
-      );
-    }
-    return Padding(
-      padding: const EdgeInsets.only(bottom: IdeSpacing.space12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AnimatedSize(
-            duration: IdeMotion.durationNormal,
-            curve: IdeMotion.curvePopup,
-            alignment: Alignment.topCenter,
-            child: _expanded
-                ? RepaintBoundary(
-                    key: ValueKey<String>(
-                      'agent-markdown-body-${widget.message.id}',
-                    ),
-                    child: _AgentMarkdownBody(data: markdown),
-                  )
-                : Text(
-                    _markdownPreviewText(markdown),
-                    key: ValueKey<String>(
-                      'agent-markdown-preview-${widget.message.id}',
-                    ),
-                    maxLines: 4,
-                    overflow: TextOverflow.ellipsis,
-                    style: textStyles.bodyMedium.copyWith(
-                      height: 1.45,
-                      color: colors.textSecondary.withValues(alpha: 0.88),
-                    ),
-                  ),
-          ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: sf.GhostButton(
-              key: ValueKey<String>(
-                'agent-markdown-toggle-${widget.message.id}',
-              ),
-              onPressed: () {
-                setState(() {
-                  _expanded = !_expanded;
-                });
-              },
-              size: sf.ButtonSize.small,
-              leading: Icon(
-                _expanded
-                    ? Icons.unfold_less_rounded
-                    : Icons.unfold_more_rounded,
-                size: 15,
-              ),
-              child: Text(
-                _expanded ? '收起正文' : '展开正文',
-                style: textStyles.bodySmall,
-              ),
-            ),
-          ),
-        ],
-      ),
+    return RepaintBoundary(
+      child: useStreamingMarkdown
+          ? _AgentMarkdownBody(controller: _ensureMarkdownController())
+          : _AgentMarkdownBody(data: markdown),
     );
   }
 }

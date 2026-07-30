@@ -63,31 +63,6 @@ String _planPreviewText(String markdown) {
   return 'Plan';
 }
 
-bool _shouldCollapseMarkdown(String markdown) {
-  return markdown.length >= _markdownCollapseLengthThreshold ||
-      _codeBlockLineCount(markdown) >= _markdownCollapseLineThreshold;
-}
-
-String _markdownPreviewText(String markdown) {
-  final parts = <String>[];
-  for (final rawLine in LineSplitter.split(markdown)) {
-    final preview = rawLine
-        .trim()
-        .replaceFirst(RegExp(r'^#+\s*'), '')
-        .replaceFirst(RegExp(r'^[-*+]\s+(\[[ xX]\]\s+)?'), '')
-        .replaceAll('`', '')
-        .trim();
-    if (preview.isEmpty) {
-      continue;
-    }
-    parts.add(preview);
-    if (parts.length >= 4 || parts.join(' ').length >= 220) {
-      break;
-    }
-  }
-  return parts.isEmpty ? 'Markdown message' : parts.join('  ');
-}
-
 InlineSpan _fileEditGroupSummarySpan(
   BuildContext context,
   AgentTimelineFileEditGroup group,

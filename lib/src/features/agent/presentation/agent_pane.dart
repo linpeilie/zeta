@@ -58,10 +58,6 @@ part 'widgets/agent_mode_selector.dart';
 part 'widgets/agent_pane_sections.dart';
 part 'widgets/agent_pane_styles.dart';
 
-// 折叠阈值与 extent 估算共用 kAgentMarkdownCollapse* 常量。
-const int _markdownCollapseLineThreshold = kAgentMarkdownCollapseLineThreshold;
-const int _markdownCollapseLengthThreshold =
-    kAgentMarkdownCollapseLengthThreshold;
 const int _diffPreviewLineCount = 24;
 
 /// Agent 主列宽度档位：只影响 page padding 等布局语义，不随每像素宽度重建。

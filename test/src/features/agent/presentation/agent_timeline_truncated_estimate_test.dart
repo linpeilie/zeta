@@ -18,9 +18,11 @@ void main() {
     isFileEditItemExpanded: _never,
   );
 
-  test('history long markdown uses truncated height estimate', () {
-    final longText = List<String>.filled(20, 'line of markdown content\n').join();
-    expect(agentMarkdownUsesTruncatedEstimate(longText), isTrue);
+  test('history and live long markdown share full-height estimates', () {
+    final longText = List<String>.filled(
+      20,
+      'line of markdown content\n',
+    ).join();
 
     final message = AgentConversationMessage(
       id: 'm1',
@@ -57,8 +59,9 @@ void main() {
       layoutContext: layout,
     );
 
-    expect(historyDesc.estimatedExtent, lessThan(liveDesc.estimatedExtent));
-    expect(historyDesc.estimatedExtent, lessThanOrEqualTo(180));
+    // 禁止折叠后，历史与 live 使用同一全文估算，不再截断到预览高度。
+    expect(historyDesc.estimatedExtent, liveDesc.estimatedExtent);
+    expect(historyDesc.estimatedExtent, greaterThan(180));
   });
 }
 
