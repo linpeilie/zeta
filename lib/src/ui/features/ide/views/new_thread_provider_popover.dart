@@ -196,27 +196,13 @@ class _NewThreadProviderPopoverState extends State<NewThreadProviderPopover> {
                       ),
                       const SizedBox(width: IdeSpacing.space10),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              provider.displayName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: textStyles.bodyMedium.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            Text(
-                              _providerKindLabel(provider.kind),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: textStyles.caption.copyWith(
-                                color: colors.textSecondary,
-                              ),
-                            ),
-                          ],
+                        child: Text(
+                          provider.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textStyles.bodyMedium.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                       if (selected)
@@ -243,14 +229,5 @@ class _NewThreadProviderPopoverState extends State<NewThreadProviderPopover> {
       }
     }
     return null;
-  }
-
-  String _providerKindLabel(AgentProviderKind kind) {
-    return switch (kind) {
-      AgentProviderKind.codexAppServer => 'Codex app-server',
-      AgentProviderKind.acp => 'Agent Client Protocol',
-      AgentProviderKind.cursorAcp => 'Unavailable provider',
-      AgentProviderKind.claudeCode => 'Claude Code',
-    };
   }
 }
