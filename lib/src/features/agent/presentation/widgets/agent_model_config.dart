@@ -324,11 +324,17 @@ class _ModelConfigTrigger extends StatelessWidget {
       state.selectedReasoningEffort,
       selectedModel?.supportedReasoningEfforts,
     );
+    final fastTier = selectedModel != null && state.supportsServiceTierSelection
+        ? agentFastServiceTier(selectedModel)
+        : null;
+    final fastSupported = fastTier != null && fastTier.enabled;
     final tooltip = StringBuffer(modelLabel);
     if (effortLabel != null) {
       tooltip.write('\n思考程度：$effortLabel');
     }
-    tooltip.write('\nFast：${state.selectedFastEnabled ? '已开启' : '已关闭'}');
+    if (fastSupported) {
+      tooltip.write('\nFast：${state.selectedFastEnabled ? '已开启' : '已关闭'}');
+    }
     if (state.appliesNextTurn) {
       tooltip.write('\n配置将在下一回合生效');
     }
@@ -1184,14 +1190,15 @@ class _ModelInlineConfig extends StatelessWidget {
                     ],
                   ],
                 ),
-              const SizedBox(height: IdeSpacing.space4),
-              _FastConfigRow(
-                model: model,
-                enabled: fastSupported,
-                value: fastEnabled,
-                unavailableReason: fastTier?.unavailableReason ?? '该模型不支持 Fast',
-                onChanged: onFastChanged,
-              ),
+              // 不支持 Fast 时不展示开关，避免“禁用态”干扰扫读。
+              if (fastSupported) ...[
+                const SizedBox(height: IdeSpacing.space4),
+                _FastConfigRow(
+                  model: model,
+                  value: fastEnabled,
+                  onChanged: onFastChanged,
+                ),
+              ],
               if (conflict != null) ...[
                 const SizedBox(height: IdeSpacing.space8),
                 _ModelConfigInlineAlert(
@@ -1225,22 +1232,18 @@ class _ModelInlineConfig extends StatelessWidget {
 class _FastConfigRow extends StatelessWidget {
   const _FastConfigRow({
     required this.model,
-    required this.enabled,
     required this.value,
-    required this.unavailableReason,
     required this.onChanged,
   });
 
   final AgentModelInfo model;
-  final bool enabled;
   final bool value;
-  final String unavailableReason;
   final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final content = SizedBox(
+    return SizedBox(
       height: 32,
       child: Row(
         children: [
@@ -1254,7 +1257,7 @@ class _FastConfigRow extends StatelessWidget {
             child: Text(
               'Fast',
               style: IdeTextStyles.of(context).bodyMedium.copyWith(
-                color: enabled ? colors.textPrimary : colors.textTertiary,
+                color: colors.textPrimary,
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
               ),
@@ -1265,16 +1268,12 @@ class _FastConfigRow extends StatelessWidget {
             child: sf.Switch(
               key: ValueKey<String>('agent-fast-switch-${model.id}'),
               value: value,
-              enabled: enabled,
-              onChanged: enabled ? onChanged : null,
+              onChanged: onChanged,
             ),
           ),
         ],
       ),
     );
-    return enabled
-        ? content
-        : IdeTooltip(message: unavailableReason, child: content);
   }
 }
 
