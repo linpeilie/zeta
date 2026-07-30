@@ -1,2 +1,2 @@
-const String appTitle = 'Zeta IDE';
+const String appTitle = 'Zeta';
 const Duration sessionSaveDelay = Duration(milliseconds: 300);

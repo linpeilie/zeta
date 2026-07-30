@@ -223,7 +223,7 @@ class GrokAcpAgentProvider
           },
           'clientInfo': <String, Object?>{
             'name': 'zeta',
-            'title': 'Zeta IDE',
+            'title': 'Zeta',
             'version': '0.1.0',
           },
         },

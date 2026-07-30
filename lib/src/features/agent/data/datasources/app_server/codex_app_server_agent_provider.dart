@@ -265,7 +265,7 @@ class CodexAppServerAgentProvider
         params: <String, Object?>{
           'clientInfo': <String, Object?>{
             'name': 'zeta',
-            'title': 'Zeta IDE',
+            'title': 'Zeta',
             'version': '0.1.0',
           },
           // 显式声明协商能力，避免依赖服务端默认值的隐式行为。

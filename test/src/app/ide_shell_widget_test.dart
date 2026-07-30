@@ -24,7 +24,7 @@ void main() {
     await _pumpIde(tester);
     await tester.pump();
 
-    expect(find.text('Zeta IDE'), findsNothing);
+    expect(find.text('Zeta'), findsNothing);
     expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-pane-host')), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-panel-card')), findsNothing);

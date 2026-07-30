@@ -1,4 +1,4 @@
-# Zeta IDE 原语对 `shadcn_flutter` 的底层适配改造方案
+# Zeta 原语对 `shadcn_flutter` 的底层适配改造方案
 
 > 版本：v1.0  
 > 日期：2026-07-28  
