@@ -118,7 +118,11 @@ class _AgentModelConfigState extends State<_AgentModelConfig> {
     );
     final reduceMotion = mediaQuery.disableAnimations;
 
-    _setPopoverState(widget.state.copyWith(expandedModelId: null));
+    // 打开时直接展开当前已选模型的额外配置（思考程度、Fast 等），
+    // 避免用户还要再点一次已选项才能看到。
+    _setPopoverState(
+      widget.state.copyWith(expandedModelId: widget.state.selectedModelId),
+    );
     final entry = showIdePopover<void>(
       context: context,
       alignment: openAbove ? Alignment.bottomLeft : Alignment.topLeft,
@@ -511,7 +515,18 @@ class _ModelConfigPopoverState extends State<_ModelConfigPopover> {
     super.initState();
     widget.stateListenable.addListener(_handleStateChanged);
     _syncModelFocusNodes(widget.stateListenable.value);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _focusInitialModel());
+    // 打开时若已有展开目标（通常为当前选中模型），首帧后滚入视野。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final expandedId = widget.stateListenable.value.expandedModelId;
+      if (expandedId != null) {
+        _lastExpandedModelId = expandedId;
+        _ensureExpandedConfigVisible(expandedId);
+      }
+      _focusInitialModel();
+    });
   }
 
   @override
