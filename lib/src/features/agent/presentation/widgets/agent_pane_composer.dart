@@ -1258,7 +1258,7 @@ class _PermissionPolicyButtonState extends State<_PermissionPolicyButton> {
   String get _displayLabel {
     for (final preset in widget.presets) {
       if (preset.id == widget.selectedPresetId) {
-        return '${preset.label}';
+        return preset.label;
       }
     }
     return widget.label;

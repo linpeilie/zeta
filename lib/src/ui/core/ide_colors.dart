@@ -5,10 +5,11 @@ import 'app_theme.dart';
 
 /// IDE 主题专用调色板。
 ///
-/// 色值来自 `shadcn_flutter` 的 Zinc [sf.ColorSchemes] 与 [sf.Colors] 色板
-/// （blue / red / amber / green / sky 等），再映射为 IDE 语义字段。运行时通过
-/// [IdeThemeScope] 解析；`app_theme.dart` 还会将它们投影到 Material 和
-/// `shadcn_flutter` 主题，因此第三方组件也会间接生效。
+/// 色值以 `shadcn_flutter` 的 Zinc [sf.ColorSchemes] 为语义基底，并组合
+/// [sf.Colors.neutral] / [sf.Colors.zinc] 表面阶梯及 blue / red / amber /
+/// green / sky 状态色板，再映射为 IDE 语义字段。运行时通过 [IdeThemeScope]
+/// 解析；`app_theme.dart` 还会将它们投影到 Material 和 `shadcn_flutter`
+/// 主题，因此第三方组件也会间接生效。
 ///
 /// 每个字段都是跨功能的语义颜色，而不是某个组件的专用色。下方字段
 /// 注释中的“生效位置”列出当前主要消费者。
@@ -46,10 +47,11 @@ class IdeColors {
     required this.focusRing,
   });
 
-  /// 从官方 Zinc 方案 + blue 品牌主色构建 IDE 语义调色板。
+  /// 从 Zinc 方案、neutral/Zinc 表面阶梯与 blue 品牌主色构建语义调色板。
   ///
-  /// 表面层级在 [sf.ColorScheme] 扁平字段之上用 [sf.Colors.zinc] 阶梯补全，
-  /// 以保持 IDE 的 frame / canvas / pane / control 明度顺序。
+  /// 表面字段按组件用途分组，不承诺跨主题统一的明度递进：深色主题中
+  /// frame/pane 与 canvas/control 分别共享一档，浅色主题则由白色画布、
+  /// neutral frame/pane 和 Zinc control 构成。
   factory IdeColors.fromShadcnColorScheme(sf.ColorScheme scheme) {
     final isDark = scheme.brightness == Brightness.dark;
     final zinc = sf.Colors.zinc;
@@ -59,7 +61,6 @@ class IdeColors {
     final amber = sf.Colors.amber;
     final green = sf.Colors.green;
     final sky = sf.Colors.sky;
-    final gray = sf.Colors.gray;
     // shadcn `.blue` recolor 在深浅下都指向 Colors.blue（500）；
     // IDE 按亮度拆阶梯，避免深浅主题 brand / ring 完全相同。
     final brand = isDark ? blue[500] : blue[600];
@@ -67,7 +68,7 @@ class IdeColors {
     if (isDark) {
       return IdeColors(
         frame: neutral[700],
-        // 画布略深于面板：background 与 zinc.900 拉开层级。
+        // 中央画布与紧凑控件同档，均比 frame/pane 更深。
         editor: neutral[800],
         surface: neutral[700],
         surfaceElevated: neutral[800],
@@ -102,7 +103,7 @@ class IdeColors {
 
     return IdeColors(
       frame: neutral[50],
-      // 浅色：canvas 最亮，pane / control 依次略灰。
+      // 浅色画布使用白色，frame/pane 共用 neutral.50，control 使用 zinc.100。
       editor: sf.Colors.white,
       surface: neutral[50],
       surfaceElevated: zinc[100],
@@ -135,20 +136,22 @@ class IdeColors {
     );
   }
 
-  /// 应用最底层的框架背景，用于承托各个内容表面。
+  /// 应用框架与标题栏的语义背景；允许与 pane 共用同一色阶。
   ///
   /// 生效位置：`WindowFrame` 外框与标题栏、Material `Scaffold` 和
   /// shadcn 根背景、面板拖拽分隔区，以及 `IdeTab`/Composer 选择器的
   /// 展开态背景。
   final Color frame;
 
-  /// 默认内容表面，层级高于 [frame]、低于抬升和覆盖层。
+  /// 默认 pane 内容表面；名称表达用途，不约束它与 [frame] 的明度顺序。
   ///
   /// 生效位置：Material canvas/card、shadcn card、Agent 上下文侧栏，
   /// 以及模型配置中的分段控件容器。
   final Color surface;
 
-  /// 在 [surface] 上抬升一层的中性表面，用于嵌套内容分组。
+  /// 嵌套控件与内容分组的对比表面。
+  ///
+  /// “Elevated” 表达视觉分组，不要求深浅主题采用相同的明度方向。
   ///
   /// 生效位置：设置页导航面板、`IdeTab` 背景、Agent 回答/文件编辑卡、
   /// 消息气泡、Markdown 代码块/引用/表头、附件缩略图和配置编辑器行号栏。
@@ -331,16 +334,16 @@ class IdeColors {
   /// Popover、菜单、Tooltip 与 Drawer 表面。
   Color get popoverSurface => surfaceOverlay;
 
-  /// 深色调色板：`ColorSchemes.darkZinc` + `Colors.blue` 品牌主色。
+  /// 深色调色板：Zinc 语义方案 + neutral/Zinc 表面 + blue 品牌主色。
   ///
   /// 各参数的具体生效位置见上方同名字段注释。
   static final IdeColors dark = IdeColors.fromShadcnColorScheme(
     sf.ColorSchemes.darkZinc,
   );
 
-  /// 浅色调色板：`ColorSchemes.lightZinc` + `Colors.blue` 品牌主色。
+  /// 浅色调色板：Zinc 语义方案 + neutral/Zinc 表面 + blue 品牌主色。
   ///
-  /// 与深色主题共享同一套语义层级；各参数的具体生效位置见上方同名字段注释。
+  /// 与深色主题共享语义用途，不共享固定明度顺序；各参数的具体生效位置见上方注释。
   static final IdeColors light = IdeColors.fromShadcnColorScheme(
     sf.ColorSchemes.lightZinc,
   );

@@ -9,38 +9,40 @@ import 'ide_component_test_harness.dart';
 void main() {
   testWidgets('IdeBusySpinner 默认使用 shadcn 不定进度与主题强调色', (tester) async {
     final semantics = tester.ensureSemantics();
-    addTearDown(semantics.dispose);
-
-    await pumpIdeComponent(
-      tester,
-      child: const Center(
-        child: IdeBusySpinner(
-          key: ValueKey('busy-spinner'),
-          semanticsLabel: 'Task running',
+    try {
+      await pumpIdeComponent(
+        tester,
+        child: const Center(
+          child: IdeBusySpinner(
+            key: ValueKey('busy-spinner'),
+            semanticsLabel: 'Task running',
+          ),
         ),
-      ),
-    );
+      );
 
-    final spinnerFinder = find.byKey(const ValueKey('busy-spinner'));
-    final indicatorFinder = find.descendant(
-      of: spinnerFinder,
-      matching: find.byType(sf.CircularProgressIndicator),
-    );
-    final indicator = tester.widget<sf.CircularProgressIndicator>(
-      indicatorFinder,
-    );
-    final colors = IdeColors.of(tester.element(spinnerFinder));
+      final spinnerFinder = find.byKey(const ValueKey('busy-spinner'));
+      final indicatorFinder = find.descendant(
+        of: spinnerFinder,
+        matching: find.byType(sf.CircularProgressIndicator),
+      );
+      final indicator = tester.widget<sf.CircularProgressIndicator>(
+        indicatorFinder,
+      );
+      final colors = IdeColors.of(tester.element(spinnerFinder));
 
-    expect(spinnerFinder, findsOneWidget);
-    expect(indicatorFinder, findsOneWidget);
-    expect(tester.getSize(spinnerFinder), const Size.square(14));
-    expect(indicator.size, 14);
-    expect(indicator.strokeWidth, 2);
-    expect(indicator.color, colors.accent);
-    expect(indicator.backgroundColor, Colors.transparent);
-    expect(indicator.value, isNull);
-    expect(find.bySemanticsLabel('Task running'), findsOneWidget);
-    expect(tester.takeException(), isNull);
+      expect(spinnerFinder, findsOneWidget);
+      expect(indicatorFinder, findsOneWidget);
+      expect(tester.getSize(spinnerFinder), const Size.square(14));
+      expect(indicator.size, 14);
+      expect(indicator.strokeWidth, 2);
+      expect(indicator.color, colors.accent);
+      expect(indicator.backgroundColor, Colors.transparent);
+      expect(indicator.value, isNull);
+      expect(find.bySemanticsLabel('Task running'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    } finally {
+      semantics.dispose();
+    }
   });
 
   testWidgets('IdeBusySpinner 映射自定义尺寸描边与颜色', (tester) async {

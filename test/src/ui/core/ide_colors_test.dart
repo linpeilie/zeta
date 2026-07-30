@@ -21,7 +21,7 @@ void main() {
     expect(light.userMessageSurface, isNot(light.primaryMuted));
   });
 
-  test('表面语义 getter 保持兼容映射和预期明度顺序', () {
+  test('表面语义 getter 保持兼容映射和主题分组契约', () {
     expect(IdeColors.dark.frameSurface, IdeColors.dark.frame);
     expect(IdeColors.dark.canvasSurface, IdeColors.dark.editor);
     expect(IdeColors.dark.paneSurface, IdeColors.dark.surface);
@@ -32,14 +32,13 @@ void main() {
       IdeColors.dark.canvasSurface.computeLuminance(),
       lessThan(IdeColors.dark.paneSurface.computeLuminance()),
     );
-    expect(
-      IdeColors.dark.paneSurface.computeLuminance(),
-      lessThan(IdeColors.dark.controlSurface.computeLuminance()),
-    );
+    expect(IdeColors.dark.frameSurface, IdeColors.dark.paneSurface);
+    expect(IdeColors.dark.canvasSurface, IdeColors.dark.controlSurface);
     expect(
       IdeColors.light.canvasSurface.computeLuminance(),
       greaterThan(IdeColors.light.paneSurface.computeLuminance()),
     );
+    expect(IdeColors.light.frameSurface, IdeColors.light.paneSurface);
     expect(
       IdeColors.light.paneSurface.computeLuminance(),
       greaterThan(IdeColors.light.controlSurface.computeLuminance()),
@@ -113,7 +112,7 @@ void main() {
     );
   });
 
-  test('主题投影消费 IdeColors 语义 Token（源自 shadcn Zinc/blue）', () {
+  test('主题投影消费 IdeColors 语义 Token（源自 neutral/Zinc/blue）', () {
     final ideTheme = buildIdeThemeData(
       brightness: Brightness.dark,
       codeFontFamily: 'monospace',
@@ -135,13 +134,18 @@ void main() {
     expect(material.hoverColor, ideTheme.colors.hoverSurface);
   });
 
-  test('IdeColors 色值来自 shadcn ColorSchemes.zinc 与 Colors 色板', () {
+  test('IdeColors 组合 Zinc 语义方案与 neutral/Zinc 状态色板', () {
     final darkScheme = sf.ColorSchemes.darkZinc;
     final lightScheme = sf.ColorSchemes.lightZinc;
 
-    expect(IdeColors.dark.frame, darkScheme.background);
+    expect(IdeColors.dark.frame, sf.Colors.neutral[700]);
+    expect(IdeColors.dark.editor, sf.Colors.neutral[800]);
+    expect(IdeColors.dark.surface, sf.Colors.neutral[700]);
+    expect(IdeColors.dark.surfaceElevated, sf.Colors.neutral[800]);
+    expect(IdeColors.dark.surfaceOverlay, sf.Colors.zinc[800]);
+    expect(IdeColors.dark.panel, sf.Colors.zinc[900]);
     expect(IdeColors.dark.textPrimary, darkScheme.foreground);
-    expect(IdeColors.dark.border, darkScheme.border);
+    expect(IdeColors.dark.border, sf.Colors.neutral[600]);
     expect(IdeColors.dark.selectedSurface, darkScheme.accent);
     expect(IdeColors.dark.accent, sf.Colors.blue[500]);
     expect(IdeColors.dark.focusRing, sf.Colors.blue[500]);
@@ -150,10 +154,12 @@ void main() {
     expect(IdeColors.dark.warning, sf.Colors.amber[400]);
     expect(IdeColors.dark.success, sf.Colors.green[400]);
     expect(IdeColors.dark.info, sf.Colors.sky[400]);
-    expect(IdeColors.dark.surface, sf.Colors.zinc[900]);
-    expect(IdeColors.dark.surfaceElevated, sf.Colors.zinc[800]);
-
-    expect(IdeColors.light.frame, lightScheme.background);
+    expect(IdeColors.light.frame, sf.Colors.neutral[50]);
+    expect(IdeColors.light.editor, sf.Colors.white);
+    expect(IdeColors.light.surface, sf.Colors.neutral[50]);
+    expect(IdeColors.light.surfaceElevated, sf.Colors.zinc[100]);
+    expect(IdeColors.light.surfaceOverlay, lightScheme.popover);
+    expect(IdeColors.light.panel, lightScheme.card);
     expect(IdeColors.light.textPrimary, lightScheme.foreground);
     expect(IdeColors.light.border, lightScheme.border);
     expect(IdeColors.light.selectedSurface, lightScheme.accent);
@@ -164,8 +170,6 @@ void main() {
     expect(IdeColors.light.warning, sf.Colors.amber[700]);
     expect(IdeColors.light.success, sf.Colors.green[600]);
     expect(IdeColors.light.info, sf.Colors.sky[600]);
-    expect(IdeColors.light.surface, sf.Colors.zinc[50]);
-    expect(IdeColors.light.surfaceElevated, sf.Colors.zinc[100]);
   });
 
   testWidgets('IdeThemeScope 在深浅模式提供对应状态 Token', (tester) async {

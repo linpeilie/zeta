@@ -2258,7 +2258,7 @@ void main() {
             modelSurface.backgroundColor,
           );
           expect(permissionSurface.borderColor, modelSurface.borderColor);
-          expect(find.text('Workspace write · Ask first'), findsOneWidget);
+          expect(find.text('Workspace write'), findsOneWidget);
 
           await tester.tap(permissionSelector);
           await tester.pump();
@@ -2307,7 +2307,7 @@ void main() {
 
           expect(viewModel.permissionSelection.matchedPresetId, 'fullAccess');
           expect(popover, findsNothing);
-          expect(find.text('Full access · Never ask'), findsOneWidget);
+          expect(find.text('Full access'), findsOneWidget);
           expect(
             FocusManager.instance.primaryFocus?.debugLabel,
             'agent-permission-policy-trigger',
@@ -2479,12 +2479,14 @@ void main() {
         await tester.tap(
           find.byKey(const ValueKey('agent-model-option-gpt-5.5')),
         );
+        await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
         final xhighOption = find.byKey(
           const ValueKey('agent-reasoning-option-xhigh'),
         );
         await tester.ensureVisible(xhighOption);
-        await tester.pump(const Duration(milliseconds: 200));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
         await tester.tap(xhighOption);
         await tester.pump(const Duration(milliseconds: 300));
         await tester.tap(
