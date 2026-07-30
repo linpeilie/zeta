@@ -267,7 +267,7 @@ class _IdeHomeState extends State<IdeHome> {
       ],
       showWindowControls: widget.showWindowControls,
       child: Padding(
-        padding: const EdgeInsets.all(IdeSpacing.space8),
+        padding: const EdgeInsets.all(IdeSpacing.space4),
         child: _buildWorkbench(),
       ),
     );

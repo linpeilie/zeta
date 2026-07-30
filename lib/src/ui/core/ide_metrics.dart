@@ -57,10 +57,11 @@ abstract final class IdeMetrics {
   /// 生效位置：项目列表操作按钮、文件树折叠按钮、侧栏图标按钮等。
   static const double iconButtonHitSize = 28;
 
-  /// 左侧 Activity Rail（主导航图标条）宽度。
+  /// Activity Rail（左右图标条）宽度。
   ///
-  /// 生效位置：`IdeWorkbenchScaffold` 的 rail 列宽，以及窄屏下为 rail
-  /// 预留的边距计算（`activityRailWidth + IdeSpacing.space8`）。
+  /// 生效位置：`IdeWorkbenchScaffold` 的 rail 列宽。两侧总占用为
+  /// `activityRailWidth + IdeSpacing.space4`（外侧贴边，内侧与内容间距
+  /// `space4`，左右镜像）。
   static const double activityRailWidth = 36;
 
   // ---------------------------------------------------------------------------

@@ -109,6 +109,7 @@ class IdeWorkbenchScaffold extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (leadingRail case final Widget rail) ...[
+              // 左栏：外侧贴边，内侧与内容间距 space4。
               SizedBox(
                 key: const ValueKey('workbench-leading-rail'),
                 width: IdeMetrics.activityRailWidth,
@@ -116,7 +117,7 @@ class IdeWorkbenchScaffold extends StatelessWidget {
               ),
               const SizedBox(
                 key: ValueKey('workbench-leading-rail-gap'),
-                width: IdeSpacing.space8,
+                width: IdeSpacing.space4,
               ),
             ],
             if (navigationInline) ...[
@@ -155,9 +156,10 @@ class IdeWorkbenchScaffold extends StatelessWidget {
               ),
             ],
             if (trailingRail case final Widget rail) ...[
+              // 右栏：内侧与内容间距 space4，外侧贴边；与左栏镜像。
               const SizedBox(
                 key: ValueKey('workbench-trailing-rail-gap'),
-                width: IdeSpacing.space8,
+                width: IdeSpacing.space4,
               ),
               SizedBox(
                 key: const ValueKey('workbench-trailing-rail'),
@@ -184,12 +186,13 @@ class IdeWorkbenchScaffold extends StatelessWidget {
         }
 
         final brightness = sf.Theme.of(context).brightness;
+        // inset 须与 rail 列宽 + 内侧 gap（space4）一致；外侧无额外 gap。
         final leadingInset = leadingRail == null
             ? 0.0
-            : IdeMetrics.activityRailWidth + IdeSpacing.space8;
+            : IdeMetrics.activityRailWidth + IdeSpacing.space4;
         final trailingInset = trailingRail == null
             ? 0.0
-            : IdeMetrics.activityRailWidth + IdeSpacing.space8;
+            : IdeSpacing.space4 + IdeMetrics.activityRailWidth;
         final availableOverlayWidth =
             (constraints.maxWidth - leadingInset - trailingInset)
                 .clamp(0.0, double.infinity)
@@ -271,12 +274,13 @@ IdeWorkbenchLayoutMode _resolveEffectiveLayoutMode({
   final requestedMode = resolveWorkbenchLayoutMode(width);
 
   bool fits({required bool includeInspector}) {
+    // 两侧总占用均为 栏宽 + 内侧 space4（外侧贴边）。
     final railExtent =
         (leadingRailAvailable
-            ? IdeMetrics.activityRailWidth + IdeSpacing.space8
+            ? IdeMetrics.activityRailWidth + IdeSpacing.space4
             : 0) +
         (trailingRailAvailable
-            ? IdeMetrics.activityRailWidth + IdeSpacing.space8
+            ? IdeSpacing.space4 + IdeMetrics.activityRailWidth
             : 0);
     final navigationExtent = navigationAvailable
         ? navigationWidth + IdeSpacing.space8

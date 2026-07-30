@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
+import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/ui/core/workbench/ide_workbench_scaffold.dart';
 
@@ -252,6 +253,12 @@ void main() {
 
     expect(find.byKey(const ValueKey('workbench-leading-rail')), findsOne);
     expect(find.byKey(const ValueKey('workbench-leading-rail-gap')), findsOne);
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('workbench-leading-rail-gap')))
+          .width,
+      IdeSpacing.space4,
+    );
     expect(find.byKey(const ValueKey('workbench-navigation-inline')), findsOne);
     expect(
       find.byKey(const ValueKey('workbench-navigation-separator')),
@@ -265,7 +272,21 @@ void main() {
     );
     expect(find.byKey(const ValueKey('workbench-inspector-inline')), findsOne);
     expect(find.byKey(const ValueKey('workbench-trailing-rail-gap')), findsOne);
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('workbench-trailing-rail-gap')))
+          .width,
+      IdeSpacing.space4,
+    );
     expect(find.byKey(const ValueKey('workbench-trailing-rail')), findsOne);
+    expect(
+      find.byKey(const ValueKey('workbench-leading-rail-outer-gap')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('workbench-trailing-rail-outer-gap')),
+      findsNothing,
+    );
   });
 
   testWidgets('窄屏 Overlay 限制可用宽度且只有一个活动侧', (tester) async {
@@ -294,11 +315,12 @@ void main() {
       find.byKey(const ValueKey('workbench-inspector-overlay')),
       findsNothing,
     );
+    // 360 - 2 * (activityRailWidth + space4) = 360 - 2 * 40 = 280
     expect(
       tester
           .getSize(find.byKey(const ValueKey('workbench-navigation-overlay')))
           .width,
-      272,
+      280,
     );
   });
 
