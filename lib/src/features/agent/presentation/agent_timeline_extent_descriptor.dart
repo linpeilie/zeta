@@ -32,6 +32,21 @@ abstract final class AgentTimelineExtentKinds {
   static const hidden = 'hidden';
 }
 
+/// 与 UI 折叠阈值对齐：历史长文默认折叠预览时的高度估算依据。
+const int kAgentMarkdownCollapseLengthThreshold = 420;
+
+/// 历史长文折叠行数阈值（与 AgentPane 折叠策略一致）。
+const int kAgentMarkdownCollapseLineThreshold = 12;
+
+/// 是否应对 markdown 使用折叠预览高度估算（历史路径）。
+bool agentMarkdownUsesTruncatedEstimate(String markdown) {
+  if (markdown.length >= kAgentMarkdownCollapseLengthThreshold) {
+    return true;
+  }
+  final lines = '\n'.allMatches(markdown).length + 1;
+  return lines >= kAgentMarkdownCollapseLineThreshold;
+}
+
 /// 布局环境输入（宽度 / 缩放 / locale），用于构造 [IdeLayoutEpoch]。
 final class AgentTimelineLayoutContext {
   /// 创建布局上下文。
@@ -195,15 +210,17 @@ final class AgentTimelineExtentDescriptorFactory {
       AgentLiveActivityViewportItem(:final turn) => Object.hash(
         'live-activity',
         turn.id,
-        turn.renderRevision,
+        turn.metaRevision,
         turn.status,
       ),
       AgentTurnFooterViewportItem(:final turn) => Object.hash(
         'footer',
         turn.id,
-        turn.renderRevision,
+        turn.metaRevision,
+        turn.status,
         turn.tokenUsage?.totalTokens,
         turn.duration?.inMilliseconds,
+        turn.modelConfig?.modelId,
       ),
       AgentBlockViewportItem(:final turn, :final block) => Object.hash(
         'block',
@@ -330,7 +347,7 @@ final class AgentTimelineExtentDescriptorFactory {
     return switch (item) {
       AgentLiveActivityViewportItem() => 36 * scale,
       AgentTurnFooterViewportItem() => 28 * scale,
-      AgentBlockViewportItem(:final block) => switch (block) {
+      AgentBlockViewportItem(:final block, :final isLive) => switch (block) {
         AgentTimelineCommandGroupRenderBlock(:final group) =>
           _estimateCommandGroup(group, expansion, scale),
         AgentTimelineFileEditGroupRenderBlock(:final group) =>
@@ -341,6 +358,7 @@ final class AgentTimelineExtentDescriptorFactory {
           width: width,
           lineHeight: lineHeight,
           scale: scale,
+          preferTruncatedEstimate: !isLive,
         ),
       },
     };
@@ -382,6 +400,7 @@ final class AgentTimelineExtentDescriptorFactory {
     required double width,
     required double lineHeight,
     required double scale,
+    required bool preferTruncatedEstimate,
   }) {
     if (entry is AgentMessageTimelineEntry) {
       return _estimateMessage(
@@ -390,6 +409,7 @@ final class AgentTimelineExtentDescriptorFactory {
         width: width,
         lineHeight: lineHeight,
         scale: scale,
+        preferTruncatedEstimate: preferTruncatedEstimate,
       );
     }
     if (entry is AgentToolTimelineEntry) {
@@ -407,10 +427,21 @@ final class AgentTimelineExtentDescriptorFactory {
     required double width,
     required double lineHeight,
     required double scale,
+    required bool preferTruncatedEstimate,
   }) {
     final text = message.text;
     if (text.trim().isEmpty) {
       return 32 * scale;
+    }
+
+    // 历史长文默认折叠：对齐 UI 预览 4 行 + 展开按钮（Grok truncated height）。
+    if (preferTruncatedEstimate &&
+        kind == AgentTimelineExtentKinds.agentMarkdown &&
+        agentMarkdownUsesTruncatedEstimate(text)) {
+      final padding = 24 * scale;
+      final previewLines = 4.0;
+      final toggle = 36 * scale;
+      return (padding + previewLines * lineHeight + toggle).clamp(64.0, 180.0);
     }
 
     final charsPerLine = math.max(24, (width / (7.5 * scale)).floor());

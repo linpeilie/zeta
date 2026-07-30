@@ -46,6 +46,9 @@ class AgentConversationTimelineStore {
       <String, AgentConversationTurnState>{};
   final Map<String, int> _messageIndexesByEntryId = <String, int>{};
 
+  /// 历史快照批量装载深度；>0 时推迟 live 绑定刷新（对齐 Grok deferred）。
+  int _historyBatchDepth = 0;
+
   /// reasoning itemId → 摘要/原文双缓冲，供流式 delta 聚合。
   final Map<String, _ReasoningStreamBuffers> _reasoningBuffersByItemId =
       <String, _ReasoningStreamBuffers>{};
@@ -320,12 +323,35 @@ class AgentConversationTimelineStore {
   }
 
   void syncLiveTurnBinding() {
+    // 历史批量装载期间不推进 live notifier，结束时一次绑定。
+    if (_historyBatchDepth > 0) {
+      return;
+    }
     final nextLiveTurn = _currentLiveTurnState();
     if (identical(_liveTurnNotifier.value, nextLiveTurn)) {
       return;
     }
     _liveTurnNotifier.value = nextLiveTurn;
   }
+
+  /// 开始历史快照批量写入（可嵌套）。
+  void beginHistoryBatch() {
+    _historyBatchDepth += 1;
+  }
+
+  /// 结束历史批量写入，并补齐一次 live 绑定。
+  void endHistoryBatch() {
+    if (_historyBatchDepth <= 0) {
+      return;
+    }
+    _historyBatchDepth -= 1;
+    if (_historyBatchDepth == 0) {
+      syncLiveTurnBinding();
+    }
+  }
+
+  /// 当前是否处于历史批量装载。
+  bool get isHistoryBatching => _historyBatchDepth > 0;
 
   void clearConversation() {
     for (final turn in _turnGroups.values.toList()) {
@@ -370,76 +396,85 @@ class AgentConversationTimelineStore {
     AgentThreadHistorySnapshot history,
     AgentThreadSummary thread,
   ) {
-    clearConversation();
-    if (history.turns.isEmpty) {
-      addConversationMessage(
-        AgentConversationMessage(
-          id: 'selected-${DateTime.now().microsecondsSinceEpoch}',
-          role: AgentMessageRole.system,
-          text: 'Selected thread: ${thread.displayName}',
-        ),
-      );
-      return;
-    }
+    // 批量装载：中间过程不刷新 live notifier（Grok push_chunk_deferred 语义）。
+    beginHistoryBatch();
+    try {
+      clearConversation();
+      if (history.turns.isEmpty) {
+        addConversationMessage(
+          AgentConversationMessage(
+            id: 'selected-${DateTime.now().microsecondsSinceEpoch}',
+            role: AgentMessageRole.system,
+            text: 'Selected thread: ${thread.displayName}',
+          ),
+        );
+        return;
+      }
 
-    // Codex 历史：tokenUsage.total 是会话累计，注册时转成 turn 增量。
-    // Grok 历史：tokenUsage 已是本回合绝对用量，直接挂到 turn，并累加会话总量。
-    AgentTokenUsage? previousCumulative;
-    String? runningTurnId;
-    for (final turn in history.turns) {
-      final isRunningTurn = turn.status == AgentHistoryTurnStatus.running;
-      final usage = turn.tokenUsage;
-      final AgentTokenUsage? turnDelta;
-      if (usage != null && usage.hasCumulativeBreakdown) {
-        if (turn.tokenUsageIsSessionCumulative) {
-          turnDelta = usage.deltaFrom(previousCumulative);
-          previousCumulative = usage;
-          _threadTokenUsage = usage;
+      // Codex 历史：tokenUsage.total 是会话累计，注册时转成 turn 增量。
+      // Grok 历史：tokenUsage 已是本回合绝对用量，直接挂到 turn，并累加会话总量。
+      AgentTokenUsage? previousCumulative;
+      String? runningTurnId;
+      for (final turn in history.turns) {
+        final isRunningTurn = turn.status == AgentHistoryTurnStatus.running;
+        final usage = turn.tokenUsage;
+        final AgentTokenUsage? turnDelta;
+        if (usage != null && usage.hasCumulativeBreakdown) {
+          if (turn.tokenUsageIsSessionCumulative) {
+            turnDelta = usage.deltaFrom(previousCumulative);
+            previousCumulative = usage;
+            _threadTokenUsage = usage;
+          } else {
+            turnDelta = usage;
+            previousCumulative = previousCumulative == null
+                ? usage
+                : previousCumulative.addCumulative(usage);
+            _threadTokenUsage = previousCumulative;
+          }
         } else {
           turnDelta = usage;
-          previousCumulative = previousCumulative == null
-              ? usage
-              : previousCumulative.addCumulative(usage);
-          _threadTokenUsage = previousCumulative;
         }
-      } else {
-        turnDelta = usage;
-      }
-      _registerHistoryTurn(turn, asLive: isRunningTurn, tokenUsage: turnDelta);
-      currentTurnGroupId = turn.id;
-      if (isRunningTurn) {
-        runningTurnId = turn.id;
-      }
-      for (final entry in turn.entries) {
-        switch (entry) {
-          case AgentHistoryMessageEntry():
-            addConversationMessage(
-              AgentConversationMessage(
-                id: entry.id,
-                sourceMessageId: entry.sourceMessageId,
-                role: entry.role,
-                text: entry.text,
-                kind: entry.kind,
-                phase: entry.phase,
-                status: entry.status,
-                duration: entry.duration,
-                localImagePaths: entry.localImagePaths,
-                raw: entry.raw,
-              ),
-            );
-            _messageIndexesByEntryId[entry.id] = _messages.indexWhere(
-              (message) => message.id == entry.id,
-            );
-          case AgentHistoryToolEntry():
-            upsertToolCall(entry.toolCall);
-          case AgentHistoryEventEntry():
-            appendTimelineEntry(AgentHistoryEventTimelineEntry(event: entry));
+        _registerHistoryTurn(
+          turn,
+          asLive: isRunningTurn,
+          tokenUsage: turnDelta,
+        );
+        currentTurnGroupId = turn.id;
+        if (isRunningTurn) {
+          runningTurnId = turn.id;
         }
+        for (final entry in turn.entries) {
+          switch (entry) {
+            case AgentHistoryMessageEntry():
+              addConversationMessage(
+                AgentConversationMessage(
+                  id: entry.id,
+                  sourceMessageId: entry.sourceMessageId,
+                  role: entry.role,
+                  text: entry.text,
+                  kind: entry.kind,
+                  phase: entry.phase,
+                  status: entry.status,
+                  duration: entry.duration,
+                  localImagePaths: entry.localImagePaths,
+                  raw: entry.raw,
+                ),
+              );
+              _messageIndexesByEntryId[entry.id] = _messages.indexWhere(
+                (message) => message.id == entry.id,
+              );
+            case AgentHistoryToolEntry():
+              upsertToolCall(entry.toolCall);
+            case AgentHistoryEventEntry():
+              appendTimelineEntry(AgentHistoryEventTimelineEntry(event: entry));
+          }
+        }
+        _appendHistoryTurnFailure(turn);
       }
-      _appendHistoryTurnFailure(turn);
+      currentTurnGroupId = runningTurnId;
+    } finally {
+      endHistoryBatch();
     }
-    currentTurnGroupId = runningTurnId;
-    syncLiveTurnBinding();
   }
 
   /// 历史快照只保存 turn 级错误时，将其恢复为该回合内的一条系统消息。
@@ -1735,6 +1770,8 @@ class AgentConversationTurnGroup {
     this.tokenUsage,
     this.modelConfig,
     this.renderRevision = 0,
+    this.contentRevision = 0,
+    this.metaRevision = 0,
   });
 
   final String id;
@@ -1749,11 +1786,20 @@ class AgentConversationTurnGroup {
   /// 本回合使用的模型 / 思考程度 / Fast 配置（若有）。
   final AgentTurnModelConfig? modelConfig;
 
-  /// 可见内容修订号；与 [AgentConversationTurnState.renderRevision] 对齐。
+  /// 与 [contentRevision] 同义的兼容字段（projection 旧调用点）。
   ///
-  /// presentation 层 projection 缓存用 `(id, renderRevision)` 做命中判断。
-  /// 默认 `0` 便于测试构造；生产 [AgentConversationTurnState.snapshot] 必须传真值。
+  /// 新代码请优先使用 [contentRevision] / [metaRevision]。
   final int renderRevision;
+
+  /// 正文/条目/计划变更修订号；projection 缓存命中键。
+  ///
+  /// token / duration 等元数据变化不推进此值。
+  final int contentRevision;
+
+  /// 元数据修订号（token、duration、status、modelConfig）。
+  ///
+  /// footer / activity 等可单独依赖此值，避免整 turn projection 失效。
+  final int metaRevision;
 }
 
 /// 单个 turn 的运行时状态。
@@ -1774,8 +1820,11 @@ class AgentConversationTurnState extends ChangeNotifier {
   AgentTurnModelConfig? _modelConfig;
   bool _dirty = false;
 
-  /// 可见内容单调修订号；每次会改变渲染结果的 mutation 递增。
-  int _renderRevision = 0;
+  /// 正文/条目修订号；projection 缓存键。
+  int _contentRevision = 0;
+
+  /// 元数据修订号；token/status 等。
+  int _metaRevision = 0;
 
   List<AgentTimelineEntry> get entries => UnmodifiableListView(_entries);
 
@@ -1793,8 +1842,14 @@ class AgentConversationTurnState extends ChangeNotifier {
 
   AgentTurnModelConfig? get modelConfig => _modelConfig;
 
-  /// presentation 投影缓存的失效依据之一。
-  int get renderRevision => _renderRevision;
+  /// 兼容别名：等于 [contentRevision]（projection 语义）。
+  int get renderRevision => _contentRevision;
+
+  /// 正文/条目/计划变更修订号。
+  int get contentRevision => _contentRevision;
+
+  /// token / duration / status / model 元数据修订号。
+  int get metaRevision => _metaRevision;
 
   bool get isRunning => _status == AgentHistoryTurnStatus.running;
 
@@ -1805,7 +1860,7 @@ class AgentConversationTurnState extends ChangeNotifier {
     } else {
       _entries.add(entry);
     }
-    _markDirty();
+    _markContentDirty();
   }
 
   void replaceEntry(AgentTimelineEntry entry) {
@@ -1814,14 +1869,14 @@ class AgentConversationTurnState extends ChangeNotifier {
       return;
     }
     _entries[index] = entry;
-    _markDirty();
+    _markContentDirty();
   }
 
   void removeEntry(String entryId) {
     final removedCount = _entries.length;
     _entries.removeWhere((entry) => entry.id == entryId);
     if (_entries.length != removedCount) {
-      _markDirty();
+      _markContentDirty();
     }
   }
 
@@ -1862,7 +1917,7 @@ class AgentConversationTurnState extends ChangeNotifier {
     _planEntries
       ..clear()
       ..addAll(nextEntries);
-    _markDirty();
+    _markContentDirty();
   }
 
   void clearPlanEntries() {
@@ -1870,7 +1925,7 @@ class AgentConversationTurnState extends ChangeNotifier {
       return;
     }
     _planEntries.clear();
-    _markDirty();
+    _markContentDirty();
   }
 
   void rename(String nextId) {
@@ -1878,7 +1933,7 @@ class AgentConversationTurnState extends ChangeNotifier {
       return;
     }
     id = nextId;
-    _markDirty();
+    _markContentDirty();
   }
 
   void updateMetadata({
@@ -1895,11 +1950,12 @@ class AgentConversationTurnState extends ChangeNotifier {
     _duration = duration;
     _tokenUsage = tokenUsage;
     _modelConfig = modelConfig;
-    _markDirty();
+    // token / status / duration 不推进 contentRevision，避免 projection 失效。
+    _markMetaDirty();
   }
 
   void markDirty() {
-    _markDirty();
+    _markContentDirty();
   }
 
   void flushNow() {
@@ -1921,13 +1977,21 @@ class AgentConversationTurnState extends ChangeNotifier {
       duration: _duration,
       tokenUsage: _tokenUsage,
       modelConfig: _modelConfig,
-      renderRevision: _renderRevision,
+      renderRevision: _contentRevision,
+      contentRevision: _contentRevision,
+      metaRevision: _metaRevision,
     );
   }
 
-  /// 标记内容变更：推进 renderRevision 并请求后续 flush 通知。
-  void _markDirty() {
-    _renderRevision += 1;
+  /// 正文/条目变更：推进 contentRevision。
+  void _markContentDirty() {
+    _contentRevision += 1;
+    _dirty = true;
+  }
+
+  /// 元数据变更：推进 metaRevision，不失效 projection 缓存。
+  void _markMetaDirty() {
+    _metaRevision += 1;
     _dirty = true;
   }
 }

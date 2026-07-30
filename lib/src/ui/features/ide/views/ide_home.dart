@@ -489,6 +489,7 @@ class _IdeHomeState extends State<IdeHome> {
                   key: ValueKey<String>('agent-pane-entry-${entry.entryId}'),
                   child: AgentPane(
                     viewModel: entry.viewModel,
+                    isActive: entry.entryId == selectedId,
                     messageSendShortcut: generalSettings.sendMessageShortcut,
                   ),
                 ),

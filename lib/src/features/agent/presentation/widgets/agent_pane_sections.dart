@@ -299,6 +299,7 @@ class _AgentThreadHistoryLoading extends StatelessWidget {
 class _AgentConversationTimeline extends StatelessWidget {
   const _AgentConversationTimeline({
     required this.viewModel,
+    required this.isActive,
     required this.scrollController,
     required this.pagePadding,
     required this.projectionCache,
@@ -312,6 +313,9 @@ class _AgentConversationTimeline extends StatelessWidget {
   });
 
   final AgentConversationViewModel viewModel;
+
+  /// 前台才订阅 live 流式 listenable。
+  final bool isActive;
   final ScrollController scrollController;
   final EdgeInsets pagePadding;
   final AgentTimelineProjectionCache projectionCache;
@@ -325,14 +329,22 @@ class _AgentConversationTimeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 非前台：不挂 live 高频信号，后台 thread 流式输出不重建此 canvas。
+    final timelineListenable = isActive
+        ? Listenable.merge(<Listenable>[
+            viewModel.historyVersionListenable,
+            viewModel.liveTurnListenable,
+            viewModel.expansionVersionListenable,
+            ?viewModel.liveTurnState,
+          ])
+        : Listenable.merge(<Listenable>[
+            viewModel.historyVersionListenable,
+            viewModel.expansionVersionListenable,
+          ]);
+
     return _AgentContentAlign(
       child: ListenableBuilder(
-        listenable: Listenable.merge(<Listenable>[
-          viewModel.historyVersionListenable,
-          viewModel.liveTurnListenable,
-          viewModel.expansionVersionListenable,
-          ?viewModel.liveTurnState,
-        ]),
+        listenable: timelineListenable,
         builder: (context, _) {
           final standby = viewModel.standbyTurnState;
           final standbySnapshot = standby != null && standby.entries.isNotEmpty
@@ -526,8 +538,8 @@ class _AgentTimelineBlockSection extends StatelessWidget {
     return switch (entry) {
       AgentMessageTimelineEntry(:final message) => _AgentMessageEntry(
         message: message,
-        // 历史与 live 的普通 Markdown 正文均不折叠；plan / 完成汇总等特殊卡自有样式。
-        collapseHeavyContent: false,
+        // 历史长文默认折叠预览，降低离屏 markdown 解析成本；live 流式全文展开。
+        collapseHeavyContent: !isLiveTurn,
         useStreamingMarkdown: isLiveTurn,
         viewModel: viewModel,
       ),

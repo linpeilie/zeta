@@ -7,12 +7,18 @@ import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dar
 final class AgentTurnProjection {
   const AgentTurnProjection({
     required this.turnId,
-    required this.renderRevision,
+    required this.contentRevision,
     required this.blocks,
   });
 
   final String turnId;
-  final int renderRevision;
+
+  /// 与 [AgentConversationTurnGroup.contentRevision] 对齐。
+  final int contentRevision;
+
+  /// 兼容旧字段名：等于 [contentRevision]。
+  int get renderRevision => contentRevision;
+
   final List<AgentTimelineRenderBlock> blocks;
 }
 
@@ -24,7 +30,8 @@ typedef AgentTimelineRenderBlocksBuilder =
 
 /// presentation 层 turn projection 缓存。
 ///
-/// 命中条件：`turn.id` 相同且 `turn.renderRevision` 相同。
+/// 命中条件：`turn.id` 相同且 `turn.contentRevision` 相同。
+/// token / meta 变化不推进 contentRevision，故不重算 blocks。
 /// 每个 turn 独立失效；live turn 更新不会重算历史 turn。
 final class AgentTimelineProjectionCache {
   AgentTimelineProjectionCache({AgentTimelineRenderBlocksBuilder? buildBlocks})
@@ -41,15 +48,18 @@ final class AgentTimelineProjectionCache {
 
   /// 解析 turn 的渲染块列表；命中缓存时返回同一列表实例。
   List<AgentTimelineRenderBlock> resolve(AgentConversationTurnGroup turn) {
+    final contentRevision = turn.contentRevision != 0
+        ? turn.contentRevision
+        : turn.renderRevision;
     final cached = _turns[turn.id];
-    if (cached != null && cached.renderRevision == turn.renderRevision) {
+    if (cached != null && cached.contentRevision == contentRevision) {
       return cached.blocks;
     }
     computeCount += 1;
     final blocks = _buildBlocks(turnId: turn.id, entries: turn.entries);
     final projection = AgentTurnProjection(
       turnId: turn.id,
-      renderRevision: turn.renderRevision,
+      contentRevision: contentRevision,
       blocks: blocks,
     );
     _turns[turn.id] = projection;

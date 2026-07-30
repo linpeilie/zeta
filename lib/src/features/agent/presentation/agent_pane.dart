@@ -58,8 +58,10 @@ part 'widgets/agent_mode_selector.dart';
 part 'widgets/agent_pane_sections.dart';
 part 'widgets/agent_pane_styles.dart';
 
-const int _markdownCollapseLineThreshold = 12;
-const int _markdownCollapseLengthThreshold = 420;
+// 折叠阈值与 extent 估算共用 kAgentMarkdownCollapse* 常量。
+const int _markdownCollapseLineThreshold = kAgentMarkdownCollapseLineThreshold;
+const int _markdownCollapseLengthThreshold =
+    kAgentMarkdownCollapseLengthThreshold;
 const int _diffPreviewLineCount = 24;
 
 /// Agent 主列宽度档位：只影响 page padding 等布局语义，不随每像素宽度重建。
@@ -79,6 +81,7 @@ class AgentPane extends StatefulWidget {
   const AgentPane({
     required this.viewModel,
     this.messageSendShortcut = MessageSendShortcut.enter,
+    this.isActive = true,
     super.key,
   });
 
@@ -86,6 +89,12 @@ class AgentPane extends StatefulWidget {
 
   /// 当前消息输入框使用的发送快捷键。
   final MessageSendShortcut messageSendShortcut;
+
+  /// 是否为前台 canvas。
+  ///
+  /// 非前台时时间线不订阅 live 高频 listenable，仅保留 history/expansion
+  /// 与 threadSnapshot 侧栏路径（对齐 Grok inactive tab 不 redraw）。
+  final bool isActive;
 
   @override
   State<AgentPane> createState() => _AgentPaneState();
@@ -297,6 +306,7 @@ class _AgentPaneState extends State<AgentPane> {
                       )
                     : _AgentConversationTimeline(
                         viewModel: widget.viewModel,
+                        isActive: widget.isActive,
                         scrollController: _scrollController,
                         pagePadding: pagePadding,
                         projectionCache: _projectionCache,

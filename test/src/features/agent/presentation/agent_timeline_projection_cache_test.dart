@@ -75,11 +75,12 @@ void main() {
     });
   });
 
-  group('AgentConversationTurnState renderRevision', () {
-    test('内容 mutation 单调递增并进入 snapshot', () {
+  group('AgentConversationTurnState content/meta revision', () {
+    test('内容 mutation 推进 contentRevision；metadata 只推进 metaRevision', () {
       final state = AgentConversationTurnState(id: 't1', isStandby: false);
-      expect(state.renderRevision, 0);
-      expect(state.snapshot().renderRevision, 0);
+      expect(state.contentRevision, 0);
+      expect(state.metaRevision, 0);
+      expect(state.snapshot().contentRevision, 0);
 
       state.appendEntry(
         AgentMessageTimelineEntry(
@@ -90,8 +91,9 @@ void main() {
           ),
         ),
       );
-      expect(state.renderRevision, 1);
-      expect(state.snapshot().renderRevision, 1);
+      expect(state.contentRevision, 1);
+      expect(state.metaRevision, 0);
+      expect(state.snapshot().contentRevision, 1);
 
       state.replaceEntry(
         AgentMessageTimelineEntry(
@@ -102,11 +104,37 @@ void main() {
           ),
         ),
       );
-      expect(state.renderRevision, 2);
+      expect(state.contentRevision, 2);
 
       state.updateMetadata(status: AgentHistoryTurnStatus.completed);
-      expect(state.renderRevision, 3);
-      expect(state.snapshot().renderRevision, 3);
+      expect(state.contentRevision, 2, reason: 'meta 不推进 content');
+      expect(state.metaRevision, 1);
+      expect(state.snapshot().metaRevision, 1);
+      expect(state.renderRevision, 2, reason: 'renderRevision 别名 content');
+    });
+
+    test('token 元数据更新不使 projection 缓存失效', () {
+      final cache = AgentTimelineProjectionCache();
+      final state = AgentConversationTurnState(id: 't1', isStandby: false);
+      state.appendEntry(
+        AgentMessageTimelineEntry(
+          message: const AgentConversationMessage(
+            id: 'm1',
+            role: AgentMessageRole.agent,
+            text: 'hello',
+          ),
+        ),
+      );
+      final first = cache.resolve(state.snapshot());
+      expect(cache.computeCount, 1);
+
+      state.updateMetadata(
+        status: state.status,
+        tokenUsage: const AgentTokenUsage(totalTokens: 42),
+      );
+      final second = cache.resolve(state.snapshot());
+      expect(cache.computeCount, 1, reason: 'contentRevision 未变');
+      expect(identical(first, second), isTrue);
     });
 
     test('live 与 history turn 各自独立 revision', () {
@@ -152,6 +180,7 @@ AgentConversationTurnGroup _turn({
     id: id,
     isStandby: false,
     renderRevision: revision,
+    contentRevision: revision,
     entries: <AgentTimelineEntry>[
       AgentMessageTimelineEntry(
         message: AgentConversationMessage(
