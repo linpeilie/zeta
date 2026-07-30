@@ -510,7 +510,12 @@ class GrokAcpAgentProvider
     }
     final fromCli = await _modelsCli.listModels(config);
     if (!_disposed && fromCli.models.isNotEmpty) {
-      _setModelList(fromCli);
+      _setModelList(fromCli, source: 'grok models CLI');
+    } else {
+      _log.info(
+        'Grok listModels returned empty '
+        '(includeHidden=$includeHidden): ${fromCli.describeForLog()}',
+      );
     }
     return fromCli;
   }
@@ -523,9 +528,15 @@ class GrokAcpAgentProvider
     await initialize();
     final fromCli = await _modelsCli.listModels(config);
     if (!_disposed && fromCli.models.isNotEmpty) {
-      _setModelList(fromCli);
+      _setModelList(fromCli, source: 'grok models CLI refresh');
       return _modelList!;
     }
+    _log.info(
+      'Grok refreshModels kept previous list '
+      '(cliEmpty=${fromCli.models.isEmpty}, '
+      'cached=${_modelList?.models.length ?? 0}): '
+      '${(fromCli.models.isNotEmpty ? fromCli : (_modelList ?? fromCli)).describeForLog()}',
+    );
     return _modelList ?? fromCli;
   }
 
@@ -1515,10 +1526,15 @@ class GrokAcpAgentProvider
     _setModelList(
       list,
       currentModelId: modelsMap?['currentModelId']?.toString(),
+      source: 'session/initialize payload',
     );
   }
 
-  void _setModelList(AgentModelList incoming, {String? currentModelId}) {
+  void _setModelList(
+    AgentModelList incoming, {
+    String? currentModelId,
+    String source = 'unknown',
+  }) {
     if (_disposed) {
       return;
     }
@@ -1562,6 +1578,9 @@ class GrokAcpAgentProvider
     );
     _modelList = merged;
     _addEvent(AgentModelListEvent(merged));
+    _log.info(
+      'Applied Grok model list (source=$source): ${merged.describeForLog()}',
+    );
 
     // 同步当前模型选择
     final current = currentModelId?.trim();

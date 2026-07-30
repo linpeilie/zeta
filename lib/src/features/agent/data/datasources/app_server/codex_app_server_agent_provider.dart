@@ -578,7 +578,11 @@ class CodexAppServerAgentProvider
     );
     _modelLists[includeHidden] = list;
     _events.add(AgentModelListEvent(list));
-    _log.fine('Fetched ${list.models.length} models from Codex');
+    _log.info(
+      'Fetched Codex model list '
+      '(includeHidden=$includeHidden, limit=$limit): '
+      '${list.describeForLog()}',
+    );
     return list;
   }
 

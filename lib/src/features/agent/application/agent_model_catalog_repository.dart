@@ -252,6 +252,11 @@ class AgentModelCatalogRepository {
     );
     _snapshots[_cacheKey(config.id, includeHidden)] = snapshot;
     _stateRevision += 1;
+    _log.info(
+      'Stored model catalog for ${config.id} '
+      '(source=$source, includeHidden=$includeHidden): '
+      '${normalized.describeForLog()}',
+    );
     return snapshot;
   }
 

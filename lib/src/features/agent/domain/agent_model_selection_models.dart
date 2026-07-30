@@ -106,6 +106,47 @@ class AgentModelInfo {
 
   /// 原始 provider payload。
   final Map<String, Object?> raw;
+
+  /// 诊断日志用摘要；不含 raw payload，避免刷屏与泄露内部字段。
+  String describeForLog() {
+    final parts = <String>[id];
+    if (model != id) {
+      parts.add('model=$model');
+    }
+    if (displayName != id && displayName != model) {
+      parts.add('name=$displayName');
+    }
+    if (isDefault) {
+      parts.add('default');
+    }
+    if (hidden) {
+      parts.add('hidden');
+    }
+    if (!enabled) {
+      parts.add('disabled');
+    }
+    if (supportedReasoningEfforts.isNotEmpty) {
+      parts.add(
+        'efforts=${supportedReasoningEfforts.map((e) => e.effort).join(',')}',
+      );
+    }
+    if (defaultReasoningEffort != null && defaultReasoningEffort!.isNotEmpty) {
+      parts.add('defaultEffort=$defaultReasoningEffort');
+    }
+    if (serviceTiers.isNotEmpty) {
+      parts.add('tiers=${serviceTiers.map((t) => t.id).join(',')}');
+    }
+    if (defaultServiceTier != null && defaultServiceTier!.isNotEmpty) {
+      parts.add('defaultTier=$defaultServiceTier');
+    }
+    if (contextWindowTokens != null) {
+      parts.add('ctx=$contextWindowTokens');
+    }
+    if (unavailableReason != null && unavailableReason!.isNotEmpty) {
+      parts.add('unavailable=$unavailableReason');
+    }
+    return parts.join(' ');
+  }
 }
 
 /// `model/list` 分页结果。
@@ -117,6 +158,18 @@ class AgentModelList {
 
   /// 下一页游标；为空表示没有更多。
   final String? nextCursor;
+
+  /// 诊断日志用摘要。
+  String describeForLog() {
+    if (models.isEmpty) {
+      return '0 models';
+    }
+    final body = models.map((model) => model.describeForLog()).join(' | ');
+    final cursor = nextCursor == null || nextCursor!.isEmpty
+        ? ''
+        : ' nextCursor=yes';
+    return '${models.length} models$cursor: $body';
+  }
 }
 
 /// 用户在输入框选择的模型组合。
