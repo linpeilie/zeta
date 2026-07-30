@@ -109,7 +109,8 @@ class IdeWorkbenchScaffold extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (leadingRail case final Widget rail) ...[
-              // 左栏：外侧贴边，内侧与内容间距 space4。
+              // 左栏：scaffold 内外侧贴边（外距由 IdeHome space4 提供），
+              // 内侧与内容间距 space4。
               SizedBox(
                 key: const ValueKey('workbench-leading-rail'),
                 width: IdeMetrics.activityRailWidth,
@@ -156,7 +157,7 @@ class IdeWorkbenchScaffold extends StatelessWidget {
               ),
             ],
             if (trailingRail case final Widget rail) ...[
-              // 右栏：内侧与内容间距 space4，外侧贴边；与左栏镜像。
+              // 右栏：内侧 space4，scaffold 内外侧贴边；与左栏镜像。
               const SizedBox(
                 key: ValueKey('workbench-trailing-rail-gap'),
                 width: IdeSpacing.space4,

@@ -3,8 +3,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
+import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/window_frame.dart';
 
 import 'ide_component_test_harness.dart';
@@ -104,6 +106,20 @@ void main() {
       tester.getTopLeft(logoFinder).dx,
       lessThan(tester.getTopLeft(menuFinder).dx),
     );
+
+    // 契约：左 space8、右 space4，图标 22×22。
+    final logoPadding = tester.widget<Padding>(
+      find.descendant(of: logoFinder, matching: find.byType(Padding)).first,
+    );
+    expect(
+      logoPadding.padding,
+      const EdgeInsets.only(left: IdeSpacing.space8, right: IdeSpacing.space4),
+    );
+    final logoSvg = tester.widget<SvgPicture>(
+      find.descendant(of: logoFinder, matching: find.byType(SvgPicture)),
+    );
+    expect(logoSvg.width, 22);
+    expect(logoSvg.height, 22);
     expect(tester.takeException(), isNull);
   }, skip: !Platform.isWindows);
 }

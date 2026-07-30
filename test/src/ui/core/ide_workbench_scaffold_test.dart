@@ -251,7 +251,14 @@ void main() {
       child: _buildWorkbench(),
     );
 
+    // Rail 布局契约：仅内侧 gap space4，无 outer-gap slot。
     expect(find.byKey(const ValueKey('workbench-leading-rail')), findsOne);
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('workbench-leading-rail')))
+          .width,
+      IdeMetrics.activityRailWidth,
+    );
     expect(find.byKey(const ValueKey('workbench-leading-rail-gap')), findsOne);
     expect(
       tester
@@ -280,12 +287,10 @@ void main() {
     );
     expect(find.byKey(const ValueKey('workbench-trailing-rail')), findsOne);
     expect(
-      find.byKey(const ValueKey('workbench-leading-rail-outer-gap')),
-      findsNothing,
-    );
-    expect(
-      find.byKey(const ValueKey('workbench-trailing-rail-outer-gap')),
-      findsNothing,
+      tester
+          .getSize(find.byKey(const ValueKey('workbench-trailing-rail')))
+          .width,
+      IdeMetrics.activityRailWidth,
     );
   });
 

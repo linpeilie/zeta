@@ -266,6 +266,7 @@ class _IdeHomeState extends State<IdeHome> {
         ),
       ],
       showWindowControls: widget.showWindowControls,
+      // 工作台外圈 space4：与 rail 内侧 gap（space4）对称，图标条视觉居中。
       child: Padding(
         padding: const EdgeInsets.all(IdeSpacing.space4),
         child: _buildWorkbench(),

@@ -202,8 +202,14 @@ class _TitleBar extends StatelessWidget {
   }
 }
 
+/// Windows 标题栏品牌 Logo。
+///
+/// 布局契约：左侧外边距 [IdeSpacing.space8]、右侧 [IdeSpacing.space4]，
+/// 图标 22×22，与下方 Workbench 左侧 rail 视觉对齐。
 class _WindowsTitleBarLogo extends StatelessWidget {
   const _WindowsTitleBarLogo();
+
+  static const double _logoSize = 22;
 
   @override
   Widget build(BuildContext context) {
@@ -213,13 +219,13 @@ class _WindowsTitleBarLogo extends StatelessWidget {
       label: 'Zeta Logo',
       child: Padding(
         padding: const EdgeInsets.only(
-          left: IdeSpacing.space6,
+          left: IdeSpacing.space8,
           right: IdeSpacing.space4,
         ),
         child: SvgPicture.asset(
           'assets/branding/zeta_logo.svg',
-          width: 20,
-          height: 20,
+          width: _logoSize,
+          height: _logoSize,
         ),
       ),
     );
