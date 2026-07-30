@@ -1720,32 +1720,40 @@ class _ReasoningEffortSliderState extends State<_ReasoningEffortSlider>
                               ),
                             ),
                           ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: _thumbInnerInset + _thumbWidth / 2,
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                for (
-                                  var index = 0;
-                                  index < widget.efforts.length;
-                                  index += 1
-                                )
-                                  DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      color: index == widget.efforts.length - 1
-                                          ? colors.intelligenceAccent
-                                          : colors.textTertiary.withValues(
-                                              alpha: 0.58,
-                                            ),
-                                      borderRadius: IdeRadius.pill,
+                          if (_dragProgress != null)
+                            Padding(
+                              key: const ValueKey(
+                                'agent-reasoning-option-markers',
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: _thumbInnerInset + _thumbWidth / 2,
+                              ),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  for (
+                                    var index = 0;
+                                    index < widget.efforts.length;
+                                    index += 1
+                                  )
+                                    DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        color:
+                                            index == widget.efforts.length - 1
+                                            ? colors.intelligenceAccent
+                                            : colors.textTertiary.withValues(
+                                                alpha: 0.58,
+                                              ),
+                                        borderRadius: IdeRadius.pill,
+                                      ),
+                                      child: const SizedBox.square(
+                                        dimension: 4,
+                                      ),
                                     ),
-                                    child: const SizedBox.square(dimension: 4),
-                                  ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
                           Row(
                             children: [
                               for (

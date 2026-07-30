@@ -1803,10 +1803,19 @@ void main() {
           final leftInset = initialThumbRect.left - trackRect.left;
           expect(topInset, closeTo(bottomInset, 0.01));
           expect(leftInset, closeTo(topInset, 0.01));
+          final optionMarkers = find.descendant(
+            of: miniConfig,
+            matching: find.byKey(
+              const ValueKey('agent-reasoning-option-markers'),
+            ),
+          );
+          expect(optionMarkers, findsNothing);
           final saveCountBeforeDrag = store.saveCount;
           final dragStart = Offset(trackRect.left + 14, trackRect.center.dy);
           final dragEnd = Offset(trackRect.right - 14, trackRect.center.dy);
           final gesture = await tester.startGesture(dragStart);
+          await tester.pump();
+          expect(optionMarkers, findsOneWidget);
           for (var step = 1; step <= 6; step += 1) {
             await gesture.moveTo(
               Offset.lerp(dragStart, dragEnd, step / 6)!,
@@ -1855,6 +1864,7 @@ void main() {
           await gesture.up();
           await tester.pump(const Duration(milliseconds: 500));
 
+          expect(optionMarkers, findsNothing);
           expect(viewModel.selectedReasoningEffort, 'xhigh');
           expect(store.saveCount, saveCountBeforeDrag + 1);
           final maximumThumbRect = tester.getRect(thumb);
