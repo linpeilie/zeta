@@ -8,6 +8,7 @@ environment:
 
 dependencies:
   file_selector: ^1.1.0
+  fl_chart: 1.2.0
   flutter:
     sdk: flutter
   flutter_highlight: ^0.7.0

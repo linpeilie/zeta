@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
@@ -10,6 +11,7 @@ import 'package:zeta/src/features/usage_statistics/application/usage_statistics_
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_formatters.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_status_card.dart';
@@ -1174,48 +1176,142 @@ class _UsageLineChart extends StatelessWidget {
       alpha: brightness == Brightness.dark ? 0.10 : 0.07,
     );
     final maximum = safeUsageChartMaximum(points);
-    final labels = points.isEmpty
-        ? const <String>[]
-        : <String>[
-            points.first.label,
-            if (points.length > 2) points[points.length ~/ 2].label,
-            if (points.length > 1) points.last.label,
-          ];
+    final hasValues = points.any((point) => point.value != null);
+    final spots = <FlSpot>[
+      for (var index = 0; index < points.length; index += 1)
+        if (points[index].value case final value?)
+          FlSpot(index.toDouble(), value)
+        else
+          FlSpot.nullSpot,
+    ];
+    final labelIndices = <int>{
+      if (points.isNotEmpty) 0,
+      if (points.length > 2) points.length ~/ 2,
+      if (points.length > 1) points.length - 1,
+    };
+    final maxX = points.length <= 1 ? 1.0 : (points.length - 1).toDouble();
+    final titleStyle = textStyles.caption.copyWith(color: colors.textTertiary);
+
     return Semantics(
       label: '${metric.label}趋势，共 ${points.length} 个时间点',
       child: RepaintBoundary(
         child: SizedBox(
           height: height,
-          child: Column(
-            children: [
-              Expanded(
-                child: CustomPaint(
-                  key: const ValueKey('usage-line-chart-canvas'),
-                  painter: _UsageLineChartPainter(
-                    points: points,
-                    maximum: maximum,
-                    lineColor: colors.accent,
-                    gridColor: colors.borderSubtle,
-                    fillColor: fillColor,
+          child: LineChart(
+            key: const ValueKey('usage-line-chart-canvas'),
+            LineChartData(
+              minX: 0,
+              maxX: maxX,
+              minY: 0,
+              maxY: maximum,
+              clipData: const FlClipData.all(),
+              gridData: FlGridData(
+                show: true,
+                drawVerticalLine: false,
+                horizontalInterval: maximum / 3,
+                getDrawingHorizontalLine: (_) =>
+                    FlLine(color: colors.borderSubtle, strokeWidth: 1),
+              ),
+              borderData: FlBorderData(show: false),
+              titlesData: FlTitlesData(
+                topTitles: const AxisTitles(),
+                rightTitles: const AxisTitles(),
+                leftTitles: const AxisTitles(),
+                bottomTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: points.isNotEmpty,
+                    reservedSize: 22,
+                    interval: 1,
+                    getTitlesWidget: (value, meta) {
+                      final index = value.round();
+                      if ((value - index).abs() > 0.001 ||
+                          !labelIndices.contains(index) ||
+                          index < 0 ||
+                          index >= points.length) {
+                        return const SizedBox.shrink();
+                      }
+                      return SideTitleWidget(
+                        meta: meta,
+                        space: 4,
+                        child: Text(points[index].label, style: titleStyle),
+                      );
+                    },
                   ),
-                  child: const SizedBox.expand(),
                 ),
               ),
-              const SizedBox(height: IdeSpacing.space4),
-              if (labels.isNotEmpty)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    for (final label in labels)
-                      Text(
-                        label,
-                        style: textStyles.caption.copyWith(
-                          color: colors.textTertiary,
+              lineTouchData: LineTouchData(
+                enabled: hasValues,
+                handleBuiltInTouches: true,
+                getTouchedSpotIndicator: (barData, spotIndexes) {
+                  return [
+                    for (final _ in spotIndexes)
+                      TouchedSpotIndicatorData(
+                        FlLine(
+                          color: colors.accent.withValues(alpha: 0.35),
+                          strokeWidth: 1,
+                        ),
+                        FlDotData(
+                          getDotPainter: (spot, percent, bar, index) {
+                            return FlDotCirclePainter(
+                              radius: 3.5,
+                              color: colors.accent,
+                              strokeWidth: 0,
+                            );
+                          },
                         ),
                       ),
-                  ],
+                  ];
+                },
+                touchTooltipData: LineTouchTooltipData(
+                  fitInsideHorizontally: true,
+                  fitInsideVertically: true,
+                  tooltipBorderRadius: IdeRadius.allSmall,
+                  tooltipPadding: const EdgeInsets.symmetric(
+                    horizontal: IdeSpacing.space8,
+                    vertical: IdeSpacing.space4,
+                  ),
+                  getTooltipColor: (_) => colors.surfaceOverlay,
+                  getTooltipItems: (touchedSpots) {
+                    return [
+                      for (final touched in touchedSpots)
+                        LineTooltipItem(
+                          _formatTrendTooltip(
+                            metric: metric,
+                            label: points[touched.x.toInt()].label,
+                            value: touched.y,
+                          ),
+                          textStyles.caption.copyWith(
+                            color: colors.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                    ];
+                  },
                 ),
-            ],
+              ),
+              lineBarsData: [
+                if (hasValues)
+                  LineChartBarData(
+                    spots: spots,
+                    color: colors.accent,
+                    barWidth: 2,
+                    isStrokeCapRound: true,
+                    isStrokeJoinRound: true,
+                    preventCurveOverShooting: true,
+                    dotData: FlDotData(
+                      getDotPainter: (spot, percent, barData, index) {
+                        return FlDotCirclePainter(
+                          radius: 2.5,
+                          color: colors.accent,
+                          strokeWidth: 0,
+                        );
+                      },
+                    ),
+                    belowBarData: BarAreaData(show: true, color: fillColor),
+                  ),
+              ],
+            ),
+            duration: Duration.zero,
           ),
         ),
       ),
@@ -1223,106 +1319,20 @@ class _UsageLineChart extends StatelessWidget {
   }
 }
 
-class _UsageLineChartPainter extends CustomPainter {
-  const _UsageLineChartPainter({
-    required this.points,
-    required this.maximum,
-    required this.lineColor,
-    required this.gridColor,
-    required this.fillColor,
-  });
-
-  final List<UsageTrendPoint> points;
-  final double maximum;
-  final Color lineColor;
-  final Color gridColor;
-  final Color fillColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final chart = Rect.fromLTWH(
-      4,
-      8,
-      math.max(0, size.width - 8),
-      size.height - 12,
-    );
-    final gridPaint = Paint()
-      ..color = gridColor
-      ..strokeWidth = 1;
-    for (var index = 0; index <= 3; index += 1) {
-      final y = chart.top + (chart.height * index / 3);
-      canvas.drawLine(Offset(chart.left, y), Offset(chart.right, y), gridPaint);
-    }
-    if (points.isEmpty) {
-      return;
-    }
-
-    final linePaint = Paint()
-      ..color = lineColor
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-    final fillPaint = Paint()
-      ..color = fillColor
-      ..style = PaintingStyle.fill;
-    final path = Path();
-    final fillPath = Path();
-    var segmentStarted = false;
-    Offset? firstPoint;
-    Offset? lastPoint;
-    for (var index = 0; index < points.length; index += 1) {
-      final value = points[index].value;
-      if (value == null) {
-        segmentStarted = false;
-        continue;
-      }
-      final x = points.length == 1
-          ? chart.center.dx
-          : chart.left + (chart.width * index / (points.length - 1));
-      final normalized = (value / maximum).clamp(0.0, 1.0);
-      final point = Offset(x, chart.bottom - (chart.height * normalized));
-      if (!segmentStarted) {
-        path.moveTo(point.dx, point.dy);
-        firstPoint ??= point;
-        segmentStarted = true;
-      } else {
-        path.lineTo(point.dx, point.dy);
-      }
-      lastPoint = point;
-    }
-    if (firstPoint != null && lastPoint != null) {
-      fillPath
-        ..moveTo(firstPoint.dx, chart.bottom)
-        ..lineTo(firstPoint.dx, firstPoint.dy)
-        ..addPath(path, Offset.zero)
-        ..lineTo(lastPoint.dx, chart.bottom)
-        ..close();
-      canvas.drawPath(fillPath, fillPaint);
-      canvas.drawPath(path, linePaint);
-    }
-    final pointPaint = Paint()..color = lineColor;
-    for (var index = 0; index < points.length; index += 1) {
-      final value = points[index].value;
-      if (value == null) {
-        continue;
-      }
-      final x = points.length == 1
-          ? chart.center.dx
-          : chart.left + (chart.width * index / (points.length - 1));
-      final y =
-          chart.bottom - (chart.height * (value / maximum).clamp(0.0, 1.0));
-      canvas.drawCircle(Offset(x, y), 2.5, pointPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_UsageLineChartPainter oldDelegate) {
-    return oldDelegate.points != points ||
-        oldDelegate.maximum != maximum ||
-        oldDelegate.lineColor != lineColor ||
-        oldDelegate.gridColor != gridColor ||
-        oldDelegate.fillColor != fillColor;
-  }
+/// 将趋势点格式化为悬浮提示文案。
+String _formatTrendTooltip({
+  required UsageTrendMetric metric,
+  required String label,
+  required double value,
+}) {
+  final formatted = switch (metric) {
+    UsageTrendMetric.calls ||
+    UsageTrendMetric.totalTokens => formatUsageCount(value),
+    UsageTrendMetric.successRate => formatUsagePercent(value),
+    UsageTrendMetric.averageResponse || UsageTrendMetric.averageDuration =>
+      formatUsageDuration(Duration(milliseconds: value.round()), compact: true),
+  };
+  return '$label · $formatted';
 }
 
 class _TaskDetailDrawer extends StatelessWidget {
