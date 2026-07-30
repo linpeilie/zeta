@@ -6,7 +6,7 @@ import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dar
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
 
 void main() {
-  const factory = AgentTimelineExtentDescriptorFactory();
+  final factory = AgentTimelineExtentDescriptorFactory();
   const layout = AgentTimelineLayoutContext(
     crossAxisExtent: 720,
     devicePixelRatio: 1,

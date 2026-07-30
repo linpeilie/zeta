@@ -15,6 +15,7 @@ import 'package:zeta/src/features/agent/application/agent_conversation_permissio
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_ui_signals.dart';
 import 'package:zeta/src/features/agent/application/agent_elapsed_ticker.dart';
+import 'package:zeta/src/features/agent/application/agent_event_frame_scheduler.dart';
 import 'package:zeta/src/features/agent/application/agent_event_stream_buffer.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_event_listener_gate.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -109,6 +110,7 @@ class AgentConversationViewModel extends ChangeNotifier {
   AgentProvider? _provider;
   StreamSubscription<AgentEvent>? _eventSubscription;
   AgentEventStreamBuffer? _eventBuffer;
+  AgentEventFrameScheduler? _eventFrameScheduler;
   final AgentProviderEventListenerGate _eventListenerGate =
       AgentProviderEventListenerGate();
 
@@ -2478,12 +2480,14 @@ class AgentConversationViewModel extends ChangeNotifier {
     }
     final previousSubscription = _eventSubscription;
     final previousBuffer = _eventBuffer;
+    final previousFrameScheduler = _eventFrameScheduler;
     final scope = _eventListenerGate.activate(
       providerId: provider.config.id,
       threadId: threadId,
       runtimeScope: _runtimeScopeOf(provider),
     );
-    final buffer = AgentEventStreamBuffer(
+    // EventBuffer 合并后 → FrameScheduler 有界 drain → _handleEvent。
+    final frameScheduler = AgentEventFrameScheduler(
       onEvent: (event) {
         if (_disposed || !identical(_provider, provider)) {
           return;
@@ -2497,6 +2501,9 @@ class AgentConversationViewModel extends ChangeNotifier {
         }
         _handleEvent(event);
       },
+    );
+    final buffer = AgentEventStreamBuffer(
+      onEvent: frameScheduler.add,
       onBackpressure: (pendingEventCount) {
         // 诊断仅记录键数量，不泄露对话或工具输出正文。
         _log.warning(
@@ -2522,11 +2529,15 @@ class AgentConversationViewModel extends ChangeNotifier {
       },
       onDone: () {
         buffer.dispose();
+        frameScheduler.dispose();
         if (!_eventListenerGate.release(scope)) {
           return;
         }
         if (identical(_eventBuffer, buffer)) {
           _eventBuffer = null;
+        }
+        if (identical(_eventFrameScheduler, frameScheduler)) {
+          _eventFrameScheduler = null;
         }
         if (identical(_eventSubscription, subscription)) {
           _eventSubscription = null;
@@ -2543,9 +2554,11 @@ class AgentConversationViewModel extends ChangeNotifier {
     );
     _eventSubscription = subscription;
     _eventBuffer = buffer;
+    _eventFrameScheduler = frameScheduler;
 
     // 旧代数未发布的 delta/progress 属于旧 thread 或旧连接，必须直接丢弃。
     previousBuffer?.dispose();
+    previousFrameScheduler?.dispose();
     if (previousSubscription != null &&
         !identical(previousSubscription, subscription)) {
       // 代次门已经屏蔽旧流；取消过程不得阻塞新 thread 的历史发布。
@@ -2557,6 +2570,8 @@ class AgentConversationViewModel extends ChangeNotifier {
     _eventListenerGate.invalidate();
     _eventBuffer?.dispose();
     _eventBuffer = null;
+    _eventFrameScheduler?.dispose();
+    _eventFrameScheduler = null;
   }
 
   bool _isCriticalDetachedEvent(AgentEvent event) {

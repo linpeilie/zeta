@@ -7,7 +7,7 @@ import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.d
 import 'package:zeta/src/ui/core/virtualization/ide_virtual_item.dart';
 
 void main() {
-  const factory = AgentTimelineExtentDescriptorFactory();
+  final factory = AgentTimelineExtentDescriptorFactory();
   const layout = AgentTimelineLayoutContext(
     crossAxisExtent: 720,
     devicePixelRatio: 1,

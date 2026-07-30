@@ -302,6 +302,7 @@ class _AgentConversationTimeline extends StatelessWidget {
     required this.scrollController,
     required this.pagePadding,
     required this.projectionCache,
+    required this.descriptorFactory,
     required this.virtualListController,
     required this.scrollCoordinator,
     required this.scrollChromeTick,
@@ -314,15 +315,13 @@ class _AgentConversationTimeline extends StatelessWidget {
   final ScrollController scrollController;
   final EdgeInsets pagePadding;
   final AgentTimelineProjectionCache projectionCache;
+  final AgentTimelineExtentDescriptorFactory descriptorFactory;
   final IdeVirtualListController virtualListController;
   final IdeVirtualScrollCoordinator scrollCoordinator;
   final ValueListenable<int> scrollChromeTick;
   final ValueChanged<String?> onLastItemIdChanged;
   final Future<void> Function() onScrollToEndPressed;
   final bool useAnchoredDynamicSliver;
-
-  static const AgentTimelineExtentDescriptorFactory _descriptorFactory =
-      AgentTimelineExtentDescriptorFactory();
 
   @override
   Widget build(BuildContext context) {
@@ -367,7 +366,7 @@ class _AgentConversationTimeline extends StatelessWidget {
 
           if (useAnchoredDynamicSliver) {
             virtualListController.setItems(
-              _descriptorFactory.describeAll(
+              descriptorFactory.describeAll(
                 items,
                 expansion: (
                   isCommandGroupExpanded: viewModel.isCommandGroupExpanded,

@@ -135,6 +135,10 @@ class _AgentPaneState extends State<AgentPane> {
   /// presentation 层 turn projection 缓存；不随窗口 constraints 失效。
   final AgentTimelineProjectionCache _projectionCache =
       AgentTimelineProjectionCache();
+
+  /// extent descriptor 复用缓存（流式仅重建尾部脏项）。
+  final AgentTimelineExtentDescriptorFactory _descriptorFactory =
+      AgentTimelineExtentDescriptorFactory();
   late Widget Function(BuildContext, _AgentPaneWidthClass)
   _responsiveBodyBuilder;
 
@@ -169,6 +173,7 @@ class _AgentPaneState extends State<AgentPane> {
     // view model 真正替换时才使档位 child 失效；普通 resize 父重建继续复用。
     _responsiveBodyBuilder = _createResponsiveBodyBuilder();
     _projectionCache.clear();
+    _descriptorFactory.clearCache();
     // 新会话清空高度缓存，回到 follow 末尾。
     _virtualListController.synchronizeNow(
       const <IdeVirtualItemDescriptor>[],
@@ -203,6 +208,7 @@ class _AgentPaneState extends State<AgentPane> {
     _canSendNotifier.dispose();
     _scrollChromeTick.dispose();
     _projectionCache.clear();
+    _descriptorFactory.clearCache();
     super.dispose();
   }
 
@@ -294,6 +300,7 @@ class _AgentPaneState extends State<AgentPane> {
                         scrollController: _scrollController,
                         pagePadding: pagePadding,
                         projectionCache: _projectionCache,
+                        descriptorFactory: _descriptorFactory,
                         virtualListController: _virtualListController,
                         scrollCoordinator: _scrollCoordinator,
                         scrollChromeTick: _scrollChromeTick,

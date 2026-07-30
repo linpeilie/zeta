@@ -76,20 +76,53 @@ final class AgentTimelineLayoutContext {
 }
 
 /// Agent timeline → [IdeVirtualItemDescriptor] 工厂。
+///
+/// 可复用实例：连续 [describeAll] 在 id 序列稳定时复用未变项的 descriptor
+/// 对象（对齐 Grok 尾部 dirty 时前缀 layout 不重建）。
 final class AgentTimelineExtentDescriptorFactory {
   /// 创建工厂。
-  const AgentTimelineExtentDescriptorFactory();
+  AgentTimelineExtentDescriptorFactory();
+
+  List<IdeVirtualItemDescriptor>? _lastDescriptors;
+
+  /// 诊断：describeAll 复用上一帧 descriptor 实例的次数。
+  int debugReusedDescriptorCount = 0;
+
+  /// 诊断：实际新建 descriptor 的次数。
+  int debugBuiltDescriptorCount = 0;
+
+  /// 清除复用缓存（会话切换时调用）。
+  void clearCache() {
+    _lastDescriptors = null;
+  }
 
   /// 将视口 item 列表转为 descriptor 序列。
+  ///
+  /// 当与上一帧相比仅尾部 revision 变化时，前缀项返回**同一实例**，
+  /// 便于 [IdeVirtualListController.setItems] 短路与减少分配。
   List<IdeVirtualItemDescriptor> describeAll(
     List<AgentTimelineViewportItem> items, {
     required AgentTimelineExpansionLookup expansion,
     required AgentTimelineLayoutContext layoutContext,
   }) {
-    return [
-      for (final item in items)
-        describe(item, expansion: expansion, layoutContext: layoutContext),
-    ];
+    final previous = _lastDescriptors;
+    final next = List<IdeVirtualItemDescriptor>.generate(items.length, (index) {
+      final built = describe(
+        items[index],
+        expansion: expansion,
+        layoutContext: layoutContext,
+      );
+      if (previous != null &&
+          index < previous.length &&
+          _descriptorFingerprintEquals(previous[index], built)) {
+        debugReusedDescriptorCount += 1;
+        return previous[index];
+      }
+      debugBuiltDescriptorCount += 1;
+      return built;
+    }, growable: false);
+    _lastDescriptors = next;
+    return next;
   }
 
   /// 描述单个 viewport item。
@@ -398,5 +431,15 @@ final class AgentTimelineExtentDescriptorFactory {
     // 冷启动基线：取 content 与 kind 默认的较大者，并做合理 clamp。
     final estimated = math.max(base * 0.5, content);
     return estimated.clamp(24.0, 4000.0);
+  }
+
+  static bool _descriptorFingerprintEquals(
+    IdeVirtualItemDescriptor a,
+    IdeVirtualItemDescriptor b,
+  ) {
+    return a.id == b.id &&
+        a.kind == b.kind &&
+        a.layoutRevision == b.layoutRevision &&
+        a.estimatedExtent == b.estimatedExtent;
   }
 }
