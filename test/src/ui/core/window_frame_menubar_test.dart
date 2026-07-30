@@ -44,19 +44,25 @@ void main() {
     expect(find.byKey(const ValueKey('window-menu-file')), findsOneWidget);
     expect(find.text('文件'), findsOneWidget);
 
-    // 标题栏最小高度走 IdeMetrics，Menubar 使用自然高度且不被 28px 裁切。
+    // Menubar 撑满标题栏的设计高度，顶层按钮与文字在该高度内垂直居中。
+    final menuButton = find.byKey(const ValueKey('window-menu-file'));
+    final menuLabel = find.text('文件');
     final menubarSize = tester.getSize(find.byType(sf.Menubar));
     final titleBarSize = tester.getSize(
       find.byKey(const ValueKey('window-title-bar')),
     );
-    expect(menubarSize.height, greaterThan(0));
+    expect(menubarSize.height, IdeMetrics.titleBarHeight);
+    expect(tester.getSize(menuButton).height, IdeMetrics.titleBarHeight);
+    expect(
+      tester.getCenter(menuLabel).dy,
+      closeTo(tester.getCenter(menuButton).dy, 0.01),
+    );
     expect(
       titleBarSize.height,
       greaterThanOrEqualTo(IdeMetrics.titleBarHeight),
     );
-    expect(titleBarSize.height, greaterThanOrEqualTo(menubarSize.height));
 
-    await tester.tap(find.byKey(const ValueKey('window-menu-file')));
+    await tester.tap(menuButton);
     // Menubar / popover 可能持有持续动画，避免 pumpAndSettle。
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
