@@ -8,7 +8,7 @@
 PRODUCT_NAME = Zeta
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.example.zeta
+PRODUCT_BUNDLE_IDENTIFIER = io.github.linpeilie.zeta
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.example. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 linpeilie. All rights reserved.
