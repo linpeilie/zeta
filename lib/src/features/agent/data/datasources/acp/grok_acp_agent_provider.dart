@@ -112,7 +112,6 @@ class GrokAcpAgentProvider
   final Map<String, _PendingAcpPermission> _pendingPermissions =
       <String, _PendingAcpPermission>{};
 
-  AgentSession? _session;
   final Map<String, String> _runningTurnIdsBySessionId = <String, String>{};
 
   /// sessionId → 工作目录，便于定位 `~/.grok/sessions/.../summary.json`。
@@ -343,7 +342,6 @@ class GrokAcpAgentProvider
       providerId: config.id,
       raw: map,
     );
-    _activateSession(session);
     _rememberProjectPath(sessionId, cwd);
     _addEvent(AgentSessionStartedEvent(session));
     _log.info('Started Grok ACP session $sessionId');
@@ -387,7 +385,6 @@ class GrokAcpAgentProvider
             providerId: config.id,
             raw: map,
           );
-          _activateSession(session);
           if (cwd != null && cwd.isNotEmpty) {
             _rememberProjectPath(sessionId, cwd);
           }
@@ -543,10 +540,6 @@ class GrokAcpAgentProvider
   @override
   void updateModelSelection(AgentModelSelection selection) {
     _modelSelection = selection;
-    final sessionId = _session?.id;
-    if (sessionId != null) {
-      unawaited(_applyModelSelectionIfNeeded(sessionId));
-    }
   }
 
   @override
@@ -665,9 +658,6 @@ class GrokAcpAgentProvider
       _titlePollTokensBySessionId[threadId] =
           (_titlePollTokensBySessionId[threadId] ?? 0) + 1;
       _runningTurnIdsBySessionId.remove(threadId);
-      if (_session?.id == threadId) {
-        _session = null;
-      }
       _addEvent(AgentThreadDeletedEvent(threadId: threadId));
       _log.info('Deleted Grok session $threadId');
     },
@@ -700,6 +690,9 @@ class GrokAcpAgentProvider
       throw UnsupportedError('${config.displayName} 不支持回合级对话模式配置');
     }
     await initialize();
+    // 模型是 session 级配置；共享 Provider 下必须按本次发送目标应用，不能依赖
+    // “最后激活会话”这种全局可变状态。
+    await _applyModelSelectionIfNeeded(session.id);
     final cwd = context.projectPath?.trim();
     if (cwd != null && cwd.isNotEmpty) {
       _rememberProjectPath(session.id, cwd);
@@ -1158,22 +1151,6 @@ class GrokAcpAgentProvider
         return;
       }
     }
-  }
-
-  void _activateSession(AgentSession session) {
-    final previousSessionId = _session?.id;
-    final currentRuntimeScope = _peer.runtimeScope;
-    if (previousSessionId != null &&
-        previousSessionId != session.id &&
-        currentRuntimeScope != null) {
-      _notificationMapper.invalidateSession(
-        runtimeScope: currentRuntimeScope,
-        sessionId: previousSessionId,
-        reason: GrokIdentityInvalidationReason.sessionSwitched,
-      );
-      _runningTurnIdsBySessionId.remove(previousSessionId);
-    }
-    _session = session;
   }
 
   void _rememberProjectPath(String sessionId, String projectPath) {

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
@@ -70,8 +71,9 @@ final class AgentThreadWorkspaceDraftKey extends AgentThreadWorkspaceKey {
 
 /// Agent Canvas 中单个常驻 Pane 的运行时条目。
 ///
-/// 一个 entry 对应一个独立的 provider controller 与 conversation view model；
-/// entryId 在草稿晋升为真实 thread 后保持不变，从而保住 Pane 本地状态。
+/// 一个 entry 对应独立的 provider controller 与 conversation view model，但
+/// Provider 进程通过应用级注册表共享；entryId 在草稿晋升为真实 thread 后保持
+/// 不变，从而保住 Pane 本地状态。
 class AgentThreadWorkspaceEntry extends ChangeNotifier {
   AgentThreadWorkspaceEntry({
     required this.entryId,
@@ -206,6 +208,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     required this._configStore,
     required this._workspaceFilesProvider,
     required this._modelCatalogRepository,
+    required this.runtimeRegistry,
     this._onTurnCompleted,
   });
 
@@ -213,6 +216,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
   final AgentProviderConfigStore _configStore;
   final List<WorkspaceNode> Function() _workspaceFilesProvider;
   final AgentModelCatalogRepository _modelCatalogRepository;
+  final AgentProviderRuntimeRegistry runtimeRegistry;
   final VoidCallback? _onTurnCompleted;
 
   final List<AgentThreadWorkspaceEntry> _entries =
@@ -402,6 +406,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
       providerFactory: _providerFactory,
       configStore: _configStore,
       modelCatalogRepository: _modelCatalogRepository,
+      runtimeRegistry: runtimeRegistry,
     );
     final viewModel = AgentConversationViewModel(
       providerController: providerController,

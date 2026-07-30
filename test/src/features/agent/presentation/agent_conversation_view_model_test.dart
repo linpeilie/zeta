@@ -3448,7 +3448,11 @@ void main() {
         expect(viewModel.models.map((model) => model.id), <String>['grok-4.5']);
         expect(viewModel.selectedModelId, 'grok-4.5');
         expect(grok.lastModelSelection?.modelId, 'grok-4.5');
-        expect(codex.disposed, isTrue);
+        expect(
+          codex.disposed,
+          isFalse,
+          reason: '切换 active Provider 只释放租约，应用级运行时继续保温',
+        );
       },
     );
 

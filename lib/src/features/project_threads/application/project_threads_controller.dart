@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_event_listener_gate.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -679,13 +680,11 @@ class ProjectThreadsController {
         if (!staticCapabilities.canListThreads) {
           return;
         }
-        AgentProvider? opened;
-        var shouldDispose = false;
+        AgentProviderRuntimeLease? lease;
         try {
-          opened = await providerController.openProvider(config);
-          shouldDispose = !providerController.isSharedActiveProvider(opened);
+          lease = await providerController.acquireProvider(config);
           final collected = await _collectProviderThreads(
-            provider: opened,
+            provider: lease.provider,
             projectPath: projectPath,
             archived: archived,
             searchTerm: searchTerm,
@@ -699,9 +698,7 @@ class ProjectThreadsController {
           );
           failures.add(config.displayName);
         } finally {
-          if (shouldDispose) {
-            await opened?.dispose();
-          }
+          await lease?.release();
         }
       }),
     );

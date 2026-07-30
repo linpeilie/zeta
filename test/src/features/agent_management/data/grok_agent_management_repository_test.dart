@@ -67,7 +67,9 @@ done
       ).writeAsStringSync('{"msg":"hello"}\n');
 
       final repository = GrokAgentManagementRepository(
-        providerFactory: FakeAgentProviderFactory(FakeAgentProvider()),
+        providerFactory: FakeAgentProviderFactory(
+          FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
+        ),
         processRunner: _scriptedRunner(<List<String>, CliProcessResult>{
           const <String>['--version']: const CliProcessResult(
             exitCode: 0,
@@ -116,7 +118,9 @@ done
       ).writeAsStringSync('{"token":"x"}');
 
       final repository = GrokAgentManagementRepository(
-        providerFactory: FakeAgentProviderFactory(FakeAgentProvider()),
+        providerFactory: FakeAgentProviderFactory(
+          FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
+        ),
         processRunner: _scriptedRunner(<List<String>, CliProcessResult>{
           const <String>['--version']: const CliProcessResult(
             exitCode: 0,
@@ -158,7 +162,9 @@ done
       ).writeAsStringSync('{"token":"x"}');
 
       final repository = GrokAgentManagementRepository(
-        providerFactory: FakeAgentProviderFactory(FakeAgentProvider()),
+        providerFactory: FakeAgentProviderFactory(
+          FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
+        ),
         processRunner: _scriptedRunner(<List<String>, CliProcessResult>{
           const <String>['--version']: const CliProcessResult(
             exitCode: 0,
@@ -196,7 +202,9 @@ done
       )..writeAsStringSync('stub');
 
       final repository = GrokAgentManagementRepository(
-        providerFactory: FakeAgentProviderFactory(FakeAgentProvider()),
+        providerFactory: FakeAgentProviderFactory(
+          FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
+        ),
         processRunner: _scriptedRunner(<List<String>, CliProcessResult>{
           const <String>['--version']: const CliProcessResult(
             exitCode: 0,
@@ -230,7 +238,9 @@ done
         '${root.path}${Platform.pathSeparator}config.toml',
       ).writeAsStringSync('permission_mode = "default"\n');
       final repository = GrokAgentManagementRepository(
-        providerFactory: FakeAgentProviderFactory(FakeAgentProvider()),
+        providerFactory: FakeAgentProviderFactory(
+          FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
+        ),
         grokHomeProvider: () => root.path,
       );
 
@@ -246,7 +256,9 @@ done
       final grokScript = File('${root.path}${Platform.pathSeparator}grok.cmd')
         ..writeAsStringSync('stub');
       final repository = GrokAgentManagementRepository(
-        providerFactory: FakeAgentProviderFactory(FakeAgentProvider()),
+        providerFactory: FakeAgentProviderFactory(
+          FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
+        ),
         grokHomeProvider: () => root.path,
       );
 

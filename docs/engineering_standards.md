@@ -107,6 +107,14 @@ main -> app -> presentation/application -> domain
 - bundle 端口为空时，对应 capability 必须不可用；不支持功能不得靠 no-op 伪装成“已实现”。
 - 启动时机由 `AgentProviderBootstrapPolicy` 描述；需要项目目录的 provider 不得在获得
   workspace 前启动，也不得参与 eager model preload。
+- `AgentProviderRuntimeRegistry` 是应用进程内 Provider 实例和子进程的唯一所有者。
+  对话、Project Threads、用量统计和 Agent 管理探测只能获取可释放租约，不得直接调用
+  `AgentProviderFactory.create` 后自行持有或销毁。正常运行时每个 Provider ID 最多一个实例；
+  影响启动的配置变化必须先使旧实例及租约失效，再创建新实例。
+- 多个 Pane 共享 Provider 时，thread/session 状态必须按 ID 隔离。启动或恢复另一个会话
+  不得隐式退订、清空或使其他会话的 reducer 失效；退订只由明确关闭对应会话的调用方发起。
+- 桌面窗口关闭必须等待运行时注册表关闭全部 Provider，再 flush 日志并退出，避免遗留
+  app-server 或 stdio 孤儿进程。
 - Codex app-server 的 JSON-RPC、通知、审批 payload 和历史 JSONL 解析必须留在 agent data 层。
 - 权限审批、用户提问和计划审批必须保持独立领域语义：
   `respondToPermission` 只接受 approve/deny/cancel 决策，

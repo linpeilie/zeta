@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:toml/toml.dart';
 
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/codex_cli_locator.dart';
 import 'package:zeta/src/features/agent/data/grok_cli_locator.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -33,7 +34,8 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
     GrokCliLocator? locator,
     DateTime Function()? now,
     String Function()? grokHomeProvider,
-    this._modelCatalogRepository,
+    this.modelCatalogRepository,
+    this.runtimeRegistry,
   }) : _processRunner =
            processRunner ??
            ((
@@ -58,7 +60,8 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
   final GrokCliLocator _locator;
   final DateTime Function() _now;
   final String Function() _grokHomeProvider;
-  final AgentModelCatalogRepository? _modelCatalogRepository;
+  final AgentModelCatalogRepository? modelCatalogRepository;
+  final AgentProviderRuntimeRegistry? runtimeRegistry;
 
   @override
   String get agentId => AgentDefinition.grok.id;
@@ -649,9 +652,14 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
     required AgentAccountState accountState,
     required bool forceModelRefresh,
   }) async {
-    AgentProvider? provider;
+    final registry =
+        runtimeRegistry ??
+        AgentProviderRuntimeRegistry(providerFactory: providerFactory);
+    final ownsRegistry = runtimeRegistry == null;
+    AgentProviderRuntimeLease? lease;
     try {
-      provider = providerFactory.create(config);
+      lease = await registry.acquire(config);
+      final provider = lease.provider;
       await provider.initialize().timeout(
         Duration(seconds: _timeoutSeconds(config)),
       );
@@ -674,7 +682,12 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
         details: '$error',
       );
     } finally {
-      await provider?.dispose();
+      if (lease != null) {
+        await lease.release();
+      }
+      if (ownsRegistry) {
+        await registry.close();
+      }
     }
   }
 
@@ -687,7 +700,7 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
     if (!hasModelCatalog) {
       return const AgentModelList(models: <AgentModelInfo>[]);
     }
-    final repository = _modelCatalogRepository;
+    final repository = modelCatalogRepository;
     if (repository == null) {
       return fetchAgentProviderModels(provider, forceRefresh: forceRefresh);
     }

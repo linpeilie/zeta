@@ -3553,7 +3553,7 @@ void main() {
       });
 
       testWidgets(
-        'stacks permissions before plans and keeps composer visible in a short window',
+        'stacks permissions before plans and hides composer while pending',
         (tester) async {
           await tester.binding.setSurfaceSize(const Size(480, 400));
           addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -3611,7 +3611,8 @@ void main() {
             lessThan(tester.getTopLeft(plan).dy),
           );
           expect(tester.getSize(dock).height, lessThanOrEqualTo(140));
-          expect(tester.getBottomLeft(composer).dy, lessThanOrEqualTo(400));
+          // 权限卡与提问卡一致：待处理时隐藏 Composer。
+          expect(composer, findsNothing);
         },
       );
     });

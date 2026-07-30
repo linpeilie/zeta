@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -20,24 +21,38 @@ class ActiveAgentProviderController extends ChangeNotifier {
     required this.providerFactory,
     required this.configStore,
     AgentModelCatalogRepository? modelCatalogRepository,
+    AgentProviderRuntimeRegistry? runtimeRegistry,
   }) : modelCatalogRepository =
            modelCatalogRepository ??
            AgentModelCatalogRepository(
              store: MemoryAgentModelCatalogCacheStore(),
-           );
+           ),
+       runtimeRegistry =
+           runtimeRegistry ??
+           AgentProviderRuntimeRegistry(providerFactory: providerFactory),
+       _ownsRuntimeRegistry = runtimeRegistry == null {
+    this.runtimeRegistry.addListener(_handleRuntimeRegistryChanged);
+  }
 
   final AgentProviderFactory providerFactory;
   final AgentProviderConfigStore configStore;
   final AgentModelCatalogRepository modelCatalogRepository;
+  final AgentProviderRuntimeRegistry runtimeRegistry;
+  final bool _ownsRuntimeRegistry;
 
   AgentProviderSettings _settings = const AgentProviderSettings();
   CursorRetirementResolution _runtimeSelection = CursorRetirementPolicy.resolve(
     const AgentProviderSettings(),
   );
-  AgentProvider? _provider;
+  AgentProviderRuntimeLease? _providerLease;
   Future<AgentProviderSettings>? _settingsFuture;
   Future<AgentProvider>? _providerFuture;
   bool _disposed = false;
+
+  AgentProvider? get _provider {
+    final lease = _providerLease;
+    return lease != null && lease.isCurrent ? lease.provider : null;
+  }
 
   /// 当前 active provider 设置。
   AgentProviderSettings get settings => _settings;
@@ -110,11 +125,10 @@ class ActiveAgentProviderController extends ChangeNotifier {
     return AgentProviderCapabilities.defaultsFor(config.kind);
   }
 
-  /// 打开指定配置的 provider 实例。
-  ///
-  /// 若与当前 active 相同则复用共享实例；否则创建**临时**实例，调用方在
-  /// [isSharedActiveProvider] 为 false 时必须 [AgentProvider.dispose]。
-  Future<AgentProvider> openProvider(AgentProviderConfig config) async {
+  /// 获取指定配置的应用级共享 Provider 租约。
+  Future<AgentProviderRuntimeLease> acquireProvider(
+    AgentProviderConfig config,
+  ) async {
     await loadSettings();
     final unavailable = CursorRetirementPolicy.unavailableReasonFor(
       providerId: config.id,
@@ -123,17 +137,7 @@ class ActiveAgentProviderController extends ChangeNotifier {
     if (unavailable != null) {
       throw UnsupportedError(unavailable);
     }
-    final existing = _provider;
-    if (existing != null && existing.config.id == config.id) {
-      return existing;
-    }
-    _log.fine('Opening ephemeral Agent provider ${config.id}');
-    return providerFactory.create(config);
-  }
-
-  /// 是否为 [activeProvider] 持有的共享实例。
-  bool isSharedActiveProvider(AgentProvider provider) {
-    return identical(_provider, provider);
+    return runtimeRegistry.acquire(config);
   }
 
   /// 更新一个 provider 的全局配置，并按需重建运行实例。
@@ -164,25 +168,22 @@ class ActiveAgentProviderController extends ChangeNotifier {
     );
     _applyRuntimeSelection();
 
-    final shouldRestartActiveProvider =
-        restartProvider && updated.id == previousActiveProviderId;
+    final shouldRestartProvider = restartProvider;
     // Repository 会在首个 await 前推进 provider generation；立即发起失效，并让
     // 缓存 I/O 与可能较慢的运行实例关闭、配置落盘并行执行。
     final Future<void> modelCatalogInvalidation = invalidatesModelCatalog
         ? modelCatalogRepository.invalidateProvider(updated.id)
         : Future<void>.value();
-    if (shouldRestartActiveProvider) {
+    if (shouldRestartProvider) {
       final creating = _providerFuture;
-      if (creating != null) {
+      if (creating != null && updated.id == previousActiveProviderId) {
         try {
           await creating;
         } catch (_) {
           // 创建失败也要继续落盘新配置，下一次启动会使用更新后的值。
         }
       }
-      final existing = _provider;
-      _provider = null;
-      await existing?.dispose();
+      await runtimeRegistry.invalidateProvider(updated.id);
     }
 
     await configStore.save(_settings);
@@ -248,9 +249,9 @@ class ActiveAgentProviderController extends ChangeNotifier {
         // 忽略创建失败，继续切换。
       }
     }
-    final existing = _provider;
-    _provider = null;
-    await existing?.dispose();
+    final existingLease = _providerLease;
+    _providerLease = null;
+    await existingLease?.release();
 
     _settings = _settings.copyWith(activeProviderId: providerId);
     _applyRuntimeSelection();
@@ -408,33 +409,15 @@ class ActiveAgentProviderController extends ChangeNotifier {
   }
 
   Future<AgentProvider> _createProvider() async {
-    final existing = _provider;
-    _provider = null;
-    await existing?.dispose();
+    final existingLease = _providerLease;
+    _providerLease = null;
+    await existingLease?.release();
     final expectedConfig = activeProviderConfig;
-    _log.fine('Creating shared Agent provider: ${expectedConfig.id}');
-    final provider = providerFactory.create(expectedConfig);
-    final actualProviderId = provider.config.id;
-    if (actualProviderId != expectedConfig.id) {
-      // factory 身份错配会让 activeProvider 的调用方不断尝试重建实例；尽早失败，
-      // 避免通知/微任务循环持续占用 CPU 和内存。
-      try {
-        await provider.dispose();
-      } catch (error, stackTrace) {
-        _log.warning(
-          'Could not dispose mismatched Agent provider $actualProviderId',
-          error,
-          stackTrace,
-        );
-      }
-      throw StateError(
-        'AgentProviderFactory returned $actualProviderId for '
-        '${expectedConfig.id}',
-      );
-    }
-    _provider = provider;
+    _log.fine('Acquiring shared Agent provider: ${expectedConfig.id}');
+    final lease = await runtimeRegistry.acquire(expectedConfig);
+    _providerLease = lease;
     _notify();
-    return provider;
+    return lease.provider;
   }
 
   /// 返回指定旧 Provider 无法进入运行时的原因。
@@ -451,9 +434,28 @@ class ActiveAgentProviderController extends ChangeNotifier {
 
   @override
   void dispose() {
+    if (_disposed) {
+      return;
+    }
     _disposed = true;
-    unawaited(_provider?.dispose());
+    runtimeRegistry.removeListener(_handleRuntimeRegistryChanged);
+    final lease = _providerLease;
+    _providerLease = null;
+    unawaited(lease?.release());
+    if (_ownsRuntimeRegistry) {
+      unawaited(runtimeRegistry.close());
+    }
     super.dispose();
+  }
+
+  void _handleRuntimeRegistryChanged() {
+    final lease = _providerLease;
+    if (lease == null || lease.isCurrent) {
+      return;
+    }
+    _providerLease = null;
+    unawaited(lease.release());
+    _notify();
   }
 
   void _notify() {

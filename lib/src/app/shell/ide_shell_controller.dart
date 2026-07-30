@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/application/agent_thread_workspace_controller.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
@@ -63,6 +64,7 @@ class IdeShellController extends ChangeNotifier {
     this._projectLocationOpener = openPathInSystemFileManager,
     this._statusReporter,
     AgentModelCatalogRepository? agentModelCatalogRepository,
+    AgentProviderRuntimeRegistry? agentProviderRuntimeRegistry,
     VoidCallback? onAgentTurnCompleted,
     DateTime Function()? now,
   }) : projectThreadsViewModel = ProjectThreadsViewModel(),
@@ -71,16 +73,22 @@ class IdeShellController extends ChangeNotifier {
          saveDelay: sessionSaveDelay,
        ),
        _now = now ?? DateTime.now {
+    this.agentProviderRuntimeRegistry =
+        agentProviderRuntimeRegistry ??
+        AgentProviderRuntimeRegistry(providerFactory: agentProviderFactory);
+    _ownsAgentProviderRuntimeRegistry = agentProviderRuntimeRegistry == null;
     agentProviderController = ActiveAgentProviderController(
       providerFactory: agentProviderFactory,
       configStore: agentProviderConfigStore,
       modelCatalogRepository: agentModelCatalogRepository,
+      runtimeRegistry: this.agentProviderRuntimeRegistry,
     );
     agentWorkspaceController = AgentThreadWorkspaceController(
       providerFactory: agentProviderFactory,
       configStore: agentProviderConfigStore,
       workspaceFilesProvider: () => _workspaceTree,
       modelCatalogRepository: agentProviderController.modelCatalogRepository,
+      runtimeRegistry: this.agentProviderRuntimeRegistry,
       onTurnCompleted: onAgentTurnCompleted,
     );
     _bootstrapAgentEntry = agentWorkspaceController.ensureDraftEntry(
@@ -119,6 +127,8 @@ class IdeShellController extends ChangeNotifier {
   final IdeSessionPersistenceCoordinator _sessionCoordinator;
   final DateTime Function() _now;
 
+  late final AgentProviderRuntimeRegistry agentProviderRuntimeRegistry;
+  late final bool _ownsAgentProviderRuntimeRegistry;
   late final ActiveAgentProviderController agentProviderController;
   late final AgentThreadWorkspaceController agentWorkspaceController;
   late final AgentThreadWorkspaceEntry _bootstrapAgentEntry;
@@ -1243,6 +1253,9 @@ class IdeShellController extends ChangeNotifier {
     projectThreadsViewModel.dispose();
     agentWorkspaceController.dispose();
     agentProviderController.dispose();
+    if (_ownsAgentProviderRuntimeRegistry) {
+      unawaited(agentProviderRuntimeRegistry.close());
+    }
     super.dispose();
   }
 }

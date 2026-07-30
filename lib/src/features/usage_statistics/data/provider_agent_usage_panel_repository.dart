@@ -1,5 +1,6 @@
 import 'package:zeta/src/features/agent/data/datasources/local_history/codex_usage_log_scanner.dart';
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_usage_log_scanner.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/usage_statistics/data/codex_usage_statistics_repository.dart';
@@ -13,22 +14,34 @@ typedef EnabledAgentProviderLoader =
 typedef AgentProviderInstanceLoader =
     Future<AgentProvider> Function(AgentProviderConfig config);
 typedef SharedAgentProviderPredicate = bool Function(AgentProvider provider);
+typedef AgentProviderRuntimeLeaseLoader =
+    Future<AgentProviderRuntimeLease> Function(AgentProviderConfig config);
 
 /// 按已启用 Provider 配置实例汇总套餐和全局今日 Token。
 class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
   ProviderAgentUsagePanelRepository({
     required this.enabledProviderLoader,
-    required this.providerLoader,
-    required this.isSharedProvider,
+    this.providerLeaseLoader,
+    this.providerLoader,
+    this.isSharedProvider,
     required this.seedIndexStore,
     this.scanner = const FileSystemCodexUsageLogScanner(),
     this.grokScanner = const FileSystemGrokUsageLogScanner(),
     DateTime Function()? clock,
-  }) : _clock = clock ?? DateTime.now;
+  }) : assert(
+         providerLeaseLoader != null || providerLoader != null,
+         'A Provider lease or instance loader is required',
+       ),
+       _clock = clock ?? DateTime.now;
 
   final EnabledAgentProviderLoader enabledProviderLoader;
-  final AgentProviderInstanceLoader providerLoader;
-  final SharedAgentProviderPredicate isSharedProvider;
+  final AgentProviderRuntimeLeaseLoader? providerLeaseLoader;
+
+  /// 旧测试/嵌入宿主兼容入口；生产代码应使用 [providerLeaseLoader]。
+  final AgentProviderInstanceLoader? providerLoader;
+
+  /// 与 [providerLoader] 配套的旧共享实例判断。
+  final SharedAgentProviderPredicate? isSharedProvider;
   final UsageStatisticsIndexStore seedIndexStore;
   final CodexUsageLogScanner scanner;
   final GrokUsageLogScanner grokScanner;
@@ -72,9 +85,16 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
     required Future<UsageStatisticsIndexSnapshot> seedFuture,
     required bool forceRefresh,
   }) async {
+    AgentProviderRuntimeLease? lease;
     AgentProvider? provider;
     try {
-      provider = await providerLoader(config);
+      final loadLease = providerLeaseLoader;
+      if (loadLease != null) {
+        lease = await loadLease(config);
+        provider = lease.provider;
+      } else {
+        provider = await providerLoader!(config);
+      }
       final quota = await _readQuota(provider);
       if (config.kind != AgentProviderKind.codexAppServer &&
           config.kind != AgentProviderKind.acp) {
@@ -130,7 +150,10 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
         message: '当前 Agent 暂时无法连接',
       );
     } finally {
-      if (provider != null && !isSharedProvider(provider)) {
+      if (lease != null) {
+        await lease.release();
+      } else if (provider != null &&
+          !(isSharedProvider?.call(provider) ?? false)) {
         try {
           await provider.dispose();
         } catch (_) {

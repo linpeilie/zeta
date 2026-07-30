@@ -7,7 +7,7 @@ import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'ide_component_test_harness.dart';
 
 void main() {
-  testWidgets('IdeBusySpinner 默认使用 shadcn 不定进度与主题强调色', (tester) async {
+  testWidgets('IdeBusySpinner 默认使用 shadcn 静态弧与主题强调色', (tester) async {
     final semantics = tester.ensureSemantics();
     try {
       await pumpIdeComponent(
@@ -37,7 +37,8 @@ void main() {
       expect(indicator.strokeWidth, 2);
       expect(indicator.color, colors.accent);
       expect(indicator.backgroundColor, Colors.transparent);
-      expect(indicator.value, isNull);
+      expect(indicator.value, 0.72);
+      expect(indicator.animated, isFalse);
       expect(find.bySemanticsLabel('Task running'), findsOneWidget);
       expect(tester.takeException(), isNull);
     } finally {
@@ -70,6 +71,44 @@ void main() {
     expect(indicator.size, 18);
     expect(indicator.strokeWidth, 3);
     expect(indicator.color, Colors.orange);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('IdeBusySpinner 单次旋转后停止调度帧且重建不重启', (tester) async {
+    var semanticsLabel = 'Running';
+    late StateSetter rebuild;
+    await pumpIdeComponent(
+      tester,
+      child: StatefulBuilder(
+        builder: (context, setState) {
+          rebuild = setState;
+          return Center(child: IdeBusySpinner(semanticsLabel: semanticsLabel));
+        },
+      ),
+    );
+
+    expect(tester.binding.hasScheduledFrame, isTrue);
+
+    final pumpCount = await tester.pumpAndSettle(
+      const Duration(milliseconds: 100),
+      EnginePhase.sendSemanticsUpdate,
+      const Duration(seconds: 2),
+    );
+
+    expect(pumpCount, greaterThan(0));
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    expect(find.byType(IdeBusySpinner), findsOneWidget);
+
+    rebuild(() {
+      semanticsLabel = 'Still running';
+    });
+    await tester.pump();
+
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    expect(
+      tester.widget<IdeBusySpinner>(find.byType(IdeBusySpinner)).semanticsLabel,
+      'Still running',
+    );
     expect(tester.takeException(), isNull);
   });
 }

@@ -114,9 +114,6 @@ class CodexAppServerAgentProvider
   final Map<String, _PendingQuestion> _pendingQuestions =
       <String, _PendingQuestion>{};
 
-  /// 当前活跃的 Agent 会话，由 thread/start 或 thread/resume 设置。
-  AgentSession? _session;
-
   /// 各 thread 当前运行中的 turn id。
   final Map<String, String> _runningTurnIdsBySessionId = <String, String>{};
 
@@ -337,18 +334,11 @@ class CodexAppServerAgentProvider
     await initialize();
     _log.fine('Starting Codex thread for provider ${config.id}');
 
-    final previousSessionId = _session?.id;
     final session = await _client.startSession(
       context: context,
       permissionSelection: _permissionSelection,
-      previousSessionId: previousSessionId,
+      previousSessionId: null,
     );
-    // 新建会话后取消旧 thread 订阅，避免后台通知继续到达。
-    await _unsubscribePreviousThreadIfNeeded(
-      previousSessionId: previousSessionId,
-      nextSessionId: session.id,
-    );
-    _session = session;
     _events.add(AgentSessionStartedEvent(session));
     _log.info('Started Codex thread ${session.id}');
     return session;
@@ -365,19 +355,12 @@ class CodexAppServerAgentProvider
       await initialize();
       _log.fine('Resuming Codex thread $sessionId');
 
-      final previousSessionId = _session?.id;
       final session = await _client.resumeSession(
         sessionId,
         context: context,
         permissionSelection: _permissionSelection,
-        previousSessionId: previousSessionId,
+        previousSessionId: null,
       );
-      // resume 成功后再退订旧 thread，保证新会话已接管订阅。
-      await _unsubscribePreviousThreadIfNeeded(
-        previousSessionId: previousSessionId,
-        nextSessionId: session.id,
-      );
-      _session = session;
       _events.add(AgentSessionStartedEvent(session));
       _log.info('Resumed Codex thread ${session.id}');
       return session;
@@ -651,10 +634,7 @@ class CodexAppServerAgentProvider
     () async {
       await initialize();
       await _client.deleteThread(threadId);
-      if (_session?.id == threadId) {
-        await _unsubscribeThreadBestEffort(threadId);
-        _session = null;
-      }
+      await _unsubscribeThreadBestEffort(threadId);
     },
   );
 
@@ -672,19 +652,13 @@ class CodexAppServerAgentProvider
           !_capabilities.canForkThreadAtTurn) {
         throw UnsupportedError('当前 Codex 版本不支持稳定的指定 turn 分支能力');
       }
-      final previousSessionId = _session?.id;
       final session = await _client.forkThread(
         threadId: threadId,
         context: context,
         boundary: boundary,
         permissionSelection: _permissionSelection,
-        previousSessionId: previousSessionId,
+        previousSessionId: null,
       );
-      await _unsubscribePreviousThreadIfNeeded(
-        previousSessionId: previousSessionId,
-        nextSessionId: session.id,
-      );
-      _session = session;
       _events.add(AgentSessionStartedEvent(session));
       _log.info('Forked Codex thread $threadId -> ${session.id}');
       return session;
@@ -972,11 +946,6 @@ class CodexAppServerAgentProvider
       return;
     }
 
-    final session = mapping.session;
-    if (session != null) {
-      _session = session;
-    }
-
     final startedTurn = mapping.startedTurn;
     if (startedTurn != null) {
       _markRunningTurn(startedTurn.sessionId, startedTurn.id);
@@ -1027,14 +996,11 @@ class CodexAppServerAgentProvider
         }
       } else if (event is AgentThreadDeletedEvent ||
           event is AgentThreadClosedEvent) {
-        // 线程关闭/删除：清本地会话与运行态，避免继续向已失效 thread 发请求。
+        // 线程关闭/删除：清理该 thread 的运行态与服务端订阅。
         final threadId = event is AgentThreadDeletedEvent
             ? event.threadId
             : (event as AgentThreadClosedEvent).threadId;
         _runningTurnIdsBySessionId.remove(threadId);
-        if (_session?.id == threadId) {
-          _session = null;
-        }
         unawaited(_unsubscribeThreadBestEffort(threadId));
       }
       _events.add(event);
@@ -1145,18 +1111,7 @@ class CodexAppServerAgentProvider
     }
   }
 
-  /// 切换到不同 thread 时取消旧订阅；同 id 或空 id 跳过。
-  Future<void> _unsubscribePreviousThreadIfNeeded({
-    required String? previousSessionId,
-    required String nextSessionId,
-  }) async {
-    if (previousSessionId == null || previousSessionId == nextSessionId) {
-      return;
-    }
-    await _unsubscribeThreadBestEffort(previousSessionId);
-  }
-
-  /// best-effort 退订：失败只记日志，不阻断会话切换。
+  /// best-effort 退订：失败只记日志，不阻断显式会话关闭。
   Future<void> _unsubscribeThreadBestEffort(String threadId) async {
     try {
       final status = await _client.unsubscribeThread(threadId);

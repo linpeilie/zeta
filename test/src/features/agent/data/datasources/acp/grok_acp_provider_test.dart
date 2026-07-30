@@ -120,6 +120,66 @@ void main() {
       },
     );
 
+    test(
+      'keeps an active session reducer when another session resumes',
+      () async {
+        final peer = _FakeJsonRpcPeer()..promptCompleter = Completer<Object?>();
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+        addTearDown(subscription.cancel);
+        addTearDown(provider.dispose);
+
+        final first = await provider.startSession(
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+        );
+        final firstTurn = provider.sendMessage(
+          session: first,
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+          message: 'keep running',
+        );
+        await _waitUntil(
+          () => events.whereType<AgentTurnStartedEvent>().isNotEmpty,
+        );
+
+        await provider.resumeSession(
+          'sess-2',
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+        );
+        peer.emitNotification('session/update', <String, Object?>{
+          'sessionId': first.id,
+          'update': <String, Object?>{
+            'sessionUpdate': 'agent_message_chunk',
+            'messageId': 'shared-runtime-message',
+            'content': <String, Object?>{'type': 'text', 'text': 'still alive'},
+          },
+          '_meta': <String, Object?>{'eventId': 'shared-runtime-event'},
+        });
+        await _waitUntil(
+          () => events.whereType<AgentMessageDeltaEvent>().any(
+            (event) =>
+                event.sessionId == first.id && event.delta == 'still alive',
+          ),
+        );
+
+        expect(
+          events.whereType<AgentMessageDeltaEvent>().any(
+            (event) =>
+                event.sessionId == first.id && event.delta == 'still alive',
+          ),
+          isTrue,
+        );
+
+        peer.promptCompleter!.complete(<String, Object?>{
+          'stopReason': 'end_turn',
+        });
+        await firstTurn;
+      },
+    );
+
     test('keeps unmatched response diagnostics out of the timeline', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(

@@ -68,7 +68,8 @@ abstract class AgentProvider {
 
   /// 取消对指定 thread 的服务端通知订阅。
   ///
-  /// 切换会话时调用，避免旧 thread 的通知继续到达本端。
+  /// 仅在对应消费者明确关闭/解绑 thread 时调用；共享 Provider 中切换到其他会话
+  /// 不得自动退订仍被其他 Pane 使用的 thread。
   /// 实现应为 best-effort：线程未加载/未订阅时不应视为失败。
   Future<void> unsubscribeThread(String threadId);
 

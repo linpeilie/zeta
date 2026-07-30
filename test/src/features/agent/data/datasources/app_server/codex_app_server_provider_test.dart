@@ -3593,36 +3593,33 @@ void main() {
       );
     });
 
-    test('unsubscribes previous thread when starting a new session', () async {
-      final peer = _FakeJsonRpcPeer();
-      final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
-        peer: peer,
-      );
-      addTearDown(provider.dispose);
+    test(
+      'keeps previous thread subscribed when starting another session',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
 
-      await provider.startSession(
-        context: const AgentContext(projectPath: '/repo'),
-      );
-      await provider.startSession(
-        context: const AgentContext(projectPath: '/repo'),
-      );
+        await provider.startSession(
+          context: const AgentContext(projectPath: '/repo'),
+        );
+        await provider.startSession(
+          context: const AgentContext(projectPath: '/repo'),
+        );
 
-      expect(peer.requestMethods, contains('thread/unsubscribe'));
-      final unsubscribeIndex = peer.requestMethods.indexOf(
-        'thread/unsubscribe',
-      );
-      expect(
-        unsubscribeIndex,
-        greaterThan(peer.requestMethods.indexOf('thread/start')),
-      );
-      final params =
-          peer.requestParams[unsubscribeIndex]! as Map<String, Object?>;
-      expect(params['threadId'], 'thread-1');
-    });
+        expect(
+          peer.requestMethods.where((method) => method == 'thread/start'),
+          hasLength(2),
+        );
+        expect(peer.requestMethods, isNot(contains('thread/unsubscribe')));
+      },
+    );
 
     test(
-      'unsubscribes previous thread when resuming a different session',
+      'keeps previous thread subscribed when resuming another session',
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
@@ -3641,20 +3638,9 @@ void main() {
 
         expect(
           peer.requestMethods,
-          containsAll(<String>[
-            'thread/start',
-            'thread/resume',
-            'thread/unsubscribe',
-          ]),
+          containsAll(<String>['thread/start', 'thread/resume']),
         );
-        final unsubscribeIndex = peer.requestMethods.indexOf(
-          'thread/unsubscribe',
-        );
-        final resumeIndex = peer.requestMethods.indexOf('thread/resume');
-        expect(unsubscribeIndex, greaterThan(resumeIndex));
-        final params =
-            peer.requestParams[unsubscribeIndex]! as Map<String, Object?>;
-        expect(params['threadId'], 'thread-1');
+        expect(peer.requestMethods, isNot(contains('thread/unsubscribe')));
       },
     );
 

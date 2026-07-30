@@ -10,6 +10,7 @@ import 'package:zeta/src/app/menu_action_bridge.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -69,6 +70,7 @@ class IdeHome extends StatefulWidget {
     required this.appearanceController,
     required this.generalSettingsController,
     required this.agentModelCatalogRepository,
+    required this.agentProviderRuntimeRegistry,
     this.enableAgentUsageAutoRefresh = true,
     this.agentProviderAvailabilityLoader,
     this.homeProviderDetectionLoader,
@@ -87,6 +89,7 @@ class IdeHome extends StatefulWidget {
   final AppearanceSettingsController appearanceController;
   final GeneralSettingsController generalSettingsController;
   final AgentModelCatalogRepository agentModelCatalogRepository;
+  final AgentProviderRuntimeRegistry agentProviderRuntimeRegistry;
 
   /// 是否在启动及每个回合结束后以 idle 优先级刷新 Agent 用量。
   final bool enableAgentUsageAutoRefresh;
@@ -165,6 +168,7 @@ class _IdeHomeState extends State<IdeHome> {
       projectLocationOpener: widget.projectLocationOpener,
       statusReporter: _showStatus,
       agentModelCatalogRepository: widget.agentModelCatalogRepository,
+      agentProviderRuntimeRegistry: widget.agentProviderRuntimeRegistry,
       onAgentTurnCompleted: _handleAgentTurnCompleted,
     )..addListener(_handleShellChanged);
     _agentManagementController = AgentManagementController(
@@ -172,10 +176,12 @@ class _IdeHomeState extends State<IdeHome> {
         AgentDefinition.codex.id: CodexAgentManagementRepository(
           providerFactory: widget.agentProviderFactory,
           modelCatalogRepository: widget.agentModelCatalogRepository,
+          runtimeRegistry: widget.agentProviderRuntimeRegistry,
         ),
         AgentDefinition.grok.id: GrokAgentManagementRepository(
           providerFactory: widget.agentProviderFactory,
           modelCatalogRepository: widget.agentModelCatalogRepository,
+          runtimeRegistry: widget.agentProviderRuntimeRegistry,
         ),
       },
       providerController: _shellController.agentProviderController,
@@ -193,10 +199,8 @@ class _IdeHomeState extends State<IdeHome> {
           widget.agentUsagePanelRepository ??
           ProviderAgentUsagePanelRepository(
             enabledProviderLoader: _loadEnabledAgentProviders,
-            providerLoader:
-                _shellController.agentProviderController.openProvider,
-            isSharedProvider:
-                _shellController.agentProviderController.isSharedActiveProvider,
+            providerLeaseLoader:
+                _shellController.agentProviderController.acquireProvider,
             seedIndexStore: widget.usageStatisticsIndexStore,
           ),
     );

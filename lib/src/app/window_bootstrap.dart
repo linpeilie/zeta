@@ -10,7 +10,19 @@ import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 
 final _loggingWindowCloseListener = _LoggingWindowCloseListener();
+final Set<Future<void> Function()> _desktopWindowShutdownHooks =
+    <Future<void> Function()>{};
 bool _loggingWindowCloseInstalled = false;
+
+/// 注册窗口真正关闭前需要等待的资源清理任务。
+void addDesktopWindowShutdownHook(Future<void> Function() hook) {
+  _desktopWindowShutdownHooks.add(hook);
+}
+
+/// 移除此前注册的窗口关闭清理任务。
+void removeDesktopWindowShutdownHook(Future<void> Function() hook) {
+  _desktopWindowShutdownHooks.remove(hook);
+}
 
 /// 初始化桌面窗口。
 ///
@@ -70,6 +82,13 @@ class _LoggingWindowCloseListener with WindowListener {
 
   Future<void> _flushAndClose() async {
     try {
+      for (final hook in _desktopWindowShutdownHooks.toList(growable: false)) {
+        try {
+          await hook();
+        } catch (_) {
+          // 单个资源关闭失败不能阻止窗口退出；日志仍会在下方统一 flush。
+        }
+      }
       await shutdownAppLogging();
     } finally {
       await windowManager.setPreventClose(false);

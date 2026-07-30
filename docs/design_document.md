@@ -33,6 +33,7 @@ main()
   -> ZetaStorageMigrator (legacy SharedPreferences -> JSON files)
   -> daily app log (~/.zeta/logs)
   -> MainApp
+    -> AgentProviderRuntimeRegistry（每个 Provider ID 一个运行实例）
     -> IdeShellController
     -> IdeHome
       -> WindowFrame（常驻）
@@ -49,7 +50,8 @@ main()
 
 IdeShellController
   -> IdeSessionStore
-  -> ActiveAgentProviderController
+  -> ActiveAgentProviderController -> Provider runtime lease
+  -> AgentThreadWorkspaceController -> 每个 Pane 独立 VM/controller，共享 runtime lease
   -> AgentConversationViewModel
   -> ProjectThreadsController
 
@@ -77,7 +79,7 @@ ProjectThreadsController
 AgentManagementController
   -> CodexAgentManagementRepository | GrokAgentManagementRepository
     -> CLI 身份、版本与登录态检查
-    -> 无计费 initialize / authenticate 握手
+    -> 通过共享 runtime lease 执行无计费 initialize / authenticate 握手
     -> provider 对应配置与脱敏诊断
 
 UsageStatisticsController
@@ -257,6 +259,11 @@ Provider 的业务策略。只有经过建模、命名与测试证明为协议�
 quirk、协议证据不足或 mapper/reducer 未完成归一化。
 
 Agent Canvas 支持多 thread 常驻 entry（各自独立 conversation VM 与 provider controller）。
+所有 controller 通过应用级 `AgentProviderRuntimeRegistry` 获取租约，同一 Provider ID 在一个
+Zeta 进程内只维护一个 app-server/stdio 运行实例。Project Threads、用量统计和 Agent 管理
+探测也复用同一实例；租约释放只撤销引用，配置失效或窗口退出才统一关闭进程。Provider 内部
+的订阅、running turn 和 reducer 必须按 session ID 隔离，启动或恢复另一个会话不能隐式退订
+已有会话。
 Project Threads 侧栏对**已打开** thread 的执行中/等待指示，以 entry 的
 `AgentConversationThreadSnapshot` 为真源，经 shell 调用 `syncRuntimeSnapshot` 更新
 `runningThreadIds`、摘要 `status`/waiting 与内存态 `completedThreadIds`。分区 UI 信号

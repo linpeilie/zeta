@@ -146,6 +146,12 @@ windows/
 
 ## 7. Agent provider 开发指南
 
+Provider 运行时由 app 组合层的 `AgentProviderRuntimeRegistry` 统一拥有。任何需要访问
+Provider 的功能（常驻对话、项目列表、用量统计、连接检测）都应获取并释放租约；
+`AgentProviderFactory.create` 只允许由注册表调用。租约释放不会反复启停进程，实例在配置
+失效或应用退出时统一关闭。共享实例必须支持多个 session 并存，切换会话不得隐式退订其他
+thread 或清空其 reducer/运行中 turn；窗口退出流程会等待注册表完成清理。
+
 新增 provider 时：
 
 1. 先确认现有 `AgentProviderBundle` 端口是否足够。已迁移的能力域优先接到
@@ -181,6 +187,8 @@ windows/
 11. 为流式 Provider 增加 adapter/reducer 序列测试；若同时支持 history/replay，必须使用
     独立 reducer 实例，并用完整 canonical signature regression 比较相对顺序。Store 只按
     entryId/tool id dumb merge，新增 Provider 不得修改 Store 来补叙事规则。
+12. 增加运行时复用测试：同一 Provider ID 的并发租约只创建一个实例；多个 session 并存时，
+    任一 session 的恢复、发送或结束不得破坏其他 session 的订阅和 reducer 状态。
 
 交互响应按领域语义拆分：权限请求调用 `respondToPermission`；结构化用户提问仅由实现
 `AgentQuestionResponseProvider` 的 Provider 通过 `respondToQuestion` 回写，空 answers

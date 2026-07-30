@@ -708,6 +708,11 @@ IconData _planTodoIcon(String? status) {
   };
 }
 
+/// 权限审批卡片。
+///
+/// 两段式布局：
+/// 1. 标题栏单行：左侧协议类型（如「命令」），右侧操作按钮，禁止换行；
+/// 2. 资源区：语义标题 + 命令代码块及 cwd / 文件等详情。
 class _AgentPermissionCard extends StatefulWidget {
   const _AgentPermissionCard({
     required this.request,
@@ -735,171 +740,271 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
   AgentPermissionRequest get request => widget.request;
 
   @override
-  Widget build(BuildContext context) => _buildApprovalCard(context);
-
-  Widget _buildApprovalCard(BuildContext context) {
+  Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final hasAmendment = request.proposedExecpolicyAmendment.isNotEmpty;
-    return IdeStatusCard(
-      tone: IdeStatusCardTone.warning,
-      title: request.title,
-      leading: Icon(
-        Icons.verified_user_outlined,
-        size: 16,
-        color: colors.warning,
-      ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (widget.autoReview != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: IdeSpacing.space6),
-              child: Text(
-                _autoReviewLabel(widget.autoReview!),
-                style: textStyles.bodySmall.copyWith(
-                  color: colors.textSecondary,
-                ),
-              ),
-            ),
-          if (request.command != null)
-            Text(
-              request.command!,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: _agentCodeTextStyle(
-                context,
-              ).copyWith(color: colors.textSecondary.withValues(alpha: 0.78)),
-            ),
-          if (request.commandActions.isNotEmpty)
-            Padding(
-              padding: EdgeInsets.only(
-                top: request.command == null ? 0 : IdeSpacing.space6,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (final action in request.commandActions)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: IdeSpacing.space2),
-                      child: Text(
-                        action,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: textStyles.bodySmall.copyWith(
-                          color: colors.textSecondary,
+    final isCommand = request.kind == AgentPermissionKind.commandExecution;
+    final displayTitle = _permissionDisplayTitle(request);
+    final command = request.command?.trim();
+    final kindLabel = _permissionKindLabel(request.kind);
+
+    return Semantics(
+      container: true,
+      label: '权限请求：$kindLabel · $displayTitle',
+      child: PanelCard(
+        key: ValueKey<String>('agent-permission-card-${request.id}'),
+        color: colors.warning.withValues(alpha: 0.08),
+        showBorder: true,
+        borderColor: colors.warning.withValues(alpha: 0.35),
+        borderRadius: IdeRadius.allMedium,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            IdeSpacing.space12,
+            IdeSpacing.space8,
+            IdeSpacing.space8,
+            IdeSpacing.space10,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // —— 标题栏：类型 | 操作，固定单行 ——
+              SizedBox(
+                height: 28,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Icon(
+                      _permissionKindIcon(request.kind),
+                      size: 15,
+                      color: colors.warning,
+                    ),
+                    const SizedBox(width: IdeSpacing.space6),
+                    Text(
+                      kindLabel,
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
+                      style: textStyles.bodyMedium.copyWith(
+                        color: colors.warning,
+                        fontWeight: FontWeight.w700,
+                        height: 1.1,
+                      ),
+                    ),
+                    const SizedBox(width: IdeSpacing.space8),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          reverse: true,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: _buildHeaderActions(
+                              colors: colors,
+                              isCommand: isCommand,
+                              hasAmendment: hasAmendment,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                ],
-              ),
-            ),
-          if (request.description != null)
-            Padding(
-              padding: EdgeInsets.only(
-                top: request.command == null && request.commandActions.isEmpty
-                    ? 0
-                    : IdeSpacing.space6,
-              ),
-              child: Text(
-                request.description!,
-                style: textStyles.bodyMedium.copyWith(
-                  color: colors.textSecondary,
+                  ],
                 ),
               ),
-            ),
-        ],
-      ),
-      footer: Wrap(
-        alignment: WrapAlignment.end,
-        spacing: IdeSpacing.space8,
-        runSpacing: IdeSpacing.space6,
-        children: [
-          sf.GhostButton(
-            key: ValueKey('agent-permission-cancel-${request.id}'),
-            onPressed: () =>
-                widget.onRespond(approved: false, cancelTurn: true),
-            size: sf.ButtonSize.small,
-            child: const Text('Cancel turn'),
-          ),
-          sf.OutlineButton(
-            key: ValueKey('agent-permission-deny-${request.id}'),
-            onPressed: () => widget.onRespond(
-              approved: false,
-              commandDecision:
-                  request.kind == AgentPermissionKind.commandExecution
-                  ? AgentCommandApprovalDecisionKind.decline
-                  : null,
-            ),
-            size: sf.ButtonSize.small,
-            leading: const Icon(Icons.close_rounded, size: 16),
-            child: const Text('Deny'),
-          ),
-          if (request.kind == AgentPermissionKind.commandExecution) ...[
-            sf.OutlineButton(
-              key: ValueKey('agent-permission-session-${request.id}'),
-              onPressed: () => widget.onRespond(
-                approved: true,
-                commandDecision:
-                    AgentCommandApprovalDecisionKind.acceptForSession,
-              ),
-              size: sf.ButtonSize.small,
-              child: const Text('Allow for session'),
-            ),
-            if (hasAmendment)
-              sf.OutlineButton(
-                key: ValueKey('agent-permission-always-${request.id}'),
-                onPressed: () => widget.onRespond(
-                  approved: true,
-                  commandDecision: AgentCommandApprovalDecisionKind
-                      .acceptWithExecpolicyAmendment,
-                  execpolicyAmendment: request.proposedExecpolicyAmendment,
+              const SizedBox(height: IdeSpacing.space8),
+              // —— 资源区：语义标题 + 命令代码块 ——
+              Text(
+                displayTitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: textStyles.titleSmall.copyWith(
+                  fontWeight: FontWeight.w600,
+                  height: 1.3,
                 ),
-                size: sf.ButtonSize.small,
-                child: const Text('Always allow'),
               ),
-          ],
-          if (widget.autoReview?.status == 'denied' &&
-              widget.onApproveGuardian != null)
-            sf.OutlineButton(
-              key: ValueKey('agent-permission-guardian-override-${request.id}'),
-              onPressed: widget.onApproveGuardian,
-              size: sf.ButtonSize.small,
-              child: const Text('Override guardian'),
-            ),
-          sf.PrimaryButton(
-            key: ValueKey('agent-permission-approve-${request.id}'),
-            onPressed: () => widget.onRespond(
-              approved: true,
-              commandDecision:
-                  request.kind == AgentPermissionKind.commandExecution
-                  ? AgentCommandApprovalDecisionKind.accept
-                  : null,
-            ),
-            size: sf.ButtonSize.small,
-            leading: const Icon(Icons.check_rounded, size: 16),
-            child: const Text('Approve'),
+              if (command != null && command.isNotEmpty) ...[
+                const SizedBox(height: IdeSpacing.space8),
+                _AgentPermissionCommandBlock(
+                  key: ValueKey<String>(
+                    'agent-permission-command-${request.id}',
+                  ),
+                  command: command,
+                ),
+              ],
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  String _autoReviewLabel(AgentAutoApprovalReviewEvent review) {
-    final status = switch (review.status) {
-      'inProgress' => 'Auto-reviewing…',
-      'approved' => 'Auto-review approved',
-      'denied' => 'Auto-review denied',
-      'timedOut' => 'Auto-review timed out',
-      'aborted' => 'Auto-review aborted',
-      _ => 'Auto-review: ${review.status}',
-    };
-    final rationale = review.rationale?.trim();
-    if (rationale == null || rationale.isEmpty) {
-      return status;
-    }
-    return '$status · $rationale';
+  /// 标题栏右侧操作：始终单行，窄宽度时由外层横向滚动承接。
+  List<Widget> _buildHeaderActions({
+    required IdeColors colors,
+    required bool isCommand,
+    required bool hasAmendment,
+  }) {
+    final actions = <Widget>[
+      sf.GhostButton(
+        key: ValueKey('agent-permission-cancel-${request.id}'),
+        onPressed: () => widget.onRespond(approved: false, cancelTurn: true),
+        size: sf.ButtonSize.small,
+        density: sf.ButtonDensity.dense,
+        child: const Text('取消回合'),
+      ),
+      const SizedBox(width: IdeSpacing.space4),
+      sf.OutlineButton(
+        key: ValueKey('agent-permission-deny-${request.id}'),
+        onPressed: () => widget.onRespond(
+          approved: false,
+          commandDecision: isCommand
+              ? AgentCommandApprovalDecisionKind.decline
+              : null,
+        ),
+        size: sf.ButtonSize.small,
+        density: sf.ButtonDensity.dense,
+        child: Text('拒绝', style: TextStyle(color: colors.error)),
+      ),
+      if (isCommand) ...[
+        const SizedBox(width: IdeSpacing.space4),
+        sf.OutlineButton(
+          key: ValueKey('agent-permission-session-${request.id}'),
+          onPressed: () => widget.onRespond(
+            approved: true,
+            commandDecision: AgentCommandApprovalDecisionKind.acceptForSession,
+          ),
+          size: sf.ButtonSize.small,
+          density: sf.ButtonDensity.dense,
+          child: const Text('本会话允许'),
+        ),
+        if (hasAmendment) ...[
+          const SizedBox(width: IdeSpacing.space4),
+          sf.OutlineButton(
+            key: ValueKey('agent-permission-always-${request.id}'),
+            onPressed: () => widget.onRespond(
+              approved: true,
+              commandDecision: AgentCommandApprovalDecisionKind
+                  .acceptWithExecpolicyAmendment,
+              execpolicyAmendment: request.proposedExecpolicyAmendment,
+            ),
+            size: sf.ButtonSize.small,
+            density: sf.ButtonDensity.dense,
+            child: const Text('始终允许'),
+          ),
+        ],
+      ],
+      if (widget.autoReview?.status == 'denied' &&
+          widget.onApproveGuardian != null) ...[
+        const SizedBox(width: IdeSpacing.space4),
+        sf.OutlineButton(
+          key: ValueKey('agent-permission-guardian-override-${request.id}'),
+          onPressed: widget.onApproveGuardian,
+          size: sf.ButtonSize.small,
+          density: sf.ButtonDensity.dense,
+          child: const Text('覆盖守护'),
+        ),
+      ],
+      const SizedBox(width: IdeSpacing.space4),
+      sf.PrimaryButton(
+        key: ValueKey('agent-permission-approve-${request.id}'),
+        onPressed: () => widget.onRespond(
+          approved: true,
+          commandDecision: isCommand
+              ? AgentCommandApprovalDecisionKind.accept
+              : null,
+        ),
+        size: sf.ButtonSize.small,
+        density: sf.ButtonDensity.dense,
+        leading: const Icon(Icons.check_rounded, size: 14),
+        child: const Text('允许'),
+      ),
+    ];
+    return actions;
+  }
+}
+
+/// 权限类型语义标题：命令已单独展示时，避免把长命令再塞进标题。
+String _permissionDisplayTitle(AgentPermissionRequest request) {
+  final title = request.title.trim();
+  final command = request.command?.trim();
+  if (command != null &&
+      command.isNotEmpty &&
+      (title.isEmpty || title == command)) {
+    return _permissionKindTitle(request.kind);
+  }
+  if (title.isNotEmpty) {
+    return title;
+  }
+  return _permissionKindTitle(request.kind);
+}
+
+String _permissionKindTitle(AgentPermissionKind kind) {
+  return switch (kind) {
+    AgentPermissionKind.commandExecution => '请求执行命令',
+    AgentPermissionKind.fileChange => '请求应用文件变更',
+    AgentPermissionKind.permissions => '请求授予权限',
+    AgentPermissionKind.other => '请求确认',
+  };
+}
+
+String _permissionKindLabel(AgentPermissionKind kind) {
+  return switch (kind) {
+    AgentPermissionKind.commandExecution => '命令',
+    AgentPermissionKind.fileChange => '文件',
+    AgentPermissionKind.permissions => '权限',
+    AgentPermissionKind.other => '确认',
+  };
+}
+
+IconData _permissionKindIcon(AgentPermissionKind kind) {
+  return switch (kind) {
+    AgentPermissionKind.commandExecution => Icons.terminal_rounded,
+    AgentPermissionKind.fileChange => Icons.difference_outlined,
+    AgentPermissionKind.permissions => Icons.verified_user_outlined,
+    AgentPermissionKind.other => Icons.shield_outlined,
+  };
+}
+
+class _AgentPermissionCommandBlock extends StatelessWidget {
+  const _AgentPermissionCommandBlock({required this.command, super.key});
+
+  final String command;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    return DecoratedBox(
+      decoration: _agentCodeBlockDecoration(colors),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: IdeSpacing.space10,
+          vertical: IdeSpacing.space8,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '\$',
+              style: _agentCodeTextStyle(context).copyWith(
+                color: colors.textTertiary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: IdeSpacing.space8),
+            Expanded(
+              child: Text(
+                command,
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+                style: _agentCodeTextStyle(context),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

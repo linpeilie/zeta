@@ -6,6 +6,7 @@ import 'package:toml/toml.dart';
 
 import 'package:zeta/src/core/security/sensitive_data_redactor.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/codex_cli_locator.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
@@ -23,7 +24,8 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
     HttpClient Function()? httpClientFactory,
     DateTime Function()? now,
     String Function()? codexHomeProvider,
-    this._modelCatalogRepository,
+    this.modelCatalogRepository,
+    this.runtimeRegistry,
   }) : _processRunner = processRunner ?? const CliProcessRunner(),
        _locator = locator ?? const CodexCliLocator(),
        _httpClientFactory = httpClientFactory ?? HttpClient.new,
@@ -36,7 +38,8 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
   final HttpClient Function() _httpClientFactory;
   final DateTime Function() _now;
   final String Function() _codexHomeProvider;
-  final AgentModelCatalogRepository? _modelCatalogRepository;
+  final AgentModelCatalogRepository? modelCatalogRepository;
+  final AgentProviderRuntimeRegistry? runtimeRegistry;
 
   @override
   String get agentId => AgentDefinition.codex.id;
@@ -577,9 +580,14 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
     required AgentAccountState accountState,
     required bool forceModelRefresh,
   }) async {
-    AgentProvider? provider;
+    final registry =
+        runtimeRegistry ??
+        AgentProviderRuntimeRegistry(providerFactory: providerFactory);
+    final ownsRegistry = runtimeRegistry == null;
+    AgentProviderRuntimeLease? lease;
     try {
-      provider = providerFactory.create(config);
+      lease = await registry.acquire(config);
+      final provider = lease.provider;
       await provider.initialize().timeout(
         Duration(seconds: _timeoutSeconds(config)),
       );
@@ -607,7 +615,12 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
         details: '$error',
       );
     } finally {
-      await provider?.dispose();
+      if (lease != null) {
+        await lease.release();
+      }
+      if (ownsRegistry) {
+        await registry.close();
+      }
     }
   }
 
@@ -620,7 +633,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
     if (!hasModelCatalog) {
       return const AgentModelList(models: <AgentModelInfo>[]);
     }
-    final repository = _modelCatalogRepository;
+    final repository = modelCatalogRepository;
     if (repository == null) {
       return fetchAgentProviderModels(provider, forceRefresh: forceRefresh);
     }

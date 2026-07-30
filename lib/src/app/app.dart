@@ -6,9 +6,11 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/app_constants.dart';
+import 'package:zeta/src/app/window_bootstrap.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/data/default_agent_provider_factory.dart';
@@ -50,6 +52,7 @@ class MainApp extends StatefulWidget {
     this.usageStatisticsIndexStore,
     this.agentUsagePanelRepository,
     this.agentModelCatalogRepository,
+    this.agentProviderRuntimeRegistry,
   });
 
   final Future<String?> Function()? directoryPicker;
@@ -87,6 +90,9 @@ class MainApp extends StatefulWidget {
   /// 应用级共享模型目录；生产默认持久化到 `~/.zeta/cache`。
   final AgentModelCatalogRepository? agentModelCatalogRepository;
 
+  /// 应用级 Provider 运行时池；测试可注入以验证实例复用与退出回收。
+  final AgentProviderRuntimeRegistry? agentProviderRuntimeRegistry;
+
   @override
   State<MainApp> createState() => MainAppState();
 }
@@ -96,10 +102,14 @@ class MainAppState extends State<MainApp>
   late final AppearanceSettingsController _appearanceController;
   late final GeneralSettingsController _generalSettingsController;
   late final AgentProviderFactory _defaultAgentProviderFactory;
+  late final AgentProviderFactory _agentProviderFactory;
+  late final AgentProviderRuntimeRegistry _agentProviderRuntimeRegistry;
+  late final Future<void> Function() _providerRuntimeShutdownHook;
   late final UsageStatisticsIndexStore _usageStatisticsIndexStore;
   late final AgentModelCatalogRepository _agentModelCatalogRepository;
   bool _ownsAppearanceController = false;
   bool _ownsGeneralSettingsController = false;
+  bool _ownsAgentProviderRuntimeRegistry = false;
   AppLifecycleState? _appLifecycleState;
   bool _nativeWindowSuspended = false;
 
@@ -122,6 +132,17 @@ class MainAppState extends State<MainApp>
     final useFilePersistence = _useFilePersistence;
     final dataPaths = widget.dataPaths;
     _defaultAgentProviderFactory = const DefaultAgentProviderFactory();
+    _agentProviderFactory =
+        widget.agentProviderFactory ?? _defaultAgentProviderFactory;
+    final injectedRuntimeRegistry = widget.agentProviderRuntimeRegistry;
+    _agentProviderRuntimeRegistry =
+        injectedRuntimeRegistry ??
+        AgentProviderRuntimeRegistry(providerFactory: _agentProviderFactory);
+    _ownsAgentProviderRuntimeRegistry = injectedRuntimeRegistry == null;
+    _providerRuntimeShutdownHook = _agentProviderRuntimeRegistry.close;
+    if (widget.enableNativeWindowFrame) {
+      addDesktopWindowShutdownHook(_providerRuntimeShutdownHook);
+    }
     _usageStatisticsIndexStore =
         widget.usageStatisticsIndexStore ??
         (useFilePersistence
@@ -175,9 +196,11 @@ class MainAppState extends State<MainApp>
     }
     if (widget.enableNativeWindowFrame) {
       windowManager.addListener(this);
+      addDesktopWindowShutdownHook(_providerRuntimeShutdownHook);
       return;
     }
     windowManager.removeListener(this);
+    removeDesktopWindowShutdownHook(_providerRuntimeShutdownHook);
     _nativeWindowSuspended = false;
   }
 
@@ -186,6 +209,10 @@ class MainAppState extends State<MainApp>
     WidgetsBinding.instance.removeObserver(this);
     if (widget.enableNativeWindowFrame) {
       windowManager.removeListener(this);
+      removeDesktopWindowShutdownHook(_providerRuntimeShutdownHook);
+    }
+    if (_ownsAgentProviderRuntimeRegistry) {
+      unawaited(_agentProviderRuntimeRegistry.close());
     }
     if (_ownsAppearanceController) {
       _appearanceController.dispose();
@@ -253,8 +280,8 @@ class MainAppState extends State<MainApp>
                 enableNativeWindowFrame: widget.enableNativeWindowFrame,
                 showWindowControls: widget.showWindowControls,
                 sessionStore: _createSessionStore(),
-                agentProviderFactory:
-                    widget.agentProviderFactory ?? _defaultAgentProviderFactory,
+                agentProviderFactory: _agentProviderFactory,
+                agentProviderRuntimeRegistry: _agentProviderRuntimeRegistry,
                 agentProviderConfigStore:
                     widget.agentProviderConfigStore ??
                     _createAgentProviderConfigStore(),

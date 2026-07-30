@@ -102,6 +102,11 @@ void main() {
       expect(nextState.selectedThreadId, 'thread-b');
       expect(nextState.runningThreadIds, contains('thread-a'));
       expect(codexBackend.anyUnsubscribed('thread-a'), isFalse);
+      expect(
+        codexBackend.instances,
+        hasLength(1),
+        reason: '项目列表和多个任务页必须复用同一个 Provider 运行时',
+      );
     },
   );
 

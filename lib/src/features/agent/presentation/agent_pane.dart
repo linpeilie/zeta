@@ -337,7 +337,13 @@ class _AgentPaneState extends State<AgentPane> {
                               ),
                             if (widget.viewModel.isReadOnly)
                               _AgentReadOnlyNotice(pagePadding: pagePadding)
-                            else if (widget.viewModel.questionRequests.isEmpty)
+                            else if (widget
+                                    .viewModel
+                                    .questionRequests
+                                    .isEmpty &&
+                                widget.viewModel.permissionRequests.isEmpty)
+                              // 提问卡 / 权限卡占用底部交互时隐藏 Composer，
+                              // 与 pending dock 互斥，避免双焦点与误发送。
                               _AgentComposerSection(
                                 key: const ValueKey('agent-composer-section'),
                                 viewModel: widget.viewModel,

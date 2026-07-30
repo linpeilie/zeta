@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
@@ -195,6 +196,9 @@ class IdeLoadingIndicator extends StatelessWidget {
 ///
 /// 与 [IdeLoadingIndicator] 一样统一走 shadcn 门面，用于标题栏与 thread 列表等
 /// 窄位 running 态；feature 不应直接拼装 Material 或裸 `sf` 进度条。
+///
+/// 每次挂载只旋转一圈，随后保留静态弧，避免运行态长时间占用帧调度。完成、停止或
+/// 中断后由调用方根据状态移除该组件。
 class IdeBusySpinner extends StatelessWidget {
   const IdeBusySpinner({
     super.key,
@@ -213,17 +217,28 @@ class IdeBusySpinner extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final indicatorColor = color ?? colors.accent;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     return Semantics(
       label: semanticsLabel,
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: sf.CircularProgressIndicator(
-          size: size,
-          strokeWidth: strokeWidth,
-          color: indicatorColor,
-          backgroundColor: Colors.transparent,
-          value: null,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 0, end: 1),
+        duration: reduceMotion ? Duration.zero : IdeMotion.durationLoadingPulse,
+        curve: Curves.linear,
+        builder: (context, turns, child) {
+          return Transform.rotate(angle: turns * math.pi * 2, child: child);
+        },
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: sf.CircularProgressIndicator(
+            size: size,
+            strokeWidth: strokeWidth,
+            color: indicatorColor,
+            backgroundColor: Colors.transparent,
+            value: 0.72,
+            animated: false,
+          ),
         ),
       ),
     );
