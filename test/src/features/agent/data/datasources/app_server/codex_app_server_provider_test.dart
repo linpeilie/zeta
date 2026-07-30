@@ -1914,9 +1914,16 @@ void main() {
       expect(peer.requestMethods.last, 'account/rateLimits/read');
       expect(quota, isNotNull);
       expect(quota!.planType, 'plus');
+      expect(quota.limitName, 'Codex');
       expect(quota.windows, hasLength(2));
+      // primary 300min / secondary 10080min → 可读时长，而非 limitName / 主要额度。
+      expect(quota.windows.first.label, '5 小时');
       expect(quota.windows.first.usedPercent, 36);
       expect(quota.windows.first.resetsAt, isNotNull);
+      expect(quota.windows.first.windowDuration, const Duration(minutes: 300));
+      expect(quota.windows.last.label, '1 周');
+      expect(quota.windows.last.usedPercent, 72);
+      expect(quota.windows.last.windowDuration, const Duration(minutes: 10080));
       expect(quota.credits?.unlimited, isFalse);
       expect(quota.credits?.balance, '12.50');
       await provider.dispose();
