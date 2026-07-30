@@ -161,15 +161,51 @@ final class IdeVirtualListController {
   /// 提交新的 item 序列；真正 synchronize 推迟到 render layout。
   ///
   /// 不在此处通知监听者，避免 layout 期间同步 rebuild。
+  ///
+  /// 若 [epoch] 与 descriptor 指纹（id/kind/layoutRevision/estimate）与
+  /// 当前 pending 或已应用序列完全一致，则 **no-op**（对齐 Grok：无脏不
+  /// rebuild layout cache），避免无意义 `synchronize` 与 list 分配。
   void setItems(
     List<IdeVirtualItemDescriptor> items, {
     required IdeLayoutEpoch epoch,
   }) {
+    final baseline = _pendingDescriptors ?? _descriptors;
+    final baselineEpoch = _pendingEpoch ?? extentIndex.epoch;
+    if (baselineEpoch == epoch && _descriptorSequenceEquals(baseline, items)) {
+      debugSetItemsNoOpCount += 1;
+      return;
+    }
     _pendingDescriptors = List<IdeVirtualItemDescriptor>.of(
       items,
       growable: false,
     );
     _pendingEpoch = epoch;
+  }
+
+  /// 诊断：setItems 因序列未变而短路的次数。
+  int debugSetItemsNoOpCount = 0;
+
+  static bool _descriptorSequenceEquals(
+    List<IdeVirtualItemDescriptor> a,
+    List<IdeVirtualItemDescriptor> b,
+  ) {
+    if (identical(a, b)) {
+      return true;
+    }
+    if (a.length != b.length) {
+      return false;
+    }
+    for (var i = 0; i < a.length; i++) {
+      final left = a[i];
+      final right = b[i];
+      if (left.id != right.id ||
+          left.kind != right.kind ||
+          left.layoutRevision != right.layoutRevision ||
+          left.estimatedExtent != right.estimatedExtent) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /// 立即同步（测试辅助）；生产路径优先让 RenderSliver 在锚点捕获后调用

@@ -4,10 +4,20 @@ import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
 
+/// 流式 UI 刷新最小间隔，对齐 Grok Build Presenter 默认 ~16ms cadence。
+///
+/// 帧级 writer 背压等进一步对齐见
+/// `plan/agent_stream_perf_grok_alignment_plan.md`。
+const Duration kAgentStreamFlushInterval = Duration(milliseconds: 16);
+
 /// Agent 面板的分区刷新信号与流式节流器。
 ///
 /// 它把 UI 刷新拆成 header/history/composer/pending interaction/
 /// live turn/auto scroll 等分区信号，避免流式输出时整页频繁重建。
+///
+/// 高频路径通过 [scheduleStreamFlush] 合并标志并按
+/// [kAgentStreamFlushInterval] 节流；关键路径用 [flushStreamChangesNow]
+/// 立即发布（对齐 Grok Presenter 的 request_throttled / 立即 present）。
 class AgentConversationUiSignals {
   AgentConversationUiSignals({
     required this._timeline,
@@ -118,8 +128,9 @@ class AgentConversationUiSignals {
     _streamNeedsComposerFlush = _streamNeedsComposerFlush || composer;
     _streamNeedsAutoScroll = _streamNeedsAutoScroll || autoScroll;
     _streamNeedsExpansionFlush = _streamNeedsExpansionFlush || expansion;
+    // 单例 timer：同窗口内多次 schedule 只合并标志（Grok dirty 合并）。
     _streamFlushTimer ??= Timer(
-      const Duration(milliseconds: 16),
+      kAgentStreamFlushInterval,
       flushPendingStreamChangesNow,
     );
   }

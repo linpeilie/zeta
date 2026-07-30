@@ -149,6 +149,11 @@ final class AgentTimelineExtentDescriptorFactory {
     };
   }
 
+  /// 布局失效指纹。
+  ///
+  /// 对齐 Grok `dirty_heights`：流式只让**变化 entry** 的 revision 变，
+  /// 禁止用整 turn 的 [AgentConversationTurnGroup.renderRevision] 绑死所有 block，
+  /// 否则 live turn 内每个字符都会把 sibling tool card 标成 measurement stale。
   Object _layoutRevision(
     AgentTimelineViewportItem item,
     AgentTimelineExpansionLookup expansion,
@@ -164,13 +169,99 @@ final class AgentTimelineExtentDescriptorFactory {
         'footer',
         turn.id,
         turn.renderRevision,
+        turn.tokenUsage?.totalTokens,
+        turn.duration?.inMilliseconds,
       ),
       AgentBlockViewportItem(:final turn, :final block) => Object.hash(
         'block',
         turn.id,
-        turn.renderRevision,
         block.id,
+        _blockContentRevision(block),
         _blockExpansionFingerprint(block, expansion),
+      ),
+    };
+  }
+
+  /// 单个 render block 的内容指纹（不含 turn 级 renderRevision）。
+  Object _blockContentRevision(AgentTimelineRenderBlock block) {
+    return switch (block) {
+      AgentTimelineCommandGroupRenderBlock(:final group) => Object.hashAll([
+        for (final item in group.items)
+          Object.hash(
+            item.id,
+            item.kind,
+            item.title,
+            _entryContentRevision(item.entry),
+          ),
+      ]),
+      AgentTimelineFileEditGroupRenderBlock(:final group) => Object.hashAll([
+        for (final item in group.items)
+          Object.hash(
+            item.id,
+            item.filePath,
+            item.title,
+            item.addedLines,
+            item.removedLines,
+            item.details,
+          ),
+      ]),
+      AgentTimelineEntryRenderBlock(:final entry) => _entryContentRevision(
+        entry,
+      ),
+    };
+  }
+
+  Object _entryContentRevision(AgentTimelineEntry entry) {
+    return switch (entry) {
+      AgentMessageTimelineEntry(:final message) => Object.hash(
+        message.id,
+        message.kind,
+        message.phase,
+        message.status,
+        message.role,
+        message.text.length,
+        message.text.hashCode,
+      ),
+      AgentToolTimelineEntry(:final toolCall) => Object.hash(
+        toolCall.id,
+        toolCall.kind,
+        toolCall.status,
+        toolCall.title,
+        toolCall.content?.length,
+        toolCall.content?.hashCode,
+        toolCall.duration?.inMilliseconds,
+      ),
+      AgentPermissionTimelineEntry(:final request) => Object.hash(
+        request.id,
+        request.title,
+        request.kind,
+        request.command,
+        request.description,
+      ),
+      AgentQuestionTimelineEntry(:final request) => Object.hash(
+        request.id,
+        request.title,
+        request.description,
+        request.questions.length,
+      ),
+      AgentPlanApprovalTimelineEntry(:final request) => Object.hash(
+        request.id,
+        request.title,
+        request.markdown.length,
+        request.markdown.hashCode,
+        request.todos.length,
+      ),
+      AgentHistoryEventTimelineEntry(:final event) => Object.hash(
+        event.id,
+        event.kind,
+        event.title,
+        event.description,
+        event.content?.length,
+      ),
+      AgentTurnDiffTimelineEntry(:final turnId, :final diff) => Object.hash(
+        turnId,
+        diff.length,
+        diff.hashCode,
       ),
     };
   }
