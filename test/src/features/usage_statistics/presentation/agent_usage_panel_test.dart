@@ -212,6 +212,38 @@ void main() {
     expect(find.text('Codex 暂时不可用'), findsOneWidget);
   });
 
+  testWidgets('静默刷新保留旧内容且不展示顶部加载横条', (tester) async {
+    final repository = _RefreshPanelRepository(_usageEntries.first);
+    final controller = AgentUsagePanelController(repository: repository);
+    addTearDown(controller.dispose);
+    await _pumpPanel(tester, controller);
+    expect(find.text('1.6K'), findsOneWidget);
+
+    final refresh = controller.refresh(showLoading: false);
+    await tester.pump();
+    expect(find.text('1.6K'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('agent-usage-provider-refreshing-codex-work')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('agent-usage-panel-loading')),
+      findsNothing,
+    );
+
+    final events = repository.refreshEvents;
+    events
+      ..add(_directoryFor(<AgentUsagePanelEntry>[_usageEntries.first]))
+      ..add(AgentUsagePanelProviderLoaded(_usageEntries.first))
+      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21, 14)))
+      ..close();
+    await refresh;
+    await tester.pump();
+
+    expect(find.text('1.6K'), findsOneWidget);
+    expect(controller.isLoading, isFalse);
+  });
+
   testWidgets('单 Provider 不显示 Tabs', (tester) async {
     final controller = AgentUsagePanelController(
       repository: _ImmediatePanelRepository(<AgentUsagePanelEntry>[

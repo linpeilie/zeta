@@ -117,6 +117,60 @@ void main() {
     expect(controller.errorMessage, isNull);
   });
 
+  test('静默刷新保留旧数据且不进入 isLoading', () async {
+    final repository = _ControlledPanelRepository();
+    final controller = AgentUsagePanelController(repository: repository);
+    addTearDown(controller.dispose);
+
+    final initialRefresh = controller.refresh();
+    final initialEvents = repository.controllers.single;
+    initialEvents
+      ..add(_directory)
+      ..add(
+        const AgentUsagePanelProviderLoaded(
+          AgentUsagePanelEntry(providerId: 'codex', providerName: 'Codex'),
+        ),
+      )
+      ..add(
+        const AgentUsagePanelProviderLoaded(
+          AgentUsagePanelEntry(providerId: 'grok', providerName: 'Grok'),
+        ),
+      )
+      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21)))
+      ..close();
+    await initialRefresh;
+    expect(controller.isLoading, isFalse);
+
+    final silentRefresh = controller.refresh(showLoading: false);
+    expect(controller.isLoading, isFalse);
+    expect(controller.providers.every((state) => !state.isLoading), isTrue);
+    expect(controller.providers.every((state) => state.entry != null), isTrue);
+
+    final silentEvents = repository.controllers.last;
+    silentEvents
+      ..add(_directory)
+      ..add(
+        const AgentUsagePanelProviderLoaded(
+          AgentUsagePanelEntry(
+            providerId: 'codex',
+            providerName: 'Codex Updated',
+          ),
+        ),
+      )
+      ..add(
+        const AgentUsagePanelProviderLoaded(
+          AgentUsagePanelEntry(providerId: 'grok', providerName: 'Grok'),
+        ),
+      )
+      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 22)))
+      ..close();
+    await silentRefresh;
+
+    expect(controller.isLoading, isFalse);
+    expect(controller.providers.first.entry?.providerName, 'Codex Updated');
+    expect(controller.lastUpdated, DateTime(2026, 7, 22));
+  });
+
   test('新刷新覆盖旧流，过期事件不会回写状态', () async {
     final repository = _ControlledPanelRepository();
     final controller = AgentUsagePanelController(repository: repository);

@@ -71,19 +71,30 @@ class AgentUsagePanelController extends ChangeNotifier {
   AgentUsagePanelEntry? get selectedEntry => selectedProvider?.entry;
 
   /// 刷新全部已启用 Provider；旧数据在刷新期间继续展示。
-  Future<void> refresh({bool forceRefresh = true}) async {
+  ///
+  /// [showLoading] 为 false 时做静默刷新（如 turn 完成后的后台更新）：保留当前
+  /// 展示内容且不切换 [isLoading]，避免面板顶部反复出现加载横条。无任何
+  /// Provider 数据时仍展示首屏加载态，避免空白闪烁。
+  Future<void> refresh({
+    bool forceRefresh = true,
+    bool showLoading = true,
+  }) async {
     final token = ++_loadToken;
-    _discovering = _providers.isEmpty;
+    // 已有目录时静默刷新不亮加载态；空面板首次加载仍需要指示。
+    final indicateLoading = showLoading || _providers.isEmpty;
+    _discovering = indicateLoading && _providers.isEmpty;
     _errorMessage = null;
-    _providers = List<AgentUsagePanelProviderState>.unmodifiable(
-      _providers.map(
-        (state) => AgentUsagePanelProviderState(
-          provider: state.provider,
-          entry: state.entry,
-          isLoading: true,
+    if (indicateLoading) {
+      _providers = List<AgentUsagePanelProviderState>.unmodifiable(
+        _providers.map(
+          (state) => AgentUsagePanelProviderState(
+            provider: state.provider,
+            entry: state.entry,
+            isLoading: true,
+          ),
         ),
-      ),
-    );
+      );
+    }
     _notify();
 
     try {
@@ -93,7 +104,10 @@ class AgentUsagePanelController extends ChangeNotifier {
         }
         switch (event) {
           case AgentUsagePanelProvidersDiscovered():
-            _applyProviderDirectory(event.providers);
+            _applyProviderDirectory(
+              event.providers,
+              markLoading: indicateLoading,
+            );
           case AgentUsagePanelProviderLoaded():
             _replaceProvider(
               event.entry.providerId,
@@ -146,7 +160,10 @@ class AgentUsagePanelController extends ChangeNotifier {
     _notify();
   }
 
-  void _applyProviderDirectory(List<AgentUsagePanelProvider> providers) {
+  void _applyProviderDirectory(
+    List<AgentUsagePanelProvider> providers, {
+    required bool markLoading,
+  }) {
     final previousById = <String, AgentUsagePanelProviderState>{
       for (final state in _providers) state.provider.providerId: state,
     };
@@ -156,7 +173,9 @@ class AgentUsagePanelController extends ChangeNotifier {
         return AgentUsagePanelProviderState(
           provider: provider,
           entry: previous?.entry,
-          isLoading: true,
+          // 静默刷新时保留原加载标记，避免已有数据时闪加载横条。
+          isLoading: markLoading,
+          loadError: markLoading ? null : previous?.loadError,
         );
       }),
     );

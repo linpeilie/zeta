@@ -201,7 +201,8 @@ class _IdeHomeState extends State<IdeHome> {
           ),
     );
     _agentUsageRefreshCoordinator = AgentUsageRefreshCoordinator(
-      refresh: _agentUsagePanelController.refresh,
+      // turn 完成 / 启动预热走静默刷新：已有数据时不闪加载横条。
+      refresh: () => _agentUsagePanelController.refresh(showLoading: false),
       schedule: (task) {
         unawaited(
           SchedulerBinding.instance.scheduleTask<void>(
