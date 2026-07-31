@@ -776,6 +776,12 @@ void main() {
       await tester.pump();
 
       expect(glowFinder, findsOneWidget);
+      expect(
+        find.byKey(
+          const ValueKey('agent-composer-running-glow-repaint-boundary'),
+        ),
+        findsOneWidget,
+      );
       final animationBuilder = find.byKey(
         const ValueKey('agent-composer-running-glow-animation'),
       );

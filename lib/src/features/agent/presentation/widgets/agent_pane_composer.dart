@@ -785,12 +785,17 @@ class _ComposerRunningGlowBorderState extends State<_ComposerRunningGlowBorder>
               Positioned.fill(
                 child: IgnorePointer(
                   child: ExcludeSemantics(
-                    child: CustomPaint(
-                      key: const ValueKey('agent-composer-running-glow'),
-                      painter: _ComposerRunningGlowPainter(
-                        progress: _controller.value,
-                        color: widget.color,
-                        brightness: widget.brightness,
+                    child: RepaintBoundary(
+                      key: const ValueKey(
+                        'agent-composer-running-glow-repaint-boundary',
+                      ),
+                      child: CustomPaint(
+                        key: const ValueKey('agent-composer-running-glow'),
+                        painter: _ComposerRunningGlowPainter(
+                          progress: _controller.value,
+                          color: widget.color,
+                          brightness: widget.brightness,
+                        ),
                       ),
                     ),
                   ),
