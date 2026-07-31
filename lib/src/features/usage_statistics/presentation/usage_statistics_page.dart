@@ -468,19 +468,6 @@ class _UsageOverviewBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final comparison = overview.callComparison;
-    final changePercent = comparison.changePercent;
-    final comparisonText = changePercent == null
-        ? comparison.current > 0
-              ? '上一周期无调用'
-              : '与上一周期持平'
-        : '${changePercent.abs().toStringAsFixed(1)}% · 相比上一周期';
-    final comparisonTrend = changePercent == null
-        ? _OverviewComparisonTrend.flat
-        : changePercent >= 0
-        ? _OverviewComparisonTrend.up
-        : _OverviewComparisonTrend.down;
-
     final colors = IdeColors.of(context);
     final tokenCard = _OverviewMetricCard(
       key: const ValueKey('usage-overview-tokens'),
@@ -502,12 +489,9 @@ class _UsageOverviewBar extends StatelessWidget {
       key: const ValueKey('usage-overview-calls'),
       label: '调用次数',
       value: formatUsageCount(overview.totalCalls),
-      detail: comparisonText,
       icon: Icons.bolt_rounded,
       accent: colors.accent,
-      comparisonTrend: comparisonTrend,
-      semanticLabel:
-          '调用次数 ${formatUsageCount(overview.totalCalls)}，$comparisonText',
+      semanticLabel: '调用次数 ${formatUsageCount(overview.totalCalls)}',
     );
 
     return LayoutBuilder(
@@ -538,44 +522,29 @@ class _UsageOverviewBar extends StatelessWidget {
   }
 }
 
-enum _OverviewComparisonTrend { up, down, flat }
-
-/// 概况区双指标卡片：大号数值 + 图标徽章 + 次级说明。
+/// 概况区双指标卡片：大号数值 + 图标徽章 + 可选次级说明。
 class _OverviewMetricCard extends StatelessWidget {
   const _OverviewMetricCard({
     required this.label,
     required this.value,
-    required this.detail,
     required this.icon,
     required this.accent,
     required this.semanticLabel,
-    this.comparisonTrend,
+    this.detail,
     super.key,
   });
 
   final String label;
   final String value;
-  final String detail;
+  final String? detail;
   final IconData icon;
   final Color accent;
   final String semanticLabel;
-  final _OverviewComparisonTrend? comparisonTrend;
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final trendColor = switch (comparisonTrend) {
-      _OverviewComparisonTrend.up => colors.success,
-      _OverviewComparisonTrend.down => colors.error,
-      _OverviewComparisonTrend.flat || null => colors.textSecondary,
-    };
-    final trendIcon = switch (comparisonTrend) {
-      _OverviewComparisonTrend.up => Icons.trending_up_rounded,
-      _OverviewComparisonTrend.down => Icons.trending_down_rounded,
-      _OverviewComparisonTrend.flat => Icons.trending_flat_rounded,
-      null => null,
-    };
 
     return Semantics(
       label: semanticLabel,
@@ -615,23 +584,17 @@ class _OverviewMetricCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: textStyles.metricValue.copyWith(color: accent),
                   ),
-                  const SizedBox(height: IdeSpacing.space6),
-                  Row(
-                    children: [
-                      if (trendIcon != null) ...[
-                        Icon(trendIcon, size: 14, color: trendColor),
-                        const SizedBox(width: IdeSpacing.space4),
-                      ],
-                      Expanded(
-                        child: Text(
-                          detail,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: textStyles.meta.copyWith(color: trendColor),
-                        ),
+                  if (detail case final String detailText) ...[
+                    const SizedBox(height: IdeSpacing.space6),
+                    Text(
+                      detailText,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: textStyles.meta.copyWith(
+                        color: colors.textSecondary,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ],
               ),
             ),
