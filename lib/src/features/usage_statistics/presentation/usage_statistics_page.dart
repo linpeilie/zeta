@@ -254,7 +254,6 @@ class _UsageFilters extends StatelessWidget {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final report = this.report;
-    final projects = report?.projectOptions ?? const <String>[];
     final agents = report?.agentOptions ?? const <String>[];
     final models = report?.modelOptions ?? const <String>[];
     return IdeToolbar(
@@ -292,23 +291,6 @@ class _UsageFilters extends StatelessWidget {
                           unawaited(controller.selectTimePreset(value));
                         }
                       },
-                    ),
-                  ),
-                  _LabeledFilter(
-                    label: '项目',
-                    width: fieldWidth,
-                    child: _select<String>(
-                      key: const ValueKey('usage-project-filter'),
-                      width: fieldWidth,
-                      value: controller.projectPath ?? _all,
-                      options: <_SelectOption<String>>[
-                        const _SelectOption(_all, '全部项目'),
-                        for (final project in projects)
-                          _SelectOption(project, usageProjectName(project)),
-                      ],
-                      onChanged: (value) => controller.selectProject(
-                        value == null || value == _all ? null : value,
-                      ),
                     ),
                   ),
                   _LabeledFilter(

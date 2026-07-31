@@ -114,7 +114,9 @@ void main() {
       find.byKey(const ValueKey('usage-time-range-filter')),
       findsOneWidget,
     );
-    expect(find.byKey(const ValueKey('usage-project-filter')), findsOneWidget);
+    expect(find.byKey(const ValueKey('usage-project-filter')), findsNothing);
+    expect(find.byKey(const ValueKey('usage-agent-filter')), findsOneWidget);
+    expect(find.byKey(const ValueKey('usage-model-filter')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('usage-custom-date-range')),
       findsOneWidget,
