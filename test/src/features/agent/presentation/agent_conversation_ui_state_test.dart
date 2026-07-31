@@ -163,7 +163,6 @@ void main() {
     late AgentConversationHistoryState history;
     late AgentConversationUiStateStore store;
     var disposed = false;
-    var legacyNotifyCount = 0;
 
     setUp(() {
       timeline = AgentConversationTimelineStore();
@@ -179,7 +178,6 @@ void main() {
       );
       history = _historyState();
       disposed = false;
-      legacyNotifyCount = 0;
       store = AgentConversationUiStateStore(
         timeline: timeline,
         buildHeaderState: () => header,
@@ -187,7 +185,6 @@ void main() {
         buildPendingInteractionState: () => pending,
         buildExpansionState: () => expansion,
         buildHistoryState: () => history,
-        onLegacyNotify: () => legacyNotifyCount += 1,
         isDisposed: () => disposed,
       );
     });
@@ -279,9 +276,7 @@ void main() {
       expect(bindingNotifications, 1);
       expect(liveNotifications, 1);
       expect(autoScrollEffects, 1);
-      expect(store.diagnostics.actualPublishCount, 1);
-      expect(store.diagnostics.legacyNotifyCount, 1);
-      expect(legacyNotifyCount, 1);
+      expect(store.diagnostics.publishCount, 1);
     });
 
     test('disposed owner rejects scheduler callbacks', () {
@@ -296,8 +291,7 @@ void main() {
       );
 
       expect(store.header.value.title, 'Thread');
-      expect(store.diagnostics.actualPublishCount, 0);
-      expect(legacyNotifyCount, 0);
+      expect(store.diagnostics.publishCount, 0);
     });
   });
 }

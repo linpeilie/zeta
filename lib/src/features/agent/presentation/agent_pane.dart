@@ -39,7 +39,6 @@ import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descr
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection_cache.dart';
-import 'package:zeta/src/features/agent/presentation/agent_timeline_virtualization_flag.dart';
 import 'package:zeta/src/features/agent/presentation/model_config_ui_state.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 import 'package:zeta/src/ui/core/virtualization/ide_dynamic_sliver_list.dart';
@@ -99,7 +98,6 @@ class AgentPane extends StatefulWidget {
 }
 
 class _AgentPaneState extends State<AgentPane> {
-  static const double _autoScrollBottomThreshold = 48;
   static const XTypeGroup _imageTypeGroup = XTypeGroup(
     label: 'Images',
     extensions: <String>['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'],
@@ -113,15 +111,9 @@ class _AgentPaneState extends State<AgentPane> {
   final List<({String name, String path})> _draftMentions =
       <({String name, String path})>[];
 
-  /// 旧路径 stick-to-bottom；flag 开启时由 coordinator 接管。
-  ///
-  /// **保留策略（阶段 5）**：至少一个发布周期内不要删除；关闭
-  /// `kUseAnchoredDynamicTimelineSliver` 时仍依赖此字段与
-  /// [_scrollToEndLegacy] 完成回退。
-  bool _stickToBottom = true;
   late StreamSubscription<AgentUiEffect> _uiEffectSubscription;
 
-  /// 动态高度路径：extent index + follow/free 协调器（flag 开启时使用）。
+  /// 动态高度路径：extent index + follow/free 协调器。
   final IdeVirtualListController _virtualListController =
       IdeVirtualListController();
   late final IdeVirtualScrollCoordinator _scrollCoordinator;
@@ -186,7 +178,6 @@ class _AgentPaneState extends State<AgentPane> {
         typographyEpoch: 0,
       ),
     );
-    _stickToBottom = true;
     _lastTimelineItemId = null;
     // 重置 coordinator：重新 attach driver 并请求 follow。
     unawaited(_scrollCoordinator.requestFollowEnd(animated: false));
@@ -309,8 +300,6 @@ class _AgentPaneState extends State<AgentPane> {
                           _lastTimelineItemId = id;
                         },
                         onScrollToEndPressed: _requestScrollToEndFromButton,
-                        useAnchoredDynamicSliver:
-                            kUseAnchoredDynamicTimelineSliver,
                       ),
                 floatingPanel: _AgentActivePlanSection(
                   viewModel: widget.viewModel,
@@ -648,43 +637,19 @@ class _AgentPaneState extends State<AgentPane> {
     if (!widget.isActive || effect is! AgentRequestAutoScroll) {
       return;
     }
-    if (kUseAnchoredDynamicTimelineSliver) {
-      // 新路径：只通知 coordinator，由 frame-coalesce 的 jump 完成 follow。
-      _scrollCoordinator.onAutoScrollTick(lastItemId: _lastTimelineItemId);
-      _notifyScrollChrome();
-      return;
-    }
-    // 旧路径回退。
-    if (_shouldStickToBottom()) {
-      _scrollToEndLegacy();
-    }
+    _scrollCoordinator.notifyContentChanged(lastItemId: _lastTimelineItemId);
+    _notifyScrollChrome();
   }
 
   void _handleScrollChanged() {
-    if (kUseAnchoredDynamicTimelineSliver) {
-      // 用户意图主要由 ScrollNotification 分发；此处刷新 chrome。
-      if (!_scrollCoordinator.isProgrammatic) {
-        final metrics = _currentScrollMetrics();
-        if (metrics != null) {
-          _scrollCoordinator.onUserScroll(metrics);
-        }
+    // 用户意图主要由 ScrollNotification 分发；此处刷新 chrome。
+    if (!_scrollCoordinator.isProgrammatic) {
+      final metrics = _currentScrollMetrics();
+      if (metrics != null) {
+        _scrollCoordinator.onUserScroll(metrics);
       }
-      _notifyScrollChrome();
-      return;
     }
-    _stickToBottom = _shouldStickToBottom();
-  }
-
-  bool _shouldStickToBottom() {
-    if (!_scrollController.hasClients) {
-      return _stickToBottom;
-    }
-    return _distanceToBottom() <= _autoScrollBottomThreshold;
-  }
-
-  double _distanceToBottom() {
-    final position = _scrollController.position;
-    return position.maxScrollExtent - position.pixels;
+    _notifyScrollChrome();
   }
 
   IdeVirtualScrollMetricsSnapshot? _currentScrollMetrics() {
@@ -697,28 +662,6 @@ class _AgentPaneState extends State<AgentPane> {
       maxScrollExtent: position.maxScrollExtent,
       viewportDimension: position.viewportDimension,
     );
-  }
-
-  /// flag 关闭时的旧 stick-to-bottom 滚底实现。
-  ///
-  /// 新路径请使用 [_scrollCoordinator.onAutoScrollTick] /
-  /// [requestFollowEnd]。本方法保留用于 A/B 回退，勿在 flag 存在期间删除。
-  void _scrollToEndLegacy() {
-    // 新消息/工具卡出现后自动滚到底部，但不阻塞当前 build。
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) {
-        return;
-      }
-      if (MediaQuery.disableAnimationsOf(context)) {
-        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-        return;
-      }
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
-      );
-    });
   }
 
   Future<void> _requestScrollToEndFromButton() {

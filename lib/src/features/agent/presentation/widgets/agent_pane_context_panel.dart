@@ -28,79 +28,91 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
   @override
   Widget build(BuildContext context) {
     final viewModel = widget.viewModel;
-    // 监听 ViewModel 整体变更：token 用量、消息列表与标题都会随它刷新。
-    return ListenableBuilder(
-      listenable: viewModel,
-      builder: (context, _) {
-        final colors = IdeColors.of(context);
-        final usage = viewModel.currentThreadTokenUsage;
-        final messages = viewModel.messages;
-        final rawItems = _buildContextRawItems(
-          timelineEntries: viewModel.timelineEntries,
-          filterNonChat: _filterNonChatMessages,
-        );
-        return Container(
-          key: const ValueKey('agent-context-panel'),
-          width: _agentContextPanelWidth,
-          decoration: BoxDecoration(
-            color: colors.surface,
-            border: Border(
-              left: BorderSide(color: colors.borderSubtle, width: 1),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _AgentContextPanelHeader(onClose: viewModel.hideContextPanel),
-              // SelectionArea 覆盖概览与原始消息区，支持拖选 / 右键复制；
-              // 关闭按钮留在区外，避免与选择手势争用。
-              Expanded(
-                child: SelectionArea(
-                  key: const ValueKey('agent-context-panel-selection'),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(
-                      IdeSpacing.space16,
-                      IdeSpacing.space8,
-                      IdeSpacing.space16,
-                      IdeSpacing.space20,
-                    ),
-                    child: RepaintBoundary(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _AgentContextSummaryCard(
-                            title: viewModel.currentThreadTitle,
-                            sessionId: viewModel.sessionId,
-                            messageCount: messages.length,
-                            providerName: viewModel.activeProviderName,
-                            contextLimit: usage?.displayModelContextWindow,
-                            totalTokens: usage?.displayTotalTokens,
-                            inputTokens: usage?.displayInputTokens,
-                            outputTokens: usage?.displayOutputTokens,
-                            cachedTokens: usage?.displayCachedInputTokens,
-                            createdAt: viewModel.threadCreatedAt,
-                            lastActiveAt: viewModel.threadLastActiveAt,
+    return ValueListenableBuilder<AgentConversationTurnState?>(
+      valueListenable: viewModel.liveTurnListenable,
+      builder: (context, liveTurnState, _) {
+        // 上下文面板只组合已有 typed slice；live binding 改变时重绑稳定 turn
+        // notifier，避免重新引入完整 ViewModel ChangeNotifier。
+        return ListenableBuilder(
+          listenable: Listenable.merge(<Listenable>[
+            viewModel.headerStateListenable,
+            viewModel.historyStateListenable,
+            viewModel.threadSnapshotListenable,
+            viewModel.providerController,
+            ?liveTurnState,
+          ]),
+          builder: (context, _) {
+            final colors = IdeColors.of(context);
+            final usage = viewModel.currentThreadTokenUsage;
+            final messages = viewModel.messages;
+            final rawItems = _buildContextRawItems(
+              timelineEntries: viewModel.timelineEntries,
+              filterNonChat: _filterNonChatMessages,
+            );
+            return Container(
+              key: const ValueKey('agent-context-panel'),
+              width: _agentContextPanelWidth,
+              decoration: BoxDecoration(
+                color: colors.surface,
+                border: Border(
+                  left: BorderSide(color: colors.borderSubtle, width: 1),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _AgentContextPanelHeader(onClose: viewModel.hideContextPanel),
+                  // SelectionArea 覆盖概览与原始消息区，支持拖选 / 右键复制；
+                  // 关闭按钮留在区外，避免与选择手势争用。
+                  Expanded(
+                    child: SelectionArea(
+                      key: const ValueKey('agent-context-panel-selection'),
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(
+                          IdeSpacing.space16,
+                          IdeSpacing.space8,
+                          IdeSpacing.space16,
+                          IdeSpacing.space20,
+                        ),
+                        child: RepaintBoundary(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _AgentContextSummaryCard(
+                                title: viewModel.currentThreadTitle,
+                                sessionId: viewModel.sessionId,
+                                messageCount: messages.length,
+                                providerName: viewModel.activeProviderName,
+                                contextLimit: usage?.displayModelContextWindow,
+                                totalTokens: usage?.displayTotalTokens,
+                                inputTokens: usage?.displayInputTokens,
+                                outputTokens: usage?.displayOutputTokens,
+                                cachedTokens: usage?.displayCachedInputTokens,
+                                createdAt: viewModel.threadCreatedAt,
+                                lastActiveAt: viewModel.threadLastActiveAt,
+                              ),
+                              const SizedBox(height: IdeSpacing.space20),
+                              _AgentContextRawMessageList(
+                                items: rawItems,
+                                filterNonChat: _filterNonChatMessages,
+                                expandedIds: _expandedRawMessageIds,
+                                onToggle: _toggleRawMessage,
+                                onFilterChanged: (value) {
+                                  setState(() {
+                                    _filterNonChatMessages = value;
+                                  });
+                                },
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: IdeSpacing.space20),
-                          _AgentContextRawMessageList(
-                            items: rawItems,
-                            filterNonChat: _filterNonChatMessages,
-                            expandedIds: _expandedRawMessageIds,
-                            onToggle: _toggleRawMessage,
-                            onFilterChanged: (value) {
-                              setState(() {
-                                _filterNonChatMessages = value;
-                              });
-                            },
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         );
       },
     );

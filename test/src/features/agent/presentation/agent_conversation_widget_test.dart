@@ -1415,6 +1415,17 @@ void main() {
     expect(find.text('2024-01-15 10:30'), findsOneWidget);
     expect(find.text('2024-06-20 14:05'), findsOneWidget);
 
+    // 面板监听 typed header state，而不是完整 ViewModel ChangeNotifier。
+    viewModel.syncThreadTitleIfCurrent('thread-ctx', 'Context thread renamed');
+    await tester.pump();
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('agent-context-panel')),
+        matching: find.text('Context thread renamed'),
+      ),
+      findsOneWidget,
+    );
+
     // 原始消息列表：ID 与角色。
     expect(find.text('msg-user-1'), findsOneWidget);
     expect(find.text('用户'), findsOneWidget);

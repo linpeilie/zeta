@@ -191,7 +191,7 @@ final class IdeVirtualScrollCoordinator {
   int _settledFrameCount = 0;
   String? _lastItemId;
   int _revealCount = 0;
-  int _coalescedTickCount = 0;
+  int _coalescedFollowEndRequestCount = 0;
 
   /// 模式变化时回调（测试与 UI 可选监听）；不在 layout 同步路径强制调用。
   VoidCallback? onModeChanged;
@@ -214,8 +214,8 @@ final class IdeVirtualScrollCoordinator {
   /// 已执行的 reveal 次数（含 jump 与 animate 完成）。
   int get revealCount => _revealCount;
 
-  /// 自上次 reveal 调度以来合并掉的 tick 数（诊断）。
-  int get coalescedTickCount => _coalescedTickCount;
+  /// 自上次 reveal 调度以来合并的内容变化请求数（诊断）。
+  int get coalescedFollowEndRequestCount => _coalescedFollowEndRequestCount;
 
   /// free 且离底部超过 exit 阈值时显示“滚到底部”按钮。
   bool shouldShowScrollToEndButton(IdeVirtualScrollMetricsSnapshot metrics) {
@@ -279,10 +279,10 @@ final class IdeVirtualScrollCoordinator {
     }
   }
 
-  /// 内容变化可能导致底部移动的 tick（如 streaming 合并信号）。
+  /// 通知协调器内容变化可能移动底部（如 streaming 合并发布）。
   ///
   /// free：忽略。followEnd：合并到本帧一次 reveal。
-  void onAutoScrollTick({String? lastItemId}) {
+  void notifyContentChanged({String? lastItemId}) {
     if (lastItemId != null) {
       _lastItemId = lastItemId;
     }
@@ -290,7 +290,7 @@ final class IdeVirtualScrollCoordinator {
       return;
     }
     _pendingFollowEnd = true;
-    _coalescedTickCount += 1;
+    _coalescedFollowEndRequestCount += 1;
     _scheduleCoalescedReveal();
   }
 
@@ -356,8 +356,8 @@ final class IdeVirtualScrollCoordinator {
         return;
       }
       _pendingFollowEnd = false;
-      _coalescedTickCount = 0;
-      // 流式 follow 强制无动画，避免 16ms tick 与 180ms 动画互相覆盖。
+      _coalescedFollowEndRequestCount = 0;
+      // 流式 follow 强制无动画，避免连续请求与显式动画互相覆盖。
       _unawaited(_revealEnd(animated: false, explicit: false));
     });
   }

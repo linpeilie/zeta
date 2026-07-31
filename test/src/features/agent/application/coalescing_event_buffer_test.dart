@@ -4,7 +4,7 @@ import 'package:zeta/src/features/agent/application/coalescing_event_buffer.dart
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 void main() {
-  group('CoalescingEventBuffer + AgentEventCoalescingPolicy', () {
+  group('CoalescingEventBuffer with AgentEventCoalescingPolicy', () {
     test('合并同 item 连续文本 delta', () async {
       final events = <AgentEvent>[];
       final buffer = _agentBuffer(onEvent: events.add);

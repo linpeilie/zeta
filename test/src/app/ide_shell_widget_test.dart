@@ -463,9 +463,9 @@ void main() {
     final viewModel = tester
         .widget<AgentPane>(find.byType(AgentPane))
         .viewModel;
-    final beforeBuffer = viewModel.eventStreamBufferDiagnostics;
-    final beforeScheduler = viewModel.eventFrameSchedulerDiagnostics;
-    final beforeUi = viewModel.uiSignalsDiagnostics;
+    final beforeBuffer = viewModel.eventCoalescingBufferDiagnostics;
+    final beforeScheduler = viewModel.eventDispatcherDiagnostics;
+    final beforeUi = viewModel.uiStateDiagnostics;
     final beforeUiScheduler = viewModel.uiUpdateSchedulerDiagnostics;
     expect(beforeBuffer, isNotNull);
     expect(beforeScheduler, isNotNull);
@@ -492,8 +492,8 @@ void main() {
     for (var pumpCount = 0; pumpCount < 50; pumpCount += 1) {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 16));
-      final buffer = viewModel.eventStreamBufferDiagnostics;
-      final scheduler = viewModel.eventFrameSchedulerDiagnostics;
+      final buffer = viewModel.eventCoalescingBufferDiagnostics;
+      final scheduler = viewModel.eventDispatcherDiagnostics;
       if (buffer != null &&
           buffer.receivedEvents - beforeBuffer!.receivedEvents ==
               fixture.expectedInputEventCount &&
@@ -507,9 +507,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 32));
     await tester.pump();
 
-    final afterBuffer = viewModel.eventStreamBufferDiagnostics!;
-    final afterScheduler = viewModel.eventFrameSchedulerDiagnostics!;
-    final afterUi = viewModel.uiSignalsDiagnostics;
+    final afterBuffer = viewModel.eventCoalescingBufferDiagnostics!;
+    final afterScheduler = viewModel.eventDispatcherDiagnostics!;
+    final afterUi = viewModel.uiStateDiagnostics;
     final afterUiScheduler = viewModel.uiUpdateSchedulerDiagnostics;
     final buildCounts = buildCounter.snapshot();
     buildCounter.dispose();
@@ -545,11 +545,11 @@ void main() {
     expect(afterUiScheduler.hasScheduledFrame, isFalse);
     expect(
       afterUiScheduler.publishCount - beforeUiScheduler.publishCount,
-      afterUi.actualPublishCount - beforeUi.actualPublishCount,
+      afterUi.publishCount - beforeUi.publishCount,
     );
     expect(
-      afterUi.legacyNotifyCount - beforeUi.legacyNotifyCount,
-      afterUi.actualPublishCount - beforeUi.actualPublishCount,
+      afterUiScheduler.publishedEffects - beforeUiScheduler.publishedEffects,
+      greaterThan(0),
     );
 
     debugPrint(
@@ -557,22 +557,20 @@ void main() {
       'fixture=${fixture.expectedInputEventCount} '
       'buffer={received:${afterBuffer.receivedEvents - beforeBuffer!.receivedEvents},'
       'coalesced:${afterBuffer.coalescedEvents - beforeBuffer.coalescedEvents},'
-      'barrier:${afterBuffer.barrierOrDirectPassThroughEvents - beforeBuffer.barrierOrDirectPassThroughEvents},'
+      'barrier:${afterBuffer.barrierEvents - beforeBuffer.barrierEvents},'
+      'direct:${afterBuffer.directPassThroughEvents - beforeBuffer.directPassThroughEvents},'
       'backpressure:${afterBuffer.backpressureFlushes - beforeBuffer.backpressureFlushes},'
       'maxPending:${afterBuffer.maxPendingKeys}} '
       'scheduler={delivered:${afterScheduler.deliveredEvents - beforeScheduler!.deliveredEvents},'
       'batches:${afterScheduler.batchCount - beforeScheduler.batchCount},'
       'yields:${afterScheduler.yieldCount - beforeScheduler.yieldCount},'
       'maxQueue:${afterScheduler.maxQueueDepth}} '
-      'ui={scheduled:${afterUi.scheduledStreamFlushCount - beforeUi.scheduledStreamFlushCount},'
-      'immediate:${afterUi.immediateFlushCount - beforeUi.immediateFlushCount},'
-      'merged:${afterUi.mergedRequestCount - beforeUi.mergedRequestCount},'
-      'published:${afterUi.actualPublishCount - beforeUi.actualPublishCount},'
-      'legacy:${afterUi.legacyNotifyCount - beforeUi.legacyNotifyCount}} '
+      'uiState={published:${afterUi.publishCount - beforeUi.publishCount}} '
       'uiFrame={scheduledFrames:${afterUiScheduler.scheduledFrames - beforeUiScheduler.scheduledFrames},'
       'framePublish:${afterUiScheduler.framePublishes - beforeUiScheduler.framePublishes},'
       'immediatePublish:${afterUiScheduler.immediatePublishes - beforeUiScheduler.immediatePublishes},'
-      'invalidated:${afterUiScheduler.invalidatedFrameCallbacks - beforeUiScheduler.invalidatedFrameCallbacks}} '
+      'invalidated:${afterUiScheduler.invalidatedFrameCallbacks - beforeUiScheduler.invalidatedFrameCallbacks},'
+      'effects:${afterUiScheduler.publishedEffects - beforeUiScheduler.publishedEffects}} '
       'shellSnapshotNotify=$shellSnapshotNotifyCount '
       'builds=$buildCounts',
     );
@@ -590,7 +588,7 @@ void main() {
       final provider = prepared.provider;
       final viewModel = prepared.viewModel;
 
-      final beforeStart = viewModel.eventStreamBufferDiagnostics!;
+      final beforeStart = viewModel.eventCoalescingBufferDiagnostics!;
       provider.emit(fixture.events.whereType<AgentTurnStartedEvent>().single);
       await _drainAgentEventSubset(
         tester,
@@ -609,7 +607,7 @@ void main() {
         messageEvents,
         hasLength(AgentEventStormFixture.messageDeltaCount),
       );
-      final beforeWarmup = viewModel.eventStreamBufferDiagnostics!;
+      final beforeWarmup = viewModel.eventCoalescingBufferDiagnostics!;
       provider.emit(messageEvents.first);
       await _drainAgentEventSubset(
         tester,
@@ -652,7 +650,7 @@ void main() {
         );
       });
 
-      final beforeBuffer = viewModel.eventStreamBufferDiagnostics!;
+      final beforeBuffer = viewModel.eventCoalescingBufferDiagnostics!;
       final buildCounter = TestWidgetBuildCounter()..start();
       final localTimelineBuildCounter = _LocalTimelineBuildCounter()..start();
       addTearDown(buildCounter.dispose);
@@ -713,7 +711,7 @@ void main() {
       final provider = prepared.provider;
       final viewModel = prepared.viewModel;
 
-      final beforeStart = viewModel.eventStreamBufferDiagnostics!;
+      final beforeStart = viewModel.eventCoalescingBufferDiagnostics!;
       provider.emit(fixture.events.whereType<AgentTurnStartedEvent>().single);
       await _drainAgentEventSubset(
         tester,
@@ -754,7 +752,7 @@ void main() {
         ),
       );
 
-      final beforeBuffer = viewModel.eventStreamBufferDiagnostics!;
+      final beforeBuffer = viewModel.eventCoalescingBufferDiagnostics!;
       final buildCounter = TestWidgetBuildCounter()..start();
       final localTimelineBuildCounter = _LocalTimelineBuildCounter()..start();
       addTearDown(buildCounter.dispose);
@@ -1670,8 +1668,8 @@ Future<void> _drainAgentEventSubset(
   for (var pumpCount = 0; pumpCount < 50; pumpCount += 1) {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 16));
-    final buffer = viewModel.eventStreamBufferDiagnostics;
-    final scheduler = viewModel.eventFrameSchedulerDiagnostics;
+    final buffer = viewModel.eventCoalescingBufferDiagnostics;
+    final scheduler = viewModel.eventDispatcherDiagnostics;
     if (buffer != null &&
         buffer.receivedEvents - beforeReceivedEvents ==
             expectedInputEventCount &&

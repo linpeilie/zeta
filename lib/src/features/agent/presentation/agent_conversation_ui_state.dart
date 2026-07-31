@@ -436,19 +436,9 @@ final class AgentConversationHistoryState {
 /// 仅包含调度与发布次数，不包含消息正文、Provider payload 或用户数据。
 @immutable
 final class AgentConversationUiStateDiagnostics {
-  const AgentConversationUiStateDiagnostics({
-    required this.scheduledStreamFlushCount,
-    required this.immediateFlushCount,
-    required this.mergedRequestCount,
-    required this.actualPublishCount,
-    required this.legacyNotifyCount,
-  });
+  const AgentConversationUiStateDiagnostics({required this.publishCount});
 
-  final int scheduledStreamFlushCount;
-  final int immediateFlushCount;
-  final int mergedRequestCount;
-  final int actualPublishCount;
-  final int legacyNotifyCount;
+  final int publishCount;
 }
 
 /// 将类型化 UI 更新请求发布到结构值 listenable 与一次性 effect stream。
@@ -464,7 +454,6 @@ final class AgentConversationUiStateStore {
     buildPendingInteractionState,
     required AgentExpansionState Function() buildExpansionState,
     required AgentConversationHistoryState Function() buildHistoryState,
-    required VoidCallback onLegacyNotify,
     required bool Function() isDisposed,
   }) {
     return AgentConversationUiStateStore._(
@@ -474,7 +463,6 @@ final class AgentConversationUiStateStore {
       buildPendingInteractionState: buildPendingInteractionState,
       buildExpansionState: buildExpansionState,
       buildHistoryState: buildHistoryState,
-      onLegacyNotify: onLegacyNotify,
       isDisposed: isDisposed,
     );
   }
@@ -486,7 +474,6 @@ final class AgentConversationUiStateStore {
     required this._buildPendingInteractionState,
     required this._buildExpansionState,
     required this._buildHistoryState,
-    required this._onLegacyNotify,
     required this._isDisposed,
   }) {
     _header = ValueNotifier<AgentHeaderState>(_buildHeaderState());
@@ -506,7 +493,6 @@ final class AgentConversationUiStateStore {
   final AgentPendingInteractionState Function() _buildPendingInteractionState;
   final AgentExpansionState Function() _buildExpansionState;
   final AgentConversationHistoryState Function() _buildHistoryState;
-  final VoidCallback _onLegacyNotify;
   final bool Function() _isDisposed;
 
   late final ValueNotifier<AgentHeaderState> _header;
@@ -518,8 +504,7 @@ final class AgentConversationUiStateStore {
       StreamController<AgentUiEffect>.broadcast(sync: true);
 
   AgentUiUpdateRequest? _debugLastAcceptedRequest;
-  int _actualPublishCount = 0;
-  int _legacyNotifyCount = 0;
+  int _publishCount = 0;
   bool _closed = false;
 
   ValueListenable<AgentHeaderState> get header => _header;
@@ -537,13 +522,7 @@ final class AgentConversationUiStateStore {
   Stream<AgentUiEffect> get effects => _effectController.stream;
 
   AgentConversationUiStateDiagnostics get diagnostics =>
-      AgentConversationUiStateDiagnostics(
-        scheduledStreamFlushCount: 0,
-        immediateFlushCount: 0,
-        mergedRequestCount: 0,
-        actualPublishCount: _actualPublishCount,
-        legacyNotifyCount: _legacyNotifyCount,
-      );
+      AgentConversationUiStateDiagnostics(publishCount: _publishCount);
 
   @visibleForTesting
   AgentUiUpdateRequest? get debugLastAcceptedRequest =>
@@ -554,7 +533,7 @@ final class AgentConversationUiStateStore {
       return;
     }
     _debugLastAcceptedRequest = request;
-    _actualPublishCount += 1;
+    _publishCount += 1;
 
     if (request.regions.contains(AgentUiRegion.liveTurnBinding)) {
       _timeline.syncLiveTurnBinding();
@@ -581,9 +560,6 @@ final class AgentConversationUiStateStore {
     for (final effect in request.effects) {
       _effectController.add(effect);
     }
-
-    _legacyNotifyCount += 1;
-    _onLegacyNotify();
   }
 
   void dispose() {

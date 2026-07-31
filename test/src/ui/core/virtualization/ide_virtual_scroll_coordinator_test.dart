@@ -87,7 +87,7 @@ void main() {
       driver.pixels = 100;
 
       for (var i = 0; i < 100; i++) {
-        coordinator.onAutoScrollTick(lastItemId: 'live-$i');
+        coordinator.notifyContentChanged(lastItemId: 'live-$i');
       }
       flushFrames();
 
@@ -102,11 +102,11 @@ void main() {
       expect(coordinator.mode, IdeVirtualScrollMode.followEnd);
 
       for (var i = 0; i < 5; i++) {
-        coordinator.onAutoScrollTick(lastItemId: 'tail');
+        coordinator.notifyContentChanged(lastItemId: 'tail');
       }
       expect(pendingFrames, hasLength(1));
       expect(coordinator.pendingFollowEnd, isTrue);
-      expect(coordinator.coalescedTickCount, 5);
+      expect(coordinator.coalescedFollowEndRequestCount, 5);
 
       flushFrames();
       expect(driver.jumpCount, 1);

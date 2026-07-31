@@ -56,16 +56,22 @@ IdeShellController
   -> ProjectThreadsController
 
 AgentConversationViewModel
-  -> AgentConversationEventProcessor
-    -> AgentConversationReducer（live/history/replay 独立实例）
-    -> AgentConversationTimelineStore
-    -> AgentConversationEffectRunner
-      -> turn completed / model catalog / structured error log
-    -> AgentConversationThreadSnapshot
+  -> AgentEventPipeline（事件资源唯一所有者）
+    -> AgentProviderEventListenerGate
+    -> AgentEventCoalescingPolicy + CoalescingEventBuffer
+    -> BoundedEventDispatcher（Dart event-loop，每 turn 最多 64）
+    -> AgentConversationEventProcessor
+      -> AgentConversationReducer（live/history/replay 独立实例）
+      -> AgentConversationTimelineStore
+      -> AgentConversationEffectRunner
+        -> turn completed / model catalog / structured error log
+      -> AgentConversationThreadSnapshot
   -> AgentUiUpdatePort
     -> AgentUiUpdateScheduler（presentation，按 Flutter frame 合并）
       -> SchedulerBindingAgentFrameScheduler
-      -> AgentConversationUiSignals（局部 listenable + legacy notify）
+      -> AgentConversationUiStateStore
+        -> header/composer/pending/expansion/history typed listenable
+        -> live turn 增量通知 + AgentUiEffect stream
   -> AgentConversationModelSelectionController
   -> AgentConversationModeController
   -> AgentPlanExecutionHandoffController
@@ -230,19 +236,26 @@ workspace 下启动、是否允许 eager model preload。
 server-request handler 排空。Codex 的 `AgentRuntimeInfo` 同步暴露 runtime identity，
 Grok 通过可选 `AgentRuntimeLifecycleProvider` 暴露中立生命周期，不把协议状态泄漏到 UI。
 
-Provider 事件进入对话详情和 Project Threads 前还经过 listener generation gate。每次绑定以
+Provider 事件进入对话详情前由 `AgentEventPipeline` 集中管理。每次绑定以
 `runtimeId + connectionEpoch + providerId + threadId + listenerGeneration` 标识；新监听先安装、
 旧监听后取消，且旧监听退出只能释放自身 generation。Codex/Grok 均通过可选
 `AgentRuntimeScopeProvider` 提供当前连接作用域，因此快速切换 Thread、Provider 重启和 dispose
-交叉不会把旧流投影到新会话。
+交叉不会把旧流投影到新会话。Pipeline 先使 listener scope 失效并停止接收，再取消 source；
+Thread 切换、替换与 dispose 清除旧缓存和 dispatcher 队列，只有当前 generation 的自然
+`onDone` 才会有界 drain 已接收事件；detached runtime 仅在 scope 仍当前时按既有 critical
+allowlist 接收。subscription、gate、buffer 与 dispatcher 不再由 ViewModel 分散持有。
 
-高频事件在 Application → UI 边界由 `AgentEventStreamBuffer` 合并：同 item 文本/reasoning
-delta 追加，同 turn token/diff 快照取最新，同工具 progress 按协议语义追加或替换。Transport
+高频事件在 Application 投影边界由 `AgentEventCoalescingPolicy` 与
+`CoalescingEventBuffer` 合并：同 item 文本/reasoning delta 追加，同 turn token/diff 快照取
+最新，同工具 progress 按协议语义追加或替换。算法只维护 keyed FIFO、pending 上限和 barrier
+flush，Agent key/merge/barrier 规则留在 policy。Transport
 和 Provider mapper 仍无损消费；完整 item、工具/turn 终态、审批、错误和连接状态会先 flush
-缓冲再立即发布。缓冲上限只产生不含正文的计数诊断，并触发即时 flush。
+缓冲再立即发布。缓冲上限只产生不含正文的计数诊断，并触发即时 flush。输出由
+`BoundedEventDispatcher` FIFO 交付；每个 Dart event-loop turn 默认最多 64 个，续批使用
+`Timer.run`，与 Flutter frame 调度相互独立。
 
 流式身份链路固定为：Provider raw notification → 协议 decoder → Provider-local
-adapter/reducer → 语义完整的 `AgentEvent` → EventBuffer →
+adapter/reducer → 语义完整的 `AgentEvent` → `AgentEventPipeline` →
 `AgentConversationEventProcessor`。Processor 使用纯同步 `AgentConversationReducer` 产生
 typed state、`AgentTimelineMutation`、ThreadSnapshot、`AgentUiUpdateRequest` 与
 `AgentConversationEffect`，再按固定顺序应用。source id 保存协议身份，entryId 是统一层唯一
@@ -256,19 +269,22 @@ typed state、`AgentTimelineMutation`、ThreadSnapshot、`AgentUiUpdateRequest` 
 |------|------------|------------|----------|
 | shared transport / decoder / codec | 原始帧 → typed protocol update | 通用协议语法、传输生命周期、字段类型 | mutable identity 状态、Provider 名称/kind/id 分支 |
 | Provider mapper / adapter / reducer | typed/raw Provider update → 完整 `AgentEvent` | 厂商字段兼容、source→entry、segment/phase、boundary、去重、终态和迟到事件 | 把未决语义交给 Store/ViewModel 猜测 |
-| `AgentEventStreamBuffer` | `AgentEvent` → 有序事件批 | 同 normalized identity/kind/detail 的合并与 barrier flush | 读取 Provider raw 字段、修复 Provider 乱序或重建 identity |
+| `AgentEventPipeline` | `Stream<AgentEvent>` → 已隔离、有界交付的事件 | subscription/scope/gate/buffer/dispatcher 所有权与 close 顺序 | UI region、Widget、Provider raw identity |
+| `AgentEventCoalescingPolicy` | `AgentEvent` → key/merge/barrier 决策 | normalized identity/kind/detail 的 Agent 合并规则 | 订阅生命周期、UI urgency、厂商 raw 字段 |
+| `CoalescingEventBuffer` / `BoundedEventDispatcher` | policy 输出 → FIFO 事件批 | pending 上限、barrier flush、每 turn 上限与 event-queue yield | Agent 业务分支、Flutter frame 调度 |
 | `AgentConversationReducer` | 规范化 `AgentEvent` + 只读 context → `AgentConversationMutation` | 接收规则、typed state、timeline/UI/snapshot/effect 描述 | Flutter 调度、Timer、Future、外部回调 |
 | `AgentConversationEventProcessor` | `AgentConversationMutation` → 已应用状态 | state/timeline/snapshot 刷新请求/UI/effect 的确定顺序与 outcome 合成 | Widget、ChangeNotifier、Flutter build-phase 判断、Provider 协议分支 |
 | `AgentConversationTimelineStore` | `AgentTimelineMutation` → timeline state | 同 entryId 更新、异 entryId 新建、同 tool id upsert | Provider 分支、开放条目推断、segment 分配、id 改写、UI urgency |
 | `AgentConversationEffectRunner` | scope-aware `AgentConversationEffect` → 外部工作 | generation/runtime/thread 校验与一次性执行 | 修改 Timeline、在 reducer 内执行异步 |
-| ViewModel / UI | timeline/domain state → 展示 | 中立状态投影与交互 | 解析协议 payload、根据 Provider 猜 identity/plan |
+| `AgentUiUpdateScheduler` / typed state store | `AgentUiUpdateRequest` → 局部 listenable/effect | Flutter frame 合并、结构相等发布、一次性 UI effect | 解释 `AgentEvent`、通知 Shell、持久化历史 |
+| ViewModel / UI | typed state/timeline/domain state → 展示 | 中立 facade、局部监听与交互 | 完整 ViewModel listener、解析协议 payload、根据 Provider 猜 identity/plan |
 
 依赖方向是单向的：共享层定义中立机制和契约，Provider data 层依赖这些契约并产出完整语义；
 共享层不得反向 import Provider 实现，也不得通过 raw map、魔法字符串或隐藏 flag 接收单一
 Provider 的业务策略。只有经过建模、命名与测试证明为协议级或跨 Provider 共性的 typed 语义，
 才允许扩展共享契约。否则差异必须保留在 Grok/Codex 各自的 adapter/reducer 内。
 
-因此，“新增一个 Provider 是否需要修改 EventBuffer/TimelineStore”也是架构健康度指标：正常
+因此，“新增一个 Provider 是否需要修改 CoalescingPolicy/Buffer 或 TimelineStore”也是架构健康度指标：正常
 答案应为否。若答案为是，设计评审必须先证明是共享 domain contract 缺失，而不是 Provider
 quirk、协议证据不足或 mapper/reducer 未完成归一化。
 
@@ -283,7 +299,7 @@ Project Threads 侧栏对**已打开** thread 的执行中/等待指示，以 en
 `runningThreadIds`、摘要 `status`/waiting 与内存态 `completedThreadIds`。分区 UI 信号
 （history/header/live 等）不替代 snapshot：任何改变 `isTurnRunning` 或 runtime status 的
 路径（含 stream flush）必须同步推送 snapshot，避免详情已结束而列表持续 busy。
-Processor 只登记 snapshot 刷新请求；实际 listenable 写入与 typed UI signal 共用
+Processor 只登记 snapshot 刷新请求；实际 listenable 写入与 typed UI state 共用
 presentation scheduler 的安全发布边界，build phase 内的 immediate 请求必须延至下一帧。
 
 Provider 的 Thread 访问统一经过 `ProviderOperationScheduler`。列表使用 Project 级
@@ -507,7 +523,7 @@ IDE 会话状态目前版本为 2，持久化内容包括：
 - Codex provider 事件映射。
 - Grok decoder/adapter/reducer、live/history 状态隔离、canonical ordering regression、history
   reader 只读性，以及 TimelineStore 的 dumb merge/history 应用顺序。
-- 共享层架构守卫：decoder/EventBuffer/TimelineStore 不 import 具体 Provider，不按
+- 共享层架构守卫：decoder/CoalescingPolicy/Buffer/TimelineStore 不 import 具体 Provider，不按
   providerId/kind/type 分支，也不从 raw/source/eventId 推断 identity 或 narrative boundary。
 - Provider-local 序列契约：每个 Provider 在进入共享层前完成 source→entry、segment/phase、
   tool upsert、终态竞态和迟到事件决策；共享层 fixture 保持 Provider 无关。

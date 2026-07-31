@@ -230,12 +230,14 @@ Dock，但不得共享 request/decision 模型或 pending registry。
 | 厂商扩展字段、source id 稳定性、eventId/messageId 复用 | 对应 Provider mapper/adapter | 在进入 application 前完成兼容和证据校验 |
 | entryId、message segment、reasoning phase、boundary、去重、first-terminal-wins | 对应 Provider reducer | 输出语义完整的 `AgentEvent`，不得要求 Store 二次猜测 |
 | live/history/replay 对齐 | 对应 Provider history/replay adapter | 复用算法但创建独立 reducer 实例 |
-| 连续事件批内合并与 barrier 顺序 | `AgentEventStreamBuffer` | 只按 typed entryId/kind/detail 合并，不读 Provider raw 字段 |
+| 连续事件批内合并与 barrier 顺序 | `AgentEventCoalescingPolicy` + `CoalescingEventBuffer` | policy 定义 typed key/merge/barrier；buffer 只实现有界通用算法，不读 Provider raw 字段 |
+| 事件订阅、旧 scope 隔离和有界交付 | `AgentEventPipeline` + `BoundedEventDispatcher` | Pipeline 唯一拥有 subscription/gate/buffer/dispatcher；dispatcher 每 turn 有界并让步 event queue |
 | 时间线新增、更新和 tool upsert | `AgentConversationTimelineStore` | 只按 normalized id dumb merge，不识别 Provider |
 | Provider capability 与启动时机 | Provider 实现、bundle 和 app 组合层 | 通过中立 capability/policy 暴露，不把协议判断放入 UI |
 
 新增 Provider 的正常改动范围应是：Provider 自有 data 文件、必要的中立 domain contract、
-factory/catalog 组合以及 Provider 契约测试。`AgentEventStreamBuffer` 和
+factory/catalog 组合以及 Provider 契约测试。`AgentEventCoalescingPolicy`、
+`CoalescingEventBuffer` 和
 `AgentConversationTimelineStore` 不应因为新增 Provider 而改变；确有跨 Provider 的新语义时，
 先设计 typed domain 字段和通用测试，再修改共享层。
 
@@ -244,7 +246,7 @@ factory/catalog 组合以及 Provider 契约测试。`AgentEventStreamBuffer` �
 1. 搜索共享层是否新增具体 Provider import、名称、kind、id 或实现类型判断。
 2. 搜索 Store/ViewModel/UI 是否新增 raw/extra key、eventId、source id 或“最后开放条目”推断。
 3. 使用 Provider-local 序列测试证明 `raw update → AgentEvent` 已完成身份、边界和终态决策。
-4. 使用 Provider 无关 fixture 回归 EventBuffer/TimelineStore；新增 Provider 时这些测试不应依赖
+4. 使用 Provider 无关 fixture 回归 CoalescingPolicy/Buffer、Pipeline 与 TimelineStore；新增 Provider 时这些测试不应依赖
    新 Provider 的类或 fixture。
 
 任一项不满足时，不得以“兼容性”或“临时兜底”为由合入共享层；应先回到对应 Provider
@@ -274,14 +276,18 @@ stale-while-revalidate：先发布可用旧目录，再以 single-flight 刷新�
 `CursorRetirementPolicy` 必须在 catalog、选择、恢复和 factory 边界 fail-closed；fallback
 只存在内存，不得保存覆盖旧设置。Cursor 不参与 live/replay/load、ACP 扩展、进程启动或
 运行时组合；不得读取、迁移、改写或删除 Cursor 自有目录和遗留索引。
-- 对话详情与 Project Threads 的 provider 事件订阅统一经过
-  `AgentProviderEventListenerGate`；切换 Thread/Provider 时先废弃旧 generation，再安装或
-  复用新监听。Provider 若实现 `AgentRuntimeScopeProvider`，监听还必须校验 runtime/epoch；
-  旧 listener `onDone` 只能释放仍为当前的 scope。
-- 高频事件只在 `AgentEventStreamBuffer` 的 Application 投影边界合并。新增可合并事件时，
+- 对话详情的 provider 事件订阅由 `AgentEventPipeline` 唯一拥有；Pipeline 组合
+  `AgentProviderEventListenerGate`、`AgentEventCoalescingPolicy`、
+  `CoalescingEventBuffer` 与 `BoundedEventDispatcher`。切换 Thread/Provider 时先废弃旧
+  generation，再取消 source；Provider 若实现 `AgentRuntimeScopeProvider`，监听还必须校验
+  runtime/epoch，旧 listener `onDone` 只能释放自身 Pipeline。
+- 高频事件只在 `AgentEventCoalescingPolicy` + `CoalescingEventBuffer` 的 Application
+  投影边界合并。新增可合并事件时，
   key 必须包含 thread、turn、item 和 event kind；完整 item、终态、审批、错误与连接状态
   不得进入可替代缓冲，并应先 flush 此前 delta。Transport/mapper 层保持逐条处理。
-- EventBuffer 交付的事件统一进入 `AgentConversationEventProcessor`。Reducer 只能同步产生
+- Buffer 输出经默认每 turn 64 个事件的 `BoundedEventDispatcher` FIFO 交付，并通过
+  `Timer.run` continuation 让出 Dart event queue；它不使用 Flutter idle/frame task。
+- Pipeline 输出统一进入 `AgentConversationEventProcessor`。Reducer 只能同步产生
   typed state、`AgentTimelineMutation`、ThreadSnapshot、`AgentUiUpdateRequest` 和
   `AgentConversationEffect`；不得依赖 Flutter scheduler、Timer、Future 或执行外部回调。
   live/history/replay 必须创建独立 reducer/context，不能共享错误去重、deprecation 或本地
@@ -296,6 +302,29 @@ stale-while-revalidate：先发布可用旧目录，再以 single-flight 刷新�
   waiting，不得让列表残留 sticky
   `active`。后台完成仅非选中 thread 记入 `completedThreadIds`。细节见
   [执行中状态方案 §2.5](../plan/agent_running_status_ux_plan.md)。
+
+### 新增 AgentEvent 接入清单
+
+新增或改变 `AgentEvent` 时，提交者必须逐项回答并用测试固定：
+
+1. 规范化 identity 由哪个 Provider data adapter/reducer 产生？
+2. 事件属于哪个 Thread/turn，接收条件是什么？
+3. 是否允许 detached runtime；若允许，是否已在精确 critical allowlist 中？
+4. 是否可合并，key 是否覆盖 thread/turn/item/kind/detail？
+5. merge 是追加、替换还是不可合并？
+6. 是否为输入 barrier，处理前需要 flush 哪些 pending？
+7. 是否属于不可丢失 critical event？
+8. Reducer 产生哪些 state 或 timeline mutation？
+9. 哪些 typed UI region 会变化？
+10. UI urgency 是 next-frame 还是 immediate，理由是什么？
+11. 是否产生一次性 `AgentUiEffect`？
+12. 是否产生 scope-aware `AgentConversationEffect`？
+13. 是否改变 `AgentConversationThreadSnapshot`？
+14. live/history/replay 是否需要独立 reducer/context 行为？
+15. Codex/Grok 或其他 Provider 是否都有相应契约测试？
+16. 是否把 raw payload、source id 推断或 Provider 分支泄漏到 presentation/Store？
+
+以上问题未全部明确前，不得把事件接入主链路。
 
 修改 Codex 适配层前，先对照
 [`third_party/codex_app_server_schema`](../third_party/codex_app_server_schema/)
@@ -441,7 +470,7 @@ Agent CLI 的数据不属于这套目录：Codex/Grok/Cursor 配置与 session �
 - 纯逻辑、JSON 编解码和状态机使用单元测试。
 - Widget 渲染和用户交互使用 `flutter_test`。
 - 外部 CLI、文件系统和持久化优先使用 fake 或 callback 注入。
-- 共享 decoder、EventBuffer 和 TimelineStore 使用 Provider 无关 fixture，并增加架构守卫，
+- 共享 decoder、CoalescingPolicy/Buffer 和 TimelineStore 使用 Provider 无关 fixture，并增加架构守卫，
   防止具体 Provider import、kind/id 分支或 raw identity 推断回流。
 - Provider adapter/reducer 使用带 Provider/CLI 版本的脱敏 fixture 覆盖 source id 复用、
   message/tool/reasoning 交错、重复事件、终态竞态和迟到事件。

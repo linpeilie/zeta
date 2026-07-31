@@ -49,7 +49,7 @@ String _modelCatalogSource(AgentProviderConfig config) {
 ///
 /// 当前 ViewModel 只保留 provider/session 协调与事件路由；时间线聚合、
 /// 模型选择和局部刷新节流已经下沉到 feature 级应用模块。
-class AgentConversationViewModel extends ChangeNotifier {
+class AgentConversationViewModel {
   AgentConversationViewModel({
     required this.providerController,
     AgentConversationTimelineStore? timelineStore,
@@ -85,7 +85,6 @@ class AgentConversationViewModel extends ChangeNotifier {
       buildPendingInteractionState: _buildPendingInteractionState,
       buildExpansionState: _buildExpansionState,
       buildHistoryState: _buildHistoryState,
-      onLegacyNotify: _notifyLegacyListeners,
       isDisposed: () => _disposed,
     );
     _uiUpdateScheduler = AgentUiUpdateScheduler(
@@ -298,12 +297,12 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   /// 当前事件缓冲诊断；仅包含计数和 pending key 深度。
   @visibleForTesting
-  CoalescingEventBufferDiagnostics? get eventStreamBufferDiagnostics =>
+  CoalescingEventBufferDiagnostics? get eventCoalescingBufferDiagnostics =>
       _eventPipeline?.diagnostics.buffer;
 
   /// 当前有界事件调度诊断；仅包含吞吐、批次和队列深度。
   @visibleForTesting
-  BoundedEventDispatcherDiagnostics? get eventFrameSchedulerDiagnostics =>
+  BoundedEventDispatcherDiagnostics? get eventDispatcherDiagnostics =>
       _eventPipeline?.diagnostics.dispatcher;
 
   /// 当前 Pipeline 的完整脱敏诊断。
@@ -311,19 +310,10 @@ class AgentConversationViewModel extends ChangeNotifier {
   AgentEventPipelineDiagnostics? get eventPipelineDiagnostics =>
       _eventPipeline?.diagnostics;
 
-  /// 当前 UI 信号诊断；仅包含调度、合并和发布次数。
+  /// 当前 typed UI state 发布诊断；不包含消息正文或 Provider payload。
   @visibleForTesting
-  AgentConversationUiStateDiagnostics get uiSignalsDiagnostics {
-    final scheduling = _uiUpdateScheduler.diagnostics;
-    final publishing = _uiStateStore.diagnostics;
-    return AgentConversationUiStateDiagnostics(
-      scheduledStreamFlushCount: scheduling.nextFrameRequestCount,
-      immediateFlushCount: scheduling.immediateRequestCount,
-      mergedRequestCount: scheduling.mergedRequestCount,
-      actualPublishCount: scheduling.publishCount,
-      legacyNotifyCount: publishing.legacyNotifyCount,
-    );
-  }
+  AgentConversationUiStateDiagnostics get uiStateDiagnostics =>
+      _uiStateStore.diagnostics;
 
   /// 当前统一 UI frame 调度诊断；不包含任何事件内容。
   @visibleForTesting
@@ -2445,7 +2435,6 @@ class AgentConversationViewModel extends ChangeNotifier {
     );
   }
 
-  @override
   void dispose() {
     _disposed = true;
     _invalidateProviderEventListener(
@@ -2467,7 +2456,6 @@ class AgentConversationViewModel extends ChangeNotifier {
     _threadSnapshotListenable.dispose();
     contextPanelVisible.dispose();
     _timeline.dispose();
-    super.dispose();
   }
 
   void _syncElapsedTicker() {
@@ -3294,12 +3282,6 @@ class AgentConversationViewModel extends ChangeNotifier {
       waitingOnApproval: _threadWaitingOnApproval,
       waitingOnUserInput: _threadWaitingOnUserInput,
     );
-  }
-
-  void _notifyLegacyListeners() {
-    if (!_disposed) {
-      notifyListeners();
-    }
   }
 
   void _flushPendingStreamChangesNow() {

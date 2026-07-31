@@ -301,8 +301,8 @@ void main() {
 
     shell.addListener(handleShellChanged);
     addTearDown(() => shell.removeListener(handleShellChanged));
-    final beforeBuffer = viewModel.eventStreamBufferDiagnostics!;
-    final beforeUi = viewModel.uiSignalsDiagnostics;
+    final beforeBuffer = viewModel.eventCoalescingBufferDiagnostics!;
+    final beforeUi = viewModel.uiStateDiagnostics;
 
     // Act
     provider.emitAll(fixture.events);
@@ -310,8 +310,8 @@ void main() {
     for (var attempt = 0; attempt < 200; attempt += 1) {
       await Future<void>.delayed(const Duration(milliseconds: 10));
       await _flushAsync();
-      final buffer = viewModel.eventStreamBufferDiagnostics;
-      final scheduler = viewModel.eventFrameSchedulerDiagnostics;
+      final buffer = viewModel.eventCoalescingBufferDiagnostics;
+      final scheduler = viewModel.eventDispatcherDiagnostics;
       if (buffer != null &&
           buffer.receivedEvents - beforeBuffer.receivedEvents ==
               fixture.expectedInputEventCount &&
@@ -327,9 +327,8 @@ void main() {
     await _flushAsync();
 
     // Assert
-    final afterUi = viewModel.uiSignalsDiagnostics;
-    final legacyNotifications =
-        afterUi.legacyNotifyCount - beforeUi.legacyNotifyCount;
+    final afterUi = viewModel.uiStateDiagnostics;
+    final uiStatePublishes = afterUi.publishCount - beforeUi.publishCount;
     final messageCharacters = viewModel.timelineEntries
         .whereType<AgentMessageTimelineEntry>()
         .where((entry) => entry.message.role == AgentMessageRole.agent)
@@ -351,11 +350,11 @@ void main() {
       contains(fixture.turnId),
     );
     expect(shellNotifications, greaterThan(0));
-    expect(shellNotifications, lessThan(legacyNotifications));
+    expect(shellNotifications, lessThan(uiStatePublishes));
 
     debugPrint(
       'agent-event-shell-phase1 '
-      'legacy=$legacyNotifications '
+      'uiStatePublish=$uiStatePublishes '
       'shellNotify=$shellNotifications',
     );
   });

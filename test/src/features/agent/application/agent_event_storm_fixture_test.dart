@@ -263,9 +263,8 @@ Future<_StormBaselineSnapshot> _runStorm({
     fixtureInputEvents: resolvedFixture.expectedInputEventCount,
     receivedEvents: bufferDiagnostics.receivedEvents,
     coalescedEvents: bufferDiagnostics.coalescedEvents,
-    barrierOrDirectPassThroughEvents:
-        bufferDiagnostics.barrierEvents +
-        bufferDiagnostics.directPassThroughEvents,
+    barrierEvents: bufferDiagnostics.barrierEvents,
+    directPassThroughEvents: bufferDiagnostics.directPassThroughEvents,
     backpressureFlushes: bufferDiagnostics.backpressureFlushes,
     currentPendingKeys: bufferDiagnostics.currentPendingKeys,
     maxPendingKeys: bufferDiagnostics.maxPendingKeys,
@@ -463,7 +462,8 @@ final class _StormBaselineSnapshot {
     required this.fixtureInputEvents,
     required this.receivedEvents,
     required this.coalescedEvents,
-    required this.barrierOrDirectPassThroughEvents,
+    required this.barrierEvents,
+    required this.directPassThroughEvents,
     required this.backpressureFlushes,
     required this.currentPendingKeys,
     required this.maxPendingKeys,
@@ -489,7 +489,8 @@ final class _StormBaselineSnapshot {
   final int fixtureInputEvents;
   final int receivedEvents;
   final int coalescedEvents;
-  final int barrierOrDirectPassThroughEvents;
+  final int barrierEvents;
+  final int directPassThroughEvents;
   final int backpressureFlushes;
   final int currentPendingKeys;
   final int maxPendingKeys;
@@ -517,8 +518,8 @@ final class _StormBaselineSnapshot {
         fixtureInputEvents == other.fixtureInputEvents &&
         receivedEvents == other.receivedEvents &&
         coalescedEvents == other.coalescedEvents &&
-        barrierOrDirectPassThroughEvents ==
-            other.barrierOrDirectPassThroughEvents &&
+        barrierEvents == other.barrierEvents &&
+        directPassThroughEvents == other.directPassThroughEvents &&
         backpressureFlushes == other.backpressureFlushes &&
         currentPendingKeys == other.currentPendingKeys &&
         maxPendingKeys == other.maxPendingKeys &&
@@ -546,7 +547,8 @@ final class _StormBaselineSnapshot {
     fixtureInputEvents,
     receivedEvents,
     coalescedEvents,
-    barrierOrDirectPassThroughEvents,
+    barrierEvents,
+    directPassThroughEvents,
     backpressureFlushes,
     currentPendingKeys,
     maxPendingKeys,
@@ -575,7 +577,8 @@ final class _StormBaselineSnapshot {
       'fixtureInputEvents': fixtureInputEvents,
       'receivedEvents': receivedEvents,
       'coalescedEvents': coalescedEvents,
-      'barrierOrDirectPassThroughEvents': barrierOrDirectPassThroughEvents,
+      'barrierEvents': barrierEvents,
+      'directPassThroughEvents': directPassThroughEvents,
       'backpressureFlushes': backpressureFlushes,
       'currentPendingKeys': currentPendingKeys,
       'maxPendingKeys': maxPendingKeys,

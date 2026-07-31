@@ -309,7 +309,6 @@ class _AgentConversationTimeline extends StatelessWidget {
     required this.scrollChromeTick,
     required this.onLastItemIdChanged,
     required this.onScrollToEndPressed,
-    required this.useAnchoredDynamicSliver,
   });
 
   final AgentConversationViewModel viewModel;
@@ -325,7 +324,6 @@ class _AgentConversationTimeline extends StatelessWidget {
   final ValueListenable<int> scrollChromeTick;
   final ValueChanged<String?> onLastItemIdChanged;
   final Future<void> Function() onScrollToEndPressed;
-  final bool useAnchoredDynamicSliver;
 
   @override
   Widget build(BuildContext context) {
@@ -375,19 +373,17 @@ class _AgentConversationTimeline extends StatelessWidget {
             localeKey: Localizations.localeOf(context).toString(),
           );
 
-          if (useAnchoredDynamicSliver) {
-            virtualListController.setItems(
-              descriptorFactory.describeAll(
-                items,
-                expansion: (
-                  isCommandGroupExpanded: expansionState.isCommandGroupExpanded,
-                  isFileEditItemExpanded: expansionState.isFileEditItemExpanded,
-                ),
-                layoutContext: layoutContext,
+          virtualListController.setItems(
+            descriptorFactory.describeAll(
+              items,
+              expansion: (
+                isCommandGroupExpanded: expansionState.isCommandGroupExpanded,
+                isFileEditItemExpanded: expansionState.isFileEditItemExpanded,
               ),
-              epoch: layoutContext.toEpoch(),
-            );
-          }
+              layoutContext: layoutContext,
+            ),
+            epoch: layoutContext.toEpoch(),
+          );
 
           final delegate = SliverChildBuilderDelegate(
             (context, index) {
@@ -424,19 +420,13 @@ class _AgentConversationTimeline extends StatelessWidget {
               // 保留 pagePadding；内容最大宽由外层 _AgentContentAlign 约束。
               SliverPadding(
                 padding: pagePadding,
-                sliver: useAnchoredDynamicSliver
-                    ? IdeAnchoredDynamicSliverList(
-                        controller: virtualListController,
-                        delegate: delegate,
-                      )
-                    : SliverList(delegate: delegate),
+                sliver: IdeAnchoredDynamicSliverList(
+                  controller: virtualListController,
+                  delegate: delegate,
+                ),
               ),
             ],
           );
-
-          if (!useAnchoredDynamicSliver) {
-            return scrollView;
-          }
 
           return NotificationListener<ScrollNotification>(
             onNotification: (notification) {

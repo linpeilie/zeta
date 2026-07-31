@@ -73,15 +73,20 @@ main -> app -> presentation/application -> domain
 
 ## 3. 状态与异步编排
 
-当前重构后的核心模式是“状态容器 + 应用控制器 + 细粒度 UI 信号”。
+当前重构后的核心模式是“状态容器 + 应用控制器 + 类型化 UI state”。
 
 - 纯状态容器只暴露状态和同步更新方法，例如 `ProjectThreadsViewModel`。
 - 应用控制器收敛分页、恢复、缓存、provider 调用和竞态处理，例如 `ProjectThreadsController`。
-- 高吞吐 UI 使用分区 `ValueListenable` 或版本号信号，避免流式输出导致整页重建。
+- 高吞吐 UI 使用结构相等的不可变 state slice 与分区 `ValueListenable`，不得用整数
+  version/revision 作为主要刷新协议。Timeline 的 live turn 保留稳定对象和增量 mutation，
+  不得因不可变状态迁移在每个 delta 复制完整历史。
 - Agent UI 更新由 application 通过 `AgentUiUpdatePort` 提交类型化 request；
   `SchedulerBinding` 只允许出现在 presentation 的 `AgentUiUpdateScheduler` 生产适配中。
   普通请求按下一 Flutter frame 合并，immediate 请求吸收 pending 后在安全边界发布；
   不得重新引入固定毫秒 Timer、post-frame 释放门闩或 idle task 队列。
+- `AgentConversationViewModel` 是命令入口和 typed listenable facade，不再继承
+  `ChangeNotifier`。Widget 只能监听所需 state slice、稳定 live turn 或一次性 UI effect；
+  Shell 只能监听 `AgentConversationThreadSnapshot`。
 - 跨模块共享的运行时指示（如侧栏 thread busy）若依赖独立 snapshot listenable，
   stream flush 与分区 publish 都必须同步该 snapshot，不得只 bump 面板 version。
 - 对会被新请求覆盖的异步加载使用 token/version guard，旧结果返回时必须被丢弃。
@@ -164,15 +169,24 @@ main -> app -> presentation/application -> domain
   `(runtimeId, connectionEpoch, providerId, threadId, listenerGeneration)` 隔离旧流；旧
   listener 的退出回调不得清理新 generation，Thread/Provider 切换应在首个 `await` 前
   使旧 generation 失效。
-- Transport 与 Provider mapper 不得丢弃协议事件。Application 投影层只允许合并同一
+- 每个对话事件源必须由 `AgentEventPipeline` 集中持有 subscription、listener scope/gate、
+  `CoalescingEventBuffer` 和 `BoundedEventDispatcher`。关闭时先使 scope 失效并停止接收，
+  再取消 source；Thread 切换、替换与 dispose 清空旧缓存和 dispatcher 队列，只有当前
+  generation 的自然 `onDone` 才会有界 drain 已接收事件。detached runtime 事件仅可在
+  scope 仍当前时按既有 critical allowlist 接收，旧 `onDone` 不得释放新 Pipeline。
+- Transport 与 Provider mapper 不得丢弃协议事件。`AgentEventCoalescingPolicy` 只定义
+  Agent key、merge 与 barrier；通用 `CoalescingEventBuffer` 只实现有界 keyed 合并。
+  Application 投影层只允许合并同一
   thread/turn/item/kind 的连续文本或 reasoning delta、token/diff 最新快照和工具 progress；
   item/工具/turn 终态、审批、错误和连接状态必须先 flush 缓冲后立即发布。背压诊断不得包含正文。
+- `BoundedEventDispatcher` 保持 FIFO，默认每个 Dart event-loop turn 最多处理 64 个事件，
+  continuation 使用 `Timer.run` 让步；名称和职责不得与 Flutter frame 调度混淆。
 - 规范化事件必须由 `AgentConversationEventProcessor` 编排。`AgentConversationReducer`
   只能同步产生 typed state、`AgentTimelineMutation`、ThreadSnapshot、
   `AgentUiUpdateRequest` 与 `AgentConversationEffect`；不得导入 Flutter scheduler、创建
   Timer、执行 Future 或调用外部端口。live/history/replay 必须使用隔离的 reducer/context，
   不得共享可变 identity、错误去重或 deprecation 状态。
-- Processor 只登记 ThreadSnapshot 刷新；实际 listenable 写入必须与 typed UI signal 共用
+- Processor 只登记 ThreadSnapshot 刷新；实际 listenable 写入必须与 typed UI state 共用
   presentation scheduler 的安全发布回调，不得在 Flutter build phase 同步通知 Shell。
 - TimelineStore 可以继续执行增量 mutation，但不得决定 UI urgency、读取 Provider raw 字段
   或增加 Codex/Grok 分支。外部回调、模型目录持久化和结构化错误日志由 EffectRunner 执行，
@@ -192,7 +206,7 @@ Agent 时间线必须区分 Provider 原始身份和 Zeta 展示身份：
 
 - `sourceItemId` / `sourceMessageId`（统称 source id）保存 Provider 协议给出的
   message/item/event 身份，用于关联、去重和诊断；它不是 UI 合并键。
-- `entryId` 是 Zeta 规范化时间线条目身份，也是 EventBuffer、TimelineStore 和 UI
+- `entryId` 是 Zeta 规范化时间线条目身份，也是 CoalescingPolicy/Buffer、TimelineStore 和 UI
   的唯一合并键。迁移期内 `AgentMessageDeltaEvent.messageId`、
   `AgentMessageUpdatedEvent.messageId` 和 `AgentReasoningDeltaEvent.itemId` 字段名暂时
   保留，但语义均为 entryId。
@@ -222,12 +236,12 @@ phase；被正文、tool、plan 或交互打断后的 reasoning 必须使用新 
 - live 状态至少按 `(runtimeId, connectionEpoch, providerId, sessionId, turnId)` 隔离；
   新 turn、cancel、prompt 失败、peer close、provider dispose、epoch 变化和 session
   删除/切换必须使旧状态失效。replay/history 在 build、失败或取消后也必须释放状态。
-- EventBuffer 只允许合并同 entryId、同事件 kind 和同必要 detail 的事件；任一非合并
+- CoalescingPolicy/Buffer 只允许合并同 entryId、同事件 kind 和同必要 detail 的事件；任一非合并
   事件先 flush。它不得推断“最后一个开放气泡”或替代 Provider boundary 状态机。
 - TimelineStore 只执行 dumb merge：同 entryId 更新、异 entryId 新建、同 tool id 原地
   upsert，不读取最后条目猜边界、不改写 id、不分配 segment，也不包含 Provider 分支。
   新增 Provider 只需在 data 层实现 decoder/adapter/reducer 并输出完整 `AgentEvent`，无需
-  修改 EventBuffer 或 TimelineStore。
+  修改 CoalescingPolicy/Buffer 或 TimelineStore。
 - eventId、messageId 稳定性和 delta/snapshot 语义必须由带 Provider/CLI 版本的脱敏
   fixture 证明；缺少真实证据时明确阻塞对应门禁，禁止复制其他 Provider 的假设。
 - History parser 只能只读来源文件；Grok 每次解析必须创建 fresh reducer，缺少稳定 turn id
@@ -240,7 +254,8 @@ phase；被正文、tool、plan 或交互打断后的 reasoning 必须使用新 
 ### 4.2 共享适配层纯度门禁
 
 本节中的“共享适配层”包括共享协议 decoder/codec/transport、
-`AgentEventStreamBuffer`、`AgentConversationTimelineStore`，以及消费中立
+`AgentEventPipeline`、`AgentEventCoalescingPolicy`、`CoalescingEventBuffer`、
+`BoundedEventDispatcher`、`AgentConversationTimelineStore`，以及消费中立
 `AgentEvent` 的 application/presentation 投影。它们是 Provider 无关的机制层，
 不是安放厂商兼容逻辑的兜底层。Grok、Codex 等 Provider 自有的 mapper、adapter、
 reducer 和 history parser 不属于共享适配层。
@@ -258,7 +273,8 @@ reducer 和 history parser 不属于共享适配层。
 - 根据 `providerId`、Provider kind、实现类型、显示名称或 CLI 名称分支；
 - 从 raw/extra payload、厂商字段、eventId 或 source id 猜测 entryId、message segment、
   reasoning phase、plan、叙事边界、去重、终态或错误恢复策略；
-- 在 EventBuffer、TimelineStore、ViewModel 或 UI 中为某个 Provider 修复乱序、缺 id、
+- 在 CoalescingPolicy/Buffer、TimelineStore、ViewModel 或 UI 中为某个 Provider
+  修复乱序、缺 id、
   delta/snapshot 差异或终态竞态；
 - 为接入新 Provider 修改 Store 的合并规则，或在共享层增加以 `unknown`、最后开放条目、
   `#segN` 等启发式生成/修复身份。
@@ -270,7 +286,8 @@ adapter/reducer 消化后输出语义完整的 `AgentEvent`。共享 decoder 的
 通用协议证据，不得以 Provider 名称作为条件。
 
 该边界是新增 Provider 和流式改动的评审门禁：正常接入只修改 Provider data 层、组合边界和
-Provider 契约测试。若 PR 因 Provider 差异修改 EventBuffer/TimelineStore，必须先证明这是中立
+Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer 或 TimelineStore，
+必须先证明这是中立
 契约缺口；否则应退回 Provider adapter/reducer。共享层测试应使用 Provider 无关 fixture，
 并持续断言无具体 Provider import、kind/id 分支和 raw identity 推断。
 

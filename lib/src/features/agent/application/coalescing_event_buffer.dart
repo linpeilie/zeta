@@ -33,10 +33,6 @@ final class CoalescingEventBufferDiagnostics {
   final int backpressureFlushes;
   final int currentPendingKeys;
   final int maxPendingKeys;
-
-  /// 迁移期聚合计数：所有会先 flush pending 的输入事件。
-  int get barrierOrDirectPassThroughEvents =>
-      barrierEvents + directPassThroughEvents;
 }
 
 /// 保持首次到达顺序的通用 keyed coalescing 缓冲器。
