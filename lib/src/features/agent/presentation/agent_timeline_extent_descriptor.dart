@@ -78,7 +78,7 @@ final class AgentTimelineLayoutContext {
 /// Agent timeline → [IdeVirtualItemDescriptor] 工厂。
 ///
 /// 可复用实例：连续 [describeAll] 在 id 序列稳定时复用未变项的 descriptor
-/// 对象（对齐 Grok 尾部 dirty 时前缀 layout 不重建）。
+/// 对象，使尾部变化时前缀布局保持稳定。
 final class AgentTimelineExtentDescriptorFactory {
   /// 创建工厂。
   AgentTimelineExtentDescriptorFactory();
@@ -184,7 +184,7 @@ final class AgentTimelineExtentDescriptorFactory {
 
   /// 布局失效指纹。
   ///
-  /// 对齐 Grok `dirty_heights`：流式只让**变化 entry** 的 revision 变，
+  /// 流式更新只让**变化 entry** 的 revision 改变，
   /// 禁止用整 turn 的 [AgentConversationTurnGroup.renderRevision] 绑死所有 block，
   /// 否则 live turn 内每个字符都会把 sibling tool card 标成 measurement stale。
   Object _layoutRevision(

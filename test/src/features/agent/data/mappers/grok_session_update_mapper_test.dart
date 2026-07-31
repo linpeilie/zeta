@@ -579,7 +579,7 @@ void main() {
     test(
       'maps multi-call billing total separately from _meta context occupancy',
       () {
-        // 流式 chunk 携带上下文占用（与 Grok Build 一致）。
+        // 流式 chunk 携带上下文占用。
         mapper.mapSessionUpdate(
           params: <String, Object?>{
             'sessionId': sessionId,

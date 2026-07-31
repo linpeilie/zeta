@@ -5,7 +5,7 @@ import 'package:flutter/scheduler.dart';
 
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
 
-/// 流式 UI 刷新最小间隔，对齐 Grok Build Presenter 默认 ~16ms cadence。
+/// 流式 UI 刷新的最小间隔，用于约束发布频率。
 ///
 /// 帧级 writer 背压见 [AgentConversationUiSignals] 的 stream in-flight 门闩。
 const Duration kAgentStreamFlushInterval = Duration(milliseconds: 16);
@@ -15,7 +15,7 @@ const Duration kAgentStreamFlushInterval = Duration(milliseconds: 16);
 /// 它把 UI 刷新拆成 header/history/composer/pending interaction/
 /// live turn/auto scroll 等分区信号，避免流式输出时整页频繁重建。
 ///
-/// ## Grok Presenter 对齐
+/// ## 流式刷新背压
 ///
 /// - **dirty 合并**：多次 [scheduleStreamFlush] 只合并标志位。
 /// - **min interval**：[kAgentStreamFlushInterval]。
@@ -152,7 +152,7 @@ class AgentConversationUiSignals {
     _streamNeedsComposerFlush = _streamNeedsComposerFlush || composer;
     _streamNeedsAutoScroll = _streamNeedsAutoScroll || autoScroll;
     _streamNeedsExpansionFlush = _streamNeedsExpansionFlush || expansion;
-    // 单例 timer：同窗口内多次 schedule 只合并标志（Grok dirty 合并）。
+    // 单例 timer：同一窗口内多次 schedule 只合并标志。
     _streamFlushTimer ??= Timer(
       kAgentStreamFlushInterval,
       flushPendingStreamChangesNow,
@@ -172,7 +172,7 @@ class AgentConversationUiSignals {
     }
 
     if (_streamPublishInFlight) {
-      // 保留 dirty 标志，再 defer 一拍（对齐 Grok writer in-flight）。
+      // 保留 dirty 标志并延后一拍，等待当前发布完成。
       debugSkippedInFlightStreamFlushCount += 1;
       _streamFlushTimer = Timer(
         kAgentStreamFlushInterval,

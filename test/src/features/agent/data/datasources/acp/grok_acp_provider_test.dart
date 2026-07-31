@@ -420,7 +420,7 @@ void main() {
         );
         expect(session.id, sessionId);
 
-        // turn 完成后 summary 尚无 generated_title；稍后异步写入（与真实 Grok 一致）。
+        // turn 完成时 summary 尚无 generated_title；稍后异步写入以覆盖延迟刷新路径。
         unawaited(
           Future<void>.delayed(const Duration(milliseconds: 15), () async {
             await summary.writeAsString('''
@@ -1464,7 +1464,7 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
       ),
       'session/load' => () {
         if (loadSessionEmitsReplay) {
-          // 在响应返回前同步发出回放通知（真实 Grok 行为）。
+          // 在响应返回前同步发出回放通知，覆盖先通知后响应的时序。
           emitNotification('session/update', <String, Object?>{
             'sessionId': 'sess-replay',
             'update': <String, Object?>{

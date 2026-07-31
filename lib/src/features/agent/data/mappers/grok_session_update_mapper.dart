@@ -25,7 +25,7 @@ class GrokAcpMappedUpdate {
 /// Grok multi-step agent turn 在 `turn_completed.usage` 里上报的
 /// `totalTokens` / `inputTokens` 是本回合内**全部 model call 的计费合计**，
 /// 不是上下文窗口占用。真正的窗口占用出现在流式通知的
-/// `params._meta.totalTokens`（与 Grok Build「当前上下文」一致）。
+/// `params._meta.totalTokens`。
 ///
 /// 本 mapper 在回合内跟踪最新 `_meta.totalTokens`，并在 turn_completed 时
 /// 写入 [AgentTokenUsage.lastTotalTokens] / [AgentTokenUsage.lastInputTokens]，
@@ -230,8 +230,8 @@ final class GrokSessionUpdateMapper {
 
   /// 从通知 envelope 的 `_meta.totalTokens` 更新上下文占用跟踪。
   ///
-  /// Grok Build 用同一字段展示「当前上下文已使用」；优先 `params._meta`，
-  /// 兼容嵌在 `update._meta` 的写法。
+  /// 该字段表示当前上下文占用；优先 `params._meta`，兼容嵌在
+  /// `update._meta` 的写法。
   int? _noteContextTokensFromParams(Map<String, Object?> params) {
     final paramsMeta = _stringKeyedMap(params['_meta']);
     final update = _stringKeyedMap(params['update']);
@@ -430,7 +430,7 @@ final class GrokSessionUpdateMapper {
     if (resolved == null) {
       return const GrokAcpMappedUpdate();
     }
-    // usage_update.used 与 Grok 上下文进度一致时，同步刷新占用跟踪。
+    // usage_update.used 表示当前上下文进度，同步刷新占用跟踪。
     if (update.used > 0) {
       _latestContextTokens = update.used;
     }

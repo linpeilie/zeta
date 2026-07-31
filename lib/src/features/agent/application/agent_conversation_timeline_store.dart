@@ -46,7 +46,7 @@ class AgentConversationTimelineStore {
       <String, AgentConversationTurnState>{};
   final Map<String, int> _messageIndexesByEntryId = <String, int>{};
 
-  /// 历史快照批量装载深度；>0 时推迟 live 绑定刷新（对齐 Grok deferred）。
+  /// 历史快照批量装载深度；>0 时推迟 live 绑定刷新。
   int _historyBatchDepth = 0;
 
   /// reasoning itemId → 摘要/原文双缓冲，供流式 delta 聚合。
@@ -396,7 +396,7 @@ class AgentConversationTimelineStore {
     AgentThreadHistorySnapshot history,
     AgentThreadSummary thread,
   ) {
-    // 批量装载：中间过程不刷新 live notifier（Grok push_chunk_deferred 语义）。
+    // 批量装载期间不刷新 live notifier，避免中间状态反复发布。
     beginHistoryBatch();
     try {
       clearConversation();

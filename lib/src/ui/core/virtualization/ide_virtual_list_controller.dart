@@ -163,8 +163,8 @@ final class IdeVirtualListController {
   /// 不在此处通知监听者，避免 layout 期间同步 rebuild。
   ///
   /// 若 [epoch] 与 descriptor 指纹（id/kind/layoutRevision/estimate）与
-  /// 当前 pending 或已应用序列完全一致，则 **no-op**（对齐 Grok：无脏不
-  /// rebuild layout cache），避免无意义 `synchronize` 与 list 分配。
+  /// 当前 pending 或已应用序列完全一致，则 **no-op**，避免无意义的
+  /// layout cache 重建、`synchronize` 与 list 分配。
   void setItems(
     List<IdeVirtualItemDescriptor> items, {
     required IdeLayoutEpoch epoch,

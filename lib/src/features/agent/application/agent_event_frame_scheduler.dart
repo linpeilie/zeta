@@ -5,8 +5,7 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 /// 默认每 event-loop turn 最多 apply 的已合并事件数。
 ///
-/// 对齐 Grok Build `ACP_DRAIN_BATCH_MAX = 32`；Zeta 侧事件已经过
-/// [AgentEventStreamBuffer] 合并，因此默认略高以覆盖 barrier 小风暴。
+/// 事件已经过 [AgentEventStreamBuffer] 合并，默认值兼顾批量吞吐与界面响应。
 const int kAgentEventMaxPerTurn = 64;
 
 /// Application 层的有界事件 drain 调度器。

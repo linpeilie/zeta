@@ -121,8 +121,8 @@ void main() {
     test(
       'restores context occupancy from stream _meta, not multi-call billing total',
       () {
-        // 回归：Grok Build 显示 ~379k 上下文占用，而 usage.totalTokens 为
-        // multi-call 计费合计 5.8m；历史回放必须把 _meta 写入 last*。
+        // 回归：上下文占用约 379k，而 usage.totalTokens 是 5.8m 的
+        // multi-call 计费合计；历史回放必须把 _meta 写入 last*。
         const content = r'''
 {"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"hello"}},"_meta":{"eventId":"u1"}}}
 {"method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"working"},"messageId":"a1"},"_meta":{"eventId":"a1","promptId":"p1","totalTokens":350000}}}

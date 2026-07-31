@@ -89,7 +89,7 @@ class AgentPane extends StatefulWidget {
   /// 是否为前台 canvas。
   ///
   /// 非前台时时间线不订阅 live 高频 listenable，仅保留 history/expansion
-  /// 与 threadSnapshot 侧栏路径（对齐 Grok inactive tab 不 redraw）。
+  /// 与 threadSnapshot 侧栏路径。
   final bool isActive;
 
   @override
