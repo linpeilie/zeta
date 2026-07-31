@@ -8,8 +8,9 @@ import 'package:zeta/src/features/agent/application/agent_conversation_reducer.d
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
-import 'package:zeta/src/features/agent/application/agent_event_frame_scheduler.dart';
-import 'package:zeta/src/features/agent/application/agent_event_stream_buffer.dart';
+import 'package:zeta/src/features/agent/application/agent_event_coalescing_policy.dart';
+import 'package:zeta/src/features/agent/application/bounded_event_dispatcher.dart';
+import 'package:zeta/src/features/agent/application/coalescing_event_buffer.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 import '../../../testing/agent_event_storm_fixture.dart';
@@ -230,15 +231,18 @@ Future<_StormBaselineSnapshot> _runStorm({
 }) async {
   final resolvedFixture = fixture ?? AgentEventStormFixture();
   final delivered = <AgentEvent>[];
-  late final AgentEventFrameScheduler scheduler;
-  scheduler = AgentEventFrameScheduler(
+  late final BoundedEventDispatcher<AgentEvent> scheduler;
+  scheduler = BoundedEventDispatcher<AgentEvent>(
     onEvent: (event) {
       delivered.add(event);
       onDelivered?.call(event);
     },
     maxEventsPerTurn: 64,
   );
-  final buffer = AgentEventStreamBuffer(onEvent: scheduler.add);
+  final buffer = CoalescingEventBuffer<AgentEvent, AgentEventKey>(
+    policy: const AgentEventCoalescingPolicy(),
+    onEmit: scheduler.add,
+  );
 
   for (final event in resolvedFixture.events) {
     buffer.add(event);
@@ -260,7 +264,8 @@ Future<_StormBaselineSnapshot> _runStorm({
     receivedEvents: bufferDiagnostics.receivedEvents,
     coalescedEvents: bufferDiagnostics.coalescedEvents,
     barrierOrDirectPassThroughEvents:
-        bufferDiagnostics.barrierOrDirectPassThroughEvents,
+        bufferDiagnostics.barrierEvents +
+        bufferDiagnostics.directPassThroughEvents,
     backpressureFlushes: bufferDiagnostics.backpressureFlushes,
     currentPendingKeys: bufferDiagnostics.currentPendingKeys,
     maxPendingKeys: bufferDiagnostics.maxPendingKeys,
@@ -303,7 +308,7 @@ Future<_StormBaselineSnapshot> _runStorm({
   );
 
   buffer.dispose();
-  scheduler.dispose();
+  await scheduler.close(drain: false);
   return snapshot;
 }
 

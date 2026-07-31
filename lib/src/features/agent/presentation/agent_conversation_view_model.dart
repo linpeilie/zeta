@@ -20,9 +20,9 @@ import 'package:zeta/src/features/agent/application/agent_conversation_permissio
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_ui_signals.dart';
 import 'package:zeta/src/features/agent/application/agent_elapsed_ticker.dart';
-import 'package:zeta/src/features/agent/application/agent_event_frame_scheduler.dart';
-import 'package:zeta/src/features/agent/application/agent_event_stream_buffer.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_event_listener_gate.dart';
+import 'package:zeta/src/features/agent/application/bounded_event_dispatcher.dart';
+import 'package:zeta/src/features/agent/application/coalescing_event_buffer.dart';
+import 'package:zeta/src/features/agent/application/agent_event_pipeline.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -157,11 +157,7 @@ class AgentConversationViewModel extends ChangeNotifier {
   _threadSnapshotListenable;
 
   AgentProvider? _provider;
-  StreamSubscription<AgentEvent>? _eventSubscription;
-  AgentEventStreamBuffer? _eventBuffer;
-  AgentEventFrameScheduler? _eventFrameScheduler;
-  final AgentProviderEventListenerGate _eventListenerGate =
-      AgentProviderEventListenerGate();
+  AgentEventPipeline? _eventPipeline;
 
   AgentSession? _session;
   String? _projectPath;
@@ -310,13 +306,18 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   /// 当前事件缓冲诊断；仅包含计数和 pending key 深度。
   @visibleForTesting
-  AgentEventStreamBufferDiagnostics? get eventStreamBufferDiagnostics =>
-      _eventBuffer?.diagnostics;
+  CoalescingEventBufferDiagnostics? get eventStreamBufferDiagnostics =>
+      _eventPipeline?.diagnostics.buffer;
 
   /// 当前有界事件调度诊断；仅包含吞吐、批次和队列深度。
   @visibleForTesting
-  AgentEventFrameSchedulerDiagnostics? get eventFrameSchedulerDiagnostics =>
-      _eventFrameScheduler?.diagnostics;
+  BoundedEventDispatcherDiagnostics? get eventFrameSchedulerDiagnostics =>
+      _eventPipeline?.diagnostics.dispatcher;
+
+  /// 当前 Pipeline 的完整脱敏诊断。
+  @visibleForTesting
+  AgentEventPipelineDiagnostics? get eventPipelineDiagnostics =>
+      _eventPipeline?.diagnostics;
 
   /// 当前 UI 信号诊断；仅包含调度、合并和发布次数。
   @visibleForTesting
@@ -633,8 +634,6 @@ class AgentConversationViewModel extends ChangeNotifier {
       port: null,
     );
     await providerController.setActiveProvider(providerId);
-    await _eventSubscription?.cancel();
-    _eventSubscription = null;
     _provider = null;
     final config = providerController.activeProviderConfig;
     _modelSelectionController.resetForProvider(config);
@@ -2447,7 +2446,9 @@ class AgentConversationViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    _invalidateProviderEventListener();
+    _invalidateProviderEventListener(
+      reason: AgentEventPipelineCloseReason.disposed,
+    );
     providerController.removeListener(_handleProviderSettingsChanged);
     _modelSelectionController.removeListener(_handleModelSelectionChanged);
     _conversationModeController.removeListener(_handleConversationModeChanged);
@@ -2463,7 +2464,6 @@ class AgentConversationViewModel extends ChangeNotifier {
     _uiSignals.dispose();
     _threadSnapshotListenable.dispose();
     contextPanelVisible.dispose();
-    unawaited(_eventSubscription?.cancel());
     _timeline.dispose();
     super.dispose();
   }
@@ -2635,8 +2635,6 @@ class AgentConversationViewModel extends ChangeNotifier {
       port: null,
     );
     await providerController.setActiveProvider(providerId);
-    await _eventSubscription?.cancel();
-    _eventSubscription = null;
     _provider = null;
     // 旧 backend 上的 live session 不可复用。
     _session = null;
@@ -2793,22 +2791,15 @@ class AgentConversationViewModel extends ChangeNotifier {
     AgentProvider provider, {
     required String? threadId,
   }) {
-    final scope = _eventListenerGate.current;
-    if (scope == null ||
-        scope.providerId != provider.config.id ||
-        scope.threadId != threadId) {
-      return false;
-    }
-    final expectedRuntime = scope.runtimeScope;
-    final currentRuntime = _runtimeScopeOf(provider);
-    if (expectedRuntime == null) {
-      // Provider 尚未创建 runtime；首个事件会把 scope 绑定到实际连接。
-      return true;
-    }
-    return expectedRuntime == currentRuntime;
+    return _eventPipeline?.matches(
+          providerId: provider.config.id,
+          threadId: threadId,
+          runtimeScope: _runtimeScopeOf(provider),
+        ) ??
+        false;
   }
 
-  /// 先安装新 listener，再异步取消旧 listener；代次门保证重叠窗口内只消费新事件。
+  /// 先安装新 Pipeline，再由其异步关闭旧资源；共享 gate 隔离重叠窗口。
   Future<void> _replaceProviderEventSubscription(
     AgentProvider provider, {
     required String? threadId,
@@ -2816,71 +2807,31 @@ class AgentConversationViewModel extends ChangeNotifier {
     if (_disposed) {
       return;
     }
-    final previousSubscription = _eventSubscription;
-    final previousBuffer = _eventBuffer;
-    final previousFrameScheduler = _eventFrameScheduler;
-    final scope = _eventListenerGate.activate(
+    final previous = _eventPipeline;
+    late final AgentEventPipeline pipeline;
+    pipeline = AgentEventPipeline(
+      source: provider.events,
       providerId: provider.config.id,
       threadId: threadId,
       runtimeScope: _runtimeScopeOf(provider),
-    );
-    // EventBuffer 合并后 → FrameScheduler 有界 drain → application processor。
-    final frameScheduler = AgentEventFrameScheduler(
-      onEvent: (event) {
+      currentRuntimeScope: () => _runtimeScopeOf(provider),
+      allowDetachedEvent: AgentConversationReducer.isCriticalDetachedEvent,
+      processEvent: (event) {
         if (_disposed || !identical(_provider, provider)) {
-          return;
-        }
-        if (!_eventListenerGate.accepts(
-          scope,
-          currentRuntimeScope: _runtimeScopeOf(provider),
-          allowDetachedRuntime:
-              AgentConversationReducer.isCriticalDetachedEvent(event),
-        )) {
           return;
         }
         _eventProcessor.process(event);
       },
-    );
-    final buffer = AgentEventStreamBuffer(
-      onEvent: frameScheduler.add,
-      onBackpressure: (pendingEventCount) {
-        // 诊断仅记录键数量，不泄露对话或工具输出正文。
-        _log.warning(
-          'Flushing Agent event buffer after backpressure '
-          '(pending keys: $pendingEventCount)',
-        );
-      },
-    );
-    StreamSubscription<AgentEvent>? subscription;
-    subscription = provider.events.listen(
-      buffer.add,
-      onError: (Object error, StackTrace _) {
-        if (!_eventListenerGate.accepts(
-          scope,
-          currentRuntimeScope: _runtimeScopeOf(provider),
-          allowDetachedRuntime: true,
-        )) {
-          return;
-        }
+      onSourceError: (error, _) {
         _log.warning(
           'Agent provider event stream failed (${error.runtimeType})',
         );
       },
       onDone: () {
-        buffer.dispose();
-        frameScheduler.dispose();
-        if (!_eventListenerGate.release(scope)) {
+        if (!identical(_eventPipeline, pipeline)) {
           return;
         }
-        if (identical(_eventBuffer, buffer)) {
-          _eventBuffer = null;
-        }
-        if (identical(_eventFrameScheduler, frameScheduler)) {
-          _eventFrameScheduler = null;
-        }
-        if (identical(_eventSubscription, subscription)) {
-          _eventSubscription = null;
-        }
+        _eventPipeline = null;
         if (_disposed || !identical(_provider, provider)) {
           return;
         }
@@ -2892,27 +2843,27 @@ class AgentConversationViewModel extends ChangeNotifier {
           fallbackTurnId: 'provider-disconnected',
         );
       },
+      replaces: previous,
+      onBackpressure: (pendingEventCount) {
+        // 诊断仅记录键数量，不泄露对话或工具输出正文。
+        _log.warning(
+          'Flushing Agent event buffer after backpressure '
+          '(pending keys: $pendingEventCount)',
+        );
+      },
     );
-    _eventSubscription = subscription;
-    _eventBuffer = buffer;
-    _eventFrameScheduler = frameScheduler;
-
-    // 旧代数未发布的 delta/progress 属于旧 thread 或旧连接，必须直接丢弃。
-    previousBuffer?.dispose();
-    previousFrameScheduler?.dispose();
-    if (previousSubscription != null &&
-        !identical(previousSubscription, subscription)) {
-      // 代次门已经屏蔽旧流；取消过程不得阻塞新 thread 的历史发布。
-      unawaited(previousSubscription.cancel());
-    }
+    _eventPipeline = pipeline;
   }
 
-  void _invalidateProviderEventListener() {
-    _eventListenerGate.invalidate();
-    _eventBuffer?.dispose();
-    _eventBuffer = null;
-    _eventFrameScheduler?.dispose();
-    _eventFrameScheduler = null;
+  void _invalidateProviderEventListener({
+    AgentEventPipelineCloseReason reason =
+        AgentEventPipelineCloseReason.threadSwitch,
+  }) {
+    final pipeline = _eventPipeline;
+    if (pipeline == null) {
+      return;
+    }
+    unawaited(pipeline.close(reason: reason));
   }
 
   Map<String, Object?> _providerRuntimeLogContext(AgentProvider? provider) {
@@ -3158,7 +3109,7 @@ class AgentConversationViewModel extends ChangeNotifier {
   }
 
   AgentConversationEffectScope? _currentEffectScope() {
-    final listener = _eventListenerGate.current;
+    final listener = _eventPipeline?.currentListenerScope;
     if (listener == null) {
       return null;
     }

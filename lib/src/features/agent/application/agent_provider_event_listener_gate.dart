@@ -36,6 +36,16 @@ final class AgentProviderEventListenerGate {
 
   AgentProviderEventListenerScope? get current => _current;
 
+  /// scope 是否仍是当前 listener。
+  bool isCurrent(AgentProviderEventListenerScope scope) {
+    return identical(_current, scope);
+  }
+
+  /// 异步收尾前确认期间没有创建更新的 generation。
+  bool isLatestGeneration(AgentProviderEventListenerScope scope) {
+    return scope.listenerGeneration == _nextGeneration;
+  }
+
   AgentProviderEventListenerScope activate({
     required String providerId,
     required String? threadId,

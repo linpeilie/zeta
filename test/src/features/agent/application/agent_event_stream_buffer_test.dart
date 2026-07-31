@@ -1,12 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/application/agent_event_stream_buffer.dart';
+import 'package:zeta/src/features/agent/application/agent_event_coalescing_policy.dart';
+import 'package:zeta/src/features/agent/application/coalescing_event_buffer.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 void main() {
-  group('AgentEventStreamBuffer', () {
+  group('CoalescingEventBuffer + AgentEventCoalescingPolicy', () {
     test('合并同 item 连续文本 delta', () async {
       final events = <AgentEvent>[];
-      final buffer = AgentEventStreamBuffer(onEvent: events.add);
+      final buffer = _agentBuffer(onEvent: events.add);
 
       buffer
         ..add(
@@ -40,7 +41,7 @@ void main() {
 
     test('does not coalesce the same entryId across message kinds', () async {
       final events = <AgentEvent>[];
-      final buffer = AgentEventStreamBuffer(onEvent: events.add);
+      final buffer = _agentBuffer(onEvent: events.add);
 
       buffer
         ..add(_messageDelta('regular'))
@@ -56,7 +57,7 @@ void main() {
 
     test('keeps Message Tool Message order for different entryIds', () {
       final events = <AgentEvent>[];
-      final buffer = AgentEventStreamBuffer(onEvent: events.add);
+      final buffer = _agentBuffer(onEvent: events.add);
 
       buffer
         ..add(_messageDelta('before', messageId: 'message-seg1'))
@@ -78,7 +79,7 @@ void main() {
 
     test('reasoning merge preserves source item kind and index', () async {
       final events = <AgentEvent>[];
-      final buffer = AgentEventStreamBuffer(onEvent: events.add);
+      final buffer = _agentBuffer(onEvent: events.add);
 
       buffer
         ..add(
@@ -114,7 +115,7 @@ void main() {
 
     test('同 turn 的 token、上下文与 diff 快照只发布最新值', () async {
       final events = <AgentEvent>[];
-      final buffer = AgentEventStreamBuffer(onEvent: events.add);
+      final buffer = _agentBuffer(onEvent: events.add);
 
       buffer
         ..add(
@@ -169,7 +170,7 @@ void main() {
 
     test('工具进度可追加合并，终态会先 flush 进度且自身不丢失', () {
       final events = <AgentEvent>[];
-      final buffer = AgentEventStreamBuffer(onEvent: events.add);
+      final buffer = _agentBuffer(onEvent: events.add);
 
       buffer
         ..add(_toolEvent(status: AgentToolStatus.inProgress, content: 'line 1'))
@@ -187,7 +188,7 @@ void main() {
 
     test('item 完整快照前先 flush delta', () {
       final events = <AgentEvent>[];
-      final buffer = AgentEventStreamBuffer(onEvent: events.add);
+      final buffer = _agentBuffer(onEvent: events.add);
 
       buffer
         ..add(_messageDelta('partial'))
@@ -208,7 +209,7 @@ void main() {
 
     test('turn 终态、审批、错误与连接状态按序立即发布', () {
       final events = <AgentEvent>[];
-      final buffer = AgentEventStreamBuffer(onEvent: events.add);
+      final buffer = _agentBuffer(onEvent: events.add);
 
       buffer
         ..add(_messageDelta('before terminal'))
@@ -256,7 +257,7 @@ void main() {
 
     test('diagnostics 记录输入、合并、透传与 pending key 峰值', () {
       final events = <AgentEvent>[];
-      final buffer = AgentEventStreamBuffer(onEvent: events.add);
+      final buffer = _agentBuffer(onEvent: events.add);
 
       buffer
         ..add(_messageDelta('one'))
@@ -266,7 +267,8 @@ void main() {
 
       expect(pendingSnapshot.receivedEvents, 3);
       expect(pendingSnapshot.coalescedEvents, 1);
-      expect(pendingSnapshot.barrierOrDirectPassThroughEvents, 0);
+      expect(pendingSnapshot.barrierEvents, 0);
+      expect(pendingSnapshot.directPassThroughEvents, 0);
       expect(pendingSnapshot.backpressureFlushes, 0);
       expect(pendingSnapshot.currentPendingKeys, 2);
       expect(pendingSnapshot.maxPendingKeys, 2);
@@ -279,7 +281,8 @@ void main() {
       expect(events, hasLength(3));
       expect(deliveredSnapshot.receivedEvents, 4);
       expect(deliveredSnapshot.coalescedEvents, 1);
-      expect(deliveredSnapshot.barrierOrDirectPassThroughEvents, 1);
+      expect(deliveredSnapshot.barrierEvents, 1);
+      expect(deliveredSnapshot.directPassThroughEvents, 0);
       expect(deliveredSnapshot.backpressureFlushes, 0);
       expect(deliveredSnapshot.currentPendingKeys, 0);
       expect(deliveredSnapshot.maxPendingKeys, 2);
@@ -290,7 +293,7 @@ void main() {
     test('背压达到上限时仅上报计数并立即 flush', () {
       final events = <AgentEvent>[];
       final diagnostics = <int>[];
-      final buffer = AgentEventStreamBuffer(
+      final buffer = _agentBuffer(
         onEvent: events.add,
         maxPendingEvents: 2,
         onBackpressure: diagnostics.add,
@@ -304,7 +307,8 @@ void main() {
       expect(events, hasLength(2));
       expect(buffer.diagnostics.receivedEvents, 2);
       expect(buffer.diagnostics.coalescedEvents, 0);
-      expect(buffer.diagnostics.barrierOrDirectPassThroughEvents, 0);
+      expect(buffer.diagnostics.barrierEvents, 0);
+      expect(buffer.diagnostics.directPassThroughEvents, 0);
       expect(buffer.diagnostics.backpressureFlushes, 1);
       expect(buffer.diagnostics.currentPendingKeys, 0);
       expect(buffer.diagnostics.maxPendingKeys, 2);
@@ -312,7 +316,7 @@ void main() {
 
     test('listener 失效时丢弃旧代数尚未发布的增量', () async {
       final events = <AgentEvent>[];
-      final buffer = AgentEventStreamBuffer(onEvent: events.add);
+      final buffer = _agentBuffer(onEvent: events.add);
 
       buffer.add(_messageDelta('stale'));
       buffer.dispose();
@@ -321,6 +325,19 @@ void main() {
       expect(events, isEmpty);
     });
   });
+}
+
+CoalescingEventBuffer<AgentEvent, AgentEventKey> _agentBuffer({
+  required void Function(AgentEvent event) onEvent,
+  int maxPendingEvents = 512,
+  void Function(int pendingEventCount)? onBackpressure,
+}) {
+  return CoalescingEventBuffer<AgentEvent, AgentEventKey>(
+    policy: const AgentEventCoalescingPolicy(),
+    onEmit: onEvent,
+    maxPendingKeys: maxPendingEvents,
+    onBackpressure: onBackpressure,
+  );
 }
 
 AgentMessageDeltaEvent _messageDelta(
