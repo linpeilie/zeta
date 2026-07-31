@@ -82,7 +82,7 @@ class AgentThreadWorkspaceEntry extends ChangeNotifier {
     required this.providerController,
     required this.viewModel,
   }) : _threadSnapshot = viewModel.threadSnapshot {
-    viewModel.addListener(_handleRuntimeChanged);
+    viewModel.threadSnapshotListenable.addListener(_handleRuntimeChanged);
     providerController.addListener(_handleRuntimeChanged);
   }
 
@@ -187,7 +187,7 @@ class AgentThreadWorkspaceEntry extends ChangeNotifier {
       return;
     }
     _disposed = true;
-    viewModel.removeListener(_handleRuntimeChanged);
+    viewModel.threadSnapshotListenable.removeListener(_handleRuntimeChanged);
     providerController.removeListener(_handleRuntimeChanged);
     viewModel.dispose();
     providerController.dispose();

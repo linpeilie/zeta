@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/application/agent_thread_workspace_controller.dart';
@@ -138,8 +139,11 @@ class IdeShellController extends ChangeNotifier {
   _workspaceEntryListeners =
       <String, ({AgentThreadWorkspaceEntry entry, VoidCallback listener})>{};
 
-  ({AgentConversationViewModel viewModel, VoidCallback listener})?
-  _selectedWorkspaceViewModelBinding;
+  ({
+    ValueListenable<AgentConversationThreadSnapshot> snapshotListenable,
+    VoidCallback listener,
+  })?
+  _selectedWorkspaceThreadSnapshotBinding;
   ({ActiveAgentProviderController providerController, VoidCallback listener})?
   _selectedProviderControllerBinding;
 
@@ -1005,23 +1009,26 @@ class IdeShellController extends ChangeNotifier {
 
   void _bindSelectedWorkspaceRuntime() {
     final selectedEntry = agentWorkspaceController.selectedEntry;
+    final selectedSnapshotListenable =
+        selectedEntry?.viewModel.threadSnapshotListenable;
 
-    final currentViewModelBinding = _selectedWorkspaceViewModelBinding;
-    if (currentViewModelBinding != null &&
+    final currentSnapshotBinding = _selectedWorkspaceThreadSnapshotBinding;
+    if (currentSnapshotBinding != null &&
         !identical(
-          currentViewModelBinding.viewModel,
-          selectedEntry?.viewModel,
+          currentSnapshotBinding.snapshotListenable,
+          selectedSnapshotListenable,
         )) {
-      currentViewModelBinding.viewModel.removeListener(
-        currentViewModelBinding.listener,
+      currentSnapshotBinding.snapshotListenable.removeListener(
+        currentSnapshotBinding.listener,
       );
-      _selectedWorkspaceViewModelBinding = null;
+      _selectedWorkspaceThreadSnapshotBinding = null;
     }
-    if (selectedEntry != null && _selectedWorkspaceViewModelBinding == null) {
-      final listener = _handleSelectedWorkspaceViewModelChanged;
-      selectedEntry.viewModel.addListener(listener);
-      _selectedWorkspaceViewModelBinding = (
-        viewModel: selectedEntry.viewModel,
+    if (selectedSnapshotListenable != null &&
+        _selectedWorkspaceThreadSnapshotBinding == null) {
+      final listener = _handleSelectedWorkspaceThreadSnapshotChanged;
+      selectedSnapshotListenable.addListener(listener);
+      _selectedWorkspaceThreadSnapshotBinding = (
+        snapshotListenable: selectedSnapshotListenable,
         listener: listener,
       );
     }
@@ -1117,7 +1124,7 @@ class IdeShellController extends ChangeNotifier {
     _syncSelectedThreadTitleFromList();
   }
 
-  void _handleSelectedWorkspaceViewModelChanged() {
+  void _handleSelectedWorkspaceThreadSnapshotChanged() {
     _notifyStateChanged();
   }
 
@@ -1235,12 +1242,12 @@ class IdeShellController extends ChangeNotifier {
     _sessionCoordinator.dispose();
     agentWorkspaceController.removeListener(_handleAgentWorkspaceChanged);
     projectThreadsViewModel.removeListener(_handleProjectThreadsChanged);
-    final selectedViewModelBinding = _selectedWorkspaceViewModelBinding;
-    if (selectedViewModelBinding != null) {
-      selectedViewModelBinding.viewModel.removeListener(
-        selectedViewModelBinding.listener,
+    final selectedSnapshotBinding = _selectedWorkspaceThreadSnapshotBinding;
+    if (selectedSnapshotBinding != null) {
+      selectedSnapshotBinding.snapshotListenable.removeListener(
+        selectedSnapshotBinding.listener,
       );
-      _selectedWorkspaceViewModelBinding = null;
+      _selectedWorkspaceThreadSnapshotBinding = null;
     }
     final selectedProviderBinding = _selectedProviderControllerBinding;
     if (selectedProviderBinding != null) {

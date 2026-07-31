@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/main.dart';
 import 'package:zeta/src/app/app.dart' show MainAppState;
-import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
+import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
@@ -469,6 +469,18 @@ void main() {
     expect(beforeBuffer, isNotNull);
     expect(beforeScheduler, isNotNull);
 
+    var shellSnapshotNotifyCount = 0;
+    void handleShellSnapshotChanged() {
+      shellSnapshotNotifyCount += 1;
+    }
+
+    viewModel.threadSnapshotListenable.addListener(handleShellSnapshotChanged);
+    addTearDown(
+      () => viewModel.threadSnapshotListenable.removeListener(
+        handleShellSnapshotChanged,
+      ),
+    );
+
     final buildCounter = TestWidgetBuildCounter()..start();
     addTearDown(buildCounter.dispose);
     for (final event in fixture.events) {
@@ -526,6 +538,7 @@ void main() {
       ),
       contains(AgentEventStormFixture.errorMessage),
     );
+    expect(shellSnapshotNotifyCount, 2);
 
     debugPrint(
       'agent-event-widget-baseline '
@@ -544,9 +557,208 @@ void main() {
       'merged:${afterUi.mergedRequestCount - beforeUi.mergedRequestCount},'
       'published:${afterUi.actualPublishCount - beforeUi.actualPublishCount},'
       'legacy:${afterUi.legacyNotifyCount - beforeUi.legacyNotifyCount}} '
+      'shellSnapshotNotify=$shellSnapshotNotifyCount '
       'builds=$buildCounts',
     );
   });
+
+  testWidgets(
+    'pure message deltas rebuild live timeline without notifying the Shell',
+    (tester) async {
+      final fixture = AgentEventStormFixture();
+      final prepared = await _prepareEventStormAgentPane(
+        tester,
+        fixture: fixture,
+        directoryPrefix: 'zeta_message_delta_phase1_',
+      );
+      final provider = prepared.provider;
+      final viewModel = prepared.viewModel;
+
+      final beforeStart = viewModel.eventStreamBufferDiagnostics!;
+      provider.emit(fixture.events.whereType<AgentTurnStartedEvent>().single);
+      await _drainAgentEventSubset(
+        tester,
+        viewModel: viewModel,
+        beforeReceivedEvents: beforeStart.receivedEvents,
+        expectedInputEventCount: 1,
+      );
+      expect(viewModel.isTurnRunning, isTrue);
+      await tester.pump(const Duration(milliseconds: 32));
+      await tester.pump();
+
+      var shellSnapshotNotifyCount = 0;
+      void handleShellSnapshotChanged() {
+        shellSnapshotNotifyCount += 1;
+      }
+
+      viewModel.threadSnapshotListenable.addListener(
+        handleShellSnapshotChanged,
+      );
+      addTearDown(
+        () => viewModel.threadSnapshotListenable.removeListener(
+          handleShellSnapshotChanged,
+        ),
+      );
+
+      final beforeBuffer = viewModel.eventStreamBufferDiagnostics!;
+      final buildCounter = TestWidgetBuildCounter()..start();
+      final localTimelineBuildCounter = _LocalTimelineBuildCounter()..start();
+      addTearDown(buildCounter.dispose);
+      addTearDown(localTimelineBuildCounter.dispose);
+      for (final event in fixture.events.whereType<AgentMessageDeltaEvent>()) {
+        provider.emit(event);
+      }
+
+      await _drainAgentEventSubset(
+        tester,
+        viewModel: viewModel,
+        beforeReceivedEvents: beforeBuffer.receivedEvents,
+        expectedInputEventCount: AgentEventStormFixture.messageDeltaCount,
+      );
+      await tester.pump(const Duration(milliseconds: 32));
+      await tester.pump();
+
+      final buildCounts = buildCounter.snapshot();
+      final localTimelineBuildCount = localTimelineBuildCounter.count;
+      localTimelineBuildCounter.dispose();
+      buildCounter.dispose();
+      final messageCharacters = viewModel.timelineEntries
+          .whereType<AgentMessageTimelineEntry>()
+          .where((entry) => entry.message.role == AgentMessageRole.agent)
+          .fold<int>(0, (sum, entry) => sum + entry.message.text.length);
+
+      expect(messageCharacters, fixture.expectedMessageCharacters);
+      expect(shellSnapshotNotifyCount, 0);
+      expect(buildCounts[AgentBuildTarget.ideHome], 0);
+      expect(buildCounts[AgentBuildTarget.agentPane], 0);
+      expect(buildCounts[AgentBuildTarget.liveTimeline], 0);
+      expect(localTimelineBuildCount, greaterThan(0));
+
+      debugPrint(
+        'agent-event-phase1-message '
+        'shellSnapshotNotify=$shellSnapshotNotifyCount '
+        'localTimelineBuild=$localTimelineBuildCount '
+        'builds=$buildCounts',
+      );
+    },
+  );
+
+  testWidgets(
+    'reasoning and tool progress rebuild live timeline without notifying Shell',
+    (tester) async {
+      final fixture = AgentEventStormFixture();
+      final prepared = await _prepareEventStormAgentPane(
+        tester,
+        fixture: fixture,
+        directoryPrefix: 'zeta_reasoning_tool_phase1_',
+      );
+      final provider = prepared.provider;
+      final viewModel = prepared.viewModel;
+
+      final beforeStart = viewModel.eventStreamBufferDiagnostics!;
+      provider.emit(fixture.events.whereType<AgentTurnStartedEvent>().single);
+      await _drainAgentEventSubset(
+        tester,
+        viewModel: viewModel,
+        beforeReceivedEvents: beforeStart.receivedEvents,
+        expectedInputEventCount: 1,
+      );
+      expect(viewModel.isTurnRunning, isTrue);
+      await tester.pump(const Duration(milliseconds: 32));
+      await tester.pump();
+
+      var shellSnapshotNotifyCount = 0;
+      void handleShellSnapshotChanged() {
+        shellSnapshotNotifyCount += 1;
+      }
+
+      viewModel.threadSnapshotListenable.addListener(
+        handleShellSnapshotChanged,
+      );
+      addTearDown(
+        () => viewModel.threadSnapshotListenable.removeListener(
+          handleShellSnapshotChanged,
+        ),
+      );
+
+      final streamEvents = fixture.events
+          .where((event) {
+            return event is AgentReasoningDeltaEvent ||
+                event is AgentToolCallEvent &&
+                    event.toolCall.status == AgentToolStatus.inProgress;
+          })
+          .toList(growable: false);
+      expect(
+        streamEvents,
+        hasLength(
+          AgentEventStormFixture.reasoningDeltaCount +
+              AgentEventStormFixture.toolProgressCount,
+        ),
+      );
+
+      final beforeBuffer = viewModel.eventStreamBufferDiagnostics!;
+      final buildCounter = TestWidgetBuildCounter()..start();
+      final localTimelineBuildCounter = _LocalTimelineBuildCounter()..start();
+      addTearDown(buildCounter.dispose);
+      addTearDown(localTimelineBuildCounter.dispose);
+      for (final event in streamEvents) {
+        provider.emit(event);
+      }
+
+      await _drainAgentEventSubset(
+        tester,
+        viewModel: viewModel,
+        beforeReceivedEvents: beforeBuffer.receivedEvents,
+        expectedInputEventCount: streamEvents.length,
+      );
+      await tester.pump(const Duration(milliseconds: 32));
+      await tester.pump();
+
+      final buildCounts = buildCounter.snapshot();
+      final localTimelineBuildCount = localTimelineBuildCounter.count;
+      localTimelineBuildCounter.dispose();
+      buildCounter.dispose();
+      final reasoningCharacters = viewModel.timelineEntries
+          .whereType<AgentToolTimelineEntry>()
+          .where((entry) => entry.toolCall.kind == AgentToolKind.think)
+          .fold<int>(
+            0,
+            (sum, entry) => sum + (entry.toolCall.content?.length ?? 0),
+          );
+      final progressTools = viewModel.timelineEntries
+          .whereType<AgentToolTimelineEntry>()
+          .where((entry) => entry.toolCall.kind == AgentToolKind.execute)
+          .map((entry) => entry.toolCall)
+          .toList(growable: false);
+
+      expect(reasoningCharacters, fixture.expectedReasoningCharacters);
+      expect(progressTools, hasLength(AgentEventStormFixture.toolCount));
+      expect(
+        progressTools,
+        everyElement(
+          isA<AgentToolCall>()
+              .having(
+                (tool) => tool.status,
+                'status',
+                AgentToolStatus.inProgress,
+              )
+              .having((tool) => tool.content, 'content', 'progress'),
+        ),
+      );
+      expect(shellSnapshotNotifyCount, 0);
+      expect(buildCounts[AgentBuildTarget.ideHome], 0);
+      expect(buildCounts[AgentBuildTarget.agentPane], 0);
+      expect(buildCounts[AgentBuildTarget.liveTimeline], 0);
+      expect(localTimelineBuildCount, greaterThan(0));
+
+      debugPrint(
+        'agent-event-phase1-reasoning-tool '
+        'shellSnapshotNotify=$shellSnapshotNotifyCount '
+        'localTimelineBuild=$localTimelineBuildCount '
+        'builds=$buildCounts',
+      );
+    },
+  );
 
   testWidgets(
     'Agent to Settings and back retains the workbench and Agent state',
@@ -1326,6 +1538,96 @@ Future<void> _flushInitialUsageRefresh(WidgetTester tester) async {
   await tester.pump();
 }
 
+Future<({FakeAgentProvider provider, AgentConversationViewModel viewModel})>
+_prepareEventStormAgentPane(
+  WidgetTester tester, {
+  required AgentEventStormFixture fixture,
+  required String directoryPrefix,
+}) async {
+  final directory = Directory.systemTemp.createTempSync(directoryPrefix);
+  addTearDown(() {
+    if (directory.existsSync()) {
+      directory.deleteSync(recursive: true);
+    }
+  });
+  final provider = FakeAgentProvider(
+    completeTurns: false,
+    threadPages: <AgentThreadPage>[
+      AgentThreadPage(
+        threads: <AgentThreadSummary>[
+          agentThread(
+            id: fixture.sessionId,
+            projectPath: directory.path,
+            title: 'Storm phase 1 thread',
+          ),
+        ],
+        nextCursor: null,
+      ),
+    ],
+    threadHistories: <String, AgentThreadHistorySnapshot>{
+      fixture.sessionId: AgentThreadHistorySnapshot(
+        threadId: fixture.sessionId,
+        turns: const <AgentHistoryTurn>[],
+      ),
+    },
+  );
+  await _pumpIde(
+    tester,
+    directoryPicker: () async => directory.path,
+    agentProviderFactory: FakeAgentProviderFactory(provider),
+    agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+  );
+
+  await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+  await tester.runAsync(waitForIo);
+  final threadRow = find.byKey(
+    ValueKey<String>('project-thread-${directory.path}-${fixture.sessionId}'),
+  );
+  await pumpUntilCondition(
+    tester,
+    () => threadRow.evaluate().isNotEmpty,
+    failureMessage: 'Storm phase 1 thread did not become ready',
+  );
+  await tester.tap(threadRow);
+  await pumpUntilCondition(
+    tester,
+    () =>
+        find.byType(AgentPane).evaluate().isNotEmpty &&
+        find.byKey(const ValueKey('agent-message-list')).evaluate().isNotEmpty,
+    failureMessage: 'Storm phase 1 AgentPane did not become ready',
+  );
+
+  return (
+    provider: provider,
+    viewModel: tester.widget<AgentPane>(find.byType(AgentPane)).viewModel,
+  );
+}
+
+Future<void> _drainAgentEventSubset(
+  WidgetTester tester, {
+  required AgentConversationViewModel viewModel,
+  required int beforeReceivedEvents,
+  required int expectedInputEventCount,
+}) async {
+  for (var pumpCount = 0; pumpCount < 50; pumpCount += 1) {
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
+    final buffer = viewModel.eventStreamBufferDiagnostics;
+    final scheduler = viewModel.eventFrameSchedulerDiagnostics;
+    if (buffer != null &&
+        buffer.receivedEvents - beforeReceivedEvents ==
+            expectedInputEventCount &&
+        buffer.currentPendingKeys == 0 &&
+        scheduler?.currentQueueDepth == 0) {
+      return;
+    }
+  }
+  fail(
+    'Agent event subset did not drain '
+    '(expected $expectedInputEventCount inputs)',
+  );
+}
+
 ManagedAgent _installedAgent(AgentDefinition definition) {
   return ManagedAgent.forDefinition(
     definition: definition,
@@ -1582,6 +1884,56 @@ class _RetainedAgentState {
   final double inspectorWidth;
   final String draft;
   final AgentConversationModeId selectedMode;
+}
+
+/// 统计 `_AgentConversationTimeline` 内部 listenable builder 的局部重建。
+///
+/// 阶段 0 的通用计数器统计 Widget runtimeType；流式更新不会重建 timeline 外壳，
+/// 因此这里通过 Element 祖先关系补充观察内部内容刷新，且不向生产 UI 注入 API。
+final class _LocalTimelineBuildCounter {
+  late final RebuildDirtyWidgetCallback _callback = _handleRebuild;
+  RebuildDirtyWidgetCallback? _previousCallback;
+  bool _started = false;
+  int count = 0;
+
+  void start() {
+    if (_started) {
+      return;
+    }
+    _started = true;
+    _previousCallback = debugOnRebuildDirtyWidget;
+    debugOnRebuildDirtyWidget = _callback;
+  }
+
+  void dispose() {
+    if (!_started) {
+      return;
+    }
+    if (identical(debugOnRebuildDirtyWidget, _callback)) {
+      debugOnRebuildDirtyWidget = _previousCallback;
+    }
+    _previousCallback = null;
+    _started = false;
+  }
+
+  void _handleRebuild(Element element, bool builtOnce) {
+    _previousCallback?.call(element, builtOnce);
+    if (element.widget.runtimeType.toString() != 'ListenableBuilder') {
+      return;
+    }
+    var belongsToTimeline = false;
+    element.visitAncestorElements((ancestor) {
+      if (ancestor.widget.runtimeType.toString() ==
+          AgentBuildTarget.liveTimeline) {
+        belongsToTimeline = true;
+        return false;
+      }
+      return true;
+    });
+    if (belongsToTimeline) {
+      count += 1;
+    }
+  }
 }
 
 class _ModeCapableFakeAgentProvider extends FakeAgentProvider

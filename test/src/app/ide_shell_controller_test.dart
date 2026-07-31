@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
@@ -10,6 +11,7 @@ import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 
+import '../testing/agent_event_storm_fixture.dart';
 import '../testing/agent_provider_stub_base.dart';
 
 void main() {
@@ -147,6 +149,408 @@ void main() {
 
     // Assert
     expect(completedTurns, 1);
+  });
+
+  test(
+    'streaming content updates locally without notifying or saving Shell',
+    () async {
+      // Arrange
+      final directory = Directory.systemTemp.createTempSync('zeta_shell_');
+      tempDirectories.add(directory);
+      final harness = await _openShellWithSelectedThread(
+        directory: directory,
+        threadIds: const <String>['thread-a'],
+        selectedThreadId: 'thread-a',
+      );
+      final shell = harness.shell;
+      final provider = harness.provider;
+      final viewModel = shell.selectedAgentViewModel;
+      addTearDown(shell.dispose);
+
+      provider.emit(
+        const AgentTurnStartedEvent(
+          AgentTurn(id: 'turn-a', sessionId: 'thread-a'),
+        ),
+      );
+      await _flushAsync();
+      await shell.saveNow();
+      harness.sessionSaves.reset();
+
+      var shellNotifications = 0;
+      void handleShellChanged() {
+        shellNotifications += 1;
+      }
+
+      shell.addListener(handleShellChanged);
+      addTearDown(() => shell.removeListener(handleShellChanged));
+
+      // Act
+      provider.emitAll(const <AgentEvent>[
+        AgentMessageDeltaEvent(
+          messageId: 'message-stream',
+          delta: 'A',
+          role: AgentMessageRole.agent,
+          sessionId: 'thread-a',
+          turnId: 'turn-a',
+        ),
+        AgentMessageDeltaEvent(
+          messageId: 'message-stream',
+          delta: 'B',
+          role: AgentMessageRole.agent,
+          sessionId: 'thread-a',
+          turnId: 'turn-a',
+        ),
+        AgentMessageDeltaEvent(
+          messageId: 'message-stream',
+          delta: 'C',
+          role: AgentMessageRole.agent,
+          sessionId: 'thread-a',
+          turnId: 'turn-a',
+        ),
+        AgentReasoningDeltaEvent(
+          itemId: 'reasoning-stream',
+          kind: AgentReasoningDeltaKind.summaryText,
+          delta: 'think ',
+          sessionId: 'thread-a',
+          turnId: 'turn-a',
+        ),
+        AgentReasoningDeltaEvent(
+          itemId: 'reasoning-stream',
+          kind: AgentReasoningDeltaKind.summaryText,
+          delta: 'more',
+          sessionId: 'thread-a',
+          turnId: 'turn-a',
+        ),
+        AgentToolCallEvent(
+          AgentToolCall(
+            id: 'tool-stream',
+            title: 'Inspect',
+            status: AgentToolStatus.inProgress,
+            content: 'step 1',
+            sessionId: 'thread-a',
+            turnId: 'turn-a',
+          ),
+        ),
+        AgentToolCallEvent(
+          AgentToolCall(
+            id: 'tool-stream',
+            title: 'Inspect',
+            status: AgentToolStatus.inProgress,
+            content: 'step 2',
+            sessionId: 'thread-a',
+            turnId: 'turn-a',
+          ),
+        ),
+      ]);
+      await _flushAsync();
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      await _flushAsync();
+
+      // Assert
+      expect(
+        viewModel.messages
+            .singleWhere((message) => message.id == 'message-stream')
+            .text,
+        'ABC',
+      );
+      expect(
+        viewModel.toolCalls
+            .singleWhere((tool) => tool.id == 'reasoning-stream')
+            .content,
+        'think more',
+      );
+      final tool = viewModel.toolCalls.singleWhere(
+        (tool) => tool.id == 'tool-stream',
+      );
+      expect(tool.status, AgentToolStatus.inProgress);
+      expect(tool.content, 'step 2');
+      expect(shellNotifications, 0);
+      expect(harness.sessionSaves.saveCount, 0);
+    },
+  );
+
+  test('fixed storm only notifies Shell for thread snapshot changes', () async {
+    // Arrange
+    final fixture = AgentEventStormFixture();
+    final directory = Directory.systemTemp.createTempSync('zeta_shell_storm_');
+    tempDirectories.add(directory);
+    final harness = await _openShellWithSelectedThread(
+      directory: directory,
+      threadIds: <String>[fixture.sessionId],
+      selectedThreadId: fixture.sessionId,
+    );
+    final shell = harness.shell;
+    final provider = harness.provider;
+    final viewModel = shell.selectedAgentViewModel;
+    addTearDown(shell.dispose);
+    await shell.saveNow();
+    harness.sessionSaves.reset();
+
+    var shellNotifications = 0;
+    void handleShellChanged() {
+      shellNotifications += 1;
+    }
+
+    shell.addListener(handleShellChanged);
+    addTearDown(() => shell.removeListener(handleShellChanged));
+    final beforeBuffer = viewModel.eventStreamBufferDiagnostics!;
+    final beforeUi = viewModel.uiSignalsDiagnostics;
+
+    // Act
+    provider.emitAll(fixture.events);
+    var drained = false;
+    for (var attempt = 0; attempt < 200; attempt += 1) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      await _flushAsync();
+      final buffer = viewModel.eventStreamBufferDiagnostics;
+      final scheduler = viewModel.eventFrameSchedulerDiagnostics;
+      if (buffer != null &&
+          buffer.receivedEvents - beforeBuffer.receivedEvents ==
+              fixture.expectedInputEventCount &&
+          buffer.currentPendingKeys == 0 &&
+          scheduler?.currentQueueDepth == 0 &&
+          !viewModel.isTurnRunning) {
+        drained = true;
+        break;
+      }
+    }
+    expect(drained, isTrue, reason: 'Agent event storm did not drain');
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    await _flushAsync();
+
+    // Assert
+    final afterUi = viewModel.uiSignalsDiagnostics;
+    final legacyNotifications =
+        afterUi.legacyNotifyCount - beforeUi.legacyNotifyCount;
+    final messageCharacters = viewModel.timelineEntries
+        .whereType<AgentMessageTimelineEntry>()
+        .where((entry) => entry.message.role == AgentMessageRole.agent)
+        .fold<int>(0, (sum, entry) => sum + entry.message.text.length);
+    final reasoningCharacters = viewModel.timelineEntries
+        .whereType<AgentToolTimelineEntry>()
+        .where((entry) => entry.toolCall.kind == AgentToolKind.think)
+        .fold<int>(
+          0,
+          (sum, entry) => sum + (entry.toolCall.content?.length ?? 0),
+        );
+
+    expect(messageCharacters, fixture.expectedMessageCharacters);
+    expect(reasoningCharacters, fixture.expectedReasoningCharacters);
+    expect(viewModel.permissionRequests, isEmpty);
+    expect(viewModel.isTurnRunning, isFalse);
+    expect(
+      viewModel.visibleHistoryTurns.map((turn) => turn.id),
+      contains(fixture.turnId),
+    );
+    expect(shellNotifications, greaterThan(0));
+    expect(shellNotifications, lessThan(legacyNotifications));
+
+    debugPrint(
+      'agent-event-shell-phase1 '
+      'legacy=$legacyNotifications '
+      'shellNotify=$shellNotifications',
+    );
+  });
+
+  test('thread snapshot summary changes still notify Shell', () async {
+    // Arrange
+    final directory = Directory.systemTemp.createTempSync('zeta_shell_');
+    tempDirectories.add(directory);
+    final harness = await _openShellWithSelectedThread(
+      directory: directory,
+      threadIds: const <String>['thread-a'],
+      selectedThreadId: 'thread-a',
+    );
+    final shell = harness.shell;
+    final provider = harness.provider;
+    addTearDown(shell.dispose);
+    await shell.saveNow();
+
+    var shellNotifications = 0;
+    void handleShellChanged() {
+      shellNotifications += 1;
+    }
+
+    shell.addListener(handleShellChanged);
+    addTearDown(() => shell.removeListener(handleShellChanged));
+
+    // Act + Assert: title
+    provider.emit(
+      const AgentThreadNameUpdatedEvent(
+        threadId: 'thread-a',
+        threadName: 'Renamed thread',
+      ),
+    );
+    await _flushAsync();
+    expect(
+      shell.selectedAgentViewModel.threadSnapshot.threadTitle,
+      'Renamed thread',
+    );
+    expect(shellNotifications, greaterThan(0));
+
+    // Act + Assert: turn running
+    shellNotifications = 0;
+    provider.emit(
+      const AgentTurnStartedEvent(
+        AgentTurn(id: 'turn-a', sessionId: 'thread-a'),
+      ),
+    );
+    await _flushAsync();
+    expect(shell.selectedAgentViewModel.threadSnapshot.isTurnRunning, isTrue);
+    expect(shellNotifications, greaterThan(0));
+
+    // Act + Assert: turn idle
+    shellNotifications = 0;
+    provider.emit(
+      const AgentTurnCompletedEvent(sessionId: 'thread-a', turnId: 'turn-a'),
+    );
+    await _flushAsync();
+    expect(shell.selectedAgentViewModel.threadSnapshot.isTurnRunning, isFalse);
+    expect(shellNotifications, greaterThan(0));
+
+    // Act + Assert: waiting on approval
+    shellNotifications = 0;
+    provider.emit(
+      const AgentThreadStatusChangedEvent(
+        threadId: 'thread-a',
+        status: AgentThreadRuntimeStatus.active,
+        waitingOnApproval: true,
+      ),
+    );
+    await _flushAsync();
+    expect(
+      shell.selectedAgentViewModel.threadSnapshot.waitingOnApproval,
+      isTrue,
+    );
+    expect(
+      shell.selectedAgentViewModel.threadSnapshot.waitingOnUserInput,
+      isFalse,
+    );
+    expect(shellNotifications, greaterThan(0));
+
+    // Act + Assert: waiting on user input
+    shellNotifications = 0;
+    provider.emit(
+      const AgentThreadStatusChangedEvent(
+        threadId: 'thread-a',
+        status: AgentThreadRuntimeStatus.active,
+        waitingOnUserInput: true,
+      ),
+    );
+    await _flushAsync();
+    expect(
+      shell.selectedAgentViewModel.threadSnapshot.waitingOnApproval,
+      isFalse,
+    );
+    expect(
+      shell.selectedAgentViewModel.threadSnapshot.waitingOnUserInput,
+      isTrue,
+    );
+    expect(shellNotifications, greaterThan(0));
+
+    // Act + Assert: runtime idle clears both waiting flags
+    shellNotifications = 0;
+    provider.emit(
+      const AgentThreadStatusChangedEvent(
+        threadId: 'thread-a',
+        status: AgentThreadRuntimeStatus.idle,
+      ),
+    );
+    await _flushAsync();
+    final idleSnapshot = shell.selectedAgentViewModel.threadSnapshot;
+    expect(idleSnapshot.runtimeStatus, AgentThreadRuntimeStatus.idle);
+    expect(idleSnapshot.waitingOnApproval, isFalse);
+    expect(idleSnapshot.waitingOnUserInput, isFalse);
+    expect(shellNotifications, greaterThan(0));
+  });
+
+  test('old ViewModel updates stay isolated after thread switch', () async {
+    // Arrange
+    final directory = Directory.systemTemp.createTempSync('zeta_shell_');
+    tempDirectories.add(directory);
+    final harness = await _openShellWithSelectedThread(
+      directory: directory,
+      threadIds: const <String>['thread-a', 'thread-b'],
+      selectedThreadId: 'thread-a',
+    );
+    final shell = harness.shell;
+    final provider = harness.provider;
+    final oldViewModel = shell.selectedAgentViewModel;
+    final oldSnapshot = oldViewModel.threadSnapshot;
+    addTearDown(shell.dispose);
+
+    final threadB = shell
+        .projectThreadStateFor(directory.path)
+        .threads
+        .singleWhere((thread) => thread.id == 'thread-b');
+    await shell.selectProjectThread(directory.path, threadB);
+    await _flushAsync();
+    final currentViewModel = shell.selectedAgentViewModel;
+    expect(currentViewModel.sessionId, 'thread-b');
+    expect(currentViewModel, isNot(same(oldViewModel)));
+
+    await shell.saveNow();
+    harness.sessionSaves.reset();
+    var shellNotifications = 0;
+    void handleShellChanged() {
+      shellNotifications += 1;
+    }
+
+    shell.addListener(handleShellChanged);
+    addTearDown(() => shell.removeListener(handleShellChanged));
+
+    // Act
+    provider.emitAll(const <AgentEvent>[
+      AgentMessageDeltaEvent(
+        messageId: 'old-thread-message',
+        delta: 'old',
+        role: AgentMessageRole.agent,
+        sessionId: 'thread-a',
+        turnId: 'turn-a',
+      ),
+      AgentMessageDeltaEvent(
+        messageId: 'old-thread-message',
+        delta: ' thread',
+        role: AgentMessageRole.agent,
+        sessionId: 'thread-a',
+        turnId: 'turn-a',
+      ),
+    ]);
+    await _flushAsync();
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    await _flushAsync();
+
+    // Assert
+    expect(
+      oldViewModel.messages
+          .singleWhere((message) => message.id == 'old-thread-message')
+          .text,
+      'old thread',
+    );
+    expect(oldViewModel.threadSnapshot, oldSnapshot);
+    expect(
+      currentViewModel.messages.any(
+        (message) => message.id == 'old-thread-message',
+      ),
+      isFalse,
+    );
+    expect(shell.selectedAgentViewModel, same(currentViewModel));
+    expect(shellNotifications, 0);
+    expect(harness.sessionSaves.saveCount, 0);
+
+    // 旧条目的摘要仍可更新项目线程列表，但不能覆盖当前选中条目的快照。
+    final currentSnapshot = currentViewModel.threadSnapshot;
+    provider.emit(
+      const AgentThreadNameUpdatedEvent(
+        threadId: 'thread-a',
+        threadName: 'Renamed old thread',
+      ),
+    );
+    await _flushAsync();
+
+    expect(oldViewModel.threadSnapshot.threadTitle, 'Renamed old thread');
+    expect(currentViewModel.threadSnapshot, currentSnapshot);
+    expect(shell.selectedAgentViewModel, same(currentViewModel));
   });
 
   test('allows cross-provider threads to run in parallel', () async {
@@ -705,6 +1109,63 @@ Future<void> _flushAsync() async {
   await Future<void>.delayed(Duration.zero);
 }
 
+Future<_SelectedThreadShellHarness> _openShellWithSelectedThread({
+  required Directory directory,
+  required List<String> threadIds,
+  required String selectedThreadId,
+}) async {
+  final backend = _ProviderBackend(
+    config: AgentProviderConfig.defaultCodex,
+    threadHistories: const <String, AgentThreadHistorySnapshot>{},
+    completeTurns: false,
+    threadPages: <AgentThreadPage>[
+      AgentThreadPage(
+        threads: <AgentThreadSummary>[
+          for (final threadId in threadIds)
+            _thread(
+              id: threadId,
+              providerId: defaultAgentProviderId,
+              projectPath: directory.path,
+            ),
+        ],
+        nextCursor: null,
+      ),
+    ],
+  );
+  final sessionSaves = _SessionSaveRecorder();
+  final shell = IdeShellController(
+    directoryPicker: () async => directory.path,
+    sessionStore: CallbackIdeSessionStore(
+      loadJson: _loadEmptySession,
+      saveJson: sessionSaves.save,
+    ),
+    agentProviderFactory: _RecordingAgentProviderFactory(
+      <String, _ProviderBackend>{defaultAgentProviderId: backend},
+    ),
+    agentProviderConfigStore: MemoryAgentProviderConfigStore(
+      const AgentProviderSettings(
+        providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
+        activeProviderId: defaultAgentProviderId,
+      ),
+    ),
+  );
+
+  await shell.openProject();
+  await _flushAsync();
+  final thread = shell
+      .projectThreadStateFor(directory.path)
+      .threads
+      .singleWhere((thread) => thread.id == selectedThreadId);
+  await shell.selectProjectThread(directory.path, thread);
+  await _flushAsync();
+
+  return _SelectedThreadShellHarness(
+    shell: shell,
+    backend: backend,
+    sessionSaves: sessionSaves,
+  );
+}
+
 AgentThreadSummary _thread({
   required String id,
   required String providerId,
@@ -724,6 +1185,32 @@ AgentThreadSummary _thread({
     recencyAt: activeAt,
     status: AgentThreadRuntimeStatus.idle,
   );
+}
+
+class _SelectedThreadShellHarness {
+  const _SelectedThreadShellHarness({
+    required this.shell,
+    required this.backend,
+    required this.sessionSaves,
+  });
+
+  final IdeShellController shell;
+  final _ProviderBackend backend;
+  final _SessionSaveRecorder sessionSaves;
+
+  _ShellTestAgentProvider get provider => backend.instances.single;
+}
+
+class _SessionSaveRecorder {
+  int saveCount = 0;
+
+  Future<void> save(String value) async {
+    saveCount += 1;
+  }
+
+  void reset() {
+    saveCount = 0;
+  }
 }
 
 class _RecordingAgentProviderFactory implements AgentProviderFactory {
@@ -830,6 +1317,16 @@ class _ShellTestAgentProvider
 
   @override
   Stream<AgentEvent> get events => _events.stream;
+
+  void emit(AgentEvent event) {
+    _events.add(event);
+  }
+
+  void emitAll(Iterable<AgentEvent> events) {
+    for (final event in events) {
+      emit(event);
+    }
+  }
 
   @override
   Future<void> initialize() async {}
