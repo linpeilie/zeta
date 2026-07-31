@@ -406,10 +406,12 @@ class AgentConversationTimelineStore {
 
       // Codex 历史：tokenUsage.total 是会话累计，注册时转成 turn 增量。
       // Grok 历史：tokenUsage 已是本回合绝对用量，直接挂到 turn，并累加会话总量。
+      //
+      // 历史快照中的 running 只表示磁盘/投影未完结，不升为 live turn。
+      // Zeta「执行中」仅来自本进程 live 流（resume 后的 turn 事件）。
       AgentTokenUsage? previousCumulative;
-      String? runningTurnId;
+      String? lastTurnId;
       for (final turn in history.turns) {
-        final isRunningTurn = turn.status == AgentHistoryTurnStatus.running;
         final usage = turn.tokenUsage;
         final AgentTokenUsage? turnDelta;
         if (usage != null && usage.hasCumulativeBreakdown) {
@@ -427,15 +429,9 @@ class AgentConversationTimelineStore {
         } else {
           turnDelta = usage;
         }
-        _registerHistoryTurn(
-          turn,
-          asLive: isRunningTurn,
-          tokenUsage: turnDelta,
-        );
+        _registerHistoryTurn(turn, asLive: false, tokenUsage: turnDelta);
+        lastTurnId = turn.id;
         currentTurnGroupId = turn.id;
-        if (isRunningTurn) {
-          runningTurnId = turn.id;
-        }
         for (final entry in turn.entries) {
           switch (entry) {
             case AgentHistoryMessageEntry():
@@ -464,7 +460,7 @@ class AgentConversationTimelineStore {
         }
         _appendHistoryTurnFailure(turn);
       }
-      currentTurnGroupId = runningTurnId;
+      currentTurnGroupId = lastTurnId;
     } finally {
       endHistoryBatch();
     }
@@ -1507,7 +1503,9 @@ class AgentConversationTimelineStore {
 
   AgentConversationTurnState? _currentLiveTurnState() {
     final activeTurnGroupId = currentTurnGroupId;
-    if (activeTurnGroupId != null) {
+    // 仅 live 归属的 running 才绑定 liveTurnState；历史未完结 turn 不进 live 槽。
+    if (activeTurnGroupId != null &&
+        _liveTurnOrder.contains(activeTurnGroupId)) {
       final current = _turnGroups[activeTurnGroupId];
       if (current != null && current.isRunning) {
         return current;
@@ -1534,10 +1532,13 @@ class AgentConversationTimelineStore {
     }
   }
 
+  /// 仅统计 live 归属的 running turn；历史快照中的 running 不算 Zeta 执行中。
   String? _selectedRunningTurnId() {
     final activeTurnGroupId = currentTurnGroupId;
-    if (_turnGroups[activeTurnGroupId]?.status ==
-        AgentHistoryTurnStatus.running) {
+    if (activeTurnGroupId != null &&
+        _liveTurnOrder.contains(activeTurnGroupId) &&
+        _turnGroups[activeTurnGroupId]?.status ==
+            AgentHistoryTurnStatus.running) {
       return activeTurnGroupId;
     }
 
@@ -1545,19 +1546,6 @@ class AgentConversationTimelineStore {
       final turnId = _liveTurnOrder[index];
       if (_turnGroups[turnId]?.status == AgentHistoryTurnStatus.running) {
         return turnId;
-      }
-    }
-
-    for (var index = _historicalTurnOrder.length - 1; index >= 0; index -= 1) {
-      final turnId = _historicalTurnOrder[index];
-      if (_turnGroups[turnId]?.status == AgentHistoryTurnStatus.running) {
-        return turnId;
-      }
-    }
-
-    for (final entry in _turnGroups.entries) {
-      if (entry.value.status == AgentHistoryTurnStatus.running) {
-        return entry.key;
       }
     }
     return null;

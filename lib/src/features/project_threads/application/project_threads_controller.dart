@@ -612,13 +612,18 @@ class ProjectThreadsController {
       }
 
       _registerThreadSummaries(projectPath, page.threads);
-      final threads = append
+      final merged = append
           ? _appendUnique(latest.threads, page.threads)
           : _replaceWithPageKeepingRuntimeThreads(
               current: latest,
               incoming: page.threads,
               preserveRuntimeThreads: !current.archived && searchTerm.isEmpty,
             );
+      // provider list 的 active/waiting 可能来自外部客户端；仅 Zeta live 可 busy。
+      final threads = _projectThreadsForZetaOwnedRuntime(
+        threads: merged,
+        runningThreadIds: latest.runningThreadIds,
+      );
       viewModel.setStateFor(
         projectPath,
         latest.copyWith(
@@ -1081,6 +1086,38 @@ class ProjectThreadsController {
       ...existing,
       for (final thread in incoming)
         if (seen.add(thread.id)) thread,
+    ];
+  }
+
+  /// 将 provider 报告的 busy 收敛为 Zeta live 语义。
+  ///
+  /// - 在 [runningThreadIds] 内：保证摘要 `active`，供列表指示器与 isBusy 使用
+  /// - 其余：剥离 active/waiting，避免 Codex 等外部客户端 running 造成假转圈
+  List<AgentThreadSummary> _projectThreadsForZetaOwnedRuntime({
+    required List<AgentThreadSummary> threads,
+    required Set<String> runningThreadIds,
+  }) {
+    if (threads.isEmpty) {
+      return threads;
+    }
+    return <AgentThreadSummary>[
+      for (final thread in threads)
+        if (runningThreadIds.contains(thread.id))
+          thread.status == AgentThreadRuntimeStatus.active
+              ? thread
+              : thread.copyWith(status: AgentThreadRuntimeStatus.active)
+        else if (thread.status == AgentThreadRuntimeStatus.active ||
+            thread.waitingOnApproval ||
+            thread.waitingOnUserInput)
+          thread.copyWith(
+            status: thread.status == AgentThreadRuntimeStatus.active
+                ? AgentThreadRuntimeStatus.idle
+                : thread.status,
+            waitingOnApproval: false,
+            waitingOnUserInput: false,
+          )
+        else
+          thread,
     ];
   }
 

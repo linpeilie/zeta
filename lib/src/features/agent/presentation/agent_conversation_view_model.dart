@@ -1993,10 +1993,12 @@ class AgentConversationViewModel {
     _currentThreadTitle = thread.displayName;
     _threadCreatedAt = thread.createdAt;
     _threadLastActiveAt = thread.lastActiveAt;
+    // 列表/历史里的 active 可能来自外部客户端（如 Codex 应用），Zeta 未持有 live
+    // 时不得标成执行中或等待交互；仅 systemError 等非忙碌态可保留展示。
     _applyThreadRuntimeStatus(
-      status: thread.status,
-      waitingOnApproval: thread.waitingOnApproval,
-      waitingOnUserInput: thread.waitingOnUserInput,
+      status: _runtimeStatusWithoutExternalBusy(thread.status),
+      waitingOnApproval: false,
+      waitingOnUserInput: false,
     );
     _timeline.clearConversation();
     _modelRerouteNotice = null;
@@ -3177,6 +3179,15 @@ class AgentConversationViewModel {
     final isActive = status == AgentThreadRuntimeStatus.active;
     _threadWaitingOnApproval = isActive && waitingOnApproval;
     _threadWaitingOnUserInput = isActive && waitingOnUserInput;
+  }
+
+  /// 打开历史时丢弃 provider 报告的 active；无 live 绑定不得显示执行中。
+  AgentThreadRuntimeStatus _runtimeStatusWithoutExternalBusy(
+    AgentThreadRuntimeStatus status,
+  ) {
+    return status == AgentThreadRuntimeStatus.active
+        ? AgentThreadRuntimeStatus.idle
+        : status;
   }
 
   void _clearThreadRuntimeStatus() {

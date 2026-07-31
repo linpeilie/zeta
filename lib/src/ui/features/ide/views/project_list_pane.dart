@@ -567,11 +567,9 @@ class _ProjectThreadList extends StatelessWidget {
       for (final thread in state.threads)
         _ThreadTile(
           projectPath: projectPath,
-          thread:
-              state.runningThreadIds.contains(thread.id) &&
-                  thread.status != AgentThreadRuntimeStatus.active
-              ? thread.copyWith(status: AgentThreadRuntimeStatus.active)
-              : thread,
+          thread: thread,
+          // 仅 Zeta live（runningThreadIds）显示执行中；忽略外部客户端 list active。
+          isZetaLiveRunning: state.isThreadRunning(thread.id),
           selected: thread.id == state.selectedThreadId,
           showCompleted: state.completedThreadIds.contains(thread.id),
           archivedView: state.archived,
@@ -612,6 +610,7 @@ class _ThreadTile extends StatefulWidget {
   const _ThreadTile({
     required this.projectPath,
     required this.thread,
+    required this.isZetaLiveRunning,
     required this.selected,
     required this.showCompleted,
     required this.archivedView,
@@ -627,6 +626,9 @@ class _ThreadTile extends StatefulWidget {
 
   final String projectPath;
   final AgentThreadSummary thread;
+
+  /// 仅本进程 live 时为 true；外源 list active 不得驱动 spinner。
+  final bool isZetaLiveRunning;
   final bool selected;
 
   /// 后台执行完毕且尚未确认时，在原 spinner 位置展示绿色完成 icon。
@@ -885,8 +887,11 @@ class _ThreadTileState extends State<_ThreadTile> {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final thread = widget.thread;
-    final isBusy = thread.isBusy;
-    final waitingLabel = thread.waitingOnApproval
+    // 等待文案也仅在 Zeta live 时展示（来自本 runtime snapshot 回写）。
+    final isBusy = widget.isZetaLiveRunning;
+    final waitingLabel = !isBusy
+        ? null
+        : thread.waitingOnApproval
         ? '等待审批'
         : thread.waitingOnUserInput
         ? '等待输入'

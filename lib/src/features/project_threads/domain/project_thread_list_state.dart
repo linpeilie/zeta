@@ -64,6 +64,9 @@ class ProjectThreadListState {
 
   bool get hasMore => nextCursor != null;
 
+  /// Zeta 本进程是否将该 thread 视为 live 执行中（列表 busy 指示真源）。
+  bool isThreadRunning(String threadId) => runningThreadIds.contains(threadId);
+
   ProjectThreadListState copyWith({
     bool? isExpanded,
     bool? hasLoaded,

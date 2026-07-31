@@ -58,7 +58,13 @@ void main() {
       );
 
       expect(store.isHistoryBatching, isFalse);
-      expect(store.liveTurnState?.id, 'turn-2');
+      // 历史中的 running 不升为 live；仅作 historical 未完结 turn。
+      expect(store.liveTurnState, isNull);
+      expect(store.isTurnRunning, isFalse);
+      expect(
+        store.visibleHistoryTurns.map((turn) => turn.id),
+        contains('turn-2'),
+      );
       // clear + final bind：允许有限次数，但绝非每个 entry 一次。
       expect(liveNotifyCount, lessThanOrEqualTo(3));
       expect(store.messages.where((m) => m.id == 'm2').length, 1);

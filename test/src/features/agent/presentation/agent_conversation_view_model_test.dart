@@ -550,7 +550,8 @@ void main() {
       addTearDown(viewModel.dispose);
 
       await viewModel.switchThread(_thread(id: 'thread-1'));
-      expect(viewModel.isTurnRunning, isTrue);
+      // 历史里的 running 不升为 Zeta live 执行中。
+      expect(viewModel.isTurnRunning, isFalse);
 
       await viewModel.switchThread(
         _thread(id: 'thread-2', title: 'Thread two'),
@@ -660,48 +661,84 @@ void main() {
       expect(viewModel.sessionId, 'thread-1');
     });
 
-    test('running selected thread resumes and steers on first send', () async {
-      final provider = _FakeAgentProvider(
-        historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
-          'thread-1': const AgentThreadHistorySnapshot(
-            threadId: 'thread-1',
-            turns: <AgentHistoryTurn>[
-              AgentHistoryTurn(
-                id: 'turn-running',
-                status: AgentHistoryTurnStatus.running,
-                entries: <AgentHistoryEntry>[
-                  AgentHistoryMessageEntry(
-                    id: 'history-user-1',
-                    role: AgentMessageRole.user,
-                    text: 'Historical context',
-                  ),
-                ],
-              ),
-            ],
+    test(
+      'history running turn stays non-live; first send resumes and starts a new turn',
+      () async {
+        final provider = _FakeAgentProvider(
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'thread-1': const AgentThreadHistorySnapshot(
+              threadId: 'thread-1',
+              turns: <AgentHistoryTurn>[
+                AgentHistoryTurn(
+                  id: 'turn-running',
+                  status: AgentHistoryTurnStatus.running,
+                  entries: <AgentHistoryEntry>[
+                    AgentHistoryMessageEntry(
+                      id: 'history-user-1',
+                      role: AgentMessageRole.user,
+                      text: 'Historical context',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          },
+        );
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.switchThread(_thread());
+        expect(viewModel.isTurnRunning, isFalse);
+        expect(viewModel.canSubmitMessage, isTrue);
+        expect(viewModel.showRunningIndicator, isFalse);
+
+        await viewModel.sendMessage('hello after open');
+
+        expect(provider.calls, <String>[
+          'read:thread-1',
+          'resume:thread-1',
+          'send:thread-1',
+        ]);
+        expect(
+          viewModel.timelineEntries.whereType<AgentMessageTimelineEntry>().map(
+            (entry) => entry.message.text,
           ),
-        },
-      );
-      final viewModel = _createViewModel(provider);
-      addTearDown(viewModel.dispose);
+          contains('hello after open'),
+        );
+      },
+    );
 
-      await viewModel.switchThread(_thread());
-      expect(viewModel.isTurnRunning, isTrue);
-      expect(viewModel.canSubmitMessage, isTrue);
+    test(
+      'switchThread ignores provider list active without live turn',
+      () async {
+        final provider = _FakeAgentProvider(
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'thread-1': _historySnapshot(
+              threadId: 'thread-1',
+              userText: 'past',
+              agentText: 'reply',
+            ),
+          },
+        );
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
 
-      await viewModel.sendMessage('hello while running');
+        await viewModel.switchThread(
+          _thread(
+            id: 'thread-1',
+            status: AgentThreadRuntimeStatus.active,
+            waitingOnApproval: true,
+            waitingOnUserInput: true,
+          ),
+        );
 
-      expect(provider.calls, <String>[
-        'read:thread-1',
-        'resume:thread-1',
-        'steer:thread-1',
-      ]);
-      expect(
-        viewModel.timelineEntries.whereType<AgentMessageTimelineEntry>().map(
-          (entry) => entry.message.text,
-        ),
-        contains('hello while running'),
-      );
-    });
+        expect(viewModel.isTurnRunning, isFalse);
+        expect(viewModel.threadRuntimeStatus, AgentThreadRuntimeStatus.idle);
+        expect(viewModel.threadWaitingOnApproval, isFalse);
+        expect(viewModel.threadWaitingOnUserInput, isFalse);
+        expect(viewModel.showRunningIndicator, isFalse);
+      },
+    );
 
     test('running turn keeps mode changes for the next new turn', () async {
       final provider = _ModeFakeAgentProvider(
@@ -711,8 +748,8 @@ void main() {
             threadId: 'thread-1',
             turns: <AgentHistoryTurn>[
               AgentHistoryTurn(
-                id: 'turn-running',
-                status: AgentHistoryTurnStatus.running,
+                id: 'turn-history',
+                status: AgentHistoryTurnStatus.completed,
                 collaborationMode: AgentConversationModeId.plan,
               ),
             ],
@@ -725,26 +762,24 @@ void main() {
       await viewModel.loadModels();
       await viewModel.switchThread(_thread());
       expect(viewModel.selectedConversationMode, AgentConversationModeId.plan);
-      expect(viewModel.conversationModeAppliesToNextTurn, isTrue);
+
+      await viewModel.sendMessage('start plan work');
+      expect(viewModel.isTurnRunning, isTrue);
 
       viewModel.selectConversationMode(AgentConversationModeId.defaultMode);
-      await viewModel.sendMessage('adjust the active plan');
+      expect(viewModel.conversationModeAppliesToNextTurn, isTrue);
 
-      expect(provider.calls, contains('steer:thread-1'));
-      expect(provider.turnConfigurations, isEmpty);
-
+      // 完成当前 live turn（fake 默认 turn id 为 turn-1）。
       provider.emit(
-        const AgentTurnCompletedEvent(
-          sessionId: 'thread-1',
-          turnId: 'turn-running',
-        ),
+        const AgentTurnCompletedEvent(sessionId: 'thread-1', turnId: 'turn-1'),
       );
       await Future<void>.delayed(Duration.zero);
+      expect(viewModel.isTurnRunning, isFalse);
       expect(viewModel.conversationModeAppliesToNextTurn, isFalse);
 
       await viewModel.sendMessage('start the next turn');
       expect(
-        provider.turnConfigurations.single.conversationMode!.modeId,
+        provider.turnConfigurations.last.conversationMode!.modeId,
         AgentConversationModeId.defaultMode,
       );
     });
@@ -995,7 +1030,7 @@ void main() {
     });
 
     test(
-      'cancels the selected thread running turn without a resumed session',
+      'cancel is a no-op when history only shows running without live turn',
       () async {
         final provider = _FakeAgentProvider(
           historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
@@ -1023,10 +1058,8 @@ void main() {
         await viewModel.switchThread(_thread());
         await viewModel.cancelActiveTurn();
 
-        expect(provider.calls, <String>[
-          'read:thread-1',
-          'cancel:thread-1:turn-running',
-        ]);
+        // 无 live turn 时不向 provider 发 cancel。
+        expect(provider.calls, <String>['read:thread-1']);
       },
     );
 
@@ -4174,6 +4207,9 @@ FakeAgentFrameScheduler _createUiFrameScheduler() {
 AgentThreadSummary _thread({
   String id = 'thread-1',
   String title = 'Thread one',
+  AgentThreadRuntimeStatus status = AgentThreadRuntimeStatus.idle,
+  bool waitingOnApproval = false,
+  bool waitingOnUserInput = false,
 }) {
   return AgentThreadSummary(
     id: id,
@@ -4184,7 +4220,9 @@ AgentThreadSummary _thread({
     preview: title,
     createdAt: DateTime.fromMillisecondsSinceEpoch(1),
     updatedAt: DateTime.fromMillisecondsSinceEpoch(2),
-    status: AgentThreadRuntimeStatus.idle,
+    status: status,
+    waitingOnApproval: waitingOnApproval,
+    waitingOnUserInput: waitingOnUserInput,
   );
 }
 

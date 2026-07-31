@@ -245,6 +245,7 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
             _RecentThreadRow(
               key: ValueKey<String>('project-home-thread-${thread.id}'),
               thread: thread,
+              isZetaLiveRunning: state.isThreadRunning(thread.id),
               onPressed: () => widget.onSelectThread(thread),
             ),
             const SizedBox(height: IdeSpacing.space2),
@@ -306,18 +307,23 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
 class _RecentThreadRow extends StatelessWidget {
   const _RecentThreadRow({
     required this.thread,
+    required this.isZetaLiveRunning,
     required this.onPressed,
     super.key,
   });
 
   final AgentThreadSummary thread;
+  final bool isZetaLiveRunning;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final statusLabel = _threadStatusLabel(thread);
+    final statusLabel = _threadStatusLabel(
+      thread,
+      isZetaLiveRunning: isZetaLiveRunning,
+    );
     final lastActiveLabel = _relativeThreadTime(
       thread.lastActiveAt,
       DateTime.now(),
@@ -402,7 +408,14 @@ class _RecentThreadRow extends StatelessWidget {
     final textStyles = IdeTextStyles.of(context);
     final labels = <({String text, Color color})>[
       if (statusLabel != null)
-        (text: statusLabel, color: _threadStatusColor(thread, colors)),
+        (
+          text: statusLabel,
+          color: _threadStatusColor(
+            thread,
+            colors,
+            isZetaLiveRunning: isZetaLiveRunning,
+          ),
+        ),
       if (lastActiveLabel != null)
         (text: lastActiveLabel, color: colors.textTertiary),
     ];
@@ -529,14 +542,17 @@ class _FlatStateMessage extends StatelessWidget {
   }
 }
 
-String? _threadStatusLabel(AgentThreadSummary thread) {
-  if (thread.waitingOnApproval) {
+String? _threadStatusLabel(
+  AgentThreadSummary thread, {
+  required bool isZetaLiveRunning,
+}) {
+  if (isZetaLiveRunning && thread.waitingOnApproval) {
     return '等待审批';
   }
-  if (thread.waitingOnUserInput) {
+  if (isZetaLiveRunning && thread.waitingOnUserInput) {
     return '等待输入';
   }
-  if (thread.isBusy) {
+  if (isZetaLiveRunning) {
     return '执行中';
   }
   if (thread.status == AgentThreadRuntimeStatus.systemError) {
@@ -545,13 +561,21 @@ String? _threadStatusLabel(AgentThreadSummary thread) {
   return null;
 }
 
-Color _threadStatusColor(AgentThreadSummary thread, IdeColors colors) {
-  if (thread.waitingOnApproval || thread.waitingOnUserInput) {
+Color _threadStatusColor(
+  AgentThreadSummary thread,
+  IdeColors colors, {
+  required bool isZetaLiveRunning,
+}) {
+  if (isZetaLiveRunning &&
+      (thread.waitingOnApproval || thread.waitingOnUserInput)) {
     return colors.warning;
   }
+  if (isZetaLiveRunning) {
+    return colors.accent;
+  }
   return switch (thread.status) {
-    AgentThreadRuntimeStatus.active => colors.accent,
     AgentThreadRuntimeStatus.systemError => colors.error,
+    AgentThreadRuntimeStatus.active ||
     AgentThreadRuntimeStatus.notLoaded ||
     AgentThreadRuntimeStatus.idle ||
     AgentThreadRuntimeStatus.unknown => colors.textSecondary,

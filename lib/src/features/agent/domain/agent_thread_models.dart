@@ -88,7 +88,11 @@ class AgentThreadSummary {
   /// 原始 provider payload，便于调试和未来补齐字段。
   final Map<String, Object?> raw;
 
-  /// 线程是否处于可感知的“忙碌/等待”态（列表运行指示器用）。
+  /// 摘要字段是否带有忙碌/等待标记。
+  ///
+  /// 列表 UI 应以 Zeta 本进程 live 的 `runningThreadIds` 为准；从 provider
+  /// `thread/list` 写入前会剥离未由 Zeta 持有的 active/waiting，避免把外部
+  /// 客户端正在跑的会话显示成 Zeta 执行中。
   bool get isBusy =>
       status == AgentThreadRuntimeStatus.active ||
       waitingOnApproval ||
