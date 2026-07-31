@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/main.dart';
 import 'package:zeta/src/app/app.dart' show MainAppState;
@@ -70,25 +69,26 @@ void main() {
     expect(TickerMode.valuesOf(homeContext).enabled, isFalse);
   });
 
-  testWidgets('startup refreshes hidden Agent statistics at idle priority', (
-    tester,
-  ) async {
-    final repository = _TrackedAgentUsageRepository();
+  testWidgets(
+    'startup refreshes hidden Agent statistics through event message',
+    (tester) async {
+      final repository = _TrackedAgentUsageRepository();
 
-    await _pumpIde(
-      tester,
-      agentUsagePanelRepository: repository,
-      flushInitialIdleTasks: false,
-    );
+      await _pumpIde(
+        tester,
+        agentUsagePanelRepository: repository,
+        flushInitialUsageRefresh: false,
+      );
 
-    expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
-    expect(repository.forceRefreshValues, isEmpty);
+      expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
+      expect(repository.forceRefreshValues, isEmpty);
 
-    await _flushInitialIdleTasks(tester);
+      await _flushInitialUsageRefresh(tester);
 
-    expect(repository.forceRefreshValues, <bool>[true]);
-    expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
-  });
+      expect(repository.forceRefreshValues, <bool>[true]);
+      expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
+    },
+  );
 
   testWidgets('activity icons toggle side panel columns', (tester) async {
     await _pumpIde(tester);
@@ -1134,7 +1134,7 @@ Future<void> _pumpIde(
   AgentUsagePanelRepository? agentUsagePanelRepository,
   String? initialSessionJson,
   Future<List<ManagedAgent>> Function()? homeProviderDetectionLoader,
-  bool flushInitialIdleTasks = true,
+  bool flushInitialUsageRefresh = true,
 }) async {
   tester.view
     ..physicalSize = size
@@ -1162,25 +1162,15 @@ Future<void> _pumpIde(
           agentUsagePanelRepository ?? const _EmptyAgentUsageRepository(),
     ),
   );
-  if (flushInitialIdleTasks) {
-    await _flushInitialIdleTasks(tester);
+  if (flushInitialUsageRefresh) {
+    await _flushInitialUsageRefresh(tester);
   }
 }
 
-Future<void> _flushInitialIdleTasks(WidgetTester tester) async {
-  final scheduler = SchedulerBinding.instance;
-  final previousStrategy = scheduler.schedulingStrategy;
-  scheduler.schedulingStrategy =
-      ({required int priority, required SchedulerBinding scheduler}) => true;
-  try {
-    // 通过正常事件循环执行 `scheduleTask`，避免直接调用
-    // `handleEventLoopCallback` 后遗留 scheduler 的待回调标记。
-    await tester.pump();
-    await tester.idle();
-    await tester.pump();
-  } finally {
-    scheduler.schedulingStrategy = previousStrategy;
-  }
+Future<void> _flushInitialUsageRefresh(WidgetTester tester) async {
+  await tester.pump(const Duration(milliseconds: 1));
+  await tester.idle();
+  await tester.pump();
 }
 
 ManagedAgent _installedAgent(AgentDefinition definition) {

@@ -4,14 +4,23 @@ import 'dart:async';
 typedef AgentUsageRefreshTaskScheduler =
     void Function(Future<void> Function() task);
 
+/// 将用量刷新作为一次性事件消息投递到 Dart event queue。
+///
+/// 不使用 Flutter Scheduler 的 idle task 队列，避免持续动画存在时 idle 任务无法
+/// 执行，并被 SchedulerBinding 通过零延迟 Timer 反复重试。
+void postAgentUsageRefreshEvent(Future<void> Function() task) {
+  Timer.run(() => unawaited(task()));
+}
+
 /// 合并 Agent 用量刷新请求。
 ///
-/// 调用方决定任务优先级；协调器只保证同一时刻最多执行一次刷新。尚未执行时的
-/// 重复请求会被合并，执行期间收到的新请求会直接丢弃。
+/// 默认通过一次性 event 消息执行刷新；调用方也可注入调度器用于测试。协调器保证
+/// 同一时刻最多执行一次刷新：尚未执行时的重复请求会被合并，执行期间收到的新请求
+/// 会直接丢弃。
 class AgentUsageRefreshCoordinator {
   factory AgentUsageRefreshCoordinator({
     required Future<void> Function() refresh,
-    required AgentUsageRefreshTaskScheduler schedule,
+    AgentUsageRefreshTaskScheduler schedule = postAgentUsageRefreshEvent,
   }) {
     return AgentUsageRefreshCoordinator._(refresh, schedule);
   }

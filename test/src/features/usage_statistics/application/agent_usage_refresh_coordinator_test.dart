@@ -1,10 +1,38 @@
 import 'dart:async';
 
+import 'package:flutter/animation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_refresh_coordinator.dart';
 
 void main() {
   group('AgentUsageRefreshCoordinator', () {
+    testWidgets('持续动画期间默认事件消息仍会执行刷新', (tester) async {
+      // Arrange
+      var refreshCount = 0;
+      final animationController = AnimationController(
+        vsync: tester,
+        duration: const Duration(seconds: 1),
+      )..repeat();
+      final coordinator = AgentUsageRefreshCoordinator(
+        refresh: () async {
+          refreshCount += 1;
+        },
+      );
+
+      try {
+        // Act
+        coordinator.requestRefresh();
+        await tester.pump(const Duration(milliseconds: 1));
+
+        // Assert
+        expect(animationController.isAnimating, isTrue);
+        expect(refreshCount, 1);
+      } finally {
+        animationController.dispose();
+        coordinator.dispose();
+      }
+    });
+
     test('合并尚未执行的重复刷新请求', () async {
       // Arrange
       var refreshCount = 0;

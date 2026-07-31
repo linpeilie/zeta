@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:window_manager/window_manager.dart';
 
@@ -91,7 +90,7 @@ class IdeHome extends StatefulWidget {
   final AgentModelCatalogRepository agentModelCatalogRepository;
   final AgentProviderRuntimeRegistry agentProviderRuntimeRegistry;
 
-  /// 是否在启动及每个回合结束后以 idle 优先级刷新 Agent 用量。
+  /// 是否在启动及每个回合结束后通过事件消息刷新 Agent 用量。
   final bool enableAgentUsageAutoRefresh;
   final AgentProviderAvailabilityLoader? agentProviderAvailabilityLoader;
   final HomeProviderDetectionLoader? homeProviderDetectionLoader;
@@ -207,15 +206,6 @@ class _IdeHomeState extends State<IdeHome> {
     _agentUsageRefreshCoordinator = AgentUsageRefreshCoordinator(
       // turn 完成 / 启动预热走静默刷新：已有数据时不闪加载横条。
       refresh: () => _agentUsagePanelController.refresh(showLoading: false),
-      schedule: (task) {
-        unawaited(
-          SchedulerBinding.instance.scheduleTask<void>(
-            task,
-            Priority.idle,
-            debugLabel: 'refresh Agent usage statistics',
-          ),
-        );
-      },
     );
     if (widget.enableAgentUsageAutoRefresh) {
       _scheduleInitialAgentUsageRefresh();
