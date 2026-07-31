@@ -12,9 +12,10 @@ const int kAgentEventMaxPerTurn = 64;
 /// Application 层的有界事件 drain 调度器。
 ///
 /// 位于 EventBuffer → ViewModel 之间：
-/// - [add] 只入队，并在当前同步栈结束后用 microtask 开 drain（使
+/// - [add] 只入队，并在当前同步栈结束后用 microtask 开首批 drain（使
 ///   `EventBuffer.flush` 的 for 循环先把整批入队再投递）。
-/// - 每个 turn 最多 [maxEventsPerTurn] 条；超额续排下一 microtask。
+/// - 每个 event-loop turn 最多 [maxEventsPerTurn] 条；超额续排下一条 event
+///   消息，让输入、Timer 和绘制事件有机会在批次之间执行。
 /// - 顺序 FIFO，不重排、不合并。
 /// - [flush] 立即排空（忽略 per-turn 上限）。
 final class AgentEventFrameScheduler {
@@ -23,7 +24,8 @@ final class AgentEventFrameScheduler {
     this.maxEventsPerTurn = kAgentEventMaxPerTurn,
     void Function(void Function() callback)? scheduleTurn,
   }) : assert(maxEventsPerTurn > 0),
-       _scheduleTurn = scheduleTurn ?? scheduleMicrotask;
+       _scheduleInitialTurn = scheduleTurn ?? scheduleMicrotask,
+       _scheduleContinuationTurn = scheduleTurn ?? _scheduleEventTurn;
 
   /// 下游消费者（通常为 ViewModel._handleEvent）。
   final void Function(AgentEvent event) onEvent;
@@ -31,7 +33,8 @@ final class AgentEventFrameScheduler {
   /// 每个 event-loop turn 最多投递的事件数。
   final int maxEventsPerTurn;
 
-  final void Function(void Function() callback) _scheduleTurn;
+  final void Function(void Function() callback) _scheduleInitialTurn;
+  final void Function(void Function() callback) _scheduleContinuationTurn;
 
   final Queue<AgentEvent> _queue = Queue<AgentEvent>();
   bool _drainScheduled = false;
@@ -83,12 +86,15 @@ final class AgentEventFrameScheduler {
     _disposed = true;
   }
 
-  void _scheduleDrain() {
+  void _scheduleDrain({bool continuation = false}) {
     if (_disposed || _drainScheduled || _draining) {
       return;
     }
     _drainScheduled = true;
-    _scheduleTurn(() {
+    final schedule = continuation
+        ? _scheduleContinuationTurn
+        : _scheduleInitialTurn;
+    schedule(() {
       if (_disposed) {
         return;
       }
@@ -113,7 +119,7 @@ final class AgentEventFrameScheduler {
     }
     if (_queue.isNotEmpty) {
       debugYieldCount += 1;
-      _scheduleDrain();
+      _scheduleDrain(continuation: true);
     }
   }
 
@@ -121,4 +127,8 @@ final class AgentEventFrameScheduler {
     debugDeliveredCount += 1;
     onEvent(event);
   }
+}
+
+void _scheduleEventTurn(void Function() callback) {
+  Timer.run(callback);
 }

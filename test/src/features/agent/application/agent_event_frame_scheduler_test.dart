@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_event_frame_scheduler.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -17,7 +19,7 @@ void main() {
         ..add(_delta('b'))
         ..add(_delta('c'));
 
-      // 入队在同步栈；投递在 microtask。
+      // 入队在同步栈；首批投递在 microtask。
       expect(delivered, isEmpty);
       expect(scheduler.pendingCount, 3);
 
@@ -25,6 +27,46 @@ void main() {
       expect(delivered, <String>['a', 'b', 'c']);
       expect(scheduler.debugYieldCount, 0);
     });
+
+    test(
+      'default scheduler yields to queued event before next batch',
+      () async {
+        // Arrange
+        final order = <String>[];
+        final markerReached = Completer<void>();
+        final scheduler = AgentEventFrameScheduler(
+          maxEventsPerTurn: 2,
+          onEvent: (event) {
+            order.add((event as AgentMessageDeltaEvent).messageId);
+          },
+        );
+        scheduler
+          ..add(_delta('1'))
+          ..add(_delta('2'))
+          ..add(_delta('3'))
+          ..add(_delta('4'))
+          ..add(_delta('5'));
+
+        // Act
+        Timer.run(() {
+          order.add('queued-event');
+          markerReached.complete();
+        });
+        await markerReached.future;
+
+        // Assert
+        expect(order, <String>['1', '2', 'queued-event']);
+        expect(scheduler.pendingCount, 3);
+
+        await Future<void>.delayed(Duration.zero);
+        expect(order, <String>['1', '2', 'queued-event', '3', '4']);
+        expect(scheduler.pendingCount, 1);
+
+        await Future<void>.delayed(Duration.zero);
+        expect(order, <String>['1', '2', 'queued-event', '3', '4', '5']);
+        expect(scheduler.pendingCount, 0);
+      },
+    );
 
     test('yields after maxEventsPerTurn and continues next turn', () async {
       final delivered = <String>[];
