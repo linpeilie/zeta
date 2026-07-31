@@ -551,7 +551,7 @@ class _OverviewMetricCard extends StatelessWidget {
     final detailStyle = textStyles.meta.copyWith(color: colors.textSecondary);
     final detailLineHeight =
         (detailStyle.fontSize ?? 10) * (detailStyle.height ?? 1.2);
-    final detailSlotHeight = detailLineHeight * 2;
+    final detailSlotHeight = detailLineHeight;
 
     return Semantics(
       label: semanticLabel,
