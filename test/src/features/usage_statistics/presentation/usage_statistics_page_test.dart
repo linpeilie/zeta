@@ -12,7 +12,6 @@ import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/metrics/compact_metric_bar.dart';
 import 'package:zeta/src/ui/core/rows/ide_data_row.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
-import 'package:zeta/src/ui/core/workbench/ide_toolbar.dart';
 
 void main() {
   testWidgets('renders full statistics and opens task detail drawer', (
@@ -40,7 +39,15 @@ void main() {
       findsOneWidget,
     );
     expect(find.byType(CompactMetricBar), findsOneWidget);
-    expect(find.byType(IdeToolbar), findsOneWidget);
+    expect(find.byKey(const ValueKey('usage-filters-toolbar')), findsOneWidget);
+    expect(
+      tester
+          .widget<IdeSurface>(
+            find.byKey(const ValueKey('usage-filters-toolbar')),
+          )
+          .level,
+      IdeSurfaceLevel.pane,
+    );
     expect(find.byType(IdeDataRow), findsWidgets);
     expect(
       tester

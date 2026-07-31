@@ -23,7 +23,6 @@ import 'package:zeta/src/ui/core/rows/ide_list_row.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/ui/core/workbench/ide_page_header.dart';
 import 'package:zeta/src/ui/core/workbench/ide_section.dart';
-import 'package:zeta/src/ui/core/workbench/ide_toolbar.dart';
 
 /// 本地 Agent CLI 使用统计页面。
 class UsageStatisticsPage extends StatefulWidget {
@@ -256,8 +255,11 @@ class _UsageFilters extends StatelessWidget {
     final report = this.report;
     final agents = report?.agentOptions ?? const <String>[];
     final models = report?.modelOptions ?? const <String>[];
-    return IdeToolbar(
+    // 与页面内其它内容卡片一致使用 pane 表面，避免 IdeToolbar 的
+    // surfaceElevated 在 canvas 上形成突兀的抬升色带。
+    return IdeSurface.pane(
       key: const ValueKey('usage-filters-toolbar'),
+      padding: IdeSpacing.panelPadding,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < IdeMetrics.mediumBreakpoint;
