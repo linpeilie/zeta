@@ -1103,6 +1103,7 @@ class _UsageLineChart extends StatelessWidget {
       alpha: brightness == Brightness.dark ? 0.10 : 0.07,
     );
     final maximum = safeUsageChartMaximum(points);
+    final yInterval = maximum / 3;
     // 缺失日期统一按 0 绘制，保证时间轴连续、无断点。
     final spots = <FlSpot>[
       for (var index = 0; index < points.length; index += 1)
@@ -1133,7 +1134,7 @@ class _UsageLineChart extends StatelessWidget {
               gridData: FlGridData(
                 show: true,
                 drawVerticalLine: false,
-                horizontalInterval: maximum / 3,
+                horizontalInterval: yInterval,
                 getDrawingHorizontalLine: (_) =>
                     FlLine(color: colors.borderSubtle, strokeWidth: 1),
               ),
@@ -1141,7 +1142,34 @@ class _UsageLineChart extends StatelessWidget {
               titlesData: FlTitlesData(
                 topTitles: const AxisTitles(),
                 rightTitles: const AxisTitles(),
-                leftTitles: const AxisTitles(),
+                leftTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    reservedSize: 40,
+                    interval: yInterval,
+                    getTitlesWidget: (value, meta) {
+                      // 与水平网格对齐：0、1/3、2/3、max。
+                      final step = (value / yInterval).round();
+                      if ((value - step * yInterval).abs() > yInterval * 0.01) {
+                        return const SizedBox.shrink();
+                      }
+                      if (step < 0 || step > 3) {
+                        return const SizedBox.shrink();
+                      }
+                      return SideTitleWidget(
+                        meta: meta,
+                        space: 6,
+                        child: Text(
+                          _formatTrendAxisValue(metric: metric, value: value),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.right,
+                          style: titleStyle,
+                        ),
+                      );
+                    },
+                  ),
+                ),
                 bottomTitles: AxisTitles(
                   sideTitles: SideTitles(
                     showTitles: points.isNotEmpty,
@@ -1250,14 +1278,21 @@ String _formatTrendTooltip({
   required String label,
   required double value,
 }) {
-  final formatted = switch (metric) {
+  return '$label · ${_formatTrendAxisValue(metric: metric, value: value)}';
+}
+
+/// Y 轴与 Tooltip 共用的趋势数值格式化。
+String _formatTrendAxisValue({
+  required UsageTrendMetric metric,
+  required double value,
+}) {
+  return switch (metric) {
     UsageTrendMetric.calls ||
     UsageTrendMetric.totalTokens => formatUsageCount(value),
     UsageTrendMetric.successRate => formatUsagePercent(value),
     UsageTrendMetric.averageResponse || UsageTrendMetric.averageDuration =>
       formatUsageDuration(Duration(milliseconds: value.round()), compact: true),
   };
-  return '$label · $formatted';
 }
 
 class _TaskDetailDrawer extends StatelessWidget {
