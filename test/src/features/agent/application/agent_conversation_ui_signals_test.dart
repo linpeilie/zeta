@@ -50,6 +50,31 @@ void main() {
       expect(signals.headerVersion, headerBefore + 1);
       expect(signals.autoScrollTick, autoBefore + 1);
       expect(legacyNotifyCount, 1);
+      expect(
+        signals.diagnostics,
+        isA<AgentConversationUiSignalsDiagnostics>()
+            .having(
+              (value) => value.scheduledStreamFlushCount,
+              'scheduledStreamFlushCount',
+              3,
+            )
+            .having(
+              (value) => value.immediateFlushCount,
+              'immediateFlushCount',
+              0,
+            )
+            .having(
+              (value) => value.mergedRequestCount,
+              'mergedRequestCount',
+              2,
+            )
+            .having(
+              (value) => value.actualPublishCount,
+              'actualPublishCount',
+              1,
+            )
+            .having((value) => value.legacyNotifyCount, 'legacyNotifyCount', 1),
+      );
       releaseFrames();
     });
 
@@ -62,6 +87,11 @@ void main() {
         expect(signals.historyVersion, 1);
         expect(signals.autoScrollTick, 1);
         expect(legacyNotifyCount, 1);
+        expect(signals.diagnostics.scheduledStreamFlushCount, 1);
+        expect(signals.diagnostics.immediateFlushCount, 1);
+        expect(signals.diagnostics.mergedRequestCount, 1);
+        expect(signals.diagnostics.actualPublishCount, 1);
+        expect(signals.diagnostics.legacyNotifyCount, 1);
         // 关键路径不占用 stream in-flight。
         expect(pendingFrames, isEmpty);
       },
@@ -83,12 +113,18 @@ void main() {
         signals.flushPendingStreamChangesNow();
         expect(signals.debugSkippedInFlightStreamFlushCount, 1);
         expect(signals.autoScrollTick, 1);
+        expect(signals.diagnostics.scheduledStreamFlushCount, 2);
+        expect(signals.diagnostics.mergedRequestCount, 0);
+        expect(signals.diagnostics.actualPublishCount, 1);
+        expect(signals.diagnostics.skippedInFlightStreamFlushCount, 1);
 
         releaseFrames();
         await Future<void>.delayed(
           kAgentStreamFlushInterval + const Duration(milliseconds: 8),
         );
         expect(signals.autoScrollTick, 2);
+        expect(signals.diagnostics.actualPublishCount, 2);
+        expect(signals.diagnostics.legacyNotifyCount, 2);
       },
     );
 
@@ -101,7 +137,27 @@ void main() {
 
       signals.flushStreamChangesNow(history: true, liveTurn: true);
       expect(signals.historyVersion, 1);
+      expect(signals.diagnostics.immediateFlushCount, 1);
+      expect(signals.diagnostics.actualPublishCount, 2);
+      expect(signals.diagnostics.legacyNotifyCount, 2);
       // 不依赖 releaseFrames 也能立即成功。
+    });
+
+    test('diagnostics returns an immutable point-in-time snapshot', () {
+      final before = signals.diagnostics;
+
+      signals.publish(header: true);
+      final after = signals.diagnostics;
+
+      expect(before.scheduledStreamFlushCount, 0);
+      expect(before.immediateFlushCount, 0);
+      expect(before.mergedRequestCount, 0);
+      expect(before.actualPublishCount, 0);
+      expect(before.legacyNotifyCount, 0);
+      expect(before.skippedInFlightStreamFlushCount, 0);
+      expect(after.actualPublishCount, 1);
+      expect(after.legacyNotifyCount, 1);
+      expect(legacyNotifyCount, 1);
     });
   });
 }

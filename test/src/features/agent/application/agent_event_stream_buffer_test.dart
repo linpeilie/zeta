@@ -254,6 +254,39 @@ void main() {
       expect(events[5], isA<AgentStatusEvent>());
     });
 
+    test('diagnostics 记录输入、合并、透传与 pending key 峰值', () {
+      final events = <AgentEvent>[];
+      final buffer = AgentEventStreamBuffer(onEvent: events.add);
+
+      buffer
+        ..add(_messageDelta('one'))
+        ..add(_messageDelta('two'))
+        ..add(_messageDelta('three', messageId: 'message-2'));
+      final pendingSnapshot = buffer.diagnostics;
+
+      expect(pendingSnapshot.receivedEvents, 3);
+      expect(pendingSnapshot.coalescedEvents, 1);
+      expect(pendingSnapshot.barrierOrDirectPassThroughEvents, 0);
+      expect(pendingSnapshot.backpressureFlushes, 0);
+      expect(pendingSnapshot.currentPendingKeys, 2);
+      expect(pendingSnapshot.maxPendingKeys, 2);
+
+      buffer.add(
+        const AgentTurnCompletedEvent(sessionId: 'thread-1', turnId: 'turn-1'),
+      );
+      final deliveredSnapshot = buffer.diagnostics;
+
+      expect(events, hasLength(3));
+      expect(deliveredSnapshot.receivedEvents, 4);
+      expect(deliveredSnapshot.coalescedEvents, 1);
+      expect(deliveredSnapshot.barrierOrDirectPassThroughEvents, 1);
+      expect(deliveredSnapshot.backpressureFlushes, 0);
+      expect(deliveredSnapshot.currentPendingKeys, 0);
+      expect(deliveredSnapshot.maxPendingKeys, 2);
+      // 先前取得的对象是值快照，不随内部 Map 后续变化。
+      expect(pendingSnapshot.currentPendingKeys, 2);
+    });
+
     test('背压达到上限时仅上报计数并立即 flush', () {
       final events = <AgentEvent>[];
       final diagnostics = <int>[];
@@ -269,6 +302,12 @@ void main() {
 
       expect(diagnostics, <int>[2]);
       expect(events, hasLength(2));
+      expect(buffer.diagnostics.receivedEvents, 2);
+      expect(buffer.diagnostics.coalescedEvents, 0);
+      expect(buffer.diagnostics.barrierOrDirectPassThroughEvents, 0);
+      expect(buffer.diagnostics.backpressureFlushes, 1);
+      expect(buffer.diagnostics.currentPendingKeys, 0);
+      expect(buffer.diagnostics.maxPendingKeys, 2);
     });
 
     test('listener 失效时丢弃旧代数尚未发布的增量', () async {

@@ -10,6 +10,38 @@ typedef _AgentEventKey = ({
   String? detail,
 });
 
+/// [AgentEventStreamBuffer] 的只读诊断快照。
+///
+/// 快照只包含计数和队列深度，不保留事件、正文、Provider payload 或 scope 标识。
+final class AgentEventStreamBufferDiagnostics {
+  const AgentEventStreamBufferDiagnostics({
+    required this.receivedEvents,
+    required this.coalescedEvents,
+    required this.barrierOrDirectPassThroughEvents,
+    required this.backpressureFlushes,
+    required this.currentPendingKeys,
+    required this.maxPendingKeys,
+  });
+
+  /// 进入缓冲器处理的事件数；dispose 后被忽略的调用不计入。
+  final int receivedEvents;
+
+  /// 与同一规范化 key 的待处理事件合并或替换的输入事件数。
+  final int coalescedEvents;
+
+  /// 走现有非合并分支、先 flush 再直接透传的事件数。
+  final int barrierOrDirectPassThroughEvents;
+
+  /// 达到 [AgentEventStreamBuffer.maxPendingEvents] 后触发 flush 的次数。
+  final int backpressureFlushes;
+
+  /// 获取快照时尚未发布的合并 key 数。
+  final int currentPendingKeys;
+
+  /// 本实例生命周期内同时存在过的最大待处理 key 数。
+  final int maxPendingKeys;
+}
+
 /// Application 层的 Provider 高频事件合并器。
 ///
 /// Transport 和 Provider mapper 仍逐条消费全部协议消息；只有进入 UI 投影前，才按
@@ -33,23 +65,48 @@ final class AgentEventStreamBuffer {
       <_AgentEventKey, AgentEvent>{};
   bool _flushScheduled = false;
   bool _disposed = false;
+  int _receivedEvents = 0;
+  int _coalescedEvents = 0;
+  int _barrierOrDirectPassThroughEvents = 0;
+  int _backpressureFlushes = 0;
+  int _maxPendingKeys = 0;
 
   int get pendingEventCount => _pending.length;
+
+  /// 返回与可变缓冲状态隔离的诊断快照。
+  AgentEventStreamBufferDiagnostics get diagnostics =>
+      AgentEventStreamBufferDiagnostics(
+        receivedEvents: _receivedEvents,
+        coalescedEvents: _coalescedEvents,
+        barrierOrDirectPassThroughEvents: _barrierOrDirectPassThroughEvents,
+        backpressureFlushes: _backpressureFlushes,
+        currentPendingKeys: _pending.length,
+        maxPendingKeys: _maxPendingKeys,
+      );
 
   void add(AgentEvent event) {
     if (_disposed) {
       return;
     }
+    _receivedEvents += 1;
     final key = _coalescingKey(event);
     if (key == null) {
+      _barrierOrDirectPassThroughEvents += 1;
       flush();
       onEvent(event);
       return;
     }
 
     final previous = _pending[key];
+    if (previous != null) {
+      _coalescedEvents += 1;
+    }
     _pending[key] = previous == null ? event : _merge(previous, event);
+    if (_pending.length > _maxPendingKeys) {
+      _maxPendingKeys = _pending.length;
+    }
     if (_pending.length >= maxPendingEvents) {
+      _backpressureFlushes += 1;
       onBackpressure?.call(_pending.length);
       flush();
       return;

@@ -8,6 +8,34 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 /// 事件已经过 [AgentEventStreamBuffer] 合并，默认值兼顾批量吞吐与界面响应。
 const int kAgentEventMaxPerTurn = 64;
 
+/// [AgentEventFrameScheduler] 的只读诊断快照。
+///
+/// 快照仅记录吞吐和队列深度，不持有事件或任何事件内容。
+final class AgentEventFrameSchedulerDiagnostics {
+  const AgentEventFrameSchedulerDiagnostics({
+    required this.deliveredEvents,
+    required this.batchCount,
+    required this.yieldCount,
+    required this.currentQueueDepth,
+    required this.maxQueueDepth,
+  });
+
+  /// 已调用下游 [AgentEventFrameScheduler.onEvent] 的事件数。
+  final int deliveredEvents;
+
+  /// 实际投递过至少一个事件的 drain/flush 批次数。
+  final int batchCount;
+
+  /// 有界批次结束后仍有排队事件、因此续排下一 event-loop turn 的次数。
+  final int yieldCount;
+
+  /// 获取快照时尚未投递的事件数。
+  final int currentQueueDepth;
+
+  /// 本实例生命周期内观察到的最大队列深度。
+  final int maxQueueDepth;
+}
+
 /// Application 层的有界事件 drain 调度器。
 ///
 /// 位于 EventBuffer → ViewModel 之间：
@@ -39,21 +67,38 @@ final class AgentEventFrameScheduler {
   bool _drainScheduled = false;
   bool _draining = false;
   bool _disposed = false;
+  int _yieldCount = 0;
+  int _deliveredEvents = 0;
+  int _batchCount = 0;
+  int _maxQueueDepth = 0;
 
   /// 当前排队未投递事件数（诊断用）。
   int get pendingCount => _queue.length;
 
   /// 诊断：触发「跨 turn 续 drain」的次数。
-  int debugYieldCount = 0;
+  int get debugYieldCount => _yieldCount;
 
   /// 诊断：实际调用 [onEvent] 的次数。
-  int debugDeliveredCount = 0;
+  int get debugDeliveredCount => _deliveredEvents;
+
+  /// 返回与可变队列隔离的诊断快照。
+  AgentEventFrameSchedulerDiagnostics get diagnostics =>
+      AgentEventFrameSchedulerDiagnostics(
+        deliveredEvents: _deliveredEvents,
+        batchCount: _batchCount,
+        yieldCount: _yieldCount,
+        currentQueueDepth: _queue.length,
+        maxQueueDepth: _maxQueueDepth,
+      );
 
   void add(AgentEvent event) {
     if (_disposed) {
       return;
     }
     _queue.add(event);
+    if (_queue.length > _maxQueueDepth) {
+      _maxQueueDepth = _queue.length;
+    }
     _scheduleDrain();
   }
 
@@ -63,6 +108,9 @@ final class AgentEventFrameScheduler {
       return;
     }
     _drainScheduled = false;
+    if (_queue.isNotEmpty) {
+      _batchCount += 1;
+    }
     while (_queue.isNotEmpty) {
       _deliver(_queue.removeFirst());
     }
@@ -108,6 +156,9 @@ final class AgentEventFrameScheduler {
     }
     _draining = true;
     try {
+      if (_queue.isNotEmpty) {
+        _batchCount += 1;
+      }
       var delivered = 0;
       while (_queue.isNotEmpty && delivered < maxEventsPerTurn) {
         _deliver(_queue.removeFirst());
@@ -117,13 +168,13 @@ final class AgentEventFrameScheduler {
       _draining = false;
     }
     if (_queue.isNotEmpty) {
-      debugYieldCount += 1;
+      _yieldCount += 1;
       _scheduleDrain(continuation: true);
     }
   }
 
   void _deliver(AgentEvent event) {
-    debugDeliveredCount += 1;
+    _deliveredEvents += 1;
     onEvent(event);
   }
 }

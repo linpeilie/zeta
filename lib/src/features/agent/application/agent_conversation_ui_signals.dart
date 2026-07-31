@@ -10,6 +10,39 @@ import 'package:zeta/src/features/agent/application/agent_conversation_timeline_
 /// 帧级 writer 背压见 [AgentConversationUiSignals] 的 stream in-flight 门闩。
 const Duration kAgentStreamFlushInterval = Duration(milliseconds: 16);
 
+/// [AgentConversationUiSignals] 的累计只读诊断快照。
+///
+/// 快照只包含调度与发布次数，不包含消息正文、Provider payload 或任何用户数据。
+@immutable
+final class AgentConversationUiSignalsDiagnostics {
+  const AgentConversationUiSignalsDiagnostics({
+    required this.scheduledStreamFlushCount,
+    required this.immediateFlushCount,
+    required this.mergedRequestCount,
+    required this.actualPublishCount,
+    required this.legacyNotifyCount,
+    required this.skippedInFlightStreamFlushCount,
+  });
+
+  /// 已接受的 [AgentConversationUiSignals.scheduleStreamFlush] 请求数。
+  final int scheduledStreamFlushCount;
+
+  /// 已进入立即刷新路径的次数，包含 timer 将关键请求升级为立即刷新的情况。
+  final int immediateFlushCount;
+
+  /// 未单独发布、而是合并进已有普通批次或立即刷新中的请求数。
+  final int mergedRequestCount;
+
+  /// 携带至少一个有效刷新标志并实际执行的 publish 次数。
+  final int actualPublishCount;
+
+  /// 旧兼容通知回调的调用次数。
+  final int legacyNotifyCount;
+
+  /// 因上一拍纯流式 publish 尚未释放而延后的 timer flush 次数。
+  final int skippedInFlightStreamFlushCount;
+}
+
 /// Agent 面板的分区刷新信号与流式节流器。
 ///
 /// 它把 UI 刷新拆成 header/history/composer/pending interaction/
@@ -55,8 +88,27 @@ class AgentConversationUiSignals {
   /// 上一拍纯流式 publish 后、帧/事件循环结束前为 true。
   bool _streamPublishInFlight = false;
 
-  /// 诊断：因 stream in-flight 而再 defer 的 timer flush 次数。
-  int debugSkippedInFlightStreamFlushCount = 0;
+  int _scheduledStreamFlushCount = 0;
+  int _immediateFlushCount = 0;
+  int _mergedRequestCount = 0;
+  int _actualPublishCount = 0;
+  int _legacyNotifyCount = 0;
+  int _skippedInFlightStreamFlushCount = 0;
+
+  /// 当前累计诊断快照。
+  AgentConversationUiSignalsDiagnostics get diagnostics =>
+      AgentConversationUiSignalsDiagnostics(
+        scheduledStreamFlushCount: _scheduledStreamFlushCount,
+        immediateFlushCount: _immediateFlushCount,
+        mergedRequestCount: _mergedRequestCount,
+        actualPublishCount: _actualPublishCount,
+        legacyNotifyCount: _legacyNotifyCount,
+        skippedInFlightStreamFlushCount: _skippedInFlightStreamFlushCount,
+      );
+
+  /// 兼容既有测试诊断入口；新测试优先读取 [diagnostics]。
+  int get debugSkippedInFlightStreamFlushCount =>
+      _skippedInFlightStreamFlushCount;
 
   int get autoScrollTick => _autoScrollTickNotifier.value;
 
@@ -110,6 +162,7 @@ class AgentConversationUiSignals {
         !autoScroll) {
       return;
     }
+    _actualPublishCount += 1;
     if (syncLiveTurn) {
       _timeline.syncLiveTurnBinding();
     }
@@ -135,6 +188,7 @@ class AgentConversationUiSignals {
     if (autoScroll) {
       _autoScrollTickNotifier.value += 1;
     }
+    _legacyNotifyCount += 1;
     _onLegacyNotify();
   }
 
@@ -146,6 +200,10 @@ class AgentConversationUiSignals {
   }) {
     if (_isDisposed()) {
       return;
+    }
+    _scheduledStreamFlushCount += 1;
+    if (_hasPendingStreamChanges) {
+      _mergedRequestCount += 1;
     }
     _streamNeedsLiveFlush = true;
     _streamNeedsHeaderFlush = _streamNeedsHeaderFlush || header;
@@ -173,7 +231,7 @@ class AgentConversationUiSignals {
 
     if (_streamPublishInFlight) {
       // 保留 dirty 标志并延后一拍，等待当前发布完成。
-      debugSkippedInFlightStreamFlushCount += 1;
+      _skippedInFlightStreamFlushCount += 1;
       _streamFlushTimer = Timer(
         kAgentStreamFlushInterval,
         flushPendingStreamChangesNow,
@@ -220,6 +278,10 @@ class AgentConversationUiSignals {
   }) {
     if (_isDisposed()) {
       return;
+    }
+    _immediateFlushCount += 1;
+    if (_hasPendingStreamChanges) {
+      _mergedRequestCount += 1;
     }
     final scheduledLiveFlush = _streamNeedsLiveFlush;
     final scheduledHeaderFlush = _streamNeedsHeaderFlush;
@@ -287,4 +349,11 @@ class AgentConversationUiSignals {
       scheduleMicrotask(release);
     }
   }
+
+  bool get _hasPendingStreamChanges =>
+      _streamNeedsLiveFlush ||
+      _streamNeedsHeaderFlush ||
+      _streamNeedsComposerFlush ||
+      _streamNeedsAutoScroll ||
+      _streamNeedsExpansionFlush;
 }

@@ -265,6 +265,21 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   int get expansionVersion => _uiSignals.expansionVersion;
 
+  /// 当前事件缓冲诊断；仅包含计数和 pending key 深度。
+  @visibleForTesting
+  AgentEventStreamBufferDiagnostics? get eventStreamBufferDiagnostics =>
+      _eventBuffer?.diagnostics;
+
+  /// 当前有界事件调度诊断；仅包含吞吐、批次和队列深度。
+  @visibleForTesting
+  AgentEventFrameSchedulerDiagnostics? get eventFrameSchedulerDiagnostics =>
+      _eventFrameScheduler?.diagnostics;
+
+  /// 当前 UI 信号诊断；仅包含调度、合并和发布次数。
+  @visibleForTesting
+  AgentConversationUiSignalsDiagnostics get uiSignalsDiagnostics =>
+      _uiSignals.diagnostics;
+
   ValueListenable<int> get historyVersionListenable =>
       _uiSignals.historyVersionListenable;
 

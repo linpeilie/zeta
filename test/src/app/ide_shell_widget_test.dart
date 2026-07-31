@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/main.dart';
 import 'package:zeta/src/app/app.dart' show MainAppState;
+import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -16,7 +17,9 @@ import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 
+import '../testing/agent_event_storm_fixture.dart';
 import '../testing/ide_test_harness.dart';
+import '../testing/widget_build_counter.dart';
 
 void main() {
   testWidgets('starts with the compact IDE panes', (tester) async {
@@ -393,6 +396,156 @@ void main() {
     );
     expect(find.byKey(const ValueKey('agent-pane-host')), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('records the current Agent event storm rebuild baseline', (
+    tester,
+  ) async {
+    final fixture = AgentEventStormFixture();
+    final directory = Directory.systemTemp.createTempSync(
+      'zeta_agent_storm_baseline_',
+    );
+    addTearDown(() {
+      if (directory.existsSync()) {
+        directory.deleteSync(recursive: true);
+      }
+    });
+    final provider = FakeAgentProvider(
+      completeTurns: false,
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[
+            agentThread(
+              id: fixture.sessionId,
+              projectPath: directory.path,
+              title: 'Storm baseline thread',
+            ),
+          ],
+          nextCursor: null,
+        ),
+      ],
+      threadHistories: <String, AgentThreadHistorySnapshot>{
+        fixture.sessionId: AgentThreadHistorySnapshot(
+          threadId: fixture.sessionId,
+          turns: const <AgentHistoryTurn>[],
+        ),
+      },
+    );
+    await _pumpIde(
+      tester,
+      directoryPicker: () async => directory.path,
+      agentProviderFactory: FakeAgentProviderFactory(provider),
+      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+    );
+
+    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await tester.runAsync(waitForIo);
+    final threadRow = find.byKey(
+      ValueKey<String>('project-thread-${directory.path}-${fixture.sessionId}'),
+    );
+    await pumpUntilCondition(
+      tester,
+      () => threadRow.evaluate().isNotEmpty,
+      failureMessage: 'Storm baseline thread did not become ready',
+    );
+    await tester.tap(threadRow);
+    await pumpUntilCondition(
+      tester,
+      () =>
+          find.byType(AgentPane).evaluate().isNotEmpty &&
+          find
+              .byKey(const ValueKey('agent-message-list'))
+              .evaluate()
+              .isNotEmpty,
+      failureMessage: 'Storm baseline AgentPane did not become ready',
+    );
+
+    final viewModel = tester
+        .widget<AgentPane>(find.byType(AgentPane))
+        .viewModel;
+    final beforeBuffer = viewModel.eventStreamBufferDiagnostics;
+    final beforeScheduler = viewModel.eventFrameSchedulerDiagnostics;
+    final beforeUi = viewModel.uiSignalsDiagnostics;
+    expect(beforeBuffer, isNotNull);
+    expect(beforeScheduler, isNotNull);
+
+    final buildCounter = TestWidgetBuildCounter()..start();
+    addTearDown(buildCounter.dispose);
+    for (final event in fixture.events) {
+      provider.emit(event);
+    }
+
+    var drained = false;
+    for (var pumpCount = 0; pumpCount < 50; pumpCount += 1) {
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      final buffer = viewModel.eventStreamBufferDiagnostics;
+      final scheduler = viewModel.eventFrameSchedulerDiagnostics;
+      if (buffer != null &&
+          buffer.receivedEvents - beforeBuffer!.receivedEvents ==
+              fixture.expectedInputEventCount &&
+          scheduler?.currentQueueDepth == 0 &&
+          !viewModel.isTurnRunning) {
+        drained = true;
+        break;
+      }
+    }
+    expect(drained, isTrue, reason: 'Agent event storm did not drain');
+    await tester.pump(const Duration(milliseconds: 32));
+    await tester.pump();
+
+    final afterBuffer = viewModel.eventStreamBufferDiagnostics!;
+    final afterScheduler = viewModel.eventFrameSchedulerDiagnostics!;
+    final afterUi = viewModel.uiSignalsDiagnostics;
+    final buildCounts = buildCounter.snapshot();
+    buildCounter.dispose();
+
+    final messageCharacters = viewModel.timelineEntries
+        .whereType<AgentMessageTimelineEntry>()
+        .where((entry) => entry.message.role == AgentMessageRole.agent)
+        .fold<int>(0, (sum, entry) => sum + entry.message.text.length);
+    final reasoningCharacters = viewModel.timelineEntries
+        .whereType<AgentToolTimelineEntry>()
+        .where((entry) => entry.toolCall.kind == AgentToolKind.think)
+        .fold<int>(
+          0,
+          (sum, entry) => sum + (entry.toolCall.content?.length ?? 0),
+        );
+
+    expect(messageCharacters, fixture.expectedMessageCharacters);
+    expect(reasoningCharacters, fixture.expectedReasoningCharacters);
+    expect(viewModel.permissionRequests, isEmpty);
+    expect(viewModel.isTurnRunning, isFalse);
+    expect(
+      viewModel.visibleHistoryTurns.map((turn) => turn.id),
+      contains(fixture.turnId),
+    );
+    expect(
+      viewModel.timelineEntries.whereType<AgentMessageTimelineEntry>().map(
+        (entry) => entry.message.text,
+      ),
+      contains(AgentEventStormFixture.errorMessage),
+    );
+
+    debugPrint(
+      'agent-event-widget-baseline '
+      'fixture=${fixture.expectedInputEventCount} '
+      'buffer={received:${afterBuffer.receivedEvents - beforeBuffer!.receivedEvents},'
+      'coalesced:${afterBuffer.coalescedEvents - beforeBuffer.coalescedEvents},'
+      'barrier:${afterBuffer.barrierOrDirectPassThroughEvents - beforeBuffer.barrierOrDirectPassThroughEvents},'
+      'backpressure:${afterBuffer.backpressureFlushes - beforeBuffer.backpressureFlushes},'
+      'maxPending:${afterBuffer.maxPendingKeys}} '
+      'scheduler={delivered:${afterScheduler.deliveredEvents - beforeScheduler!.deliveredEvents},'
+      'batches:${afterScheduler.batchCount - beforeScheduler.batchCount},'
+      'yields:${afterScheduler.yieldCount - beforeScheduler.yieldCount},'
+      'maxQueue:${afterScheduler.maxQueueDepth}} '
+      'ui={scheduled:${afterUi.scheduledStreamFlushCount - beforeUi.scheduledStreamFlushCount},'
+      'immediate:${afterUi.immediateFlushCount - beforeUi.immediateFlushCount},'
+      'merged:${afterUi.mergedRequestCount - beforeUi.mergedRequestCount},'
+      'published:${afterUi.actualPublishCount - beforeUi.actualPublishCount},'
+      'legacy:${afterUi.legacyNotifyCount - beforeUi.legacyNotifyCount}} '
+      'builds=$buildCounts',
+    );
   });
 
   testWidgets(

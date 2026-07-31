@@ -88,21 +88,43 @@ void main() {
 
       expect(delivered, isEmpty);
       expect(scheduled, hasLength(1));
+      final queuedSnapshot = scheduler.diagnostics;
+      expect(queuedSnapshot.deliveredEvents, 0);
+      expect(queuedSnapshot.batchCount, 0);
+      expect(queuedSnapshot.yieldCount, 0);
+      expect(queuedSnapshot.currentQueueDepth, 5);
+      expect(queuedSnapshot.maxQueueDepth, 5);
 
       scheduled.removeAt(0)();
       expect(delivered, <String>['1', '2']);
       expect(scheduler.debugYieldCount, 1);
       expect(scheduler.pendingCount, 3);
+      expect(scheduler.diagnostics.deliveredEvents, 2);
+      expect(scheduler.diagnostics.batchCount, 1);
+      expect(scheduler.diagnostics.yieldCount, 1);
+      expect(scheduler.diagnostics.currentQueueDepth, 3);
+      expect(scheduler.diagnostics.maxQueueDepth, 5);
 
       expect(scheduled, hasLength(1));
       scheduled.removeAt(0)();
       expect(delivered, <String>['1', '2', '3', '4']);
       expect(scheduler.debugYieldCount, 2);
+      expect(scheduler.diagnostics.deliveredEvents, 4);
+      expect(scheduler.diagnostics.batchCount, 2);
+      expect(scheduler.diagnostics.yieldCount, 2);
+      expect(scheduler.diagnostics.currentQueueDepth, 1);
 
       expect(scheduled, hasLength(1));
       scheduled.removeAt(0)();
       expect(delivered, <String>['1', '2', '3', '4', '5']);
       expect(scheduler.pendingCount, 0);
+      expect(scheduler.diagnostics.deliveredEvents, 5);
+      expect(scheduler.diagnostics.batchCount, 3);
+      expect(scheduler.diagnostics.yieldCount, 2);
+      expect(scheduler.diagnostics.currentQueueDepth, 0);
+      expect(scheduler.diagnostics.maxQueueDepth, 5);
+      // 先前取得的对象是值快照，不随内部 Queue 后续变化。
+      expect(queuedSnapshot.currentQueueDepth, 5);
     });
 
     test('flush drains remaining ignoring per-turn budget', () {
@@ -124,6 +146,11 @@ void main() {
 
       scheduler.flush();
       expect(delivered, <String>['a', 'b', 'c']);
+      expect(scheduler.diagnostics.deliveredEvents, 3);
+      expect(scheduler.diagnostics.batchCount, 1);
+      expect(scheduler.diagnostics.yieldCount, 0);
+      expect(scheduler.diagnostics.currentQueueDepth, 0);
+      expect(scheduler.diagnostics.maxQueueDepth, 3);
     });
 
     test('dispose without flush drops pending', () {
