@@ -1,0 +1,85 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+import 'package:zeta/src/ui/core/ide_button.dart';
+import 'package:zeta/src/ui/core/ide_metrics.dart';
+import 'package:zeta/src/ui/core/ide_text_styles.dart';
+
+import 'ide_component_test_harness.dart';
+
+void main() {
+  testWidgets('IdeButton 使用 bodySmall 字号并响应点击', (tester) async {
+    var presses = 0;
+
+    await pumpIdeComponent(
+      tester,
+      child: Align(
+        alignment: Alignment.center,
+        child: IdeButton(
+          key: const ValueKey('sample-button'),
+          label: '刷新',
+          leadingIcon: Icons.refresh_rounded,
+          onPressed: () => presses += 1,
+        ),
+      ),
+    );
+
+    final label = tester.widget<Text>(find.text('刷新'));
+    final expectedSize = IdeTextStyles.of(
+      tester.element(find.text('刷新')),
+    ).bodySmall.fontSize;
+    expect(label.style?.fontSize, expectedSize);
+    expect(find.byType(sf.Button), findsOneWidget);
+    expect(find.byIcon(Icons.refresh_rounded), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('sample-button')));
+    await tester.pump();
+    expect(presses, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('IdeButton.toolbar 固定为工具条高度', (tester) async {
+    await pumpIdeComponent(
+      tester,
+      child: const Align(
+        alignment: Alignment.center,
+        child: IdeButton.toolbar(
+          key: ValueKey('toolbar-button'),
+          label: '筛选',
+          leadingIcon: Icons.calendar_month_rounded,
+          trailingIcon: Icons.keyboard_arrow_down_rounded,
+        ),
+      ),
+    );
+
+    expect(
+      tester.getSize(find.byKey(const ValueKey('toolbar-button'))).height,
+      IdeMetrics.toolbarHeight,
+    );
+    expect(find.byIcon(Icons.calendar_month_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.keyboard_arrow_down_rounded), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('IdeButton 禁用时不触发 onPressed', (tester) async {
+    var presses = 0;
+
+    await pumpIdeComponent(
+      tester,
+      child: Align(
+        alignment: Alignment.center,
+        child: IdeButton(
+          key: const ValueKey('disabled-button'),
+          label: '不可点',
+          enabled: false,
+          onPressed: () => presses += 1,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('disabled-button')));
+    await tester.pump();
+    expect(presses, 0);
+    expect(tester.takeException(), isNull);
+  });
+}

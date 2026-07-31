@@ -6,9 +6,9 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_controller.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_formatters.dart';
+import 'package:zeta/src/ui/core/ide_button.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
-import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_motion.dart';
 import 'package:zeta/src/ui/core/ide_popover.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
@@ -97,43 +97,20 @@ class _UsageTimeRangeFilterState extends State<UsageTimeRangeFilter> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
     final isOpen = _popover != null && !_popover!.isCompleted;
 
     return ListenableBuilder(
       listenable: widget.controller,
       builder: (context, _) {
-        return SizedBox(
+        return IdeButton.toolbar(
+          key: const ValueKey('usage-time-range-filter'),
+          label: _triggerLabel,
           width: widget.width,
-          height: IdeMetrics.toolbarHeight,
-          child: sf.OutlineButton(
-            key: const ValueKey('usage-time-range-filter'),
-            onPressed: _togglePopover,
-            size: sf.ButtonSize.small,
-            density: sf.ButtonDensity.dense,
-            leading: Icon(
-              Icons.calendar_month_rounded,
-              size: 15,
-              color: colors.textSecondary,
-            ),
-            trailing: Icon(
-              isOpen
-                  ? Icons.keyboard_arrow_up_rounded
-                  : Icons.keyboard_arrow_down_rounded,
-              size: 16,
-              color: colors.textSecondary,
-            ),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                _triggerLabel,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: textStyles.bodySmall.copyWith(color: colors.textPrimary),
-              ),
-            ),
-          ),
+          onPressed: _togglePopover,
+          leadingIcon: Icons.calendar_month_rounded,
+          trailingIcon: isOpen
+              ? Icons.keyboard_arrow_up_rounded
+              : Icons.keyboard_arrow_down_rounded,
         );
       },
     );

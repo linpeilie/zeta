@@ -10,9 +10,11 @@ import 'package:zeta/src/features/usage_statistics/application/usage_statistics_
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_formatters.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_time_range_filter.dart';
+import 'package:zeta/src/ui/core/ide_button.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
+import 'package:zeta/src/ui/core/ide_select.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_status_card.dart';
 import 'package:zeta/src/ui/core/ide_tabs.dart';
@@ -113,10 +115,9 @@ class _UsageStatisticsPageState extends State<UsageStatisticsPage> {
                           body: Text(error),
                           footer: Align(
                             alignment: Alignment.centerLeft,
-                            child: sf.OutlineButton(
+                            child: IdeButton(
                               onPressed: controller.refresh,
-                              size: sf.ButtonSize.small,
-                              child: const Text('重新加载'),
+                              label: '重新加载',
                             ),
                           ),
                         ),
@@ -218,14 +219,14 @@ class _UsageFilters extends StatelessWidget {
                   _LabeledFilter(
                     label: 'Agent',
                     width: fieldWidth,
-                    child: _select<String>(
+                    child: IdeSelect<String>(
                       key: const ValueKey('usage-agent-filter'),
                       width: fieldWidth,
                       value: controller.providerId ?? _all,
-                      options: <_SelectOption<String>>[
-                        const _SelectOption(_all, '全部 Agent'),
+                      options: <IdeSelectOption<String>>[
+                        const IdeSelectOption(_all, '全部 Agent'),
                         for (final agent in agents)
-                          _SelectOption(agent, _providerName(report, agent)),
+                          IdeSelectOption(agent, _providerName(report, agent)),
                       ],
                       onChanged: (value) => controller.selectProvider(
                         value == null || value == _all ? null : value,
@@ -235,13 +236,14 @@ class _UsageFilters extends StatelessWidget {
                   _LabeledFilter(
                     label: '模型',
                     width: fieldWidth,
-                    child: _select<String>(
+                    child: IdeSelect<String>(
                       key: const ValueKey('usage-model-filter'),
                       width: fieldWidth,
                       value: controller.model ?? _all,
-                      options: <_SelectOption<String>>[
-                        const _SelectOption(_all, '全部模型'),
-                        for (final model in models) _SelectOption(model, model),
+                      options: <IdeSelectOption<String>>[
+                        const IdeSelectOption(_all, '全部模型'),
+                        for (final model in models)
+                          IdeSelectOption(model, model),
                       ],
                       onChanged: (value) => controller.selectModel(
                         value == null || value == _all ? null : value,
@@ -275,20 +277,13 @@ class _UsageFilters extends StatelessWidget {
                             ),
                           ),
                         const SizedBox(width: IdeSpacing.space8),
-                        SizedBox(
-                          height: IdeMetrics.toolbarHeight,
-                          child: sf.OutlineButton(
-                            key: const ValueKey('usage-refresh-button'),
-                            onPressed: controller.loading
-                                ? null
-                                : controller.refresh,
-                            size: sf.ButtonSize.small,
-                            leading: const Icon(
-                              Icons.refresh_rounded,
-                              size: 15,
-                            ),
-                            child: const Text('刷新'),
-                          ),
+                        IdeButton.toolbar(
+                          key: const ValueKey('usage-refresh-button'),
+                          label: '刷新',
+                          leadingIcon: Icons.refresh_rounded,
+                          onPressed: controller.loading
+                              ? null
+                              : controller.refresh,
                         ),
                       ],
                     ),
@@ -302,65 +297,6 @@ class _UsageFilters extends StatelessWidget {
     );
   }
 
-  /// 与 [UsageTimeRangeFilter] 的 OutlineButton(small + dense) 对齐：
-  /// 字号用 [IdeTextStyles.bodySmall]，内边距近似 base×0.75×0.5。
-  static Widget _select<T>({
-    required Key key,
-    required double width,
-    required T value,
-    required List<_SelectOption<T>> options,
-    required ValueChanged<T?> onChanged,
-  }) {
-    return Builder(
-      builder: (context) {
-        final colors = IdeColors.of(context);
-        final textStyles = IdeTextStyles.of(context);
-        // sf.Select 默认走 typography.small(14)，与工具栏 bodySmall(11) 不一致。
-        final labelStyle = textStyles.bodySmall.copyWith(
-          color: colors.textPrimary,
-        );
-        return sf.Select<T>(
-          key: key,
-          value: value,
-          constraints: BoxConstraints.tightFor(
-            width: width,
-            height: IdeMetrics.toolbarHeight,
-          ),
-          // OutlineButton small+dense：水平 16×0.75×0.5≈6，垂直 8×0.75×0.5≈3。
-          padding: const EdgeInsets.symmetric(
-            horizontal: IdeSpacing.space8,
-            vertical: IdeSpacing.space2,
-          ),
-          popupConstraints: BoxConstraints(maxHeight: 320, minWidth: width),
-          itemBuilder: (context, selected) {
-            final option = options.firstWhere(
-              (candidate) => candidate.value == selected,
-              orElse: () => options.first,
-            );
-            return Text(
-              option.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: labelStyle,
-            );
-          },
-          onChanged: onChanged.call,
-          popup: sf.SelectPopup.noVirtualization(
-            items: sf.SelectItemList(
-              children: [
-                for (final option in options)
-                  sf.SelectItemButton(
-                    value: option.value,
-                    child: Text(option.label, style: labelStyle),
-                  ),
-              ],
-            ),
-          ).call,
-        );
-      },
-    );
-  }
-
   static String _providerName(UsageStatisticsReport? report, String id) {
     if (report != null) {
       for (final record in report.records) {
@@ -371,13 +307,6 @@ class _UsageFilters extends StatelessWidget {
     }
     return id;
   }
-}
-
-class _SelectOption<T> {
-  const _SelectOption(this.value, this.label);
-
-  final T value;
-  final String label;
 }
 
 class _LabeledFilter extends StatelessWidget {
@@ -723,13 +652,13 @@ class _AgentStatsPanel extends StatelessWidget {
                 style: textStyles.meta.copyWith(color: colors.textSecondary),
               ),
             ),
-            _UsageFilters._select<UsageRankSort>(
+            IdeSelect<UsageRankSort>(
               key: const ValueKey('usage-agent-rank-sort'),
               width: 140,
               value: controller.rankSort,
               options: [
                 for (final sort in UsageRankSort.values)
-                  _SelectOption(sort, sort.label),
+                  IdeSelectOption(sort, sort.label),
               ],
               onChanged: (value) {
                 if (value != null) {
@@ -1455,11 +1384,11 @@ class _EmptyUsageState extends StatelessWidget {
               ),
             ),
             const SizedBox(height: IdeSpacing.space16),
-            sf.PrimaryButton(
+            IdeButton(
               key: const ValueKey('usage-open-agent-management-button'),
+              label: '打开 Agent 管理',
+              variant: IdeButtonVariant.primary,
               onPressed: onOpenAgentManagement,
-              size: sf.ButtonSize.small,
-              child: const Text('打开 Agent 管理'),
             ),
           ],
         ),

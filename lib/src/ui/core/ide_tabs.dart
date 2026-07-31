@@ -85,7 +85,7 @@ class IdeTabs<T> extends StatelessWidget {
     final tabs = DecoratedBox(
       decoration: BoxDecoration(
         border: Border.all(color: colors.borderSubtle),
-        borderRadius: IdeRadius.allSmall,
+        borderRadius: IdeRadius.allMedium,
       ),
       child: sf.ComponentTheme(
         data: sf.TabsTheme(
@@ -95,7 +95,7 @@ class IdeTabs<T> extends StatelessWidget {
             vertical: IdeSpacing.space4,
           ),
           backgroundColor: colors.surfaceElevated,
-          borderRadius: IdeRadius.allSmall,
+          borderRadius: IdeRadius.allMedium,
         ),
         child: sf.Tabs(
           index: selectedIndex,
