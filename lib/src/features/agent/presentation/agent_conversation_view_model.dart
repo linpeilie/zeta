@@ -6,6 +6,11 @@ import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/core/logging/structured_error_logging.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_effect.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_effect_runner.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_event_processor.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_mutation.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_reducer.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_plan_execution_handoff_controller.dart';
@@ -70,6 +75,9 @@ class AgentConversationViewModel extends ChangeNotifier {
            AgentConversationPermissionSelectionController(
              persistSelection: providerController.persistPermissionSelection,
            ) {
+    _eventReducerContexts = AgentConversationReducerContexts(
+      liveTimelineIds: _localTimelineIds,
+    );
     _uiSignals = AgentConversationUiSignals(
       timeline: _timeline,
       onLegacyNotify: _notifyLegacyListeners,
@@ -80,6 +88,27 @@ class AgentConversationViewModel extends ChangeNotifier {
       frameScheduler: uiFrameScheduler,
     );
     _uiUpdates = _uiUpdateScheduler;
+    _eventStateTarget = _AgentConversationEventStateTarget(this);
+    _eventUiUpdates = _AgentConversationEventUiUpdatePort(this);
+    _effectRunner = DefaultAgentConversationEffectRunner(
+      currentScope: _currentEffectScope,
+      recordModelCatalog:
+          ({required config, required models, required source}) =>
+              providerController.modelCatalogRepository.record(
+                config: config,
+                models: models,
+                source: source,
+              ),
+      onTurnCompleted: onTurnCompleted,
+    );
+    _eventProcessor = AgentConversationEventProcessor(
+      reducer: _eventReducerContexts.live,
+      context: _buildEventReducerContext,
+      timeline: _timeline,
+      stateTarget: _eventStateTarget,
+      uiUpdates: _eventUiUpdates,
+      effectRunner: _effectRunner,
+    );
     _modelSelectionController.addListener(_handleModelSelectionChanged);
     _conversationModeController.addListener(_handleConversationModeChanged);
     providerController.addListener(_handleProviderSettingsChanged);
@@ -111,10 +140,18 @@ class AgentConversationViewModel extends ChangeNotifier {
   _permissionSelectionController;
   final AgentPlanExecutionHandoffController _planExecutionHandoffController =
       AgentPlanExecutionHandoffController();
+  final AgentConversationLocalTimelineIdGenerator _localTimelineIds =
+      AgentConversationLocalTimelineIdGenerator();
   late final AgentConversationUiSignals _uiSignals;
   late final AgentUiUpdateScheduler _uiUpdateScheduler;
   late final AgentUiUpdatePort _uiUpdates;
+  late final AgentConversationReducerContexts _eventReducerContexts;
+  late final AgentConversationStateMutationTarget _eventStateTarget;
+  late final AgentUiUpdatePort _eventUiUpdates;
+  late final AgentConversationEffectRunner _effectRunner;
+  late final AgentConversationEventProcessor _eventProcessor;
   AgentUiUpdateRequest? _debugLastUiUpdateRequest;
+  bool _threadSnapshotRefreshPending = false;
   final AgentElapsedTicker _elapsedTicker = AgentElapsedTicker();
   late final ValueNotifier<AgentConversationThreadSnapshot>
   _threadSnapshotListenable;
@@ -168,9 +205,6 @@ class AgentConversationViewModel extends ChangeNotifier {
   /// 当前线程的最后活跃时间；优先取摘要的 recency，否则 updatedAt。
   DateTime? _threadLastActiveAt;
 
-  /// 本会话已展示过的弃用 summary，避免重复刷屏。
-  final Set<String> _shownDeprecationSummaries = <String>{};
-
   /// 按 turnId 跟踪 Guardian 自动评审状态。
   final Map<String, AgentAutoApprovalReviewEvent> _autoReviewsByTurnId =
       <String, AgentAutoApprovalReviewEvent>{};
@@ -180,9 +214,6 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   /// 上下文占用达到该比例时提示压缩。
   static const double contextCompactThreshold = 0.85;
-
-  /// 本地时间线条目单调序号；避免 Windows 上 DateTime 仅毫秒精度导致 id 碰撞。
-  int _localTimelineIdSeq = 0;
 
   List<AgentConversationMessage> get messages => _timeline.messages;
 
@@ -1183,14 +1214,18 @@ class AgentConversationViewModel extends ChangeNotifier {
   }
 
   void _handleModelList(AgentModelList modelList) {
-    _modelRefreshError = null;
-    _modelSelectionController.handleModelList(modelList);
+    _applyModelList(modelList);
     _publishUiChanges(
       AgentUiUpdateRequest(
         regions: const <AgentUiRegion>{AgentUiRegion.composer},
         urgency: AgentUiUpdateUrgency.immediate,
       ),
     );
+  }
+
+  void _applyModelList(AgentModelList modelList) {
+    _modelRefreshError = null;
+    _modelSelectionController.handleModelList(modelList);
   }
 
   void _applyThreadSelectionFromHistory(AgentThreadHistorySnapshot history) {
@@ -2423,6 +2458,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       _conversationModeController.dispose();
     }
     _elapsedTicker.dispose();
+    _effectRunner.dispose();
     _uiUpdateScheduler.dispose();
     _uiSignals.dispose();
     _threadSnapshotListenable.dispose();
@@ -2788,7 +2824,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       threadId: threadId,
       runtimeScope: _runtimeScopeOf(provider),
     );
-    // EventBuffer 合并后 → FrameScheduler 有界 drain → _handleEvent。
+    // EventBuffer 合并后 → FrameScheduler 有界 drain → application processor。
     final frameScheduler = AgentEventFrameScheduler(
       onEvent: (event) {
         if (_disposed || !identical(_provider, provider)) {
@@ -2797,11 +2833,12 @@ class AgentConversationViewModel extends ChangeNotifier {
         if (!_eventListenerGate.accepts(
           scope,
           currentRuntimeScope: _runtimeScopeOf(provider),
-          allowDetachedRuntime: _isCriticalDetachedEvent(event),
+          allowDetachedRuntime:
+              AgentConversationReducer.isCriticalDetachedEvent(event),
         )) {
           return;
         }
-        _handleEvent(event);
+        _eventProcessor.process(event);
       },
     );
     final buffer = AgentEventStreamBuffer(
@@ -2851,7 +2888,9 @@ class AgentConversationViewModel extends ChangeNotifier {
           'Agent provider event stream closed '
           '(provider: ${provider.config.id}, thread: ${threadId ?? 'detached'})',
         );
-        _settleInterruptedLiveTurn(fallbackTurnId: 'provider-disconnected');
+        _eventProcessor.settleInterruptedTurn(
+          fallbackTurnId: 'provider-disconnected',
+        );
       },
     );
     _eventSubscription = subscription;
@@ -2874,678 +2913,6 @@ class AgentConversationViewModel extends ChangeNotifier {
     _eventBuffer = null;
     _eventFrameScheduler?.dispose();
     _eventFrameScheduler = null;
-  }
-
-  bool _isCriticalDetachedEvent(AgentEvent event) {
-    return event is AgentStatusEvent ||
-        event is AgentErrorEvent ||
-        event is AgentTurnCompletedEvent ||
-        event is AgentThreadClosedEvent ||
-        event is AgentPermissionRequestedEvent ||
-        event is AgentPermissionResolvedEvent ||
-        event is AgentPlanApprovalRequestedEvent ||
-        event is AgentPlanApprovalResolvedEvent;
-  }
-
-  /// 最近一次已展示的错误概要。
-  ///
-  /// Codex 在失败时会同时发送 `error` 通知和带 `turn.error` 的
-  /// `turn/completed`，两者携带相同的错误文本；记录该值用于去重，
-  /// 避免同一条错误在时间线上出现两次。
-  String? _lastShownErrorMessage;
-
-  /// 将 provider 事件规约成面板状态。
-  void _handleEvent(AgentEvent event) {
-    switch (event) {
-      case AgentStatusEvent():
-        _status = event.status;
-        _publishUiChanges(
-          AgentUiUpdateRequest(urgency: AgentUiUpdateUrgency.immediate),
-        );
-      case AgentSessionStartedEvent():
-        if (!_shouldAcceptSessionStarted(event.session.id)) {
-          break;
-        }
-        final wasCurrentSession = _session?.id == event.session.id;
-        _session = event.session;
-        _restoredSessionId = event.session.id;
-        if (!wasCurrentSession) {
-          _bindConversationModeThreadPreservingDraft(
-            threadId: event.session.id,
-            historyMode: _conversationModeController.state.confirmedMode,
-          );
-          _conversationModeController.setTurnRunning(isTurnRunning);
-        }
-        _threadOpenPhase = AgentThreadOpenPhase.idle;
-        _requiresResumedSelectedThread = false;
-        _applySessionTitle(event.session);
-        _publishUiChanges(
-          AgentUiUpdateRequest(
-            regions: const <AgentUiRegion>{
-              AgentUiRegion.header,
-              AgentUiRegion.composer,
-            },
-            urgency: AgentUiUpdateUrgency.immediate,
-          ),
-        );
-      case AgentThreadStatusChangedEvent():
-        if (!_shouldHandleEventForCurrentThread(sessionId: event.threadId)) {
-          break;
-        }
-        _applyThreadRuntimeStatus(
-          status: event.status,
-          waitingOnApproval: event.waitingOnApproval,
-          waitingOnUserInput: event.waitingOnUserInput,
-        );
-        _publishUiChanges(
-          AgentUiUpdateRequest(
-            regions: const <AgentUiRegion>{AgentUiRegion.header},
-            urgency: AgentUiUpdateUrgency.immediate,
-          ),
-        );
-      case AgentThreadNameUpdatedEvent():
-        if (!_shouldHandleEventForCurrentThread(sessionId: event.threadId)) {
-          break;
-        }
-        final name = event.threadName?.trim();
-        if (name != null && name.isNotEmpty) {
-          // 服务端自动/手动改名后同步详情头栏与 session 缓存。
-          _applyThreadTitle(name);
-        }
-        _publishUiChanges(
-          AgentUiUpdateRequest(
-            regions: const <AgentUiRegion>{AgentUiRegion.header},
-            urgency: AgentUiUpdateUrgency.immediate,
-          ),
-        );
-      case AgentThreadArchivedEvent():
-      case AgentThreadUnarchivedEvent():
-      case AgentThreadDeletedEvent():
-        // 列表侧负责移除；若当前会话被删/归档，由 shell onActiveThreadCleared 重置。
-        break;
-      case AgentThreadClosedEvent():
-        if (!_shouldHandleEventForCurrentThread(sessionId: event.threadId)) {
-          break;
-        }
-        _settleInterruptedLiveTurn(fallbackTurnId: 'closed');
-      case AgentThreadCompactedEvent():
-        if (!_shouldHandleEventForCurrentThread(sessionId: event.threadId)) {
-          break;
-        }
-        _isCompacting = false;
-        _publishUiChanges(
-          AgentUiUpdateRequest(
-            regions: const <AgentUiRegion>{
-              AgentUiRegion.header,
-              AgentUiRegion.composer,
-            },
-            urgency: AgentUiUpdateUrgency.immediate,
-          ),
-        );
-      case AgentThreadSettingsUpdatedEvent():
-        if (!_shouldHandleEventForCurrentThread(sessionId: event.threadId)) {
-          break;
-        }
-        _applyThreadSelectionFromThreadSettings(modelId: event.model);
-        _permissionSelectionController.applyThreadSettings(
-          approvalPolicy: event.approvalPolicy,
-          sandboxPolicy: event.sandboxPolicy,
-          permissionProfileId: event.activePermissionProfileId,
-        );
-        _conversationModeController.applyThreadSettings(event);
-        _publishUiChanges(
-          AgentUiUpdateRequest(
-            regions: const <AgentUiRegion>{AgentUiRegion.composer},
-            urgency: AgentUiUpdateUrgency.immediate,
-          ),
-        );
-      case AgentAutoApprovalReviewEvent():
-        if (!_shouldHandleEventForCurrentThread(
-          sessionId: event.threadId,
-          turnId: event.turnId,
-        )) {
-          break;
-        }
-        _autoReviewsByTurnId[event.turnId] = event;
-        if (event.status == 'denied') {
-          _latestDeniedAutoReview = event;
-        } else if (event.status == 'approved') {
-          if (_latestDeniedAutoReview?.reviewId == event.reviewId) {
-            _latestDeniedAutoReview = null;
-          }
-        }
-        _publishUiChanges(
-          AgentUiUpdateRequest(
-            regions: const <AgentUiRegion>{
-              AgentUiRegion.header,
-              AgentUiRegion.liveTurn,
-              AgentUiRegion.history,
-            },
-            urgency: AgentUiUpdateUrgency.immediate,
-          ),
-        );
-      case AgentTurnStartedEvent():
-        if (!_shouldHandleEventForCurrentThread(
-          sessionId: event.turn.sessionId,
-          turnId: event.turn.id,
-        )) {
-          break;
-        }
-        _lastShownErrorMessage = null;
-        _timeline.beginLiveTurnGroup(event.turn);
-        _conversationModeController.setTurnRunning(true);
-        _consumeActivityDirty();
-        _syncElapsedTicker();
-        _flushStreamChangesNow(
-          AgentUiUpdateRequest(
-            regions: const <AgentUiRegion>{
-              AgentUiRegion.liveTurnBinding,
-              AgentUiRegion.liveTurn,
-              AgentUiRegion.header,
-              AgentUiRegion.composer,
-            },
-            urgency: AgentUiUpdateUrgency.immediate,
-          ),
-        );
-      case AgentTurnCompletedEvent():
-        if (!_shouldHandleEventForCurrentThread(
-          sessionId: event.sessionId,
-          turnId: event.turnId,
-        )) {
-          break;
-        }
-        // completeLiveTurnGroup 会清空 live planEntries；必须先生成本地交接快照。
-        final planExecutionChanged =
-            _updatePlanExecutionRequestForCompletedTurn(event);
-        // 先插失败原因，让消息归入该回合分组，再收尾分组。
-        _addTurnFailureMessage(event);
-        _timeline.completeLiveTurnGroup(
-          event.turnId,
-          status: event.status,
-          duration: event.duration,
-        );
-        _conversationModeController.setTurnRunning(isTurnRunning);
-        // 回合结束后清除改道头栏提示，避免残留到下一回合。
-        _modelRerouteNotice = null;
-        if (!isTurnRunning &&
-            _status.state == AgentProviderConnectionState.running) {
-          _status = AgentProviderStatus(
-            state: AgentProviderConnectionState.ready,
-            message: '$activeProviderName ready',
-          );
-        }
-        // turn 已结束后若仍残留 active，会让侧栏 isBusy 一直转圈；
-        // status/changed→idle 可能迟到或缺失，这里与 isTurnRunning 对齐。
-        if (!isTurnRunning &&
-            _threadRuntimeStatus == AgentThreadRuntimeStatus.active) {
-          _applyThreadRuntimeStatus(
-            status: AgentThreadRuntimeStatus.idle,
-            waitingOnApproval: false,
-            waitingOnUserInput: false,
-          );
-        }
-        _consumeActivityDirty();
-        _syncElapsedTicker();
-        _flushStreamChangesNow(
-          AgentUiUpdateRequest(
-            regions: <AgentUiRegion>{
-              AgentUiRegion.history,
-              AgentUiRegion.liveTurnBinding,
-              AgentUiRegion.header,
-              AgentUiRegion.composer,
-              if (planExecutionChanged) AgentUiRegion.pendingInteraction,
-            },
-            urgency: AgentUiUpdateUrgency.immediate,
-            effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-          ),
-        );
-        onTurnCompleted?.call();
-      case AgentTokenUsageEvent():
-        if (!_shouldHandleEventForCurrentThread(
-          sessionId: event.sessionId,
-          turnId: event.turnId,
-        )) {
-          break;
-        }
-        _timeline.updateTurnTokenUsage(event);
-        // header：会话总 token；composer：上下文窗口；history/live：turn footer。
-        // Grok 的 usage 常在 turn 完成后才到，必须刷新历史区分隔线。
-        final usageTurnId = event.turnId;
-        final usageOnHistory =
-            usageTurnId != null && _timeline.isHistoryTurnId(usageTurnId);
-        _flushStreamChangesNow(
-          AgentUiUpdateRequest(
-            regions: <AgentUiRegion>{
-              AgentUiRegion.header,
-              AgentUiRegion.composer,
-              if (usageOnHistory) AgentUiRegion.history,
-              // 无 turnId 或仍在 live 区时刷新 live footer。
-              if (!usageOnHistory) AgentUiRegion.liveTurn,
-            },
-            urgency: AgentUiUpdateUrgency.immediate,
-          ),
-        );
-      case AgentContextWindowUsageEvent():
-        if (!_shouldHandleEventForCurrentThread(
-          sessionId: event.sessionId,
-          turnId: event.turnId,
-        )) {
-          break;
-        }
-        _timeline.updateContextWindowUsage(event);
-        // 高频上下文快照刷新 composer；同时显式保留旧 stream gate
-        // 无条件附带的 live flush。计费 header/footer 保持不变。
-        _scheduleStreamFlush(
-          AgentUiUpdateRequest(
-            regions: const <AgentUiRegion>{
-              AgentUiRegion.liveTurn,
-              AgentUiRegion.composer,
-            },
-            urgency: AgentUiUpdateUrgency.nextFrame,
-          ),
-        );
-      case AgentMessageDeltaEvent():
-        if (!_shouldHandleEventForCurrentThread(
-          sessionId: event.sessionId,
-          turnId: event.turnId,
-        )) {
-          break;
-        }
-        final isPlanDelta = event.kind == AgentMessageKind.plan;
-        _timeline.appendMessageDelta(event);
-        final messageActivityChanged = _consumeActivityDirty();
-        _scheduleStreamFlush(
-          AgentUiUpdateRequest(
-            regions: <AgentUiRegion>{
-              AgentUiRegion.liveTurn,
-              if (messageActivityChanged) AgentUiRegion.header,
-              if (isPlanDelta) AgentUiRegion.expansion,
-            },
-            urgency: AgentUiUpdateUrgency.nextFrame,
-            effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-          ),
-        );
-      case AgentReasoningDeltaEvent():
-        if (!_shouldHandleEventForCurrentThread(
-          sessionId: event.sessionId,
-          turnId: event.turnId,
-        )) {
-          break;
-        }
-        _timeline.appendReasoningDelta(event);
-        final reasoningActivityChanged = _consumeActivityDirty();
-        _scheduleStreamFlush(
-          AgentUiUpdateRequest(
-            regions: <AgentUiRegion>{
-              AgentUiRegion.liveTurn,
-              if (reasoningActivityChanged) AgentUiRegion.header,
-              AgentUiRegion.expansion,
-            },
-            urgency: AgentUiUpdateUrgency.nextFrame,
-            effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-          ),
-        );
-      case AgentMessageUpdatedEvent():
-        if (!_shouldHandleEventForCurrentThread(
-          sessionId: event.sessionId,
-          turnId: event.turnId,
-        )) {
-          break;
-        }
-        _timeline.updateMessage(event);
-        _flushStreamChangesNow(
-          AgentUiUpdateRequest(
-            regions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
-            urgency: AgentUiUpdateUrgency.immediate,
-            effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-          ),
-        );
-      case AgentPlanUpdatedEvent():
-        if (!_shouldHandleEventForCurrentThread(
-          sessionId: event.sessionId,
-          turnId: event.turnId,
-        )) {
-          break;
-        }
-        _timeline.replaceActivePlan(event);
-        _flushStreamChangesNow(
-          AgentUiUpdateRequest(
-            regions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
-            urgency: AgentUiUpdateUrgency.immediate,
-          ),
-        );
-      case AgentSessionConfigUpdatedEvent():
-        if (!_shouldHandleEventForCurrentThread(sessionId: event.sessionId)) {
-          break;
-        }
-        _sessionConfigOptions = event.options;
-        _applyThreadSelectionFromSessionConfigOptions(event.options);
-        _publishUiChanges(
-          AgentUiUpdateRequest(
-            regions: const <AgentUiRegion>{AgentUiRegion.composer},
-            urgency: AgentUiUpdateUrgency.immediate,
-          ),
-        );
-      case AgentTurnDiffEvent():
-        if (!_shouldHandleEventForCurrentThread(
-          sessionId: event.sessionId,
-          turnId: event.turnId,
-        )) {
-          break;
-        }
-        _timeline.upsertTurnDiff(event);
-        _flushStreamChangesNow(
-          AgentUiUpdateRequest(
-            regions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
-            urgency: AgentUiUpdateUrgency.immediate,
-            effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-          ),
-        );
-      case AgentToolCallEvent():
-        if (!_shouldHandleEventForCurrentThread(
-          sessionId: event.toolCall.sessionId,
-          turnId: event.toolCall.turnId,
-        )) {
-          break;
-        }
-        _timeline.upsertToolCall(event.toolCall);
-        final activityChanged = _consumeActivityDirty();
-        // 工具进行中时更新状态文案；相位变化时刷新 header。
-        if (event.toolCall.status == AgentToolStatus.inProgress ||
-            event.toolCall.status == AgentToolStatus.pending) {
-          final title = event.toolCall.displayTitle.trim();
-          if (title.isNotEmpty) {
-            _status = AgentProviderStatus(
-              state: AgentProviderConnectionState.running,
-              message: title.length > 80 ? '${title.substring(0, 80)}…' : title,
-            );
-          }
-          _scheduleStreamFlush(
-            AgentUiUpdateRequest(
-              regions: <AgentUiRegion>{
-                AgentUiRegion.liveTurn,
-                if (activityChanged) AgentUiRegion.header,
-              },
-              urgency: AgentUiUpdateUrgency.nextFrame,
-              effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-            ),
-          );
-          break;
-        }
-        _flushStreamChangesNow(
-          AgentUiUpdateRequest(
-            regions: <AgentUiRegion>{
-              AgentUiRegion.liveTurn,
-              if (activityChanged) AgentUiRegion.header,
-            },
-            urgency: AgentUiUpdateUrgency.immediate,
-            effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-          ),
-        );
-      case AgentPermissionRequestedEvent():
-        if (!_shouldHandleEventForCurrentThread(
-          sessionId: event.request.sessionId,
-          turnId: event.request.turnId,
-        )) {
-          break;
-        }
-        _timeline.addPermissionRequest(event.request);
-        _flushStreamChangesNow(
-          AgentUiUpdateRequest(
-            regions: const <AgentUiRegion>{
-              AgentUiRegion.liveTurn,
-              AgentUiRegion.pendingInteraction,
-            },
-            urgency: AgentUiUpdateUrgency.immediate,
-          ),
-        );
-      case AgentPermissionResolvedEvent():
-        // 他端已应答：按 threadId 路由，移除本端仍展示的审批卡。
-        if (!_shouldHandleEventForCurrentThread(sessionId: event.threadId)) {
-          break;
-        }
-        _timeline.removePermissionRequest(event.requestId);
-        _flushStreamChangesNow(
-          AgentUiUpdateRequest(
-            regions: const <AgentUiRegion>{
-              AgentUiRegion.liveTurn,
-              AgentUiRegion.pendingInteraction,
-            },
-            urgency: AgentUiUpdateUrgency.immediate,
-          ),
-        );
-      case AgentQuestionRequestedEvent():
-        if (!_shouldHandleEventForCurrentThread(
-          sessionId: event.request.sessionId,
-          turnId: event.request.turnId,
-        )) {
-          break;
-        }
-        _timeline.addQuestionRequest(event.request);
-        _flushStreamChangesNow(
-          AgentUiUpdateRequest(
-            regions: const <AgentUiRegion>{
-              AgentUiRegion.liveTurn,
-              AgentUiRegion.pendingInteraction,
-            },
-            urgency: AgentUiUpdateUrgency.immediate,
-          ),
-        );
-      case AgentQuestionResolvedEvent():
-        if (!_shouldHandleEventForCurrentThread(sessionId: event.threadId)) {
-          break;
-        }
-        _timeline.removeQuestionRequest(event.requestId);
-        _flushStreamChangesNow(
-          AgentUiUpdateRequest(
-            regions: const <AgentUiRegion>{
-              AgentUiRegion.liveTurn,
-              AgentUiRegion.pendingInteraction,
-            },
-            urgency: AgentUiUpdateUrgency.immediate,
-          ),
-        );
-      case AgentPlanApprovalRequestedEvent():
-        if (!_shouldHandleEventForCurrentThread(
-          sessionId: event.request.sessionId,
-          turnId: event.request.turnId,
-        )) {
-          break;
-        }
-        _timeline.addPlanApprovalRequest(event.request);
-        _flushStreamChangesNow(
-          AgentUiUpdateRequest(
-            regions: const <AgentUiRegion>{
-              AgentUiRegion.liveTurn,
-              AgentUiRegion.pendingInteraction,
-            },
-            urgency: AgentUiUpdateUrgency.immediate,
-          ),
-        );
-      case AgentPlanApprovalResolvedEvent():
-        if (!_shouldHandleEventForCurrentThread(sessionId: event.sessionId)) {
-          break;
-        }
-        _timeline.removePlanApprovalRequest(event.requestId);
-        _flushStreamChangesNow(
-          AgentUiUpdateRequest(
-            regions: const <AgentUiRegion>{
-              AgentUiRegion.liveTurn,
-              AgentUiRegion.pendingInteraction,
-            },
-            urgency: AgentUiUpdateUrgency.immediate,
-          ),
-        );
-      case AgentModelReroutedEvent():
-        if (!_shouldHandleEventForCurrentThread(
-          sessionId: event.threadId,
-          turnId: event.turnId,
-        )) {
-          break;
-        }
-        _modelRerouteNotice = '已改道至 ${event.toModel}';
-        _timeline.addHistoryEvent(
-          AgentHistoryEventEntry(
-            id: _nextLocalTimelineId('model-reroute'),
-            kind: AgentHistoryEventKind.system,
-            title: '模型已改道',
-            description: '${event.fromModel} → ${event.toModel}',
-            content: _modelRerouteReasonLabel(event.reason),
-            raw: event.raw,
-          ),
-        );
-        _flushStreamChangesNow(
-          AgentUiUpdateRequest(
-            regions: const <AgentUiRegion>{
-              AgentUiRegion.liveTurn,
-              AgentUiRegion.header,
-            },
-            urgency: AgentUiUpdateUrgency.immediate,
-            effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-          ),
-        );
-      case AgentDeprecationNoticeEvent():
-        // 按 summary 去重：同一弃用提示在本 ViewModel 生命周期内只展示一次。
-        if (!_shownDeprecationSummaries.add(event.summary)) {
-          break;
-        }
-        _timeline.addHistoryEvent(
-          AgentHistoryEventEntry(
-            id: _nextLocalTimelineId('deprecation'),
-            kind: AgentHistoryEventKind.warning,
-            title: '适配层弃用提示',
-            description: event.summary,
-            content: event.details == null
-                ? '请升级 Codex 适配层以继续兼容协议变更。'
-                : '${event.details}\n请升级 Codex 适配层以继续兼容协议变更。',
-            raw: event.raw,
-          ),
-        );
-        _flushStreamChangesNow(
-          AgentUiUpdateRequest(
-            regions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
-            urgency: AgentUiUpdateUrgency.immediate,
-            effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-          ),
-        );
-      case AgentSystemItemEvent():
-        if (!_shouldHandleEventForCurrentThread(
-          sessionId: event.sessionId,
-          turnId: event.turnId,
-        )) {
-          break;
-        }
-        // contextCompaction item 到达时也结束 compact 进行中标志。
-        if (event.entry.title.contains('压缩') ||
-            event.entry.kind == AgentHistoryEventKind.system) {
-          final rawType = event.entry.raw['type']?.toString();
-          if (rawType == 'contextCompaction' ||
-              event.entry.title.contains('上下文已压缩')) {
-            _isCompacting = false;
-          }
-        }
-        _timeline.addHistoryEvent(event.entry);
-        _flushStreamChangesNow(
-          AgentUiUpdateRequest(
-            regions: const <AgentUiRegion>{
-              AgentUiRegion.liveTurn,
-              AgentUiRegion.header,
-              AgentUiRegion.composer,
-            },
-            urgency: AgentUiUpdateUrgency.immediate,
-            effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-          ),
-        );
-      case AgentModelListEvent():
-        _handleModelList(event.models);
-        // loadModels 的 refreshLoader 会负责落盘；这里仅记录会话期间 Provider
-        // 主动推送的新目录，避免同一次 model/list 响应写入两次。
-        if (!_modelsRefreshing) {
-          unawaited(
-            providerController.modelCatalogRepository.record(
-              config: providerController.activeProviderConfig,
-              models: event.models,
-              source: '$activeProviderName runtime',
-            ),
-          );
-        }
-      case AgentErrorEvent():
-        _logProviderErrorEvent(event);
-        if (!_shouldHandleEventForCurrentThread(
-          sessionId: event.sessionId,
-          turnId: event.turnId,
-        )) {
-          break;
-        }
-        _lastShownErrorMessage = event.message;
-        _timeline.addConversationMessage(
-          AgentConversationMessage(
-            id: _nextLocalTimelineId('error'),
-            role: AgentMessageRole.system,
-            text: _errorMessageText(event),
-          ),
-        );
-        _flushStreamChangesNow(
-          AgentUiUpdateRequest(
-            regions: const <AgentUiRegion>{
-              AgentUiRegion.history,
-              AgentUiRegion.liveTurn,
-              AgentUiRegion.header,
-            },
-            urgency: AgentUiUpdateUrgency.immediate,
-            effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-          ),
-        );
-    }
-  }
-
-  /// 连接终止后将当前回合收敛为中断态，避免 UI 与计时器永久停留在 running。
-  void _settleInterruptedLiveTurn({required String fallbackTurnId}) {
-    _clearThreadRuntimeStatus();
-    final planExecutionCleared = _planExecutionHandoffController.clear();
-    if (isTurnRunning) {
-      _timeline.completeLiveTurnGroup(
-        _timeline.selectedRunningTurnId ?? fallbackTurnId,
-        status: AgentHistoryTurnStatus.interrupted,
-      );
-    }
-    _conversationModeController.setTurnRunning(isTurnRunning);
-    _consumeActivityDirty();
-    _syncElapsedTicker();
-    _publishUiChanges(
-      AgentUiUpdateRequest(
-        regions: <AgentUiRegion>{
-          AgentUiRegion.history,
-          AgentUiRegion.liveTurnBinding,
-          AgentUiRegion.header,
-          AgentUiRegion.composer,
-          if (planExecutionCleared) AgentUiRegion.pendingInteraction,
-        },
-        urgency: AgentUiUpdateUrgency.immediate,
-      ),
-    );
-  }
-
-  /// Provider 已将异常归一化为事件时统一记录，覆盖 Codex、Grok 和未来实现。
-  void _logProviderErrorEvent(AgentErrorEvent event) {
-    logStructuredFailure(
-      _log,
-      message: 'Agent provider error event',
-      error: event.exception,
-      stackTrace: event.stackTrace,
-      context: <String, Object?>{
-        ..._providerRuntimeLogContext(_provider),
-        'operation': 'provider/event',
-        'eventType': event.runtimeType.toString(),
-        'sessionId': event.sessionId,
-        'turnId': event.turnId,
-        'message': event.message,
-        'details': event.details,
-        'code': event.code,
-        'willRetry': event.willRetry,
-        'diagnostic': event.raw,
-      },
-    );
   }
 
   Map<String, Object?> _providerRuntimeLogContext(AgentProvider? provider) {
@@ -3616,60 +2983,14 @@ class AgentConversationViewModel extends ChangeNotifier {
     return null;
   }
 
-  /// 将协议改道原因枚举转为可读说明。
-  String _modelRerouteReasonLabel(String reason) {
-    return switch (reason) {
-      'highRiskCyberActivity' => '原因：高风险网络活动策略',
-      _ => '原因：$reason',
-    };
-  }
-
-  /// 回合以失败终态结束时，把 `turn.error` 的原因插入时间线。
-  ///
-  /// 若同样的错误文本刚通过 `error` 通知展示过则跳过，避免重复。
-  void _addTurnFailureMessage(AgentTurnCompletedEvent event) {
-    final errorMessage = event.errorMessage;
-    if (event.status != AgentHistoryTurnStatus.failed ||
-        errorMessage == null ||
-        errorMessage == _lastShownErrorMessage) {
-      return;
-    }
-    _lastShownErrorMessage = errorMessage;
-    _timeline.addConversationMessage(
-      AgentConversationMessage(
-        id: _nextLocalTimelineId('turn-failed'),
-        role: AgentMessageRole.system,
-        text: 'Turn failed: $errorMessage',
-      ),
-    );
-  }
-
   /// 生成本地时间线条目 id；时间戳 + 单调序号，保证同毫秒内也不碰撞。
   String _nextLocalTimelineId(String prefix) {
-    _localTimelineIdSeq += 1;
-    return '$prefix-${DateTime.now().microsecondsSinceEpoch}-$_localTimelineIdSeq';
+    return _localTimelineIds.next(prefix);
   }
 
   /// 生成 `clientUserMessageId`，用于 turn/start 幂等。
   String _nextClientUserMessageId() {
-    _localTimelineIdSeq += 1;
-    return 'msg-${DateTime.now().microsecondsSinceEpoch}-$_localTimelineIdSeq';
-  }
-
-  /// 组装错误事件的展示文本；服务端声明会自动重试时附加提示。
-  String _errorMessageText(AgentErrorEvent event) {
-    final buffer = StringBuffer(event.message);
-    final details = event.details;
-    if (details != null && details.isNotEmpty) {
-      buffer.write(': $details');
-    }
-    if (event.willRetry ?? false) {
-      buffer.write(' (Codex will retry automatically)');
-    }
-    if (event.code == 'contextWindowExceeded') {
-      buffer.write('。上下文已超限，可点击头栏「压缩上下文」后继续。');
-    }
-    return buffer.toString();
+    return _localTimelineIds.next('msg');
   }
 
   /// 组装协议输入项：文本（含当前文件上下文）+ mention + 本地图片。
@@ -3813,24 +3134,44 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   String? get _selectedThreadId => _session?.id ?? _restoredSessionId;
 
-  bool _shouldAcceptSessionStarted(String sessionId) {
-    final selectedThreadId = _selectedThreadId;
-    if (selectedThreadId != null) {
-      return selectedThreadId == sessionId;
-    }
-    return !_requiresResumedSelectedThread;
+  AgentConversationReducerContext _buildEventReducerContext() {
+    final effectScope =
+        _currentEffectScope() ??
+        AgentConversationEffectScope(
+          reductionScope: AgentConversationReductionScope.live,
+          providerId: activeProviderId,
+          listenerGeneration: -1,
+          threadId: _selectedThreadId,
+        );
+    return AgentConversationReducerContext(
+      scope: AgentConversationReductionScope.live,
+      selectedThreadId: _selectedThreadId,
+      requiresResumedSelectedThread: _requiresResumedSelectedThread,
+      pendingTurnGroupId: _timeline.pendingTurnGroupId,
+      hasTurn: _timeline.hasTurn,
+      isHistoryTurnId: _timeline.isHistoryTurnId,
+      modelsRefreshing: _modelsRefreshing,
+      activeProviderName: activeProviderName,
+      activeProviderConfig: providerController.activeProviderConfig,
+      effectScope: effectScope,
+    );
   }
 
-  bool _shouldHandleEventForCurrentThread({String? sessionId, String? turnId}) {
-    final selectedThreadId = _selectedThreadId;
-    if (sessionId != null) {
-      return selectedThreadId == sessionId;
+  AgentConversationEffectScope? _currentEffectScope() {
+    final listener = _eventListenerGate.current;
+    if (listener == null) {
+      return null;
     }
-    if (turnId != null) {
-      return _timeline.hasTurn(turnId) ||
-          turnId == _timeline.pendingTurnGroupId;
-    }
-    return true;
+    final provider = _provider;
+    return AgentConversationEffectScope(
+      reductionScope: AgentConversationReductionScope.live,
+      providerId: listener.providerId,
+      listenerGeneration: listener.listenerGeneration,
+      runtimeId: listener.runtimeId,
+      connectionEpoch: listener.connectionEpoch,
+      providerLifecycleState: provider?.bundle.runtime.lifecycleState.name,
+      threadId: _selectedThreadId,
+    );
   }
 
   bool _isStillSelectedThread(int switchToken, String? expectedThreadId) {
@@ -3898,6 +3239,9 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   void _publishUiChanges(AgentUiUpdateRequest request) {
     _debugLastUiUpdateRequest = request;
+    // 保持阶段 3 的统一安全发布边界：命令入口与事件 processor 都只标记刷新，
+    // 真正的 ValueNotifier 写入由 AgentUiUpdateScheduler 的安全回调执行。
+    _threadSnapshotRefreshPending = true;
     _uiUpdates.publish(request);
   }
 
@@ -3919,35 +3263,177 @@ class AgentConversationViewModel extends ChangeNotifier {
     }
   }
 
-  void _scheduleStreamFlush(AgentUiUpdateRequest request) {
-    _debugLastUiUpdateRequest = request;
-    _uiUpdates.publish(request);
-  }
-
   void _flushPendingStreamChangesNow() {
     _uiUpdates.publish(
       AgentUiUpdateRequest(urgency: AgentUiUpdateUrgency.immediate),
     );
   }
 
-  void _flushStreamChangesNow(AgentUiUpdateRequest request) {
-    _debugLastUiUpdateRequest = request;
-    _uiUpdates.publish(request);
-  }
-
   void _publishScheduledUiChanges(AgentUiUpdateRequest request) {
     // Thread snapshot 与局部 listenable 共用安全发布边界，避免 immediate 请求
     // 在 Widget build 中先经 Shell 通知形成同步重入。
-    _syncThreadSnapshotListenable();
+    if (_threadSnapshotRefreshPending) {
+      _threadSnapshotRefreshPending = false;
+      _syncThreadSnapshotListenable();
+    }
     _uiSignals.publish(request);
   }
 
   /// 将当前 isTurnRunning / runtimeStatus 等推到 [threadSnapshotListenable]。
   void _syncThreadSnapshotListenable() {
-    final nextThreadSnapshot = _buildThreadSnapshot();
-    if (nextThreadSnapshot != _threadSnapshotListenable.value) {
-      _threadSnapshotListenable.value = nextThreadSnapshot;
+    _publishThreadSnapshot(_buildThreadSnapshot());
+  }
+
+  void _publishThreadSnapshot(AgentConversationThreadSnapshot snapshot) {
+    if (!_disposed && snapshot != _threadSnapshotListenable.value) {
+      _threadSnapshotListenable.value = snapshot;
     }
+  }
+}
+
+final class _AgentConversationEventUiUpdatePort implements AgentUiUpdatePort {
+  const _AgentConversationEventUiUpdatePort(this._viewModel);
+
+  final AgentConversationViewModel _viewModel;
+
+  @override
+  void publish(AgentUiUpdateRequest request) {
+    _viewModel._publishUiChanges(request);
+  }
+}
+
+final class _AgentConversationEventStateTarget
+    implements AgentConversationStateMutationTarget {
+  const _AgentConversationEventStateTarget(this._viewModel);
+
+  final AgentConversationViewModel _viewModel;
+
+  @override
+  AgentConversationStateMutationOutcome apply(
+    AgentConversationStateChange change,
+  ) {
+    switch (change) {
+      case AgentSetProviderStatusChange():
+        _viewModel._status = change.status;
+      case AgentApplySessionStartedChange():
+        final session = change.session;
+        final wasCurrentSession = _viewModel._session?.id == session.id;
+        _viewModel._session = session;
+        _viewModel._restoredSessionId = session.id;
+        if (!wasCurrentSession) {
+          _viewModel._bindConversationModeThreadPreservingDraft(
+            threadId: session.id,
+            historyMode:
+                _viewModel._conversationModeController.state.confirmedMode,
+          );
+          _viewModel._conversationModeController.setTurnRunning(
+            _viewModel.isTurnRunning,
+          );
+        }
+        _viewModel._threadOpenPhase = AgentThreadOpenPhase.idle;
+        _viewModel._requiresResumedSelectedThread = false;
+        _viewModel._applySessionTitle(session);
+      case AgentApplyThreadRuntimeStatusChange():
+        _viewModel._applyThreadRuntimeStatus(
+          status: change.status,
+          waitingOnApproval: change.waitingOnApproval,
+          waitingOnUserInput: change.waitingOnUserInput,
+        );
+      case AgentApplyThreadNameChange():
+        final name = change.threadName?.trim();
+        if (name != null && name.isNotEmpty) {
+          _viewModel._applyThreadTitle(name);
+        }
+      case AgentSetCompactingChange():
+        _viewModel._isCompacting = change.value;
+      case AgentApplyThreadSettingsChange():
+        final event = change.event;
+        _viewModel._applyThreadSelectionFromThreadSettings(
+          modelId: event.model,
+        );
+        _viewModel._permissionSelectionController.applyThreadSettings(
+          approvalPolicy: event.approvalPolicy,
+          sandboxPolicy: event.sandboxPolicy,
+          permissionProfileId: event.activePermissionProfileId,
+        );
+        _viewModel._conversationModeController.applyThreadSettings(event);
+      case AgentApplySessionConfigChange():
+        _viewModel._sessionConfigOptions = change.options;
+        _viewModel._applyThreadSelectionFromSessionConfigOptions(
+          change.options,
+        );
+      case AgentApplyAutoApprovalReviewChange():
+        final event = change.event;
+        _viewModel._autoReviewsByTurnId[event.turnId] = event;
+        if (event.status == 'denied') {
+          _viewModel._latestDeniedAutoReview = event;
+        } else if (event.status == 'approved' &&
+            _viewModel._latestDeniedAutoReview?.reviewId == event.reviewId) {
+          _viewModel._latestDeniedAutoReview = null;
+        }
+      case AgentPrepareTurnCompletedChange():
+        return AgentConversationStateMutationOutcome(
+          pendingInteractionChanged: _viewModel
+              ._updatePlanExecutionRequestForCompletedTurn(change.event),
+        );
+      case AgentFinalizeTurnStartedChange():
+        _viewModel._conversationModeController.setTurnRunning(true);
+        _viewModel._consumeActivityDirty();
+        _viewModel._syncElapsedTicker();
+      case AgentFinalizeTurnCompletedChange():
+        _viewModel._conversationModeController.setTurnRunning(
+          _viewModel.isTurnRunning,
+        );
+        _viewModel._modelRerouteNotice = null;
+        if (!_viewModel.isTurnRunning &&
+            _viewModel._status.state == AgentProviderConnectionState.running) {
+          _viewModel._status = AgentProviderStatus(
+            state: AgentProviderConnectionState.ready,
+            message: '${_viewModel.activeProviderName} ready',
+          );
+        }
+        if (!_viewModel.isTurnRunning &&
+            _viewModel._threadRuntimeStatus ==
+                AgentThreadRuntimeStatus.active) {
+          _viewModel._applyThreadRuntimeStatus(
+            status: AgentThreadRuntimeStatus.idle,
+            waitingOnApproval: false,
+            waitingOnUserInput: false,
+          );
+        }
+        _viewModel._consumeActivityDirty();
+        _viewModel._syncElapsedTicker();
+      case AgentPrepareInterruptedTurnChange():
+        _viewModel._clearThreadRuntimeStatus();
+        return AgentConversationStateMutationOutcome(
+          pendingInteractionChanged: _viewModel._planExecutionHandoffController
+              .clear(),
+        );
+      case AgentFinalizeInterruptedTurnChange():
+        _viewModel._conversationModeController.setTurnRunning(
+          _viewModel.isTurnRunning,
+        );
+        _viewModel._consumeActivityDirty();
+        _viewModel._syncElapsedTicker();
+      case AgentApplyToolStatusChange():
+        final title = change.toolCall.displayTitle.trim();
+        if (title.isNotEmpty) {
+          _viewModel._status = AgentProviderStatus(
+            state: AgentProviderConnectionState.running,
+            message: title.length > 80 ? '${title.substring(0, 80)}…' : title,
+          );
+        }
+      case AgentSetModelRerouteNoticeChange():
+        _viewModel._modelRerouteNotice = change.notice;
+      case AgentHandleModelListChange():
+        _viewModel._applyModelList(change.models);
+    }
+    return AgentConversationStateMutationOutcome.none;
+  }
+
+  @override
+  void requestThreadSnapshotRefresh() {
+    _viewModel._threadSnapshotRefreshPending = true;
   }
 }
 

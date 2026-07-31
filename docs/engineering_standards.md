@@ -167,6 +167,16 @@ main -> app -> presentation/application -> domain
 - Transport 与 Provider mapper 不得丢弃协议事件。Application 投影层只允许合并同一
   thread/turn/item/kind 的连续文本或 reasoning delta、token/diff 最新快照和工具 progress；
   item/工具/turn 终态、审批、错误和连接状态必须先 flush 缓冲后立即发布。背压诊断不得包含正文。
+- 规范化事件必须由 `AgentConversationEventProcessor` 编排。`AgentConversationReducer`
+  只能同步产生 typed state、`AgentTimelineMutation`、ThreadSnapshot、
+  `AgentUiUpdateRequest` 与 `AgentConversationEffect`；不得导入 Flutter scheduler、创建
+  Timer、执行 Future 或调用外部端口。live/history/replay 必须使用隔离的 reducer/context，
+  不得共享可变 identity、错误去重或 deprecation 状态。
+- Processor 只登记 ThreadSnapshot 刷新；实际 listenable 写入必须与 typed UI signal 共用
+  presentation scheduler 的安全发布回调，不得在 Flutter build phase 同步通知 Shell。
+- TimelineStore 可以继续执行增量 mutation，但不得决定 UI urgency、读取 Provider raw 字段
+  或增加 Codex/Grok 分支。外部回调、模型目录持久化和结构化错误日志由 EffectRunner 执行，
+  且执行前必须校验 listener generation、runtime/epoch 与必要 thread scope。
 - Provider Thread 操作必须复用 `ProviderOperationScheduler`。同一 Thread 的变更使用
   `exclusive` 并保持 FIFO，list/read 使用 Project/Thread `sharedRead`；禁止同键重入，
   dispose 必须拒绝未入场任务并等待已入场任务释放资源键。

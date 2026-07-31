@@ -1572,7 +1572,11 @@ void main() {
       'turn completed clears sticky active runtime status for list snapshot',
       () async {
         final provider = _FakeAgentProvider();
-        final viewModel = _createViewModel(provider);
+        var turnCompletedCount = 0;
+        final viewModel = _createViewModel(
+          provider,
+          onTurnCompleted: () => turnCompletedCount += 1,
+        );
         addTearDown(viewModel.dispose);
 
         await viewModel.sendMessage('hello');
@@ -1606,6 +1610,57 @@ void main() {
           viewModel.threadSnapshot.runtimeStatus,
           AgentThreadRuntimeStatus.idle,
         );
+        expect(turnCompletedCount, 1);
+      },
+    );
+
+    test(
+      'defers event thread snapshot notifications received during build phase',
+      () async {
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.sendMessage('hello');
+        await _drainTypedUiUpdate();
+        final scheduler = _uiFrameSchedulers.single;
+        final snapshotBeforeEvent = viewModel.threadSnapshot;
+        var snapshotNotificationCount = 0;
+        void handleSnapshot() => snapshotNotificationCount += 1;
+        viewModel.threadSnapshotListenable.addListener(handleSnapshot);
+        addTearDown(
+          () =>
+              viewModel.threadSnapshotListenable.removeListener(handleSnapshot),
+        );
+
+        await scheduler.runInBuildPhaseAsync(() async {
+          provider.emit(
+            const AgentThreadStatusChangedEvent(
+              threadId: 'thread-1',
+              status: AgentThreadRuntimeStatus.active,
+              waitingOnApproval: true,
+            ),
+          );
+          await _drainTypedUiScheduling();
+
+          expect(
+            viewModel.threadRuntimeStatus,
+            AgentThreadRuntimeStatus.active,
+          );
+          expect(viewModel.threadWaitingOnApproval, isTrue);
+          expect(viewModel.threadSnapshot, snapshotBeforeEvent);
+          expect(snapshotNotificationCount, 0);
+          expect(scheduler.pendingCallbackCount, greaterThan(0));
+        });
+
+        scheduler.pumpFrame();
+
+        expect(snapshotNotificationCount, 1);
+        expect(
+          viewModel.threadSnapshot.runtimeStatus,
+          AgentThreadRuntimeStatus.active,
+        );
+        expect(viewModel.threadSnapshot.waitingOnApproval, isTrue);
       },
     );
 
@@ -4052,6 +4107,7 @@ AgentConversationViewModel _createViewModel(
   _FakeAgentProvider provider, {
   AgentModelCatalogRepository? modelCatalogRepository,
   AgentConversationModeController? conversationModeController,
+  void Function()? onTurnCompleted,
 }) {
   final controller = ActiveAgentProviderController(
     providerFactory: _FakeAgentProviderFactory(provider),
@@ -4062,6 +4118,7 @@ AgentConversationViewModel _createViewModel(
   final viewModel = AgentConversationViewModel(
     providerController: controller,
     conversationModeController: conversationModeController,
+    onTurnCompleted: onTurnCompleted,
     uiFrameScheduler: _createUiFrameScheduler(),
   );
   viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);

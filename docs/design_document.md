@@ -56,7 +56,12 @@ IdeShellController
   -> ProjectThreadsController
 
 AgentConversationViewModel
-  -> AgentConversationTimelineStore
+  -> AgentConversationEventProcessor
+    -> AgentConversationReducer（live/history/replay 独立实例）
+    -> AgentConversationTimelineStore
+    -> AgentConversationEffectRunner
+      -> turn completed / model catalog / structured error log
+    -> AgentConversationThreadSnapshot
   -> AgentUiUpdatePort
     -> AgentUiUpdateScheduler（presentation，按 Flutter frame 合并）
       -> SchedulerBindingAgentFrameScheduler
@@ -237,10 +242,13 @@ delta 追加，同 turn token/diff 快照取最新，同工具 progress 按协�
 缓冲再立即发布。缓冲上限只产生不含正文的计数诊断，并触发即时 flush。
 
 流式身份链路固定为：Provider raw notification → 协议 decoder → Provider-local
-adapter/reducer → 语义完整的 `AgentEvent` → EventBuffer → TimelineStore。source id 保存协议
-身份，entryId 是统一层唯一合并键；TimelineStore 只执行同 entryId 更新、异 entryId 新建和
-同 tool id upsert，不猜开放条目或 narrative boundary。新增 Provider 只扩展 data adapter/
-reducer 及其契约测试，无需修改 Store。
+adapter/reducer → 语义完整的 `AgentEvent` → EventBuffer →
+`AgentConversationEventProcessor`。Processor 使用纯同步 `AgentConversationReducer` 产生
+typed state、`AgentTimelineMutation`、ThreadSnapshot、`AgentUiUpdateRequest` 与
+`AgentConversationEffect`，再按固定顺序应用。source id 保存协议身份，entryId 是统一层唯一
+合并键；TimelineStore 只执行同 entryId 更新、异 entryId 新建和同 tool id upsert，不猜开放
+条目、narrative boundary 或 UI urgency。外部回调与异步工作只由 scope-aware EffectRunner
+执行。新增 Provider 只扩展 data adapter/reducer 及其契约测试，无需修改 Store。
 
 #### 流式适配职责矩阵
 
@@ -249,7 +257,10 @@ reducer 及其契约测试，无需修改 Store。
 | shared transport / decoder / codec | 原始帧 → typed protocol update | 通用协议语法、传输生命周期、字段类型 | mutable identity 状态、Provider 名称/kind/id 分支 |
 | Provider mapper / adapter / reducer | typed/raw Provider update → 完整 `AgentEvent` | 厂商字段兼容、source→entry、segment/phase、boundary、去重、终态和迟到事件 | 把未决语义交给 Store/ViewModel 猜测 |
 | `AgentEventStreamBuffer` | `AgentEvent` → 有序事件批 | 同 normalized identity/kind/detail 的合并与 barrier flush | 读取 Provider raw 字段、修复 Provider 乱序或重建 identity |
-| `AgentConversationTimelineStore` | 有序 `AgentEvent` → timeline state | 同 entryId 更新、异 entryId 新建、同 tool id upsert | Provider 分支、开放条目推断、segment 分配、id 改写 |
+| `AgentConversationReducer` | 规范化 `AgentEvent` + 只读 context → `AgentConversationMutation` | 接收规则、typed state、timeline/UI/snapshot/effect 描述 | Flutter 调度、Timer、Future、外部回调 |
+| `AgentConversationEventProcessor` | `AgentConversationMutation` → 已应用状态 | state/timeline/snapshot 刷新请求/UI/effect 的确定顺序与 outcome 合成 | Widget、ChangeNotifier、Flutter build-phase 判断、Provider 协议分支 |
+| `AgentConversationTimelineStore` | `AgentTimelineMutation` → timeline state | 同 entryId 更新、异 entryId 新建、同 tool id upsert | Provider 分支、开放条目推断、segment 分配、id 改写、UI urgency |
+| `AgentConversationEffectRunner` | scope-aware `AgentConversationEffect` → 外部工作 | generation/runtime/thread 校验与一次性执行 | 修改 Timeline、在 reducer 内执行异步 |
 | ViewModel / UI | timeline/domain state → 展示 | 中立状态投影与交互 | 解析协议 payload、根据 Provider 猜 identity/plan |
 
 依赖方向是单向的：共享层定义中立机制和契约，Provider data 层依赖这些契约并产出完整语义；
@@ -272,6 +283,8 @@ Project Threads 侧栏对**已打开** thread 的执行中/等待指示，以 en
 `runningThreadIds`、摘要 `status`/waiting 与内存态 `completedThreadIds`。分区 UI 信号
 （history/header/live 等）不替代 snapshot：任何改变 `isTurnRunning` 或 runtime status 的
 路径（含 stream flush）必须同步推送 snapshot，避免详情已结束而列表持续 busy。
+Processor 只登记 snapshot 刷新请求；实际 listenable 写入与 typed UI signal 共用
+presentation scheduler 的安全发布边界，build phase 内的 immediate 请求必须延至下一帧。
 
 Provider 的 Thread 访问统一经过 `ProviderOperationScheduler`。列表使用 Project 级
 `sharedRead`，历史读取使用 Thread 级 `sharedRead`；resume、fork、重命名、归档、删除和

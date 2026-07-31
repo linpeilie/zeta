@@ -31,6 +31,17 @@ final class FakeAgentFrameScheduler implements AgentFrameScheduler {
     }
   }
 
+  /// 在 build phase 标记下执行异步测试体，便于推进事件流 microtask。
+  Future<T> runInBuildPhaseAsync<T>(Future<T> Function() body) async {
+    final previous = _isInBuildPhase;
+    _isInBuildPhase = true;
+    try {
+      return await body();
+    } finally {
+      _isInBuildPhase = previous;
+    }
+  }
+
   /// 推进一帧；本帧 callback 新排入的任务留给下一次调用。
   void pumpFrame() {
     final callbacks = List<VoidCallback>.of(_callbacks);

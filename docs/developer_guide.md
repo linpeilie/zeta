@@ -106,8 +106,9 @@ windows/
 - `lib/src/app`：应用装配、窗口启动、菜单桥接、shell controller 和常量。
 - `lib/src/core`：日志、`~/.zeta` 路径布局、原子文本写入等跨功能基础设施。
 - `lib/src/features/agent`：Agent provider 抽象、Codex app-server、Grok ACP、
-  共享事件映射、类型化 UI 更新端口、presentation frame scheduler、对话状态和
-  Agent pane。无 pump 的调度单测使用 `FakeAgentFrameScheduler` 手动推进 frame。
+  共享事件映射、纯同步 conversation reducer、事件 processor、scope-aware effect runner、
+  类型化 UI 更新端口、presentation frame scheduler、对话状态和 Agent pane。无 pump 的
+  调度单测使用 `FakeAgentFrameScheduler` 手动推进 frame。
 - `lib/src/features/agent_management`：Codex/Grok CLI 检测、身份/版本/账号诊断、
   无计费连接测试、配置安全编辑和 Agent 管理页面。
 - `lib/src/features/ide_session`：IDE 会话模型、状态构建、恢复协调和持久化。
@@ -280,11 +281,20 @@ stale-while-revalidate：先发布可用旧目录，再以 single-flight 刷新�
 - 高频事件只在 `AgentEventStreamBuffer` 的 Application 投影边界合并。新增可合并事件时，
   key 必须包含 thread、turn、item 和 event kind；完整 item、终态、审批、错误与连接状态
   不得进入可替代缓冲，并应先 flush 此前 delta。Transport/mapper 层保持逐条处理。
+- EventBuffer 交付的事件统一进入 `AgentConversationEventProcessor`。Reducer 只能同步产生
+  typed state、`AgentTimelineMutation`、ThreadSnapshot、`AgentUiUpdateRequest` 和
+  `AgentConversationEffect`；不得依赖 Flutter scheduler、Timer、Future 或执行外部回调。
+  live/history/replay 必须创建独立 reducer/context，不能共享错误去重、deprecation 或本地
+  identity 状态。
+- EffectRunner 执行 turn-completed 回调、模型目录记录和结构化错误日志，并在执行前重新校验
+  listener generation、runtime/epoch 与必要 thread scope；TimelineStore 只执行增量 mutation，
+  不决定 UI urgency。
 - 多 thread 常驻时，侧栏 busy 真源是各 entry 的 `AgentConversationThreadSnapshot`
   （`isTurnRunning` / `runtimeStatus` / waiting），经 shell `syncRuntimeSnapshot` 写入
-  `runningThreadIds` 与摘要 status。`_publishUiChanges` 与 `_flushStreamChangesNow`
-  都必须刷新 `threadSnapshotListenable`；turn 结束后若无 waiting，不得让列表残留
-  sticky `active`。后台完成仅非选中 thread 记入 `completedThreadIds`。细节见
+  `runningThreadIds` 与摘要 status。Processor 在对应 mutation 后登记 snapshot 刷新，
+  presentation 仅在 typed UI scheduler 的安全发布回调中写入 listenable；turn 结束后若无
+  waiting，不得让列表残留 sticky
+  `active`。后台完成仅非选中 thread 记入 `completedThreadIds`。细节见
   [执行中状态方案 §2.5](../plan/agent_running_status_ux_plan.md)。
 
 修改 Codex 适配层前，先对照
