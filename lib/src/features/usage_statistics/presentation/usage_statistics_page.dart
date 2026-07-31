@@ -137,7 +137,7 @@ class _UsageStatisticsPageState extends State<UsageStatisticsPage> {
                       else ...[
                         _UsageOverviewBar(overview: report.overview),
                         const SizedBox(height: IdeSpacing.space12),
-                        _TrendSection(controller: controller, report: report),
+                        _TrendSection(report: report),
                         const SizedBox(height: IdeSpacing.space16),
                         if (report.records.isEmpty)
                           _EmptyUsageState(
@@ -522,9 +522,8 @@ class _UsageOverviewBar extends StatelessWidget {
 }
 
 class _TrendSection extends StatelessWidget {
-  const _TrendSection({required this.controller, required this.report});
+  const _TrendSection({required this.report});
 
-  final UsageStatisticsController controller;
   final UsageStatisticsReport report;
 
   @override
@@ -534,26 +533,11 @@ class _TrendSection extends StatelessWidget {
       padding: IdeSpacing.panelPadding,
       child: IdeSection(
         title: '使用趋势',
-        subtitle: '粒度根据时间范围自动调整',
-        trailing: IdeTabs<UsageTrendMetric>(
-          value: controller.trendMetric,
-          semanticLabel: '趋势指标',
-          items: [
-            for (final metric in UsageTrendMetric.values)
-              IdeTabItem<UsageTrendMetric>(
-                key: ValueKey<String>('usage-trend-${metric.name}'),
-                value: metric,
-                label: metric.label,
-              ),
-          ],
-          onChanged: controller.selectTrendMetric,
-        ),
+        subtitle: 'Token 消耗 · 粒度根据时间范围自动调整',
         child: _UsageLineChart(
-          key: ValueKey<String>(
-            'usage-main-chart-${controller.trendMetric.name}',
-          ),
-          points: report.trend,
-          metric: controller.trendMetric,
+          key: const ValueKey('usage-main-chart-totalTokens'),
+          points: report.tokenTrend,
+          metric: UsageTrendMetric.totalTokens,
         ),
       ),
     );

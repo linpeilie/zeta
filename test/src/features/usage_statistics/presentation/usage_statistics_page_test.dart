@@ -35,9 +35,11 @@ void main() {
     expect(find.text('推理 100', findRichText: true), findsOneWidget);
     expect(find.text('ChatGPT Plus'), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('usage-main-chart-calls')),
+      find.byKey(const ValueKey('usage-main-chart-totalTokens')),
       findsOneWidget,
     );
+    expect(find.byKey(const ValueKey('usage-trend-calls')), findsNothing);
+    expect(find.text('调用次数'), findsWidgets); // overview still has it
     expect(find.byType(CompactMetricBar), findsOneWidget);
     expect(find.byKey(const ValueKey('usage-filters-toolbar')), findsOneWidget);
     expect(

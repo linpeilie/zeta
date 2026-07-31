@@ -24,7 +24,6 @@ class UsageStatisticsController extends ChangeNotifier {
   String? _projectPath;
   String? _providerId;
   String? _model;
-  UsageTrendMetric _trendMetric = UsageTrendMetric.calls;
   UsageRankSort _rankSort = UsageRankSort.calls;
   UsageStatisticsSourceSnapshot? _source;
   UsageStatisticsReport? _report;
@@ -41,7 +40,6 @@ class UsageStatisticsController extends ChangeNotifier {
   String? get projectPath => _projectPath;
   String? get providerId => _providerId;
   String? get model => _model;
-  UsageTrendMetric get trendMetric => _trendMetric;
   UsageRankSort get rankSort => _rankSort;
   UsageStatisticsReport? get report => _report;
   UsageStatisticsSourceSnapshot? get source => _source;
@@ -113,15 +111,6 @@ class UsageStatisticsController extends ChangeNotifier {
     _notify();
   }
 
-  void selectTrendMetric(UsageTrendMetric value) {
-    if (_trendMetric == value) {
-      return;
-    }
-    _trendMetric = value;
-    _rebuildReport();
-    _notify();
-  }
-
   void selectRankSort(UsageRankSort value) {
     if (_rankSort == value) {
       return;
@@ -186,7 +175,8 @@ class UsageStatisticsController extends ChangeNotifier {
         providerId: _providerId,
         model: _model,
       ),
-      trendMetric: _trendMetric,
+      // 主趋势图仅展示 Token 消耗。
+      trendMetric: UsageTrendMetric.totalTokens,
       rankSort: _rankSort,
     );
     _projectPath = _retainOption(_projectPath, nextReport.projectOptions);
@@ -200,7 +190,7 @@ class UsageStatisticsController extends ChangeNotifier {
         providerId: _providerId,
         model: _model,
       ),
-      trendMetric: _trendMetric,
+      trendMetric: UsageTrendMetric.totalTokens,
       rankSort: _rankSort,
     );
   }
