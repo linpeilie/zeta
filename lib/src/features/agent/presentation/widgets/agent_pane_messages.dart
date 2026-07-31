@@ -42,72 +42,83 @@ class _AgentMessageEntry extends StatelessWidget {
 /// 挂在 live turn 条目之后、footer 之前：展示主活动段 + 时长，
 /// 思考数据本身不进入可见时间线，但仍通过此状态条反馈当前活动相位。
 class _AgentLiveActivityStatus extends StatelessWidget {
-  const _AgentLiveActivityStatus({required this.viewModel});
+  const _AgentLiveActivityStatus({
+    required this.viewModel,
+    required this.isActive,
+  });
 
   final AgentConversationViewModel viewModel;
+  final bool isActive;
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: Listenable.merge(<Listenable>[
-        viewModel.elapsedClockListenable,
-        viewModel.headerVersionListenable,
-      ]),
-      builder: (context, _) {
-        if (!viewModel.isTurnRunning) {
-          return const SizedBox.shrink();
-        }
-        final colors = IdeColors.of(context);
-        final textStyles = IdeTextStyles.of(context);
-        final waitingLabel = viewModel.threadStatusCapsuleLabel;
-        final isWaiting = waitingLabel != null;
-        final statusText = isWaiting
-            ? waitingLabel
-            : _headerRunningStatusText(viewModel, viewModel.elapsedNow);
-        final accent = isWaiting ? colors.warning : colors.accent;
-        return Padding(
-          key: const ValueKey<String>('agent-live-activity-status'),
-          padding: const EdgeInsets.only(
-            bottom: IdeSpacing.space10,
-            top: IdeSpacing.space2,
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              if (isWaiting)
-                Icon(
-                  viewModel.threadWaitingOnApproval
-                      ? Icons.verified_user_outlined
-                      : viewModel.threadWaitingOnUserInput
-                      ? Icons.edit_note_rounded
-                      : Icons.error_outline_rounded,
-                  size: 14,
-                  color: accent,
-                )
-              else
-                const IdeBusySpinner(
-                  key: ValueKey<String>('agent-live-activity-spinner'),
-                  size: 12,
-                  strokeWidth: 1.8,
-                  semanticsLabel: 'Turn running',
-                ),
-              const SizedBox(width: IdeSpacing.space8),
-              Expanded(
-                child: Text(
-                  statusText,
-                  key: const ValueKey<String>('agent-live-activity-label'),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: textStyles.bodySmall.copyWith(
-                    color: isWaiting
-                        ? colors.warning
-                        : colors.textSecondary.withValues(alpha: 0.9),
-                    fontWeight: FontWeight.w500,
+    return ValueListenableBuilder<AgentHeaderState>(
+      valueListenable: viewModel.headerStateListenable,
+      builder: (context, state, _) {
+        Widget content(DateTime now) {
+          if (!state.isTurnRunning) {
+            return const SizedBox.shrink();
+          }
+          final colors = IdeColors.of(context);
+          final textStyles = IdeTextStyles.of(context);
+          final waitingLabel = state.statusCapsuleLabel;
+          final isWaiting = waitingLabel != null;
+          final statusText = isWaiting
+              ? waitingLabel
+              : _headerRunningStatusText(state, now);
+          final accent = isWaiting ? colors.warning : colors.accent;
+          return Padding(
+            key: const ValueKey<String>('agent-live-activity-status'),
+            padding: const EdgeInsets.only(
+              bottom: IdeSpacing.space10,
+              top: IdeSpacing.space2,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                if (isWaiting)
+                  Icon(
+                    state.waitingOnApproval
+                        ? Icons.verified_user_outlined
+                        : state.waitingOnUserInput
+                        ? Icons.edit_note_rounded
+                        : Icons.error_outline_rounded,
+                    size: 14,
+                    color: accent,
+                  )
+                else
+                  const IdeBusySpinner(
+                    key: ValueKey<String>('agent-live-activity-spinner'),
+                    size: 12,
+                    strokeWidth: 1.8,
+                    semanticsLabel: 'Turn running',
+                  ),
+                const SizedBox(width: IdeSpacing.space8),
+                Expanded(
+                  child: Text(
+                    statusText,
+                    key: const ValueKey<String>('agent-live-activity-label'),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: textStyles.bodySmall.copyWith(
+                      color: isWaiting
+                          ? colors.warning
+                          : colors.textSecondary.withValues(alpha: 0.9),
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          );
+        }
+
+        if (!isActive) {
+          return content(DateTime.now());
+        }
+        return ListenableBuilder(
+          listenable: viewModel.elapsedClockListenable,
+          builder: (context, _) => content(viewModel.elapsedNow),
         );
       },
     );
@@ -737,9 +748,11 @@ class _AgentPlanMessageCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: IdeSpacing.space12),
       child: ListenableBuilder(
-        listenable: viewModel.expansionVersionListenable,
+        listenable: viewModel.expansionStateListenable,
         builder: (context, _) {
-          final expanded = viewModel.isPlanMessageExpanded(message.id);
+          final expanded = viewModel.expansionState.isPlanMessageExpanded(
+            message.id,
+          );
           return RepaintBoundary(
             child: IdeCollapsibleCard(
               headerKey: ValueKey<String>('agent-plan-card-${message.id}'),

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/main.dart';
+import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
@@ -200,16 +201,12 @@ void main() {
       final controller = tester.widget<ScrollView>(scrollView).controller!;
       final pane = tester.widget<AgentPane>(find.byType(AgentPane));
       var autoScrollNotifications = 0;
-      void countAutoScroll() {
-        autoScrollNotifications += 1;
-      }
-
-      pane.viewModel.autoScrollTickListenable.addListener(countAutoScroll);
-      addTearDown(
-        () => pane.viewModel.autoScrollTickListenable.removeListener(
-          countAutoScroll,
-        ),
-      );
+      final effectSubscription = pane.viewModel.uiEffects.listen((effect) {
+        if (effect is AgentRequestAutoScroll) {
+          autoScrollNotifications += 1;
+        }
+      });
+      addTearDown(effectSubscription.cancel);
       final trace = ScrollMetricsTrace('B');
 
       await _pumpUntilScrollMetricsStable(tester, controller);

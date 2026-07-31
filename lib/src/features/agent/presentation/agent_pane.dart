@@ -14,6 +14,7 @@ import 'package:pasteboard/pasteboard.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
@@ -33,6 +34,7 @@ import 'package:zeta/src/ui/core/layout/ide_constraint_bucket_builder.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/presentation/agent_conversation_ui_state.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descriptor.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
@@ -117,7 +119,7 @@ class _AgentPaneState extends State<AgentPane> {
   /// `kUseAnchoredDynamicTimelineSliver` 时仍依赖此字段与
   /// [_scrollToEndLegacy] 完成回退。
   bool _stickToBottom = true;
-  late int _lastAutoScrollTick;
+  late StreamSubscription<AgentUiEffect> _uiEffectSubscription;
 
   /// 动态高度路径：extent index + follow/free 协调器（flag 开启时使用）。
   final IdeVirtualListController _virtualListController =
@@ -160,10 +162,7 @@ class _AgentPaneState extends State<AgentPane> {
     _scrollCoordinator = IdeVirtualScrollCoordinator(driver: _scrollDriver)
       ..onModeChanged = _notifyScrollChrome;
     _scrollController.addListener(_handleScrollChanged);
-    _lastAutoScrollTick = widget.viewModel.autoScrollTick;
-    widget.viewModel.autoScrollTickListenable.addListener(
-      _handleAutoScrollTickChanged,
-    );
+    _uiEffectSubscription = widget.viewModel.uiEffects.listen(_handleUiEffect);
   }
 
   @override
@@ -172,9 +171,7 @@ class _AgentPaneState extends State<AgentPane> {
     if (oldWidget.viewModel == widget.viewModel) {
       return;
     }
-    oldWidget.viewModel.autoScrollTickListenable.removeListener(
-      _handleAutoScrollTickChanged,
-    );
+    unawaited(_uiEffectSubscription.cancel());
     // view model 真正替换时才使档位 child 失效；普通 resize 父重建继续复用。
     _responsiveBodyBuilder = _createResponsiveBodyBuilder();
     _projectionCache.clear();
@@ -191,19 +188,14 @@ class _AgentPaneState extends State<AgentPane> {
     );
     _stickToBottom = true;
     _lastTimelineItemId = null;
-    _lastAutoScrollTick = widget.viewModel.autoScrollTick;
     // 重置 coordinator：重新 attach driver 并请求 follow。
     unawaited(_scrollCoordinator.requestFollowEnd(animated: false));
-    widget.viewModel.autoScrollTickListenable.addListener(
-      _handleAutoScrollTickChanged,
-    );
+    _uiEffectSubscription = widget.viewModel.uiEffects.listen(_handleUiEffect);
   }
 
   @override
   void dispose() {
-    widget.viewModel.autoScrollTickListenable.removeListener(
-      _handleAutoScrollTickChanged,
-    );
+    unawaited(_uiEffectSubscription.cancel());
     _inputController.removeListener(_handleInputChanged);
     _scrollController.removeListener(_handleScrollChanged);
     _scrollCoordinator.onModeChanged = null;
@@ -268,10 +260,14 @@ class _AgentPaneState extends State<AgentPane> {
         _AgentContentAlign(
           child: Padding(
             padding: pagePadding,
-            child: ListenableBuilder(
-              listenable: widget.viewModel.headerVersionListenable,
-              builder: (context, _) {
-                return _AgentHeader(viewModel: widget.viewModel);
+            child: ValueListenableBuilder<AgentHeaderState>(
+              valueListenable: widget.viewModel.headerStateListenable,
+              builder: (context, state, _) {
+                return _AgentHeader(
+                  viewModel: widget.viewModel,
+                  state: state,
+                  isActive: widget.isActive,
+                );
               },
             ),
           ),
@@ -279,16 +275,15 @@ class _AgentPaneState extends State<AgentPane> {
         Expanded(
           child: ListenableBuilder(
             listenable: Listenable.merge(<Listenable>[
-              widget.viewModel.historyVersionListenable,
+              widget.viewModel.historyStateListenable,
               widget.viewModel.liveTurnListenable,
             ]),
             builder: (context, _) {
+              final historyState = widget.viewModel.historyState;
+              final liveTurnState = widget.viewModel.liveTurnState;
               final hasConversation =
-                  widget.viewModel.visibleHistoryTurns.isNotEmpty ||
-                  widget.viewModel.liveTurnState != null;
-              final isLoadingHistory =
-                  widget.viewModel.threadOpenPhase ==
-                  AgentThreadOpenPhase.loadingHistory;
+                  historyState.visibleTurns.isNotEmpty || liveTurnState != null;
+              final isLoadingHistory = historyState.isLoading;
               // 加载历史时输入框固定底部（与已有对话一致），空草稿仍居中。
               final pinFooterToBottom = hasConversation || isLoadingHistory;
               return _AgentConversationLayout(
@@ -296,9 +291,9 @@ class _AgentPaneState extends State<AgentPane> {
                 reduceMotion: MediaQuery.disableAnimationsOf(context),
                 timeline: isLoadingHistory
                     ? _AgentThreadHistoryLoading(
-                        providerId: widget.viewModel.threadProviderId,
-                        providerKind: widget.viewModel.activeProviderKind,
-                        providerName: widget.viewModel.activeProviderName,
+                        providerId: historyState.providerId,
+                        providerKind: historyState.providerKind,
+                        providerName: historyState.providerName,
                       )
                     : _AgentConversationTimeline(
                         viewModel: widget.viewModel,
@@ -334,32 +329,32 @@ class _AgentPaneState extends State<AgentPane> {
                     ),
                     ListenableBuilder(
                       listenable: Listenable.merge(<Listenable>[
-                        widget.viewModel.composerVersionListenable,
-                        widget.viewModel.pendingInteractionVersionListenable,
+                        widget.viewModel.composerStateListenable,
+                        widget.viewModel.pendingInteractionStateListenable,
                       ]),
                       builder: (context, _) {
+                        final composerState = widget.viewModel.composerState;
+                        final pendingState =
+                            widget.viewModel.pendingInteractionState;
                         return Column(
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            if (widget.viewModel.unavailableProviderReason
+                            if (composerState.unavailableProviderReason
                                 case final reason?)
                               _AgentProviderUnavailableNotice(
                                 reason: reason,
                                 pagePadding: pagePadding,
                               ),
-                            if (widget.viewModel.isReadOnly)
+                            if (composerState.isReadOnly)
                               _AgentReadOnlyNotice(pagePadding: pagePadding)
-                            else if (widget
-                                    .viewModel
-                                    .questionRequests
-                                    .isEmpty &&
-                                widget.viewModel.permissionRequests.isEmpty)
+                            else if (!pendingState.blocksComposer)
                               // 提问卡 / 权限卡占用底部交互时隐藏 Composer，
                               // 与 pending dock 互斥，避免双焦点与误发送。
                               _AgentComposerSection(
                                 key: const ValueKey('agent-composer-section'),
                                 viewModel: widget.viewModel,
+                                state: composerState,
                                 inputController: _inputController,
                                 composerFocusNode: _composerFocusNode,
                                 canSendListenable: _canSendNotifier,
@@ -649,12 +644,10 @@ class _AgentPaneState extends State<AgentPane> {
     _syncCanSend();
   }
 
-  void _handleAutoScrollTickChanged() {
-    final nextTick = widget.viewModel.autoScrollTick;
-    if (nextTick == _lastAutoScrollTick) {
+  void _handleUiEffect(AgentUiEffect effect) {
+    if (!widget.isActive || effect is! AgentRequestAutoScroll) {
       return;
     }
-    _lastAutoScrollTick = nextTick;
     if (kUseAnchoredDynamicTimelineSliver) {
       // 新路径：只通知 coordinator，由 frame-coalesce 的 jump 完成 follow。
       _scrollCoordinator.onAutoScrollTick(lastItemId: _lastTimelineItemId);

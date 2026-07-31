@@ -18,9 +18,9 @@ class _AgentActivePlanSection extends StatelessWidget {
     return ListenableBuilder(
       listenable: Listenable.merge(<Listenable>[
         viewModel.liveTurnListenable,
-        viewModel.headerVersionListenable,
-        viewModel.pendingInteractionVersionListenable,
-        viewModel.expansionVersionListenable,
+        viewModel.headerStateListenable,
+        viewModel.pendingInteractionStateListenable,
+        viewModel.expansionStateListenable,
       ]),
       builder: (context, _) {
         final turnState = viewModel.liveTurnState;
@@ -30,10 +30,19 @@ class _AgentActivePlanSection extends StatelessWidget {
         return ListenableBuilder(
           listenable: turnState,
           builder: (context, _) {
-            if (!viewModel.shouldShowActivePlan) {
+            final headerState = viewModel.headerState;
+            final pendingState = viewModel.pendingInteractionState;
+            final entries = turnState.planEntries;
+            final shouldShow =
+                headerState.isTurnRunning &&
+                !headerState.isReadOnly &&
+                entries.length >= 2 &&
+                pendingState.isEmpty &&
+                !headerState.waitingOnApproval &&
+                !headerState.waitingOnUserInput;
+            if (!shouldShow) {
               return const SizedBox.shrink();
             }
-            final entries = viewModel.activePlanEntries;
             return _AgentContentAlign(
               // CustomMultiChildLayout 会给浮层一个有界最大高度；这里必须按内容
               // 收缩，否则 Align 会占满 Footer 上方空间并把卡片留在时间线顶部。
@@ -58,7 +67,9 @@ class _AgentActivePlanSection extends StatelessWidget {
                         ),
                         turnId: turnState.id,
                         entries: entries,
-                        expanded: viewModel.isActivePlanExpanded(turnState.id),
+                        expanded: viewModel.expansionState.isActivePlanExpanded(
+                          turnState.id,
+                        ),
                         onToggle: () =>
                             viewModel.toggleActivePlan(turnState.id),
                       ),

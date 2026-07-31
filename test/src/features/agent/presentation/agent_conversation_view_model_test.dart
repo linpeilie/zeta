@@ -1701,8 +1701,14 @@ void main() {
 
         await viewModel.sendMessage('hello');
         await Future<void>.delayed(Duration.zero);
-        final autoScrollTick = viewModel.autoScrollTick;
-        final pendingVersion = viewModel.pendingInteractionVersion;
+        var autoScrollEffects = 0;
+        final effectSubscription = viewModel.uiEffects.listen((effect) {
+          if (effect is AgentRequestAutoScroll) {
+            autoScrollEffects += 1;
+          }
+        });
+        addTearDown(effectSubscription.cancel);
+        final pendingState = viewModel.pendingInteractionState;
         provider.emit(
           const AgentPermissionRequestedEvent(
             AgentPermissionRequest(
@@ -1724,13 +1730,10 @@ void main() {
           viewModel.timelineEntries.whereType<AgentPermissionTimelineEntry>(),
           hasLength(1),
         );
-        expect(
-          viewModel.pendingInteractionVersion,
-          greaterThan(pendingVersion),
-        );
-        expect(viewModel.autoScrollTick, autoScrollTick);
+        expect(viewModel.pendingInteractionState, isNot(pendingState));
+        expect(autoScrollEffects, 0);
 
-        final requestedPendingVersion = viewModel.pendingInteractionVersion;
+        final requestedPendingState = viewModel.pendingInteractionState;
         provider.emit(
           const AgentPermissionResolvedEvent(
             requestId: 'approval-1',
@@ -1744,11 +1747,8 @@ void main() {
           viewModel.timelineEntries.whereType<AgentPermissionTimelineEntry>(),
           isEmpty,
         );
-        expect(
-          viewModel.pendingInteractionVersion,
-          greaterThan(requestedPendingVersion),
-        );
-        expect(viewModel.autoScrollTick, autoScrollTick);
+        expect(viewModel.pendingInteractionState, isNot(requestedPendingState));
+        expect(autoScrollEffects, 0);
       },
     );
 
@@ -1970,12 +1970,12 @@ void main() {
           isEmpty,
         );
 
-        final historyVersion = viewModel.historyVersion;
-        final expansionVersion = viewModel.expansionVersion;
+        final historyState = viewModel.historyState;
+        final expansionState = viewModel.expansionState;
         expect(viewModel.isActivePlanExpanded('turn-1'), isFalse);
         viewModel.toggleActivePlan('turn-1');
-        expect(viewModel.historyVersion, historyVersion);
-        expect(viewModel.expansionVersion, greaterThan(expansionVersion));
+        expect(viewModel.historyState, historyState);
+        expect(viewModel.expansionState, isNot(expansionState));
         expect(viewModel.isActivePlanExpanded('turn-1'), isTrue);
 
         provider.emit(
@@ -2142,7 +2142,7 @@ void main() {
     });
 
     test(
-      'keeps history notifier stable while refreshing header and composer on token usage',
+      'keeps history state stable while refreshing header and composer token state',
       () async {
         final provider = _FakeAgentProvider();
         final viewModel = _createViewModel(provider);
@@ -2157,22 +2157,22 @@ void main() {
         var headerNotifications = 0;
         var composerNotifications = 0;
         var liveNotifications = 0;
-        viewModel.historyVersionListenable.addListener(() {
+        viewModel.historyStateListenable.addListener(() {
           historyNotifications += 1;
         });
-        viewModel.headerVersionListenable.addListener(() {
+        viewModel.headerStateListenable.addListener(() {
           headerNotifications += 1;
         });
-        viewModel.composerVersionListenable.addListener(() {
+        viewModel.composerStateListenable.addListener(() {
           composerNotifications += 1;
         });
         liveTurn!.addListener(() {
           liveNotifications += 1;
         });
 
-        final historyVersion = viewModel.historyVersion;
-        final headerVersion = viewModel.headerVersion;
-        final composerVersion = viewModel.composerVersion;
+        final historyState = viewModel.historyState;
+        final headerState = viewModel.headerState;
+        final composerState = viewModel.composerState;
 
         provider.emit(
           const AgentMessageDeltaEvent(
@@ -2197,9 +2197,9 @@ void main() {
         await _drainTypedUiUpdate();
 
         // history 保持稳定；header（会话 token）与 composer（上下文进度环）需同步刷新。
-        expect(viewModel.historyVersion, historyVersion);
-        expect(viewModel.headerVersion, greaterThan(headerVersion));
-        expect(viewModel.composerVersion, greaterThan(composerVersion));
+        expect(viewModel.historyState, historyState);
+        expect(viewModel.headerState, isNot(headerState));
+        expect(viewModel.composerState, isNot(composerState));
         expect(viewModel.currentThreadLastTokenUsage?.totalTokens, 1200);
         expect(historyNotifications, 0);
         expect(headerNotifications, 1);
@@ -2225,26 +2225,28 @@ void main() {
         var composerNotifications = 0;
         var liveNotifications = 0;
         var autoScrollNotifications = 0;
-        viewModel.historyVersionListenable.addListener(() {
+        viewModel.historyStateListenable.addListener(() {
           historyNotifications += 1;
         });
-        viewModel.headerVersionListenable.addListener(() {
+        viewModel.headerStateListenable.addListener(() {
           headerNotifications += 1;
         });
-        viewModel.composerVersionListenable.addListener(() {
+        viewModel.composerStateListenable.addListener(() {
           composerNotifications += 1;
         });
-        viewModel.autoScrollTickListenable.addListener(() {
-          autoScrollNotifications += 1;
+        final effectSubscription = viewModel.uiEffects.listen((effect) {
+          if (effect is AgentRequestAutoScroll) {
+            autoScrollNotifications += 1;
+          }
         });
+        addTearDown(effectSubscription.cancel);
         liveTurn!.addListener(() {
           liveNotifications += 1;
         });
 
-        final historyVersion = viewModel.historyVersion;
-        final headerVersion = viewModel.headerVersion;
-        final composerVersion = viewModel.composerVersion;
-        final autoScrollTick = viewModel.autoScrollTick;
+        final historyState = viewModel.historyState;
+        final headerState = viewModel.headerState;
+        final composerState = viewModel.composerState;
 
         provider.emit(
           const AgentToolCallEvent(
@@ -2273,15 +2275,17 @@ void main() {
         // 核心契约：高频 tool progress 经 EventBuffer 合并后，Store 只保留最新内容；
         // history/composer 不因 progress 抖动。UI 分区 notify 次数受帧调度影响，
         // 不在此做硬性 1 次断言（见 plan/agent_stream_perf_grok_alignment_plan.md）。
-        expect(viewModel.historyVersion, historyVersion);
-        expect(viewModel.composerVersion, composerVersion);
+        expect(viewModel.historyState, historyState);
+        expect(viewModel.composerState, composerState);
         expect(historyNotifications, 0);
         expect(composerNotifications, 0);
-        expect(viewModel.headerVersion, greaterThanOrEqualTo(headerVersion));
+        expect(
+          viewModel.headerState == headerState || headerNotifications == 1,
+          isTrue,
+        );
         expect(headerNotifications, lessThanOrEqualTo(1));
         expect(liveNotifications, lessThanOrEqualTo(2));
         expect(autoScrollNotifications, lessThanOrEqualTo(2));
-        expect(viewModel.autoScrollTick, greaterThanOrEqualTo(autoScrollTick));
         expect(
           viewModel.timelineEntries
               .whereType<AgentToolTimelineEntry>()

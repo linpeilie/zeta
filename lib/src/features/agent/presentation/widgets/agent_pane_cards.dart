@@ -13,9 +13,11 @@ class _AgentCommandGroupCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     return ListenableBuilder(
-      listenable: viewModel.expansionVersionListenable,
+      listenable: viewModel.expansionStateListenable,
       builder: (context, _) {
-        final expanded = viewModel.isCommandGroupExpanded(group.id);
+        final expanded = viewModel.expansionState.isCommandGroupExpanded(
+          group.id,
+        );
         return IdeCollapsibleCard(
           headerKey: ValueKey<String>('agent-command-group-header-${group.id}'),
           bodyKey: ValueKey<String>('agent-command-group-body-${group.id}'),
@@ -164,9 +166,11 @@ class _AgentFileEditItemRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: viewModel.expansionVersionListenable,
+      listenable: viewModel.expansionStateListenable,
       builder: (context, _) {
-        final expanded = viewModel.isFileEditItemExpanded(item.id);
+        final expanded = viewModel.expansionState.isFileEditItemExpanded(
+          item.id,
+        );
         final canExpand = item.hasDetails;
         return IdeCollapsibleCard(
           headerKey: ValueKey<String>('agent-file-edit-item-row-${item.id}'),
@@ -396,7 +400,7 @@ class _AgentToolCallCard extends StatelessWidget {
         toolCall.duration == null &&
         toolCall.startedAt != null &&
         toolCall.isActiveStatus;
-    final listenables = <Listenable>[viewModel.expansionVersionListenable];
+    final listenables = <Listenable>[viewModel.expansionStateListenable];
     if (needsElapsedTick) {
       listenables.add(viewModel.elapsedClockListenable);
     }
@@ -405,7 +409,9 @@ class _AgentToolCallCard extends StatelessWidget {
       builder: (context, _) {
         final canExpand =
             toolCall.content != null && toolCall.content!.isNotEmpty;
-        final expanded = viewModel.isToolCallExpanded(toolCall.id);
+        final expanded = viewModel.expansionState.isToolCallExpanded(
+          toolCall.id,
+        );
         final elapsedLabel = _toolElapsedLabel(
           viewModel,
           toolCall,

@@ -602,26 +602,62 @@ void main() {
       await tester.pump(const Duration(milliseconds: 32));
       await tester.pump();
 
+      final messageEvents = fixture.events
+          .whereType<AgentMessageDeltaEvent>()
+          .toList(growable: false);
+      expect(
+        messageEvents,
+        hasLength(AgentEventStormFixture.messageDeltaCount),
+      );
+      final beforeWarmup = viewModel.eventStreamBufferDiagnostics!;
+      provider.emit(messageEvents.first);
+      await _drainAgentEventSubset(
+        tester,
+        viewModel: viewModel,
+        beforeReceivedEvents: beforeWarmup.receivedEvents,
+        expectedInputEventCount: 1,
+      );
+      await tester.pump(const Duration(milliseconds: 32));
+      await tester.pump();
+
       var shellSnapshotNotifyCount = 0;
+      var headerStateNotifyCount = 0;
+      var composerStateNotifyCount = 0;
       void handleShellSnapshotChanged() {
         shellSnapshotNotifyCount += 1;
+      }
+
+      void handleHeaderStateChanged() {
+        headerStateNotifyCount += 1;
+      }
+
+      void handleComposerStateChanged() {
+        composerStateNotifyCount += 1;
       }
 
       viewModel.threadSnapshotListenable.addListener(
         handleShellSnapshotChanged,
       );
-      addTearDown(
-        () => viewModel.threadSnapshotListenable.removeListener(
+      viewModel.headerStateListenable.addListener(handleHeaderStateChanged);
+      viewModel.composerStateListenable.addListener(handleComposerStateChanged);
+      addTearDown(() {
+        viewModel.threadSnapshotListenable.removeListener(
           handleShellSnapshotChanged,
-        ),
-      );
+        );
+        viewModel.headerStateListenable.removeListener(
+          handleHeaderStateChanged,
+        );
+        viewModel.composerStateListenable.removeListener(
+          handleComposerStateChanged,
+        );
+      });
 
       final beforeBuffer = viewModel.eventStreamBufferDiagnostics!;
       final buildCounter = TestWidgetBuildCounter()..start();
       final localTimelineBuildCounter = _LocalTimelineBuildCounter()..start();
       addTearDown(buildCounter.dispose);
       addTearDown(localTimelineBuildCounter.dispose);
-      for (final event in fixture.events.whereType<AgentMessageDeltaEvent>()) {
+      for (final event in messageEvents.skip(1)) {
         provider.emit(event);
       }
 
@@ -629,7 +665,7 @@ void main() {
         tester,
         viewModel: viewModel,
         beforeReceivedEvents: beforeBuffer.receivedEvents,
-        expectedInputEventCount: AgentEventStormFixture.messageDeltaCount,
+        expectedInputEventCount: AgentEventStormFixture.messageDeltaCount - 1,
       );
       await tester.pump(const Duration(milliseconds: 32));
       await tester.pump();
@@ -645,14 +681,20 @@ void main() {
 
       expect(messageCharacters, fixture.expectedMessageCharacters);
       expect(shellSnapshotNotifyCount, 0);
+      expect(headerStateNotifyCount, 0);
+      expect(composerStateNotifyCount, 0);
       expect(buildCounts[AgentBuildTarget.ideHome], 0);
       expect(buildCounts[AgentBuildTarget.agentPane], 0);
+      expect(buildCounts[AgentBuildTarget.header], 0);
+      expect(buildCounts[AgentBuildTarget.composer], 0);
       expect(buildCounts[AgentBuildTarget.liveTimeline], 0);
       expect(localTimelineBuildCount, greaterThan(0));
 
       debugPrint(
         'agent-event-phase1-message '
         'shellSnapshotNotify=$shellSnapshotNotifyCount '
+        'headerStateNotify=$headerStateNotifyCount '
+        'composerStateNotify=$composerStateNotifyCount '
         'localTimelineBuild=$localTimelineBuildCount '
         'builds=$buildCounts',
       );

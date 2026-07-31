@@ -332,27 +332,26 @@ class _AgentConversationTimeline extends StatelessWidget {
     // 非前台：不挂 live 高频信号，后台 thread 流式输出不重建此 canvas。
     final timelineListenable = isActive
         ? Listenable.merge(<Listenable>[
-            viewModel.historyVersionListenable,
+            viewModel.historyStateListenable,
             viewModel.liveTurnListenable,
-            viewModel.expansionVersionListenable,
+            viewModel.expansionStateListenable,
             ?viewModel.liveTurnState,
           ])
         : Listenable.merge(<Listenable>[
-            viewModel.historyVersionListenable,
-            viewModel.expansionVersionListenable,
+            viewModel.historyStateListenable,
+            viewModel.expansionStateListenable,
           ]);
 
     return _AgentContentAlign(
       child: ListenableBuilder(
         listenable: timelineListenable,
         builder: (context, _) {
-          final standby = viewModel.standbyTurnState;
-          final standbySnapshot = standby != null && standby.entries.isNotEmpty
-              ? standby.snapshot()
-              : null;
-          final historyTurns = viewModel.visibleHistoryTurns;
+          final historyState = viewModel.historyState;
+          final standbySnapshot = historyState.standbyTurn;
+          final historyTurns = historyState.visibleTurns;
           final liveTurnState = viewModel.liveTurnState;
           final liveSnapshot = liveTurnState?.snapshot();
+          final expansionState = viewModel.expansionState;
           final items = projectAgentTimelineViewportItems(
             standbyTurn: standbySnapshot,
             visibleHistoryTurns: historyTurns,
@@ -381,8 +380,8 @@ class _AgentConversationTimeline extends StatelessWidget {
               descriptorFactory.describeAll(
                 items,
                 expansion: (
-                  isCommandGroupExpanded: viewModel.isCommandGroupExpanded,
-                  isFileEditItemExpanded: viewModel.isFileEditItemExpanded,
+                  isCommandGroupExpanded: expansionState.isCommandGroupExpanded,
+                  isFileEditItemExpanded: expansionState.isFileEditItemExpanded,
                 ),
                 layoutContext: layoutContext,
               ),
@@ -494,7 +493,10 @@ class _AgentConversationTimeline extends StatelessWidget {
       case AgentLiveActivityViewportItem():
         return KeyedSubtree(
           key: const ValueKey('agent-live-turn-section'),
-          child: _AgentLiveActivityStatus(viewModel: viewModel),
+          child: _AgentLiveActivityStatus(
+            viewModel: viewModel,
+            isActive: isActive,
+          ),
         );
       case AgentTurnFooterViewportItem(:final turn):
         return _AgentTurnFooter(turn: turn);
@@ -578,26 +580,18 @@ class _AgentPendingInteractionSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: Listenable.merge(<Listenable>[
-        viewModel.historyVersionListenable,
-        viewModel.composerVersionListenable,
-        viewModel.pendingInteractionVersionListenable,
-      ]),
-      builder: (context, _) => _buildDock(context),
+    return ValueListenableBuilder<AgentPendingInteractionState>(
+      valueListenable: viewModel.pendingInteractionStateListenable,
+      builder: (context, state, _) => _buildDock(context, state),
     );
   }
 
-  Widget _buildDock(BuildContext context) {
-    final permissionRequests = viewModel.permissionRequests;
-    final questionRequests = viewModel.questionRequests;
-    final planApprovalRequests = viewModel.planApprovalRequests;
-    final planExecutionRequest = viewModel.planExecutionRequest;
-    if (viewModel.isReadOnly ||
-        (permissionRequests.isEmpty &&
-            questionRequests.isEmpty &&
-            planApprovalRequests.isEmpty &&
-            planExecutionRequest == null)) {
+  Widget _buildDock(BuildContext context, AgentPendingInteractionState state) {
+    final permissionRequests = state.permissions;
+    final questionRequests = state.questions;
+    final planApprovalRequests = state.planApprovals;
+    final planExecutionRequest = state.planExecutionHandoff;
+    if (state.isReadOnly || state.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -639,7 +633,10 @@ class _AgentPendingInteractionSection extends StatelessWidget {
                           ? IdeSpacing.space8
                           : 0,
                     ),
-                    child: _buildPermissionCard(permissionRequests[index]),
+                    child: _buildPermissionCard(
+                      permissionRequests[index],
+                      state,
+                    ),
                   ),
                 for (var index = 0; index < questionRequests.length; index++)
                   Padding(
@@ -710,11 +707,14 @@ class _AgentPendingInteractionSection extends StatelessWidget {
     );
   }
 
-  Widget _buildPermissionCard(AgentPermissionRequest request) {
+  Widget _buildPermissionCard(
+    AgentPermissionRequest request,
+    AgentPendingInteractionState state,
+  ) {
     return _AgentPermissionCard(
       request: request,
-      autoReview: viewModel.autoReviewForTurn(request.turnId),
-      onApproveGuardian: viewModel.latestDeniedAutoReview != null
+      autoReview: state.autoReviewForTurn(request.turnId),
+      onApproveGuardian: state.latestDeniedAutoReview != null
           ? viewModel.approveGuardianDeniedAction
           : null,
       onRespond:
@@ -737,6 +737,7 @@ class _AgentPendingInteractionSection extends StatelessWidget {
 class _AgentComposerSection extends StatelessWidget {
   const _AgentComposerSection({
     required this.viewModel,
+    required this.state,
     required this.inputController,
     required this.composerFocusNode,
     required this.canSendListenable,
@@ -750,6 +751,7 @@ class _AgentComposerSection extends StatelessWidget {
   });
 
   final AgentConversationViewModel viewModel;
+  final AgentComposerState state;
   final TextEditingController inputController;
   final FocusNode composerFocusNode;
   final ValueListenable<bool> canSendListenable;
@@ -765,63 +767,53 @@ class _AgentComposerSection extends StatelessWidget {
     return _AgentContentAlign(
       child: Padding(
         padding: pagePadding.copyWith(top: IdeSpacing.space8),
-        child: ListenableBuilder(
-          listenable: viewModel.composerVersionListenable,
-          builder: (context, _) {
-            return ValueListenableBuilder<bool>(
-              valueListenable: canSendListenable,
-              builder: (context, canSend, _) {
-                return _AgentComposer(
-                  controller: inputController,
-                  focusNode: composerFocusNode,
-                  canSubmit: canSend && viewModel.canSubmitMessage,
-                  isTurnRunning: viewModel.isTurnRunning,
-                  threadOpenPhase: viewModel.threadOpenPhase,
-                  currentWindowTokenUsage:
-                      viewModel.currentThreadLastTokenUsage,
-                  draftImagePaths: draftImagePaths,
-                  onAttachImages: onAttachImages,
-                  onRemoveImage: onRemoveImage,
-                  onSend: onSend,
-                  onCancel: viewModel.cancelActiveTurn,
-                  showImageAttachment: viewModel.canAttachImages,
-                  showResourceMention: viewModel.canMentionResources,
-                  conversationModeStatus: _modeSelectorStatus(
-                    viewModel.conversationModeLoadStatus,
-                  ),
-                  conversationModeOptions: viewModel.conversationModeOptions,
-                  selectedConversationMode: viewModel.selectedConversationMode,
-                  conversationModeAppliesToNextTurn:
-                      viewModel.conversationModeAppliesToNextTurn,
-                  conversationModeStatusMessage:
-                      viewModel.conversationModeStatusMessage,
-                  conversationModeContextId:
-                      viewModel.conversationModeContextId,
-                  onSelectConversationMode: viewModel.selectConversationMode,
-                  showModelSelection: viewModel.showModelSelection,
-                  modelConfigState: viewModel.modelConfigUiState,
-                  showPermissionPolicy: viewModel.showPermissionPolicy,
-                  permissionPolicyLabel: viewModel.permissionPolicyLabel,
-                  permissionPresets: AgentPermissionSelection.presets,
-                  selectedPermissionPresetId:
-                      viewModel.permissionSelection.matchedPresetId,
-                  sessionConfigOptions: viewModel.sessionConfigOptions,
-                  onSelectModel: viewModel.selectModel,
-                  onSelectReasoningEffort: viewModel.selectReasoningEffort,
-                  onSelectFastEnabled: viewModel.selectFastEnabled,
-                  onResolveModelCompatibility:
-                      viewModel.resolveModelCompatibilityConflict,
-                  onRetryModelConfiguration:
-                      viewModel.retryModelConfigurationSave,
-                  onCloseModelConfiguration:
-                      viewModel.clearModelConfigurationTransientState,
-                  onSelectPermissionPreset: viewModel.selectPermissionPreset,
-                  onSelectSessionConfigOption:
-                      viewModel.selectSessionConfigOption,
-                  mentionCandidates: viewModel.mentionCandidateFiles,
-                  onInsertMention: onInsertMention,
-                );
-              },
+        child: ValueListenableBuilder<bool>(
+          valueListenable: canSendListenable,
+          builder: (context, canSend, _) {
+            return _AgentComposer(
+              controller: inputController,
+              focusNode: composerFocusNode,
+              canSubmit: canSend && state.canSubmitMessage,
+              isTurnRunning: state.isTurnRunning,
+              threadOpenPhase: state.threadOpenPhase,
+              currentWindowTokenUsage: state.contextUsage,
+              draftImagePaths: draftImagePaths,
+              onAttachImages: onAttachImages,
+              onRemoveImage: onRemoveImage,
+              onSend: onSend,
+              onCancel: viewModel.cancelActiveTurn,
+              showImageAttachment: state.canAttachImages,
+              showResourceMention: state.canMentionResources,
+              conversationModeStatus: _modeSelectorStatus(
+                state.conversationModeStatus,
+              ),
+              conversationModeOptions: state.conversationModeOptions,
+              selectedConversationMode: state.selectedConversationMode,
+              conversationModeAppliesToNextTurn:
+                  state.conversationModeAppliesToNextTurn,
+              conversationModeStatusMessage:
+                  state.conversationModeStatusMessage,
+              conversationModeContextId: state.conversationModeContextId,
+              onSelectConversationMode: viewModel.selectConversationMode,
+              showModelSelection: state.showModelSelection,
+              modelConfigState: state.modelConfigState,
+              showPermissionPolicy: state.showPermissionPolicy,
+              permissionPolicyLabel: state.permissionPolicyLabel,
+              permissionPresets: AgentPermissionSelection.presets,
+              selectedPermissionPresetId: state.selectedPermissionPresetId,
+              sessionConfigOptions: state.sessionConfigOptions,
+              onSelectModel: viewModel.selectModel,
+              onSelectReasoningEffort: viewModel.selectReasoningEffort,
+              onSelectFastEnabled: viewModel.selectFastEnabled,
+              onResolveModelCompatibility:
+                  viewModel.resolveModelCompatibilityConflict,
+              onRetryModelConfiguration: viewModel.retryModelConfigurationSave,
+              onCloseModelConfiguration:
+                  viewModel.clearModelConfigurationTransientState,
+              onSelectPermissionPreset: viewModel.selectPermissionPreset,
+              onSelectSessionConfigOption: viewModel.selectSessionConfigOption,
+              mentionCandidates: viewModel.mentionCandidateFiles,
+              onInsertMention: onInsertMention,
             );
           },
         ),

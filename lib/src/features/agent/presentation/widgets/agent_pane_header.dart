@@ -2,21 +2,40 @@ part of '../agent_pane.dart';
 
 /// thread 详情头部：左侧标题 + 运行图标，右侧 token、分叉与更多菜单。
 class _AgentHeader extends StatelessWidget {
-  const _AgentHeader({required this.viewModel});
+  const _AgentHeader({
+    required this.viewModel,
+    required this.state,
+    required this.isActive,
+  });
 
   final AgentConversationViewModel viewModel;
+  final AgentHeaderState state;
+  final bool isActive;
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     // 与上下文面板「总 Token」同源：会话累计用量，而非最近一次上下文窗口占用。
-    final tokenUsage = viewModel.currentThreadTokenUsage;
+    final tokenUsage = state.tokenUsage;
     final tokenLabel = _threadTotalTokenUsageLabel(tokenUsage);
     final tokenTooltip = _tokenUsageTooltip(tokenUsage);
-    final threadOpenStatusText = _threadOpenStatusText(viewModel);
-    final offerCompact = viewModel.shouldOfferContextCompact;
-    final canFork = viewModel.canForkCurrentThread;
+    final threadOpenStatusText = _threadOpenStatusText(state);
+    final offerCompact = state.shouldOfferContextCompact;
+    final canFork = state.canFork;
+    Widget runningStatus(DateTime now) {
+      return Text(
+        _headerRunningStatusText(state, now),
+        key: const ValueKey('agent-header-running-status'),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: textStyles.caption.copyWith(
+          color: colors.mutedText.withValues(alpha: 0.86),
+          fontWeight: FontWeight.w500,
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
@@ -33,7 +52,7 @@ class _AgentHeader extends StatelessWidget {
                     children: [
                       Flexible(
                         child: Text(
-                          viewModel.currentThreadTitle,
+                          state.title,
                           key: const ValueKey('agent-header-title'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -43,21 +62,20 @@ class _AgentHeader extends StatelessWidget {
                           ),
                         ),
                       ),
-                      if (viewModel.threadStatusCapsuleLabel
-                          case final label?) ...[
+                      if (state.statusCapsuleLabel case final label?) ...[
                         const SizedBox(width: IdeSpacing.space6),
                         IdeTab(
                           key: const ValueKey('agent-header-status-capsule'),
                           label: label,
-                          leadingIcon: viewModel.threadWaitingOnApproval
+                          leadingIcon: state.waitingOnApproval
                               ? Icons.verified_user_outlined
-                              : viewModel.threadWaitingOnUserInput
+                              : state.waitingOnUserInput
                               ? Icons.edit_note_rounded
                               : Icons.error_outline_rounded,
                           trailingIcon: null,
                           semanticLabel: label,
                         ),
-                      ] else if (viewModel.showRunningIndicator) ...[
+                      ] else if (state.showRunningIndicator) ...[
                         const SizedBox(width: 6),
                         const IdeBusySpinner(
                           key: ValueKey('agent-header-running-icon'),
@@ -67,28 +85,13 @@ class _AgentHeader extends StatelessWidget {
                         ),
                         const SizedBox(width: IdeSpacing.space6),
                         Flexible(
-                          child: ListenableBuilder(
-                            listenable: viewModel.elapsedClockListenable,
-                            builder: (context, _) {
-                              return Text(
-                                _headerRunningStatusText(
-                                  viewModel,
-                                  viewModel.elapsedNow,
-                                ),
-                                key: const ValueKey(
-                                  'agent-header-running-status',
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: textStyles.caption.copyWith(
-                                  color: colors.mutedText.withValues(
-                                    alpha: 0.86,
-                                  ),
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              );
-                            },
-                          ),
+                          child: isActive
+                              ? ListenableBuilder(
+                                  listenable: viewModel.elapsedClockListenable,
+                                  builder: (context, _) =>
+                                      runningStatus(viewModel.elapsedNow),
+                                )
+                              : runningStatus(DateTime.now()),
                         ),
                       ],
                     ],
@@ -98,9 +101,8 @@ class _AgentHeader extends StatelessWidget {
                     Text(
                       threadOpenStatusText,
                       key: ValueKey(
-                        viewModel.threadOpenPhase ==
-                                    AgentThreadOpenPhase.idle &&
-                                viewModel.systemNoticeLabel != null
+                        state.threadOpenPhase == AgentThreadOpenPhase.idle &&
+                                state.systemNoticeLabel != null
                             ? 'agent-system-notice'
                             : 'agent-thread-open-status',
                       ),
@@ -108,7 +110,7 @@ class _AgentHeader extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: textStyles.bodySmall.copyWith(
                         color:
-                            viewModel.threadOpenPhase ==
+                            state.threadOpenPhase ==
                                 AgentThreadOpenPhase.openFailed
                             ? colors.warning
                             : colors.mutedText.withValues(alpha: 0.82),
@@ -165,12 +167,12 @@ class _AgentHeader extends StatelessWidget {
               ),
             ],
             const SizedBox(width: IdeSpacing.space4),
-            _AgentHeaderMoreButton(viewModel: viewModel),
+            _AgentHeaderMoreButton(viewModel: viewModel, state: state),
           ],
         ),
-        if (offerCompact || viewModel.isCompacting) ...[
+        if (offerCompact || state.isCompacting) ...[
           const SizedBox(height: IdeSpacing.space8),
-          _AgentCompactBanner(viewModel: viewModel),
+          _AgentCompactBanner(viewModel: viewModel, state: state),
         ],
       ],
     );
@@ -179,9 +181,10 @@ class _AgentHeader extends StatelessWidget {
 
 /// 标题栏右侧「更多」菜单：重命名 / 归档 / 上下文。
 class _AgentHeaderMoreButton extends StatefulWidget {
-  const _AgentHeaderMoreButton({required this.viewModel});
+  const _AgentHeaderMoreButton({required this.viewModel, required this.state});
 
   final AgentConversationViewModel viewModel;
+  final AgentHeaderState state;
 
   @override
   State<_AgentHeaderMoreButton> createState() => _AgentHeaderMoreButtonState();
@@ -213,8 +216,8 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
     setState(() {
       _menuOpen = true;
     });
-    final canRename = widget.viewModel.canRenameCurrentThread;
-    final canArchive = widget.viewModel.canArchiveCurrentThread;
+    final canRename = widget.state.canRename;
+    final canArchive = widget.state.canArchive;
     final entry = showIdePopover<void>(
       context: context,
       alignment: Alignment.topRight,
@@ -284,9 +287,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
   }
 
   Future<void> _showRenameDialog() async {
-    final controller = TextEditingController(
-      text: widget.viewModel.currentThreadTitle,
-    );
+    final controller = TextEditingController(text: widget.state.title);
     final name = await showIdeDialog<String>(
       context: context,
       builder: (dialogContext) {
@@ -345,15 +346,16 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
 
 /// 上下文接近上限时的压缩提示条。
 class _AgentCompactBanner extends StatelessWidget {
-  const _AgentCompactBanner({required this.viewModel});
+  const _AgentCompactBanner({required this.viewModel, required this.state});
 
   final AgentConversationViewModel viewModel;
+  final AgentHeaderState state;
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final compacting = viewModel.isCompacting;
+    final compacting = state.isCompacting;
     return DecoratedBox(
       key: const ValueKey('agent-compact-banner'),
       decoration: BoxDecoration(
@@ -382,7 +384,7 @@ class _AgentCompactBanner extends StatelessWidget {
             sf.OutlineButton(
               key: const ValueKey('agent-compact-button'),
               size: sf.ButtonSize.small,
-              onPressed: compacting || viewModel.isTurnRunning
+              onPressed: compacting || state.isTurnRunning
                   ? null
                   : () {
                       unawaited(viewModel.compactCurrentThread());

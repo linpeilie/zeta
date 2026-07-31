@@ -1113,77 +1113,72 @@ void main() {
         expect(tester.takeException(), isNull);
       });
 
-      testWidgets(
-        'expands history plan card through view model state without bumping history version',
-        (tester) async {
-          final viewModel = _createViewModel(
-            _FakeAgentProvider(
-              historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
-                'thread-plan': AgentThreadHistorySnapshot(
-                  threadId: 'thread-plan',
-                  turns: <AgentHistoryTurn>[
-                    AgentHistoryTurn(
-                      id: 'turn-plan-1',
-                      entries: <AgentHistoryEntry>[
-                        const AgentHistoryMessageEntry(
-                          id: 'history-user-plan-1',
-                          role: AgentMessageRole.user,
-                          text: 'Show the plan',
-                        ),
-                        AgentHistoryMessageEntry(
-                          id: 'history-plan-1',
-                          role: AgentMessageRole.agent,
-                          text: '- [x] Inspect timeline\n- [ ] Split cards',
-                          kind: AgentMessageKind.plan,
-                          raw: const <String, Object?>{'type': 'plan'},
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              },
-            ),
-          );
-          addTearDown(viewModel.dispose);
+      testWidgets('expands history plan card without replacing history state', (
+        tester,
+      ) async {
+        final viewModel = _createViewModel(
+          _FakeAgentProvider(
+            historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+              'thread-plan': AgentThreadHistorySnapshot(
+                threadId: 'thread-plan',
+                turns: <AgentHistoryTurn>[
+                  AgentHistoryTurn(
+                    id: 'turn-plan-1',
+                    entries: <AgentHistoryEntry>[
+                      const AgentHistoryMessageEntry(
+                        id: 'history-user-plan-1',
+                        role: AgentMessageRole.user,
+                        text: 'Show the plan',
+                      ),
+                      AgentHistoryMessageEntry(
+                        id: 'history-plan-1',
+                        role: AgentMessageRole.agent,
+                        text: '- [x] Inspect timeline\n- [ ] Split cards',
+                        kind: AgentMessageKind.plan,
+                        raw: const <String, Object?>{'type': 'plan'},
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            },
+          ),
+        );
+        addTearDown(viewModel.dispose);
 
-          await tester.pumpWidget(_TestApp(viewModel: viewModel));
-          await viewModel.switchThread(
-            _thread(id: 'thread-plan', title: 'Plan card'),
-          );
-          await _pumpAgentPaneUi(tester);
+        await tester.pumpWidget(_TestApp(viewModel: viewModel));
+        await viewModel.switchThread(
+          _thread(id: 'thread-plan', title: 'Plan card'),
+        );
+        await _pumpAgentPaneUi(tester);
 
-          expect(viewModel.isPlanMessageExpanded('history-plan-1'), isFalse);
-          expect(
-            find.byKey(
-              const ValueKey<String>('agent-plan-preview-history-plan-1'),
-            ),
-            findsOneWidget,
-          );
-          expect(
-            find.byKey(
-              const ValueKey<String>('agent-plan-body-history-plan-1'),
-            ),
-            findsNothing,
-          );
+        expect(viewModel.isPlanMessageExpanded('history-plan-1'), isFalse);
+        expect(
+          find.byKey(
+            const ValueKey<String>('agent-plan-preview-history-plan-1'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey<String>('agent-plan-body-history-plan-1')),
+          findsNothing,
+        );
 
-          final historyVersion = viewModel.historyVersion;
-          await tester.tap(
-            find.byKey(
-              const ValueKey<String>('agent-plan-toggle-history-plan-1'),
-            ),
-          );
-          await _pumpAgentPaneUi(tester);
+        final historyState = viewModel.historyState;
+        await tester.tap(
+          find.byKey(
+            const ValueKey<String>('agent-plan-toggle-history-plan-1'),
+          ),
+        );
+        await _pumpAgentPaneUi(tester);
 
-          expect(viewModel.historyVersion, historyVersion);
-          expect(viewModel.isPlanMessageExpanded('history-plan-1'), isTrue);
-          expect(
-            find.byKey(
-              const ValueKey<String>('agent-plan-body-history-plan-1'),
-            ),
-            findsOneWidget,
-          );
-        },
-      );
+        expect(viewModel.historyState, historyState);
+        expect(viewModel.isPlanMessageExpanded('history-plan-1'), isTrue);
+        expect(
+          find.byKey(const ValueKey<String>('agent-plan-body-history-plan-1')),
+          findsOneWidget,
+        );
+      });
 
       testWidgets(
         'renders live agent markdown through a streaming controller and commits the final update',
@@ -1344,7 +1339,7 @@ void main() {
           );
           await _pumpAgentPaneUi(tester);
 
-          final historyVersion = viewModel.historyVersion;
+          final historyState = viewModel.historyState;
           await tester.tap(
             find.byKey(
               ValueKey<String>(
@@ -1354,7 +1349,7 @@ void main() {
           );
           await _pumpAgentPaneUi(tester);
 
-          expect(viewModel.historyVersion, historyVersion);
+          expect(viewModel.historyState, historyState);
 
           await tester.tap(
             find.byKey(
@@ -1365,7 +1360,7 @@ void main() {
           );
           await _pumpAgentPaneUi(tester);
 
-          expect(viewModel.historyVersion, historyVersion);
+          expect(viewModel.historyState, historyState);
           expect(
             viewModel.isFileEditItemExpanded(
               _fileEditItemId('history-edit-large', 'lib/main.dart'),
@@ -1456,7 +1451,7 @@ void main() {
           expandAllButton.onPressed?.call();
           await _pumpAgentPaneUi(tester);
 
-          expect(viewModel.historyVersion, historyVersion);
+          expect(viewModel.historyState, historyState);
           expect(
             find.textContaining('+line 30', findRichText: true),
             findsOneWidget,

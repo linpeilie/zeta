@@ -18,7 +18,6 @@ import 'package:zeta/src/features/agent/application/agent_conversation_thread_sn
 import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_permission_selection_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_ui_signals.dart';
 import 'package:zeta/src/features/agent/application/agent_elapsed_ticker.dart';
 import 'package:zeta/src/features/agent/application/bounded_event_dispatcher.dart';
 import 'package:zeta/src/features/agent/application/coalescing_event_buffer.dart';
@@ -28,6 +27,7 @@ import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/presentation/agent_conversation_ui_state.dart';
 import 'package:zeta/src/features/agent/presentation/agent_ui_update_scheduler.dart';
 import 'package:zeta/src/features/agent/presentation/model_config_ui_state.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
@@ -78,8 +78,13 @@ class AgentConversationViewModel extends ChangeNotifier {
     _eventReducerContexts = AgentConversationReducerContexts(
       liveTimelineIds: _localTimelineIds,
     );
-    _uiSignals = AgentConversationUiSignals(
+    _uiStateStore = AgentConversationUiStateStore(
       timeline: _timeline,
+      buildHeaderState: _buildHeaderState,
+      buildComposerState: _buildComposerState,
+      buildPendingInteractionState: _buildPendingInteractionState,
+      buildExpansionState: _buildExpansionState,
+      buildHistoryState: _buildHistoryState,
       onLegacyNotify: _notifyLegacyListeners,
       isDisposed: () => _disposed,
     );
@@ -142,7 +147,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       AgentPlanExecutionHandoffController();
   final AgentConversationLocalTimelineIdGenerator _localTimelineIds =
       AgentConversationLocalTimelineIdGenerator();
-  late final AgentConversationUiSignals _uiSignals;
+  late final AgentConversationUiStateStore _uiStateStore;
   late final AgentUiUpdateScheduler _uiUpdateScheduler;
   late final AgentUiUpdatePort _uiUpdates;
   late final AgentConversationReducerContexts _eventReducerContexts;
@@ -291,19 +296,6 @@ class AgentConversationViewModel extends ChangeNotifier {
   /// 头栏次要提示：模型改道等非阻塞系统通知。
   String? get systemNoticeLabel => _modelRerouteNotice;
 
-  int get autoScrollTick => _uiSignals.autoScrollTick;
-
-  int get historyVersion => _uiSignals.historyVersion;
-
-  int get headerVersion => _uiSignals.headerVersion;
-
-  int get composerVersion => _uiSignals.composerVersion;
-
-  /// 待处理权限、提问、计划审批或本地执行交接的变更版本。
-  int get pendingInteractionVersion => _uiSignals.pendingInteractionVersion;
-
-  int get expansionVersion => _uiSignals.expansionVersion;
-
   /// 当前事件缓冲诊断；仅包含计数和 pending key 深度。
   @visibleForTesting
   CoalescingEventBufferDiagnostics? get eventStreamBufferDiagnostics =>
@@ -321,10 +313,10 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   /// 当前 UI 信号诊断；仅包含调度、合并和发布次数。
   @visibleForTesting
-  AgentConversationUiSignalsDiagnostics get uiSignalsDiagnostics {
+  AgentConversationUiStateDiagnostics get uiSignalsDiagnostics {
     final scheduling = _uiUpdateScheduler.diagnostics;
-    final publishing = _uiSignals.diagnostics;
-    return AgentConversationUiSignalsDiagnostics(
+    final publishing = _uiStateStore.diagnostics;
+    return AgentConversationUiStateDiagnostics(
       scheduledStreamFlushCount: scheduling.nextFrameRequestCount,
       immediateFlushCount: scheduling.immediateRequestCount,
       mergedRequestCount: scheduling.mergedRequestCount,
@@ -343,24 +335,34 @@ class AgentConversationViewModel extends ChangeNotifier {
   AgentUiUpdateRequest? get debugLastUiUpdateRequest =>
       _debugLastUiUpdateRequest;
 
-  ValueListenable<int> get historyVersionListenable =>
-      _uiSignals.historyVersionListenable;
+  AgentConversationHistoryState get historyState => _uiStateStore.history.value;
 
-  ValueListenable<int> get headerVersionListenable =>
-      _uiSignals.headerVersionListenable;
+  ValueListenable<AgentConversationHistoryState> get historyStateListenable =>
+      _uiStateStore.history;
 
-  ValueListenable<int> get composerVersionListenable =>
-      _uiSignals.composerVersionListenable;
+  AgentHeaderState get headerState => _uiStateStore.header.value;
 
-  /// 供固定交互区监听 pending 列表，避免依赖消息流刷新。
-  ValueListenable<int> get pendingInteractionVersionListenable =>
-      _uiSignals.pendingInteractionVersionListenable;
+  ValueListenable<AgentHeaderState> get headerStateListenable =>
+      _uiStateStore.header;
 
-  ValueListenable<int> get expansionVersionListenable =>
-      _uiSignals.expansionVersionListenable;
+  AgentComposerState get composerState => _uiStateStore.composer.value;
 
-  ValueListenable<int> get autoScrollTickListenable =>
-      _uiSignals.autoScrollTickListenable;
+  ValueListenable<AgentComposerState> get composerStateListenable =>
+      _uiStateStore.composer;
+
+  AgentPendingInteractionState get pendingInteractionState =>
+      _uiStateStore.pendingInteractions.value;
+
+  ValueListenable<AgentPendingInteractionState>
+  get pendingInteractionStateListenable => _uiStateStore.pendingInteractions;
+
+  AgentExpansionState get expansionState => _uiStateStore.expansion.value;
+
+  ValueListenable<AgentExpansionState> get expansionStateListenable =>
+      _uiStateStore.expansion;
+
+  /// 当前挂载 AgentPane 消费的一次性 UI effect；不保存或 replay。
+  Stream<AgentUiEffect> get uiEffects => _uiStateStore.effects;
 
   ValueListenable<AgentConversationTurnState?> get liveTurnListenable =>
       _timeline.liveTurnListenable;
@@ -2461,7 +2463,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     _elapsedTicker.dispose();
     _effectRunner.dispose();
     _uiUpdateScheduler.dispose();
-    _uiSignals.dispose();
+    _uiStateStore.dispose();
     _threadSnapshotListenable.dispose();
     contextPanelVisible.dispose();
     _timeline.dispose();
@@ -3196,6 +3198,92 @@ class AgentConversationViewModel extends ChangeNotifier {
     _uiUpdates.publish(request);
   }
 
+  AgentHeaderState _buildHeaderState() {
+    final activity = currentActivity;
+    return AgentHeaderState(
+      title: _currentThreadTitle,
+      threadOpenPhase: _threadOpenPhase,
+      systemNoticeLabel: _modelRerouteNotice,
+      statusCapsuleLabel: threadStatusCapsuleLabel,
+      waitingOnApproval: _threadWaitingOnApproval,
+      waitingOnUserInput: _threadWaitingOnUserInput,
+      showRunningIndicator: showRunningIndicator,
+      runningActivityLabel: agentActivitySegmentLabel(activity),
+      segmentStartedAt: activity.segmentStartedAt,
+      turnStartedAt: _timeline.currentTurnStartedAt,
+      tokenUsage: _timeline.currentThreadTokenUsage,
+      shouldOfferContextCompact: shouldOfferContextCompact,
+      isCompacting: _isCompacting,
+      isTurnRunning: isTurnRunning,
+      isReadOnly: isReadOnly,
+      canFork: canForkCurrentThread,
+      canRename: canRenameCurrentThread,
+      canArchive: canArchiveCurrentThread,
+    );
+  }
+
+  AgentComposerState _buildComposerState() {
+    final modeState = _conversationModeController.state;
+    return AgentComposerState(
+      canSubmitMessage: canSubmitMessage,
+      isTurnRunning: isTurnRunning,
+      threadOpenPhase: _threadOpenPhase,
+      contextUsage: currentThreadLastTokenUsage,
+      isReadOnly: isReadOnly,
+      unavailableProviderReason: unavailableProviderReason,
+      canAttachImages: canAttachImages,
+      canMentionResources: canMentionResources,
+      conversationModeStatus: modeState.status,
+      conversationModeOptions: modeState.presets,
+      selectedConversationMode: modeState.draftMode,
+      conversationModeAppliesToNextTurn: modeState.appliesToNextTurn,
+      conversationModeStatusMessage: conversationModeStatusMessage,
+      conversationModeContextId: conversationModeContextId,
+      showModelSelection: showModelSelection,
+      modelConfigState: modelConfigUiState,
+      showPermissionPolicy: showPermissionPolicy,
+      permissionPolicyLabel: permissionPolicyLabel,
+      selectedPermissionPresetId: permissionSelection.matchedPresetId,
+      sessionConfigOptions: sessionConfigOptions,
+    );
+  }
+
+  AgentPendingInteractionState _buildPendingInteractionState() {
+    return AgentPendingInteractionState(
+      permissions: _timeline.permissionRequests,
+      questions: _timeline.questionRequests,
+      planApprovals: _timeline.planApprovalRequests,
+      planExecutionHandoff: _planExecutionHandoffController.pendingRequest,
+      isReadOnly: isReadOnly,
+      autoReviewsByTurnId: _autoReviewsByTurnId,
+      latestDeniedAutoReview: _latestDeniedAutoReview,
+    );
+  }
+
+  AgentExpansionState _buildExpansionState() {
+    return AgentExpansionState(
+      toolCallIds: _timeline.expandedToolCallIds,
+      planMessageIds: _timeline.expandedPlanMessageIds,
+      activePlanTurnIds: _timeline.expandedActivePlanTurnIds,
+      commandGroupIds: _timeline.expandedCommandGroupIds,
+      fileEditItemIds: _timeline.expandedFileEditItemIds,
+    );
+  }
+
+  AgentConversationHistoryState _buildHistoryState() {
+    final standby = _timeline.standbyTurnState;
+    return AgentConversationHistoryState(
+      standbyTurn: standby != null && standby.entries.isNotEmpty
+          ? standby.snapshot()
+          : null,
+      visibleTurns: _timeline.visibleHistoryTurns,
+      threadOpenPhase: _threadOpenPhase,
+      providerId: threadProviderId,
+      providerKind: activeProviderKind,
+      providerName: activeProviderName,
+    );
+  }
+
   AgentConversationThreadSnapshot _buildThreadSnapshot() {
     return AgentConversationThreadSnapshot(
       sessionId: sessionId,
@@ -3227,7 +3315,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       _threadSnapshotRefreshPending = false;
       _syncThreadSnapshotListenable();
     }
-    _uiSignals.publish(request);
+    _uiStateStore.publish(request);
   }
 
   /// 将当前 isTurnRunning / runtimeStatus 等推到 [threadSnapshotListenable]。

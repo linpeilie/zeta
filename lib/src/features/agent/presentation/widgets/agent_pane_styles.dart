@@ -324,17 +324,14 @@ String? _formatDuration(Duration? duration, {bool includeSubSecond = false}) =>
 /// 标题栏 / 对话流执行中文案：主 segment 时长 + turn 总时长。
 ///
 /// 例：`思考中 · 24s · 共 1m 12s`、`启动中 · 共 3s`。
-String _headerRunningStatusText(
-  AgentConversationViewModel viewModel,
-  DateTime now,
-) {
-  final segmentLabel = viewModel.runningActivityLabel;
+String _headerRunningStatusText(AgentHeaderState state, DateTime now) {
+  final segmentLabel = state.runningActivityLabel;
   final segmentElapsed = _formatDuration(
-    viewModel.segmentElapsedAt(now),
+    resolveAgentElapsed(now: now, startedAt: state.segmentStartedAt),
     includeSubSecond: true,
   );
   final turnElapsed = _formatDuration(
-    viewModel.turnElapsedAt(now),
+    resolveAgentElapsed(now: now, startedAt: state.turnStartedAt),
     includeSubSecond: true,
   );
   final parts = <String>[];
@@ -366,13 +363,13 @@ String? _toolElapsedLabel(
   return _formatDuration(elapsed, includeSubSecond: live);
 }
 
-String? _threadOpenStatusText(AgentConversationViewModel viewModel) {
-  return switch (viewModel.threadOpenPhase) {
+String? _threadOpenStatusText(AgentHeaderState state) {
+  return switch (state.threadOpenPhase) {
     AgentThreadOpenPhase.loadingHistory => 'Loading thread history...',
     AgentThreadOpenPhase.openFailed =>
       'Thread open failed. Click this thread again to retry.',
     // 打开成功时，头栏可展示模型改道等非阻塞系统提示。
-    AgentThreadOpenPhase.idle => viewModel.systemNoticeLabel,
+    AgentThreadOpenPhase.idle => state.systemNoticeLabel,
   };
 }
 

@@ -221,6 +221,26 @@ class AgentConversationTimelineStore {
     return _expandedFileEditItemIds.contains(fileEditItemId);
   }
 
+  /// 当前工具卡展开 id 的不可修改视图。
+  Set<String> get expandedToolCallIds =>
+      Set<String>.unmodifiable(_expandedToolCallIds);
+
+  /// 当前计划消息展开 id 的不可修改视图。
+  Set<String> get expandedPlanMessageIds =>
+      Set<String>.unmodifiable(_expandedPlanMessageIds);
+
+  /// 当前活动计划展开 turn id 的不可修改视图。
+  Set<String> get expandedActivePlanTurnIds =>
+      Set<String>.unmodifiable(_expandedActivePlanTurnIds);
+
+  /// 当前命令分组展开 id 的不可修改视图。
+  Set<String> get expandedCommandGroupIds =>
+      Set<String>.unmodifiable(_expandedCommandGroupIds);
+
+  /// 当前文件编辑项展开 id 的不可修改视图。
+  Set<String> get expandedFileEditItemIds =>
+      Set<String>.unmodifiable(_expandedFileEditItemIds);
+
   AgentTokenUsage? _latestAvailableTurnTokenUsage() {
     for (final turnId in _liveTurnOrder.reversed) {
       final usage = _turnGroups[turnId]?.tokenUsage;
