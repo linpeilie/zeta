@@ -508,14 +508,16 @@ class _UsageOverviewBar extends StatelessWidget {
             ],
           );
         }
-        return Row(
-          key: const ValueKey('usage-overview-layout-equal'),
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: tokenCard),
-            const SizedBox(width: IdeSpacing.space8),
-            Expanded(child: callsCard),
-          ],
+        return IntrinsicHeight(
+          child: Row(
+            key: const ValueKey('usage-overview-layout-equal'),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: tokenCard),
+              const SizedBox(width: IdeSpacing.space8),
+              Expanded(child: callsCard),
+            ],
+          ),
         );
       },
     );
@@ -545,6 +547,11 @@ class _OverviewMetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
+    // 与 Token 卡片一致：始终预留最多 2 行 meta 高度，避免无 detail 时变矮。
+    final detailStyle = textStyles.meta.copyWith(color: colors.textSecondary);
+    final detailLineHeight =
+        (detailStyle.fontSize ?? 10) * (detailStyle.height ?? 1.2);
+    final detailSlotHeight = detailLineHeight * 2;
 
     return Semantics(
       label: semanticLabel,
@@ -584,17 +591,19 @@ class _OverviewMetricCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: textStyles.metricValue.copyWith(color: accent),
                   ),
-                  if (detail case final String detailText) ...[
-                    const SizedBox(height: IdeSpacing.space6),
-                    Text(
-                      detailText,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: textStyles.meta.copyWith(
-                        color: colors.textSecondary,
-                      ),
-                    ),
-                  ],
+                  const SizedBox(height: IdeSpacing.space6),
+                  SizedBox(
+                    height: detailSlotHeight,
+                    width: double.infinity,
+                    child: detail == null
+                        ? null
+                        : Text(
+                            detail!,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: detailStyle,
+                          ),
+                  ),
                 ],
               ),
             ),
