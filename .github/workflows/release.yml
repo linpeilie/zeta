@@ -1,0 +1,252 @@
+name: Release Desktop Packages
+run-name: Release ${{ github.ref_name }}
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: 3.44.4
+
+jobs:
+  quality:
+    name: Validate, analyze, and test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Validate release tag
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          build_name="$(
+            dart run tool/packaging/pubspec_version.dart name pubspec.yaml
+          )"
+          stable_tag="v${build_name}"
+          tag="${GITHUB_REF_NAME}"
+          prerelease=false
+
+          if [[ "${tag}" == "${stable_tag}" ]]; then
+            :
+          elif [[ "${tag}" == "${stable_tag}-"* ]]; then
+            prerelease_part="${tag#"${stable_tag}-"}"
+            if [[ ! "${prerelease_part}" =~ ^[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*$ ]]; then
+              echo "Invalid SemVer prerelease suffix: ${prerelease_part}" >&2
+              exit 1
+            fi
+
+            IFS='.' read -r -a identifiers <<<"${prerelease_part}"
+            for identifier in "${identifiers[@]}"; do
+              if [[ "${identifier}" =~ ^[0-9]+$ &&
+                ${#identifier} -gt 1 &&
+                "${identifier}" == 0* ]]; then
+                echo "Numeric prerelease identifiers cannot contain leading zeroes: ${identifier}" >&2
+                exit 1
+              fi
+            done
+            prerelease=true
+          else
+            echo "Tag ${tag} does not match pubspec version ${build_name}." >&2
+            exit 1
+          fi
+
+          echo "Validated ${tag} against pubspec version ${build_name}."
+          echo "prerelease=${prerelease}" >>"${GITHUB_OUTPUT}"
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+  windows:
+    name: Build Windows x64
+    runs-on: windows-2025
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Install Inno Setup
+        run: choco install innosetup --version=6.7.1 --yes --no-progress
+
+      - name: Package Windows release
+        shell: pwsh
+        run: ./tool/packaging/package_windows.ps1
+
+      - name: Upload Windows packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: zeta-windows-x64
+          path: dist/zeta-*-windows-x64*
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+  macos:
+    name: Build macOS universal
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Build macOS release
+        run: flutter build macos --release
+
+      - name: Package macOS release
+        run: bash ./tool/packaging/package_macos.sh
+
+      - name: Upload macOS packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: zeta-macos-universal
+          path: dist/zeta-*-macos-universal*
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+  linux:
+    name: Build Linux x64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Install Linux build dependencies
+        run: >-
+          sudo apt-get update &&
+          sudo apt-get install --yes
+          clang
+          cmake
+          ninja-build
+          pkg-config
+          libgtk-3-dev
+          liblzma-dev
+          libfontconfig1-dev
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Build Linux release
+        run: flutter build linux --release
+
+      - name: Package Linux release
+        run: bash ./tool/packaging/package_linux.sh
+
+      - name: Upload Linux packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: zeta-linux-x64
+          path: |
+            dist/zeta-*-linux-x64*
+            dist/zeta_*_amd64.deb*
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+  release:
+    name: Publish GitHub Release
+    needs:
+      - quality
+      - windows
+      - macos
+      - linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Download release packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: zeta-*
+          path: dist
+          merge-multiple: true
+
+      - name: Verify release packages
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          asset_count="$(find dist -maxdepth 1 -type f | wc -l)"
+          checksum_count="$(
+            find dist -maxdepth 1 -type f -name '*.sha256' | wc -l
+          )"
+          if [[ "${asset_count}" -ne 12 || "${checksum_count}" -ne 6 ]]; then
+            echo "Expected 12 assets including 6 checksums, found ${asset_count} assets and ${checksum_count} checksums." >&2
+            find dist -maxdepth 1 -type f -print | sort >&2
+            exit 1
+          fi
+
+          (
+            cd dist
+            sha256sum --check ./*.sha256
+          )
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@fe965f7af51af5f2602596916f38a38df2e33de0 # v3.0.2
+        with:
+          name: Zeta ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          files: dist/*
+          draft: false
+          prerelease: ${{ needs.quality.outputs.prerelease }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          overwrite_files: true
