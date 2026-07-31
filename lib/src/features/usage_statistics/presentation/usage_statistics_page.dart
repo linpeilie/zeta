@@ -1104,6 +1104,17 @@ class _UsageLineChart extends StatelessWidget {
     );
     final maximum = safeUsageChartMaximum(points);
     final yInterval = maximum / 3;
+    // 折线与圆点有实际宽度，数据点不能贴在裁剪边界上，否则首尾、零值和最大值
+    // 只能绘制一部分。单点数据居中，多点数据按横轴跨度保留稳定比例的安全区。
+    final lastPointX = points.isEmpty ? 0.0 : (points.length - 1).toDouble();
+    final horizontalPadding = switch (points.length) {
+      0 => 0.0,
+      1 => 0.5,
+      _ => math.max(0.05, lastPointX * 0.02),
+    };
+    final chartMinX = points.isEmpty ? 0.0 : -horizontalPadding;
+    final chartMaxX = points.isEmpty ? 1.0 : lastPointX + horizontalPadding;
+    final verticalPadding = maximum * 0.06;
     // 缺失日期统一按 0 绘制，保证时间轴连续、无断点。
     final spots = <FlSpot>[
       for (var index = 0; index < points.length; index += 1)
@@ -1115,7 +1126,6 @@ class _UsageLineChart extends StatelessWidget {
       if (points.length > 2) points.length ~/ 2,
       if (points.length > 1) points.length - 1,
     };
-    final maxX = points.length <= 1 ? 1.0 : (points.length - 1).toDouble();
     final titleStyle = textStyles.caption.copyWith(color: colors.textTertiary);
 
     return Semantics(
@@ -1126,10 +1136,10 @@ class _UsageLineChart extends StatelessWidget {
           child: LineChart(
             key: const ValueKey('usage-line-chart-canvas'),
             LineChartData(
-              minX: 0,
-              maxX: maxX,
-              minY: 0,
-              maxY: maximum,
+              minX: chartMinX,
+              maxX: chartMaxX,
+              minY: -verticalPadding,
+              maxY: maximum + verticalPadding,
               clipData: const FlClipData.all(),
               gridData: FlGridData(
                 show: true,
@@ -1186,6 +1196,7 @@ class _UsageLineChart extends StatelessWidget {
                       return SideTitleWidget(
                         meta: meta,
                         space: 4,
+                        fitInside: SideTitleFitInsideData.fromTitleMeta(meta),
                         child: Text(points[index].label, style: titleStyle),
                       );
                     },
@@ -1260,7 +1271,12 @@ class _UsageLineChart extends StatelessWidget {
                         );
                       },
                     ),
-                    belowBarData: BarAreaData(show: true, color: fillColor),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      color: fillColor,
+                      cutOffY: 0,
+                      applyCutOffY: true,
+                    ),
                   ),
               ],
             ),

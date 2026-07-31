@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
@@ -138,6 +141,74 @@ void main() {
           .height,
       IdeMetrics.toolbarHeight,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('keeps trend endpoints and labels inside chart bounds', (
+    tester,
+  ) async {
+    final now = DateTime(2026, 7, 10, 12);
+    final controller = UsageStatisticsController(
+      repository: _UsageRepository(_source(now)),
+      clock: () => now,
+    );
+    addTearDown(controller.dispose);
+    await tester.runAsync(controller.initialize);
+
+    await _pumpUsagePage(
+      tester,
+      controller: controller,
+      size: const Size(520, 820),
+    );
+    // SideTitleWidget 首帧后测量标签宽度，再回收首尾标签的位置。
+    await tester.pump();
+
+    final chartScope = find.byKey(
+      const ValueKey('usage-main-chart-totalTokens'),
+    );
+    final chartFinder = find.descendant(
+      of: chartScope,
+      matching: find.byType(LineChart),
+    );
+    final chart = tester.widget<LineChart>(chartFinder);
+    final data = chart.data;
+    final bar = data.lineBarsData.single;
+
+    expect(data.minX, lessThan(bar.spots.first.x));
+    expect(data.maxX, greaterThan(bar.spots.last.x));
+    expect(
+      data.minY,
+      lessThan(bar.spots.map((spot) => spot.y).reduce(math.min)),
+    );
+    expect(
+      data.maxY,
+      greaterThan(bar.spots.map((spot) => spot.y).reduce(math.max)),
+    );
+    expect(bar.belowBarData.applyCutOffY, isTrue);
+    expect(bar.belowBarData.cutOffY, 0);
+
+    final chartRect = tester.getRect(chartFinder);
+    final bottomTitles = tester
+        .widgetList<SideTitleWidget>(
+          find.descendant(
+            of: chartScope,
+            matching: find.byType(SideTitleWidget),
+          ),
+        )
+        .where((widget) => widget.meta.axisSide == AxisSide.bottom)
+        .toList();
+    expect(bottomTitles, isNotEmpty);
+    for (final title in bottomTitles) {
+      expect(title.fitInside.enabled, isTrue);
+      final titleText = find.descendant(
+        of: find.byWidget(title),
+        matching: find.byType(Text),
+      );
+      expect(titleText, findsOneWidget);
+      final titleRect = tester.getRect(titleText);
+      expect(titleRect.left, greaterThanOrEqualTo(chartRect.left));
+      expect(titleRect.right, lessThanOrEqualTo(chartRect.right));
+    }
     expect(tester.takeException(), isNull);
   });
 
