@@ -18,7 +18,6 @@ import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_status_card.dart';
 import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
-import 'package:zeta/src/ui/core/metrics/compact_metric_bar.dart';
 import 'package:zeta/src/ui/core/rows/ide_data_row.dart';
 import 'package:zeta/src/ui/core/rows/ide_list_row.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
@@ -470,53 +469,175 @@ class _UsageOverviewBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final comparison = overview.callComparison;
-    final comparisonText = comparison.changePercent == null
+    final changePercent = comparison.changePercent;
+    final comparisonText = changePercent == null
         ? comparison.current > 0
               ? '上一周期无调用'
               : '与上一周期持平'
-        : '${comparison.changePercent! >= 0 ? '↑' : '↓'} '
-              '${comparison.changePercent!.abs().toStringAsFixed(1)}% · 相比上一周期';
-    return CompactMetricBar(
-      items: [
-        CompactMetricItem(
-          label: '调用次数',
-          value: formatUsageCount(overview.totalCalls),
-          detail: comparisonText,
-          icon: Icons.bolt_rounded,
+        : '${changePercent.abs().toStringAsFixed(1)}% · 相比上一周期';
+    final comparisonTrend = changePercent == null
+        ? _OverviewComparisonTrend.flat
+        : changePercent >= 0
+        ? _OverviewComparisonTrend.up
+        : _OverviewComparisonTrend.down;
+
+    final colors = IdeColors.of(context);
+    final tokenCard = _OverviewMetricCard(
+      key: const ValueKey('usage-overview-tokens'),
+      label: 'Token 使用量',
+      value: overview.tokens.hasData
+          ? formatUsageCount(overview.tokens.effectiveTotal ?? 0)
+          : '—',
+      detail: overview.tokens.hasData
+          ? '输入 ${formatUsageCount(overview.tokens.inputTokens ?? 0)} · '
+                '输出 ${formatUsageCount(overview.tokens.outputTokens ?? 0)} · '
+                '推理 ${formatUsageCount(overview.tokens.reasoningTokens ?? 0)}'
+          : '当前筛选下暂无 Token 统计',
+      icon: Icons.data_usage_rounded,
+      accent: colors.intelligenceAccent,
+      semanticLabel:
+          'Token 使用量 ${overview.tokens.hasData ? formatUsageCount(overview.tokens.effectiveTotal ?? 0) : '暂无数据'}',
+    );
+    final callsCard = _OverviewMetricCard(
+      key: const ValueKey('usage-overview-calls'),
+      label: '调用次数',
+      value: formatUsageCount(overview.totalCalls),
+      detail: comparisonText,
+      icon: Icons.bolt_rounded,
+      accent: colors.accent,
+      comparisonTrend: comparisonTrend,
+      semanticLabel:
+          '调用次数 ${formatUsageCount(overview.totalCalls)}，$comparisonText',
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final stacked = constraints.maxWidth < IdeMetrics.stackedRowBreakpoint;
+        if (stacked) {
+          return Column(
+            key: const ValueKey('usage-overview-layout-stacked'),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              tokenCard,
+              const SizedBox(height: IdeSpacing.space8),
+              callsCard,
+            ],
+          );
+        }
+        return Row(
+          key: const ValueKey('usage-overview-layout-equal'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: tokenCard),
+            const SizedBox(width: IdeSpacing.space8),
+            Expanded(child: callsCard),
+          ],
+        );
+      },
+    );
+  }
+}
+
+enum _OverviewComparisonTrend { up, down, flat }
+
+/// 概况区双指标卡片：大号数值 + 图标徽章 + 次级说明。
+class _OverviewMetricCard extends StatelessWidget {
+  const _OverviewMetricCard({
+    required this.label,
+    required this.value,
+    required this.detail,
+    required this.icon,
+    required this.accent,
+    required this.semanticLabel,
+    this.comparisonTrend,
+    super.key,
+  });
+
+  final String label;
+  final String value;
+  final String detail;
+  final IconData icon;
+  final Color accent;
+  final String semanticLabel;
+  final _OverviewComparisonTrend? comparisonTrend;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    final trendColor = switch (comparisonTrend) {
+      _OverviewComparisonTrend.up => colors.success,
+      _OverviewComparisonTrend.down => colors.error,
+      _OverviewComparisonTrend.flat || null => colors.textSecondary,
+    };
+    final trendIcon = switch (comparisonTrend) {
+      _OverviewComparisonTrend.up => Icons.trending_up_rounded,
+      _OverviewComparisonTrend.down => Icons.trending_down_rounded,
+      _OverviewComparisonTrend.flat => Icons.trending_flat_rounded,
+      null => null,
+    };
+
+    return Semantics(
+      label: semanticLabel,
+      child: IdeSurface.pane(
+        padding: IdeSpacing.panelPadding,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.12),
+                borderRadius: IdeRadius.allMedium,
+              ),
+              child: Icon(icon, size: 18, color: accent),
+            ),
+            const SizedBox(width: IdeSpacing.space12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textStyles.toolbarLabel.copyWith(
+                      color: colors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: IdeSpacing.space4),
+                  Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textStyles.metricValue.copyWith(color: accent),
+                  ),
+                  const SizedBox(height: IdeSpacing.space6),
+                  Row(
+                    children: [
+                      if (trendIcon != null) ...[
+                        Icon(trendIcon, size: 14, color: trendColor),
+                        const SizedBox(width: IdeSpacing.space4),
+                      ],
+                      Expanded(
+                        child: Text(
+                          detail,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: textStyles.meta.copyWith(color: trendColor),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        CompactMetricItem(
-          label: '成功率',
-          value: formatUsagePercent(overview.successRate),
-          detail: '失败：${overview.failedCalls} 次',
-          icon: Icons.check_circle_outline_rounded,
-        ),
-        CompactMetricItem(
-          label: '平均响应时间',
-          value: formatUsageDuration(overview.averageResponse),
-          detail: overview.responseSampleCount == 0
-              ? '暂无可靠 TTFT 样本'
-              : '有效样本：${overview.responseSampleCount}',
-          icon: Icons.speed_rounded,
-        ),
-        CompactMetricItem(
-          label: '平均任务耗时',
-          value: formatUsageDuration(overview.averageDuration),
-          detail: '按 Codex turn 统计',
-          icon: Icons.timer_outlined,
-        ),
-        CompactMetricItem(
-          label: 'Token 使用量',
-          value: overview.tokens.hasData
-              ? formatUsageCount(overview.tokens.effectiveTotal ?? 0)
-              : '不支持',
-          detail: overview.tokens.hasData
-              ? '输入 ${formatUsageCount(overview.tokens.inputTokens ?? 0)} · '
-                    '输出 ${formatUsageCount(overview.tokens.outputTokens ?? 0)} · '
-                    '推理 ${formatUsageCount(overview.tokens.reasoningTokens ?? 0)}'
-              : '当前 Agent 不支持 Token 统计',
-          icon: Icons.data_usage_rounded,
-        ),
-      ],
+      ),
     );
   }
 }

@@ -12,7 +12,6 @@ import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_repos
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_page.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
-import 'package:zeta/src/ui/core/metrics/compact_metric_bar.dart';
 import 'package:zeta/src/ui/core/rows/ide_data_row.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 
@@ -42,8 +41,13 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('usage-trend-calls')), findsNothing);
-    expect(find.text('调用次数'), findsWidgets); // overview still has it
-    expect(find.byType(CompactMetricBar), findsOneWidget);
+    expect(find.byKey(const ValueKey('usage-overview-tokens')), findsOneWidget);
+    expect(find.byKey(const ValueKey('usage-overview-calls')), findsOneWidget);
+    expect(find.text('Token 使用量'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('usage-overview-layout-equal')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('usage-filters-toolbar')), findsOneWidget);
     expect(
       tester
