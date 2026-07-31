@@ -152,6 +152,35 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('aligns agent filter text style with time range trigger', (
+    tester,
+  ) async {
+    final now = DateTime(2026, 7, 10, 12);
+    final controller = UsageStatisticsController(
+      repository: _UsageRepository(_source(now)),
+      clock: () => now,
+    );
+    addTearDown(controller.dispose);
+    await tester.runAsync(controller.initialize);
+    await _pumpUsagePage(tester, controller: controller);
+
+    TextStyle? styleOf(ValueKey<String> key) {
+      return tester
+          .widget<Text>(
+            find.descendant(of: find.byKey(key), matching: find.byType(Text)),
+          )
+          .style;
+    }
+
+    final timeStyle = styleOf(const ValueKey('usage-time-range-filter'));
+    final agentStyle = styleOf(const ValueKey('usage-agent-filter'));
+    final modelStyle = styleOf(const ValueKey('usage-model-filter'));
+
+    expect(timeStyle?.fontSize, isNotNull);
+    expect(agentStyle?.fontSize, timeStyle?.fontSize);
+    expect(modelStyle?.fontSize, timeStyle?.fontSize);
+  });
+
   testWidgets('keeps trend endpoints and labels inside chart bounds', (
     tester,
   ) async {

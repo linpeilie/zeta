@@ -302,6 +302,8 @@ class _UsageFilters extends StatelessWidget {
     );
   }
 
+  /// 与 [UsageTimeRangeFilter] 的 OutlineButton(small + dense) 对齐：
+  /// 字号用 [IdeTextStyles.bodySmall]，内边距近似 base×0.75×0.5。
   static Widget _select<T>({
     required Key key,
     required double width,
@@ -309,33 +311,53 @@ class _UsageFilters extends StatelessWidget {
     required List<_SelectOption<T>> options,
     required ValueChanged<T?> onChanged,
   }) {
-    return sf.Select<T>(
-      key: key,
-      value: value,
-      constraints: BoxConstraints.tightFor(
-        width: width,
-        height: IdeMetrics.toolbarHeight,
-      ),
-      popupConstraints: BoxConstraints(maxHeight: 320, minWidth: width),
-      itemBuilder: (context, selected) {
-        final option = options.firstWhere(
-          (candidate) => candidate.value == selected,
-          orElse: () => options.first,
+    return Builder(
+      builder: (context) {
+        final colors = IdeColors.of(context);
+        final textStyles = IdeTextStyles.of(context);
+        // sf.Select 默认走 typography.small(14)，与工具栏 bodySmall(11) 不一致。
+        final labelStyle = textStyles.bodySmall.copyWith(
+          color: colors.textPrimary,
         );
-        return Text(option.label, maxLines: 1, overflow: TextOverflow.ellipsis);
+        return sf.Select<T>(
+          key: key,
+          value: value,
+          constraints: BoxConstraints.tightFor(
+            width: width,
+            height: IdeMetrics.toolbarHeight,
+          ),
+          // OutlineButton small+dense：水平 16×0.75×0.5≈6，垂直 8×0.75×0.5≈3。
+          padding: const EdgeInsets.symmetric(
+            horizontal: IdeSpacing.space8,
+            vertical: IdeSpacing.space2,
+          ),
+          popupConstraints: BoxConstraints(maxHeight: 320, minWidth: width),
+          itemBuilder: (context, selected) {
+            final option = options.firstWhere(
+              (candidate) => candidate.value == selected,
+              orElse: () => options.first,
+            );
+            return Text(
+              option.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: labelStyle,
+            );
+          },
+          onChanged: onChanged.call,
+          popup: sf.SelectPopup.noVirtualization(
+            items: sf.SelectItemList(
+              children: [
+                for (final option in options)
+                  sf.SelectItemButton(
+                    value: option.value,
+                    child: Text(option.label, style: labelStyle),
+                  ),
+              ],
+            ),
+          ).call,
+        );
       },
-      onChanged: onChanged.call,
-      popup: sf.SelectPopup.noVirtualization(
-        items: sf.SelectItemList(
-          children: [
-            for (final option in options)
-              sf.SelectItemButton(
-                value: option.value,
-                child: Text(option.label),
-              ),
-          ],
-        ),
-      ).call,
     );
   }
 
