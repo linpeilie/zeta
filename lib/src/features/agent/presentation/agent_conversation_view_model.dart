@@ -2021,6 +2021,9 @@ class AgentConversationViewModel {
       final provider = await _ensureProvider(
         preferredProviderId: thread.providerId,
       );
+      // Thread entry 是独立 VM：共享 catalog 预热不会写入本实例的 _modelList。
+      // 打开历史时与读 history 并行 hydrate，避免 composer 因 models 为空隐藏选择器。
+      final modelsFuture = loadModels();
       if (previousThreadId != null && previousThreadId != thread.id) {
         // 不阻塞历史加载：退订失败只记日志。
         unawaited(_unsubscribeThreadBestEffort(provider, previousThreadId));
@@ -2036,6 +2039,10 @@ class AgentConversationViewModel {
         sessionPath: thread.sessionPath,
         projectPath: thread.projectPath,
       );
+      if (!_isCurrentSwitch(switchToken)) {
+        return;
+      }
+      await modelsFuture;
       if (!_isCurrentSwitch(switchToken)) {
         return;
       }

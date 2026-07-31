@@ -84,6 +84,41 @@ void main() {
     });
 
     test(
+      'switchThread hydrates model list without a prior loadModels call',
+      () async {
+        final provider = _FakeAgentProvider(
+          availableModels: const AgentModelList(
+            models: <AgentModelInfo>[
+              AgentModelInfo(
+                id: 'gpt-5.5',
+                model: 'gpt-5.5',
+                displayName: 'GPT-5.5',
+                isDefault: true,
+              ),
+            ],
+          ),
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'thread-1': _historySnapshot(
+              threadId: 'thread-1',
+              userText: 'What changed?',
+              agentText: 'The provider layer changed.',
+            ),
+          },
+        );
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        expect(viewModel.models, isEmpty);
+
+        await viewModel.switchThread(_thread());
+
+        expect(viewModel.models.map((model) => model.id), <String>['gpt-5.5']);
+        expect(viewModel.modelConfigUiState.models, isNotEmpty);
+        expect(viewModel.modelConfigUiState.isRefreshing, isFalse);
+      },
+    );
+
+    test(
       'switchThread does not wait for stale event subscription cancellation',
       () async {
         final cancellationGate = Completer<void>();
@@ -3165,9 +3200,10 @@ void main() {
         final viewModel = _createViewModel(provider);
         addTearDown(viewModel.dispose);
 
-        await viewModel.loadModels();
+        // 不预先 loadModels：打开 thread 时应自行 hydrate 后再回填 history 选择。
         await viewModel.switchThread(_thread());
 
+        expect(viewModel.models, isNotEmpty);
         expect(viewModel.selectedModelId, 'gpt-5.5');
         expect(viewModel.selectedReasoningEffort, 'high');
         expect(viewModel.selectedServiceTierId, 'priority');
