@@ -5,6 +5,7 @@
 - [产品需求文档](./product_requirements.md)
 - [设计文档](./design_document.md)
 - [开发者文档](./developer_guide.md)
+- [发版指南](./release_guide.md)
 - [工程规范](./engineering_standards.md)
 - [Codex app-server 协议版本锁定](./codex_app_server_protocol.md)
 - [Cursor Agent 退役历史说明](./cursor_agent_guide.md)
