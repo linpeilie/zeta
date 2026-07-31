@@ -15,16 +15,28 @@ enum UsageTimeRangePreset {
 }
 
 extension UsageTimeRangePresetLabel on UsageTimeRangePreset {
+  /// 完整文案，用于辅助说明与无障碍语义。
   String get label => switch (this) {
-    UsageTimeRangePreset.today => '今天',
-    UsageTimeRangePreset.last7Days => '最近 7 天',
-    UsageTimeRangePreset.last30Days => '最近 30 天',
-    UsageTimeRangePreset.last90Days => '最近 90 天',
+    UsageTimeRangePreset.today => '当天',
+    UsageTimeRangePreset.last7Days => '最近7天',
+    UsageTimeRangePreset.last30Days => '最近30天',
+    UsageTimeRangePreset.last90Days => '最近90天',
     UsageTimeRangePreset.thisMonth => '本月',
     UsageTimeRangePreset.previousMonth => '上个月',
     UsageTimeRangePreset.custom => '自定义时间',
   };
+
+  /// 条件栏与快捷列表使用的标签。
+  String get compactLabel => label;
 }
+
+/// 时间范围弹层左侧快捷选项（不含自定义；日历选择即自定义）。
+const List<UsageTimeRangePreset> kUsageTimeRangeQuickOptions =
+    <UsageTimeRangePreset>[
+      UsageTimeRangePreset.today,
+      UsageTimeRangePreset.last7Days,
+      UsageTimeRangePreset.last30Days,
+    ];
 
 /// 左闭右开的统计时间窗口。
 class UsageDateWindow {

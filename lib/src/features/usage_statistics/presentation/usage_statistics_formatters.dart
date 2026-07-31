@@ -48,6 +48,21 @@ String formatUsageDateTime(DateTime? value) {
       '${local.minute.toString().padLeft(2, '0')}';
 }
 
+/// 仅日期（本地时区），用于时间范围触发器与自定义区间摘要。
+String formatUsageDate(DateTime? value) {
+  if (value == null) {
+    return '暂无数据';
+  }
+  final local = value.toLocal();
+  return '${local.year.toString().padLeft(4, '0')}-'
+      '${local.month.toString().padLeft(2, '0')}-'
+      '${local.day.toString().padLeft(2, '0')}';
+}
+
+String formatUsageDateRange(DateTime start, DateTime endInclusive) {
+  return '${formatUsageDate(start)} – ${formatUsageDate(endInclusive)}';
+}
+
 String formatUsageClock(DateTime? value) {
   if (value == null) {
     return '--:--';

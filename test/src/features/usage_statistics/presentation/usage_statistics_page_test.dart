@@ -107,9 +107,6 @@ void main() {
     );
     addTearDown(controller.dispose);
     await tester.runAsync(controller.initialize);
-    await tester.runAsync(
-      () => controller.selectTimePreset(UsageTimeRangePreset.custom),
-    );
 
     await _pumpUsagePage(
       tester,
@@ -124,10 +121,7 @@ void main() {
     expect(find.byKey(const ValueKey('usage-project-filter')), findsNothing);
     expect(find.byKey(const ValueKey('usage-agent-filter')), findsOneWidget);
     expect(find.byKey(const ValueKey('usage-model-filter')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('usage-custom-date-range')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('usage-custom-date-range')), findsNothing);
     expect(
       find.byKey(const ValueKey('usage-ranking-layout-stacked')),
       findsOneWidget,
@@ -142,6 +136,57 @@ void main() {
           .height,
       IdeMetrics.toolbarHeight,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('opens time range popover with shortcuts and calendar', (
+    tester,
+  ) async {
+    final now = DateTime(2026, 7, 10, 12);
+    final controller = UsageStatisticsController(
+      repository: _UsageRepository(_source(now)),
+      clock: () => now,
+    );
+    addTearDown(controller.dispose);
+    await tester.runAsync(controller.initialize);
+
+    await _pumpUsagePage(tester, controller: controller);
+
+    expect(find.text('最近7天'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('usage-time-range-filter')));
+    // Popover / Calendar 可能带持续动画，避免 pumpAndSettle 超时。
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(
+      find.byKey(const ValueKey('usage-time-range-popover')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('usage-time-range-shortcuts')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('usage-time-range-calendar')),
+      findsOneWidget,
+    );
+    expect(find.text('当天'), findsWidgets);
+    expect(find.text('最近7天'), findsWidgets);
+    expect(find.text('最近30天'), findsOneWidget);
+    expect(find.text('1d'), findsNothing);
+
+    await tester.tap(
+      find.byKey(const ValueKey('usage-time-range-preset-today')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(controller.timePreset, UsageTimeRangePreset.today);
+    expect(
+      find.byKey(const ValueKey('usage-time-range-popover')),
+      findsNothing,
+    );
+    expect(find.text('当天'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

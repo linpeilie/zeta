@@ -10,6 +10,7 @@ import 'package:zeta/src/features/usage_statistics/application/usage_statistics_
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_report_builder.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_formatters.dart';
+import 'package:zeta/src/features/usage_statistics/presentation/usage_time_range_filter.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
@@ -280,19 +281,9 @@ class _UsageFilters extends StatelessWidget {
                   _LabeledFilter(
                     label: '时间范围',
                     width: fieldWidth,
-                    child: _select<UsageTimeRangePreset>(
-                      key: const ValueKey('usage-time-range-filter'),
+                    child: UsageTimeRangeFilter(
+                      controller: controller,
                       width: fieldWidth,
-                      value: controller.timePreset,
-                      options: [
-                        for (final preset in UsageTimeRangePreset.values)
-                          _SelectOption(preset, preset.label),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          unawaited(controller.selectTimePreset(value));
-                        }
-                      },
                     ),
                   ),
                   _LabeledFilter(
@@ -375,38 +366,6 @@ class _UsageFilters extends StatelessWidget {
                   ),
                 ],
               ),
-              if (controller.timePreset == UsageTimeRangePreset.custom) ...[
-                const SizedBox(height: IdeSpacing.space8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: SizedBox(
-                    width: compact ? constraints.maxWidth : 320,
-                    height: IdeMetrics.toolbarHeight,
-                    child: sf.DateRangePicker(
-                      key: const ValueKey('usage-custom-date-range'),
-                      value: sf.DateTimeRange(
-                        controller.customStart ??
-                            DateTime.now().subtract(const Duration(days: 6)),
-                        controller.customEndInclusive ?? DateTime.now(),
-                      ),
-                      mode: compact
-                          ? sf.PromptMode.dialog
-                          : sf.PromptMode.popover,
-                      dialogTitle: const Text('选择统计日期'),
-                      onChanged: (range) {
-                        if (range != null) {
-                          unawaited(
-                            controller.selectCustomRange(
-                              range.start,
-                              range.end,
-                            ),
-                          );
-                        }
-                      },
-                    ),
-                  ),
-                ),
-              ],
             ],
           );
         },
