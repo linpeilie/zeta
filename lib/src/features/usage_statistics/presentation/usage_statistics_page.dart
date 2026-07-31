@@ -1103,14 +1103,12 @@ class _UsageLineChart extends StatelessWidget {
       alpha: brightness == Brightness.dark ? 0.10 : 0.07,
     );
     final maximum = safeUsageChartMaximum(points);
-    final hasValues = points.any((point) => point.value != null);
+    // 缺失日期统一按 0 绘制，保证时间轴连续、无断点。
     final spots = <FlSpot>[
       for (var index = 0; index < points.length; index += 1)
-        if (points[index].value case final value?)
-          FlSpot(index.toDouble(), value)
-        else
-          FlSpot.nullSpot,
+        FlSpot(index.toDouble(), points[index].value ?? 0),
     ];
+    final hasValues = points.isNotEmpty;
     final labelIndices = <int>{
       if (points.isNotEmpty) 0,
       if (points.length > 2) points.length ~/ 2,

@@ -232,9 +232,10 @@ double? _successRate(List<AgentUsageRecord> records) {
   return completed / terminal.length;
 }
 
+/// 无记录或无 Token 字段时按 0 计入，避免趋势图在日期轴上出现断点/跳过。
 double? _tokenTrendValue(List<AgentUsageRecord> records) {
   final total = _sumTokens(records).totalTokens;
-  return total?.toDouble();
+  return (total ?? 0).toDouble();
 }
 
 double? _durationTrendValue(Iterable<Duration?> values) {

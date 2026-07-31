@@ -120,6 +120,48 @@ void main() {
       expect(report.overview.callComparison.changePercent, 300);
     });
 
+    test('fills empty trend buckets with zero instead of null gaps', () {
+      final now = DateTime(2026, 7, 10, 12);
+      final source = UsageStatisticsSourceSnapshot(
+        refreshedAt: now,
+        records: <AgentUsageRecord>[
+          _record(
+            turnId: 'only-today',
+            projectPath: '/work/alpha',
+            startedAt: DateTime(2026, 7, 10, 9),
+            status: UsageTaskStatus.completed,
+            inputTokens: 50,
+            outputTokens: 50,
+            totalTokens: 100,
+          ),
+        ],
+      );
+
+      final report = buildUsageStatisticsReport(
+        source: source,
+        window: UsageDateWindow.resolve(
+          preset: UsageTimeRangePreset.last7Days,
+          now: now,
+        ),
+        filter: const UsageStatisticsFilter(),
+        trendMetric: UsageTrendMetric.totalTokens,
+        rankSort: UsageRankSort.totalTokens,
+      );
+
+      // 最近 7 天按日分桶，应覆盖 7 个自然日点。
+      expect(report.tokenTrend, hasLength(7));
+      expect(report.tokenTrend.every((point) => point.value != null), isTrue);
+      expect(report.tokenTrend.where((point) => point.value == 0).length, 6);
+      expect(
+        report.tokenTrend.singleWhere((point) => point.value != 0).value,
+        100,
+      );
+      // 主趋势与 tokenTrend 使用同一套零填充语义。
+      expect(report.trend.map((p) => p.value).toList(), [
+        for (final point in report.tokenTrend) point.value,
+      ]);
+    });
+
     test('applies project and model filters without losing filter options', () {
       final now = DateTime(2026, 7, 10, 12);
       final source = UsageStatisticsSourceSnapshot(
