@@ -1,6 +1,6 @@
 # 设计文档
 
-最后更新：2026-07-23
+最后更新：2026-07-31
 
 ## 1. 设计目标
 
@@ -57,7 +57,10 @@ IdeShellController
 
 AgentConversationViewModel
   -> AgentConversationTimelineStore
-  -> AgentConversationUiSignals
+  -> AgentUiUpdatePort
+    -> AgentUiUpdateScheduler（presentation，按 Flutter frame 合并）
+      -> SchedulerBindingAgentFrameScheduler
+      -> AgentConversationUiSignals（局部 listenable + legacy notify）
   -> AgentConversationModelSelectionController
   -> AgentConversationModeController
   -> AgentPlanExecutionHandoffController

@@ -13,9 +13,15 @@ import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 
 import '../testing/agent_event_storm_fixture.dart';
 import '../testing/agent_provider_stub_base.dart';
+import '../testing/fake_agent_frame_scheduler.dart';
+
+final List<FakeAgentFrameScheduler> _uiFrameSchedulers =
+    <FakeAgentFrameScheduler>[];
 
 void main() {
   final tempDirectories = <Directory>[];
+
+  setUp(_uiFrameSchedulers.clear);
 
   tearDown(() {
     for (final directory in tempDirectories) {
@@ -60,6 +66,7 @@ void main() {
       );
 
       final shell = IdeShellController(
+        agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         directoryPicker: () async => directory.path,
         sessionStore: const CallbackIdeSessionStore(
           loadJson: _loadEmptySession,
@@ -122,6 +129,7 @@ void main() {
       threadPages: <AgentThreadPage>[],
     );
     final shell = IdeShellController(
+      agentUiFrameSchedulerFactory: _createUiFrameScheduler,
       directoryPicker: () async => null,
       sessionStore: const CallbackIdeSessionStore(
         loadJson: _loadEmptySession,
@@ -597,6 +605,7 @@ void main() {
     );
 
     final shell = IdeShellController(
+      agentUiFrameSchedulerFactory: _createUiFrameScheduler,
       directoryPicker: () async => directory.path,
       sessionStore: const CallbackIdeSessionStore(
         loadJson: _loadEmptySession,
@@ -694,6 +703,7 @@ void main() {
 
       // Act
       final shell = IdeShellController(
+        agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         directoryPicker: () async => directory.path,
         sessionStore: CallbackIdeSessionStore(
           loadJson: () async => restoredSession.encode(),
@@ -773,6 +783,7 @@ void main() {
       threadPages: const <AgentThreadPage>[],
     );
     final shell = IdeShellController(
+      agentUiFrameSchedulerFactory: _createUiFrameScheduler,
       directoryPicker: () async => directory.path,
       sessionStore: CallbackIdeSessionStore(
         loadJson: () async => restoredSession.encode(),
@@ -874,6 +885,7 @@ void main() {
         ],
       );
       final shell = IdeShellController(
+        agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         directoryPicker: () async => firstDirectory.path,
         sessionStore: const CallbackIdeSessionStore(
           loadJson: _loadEmptySession,
@@ -966,6 +978,7 @@ void main() {
       ],
     );
     final shell = IdeShellController(
+      agentUiFrameSchedulerFactory: _createUiFrameScheduler,
       directoryPicker: () async => directory.path,
       sessionStore: CallbackIdeSessionStore(
         loadJson: () async => restoredSession.encode(),
@@ -1054,6 +1067,7 @@ void main() {
         ],
       );
       final shell = IdeShellController(
+        agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         directoryPicker: () async => firstDirectory.path,
         sessionStore: CallbackIdeSessionStore(
           loadJson: () async => restoredSession.encode(),
@@ -1105,8 +1119,18 @@ Future<void> _saveDiscardedSession(String value) async {}
 
 Future<void> _flushAsync() async {
   await Future<void>.delayed(const Duration(milliseconds: 20));
-  await Future<void>.delayed(Duration.zero);
-  await Future<void>.delayed(Duration.zero);
+  for (var turn = 0; turn < 3; turn += 1) {
+    await Future<void>.delayed(Duration.zero);
+    for (final scheduler in _uiFrameSchedulers) {
+      scheduler.drainFrames();
+    }
+  }
+}
+
+FakeAgentFrameScheduler _createUiFrameScheduler() {
+  final scheduler = FakeAgentFrameScheduler();
+  _uiFrameSchedulers.add(scheduler);
+  return scheduler;
 }
 
 Future<_SelectedThreadShellHarness> _openShellWithSelectedThread({
@@ -1134,6 +1158,7 @@ Future<_SelectedThreadShellHarness> _openShellWithSelectedThread({
   );
   final sessionSaves = _SessionSaveRecorder();
   final shell = IdeShellController(
+    agentUiFrameSchedulerFactory: _createUiFrameScheduler,
     directoryPicker: () async => directory.path,
     sessionStore: CallbackIdeSessionStore(
       loadJson: _loadEmptySession,

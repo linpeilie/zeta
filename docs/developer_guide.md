@@ -1,6 +1,6 @@
 # 开发者文档
 
-最后更新：2026-07-23
+最后更新：2026-07-31
 
 ## 1. 项目简介
 
@@ -106,7 +106,8 @@ windows/
 - `lib/src/app`：应用装配、窗口启动、菜单桥接、shell controller 和常量。
 - `lib/src/core`：日志、`~/.zeta` 路径布局、原子文本写入等跨功能基础设施。
 - `lib/src/features/agent`：Agent provider 抽象、Codex app-server、Grok ACP、
-  共享事件映射、对话状态和 Agent pane。
+  共享事件映射、类型化 UI 更新端口、presentation frame scheduler、对话状态和
+  Agent pane。无 pump 的调度单测使用 `FakeAgentFrameScheduler` 手动推进 frame。
 - `lib/src/features/agent_management`：Codex/Grok CLI 检测、身份/版本/账号诊断、
   无计费连接测试、配置安全编辑和 Agent 管理页面。
 - `lib/src/features/ide_session`：IDE 会话模型、状态构建、恢复协调和持久化。

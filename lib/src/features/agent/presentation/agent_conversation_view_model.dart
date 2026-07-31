@@ -18,10 +18,12 @@ import 'package:zeta/src/features/agent/application/agent_elapsed_ticker.dart';
 import 'package:zeta/src/features/agent/application/agent_event_frame_scheduler.dart';
 import 'package:zeta/src/features/agent/application/agent_event_stream_buffer.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_event_listener_gate.dart';
+import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/presentation/agent_ui_update_scheduler.dart';
 import 'package:zeta/src/features/agent/presentation/model_config_ui_state.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
@@ -52,6 +54,7 @@ class AgentConversationViewModel extends ChangeNotifier {
     permissionSelectionController,
     this.workspaceFilesProvider,
     this.onTurnCompleted,
+    AgentFrameScheduler? uiFrameScheduler,
   }) : _timeline = timelineStore ?? AgentConversationTimelineStore(),
        _ownsModelSelectionController = modelSelectionController == null,
        _modelSelectionController =
@@ -72,6 +75,11 @@ class AgentConversationViewModel extends ChangeNotifier {
       onLegacyNotify: _notifyLegacyListeners,
       isDisposed: () => _disposed,
     );
+    _uiUpdateScheduler = AgentUiUpdateScheduler(
+      _publishScheduledUiChanges,
+      frameScheduler: uiFrameScheduler,
+    );
+    _uiUpdates = _uiUpdateScheduler;
     _modelSelectionController.addListener(_handleModelSelectionChanged);
     _conversationModeController.addListener(_handleConversationModeChanged);
     providerController.addListener(_handleProviderSettingsChanged);
@@ -104,6 +112,8 @@ class AgentConversationViewModel extends ChangeNotifier {
   final AgentPlanExecutionHandoffController _planExecutionHandoffController =
       AgentPlanExecutionHandoffController();
   late final AgentConversationUiSignals _uiSignals;
+  late final AgentUiUpdateScheduler _uiUpdateScheduler;
+  late final AgentUiUpdatePort _uiUpdates;
   AgentUiUpdateRequest? _debugLastUiUpdateRequest;
   final AgentElapsedTicker _elapsedTicker = AgentElapsedTicker();
   late final ValueNotifier<AgentConversationThreadSnapshot>
@@ -279,8 +289,22 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   /// 当前 UI 信号诊断；仅包含调度、合并和发布次数。
   @visibleForTesting
-  AgentConversationUiSignalsDiagnostics get uiSignalsDiagnostics =>
-      _uiSignals.diagnostics;
+  AgentConversationUiSignalsDiagnostics get uiSignalsDiagnostics {
+    final scheduling = _uiUpdateScheduler.diagnostics;
+    final publishing = _uiSignals.diagnostics;
+    return AgentConversationUiSignalsDiagnostics(
+      scheduledStreamFlushCount: scheduling.nextFrameRequestCount,
+      immediateFlushCount: scheduling.immediateRequestCount,
+      mergedRequestCount: scheduling.mergedRequestCount,
+      actualPublishCount: scheduling.publishCount,
+      legacyNotifyCount: publishing.legacyNotifyCount,
+    );
+  }
+
+  /// 当前统一 UI frame 调度诊断；不包含任何事件内容。
+  @visibleForTesting
+  AgentUiUpdateSchedulerDiagnostics get uiUpdateSchedulerDiagnostics =>
+      _uiUpdateScheduler.diagnostics;
 
   /// 最近一次由 ViewModel 生成的无 payload UI 更新请求，仅供事件映射测试。
   @visibleForTesting
@@ -2399,6 +2423,7 @@ class AgentConversationViewModel extends ChangeNotifier {
       _conversationModeController.dispose();
     }
     _elapsedTicker.dispose();
+    _uiUpdateScheduler.dispose();
     _uiSignals.dispose();
     _threadSnapshotListenable.dispose();
     contextPanelVisible.dispose();
@@ -3873,8 +3898,7 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   void _publishUiChanges(AgentUiUpdateRequest request) {
     _debugLastUiUpdateRequest = request;
-    _syncThreadSnapshotListenable();
-    _uiSignals.publish(request);
+    _uiUpdates.publish(request);
   }
 
   AgentConversationThreadSnapshot _buildThreadSnapshot() {
@@ -3897,19 +3921,25 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   void _scheduleStreamFlush(AgentUiUpdateRequest request) {
     _debugLastUiUpdateRequest = request;
-    _uiSignals.scheduleStreamFlush(request);
+    _uiUpdates.publish(request);
   }
 
   void _flushPendingStreamChangesNow() {
-    _uiSignals.flushPendingStreamChangesNow();
+    _uiUpdates.publish(
+      AgentUiUpdateRequest(urgency: AgentUiUpdateUrgency.immediate),
+    );
   }
 
   void _flushStreamChangesNow(AgentUiUpdateRequest request) {
     _debugLastUiUpdateRequest = request;
-    // 流式 flush 也必须刷新 thread snapshot，否则 turn/completed 等路径
-    // 只更新分区信号、不推 isTurnRunning，侧栏会一直卡在执行中。
+    _uiUpdates.publish(request);
+  }
+
+  void _publishScheduledUiChanges(AgentUiUpdateRequest request) {
+    // Thread snapshot 与局部 listenable 共用安全发布边界，避免 immediate 请求
+    // 在 Widget build 中先经 Shell 通知形成同步重入。
     _syncThreadSnapshotListenable();
-    _uiSignals.flushStreamChangesNow(request);
+    _uiSignals.publish(request);
   }
 
   /// 将当前 isTurnRunning / runtimeStatus 等推到 [threadSnapshotListenable]。

@@ -33,10 +33,10 @@ enum AgentUiRegion {
 /// 该类型只描述 UI 调度时机；Provider 输入事件的 barrier 仍由事件缓冲器
 /// 独立决定。
 enum AgentUiUpdateUrgency {
-  /// 沿用现有 16 ms stream gate，在下一帧窗口合并发布。
+  /// 与同一可见帧前的普通请求合并，并在下一 Flutter frame 发布。
   nextFrame,
 
-  /// 沿用现有立即 flush 路径，在当前调用中发布。
+  /// 不等待普通 frame cadence；若正处于 Widget build，则延至最近安全帧。
   immediate,
 }
 
@@ -91,7 +91,7 @@ final class AgentUiUpdateRequest {
   /// 本次发布涉及的 UI 区域。
   final Set<AgentUiRegion> regions;
 
-  /// 本次发布应进入的现有调度路径。
+  /// 本次发布应进入的帧调度路径。
   final AgentUiUpdateUrgency urgency;
 
   /// 发布完成时按顺序消费的一次性 UI effect。

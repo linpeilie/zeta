@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
+import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
@@ -210,6 +211,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     required this._modelCatalogRepository,
     required this.runtimeRegistry,
     this._onTurnCompleted,
+    this.uiFrameSchedulerFactory,
   });
 
   final AgentProviderFactory _providerFactory;
@@ -218,6 +220,9 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
   final AgentModelCatalogRepository _modelCatalogRepository;
   final AgentProviderRuntimeRegistry runtimeRegistry;
   final VoidCallback? _onTurnCompleted;
+
+  /// 为每个常驻 ViewModel 创建独立 frame 端口；生产环境为空时使用 Flutter 实现。
+  final AgentFrameScheduler Function()? uiFrameSchedulerFactory;
 
   final List<AgentThreadWorkspaceEntry> _entries =
       <AgentThreadWorkspaceEntry>[];
@@ -412,6 +417,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
       providerController: providerController,
       workspaceFilesProvider: _workspaceFilesProvider,
       onTurnCompleted: _onTurnCompleted,
+      uiFrameScheduler: uiFrameSchedulerFactory?.call(),
     );
     final entry = AgentThreadWorkspaceEntry(
       entryId: 'agent-workspace-entry-${_nextEntryId += 1}',

@@ -1,6 +1,6 @@
 # 工程规范
 
-最后更新：2026-07-16
+最后更新：2026-07-31
 
 本文从当前 `lib/` 重构后的代码结构中提炼长期遵循的工程规范。它补充根目录 `AGENTS.md`，用于指导后续功能开发、重构和评审。
 
@@ -78,6 +78,10 @@ main -> app -> presentation/application -> domain
 - 纯状态容器只暴露状态和同步更新方法，例如 `ProjectThreadsViewModel`。
 - 应用控制器收敛分页、恢复、缓存、provider 调用和竞态处理，例如 `ProjectThreadsController`。
 - 高吞吐 UI 使用分区 `ValueListenable` 或版本号信号，避免流式输出导致整页重建。
+- Agent UI 更新由 application 通过 `AgentUiUpdatePort` 提交类型化 request；
+  `SchedulerBinding` 只允许出现在 presentation 的 `AgentUiUpdateScheduler` 生产适配中。
+  普通请求按下一 Flutter frame 合并，immediate 请求吸收 pending 后在安全边界发布；
+  不得重新引入固定毫秒 Timer、post-frame 释放门闩或 idle task 队列。
 - 跨模块共享的运行时指示（如侧栏 thread busy）若依赖独立 snapshot listenable，
   stream flush 与分区 publish 都必须同步该 snapshot，不得只 bump 面板 version。
 - 对会被新请求覆盖的异步加载使用 token/version guard，旧结果返回时必须被丢弃。

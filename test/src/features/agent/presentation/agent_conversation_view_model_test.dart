@@ -14,8 +14,14 @@ import 'package:zeta/src/features/agent/presentation/agent_conversation_view_mod
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 
 import '../../../testing/agent_provider_stub_base.dart';
+import '../../../testing/fake_agent_frame_scheduler.dart';
+
+final List<FakeAgentFrameScheduler> _uiFrameSchedulers =
+    <FakeAgentFrameScheduler>[];
 
 void main() {
+  setUp(_uiFrameSchedulers.clear);
+
   group('AgentConversationViewModel', () {
     test('uses New thread as the default header title', () {
       final viewModel = _createViewModel(_FakeAgentProvider());
@@ -1203,7 +1209,7 @@ void main() {
           turnId: 'turn-1',
         ),
       );
-      await Future<void>.delayed(const Duration(milliseconds: 24));
+      await _drainTypedUiUpdate();
 
       var think = viewModel.timelineEntries
           .whereType<AgentToolTimelineEntry>()
@@ -1243,7 +1249,7 @@ void main() {
           turnId: 'turn-1',
         ),
       );
-      await Future<void>.delayed(const Duration(milliseconds: 24));
+      await _drainTypedUiUpdate();
 
       think = viewModel.timelineEntries
           .whereType<AgentToolTimelineEntry>()
@@ -1348,7 +1354,7 @@ void main() {
               turnId: 'turn-1',
             ),
           );
-        await Future<void>.delayed(const Duration(milliseconds: 24));
+        await _drainTypedUiUpdate();
 
         final orderedIds = viewModel.liveTurnState!.entries
             .map(
@@ -1410,7 +1416,7 @@ void main() {
           turnId: 'turn-1',
         ),
       );
-      await Future<void>.delayed(const Duration(milliseconds: 24));
+      await _drainTypedUiUpdate();
 
       final plan = viewModel.timelineEntries
           .whereType<AgentMessageTimelineEntry>()
@@ -2133,7 +2139,7 @@ void main() {
             ),
           ),
         );
-        await Future<void>.delayed(const Duration(milliseconds: 24));
+        await _drainTypedUiUpdate();
 
         // history 保持稳定；header（会话 token）与 composer（上下文进度环）需同步刷新。
         expect(viewModel.historyVersion, historyVersion);
@@ -2207,7 +2213,7 @@ void main() {
             ),
           ),
         );
-        await Future<void>.delayed(const Duration(milliseconds: 24));
+        await _drainTypedUiUpdate();
 
         // 核心契约：高频 tool progress 经 EventBuffer 合并后，Store 只保留最新内容；
         // history/composer 不因 progress 抖动。UI 分区 notify 次数受帧调度影响，
@@ -3216,6 +3222,7 @@ void main() {
         addTearDown(controller.dispose);
         final viewModel = AgentConversationViewModel(
           providerController: controller,
+          uiFrameScheduler: _createUiFrameScheduler(),
         );
         addTearDown(viewModel.dispose);
         viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
@@ -3261,6 +3268,7 @@ void main() {
         addTearDown(controller.dispose);
         final viewModel = AgentConversationViewModel(
           providerController: controller,
+          uiFrameScheduler: _createUiFrameScheduler(),
         );
         addTearDown(viewModel.dispose);
 
@@ -3306,6 +3314,7 @@ void main() {
       addTearDown(controller.dispose);
       final viewModel = AgentConversationViewModel(
         providerController: controller,
+        uiFrameScheduler: _createUiFrameScheduler(),
       );
       addTearDown(viewModel.dispose);
 
@@ -3365,6 +3374,7 @@ void main() {
       addTearDown(controller.dispose);
       final viewModel = AgentConversationViewModel(
         providerController: controller,
+        uiFrameScheduler: _createUiFrameScheduler(),
       );
       addTearDown(viewModel.dispose);
       viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
@@ -3438,6 +3448,7 @@ void main() {
         addTearDown(controller.dispose);
         final viewModel = AgentConversationViewModel(
           providerController: controller,
+          uiFrameScheduler: _createUiFrameScheduler(),
         );
         addTearDown(viewModel.dispose);
         viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
@@ -3495,6 +3506,7 @@ void main() {
         addTearDown(controller.dispose);
         final viewModel = AgentConversationViewModel(
           providerController: controller,
+          uiFrameScheduler: _createUiFrameScheduler(),
         );
         addTearDown(viewModel.dispose);
         viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
@@ -3566,6 +3578,7 @@ void main() {
       addTearDown(controller.dispose);
       final viewModel = AgentConversationViewModel(
         providerController: controller,
+        uiFrameScheduler: _createUiFrameScheduler(),
       );
       addTearDown(viewModel.dispose);
       viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
@@ -4009,8 +4022,12 @@ void main() {
   });
 }
 
-Future<void> _drainTypedUiUpdate() {
-  return Future<void>.delayed(const Duration(milliseconds: 24));
+Future<void> _drainTypedUiUpdate() async {
+  await _drainTypedUiScheduling();
+  for (final scheduler in _uiFrameSchedulers) {
+    scheduler.drainFrames();
+  }
+  await _drainTypedUiScheduling();
 }
 
 Future<void> _drainTypedUiScheduling() async {
@@ -4045,9 +4062,16 @@ AgentConversationViewModel _createViewModel(
   final viewModel = AgentConversationViewModel(
     providerController: controller,
     conversationModeController: conversationModeController,
+    uiFrameScheduler: _createUiFrameScheduler(),
   );
   viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
   return viewModel;
+}
+
+FakeAgentFrameScheduler _createUiFrameScheduler() {
+  final scheduler = FakeAgentFrameScheduler();
+  _uiFrameSchedulers.add(scheduler);
+  return scheduler;
 }
 
 AgentThreadSummary _thread({
@@ -4504,7 +4528,7 @@ Future<void> _emitCompletedPlan(
       status: status,
     ),
   );
-  await Future<void>.delayed(const Duration(milliseconds: 24));
+  await _drainTypedUiUpdate();
 }
 
 const AgentModelList _conversationModeModels = AgentModelList(

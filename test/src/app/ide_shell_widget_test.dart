@@ -466,6 +466,7 @@ void main() {
     final beforeBuffer = viewModel.eventStreamBufferDiagnostics;
     final beforeScheduler = viewModel.eventFrameSchedulerDiagnostics;
     final beforeUi = viewModel.uiSignalsDiagnostics;
+    final beforeUiScheduler = viewModel.uiUpdateSchedulerDiagnostics;
     expect(beforeBuffer, isNotNull);
     expect(beforeScheduler, isNotNull);
 
@@ -509,6 +510,7 @@ void main() {
     final afterBuffer = viewModel.eventStreamBufferDiagnostics!;
     final afterScheduler = viewModel.eventFrameSchedulerDiagnostics!;
     final afterUi = viewModel.uiSignalsDiagnostics;
+    final afterUiScheduler = viewModel.uiUpdateSchedulerDiagnostics;
     final buildCounts = buildCounter.snapshot();
     buildCounter.dispose();
 
@@ -539,6 +541,16 @@ void main() {
       contains(AgentEventStormFixture.errorMessage),
     );
     expect(shellSnapshotNotifyCount, 2);
+    expect(afterUiScheduler.hasPendingRequest, isFalse);
+    expect(afterUiScheduler.hasScheduledFrame, isFalse);
+    expect(
+      afterUiScheduler.publishCount - beforeUiScheduler.publishCount,
+      afterUi.actualPublishCount - beforeUi.actualPublishCount,
+    );
+    expect(
+      afterUi.legacyNotifyCount - beforeUi.legacyNotifyCount,
+      afterUi.actualPublishCount - beforeUi.actualPublishCount,
+    );
 
     debugPrint(
       'agent-event-widget-baseline '
@@ -557,6 +569,10 @@ void main() {
       'merged:${afterUi.mergedRequestCount - beforeUi.mergedRequestCount},'
       'published:${afterUi.actualPublishCount - beforeUi.actualPublishCount},'
       'legacy:${afterUi.legacyNotifyCount - beforeUi.legacyNotifyCount}} '
+      'uiFrame={scheduledFrames:${afterUiScheduler.scheduledFrames - beforeUiScheduler.scheduledFrames},'
+      'framePublish:${afterUiScheduler.framePublishes - beforeUiScheduler.framePublishes},'
+      'immediatePublish:${afterUiScheduler.immediatePublishes - beforeUiScheduler.immediatePublishes},'
+      'invalidated:${afterUiScheduler.invalidatedFrameCallbacks - beforeUiScheduler.invalidatedFrameCallbacks}} '
       'shellSnapshotNotify=$shellSnapshotNotifyCount '
       'builds=$buildCounts',
     );

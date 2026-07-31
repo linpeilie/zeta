@@ -8,6 +8,7 @@ import 'package:zeta/src/features/agent/application/agent_conversation_thread_sn
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/application/agent_thread_workspace_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -66,6 +67,7 @@ class IdeShellController extends ChangeNotifier {
     this._statusReporter,
     AgentModelCatalogRepository? agentModelCatalogRepository,
     AgentProviderRuntimeRegistry? agentProviderRuntimeRegistry,
+    AgentFrameScheduler Function()? agentUiFrameSchedulerFactory,
     VoidCallback? onAgentTurnCompleted,
     DateTime Function()? now,
   }) : projectThreadsViewModel = ProjectThreadsViewModel(),
@@ -91,6 +93,7 @@ class IdeShellController extends ChangeNotifier {
       modelCatalogRepository: agentProviderController.modelCatalogRepository,
       runtimeRegistry: this.agentProviderRuntimeRegistry,
       onTurnCompleted: onAgentTurnCompleted,
+      uiFrameSchedulerFactory: agentUiFrameSchedulerFactory,
     );
     _bootstrapAgentEntry = agentWorkspaceController.ensureDraftEntry(
       projectPath: _bootstrapProjectPath,
