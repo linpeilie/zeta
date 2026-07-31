@@ -27,9 +27,12 @@ import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_refresh_coordinator.dart';
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_controller.dart';
 import 'package:zeta/src/features/usage_statistics/data/codex_usage_statistics_repository.dart';
+import 'package:zeta/src/features/usage_statistics/data/composite_usage_statistics_repository.dart';
+import 'package:zeta/src/features/usage_statistics/data/grok_usage_statistics_repository.dart';
 import 'package:zeta/src/features/usage_statistics/data/provider_agent_usage_panel_repository.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_index_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
+import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_repository.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_panel.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_page.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
@@ -187,10 +190,18 @@ class _IdeHomeState extends State<IdeHome> {
       runtimeStateProvider: _managementRuntimeState,
       runtimeListenable: _shellController,
     )..addListener(_handleAgentManagementChanged);
+    // 使用统计聚合所有内置支持 Provider 的本地历史，不绑定当前激活 Agent。
+    // 身份由各数据源固定为 codex / grok；扫描本机 ~/.codex 与 ~/.grok。
     _usageStatisticsController = UsageStatisticsController(
-      repository: CodexUsageStatisticsRepository(
-        providerLoader: _shellController.agentProviderController.activeProvider,
-        indexStore: widget.usageStatisticsIndexStore,
+      repository: CompositeUsageStatisticsRepository(
+        sources: <UsageStatisticsRepository>[
+          CodexUsageStatisticsRepository(
+            indexStore: widget.usageStatisticsIndexStore,
+            // 不启动 CLI：仅读本地 rollout；套餐额度由侧栏用量面板负责。
+            includeQuota: false,
+          ),
+          GrokUsageStatisticsRepository(includeQuota: false),
+        ],
       ),
     );
     _agentUsagePanelController = AgentUsagePanelController(

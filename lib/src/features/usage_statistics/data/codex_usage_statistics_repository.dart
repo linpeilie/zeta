@@ -12,25 +12,36 @@ typedef UsageAgentProviderLoader = Future<AgentProvider> Function();
 
 /// 基于 Codex 本地 rollout JSONL 的使用统计数据源。
 ///
+/// 记录身份固定为 Codex（[defaultAgentProviderId]），不依赖当前激活 Provider。
+/// [providerLoader] 仅用于解析 `CODEX_HOME` 与可选套餐额度；可为空，此时仅扫本机默认路径。
 /// app-server 仅用于读取当前套餐额度；历史 token 不依赖 thread/list。
 class CodexUsageStatisticsRepository implements UsageStatisticsRepository {
   CodexUsageStatisticsRepository({
-    required this.providerLoader,
     required this.indexStore,
+    this.providerLoader,
     this.scanner = const FileSystemCodexUsageLogScanner(),
     Map<String, String>? environment,
     this.homeDirectory,
     this.includeQuota = true,
+    this.providerId = defaultAgentProviderId,
+    String? providerName,
     DateTime Function()? clock,
-  }) : _environment = environment ?? Platform.environment,
+  }) : providerName =
+           providerName ?? AgentProviderConfig.defaultCodex.displayName,
+       _environment = environment ?? Platform.environment,
        _clock = clock ?? DateTime.now;
 
-  final UsageAgentProviderLoader providerLoader;
+  /// 可选；仅用于配置环境中的 `CODEX_HOME` 与 [AgentUsageQuotaProvider]。
+  final UsageAgentProviderLoader? providerLoader;
   final UsageStatisticsIndexStore indexStore;
   final CodexUsageLogScanner scanner;
   final Map<String, String> _environment;
   final String? homeDirectory;
   final bool includeQuota;
+
+  /// 写入记录的稳定 Provider 身份，不随 active provider 变化。
+  final String providerId;
+  final String providerName;
   final DateTime Function() _clock;
 
   @override
@@ -38,8 +49,17 @@ class CodexUsageStatisticsRepository implements UsageStatisticsRepository {
     required DateTime earliest,
     bool forceRefresh = false,
   }) async {
-    final provider = await providerLoader();
     final warnings = <String>[];
+    AgentProvider? provider;
+    final loader = providerLoader;
+    if (loader != null) {
+      try {
+        provider = await loader();
+      } catch (_) {
+        warnings.add('Codex 运行时暂时不可用，已仅根据本地历史统计。');
+      }
+    }
+
     final index = await indexStore.load();
     final scan = await scanner.scan(
       codexHome: _resolveCodexHome(provider),
@@ -66,7 +86,6 @@ class CodexUsageStatisticsRepository implements UsageStatisticsRepository {
 
     final records =
         _recordsFromSessions(
-            provider,
             scan.sessions.values,
           ).where((record) => !record.startedAt.isBefore(earliest)).toList()
           ..sort((left, right) => right.startedAt.compareTo(left.startedAt));
@@ -78,8 +97,8 @@ class CodexUsageStatisticsRepository implements UsageStatisticsRepository {
     );
   }
 
-  String _resolveCodexHome(AgentProvider provider) {
-    final configured = _nonEmpty(provider.config.environment['CODEX_HOME']);
+  String _resolveCodexHome(AgentProvider? provider) {
+    final configured = _nonEmpty(provider?.config.environment['CODEX_HOME']);
     if (configured != null) {
       return configured;
     }
@@ -95,7 +114,6 @@ class CodexUsageStatisticsRepository implements UsageStatisticsRepository {
   }
 
   List<AgentUsageRecord> _recordsFromSessions(
-    AgentProvider provider,
     Iterable<CodexUsageSessionSnapshot> sessions,
   ) {
     final recordsById = <String, AgentUsageRecord>{};
@@ -142,8 +160,8 @@ class CodexUsageStatisticsRepository implements UsageStatisticsRepository {
         final record = AgentUsageRecord(
           threadId: session.threadId,
           turnId: turn.id,
-          providerId: provider.config.id,
-          providerName: provider.config.displayName,
+          providerId: providerId,
+          providerName: providerName,
           projectPath: _nonEmpty(turn.cwd) ?? session.projectPath,
           sourceKind: session.sourceKind,
           startedAt: startedAt,

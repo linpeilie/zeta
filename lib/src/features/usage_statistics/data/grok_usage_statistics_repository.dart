@@ -9,22 +9,34 @@ import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_repos
 typedef GrokUsageAgentProviderLoader = Future<AgentProvider> Function();
 
 /// 基于 Grok 本地 `updates.jsonl` 的跨项目使用统计数据源。
+///
+/// 记录身份固定为 Grok（[grokAgentProviderId]），不依赖当前激活 Provider。
+/// [providerLoader] 仅用于解析 `GROK_HOME` 与可选套餐额度；可为空。
 class GrokUsageStatisticsRepository implements UsageStatisticsRepository {
   GrokUsageStatisticsRepository({
-    required this.providerLoader,
+    this.providerLoader,
     this.scanner = const FileSystemGrokUsageLogScanner(),
     Map<String, String>? environment,
     this.homeDirectory,
     this.includeQuota = true,
+    this.providerId = grokAgentProviderId,
+    String? providerName,
     DateTime Function()? clock,
-  }) : _environment = environment ?? Platform.environment,
+  }) : providerName =
+           providerName ?? AgentProviderConfig.defaultGrok.displayName,
+       _environment = environment ?? Platform.environment,
        _clock = clock ?? DateTime.now;
 
-  final GrokUsageAgentProviderLoader providerLoader;
+  /// 可选；仅用于配置环境中的 `GROK_HOME` 与 [AgentUsageQuotaProvider]。
+  final GrokUsageAgentProviderLoader? providerLoader;
   final GrokUsageLogScanner scanner;
   final Map<String, String> _environment;
   final String? homeDirectory;
   final bool includeQuota;
+
+  /// 写入记录的稳定 Provider 身份，不随 active provider 变化。
+  final String providerId;
+  final String providerName;
   final DateTime Function() _clock;
 
   @override
@@ -32,12 +44,22 @@ class GrokUsageStatisticsRepository implements UsageStatisticsRepository {
     required DateTime earliest,
     bool forceRefresh = false,
   }) async {
-    final provider = await providerLoader();
+    final warnings = <String>[];
+    AgentProvider? provider;
+    final loader = providerLoader;
+    if (loader != null) {
+      try {
+        provider = await loader();
+      } catch (_) {
+        warnings.add('Grok 运行时暂时不可用，已仅根据本地历史统计。');
+      }
+    }
+
     final scan = await scanner.scan(
       grokHome: _resolveGrokHome(provider),
       forceRefresh: forceRefresh,
     );
-    final warnings = scan.warnings.toList();
+    warnings.addAll(scan.warnings);
 
     AgentUsageQuotaSnapshot? quota;
     if (includeQuota && provider is AgentUsageQuotaProvider) {
@@ -60,8 +82,8 @@ class GrokUsageStatisticsRepository implements UsageStatisticsRepository {
           AgentUsageRecord(
             threadId: session.threadId,
             turnId: turn.id,
-            providerId: provider.config.id,
-            providerName: provider.config.displayName,
+            providerId: providerId,
+            providerName: providerName,
             projectPath: _nonEmpty(turn.cwd) ?? session.projectPath,
             sourceKind: 'grok_acp',
             startedAt: startedAt,
@@ -94,8 +116,8 @@ class GrokUsageStatisticsRepository implements UsageStatisticsRepository {
     );
   }
 
-  String _resolveGrokHome(AgentProvider provider) {
-    final configured = _nonEmpty(provider.config.environment['GROK_HOME']);
+  String _resolveGrokHome(AgentProvider? provider) {
+    final configured = _nonEmpty(provider?.config.environment['GROK_HOME']);
     if (configured != null) {
       return configured;
     }
