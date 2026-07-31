@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
+import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
 
 /// 流式 UI 刷新的最小间隔，用于约束发布频率。
 ///
@@ -33,7 +34,7 @@ final class AgentConversationUiSignalsDiagnostics {
   /// 未单独发布、而是合并进已有普通批次或立即刷新中的请求数。
   final int mergedRequestCount;
 
-  /// 携带至少一个有效刷新标志并实际执行的 publish 次数。
+  /// 携带至少一个有效 region/effect 并实际执行的 publish 次数。
   final int actualPublishCount;
 
   /// 旧兼容通知回调的调用次数。
@@ -45,12 +46,12 @@ final class AgentConversationUiSignalsDiagnostics {
 
 /// Agent 面板的分区刷新信号与流式节流器。
 ///
-/// 它把 UI 刷新拆成 header/history/composer/pending interaction/
-/// live turn/auto scroll 等分区信号，避免流式输出时整页频繁重建。
+/// 它消费类型化 region/effect 请求，并发布 header/history/composer/
+/// pending interaction/live turn 等分区信号，避免流式输出时整页频繁重建。
 ///
 /// ## 流式刷新背压
 ///
-/// - **dirty 合并**：多次 [scheduleStreamFlush] 只合并标志位。
+/// - **dirty 合并**：多次 [scheduleStreamFlush] 合并 region 与 effect。
 /// - **min interval**：[kAgentStreamFlushInterval]。
 /// - **stream in-flight**（Phase 2）：仅 **timer 驱动的纯流式 flush**
 ///   在上一帧未结束时再 defer 一拍；[flushStreamChangesNow] 关键路径
@@ -79,11 +80,8 @@ class AgentConversationUiSignals {
   final ValueNotifier<int> _autoScrollTickNotifier = ValueNotifier<int>(0);
 
   Timer? _streamFlushTimer;
-  bool _streamNeedsLiveFlush = false;
-  bool _streamNeedsHeaderFlush = false;
-  bool _streamNeedsComposerFlush = false;
-  bool _streamNeedsAutoScroll = false;
-  bool _streamNeedsExpansionFlush = false;
+  AgentUiUpdateRequest _pendingStreamRequest = AgentUiUpdateRequest.none;
+  AgentUiUpdateRequest? _debugLastAcceptedRequest;
 
   /// 上一拍纯流式 publish 后、帧/事件循环结束前为 true。
   bool _streamPublishInFlight = false;
@@ -109,6 +107,11 @@ class AgentConversationUiSignals {
   /// 兼容既有测试诊断入口；新测试优先读取 [diagnostics]。
   int get debugSkippedInFlightStreamFlushCount =>
       _skippedInFlightStreamFlushCount;
+
+  /// 最近一次被入口接受或合并后的无 payload 请求，仅用于测试事件映射。
+  @visibleForTesting
+  AgentUiUpdateRequest? get debugLastAcceptedRequest =>
+      _debugLastAcceptedRequest;
 
   int get autoScrollTick => _autoScrollTickNotifier.value;
 
@@ -139,78 +142,70 @@ class AgentConversationUiSignals {
 
   ValueListenable<int> get autoScrollTickListenable => _autoScrollTickNotifier;
 
-  void publish({
-    bool history = false,
-    bool syncLiveTurn = false,
-    bool header = false,
-    bool composer = false,
-    bool pendingInteraction = false,
-    bool expansion = false,
-    bool liveTurn = false,
-    bool autoScroll = false,
-  }) {
+  /// 在当前同步发布边界应用一个类型化 UI 更新请求。
+  ///
+  /// [AgentUiUpdateRequest.urgency] 描述请求抵达该边界之前的调度意图；
+  /// 此方法不再二次调度，以保持既有同步发布行为。
+  void publish(AgentUiUpdateRequest request) {
     if (_isDisposed()) {
       return;
     }
-    if (!history &&
-        !syncLiveTurn &&
-        !header &&
-        !composer &&
-        !pendingInteraction &&
-        !expansion &&
-        !liveTurn &&
-        !autoScroll) {
+    if (request.isEmpty) {
       return;
     }
+    _debugLastAcceptedRequest = request;
     _actualPublishCount += 1;
-    if (syncLiveTurn) {
+    if (request.regions.contains(AgentUiRegion.liveTurnBinding)) {
       _timeline.syncLiveTurnBinding();
     }
-    if (history) {
+    if (request.regions.contains(AgentUiRegion.history)) {
       _historyVersionNotifier.value += 1;
     }
-    if (header) {
+    if (request.regions.contains(AgentUiRegion.header)) {
       _headerVersionNotifier.value += 1;
     }
-    if (composer) {
+    if (request.regions.contains(AgentUiRegion.composer)) {
       _composerVersionNotifier.value += 1;
     }
-    if (pendingInteraction) {
+    if (request.regions.contains(AgentUiRegion.pendingInteraction)) {
       _pendingInteractionVersionNotifier.value += 1;
     }
-    if (expansion) {
+    if (request.regions.contains(AgentUiRegion.expansion)) {
       _expansionVersionNotifier.value += 1;
     }
-    if (liveTurn) {
+    if (request.regions.contains(AgentUiRegion.liveTurn)) {
       _timeline.liveTurnState?.markDirty();
       _timeline.liveTurnState?.flushNow();
     }
-    if (autoScroll) {
-      _autoScrollTickNotifier.value += 1;
+    for (final effect in request.effects) {
+      if (effect is AgentRequestAutoScroll) {
+        // Widget 暂时仍订阅旧 tick；类型化 effect 在此兼容边界被消费一次。
+        _autoScrollTickNotifier.value += 1;
+      }
     }
     _legacyNotifyCount += 1;
     _onLegacyNotify();
   }
 
-  void scheduleStreamFlush({
-    bool header = false,
-    bool composer = false,
-    bool autoScroll = false,
-    bool expansion = false,
-  }) {
+  /// 将 next-frame 请求合并进既有 16 ms 流式刷新窗口。
+  void scheduleStreamFlush(AgentUiUpdateRequest request) {
+    assert(
+      request.urgency == AgentUiUpdateUrgency.nextFrame,
+      'scheduleStreamFlush 只接受 nextFrame 请求。',
+    );
     if (_isDisposed()) {
+      return;
+    }
+    if (request.isEmpty) {
       return;
     }
     _scheduledStreamFlushCount += 1;
     if (_hasPendingStreamChanges) {
       _mergedRequestCount += 1;
     }
-    _streamNeedsLiveFlush = true;
-    _streamNeedsHeaderFlush = _streamNeedsHeaderFlush || header;
-    _streamNeedsComposerFlush = _streamNeedsComposerFlush || composer;
-    _streamNeedsAutoScroll = _streamNeedsAutoScroll || autoScroll;
-    _streamNeedsExpansionFlush = _streamNeedsExpansionFlush || expansion;
-    // 单例 timer：同一窗口内多次 schedule 只合并标志。
+    _pendingStreamRequest = _pendingStreamRequest.mergedWith(request);
+    _debugLastAcceptedRequest = _pendingStreamRequest;
+    // 单例 timer：同一窗口内多次 schedule 只合并类型化请求。
     _streamFlushTimer ??= Timer(
       kAgentStreamFlushInterval,
       flushPendingStreamChangesNow,
@@ -222,10 +217,14 @@ class AgentConversationUiSignals {
     if (_isDisposed()) {
       return;
     }
-    // 关键标志不应走 timer 路径长期滞留；若已有 composer 等，改立即 force。
-    final hasCriticalScheduled = _streamNeedsComposerFlush;
+    // 关键 region 不应走 timer 路径长期滞留；若已有 composer，改立即 force。
+    final hasCriticalScheduled = _pendingStreamRequest.regions.contains(
+      AgentUiRegion.composer,
+    );
     if (hasCriticalScheduled) {
-      flushStreamChangesNow();
+      flushStreamChangesNow(
+        AgentUiUpdateRequest(urgency: AgentUiUpdateUrgency.immediate),
+      );
       return;
     }
 
@@ -240,42 +239,23 @@ class AgentConversationUiSignals {
     }
 
     _streamFlushTimer = null;
-    final live = _streamNeedsLiveFlush;
-    final header = _streamNeedsHeaderFlush;
-    final autoScroll = _streamNeedsAutoScroll;
-    final expansion = _streamNeedsExpansionFlush;
-    _streamNeedsLiveFlush = false;
-    _streamNeedsHeaderFlush = false;
-    _streamNeedsComposerFlush = false;
-    _streamNeedsAutoScroll = false;
-    _streamNeedsExpansionFlush = false;
-
-    if (!live && !header && !autoScroll && !expansion) {
+    final request = _takePendingStreamRequest();
+    if (request.isEmpty) {
       return;
     }
 
-    publish(
-      header: header,
-      expansion: expansion,
-      liveTurn: live,
-      autoScroll: autoScroll,
-    );
+    publish(request);
     _armStreamPublishInFlight();
   }
 
   /// 关键路径立即发布；**永不**被 stream in-flight 阻塞。
   ///
-  /// 会取消 timer 并吸收已调度的 stream 标志。
-  void flushStreamChangesNow({
-    bool history = false,
-    bool syncLiveTurn = false,
-    bool header = false,
-    bool composer = false,
-    bool pendingInteraction = false,
-    bool expansion = false,
-    bool liveTurn = false,
-    bool autoScroll = false,
-  }) {
+  /// 会取消 timer 并吸收已调度的 stream 请求。
+  void flushStreamChangesNow(AgentUiUpdateRequest request) {
+    assert(
+      request.urgency == AgentUiUpdateUrgency.immediate,
+      'flushStreamChangesNow 只接受 immediate 请求。',
+    );
     if (_isDisposed()) {
       return;
     }
@@ -283,28 +263,11 @@ class AgentConversationUiSignals {
     if (_hasPendingStreamChanges) {
       _mergedRequestCount += 1;
     }
-    final scheduledLiveFlush = _streamNeedsLiveFlush;
-    final scheduledHeaderFlush = _streamNeedsHeaderFlush;
-    final scheduledComposerFlush = _streamNeedsComposerFlush;
-    final scheduledAutoScroll = _streamNeedsAutoScroll;
-    final scheduledExpansionFlush = _streamNeedsExpansionFlush;
+    final mergedRequest = _pendingStreamRequest.mergedWith(request);
     _streamFlushTimer?.cancel();
     _streamFlushTimer = null;
-    _streamNeedsLiveFlush = false;
-    _streamNeedsHeaderFlush = false;
-    _streamNeedsComposerFlush = false;
-    _streamNeedsAutoScroll = false;
-    _streamNeedsExpansionFlush = false;
-    publish(
-      history: history,
-      syncLiveTurn: syncLiveTurn,
-      header: header || scheduledHeaderFlush,
-      composer: composer || scheduledComposerFlush,
-      pendingInteraction: pendingInteraction,
-      expansion: expansion || scheduledExpansionFlush,
-      liveTurn: liveTurn || scheduledLiveFlush,
-      autoScroll: autoScroll || scheduledAutoScroll,
-    );
+    _pendingStreamRequest = AgentUiUpdateRequest.none;
+    publish(mergedRequest);
     // 关键路径不占用 stream in-flight 门闩，避免阻塞后续 cadence。
   }
 
@@ -350,10 +313,11 @@ class AgentConversationUiSignals {
     }
   }
 
-  bool get _hasPendingStreamChanges =>
-      _streamNeedsLiveFlush ||
-      _streamNeedsHeaderFlush ||
-      _streamNeedsComposerFlush ||
-      _streamNeedsAutoScroll ||
-      _streamNeedsExpansionFlush;
+  AgentUiUpdateRequest _takePendingStreamRequest() {
+    final request = _pendingStreamRequest;
+    _pendingStreamRequest = AgentUiUpdateRequest.none;
+    return request;
+  }
+
+  bool get _hasPendingStreamChanges => !_pendingStreamRequest.isEmpty;
 }

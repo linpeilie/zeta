@@ -18,6 +18,7 @@ import 'package:zeta/src/features/agent/application/agent_elapsed_ticker.dart';
 import 'package:zeta/src/features/agent/application/agent_event_frame_scheduler.dart';
 import 'package:zeta/src/features/agent/application/agent_event_stream_buffer.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_event_listener_gate.dart';
+import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -103,6 +104,7 @@ class AgentConversationViewModel extends ChangeNotifier {
   final AgentPlanExecutionHandoffController _planExecutionHandoffController =
       AgentPlanExecutionHandoffController();
   late final AgentConversationUiSignals _uiSignals;
+  AgentUiUpdateRequest? _debugLastUiUpdateRequest;
   final AgentElapsedTicker _elapsedTicker = AgentElapsedTicker();
   late final ValueNotifier<AgentConversationThreadSnapshot>
   _threadSnapshotListenable;
@@ -280,6 +282,11 @@ class AgentConversationViewModel extends ChangeNotifier {
   AgentConversationUiSignalsDiagnostics get uiSignalsDiagnostics =>
       _uiSignals.diagnostics;
 
+  /// 最近一次由 ViewModel 生成的无 payload UI 更新请求，仅供事件映射测试。
+  @visibleForTesting
+  AgentUiUpdateRequest? get debugLastUiUpdateRequest =>
+      _debugLastUiUpdateRequest;
+
   ValueListenable<int> get historyVersionListenable =>
       _uiSignals.historyVersionListenable;
 
@@ -384,7 +391,15 @@ class AgentConversationViewModel extends ChangeNotifier {
       return;
     }
     _conversationModeController.selectMode(AgentConversationModeId.defaultMode);
-    _publishUiChanges(pendingInteraction: true, composer: true);
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{
+          AgentUiRegion.pendingInteraction,
+          AgentUiRegion.composer,
+        },
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
     await sendMessage(planExecutionPrompt);
   }
 
@@ -395,7 +410,15 @@ class AgentConversationViewModel extends ChangeNotifier {
       return;
     }
     _conversationModeController.selectMode(AgentConversationModeId.plan);
-    _publishUiChanges(pendingInteraction: true, composer: true);
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{
+          AgentUiRegion.pendingInteraction,
+          AgentUiRegion.composer,
+        },
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
   }
 
   /// 关闭本地执行提示，不向 Provider 回写任何审批结果。
@@ -404,7 +427,15 @@ class AgentConversationViewModel extends ChangeNotifier {
         !_planExecutionHandoffController.resolve(request)) {
       return;
     }
-    _publishUiChanges(pendingInteraction: true, composer: true);
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{
+          AgentUiRegion.pendingInteraction,
+          AgentUiRegion.composer,
+        },
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
   }
 
   /// 重试当前 Provider 的模式目录探测。
@@ -566,11 +597,16 @@ class AgentConversationViewModel extends ChangeNotifier {
       message: 'Loading $activeProviderName',
     );
     _publishUiChanges(
-      history: true,
-      syncLiveTurn: true,
-      header: true,
-      composer: true,
-      pendingInteraction: true,
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{
+          AgentUiRegion.history,
+          AgentUiRegion.liveTurnBinding,
+          AgentUiRegion.header,
+          AgentUiRegion.composer,
+          AgentUiRegion.pendingInteraction,
+        },
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
     );
     await loadModels();
   }
@@ -835,27 +871,52 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   void toggleToolCall(String toolCallId) {
     _timeline.toggleToolCall(toolCallId);
-    _publishUiChanges(expansion: true);
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{AgentUiRegion.expansion},
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
   }
 
   void togglePlanMessage(String messageId) {
     _timeline.togglePlanMessage(messageId);
-    _publishUiChanges(expansion: true);
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{AgentUiRegion.expansion},
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
   }
 
   void toggleActivePlan(String turnId) {
     _timeline.toggleActivePlan(turnId);
-    _publishUiChanges(expansion: true);
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{AgentUiRegion.expansion},
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
   }
 
   void toggleCommandGroup(String commandGroupId) {
     _timeline.toggleCommandGroup(commandGroupId);
-    _publishUiChanges(expansion: true);
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{AgentUiRegion.expansion},
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
   }
 
   void toggleFileEditItem(String fileEditItemId) {
     _timeline.toggleFileEditItem(fileEditItemId);
-    _publishUiChanges(expansion: true);
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{AgentUiRegion.expansion},
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
   }
 
   /// 加载全局 provider 设置。
@@ -898,7 +959,9 @@ class AgentConversationViewModel extends ChangeNotifier {
         details: error.toString(),
       );
     }
-    _publishUiChanges();
+    _publishUiChanges(
+      AgentUiUpdateRequest(urgency: AgentUiUpdateUrgency.immediate),
+    );
   }
 
   /// 预加载模型列表。
@@ -910,7 +973,12 @@ class AgentConversationViewModel extends ChangeNotifier {
     if (!providerController.hasRuntimeProvider) {
       _modelsRefreshing = false;
       _modelRefreshError = null;
-      _publishUiChanges(composer: true);
+      _publishUiChanges(
+        AgentUiUpdateRequest(
+          regions: const <AgentUiRegion>{AgentUiRegion.composer},
+          urgency: AgentUiUpdateUrgency.immediate,
+        ),
+      );
       return;
     }
     final config = providerController.activeProviderConfig;
@@ -924,7 +992,12 @@ class AgentConversationViewModel extends ChangeNotifier {
       _log.fine(
         'Deferring ${config.displayName} preload until session bootstrap',
       );
-      _publishUiChanges(composer: true);
+      _publishUiChanges(
+        AgentUiUpdateRequest(
+          regions: const <AgentUiRegion>{AgentUiRegion.composer},
+          urgency: AgentUiUpdateUrgency.immediate,
+        ),
+      );
       return;
     }
     final hasWorkspace = _projectPath?.trim().isNotEmpty ?? false;
@@ -932,12 +1005,22 @@ class AgentConversationViewModel extends ChangeNotifier {
       _log.fine(
         'Deferring ${config.displayName} preload until a workspace is ready',
       );
-      _publishUiChanges(composer: true);
+      _publishUiChanges(
+        AgentUiUpdateRequest(
+          regions: const <AgentUiRegion>{AgentUiRegion.composer},
+          urgency: AgentUiUpdateUrgency.immediate,
+        ),
+      );
       return;
     }
     _modelsRefreshing = true;
     _modelRefreshError = null;
-    _publishUiChanges(composer: true);
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{AgentUiRegion.composer},
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
     try {
       AgentProvider? initializedProvider;
       final result = await providerController.modelCatalogRepository.load(
@@ -966,7 +1049,12 @@ class AgentConversationViewModel extends ChangeNotifier {
       _modelRefreshError = '模型列表刷新失败，已保留现有配置。';
     } finally {
       _modelsRefreshing = false;
-      _publishUiChanges(composer: true);
+      _publishUiChanges(
+        AgentUiUpdateRequest(
+          regions: const <AgentUiRegion>{AgentUiRegion.composer},
+          urgency: AgentUiUpdateUrgency.immediate,
+        ),
+      );
     }
   }
 
@@ -978,7 +1066,12 @@ class AgentConversationViewModel extends ChangeNotifier {
 
   Future<void> selectPermissionPreset(AgentPermissionPreset preset) async {
     await _permissionSelectionController.selectPreset(preset);
-    _publishUiChanges(composer: true);
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{AgentUiRegion.composer},
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
   }
 
   /// Guardian 拒绝后的人工放行。
@@ -999,7 +1092,15 @@ class AgentConversationViewModel extends ChangeNotifier {
         event: review.raw,
       );
       _latestDeniedAutoReview = null;
-      _publishUiChanges(header: true, liveTurn: true);
+      _publishUiChanges(
+        AgentUiUpdateRequest(
+          regions: const <AgentUiRegion>{
+            AgentUiRegion.header,
+            AgentUiRegion.liveTurn,
+          },
+          urgency: AgentUiUpdateUrgency.immediate,
+        ),
+      );
     } catch (error) {
       _log.warning(
         'Could not approve guardian-denied action (${error.runtimeType})',
@@ -1045,14 +1146,27 @@ class AgentConversationViewModel extends ChangeNotifier {
         message: 'Could not update session option',
         details: error.toString(),
       );
-      _publishUiChanges(header: true, composer: true);
+      _publishUiChanges(
+        AgentUiUpdateRequest(
+          regions: const <AgentUiRegion>{
+            AgentUiRegion.header,
+            AgentUiRegion.composer,
+          },
+          urgency: AgentUiUpdateUrgency.immediate,
+        ),
+      );
     }
   }
 
   void _handleModelList(AgentModelList modelList) {
     _modelRefreshError = null;
     _modelSelectionController.handleModelList(modelList);
-    _publishUiChanges(composer: true);
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{AgentUiRegion.composer},
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
   }
 
   void _applyThreadSelectionFromHistory(AgentThreadHistorySnapshot history) {
@@ -1428,11 +1542,16 @@ class AgentConversationViewModel extends ChangeNotifier {
         }
       }
       _publishUiChanges(
-        history: true,
-        syncLiveTurn: true,
-        header: true,
-        composer: true,
-        pendingInteraction: true,
+        AgentUiUpdateRequest(
+          regions: const <AgentUiRegion>{
+            AgentUiRegion.history,
+            AgentUiRegion.liveTurnBinding,
+            AgentUiRegion.header,
+            AgentUiRegion.composer,
+            AgentUiRegion.pendingInteraction,
+          },
+          urgency: AgentUiUpdateUrgency.immediate,
+        ),
       );
       return;
     }
@@ -1448,7 +1567,15 @@ class AgentConversationViewModel extends ChangeNotifier {
       _threadOpenPhase = AgentThreadOpenPhase.idle;
       _requiresResumedSelectedThread = false;
     }
-    _publishUiChanges(header: true, composer: true);
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{
+          AgentUiRegion.header,
+          AgentUiRegion.composer,
+        },
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
   }
 
   /// 发送用户消息。
@@ -1520,12 +1647,17 @@ class AgentConversationViewModel extends ChangeNotifier {
     );
     _syncElapsedTicker();
     _publishUiChanges(
-      syncLiveTurn: true,
-      liveTurn: true,
-      header: true,
-      composer: true,
-      pendingInteraction: clearedPlanExecution,
-      autoScroll: true,
+      AgentUiUpdateRequest(
+        regions: <AgentUiRegion>{
+          AgentUiRegion.liveTurnBinding,
+          AgentUiRegion.liveTurn,
+          AgentUiRegion.header,
+          AgentUiRegion.composer,
+          if (clearedPlanExecution) AgentUiRegion.pendingInteraction,
+        },
+        urgency: AgentUiUpdateUrgency.immediate,
+        effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
+      ),
     );
 
     try {
@@ -1561,7 +1693,12 @@ class AgentConversationViewModel extends ChangeNotifier {
           _currentThreadTitle == defaultThreadTitle &&
           trimmed.isNotEmpty) {
         _applyThreadTitle(_provisionalThreadTitle(trimmed));
-        _publishUiChanges(header: true);
+        _publishUiChanges(
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{AgentUiRegion.header},
+            urgency: AgentUiUpdateUrgency.immediate,
+          ),
+        );
       }
       _log.info('Sending Agent request with provider ${provider.config.id}');
       if (isNewTurn) {
@@ -1583,10 +1720,15 @@ class AgentConversationViewModel extends ChangeNotifier {
             _isStillSelectedThread(switchToken, session.id)) {
           _timeline.beginLiveTurnGroup(turn);
           _publishUiChanges(
-            syncLiveTurn: true,
-            liveTurn: true,
-            header: true,
-            composer: true,
+            AgentUiUpdateRequest(
+              regions: const <AgentUiRegion>{
+                AgentUiRegion.liveTurnBinding,
+                AgentUiRegion.liveTurn,
+                AgentUiRegion.header,
+                AgentUiRegion.composer,
+              },
+              urgency: AgentUiUpdateUrgency.immediate,
+            ),
           );
         }
       } else {
@@ -1712,7 +1854,15 @@ class AgentConversationViewModel extends ChangeNotifier {
   Future<void> switchThread(AgentThreadSummary thread) async {
     final switchToken = ++_threadSwitchToken;
     if (_planExecutionHandoffController.clear()) {
-      _publishUiChanges(pendingInteraction: true, composer: true);
+      _publishUiChanges(
+        AgentUiUpdateRequest(
+          regions: const <AgentUiRegion>{
+            AgentUiRegion.pendingInteraction,
+            AgentUiRegion.composer,
+          },
+          urgency: AgentUiUpdateUrgency.immediate,
+        ),
+      );
     }
     // 在第一个 await 前让旧 thread listener 失效，避免其微任务事件污染新时间线。
     _invalidateProviderEventListener();
@@ -1805,10 +1955,15 @@ class AgentConversationViewModel extends ChangeNotifier {
       message: 'Loading history',
     );
     _publishUiChanges(
-      history: true,
-      syncLiveTurn: true,
-      header: true,
-      composer: true,
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{
+          AgentUiRegion.history,
+          AgentUiRegion.liveTurnBinding,
+          AgentUiRegion.header,
+          AgentUiRegion.composer,
+        },
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
     );
 
     try {
@@ -1855,11 +2010,16 @@ class AgentConversationViewModel extends ChangeNotifier {
         message: '$activeProviderName ready',
       );
       _publishUiChanges(
-        history: true,
-        syncLiveTurn: true,
-        header: true,
-        composer: true,
-        autoScroll: true,
+        AgentUiUpdateRequest(
+          regions: const <AgentUiRegion>{
+            AgentUiRegion.history,
+            AgentUiRegion.liveTurnBinding,
+            AgentUiRegion.header,
+            AgentUiRegion.composer,
+          },
+          urgency: AgentUiUpdateUrgency.immediate,
+          effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
+        ),
       );
     } catch (error) {
       if (!_isCurrentSwitch(switchToken)) {
@@ -1885,7 +2045,16 @@ class AgentConversationViewModel extends ChangeNotifier {
     List<String> execpolicyAmendment = const <String>[],
   }) async {
     _timeline.removePermissionRequest(request.id);
-    _publishUiChanges(history: true, liveTurn: true, pendingInteraction: true);
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{
+          AgentUiRegion.history,
+          AgentUiRegion.liveTurn,
+          AgentUiRegion.pendingInteraction,
+        },
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
     _log.info(
       'Responding to Agent permission ${request.kind.name}: approved=$approved',
     );
@@ -1912,7 +2081,16 @@ class AgentConversationViewModel extends ChangeNotifier {
     Map<String, List<String>> answers = const <String, List<String>>{},
   }) async {
     _timeline.removeQuestionRequest(request.id);
-    _publishUiChanges(history: true, liveTurn: true, pendingInteraction: true);
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{
+          AgentUiRegion.history,
+          AgentUiRegion.liveTurn,
+          AgentUiRegion.pendingInteraction,
+        },
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
     _log.info(
       'Responding to Agent question '
       '(${answers.length} answered questions)',
@@ -1931,7 +2109,16 @@ class AgentConversationViewModel extends ChangeNotifier {
     AgentPlanApprovalDecisionKind kind,
   ) async {
     _timeline.removePlanApprovalRequest(request.id);
-    _publishUiChanges(history: true, liveTurn: true, pendingInteraction: true);
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{
+          AgentUiRegion.history,
+          AgentUiRegion.liveTurn,
+          AgentUiRegion.pendingInteraction,
+        },
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
     final planApproval = _provider?.bundle.planApproval;
     if (planApproval == null) {
       return;
@@ -1966,7 +2153,15 @@ class AgentConversationViewModel extends ChangeNotifier {
       state: AgentProviderConnectionState.running,
       message: 'Creating branch',
     );
-    _publishUiChanges(header: true, composer: true);
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{
+          AgentUiRegion.header,
+          AgentUiRegion.composer,
+        },
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
 
     try {
       final provider = await _ensureProvider();
@@ -2070,7 +2265,15 @@ class AgentConversationViewModel extends ChangeNotifier {
       return;
     }
     _isCompacting = true;
-    _publishUiChanges(header: true, composer: true);
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{
+          AgentUiRegion.header,
+          AgentUiRegion.composer,
+        },
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
     try {
       final provider = await _ensureProvider();
       final threadMutations = provider.bundle.threadMutations;
@@ -2084,7 +2287,15 @@ class AgentConversationViewModel extends ChangeNotifier {
       _isCompacting = false;
       _log.warning('Could not compact thread $threadId (${error.runtimeType})');
       _markError('Could not compact context', details: error.toString());
-      _publishUiChanges(header: true, composer: true);
+      _publishUiChanges(
+        AgentUiUpdateRequest(
+          regions: const <AgentUiRegion>{
+            AgentUiRegion.header,
+            AgentUiRegion.composer,
+          },
+          urgency: AgentUiUpdateUrgency.immediate,
+        ),
+      );
     }
   }
 
@@ -2100,7 +2311,12 @@ class AgentConversationViewModel extends ChangeNotifier {
     }
     final previousTitle = _currentThreadTitle;
     _applyThreadTitle(trimmed);
-    _publishUiChanges(header: true);
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{AgentUiRegion.header},
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
     try {
       final provider = await _ensureProvider();
       final threadMutations = provider.bundle.threadMutations;
@@ -2113,7 +2329,12 @@ class AgentConversationViewModel extends ChangeNotifier {
     } catch (error) {
       if (sessionId == threadId && _currentThreadTitle == trimmed) {
         _applyThreadTitle(previousTitle);
-        _publishUiChanges(header: true);
+        _publishUiChanges(
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{AgentUiRegion.header},
+            urgency: AgentUiUpdateUrgency.immediate,
+          ),
+        );
       }
       _log.warning('Could not rename thread $threadId (${error.runtimeType})');
       _markError('Could not rename thread', details: error.toString());
@@ -2156,7 +2377,12 @@ class AgentConversationViewModel extends ChangeNotifier {
       return;
     }
     _applyThreadTitle(trimmed);
-    _publishUiChanges(header: true);
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{AgentUiRegion.header},
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
   }
 
   @override
@@ -2202,9 +2428,14 @@ class AgentConversationViewModel extends ChangeNotifier {
     final planExecutionCleared =
         isReadOnly && _planExecutionHandoffController.clear();
     _publishUiChanges(
-      header: true,
-      composer: true,
-      pendingInteraction: planExecutionCleared,
+      AgentUiUpdateRequest(
+        regions: <AgentUiRegion>{
+          AgentUiRegion.header,
+          AgentUiRegion.composer,
+          if (planExecutionCleared) AgentUiRegion.pendingInteraction,
+        },
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
     );
   }
 
@@ -2212,14 +2443,24 @@ class AgentConversationViewModel extends ChangeNotifier {
     if (_disposed) {
       return;
     }
-    _publishUiChanges(composer: true);
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{AgentUiRegion.composer},
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
   }
 
   void _handleConversationModeChanged() {
     if (_disposed) {
       return;
     }
-    _publishUiChanges(composer: true);
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{AgentUiRegion.composer},
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
   }
 
   /// 确保拿到正确的共享 provider 实例。
@@ -2361,10 +2602,15 @@ class AgentConversationViewModel extends ChangeNotifier {
     _syncElapsedTicker();
     _conversationModeController.setTurnRunning(isTurnRunning);
     _publishUiChanges(
-      history: true,
-      syncLiveTurn: true,
-      header: true,
-      composer: true,
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{
+          AgentUiRegion.history,
+          AgentUiRegion.liveTurnBinding,
+          AgentUiRegion.header,
+          AgentUiRegion.composer,
+        },
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
     );
   }
 
@@ -2404,7 +2650,15 @@ class AgentConversationViewModel extends ChangeNotifier {
           _threadOpenPhase = AgentThreadOpenPhase.idle;
           _requiresResumedSelectedThread = false;
           _applySessionTitle(session);
-          _publishUiChanges(header: true, composer: true);
+          _publishUiChanges(
+            AgentUiUpdateRequest(
+              regions: const <AgentUiRegion>{
+                AgentUiRegion.header,
+                AgentUiRegion.composer,
+              },
+              urgency: AgentUiUpdateUrgency.immediate,
+            ),
+          );
         }
         return session;
       } catch (error) {
@@ -2443,7 +2697,15 @@ class AgentConversationViewModel extends ChangeNotifier {
       _threadOpenPhase = AgentThreadOpenPhase.idle;
       _requiresResumedSelectedThread = false;
       _applySessionTitle(session);
-      _publishUiChanges(header: true, composer: true);
+      _publishUiChanges(
+        AgentUiUpdateRequest(
+          regions: const <AgentUiRegion>{
+            AgentUiRegion.header,
+            AgentUiRegion.composer,
+          },
+          urgency: AgentUiUpdateUrgency.immediate,
+        ),
+      );
     }
     return session;
   }
@@ -2612,7 +2874,9 @@ class AgentConversationViewModel extends ChangeNotifier {
     switch (event) {
       case AgentStatusEvent():
         _status = event.status;
-        _publishUiChanges();
+        _publishUiChanges(
+          AgentUiUpdateRequest(urgency: AgentUiUpdateUrgency.immediate),
+        );
       case AgentSessionStartedEvent():
         if (!_shouldAcceptSessionStarted(event.session.id)) {
           break;
@@ -2630,7 +2894,15 @@ class AgentConversationViewModel extends ChangeNotifier {
         _threadOpenPhase = AgentThreadOpenPhase.idle;
         _requiresResumedSelectedThread = false;
         _applySessionTitle(event.session);
-        _publishUiChanges(header: true, composer: true);
+        _publishUiChanges(
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{
+              AgentUiRegion.header,
+              AgentUiRegion.composer,
+            },
+            urgency: AgentUiUpdateUrgency.immediate,
+          ),
+        );
       case AgentThreadStatusChangedEvent():
         if (!_shouldHandleEventForCurrentThread(sessionId: event.threadId)) {
           break;
@@ -2640,7 +2912,12 @@ class AgentConversationViewModel extends ChangeNotifier {
           waitingOnApproval: event.waitingOnApproval,
           waitingOnUserInput: event.waitingOnUserInput,
         );
-        _publishUiChanges(header: true);
+        _publishUiChanges(
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{AgentUiRegion.header},
+            urgency: AgentUiUpdateUrgency.immediate,
+          ),
+        );
       case AgentThreadNameUpdatedEvent():
         if (!_shouldHandleEventForCurrentThread(sessionId: event.threadId)) {
           break;
@@ -2650,7 +2927,12 @@ class AgentConversationViewModel extends ChangeNotifier {
           // 服务端自动/手动改名后同步详情头栏与 session 缓存。
           _applyThreadTitle(name);
         }
-        _publishUiChanges(header: true);
+        _publishUiChanges(
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{AgentUiRegion.header},
+            urgency: AgentUiUpdateUrgency.immediate,
+          ),
+        );
       case AgentThreadArchivedEvent():
       case AgentThreadUnarchivedEvent():
       case AgentThreadDeletedEvent():
@@ -2666,7 +2948,15 @@ class AgentConversationViewModel extends ChangeNotifier {
           break;
         }
         _isCompacting = false;
-        _publishUiChanges(header: true, composer: true);
+        _publishUiChanges(
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{
+              AgentUiRegion.header,
+              AgentUiRegion.composer,
+            },
+            urgency: AgentUiUpdateUrgency.immediate,
+          ),
+        );
       case AgentThreadSettingsUpdatedEvent():
         if (!_shouldHandleEventForCurrentThread(sessionId: event.threadId)) {
           break;
@@ -2678,7 +2968,12 @@ class AgentConversationViewModel extends ChangeNotifier {
           permissionProfileId: event.activePermissionProfileId,
         );
         _conversationModeController.applyThreadSettings(event);
-        _publishUiChanges(composer: true);
+        _publishUiChanges(
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{AgentUiRegion.composer},
+            urgency: AgentUiUpdateUrgency.immediate,
+          ),
+        );
       case AgentAutoApprovalReviewEvent():
         if (!_shouldHandleEventForCurrentThread(
           sessionId: event.threadId,
@@ -2694,7 +2989,16 @@ class AgentConversationViewModel extends ChangeNotifier {
             _latestDeniedAutoReview = null;
           }
         }
-        _publishUiChanges(header: true, liveTurn: true, history: true);
+        _publishUiChanges(
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{
+              AgentUiRegion.header,
+              AgentUiRegion.liveTurn,
+              AgentUiRegion.history,
+            },
+            urgency: AgentUiUpdateUrgency.immediate,
+          ),
+        );
       case AgentTurnStartedEvent():
         if (!_shouldHandleEventForCurrentThread(
           sessionId: event.turn.sessionId,
@@ -2708,10 +3012,15 @@ class AgentConversationViewModel extends ChangeNotifier {
         _consumeActivityDirty();
         _syncElapsedTicker();
         _flushStreamChangesNow(
-          syncLiveTurn: true,
-          liveTurn: true,
-          header: true,
-          composer: true,
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{
+              AgentUiRegion.liveTurnBinding,
+              AgentUiRegion.liveTurn,
+              AgentUiRegion.header,
+              AgentUiRegion.composer,
+            },
+            urgency: AgentUiUpdateUrgency.immediate,
+          ),
         );
       case AgentTurnCompletedEvent():
         if (!_shouldHandleEventForCurrentThread(
@@ -2753,12 +3062,17 @@ class AgentConversationViewModel extends ChangeNotifier {
         _consumeActivityDirty();
         _syncElapsedTicker();
         _flushStreamChangesNow(
-          history: true,
-          syncLiveTurn: true,
-          header: true,
-          composer: true,
-          pendingInteraction: planExecutionChanged,
-          autoScroll: true,
+          AgentUiUpdateRequest(
+            regions: <AgentUiRegion>{
+              AgentUiRegion.history,
+              AgentUiRegion.liveTurnBinding,
+              AgentUiRegion.header,
+              AgentUiRegion.composer,
+              if (planExecutionChanged) AgentUiRegion.pendingInteraction,
+            },
+            urgency: AgentUiUpdateUrgency.immediate,
+            effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
+          ),
         );
         onTurnCompleted?.call();
       case AgentTokenUsageEvent():
@@ -2775,11 +3089,16 @@ class AgentConversationViewModel extends ChangeNotifier {
         final usageOnHistory =
             usageTurnId != null && _timeline.isHistoryTurnId(usageTurnId);
         _flushStreamChangesNow(
-          header: true,
-          composer: true,
-          history: usageOnHistory,
-          // 无 turnId 或仍在 live 区时刷新 live footer。
-          liveTurn: !usageOnHistory,
+          AgentUiUpdateRequest(
+            regions: <AgentUiRegion>{
+              AgentUiRegion.header,
+              AgentUiRegion.composer,
+              if (usageOnHistory) AgentUiRegion.history,
+              // 无 turnId 或仍在 live 区时刷新 live footer。
+              if (!usageOnHistory) AgentUiRegion.liveTurn,
+            },
+            urgency: AgentUiUpdateUrgency.immediate,
+          ),
         );
       case AgentContextWindowUsageEvent():
         if (!_shouldHandleEventForCurrentThread(
@@ -2789,8 +3108,17 @@ class AgentConversationViewModel extends ChangeNotifier {
           break;
         }
         _timeline.updateContextWindowUsage(event);
-        // 高频上下文快照只刷新 composer；计费 header/footer 保持不变。
-        _scheduleStreamFlush(composer: true);
+        // 高频上下文快照刷新 composer；同时显式保留旧 stream gate
+        // 无条件附带的 live flush。计费 header/footer 保持不变。
+        _scheduleStreamFlush(
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{
+              AgentUiRegion.liveTurn,
+              AgentUiRegion.composer,
+            },
+            urgency: AgentUiUpdateUrgency.nextFrame,
+          ),
+        );
       case AgentMessageDeltaEvent():
         if (!_shouldHandleEventForCurrentThread(
           sessionId: event.sessionId,
@@ -2800,10 +3128,17 @@ class AgentConversationViewModel extends ChangeNotifier {
         }
         final isPlanDelta = event.kind == AgentMessageKind.plan;
         _timeline.appendMessageDelta(event);
+        final messageActivityChanged = _consumeActivityDirty();
         _scheduleStreamFlush(
-          header: _consumeActivityDirty(),
-          autoScroll: true,
-          expansion: isPlanDelta,
+          AgentUiUpdateRequest(
+            regions: <AgentUiRegion>{
+              AgentUiRegion.liveTurn,
+              if (messageActivityChanged) AgentUiRegion.header,
+              if (isPlanDelta) AgentUiRegion.expansion,
+            },
+            urgency: AgentUiUpdateUrgency.nextFrame,
+            effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
+          ),
         );
       case AgentReasoningDeltaEvent():
         if (!_shouldHandleEventForCurrentThread(
@@ -2813,10 +3148,17 @@ class AgentConversationViewModel extends ChangeNotifier {
           break;
         }
         _timeline.appendReasoningDelta(event);
+        final reasoningActivityChanged = _consumeActivityDirty();
         _scheduleStreamFlush(
-          header: _consumeActivityDirty(),
-          autoScroll: true,
-          expansion: true,
+          AgentUiUpdateRequest(
+            regions: <AgentUiRegion>{
+              AgentUiRegion.liveTurn,
+              if (reasoningActivityChanged) AgentUiRegion.header,
+              AgentUiRegion.expansion,
+            },
+            urgency: AgentUiUpdateUrgency.nextFrame,
+            effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
+          ),
         );
       case AgentMessageUpdatedEvent():
         if (!_shouldHandleEventForCurrentThread(
@@ -2826,7 +3168,13 @@ class AgentConversationViewModel extends ChangeNotifier {
           break;
         }
         _timeline.updateMessage(event);
-        _flushStreamChangesNow(liveTurn: true, autoScroll: true);
+        _flushStreamChangesNow(
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
+            urgency: AgentUiUpdateUrgency.immediate,
+            effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
+          ),
+        );
       case AgentPlanUpdatedEvent():
         if (!_shouldHandleEventForCurrentThread(
           sessionId: event.sessionId,
@@ -2835,14 +3183,24 @@ class AgentConversationViewModel extends ChangeNotifier {
           break;
         }
         _timeline.replaceActivePlan(event);
-        _flushStreamChangesNow(liveTurn: true);
+        _flushStreamChangesNow(
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
+            urgency: AgentUiUpdateUrgency.immediate,
+          ),
+        );
       case AgentSessionConfigUpdatedEvent():
         if (!_shouldHandleEventForCurrentThread(sessionId: event.sessionId)) {
           break;
         }
         _sessionConfigOptions = event.options;
         _applyThreadSelectionFromSessionConfigOptions(event.options);
-        _publishUiChanges(composer: true);
+        _publishUiChanges(
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{AgentUiRegion.composer},
+            urgency: AgentUiUpdateUrgency.immediate,
+          ),
+        );
       case AgentTurnDiffEvent():
         if (!_shouldHandleEventForCurrentThread(
           sessionId: event.sessionId,
@@ -2851,7 +3209,13 @@ class AgentConversationViewModel extends ChangeNotifier {
           break;
         }
         _timeline.upsertTurnDiff(event);
-        _flushStreamChangesNow(liveTurn: true, autoScroll: true);
+        _flushStreamChangesNow(
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
+            urgency: AgentUiUpdateUrgency.immediate,
+            effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
+          ),
+        );
       case AgentToolCallEvent():
         if (!_shouldHandleEventForCurrentThread(
           sessionId: event.toolCall.sessionId,
@@ -2871,13 +3235,27 @@ class AgentConversationViewModel extends ChangeNotifier {
               message: title.length > 80 ? '${title.substring(0, 80)}…' : title,
             );
           }
-          _scheduleStreamFlush(header: activityChanged, autoScroll: true);
+          _scheduleStreamFlush(
+            AgentUiUpdateRequest(
+              regions: <AgentUiRegion>{
+                AgentUiRegion.liveTurn,
+                if (activityChanged) AgentUiRegion.header,
+              },
+              urgency: AgentUiUpdateUrgency.nextFrame,
+              effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
+            ),
+          );
           break;
         }
         _flushStreamChangesNow(
-          liveTurn: true,
-          header: activityChanged,
-          autoScroll: true,
+          AgentUiUpdateRequest(
+            regions: <AgentUiRegion>{
+              AgentUiRegion.liveTurn,
+              if (activityChanged) AgentUiRegion.header,
+            },
+            urgency: AgentUiUpdateUrgency.immediate,
+            effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
+          ),
         );
       case AgentPermissionRequestedEvent():
         if (!_shouldHandleEventForCurrentThread(
@@ -2887,14 +3265,30 @@ class AgentConversationViewModel extends ChangeNotifier {
           break;
         }
         _timeline.addPermissionRequest(event.request);
-        _flushStreamChangesNow(liveTurn: true, pendingInteraction: true);
+        _flushStreamChangesNow(
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{
+              AgentUiRegion.liveTurn,
+              AgentUiRegion.pendingInteraction,
+            },
+            urgency: AgentUiUpdateUrgency.immediate,
+          ),
+        );
       case AgentPermissionResolvedEvent():
         // 他端已应答：按 threadId 路由，移除本端仍展示的审批卡。
         if (!_shouldHandleEventForCurrentThread(sessionId: event.threadId)) {
           break;
         }
         _timeline.removePermissionRequest(event.requestId);
-        _flushStreamChangesNow(liveTurn: true, pendingInteraction: true);
+        _flushStreamChangesNow(
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{
+              AgentUiRegion.liveTurn,
+              AgentUiRegion.pendingInteraction,
+            },
+            urgency: AgentUiUpdateUrgency.immediate,
+          ),
+        );
       case AgentQuestionRequestedEvent():
         if (!_shouldHandleEventForCurrentThread(
           sessionId: event.request.sessionId,
@@ -2903,13 +3297,29 @@ class AgentConversationViewModel extends ChangeNotifier {
           break;
         }
         _timeline.addQuestionRequest(event.request);
-        _flushStreamChangesNow(liveTurn: true, pendingInteraction: true);
+        _flushStreamChangesNow(
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{
+              AgentUiRegion.liveTurn,
+              AgentUiRegion.pendingInteraction,
+            },
+            urgency: AgentUiUpdateUrgency.immediate,
+          ),
+        );
       case AgentQuestionResolvedEvent():
         if (!_shouldHandleEventForCurrentThread(sessionId: event.threadId)) {
           break;
         }
         _timeline.removeQuestionRequest(event.requestId);
-        _flushStreamChangesNow(liveTurn: true, pendingInteraction: true);
+        _flushStreamChangesNow(
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{
+              AgentUiRegion.liveTurn,
+              AgentUiRegion.pendingInteraction,
+            },
+            urgency: AgentUiUpdateUrgency.immediate,
+          ),
+        );
       case AgentPlanApprovalRequestedEvent():
         if (!_shouldHandleEventForCurrentThread(
           sessionId: event.request.sessionId,
@@ -2918,13 +3328,29 @@ class AgentConversationViewModel extends ChangeNotifier {
           break;
         }
         _timeline.addPlanApprovalRequest(event.request);
-        _flushStreamChangesNow(liveTurn: true, pendingInteraction: true);
+        _flushStreamChangesNow(
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{
+              AgentUiRegion.liveTurn,
+              AgentUiRegion.pendingInteraction,
+            },
+            urgency: AgentUiUpdateUrgency.immediate,
+          ),
+        );
       case AgentPlanApprovalResolvedEvent():
         if (!_shouldHandleEventForCurrentThread(sessionId: event.sessionId)) {
           break;
         }
         _timeline.removePlanApprovalRequest(event.requestId);
-        _flushStreamChangesNow(liveTurn: true, pendingInteraction: true);
+        _flushStreamChangesNow(
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{
+              AgentUiRegion.liveTurn,
+              AgentUiRegion.pendingInteraction,
+            },
+            urgency: AgentUiUpdateUrgency.immediate,
+          ),
+        );
       case AgentModelReroutedEvent():
         if (!_shouldHandleEventForCurrentThread(
           sessionId: event.threadId,
@@ -2943,7 +3369,16 @@ class AgentConversationViewModel extends ChangeNotifier {
             raw: event.raw,
           ),
         );
-        _flushStreamChangesNow(liveTurn: true, header: true, autoScroll: true);
+        _flushStreamChangesNow(
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{
+              AgentUiRegion.liveTurn,
+              AgentUiRegion.header,
+            },
+            urgency: AgentUiUpdateUrgency.immediate,
+            effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
+          ),
+        );
       case AgentDeprecationNoticeEvent():
         // 按 summary 去重：同一弃用提示在本 ViewModel 生命周期内只展示一次。
         if (!_shownDeprecationSummaries.add(event.summary)) {
@@ -2961,7 +3396,13 @@ class AgentConversationViewModel extends ChangeNotifier {
             raw: event.raw,
           ),
         );
-        _flushStreamChangesNow(liveTurn: true, autoScroll: true);
+        _flushStreamChangesNow(
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
+            urgency: AgentUiUpdateUrgency.immediate,
+            effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
+          ),
+        );
       case AgentSystemItemEvent():
         if (!_shouldHandleEventForCurrentThread(
           sessionId: event.sessionId,
@@ -2980,10 +3421,15 @@ class AgentConversationViewModel extends ChangeNotifier {
         }
         _timeline.addHistoryEvent(event.entry);
         _flushStreamChangesNow(
-          liveTurn: true,
-          header: true,
-          composer: true,
-          autoScroll: true,
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{
+              AgentUiRegion.liveTurn,
+              AgentUiRegion.header,
+              AgentUiRegion.composer,
+            },
+            urgency: AgentUiUpdateUrgency.immediate,
+            effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
+          ),
         );
       case AgentModelListEvent():
         _handleModelList(event.models);
@@ -3015,10 +3461,15 @@ class AgentConversationViewModel extends ChangeNotifier {
           ),
         );
         _flushStreamChangesNow(
-          history: true,
-          liveTurn: true,
-          header: true,
-          autoScroll: true,
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{
+              AgentUiRegion.history,
+              AgentUiRegion.liveTurn,
+              AgentUiRegion.header,
+            },
+            urgency: AgentUiUpdateUrgency.immediate,
+            effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
+          ),
         );
     }
   }
@@ -3037,11 +3488,16 @@ class AgentConversationViewModel extends ChangeNotifier {
     _consumeActivityDirty();
     _syncElapsedTicker();
     _publishUiChanges(
-      history: true,
-      syncLiveTurn: true,
-      header: true,
-      composer: true,
-      pendingInteraction: planExecutionCleared,
+      AgentUiUpdateRequest(
+        regions: <AgentUiRegion>{
+          AgentUiRegion.history,
+          AgentUiRegion.liveTurnBinding,
+          AgentUiRegion.header,
+          AgentUiRegion.composer,
+          if (planExecutionCleared) AgentUiRegion.pendingInteraction,
+        },
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
     );
   }
 
@@ -3267,11 +3723,16 @@ class AgentConversationViewModel extends ChangeNotifier {
       ),
     );
     _publishUiChanges(
-      history: _timeline.isHistoryTurnId(turnId),
-      liveTurn: _timeline.isLiveTurnId(turnId),
-      header: true,
-      composer: true,
-      autoScroll: true,
+      AgentUiUpdateRequest(
+        regions: <AgentUiRegion>{
+          if (_timeline.isHistoryTurnId(turnId)) AgentUiRegion.history,
+          if (_timeline.isLiveTurnId(turnId)) AgentUiRegion.liveTurn,
+          AgentUiRegion.header,
+          AgentUiRegion.composer,
+        },
+        urgency: AgentUiUpdateUrgency.immediate,
+        effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
+      ),
     );
   }
 
@@ -3289,11 +3750,16 @@ class AgentConversationViewModel extends ChangeNotifier {
       ),
     );
     _publishUiChanges(
-      history: _timeline.isHistoryTurnId(turnId),
-      liveTurn: _timeline.isLiveTurnId(turnId),
-      header: true,
-      composer: true,
-      autoScroll: true,
+      AgentUiUpdateRequest(
+        regions: <AgentUiRegion>{
+          if (_timeline.isHistoryTurnId(turnId)) AgentUiRegion.history,
+          if (_timeline.isLiveTurnId(turnId)) AgentUiRegion.liveTurn,
+          AgentUiRegion.header,
+          AgentUiRegion.composer,
+        },
+        urgency: AgentUiUpdateUrgency.immediate,
+        effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
+      ),
     );
   }
 
@@ -3405,27 +3871,10 @@ class AgentConversationViewModel extends ChangeNotifier {
     _threadWaitingOnUserInput = false;
   }
 
-  void _publishUiChanges({
-    bool history = false,
-    bool syncLiveTurn = false,
-    bool header = false,
-    bool composer = false,
-    bool pendingInteraction = false,
-    bool expansion = false,
-    bool liveTurn = false,
-    bool autoScroll = false,
-  }) {
+  void _publishUiChanges(AgentUiUpdateRequest request) {
+    _debugLastUiUpdateRequest = request;
     _syncThreadSnapshotListenable();
-    _uiSignals.publish(
-      history: history,
-      syncLiveTurn: syncLiveTurn,
-      header: header,
-      composer: composer,
-      pendingInteraction: pendingInteraction,
-      expansion: expansion,
-      liveTurn: liveTurn,
-      autoScroll: autoScroll,
-    );
+    _uiSignals.publish(request);
   }
 
   AgentConversationThreadSnapshot _buildThreadSnapshot() {
@@ -3446,45 +3895,21 @@ class AgentConversationViewModel extends ChangeNotifier {
     }
   }
 
-  void _scheduleStreamFlush({
-    bool header = false,
-    bool composer = false,
-    bool autoScroll = false,
-    bool expansion = false,
-  }) {
-    _uiSignals.scheduleStreamFlush(
-      header: header,
-      composer: composer,
-      autoScroll: autoScroll,
-      expansion: expansion,
-    );
+  void _scheduleStreamFlush(AgentUiUpdateRequest request) {
+    _debugLastUiUpdateRequest = request;
+    _uiSignals.scheduleStreamFlush(request);
   }
 
   void _flushPendingStreamChangesNow() {
     _uiSignals.flushPendingStreamChangesNow();
   }
 
-  void _flushStreamChangesNow({
-    bool history = false,
-    bool syncLiveTurn = false,
-    bool header = false,
-    bool composer = false,
-    bool pendingInteraction = false,
-    bool liveTurn = false,
-    bool autoScroll = false,
-  }) {
+  void _flushStreamChangesNow(AgentUiUpdateRequest request) {
+    _debugLastUiUpdateRequest = request;
     // 流式 flush 也必须刷新 thread snapshot，否则 turn/completed 等路径
     // 只更新分区信号、不推 isTurnRunning，侧栏会一直卡在执行中。
     _syncThreadSnapshotListenable();
-    _uiSignals.flushStreamChangesNow(
-      history: history,
-      syncLiveTurn: syncLiveTurn,
-      header: header,
-      composer: composer,
-      pendingInteraction: pendingInteraction,
-      liveTurn: liveTurn,
-      autoScroll: autoScroll,
-    );
+    _uiSignals.flushStreamChangesNow(request);
   }
 
   /// 将当前 isTurnRunning / runtimeStatus 等推到 [threadSnapshotListenable]。

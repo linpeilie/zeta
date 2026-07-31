@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:logging/logging.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -3648,7 +3649,386 @@ void main() {
         expect(viewModel.canSubmitMessage, isFalse);
       },
     );
+
+    group('typed UI update mapping', () {
+      test('maps lifecycle and thread updates to typed regions', () async {
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        _expectLastUiUpdate(
+          viewModel,
+          regions: const <AgentUiRegion>{
+            AgentUiRegion.history,
+            AgentUiRegion.liveTurnBinding,
+            AgentUiRegion.header,
+            AgentUiRegion.composer,
+            AgentUiRegion.pendingInteraction,
+          },
+          urgency: AgentUiUpdateUrgency.immediate,
+        );
+
+        await viewModel.sendMessage('hello');
+        provider.emit(
+          const AgentThreadStatusChangedEvent(
+            threadId: 'thread-1',
+            status: AgentThreadRuntimeStatus.active,
+          ),
+        );
+        await _drainTypedUiUpdate();
+
+        _expectLastUiUpdate(
+          viewModel,
+          regions: const <AgentUiRegion>{AgentUiRegion.header},
+          urgency: AgentUiUpdateUrgency.immediate,
+        );
+      });
+
+      test(
+        'maps turn completion to immediate regions and auto-scroll',
+        () async {
+          final provider = _FakeAgentProvider();
+          final viewModel = _createViewModel(provider);
+          addTearDown(viewModel.dispose);
+
+          await viewModel.sendMessage('hello');
+          provider.emit(
+            const AgentTurnCompletedEvent(
+              sessionId: 'thread-1',
+              turnId: 'turn-1',
+            ),
+          );
+          await _drainTypedUiUpdate();
+
+          _expectLastUiUpdate(
+            viewModel,
+            regions: const <AgentUiRegion>{
+              AgentUiRegion.history,
+              AgentUiRegion.liveTurnBinding,
+              AgentUiRegion.header,
+              AgentUiRegion.composer,
+            },
+            urgency: AgentUiUpdateUrgency.immediate,
+            effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
+          );
+        },
+      );
+
+      test(
+        'maps message and reasoning deltas to next-frame requests',
+        () async {
+          final provider = _FakeAgentProvider();
+          final viewModel = _createViewModel(provider);
+          addTearDown(viewModel.dispose);
+
+          await viewModel.sendMessage('hello');
+          provider.emit(
+            const AgentMessageDeltaEvent(
+              messageId: 'message-typed',
+              delta: 'stream',
+              role: AgentMessageRole.agent,
+              phase: AgentMessagePhase.response,
+              status: AgentMessageStatus.streaming,
+              sessionId: 'thread-1',
+              turnId: 'turn-1',
+            ),
+          );
+          await _drainTypedUiUpdate();
+
+          var request = viewModel.debugLastUiUpdateRequest;
+          expect(request, isNotNull);
+          expect(request!.urgency, AgentUiUpdateUrgency.nextFrame);
+          expect(
+            request.regions,
+            containsAll(const <AgentUiRegion>{AgentUiRegion.liveTurn}),
+          );
+          expect(
+            request.regions.difference(const <AgentUiRegion>{
+              AgentUiRegion.liveTurn,
+              AgentUiRegion.header,
+            }),
+            isEmpty,
+          );
+          expect(request.regions, isNot(contains(AgentUiRegion.expansion)));
+          expect(request.effects, const <AgentUiEffect>[
+            AgentRequestAutoScroll(),
+          ]);
+
+          provider.emit(
+            const AgentReasoningDeltaEvent(
+              itemId: 'reasoning-typed',
+              kind: AgentReasoningDeltaKind.summaryText,
+              delta: 'thinking',
+              sessionId: 'thread-1',
+              turnId: 'turn-1',
+            ),
+          );
+          await _drainTypedUiUpdate();
+
+          request = viewModel.debugLastUiUpdateRequest;
+          expect(request, isNotNull);
+          expect(request!.urgency, AgentUiUpdateUrgency.nextFrame);
+          expect(
+            request.regions,
+            containsAll(const <AgentUiRegion>{
+              AgentUiRegion.liveTurn,
+              AgentUiRegion.expansion,
+            }),
+          );
+          expect(
+            request.regions.difference(const <AgentUiRegion>{
+              AgentUiRegion.liveTurn,
+              AgentUiRegion.header,
+              AgentUiRegion.expansion,
+            }),
+            isEmpty,
+          );
+          expect(request.effects, const <AgentUiEffect>[
+            AgentRequestAutoScroll(),
+          ]);
+        },
+      );
+
+      test('maps token and context usage without conflating cadence', () async {
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.sendMessage('hello');
+        provider.emit(
+          const AgentTokenUsageEvent(
+            tokenUsage: AgentTokenUsage(
+              inputTokens: 10,
+              outputTokens: 5,
+              totalTokens: 15,
+            ),
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+        );
+        await _drainTypedUiUpdate();
+
+        _expectLastUiUpdate(
+          viewModel,
+          regions: const <AgentUiRegion>{
+            AgentUiRegion.header,
+            AgentUiRegion.composer,
+            AgentUiRegion.liveTurn,
+          },
+          urgency: AgentUiUpdateUrgency.immediate,
+        );
+
+        provider.emit(
+          const AgentContextWindowUsageEvent(
+            usedTokens: 12,
+            modelContextWindow: 100,
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+        );
+        await _drainTypedUiScheduling();
+
+        _expectLastUiUpdate(
+          viewModel,
+          regions: const <AgentUiRegion>{
+            AgentUiRegion.liveTurn,
+            AgentUiRegion.composer,
+          },
+          urgency: AgentUiUpdateUrgency.nextFrame,
+        );
+      });
+
+      test('maps tool, diff, and plan event families', () async {
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.sendMessage('hello');
+        provider.emit(
+          const AgentPlanUpdatedEvent(
+            entries: <AgentPlanEntry>[
+              AgentPlanEntry(content: 'Inspect', status: 'inProgress'),
+            ],
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+        );
+        await _drainTypedUiUpdate();
+        _expectLastUiUpdate(
+          viewModel,
+          regions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
+          urgency: AgentUiUpdateUrgency.immediate,
+        );
+
+        provider.emit(
+          const AgentTurnDiffEvent(
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+            diff: 'diff --git a/a.dart b/a.dart\n+typed',
+          ),
+        );
+        await _drainTypedUiUpdate();
+        _expectLastUiUpdate(
+          viewModel,
+          regions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
+          urgency: AgentUiUpdateUrgency.immediate,
+          effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
+        );
+
+        provider.emit(
+          const AgentToolCallEvent(
+            AgentToolCall(
+              id: 'tool-typed',
+              title: 'Run typed check',
+              kind: AgentToolKind.execute,
+              status: AgentToolStatus.inProgress,
+              sessionId: 'thread-1',
+              turnId: 'turn-1',
+            ),
+          ),
+        );
+        await _drainTypedUiUpdate();
+
+        final request = viewModel.debugLastUiUpdateRequest;
+        expect(request, isNotNull);
+        expect(request!.urgency, AgentUiUpdateUrgency.nextFrame);
+        expect(
+          request.regions,
+          containsAll(const <AgentUiRegion>{AgentUiRegion.liveTurn}),
+        );
+        expect(
+          request.regions.difference(const <AgentUiRegion>{
+            AgentUiRegion.liveTurn,
+            AgentUiRegion.header,
+          }),
+          isEmpty,
+        );
+        expect(request.effects, const <AgentUiEffect>[
+          AgentRequestAutoScroll(),
+        ]);
+      });
+
+      test('maps pending interactions without auto-scroll effects', () async {
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.sendMessage('hello');
+        provider.emit(
+          const AgentPermissionRequestedEvent(
+            AgentPermissionRequest(
+              id: 'permission-typed',
+              title: 'Run command',
+              kind: AgentPermissionKind.commandExecution,
+              sessionId: 'thread-1',
+              turnId: 'turn-1',
+            ),
+          ),
+        );
+        await _drainTypedUiUpdate();
+
+        _expectLastUiUpdate(
+          viewModel,
+          regions: const <AgentUiRegion>{
+            AgentUiRegion.liveTurn,
+            AgentUiRegion.pendingInteraction,
+          },
+          urgency: AgentUiUpdateUrgency.immediate,
+        );
+      });
+
+      test('maps model, system, and error events independently', () async {
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.sendMessage('hello');
+        provider.emit(
+          const AgentModelReroutedEvent(
+            threadId: 'thread-1',
+            turnId: 'turn-1',
+            fromModel: 'model-a',
+            toModel: 'model-b',
+            reason: 'policy',
+          ),
+        );
+        await _drainTypedUiUpdate();
+        _expectLastUiUpdate(
+          viewModel,
+          regions: const <AgentUiRegion>{
+            AgentUiRegion.liveTurn,
+            AgentUiRegion.header,
+          },
+          urgency: AgentUiUpdateUrgency.immediate,
+          effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
+        );
+
+        provider.emit(
+          const AgentSystemItemEvent(
+            entry: AgentHistoryEventEntry(
+              id: 'system-typed',
+              kind: AgentHistoryEventKind.system,
+              title: 'Typed system item',
+            ),
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+        );
+        await _drainTypedUiUpdate();
+        _expectLastUiUpdate(
+          viewModel,
+          regions: const <AgentUiRegion>{
+            AgentUiRegion.liveTurn,
+            AgentUiRegion.header,
+            AgentUiRegion.composer,
+          },
+          urgency: AgentUiUpdateUrgency.immediate,
+          effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
+        );
+
+        provider.emit(
+          const AgentErrorEvent(
+            message: 'Typed provider error',
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+        );
+        await _drainTypedUiUpdate();
+        _expectLastUiUpdate(
+          viewModel,
+          regions: const <AgentUiRegion>{
+            AgentUiRegion.history,
+            AgentUiRegion.liveTurn,
+            AgentUiRegion.header,
+          },
+          urgency: AgentUiUpdateUrgency.immediate,
+          effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
+        );
+      });
+    });
   });
+}
+
+Future<void> _drainTypedUiUpdate() {
+  return Future<void>.delayed(const Duration(milliseconds: 24));
+}
+
+Future<void> _drainTypedUiScheduling() async {
+  await Future<void>.delayed(Duration.zero);
+  await Future<void>.delayed(Duration.zero);
+  await Future<void>.delayed(Duration.zero);
+}
+
+void _expectLastUiUpdate(
+  AgentConversationViewModel viewModel, {
+  required Set<AgentUiRegion> regions,
+  required AgentUiUpdateUrgency urgency,
+  List<AgentUiEffect> effects = const <AgentUiEffect>[],
+}) {
+  expect(
+    viewModel.debugLastUiUpdateRequest,
+    AgentUiUpdateRequest(regions: regions, urgency: urgency, effects: effects),
+  );
 }
 
 AgentConversationViewModel _createViewModel(
