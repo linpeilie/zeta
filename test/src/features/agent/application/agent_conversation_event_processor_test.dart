@@ -110,9 +110,7 @@ void main() {
       expect(stateTarget.appliedChanges, isEmpty);
       expect(stateTarget.snapshotRefreshRequests, 0);
       expect(uiUpdates.requests, isEmpty);
-      expect(timeline.messages, <AgentConversationMessage>[
-        AgentConversationTimelineStore.welcomeMessage,
-      ]);
+      expect(timeline.messages, isEmpty);
     });
 
     test('adds header region when a timeline mutation changes activity', () {

@@ -11,34 +11,18 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 /// - live turn / history turn / standby turn 的分组状态
 /// - token 汇总与 UI 展开态
 class AgentConversationTimelineStore {
-  AgentConversationTimelineStore() {
-    _seedInitialStandbyTimeline();
-  }
-
-  static const AgentConversationMessage welcomeMessage =
-      AgentConversationMessage(
-        id: 'welcome',
-        role: AgentMessageRole.agent,
-        text:
-            'Ready. Select a file or send a request to start an Agent thread.',
-      );
-
-  /// welcome 消息和回合外系统消息所属的 standby 分组 id。
+  /// 回合外系统消息所属的 standby 分组 id。
   static const String standbyTurnId = '__standby__';
 
-  final List<AgentConversationMessage> _messages = <AgentConversationMessage>[
-    welcomeMessage,
-  ];
+  final List<AgentConversationMessage> _messages = <AgentConversationMessage>[];
   final List<AgentToolCall> _toolCalls = <AgentToolCall>[];
   final List<AgentPermissionRequest> _permissionRequests =
       <AgentPermissionRequest>[];
   final List<AgentQuestionRequest> _questionRequests = <AgentQuestionRequest>[];
   final List<AgentPlanApprovalRequest> _planApprovalRequests =
       <AgentPlanApprovalRequest>[];
-  final List<AgentTimelineEntry> _timelineEntries = <AgentTimelineEntry>[
-    AgentMessageTimelineEntry(message: welcomeMessage),
-  ];
-  final List<String> _timelineEntryTurnIds = <String>[standbyTurnId];
+  final List<AgentTimelineEntry> _timelineEntries = <AgentTimelineEntry>[];
+  final List<String> _timelineEntryTurnIds = <String>[];
   final Map<String, String> _turnIdsByTimelineEntryId = <String, String>{};
   final List<String> _historicalTurnOrder = <String>[];
   final List<String> _liveTurnOrder = <String>[];
@@ -311,8 +295,6 @@ class AgentConversationTimelineStore {
   ///
   /// [modelConfig] 为本回合发送时的模型配置快照，供终态 footer 展示。
   String startPendingLiveTurn({AgentTurnModelConfig? modelConfig}) {
-    // 用户已开始真实对话，移除初始 Ready 占位文案。
-    _dismissWelcomeMessage();
     final pendingTurnId = 'pending-${DateTime.now().microsecondsSinceEpoch}';
     _pendingTurnGroupId = pendingTurnId;
     currentTurnGroupId = pendingTurnId;
@@ -401,15 +383,6 @@ class AgentConversationTimelineStore {
     _threadTokenUsage = null;
     _liveContextWindowUsage = null;
     _clearActivity();
-  }
-
-  /// 清空当前对话，并恢复到仅包含 welcome 消息的初始待机态。
-  void resetToWelcomeState() {
-    clearConversation();
-    _messages.add(welcomeMessage);
-    _timelineEntries.add(AgentMessageTimelineEntry(message: welcomeMessage));
-    _timelineEntryTurnIds.add(standbyTurnId);
-    _seedInitialStandbyTimeline();
   }
 
   void applyHistorySnapshot(
@@ -542,10 +515,6 @@ class AgentConversationTimelineStore {
 
   /// 追加时间线条目，并打上当前 turn 分组 id。
   String appendTimelineEntry(AgentTimelineEntry entry) {
-    // 任意真实内容进入时间线后，不再保留 Ready 占位。
-    if (!_isWelcomeTimelineEntry(entry)) {
-      _dismissWelcomeMessage();
-    }
     // 同 id 条目已存在时替换，避免 Windows 时钟精度不足导致重复 key。
     final existingIndex = _timelineEntries.indexWhere(
       (item) => item.id == entry.id,
@@ -1417,33 +1386,6 @@ class AgentConversationTimelineStore {
   void dispose() {
     clearConversation();
     _liveTurnNotifier.dispose();
-  }
-
-  void _seedInitialStandbyTimeline() {
-    final standbyGroup = _turnStateFor(
-      standbyTurnId,
-      isStandby: true,
-      isHistorical: false,
-    );
-    standbyGroup.appendEntry(_timelineEntries.single);
-    _turnIdsByTimelineEntryId[_timelineEntries.single.id] = standbyTurnId;
-  }
-
-  /// 会话已有实质内容时移除 Ready 占位，避免与真实消息并存。
-  void _dismissWelcomeMessage() {
-    final messageIndex = _messages.indexWhere(
-      (message) => message.id == welcomeMessage.id,
-    );
-    if (messageIndex == -1) {
-      return;
-    }
-    _messages.removeAt(messageIndex);
-    _removeTimelineEntryById('message-${welcomeMessage.id}');
-  }
-
-  bool _isWelcomeTimelineEntry(AgentTimelineEntry entry) {
-    return entry is AgentMessageTimelineEntry &&
-        entry.message.id == welcomeMessage.id;
   }
 
   void _renameTurnGroup(String oldId, String newId) {

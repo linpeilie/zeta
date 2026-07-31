@@ -1581,7 +1581,7 @@ class AgentConversationViewModel {
       _threadCreatedAt = null;
       _threadLastActiveAt = null;
       contextPanelVisible.value = false;
-      _timeline.resetToWelcomeState();
+      _timeline.clearConversation();
       _consumeActivityDirty();
       _syncElapsedTicker();
       if (previousThreadId != null &&

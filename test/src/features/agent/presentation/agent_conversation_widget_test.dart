@@ -42,6 +42,36 @@ void main() {
     tempDirectories.clear();
   });
 
+  testWidgets('starts with no welcome placeholder in the timeline', (
+    tester,
+  ) async {
+    // Arrange
+    final session = activeProjectSessionStore(tempDirectories);
+
+    // Act
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(
+          FakeAgentProvider(includeConversationTestThread: true),
+        ),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+    await pumpUntilAgentComposer(tester);
+
+    // Assert
+    expect(find.byKey(const ValueKey('agent-message-input')), findsOneWidget);
+    expect(
+      find.text(
+        'Ready. Select a file or send a request to start an Agent thread.',
+      ),
+      findsNothing,
+    );
+  });
+
   testWidgets('shows unavailable reason for a retired Cursor selection', (
     tester,
   ) async {

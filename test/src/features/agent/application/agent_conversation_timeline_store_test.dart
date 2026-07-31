@@ -652,39 +652,32 @@ void main() {
       expect(store.isToolCallExpanded('mcp-1'), isTrue);
     });
 
-    test(
-      'dismisses welcome message once real conversation content arrives',
-      () {
-        final store = AgentConversationTimelineStore();
-        addTearDown(store.dispose);
+    test('starts empty and creates only the real live turn', () {
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
 
-        expect(
-          store.messages.map((message) => message.id),
-          contains(AgentConversationTimelineStore.welcomeMessage.id),
-        );
+      expect(store.messages, isEmpty);
+      expect(store.timelineEntries, isEmpty);
+      expect(store.conversationTurns, isEmpty);
 
-        store.startPendingLiveTurn();
-        store.addConversationMessage(
-          const AgentConversationMessage(
-            id: 'user-1',
-            role: AgentMessageRole.user,
-            text: 'hello',
-          ),
-        );
-        store.syncLiveTurnBinding();
+      store.startPendingLiveTurn();
+      store.addConversationMessage(
+        const AgentConversationMessage(
+          id: 'user-1',
+          role: AgentMessageRole.user,
+          text: 'hello',
+        ),
+      );
+      store.syncLiveTurnBinding();
 
-        expect(
-          store.messages.map((message) => message.id),
-          isNot(contains(AgentConversationTimelineStore.welcomeMessage.id)),
-        );
-        expect(
-          store.conversationTurns.map((turn) => turn.id).toList(),
-          isNot(contains(AgentConversationTimelineStore.standbyTurnId)),
-        );
-        expect(store.conversationTurns, hasLength(1));
-        expect(store.conversationTurns.single.isStandby, isFalse);
-      },
-    );
+      expect(store.messages.map((message) => message.id), <String>['user-1']);
+      expect(
+        store.conversationTurns.map((turn) => turn.id).toList(),
+        isNot(contains(AgentConversationTimelineStore.standbyTurnId)),
+      );
+      expect(store.conversationTurns, hasLength(1));
+      expect(store.conversationTurns.single.isStandby, isFalse);
+    });
 
     test('replaces same-id timeline entries instead of duplicating them', () {
       final store = AgentConversationTimelineStore();
@@ -1260,14 +1253,7 @@ List<AgentTimelineEntry> _liveTimelineEntries(
   if (live != null) {
     return List<AgentTimelineEntry>.from(live.entries);
   }
-  return store.timelineEntries
-      .where(
-        (entry) =>
-            entry is! AgentMessageTimelineEntry ||
-            entry.message.id !=
-                AgentConversationTimelineStore.welcomeMessage.id,
-      )
-      .toList();
+  return store.timelineEntries.toList();
 }
 
 AgentThreadSummary _thread() {

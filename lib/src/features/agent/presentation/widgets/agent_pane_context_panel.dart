@@ -574,12 +574,8 @@ List<_ContextRawItem> _buildContextRawItems({
   return items;
 }
 
-/// 主对话：用户/助手普通消息（排除 welcome、计划、系统）。
+/// 主对话：用户/助手普通消息（排除计划、系统）。
 bool _isMainConversationMessage(AgentConversationMessage message) {
-  if (message.id == 'welcome' ||
-      message.id == AgentConversationTimelineStore.welcomeMessage.id) {
-    return false;
-  }
   if (message.isPlan) {
     return false;
   }
