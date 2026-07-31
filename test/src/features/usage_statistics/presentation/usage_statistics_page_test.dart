@@ -31,23 +31,19 @@ void main() {
 
     expect(find.byKey(const ValueKey('usage-statistics-page')), findsOneWidget);
     expect(find.text('使用统计'), findsOneWidget);
-    expect(find.text('Agent 使用排行'), findsOneWidget);
-    expect(find.text('项目使用排行'), findsOneWidget);
-    expect(find.text('Token 分析'), findsOneWidget);
-    expect(find.text('推理 100', findRichText: true), findsOneWidget);
-    expect(find.text('ChatGPT Plus'), findsOneWidget);
+    expect(find.byKey(const ValueKey('usage-detail-tabs')), findsOneWidget);
+    expect(find.text('Agent 统计'), findsOneWidget);
+    expect(find.text('模型统计'), findsOneWidget);
+    expect(find.text('项目列表'), findsOneWidget);
+    expect(find.text('任务列表'), findsOneWidget);
+    expect(find.byKey(const ValueKey('usage-panel-agents')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('usage-main-chart-totalTokens')),
       findsOneWidget,
     );
-    expect(find.byKey(const ValueKey('usage-trend-calls')), findsNothing);
     expect(find.byKey(const ValueKey('usage-overview-tokens')), findsOneWidget);
     expect(find.byKey(const ValueKey('usage-overview-calls')), findsOneWidget);
     expect(find.text('Token 使用量'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('usage-overview-layout-equal')),
-      findsOneWidget,
-    );
     expect(find.byKey(const ValueKey('usage-filters-toolbar')), findsOneWidget);
     expect(
       tester
@@ -57,7 +53,6 @@ void main() {
           .level,
       IdeSurfaceLevel.pane,
     );
-    expect(find.byType(IdeDataRow), findsWidgets);
     expect(
       tester
           .widget<IdeSurface>(
@@ -74,15 +69,12 @@ void main() {
           .level,
       IdeSurfaceLevel.pane,
     );
-    expect(
-      find.byKey(const ValueKey('usage-ranking-layout-equal')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('usage-resource-layout-equal')),
-      findsOneWidget,
-    );
     expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byKey(const ValueKey('usage-detail-tab-tasks')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('usage-panel-tasks')), findsOneWidget);
+    expect(find.byType(IdeDataRow), findsWidgets);
 
     final taskRow = find.byKey(const ValueKey('usage-row-thread-1/turn-1'));
     await tester.ensureVisible(taskRow);
@@ -102,13 +94,33 @@ void main() {
     expect(find.text('项目路径'), findsOneWidget);
     expect(find.text(r'C:\work\zeta'), findsWidgets);
     expect(find.text('首次响应'), findsOneWidget);
-    expect(find.textContaining('Prompt'), findsOneWidget);
+    expect(find.text('Token'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('adapts filters and content to a narrow viewport', (
-    tester,
-  ) async {
+  testWidgets('switches detail tabs and shows model stats', (tester) async {
+    final now = DateTime(2026, 7, 10, 12);
+    final controller = UsageStatisticsController(
+      repository: _UsageRepository(_source(now)),
+      clock: () => now,
+    );
+    addTearDown(controller.dispose);
+    await tester.runAsync(controller.initialize);
+    await _pumpUsagePage(tester, controller: controller);
+
+    await tester.tap(find.byKey(const ValueKey('usage-detail-tab-models')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('usage-panel-models')), findsOneWidget);
+    expect(find.text('推理 100', findRichText: true), findsOneWidget);
+    expect(find.text('gpt-5'), findsWidgets);
+
+    await tester.tap(find.byKey(const ValueKey('usage-detail-tab-projects')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('usage-panel-projects')), findsOneWidget);
+    expect(find.text('zeta'), findsOneWidget);
+  });
+
+  testWidgets('adapts filters to a narrow viewport', (tester) async {
     final now = DateTime(2026, 7, 10, 12);
     final controller = UsageStatisticsController(
       repository: _UsageRepository(_source(now)),
@@ -130,15 +142,7 @@ void main() {
     expect(find.byKey(const ValueKey('usage-project-filter')), findsNothing);
     expect(find.byKey(const ValueKey('usage-agent-filter')), findsOneWidget);
     expect(find.byKey(const ValueKey('usage-model-filter')), findsOneWidget);
-    expect(find.byKey(const ValueKey('usage-custom-date-range')), findsNothing);
-    expect(
-      find.byKey(const ValueKey('usage-ranking-layout-stacked')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('usage-resource-layout-stacked')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('usage-detail-tabs')), findsOneWidget);
     expect(
       tester
           .getSize(find.byKey(const ValueKey('usage-time-range-filter')))
@@ -267,38 +271,73 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'uses stacked rankings and a 6:4 resource layout at medium width',
-    (tester) async {
-      final now = DateTime(2026, 7, 10, 12);
-      final controller = UsageStatisticsController(
-        repository: _UsageRepository(_source(now)),
-        clock: () => now,
-      );
-      addTearDown(controller.dispose);
-      await tester.runAsync(controller.initialize);
+  testWidgets('paginates task list beyond page size', (tester) async {
+    final now = DateTime(2026, 7, 10, 12);
+    final records = <AgentUsageRecord>[
+      for (var i = 0; i < 25; i += 1)
+        AgentUsageRecord(
+          threadId: 'thread-$i',
+          turnId: 'turn-$i',
+          providerId: 'codex',
+          providerName: 'Codex',
+          projectPath: r'C:\work\zeta',
+          sourceKind: 'appServer',
+          startedAt: DateTime(2026, 7, 10, 9).subtract(Duration(minutes: i)),
+          status: UsageTaskStatus.completed,
+          tokens: const UsageTokenBreakdown(totalTokens: 10),
+        ),
+    ];
+    final controller = UsageStatisticsController(
+      repository: _UsageRepository(
+        UsageStatisticsSourceSnapshot(records: records, refreshedAt: now),
+      ),
+      clock: () => now,
+    );
+    addTearDown(controller.dispose);
+    await tester.runAsync(controller.initialize);
+    await _pumpUsagePage(tester, controller: controller);
 
-      await _pumpUsagePage(
-        tester,
-        controller: controller,
-        size: const Size(900, 900),
-      );
+    await tester.tap(find.byKey(const ValueKey('usage-detail-tab-tasks')));
+    await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const ValueKey('usage-ranking-layout-stacked')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('usage-resource-layout-sixty-forty')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('usage-table-horizontal-scroll')),
-        findsWidgets,
-      );
-      expect(tester.takeException(), isNull);
-    },
-  );
+    expect(find.byKey(const ValueKey('usage-task-pagination')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('usage-row-thread-0/turn-0')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('usage-row-thread-20/turn-20')),
+      findsNothing,
+    );
+
+    // 翻到第 2 页：分页在页面 ListView 底部，需先滚入视口。
+    final pagination = find.byKey(const ValueKey('usage-task-pagination'));
+    await tester.scrollUntilVisible(
+      pagination,
+      300,
+      scrollable: find
+          .byWidgetPredicate(
+            (widget) =>
+                widget is Scrollable &&
+                widget.axisDirection == AxisDirection.down,
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+    final pageTwo = find.descendant(of: pagination, matching: find.text('2'));
+    expect(pageTwo, findsOneWidget);
+    await tester.tap(pageTwo);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('usage-row-thread-20/turn-20')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('usage-row-thread-0/turn-0')),
+      findsNothing,
+    );
+  });
 
   testWidgets('keeps table row keys unique for duplicate record ids', (
     tester,
@@ -330,6 +369,8 @@ void main() {
     await tester.runAsync(controller.initialize);
 
     await _pumpUsagePage(tester, controller: controller);
+    await tester.tap(find.byKey(const ValueKey('usage-detail-tab-tasks')));
+    await tester.pumpAndSettle();
 
     final firstDuplicateRow = find.byKey(
       const ValueKey('usage-row-thread-1/turn-1'),
@@ -392,6 +433,7 @@ void main() {
 
     expect(openedManagement, isTrue);
     expect(find.text('暂无使用记录'), findsOneWidget);
+    expect(find.byKey(const ValueKey('usage-detail-tabs')), findsNothing);
   });
 }
 

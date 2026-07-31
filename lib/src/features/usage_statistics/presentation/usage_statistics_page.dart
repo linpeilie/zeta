@@ -5,7 +5,6 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
-import 'package:zeta/src/features/agent/domain/agent_usage_models.dart';
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_controller.dart';
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_report_builder.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
@@ -19,7 +18,6 @@ import 'package:zeta/src/ui/core/ide_status_card.dart';
 import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/rows/ide_data_row.dart';
-import 'package:zeta/src/ui/core/rows/ide_list_row.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/ui/core/workbench/ide_page_header.dart';
 import 'package:zeta/src/ui/core/workbench/ide_section.dart';
@@ -82,7 +80,6 @@ class _UsageStatisticsPageState extends State<UsageStatisticsPage> {
     final report = controller.report;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final wide = constraints.maxWidth >= IdeMetrics.wideBreakpoint;
         final medium = constraints.maxWidth >= IdeMetrics.mediumBreakpoint;
         final pagePadding = medium
             ? IdeSpacing.pagePadding
@@ -142,53 +139,14 @@ class _UsageStatisticsPageState extends State<UsageStatisticsPage> {
                           _EmptyUsageState(
                             onOpenAgentManagement: widget.onOpenAgentManagement,
                           )
-                        else ...[
-                          _ResponsivePair(
-                            debugLabel: 'usage-ranking-layout',
-                            layout: wide
-                                ? _UsagePairLayout.equal
-                                : _UsagePairLayout.stacked,
-                            left: _AgentRankingSection(
-                              controller: controller,
-                              entries: report.agentRanking,
-                            ),
-                            right: _ProjectRankingSection(
-                              entries: report.projectRanking,
-                              onProjectSelected: controller.selectProject,
-                            ),
-                          ),
-                          const SizedBox(height: IdeSpacing.space16),
-                          _ResponsivePair(
-                            debugLabel: 'usage-resource-layout',
-                            layout: wide
-                                ? _UsagePairLayout.equal
-                                : medium
-                                ? _UsagePairLayout.sixtyForty
-                                : _UsagePairLayout.stacked,
-                            left: _TokenAnalysisSection(report: report),
-                            right: _QuotaSection(
-                              quota: controller.source?.quota,
-                            ),
-                          ),
-                          const SizedBox(height: IdeSpacing.space16),
-                          _RecentTasksSection(
-                            records: report.records,
+                        else
+                          _UsageDetailTabs(
+                            controller: controller,
+                            report: report,
                             onTaskPressed: (record) =>
                                 _openTaskDrawer(context, record),
+                            onProjectSelected: controller.selectProject,
                           ),
-                          const SizedBox(height: IdeSpacing.space16),
-                          _ErrorAnalysisSection(
-                            errors: report.errors,
-                            records: report.records,
-                            onCategoryPressed: (category) {
-                              _openErrorDrawer(
-                                context,
-                                category,
-                                report.records,
-                              );
-                            },
-                          ),
-                        ],
                       ],
                     ],
                   ),
@@ -208,34 +166,6 @@ class _UsageStatisticsPageState extends State<UsageStatisticsPage> {
       expands: narrow,
       position: narrow ? sf.OverlayPosition.bottom : sf.OverlayPosition.end,
       builder: (drawerContext) => _TaskDetailDrawer(record: record),
-    );
-  }
-
-  void _openErrorDrawer(
-    BuildContext context,
-    UsageErrorCategory category,
-    List<AgentUsageRecord> records,
-  ) {
-    final matching = records
-        .where(
-          (record) =>
-              record.status.isFailure &&
-              (record.errorCategory ?? UsageErrorCategory.other) == category,
-        )
-        .toList();
-    final narrow = MediaQuery.sizeOf(context).width < 700;
-    sf.openDrawer(
-      context: context,
-      expands: narrow,
-      position: narrow ? sf.OverlayPosition.bottom : sf.OverlayPosition.end,
-      builder: (drawerContext) => _ErrorListDrawer(
-        category: category,
-        records: matching,
-        onTaskPressed: (record) {
-          sf.closeOverlay(drawerContext);
-          _openTaskDrawer(context, record);
-        },
-      ),
     );
   }
 }
@@ -637,99 +567,256 @@ class _TrendSection extends StatelessWidget {
   }
 }
 
-enum _UsagePairLayout { stacked, equal, sixtyForty }
+/// 趋势图下方详情区 Tab。
+enum _UsageDetailTab { agents, models, projects, tasks }
 
-class _ResponsivePair extends StatelessWidget {
-  const _ResponsivePair({
-    required this.debugLabel,
-    required this.layout,
-    required this.left,
-    required this.right,
+/// 趋势图下方四栏：Agent / 模型 / 项目 / 任务。
+class _UsageDetailTabs extends StatefulWidget {
+  const _UsageDetailTabs({
+    required this.controller,
+    required this.report,
+    required this.onTaskPressed,
+    required this.onProjectSelected,
   });
 
-  final String debugLabel;
-  final _UsagePairLayout layout;
-  final Widget left;
-  final Widget right;
+  final UsageStatisticsController controller;
+  final UsageStatisticsReport report;
+  final ValueChanged<AgentUsageRecord> onTaskPressed;
+  final ValueChanged<String?> onProjectSelected;
+
+  @override
+  State<_UsageDetailTabs> createState() => _UsageDetailTabsState();
+}
+
+class _UsageDetailTabsState extends State<_UsageDetailTabs> {
+  static const int _taskPageSize = 20;
+
+  _UsageDetailTab _tab = _UsageDetailTab.agents;
+  int _taskPage = 1;
+
+  @override
+  void didUpdateWidget(covariant _UsageDetailTabs oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final totalPages = _taskTotalPages(widget.report.records.length);
+    if (_taskPage > totalPages) {
+      _taskPage = totalPages;
+    }
+  }
+
+  int _taskTotalPages(int recordCount) {
+    if (recordCount <= 0) {
+      return 1;
+    }
+    return ((recordCount + _taskPageSize - 1) / _taskPageSize).floor();
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (layout == _UsagePairLayout.stacked) {
-      return Column(
-        key: ValueKey<String>('$debugLabel-stacked'),
+    return IdeSurface.pane(
+      key: const ValueKey('usage-detail-tabs'),
+      padding: IdeSpacing.panelPadding,
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          left,
+          IdeTabs<_UsageDetailTab>(
+            key: const ValueKey('usage-detail-tab-bar'),
+            value: _tab,
+            semanticLabel: '使用统计详情分类',
+            items: const [
+              IdeTabItem(
+                key: ValueKey('usage-detail-tab-agents'),
+                value: _UsageDetailTab.agents,
+                label: 'Agent 统计',
+              ),
+              IdeTabItem(
+                key: ValueKey('usage-detail-tab-models'),
+                value: _UsageDetailTab.models,
+                label: '模型统计',
+              ),
+              IdeTabItem(
+                key: ValueKey('usage-detail-tab-projects'),
+                value: _UsageDetailTab.projects,
+                label: '项目列表',
+              ),
+              IdeTabItem(
+                key: ValueKey('usage-detail-tab-tasks'),
+                value: _UsageDetailTab.tasks,
+                label: '任务列表',
+              ),
+            ],
+            onChanged: (value) {
+              setState(() {
+                _tab = value;
+              });
+            },
+          ),
           const SizedBox(height: IdeSpacing.space12),
-          right,
+          switch (_tab) {
+            _UsageDetailTab.agents => _AgentStatsPanel(
+              controller: widget.controller,
+              entries: widget.report.agentRanking,
+            ),
+            _UsageDetailTab.models => _ModelStatsPanel(report: widget.report),
+            _UsageDetailTab.projects => _ProjectListPanel(
+              entries: widget.report.projectRanking,
+              onProjectSelected: widget.onProjectSelected,
+            ),
+            _UsageDetailTab.tasks => _TaskListPanel(
+              records: widget.report.records,
+              page: _taskPage,
+              pageSize: _taskPageSize,
+              onPageChanged: (page) {
+                setState(() {
+                  _taskPage = page;
+                });
+              },
+              onTaskPressed: widget.onTaskPressed,
+            ),
+          },
         ],
-      );
-    }
-    final leftFlex = layout == _UsagePairLayout.sixtyForty ? 3 : 1;
-    final rightFlex = layout == _UsagePairLayout.sixtyForty ? 2 : 1;
-    return Row(
-      key: ValueKey<String>(
-        '$debugLabel-${layout == _UsagePairLayout.equal ? 'equal' : 'sixty-forty'}',
       ),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(flex: leftFlex, child: left),
-        const SizedBox(width: IdeSpacing.space12),
-        Expanded(flex: rightFlex, child: right),
-      ],
     );
   }
 }
 
-class _AgentRankingSection extends StatelessWidget {
-  const _AgentRankingSection({required this.controller, required this.entries});
+class _AgentStatsPanel extends StatelessWidget {
+  const _AgentStatsPanel({required this.controller, required this.entries});
 
   final UsageStatisticsController controller;
   final List<UsageAgentRankEntry> entries;
 
   @override
   Widget build(BuildContext context) {
-    return IdeSection(
-      title: 'Agent 使用排行',
-      subtitle: '按当前筛选范围汇总',
-      trailing: _UsageFilters._select<UsageRankSort>(
-        key: const ValueKey('usage-agent-rank-sort'),
-        width: 140,
-        value: controller.rankSort,
-        options: [
-          for (final sort in UsageRankSort.values)
-            _SelectOption(sort, sort.label),
-        ],
-        onChanged: (value) {
-          if (value != null) {
-            controller.selectRankSort(value);
-          }
-        },
-      ),
-      child: _UsageTable(
-        minWidth: 620,
-        headers: const ['Agent', '调用次数', '成功率', 'Token', '失败', '平均耗时'],
-        flexes: const [3, 2, 2, 2, 2, 2],
-        rows: [
-          for (final entry in entries)
-            [
-              entry.providerName,
-              formatUsageCount(entry.calls),
-              formatUsagePercent(entry.successRate),
-              entry.totalTokens == null
-                  ? '不支持'
-                  : formatUsageCount(entry.totalTokens!),
-              entry.failures.toString(),
-              formatUsageDuration(entry.averageDuration, compact: true),
-            ],
-        ],
-      ),
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    return Column(
+      key: const ValueKey('usage-panel-agents'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '按当前筛选范围汇总',
+                style: textStyles.meta.copyWith(color: colors.textSecondary),
+              ),
+            ),
+            _UsageFilters._select<UsageRankSort>(
+              key: const ValueKey('usage-agent-rank-sort'),
+              width: 140,
+              value: controller.rankSort,
+              options: [
+                for (final sort in UsageRankSort.values)
+                  _SelectOption(sort, sort.label),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  controller.selectRankSort(value);
+                }
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: IdeSpacing.space8),
+        _UsageTable(
+          minWidth: 620,
+          headers: const ['Agent', '调用次数', '成功率', 'Token', '失败', '平均耗时'],
+          flexes: const [3, 2, 2, 2, 2, 2],
+          rows: [
+            for (final entry in entries)
+              [
+                entry.providerName,
+                formatUsageCount(entry.calls),
+                formatUsagePercent(entry.successRate),
+                entry.totalTokens == null
+                    ? '不支持'
+                    : formatUsageCount(entry.totalTokens!),
+                entry.failures.toString(),
+                formatUsageDuration(entry.averageDuration, compact: true),
+              ],
+          ],
+        ),
+      ],
     );
   }
 }
 
-class _ProjectRankingSection extends StatelessWidget {
-  const _ProjectRankingSection({
+class _ModelStatsPanel extends StatelessWidget {
+  const _ModelStatsPanel({required this.report});
+
+  final UsageStatisticsReport report;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    final tokens = report.overview.tokens;
+    return Column(
+      key: const ValueKey('usage-panel-models'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          '模型 Token 消耗与占比',
+          style: textStyles.meta.copyWith(color: colors.textSecondary),
+        ),
+        const SizedBox(height: IdeSpacing.space8),
+        if (!tokens.hasData && report.modelShares.isEmpty)
+          Text(
+            '当前筛选下暂无模型统计',
+            style: textStyles.bodyMedium.copyWith(color: colors.textSecondary),
+          )
+        else ...[
+          if (tokens.hasData) ...[
+            Wrap(
+              spacing: IdeSpacing.space12,
+              runSpacing: IdeSpacing.space6,
+              children: [
+                _InlineMetric(
+                  label: '总量',
+                  value: formatUsageCount(tokens.effectiveTotal ?? 0),
+                ),
+                _InlineMetric(
+                  label: '输入',
+                  value: formatUsageCount(tokens.inputTokens ?? 0),
+                ),
+                _InlineMetric(
+                  label: '缓存输入',
+                  value: formatUsageCount(tokens.cachedInputTokens ?? 0),
+                ),
+                _InlineMetric(
+                  label: '输出',
+                  value: formatUsageCount(tokens.outputTokens ?? 0),
+                ),
+                _InlineMetric(
+                  label: '推理',
+                  value: formatUsageCount(tokens.reasoningTokens ?? 0),
+                ),
+              ],
+            ),
+            const SizedBox(height: IdeSpacing.space12),
+          ],
+          _UsageTable(
+            minWidth: 520,
+            headers: const ['模型', 'Token', '占比'],
+            flexes: const [4, 2, 2],
+            rows: [
+              for (final share in report.modelShares)
+                [
+                  share.model,
+                  formatUsageCount(share.totalTokens),
+                  '${(share.ratio * 100).toStringAsFixed(1)}%',
+                ],
+            ],
+            rowKeys: [for (final share in report.modelShares) share.model],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ProjectListPanel extends StatelessWidget {
+  const _ProjectListPanel({
     required this.entries,
     required this.onProjectSelected,
   });
@@ -739,115 +826,116 @@ class _ProjectRankingSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IdeSection(
-      title: '项目使用排行',
-      subtitle: '点击项目可直接应用筛选',
-      child: _UsageTable(
-        minWidth: 620,
-        headers: const ['项目', '调用次数', 'Token', '平均耗时', '最近使用'],
-        flexes: const [3, 2, 2, 2, 2],
-        rows: [
-          for (final entry in entries)
-            [
-              entry.projectName,
-              formatUsageCount(entry.calls),
-              entry.totalTokens == null
-                  ? '不支持'
-                  : formatUsageCount(entry.totalTokens!),
-              formatUsageDuration(entry.averageDuration, compact: true),
-              formatUsageRelativeTime(entry.lastUsedAt, DateTime.now()),
-            ],
-        ],
-        rowKeys: [for (final entry in entries) entry.projectPath],
-        onRowPressed: (index) => onProjectSelected(entries[index].projectPath),
-      ),
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    return Column(
+      key: const ValueKey('usage-panel-projects'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          '按当前筛选范围汇总 · 点击项目可聚焦该项目',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: textStyles.meta.copyWith(color: colors.textSecondary),
+        ),
+        const SizedBox(height: IdeSpacing.space8),
+        _UsageTable(
+          minWidth: 620,
+          headers: const ['项目', '调用次数', 'Token', '平均耗时', '最近使用'],
+          flexes: const [3, 2, 2, 2, 2],
+          rows: [
+            for (final entry in entries)
+              [
+                entry.projectName,
+                formatUsageCount(entry.calls),
+                entry.totalTokens == null
+                    ? '不支持'
+                    : formatUsageCount(entry.totalTokens!),
+                formatUsageDuration(entry.averageDuration, compact: true),
+                formatUsageRelativeTime(entry.lastUsedAt, DateTime.now()),
+              ],
+          ],
+          rowKeys: [for (final entry in entries) entry.projectPath],
+          onRowPressed: (index) =>
+              onProjectSelected(entries[index].projectPath),
+        ),
+      ],
     );
   }
 }
 
-class _TokenAnalysisSection extends StatelessWidget {
-  const _TokenAnalysisSection({required this.report});
+class _TaskListPanel extends StatelessWidget {
+  const _TaskListPanel({
+    required this.records,
+    required this.page,
+    required this.pageSize,
+    required this.onPageChanged,
+    required this.onTaskPressed,
+  });
 
-  final UsageStatisticsReport report;
+  final List<AgentUsageRecord> records;
+  final int page;
+  final int pageSize;
+  final ValueChanged<int> onPageChanged;
+  final ValueChanged<AgentUsageRecord> onTaskPressed;
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final tokens = report.overview.tokens;
-    return IdeSection(
-      title: 'Token 分析',
-      subtitle: '输入、输出与模型消耗比例',
-      child: tokens.hasData
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Wrap(
-                  spacing: IdeSpacing.space12,
-                  runSpacing: IdeSpacing.space6,
-                  children: [
-                    _InlineMetric(
-                      label: '总量',
-                      value: formatUsageCount(tokens.effectiveTotal ?? 0),
-                    ),
-                    _InlineMetric(
-                      label: '输入',
-                      value: formatUsageCount(tokens.inputTokens ?? 0),
-                    ),
-                    _InlineMetric(
-                      label: '缓存输入',
-                      value: formatUsageCount(tokens.cachedInputTokens ?? 0),
-                    ),
-                    _InlineMetric(
-                      label: '输出',
-                      value: formatUsageCount(tokens.outputTokens ?? 0),
-                    ),
-                    _InlineMetric(
-                      label: '推理',
-                      value: formatUsageCount(tokens.reasoningTokens ?? 0),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: IdeSpacing.space12),
-                for (final share in report.modelShares) ...[
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          share.model,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: textStyles.bodySmall,
-                        ),
-                      ),
-                      Text(
-                        '${(share.ratio * 100).toStringAsFixed(1)}% · '
-                        '${formatUsageCount(share.totalTokens)}',
-                        style: textStyles.caption.copyWith(
-                          color: colors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: IdeSpacing.space4),
-                  sf.Progress(progress: share.ratio),
-                  const SizedBox(height: IdeSpacing.space8),
-                ],
-                const SizedBox(height: IdeSpacing.space4),
-                _UsageLineChart(
-                  key: const ValueKey('usage-token-trend-chart'),
-                  points: report.tokenTrend,
-                  metric: UsageTrendMetric.totalTokens,
-                  height: 150,
-                ),
+    final totalPages = records.isEmpty
+        ? 1
+        : ((records.length + pageSize - 1) / pageSize).floor();
+    final safePage = page.clamp(1, totalPages);
+    final start = (safePage - 1) * pageSize;
+    final visible = records.skip(start).take(pageSize).toList();
+
+    return Column(
+      key: const ValueKey('usage-panel-tasks'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          '共 ${records.length} 条 · 每页 $pageSize 条 · 仅展示统计元数据',
+          style: textStyles.meta.copyWith(color: colors.textSecondary),
+        ),
+        const SizedBox(height: IdeSpacing.space8),
+        _UsageTable(
+          minWidth: 780,
+          headers: const ['时间', '项目', 'Agent', '模型', '耗时', 'Token', '状态'],
+          flexes: const [2, 3, 2, 3, 2, 2, 2],
+          rows: [
+            for (final record in visible)
+              [
+                formatUsageDateTime(record.startedAt),
+                record.projectName,
+                record.providerName,
+                record.model ?? '未知模型',
+                formatUsageDuration(record.duration, compact: true),
+                record.tokens.effectiveTotal == null
+                    ? '不支持'
+                    : formatUsageCount(record.tokens.effectiveTotal!),
+                record.status.label,
               ],
-            )
-          : Text(
-              '当前 Agent 不支持 Token 统计',
-              style: textStyles.bodyMedium.copyWith(
-                color: colors.textSecondary,
-              ),
+          ],
+          rowKeys: [for (final record in visible) record.id],
+          onRowPressed: (index) => onTaskPressed(visible[index]),
+        ),
+        if (records.length > pageSize) ...[
+          const SizedBox(height: IdeSpacing.space12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: sf.Pagination(
+              key: const ValueKey('usage-task-pagination'),
+              page: safePage,
+              totalPages: totalPages,
+              maxPages: 5,
+              onPageChanged: onPageChanged,
+              hidePreviousOnFirstPage: true,
+              hideNextOnLastPage: true,
             ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -873,225 +961,6 @@ class _InlineMetric extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _QuotaSection extends StatelessWidget {
-  const _QuotaSection({required this.quota});
-
-  final AgentUsageQuotaSnapshot? quota;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
-    final quota = this.quota;
-    return IdeSection(
-      title: '订阅套餐',
-      subtitle: 'Codex 返回的实际限额窗口',
-      child: quota == null
-          ? Text(
-              '当前账号未提供套餐信息',
-              style: textStyles.bodyMedium.copyWith(
-                color: colors.textSecondary,
-              ),
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        formatUsagePlanType(quota.planType),
-                        style: textStyles.titleLarge,
-                      ),
-                    ),
-                    if (quota.credits?.unlimited == true)
-                      const IdeTab(
-                        label: '无限额度',
-                        selected: true,
-                        trailingIcon: null,
-                      ),
-                  ],
-                ),
-                if (quota.limitName case final name?) ...[
-                  const SizedBox(height: IdeSpacing.space4),
-                  Text(
-                    name,
-                    style: textStyles.caption.copyWith(
-                      color: colors.textSecondary,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: IdeSpacing.space12),
-                for (final window in quota.windows) ...[
-                  _QuotaWindow(window: window),
-                  const SizedBox(height: IdeSpacing.space10),
-                ],
-                if (quota.credits case final credits?)
-                  Text(
-                    credits.unlimited
-                        ? '余额：无限'
-                        : credits.balance == null
-                        ? '余额状态：${credits.hasCredits ? '可用' : '已用尽'}'
-                        : '余额：${credits.balance}',
-                    style: textStyles.bodySmall.copyWith(
-                      color: credits.hasCredits || credits.unlimited
-                          ? colors.success
-                          : colors.warning,
-                    ),
-                  ),
-                if (quota.reachedReason != null) ...[
-                  const SizedBox(height: IdeSpacing.space8),
-                  Text(
-                    '额度状态：${quota.reachedReason}',
-                    style: textStyles.caption.copyWith(color: colors.warning),
-                  ),
-                ],
-              ],
-            ),
-    );
-  }
-}
-
-class _QuotaWindow extends StatelessWidget {
-  const _QuotaWindow({required this.window});
-
-  final AgentUsageWindow window;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
-    final remaining = math.max(0, 100 - window.usedPercent);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(child: Text(window.label, style: textStyles.bodySmall)),
-            Text(
-              '已用 ${window.usedPercent}% · 剩余 $remaining%',
-              style: textStyles.caption.copyWith(color: colors.textSecondary),
-            ),
-          ],
-        ),
-        const SizedBox(height: IdeSpacing.space4),
-        sf.Progress(progress: window.usedPercent.toDouble(), min: 0, max: 100),
-        const SizedBox(height: IdeSpacing.space4),
-        Text(
-          window.resetsAt == null
-              ? '未提供重置时间'
-              : '重置时间：${formatUsageDateTime(window.resetsAt)}',
-          style: textStyles.caption.copyWith(color: colors.textTertiary),
-        ),
-      ],
-    );
-  }
-}
-
-class _RecentTasksSection extends StatelessWidget {
-  const _RecentTasksSection({
-    required this.records,
-    required this.onTaskPressed,
-  });
-
-  final List<AgentUsageRecord> records;
-  final ValueChanged<AgentUsageRecord> onTaskPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final visible = records.take(20).toList();
-    return IdeSection(
-      title: '最近任务',
-      subtitle: '仅展示统计元数据，不展示 Prompt 和文件内容',
-      child: _UsageTable(
-        minWidth: 780,
-        headers: const ['时间', '项目', 'Agent', '模型', '耗时', 'Token', '状态'],
-        flexes: const [2, 3, 2, 3, 2, 2, 2],
-        rows: [
-          for (final record in visible)
-            [
-              formatUsageDateTime(record.startedAt),
-              record.projectName,
-              record.providerName,
-              record.model ?? '未知模型',
-              formatUsageDuration(record.duration, compact: true),
-              record.tokens.effectiveTotal == null
-                  ? '不支持'
-                  : formatUsageCount(record.tokens.effectiveTotal!),
-              record.status.label,
-            ],
-        ],
-        rowKeys: [for (final record in visible) record.id],
-        onRowPressed: (index) => onTaskPressed(visible[index]),
-      ),
-    );
-  }
-}
-
-class _ErrorAnalysisSection extends StatelessWidget {
-  const _ErrorAnalysisSection({
-    required this.errors,
-    required this.records,
-    required this.onCategoryPressed,
-  });
-
-  final List<UsageErrorBreakdown> errors;
-  final List<AgentUsageRecord> records;
-  final ValueChanged<UsageErrorCategory> onCategoryPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
-    final failures = records.where((record) => record.status.isFailure).length;
-    return IdeSection(
-      title: '失败分析',
-      subtitle: '失败次数：$failures',
-      child: errors.isEmpty
-          ? Row(
-              children: [
-                Icon(
-                  Icons.check_circle_outline,
-                  size: 18,
-                  color: colors.success,
-                ),
-                const SizedBox(width: IdeSpacing.space8),
-                Text('当前范围内没有失败任务', style: textStyles.bodyMedium),
-              ],
-            )
-          : Column(
-              children: [
-                for (var index = 0; index < errors.length; index += 1)
-                  IdeListRow(
-                    key: ValueKey<String>(
-                      'usage-error-${errors[index].category.name}',
-                    ),
-                    title: errors[index].category.label,
-                    subtitle: errors[index].category.nextAction,
-                    leading: Icon(Icons.error_outline, color: colors.error),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          errors[index].count.toString(),
-                          style: textStyles.titleSmall.copyWith(
-                            color: colors.error,
-                          ),
-                        ),
-                        const SizedBox(width: IdeSpacing.space4),
-                        const Icon(Icons.chevron_right_rounded, size: 16),
-                      ],
-                    ),
-                    onPressed: () => onCategoryPressed(errors[index].category),
-                    showDivider: index < errors.length - 1,
-                    semanticLabel: '查看${errors[index].category.label}任务',
-                  ),
-              ],
-            ),
     );
   }
 }
@@ -1179,13 +1048,11 @@ class _UsageLineChart extends StatelessWidget {
   const _UsageLineChart({
     required this.points,
     required this.metric,
-    this.height = 210,
     super.key,
   });
 
   final List<UsageTrendPoint> points;
   final UsageTrendMetric metric;
-  final double height;
 
   @override
   Widget build(BuildContext context) {
@@ -1225,7 +1092,7 @@ class _UsageLineChart extends StatelessWidget {
       label: '${metric.label}趋势，共 ${points.length} 个时间点',
       child: RepaintBoundary(
         child: SizedBox(
-          height: height,
+          height: 210,
           child: LineChart(
             key: const ValueKey('usage-line-chart-canvas'),
             LineChartData(
@@ -1452,53 +1319,6 @@ class _TaskDetailDrawer extends StatelessWidget {
             ),
             _DetailRow(label: '下一步', value: category.nextAction),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-class _ErrorListDrawer extends StatelessWidget {
-  const _ErrorListDrawer({
-    required this.category,
-    required this.records,
-    required this.onTaskPressed,
-  });
-
-  final UsageErrorCategory category;
-  final List<AgentUsageRecord> records;
-  final ValueChanged<AgentUsageRecord> onTaskPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final textStyles = IdeTextStyles.of(context);
-    return _DrawerSurface(
-      title: category.label,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          IdeStatusCard(
-            tone: IdeStatusCardTone.info,
-            title: '建议操作',
-            body: Text(category.nextAction),
-            margin: EdgeInsets.zero,
-          ),
-          const SizedBox(height: IdeSpacing.space12),
-          Text('${records.length} 条任务', style: textStyles.titleSmall),
-          const SizedBox(height: IdeSpacing.space8),
-          for (var index = 0; index < records.length; index += 1)
-            IdeListRow(
-              key: ValueKey<String>('usage-error-task-${records[index].id}'),
-              title: records[index].projectName,
-              subtitle:
-                  records[index].errorMessage ??
-                  records[index].errorCode ??
-                  '未提供详细原因',
-              trailing: const Icon(Icons.chevron_right_rounded, size: 16),
-              onPressed: () => onTaskPressed(records[index]),
-              showDivider: index < records.length - 1,
-              semanticLabel: '打开 ${records[index].projectName} 失败任务',
-            ),
         ],
       ),
     );
