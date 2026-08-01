@@ -422,7 +422,8 @@ class _QuotaWindow extends StatelessWidget {
           ],
         ),
         const SizedBox(height: IdeSpacing.space4),
-        sf.Progress(progress: used.toDouble(), min: 0, max: 100),
+        // 深色段表示剩余额度，与「剩余 n%」文案一致。
+        sf.Progress(progress: remaining.toDouble(), min: 0, max: 100),
         if (window.resetsAt case final resetsAt?) ...[
           const SizedBox(height: IdeSpacing.space2),
           Text(
