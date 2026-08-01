@@ -16,12 +16,17 @@ import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_mode
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
+import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 
 import '../testing/agent_event_storm_fixture.dart';
 import '../testing/ide_test_harness.dart';
 import '../testing/widget_build_counter.dart';
 
 void main() {
+  tearDown(() {
+    IdeHome.debugShowTrailingRail = false;
+  });
+
   testWidgets('starts with the compact IDE panes', (tester) async {
     await _pumpIde(tester);
     await tester.pump();
@@ -35,8 +40,9 @@ void main() {
     expect(find.byKey(const ValueKey('tools-panel-card')), findsNothing);
     expect(find.byKey(const ValueKey('left-projects-action')), findsOneWidget);
     expect(find.byKey(const ValueKey('left-context-action')), findsOneWidget);
-    expect(find.byKey(const ValueKey('right-files-action')), findsOneWidget);
-    expect(find.byKey(const ValueKey('right-tools-action')), findsOneWidget);
+    expect(find.byKey(const ValueKey('right-files-action')), findsNothing);
+    expect(find.byKey(const ValueKey('right-tools-action')), findsNothing);
+    expect(find.byKey(const ValueKey('workbench-trailing-rail')), findsNothing);
     expect(find.text('Projects'), findsOneWidget);
     expect(find.byKey(const ValueKey('global-home-page')), findsOneWidget);
     expect(find.text('欢迎使用 Zeta'), findsOneWidget);
@@ -94,6 +100,7 @@ void main() {
   );
 
   testWidgets('activity icons toggle side panel columns', (tester) async {
+    _enableTrailingRailForTest();
     await _pumpIde(tester);
 
     await tester.tap(find.byKey(const ValueKey('left-projects-action')));
@@ -169,6 +176,7 @@ void main() {
   testWidgets('side panel cards own borders without workbench pane wrappers', (
     tester,
   ) async {
+    _enableTrailingRailForTest();
     await _pumpIde(tester);
     await tester.tap(find.byKey(const ValueKey('left-context-action')));
     await tester.tap(find.byKey(const ValueKey('right-files-action')));
@@ -191,6 +199,7 @@ void main() {
   });
 
   testWidgets('horizontal resize handles clamp side widths', (tester) async {
+    _enableTrailingRailForTest();
     await _pumpIde(tester);
 
     expect(
@@ -278,6 +287,7 @@ void main() {
   testWidgets('vertical resize handles preserve accumulated drag distance', (
     tester,
   ) async {
+    _enableTrailingRailForTest();
     await _pumpIde(tester);
     await tester.tap(find.byKey(const ValueKey('left-context-action')));
     await tester.tap(find.byKey(const ValueKey('right-files-action')));
@@ -319,6 +329,7 @@ void main() {
   testWidgets('right panels use overlay in medium and compact modes', (
     tester,
   ) async {
+    _enableTrailingRailForTest();
     await _pumpIde(tester, size: const Size(832, 900));
 
     expect(
@@ -1720,9 +1731,14 @@ class _TrackedAgentUsageRepository implements AgentUsagePanelRepository {
   }
 }
 
+void _enableTrailingRailForTest() {
+  IdeHome.debugShowTrailingRail = true;
+}
+
 Future<_RetainedAgentState> _prepareRetainedAgentState(
   WidgetTester tester,
 ) async {
+  _enableTrailingRailForTest();
   final directory = Directory.systemTemp.createTempSync('zeta_workbench_test_');
   addTearDown(() {
     if (directory.existsSync()) {

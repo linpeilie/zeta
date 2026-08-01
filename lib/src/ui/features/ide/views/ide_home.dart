@@ -60,6 +60,9 @@ typedef HomeProviderDetectionLoader = Future<List<ManagedAgent>> Function();
 ///
 /// 当前布局是左右图标栏、左右活动面板与中间 Agent 主编辑区组成的五列结构；
 /// 具体项目、会话和 Agent thread 编排由 [IdeShellController] 承接。
+///
+/// Trailing Rail（Files/Tools）暂时关闭；加回时将 [_trailingRailEnabled]
+/// 设为 `true` 并移除 [debugShowTrailingRail]。
 class IdeHome extends StatefulWidget {
   const IdeHome({
     required this.directoryPicker,
@@ -80,6 +83,13 @@ class IdeHome extends StatefulWidget {
     this.showWindowControls = true,
     super.key,
   });
+
+  /// 生产路径是否装配 Trailing Rail；暂时关闭以便后续一次性加回。
+  static const bool _trailingRailEnabled = false;
+
+  /// 测试专用：为仍覆盖 Inspector 行为的用例临时显示 Trailing Rail。
+  @visibleForTesting
+  static bool debugShowTrailingRail = false;
 
   final Future<String?> Function() directoryPicker;
   final bool enableNativeWindowFrame;
@@ -351,7 +361,10 @@ class _IdeHomeState extends State<IdeHome> {
           : null,
       inspectorVisible: inspectorVisible,
       inspectorWidth: _rightPanelWidth,
-      trailingRailBuilder: _buildTrailingRail,
+      trailingRailBuilder:
+          (IdeHome._trailingRailEnabled || IdeHome.debugShowTrailingRail)
+          ? _buildTrailingRail
+          : null,
       activeOverlay: _activeOverlay,
       onDismissOverlay: _closeActiveOverlay,
       overlayTriggerFocusNode: _overlayTriggerFocusNode,
@@ -599,6 +612,8 @@ class _IdeHomeState extends State<IdeHome> {
     );
   }
 
+  /// Files/Tools 右侧活动栏；由 [_trailingRailEnabled] / [IdeHome.debugShowTrailingRail]
+  /// 控制是否装配，实现保留以便加回。
   Widget _buildTrailingRail(BuildContext context, IdeWorkbenchLayoutMode mode) {
     if (_page != _IdeHomePage.home) {
       return const IdeActivityRail(leadingActions: <IdeRailAction>[]);

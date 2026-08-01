@@ -7,13 +7,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/main.dart';
 import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 
 import '../../../testing/ide_test_harness.dart';
 
 void main() {
   final tempDirectories = <Directory>[];
 
+  setUp(() {
+    // 本文件用例依赖 Files 面板，需在 pump 前临时恢复 Trailing Rail。
+    IdeHome.debugShowTrailingRail = true;
+  });
+
   tearDown(() {
+    IdeHome.debugShowTrailingRail = false;
     for (final directory in tempDirectories) {
       if (directory.existsSync()) {
         directory.deleteSync(recursive: true);
