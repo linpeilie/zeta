@@ -304,6 +304,7 @@ class _AgentConversationTimeline extends StatelessWidget {
     required this.pagePadding,
     required this.projectionCache,
     required this.descriptorFactory,
+    required this.markdownCache,
     required this.virtualListController,
     required this.scrollCoordinator,
     required this.scrollChromeTick,
@@ -319,6 +320,7 @@ class _AgentConversationTimeline extends StatelessWidget {
   final EdgeInsets pagePadding;
   final AgentTimelineProjectionCache projectionCache;
   final AgentTimelineExtentDescriptorFactory descriptorFactory;
+  final AgentMarkdownCache markdownCache;
   final IdeVirtualListController virtualListController;
   final IdeVirtualScrollCoordinator scrollCoordinator;
   final ValueListenable<int> scrollChromeTick;
@@ -341,119 +343,148 @@ class _AgentConversationTimeline extends StatelessWidget {
           ]);
 
     return _AgentContentAlign(
-      child: ListenableBuilder(
-        listenable: timelineListenable,
-        builder: (context, _) {
-          final historyState = viewModel.historyState;
-          final standbySnapshot = historyState.standbyTurn;
-          final historyTurns = historyState.visibleTurns;
-          final liveTurnState = viewModel.liveTurnState;
-          final liveSnapshot = liveTurnState?.snapshot();
-          final expansionState = viewModel.expansionState;
-          final items = projectAgentTimelineViewportItems(
-            standbyTurn: standbySnapshot,
-            visibleHistoryTurns: historyTurns,
-            liveTurn: liveSnapshot,
-            resolveBlocks: projectionCache.resolve,
-          );
-          // 仅保留当前可见 turn 的投影缓存，避免历史窗口滑动后无限增长。
-          projectionCache.retainOnly(<String>{
-            if (standbySnapshot != null) standbySnapshot.id,
-            for (final turn in historyTurns) turn.id,
-            if (liveSnapshot != null) liveSnapshot.id,
-          });
+      child: LayoutBuilder(
+        builder: (context, constraints) => ListenableBuilder(
+          listenable: timelineListenable,
+          builder: (context, _) {
+            final historyState = viewModel.historyState;
+            final standbySnapshot = historyState.standbyTurn;
+            final historyTurns = historyState.visibleTurns;
+            final liveTurnState = viewModel.liveTurnState;
+            final liveSnapshot = liveTurnState?.snapshot();
+            final expansionState = viewModel.expansionState;
+            final items = projectAgentTimelineViewportItems(
+              standbyTurn: standbySnapshot,
+              visibleHistoryTurns: historyTurns,
+              liveTurn: liveSnapshot,
+              resolveBlocks: projectionCache.resolve,
+            );
+            // 仅保留当前可见 turn 的投影缓存，避免历史窗口滑动后无限增长。
+            projectionCache.retainOnly(<String>{
+              if (standbySnapshot != null) standbySnapshot.id,
+              for (final turn in historyTurns) turn.id,
+              if (liveSnapshot != null) liveSnapshot.id,
+            });
 
-          onLastItemIdChanged(items.isEmpty ? null : items.last.id);
+            onLastItemIdChanged(items.isEmpty ? null : items.last.id);
 
-          final media = MediaQuery.of(context);
-          final layoutContext = AgentTimelineLayoutContext(
-            crossAxisExtent: media.size.width - pagePadding.horizontal,
-            devicePixelRatio: media.devicePixelRatio,
-            textScale: media.textScaler.scale(1),
-            localeKey: Localizations.localeOf(context).toString(),
-          );
-
-          virtualListController.setItems(
-            descriptorFactory.describeAll(
-              items,
-              expansion: (
-                isCommandGroupExpanded: expansionState.isCommandGroupExpanded,
-                isFileEditItemExpanded: expansionState.isFileEditItemExpanded,
+            final media = MediaQuery.of(context);
+            final layoutContext = AgentTimelineLayoutContext(
+              // 必须使用 920px 内容轴内的真实局部宽度；窗口宽度会让高度估算和
+              // layout epoch 在多面板/窗口 resize 时失真。
+              crossAxisExtent: math.max(
+                0,
+                constraints.maxWidth - pagePadding.horizontal,
               ),
-              layoutContext: layoutContext,
-            ),
-            epoch: layoutContext.toEpoch(),
-          );
+              devicePixelRatio: media.devicePixelRatio,
+              textScale: media.textScaler.scale(1),
+              localeKey: Localizations.localeOf(context).toString(),
+            );
 
-          final delegate = SliverChildBuilderDelegate(
-            (context, index) {
-              final item = items[index];
-              return KeyedSubtree(
-                key: ValueKey<String>(agentTimelineViewportItemKey(item)),
-                child: _buildViewportItem(item),
-              );
-            },
-            childCount: items.length,
-            findChildIndexCallback: (Key key) {
-              if (key is! ValueKey<String>) {
-                return null;
-              }
-              final value = key.value;
-              const prefix = 'timeline-viewport-';
-              if (!value.startsWith(prefix)) {
-                return null;
-              }
-              final id = value.substring(prefix.length);
-              final index = items.indexWhere((item) => item.id == id);
-              return index >= 0 ? index : null;
-            },
-            // turn 内展开态由 viewModel 持有；允许回收视口外 turn。
-            addAutomaticKeepAlives: false,
-            addRepaintBoundaries: true,
-          );
-
-          final scrollView = CustomScrollView(
-            key: const ValueKey('agent-message-list'),
-            controller: scrollController,
-            // 默认 cacheExtent 保留少量视口外 block，兼顾滚动流畅与虚拟化收益。
-            slivers: [
-              // 保留 pagePadding；内容最大宽由外层 _AgentContentAlign 约束。
-              SliverPadding(
-                padding: pagePadding,
-                sliver: IdeAnchoredDynamicSliverList(
-                  controller: virtualListController,
-                  delegate: delegate,
+            virtualListController.setItems(
+              descriptorFactory.describeAll(
+                items,
+                expansion: (
+                  isCommandGroupExpanded: expansionState.isCommandGroupExpanded,
+                  isFileEditItemExpanded: expansionState.isFileEditItemExpanded,
                 ),
+                layoutContext: layoutContext,
               ),
-            ],
-          );
+              epoch: layoutContext.toEpoch(),
+            );
 
-          return NotificationListener<ScrollNotification>(
-            onNotification: (notification) {
-              return dispatchUserScrollToCoordinator(
-                coordinator: scrollCoordinator,
-                notification: notification,
-                controller: scrollController,
-              );
-            },
-            child: ListenableBuilder(
-              listenable: scrollChromeTick,
-              builder: (context, _) {
-                final showButton = _shouldShowScrollToEndButton();
-                return IdeVirtualScrollShell(
-                  controller: scrollController,
-                  semanticLabel: 'Agent 对话滚动条',
-                  showScrollToEndButton: showButton,
-                  hasNewContent: showButton && viewModel.liveTurnState != null,
-                  onScrollToEnd: () {
-                    unawaited(onScrollToEndPressed());
+            final itemIndexes = <String, int>{
+              for (var index = 0; index < items.length; index++)
+                items[index].id: index,
+            };
+            final delegate = SliverChildBuilderDelegate(
+              (context, index) {
+                final item = items[index];
+                final itemKey = ValueKey<String>(
+                  agentTimelineViewportItemKey(item),
+                );
+                final content = IndexedSemantics(
+                  index: index,
+                  child: RepaintBoundary(child: _buildViewportItem(item)),
+                );
+                final keepAliveListenable = _prepareMarkdownWarmEntry(item);
+                if (keepAliveListenable == null) {
+                  return KeyedSubtree(key: itemKey, child: content);
+                }
+                return ValueListenableBuilder<bool>(
+                  key: itemKey,
+                  valueListenable: keepAliveListenable,
+                  child: content,
+                  builder: (context, keepAlive, child) {
+                    return KeepAlive(keepAlive: keepAlive, child: child!);
                   },
-                  child: scrollView,
                 );
               },
-            ),
-          );
-        },
+              childCount: items.length,
+              findChildIndexCallback: (Key key) {
+                if (key is! ValueKey<String>) {
+                  return null;
+                }
+                final value = key.value;
+                const prefix = 'timeline-viewport-';
+                if (!value.startsWith(prefix)) {
+                  return null;
+                }
+                final id = value.substring(prefix.length);
+                return itemIndexes[id];
+              },
+              // Markdown 在根节点使用显式 KeepAlive；禁止嵌套子树发送 ParentData 通知。
+              addAutomaticKeepAlives: false,
+              // KeepAlive 必须直接控制 Sliver child 的 ParentData，因此在上方按
+              // KeepAlive → IndexedSemantics → RepaintBoundary 的顺序显式包装。
+              addRepaintBoundaries: false,
+              addSemanticIndexes: false,
+            );
+
+            final scrollView = CustomScrollView(
+              key: const ValueKey('agent-message-list'),
+              controller: scrollController,
+              // 默认 cacheExtent 保留少量视口外 block，兼顾滚动流畅与虚拟化收益。
+              slivers: [
+                // 保留 pagePadding；内容最大宽由外层 _AgentContentAlign 约束。
+                SliverPadding(
+                  padding: pagePadding,
+                  sliver: IdeAnchoredDynamicSliverList(
+                    controller: virtualListController,
+                    delegate: delegate,
+                  ),
+                ),
+              ],
+            );
+
+            return NotificationListener<ScrollNotification>(
+              onNotification: (notification) {
+                return dispatchUserScrollToCoordinator(
+                  coordinator: scrollCoordinator,
+                  notification: notification,
+                  controller: scrollController,
+                );
+              },
+              child: ListenableBuilder(
+                listenable: scrollChromeTick,
+                builder: (context, _) {
+                  final showButton = _shouldShowScrollToEndButton();
+                  return IdeVirtualScrollShell(
+                    controller: scrollController,
+                    semanticLabel: 'Agent 对话滚动条',
+                    showScrollToEndButton: showButton,
+                    hasNewContent:
+                        showButton && viewModel.liveTurnState != null,
+                    onScrollToEnd: () {
+                      unawaited(onScrollToEndPressed());
+                    },
+                    child: scrollView,
+                  );
+                },
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -479,6 +510,7 @@ class _AgentConversationTimeline extends StatelessWidget {
           turn: turn,
           block: block,
           viewModel: viewModel,
+          markdownCache: markdownCache,
         );
       case AgentLiveActivityViewportItem():
         return KeyedSubtree(
@@ -492,6 +524,31 @@ class _AgentConversationTimeline extends StatelessWidget {
         return _AgentTurnFooter(turn: turn);
     }
   }
+
+  ValueListenable<bool>? _prepareMarkdownWarmEntry(
+    AgentTimelineViewportItem item,
+  ) {
+    if (item is! AgentBlockViewportItem) {
+      return null;
+    }
+    final block = item.block;
+    if (block is! AgentTimelineEntryRenderBlock) {
+      return null;
+    }
+    final entry = block.entry;
+    if (entry is! AgentMessageTimelineEntry) {
+      return null;
+    }
+    final message = entry.message;
+    if (message.role != AgentMessageRole.agent || message.isPlan) {
+      return null;
+    }
+    return markdownCache.prepareWarmEntry(
+      messageId: message.id,
+      data: message.text,
+      preferIncrementalUpdate: item.isLive,
+    );
+  }
 }
 
 /// 单个 Sliver item 只渲染一个 projection block。
@@ -503,11 +560,13 @@ class _AgentTimelineBlockSection extends StatelessWidget {
     required this.turn,
     required this.block,
     required this.viewModel,
+    required this.markdownCache,
   });
 
   final AgentConversationTurnGroup turn;
   final AgentTimelineRenderBlock block;
   final AgentConversationViewModel viewModel;
+  final AgentMarkdownCache markdownCache;
 
   @override
   Widget build(BuildContext context) {
@@ -516,6 +575,7 @@ class _AgentTimelineBlockSection extends StatelessWidget {
       child: switch (block) {
         AgentTimelineEntryRenderBlock(:final entry) => _buildTimelineEntry(
           entry,
+          markdownCache: markdownCache,
         ),
         AgentTimelineCommandGroupRenderBlock(:final group) =>
           _AgentCommandGroupCard(group: group, viewModel: viewModel),
@@ -525,7 +585,10 @@ class _AgentTimelineBlockSection extends StatelessWidget {
     );
   }
 
-  Widget _buildTimelineEntry(AgentTimelineEntry entry) {
+  Widget _buildTimelineEntry(
+    AgentTimelineEntry entry, {
+    required AgentMarkdownCache markdownCache,
+  }) {
     final isLiveTurn = viewModel.liveTurnState?.id == turn.id;
     return switch (entry) {
       AgentMessageTimelineEntry(:final message) => _AgentMessageEntry(
@@ -533,6 +596,7 @@ class _AgentTimelineBlockSection extends StatelessWidget {
         // 历史与 live 正文均全文渲染，禁止折叠预览。
         useStreamingMarkdown: isLiveTurn,
         viewModel: viewModel,
+        markdownCache: markdownCache,
       ),
       AgentToolTimelineEntry(:final toolCall) => _AgentToolCallCard(
         toolCall: toolCall,

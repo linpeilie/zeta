@@ -2664,10 +2664,11 @@ void main() {
     final markdownWidget = tester
         .widgetList<MarkdownWidget>(find.byType(MarkdownWidget))
         .singleWhere(
-          (widget) => widget.data?.contains('First markdown item') ?? false,
+          (widget) =>
+              widget.controller?.data.contains('First markdown item') ?? false,
         );
-    expect(markdownWidget.data, isNotNull);
-    expect(markdownWidget.controller, isNull);
+    expect(markdownWidget.data, isNull);
+    expect(markdownWidget.controller, isNotNull);
     expect(markdownWidget.useColumn, isTrue);
     expect(markdownWidget.selectable, isTrue);
     expect(markdownWidget.padding, EdgeInsets.zero);
@@ -3253,8 +3254,8 @@ void main() {
         matching: find.byType(MarkdownWidget),
       ),
     );
-    expect(planMarkdownWidget.data, isNotNull);
-    expect(planMarkdownWidget.controller, isNull);
+    expect(planMarkdownWidget.data, isNull);
+    expect(planMarkdownWidget.controller, isNotNull);
   });
 
   testWidgets('renders tool calls, approval cards, and approval responses', (

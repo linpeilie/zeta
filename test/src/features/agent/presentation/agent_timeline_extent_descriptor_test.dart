@@ -129,6 +129,40 @@ void main() {
     expect(descriptors.map((d) => d.id).toList(), [items[0].id, items[1].id]);
     expect(descriptors, everyElement(isA<IdeVirtualItemDescriptor>()));
   });
+
+  test('长 Markdown 逐源行累计折行且估算不再截断到 4000', () {
+    final longLine = List<String>.filled(180, '宽').join();
+    final text = List<String>.filled(80, longLine).join('\n');
+    final message = AgentConversationMessage(
+      id: 'long-markdown',
+      role: AgentMessageRole.agent,
+      text: text,
+    );
+    final entry = AgentMessageTimelineEntry(message: message);
+    final item = AgentBlockViewportItem(
+      turn: AgentConversationTurnGroup(
+        id: 'long-turn',
+        status: AgentHistoryTurnStatus.completed,
+        isStandby: false,
+        entries: <AgentTimelineEntry>[entry],
+      ),
+      block: AgentTimelineEntryRenderBlock(entry: entry),
+      isLive: false,
+    );
+
+    final descriptor = factory.describe(
+      item,
+      expansion: expansion,
+      layoutContext: const AgentTimelineLayoutContext(
+        crossAxisExtent: 360,
+        devicePixelRatio: 1,
+        textScale: 1,
+        localeKey: 'zh',
+      ),
+    );
+
+    expect(descriptor.estimatedExtent, greaterThan(4000));
+  });
 }
 
 bool _neverExpanded(String _) => false;

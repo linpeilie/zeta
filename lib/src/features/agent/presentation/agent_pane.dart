@@ -35,6 +35,7 @@ import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_ui_state.dart';
+import 'package:zeta/src/features/agent/presentation/agent_markdown_cache.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descriptor.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
@@ -42,6 +43,7 @@ import 'package:zeta/src/features/agent/presentation/agent_timeline_projection_c
 import 'package:zeta/src/features/agent/presentation/model_config_ui_state.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 import 'package:zeta/src/ui/core/virtualization/ide_dynamic_sliver_list.dart';
+import 'package:zeta/src/ui/core/virtualization/ide_smooth_scroll_controller.dart';
 import 'package:zeta/src/ui/core/virtualization/ide_virtual_item.dart';
 import 'package:zeta/src/ui/core/virtualization/ide_virtual_list_controller.dart';
 import 'package:zeta/src/ui/core/virtualization/ide_virtual_scroll_coordinator.dart';
@@ -105,7 +107,7 @@ class _AgentPaneState extends State<AgentPane> {
 
   final TextEditingController _inputController = TextEditingController();
   late final FocusNode _composerFocusNode;
-  final ScrollController _scrollController = ScrollController();
+  late final IdeSmoothScrollController _scrollController;
   final ValueNotifier<bool> _canSendNotifier = ValueNotifier<bool>(false);
   final List<String> _draftImagePaths = <String>[];
   final List<({String name, String path})> _draftMentions =
@@ -138,6 +140,7 @@ class _AgentPaneState extends State<AgentPane> {
   /// extent descriptor 复用缓存（流式仅重建尾部脏项）。
   final AgentTimelineExtentDescriptorFactory _descriptorFactory =
       AgentTimelineExtentDescriptorFactory();
+  AgentMarkdownCache _markdownCache = AgentMarkdownCache();
   late Widget Function(BuildContext, _AgentPaneWidthClass)
   _responsiveBodyBuilder;
 
@@ -150,11 +153,20 @@ class _AgentPaneState extends State<AgentPane> {
     );
     _responsiveBodyBuilder = _createResponsiveBodyBuilder();
     _inputController.addListener(_handleInputChanged);
+    _scrollController = IdeSmoothScrollController();
     _scrollDriver = IdeScrollControllerDriver(_scrollController);
     _scrollCoordinator = IdeVirtualScrollCoordinator(driver: _scrollDriver)
       ..onModeChanged = _notifyScrollChrome;
     _scrollController.addListener(_handleScrollChanged);
     _uiEffectSubscription = widget.viewModel.uiEffects.listen(_handleUiEffect);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scrollController.smoothScrollingEnabled = !MediaQuery.disableAnimationsOf(
+      context,
+    );
   }
 
   @override
@@ -168,6 +180,11 @@ class _AgentPaneState extends State<AgentPane> {
     _responsiveBodyBuilder = _createResponsiveBodyBuilder();
     _projectionCache.clear();
     _descriptorFactory.clearCache();
+    final previousMarkdownCache = _markdownCache;
+    _markdownCache = AgentMarkdownCache();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      previousMarkdownCache.dispose();
+    });
     // 新会话清空高度缓存，回到 follow 末尾。
     _virtualListController.synchronizeNow(
       const <IdeVirtualItemDescriptor>[],
@@ -197,6 +214,7 @@ class _AgentPaneState extends State<AgentPane> {
     _scrollChromeTick.dispose();
     _projectionCache.clear();
     _descriptorFactory.clearCache();
+    _markdownCache.dispose();
     super.dispose();
   }
 
@@ -293,6 +311,7 @@ class _AgentPaneState extends State<AgentPane> {
                         pagePadding: pagePadding,
                         projectionCache: _projectionCache,
                         descriptorFactory: _descriptorFactory,
+                        markdownCache: _markdownCache,
                         virtualListController: _virtualListController,
                         scrollCoordinator: _scrollCoordinator,
                         scrollChromeTick: _scrollChromeTick,

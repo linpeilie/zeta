@@ -537,7 +537,7 @@ class _AgentPlanApprovalCard extends StatelessWidget {
             const SizedBox(height: IdeSpacing.space8),
           ],
           if (request.markdown.trim().isNotEmpty)
-            _AgentMarkdownBody(data: request.markdown),
+            _AgentRawMarkdownBody(data: request.markdown),
           if (request.todos.isNotEmpty) ...[
             const SizedBox(height: IdeSpacing.space8),
             _AgentPlanTodoList(title: 'Todos', todos: request.todos),
@@ -618,7 +618,7 @@ class _AgentPlanExecutionCard extends StatelessWidget {
             style: textStyles.bodyMedium.copyWith(color: colors.textSecondary),
           ),
           const SizedBox(height: IdeSpacing.space8),
-          _AgentMarkdownBody(data: request.markdown),
+          _AgentRawMarkdownBody(data: request.markdown),
         ],
       ),
       footer: Wrap(

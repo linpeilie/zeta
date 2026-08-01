@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/virtualization/ide_smooth_scroll_controller.dart';
 import 'package:zeta/src/ui/core/virtualization/ide_virtual_scrollbar.dart';
 
 import '../ide_component_test_harness.dart';
@@ -274,6 +276,82 @@ void main() {
       expect(find.byType(IdeScrollToEndButton), findsOneWidget);
       await tester.tap(find.byType(IdeScrollToEndButton));
       expect(toEnd, isTrue);
+    });
+
+    testWidgets('桌面滚轮连续增量累加到同一个平滑目标', (tester) async {
+      final controller = IdeSmoothScrollController();
+      addTearDown(controller.dispose);
+
+      await pumpIdeComponent(
+        tester,
+        size: const Size(400, 500),
+        child: IdeVirtualScrollbar(
+          controller: controller,
+          child: ListView.builder(
+            controller: controller,
+            itemCount: 80,
+            itemBuilder: (context, index) =>
+                SizedBox(height: 40, child: Text('smooth-$index')),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final position = tester.getCenter(find.byType(ListView));
+      await tester.sendEventToBinding(
+        PointerScrollEvent(
+          position: position,
+          scrollDelta: const Offset(0, 120),
+          kind: PointerDeviceKind.mouse,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(controller.offset, inExclusiveRange(0, 120));
+
+      await tester.sendEventToBinding(
+        PointerScrollEvent(
+          position: position,
+          scrollDelta: const Offset(0, 120),
+          kind: PointerDeviceKind.mouse,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(controller.offset, closeTo(240, 1));
+    });
+
+    testWidgets('关闭动效时滚轮即时更新且拖拽保持原生', (tester) async {
+      final controller = IdeSmoothScrollController(
+        smoothScrollingEnabled: false,
+      );
+      addTearDown(controller.dispose);
+
+      await pumpIdeComponent(
+        tester,
+        size: const Size(400, 500),
+        child: ListView.builder(
+          controller: controller,
+          itemCount: 80,
+          itemBuilder: (context, index) =>
+              SizedBox(height: 40, child: Text('native-$index')),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.sendEventToBinding(
+        PointerScrollEvent(
+          position: tester.getCenter(find.byType(ListView)),
+          scrollDelta: const Offset(0, 120),
+          kind: PointerDeviceKind.mouse,
+        ),
+      );
+      await tester.pump();
+      expect(controller.offset, closeTo(120, 1));
+
+      await tester.drag(find.byType(ListView), const Offset(0, -80));
+      await tester.pumpAndSettle();
+      expect(controller.offset, greaterThan(120));
     });
   });
 }

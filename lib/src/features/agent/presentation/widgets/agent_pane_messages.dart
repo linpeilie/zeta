@@ -6,16 +6,23 @@ class _AgentMessageEntry extends StatelessWidget {
     required this.message,
     required this.useStreamingMarkdown,
     required this.viewModel,
+    required this.markdownCache,
   });
 
   final AgentConversationMessage message;
   final bool useStreamingMarkdown;
   final AgentConversationViewModel viewModel;
+  final AgentMarkdownCache markdownCache;
 
   @override
   Widget build(BuildContext context) {
     if (message.isPlan) {
-      return _AgentPlanMessageCard(message: message, viewModel: viewModel);
+      return _AgentPlanMessageCard(
+        message: message,
+        useStreamingMarkdown: useStreamingMarkdown,
+        viewModel: viewModel,
+        markdownCache: markdownCache,
+      );
     }
     // Codex phase=final_answer → 完成汇总卡片；无正文时不占位。
     if (message.isFinalAnswer) {
@@ -25,12 +32,14 @@ class _AgentMessageEntry extends StatelessWidget {
       return _AgentFinalAnswerCard(
         message: message,
         useStreamingMarkdown: useStreamingMarkdown,
+        markdownCache: markdownCache,
       );
     }
     if (message.role == AgentMessageRole.agent) {
       return _AgentMarkdownMessage(
         message: message,
         useStreamingMarkdown: useStreamingMarkdown,
+        markdownCache: markdownCache,
       );
     }
     return _AgentBubbleMessage(message: message, viewModel: viewModel);
@@ -501,105 +510,130 @@ class _AgentBubbleMessage extends StatelessWidget {
 }
 
 /// 普通 Agent 正文使用全宽 Markdown 渲染（全文，不折叠）。
-class _AgentMarkdownMessage extends StatefulWidget {
+class _AgentMarkdownMessage extends StatelessWidget {
   const _AgentMarkdownMessage({
     required this.message,
     required this.useStreamingMarkdown,
+    required this.markdownCache,
   });
 
   final AgentConversationMessage message;
   final bool useStreamingMarkdown;
+  final AgentMarkdownCache markdownCache;
 
   @override
-  State<_AgentMarkdownMessage> createState() => _AgentMarkdownMessageState();
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: _AgentMarkdownBody(
+        message: message,
+        useStreamingMarkdown: useStreamingMarkdown,
+        markdownCache: markdownCache,
+      ),
+    );
+  }
 }
 
-class _AgentMarkdownMessageState extends State<_AgentMarkdownMessage> {
-  MarkdownController? _markdownController;
+class _AgentMarkdownBody extends StatefulWidget {
+  const _AgentMarkdownBody({
+    required this.message,
+    required this.useStreamingMarkdown,
+    required this.markdownCache,
+  });
+
+  final AgentConversationMessage message;
+  final bool useStreamingMarkdown;
+  final AgentMarkdownCache markdownCache;
+
+  @override
+  State<_AgentMarkdownBody> createState() => _AgentMarkdownBodyState();
+}
+
+class _AgentMarkdownBodyState extends State<_AgentMarkdownBody> {
+  late AgentMarkdownCacheLease _lease;
   bool _streamCommitted = false;
 
   @override
   void initState() {
     super.initState();
+    _attachLease();
     _syncMarkdownController();
   }
 
   @override
-  void didUpdateWidget(covariant _AgentMarkdownMessage oldWidget) {
+  void didUpdateWidget(covariant _AgentMarkdownBody oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.message.id != widget.message.id ||
-        oldWidget.useStreamingMarkdown != widget.useStreamingMarkdown) {
-      _disposeMarkdownController();
+    if (oldWidget.markdownCache != widget.markdownCache ||
+        oldWidget.message.id != widget.message.id) {
+      _detachLease();
+      _attachLease();
     }
     _syncMarkdownController();
   }
 
-  @override
-  void dispose() {
-    _disposeMarkdownController();
-    super.dispose();
+  void _attachLease() {
+    final lease = widget.markdownCache.acquire(
+      messageId: widget.message.id,
+      data: widget.message.text,
+      preferIncrementalUpdate: widget.useStreamingMarkdown,
+    );
+    _lease = lease;
   }
 
-  MarkdownController _ensureMarkdownController() {
-    return _markdownController ??= MarkdownController();
+  void _detachLease() {
+    _lease.release();
+    _streamCommitted = false;
   }
 
   void _syncMarkdownController() {
-    if (!widget.useStreamingMarkdown) {
-      _disposeMarkdownController();
-      return;
-    }
-    final controller = _ensureMarkdownController();
+    final lease = _lease;
     final nextText = widget.message.text;
-    final currentText = controller.data;
-    if (nextText != currentText) {
-      if (nextText.startsWith(currentText)) {
-        controller.appendChunk(nextText.substring(currentText.length));
-      } else {
-        controller.setData(nextText);
-      }
+    if (lease.controller.data != nextText) {
+      lease.updateData(
+        nextText,
+        preferIncrementalUpdate: widget.useStreamingMarkdown,
+      );
       _streamCommitted = false;
     }
 
     final isCompleted = widget.message.status == AgentMessageStatus.completed;
     if (isCompleted && !_streamCommitted) {
-      controller.commitStream();
+      lease.controller.commitStream();
       _streamCommitted = true;
     } else if (!isCompleted) {
       _streamCommitted = false;
     }
   }
 
-  void _disposeMarkdownController() {
-    _markdownController?.dispose();
-    _markdownController = null;
-    _streamCommitted = false;
+  @override
+  void dispose() {
+    _detachLease();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final markdown = widget.message.text;
-    final useStreamingMarkdown = widget.useStreamingMarkdown;
-    return RepaintBoundary(
-      child: useStreamingMarkdown
-          ? _AgentMarkdownBody(controller: _ensureMarkdownController())
-          : _AgentMarkdownBody(data: markdown),
+    return MarkdownWidget(
+      controller: _lease.controller,
+      theme: _agentMarkdownTheme(context),
+      useColumn: true,
+      selectable: true,
+      padding: EdgeInsets.zero,
+      enableCopyFullDocumentShortcut: false,
+      showCopyAllInContextMenu: false,
     );
   }
 }
 
-class _AgentMarkdownBody extends StatelessWidget {
-  const _AgentMarkdownBody({this.data, this.controller})
-    : assert((data == null) != (controller == null));
+/// 非时间线消息使用的轻量 Markdown 渲染，不进入历史消息保温缓存。
+class _AgentRawMarkdownBody extends StatelessWidget {
+  const _AgentRawMarkdownBody({required this.data});
 
-  final String? data;
-  final MarkdownController? controller;
+  final String data;
 
   @override
   Widget build(BuildContext context) {
     return MarkdownWidget(
       data: data,
-      controller: controller,
       theme: _agentMarkdownTheme(context),
       useColumn: true,
       selectable: true,
@@ -613,90 +647,24 @@ class _AgentMarkdownBody extends StatelessWidget {
 /// Agent 完成汇总卡片：对应 Codex `agent_message` + `phase=final_answer`。
 ///
 /// 以固定卡片壳展示全文 Markdown（不做历史折叠），流式回合内仍可增量渲染。
-class _AgentFinalAnswerCard extends StatefulWidget {
+class _AgentFinalAnswerCard extends StatelessWidget {
   const _AgentFinalAnswerCard({
     required this.message,
     required this.useStreamingMarkdown,
+    required this.markdownCache,
   });
 
   final AgentConversationMessage message;
   final bool useStreamingMarkdown;
-
-  @override
-  State<_AgentFinalAnswerCard> createState() => _AgentFinalAnswerCardState();
-}
-
-class _AgentFinalAnswerCardState extends State<_AgentFinalAnswerCard> {
-  MarkdownController? _markdownController;
-  bool _streamCommitted = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _syncMarkdownController();
-  }
-
-  @override
-  void didUpdateWidget(covariant _AgentFinalAnswerCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.message.id != widget.message.id ||
-        oldWidget.useStreamingMarkdown != widget.useStreamingMarkdown) {
-      _disposeMarkdownController();
-    }
-    _syncMarkdownController();
-  }
-
-  @override
-  void dispose() {
-    _disposeMarkdownController();
-    super.dispose();
-  }
-
-  MarkdownController _ensureMarkdownController() {
-    return _markdownController ??= MarkdownController();
-  }
-
-  void _syncMarkdownController() {
-    if (!widget.useStreamingMarkdown) {
-      _disposeMarkdownController();
-      return;
-    }
-    final controller = _ensureMarkdownController();
-    final nextText = widget.message.text;
-    final currentText = controller.data;
-    if (nextText != currentText) {
-      if (nextText.startsWith(currentText)) {
-        controller.appendChunk(nextText.substring(currentText.length));
-      } else {
-        controller.setData(nextText);
-      }
-      _streamCommitted = false;
-    }
-
-    final isCompleted = widget.message.status == AgentMessageStatus.completed;
-    if (isCompleted && !_streamCommitted) {
-      controller.commitStream();
-      _streamCommitted = true;
-    } else if (!isCompleted) {
-      _streamCommitted = false;
-    }
-  }
-
-  void _disposeMarkdownController() {
-    _markdownController?.dispose();
-    _markdownController = null;
-    _streamCommitted = false;
-  }
+  final AgentMarkdownCache markdownCache;
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final markdown = widget.message.text;
-    final useStreamingMarkdown = widget.useStreamingMarkdown;
     return RepaintBoundary(
       child: PanelCard(
-        key: ValueKey<String>('agent-final-answer-card-${widget.message.id}'),
+        key: ValueKey<String>('agent-final-answer-card-${message.id}'),
         color: colors.surfaceElevated,
         borderColor: colors.border,
         borderRadius: IdeRadius.allMedium,
@@ -723,9 +691,11 @@ class _AgentFinalAnswerCardState extends State<_AgentFinalAnswerCard> {
                 ],
               ),
               const SizedBox(height: IdeSpacing.space10),
-              useStreamingMarkdown
-                  ? _AgentMarkdownBody(controller: _ensureMarkdownController())
-                  : _AgentMarkdownBody(data: markdown),
+              _AgentMarkdownBody(
+                message: message,
+                useStreamingMarkdown: useStreamingMarkdown,
+                markdownCache: markdownCache,
+              ),
             ],
           ),
         ),
@@ -736,10 +706,17 @@ class _AgentFinalAnswerCardState extends State<_AgentFinalAnswerCard> {
 
 /// plan 消息使用独立卡片渲染，默认只显示一行预览。
 class _AgentPlanMessageCard extends StatelessWidget {
-  const _AgentPlanMessageCard({required this.message, required this.viewModel});
+  const _AgentPlanMessageCard({
+    required this.message,
+    required this.useStreamingMarkdown,
+    required this.viewModel,
+    required this.markdownCache,
+  });
 
   final AgentConversationMessage message;
+  final bool useStreamingMarkdown;
   final AgentConversationViewModel viewModel;
+  final AgentMarkdownCache markdownCache;
 
   @override
   Widget build(BuildContext context) {
@@ -799,7 +776,11 @@ class _AgentPlanMessageCard extends StatelessWidget {
               semanticLabel: expanded ? '收起计划' : '展开计划',
               body: Padding(
                 padding: const EdgeInsets.only(right: IdeSpacing.space4),
-                child: _AgentMarkdownBody(data: message.text),
+                child: _AgentMarkdownBody(
+                  message: message,
+                  useStreamingMarkdown: useStreamingMarkdown,
+                  markdownCache: markdownCache,
+                ),
               ),
             ),
           );

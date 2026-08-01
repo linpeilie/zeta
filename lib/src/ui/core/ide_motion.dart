@@ -65,6 +65,9 @@ abstract final class IdeMotion {
   /// `AnimatedContainer`、`AnimatedSwitcher`、选中态过渡等。
   static const Curve curveDefault = Curves.easeInOutCubic;
 
+  /// 桌面滚轮平滑滚动：快速响应输入，并在终点前自然减速。
+  static const Curve curveScroll = Curves.easeOutCubic;
+
   /// 弹出/展开缓动：结束段更利落，适合浮层与折叠正文。
   ///
   /// 生效位置：`IdeCollapsibleCard` 正文；消息区弹出式控件

@@ -417,11 +417,37 @@ final class AgentTimelineExtentDescriptorFactory {
 
     // 全文渲染：历史与 live 均按完整内容估算高度，禁止折叠预览截断。
     final charsPerLine = math.max(24, (width / (7.5 * scale)).floor());
-    final explicitLines = '\n'.allMatches(text).length + 1;
-    final nonWs = text.replaceAll(RegExp(r'\s+'), '').length;
-    final wrapped = (nonWs / charsPerLine).ceil();
-    final fencePenalty = '```'.allMatches(text).length * 2;
-    final visualLines = math.max(explicitLines, wrapped) + fencePenalty;
+    var visualLines = 0;
+    var blockSpacingLines = 0.0;
+    var insideFence = false;
+    for (final sourceLine in text.split('\n')) {
+      final trimmed = sourceLine.trim();
+      if (trimmed.startsWith('```') || trimmed.startsWith('~~~')) {
+        insideFence = !insideFence;
+        visualLines += 1;
+        blockSpacingLines += 0.5;
+        continue;
+      }
+
+      // 必须逐源行累加折行；按全文字符数与显式行数取 max 会严重低估
+      // “多行且每行都需要折行”的长 Markdown。
+      final lineLength = trimmed.runes.length;
+      final effectiveCharsPerLine = insideFence
+          ? math.max(20, (charsPerLine * 0.9).floor())
+          : charsPerLine;
+      visualLines += math.max(1, (lineLength / effectiveCharsPerLine).ceil());
+
+      if (trimmed.isEmpty) {
+        blockSpacingLines += 0.45;
+      } else if (!insideFence && trimmed.startsWith('#')) {
+        blockSpacingLines += 0.7;
+      } else if (!insideFence &&
+          (trimmed.startsWith('- ') ||
+              trimmed.startsWith('* ') ||
+              trimmed.startsWith('> '))) {
+        blockSpacingLines += 0.15;
+      }
+    }
 
     final padding = 24 * scale;
     final base = kind == AgentTimelineExtentKinds.agentMarkdown
@@ -430,10 +456,11 @@ final class AgentTimelineExtentDescriptorFactory {
         ? 120 * scale
         : 48 * scale;
 
-    final content = padding + visualLines * lineHeight;
-    // 冷启动基线：取 content 与 kind 默认的较大者，并做合理 clamp。
+    final content = padding + (visualLines + blockSpacingLines) * lineHeight;
+    // 冷启动基线：取 content 与 kind 默认的较大者。不要截断长消息估算，
+    // 否则单项超过旧上限后会在滚动帧内产生巨大的同步 measurement delta。
     final estimated = math.max(base * 0.5, content);
-    return estimated.clamp(24.0, 4000.0);
+    return math.max(24.0, estimated);
   }
 
   static bool _descriptorFingerprintEquals(
