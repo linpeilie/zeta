@@ -352,6 +352,17 @@ class _PlanSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
+    // 有套餐但缺少窗口百分比时，按未使用处理，进度条默认剩余 100%。
+    final windows = quota.windows.isNotEmpty
+        ? quota.windows
+        : <AgentUsageWindow>[
+            AgentUsageWindow(
+              label: quota.limitName?.trim().isNotEmpty == true
+                  ? quota.limitName!.trim()
+                  : '套餐额度',
+              usedPercent: 0,
+            ),
+          ];
     return Column(
       key: const ValueKey('agent-usage-plan-section'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -374,16 +385,14 @@ class _PlanSection extends StatelessWidget {
             style: textStyles.caption.copyWith(color: colors.textSecondary),
           ),
         ],
-        if (quota.windows.isNotEmpty) ...[
-          const SizedBox(height: IdeSpacing.space10),
-          for (var index = 0; index < quota.windows.length; index++) ...[
-            _QuotaWindow(
-              key: ValueKey<String>('agent-usage-window-$index'),
-              window: quota.windows[index],
-            ),
-            if (index != quota.windows.length - 1)
-              const SizedBox(height: IdeSpacing.space8),
-          ],
+        const SizedBox(height: IdeSpacing.space10),
+        for (var index = 0; index < windows.length; index++) ...[
+          _QuotaWindow(
+            key: ValueKey<String>('agent-usage-window-$index'),
+            window: windows[index],
+          ),
+          if (index != windows.length - 1)
+            const SizedBox(height: IdeSpacing.space8),
         ],
       ],
     );

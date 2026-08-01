@@ -272,6 +272,37 @@ void main() {
     expect(find.text('暂无已启用的 Agent'), findsOneWidget);
     expect(repository.loadCount, 2);
   });
+
+  testWidgets('有套餐但无窗口百分比时默认剩余 100%', (tester) async {
+    final controller = AgentUsagePanelController(
+      repository: _ImmediatePanelRepository(const <AgentUsagePanelEntry>[
+        AgentUsagePanelEntry(
+          providerId: 'grok',
+          providerName: 'Grok',
+          quota: AgentUsageQuotaSnapshot(
+            providerId: 'grok',
+            providerName: 'Grok',
+            planType: 'SuperGrok',
+            limitName: '周额度',
+            windows: <AgentUsageWindow>[],
+          ),
+        ),
+      ]),
+    );
+    addTearDown(controller.dispose);
+
+    await _pumpPanel(tester, controller);
+
+    expect(find.text('SuperGrok'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('agent-usage-plan-section')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('agent-usage-window-0')), findsOneWidget);
+    expect(find.text('周额度'), findsWidgets);
+    expect(find.text('剩余 100%'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 final _usageEntries = <AgentUsagePanelEntry>[
