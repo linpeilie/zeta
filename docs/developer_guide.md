@@ -159,7 +159,7 @@ thread 或清空其 reducer/运行中 turn；窗口退出流程会等待注册�
 1. 先确认现有 `AgentProviderBundle` 端口是否足够。已迁移的能力域优先接到
    `conversation`、`threadCatalog`、`threadMutations`、`threadBranching`、
    `turnSteering`、`interactions`、`modelCatalog`、`localThreadList`、
-   `sessionConfiguration`、`planApproval`、`conversationModes` 等端口，不要继续优先扩张
+   `sessionConfiguration`、`planApproval`、`conversationModes`、`skills` 等端口，不要继续优先扩张
    `AgentProvider` 旧必选接口。
 2. 在领域层定义初始化前可判断的静态 `AgentProviderCapabilities` 与 bootstrap
    policy；握手后若能力发生变化，应返回更精确的动态 capabilities。
@@ -196,6 +196,23 @@ thread 或清空其 reducer/运行中 turn；窗口退出流程会等待注册�
 `AgentQuestionResponseProvider` 的 Provider 通过 `respondToQuestion` 回写，空 answers
 表示 Skip；计划审批仍使用 `AgentPlanApprovalPort`。三类请求可以共享 Pending Interaction
 Dock，但不得共享 request/decision 模型或 pending registry。
+
+### Skill 输入与 Composer token
+
+- Domain 使用 `AgentUserInput.skill`、`AgentSkillMetadata` / `AgentSkillsCatalog`；
+  capability 位为 `supportsSkillInput`（Codex 开、Grok 关）。
+- Codex 通过可选端口 `bundle.skills`（`AgentSkillsPort`）暴露 `skills/list` 与
+  `skills/changed`；application 层由 `AgentSkillsCatalogController` 做
+  stale-while-revalidate / single-flight。
+- Composer 用 `ComposerDocumentController`：skill 以 `U+FFFC` sentinel 占位、
+  `WidgetSpan` 渲染为 `$name` chip，退格整块删除；发送时序列化为文本 `$name` 并附带
+  `type: skill` 输入项。触发入口为输入 `$` 或 More actions → Insert skill；
+  候选列表以 Composer 锚定的 popover 展示，支持 `$query` 实时过滤与 ↑↓/Enter/Esc。
+  Chip 与列表项展示 `displayName`；tooltip / 协议文本仍对齐 Codex
+  的 `$name` 与 `[$name](path)` 形态。
+- Grok / ACP 不得静默吞掉 `AgentUserInput.skill`；应在 `sendMessage` 显式
+  `UnsupportedError`，UI 靠 capability 隐藏入口。
+- `@mention` v1 仍为纯文本旁路列表，不与 skill token 混用同一原子编辑语义。
 
 ### Plan conversation mode 开发与验证
 

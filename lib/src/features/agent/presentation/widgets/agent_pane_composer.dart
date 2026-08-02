@@ -19,6 +19,7 @@ class _AgentComposer extends StatelessWidget {
     required this.onCancel,
     required this.showImageAttachment,
     required this.showResourceMention,
+    required this.showSkillInsert,
     required this.conversationModeStatus,
     required this.conversationModeOptions,
     required this.selectedConversationMode,
@@ -43,6 +44,7 @@ class _AgentComposer extends StatelessWidget {
     required this.onSelectSessionConfigOption,
     required this.mentionCandidates,
     required this.onInsertMention,
+    required this.onInsertSkill,
   });
 
   final TextEditingController controller;
@@ -58,6 +60,7 @@ class _AgentComposer extends StatelessWidget {
   final VoidCallback onCancel;
   final bool showImageAttachment;
   final bool showResourceMention;
+  final bool showSkillInsert;
 
   /// 当前 Provider 的模式目录状态；不可用时不占用 Composer 布局。
   final AgentModeSelectorStatus conversationModeStatus;
@@ -114,6 +117,9 @@ class _AgentComposer extends StatelessWidget {
 
   /// 选中 mention 文件后的回调。
   final ValueChanged<WorkspaceNode> onInsertMention;
+
+  /// 打开 skill 插入选择器。
+  final VoidCallback onInsertSkill;
 
   @override
   Widget build(BuildContext context) {
@@ -375,11 +381,13 @@ class _AgentComposer extends StatelessWidget {
       showPlan: showPlan,
       planSelected: selectedConversationMode == AgentConversationModeId.plan,
       showMentionFile: showResourceMention,
+      showInsertSkill: showSkillInsert,
       showAttachImage: showImageAttachment,
       contextId: conversationModeContextId,
       onSelectPlan: () =>
           onSelectConversationMode(AgentConversationModeId.plan),
       onMentionFile: () => _showMentionPicker(context),
+      onInsertSkill: onInsertSkill,
       onAttachImage: onAttachImages,
     );
   }
@@ -507,20 +515,24 @@ class _ComposerMoreActionsButton extends StatefulWidget {
     required this.showPlan,
     required this.planSelected,
     required this.showMentionFile,
+    required this.showInsertSkill,
     required this.showAttachImage,
     required this.contextId,
     required this.onSelectPlan,
     required this.onMentionFile,
+    required this.onInsertSkill,
     required this.onAttachImage,
   });
 
   final bool showPlan;
   final bool planSelected;
   final bool showMentionFile;
+  final bool showInsertSkill;
   final bool showAttachImage;
   final Object contextId;
   final VoidCallback onSelectPlan;
   final VoidCallback onMentionFile;
+  final VoidCallback onInsertSkill;
   final VoidCallback onAttachImage;
 
   @override
@@ -539,7 +551,10 @@ class _ComposerMoreActionsButtonState
   IdePopoverHandle<void>? _popoverEntry;
 
   bool get _hasActions =>
-      widget.showPlan || widget.showMentionFile || widget.showAttachImage;
+      widget.showPlan ||
+      widget.showMentionFile ||
+      widget.showInsertSkill ||
+      widget.showAttachImage;
 
   @override
   void didUpdateWidget(covariant _ComposerMoreActionsButton oldWidget) {
@@ -550,6 +565,7 @@ class _ComposerMoreActionsButtonState
             oldWidget.showPlan != widget.showPlan ||
             oldWidget.planSelected != widget.planSelected ||
             oldWidget.showMentionFile != widget.showMentionFile ||
+            oldWidget.showInsertSkill != widget.showInsertSkill ||
             oldWidget.showAttachImage != widget.showAttachImage);
     if (!shouldDismiss) {
       return;
@@ -674,12 +690,23 @@ class _ComposerMoreActionsButtonState
           dividerAbove: widget.showPlan,
           onPressed: () => _activateAction(widget.onMentionFile),
         ),
+      if (widget.showInsertSkill)
+        IdeContextMenuAction(
+          key: const ValueKey('agent-insert-skill-button'),
+          label: 'Insert skill',
+          leadingIcon: Icons.auto_awesome_rounded,
+          dividerAbove: widget.showPlan || widget.showMentionFile,
+          onPressed: () => _activateAction(widget.onInsertSkill),
+        ),
       if (widget.showAttachImage)
         IdeContextMenuAction(
           key: const ValueKey('agent-attach-image-button'),
           label: 'Attach image',
           leadingIcon: Icons.image_outlined,
-          dividerAbove: widget.showPlan && !widget.showMentionFile,
+          dividerAbove:
+              widget.showPlan ||
+              widget.showMentionFile ||
+              widget.showInsertSkill,
           onPressed: () => _activateAction(widget.onAttachImage),
         ),
     ];

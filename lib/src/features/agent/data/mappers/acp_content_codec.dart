@@ -97,6 +97,10 @@ class AcpContentCodec {
           });
         case AgentMentionUserInput(:final name, :final path):
           blocks.add(_resourceLink(name: name, path: path));
+        case AgentSkillUserInput():
+          throw UnsupportedError(
+            'Structured skill input is not supported by ACP content codec',
+          );
       }
     }
 

@@ -2126,9 +2126,64 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('agent-send-button')));
     await tester.pumpAndSettle();
 
+    // 用户消息走与 Agent 相同的 Markdown 渲染管线，可复制语义由 selectable 保留。
     expect(
-      find.widgetWithText(SelectableText, 'Copy this user message'),
+      find.descendant(
+        of: find.byType(MarkdownWidget),
+        matching: find.text('Copy this user message', findRichText: true),
+      ),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('renders user message markdown with the bubble theme', (
+    tester,
+  ) async {
+    final session = activeProjectSessionStore(tempDirectories);
+    final provider = FakeAgentProvider(includeConversationTestThread: true);
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+
+    await pumpUntilAgentComposer(tester);
+    await tester.enterText(
+      find.byKey(const ValueKey('agent-message-input')),
+      '**bold**\n\n```\ncode line\n```',
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+    await tester.pumpAndSettle();
+
+    // 原始 markdown 语法不应出现在 Markdown 渲染子树中（头栏标题为纯文本，已排除）。
+    expect(
+      find.descendant(
+        of: find.byType(MarkdownWidget),
+        matching: find.text('**bold**', findRichText: true),
+      ),
+      findsNothing,
+    );
+    // 解析后的加粗文本与代码块内容应当可见。
+    expect(
+      find.descendant(
+        of: find.byType(MarkdownWidget),
+        matching: find.textContaining('bold', findRichText: true),
+      ),
+      findsWidgets,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(MarkdownWidget),
+        matching: find.textContaining('code line', findRichText: true),
+      ),
+      findsWidgets,
     );
   });
 

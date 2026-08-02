@@ -172,6 +172,21 @@ abstract interface class AgentConversationModeCatalogProvider {
   Future<AgentConversationModeCatalog> listConversationModes();
 }
 
+/// 支持 Skill 目录发现的 Provider 可选接口。
+///
+/// 实现该接口只表示适配器具备 `skills/list` 入口；UI 是否展示仍由
+/// [AgentProviderCapabilities.supportsSkillInput] 门控。
+abstract interface class AgentSkillsCatalogProvider {
+  /// 读取指定 cwd 下可用的 skill 目录。
+  Future<AgentSkillsCatalog> listSkills({
+    List<String> cwds = const <String>[],
+    bool forceReload = false,
+  });
+
+  /// Skill 文件变更失效信号；无 payload，收到后应重新 list。
+  Stream<void> get skillsChanged;
+}
+
 /// Provider 拥有本地会话索引时，可只移除客户端列表记录而不删除服务端历史。
 ///
 /// 该操作与 [AgentProvider.deleteThread] 语义严格分离，UI 必须明确提示用户远端

@@ -7,6 +7,7 @@ class _CodexAppServerClient {
     required this._config,
     required this._modelListMapper,
     required this._collaborationModeMapper,
+    required this._skillsMapper,
     required this._turnStartParamsEncoder,
     required this._threadHistoryReader,
   });
@@ -15,6 +16,7 @@ class _CodexAppServerClient {
   final AgentProviderConfig _config;
   final _CodexModelListMapper _modelListMapper;
   final _CodexCollaborationModeMapper _collaborationModeMapper;
+  final _CodexSkillsMapper _skillsMapper;
   final _CodexTurnStartParamsEncoder _turnStartParamsEncoder;
   final _CodexThreadHistoryReader _threadHistoryReader;
 
@@ -64,6 +66,28 @@ class _CodexAppServerClient {
         'Normalized Codex collaboration mode catalog '
         '(invalid=${mapping.invalidEntryCount}, '
         'duplicates=${mapping.duplicateEntryCount})',
+      );
+    }
+    return mapping.catalog;
+  }
+
+  Future<AgentSkillsCatalog> fetchSkillsCatalog({
+    List<String> cwds = const <String>[],
+    bool forceReload = false,
+  }) async {
+    final result = await _peer.sendRequest(
+      'skills/list',
+      params: <String, Object?>{
+        if (cwds.isNotEmpty) 'cwds': cwds,
+        'forceReload': forceReload,
+      },
+    );
+    final mapping = _skillsMapper.catalogFromResult(result);
+    if (mapping.invalidEntryCount > 0 || mapping.droppedSkillCount > 0) {
+      _log.fine(
+        'Normalized Codex skills catalog '
+        '(invalid=${mapping.invalidEntryCount}, '
+        'dropped=${mapping.droppedSkillCount})',
       );
     }
     return mapping.catalog;

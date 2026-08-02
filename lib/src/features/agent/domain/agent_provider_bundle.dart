@@ -16,6 +16,7 @@ final class AgentProviderBundle {
     this.interactions,
     this.modelCatalog,
     this.conversationModes,
+    this.skills,
     this.localThreadList,
     this.sessionConfiguration,
     this.planApproval,
@@ -62,6 +63,13 @@ final class AgentProviderBundle {
           _LegacyAgentConversationModeCatalogPort(modeCatalogProvider),
         _ => null,
       },
+      skills: capabilities.supportsSkillInput
+          ? switch (provider) {
+              final AgentSkillsCatalogProvider skillsProvider =>
+                _LegacyAgentSkillsPort(skillsProvider),
+              _ => null,
+            }
+          : null,
       localThreadList: switch (provider) {
         final AgentLocalThreadListProvider localThreadListProvider =>
           _LegacyAgentLocalThreadListPort(localThreadListProvider),
@@ -89,6 +97,7 @@ final class AgentProviderBundle {
   final AgentInteractionPort? interactions;
   final AgentModelCatalogPort? modelCatalog;
   final AgentConversationModeCatalogPort? conversationModes;
+  final AgentSkillsPort? skills;
   final AgentLocalThreadListPort? localThreadList;
   final AgentSessionConfigurationPort? sessionConfiguration;
   final AgentPlanApprovalPort? planApproval;
@@ -217,6 +226,18 @@ abstract interface class AgentModelCatalogPort {
 abstract interface class AgentConversationModeCatalogPort {
   /// 读取当前运行时可用的对话模式预设。
   Future<AgentConversationModeCatalog> listConversationModes();
+}
+
+/// Provider 中立的 Skill 目录端口。
+abstract interface class AgentSkillsPort {
+  /// 读取指定 cwd 下可用的 skill 目录。
+  Future<AgentSkillsCatalog> listSkills({
+    List<String> cwds = const <String>[],
+    bool forceReload = false,
+  });
+
+  /// Skill 文件变更失效信号。
+  Stream<void> get skillsChanged;
 }
 
 /// 只移除 Zeta 本地 thread 列表记录的可选端口。
@@ -494,6 +515,23 @@ final class _LegacyAgentConversationModeCatalogPort
   Future<AgentConversationModeCatalog> listConversationModes() {
     return _provider.listConversationModes();
   }
+}
+
+final class _LegacyAgentSkillsPort implements AgentSkillsPort {
+  const _LegacyAgentSkillsPort(this._provider);
+
+  final AgentSkillsCatalogProvider _provider;
+
+  @override
+  Future<AgentSkillsCatalog> listSkills({
+    List<String> cwds = const <String>[],
+    bool forceReload = false,
+  }) {
+    return _provider.listSkills(cwds: cwds, forceReload: forceReload);
+  }
+
+  @override
+  Stream<void> get skillsChanged => _provider.skillsChanged;
 }
 
 final class _LegacyAgentLocalThreadListPort

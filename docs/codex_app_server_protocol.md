@@ -183,3 +183,17 @@ registry。
 smoke 只输出平台、版本、Schema 模式、检查项、方法名和计数；不输出或持久化
 Prompt、回复、文件内容、凭证、原始 JSONL、thread/turn id 或 stderr 原文。脚本使用临时
 空 workspace、只读 sandbox，并默认归档自己创建的 thread。
+
+### 8.4 Skills
+
+Zeta 将 Codex Skills 映射为中立 domain 模型与 Composer token：
+
+| Codex | Zeta |
+| --- | --- |
+| `skills/list` | `AgentSkillsPort.listSkills` → `AgentSkillsCatalog` |
+| `skills/changed` | `AgentSkillsPort.skillsChanged`（失效信号） |
+| `UserInput` `{ type: "skill", name, path }` | `AgentUserInput.skill` |
+| 文本 marker `$<name>` | Composer chip / 序列化文本；Codex 用户消息常呈现为 `[$name](path)`；历史展平为 `$name` |
+
+发送回合时同时携带文本 `$name` 与结构化 `skill` item（Codex 推荐路径）。
+`skills/extraRoots/set` 尚未接入。

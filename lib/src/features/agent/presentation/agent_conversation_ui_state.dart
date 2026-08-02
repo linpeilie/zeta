@@ -110,6 +110,7 @@ final class AgentComposerState {
     required this.unavailableProviderReason,
     required this.canAttachImages,
     required this.canMentionResources,
+    required this.canUseSkills,
     required this.conversationModeStatus,
     required Iterable<AgentConversationModePreset> conversationModeOptions,
     required this.selectedConversationMode,
@@ -141,6 +142,7 @@ final class AgentComposerState {
   final String? unavailableProviderReason;
   final bool canAttachImages;
   final bool canMentionResources;
+  final bool canUseSkills;
   final AgentConversationModeLoadStatus conversationModeStatus;
   final List<AgentConversationModePreset> conversationModeOptions;
   final AgentConversationModeId? selectedConversationMode;
@@ -169,6 +171,7 @@ final class AgentComposerState {
             other.unavailableProviderReason == unavailableProviderReason &&
             other.canAttachImages == canAttachImages &&
             other.canMentionResources == canMentionResources &&
+            other.canUseSkills == canUseSkills &&
             other.conversationModeStatus == conversationModeStatus &&
             listEquals(
               other.conversationModeOptions,
@@ -201,6 +204,7 @@ final class AgentComposerState {
     unavailableProviderReason,
     canAttachImages,
     canMentionResources,
+    canUseSkills,
     conversationModeStatus,
     Object.hashAll(conversationModeOptions),
     selectedConversationMode,

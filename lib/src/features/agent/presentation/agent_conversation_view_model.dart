@@ -19,6 +19,7 @@ import 'package:zeta/src/features/agent/application/agent_conversation_model_sel
 import 'package:zeta/src/features/agent/application/agent_conversation_permission_selection_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
 import 'package:zeta/src/features/agent/application/agent_elapsed_ticker.dart';
+import 'package:zeta/src/features/agent/application/agent_skills_catalog_controller.dart';
 import 'package:zeta/src/features/agent/application/bounded_event_dispatcher.dart';
 import 'package:zeta/src/features/agent/application/coalescing_event_buffer.dart';
 import 'package:zeta/src/features/agent/application/agent_event_pipeline.dart';
@@ -55,6 +56,7 @@ class AgentConversationViewModel {
     AgentConversationTimelineStore? timelineStore,
     AgentConversationModelSelectionController? modelSelectionController,
     AgentConversationModeController? conversationModeController,
+    AgentSkillsCatalogController? skillsCatalogController,
     AgentConversationPermissionSelectionController?
     permissionSelectionController,
     this.workspaceFilesProvider,
@@ -70,6 +72,9 @@ class AgentConversationViewModel {
        _ownsConversationModeController = conversationModeController == null,
        _conversationModeController =
            conversationModeController ?? AgentConversationModeController(),
+       _ownsSkillsCatalogController = skillsCatalogController == null,
+       _skillsCatalogController =
+           skillsCatalogController ?? AgentSkillsCatalogController(),
        _permissionSelectionController =
            permissionSelectionController ??
            AgentConversationPermissionSelectionController(
@@ -115,6 +120,7 @@ class AgentConversationViewModel {
     );
     _modelSelectionController.addListener(_handleModelSelectionChanged);
     _conversationModeController.addListener(_handleConversationModeChanged);
+    _skillsCatalogController.addListener(_handleSkillsCatalogChanged);
     providerController.addListener(_handleProviderSettingsChanged);
     _threadSnapshotListenable = ValueNotifier<AgentConversationThreadSnapshot>(
       _buildThreadSnapshot(),
@@ -140,6 +146,8 @@ class AgentConversationViewModel {
   final AgentConversationModelSelectionController _modelSelectionController;
   final bool _ownsConversationModeController;
   final AgentConversationModeController _conversationModeController;
+  final bool _ownsSkillsCatalogController;
+  final AgentSkillsCatalogController _skillsCatalogController;
   final AgentConversationPermissionSelectionController
   _permissionSelectionController;
   final AgentPlanExecutionHandoffController _planExecutionHandoffController =
@@ -587,6 +595,28 @@ class AgentConversationViewModel {
 
   bool get canMentionResources => activeCapabilities.supportsResourceInput;
 
+  /// Provider 声明支持结构化 skill 时开放入口；目录未就绪时 picker 可为空。
+  bool get canUseSkills => activeCapabilities.supportsSkillInput;
+
+  /// Skill picker 候选；按 name/description 过滤。
+  List<AgentSkillMetadata> skillCandidates({String query = ''}) {
+    if (!canUseSkills) {
+      return const <AgentSkillMetadata>[];
+    }
+    return _skillsCatalogController.query(query);
+  }
+
+  /// 预热 skill 目录（打开 picker 前调用）。
+  Future<void> ensureSkillsCatalog() async {
+    if (!canUseSkills) {
+      return;
+    }
+    final provider = await _ensureProvider(
+      preferredProviderId: _selectedProviderId,
+    );
+    await _ensureSkillsCatalog(provider);
+  }
+
   bool get canRenameCurrentThread =>
       sessionId != null && !isReadOnly && activeCapabilities.canRenameThread;
 
@@ -623,6 +653,11 @@ class AgentConversationViewModel {
     _conversationModeCatalogRuntimeScope = null;
     await _conversationModeController.loadCatalog(
       providerId: providerId,
+      port: null,
+    );
+    await _skillsCatalogController.bind(
+      providerId: providerId,
+      projectPath: _projectPath,
       port: null,
     );
     await providerController.setActiveProvider(providerId);
@@ -1556,6 +1591,12 @@ class AgentConversationViewModel {
     }
     _projectPath = projectPath;
     _contextFilePath = contextFilePath;
+    if (projectChanged) {
+      final provider = _provider;
+      if (provider != null) {
+        unawaited(_ensureSkillsCatalog(provider));
+      }
+    }
     if (projectChanged || resetConversation) {
       // 离开当前会话时取消订阅；恢复到另一 thread 时也退订旧 id。
       final previousThreadId = _selectedThreadId;
@@ -1638,6 +1679,7 @@ class AgentConversationViewModel {
     List<String> localImagePaths = const <String>[],
     List<({String name, String path})> mentions =
         const <({String name, String path})>[],
+    List<AgentSkillRef> skills = const <AgentSkillRef>[],
   }) async {
     final trimmed = text.trim();
     final imagePaths = List<String>.unmodifiable(
@@ -1648,7 +1690,11 @@ class AgentConversationViewModel {
     final resolvedMentions = canMentionResources
         ? mentions
         : const <({String name, String path})>[];
-    if ((trimmed.isEmpty && imagePaths.isEmpty && resolvedMentions.isEmpty) ||
+    final resolvedSkills = canUseSkills ? skills : const <AgentSkillRef>[];
+    if ((trimmed.isEmpty &&
+            imagePaths.isEmpty &&
+            resolvedMentions.isEmpty &&
+            resolvedSkills.isEmpty) ||
         !canSubmitMessage) {
       return;
     }
@@ -1664,6 +1710,7 @@ class AgentConversationViewModel {
       text: trimmed,
       localImagePaths: imagePaths,
       mentions: resolvedMentions,
+      skills: resolvedSkills,
     );
     final clientUserMessageId = _nextClientUserMessageId();
 
@@ -2452,11 +2499,15 @@ class AgentConversationViewModel {
     providerController.removeListener(_handleProviderSettingsChanged);
     _modelSelectionController.removeListener(_handleModelSelectionChanged);
     _conversationModeController.removeListener(_handleConversationModeChanged);
+    _skillsCatalogController.removeListener(_handleSkillsCatalogChanged);
     if (_ownsModelSelectionController) {
       _modelSelectionController.dispose();
     }
     if (_ownsConversationModeController) {
       _conversationModeController.dispose();
+    }
+    if (_ownsSkillsCatalogController) {
+      _skillsCatalogController.dispose();
     }
     _elapsedTicker.dispose();
     _effectRunner.dispose();
@@ -2523,6 +2574,18 @@ class AgentConversationViewModel {
     );
   }
 
+  void _handleSkillsCatalogChanged() {
+    if (_disposed) {
+      return;
+    }
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{AgentUiRegion.composer},
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
+  }
+
   /// 确保拿到正确的共享 provider 实例。
   ///
   /// [preferredProviderId] 非空且与当前 active 不同时，会先切换 active（不清理
@@ -2565,7 +2628,19 @@ class AgentConversationViewModel {
       threadId: _selectedThreadId,
     );
     await _ensureConversationModeCatalog(provider);
+    await _ensureSkillsCatalog(provider);
     return provider;
+  }
+
+  Future<void> _ensureSkillsCatalog(AgentProvider provider) async {
+    final supportsSkills = provider.capabilities.supportsSkillInput;
+    final port = supportsSkills ? provider.bundle.skills : null;
+    await _skillsCatalogController.bind(
+      providerId: provider.config.id,
+      projectPath: _projectPath,
+      port: port,
+      configFingerprint: provider.config.id,
+    );
   }
 
   Future<void> _ensureConversationModeCatalog(AgentProvider provider) async {
@@ -2631,6 +2706,11 @@ class AgentConversationViewModel {
     _conversationModeCatalogRuntimeScope = null;
     await _conversationModeController.loadCatalog(
       providerId: providerId,
+      port: null,
+    );
+    await _skillsCatalogController.bind(
+      providerId: providerId,
+      projectPath: _projectPath,
       port: null,
     );
     await providerController.setActiveProvider(providerId);
@@ -2943,12 +3023,13 @@ class AgentConversationViewModel {
     return _localTimelineIds.next('msg');
   }
 
-  /// 组装协议输入项：文本（含当前文件上下文）+ mention + 本地图片。
+  /// 组装协议输入项：文本（含当前文件上下文）+ skill + mention + 本地图片。
   List<AgentUserInput> _buildUserInputs({
     required String text,
     required List<String> localImagePaths,
     List<({String name, String path})> mentions =
         const <({String name, String path})>[],
+    List<AgentSkillRef> skills = const <AgentSkillRef>[],
   }) {
     final inputs = <AgentUserInput>[];
     final textElements = <AgentTextElement>[];
@@ -2982,6 +3063,13 @@ class AgentConversationViewModel {
     } else if (_contextFilePath != null) {
       // 纯图片发送时仍附带当前文件上下文，便于模型定位工作区。
       inputs.add(AgentUserInput.text(_messageWithContext('')));
+    }
+    final seenSkillPaths = <String>{};
+    for (final skill in skills) {
+      if (!seenSkillPaths.add(skill.path)) {
+        continue;
+      }
+      inputs.add(AgentUserInput.skill(name: skill.name, path: skill.path));
     }
     for (final mention in mentions) {
       inputs.add(
@@ -3239,6 +3327,7 @@ class AgentConversationViewModel {
       unavailableProviderReason: unavailableProviderReason,
       canAttachImages: canAttachImages,
       canMentionResources: canMentionResources,
+      canUseSkills: canUseSkills,
       conversationModeStatus: modeState.status,
       conversationModeOptions: modeState.presets,
       selectedConversationMode: modeState.draftMode,

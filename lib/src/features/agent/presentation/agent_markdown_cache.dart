@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
@@ -23,6 +24,12 @@ final class AgentMarkdownCache {
   final LinkedHashMap<String, _AgentMarkdownCacheEntry> _entries =
       LinkedHashMap<String, _AgentMarkdownCacheEntry>();
 
+  /// 当前请求保温的条目 id 集合（同步簿记）。
+  ///
+  /// `keepAlive` notifier 的写入被推迟到微任务，以避开 build 阶段通知监听者；
+  /// 名额判定仍需要同步结果，因此单独维护此集合作为真源。
+  final Set<String> _warmMessageIds = <String>{};
+
   bool _disposed = false;
 
   /// 诊断：新建并执行首次解析的控制器数量。
@@ -38,8 +45,7 @@ final class AgentMarkdownCache {
   int get controllerCount => _entries.length;
 
   /// 当前请求保活的渲染子树数量。
-  int get warmEntryCount =>
-      _entries.values.where((entry) => entry.keepAlive.value).length;
+  int get warmEntryCount => _warmMessageIds.length;
 
   /// 获取指定消息的控制器租约。
   ///
@@ -111,7 +117,7 @@ final class AgentMarkdownCache {
 
     // remove + reinsert 将命中项移动到 LRU 尾部。
     _entries[messageId] = entry;
-    entry.keepAlive.value = true;
+    _setKeepAlive(entry, true);
     _trimWarmEntries(except: entry);
     return entry;
   }
@@ -138,7 +144,7 @@ final class AgentMarkdownCache {
     }
     _entries.remove(entry.messageId);
     _entries[entry.messageId] = entry;
-    entry.keepAlive.value = true;
+    _setKeepAlive(entry, true);
     _trimWarmEntries(except: entry);
   }
 
@@ -151,15 +157,39 @@ final class AgentMarkdownCache {
       if (warmCount <= maxWarmEntries) {
         break;
       }
-      if (identical(candidate, except) || !candidate.keepAlive.value) {
+      if (identical(candidate, except) ||
+          !_warmMessageIds.contains(candidate.messageId)) {
         continue;
       }
-      candidate.keepAlive.value = false;
+      _setKeepAlive(candidate, false);
       warmCount -= 1;
     }
-    if (warmCount > maxWarmEntries && except?.keepAlive.value == true) {
-      except!.keepAlive.value = false;
+    if (warmCount > maxWarmEntries &&
+        except != null &&
+        _warmMessageIds.contains(except.messageId)) {
+      _setKeepAlive(except, false);
     }
+  }
+
+  /// 更新保温簿记，并把 notifier 写入推迟到微任务。
+  ///
+  /// `acquire`/`prepareWarmEntry` 会在 Sliver 的 build 阶段被调用；此时同步写入
+  /// 会通知到正处于重建/卸载中的 `ValueListenableBuilder`（DEFUNCT element），
+  /// 触发 “markNeedsBuild during build” 断言。保温信号只影响 keep-alive 名额，
+  /// 允许最终一致，因此簿记同步更新、通知统一推迟。
+  void _setKeepAlive(_AgentMarkdownCacheEntry entry, bool value) {
+    final messageId = entry.messageId;
+    if (value) {
+      _warmMessageIds.add(messageId);
+    } else {
+      _warmMessageIds.remove(messageId);
+    }
+    final notifier = entry.keepAlive;
+    scheduleMicrotask(() {
+      if (!entry.disposed && notifier.value != value) {
+        notifier.value = value;
+      }
+    });
   }
 
   void _release(_AgentMarkdownCacheEntry entry) {
@@ -171,7 +201,7 @@ final class AgentMarkdownCache {
     }
     if (entry.referenceCount == 0) {
       // 没有渲染子树时无需占用 warm 配额；解析结果仍可留在控制器 LRU 中。
-      entry.keepAlive.value = false;
+      _setKeepAlive(entry, false);
     }
     _trimControllerEntries();
   }
@@ -199,9 +229,7 @@ final class AgentMarkdownCache {
       return;
     }
     entry.disposed = true;
-    if (entry.keepAlive.value) {
-      entry.keepAlive.value = false;
-    }
+    _setKeepAlive(entry, false);
     entry
       ..keepAlive.dispose()
       ..controller.dispose();

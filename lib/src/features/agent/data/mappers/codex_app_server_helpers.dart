@@ -378,6 +378,10 @@ String? _userInputText(Object? value) {
         // 图片走独立路径字段，不拼进文本。
         break;
       case 'skill':
+        final skillName = _string(item['name']) ?? _string(item['id']);
+        if (skillName != null) {
+          parts.add('\$$skillName');
+        }
       case 'mention':
         final name = _string(item['name']) ?? _string(item['id']);
         if (name != null) {

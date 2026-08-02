@@ -337,6 +337,7 @@ AgentComposerState _composerState({
     unavailableProviderReason: null,
     canAttachImages: true,
     canMentionResources: true,
+    canUseSkills: false,
     conversationModeStatus: AgentConversationModeLoadStatus.ready,
     conversationModeOptions: conversationModes,
     selectedConversationMode: AgentConversationModeId.defaultMode,

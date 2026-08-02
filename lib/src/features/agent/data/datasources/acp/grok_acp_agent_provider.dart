@@ -689,6 +689,9 @@ class GrokAcpAgentProvider
     if (configuration.conversationMode != null) {
       throw UnsupportedError('${config.displayName} 不支持回合级对话模式配置');
     }
+    if (inputs != null && inputs.any((input) => input is AgentSkillUserInput)) {
+      throw UnsupportedError('${config.displayName} 不支持结构化 skill 输入');
+    }
     await initialize();
     // 模型是 session 级配置；共享 Provider 下必须按本次发送目标应用，不能依赖
     // “最后激活会话”这种全局可变状态。

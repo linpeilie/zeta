@@ -130,6 +130,11 @@ List<Object?> _encodeCodexUserInputs(List<AgentUserInput> inputs) {
           'name': name,
           'path': path,
         },
+        AgentSkillUserInput(:final name, :final path) => <String, Object?>{
+          'type': 'skill',
+          'name': name,
+          'path': path,
+        },
       },
   ];
 }

@@ -36,6 +36,7 @@ import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_ui_state.dart';
 import 'package:zeta/src/features/agent/presentation/agent_markdown_cache.dart';
+import 'package:zeta/src/features/agent/presentation/composer_document.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descriptor.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
@@ -58,6 +59,7 @@ part 'widgets/agent_pane_plan_panel.dart';
 part 'widgets/composer_selector_popover.dart';
 part 'widgets/agent_model_config.dart';
 part 'widgets/agent_mode_selector.dart';
+part 'widgets/agent_skill_picker.dart';
 part 'widgets/agent_pane_sections.dart';
 part 'widgets/agent_pane_styles.dart';
 
@@ -105,13 +107,28 @@ class _AgentPaneState extends State<AgentPane> {
     extensions: <String>['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'],
   );
 
-  final TextEditingController _inputController = TextEditingController();
+  final ComposerDocumentController _inputController =
+      ComposerDocumentController();
   late final FocusNode _composerFocusNode;
   late final IdeSmoothScrollController _scrollController;
   final ValueNotifier<bool> _canSendNotifier = ValueNotifier<bool>(false);
   final List<String> _draftImagePaths = <String>[];
   final List<({String name, String path})> _draftMentions =
       <({String name, String path})>[];
+  final GlobalKey _composerAnchorKey = GlobalKey(
+    debugLabel: 'agent-composer-skill-anchor',
+  );
+  late final _ComposerSelectorPopoverController _skillPopoverController;
+  final _SkillPickerListController _skillPickerListController =
+      _SkillPickerListController();
+
+  /// 允许下一次 `$` 触发自动打开 skill picker（关闭后需先离开 `$query` 再进入）。
+  bool _skillQueryArmed = true;
+
+  /// 防止 `$` 监听与菜单入口并发预热时重复 show。
+  bool _skillPickerOpening = false;
+
+  bool get _skillPickerOpen => _skillPopoverController.isOpen;
 
   late StreamSubscription<AgentUiEffect> _uiEffectSubscription;
 
@@ -151,8 +168,13 @@ class _AgentPaneState extends State<AgentPane> {
       debugLabel: 'AgentMessageComposer',
       onKeyEvent: _handleComposerKeyEvent,
     );
+    _skillPopoverController = _ComposerSelectorPopoverController(
+      triggerFocusNode: _composerFocusNode,
+      onOpenChanged: _handleSkillPopoverOpenChanged,
+    );
     _responsiveBodyBuilder = _createResponsiveBodyBuilder();
     _inputController.addListener(_handleInputChanged);
+    _inputController.addListener(_handleSkillQueryChanged);
     _scrollController = IdeSmoothScrollController();
     _scrollDriver = IdeScrollControllerDriver(_scrollController);
     _scrollCoordinator = IdeVirtualScrollCoordinator(driver: _scrollDriver)
@@ -205,8 +227,11 @@ class _AgentPaneState extends State<AgentPane> {
   void dispose() {
     unawaited(_uiEffectSubscription.cancel());
     _inputController.removeListener(_handleInputChanged);
+    _inputController.removeListener(_handleSkillQueryChanged);
     _scrollController.removeListener(_handleScrollChanged);
     _scrollCoordinator.onModeChanged = null;
+    _skillPopoverController.dispose();
+    _skillPickerListController.dispose();
     _inputController.dispose();
     _composerFocusNode.dispose();
     _scrollController.dispose();
@@ -361,6 +386,7 @@ class _AgentPaneState extends State<AgentPane> {
                               // 与 pending dock 互斥，避免双焦点与误发送。
                               _AgentComposerSection(
                                 key: const ValueKey('agent-composer-section'),
+                                anchorKey: _composerAnchorKey,
                                 viewModel: widget.viewModel,
                                 state: composerState,
                                 inputController: _inputController,
@@ -374,6 +400,7 @@ class _AgentPaneState extends State<AgentPane> {
                                 onRemoveImage: _removeDraftImage,
                                 onSend: _sendMessage,
                                 onInsertMention: _insertMention,
+                                onInsertSkill: _openSkillPickerFromMenu,
                               ),
                           ],
                         );
@@ -407,9 +434,39 @@ class _AgentPaneState extends State<AgentPane> {
     _syncCanSend();
   }
 
+  void _handleSkillQueryChanged() {
+    if (!widget.viewModel.canUseSkills) {
+      return;
+    }
+    final query = _inputController.activeSkillQuery;
+    if (query == null) {
+      if (_skillPickerOpen) {
+        _skillPopoverController.dismiss();
+      }
+      _skillQueryArmed = true;
+      return;
+    }
+    if (_skillPickerOpen) {
+      return;
+    }
+    if (!_skillQueryArmed) {
+      return;
+    }
+    _skillQueryArmed = false;
+    unawaited(_showSkillPicker());
+  }
+
+  void _handleSkillPopoverOpenChanged() {
+    if (!_skillPickerOpen) {
+      _skillPickerListController.reset();
+      if (_inputController.activeSkillQuery == null) {
+        _skillQueryArmed = true;
+      }
+    }
+  }
+
   void _syncCanSend() {
-    final canSend =
-        _inputController.text.trim().isNotEmpty || _draftImagePaths.isNotEmpty;
+    final canSend = _inputController.hasContent || _draftImagePaths.isNotEmpty;
     if (canSend == _canSendNotifier.value) {
       return;
     }
@@ -419,6 +476,35 @@ class _AgentPaneState extends State<AgentPane> {
   KeyEventResult _handleComposerKeyEvent(FocusNode node, KeyEvent event) {
     if (!node.hasPrimaryFocus || event is! KeyDownEvent) {
       return KeyEventResult.ignored;
+    }
+
+    if (_skillPickerOpen) {
+      if (event.logicalKey == LogicalKeyboardKey.escape) {
+        _skillPopoverController.dismiss();
+        return KeyEventResult.handled;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+        _skillPickerListController.move(1);
+        return KeyEventResult.handled;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+        _skillPickerListController.move(-1);
+        return KeyEventResult.handled;
+      }
+      final isEnter =
+          event.logicalKey == LogicalKeyboardKey.enter ||
+          event.logicalKey == LogicalKeyboardKey.numpadEnter;
+      if (isEnter) {
+        final composing = _inputController.value.composing;
+        if (composing.isValid && !composing.isCollapsed) {
+          return KeyEventResult.ignored;
+        }
+        final skill = _skillPickerListController.highlighted;
+        if (skill != null) {
+          _selectSkillFromPicker(skill);
+        }
+        return KeyEventResult.handled;
+      }
     }
 
     final isEnter =
@@ -591,10 +677,13 @@ class _AgentPaneState extends State<AgentPane> {
     if (!_canSendNotifier.value || !widget.viewModel.canSubmitMessage) {
       return;
     }
-    final text = _inputController.text;
+    final serialized = _inputController.serialize();
     final images = List<String>.from(_draftImagePaths);
     final mentions = List<({String name, String path})>.from(_draftMentions);
-    if (text.trim().isEmpty && images.isEmpty && mentions.isEmpty) {
+    if (serialized.text.trim().isEmpty &&
+        images.isEmpty &&
+        mentions.isEmpty &&
+        serialized.skills.isEmpty) {
       return;
     }
     _inputController.clear();
@@ -606,10 +695,110 @@ class _AgentPaneState extends State<AgentPane> {
     }
     _syncCanSend();
     widget.viewModel.sendMessage(
-      text,
+      serialized.text,
       localImagePaths: images,
       mentions: mentions,
+      skills: serialized.skills,
     );
+  }
+
+  void _insertSkill(AgentSkillMetadata skill) {
+    if (!widget.viewModel.canUseSkills) {
+      return;
+    }
+    _inputController.insertSkill(skill);
+    _syncCanSend();
+    _composerFocusNode.requestFocus();
+  }
+
+  void _selectSkillFromPicker(AgentSkillMetadata skill) {
+    _skillPopoverController.dismiss();
+    _insertSkill(skill);
+  }
+
+  /// More actions → Insert skill：确保进入 `$query` 后再弹出列表。
+  void _openSkillPickerFromMenu() {
+    if (!widget.viewModel.canUseSkills ||
+        _skillPickerOpen ||
+        _skillPickerOpening) {
+      return;
+    }
+    // 先解除 `$` 自动打开，避免插入触发与本次 show 并发。
+    _skillQueryArmed = false;
+    _ensureSkillQueryTrigger();
+    unawaited(_showSkillPicker());
+  }
+
+  /// 在光标处写入 `$` 触发片段（必要时补前导空格）。
+  void _ensureSkillQueryTrigger() {
+    if (_inputController.activeSkillQuery != null) {
+      return;
+    }
+    final text = _inputController.text;
+    final selection = _inputController.selection;
+    final cursor = selection.isValid
+        ? selection.extentOffset.clamp(0, text.length)
+        : text.length;
+    final start = selection.isValid
+        ? selection.baseOffset.clamp(0, text.length)
+        : cursor;
+    final left = math.min(start, cursor);
+    final right = math.max(start, cursor);
+    final before = text.substring(0, left);
+    final after = text.substring(right);
+    final needsSpace = before.isNotEmpty && !RegExp(r'\s$').hasMatch(before);
+    final insert = needsSpace ? r' $' : r'$';
+    _inputController.value = TextEditingValue(
+      text: '$before$insert$after',
+      selection: TextSelection.collapsed(offset: before.length + insert.length),
+      composing: TextRange.empty,
+    );
+  }
+
+  Future<void> _showSkillPicker() async {
+    if (!widget.viewModel.canUseSkills ||
+        _skillPickerOpen ||
+        _skillPickerOpening ||
+        !mounted) {
+      return;
+    }
+    if (_composerAnchorKey.currentContext == null) {
+      return;
+    }
+    _skillPickerOpening = true;
+    try {
+      // 打开前尽量预热 skills/list，避免空列表误导。
+      try {
+        await widget.viewModel.ensureSkillsCatalog();
+      } catch (_) {
+        // 目录失败时仍展示 picker，由空态提示用户。
+      }
+      if (!mounted || _skillPickerOpen) {
+        return;
+      }
+      final openContext = _composerAnchorKey.currentContext;
+      if (openContext == null || !openContext.mounted) {
+        return;
+      }
+      _skillPopoverController.show(
+        context: openContext,
+        preferredWidth: _agentSkillPickerPreferredWidth,
+        preferredMaxHeight: _agentSkillPickerPreferredMaxHeight,
+        key: const ValueKey('agent-skill-picker-overlay'),
+        builder: (context, layout) => _AgentSkillPickerPopover(
+          width: layout.width,
+          maxHeight: layout.maxHeight,
+          documentController: _inputController,
+          listController: _skillPickerListController,
+          candidatesFor: (query) =>
+              widget.viewModel.skillCandidates(query: query),
+          onSelect: _selectSkillFromPicker,
+          onRequestClose: _skillPopoverController.dismiss,
+        ),
+      );
+    } finally {
+      _skillPickerOpening = false;
+    }
   }
 
   /// 从工作区文件列表插入 @mention。

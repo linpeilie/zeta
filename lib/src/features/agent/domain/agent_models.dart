@@ -18,6 +18,7 @@ export 'package:zeta/src/features/agent/domain/agent_question_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_runtime_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_session_config_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_session_models.dart';
+export 'package:zeta/src/features/agent/domain/agent_skill_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_thread_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_tool_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_turn_activity_models.dart';

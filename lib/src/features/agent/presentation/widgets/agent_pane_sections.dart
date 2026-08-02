@@ -800,7 +800,9 @@ class _AgentComposerSection extends StatelessWidget {
     required this.onRemoveImage,
     required this.onSend,
     required this.onInsertMention,
+    required this.onInsertSkill,
     required this.pagePadding,
+    this.anchorKey,
     super.key,
   });
 
@@ -814,7 +816,11 @@ class _AgentComposerSection extends StatelessWidget {
   final ValueChanged<String> onRemoveImage;
   final VoidCallback onSend;
   final ValueChanged<WorkspaceNode> onInsertMention;
+  final VoidCallback onInsertSkill;
   final EdgeInsets pagePadding;
+
+  /// Skill popover 锚定用；挂在 Composer 根节点上。
+  final Key? anchorKey;
 
   @override
   Widget build(BuildContext context) {
@@ -824,50 +830,57 @@ class _AgentComposerSection extends StatelessWidget {
         child: ValueListenableBuilder<bool>(
           valueListenable: canSendListenable,
           builder: (context, canSend, _) {
-            return _AgentComposer(
-              controller: inputController,
-              focusNode: composerFocusNode,
-              canSubmit: canSend && state.canSubmitMessage,
-              isTurnRunning: state.isTurnRunning,
-              threadOpenPhase: state.threadOpenPhase,
-              currentWindowTokenUsage: state.contextUsage,
-              draftImagePaths: draftImagePaths,
-              onAttachImages: onAttachImages,
-              onRemoveImage: onRemoveImage,
-              onSend: onSend,
-              onCancel: viewModel.cancelActiveTurn,
-              showImageAttachment: state.canAttachImages,
-              showResourceMention: state.canMentionResources,
-              conversationModeStatus: _modeSelectorStatus(
-                state.conversationModeStatus,
+            return KeyedSubtree(
+              key: anchorKey,
+              child: _AgentComposer(
+                controller: inputController,
+                focusNode: composerFocusNode,
+                canSubmit: canSend && state.canSubmitMessage,
+                isTurnRunning: state.isTurnRunning,
+                threadOpenPhase: state.threadOpenPhase,
+                currentWindowTokenUsage: state.contextUsage,
+                draftImagePaths: draftImagePaths,
+                onAttachImages: onAttachImages,
+                onRemoveImage: onRemoveImage,
+                onSend: onSend,
+                onCancel: viewModel.cancelActiveTurn,
+                showImageAttachment: state.canAttachImages,
+                showResourceMention: state.canMentionResources,
+                showSkillInsert: state.canUseSkills,
+                conversationModeStatus: _modeSelectorStatus(
+                  state.conversationModeStatus,
+                ),
+                conversationModeOptions: state.conversationModeOptions,
+                selectedConversationMode: state.selectedConversationMode,
+                conversationModeAppliesToNextTurn:
+                    state.conversationModeAppliesToNextTurn,
+                conversationModeStatusMessage:
+                    state.conversationModeStatusMessage,
+                conversationModeContextId: state.conversationModeContextId,
+                onSelectConversationMode: viewModel.selectConversationMode,
+                showModelSelection: state.showModelSelection,
+                modelConfigState: state.modelConfigState,
+                showPermissionPolicy: state.showPermissionPolicy,
+                permissionPolicyLabel: state.permissionPolicyLabel,
+                permissionPresets: AgentPermissionSelection.presets,
+                selectedPermissionPresetId: state.selectedPermissionPresetId,
+                sessionConfigOptions: state.sessionConfigOptions,
+                onSelectModel: viewModel.selectModel,
+                onSelectReasoningEffort: viewModel.selectReasoningEffort,
+                onSelectFastEnabled: viewModel.selectFastEnabled,
+                onResolveModelCompatibility:
+                    viewModel.resolveModelCompatibilityConflict,
+                onRetryModelConfiguration:
+                    viewModel.retryModelConfigurationSave,
+                onCloseModelConfiguration:
+                    viewModel.clearModelConfigurationTransientState,
+                onSelectPermissionPreset: viewModel.selectPermissionPreset,
+                onSelectSessionConfigOption:
+                    viewModel.selectSessionConfigOption,
+                mentionCandidates: viewModel.mentionCandidateFiles,
+                onInsertMention: onInsertMention,
+                onInsertSkill: onInsertSkill,
               ),
-              conversationModeOptions: state.conversationModeOptions,
-              selectedConversationMode: state.selectedConversationMode,
-              conversationModeAppliesToNextTurn:
-                  state.conversationModeAppliesToNextTurn,
-              conversationModeStatusMessage:
-                  state.conversationModeStatusMessage,
-              conversationModeContextId: state.conversationModeContextId,
-              onSelectConversationMode: viewModel.selectConversationMode,
-              showModelSelection: state.showModelSelection,
-              modelConfigState: state.modelConfigState,
-              showPermissionPolicy: state.showPermissionPolicy,
-              permissionPolicyLabel: state.permissionPolicyLabel,
-              permissionPresets: AgentPermissionSelection.presets,
-              selectedPermissionPresetId: state.selectedPermissionPresetId,
-              sessionConfigOptions: state.sessionConfigOptions,
-              onSelectModel: viewModel.selectModel,
-              onSelectReasoningEffort: viewModel.selectReasoningEffort,
-              onSelectFastEnabled: viewModel.selectFastEnabled,
-              onResolveModelCompatibility:
-                  viewModel.resolveModelCompatibilityConflict,
-              onRetryModelConfiguration: viewModel.retryModelConfigurationSave,
-              onCloseModelConfiguration:
-                  viewModel.clearModelConfigurationTransientState,
-              onSelectPermissionPreset: viewModel.selectPermissionPreset,
-              onSelectSessionConfigOption: viewModel.selectSessionConfigOption,
-              mentionCandidates: viewModel.mentionCandidateFiles,
-              onInsertMention: onInsertMention,
             );
           },
         ),

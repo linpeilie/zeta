@@ -1,9 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/presentation/agent_markdown_cache.dart';
 
+/// 等待保温信号微任务落盘。
+Future<void> flushKeepAlive() => Future<void>.delayed(Duration.zero);
+
 void main() {
   group('AgentMarkdownCache', () {
-    test('复用历史 Markdown 控制器并限制渲染保温数量', () {
+    test('复用历史 Markdown 控制器并限制渲染保温数量', () async {
       final cache = AgentMarkdownCache(
         maxWarmEntries: 2,
         maxControllerEntries: 3,
@@ -13,12 +16,14 @@ void main() {
       final first = cache.acquire(messageId: 'a', data: '# A');
       final firstController = first.controller;
       final second = cache.acquire(messageId: 'b', data: '# B');
+      await flushKeepAlive();
 
       expect(first.shouldKeepAlive, isTrue);
       expect(second.shouldKeepAlive, isTrue);
       expect(cache.warmEntryCount, 2);
 
       final third = cache.acquire(messageId: 'c', data: '# C');
+      await flushKeepAlive();
 
       expect(first.shouldKeepAlive, isFalse);
       expect(second.shouldKeepAlive, isTrue);
@@ -28,6 +33,7 @@ void main() {
       first.release();
       second.release();
       third.release();
+      await flushKeepAlive();
       expect(cache.warmEntryCount, 0);
 
       final firstAgain = cache.acquire(messageId: 'a', data: '# A');

@@ -15,13 +15,13 @@
     }
   },
   "documentation": {
-    "etag": "\"74dc49e89b55dc037066c0249a16457758e22e41cb54081bd5c66b951cf7686c\"",
+    "etag": "\"588b2b5e324f9262942b33e16f06090cd9328b5fe0fa085d4fdefd1f93292263\"",
     "last_modified": null,
     "path": "references/cached-app-server.md",
     "published_url": "https://developers.openai.com/codex/app-server",
-    "sha256": "0d6026afd5b4b219fa43cf18a3ca819c4dbb86ce58678d4e056d8f99f06e2f1a",
+    "sha256": "7761cf76ab28ecfb2a1e21baf139b48a4fbf8a96f302350cdbc6ee0841316982",
     "source": "https://raw.githubusercontent.com/openai/codex/main/codex-rs/app-server/README.md",
-    "updated_at": "2026-07-30T08:15:15.057221Z"
+    "updated_at": "2026-08-01T15:06:14.025246Z"
   },
   "format_version": 1,
   "latest_release": {

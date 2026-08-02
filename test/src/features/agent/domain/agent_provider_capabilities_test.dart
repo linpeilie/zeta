@@ -14,6 +14,7 @@ void main() {
       expect(capabilities.canForkThreadAtTurn, isFalse);
       expect(capabilities.canCompactThread, isTrue);
       expect(capabilities.supportsLocalImageInput, isTrue);
+      expect(capabilities.supportsSkillInput, isTrue);
       expect(capabilities.supportsPermissionPolicySelection, isTrue);
       expect(capabilities.supportsPermissionProfileDiscovery, isTrue);
       expect(capabilities.supportsPermissionProfileSelection, isTrue);
@@ -46,6 +47,7 @@ void main() {
       expect(capabilities.canSteerTurn, isFalse);
       expect(capabilities.supportsLocalImageInput, isFalse);
       expect(capabilities.supportsResourceInput, isTrue);
+      expect(capabilities.supportsSkillInput, isFalse);
     });
 
     test('describes workspace-scoped bootstrap without eager preload', () {

@@ -1,6 +1,6 @@
 /// 用户发给 Agent 的一条输入项（对应协议 `UserInput`）。
 ///
-/// 覆盖 `text`、`localImage`、`mention`；`skill` / 远程 `image` 按后续阶段扩展。
+/// 覆盖 `text`、`localImage`、`mention`、`skill`；远程 `image` 按后续阶段扩展。
 sealed class AgentUserInput {
   const AgentUserInput();
 
@@ -21,6 +21,12 @@ sealed class AgentUserInput {
     required String name,
     required String path,
   }) = AgentMentionUserInput;
+
+  /// Skill 引用（协议 `skill`）；文本中应同时包含 `$name` marker。
+  const factory AgentUserInput.skill({
+    required String name,
+    required String path,
+  }) = AgentSkillUserInput;
 }
 
 /// 文本内嵌特殊 span（协议 `TextElement`）。
@@ -74,5 +80,16 @@ final class AgentMentionUserInput extends AgentUserInput {
   final String name;
 
   /// 文件绝对或工作区相对路径。
+  final String path;
+}
+
+/// Skill 输入项。
+final class AgentSkillUserInput extends AgentUserInput {
+  const AgentSkillUserInput({required this.name, required this.path});
+
+  /// Skill 稳定标识。
+  final String name;
+
+  /// Skill 定义文件的绝对路径。
   final String path;
 }

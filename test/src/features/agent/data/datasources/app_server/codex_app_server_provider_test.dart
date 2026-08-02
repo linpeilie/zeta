@@ -9,6 +9,7 @@ import 'package:zeta/src/features/agent/data/datasources/app_server/codex_app_se
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/provider_operation_scheduler.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 
 void main() {
   group('CodexAppServerAgentProvider', () {
@@ -108,7 +109,7 @@ void main() {
 
       final optOut = capabilities['optOutNotificationMethods']! as List<String>;
       expect(optOut, contains('thread/realtime/outputAudio/delta'));
-      // 已消费或近期路线图内的通知不允许被屏蔽。
+      // ????????????????????
       expect(optOut, isNot(contains('thread/tokenUsage/updated')));
       expect(optOut, isNot(contains('turn/completed')));
       expect(optOut, isNot(contains('item/reasoning/textDelta')));
@@ -604,7 +605,7 @@ void main() {
           'payload': <String, Object?>{
             'type': 'task_started',
             'turn_id': 'turn-aborted',
-            // Codex JSONL 与 app-server Turn 均使用 Unix 秒。
+            // Codex JSONL ? app-server Turn ??? Unix ??
             'started_at': 1783144800,
           },
         },
@@ -705,7 +706,7 @@ void main() {
         final tool = events.whereType<AgentToolCallEvent>().single.toolCall;
         expect(tool.id, 'reasoning-1');
         expect(tool.kind, AgentToolKind.think);
-        expect(tool.title, '思考');
+        expect(tool.title, '??');
         expect(tool.content, 'final summary');
 
         await subscription.cancel();
@@ -833,24 +834,22 @@ void main() {
             )
             .map((record) => record.message)
             .toList();
+        final skillsChangedMessages = records
+            .where(
+              (record) =>
+                  record.loggerName == 'zeta.agent.codex_app_server' &&
+                  record.level == Level.FINE &&
+                  record.message.contains('skills/changed received'),
+            )
+            .map((record) => record.message)
+            .toList();
 
         expect(events, isEmpty);
-        expect(unmatchedFineMessages, hasLength(2));
-        expect(
-          unmatchedFineMessages.singleWhere(
-            (message) => message.contains('account/updated'),
-          ),
-          contains('account/updated'),
-        );
-        expect(
-          unmatchedFineMessages.singleWhere(
-            (message) => message.contains('skills/changed'),
-          ),
-          contains('skills/changed'),
-        );
+        expect(unmatchedFineMessages, hasLength(1));
+        expect(unmatchedFineMessages.single, contains('account/updated'));
+        expect(skillsChangedMessages, hasLength(1));
         expect(provider.unmatchedNotificationCountsForTesting, <String, int>{
           'account/updated': 2,
-          'skills/changed': 1,
         });
       },
     );
@@ -1187,7 +1186,7 @@ void main() {
           'threadId': 'thread-1',
           'turnId': 'turn-1',
           'itemId': 'mcp-1',
-          'message': 'Fetching resources…',
+          'message': 'Fetching resources?',
         });
         await Future<void>.delayed(Duration.zero);
 
@@ -1196,7 +1195,7 @@ void main() {
         expect(toolEvent.toolCall.title, 'MCP tool');
         expect(toolEvent.toolCall.kind, AgentToolKind.other);
         expect(toolEvent.toolCall.status, AgentToolStatus.inProgress);
-        expect(toolEvent.toolCall.content, 'Fetching resources…');
+        expect(toolEvent.toolCall.content, 'Fetching resources?');
         expect(toolEvent.toolCall.sessionId, 'thread-1');
         expect(toolEvent.toolCall.turnId, 'turn-1');
         expect(toolEvent.toolCall.raw['_progressAppend'], isTrue);
@@ -1321,27 +1320,27 @@ void main() {
         final tools = events.whereType<AgentToolCallEvent>().toList();
         expect(tools, hasLength(4));
         expect(tools[0].toolCall.kind, AgentToolKind.search);
-        expect(tools[0].toolCall.title, 'Web 搜索');
+        expect(tools[0].toolCall.title, 'Web ??');
         expect(tools[0].toolCall.content, 'https://example.com/docs');
         expect(tools[1].toolCall.kind, AgentToolKind.read);
         expect(tools[1].toolCall.content, '/tmp/preview.png');
         expect(tools[2].toolCall.kind, AgentToolKind.fetch);
         expect(tools[2].toolCall.status, AgentToolStatus.completed);
         expect(tools[2].toolCall.locations, <String>['/tmp/out.png']);
-        expect(tools[3].toolCall.title, '协作: spawnAgent');
+        expect(tools[3].toolCall.title, '??: spawnAgent');
         expect(tools[3].toolCall.content, 'Investigate auth');
 
         final systemItems = events.whereType<AgentSystemItemEvent>().toList();
         expect(systemItems, hasLength(5));
-        expect(systemItems[0].entry.title, '进入评审模式');
+        expect(systemItems[0].entry.title, '??????');
         expect(systemItems[0].entry.description, 'Review uncommitted changes');
-        expect(systemItems[1].entry.title, '上下文已压缩');
-        expect(systemItems[2].entry.title, 'Hook 提示');
+        expect(systemItems[1].entry.title, '??????');
+        expect(systemItems[2].entry.title, 'Hook ??');
         expect(systemItems[2].entry.content, 'Pre-commit checks');
-        expect(systemItems[3].entry.title, '等待中');
-        expect(systemItems[3].entry.description, '休眠 1 秒');
-        expect(systemItems[4].entry.title, '子代理活动');
-        expect(systemItems[4].entry.description, '已启动 · worker/auth');
+        expect(systemItems[3].entry.title, '???');
+        expect(systemItems[3].entry.description, '?? 1 ?');
+        expect(systemItems[4].entry.title, '?????');
+        expect(systemItems[4].entry.description, '??? ? worker/auth');
 
         await subscription.cancel();
         await provider.dispose();
@@ -1543,7 +1542,7 @@ void main() {
         expect(resolved.requestId, '42');
         expect(resolved.threadId, 'thread-1');
 
-        // 他端已解决：本端不应再向服务端回写审批响应。
+        // ??????????????????????
         await provider.respondToPermission(
           AgentPermissionDecision(requestId: '42', approved: true),
         );
@@ -1584,7 +1583,7 @@ void main() {
         );
         await Future<void>.delayed(Duration.zero);
 
-        // 拒绝类请求不应出现 UI 审批卡片。
+        // ????????? UI ?????
         expect(events.whereType<AgentPermissionRequestedEvent>(), isEmpty);
 
         final unknown = peer.errorResponses['unknown-1'];
@@ -1916,12 +1915,12 @@ void main() {
       expect(quota!.planType, 'plus');
       expect(quota.limitName, 'Codex');
       expect(quota.windows, hasLength(2));
-      // primary 300min / secondary 10080min → 可读时长，而非 limitName / 主要额度。
-      expect(quota.windows.first.label, '5 小时');
+      // primary 300min / secondary 10080min ? ??????? limitName / ?????
+      expect(quota.windows.first.label, '5 ??');
       expect(quota.windows.first.usedPercent, 36);
       expect(quota.windows.first.resetsAt, isNotNull);
       expect(quota.windows.first.windowDuration, const Duration(minutes: 300));
-      expect(quota.windows.last.label, '1 周');
+      expect(quota.windows.last.label, '1 ?');
       expect(quota.windows.last.usedPercent, 72);
       expect(quota.windows.last.windowDuration, const Duration(minutes: 10080));
       expect(quota.credits?.unlimited, isFalse);
@@ -2249,17 +2248,17 @@ void main() {
 
       final webSearch = _historyEntries(history)[5] as AgentHistoryToolEntry;
       expect(webSearch.toolCall.kind, AgentToolKind.search);
-      expect(webSearch.toolCall.title, 'Web 搜索');
+      expect(webSearch.toolCall.title, 'Web ??');
       expect(webSearch.toolCall.content, 'zeta design system');
 
       final review = _historyEntries(history)[6] as AgentHistoryEventEntry;
       expect(review.kind, AgentHistoryEventKind.system);
-      expect(review.title, '进入评审模式');
+      expect(review.title, '??????');
       expect(review.description, 'Review branch diff');
 
       final compact = _historyEntries(history)[7] as AgentHistoryEventEntry;
       expect(compact.kind, AgentHistoryEventKind.system);
-      expect(compact.title, '上下文已压缩');
+      expect(compact.title, '??????');
       await provider.dispose();
     });
 
@@ -2714,20 +2713,20 @@ void main() {
                 'questions': <Object?>[
                   <String, Object?>{
                     'id': 'logging_destination',
-                    'header': '日志去向',
-                    'question': '主要要做到哪一级？',
+                    'header': '????',
+                    'question': '?????????',
                     'options': <Object?>[
-                      <String, Object?>{'label': '开发日志 (Recommended)'},
-                      <String, Object?>{'label': '本地日志文件'},
+                      <String, Object?>{'label': '???? (Recommended)'},
+                      <String, Object?>{'label': '??????'},
                     ],
                   },
                   <String, Object?>{
                     'id': 'logging_api',
-                    'header': '实现方式',
-                    'question': '日志 API 想偏向哪种实现？',
+                    'header': '????',
+                    'question': '?? API ????????',
                     'options': <Object?>[
-                      <String, Object?>{'label': '内置封装 (Recommended)'},
-                      <String, Object?>{'label': 'logging 包'},
+                      <String, Object?>{'label': '???? (Recommended)'},
+                      <String, Object?>{'label': 'logging ?'},
                     ],
                   },
                 ],
@@ -2742,10 +2741,10 @@ void main() {
               'output': jsonEncode(<String, Object?>{
                 'answers': <String, Object?>{
                   'logging_destination': <String, Object?>{
-                    'answers': <String>['开发日志 (Recommended)'],
+                    'answers': <String>['???? (Recommended)'],
                   },
                   'logging_api': <String, Object?>{
-                    'answers': <String>['logging 包'],
+                    'answers': <String>['logging ?'],
                   },
                 },
               }),
@@ -2766,15 +2765,15 @@ void main() {
 
         final first = entry.qaPairs![0];
         expect(first.questionId, 'logging_destination');
-        expect(first.question, '主要要做到哪一级？');
-        expect(first.header, '日志去向');
-        expect(first.options, <String>['开发日志 (Recommended)', '本地日志文件']);
-        expect(first.answers, <String>['开发日志 (Recommended)']);
+        expect(first.question, '?????????');
+        expect(first.header, '????');
+        expect(first.options, <String>['???? (Recommended)', '??????']);
+        expect(first.answers, <String>['???? (Recommended)']);
 
         final second = entry.qaPairs![1];
         expect(second.questionId, 'logging_api');
-        expect(second.question, '日志 API 想偏向哪种实现？');
-        expect(second.answers, <String>['logging 包']);
+        expect(second.question, '?? API ????????');
+        expect(second.answers, <String>['logging ?']);
 
         await provider.dispose();
       },
@@ -3066,7 +3065,7 @@ void main() {
         final sub = provider.events.listen(events.add);
         addTearDown(sub.cancel);
 
-        // 当前协议结构：tokenUsage 内嵌 camelCase 的 total/last breakdown。
+        // ???????tokenUsage ?? camelCase ? total/last breakdown?
         peer.emitNotification('thread/tokenUsage/updated', <String, Object?>{
           'threadId': 'thread-1',
           'turnId': 'turn-live',
@@ -3121,7 +3120,7 @@ void main() {
       final sub = provider.events.listen(events.add);
       addTearDown(sub.cancel);
 
-      // 当前协议结构：错误信息在嵌套的 TurnError 对象里。
+      // ??????????????? TurnError ????
       peer.emitNotification('error', <String, Object?>{
         'threadId': 'thread-1',
         'turnId': 'turn-live',
@@ -3132,7 +3131,7 @@ void main() {
           'codexErrorInfo': 'contextWindowExceeded',
         },
       });
-      // 对象变体的 codexErrorInfo：取唯一键名作为错误码。
+      // ????? codexErrorInfo????????????
       peer.emitNotification('error', <String, Object?>{
         'threadId': 'thread-1',
         'turnId': 'turn-live',
@@ -3467,7 +3466,7 @@ void main() {
         ..emitStderr(
           '\u001b[31mERROR\u001b[0m codex_core::tools::router: Exit code: 1',
         )
-        ..emitStderr('\u001b[31;1mGet-CimInstance: 拒绝访问\u001b[0m');
+        ..emitStderr('\u001b[31;1mGet-CimInstance: ????\u001b[0m');
       await Future<void>.delayed(Duration.zero);
 
       expect(events.whereType<AgentErrorEvent>(), isEmpty);
@@ -4250,6 +4249,73 @@ void main() {
       ]);
     });
 
+    test('encodes skill inputs in turn/start', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+
+      final session = await provider.startSession(
+        context: const AgentContext(projectPath: '/repo'),
+      );
+      await provider.sendMessage(
+        session: session,
+        inputs: const <AgentUserInput>[
+          AgentUserInput.text(r'$skill-creator Add a skill'),
+          AgentUserInput.skill(
+            name: 'skill-creator',
+            path: '/skills/skill-creator/SKILL.md',
+          ),
+        ],
+        context: const AgentContext(projectPath: '/repo'),
+      );
+
+      final turnStartIndex = peer.requestMethods.indexOf('turn/start');
+      final params =
+          peer.requestParams[turnStartIndex]! as Map<String, Object?>;
+      expect(params['input'], <Object?>[
+        <String, Object?>{
+          'type': 'text',
+          'text': r'$skill-creator Add a skill',
+        },
+        <String, Object?>{
+          'type': 'skill',
+          'name': 'skill-creator',
+          'path': '/skills/skill-creator/SKILL.md',
+        },
+      ]);
+    });
+
+    test('lists skills and emits skillsChanged', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+
+      expect(provider.capabilities.supportsSkillInput, isTrue);
+      expect(provider, isA<AgentSkillsCatalogProvider>());
+
+      final changed = <void>[];
+      final subscription = provider.skillsChanged.listen(changed.add);
+      addTearDown(subscription.cancel);
+
+      final catalog = await provider.listSkills(
+        cwds: const <String>['/repo'],
+        forceReload: true,
+      );
+      expect(peer.requestMethods, contains('skills/list'));
+      expect(catalog.allSkills.single.name, 'skill-creator');
+      expect(catalog.allSkills.single.enabled, isTrue);
+
+      peer.emitNotification('skills/changed', const <String, Object?>{});
+      await Future<void>.delayed(Duration.zero);
+      expect(changed, hasLength(1));
+    });
+
     test('maps autoApprovalReview notifications', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
@@ -4347,7 +4413,7 @@ void main() {
       expect(turnStartIndex, isNot(-1));
       final params = peer.requestParams[turnStartIndex] as Map<String, Object?>;
       expect(params['model'], 'gpt-5.4-mini');
-      // 协议参数名是 `effort`,不是旧的 `reasoningEffort`。
+      // ?????? `effort`,???? `reasoningEffort`?
       expect(params['effort'], 'high');
       expect(params.containsKey('reasoningEffort'), isFalse);
       expect(params['serviceTier'], 'priority');
@@ -4689,6 +4755,38 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
               ],
               'nextCursor': null,
             },
+      'skills/list' => <String, Object?>{
+        'data': <Object?>[
+          <String, Object?>{
+            'cwd':
+                (paramsMap['cwds'] is List &&
+                    (paramsMap['cwds']! as List).isNotEmpty)
+                ? (paramsMap['cwds']! as List).first
+                : '/repo',
+            'skills': <Object?>[
+              <String, Object?>{
+                'name': 'skill-creator',
+                'path': '/skills/skill-creator/SKILL.md',
+                'description': 'Create or update a Codex skill',
+                'enabled': true,
+                'scope': 'user',
+                'interface': <String, Object?>{
+                  'displayName': 'Skill Creator',
+                  'shortDescription': 'Create skills',
+                  'defaultPrompt': 'Add a new skill',
+                },
+              },
+              <String, Object?>{
+                'name': 'disabled-skill',
+                'path': '/skills/disabled/SKILL.md',
+                'description': 'Should be filtered',
+                'enabled': false,
+              },
+            ],
+            'errors': <Object?>[],
+          },
+        ],
+      },
       _ => <String, Object?>{},
     };
   }

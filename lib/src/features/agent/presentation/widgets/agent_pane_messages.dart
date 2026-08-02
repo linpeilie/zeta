@@ -42,7 +42,12 @@ class _AgentMessageEntry extends StatelessWidget {
         markdownCache: markdownCache,
       );
     }
-    return _AgentBubbleMessage(message: message, viewModel: viewModel);
+    return _AgentBubbleMessage(
+      message: message,
+      useStreamingMarkdown: useStreamingMarkdown,
+      viewModel: viewModel,
+      markdownCache: markdownCache,
+    );
   }
 }
 
@@ -343,12 +348,20 @@ String? _turnDurationLabel(AgentConversationTurnGroup group) {
   };
 }
 
-/// 用户或系统消息仍然使用紧凑气泡。
+/// 用户或系统消息使用紧凑气泡，正文走与 Agent 相同的 Markdown 渲染管线，
+/// 但使用收敛的气泡主题（标题降级、代码块用控制面底色）。
 class _AgentBubbleMessage extends StatelessWidget {
-  const _AgentBubbleMessage({required this.message, required this.viewModel});
+  const _AgentBubbleMessage({
+    required this.message,
+    required this.useStreamingMarkdown,
+    required this.viewModel,
+    required this.markdownCache,
+  });
 
   final AgentConversationMessage message;
+  final bool useStreamingMarkdown;
   final AgentConversationViewModel viewModel;
+  final AgentMarkdownCache markdownCache;
 
   @override
   Widget build(BuildContext context) {
@@ -430,16 +443,14 @@ class _AgentBubbleMessage extends StatelessWidget {
                         if (hasText) const SizedBox(height: IdeSpacing.space8),
                       ],
                       if (hasText)
-                        SelectableText(
-                          message.text,
-                          style:
-                              (isUser
-                                      ? textStyles.bodyMedium
-                                      : textStyles.proseBody)
-                                  .copyWith(
-                                    height: 1.4,
-                                    color: colors.textPrimary,
-                                  ),
+                        SizedBox(
+                          width: double.infinity,
+                          child: _AgentMarkdownBody(
+                            message: message,
+                            useStreamingMarkdown: useStreamingMarkdown,
+                            markdownCache: markdownCache,
+                            themeBuilder: _agentUserBubbleMarkdownTheme,
+                          ),
                         ),
                     ],
                   ),
@@ -538,11 +549,15 @@ class _AgentMarkdownBody extends StatefulWidget {
     required this.message,
     required this.useStreamingMarkdown,
     required this.markdownCache,
+    this.themeBuilder,
   });
 
   final AgentConversationMessage message;
   final bool useStreamingMarkdown;
   final AgentMarkdownCache markdownCache;
+
+  /// 可选的主题构造器；缺省使用 Agent 正文主题。
+  final MarkdownThemeData Function(BuildContext context)? themeBuilder;
 
   @override
   State<_AgentMarkdownBody> createState() => _AgentMarkdownBodyState();
@@ -614,7 +629,7 @@ class _AgentMarkdownBodyState extends State<_AgentMarkdownBody> {
   Widget build(BuildContext context) {
     return MarkdownWidget(
       controller: _lease.controller,
-      theme: _agentMarkdownTheme(context),
+      theme: (widget.themeBuilder ?? _agentMarkdownTheme)(context),
       useColumn: true,
       selectable: true,
       padding: EdgeInsets.zero,

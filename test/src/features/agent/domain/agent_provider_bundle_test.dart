@@ -59,6 +59,7 @@ void main() {
         expect(bundle.interactions, isNotNull);
         expect(bundle.modelCatalog, isNotNull);
         expect(bundle.conversationModes, isNotNull);
+        expect(bundle.skills, isNotNull);
         expect(bundle.localThreadList, isNotNull);
         expect(bundle.sessionConfiguration, isNotNull);
         expect(bundle.planApproval, isNotNull);
@@ -129,6 +130,9 @@ void main() {
         final models = await bundle.modelCatalog!.listModels();
         final conversationModes = await bundle.conversationModes!
             .listConversationModes();
+        final skills = await bundle.skills!.listSkills(
+          cwds: const <String>['/workspace'],
+        );
         await bundle.localThreadList!.removeThreadFromList('thread-1');
         await bundle.sessionConfiguration!.setSessionConfigOption(
           sessionId: 'thread-1',
@@ -196,6 +200,9 @@ void main() {
         );
         expect(provider.conversationModeListCalls, 1);
         expect(bundle.capabilities.supportsModeSelection, isFalse);
+        expect(skills.allSkills, hasLength(1));
+        expect(skills.allSkills.single.name, 'skill-creator');
+        expect(provider.skillsListCalls, 1);
         expect(provider.removedThreads, <String>['thread-1']);
         expect(
           provider.sessionConfigWrites,
@@ -225,6 +232,7 @@ void main() {
       expect(bundle.interactions, isNull);
       expect(bundle.modelCatalog, isNull);
       expect(bundle.conversationModes, isNull);
+      expect(bundle.skills, isNull);
       expect(bundle.localThreadList, isNull);
       expect(bundle.sessionConfiguration, isNull);
       expect(bundle.planApproval, isNull);
@@ -302,6 +310,8 @@ void main() {
       expect(codex.interactions, isNotNull);
       expect(codex.modelCatalog, isNotNull);
       expect(codex.conversationModes, isNull);
+      // Minimal fake 未实现 AgentSkillsCatalogProvider，即使 capability 打开也无端口。
+      expect(codex.skills, isNull);
 
       expect(grok.threadCatalog, isNotNull);
       expect(grok.threadMutations, isNotNull);
@@ -310,8 +320,10 @@ void main() {
       expect(grok.interactions, isNotNull);
       expect(grok.modelCatalog, isNotNull);
       expect(grok.conversationModes, isNull);
+      expect(grok.skills, isNull);
 
       expect(cursor.conversationModes, isNull);
+      expect(cursor.skills, isNull);
     });
   });
 }
@@ -537,6 +549,7 @@ class _BundleFakeProvider extends _MinimalBundleFakeProvider
         AgentSessionConfigProvider,
         AgentPlanApprovalProvider,
         AgentConversationModeCatalogProvider,
+        AgentSkillsCatalogProvider,
         AgentRuntimeInfoProvider,
         AgentRuntimeLifecycleProvider,
         AgentRuntimeScopeProvider,
@@ -555,6 +568,9 @@ class _BundleFakeProvider extends _MinimalBundleFakeProvider
   final List<AgentQuestionResponse> questionResponses =
       <AgentQuestionResponse>[];
   int conversationModeListCalls = 0;
+  int skillsListCalls = 0;
+  final StreamController<void> _skillsChanged =
+      StreamController<void>.broadcast();
 
   @override
   final AgentRuntimeInfo? runtimeInfo;
@@ -579,6 +595,32 @@ class _BundleFakeProvider extends _MinimalBundleFakeProvider
           id: AgentConversationModeId.plan,
           displayName: 'Plan',
           suggestedReasoningEffort: 'medium',
+        ),
+      ],
+    );
+  }
+
+  @override
+  Stream<void> get skillsChanged => _skillsChanged.stream;
+
+  @override
+  Future<AgentSkillsCatalog> listSkills({
+    List<String> cwds = const <String>[],
+    bool forceReload = false,
+  }) async {
+    skillsListCalls += 1;
+    return AgentSkillsCatalog(
+      entries: [
+        AgentSkillsCatalogEntry(
+          cwd: cwds.isEmpty ? '/workspace' : cwds.first,
+          skills: const [
+            AgentSkillMetadata(
+              name: 'skill-creator',
+              path: '/skills/skill-creator/SKILL.md',
+              description: 'Create skills',
+              enabled: true,
+            ),
+          ],
         ),
       ],
     );
@@ -615,5 +657,11 @@ class _BundleFakeProvider extends _MinimalBundleFakeProvider
   @override
   Future<void> respondToQuestion(AgentQuestionResponse response) async {
     questionResponses.add(response);
+  }
+
+  @override
+  Future<void> dispose() async {
+    await _skillsChanged.close();
+    await super.dispose();
   }
 }

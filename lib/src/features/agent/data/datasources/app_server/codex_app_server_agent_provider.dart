@@ -21,6 +21,7 @@ part '../../mappers/codex_conversation_mode_codec.dart';
 part '../../mappers/codex_model_list_mapper.dart';
 part '../../mappers/codex_notification_mapper.dart';
 part '../../mappers/codex_question_mapper.dart';
+part '../../mappers/codex_skills_mapper.dart';
 part '../../mappers/codex_turn_start_params_encoder.dart';
 part '../local_history/codex_jsonl_history_parser.dart';
 part '../local_history/codex_thread_history_reader.dart';
@@ -43,7 +44,8 @@ class CodexAppServerAgentProvider
         AgentRuntimeScopeProvider,
         AgentRefreshableModelCatalogProvider,
         AgentQuestionResponseProvider,
-        AgentConversationModeCatalogProvider {
+        AgentConversationModeCatalogProvider,
+        AgentSkillsCatalogProvider {
   /// 创建 Codex app-server provider 实例。
   ///
   /// [config] 包含命令、参数、环境变量等 provider 配置。
@@ -74,6 +76,7 @@ class CodexAppServerAgentProvider
     final threadHistoryReader = _CodexThreadHistoryReader();
     final modelListMapper = _CodexModelListMapper();
     final collaborationModeMapper = _CodexCollaborationModeMapper();
+    final skillsMapper = _CodexSkillsMapper();
     final turnStartParamsEncoder = _CodexTurnStartParamsEncoder(
       defaultModelId: config.defaultModel,
     );
@@ -82,6 +85,7 @@ class CodexAppServerAgentProvider
       config: config,
       modelListMapper: modelListMapper,
       collaborationModeMapper: collaborationModeMapper,
+      skillsMapper: skillsMapper,
       turnStartParamsEncoder: turnStartParamsEncoder,
       threadHistoryReader: threadHistoryReader,
     );
@@ -141,6 +145,10 @@ class CodexAppServerAgentProvider
 
   /// 服务端明确不支持实验方法后，同一 epoch 不再自动重试。
   AgentRuntimeScope? _unsupportedConversationModeCatalogScope;
+
+  /// Skill 文件变更失效广播（供 application 层 stale 刷新）。
+  final StreamController<void> _skillsChanged =
+      StreamController<void>.broadcast();
 
   /// 是否已完成 initialize 握手。
   bool _initialized = false;
@@ -415,6 +423,32 @@ class CodexAppServerAgentProvider
   }) async {
     await initialize();
     return _fetchModelList(limit: limit, includeHidden: includeHidden);
+  }
+
+  @override
+  Stream<void> get skillsChanged => _skillsChanged.stream;
+
+  @override
+  Future<AgentSkillsCatalog> listSkills({
+    List<String> cwds = const <String>[],
+    bool forceReload = false,
+  }) async {
+    await initialize();
+    final normalizedCwds = <String>[
+      for (final cwd in cwds)
+        if (cwd.trim().isNotEmpty) cwd.trim(),
+    ];
+    final projectPath = normalizedCwds.isEmpty
+        ? '__default__'
+        : normalizedCwds.join('\u0001');
+    return _operationScheduler.schedule<AgentSkillsCatalog>(
+      key: ProjectOperationKey(providerId: config.id, projectPath: projectPath),
+      access: ProviderOperationAccess.sharedRead,
+      operation: () => _client.fetchSkillsCatalog(
+        cwds: normalizedCwds,
+        forceReload: forceReload,
+      ),
+    );
   }
 
   @override
@@ -845,6 +879,7 @@ class CodexAppServerAgentProvider
     await _peer.close();
     await _operationScheduler.close();
     await _events.close();
+    await _skillsChanged.close();
   }
 
   void _clearConversationModeCatalogState() {
@@ -931,6 +966,12 @@ class CodexAppServerAgentProvider
         'Codex model/rerouted: $fromModel → $toModel '
         '(${reason?.length ?? 0} reason characters)',
       );
+    } else if (notification.method == 'skills/changed') {
+      if (!_skillsChanged.isClosed) {
+        _skillsChanged.add(null);
+      }
+      _log.fine('Codex skills/changed received');
+      return;
     }
 
     final mapping = _notificationMapper.map(

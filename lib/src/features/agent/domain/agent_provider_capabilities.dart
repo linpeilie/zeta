@@ -53,6 +53,7 @@ class AgentProviderCapabilities {
     this.supportsTextInput = true,
     this.supportsLocalImageInput = false,
     this.supportsResourceInput = false,
+    this.supportsSkillInput = false,
     this.supportsPermissionRequests = false,
     this.supportsUserQuestions = false,
     this.supportsPlanApproval = false,
@@ -89,6 +90,9 @@ class AgentProviderCapabilities {
   final bool supportsTextInput;
   final bool supportsLocalImageInput;
   final bool supportsResourceInput;
+
+  /// 是否支持结构化 skill 输入与 skill 目录发现。
+  final bool supportsSkillInput;
   final bool supportsPermissionRequests;
   final bool supportsUserQuestions;
   final bool supportsPlanApproval;
@@ -125,6 +129,7 @@ class AgentProviderCapabilities {
     bool? supportsTextInput,
     bool? supportsLocalImageInput,
     bool? supportsResourceInput,
+    bool? supportsSkillInput,
     bool? supportsPermissionRequests,
     bool? supportsUserQuestions,
     bool? supportsPlanApproval,
@@ -160,6 +165,7 @@ class AgentProviderCapabilities {
           supportsLocalImageInput ?? this.supportsLocalImageInput,
       supportsResourceInput:
           supportsResourceInput ?? this.supportsResourceInput,
+      supportsSkillInput: supportsSkillInput ?? this.supportsSkillInput,
       supportsPermissionRequests:
           supportsPermissionRequests ?? this.supportsPermissionRequests,
       supportsUserQuestions:
@@ -206,6 +212,7 @@ class AgentProviderCapabilities {
     canCompactThread: true,
     supportsLocalImageInput: true,
     supportsResourceInput: true,
+    supportsSkillInput: true,
     supportsPermissionRequests: true,
     supportsUserQuestions: true,
     // 当前 Codex 适配尚未暴露独立计划审批回写端口，避免提前声明可执行能力。
