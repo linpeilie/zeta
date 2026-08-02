@@ -214,6 +214,18 @@ Dock，但不得共享 request/decision 模型或 pending registry。
   `UnsupportedError`，UI 靠 capability 隐藏入口。
 - `@mention` v1 仍为纯文本旁路列表，不与 skill token 混用同一原子编辑语义。
 
+### 斜线命令菜单（`/`）
+
+- 在 Composer 中输入 `/`，且 `/` 前为空或仅空白（空格/换行/制表）时弹出斜线菜单。
+  路径中间的 `/`（如 `/Users/foo` 或 `hello/`）不得触发。
+- 菜单分层展示：**命令** 与 **Skills**。当前命令仅 `Plan`（依赖可用的 Plan
+  conversation mode）；Skills 分区复用 `skillCandidates`，仅在
+  `supportsSkillInput` 时出现。
+- 选择 `Plan`：消费 `/query` 并切换下一回合为 Plan 模式，不向文本插入
+  `/plan`。选择 Skill：消费 `/query` 并走既有 skill token 插入路径。
+- 支持 `/query` 实时过滤与 ↑↓/Enter/Esc；与 `$` skill picker 互斥，同一时刻
+  只打开其中一个。
+
 ### Plan conversation mode 开发与验证
 
 - Domain 只使用 `AgentConversationMode*`；Codex 的 `collaborationMode` JSON 只存在于

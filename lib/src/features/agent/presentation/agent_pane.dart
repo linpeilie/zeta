@@ -60,6 +60,7 @@ part 'widgets/composer_selector_popover.dart';
 part 'widgets/agent_model_config.dart';
 part 'widgets/agent_mode_selector.dart';
 part 'widgets/agent_skill_picker.dart';
+part 'widgets/agent_slash_command_picker.dart';
 part 'widgets/agent_pane_sections.dart';
 part 'widgets/agent_pane_styles.dart';
 
@@ -121,6 +122,9 @@ class _AgentPaneState extends State<AgentPane> {
   late final _ComposerSelectorPopoverController _skillPopoverController;
   final _SkillPickerListController _skillPickerListController =
       _SkillPickerListController();
+  late final _ComposerSelectorPopoverController _slashPopoverController;
+  final _SlashMenuListController _slashMenuListController =
+      _SlashMenuListController();
 
   /// 允许下一次 `$` 触发自动打开 skill picker（关闭后需先离开 `$query` 再进入）。
   bool _skillQueryArmed = true;
@@ -128,7 +132,30 @@ class _AgentPaneState extends State<AgentPane> {
   /// 防止 `$` 监听与菜单入口并发预热时重复 show。
   bool _skillPickerOpening = false;
 
+  /// 允许下一次 `/` 触发自动打开斜线命令菜单。
+  bool _slashQueryArmed = true;
+
+  /// 防止 `/` 监听并发预热时重复 show。
+  bool _slashPickerOpening = false;
+
   bool get _skillPickerOpen => _skillPopoverController.isOpen;
+
+  bool get _slashPickerOpen => _slashPopoverController.isOpen;
+
+  /// 是否具备可展示的斜线命令（当前仅 Plan）。
+  bool get _hasSlashPlanCommand {
+    if (!widget.viewModel.canSelectConversationMode) {
+      return false;
+    }
+    return widget.viewModel.conversationModeOptions.any(
+      (preset) =>
+          preset.id == AgentConversationModeId.plan && preset.isSelectable,
+    );
+  }
+
+  /// 斜线菜单是否至少有一个分区（命令或 Skills）可展示。
+  bool get _canOpenSlashMenu =>
+      _hasSlashPlanCommand || widget.viewModel.canUseSkills;
 
   late StreamSubscription<AgentUiEffect> _uiEffectSubscription;
 
@@ -172,9 +199,14 @@ class _AgentPaneState extends State<AgentPane> {
       triggerFocusNode: _composerFocusNode,
       onOpenChanged: _handleSkillPopoverOpenChanged,
     );
+    _slashPopoverController = _ComposerSelectorPopoverController(
+      triggerFocusNode: _composerFocusNode,
+      onOpenChanged: _handleSlashPopoverOpenChanged,
+    );
     _responsiveBodyBuilder = _createResponsiveBodyBuilder();
     _inputController.addListener(_handleInputChanged);
     _inputController.addListener(_handleSkillQueryChanged);
+    _inputController.addListener(_handleSlashQueryChanged);
     _scrollController = IdeSmoothScrollController();
     _scrollDriver = IdeScrollControllerDriver(_scrollController);
     _scrollCoordinator = IdeVirtualScrollCoordinator(driver: _scrollDriver)
@@ -228,10 +260,13 @@ class _AgentPaneState extends State<AgentPane> {
     unawaited(_uiEffectSubscription.cancel());
     _inputController.removeListener(_handleInputChanged);
     _inputController.removeListener(_handleSkillQueryChanged);
+    _inputController.removeListener(_handleSlashQueryChanged);
     _scrollController.removeListener(_handleScrollChanged);
     _scrollCoordinator.onModeChanged = null;
     _skillPopoverController.dispose();
     _skillPickerListController.dispose();
+    _slashPopoverController.dispose();
+    _slashMenuListController.dispose();
     _inputController.dispose();
     _composerFocusNode.dispose();
     _scrollController.dispose();
@@ -452,6 +487,10 @@ class _AgentPaneState extends State<AgentPane> {
     if (!_skillQueryArmed) {
       return;
     }
+    // `$` 与 `/` 互斥：进入 skill 触发时关闭斜线菜单。
+    if (_slashPickerOpen) {
+      _slashPopoverController.dismiss();
+    }
     _skillQueryArmed = false;
     unawaited(_showSkillPicker());
   }
@@ -461,6 +500,41 @@ class _AgentPaneState extends State<AgentPane> {
       _skillPickerListController.reset();
       if (_inputController.activeSkillQuery == null) {
         _skillQueryArmed = true;
+      }
+    }
+  }
+
+  void _handleSlashQueryChanged() {
+    if (!_canOpenSlashMenu) {
+      return;
+    }
+    final query = _inputController.activeSlashQuery;
+    if (query == null) {
+      if (_slashPickerOpen) {
+        _slashPopoverController.dismiss();
+      }
+      _slashQueryArmed = true;
+      return;
+    }
+    if (_slashPickerOpen) {
+      return;
+    }
+    if (!_slashQueryArmed) {
+      return;
+    }
+    // `/` 与 `$` 互斥：进入斜线触发时关闭 skill picker。
+    if (_skillPickerOpen) {
+      _skillPopoverController.dismiss();
+    }
+    _slashQueryArmed = false;
+    unawaited(_showSlashCommandPicker());
+  }
+
+  void _handleSlashPopoverOpenChanged() {
+    if (!_slashPickerOpen) {
+      _slashMenuListController.reset();
+      if (_inputController.activeSlashQuery == null) {
+        _slashQueryArmed = true;
       }
     }
   }
@@ -476,6 +550,35 @@ class _AgentPaneState extends State<AgentPane> {
   KeyEventResult _handleComposerKeyEvent(FocusNode node, KeyEvent event) {
     if (!node.hasPrimaryFocus || event is! KeyDownEvent) {
       return KeyEventResult.ignored;
+    }
+
+    if (_slashPickerOpen) {
+      if (event.logicalKey == LogicalKeyboardKey.escape) {
+        _slashPopoverController.dismiss();
+        return KeyEventResult.handled;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+        _slashMenuListController.move(1);
+        return KeyEventResult.handled;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+        _slashMenuListController.move(-1);
+        return KeyEventResult.handled;
+      }
+      final isEnter =
+          event.logicalKey == LogicalKeyboardKey.enter ||
+          event.logicalKey == LogicalKeyboardKey.numpadEnter;
+      if (isEnter) {
+        final composing = _inputController.value.composing;
+        if (composing.isValid && !composing.isCollapsed) {
+          return KeyEventResult.ignored;
+        }
+        final item = _slashMenuListController.highlighted;
+        if (item != null) {
+          _activateSlashMenuItem(item);
+        }
+        return KeyEventResult.handled;
+      }
     }
 
     if (_skillPickerOpen) {
@@ -716,6 +819,34 @@ class _AgentPaneState extends State<AgentPane> {
     _insertSkill(skill);
   }
 
+  void _activateSlashMenuItem(_SlashMenuItem item) {
+    switch (item) {
+      case final _SlashCommandMenuItem command:
+        _selectSlashCommand(command.id);
+      case final _SlashSkillMenuItem skill:
+        _selectSkillFromSlashMenu(skill.skill);
+    }
+  }
+
+  /// 选中斜线命令：移除 `/query` 并执行对应动作。
+  void _selectSlashCommand(_SlashCommandId id) {
+    _slashPopoverController.dismiss();
+    _inputController.consumeActiveSlashQuery();
+    switch (id) {
+      case _SlashCommandId.plan:
+        if (widget.viewModel.selectedConversationMode !=
+            AgentConversationModeId.plan) {
+          widget.viewModel.selectConversationMode(AgentConversationModeId.plan);
+        }
+    }
+    _composerFocusNode.requestFocus();
+  }
+
+  void _selectSkillFromSlashMenu(AgentSkillMetadata skill) {
+    _slashPopoverController.dismiss();
+    _insertSkill(skill);
+  }
+
   /// More actions → Insert skill：确保进入 `$query` 后再弹出列表。
   void _openSkillPickerFromMenu() {
     if (!widget.viewModel.canUseSkills ||
@@ -725,6 +856,9 @@ class _AgentPaneState extends State<AgentPane> {
     }
     // 先解除 `$` 自动打开，避免插入触发与本次 show 并发。
     _skillQueryArmed = false;
+    if (_slashPickerOpen) {
+      _slashPopoverController.dismiss();
+    }
     _ensureSkillQueryTrigger();
     unawaited(_showSkillPicker());
   }
@@ -798,6 +932,60 @@ class _AgentPaneState extends State<AgentPane> {
       );
     } finally {
       _skillPickerOpening = false;
+    }
+  }
+
+  Future<void> _showSlashCommandPicker() async {
+    if (!_canOpenSlashMenu ||
+        _slashPickerOpen ||
+        _slashPickerOpening ||
+        !mounted) {
+      return;
+    }
+    if (_composerAnchorKey.currentContext == null) {
+      return;
+    }
+    _slashPickerOpening = true;
+    try {
+      // Skills 分区存在时尽量预热目录，避免空列表误导。
+      if (widget.viewModel.canUseSkills) {
+        try {
+          await widget.viewModel.ensureSkillsCatalog();
+        } catch (_) {
+          // 目录失败时仍展示菜单；Skills 可为空，命令仍可用。
+        }
+      }
+      if (!mounted || _slashPickerOpen) {
+        return;
+      }
+      final openContext = _composerAnchorKey.currentContext;
+      if (openContext == null || !openContext.mounted) {
+        return;
+      }
+      _slashPopoverController.show(
+        context: openContext,
+        preferredWidth: _agentSlashCommandPickerPreferredWidth,
+        preferredMaxHeight: _agentSlashCommandPickerPreferredMaxHeight,
+        key: const ValueKey('agent-slash-command-picker-overlay'),
+        builder: (context, layout) => _AgentSlashCommandPickerPopover(
+          width: layout.width,
+          maxHeight: layout.maxHeight,
+          documentController: _inputController,
+          listController: _slashMenuListController,
+          showPlanCommand: _hasSlashPlanCommand,
+          planSelected:
+              widget.viewModel.selectedConversationMode ==
+              AgentConversationModeId.plan,
+          skillCandidatesFor: (query) => widget.viewModel.canUseSkills
+              ? widget.viewModel.skillCandidates(query: query)
+              : const <AgentSkillMetadata>[],
+          onSelectCommand: _selectSlashCommand,
+          onSelectSkill: _selectSkillFromSlashMenu,
+          onRequestClose: _slashPopoverController.dismiss,
+        ),
+      );
+    } finally {
+      _slashPickerOpening = false;
     }
   }
 

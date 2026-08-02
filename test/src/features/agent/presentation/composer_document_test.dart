@@ -49,6 +49,76 @@ void main() {
       expect(controller.skills, hasLength(1));
     });
 
+    test('detects active slash query only after start or whitespace', () {
+      final controller = ComposerDocumentController();
+
+      controller.value = const TextEditingValue(
+        text: '/',
+        selection: TextSelection.collapsed(offset: 1),
+      );
+      expect(controller.activeSlashQuery, '');
+
+      controller.value = const TextEditingValue(
+        text: '/pla',
+        selection: TextSelection.collapsed(offset: 4),
+      );
+      expect(controller.activeSlashQuery, 'pla');
+
+      controller.value = const TextEditingValue(
+        text: 'hello /pl',
+        selection: TextSelection.collapsed(offset: 9),
+      );
+      expect(controller.activeSlashQuery, 'pl');
+
+      controller.value = const TextEditingValue(
+        text: 'hello/',
+        selection: TextSelection.collapsed(offset: 6),
+      );
+      expect(controller.activeSlashQuery, isNull);
+
+      controller.value = const TextEditingValue(
+        text: '/Users/foo',
+        selection: TextSelection.collapsed(offset: 10),
+      );
+      expect(controller.activeSlashQuery, isNull);
+    });
+
+    test('consumes active slash query without inserting content', () {
+      final controller = ComposerDocumentController();
+      controller.value = const TextEditingValue(
+        text: 'note /plan more',
+        selection: TextSelection.collapsed(offset: 10),
+      );
+      expect(controller.activeSlashQuery, 'plan');
+
+      controller.consumeActiveSlashQuery();
+      expect(controller.text, 'note  more');
+      expect(controller.selection.baseOffset, 5);
+      expect(controller.activeSlashQuery, isNull);
+    });
+
+    test('replaces active /query when inserting skill', () {
+      final controller = ComposerDocumentController();
+      controller.value = const TextEditingValue(
+        text: '/ski',
+        selection: TextSelection.collapsed(offset: 4),
+      );
+      expect(controller.activeSlashQuery, 'ski');
+
+      controller.insertSkill(
+        const AgentSkillMetadata(
+          name: 'skill-creator',
+          path: '/skills/skill-creator/SKILL.md',
+          description: 'Create skills',
+          enabled: true,
+        ),
+      );
+
+      expect(controller.text.contains('/ski'), isFalse);
+      expect(controller.skills, hasLength(1));
+      expect(controller.activeSlashQuery, isNull);
+    });
+
     test('removes skill when sentinel is deleted', () {
       final controller = ComposerDocumentController();
       controller.insertSkill(

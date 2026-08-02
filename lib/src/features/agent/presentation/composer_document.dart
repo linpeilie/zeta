@@ -54,7 +54,54 @@ final class ComposerDocumentController extends TextEditingController {
     return match.group(1);
   }
 
-  /// 在光标处插入 skill；若正在输入 `$query` 则替换该片段。
+  /// 光标前未完成的 `/query`（不含 `/`）；无触发时返回 null。
+  ///
+  /// 仅当 `/` 位于行首/文档开头，或前面为空白（空格/换行/制表）时生效，
+  /// 避免把路径中间的 `/` 当成斜线命令。
+  String? get activeSlashQuery {
+    final selection = value.selection;
+    if (!selection.isValid || !selection.isCollapsed) {
+      return null;
+    }
+    final text = value.text;
+    final cursor = selection.start.clamp(0, text.length);
+    final before = text.substring(0, cursor);
+    final match = RegExp(r'(?:^|[\s])/([^\s/]*)$').firstMatch(before);
+    if (match == null) {
+      return null;
+    }
+    return match.group(1);
+  }
+
+  /// 移除光标前的 `/query` 触发片段；无触发时不改动。
+  void consumeActiveSlashQuery() {
+    final selection = value.selection;
+    if (!selection.isValid || !selection.isCollapsed) {
+      return;
+    }
+    final text = value.text;
+    final cursor = selection.start.clamp(0, text.length);
+    final before = text.substring(0, cursor);
+    final after = text.substring(cursor);
+    final match = RegExp(r'(?:^|[\s])/([^\s/]*)$').firstMatch(before);
+    if (match == null) {
+      return;
+    }
+    final slashIndex = before.lastIndexOf('/');
+    if (slashIndex < 0) {
+      return;
+    }
+    final nextBefore = before.substring(0, slashIndex);
+    _setValueInternal(
+      TextEditingValue(
+        text: '$nextBefore$after',
+        selection: TextSelection.collapsed(offset: nextBefore.length),
+        composing: TextRange.empty,
+      ),
+    );
+  }
+
+  /// 在光标处插入 skill；若正在输入 `$query` 或 `/query` 则替换该片段。
   void insertSkill(AgentSkillMetadata skill, {String? defaultPrompt}) {
     final ref = AgentSkillRef(
       name: skill.name,
@@ -74,11 +121,17 @@ final class ComposerDocumentController extends TextEditingController {
 
     final before = text.substring(0, left);
     final after = text.substring(right);
-    final queryMatch = RegExp(r'(?:^|[\s])\$([^\s$]*)$').firstMatch(before);
+    final skillQueryMatch = RegExp(
+      r'(?:^|[\s])\$([^\s$]*)$',
+    ).firstMatch(before);
+    final slashQueryMatch = RegExp(r'(?:^|[\s])/([^\s/]*)$').firstMatch(before);
     late final String nextBefore;
-    if (queryMatch != null) {
+    if (skillQueryMatch != null) {
       final dollarIndex = before.lastIndexOf(r'$');
       nextBefore = before.substring(0, dollarIndex);
+    } else if (slashQueryMatch != null) {
+      final slashIndex = before.lastIndexOf('/');
+      nextBefore = before.substring(0, slashIndex);
     } else {
       nextBefore = before;
     }
