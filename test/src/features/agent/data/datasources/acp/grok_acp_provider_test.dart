@@ -67,6 +67,164 @@ void main() {
       await provider.dispose();
     });
 
+    test('lists Grok skills via x.ai/skills/list', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+
+      final catalog = await provider.listSkills(cwds: <String>['/repo']);
+
+      expect(peer.requestMethods, contains('x.ai/skills/list'));
+      final skillsIndex = peer.requestMethods.indexOf('x.ai/skills/list');
+      final params =
+          peer.requestParams[skillsIndex]! as Map<String, Object?>;
+      expect(params['cwd'], '/repo');
+      expect(catalog.entries, hasLength(1));
+      final entry = catalog.entries.single;
+      expect(entry.cwd, '/repo');
+      // fixture 中 pdf 处于禁用态，被 dropped。
+      expect(entry.skills, hasLength(3));
+      expect(entry.skills.first.name, 'create-skill');
+      expect(entry.skills.first.displayName, 'Create Skill');
+    });
+
+    test('listSkills falls back to process cwd when no cwd provided', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+
+      final catalog = await provider.listSkills();
+
+      expect(peer.requestMethods, contains('x.ai/skills/list'));
+      final skillsIndex = peer.requestMethods.indexOf('x.ai/skills/list');
+      final params =
+          peer.requestParams[skillsIndex]! as Map<String, Object?>;
+      expect(params['cwd'], '.');
+      expect(catalog.entries, hasLength(1));
+      expect(catalog.entries.single.cwd, '.');
+    });
+
+    test('invalidates skills catalog on plugins_changed notification', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+      await provider.initialize();
+
+      final changed = <void>[];
+      final subscription = provider.skillsChanged.listen((_) => changed.add(null));
+      addTearDown(subscription.cancel);
+
+      peer.emitNotification('x.ai/session_notification', <String, Object?>{
+        'sessionId': 'sess-1',
+        'update': <String, Object?>{
+          'sessionUpdate': 'plugins_changed',
+          'plugins': <Object?>[],
+        },
+        '_meta': <String, Object?>{'eventId': 'evt-1'},
+      });
+
+      await _waitUntil(() => changed.isNotEmpty);
+      expect(changed, hasLength(1));
+    });
+
+    test('ignores non-skill session notifications for skillsChanged', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+      await provider.initialize();
+
+      final changed = <void>[];
+      final subscription = provider.skillsChanged.listen((_) => changed.add(null));
+      addTearDown(subscription.cancel);
+
+      peer.emitNotification('x.ai/session_notification', <String, Object?>{
+        'sessionId': 'sess-1',
+        'update': <String, Object?>{
+          'sessionUpdate': 'auto_compact_started',
+        },
+        '_meta': <String, Object?>{'eventId': 'evt-1'},
+      });
+
+      await _waitUntil(() => changed.isNotEmpty);
+      expect(changed, isEmpty);
+    });
+
+    test('sends skills as \$name text and skips structured skill inputs', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+
+      final session = await provider.startSession(
+        context: const AgentContext(projectPath: r'/repo'),
+      );
+      await provider.sendMessage(
+        session: session,
+        context: const AgentContext(projectPath: r'/repo'),
+        // composer 真实形态：文本（已含 `$name`）与结构化 skill 输入并列。
+        inputs: <AgentUserInput>[
+          AgentUserInput.text(r'$create-skill make a skill'),
+          AgentUserInput.skill(
+            name: 'create-skill',
+            path: '/repo/.grok/skills/create-skill/SKILL.md',
+          ),
+        ],
+      );
+
+      final promptIndex = peer.requestMethods.indexOf('session/prompt');
+      final params = peer.requestParams[promptIndex]! as Map<String, Object?>;
+      final prompt = params['prompt'] as List<Object?>;
+      // skill 结构化输入被跳过，仅保留文本 `$name`，避免重复。
+      expect(prompt, hasLength(1));
+      final textBlock = prompt.single as Map<Object?, Object?>;
+      expect(textBlock['type'], 'text');
+      expect(textBlock['text'], r'$create-skill make a skill');
+    });
+
+    test('synthesizes \$name text for skill-only sends', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+
+      final session = await provider.startSession(
+        context: const AgentContext(projectPath: r'/repo'),
+      );
+      await provider.sendMessage(
+        session: session,
+        context: const AgentContext(projectPath: r'/repo'),
+        inputs: <AgentUserInput>[
+          AgentUserInput.skill(
+            name: 'create-skill',
+            path: '/repo/.grok/skills/create-skill/SKILL.md',
+          ),
+        ],
+      );
+
+      final promptIndex = peer.requestMethods.indexOf('session/prompt');
+      final params = peer.requestParams[promptIndex]! as Map<String, Object?>;
+      final prompt = params['prompt'] as List<Object?>;
+      final textBlock = prompt.single as Map<Object?, Object?>;
+      expect(textBlock['type'], 'text');
+      expect(textBlock['text'], r'$create-skill');
+    });
+
     test(
       'enriches live context occupancy with the active model window',
       () async {
@@ -1484,6 +1642,9 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
       }(),
       'session/prompt' => <String, Object?>{'stopReason': 'end_turn'},
       'session/set_model' => <String, Object?>{},
+      'x.ai/skills/list' => readFixtureJsonMap(
+        'grok/acp/xai_skills_list_response.json',
+      ),
       '_x.ai/billing' => readFixtureJsonMap(
         'grok/acp/xai_billing_response_redacted.json',
       ),

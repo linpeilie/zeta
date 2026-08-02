@@ -1,0 +1,48 @@
+{
+  "result": {
+    "skills": [
+      {
+        "name": "create-skill",
+        "display_name": "Create Skill",
+        "description": "Scaffold a new SKILL.md skill in the current project.",
+        "short_description": "Scaffold a skill",
+        "has_user_specified_description": true,
+        "path": "/Users/linpeilie/.grok/skills/create-skill/SKILL.md",
+        "scope": "user",
+        "user_invocable": true,
+        "enabled": true
+      },
+      {
+        "name": "find-session",
+        "description": "Search past sessions by keyword.",
+        "has_user_specified_description": true,
+        "path": "/repo/.grok/skills/find-session/SKILL.md",
+        "scope": "local",
+        "user_invocable": true,
+        "enabled": true
+      },
+      {
+        "name": "pdf",
+        "description": "Read and extract content from PDF files.",
+        "has_user_specified_description": false,
+        "path": "/Users/linpeilie/.claude/skills/pdf/SKILL.md",
+        "scope": "user",
+        "user_invocable": false,
+        "enabled": false
+      },
+      {
+        "name": "plan-review",
+        "display_name": "Plan Review",
+        "description": "Review an implementation plan before execution.",
+        "short_description": "Review plans",
+        "has_user_specified_description": true,
+        "path": "/repo/.grok/plugins/review/plans/plan-review/SKILL.md",
+        "scope": "plugin",
+        "plugin_name": "review",
+        "plugin_version": "1.2.0",
+        "user_invocable": true,
+        "enabled": true
+      }
+    ]
+  }
+}

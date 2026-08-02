@@ -47,7 +47,7 @@ void main() {
       expect(capabilities.canSteerTurn, isFalse);
       expect(capabilities.supportsLocalImageInput, isFalse);
       expect(capabilities.supportsResourceInput, isTrue);
-      expect(capabilities.supportsSkillInput, isFalse);
+      expect(capabilities.supportsSkillInput, isTrue);
     });
 
     test('describes workspace-scoped bootstrap without eager preload', () {

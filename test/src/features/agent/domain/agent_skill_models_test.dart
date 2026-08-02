@@ -97,12 +97,12 @@ void main() {
   });
 
   group('AgentProviderCapabilities.supportsSkillInput', () {
-    test('enables Codex and keeps Grok off', () {
+    test('enables Codex and Grok', () {
       expect(
         AgentProviderCapabilities.codexAppServer.supportsSkillInput,
         isTrue,
       );
-      expect(AgentProviderCapabilities.grokAcp.supportsSkillInput, isFalse);
+      expect(AgentProviderCapabilities.grokAcp.supportsSkillInput, isTrue);
     });
   });
 }

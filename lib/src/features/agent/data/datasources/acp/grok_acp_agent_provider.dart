@@ -15,6 +15,7 @@ import 'package:zeta/src/features/agent/data/mappers/acp_permission_mapper.dart'
 import 'package:zeta/src/features/agent/data/mappers/grok_acp_notification_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_billing_quota_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_error_normalizer.dart';
+import 'package:zeta/src/features/agent/data/mappers/grok_skills_mapper.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 
@@ -27,6 +28,7 @@ typedef JsonRpcPeerFactory = JsonRpcPeer Function(AgentProviderConfig config);
 ///
 /// 启动 `grok agent stdio`，通过标准 ACP JSON-RPC 完成会话、流式回复与审批。
 /// 账号套餐额度通过 xAI 扩展 `_x.ai/billing` 读取。
+/// Skill 目录通过 xAI 扩展 `x.ai/skills/list` 读取（本地 SKILL.md 扫描）。
 /// 不支持的 Codex 专有能力通过 [capabilities] 关闭，并在误调用时明确失败。
 class GrokAcpAgentProvider
     implements
@@ -34,7 +36,8 @@ class GrokAcpAgentProvider
         AgentUsageQuotaProvider,
         AgentRuntimeLifecycleProvider,
         AgentRuntimeScopeProvider,
-        AgentRefreshableModelCatalogProvider {
+        AgentRefreshableModelCatalogProvider,
+        AgentSkillsCatalogProvider {
   GrokAcpAgentProvider({
     required this.config,
     JsonRpcPeer? peer,
@@ -106,6 +109,8 @@ class GrokAcpAgentProvider
 
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
+  final StreamController<void> _skillsChanged =
+      StreamController<void>.broadcast();
   final ProviderOperationScheduler _operationScheduler =
       ProviderOperationScheduler();
 
@@ -569,6 +574,55 @@ class GrokAcpAgentProvider
     );
   }
 
+  /// Skill 文件/插件变更失效信号（供 application 层 stale 刷新）。
+  @override
+  Stream<void> get skillsChanged => _skillsChanged.stream;
+
+  /// 读取指定 cwd 下 Grok 可用的 skill 目录。
+  ///
+  /// 走 xAI 扩展 `x.ai/skills/list`；Grok 侧对每个 cwd 做一次本地 SKILL.md 扫描，
+  /// 每个 cwd 产生一个目录条目。`forceReload` 由协议忽略（每次调用都是全新扫描）。
+  @override
+  Future<AgentSkillsCatalog> listSkills({
+    List<String> cwds = const <String>[],
+    bool forceReload = false,
+  }) async {
+    await initialize();
+    final normalizedCwds = <String>[
+      for (final cwd in cwds)
+        if (cwd.trim().isNotEmpty) cwd.trim(),
+    ];
+    // `x.ai/skills/list` 的 `cwd` 为必填；无工作区时退化为进程自身目录。
+    final resolvedCwds = normalizedCwds.isEmpty
+        ? const <String>['.']
+        : normalizedCwds;
+    final key = resolvedCwds.join('\u0001');
+    return _operationScheduler.schedule<AgentSkillsCatalog>(
+      key: ProjectOperationKey(providerId: config.id, projectPath: key),
+      access: ProviderOperationAccess.sharedRead,
+      operation: () async {
+        final entries = <AgentSkillsCatalogEntry>[];
+        for (final cwd in resolvedCwds) {
+          final result = await _peer.sendRequest(
+            'x.ai/skills/list',
+            params: <String, Object?>{'cwd': cwd},
+            timeout: const Duration(seconds: 20),
+          );
+          final mapped = mapGrokSkillsEntry(result, cwd: cwd);
+          if (mapped.invalidEntryCount > 0 || mapped.droppedSkillCount > 0) {
+            _log.fine(
+              'Normalized Grok skills for $cwd '
+              '(invalid=${mapped.invalidEntryCount}, '
+              'dropped=${mapped.droppedSkillCount})',
+            );
+          }
+          entries.add(mapped.entry);
+        }
+        return AgentSkillsCatalog(entries: entries);
+      },
+    );
+  }
+
   @override
   Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
     return const <AgentPermissionProfileSummary>[];
@@ -689,9 +743,6 @@ class GrokAcpAgentProvider
     if (configuration.conversationMode != null) {
       throw UnsupportedError('${config.displayName} 不支持回合级对话模式配置');
     }
-    if (inputs != null && inputs.any((input) => input is AgentSkillUserInput)) {
-      throw UnsupportedError('${config.displayName} 不支持结构化 skill 输入');
-    }
     await initialize();
     // 模型是 session 级配置；共享 Provider 下必须按本次发送目标应用，不能依赖
     // “最后激活会话”这种全局可变状态。
@@ -700,9 +751,36 @@ class GrokAcpAgentProvider
     if (cwd != null && cwd.isNotEmpty) {
       _rememberProjectPath(session.id, cwd);
     }
+    // Skill 以 `$name` marker 编入文本 block（composer serialize 已把 skill token
+    // 展开为 `$name`），Grok 通过 prompt 文本中的 `$name` 调用 skill；结构化输入
+    // 在此跳过以避免重复。仅剩 skill 输入（无其它文本）时，优先复用 `message`
+    //（其已含 `$name`），否则兜底合成 `$name` 文本。
+    final skillInputs = <AgentSkillUserInput>[];
+    final otherInputs = <AgentUserInput>[];
+    if (inputs != null) {
+      for (final input in inputs) {
+        if (input is AgentSkillUserInput) {
+          skillInputs.add(input);
+        } else {
+          otherInputs.add(input);
+        }
+      }
+    }
+    final List<AgentUserInput>? resolvedInputs;
+    if (otherInputs.isNotEmpty) {
+      resolvedInputs = otherInputs;
+    } else if (skillInputs.isEmpty) {
+      resolvedInputs = inputs;
+    } else if ((message?.trim().isNotEmpty ?? false)) {
+      resolvedInputs = null;
+    } else {
+      resolvedInputs = <AgentUserInput>[
+        for (final skill in skillInputs) AgentUserInput.text('\$${skill.name}'),
+      ];
+    }
     final prompt = AcpContentCodec.buildPromptBlocks(
       message: message,
-      inputs: inputs,
+      inputs: resolvedInputs,
       context: context,
       encodeLocalImagesAsPathText: true,
     );
@@ -918,6 +996,7 @@ class GrokAcpAgentProvider
     await _operationScheduler.close();
     _notificationMapper.dispose();
     await _events.close();
+    await _skillsChanged.close();
   }
 
   void _listenToPeer() {
@@ -1011,6 +1090,14 @@ class GrokAcpAgentProvider
       return;
     }
 
+    // x.ai/session_notification 携带 sessionUpdate 枚举（tag `sessionUpdate`）；
+    // 插件/hooks 变更会增删 skill，需失效本地 skill 目录让 composer 重新拉取。
+    if (method == 'x.ai/session_notification' ||
+        method == '_x.ai/session_notification') {
+      _handleSessionNotificationInvalidation(params);
+      return;
+    }
+
     // 其它 x.ai 扩展通知：诊断即可，避免刷屏。
     if (method.startsWith('_x.ai/') || method.startsWith('x.ai/')) {
       if (_loggedUnmatched.add(method)) {
@@ -1021,6 +1108,30 @@ class GrokAcpAgentProvider
 
     if (_loggedUnmatched.add(method)) {
       _log.fine('Unmatched Grok notification: $method');
+    }
+  }
+
+  /// 处理 `x.ai/session_notification` 对 skill 目录的失效信号。
+  ///
+  /// `update.sessionUpdate` 为 snake_case 变体名（如 `plugins_changed`）。
+  /// 命中会影响 skill 集合的变体时广播 [skillsChanged]，供 application 层刷新；
+  /// 其余变体仅记一条去重 fine 日志，避免刷屏。
+  void _handleSessionNotificationInvalidation(Map<String, Object?> params) {
+    final update = _asStringKeyedMap(params['update']);
+    final updateType = update?['sessionUpdate']?.toString();
+    final invalidatesSkills = switch (updateType) {
+      'plugins_changed' || 'hooks_changed' || 'skills_changed' => true,
+      _ => false,
+    };
+    if (invalidatesSkills) {
+      if (!_skillsChanged.isClosed) {
+        _skillsChanged.add(null);
+      }
+      _log.fine('Grok session notification $updateType → skills catalog invalidated');
+      return;
+    }
+    if (_loggedUnmatched.add('x.ai/session_notification:$updateType')) {
+      _log.fine('Ignoring Grok session notification update: $updateType');
     }
   }
 

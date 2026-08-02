@@ -232,6 +232,7 @@ class AgentProviderCapabilities {
   ///
   /// 本地图片当前只会退化为路径文本，因此不声明图片输入能力。
   /// 重命名/删除走 xAI 扩展 `_x.ai/session/rename|delete`；归档无协议支持，保持关闭。
+  /// Skill 目录走 xAI 扩展 `x.ai/skills/list`；发送时以 `$name` 文本 marker 调用。
   static const grokAcp = AgentProviderCapabilities(
     canCreateSession: true,
     canResumeSession: true,
@@ -242,6 +243,7 @@ class AgentProviderCapabilities {
     canCancelTurn: true,
     canRenameThread: true,
     supportsResourceInput: true,
+    supportsSkillInput: true,
     supportsPermissionRequests: true,
     supportsModelSelection: true,
     supportsReasoningOptions: true,
