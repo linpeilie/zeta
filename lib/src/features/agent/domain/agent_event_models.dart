@@ -509,6 +509,22 @@ class AgentSessionConfigUpdatedEvent extends AgentEvent {
   final List<AgentSessionConfigOption> options;
 }
 
+/// 服务端权威的会话模式更新。
+///
+/// 对应 Grok `current_mode_update`：agent 在每次进入/退出 plan 模式时广播，
+/// 是 plan 模式状态唯一可信的信号（不按工具调用标题推断）。
+class AgentConversationModeUpdatedEvent extends AgentEvent {
+  const AgentConversationModeUpdatedEvent({
+    required this.sessionId,
+    required this.modeId,
+    this.raw = const <String, Object?>{},
+  });
+
+  final String sessionId;
+  final AgentConversationModeId modeId;
+  final Map<String, Object?> raw;
+}
+
 /// Provider 请求用户独立审批计划。
 class AgentPlanApprovalRequestedEvent extends AgentEvent {
   const AgentPlanApprovalRequestedEvent(this.request);

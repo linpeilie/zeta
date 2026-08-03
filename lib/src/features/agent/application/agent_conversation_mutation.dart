@@ -58,6 +58,13 @@ final class AgentApplySessionConfigChange extends AgentConversationStateChange {
   final List<AgentSessionConfigOption> options;
 }
 
+final class AgentApplyConversationModeChange
+    extends AgentConversationStateChange {
+  const AgentApplyConversationModeChange(this.event);
+
+  final AgentConversationModeUpdatedEvent event;
+}
+
 final class AgentApplyAutoApprovalReviewChange
     extends AgentConversationStateChange {
   const AgentApplyAutoApprovalReviewChange(this.event);

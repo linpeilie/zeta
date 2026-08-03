@@ -62,6 +62,16 @@ class _AgentHeader extends StatelessWidget {
                           ),
                         ),
                       ),
+                      if (state.isPlanMode) ...[
+                        const SizedBox(width: IdeSpacing.space6),
+                        IdeTab(
+                          key: const ValueKey('agent-header-plan-mode'),
+                          label: 'Plan',
+                          leadingIcon: Icons.fact_check_outlined,
+                          trailingIcon: null,
+                          semanticLabel: '只读 Plan 模式',
+                        ),
+                      ],
                       if (state.statusCapsuleLabel case final label?) ...[
                         const SizedBox(width: IdeSpacing.space6),
                         IdeTab(

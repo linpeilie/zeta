@@ -67,7 +67,7 @@ void main() {
       await provider.dispose();
     });
 
-    test('lists Grok skills via x.ai/skills/list', () async {
+    test('lists Grok skills via _x.ai/skills/list', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
         config: AgentProviderConfig.defaultGrok,
@@ -77,10 +77,9 @@ void main() {
 
       final catalog = await provider.listSkills(cwds: <String>['/repo']);
 
-      expect(peer.requestMethods, contains('x.ai/skills/list'));
-      final skillsIndex = peer.requestMethods.indexOf('x.ai/skills/list');
-      final params =
-          peer.requestParams[skillsIndex]! as Map<String, Object?>;
+      expect(peer.requestMethods, contains('_x.ai/skills/list'));
+      final skillsIndex = peer.requestMethods.indexOf('_x.ai/skills/list');
+      final params = peer.requestParams[skillsIndex]! as Map<String, Object?>;
       expect(params['cwd'], '/repo');
       expect(catalog.entries, hasLength(1));
       final entry = catalog.entries.single;
@@ -101,40 +100,44 @@ void main() {
 
       final catalog = await provider.listSkills();
 
-      expect(peer.requestMethods, contains('x.ai/skills/list'));
-      final skillsIndex = peer.requestMethods.indexOf('x.ai/skills/list');
-      final params =
-          peer.requestParams[skillsIndex]! as Map<String, Object?>;
+      expect(peer.requestMethods, contains('_x.ai/skills/list'));
+      final skillsIndex = peer.requestMethods.indexOf('_x.ai/skills/list');
+      final params = peer.requestParams[skillsIndex]! as Map<String, Object?>;
       expect(params['cwd'], '.');
       expect(catalog.entries, hasLength(1));
       expect(catalog.entries.single.cwd, '.');
     });
 
-    test('invalidates skills catalog on plugins_changed notification', () async {
-      final peer = _FakeJsonRpcPeer();
-      final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
-        peer: peer,
-      );
-      addTearDown(provider.dispose);
-      await provider.initialize();
+    test(
+      'invalidates skills catalog on plugins_changed notification',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+        await provider.initialize();
 
-      final changed = <void>[];
-      final subscription = provider.skillsChanged.listen((_) => changed.add(null));
-      addTearDown(subscription.cancel);
+        final changed = <void>[];
+        final subscription = provider.skillsChanged.listen(
+          (_) => changed.add(null),
+        );
+        addTearDown(subscription.cancel);
 
-      peer.emitNotification('x.ai/session_notification', <String, Object?>{
-        'sessionId': 'sess-1',
-        'update': <String, Object?>{
-          'sessionUpdate': 'plugins_changed',
-          'plugins': <Object?>[],
-        },
-        '_meta': <String, Object?>{'eventId': 'evt-1'},
-      });
+        peer.emitNotification('x.ai/session_notification', <String, Object?>{
+          'sessionId': 'sess-1',
+          'update': <String, Object?>{
+            'sessionUpdate': 'plugins_changed',
+            'plugins': <Object?>[],
+          },
+          '_meta': <String, Object?>{'eventId': 'evt-1'},
+        });
 
-      await _waitUntil(() => changed.isNotEmpty);
-      expect(changed, hasLength(1));
-    });
+        await _waitUntil(() => changed.isNotEmpty);
+        expect(changed, hasLength(1));
+      },
+    );
 
     test('ignores non-skill session notifications for skillsChanged', () async {
       final peer = _FakeJsonRpcPeer();
@@ -146,14 +149,14 @@ void main() {
       await provider.initialize();
 
       final changed = <void>[];
-      final subscription = provider.skillsChanged.listen((_) => changed.add(null));
+      final subscription = provider.skillsChanged.listen(
+        (_) => changed.add(null),
+      );
       addTearDown(subscription.cancel);
 
       peer.emitNotification('x.ai/session_notification', <String, Object?>{
         'sessionId': 'sess-1',
-        'update': <String, Object?>{
-          'sessionUpdate': 'auto_compact_started',
-        },
+        'update': <String, Object?>{'sessionUpdate': 'auto_compact_started'},
         '_meta': <String, Object?>{'eventId': 'evt-1'},
       });
 
@@ -161,39 +164,42 @@ void main() {
       expect(changed, isEmpty);
     });
 
-    test('sends skills as \$name text and skips structured skill inputs', () async {
-      final peer = _FakeJsonRpcPeer();
-      final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
-        peer: peer,
-      );
-      addTearDown(provider.dispose);
+    test(
+      'sends skills as \$name text and skips structured skill inputs',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
 
-      final session = await provider.startSession(
-        context: const AgentContext(projectPath: r'/repo'),
-      );
-      await provider.sendMessage(
-        session: session,
-        context: const AgentContext(projectPath: r'/repo'),
-        // composer 真实形态：文本（已含 `$name`）与结构化 skill 输入并列。
-        inputs: <AgentUserInput>[
-          AgentUserInput.text(r'$create-skill make a skill'),
-          AgentUserInput.skill(
-            name: 'create-skill',
-            path: '/repo/.grok/skills/create-skill/SKILL.md',
-          ),
-        ],
-      );
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'/repo'),
+        );
+        await provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: r'/repo'),
+          // composer 真实形态：文本（已含 `$name`）与结构化 skill 输入并列。
+          inputs: <AgentUserInput>[
+            AgentUserInput.text(r'$create-skill make a skill'),
+            AgentUserInput.skill(
+              name: 'create-skill',
+              path: '/repo/.grok/skills/create-skill/SKILL.md',
+            ),
+          ],
+        );
 
-      final promptIndex = peer.requestMethods.indexOf('session/prompt');
-      final params = peer.requestParams[promptIndex]! as Map<String, Object?>;
-      final prompt = params['prompt'] as List<Object?>;
-      // skill 结构化输入被跳过，仅保留文本 `$name`，避免重复。
-      expect(prompt, hasLength(1));
-      final textBlock = prompt.single as Map<Object?, Object?>;
-      expect(textBlock['type'], 'text');
-      expect(textBlock['text'], r'$create-skill make a skill');
-    });
+        final promptIndex = peer.requestMethods.indexOf('session/prompt');
+        final params = peer.requestParams[promptIndex]! as Map<String, Object?>;
+        final prompt = params['prompt'] as List<Object?>;
+        // skill 结构化输入被跳过，仅保留文本 `$name`，避免重复。
+        expect(prompt, hasLength(1));
+        final textBlock = prompt.single as Map<Object?, Object?>;
+        expect(textBlock['type'], 'text');
+        expect(textBlock['text'], r'$create-skill make a skill');
+      },
+    );
 
     test('synthesizes \$name text for skill-only sends', () async {
       final peer = _FakeJsonRpcPeer();
@@ -434,21 +440,22 @@ void main() {
       },
     );
 
-    test('rejects turn mode configuration before sending a request', () async {
-      final peer = _FakeJsonRpcPeer();
-      final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
-        peer: peer,
-      );
-      addTearDown(provider.dispose);
+    test(
+      'encodes plan conversation mode as session/prompt _meta.mode',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
 
-      await expectLater(
-        provider.sendMessage(
-          session: const AgentSession(
-            id: 'sess-1',
-            providerId: grokAgentProviderId,
-          ),
-          context: const AgentContext(projectPath: '/repo'),
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'/repo'),
+        );
+        await provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: r'/repo'),
           message: 'hello',
           configuration: AgentTurnConfiguration(
             conversationMode: AgentConversationModeSelection(
@@ -456,11 +463,40 @@ void main() {
               effectiveModelId: 'grok-4.5',
             ),
           ),
+        );
+
+        final promptIndex = peer.requestMethods.lastIndexOf('session/prompt');
+        final params = peer.requestParams[promptIndex]! as Map<String, Object?>;
+        expect(params['_meta'], <String, Object?>{'mode': 'plan'});
+      },
+    );
+
+    test('encodes default conversation mode as agent _meta.mode', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+
+      final session = await provider.startSession(
+        context: const AgentContext(projectPath: r'/repo'),
+      );
+      await provider.sendMessage(
+        session: session,
+        context: const AgentContext(projectPath: r'/repo'),
+        message: 'hello',
+        configuration: AgentTurnConfiguration(
+          conversationMode: AgentConversationModeSelection(
+            modeId: AgentConversationModeId.defaultMode,
+            effectiveModelId: 'grok-4.5',
+          ),
         ),
-        throwsA(isA<UnsupportedError>()),
       );
 
-      expect(peer.requestMethods, isEmpty);
+      final promptIndex = peer.requestMethods.lastIndexOf('session/prompt');
+      final params = peer.requestParams[promptIndex]! as Map<String, Object?>;
+      expect(params['_meta'], <String, Object?>{'mode': 'agent'});
     });
 
     test(
@@ -925,6 +961,217 @@ void main() {
 
       await subscription.cancel();
       await provider.dispose();
+    });
+
+    test('parks x.ai/exit_plan_mode until user approves the plan', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+      addTearDown(() async {
+        await subscription.cancel();
+        await provider.dispose();
+      });
+
+      await provider.startSession(
+        context: const AgentContext(projectPath: r'/repo'),
+      );
+      peer.emitServerRequest(
+        id: 55,
+        method: 'x.ai/exit_plan_mode',
+        params: <String, Object?>{
+          'sessionId': 'sess-1',
+          'toolCallId': 'plan-call-1',
+          'planContent': '# Plan\n\n1. Refactor\n2. Test',
+        },
+      );
+      await _waitUntil(
+        () => events.whereType<AgentPlanApprovalRequestedEvent>().isNotEmpty,
+      );
+
+      final approval = events
+          .whereType<AgentPlanApprovalRequestedEvent>()
+          .single
+          .request;
+      expect(approval.id, 'plan-call-1');
+      expect(approval.sessionId, 'sess-1');
+      expect(approval.markdown, contains('Refactor'));
+
+      // 审批在途：尚未有任何 ext 响应（shell 保持 park）。
+      expect(peer.responses, isEmpty);
+
+      await provider.respondToPlanApproval(
+        AgentPlanApprovalDecision(
+          requestId: approval.id,
+          kind: AgentPlanApprovalDecisionKind.accepted,
+        ),
+      );
+      expect(peer.responses, isNotEmpty);
+      final response = peer.responses.single;
+      expect(response['id'], 55);
+      final result = response['result']! as Map<String, Object?>;
+      expect(result['outcome'], 'approved');
+    });
+
+    test('rejects a plan with feedback mapped to cancelled', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+      addTearDown(() async {
+        await subscription.cancel();
+        await provider.dispose();
+      });
+
+      await provider.startSession(
+        context: const AgentContext(projectPath: r'/repo'),
+      );
+      peer.emitServerRequest(
+        id: 77,
+        method: 'x.ai/exit_plan_mode',
+        params: <String, Object?>{
+          'sessionId': 'sess-1',
+          'toolCallId': 'plan-call-2',
+          'planContent': '# Plan',
+        },
+      );
+      await _waitUntil(
+        () => events.whereType<AgentPlanApprovalRequestedEvent>().isNotEmpty,
+      );
+
+      await provider.respondToPlanApproval(
+        AgentPlanApprovalDecision(
+          requestId: 'plan-call-2',
+          kind: AgentPlanApprovalDecisionKind.rejected,
+          reason: 'please add error handling',
+        ),
+      );
+      final result = peer.responses.single['result']! as Map<String, Object?>;
+      expect(result['outcome'], 'cancelled');
+      expect(result['feedback'], 'please add error handling');
+    });
+
+    test(
+      'replacing exit_plan_mode abandons the previous parked request',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+        addTearDown(() async {
+          await subscription.cancel();
+          await provider.dispose();
+        });
+
+        await provider.startSession(
+          context: const AgentContext(projectPath: r'/repo'),
+        );
+        peer.emitServerRequest(
+          id: 101,
+          method: 'x.ai/exit_plan_mode',
+          params: <String, Object?>{
+            'sessionId': 'sess-1',
+            'toolCallId': 'plan-call-replace',
+            'planContent': '# Plan v1',
+          },
+        );
+        await _waitUntil(
+          () => events.whereType<AgentPlanApprovalRequestedEvent>().isNotEmpty,
+        );
+
+        peer.emitServerRequest(
+          id: 102,
+          method: 'x.ai/exit_plan_mode',
+          params: <String, Object?>{
+            'sessionId': 'sess-1',
+            'toolCallId': 'plan-call-replace',
+            'planContent': '# Plan v2',
+          },
+        );
+        await _waitUntil(() {
+          final resolved = events.whereType<AgentPlanApprovalResolvedEvent>();
+          final requested = events.whereType<AgentPlanApprovalRequestedEvent>();
+          return resolved.isNotEmpty && requested.length >= 2;
+        });
+
+        // 旧 rpc id=101 必须以 abandoned 应答，新请求仍 park（无 102 响应）。
+        expect(peer.responses, hasLength(1));
+        expect(peer.responses.single['id'], 101);
+        final abandoned =
+            peer.responses.single['result']! as Map<String, Object?>;
+        expect(abandoned['outcome'], 'abandoned');
+        expect(
+          events.whereType<AgentPlanApprovalResolvedEvent>().single.requestId,
+          'plan-call-replace',
+        );
+        expect(
+          events
+              .whereType<AgentPlanApprovalRequestedEvent>()
+              .last
+              .request
+              .markdown,
+          contains('v2'),
+        );
+
+        await provider.respondToPlanApproval(
+          AgentPlanApprovalDecision(
+            requestId: 'plan-call-replace',
+            kind: AgentPlanApprovalDecisionKind.accepted,
+          ),
+        );
+        expect(peer.responses, hasLength(2));
+        expect(peer.responses.last['id'], 102);
+        final approved = peer.responses.last['result']! as Map<String, Object?>;
+        expect(approved['outcome'], 'approved');
+      },
+    );
+
+    test('dispose abandons parked exit_plan_mode requests', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+
+      await provider.startSession(
+        context: const AgentContext(projectPath: r'/repo'),
+      );
+      peer.emitServerRequest(
+        id: 201,
+        method: 'x.ai/exit_plan_mode',
+        params: <String, Object?>{
+          'sessionId': 'sess-1',
+          'toolCallId': 'plan-call-dispose',
+          'planContent': '# Plan',
+        },
+      );
+      await _waitUntil(
+        () => events.whereType<AgentPlanApprovalRequestedEvent>().isNotEmpty,
+      );
+      expect(peer.responses, isEmpty);
+
+      await provider.dispose();
+      await subscription.cancel();
+
+      expect(peer.responses, isNotEmpty);
+      expect(peer.responses.single['id'], 201);
+      final result = peer.responses.single['result']! as Map<String, Object?>;
+      expect(result['outcome'], 'abandoned');
+      expect(
+        events.whereType<AgentPlanApprovalResolvedEvent>().single.requestId,
+        'plan-call-dispose',
+      );
     });
 
     test(
@@ -1642,7 +1889,7 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
       }(),
       'session/prompt' => <String, Object?>{'stopReason': 'end_turn'},
       'session/set_model' => <String, Object?>{},
-      'x.ai/skills/list' => readFixtureJsonMap(
+      '_x.ai/skills/list' => readFixtureJsonMap(
         'grok/acp/xai_skills_list_response.json',
       ),
       '_x.ai/billing' => readFixtureJsonMap(

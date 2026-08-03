@@ -377,6 +377,57 @@ final class AgentConversationModeController extends ChangeNotifier {
     );
   }
 
+  /// 应用服务端权威的会话模式（如 Grok `current_mode_update`）。
+  ///
+  /// 与 [applyThreadSettings] 相同，迟到通知可以修正 confirmed，但只有用户没有
+  /// 继续选择时才同步 draft；未知模式宽容忽略。会话模式不携带模型，因此只更新
+  /// 模式标识。
+  ///
+  /// [clearPendingTurn] 用于 provider 计划审批消费 plan 模式后的复位：此时
+  /// pending 仍可能是 plan（Grok 的 `markTurnAccepted` 在阻塞 `session/prompt`
+  /// 返回后才执行），必须强制丢弃 pending 并同步 draft，避免迟到的
+  /// [markTurnAccepted] 把 confirmed 写回 plan、再次触发本地执行交接。
+  void applyServerMode(
+    AgentConversationModeId modeId, {
+    bool clearPendingTurn = false,
+  }) {
+    if (_disposed || _threadId == null) {
+      return;
+    }
+    if (modeId.kind == AgentConversationModeKind.unknown) {
+      return;
+    }
+    final pending = _pendingTurn;
+    final matchesPending =
+        pending != null &&
+        pending.threadGeneration == _threadGeneration &&
+        pending.threadId == _threadId &&
+        pending.selection.modeId == modeId;
+    final shouldClearPending = matchesPending || clearPendingTurn;
+    final canSyncDraft =
+        clearPendingTurn ||
+        _selectionRevision == _draftAuthorityRevision ||
+        (matchesPending && _selectionRevision == pending.selectionRevision);
+    if (canSyncDraft) {
+      _draftAuthorityRevision = _selectionRevision;
+    }
+    if (shouldClearPending) {
+      _pendingTurn = null;
+    }
+
+    _replaceState(
+      AgentConversationModeState(
+        status: _state.status,
+        presets: _state.presets,
+        confirmedMode: modeId,
+        draftMode: canSyncDraft ? modeId : _state.draftMode,
+        pendingTurnMode: shouldClearPending ? null : _state.pendingTurnMode,
+        errorMessage: _state.errorMessage,
+        appliesToNextTurn: _state.appliesToNextTurn,
+      ),
+    );
+  }
+
   /// 标记当前是否存在 active turn。
   void setTurnRunning(bool running) {
     if (_disposed || _state.appliesToNextTurn == running) {

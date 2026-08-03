@@ -456,6 +456,61 @@ void main() {
       expect(ids.toSet(), hasLength(ids.length));
     });
 
+    test('maps current_mode_update to a conversation mode event', () {
+      final mapped = mapper.mapSessionUpdate(
+        params: _params(<String, Object?>{
+          'sessionUpdate': 'current_mode_update',
+          'currentModeId': 'plan',
+        }, eventId: 'mode-1'),
+        runningTurnId: turnId,
+        runtimeScope: runtimeScope,
+      );
+      expect(mapped.events.single, isA<AgentConversationModeUpdatedEvent>());
+      final mode = mapped.events.single as AgentConversationModeUpdatedEvent;
+      expect(mode.modeId, AgentConversationModeId.plan);
+      expect(mode.sessionId, sessionId);
+    });
+
+    test('maps current_mode_update agent alias to default mode', () {
+      final mapped = mapper.mapSessionUpdate(
+        params: _params(<String, Object?>{
+          'sessionUpdate': 'current_mode_update',
+          'currentModeId': 'agent',
+        }, eventId: 'mode-agent'),
+        runningTurnId: turnId,
+        runtimeScope: runtimeScope,
+      );
+      expect(mapped.events.single, isA<AgentConversationModeUpdatedEvent>());
+      final mode = mapped.events.single as AgentConversationModeUpdatedEvent;
+      expect(mode.modeId, AgentConversationModeId.defaultMode);
+    });
+
+    test('maps current_mode_update default wire value to default mode', () {
+      final mapped = mapper.mapSessionUpdate(
+        params: _params(<String, Object?>{
+          'sessionUpdate': 'current_mode_update',
+          'currentModeId': 'default',
+        }, eventId: 'mode-default'),
+        runningTurnId: turnId,
+        runtimeScope: runtimeScope,
+      );
+      final mode = mapped.events.single as AgentConversationModeUpdatedEvent;
+      expect(mode.modeId, AgentConversationModeId.defaultMode);
+    });
+
+    test('drops current_mode_update with unknown mode id', () {
+      final mapped = mapper.mapSessionUpdate(
+        params: _params(<String, Object?>{
+          'sessionUpdate': 'current_mode_update',
+          'currentModeId': 'planner-v2',
+        }, eventId: 'mode-2'),
+        runningTurnId: turnId,
+        runtimeScope: runtimeScope,
+      );
+      expect(mapped.events, isEmpty);
+      expect(mapped.unmatchedKind, 'current_mode_update');
+    });
+
     test('Phase 0 Grok fixtures produce normalized adapter identities', () {
       mapper.dispose();
       mapper = GrokAcpNotificationMapper();

@@ -103,6 +103,10 @@ final class GrokSessionUpdateMapper {
         runtimeScope: runtimeScope,
         terminalSource: terminalSource,
       ),
+      AcpCurrentModeUpdate() => _mapCurrentMode(
+        decoded,
+        runtimeScope: runtimeScope,
+      ),
       AcpUnknownUpdate() => GrokAcpMappedUpdate(unmatchedKind: decoded.kind),
     };
     // usage_update 与 turn_completed 已携带完整 token 事件；普通 chunk 才追加
@@ -412,6 +416,55 @@ final class GrokSessionUpdateMapper {
         ),
       ],
     );
+  }
+
+  /// 映射会话级模式更新（`current_mode_update`）。
+  ///
+  /// 模式是会话级状态，不属于某个 turn 的叙事边界，因此不经过
+  /// `resolveVisibleBoundaryUpdate`；未知模式标识宽容降级为忽略。
+  ///
+  /// Grok 在 `session/prompt` 的 `_meta.mode` 使用 `agent` 表示默认模式，
+  /// `currentModeId` 也可能复用同一词汇；中立 [AgentConversationModeId] 仍
+  /// 以 `default` 为规范值，别名归一仅在本 adapter 完成。
+  GrokAcpMappedUpdate _mapCurrentMode(
+    AcpCurrentModeUpdate update, {
+    required AgentRuntimeScope runtimeScope,
+  }) {
+    final sessionId = update.sessionId;
+    if (sessionId == null) {
+      return const GrokAcpMappedUpdate();
+    }
+    final modeId = _normalizeGrokConversationModeId(update.modeId);
+    if (modeId == null || modeId.kind == AgentConversationModeKind.unknown) {
+      return GrokAcpMappedUpdate(unmatchedKind: update.kind);
+    }
+    return GrokAcpMappedUpdate(
+      events: <AgentEvent>[
+        AgentConversationModeUpdatedEvent(
+          sessionId: sessionId,
+          modeId: modeId,
+          raw: update.raw,
+        ),
+      ],
+    );
+  }
+
+  /// 将 Grok 协议模式标识归一为中立 [AgentConversationModeId]。
+  ///
+  /// `agent` 是 Grok 默认模式的 wire 别名（与 `_meta.mode` 一致），映射为
+  /// [AgentConversationModeId.defaultMode]；其它未知值保持 unknown。
+  static AgentConversationModeId? _normalizeGrokConversationModeId(
+    Object? rawValue,
+  ) {
+    final modeId = AgentConversationModeId.tryFromRaw(rawValue);
+    if (modeId == null) {
+      return null;
+    }
+    if (modeId.kind == AgentConversationModeKind.unknown &&
+        modeId.rawValue == 'agent') {
+      return AgentConversationModeId.defaultMode;
+    }
+    return modeId;
   }
 
   GrokAcpMappedUpdate _mapUsage(

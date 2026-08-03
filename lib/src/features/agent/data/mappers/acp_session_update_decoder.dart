@@ -155,6 +155,20 @@ final class AcpSessionUpdateDecoder {
           eventId: eventId,
           raw: raw,
         );
+      case 'current_mode_update':
+        final modeId =
+            _optionalString(update['currentModeId']) ??
+            _optionalString(update['current_mode_id']);
+        if (modeId == null) {
+          return invalid('missing_mode_id');
+        }
+        return AcpCurrentModeUpdate(
+          sessionId: sessionId,
+          modeId: modeId,
+          promptId: promptId,
+          eventId: eventId,
+          raw: raw,
+        );
       default:
         return invalid(kind.isEmpty ? 'missing_update_kind' : 'unknown_kind');
     }
@@ -410,6 +424,20 @@ final class AcpTurnCompletedUpdate extends AcpSessionUpdate {
 
   final String stopReason;
   final AcpTurnUsage? usage;
+}
+
+/// ACP 会话模式更新（如 Grok 的 `current_mode_update`）。
+final class AcpCurrentModeUpdate extends AcpSessionUpdate {
+  const AcpCurrentModeUpdate({
+    required String sessionId,
+    required this.modeId,
+    super.promptId,
+    super.eventId,
+    super.raw,
+  }) : super(sessionId: sessionId, kind: 'current_mode_update');
+
+  /// 服务端权威的会话模式标识（`default` / `plan` / `ask` 等）。
+  final String modeId;
 }
 
 /// 未知、暂不投影或损坏的 ACP update。

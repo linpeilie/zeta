@@ -1,6 +1,6 @@
 import 'package:zeta/src/features/agent/domain/agent_skill_models.dart';
 
-/// 将 Grok ACP `x.ai/skills/list` 响应宽容映射为中立 [AgentSkillsCatalog]。
+/// 将 Grok ACP `_x.ai/skills/list` 响应宽容映射为中立 [AgentSkillsCatalog]。
 ///
 /// 响应可能带 ACP `ExtMethodResult` envelope（`{"result": {"skills": [...]}}`），
 /// 也可能直接是 `{"skills": [...]}`；两者都容忍。
@@ -21,15 +21,15 @@ class GrokSkillsMapping {
   final int droppedSkillCount;
 }
 
-/// 将 `x.ai/skills/list` 的单个 cwd 响应映射为一个目录条目。
-GrokSkillsMapping mapGrokSkillsEntry(
-  Object? raw, {
-  required String cwd,
-}) {
+/// 将 `_x.ai/skills/list` 的单个 cwd 响应映射为一个目录条目。
+GrokSkillsMapping mapGrokSkillsEntry(Object? raw, {required String cwd}) {
   final response = _asStringKeyedMap(raw);
   if (response == null) {
     return GrokSkillsMapping(
-      entry: AgentSkillsCatalogEntry(cwd: cwd, skills: const <AgentSkillMetadata>[]),
+      entry: AgentSkillsCatalogEntry(
+        cwd: cwd,
+        skills: const <AgentSkillMetadata>[],
+      ),
       invalidEntryCount: 1,
       droppedSkillCount: 0,
     );
@@ -40,7 +40,10 @@ GrokSkillsMapping mapGrokSkillsEntry(
   final skillsValue = innerMap['skills'];
   if (skillsValue is! List) {
     return GrokSkillsMapping(
-      entry: AgentSkillsCatalogEntry(cwd: cwd, skills: const <AgentSkillMetadata>[]),
+      entry: AgentSkillsCatalogEntry(
+        cwd: cwd,
+        skills: const <AgentSkillMetadata>[],
+      ),
       invalidEntryCount: 1,
       droppedSkillCount: 0,
     );
@@ -83,12 +86,12 @@ AgentSkillMetadata? _skillFromValue(Object? value) {
     path: path,
     description: _trimmedString(skill['description']) ?? '',
     enabled: skill['enabled'] is bool ? skill['enabled'] as bool : true,
-    displayName: _trimmedString(
-      skill['displayName'],
-    ) ?? _trimmedString(skill['display_name']),
-    shortDescription: _trimmedString(
-      skill['shortDescription'],
-    ) ?? _trimmedString(skill['short_description']),
+    displayName:
+        _trimmedString(skill['displayName']) ??
+        _trimmedString(skill['display_name']),
+    shortDescription:
+        _trimmedString(skill['shortDescription']) ??
+        _trimmedString(skill['short_description']),
     scope: _trimmedString(skill['scope']),
   );
 }

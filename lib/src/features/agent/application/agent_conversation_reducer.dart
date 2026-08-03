@@ -153,6 +153,10 @@ final class AgentConversationReducer {
       AgentMessageUpdatedEvent() => _messageUpdated(event, context),
       AgentPlanUpdatedEvent() => _planUpdated(event, context),
       AgentSessionConfigUpdatedEvent() => _sessionConfig(event, context),
+      AgentConversationModeUpdatedEvent() => _conversationModeUpdated(
+        event,
+        context,
+      ),
       AgentPlanApprovalRequestedEvent() => _planApprovalRequested(
         event,
         context,
@@ -354,6 +358,28 @@ final class AgentConversationReducer {
       ],
       uiUpdate: AgentUiUpdateRequest(
         regions: const <AgentUiRegion>{AgentUiRegion.composer},
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
+  }
+
+  AgentConversationMutation _conversationModeUpdated(
+    AgentConversationModeUpdatedEvent event,
+    AgentConversationReducerContext context,
+  ) {
+    if (!_shouldHandleCurrent(context, sessionId: event.sessionId)) {
+      return AgentConversationMutation.rejected('currentThreadMismatch');
+    }
+    return AgentConversationMutation(
+      accepted: true,
+      stateChanges: <AgentConversationStateChange>[
+        AgentApplyConversationModeChange(event),
+      ],
+      uiUpdate: AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{
+          AgentUiRegion.header,
+          AgentUiRegion.composer,
+        },
         urgency: AgentUiUpdateUrgency.immediate,
       ),
     );

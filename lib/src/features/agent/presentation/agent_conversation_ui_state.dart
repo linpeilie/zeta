@@ -30,6 +30,7 @@ final class AgentHeaderState {
     required this.canFork,
     required this.canRename,
     required this.canArchive,
+    required this.isPlanMode,
   });
 
   final String title;
@@ -50,6 +51,7 @@ final class AgentHeaderState {
   final bool canFork;
   final bool canRename;
   final bool canArchive;
+  final bool isPlanMode;
 
   @override
   bool operator ==(Object other) {
@@ -72,7 +74,8 @@ final class AgentHeaderState {
             other.isReadOnly == isReadOnly &&
             other.canFork == canFork &&
             other.canRename == canRename &&
-            other.canArchive == canArchive;
+            other.canArchive == canArchive &&
+            other.isPlanMode == isPlanMode;
   }
 
   @override
@@ -95,6 +98,7 @@ final class AgentHeaderState {
     canFork,
     canRename,
     canArchive,
+    isPlanMode,
   ]);
 }
 

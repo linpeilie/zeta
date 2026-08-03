@@ -149,6 +149,45 @@ void main() {
       expect(plan.entries.single.priority, 'high');
     });
 
+    test('decodes current_mode_update with camelCase mode id', () {
+      final decoded = decoder.decode(<String, Object?>{
+        'sessionId': 'session-1',
+        'update': <String, Object?>{
+          'sessionUpdate': 'current_mode_update',
+          'currentModeId': 'plan',
+        },
+      });
+
+      expect(decoded, isA<AcpCurrentModeUpdate>());
+      final mode = decoded as AcpCurrentModeUpdate;
+      expect(mode.modeId, 'plan');
+    });
+
+    test('decodes current_mode_update with snake_case mode id fallback', () {
+      final decoded = decoder.decode(<String, Object?>{
+        'sessionId': 'session-1',
+        'update': <String, Object?>{
+          'sessionUpdate': 'current_mode_update',
+          'current_mode_id': 'default',
+        },
+      });
+
+      expect(decoded, isA<AcpCurrentModeUpdate>());
+      final mode = decoded as AcpCurrentModeUpdate;
+      expect(mode.modeId, 'default');
+    });
+
+    test('rejects current_mode_update without a mode id', () {
+      final decoded = decoder.decode(<String, Object?>{
+        'sessionId': 'session-1',
+        'update': <String, Object?>{'sessionUpdate': 'current_mode_update'},
+      });
+
+      expect(decoded, isA<AcpUnknownUpdate>());
+      final unknown = decoded as AcpUnknownUpdate;
+      expect(unknown.diagnostic, 'missing_mode_id');
+    });
+
     test('decodes usage updates with tolerant numeric fields', () {
       final decoded = decoder.decode(<String, Object?>{
         'sessionId': 'session-1',

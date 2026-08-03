@@ -335,6 +335,45 @@ void main() {
       },
     );
 
+    test(
+      'clearPendingTurn drops plan pending so late markTurnAccepted is a no-op',
+      () {
+        controller.bindThread(threadId: 'thread-a');
+        controller.selectMode(AgentConversationModeId.plan);
+        final selection = controller
+            .snapshotForNewTurn(effectiveModelId: 'gpt-5.6')
+            .conversationMode!;
+
+        // 普通 server 更新只清与自身匹配的 pending，plan→default 会留下 pending。
+        controller.applyServerMode(AgentConversationModeId.defaultMode);
+        expect(
+          controller.state.confirmedMode,
+          AgentConversationModeId.defaultMode,
+        );
+        expect(controller.state.pendingTurnMode, same(selection));
+
+        // 计划审批消费路径强制清 pending，并同步 draft。
+        controller.applyServerMode(
+          AgentConversationModeId.defaultMode,
+          clearPendingTurn: true,
+        );
+        expect(
+          controller.state.confirmedMode,
+          AgentConversationModeId.defaultMode,
+        );
+        expect(controller.state.draftMode, AgentConversationModeId.defaultMode);
+        expect(controller.state.pendingTurnMode, isNull);
+
+        // Grok 阻塞 session/prompt 返回后的迟到确认不得写回 plan。
+        controller.markTurnAccepted(threadId: 'thread-a', selection: selection);
+        expect(
+          controller.state.confirmedMode,
+          AgentConversationModeId.defaultMode,
+        );
+        expect(controller.state.pendingTurnMode, isNull);
+      },
+    );
+
     test('settings are authoritative without replacing a newer user draft', () {
       controller.bindThread(threadId: 'thread-a');
       controller.selectMode(AgentConversationModeId.plan);

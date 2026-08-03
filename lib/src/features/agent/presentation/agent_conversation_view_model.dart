@@ -392,6 +392,14 @@ class AgentConversationViewModel {
       _conversationModeController.state.status ==
       AgentConversationModeLoadStatus.ready;
 
+  /// 当前 thread 是否处于只读 Plan 会话模式。
+  ///
+  /// 以服务端 `current_mode_update`（Grok）为准：进入/退出 plan 模式时由
+  /// provider 广播，本地不按工具调用标题推断。
+  bool get isPlanMode =>
+      _conversationModeController.state.confirmedMode?.kind ==
+      AgentConversationModeKind.plan;
+
   /// 当前 Provider 的对话模式目录加载状态。
   AgentConversationModeLoadStatus get conversationModeLoadStatus =>
       _conversationModeController.state.status;
@@ -2232,6 +2240,17 @@ class AgentConversationViewModel {
     await planApproval.respondToPlanApproval(
       AgentPlanApprovalDecision(requestId: request.id, kind: kind),
     );
+    // provider 驱动的计划审批一旦作出决定，计划即被消费：接受 → grok 自行
+    // 进入实施回合；放弃 → grok 退出 plan 模式。必须强制清空 pending turn
+    // 模式：Grok 的 markTurnAccepted 在阻塞 session/prompt 返回后才执行，
+    // 若不 clear，迟到确认会把 confirmed 写回 plan 并重复触发本地执行交接。
+    // 拒绝则留在 plan 模式继续修订。
+    if (kind != AgentPlanApprovalDecisionKind.rejected) {
+      _conversationModeController.applyServerMode(
+        AgentConversationModeId.defaultMode,
+        clearPendingTurn: true,
+      );
+    }
   }
 
   /// 从上一历史 turn 创建新分支，并用编辑后的文本开启新回合。
@@ -2569,6 +2588,24 @@ class AgentConversationViewModel {
     _publishUiChanges(
       AgentUiUpdateRequest(
         regions: const <AgentUiRegion>{AgentUiRegion.composer},
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
+  }
+
+  /// 应用服务端权威的会话模式（Grok `current_mode_update`）。
+  ///
+  /// 更新模式控制器的 confirmed/draft，并刷新 header（plan 模式徽标）。
+  /// plan 模式状态只以此信号为准，不按 `enter_plan_mode`/`exit_plan_mode`
+  /// 工具调用标题推断。
+  void _applyServerConversationMode(AgentConversationModeUpdatedEvent event) {
+    if (_disposed) {
+      return;
+    }
+    _conversationModeController.applyServerMode(event.modeId);
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{AgentUiRegion.header},
         urgency: AgentUiUpdateUrgency.immediate,
       ),
     );
@@ -3313,6 +3350,7 @@ class AgentConversationViewModel {
       canFork: canForkCurrentThread,
       canRename: canRenameCurrentThread,
       canArchive: canArchiveCurrentThread,
+      isPlanMode: isPlanMode,
     );
   }
 
@@ -3490,6 +3528,8 @@ final class _AgentConversationEventStateTarget
         _viewModel._applyThreadSelectionFromSessionConfigOptions(
           change.options,
         );
+      case AgentApplyConversationModeChange():
+        _viewModel._applyServerConversationMode(change.event);
       case AgentApplyAutoApprovalReviewChange():
         final event = change.event;
         _viewModel._autoReviewsByTurnId[event.turnId] = event;

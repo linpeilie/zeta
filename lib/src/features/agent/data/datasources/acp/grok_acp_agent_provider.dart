@@ -28,7 +28,7 @@ typedef JsonRpcPeerFactory = JsonRpcPeer Function(AgentProviderConfig config);
 ///
 /// 启动 `grok agent stdio`，通过标准 ACP JSON-RPC 完成会话、流式回复与审批。
 /// 账号套餐额度通过 xAI 扩展 `_x.ai/billing` 读取。
-/// Skill 目录通过 xAI 扩展 `x.ai/skills/list` 读取（本地 SKILL.md 扫描）。
+/// Skill 目录通过 xAI 扩展 `_x.ai/skills/list` 读取（本地 SKILL.md 扫描）。
 /// 不支持的 Codex 专有能力通过 [capabilities] 关闭，并在误调用时明确失败。
 class GrokAcpAgentProvider
     implements
@@ -37,7 +37,9 @@ class GrokAcpAgentProvider
         AgentRuntimeLifecycleProvider,
         AgentRuntimeScopeProvider,
         AgentRefreshableModelCatalogProvider,
-        AgentSkillsCatalogProvider {
+        AgentSkillsCatalogProvider,
+        AgentConversationModeCatalogProvider,
+        AgentPlanApprovalProvider {
   GrokAcpAgentProvider({
     required this.config,
     JsonRpcPeer? peer,
@@ -116,6 +118,11 @@ class GrokAcpAgentProvider
 
   final Map<String, _PendingAcpPermission> _pendingPermissions =
       <String, _PendingAcpPermission>{};
+
+  /// 挂起的 `x.ai/exit_plan_mode` 计划审批，key 为 `AgentPlanApprovalRequest.id`
+  ///（即 grok 的 `toolCallId`）。响应必须回到请求方，否则 shell 会一直等待。
+  final Map<String, _PendingPlanApproval> _pendingPlanApprovals =
+      <String, _PendingPlanApproval>{};
 
   final Map<String, String> _runningTurnIdsBySessionId = <String, String>{};
 
@@ -578,9 +585,30 @@ class GrokAcpAgentProvider
   @override
   Stream<void> get skillsChanged => _skillsChanged.stream;
 
+  /// Grok 的会话模式目录。
+  ///
+  /// 对应 grok-build 的 `SessionMode { Default, Plan }` 闭集，协议层面不提供
+  /// 运行时探测；这里直接返回静态目录。模式通过 `session/prompt` 的
+  /// `_meta.mode` 逐回合驱动（见 [AgentProvider.sendMessage]）。
+  @override
+  Future<AgentConversationModeCatalog> listConversationModes() async {
+    return AgentConversationModeCatalog(
+      presets: const <AgentConversationModePreset>[
+        AgentConversationModePreset(
+          id: AgentConversationModeId.defaultMode,
+          displayName: 'Default',
+        ),
+        AgentConversationModePreset(
+          id: AgentConversationModeId.plan,
+          displayName: 'Plan',
+        ),
+      ],
+    );
+  }
+
   /// 读取指定 cwd 下 Grok 可用的 skill 目录。
   ///
-  /// 走 xAI 扩展 `x.ai/skills/list`；Grok 侧对每个 cwd 做一次本地 SKILL.md 扫描，
+  /// 走 xAI 扩展 `_x.ai/skills/list`；Grok 侧对每个 cwd 做一次本地 SKILL.md 扫描，
   /// 每个 cwd 产生一个目录条目。`forceReload` 由协议忽略（每次调用都是全新扫描）。
   @override
   Future<AgentSkillsCatalog> listSkills({
@@ -592,7 +620,9 @@ class GrokAcpAgentProvider
       for (final cwd in cwds)
         if (cwd.trim().isNotEmpty) cwd.trim(),
     ];
-    // `x.ai/skills/list` 的 `cwd` 为必填；无工作区时退化为进程自身目录。
+    // `_x.ai/skills/list` 的 `cwd` 为必填；无工作区时退化为进程自身目录。
+    // 注意：方法名带前导下划线，与 `_x.ai/billing` / `_x.ai/session/*` 一致；
+    // 误用 `x.ai/skills/list` 会得到 JSON-RPC -32601 Method not found。
     final resolvedCwds = normalizedCwds.isEmpty
         ? const <String>['.']
         : normalizedCwds;
@@ -604,7 +634,7 @@ class GrokAcpAgentProvider
         final entries = <AgentSkillsCatalogEntry>[];
         for (final cwd in resolvedCwds) {
           final result = await _peer.sendRequest(
-            'x.ai/skills/list',
+            '_x.ai/skills/list',
             params: <String, Object?>{'cwd': cwd},
             timeout: const Duration(seconds: 20),
           );
@@ -740,9 +770,7 @@ class GrokAcpAgentProvider
     String? clientUserMessageId,
     AgentTurnConfiguration configuration = const AgentTurnConfiguration(),
   }) async {
-    if (configuration.conversationMode != null) {
-      throw UnsupportedError('${config.displayName} 不支持回合级对话模式配置');
-    }
+    final meta = _promptMetaFor(configuration.conversationMode);
     await initialize();
     // 模型是 session 级配置；共享 Provider 下必须按本次发送目标应用，不能依赖
     // “最后激活会话”这种全局可变状态。
@@ -810,7 +838,11 @@ class GrokAcpAgentProvider
     try {
       final result = await _peer.sendRequest(
         'session/prompt',
-        params: <String, Object?>{'sessionId': session.id, 'prompt': prompt},
+        params: <String, Object?>{
+          'sessionId': session.id,
+          'prompt': prompt,
+          if (meta.isNotEmpty) '_meta': meta,
+        },
         // 单次 turn 可能很长；由用户取消或进程退出打断。
         timeout: const Duration(hours: 2),
       );
@@ -871,6 +903,27 @@ class GrokAcpAgentProvider
     }
 
     return turn;
+  }
+
+  /// 将回合级对话模式编码为 `session/prompt` 的 `_meta`。
+  ///
+  /// Grok 以 `_meta.mode` 驱动会话模式：`plan` 进入只读计划模式，
+  /// `agent` 表示默认模式（[AgentConversationModeKind.defaultMode]）。
+  /// 无模式选择时返回空 map，保持旧的顶层参数结构。
+  Map<String, Object?> _promptMetaFor(
+    AgentConversationModeSelection? conversationMode,
+  ) {
+    if (conversationMode == null) {
+      return const <String, Object?>{};
+    }
+    final mode = switch (conversationMode.modeId.kind) {
+      AgentConversationModeKind.defaultMode => 'agent',
+      AgentConversationModeKind.plan => 'plan',
+      AgentConversationModeKind.unknown => throw UnsupportedError(
+        '${config.displayName} 不支持对话模式 ${conversationMode.modeId.rawValue}',
+      ),
+    };
+    return <String, Object?>{'mode': mode};
   }
 
   @override
@@ -955,6 +1008,36 @@ class GrokAcpAgentProvider
   }
 
   @override
+  Future<void> respondToPlanApproval(AgentPlanApprovalDecision decision) async {
+    final pending = _pendingPlanApprovals.remove(decision.requestId);
+    if (pending == null) {
+      _log.warning(
+        'Ignoring response for unknown Grok plan approval ${decision.requestId}',
+      );
+      return;
+    }
+
+    // 与 grok-build `ExitPlanModeExtResponse` 对齐：
+    // accepted → approved（退出 plan 模式并实施），
+    // rejected → cancelled + feedback（留在 plan 模式继续修订），
+    // cancelled → abandoned（退出 plan 模式且不启新回合）。
+    final outcome = switch (decision.kind) {
+      AgentPlanApprovalDecisionKind.accepted => 'approved',
+      AgentPlanApprovalDecisionKind.rejected => 'cancelled',
+      AgentPlanApprovalDecisionKind.cancelled => 'abandoned',
+    };
+    final feedback = decision.reason?.trim();
+    await _peer.sendScopedResponse(
+      pending.requestId,
+      runtimeScope: pending.runtimeScope,
+      result: <String, Object?>{
+        'outcome': outcome,
+        if (feedback != null && feedback.isNotEmpty) 'feedback': feedback,
+      },
+    );
+  }
+
+  @override
   Future<void> dispose() {
     final existing = _disposeOperation;
     if (existing != null) {
@@ -988,6 +1071,21 @@ class GrokAcpAgentProvider
         _pendingPermissions.remove(pending.requestKey);
       }
     }
+    // 与 permission 对称：dispose 时 best-effort 回 abandoned，避免 shell 继续
+    // park 在 x.ai/exit_plan_mode 上直到进程退出。
+    // 注意：此处 _disposed 已为 true，_addEvent 会短路；终态事件直接写入
+    // 尚未 close 的 stream，便于 UI 在 provider 拆掉前清掉审批卡片。
+    for (final entry in _pendingPlanApprovals.entries.toList()) {
+      try {
+        await _respondPlanApprovalAbandoned(entry.value);
+      } catch (_) {
+        // peer 已关闭或响应失败时仍清理本地状态。
+      }
+      if (!_events.isClosed) {
+        _events.add(AgentPlanApprovalResolvedEvent(requestId: entry.key));
+      }
+    }
+    _pendingPlanApprovals.clear();
     await _notificationSubscription?.cancel();
     await _serverRequestSubscription?.cancel();
     await _stderrSubscription?.cancel();
@@ -1127,7 +1225,9 @@ class GrokAcpAgentProvider
       if (!_skillsChanged.isClosed) {
         _skillsChanged.add(null);
       }
-      _log.fine('Grok session notification $updateType → skills catalog invalidated');
+      _log.fine(
+        'Grok session notification $updateType → skills catalog invalidated',
+      );
       return;
     }
     if (_loggedUnmatched.add('x.ai/session_notification:$updateType')) {
@@ -1392,6 +1492,8 @@ class GrokAcpAgentProvider
       switch (request.method) {
         case 'session/request_permission':
           await _handlePermissionRequest(request);
+        case 'x.ai/exit_plan_mode':
+          await _handlePlanApprovalRequest(request);
         case 'fs/read_text_file':
           await _handleReadTextFile(request);
         case 'fs/write_text_file':
@@ -1460,6 +1562,10 @@ class GrokAcpAgentProvider
       );
     }
     _pendingPermissions.clear();
+    for (final entry in _pendingPlanApprovals.entries) {
+      _addEvent(AgentPlanApprovalResolvedEvent(requestId: entry.key));
+    }
+    _pendingPlanApprovals.clear();
     _emitConnectionUnavailableStatus();
   }
 
@@ -1509,6 +1615,72 @@ class GrokAcpAgentProvider
       AgentProviderStatus(
         state: AgentProviderConnectionState.running,
         message: 'Waiting for approval: ${mapping.request.title}',
+      ),
+    );
+  }
+
+  /// 处理 `x.ai/exit_plan_mode` 计划审批反请求。
+  ///
+  /// grok 在模型调用 `exit_plan_mode` 工具时以阻塞 ext_method 反推计划正文给客户端。
+  /// 这里构造 [AgentPlanApprovalRequest] 并发出事件，把审批决策面交给 UI；但**不立即
+  /// 应答**——响应在用户作出决定后经 [respondToPlanApproval] 回写，否则 shell 会
+  /// 一直 park 在当前工具调用上。
+  Future<void> _handlePlanApprovalRequest(JsonRpcRequest request) async {
+    final params = request.params;
+    final sessionId = params['sessionId']?.toString();
+    final toolCallId = params['toolCallId']?.toString();
+    if (sessionId == null || toolCallId == null || toolCallId.isEmpty) {
+      await _peer.sendScopedResponse(
+        request.id,
+        runtimeScope: request.runtimeScope,
+        error: const JsonRpcError(
+          code: -32602,
+          message:
+              'Invalid exit_plan_mode params: sessionId/toolCallId required',
+        ),
+      );
+      return;
+    }
+
+    // 同 toolCallId 已有在途审批时，先对旧 JSON-RPC request 回 abandoned，
+    // 再 park 新请求；否则 shell 会永远等旧 request id 的响应。
+    final existing = _pendingPlanApprovals.remove(toolCallId);
+    if (existing != null) {
+      _log.warning(
+        'Replacing pending plan approval for $sessionId '
+        '(old rpc=${existing.requestId}, new rpc=${request.id})',
+      );
+      try {
+        await _respondPlanApprovalAbandoned(existing);
+      } catch (_) {
+        // 旧响应失败时仍继续 park 新请求，避免新的 exit_plan_mode 也被挂死。
+      }
+      _addEvent(AgentPlanApprovalResolvedEvent(requestId: toolCallId));
+    }
+
+    final planContent = params['planContent']?.toString();
+    final approval = AgentPlanApprovalRequest(
+      id: toolCallId,
+      title: 'Plan approval',
+      markdown: planContent ?? '',
+      sessionId: sessionId,
+      turnId: _runningTurnIdsBySessionId[sessionId],
+      isProject: false,
+      raw: _asStringKeyedMap(params) ?? const <String, Object?>{},
+    );
+    _pendingPlanApprovals[toolCallId] = _PendingPlanApproval(
+      requestId: request.id,
+      runtimeScope: request.runtimeScope,
+    );
+
+    _log.info('Grok plan approval requested (tool=$toolCallId)');
+    _addEvent(AgentPlanApprovalRequestedEvent(approval));
+
+    // 更新状态文案，避免 UI 看起来像「无响应卡住」。
+    _emitStatus(
+      AgentProviderStatus(
+        state: AgentProviderConnectionState.running,
+        message: 'Waiting for plan approval',
       ),
     );
   }
@@ -1600,6 +1772,20 @@ class GrokAcpAgentProvider
       result: <String, Object?>{
         'outcome': <String, Object?>{'outcome': 'cancelled'},
       },
+    );
+  }
+
+  /// 对已 park 的 `x.ai/exit_plan_mode` 回写 abandoned（不启新回合、退出 plan）。
+  ///
+  /// 调用方负责从 [_pendingPlanApprovals] 移除条目并发出 resolved 事件；
+  /// 本方法只写 JSON-RPC 响应，避免替换/dispose 路径漏应答导致 shell hang。
+  Future<void> _respondPlanApprovalAbandoned(
+    _PendingPlanApproval pending,
+  ) async {
+    await _peer.sendScopedResponse(
+      pending.requestId,
+      runtimeScope: pending.runtimeScope,
+      result: const <String, Object?>{'outcome': 'abandoned'},
     );
   }
 
@@ -1886,6 +2072,16 @@ class _PendingAcpPermission {
   final String requestKey;
   final AgentRuntimeScope? runtimeScope;
   final AcpPermissionMapping mapping;
+}
+
+/// 已 park 的 `x.ai/exit_plan_mode` 反请求，等待用户作出审批决定后回写响应。
+class _PendingPlanApproval {
+  _PendingPlanApproval({required this.requestId, required this.runtimeScope});
+
+  /// ext_method 的 JSON-RPC request id（响应的目标）。
+  final Object requestId;
+
+  final AgentRuntimeScope? runtimeScope;
 }
 
 final class _GrokPromptFailure {

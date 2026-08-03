@@ -319,6 +319,7 @@ AgentHeaderState _headerState({
     canFork: false,
     canRename: false,
     canArchive: false,
+    isPlanMode: false,
   );
 }
 
