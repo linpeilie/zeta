@@ -3,8 +3,9 @@ part of '../agent_pane.dart';
 /// 底部输入面板。
 ///
 /// 上半部分是多行输入框，下半部分是操作行：左侧通过“更多操作”菜单承载文件、
-/// 图片和 Plan 快捷入口，并渐进展示模式/会话配置/审批策略；模型选择器固定在右侧，
-/// 位于上下文进度圆圈左侧，发送/取消按钮最右。
+/// 图片和 Plan 快捷入口；**仅当 draft 为 Plan 时**在工具栏展示 Plan 标识（Default
+/// 不占位）。会话配置/审批策略渐进展示；模型选择器固定在右侧，位于上下文进度
+/// 圆圈左侧，发送/取消按钮最右。
 class _AgentComposer extends StatelessWidget {
   const _AgentComposer({
     required this.controller,
@@ -25,7 +26,6 @@ class _AgentComposer extends StatelessWidget {
     required this.conversationModeOptions,
     required this.selectedConversationMode,
     required this.conversationModeAppliesToNextTurn,
-    required this.conversationModeStatusMessage,
     required this.conversationModeContextId,
     required this.onSelectConversationMode,
     required this.showModelSelection,
@@ -73,9 +73,6 @@ class _AgentComposer extends StatelessWidget {
 
   /// 当前选择是否只在下一新 turn 生效。
   final bool conversationModeAppliesToNextTurn;
-
-  /// 加载、错误或只读模式的简短提示。
-  final String? conversationModeStatusMessage;
 
   /// Provider/thread 切换时用于关闭旧模式浮层的稳定上下文标识。
   final Object conversationModeContextId;
@@ -144,7 +141,8 @@ class _AgentComposer extends StatelessWidget {
     final contextWindowTokenProgress = _contextWindowTokenUsageProgressValue(
       currentWindowTokenUsage,
     );
-    // 左侧可裁切选择器：模式、会话配置、审批策略。模型选择器单独放右侧。
+    // 左侧可裁切选择器：Plan 标识（仅选中 Plan 时）、会话配置、审批策略。
+    // 模型选择器单独放右侧。Default 模式不占位。
     final selectorControls = <Widget>[];
     void addSelector(Widget control) {
       if (selectorControls.isNotEmpty) {
@@ -153,16 +151,12 @@ class _AgentComposer extends StatelessWidget {
       selectorControls.add(control);
     }
 
-    if (conversationModeStatus != AgentModeSelectorStatus.unavailable) {
+    if (selectedConversationMode?.kind == AgentConversationModeKind.plan) {
       addSelector(
-        AgentModeSelector(
-          status: conversationModeStatus,
-          presets: conversationModeOptions,
-          selectedMode: selectedConversationMode,
+        _AgentComposerPlanBadge(
           appliesToNextTurn: conversationModeAppliesToNextTurn,
-          statusMessage: conversationModeStatusMessage,
-          contextId: conversationModeContextId,
-          onChanged: onSelectConversationMode,
+          onClear: () =>
+              onSelectConversationMode(AgentConversationModeId.defaultMode),
         ),
       );
     }
@@ -421,15 +415,21 @@ class _AgentComposer extends StatelessWidget {
           (preset) =>
               preset.id == AgentConversationModeId.plan && preset.isSelectable,
         );
+    final planSelected =
+        selectedConversationMode == AgentConversationModeId.plan;
     return _ComposerMoreActionsButton(
       showPlan: showPlan,
-      planSelected: selectedConversationMode == AgentConversationModeId.plan,
+      planSelected: planSelected,
       showMentionFile: showResourceMention,
       showInsertSkill: showSkillInsert,
       showAttachImage: showImageAttachment,
       contextId: conversationModeContextId,
-      onSelectPlan: () =>
-          onSelectConversationMode(AgentConversationModeId.plan),
+      // 再次选择 Plan 时切回 Default，与工具栏标识清除一致。
+      onTogglePlan: () => onSelectConversationMode(
+        planSelected
+            ? AgentConversationModeId.defaultMode
+            : AgentConversationModeId.plan,
+      ),
       onMentionFile: onOpenMentionPicker,
       onInsertSkill: onInsertSkill,
       onAttachImage: onAttachImages,
@@ -495,6 +495,63 @@ class _AgentComposer extends StatelessWidget {
   }
 }
 
+/// Composer 工具栏上的 Plan draft 标识。
+///
+/// 无底 ghost Chip；hover 时前导图标切为关闭示意，整颗点击退出 Plan。
+/// 不使用尾部关闭按钮，避免条件插入导致布局跳动。
+class _AgentComposerPlanBadge extends StatefulWidget {
+  const _AgentComposerPlanBadge({
+    required this.appliesToNextTurn,
+    required this.onClear,
+  });
+
+  final bool appliesToNextTurn;
+  final VoidCallback onClear;
+
+  @override
+  State<_AgentComposerPlanBadge> createState() =>
+      _AgentComposerPlanBadgeState();
+}
+
+class _AgentComposerPlanBadgeState extends State<_AgentComposerPlanBadge> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final semanticLabel = widget.appliesToNextTurn
+        ? 'Plan，对话模式，下一回合生效，点击清除'
+        : 'Plan，对话模式，点击清除';
+    final tooltip = widget.appliesToNextTurn ? 'Plan\n将在下一回合生效' : 'Plan';
+    return MouseRegion(
+      onEnter: (_) {
+        if (!_hovered) {
+          setState(() => _hovered = true);
+        }
+      },
+      onExit: (_) {
+        if (_hovered) {
+          setState(() => _hovered = false);
+        }
+      },
+      child: Tooltip(
+        message: tooltip,
+        child: IdeChip(
+          key: const ValueKey('agent-composer-plan-badge'),
+          label: 'Plan',
+          leadingIcon: _hovered
+              ? sf.BootstrapIcons.xCircleFill
+              : sf.LucideIcons.clipboardList,
+          // ghost + 非 selected：无填充底，仅文字/图标。
+          selected: false,
+          variant: IdeChipVariant.ghost,
+          semanticLabel: semanticLabel,
+          onPressed: widget.onClear,
+        ),
+      ),
+    );
+  }
+}
+
 /// Composer 左下角的能力感知“更多操作”菜单。
 class _ComposerMoreActionsButton extends StatefulWidget {
   const _ComposerMoreActionsButton({
@@ -504,7 +561,7 @@ class _ComposerMoreActionsButton extends StatefulWidget {
     required this.showInsertSkill,
     required this.showAttachImage,
     required this.contextId,
-    required this.onSelectPlan,
+    required this.onTogglePlan,
     required this.onMentionFile,
     required this.onInsertSkill,
     required this.onAttachImage,
@@ -516,7 +573,9 @@ class _ComposerMoreActionsButton extends StatefulWidget {
   final bool showInsertSkill;
   final bool showAttachImage;
   final Object contextId;
-  final VoidCallback onSelectPlan;
+
+  /// 切换 Plan / Default draft 模式。
+  final VoidCallback onTogglePlan;
   final VoidCallback onMentionFile;
   final VoidCallback onInsertSkill;
   final VoidCallback onAttachImage;
@@ -661,12 +720,10 @@ class _ComposerMoreActionsButtonState
           leadingIcon: widget.planSelected
               ? Icons.check_rounded
               : Icons.alt_route_rounded,
-          semanticLabel: widget.planSelected ? 'Plan, selected' : 'Plan',
-          onPressed: () => _activateAction(() {
-            if (!widget.planSelected) {
-              widget.onSelectPlan();
-            }
-          }),
+          semanticLabel: widget.planSelected
+              ? 'Plan, selected, tap to clear'
+              : 'Plan',
+          onPressed: () => _activateAction(widget.onTogglePlan),
         ),
       if (widget.showMentionFile)
         IdeContextMenuAction(

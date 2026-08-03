@@ -854,8 +854,6 @@ class _AgentComposerSection extends StatelessWidget {
                 selectedConversationMode: state.selectedConversationMode,
                 conversationModeAppliesToNextTurn:
                     state.conversationModeAppliesToNextTurn,
-                conversationModeStatusMessage:
-                    state.conversationModeStatusMessage,
                 conversationModeContextId: state.conversationModeContextId,
                 onSelectConversationMode: viewModel.selectConversationMode,
                 showModelSelection: state.showModelSelection,

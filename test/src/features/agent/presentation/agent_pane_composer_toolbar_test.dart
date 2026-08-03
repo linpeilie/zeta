@@ -16,7 +16,7 @@ import 'harness/agent_pane_test_harness.dart';
 void main() {
   group('AgentPane composer toolbar', () {
     testWidgets(
-      'mode selector leads composer controls and dispatches one selection',
+      'hides mode UI by default and shows Plan badge after more-actions select',
       (tester) async {
         final provider = AgentPaneModeFakeProvider(
           models: agentPaneModelConfigList,
@@ -54,14 +54,16 @@ void main() {
         );
         await pumpUntilFinder(
           tester,
-          find.byKey(const ValueKey('agent-mode-selector')),
+          find.byKey(const ValueKey('agent-session-config-cursor-model')),
         );
         await pumpUntilFinder(
           tester,
-          find.byKey(const ValueKey('agent-session-config-cursor-model')),
+          find.byKey(const ValueKey('agent-more-actions-button')),
         );
 
-        final modeSelector = find.byKey(const ValueKey('agent-mode-selector'));
+        final planBadge = find.byKey(
+          const ValueKey('agent-composer-plan-badge'),
+        );
         final sessionSelector = find.byKey(
           const ValueKey('agent-session-config-cursor-model'),
         );
@@ -71,15 +73,13 @@ void main() {
         final permissionSelector = find.byKey(
           const ValueKey('agent-permission-policy-selector'),
         );
-        expect(modeSelector, findsOneWidget);
+        // Default：不展示模式选择器 / Plan 标识。
+        expect(find.byKey(const ValueKey('agent-mode-selector')), findsNothing);
+        expect(planBadge, findsNothing);
         expect(sessionSelector, findsOneWidget);
         expect(modelSelector, findsOneWidget);
         expect(permissionSelector, findsOneWidget);
-        // 左侧：模式 → 会话配置 → 审批；模型选择器固定在右侧。
-        expect(
-          tester.getTopLeft(modeSelector).dx,
-          lessThan(tester.getTopLeft(sessionSelector).dx),
-        );
+        // 左侧：会话配置 → 审批；模型选择器固定在右侧。
         expect(
           tester.getTopLeft(sessionSelector).dx,
           lessThan(tester.getTopLeft(permissionSelector).dx),
@@ -93,16 +93,42 @@ void main() {
         modeController.addListener(() {
           selectionNotifications += 1;
         });
-        await tester.tap(modeSelector);
+        await tester.tap(
+          find.byKey(const ValueKey('agent-more-actions-button')),
+        );
         await tester.pump(const Duration(milliseconds: 300));
-        await tester.tap(find.byKey(const ValueKey('agent-mode-option-plan')));
-        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('agent-more-actions-plan')));
+        // 更多操作在 popover dismiss 完成后才切换模式。
+        await pumpUntilFinder(tester, planBadge);
 
         expect(
           viewModel.selectedConversationMode,
           AgentConversationModeId.plan,
         );
         expect(selectionNotifications, 1);
+        expect(planBadge, findsOneWidget);
+        // Plan 标识出现在会话配置左侧。
+        expect(
+          tester.getTopLeft(planBadge).dx,
+          lessThan(tester.getTopLeft(sessionSelector).dx),
+        );
+
+        // 点击整颗 Plan Chip 恢复 Default（无尾部关闭按钮）。
+        expect(
+          find.descendant(
+            of: planBadge,
+            matching: find.byIcon(Icons.close_rounded),
+          ),
+          findsNothing,
+        );
+        await tester.tap(planBadge);
+        await pumpUntilFinderAbsent(tester, planBadge);
+        expect(
+          viewModel.selectedConversationMode,
+          AgentConversationModeId.defaultMode,
+        );
+        expect(planBadge, findsNothing);
+        expect(selectionNotifications, 2);
       },
     );
 
@@ -125,13 +151,18 @@ void main() {
         );
         await pumpUntilFinder(
           tester,
-          find.byKey(const ValueKey('agent-mode-selector')),
+          find.byKey(const ValueKey('agent-more-actions-button')),
         );
 
         final moreActionsButton = find.byKey(
           const ValueKey('agent-more-actions-button'),
         );
+        final planBadge = find.byKey(
+          const ValueKey('agent-composer-plan-badge'),
+        );
         expect(moreActionsButton, findsOneWidget);
+        expect(find.byKey(const ValueKey('agent-mode-selector')), findsNothing);
+        expect(planBadge, findsNothing);
         expect(
           find.byKey(const ValueKey('agent-mention-file-button')),
           findsNothing,
@@ -185,6 +216,30 @@ void main() {
           FocusManager.instance.primaryFocus?.debugLabel,
           'agent-more-actions-trigger',
         );
+        expect(
+          viewModel.selectedConversationMode,
+          AgentConversationModeId.plan,
+        );
+        expect(planBadge, findsOneWidget);
+
+        // 再次通过更多操作 Plan 切换回 Default。
+        await tester.tap(moreActionsButton);
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.tap(planAction);
+        await pumpUntilFinderAbsent(tester, popover);
+        await tester.pump();
+        expect(
+          viewModel.selectedConversationMode,
+          AgentConversationModeId.defaultMode,
+        );
+        expect(planBadge, findsNothing);
+
+        // 重新选 Plan 后再发送，确认 turn 配置仍走 Plan。
+        await tester.tap(moreActionsButton);
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.tap(planAction);
+        await pumpUntilFinderAbsent(tester, popover);
+        await tester.pump();
         expect(
           viewModel.selectedConversationMode,
           AgentConversationModeId.plan,
@@ -567,11 +622,11 @@ void main() {
         );
         await pumpUntilFinder(
           tester,
-          find.byKey(const ValueKey('agent-mode-selector')),
+          find.byKey(const ValueKey('agent-session-config-cursor-model')),
         );
         await pumpUntilFinder(
           tester,
-          find.byKey(const ValueKey('agent-session-config-cursor-model')),
+          find.byKey(const ValueKey('agent-more-actions-button')),
         );
 
         final moreActionsButton = find.byKey(
@@ -585,9 +640,22 @@ void main() {
         final modelSelector = find.byKey(
           const ValueKey('agent-model-selector'),
         );
+        // Default 不展示模式控件；选 Plan 后再校验标识参与左侧区。
+        expect(find.byKey(const ValueKey('agent-mode-selector')), findsNothing);
+        expect(
+          find.byKey(const ValueKey('agent-composer-plan-badge')),
+          findsNothing,
+        );
+        await tester.tap(moreActionsButton);
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.tap(find.byKey(const ValueKey('agent-more-actions-plan')));
+        final planBadge = find.byKey(
+          const ValueKey('agent-composer-plan-badge'),
+        );
+        await pumpUntilFinder(tester, planBadge);
         // 仅左侧可裁切区；模型选择器在工具栏右侧，不参与 clip 组。
         final selectorControls = <Finder>[
-          find.byKey(const ValueKey('agent-mode-selector')),
+          planBadge,
           find.byKey(const ValueKey('agent-session-config-cursor-model')),
           find.byKey(const ValueKey('agent-permission-policy-selector')),
         ];
@@ -620,7 +688,7 @@ void main() {
         expect(
           find.descendant(
             of: selectors,
-            matching: find.byKey(const ValueKey('agent-mode-selector')),
+            matching: find.byKey(const ValueKey('agent-composer-plan-badge')),
           ),
           findsOneWidget,
         );

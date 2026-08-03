@@ -1831,22 +1831,24 @@ Future<_RetainedAgentState> _prepareRetainedAgentState(
   scrollController.jumpTo(scrollController.position.maxScrollExtent / 2);
   await tester.pump();
 
-  final modeSelector = find.byKey(const ValueKey('agent-mode-selector'));
+  final moreActionsButton = find.byKey(
+    const ValueKey('agent-more-actions-button'),
+  );
   await pumpUntilCondition(
     tester,
-    () => modeSelector.evaluate().isNotEmpty,
-    failureMessage: 'Conversation mode selector did not become ready',
+    () => moreActionsButton.evaluate().isNotEmpty,
+    failureMessage: 'Composer more-actions button did not become ready',
   );
-  await tester.tap(modeSelector);
+  await tester.tap(moreActionsButton);
   await tester.pump(const Duration(milliseconds: 300));
-  await tester.tap(find.byKey(const ValueKey('agent-mode-option-plan')));
+  await tester.tap(find.byKey(const ValueKey('agent-more-actions-plan')));
   await pumpUntilCondition(
     tester,
     () => find
-        .byKey(const ValueKey('agent-mode-selector-popover'))
+        .byKey(const ValueKey('agent-composer-plan-badge'))
         .evaluate()
-        .isEmpty,
-    failureMessage: 'Conversation mode selector did not close',
+        .isNotEmpty,
+    failureMessage: 'Plan badge did not appear after selecting Plan',
   );
 
   const draft = 'Draft retained across workbench pages';
@@ -1916,9 +1918,13 @@ void _expectRetainedAgentState(
     retained.selectedMode,
   );
   expect(
+    find.byKey(const ValueKey('agent-composer-plan-badge')),
+    findsOneWidget,
+  );
+  expect(
     find.descendant(
-      of: find.byKey(const ValueKey('agent-mode-selector')),
-      matching: find.textContaining('Plan'),
+      of: find.byKey(const ValueKey('agent-composer-plan-badge')),
+      matching: find.text('Plan'),
     ),
     findsOneWidget,
   );

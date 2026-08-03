@@ -3046,33 +3046,30 @@ void main() {
         ),
       );
       await pumpUntilAgentComposer(tester);
-      final modeSelector = find.byKey(
-        const ValueKey<String>('agent-mode-selector'),
+      final moreActionsButton = find.byKey(
+        const ValueKey<String>('agent-more-actions-button'),
       );
       await pumpUntilCondition(
         tester,
-        () => modeSelector.evaluate().isNotEmpty,
-        failureMessage: 'Conversation mode selector did not become ready',
+        () => moreActionsButton.evaluate().isNotEmpty,
+        failureMessage: 'Composer more-actions button did not become ready',
       );
 
-      await tester.tap(modeSelector);
+      await tester.tap(moreActionsButton);
       await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(
-        find.byKey(const ValueKey<String>('agent-mode-option-plan')),
+        find.byKey(const ValueKey<String>('agent-more-actions-plan')),
       );
       await pumpUntilCondition(
         tester,
         () => find
-            .byKey(const ValueKey<String>('agent-mode-selector-popover'))
+            .byKey(const ValueKey<String>('agent-composer-plan-badge'))
             .evaluate()
-            .isEmpty,
-        failureMessage: 'Conversation mode selector did not close',
+            .isNotEmpty,
+        failureMessage: 'Plan badge did not appear after selecting Plan',
       );
       expect(
-        find.descendant(
-          of: modeSelector,
-          matching: find.textContaining('Plan'),
-        ),
+        find.byKey(const ValueKey<String>('agent-composer-plan-badge')),
         findsOneWidget,
       );
       provider.emit(
