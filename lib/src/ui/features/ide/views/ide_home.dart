@@ -274,7 +274,7 @@ class _IdeHomeState extends State<IdeHome> {
         ),
         WindowTitleBarAction(
           key: const ValueKey('titlebar-settings-action'),
-          icon: Icons.settings_rounded,
+          icon: sf.RadixIcons.mixerHorizontal,
           tooltip: 'Settings',
           semanticLabel: 'Open settings page',
           active: _page == _IdeHomePage.settings,
