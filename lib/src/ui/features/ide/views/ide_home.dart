@@ -593,7 +593,7 @@ class _IdeHomeState extends State<IdeHome> {
       trailingActions: [
         IdeRailAction(
           key: const ValueKey('left-context-action'),
-          icon: Icons.data_object_rounded,
+          icon: sf.LucideIcons.chartPie,
           tooltip: 'Context',
           semanticLabel: 'Toggle context panel',
           active:
