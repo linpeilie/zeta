@@ -180,8 +180,8 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
             key: _newThreadButtonKey,
             child: _FlatActionButton(
               key: const ValueKey<String>('project-home-new-thread-button'),
-              label: '新建 Thread',
-              semanticLabel: '为 $projectName 新建 Thread',
+              label: '新建会话',
+              semanticLabel: '为 $projectName 新建会话',
               icon: Icons.add_comment_outlined,
               onPressed: _toggleProviderPopover,
             ),

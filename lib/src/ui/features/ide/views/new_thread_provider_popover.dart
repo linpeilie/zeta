@@ -154,7 +154,7 @@ class _NewThreadProviderPopoverState extends State<NewThreadProviderPopover> {
         Padding(
           padding: const EdgeInsets.only(bottom: IdeSpacing.space10),
           child: Text(
-            '请选择用于创建新 thread 的 Agent。',
+            '请选择用于创建新会话的 Agent。',
             style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
           ),
         ),

@@ -37,7 +37,7 @@ void main() {
 
     expect(find.text('zeta'), findsOneWidget);
     expect(find.text(r'C:\workspace\zeta'), findsOneWidget);
-    expect(find.text('新建 Thread'), findsOneWidget);
+    expect(find.text('新建会话'), findsOneWidget);
     expect(find.text('近期会话'), findsOneWidget);
     for (var index = 0; index < 5; index += 1) {
       expect(
