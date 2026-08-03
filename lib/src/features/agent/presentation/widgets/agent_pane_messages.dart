@@ -627,14 +627,19 @@ class _AgentMarkdownBodyState extends State<_AgentMarkdownBody> {
 
   @override
   Widget build(BuildContext context) {
-    return MarkdownWidget(
-      controller: _lease.controller,
-      theme: (widget.themeBuilder ?? _agentMarkdownTheme)(context),
-      useColumn: true,
-      selectable: true,
-      padding: EdgeInsets.zero,
-      enableCopyFullDocumentShortcut: false,
-      showCopyAllInContextMenu: false,
+    // mixin_markdown 对普通文本使用 MouseCursor.defer，桌面端默认仍是箭头；
+    // 外层声明 text 光标，链接仍会用包内 click 覆盖。
+    return MouseRegion(
+      cursor: SystemMouseCursors.text,
+      child: MarkdownWidget(
+        controller: _lease.controller,
+        theme: (widget.themeBuilder ?? _agentMarkdownTheme)(context),
+        useColumn: true,
+        selectable: true,
+        padding: EdgeInsets.zero,
+        enableCopyFullDocumentShortcut: false,
+        showCopyAllInContextMenu: false,
+      ),
     );
   }
 }
@@ -647,14 +652,17 @@ class _AgentRawMarkdownBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MarkdownWidget(
-      data: data,
-      theme: _agentMarkdownTheme(context),
-      useColumn: true,
-      selectable: true,
-      padding: EdgeInsets.zero,
-      enableCopyFullDocumentShortcut: false,
-      showCopyAllInContextMenu: false,
+    return MouseRegion(
+      cursor: SystemMouseCursors.text,
+      child: MarkdownWidget(
+        data: data,
+        theme: _agentMarkdownTheme(context),
+        useColumn: true,
+        selectable: true,
+        padding: EdgeInsets.zero,
+        enableCopyFullDocumentShortcut: false,
+        showCopyAllInContextMenu: false,
+      ),
     );
   }
 }
