@@ -963,6 +963,120 @@ void main() {
       await provider.dispose();
     });
 
+    test('parks _x.ai/ask_user_question until the user answers', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+      addTearDown(() async {
+        await subscription.cancel();
+        await provider.dispose();
+      });
+
+      await provider.startSession(
+        context: const AgentContext(projectPath: r'/repo'),
+      );
+      peer.emitServerRequest(
+        id: 91,
+        method: '_x.ai/ask_user_question',
+        params: <String, Object?>{
+          'sessionId': 'sess-1',
+          'toolCallId': 'ask-call-1',
+          'questions': <Object?>[
+            <String, Object?>{
+              'question': 'Which path?',
+              'options': <Object?>[
+                <String, Object?>{
+                  'label': 'ACP bridge',
+                  'description': 'Reuse existing transport',
+                },
+                <String, Object?>{'label': 'Native'},
+              ],
+            },
+          ],
+        },
+      );
+      await _waitUntil(
+        () => events.whereType<AgentQuestionRequestedEvent>().isNotEmpty,
+      );
+
+      final request = events
+          .whereType<AgentQuestionRequestedEvent>()
+          .single
+          .request;
+      expect(request.id, 'ask-call-1');
+      expect(request.sessionId, 'sess-1');
+      expect(request.questions, hasLength(1));
+      expect(request.questions.single.questionId, 'Which path?');
+      expect(provider.capabilities.supportsUserQuestions, isTrue);
+      expect(peer.responses, isEmpty);
+
+      await provider.respondToQuestion(
+        AgentQuestionResponse(
+          requestId: request.id,
+          answers: <String, List<String>>{
+            'Which path?': <String>['ACP bridge'],
+          },
+        ),
+      );
+
+      expect(peer.responses, hasLength(1));
+      final response = peer.responses.single;
+      expect(response['id'], 91);
+      final result = response['result']! as Map<String, Object?>;
+      expect(result['type'], 'accepted');
+      final answers = result['answers']! as Map<String, Object?>;
+      expect(answers['Which path?'], 'ACP bridge');
+    });
+
+    test(
+      'accepts x.ai/ask_user_question prefix and skips with empty answers',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+        addTearDown(() async {
+          await subscription.cancel();
+          await provider.dispose();
+        });
+
+        await provider.initialize();
+        peer.emitServerRequest(
+          id: 92,
+          method: 'x.ai/ask_user_question',
+          params: <String, Object?>{
+            'sessionId': 'sess-1',
+            'toolCallId': 'ask-call-2',
+            'questions': <Object?>[
+              <String, Object?>{
+                'question': 'Continue?',
+                'options': <Object?>[
+                  <String, Object?>{'label': 'Yes'},
+                ],
+              },
+            ],
+          },
+        );
+        await _waitUntil(
+          () => events.whereType<AgentQuestionRequestedEvent>().isNotEmpty,
+        );
+
+        await provider.respondToQuestion(
+          const AgentQuestionResponse(requestId: 'ask-call-2'),
+        );
+
+        final result = peer.responses.single['result']! as Map<String, Object?>;
+        expect(result['type'], 'skip_interview');
+      },
+    );
+
     test('parks x.ai/exit_plan_mode until user approves the plan', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
@@ -1013,6 +1127,46 @@ void main() {
       final response = peer.responses.single;
       expect(response['id'], 55);
       final result = response['result']! as Map<String, Object?>;
+      expect(result['outcome'], 'approved');
+    });
+
+    test('parks _x.ai/exit_plan_mode with underscore prefix', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+      addTearDown(() async {
+        await subscription.cancel();
+        await provider.dispose();
+      });
+
+      await provider.startSession(
+        context: const AgentContext(projectPath: r'/repo'),
+      );
+      peer.emitServerRequest(
+        id: 56,
+        method: '_x.ai/exit_plan_mode',
+        params: <String, Object?>{
+          'sessionId': 'sess-1',
+          'toolCallId': 'plan-call-underscore',
+          'planContent': '# Underscore plan',
+        },
+      );
+      await _waitUntil(
+        () => events.whereType<AgentPlanApprovalRequestedEvent>().isNotEmpty,
+      );
+
+      await provider.respondToPlanApproval(
+        const AgentPlanApprovalDecision(
+          requestId: 'plan-call-underscore',
+          kind: AgentPlanApprovalDecisionKind.accepted,
+        ),
+      );
+      expect(peer.responses.single['id'], 56);
+      final result = peer.responses.single['result']! as Map<String, Object?>;
       expect(result['outcome'], 'approved');
     });
 

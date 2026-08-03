@@ -245,6 +245,8 @@ class AgentProviderCapabilities {
     supportsResourceInput: true,
     supportsSkillInput: true,
     supportsPermissionRequests: true,
+    // `_x.ai/ask_user_question` park 到 UI 并经 respondToQuestion 回写。
+    supportsUserQuestions: true,
     supportsModeSelection: true,
     supportsPlanApproval: true,
     supportsModelSelection: true,

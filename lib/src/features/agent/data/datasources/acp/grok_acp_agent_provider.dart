@@ -15,6 +15,7 @@ import 'package:zeta/src/features/agent/data/mappers/acp_permission_mapper.dart'
 import 'package:zeta/src/features/agent/data/mappers/grok_acp_notification_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_billing_quota_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_error_normalizer.dart';
+import 'package:zeta/src/features/agent/data/mappers/grok_question_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_skills_mapper.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -29,6 +30,7 @@ typedef JsonRpcPeerFactory = JsonRpcPeer Function(AgentProviderConfig config);
 /// 启动 `grok agent stdio`，通过标准 ACP JSON-RPC 完成会话、流式回复与审批。
 /// 账号套餐额度通过 xAI 扩展 `_x.ai/billing` 读取。
 /// Skill 目录通过 xAI 扩展 `_x.ai/skills/list` 读取（本地 SKILL.md 扫描）。
+/// 结构化用户提问通过 `_x.ai/ask_user_question`（兼容 `x.ai/` 前缀）park 到 UI。
 /// 不支持的 Codex 专有能力通过 [capabilities] 关闭，并在误调用时明确失败。
 class GrokAcpAgentProvider
     implements
@@ -39,7 +41,8 @@ class GrokAcpAgentProvider
         AgentRefreshableModelCatalogProvider,
         AgentSkillsCatalogProvider,
         AgentConversationModeCatalogProvider,
-        AgentPlanApprovalProvider {
+        AgentPlanApprovalProvider,
+        AgentQuestionResponseProvider {
   GrokAcpAgentProvider({
     required this.config,
     JsonRpcPeer? peer,
@@ -47,6 +50,7 @@ class GrokAcpAgentProvider
     GrokSessionHistoryReader? sessionHistoryReader,
     GrokModelsCli? modelsCli,
     GrokAcpNotificationMapper? notificationMapper,
+    GrokQuestionMapper? questionMapper,
     List<Duration>? generatedTitlePollDelays,
   }) : _modelSelection = AgentModelSelection(
          modelId: config.selectedModel ?? config.defaultModel,
@@ -57,6 +61,7 @@ class GrokAcpAgentProvider
            sessionHistoryReader ?? GrokSessionHistoryReader(),
        _modelsCli = modelsCli ?? const GrokModelsCli(),
        _notificationMapper = notificationMapper ?? GrokAcpNotificationMapper(),
+       _questionMapper = questionMapper ?? const GrokQuestionMapper(),
        _generatedTitlePollDelays =
            generatedTitlePollDelays ?? _defaultGeneratedTitlePollDelays {
     // 在构造体中创建 peer，以便闭包捕获运行时模型选择。
@@ -108,6 +113,7 @@ class GrokAcpAgentProvider
   final GrokModelsCli _modelsCli;
   final GrokAcpNotificationMapper _notificationMapper;
   final List<Duration> _generatedTitlePollDelays;
+  final GrokQuestionMapper _questionMapper;
 
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
@@ -123,6 +129,10 @@ class GrokAcpAgentProvider
   ///（即 grok 的 `toolCallId`）。响应必须回到请求方，否则 shell 会一直等待。
   final Map<String, _PendingPlanApproval> _pendingPlanApprovals =
       <String, _PendingPlanApproval>{};
+
+  /// 挂起的 `_x.ai/ask_user_question`，key 为领域请求 id（优先 toolCallId）。
+  final Map<String, GrokPendingQuestion> _pendingQuestions =
+      <String, GrokPendingQuestion>{};
 
   final Map<String, String> _runningTurnIdsBySessionId = <String, String>{};
 
@@ -964,11 +974,16 @@ class GrokAcpAgentProvider
         reason: GrokIdentityInvalidationReason.cancel,
       );
     }
-    // 取消时关闭所有挂起的审批。
+    // 取消时关闭所有挂起的审批与用户提问，避免 shell 继续 park。
     for (final entry in List<_PendingAcpPermission>.from(
       _pendingPermissions.values,
     )) {
       await _respondPermissionCancelled(entry);
+    }
+    for (final pending in List<GrokPendingQuestion>.from(
+      _pendingQuestions.values,
+    )) {
+      await _respondQuestionSkipped(pending, reason: 'turnCancelled');
     }
   }
 
@@ -1038,6 +1053,27 @@ class GrokAcpAgentProvider
   }
 
   @override
+  Future<void> respondToQuestion(AgentQuestionResponse response) async {
+    final pending = _pendingQuestions.remove(response.requestId);
+    if (pending == null) {
+      _log.warning(
+        'Ignoring response for unknown Grok question ${response.requestId}',
+      );
+      return;
+    }
+
+    _log.info(
+      'Responding to Grok user question '
+      '(${response.answers.length} answered questions)',
+    );
+    await _peer.sendScopedResponse(
+      pending.requestId,
+      runtimeScope: pending.runtimeScope,
+      result: _questionMapper.response(response, pending: pending),
+    );
+  }
+
+  @override
   Future<void> dispose() {
     final existing = _disposeOperation;
     if (existing != null) {
@@ -1071,10 +1107,10 @@ class GrokAcpAgentProvider
         _pendingPermissions.remove(pending.requestKey);
       }
     }
-    // 与 permission 对称：dispose 时 best-effort 回 abandoned，避免 shell 继续
-    // park 在 x.ai/exit_plan_mode 上直到进程退出。
+    // 与 permission 对称：dispose 时 best-effort 回 abandoned/skip，避免 shell
+    // 继续 park 在 exit_plan_mode / ask_user_question 上直到进程退出。
     // 注意：此处 _disposed 已为 true，_addEvent 会短路；终态事件直接写入
-    // 尚未 close 的 stream，便于 UI 在 provider 拆掉前清掉审批卡片。
+    // 尚未 close 的 stream，便于 UI 在 provider 拆掉前清掉审批/提问卡片。
     for (final entry in _pendingPlanApprovals.entries.toList()) {
       try {
         await _respondPlanApprovalAbandoned(entry.value);
@@ -1086,6 +1122,30 @@ class GrokAcpAgentProvider
       }
     }
     _pendingPlanApprovals.clear();
+    for (final pending in _pendingQuestions.values.toList()) {
+      try {
+        await _peer.sendScopedResponse(
+          pending.requestId,
+          runtimeScope: pending.runtimeScope,
+          result: _questionMapper.response(
+            AgentQuestionResponse(requestId: pending.id),
+            pending: pending,
+          ),
+        );
+      } catch (_) {
+        // peer 已关闭时忽略。
+      }
+      if (!_events.isClosed) {
+        _events.add(
+          AgentQuestionResolvedEvent(
+            requestId: pending.id,
+            threadId: pending.sessionId ?? '',
+            raw: const <String, Object?>{'reason': 'disposed'},
+          ),
+        );
+      }
+    }
+    _pendingQuestions.clear();
     await _notificationSubscription?.cancel();
     await _serverRequestSubscription?.cancel();
     await _stderrSubscription?.cancel();
@@ -1492,8 +1552,13 @@ class GrokAcpAgentProvider
       switch (request.method) {
         case 'session/request_permission':
           await _handlePermissionRequest(request);
+        // Grok 扩展方法在 wire 上常见 `_x.ai/` 前缀；同时兼容无下划线形式。
         case 'x.ai/exit_plan_mode':
+        case '_x.ai/exit_plan_mode':
           await _handlePlanApprovalRequest(request);
+        case 'x.ai/ask_user_question':
+        case '_x.ai/ask_user_question':
+          await _handleQuestionRequest(request);
         case 'fs/read_text_file':
           await _handleReadTextFile(request);
         case 'fs/write_text_file':
@@ -1566,6 +1631,16 @@ class GrokAcpAgentProvider
       _addEvent(AgentPlanApprovalResolvedEvent(requestId: entry.key));
     }
     _pendingPlanApprovals.clear();
+    for (final pending in _pendingQuestions.values) {
+      _addEvent(
+        AgentQuestionResolvedEvent(
+          requestId: pending.id,
+          threadId: pending.sessionId ?? '',
+          raw: const <String, Object?>{'reason': 'connectionClosed'},
+        ),
+      );
+    }
+    _pendingQuestions.clear();
     _emitConnectionUnavailableStatus();
   }
 
@@ -1615,6 +1690,90 @@ class GrokAcpAgentProvider
       AgentProviderStatus(
         state: AgentProviderConnectionState.running,
         message: 'Waiting for approval: ${mapping.request.title}',
+      ),
+    );
+  }
+
+  /// 处理 `_x.ai/ask_user_question` 结构化用户提问反请求。
+  ///
+  /// 与 permission / plan approval 相同：先 park JSON-RPC，再经
+  /// [respondToQuestion] 回写；空 answers 编码为 `skip_interview`。
+  Future<void> _handleQuestionRequest(JsonRpcRequest request) async {
+    final params = request.params;
+    final sessionId = params['sessionId']?.toString();
+    final requestRuntimeScope = request.runtimeScope;
+    if (sessionId != null && requestRuntimeScope != null) {
+      _notificationMapper.noteBoundary(
+        runtimeScope: requestRuntimeScope,
+        sessionId: sessionId,
+        runningTurnId: _runningTurnIdsBySessionId[sessionId],
+        kind: GrokNarrativeBoundaryKind.userQuestion,
+      );
+    }
+
+    final mapped = _questionMapper.mapRequest(
+      requestId: request.id,
+      params: params,
+      runningTurnId: sessionId == null
+          ? null
+          : _runningTurnIdsBySessionId[sessionId],
+    );
+
+    // 同领域 id 已有在途提问时，先对旧 JSON-RPC 回 skip，再 park 新请求。
+    final existing = _pendingQuestions.remove(mapped.pending.id);
+    if (existing != null) {
+      _log.warning(
+        'Replacing pending Grok question ${mapped.pending.id} '
+        '(old rpc=${existing.requestId}, new rpc=${request.id})',
+      );
+      try {
+        await _peer.sendScopedResponse(
+          existing.requestId,
+          runtimeScope: existing.runtimeScope,
+          result: _questionMapper.response(
+            AgentQuestionResponse(requestId: existing.id),
+            pending: existing,
+          ),
+        );
+      } catch (_) {
+        // 旧响应失败时仍继续 park 新请求。
+      }
+      _addEvent(
+        AgentQuestionResolvedEvent(
+          requestId: existing.id,
+          threadId: existing.sessionId ?? '',
+          raw: const <String, Object?>{'reason': 'replaced'},
+        ),
+      );
+    }
+
+    if (mapped.event.request.questions.isEmpty) {
+      _log.warning(
+        'Grok question ${mapped.pending.id} has no questions; skipping',
+      );
+      await _peer.sendScopedResponse(
+        request.id,
+        runtimeScope: request.runtimeScope,
+        result: _questionMapper.response(
+          AgentQuestionResponse(requestId: mapped.pending.id),
+          pending: mapped.pending,
+        ),
+      );
+      return;
+    }
+
+    _pendingQuestions[mapped.pending.id] = mapped.pending.copyWith(
+      runtimeScope: request.runtimeScope,
+    );
+    _log.info(
+      'Grok user question requested '
+      '(id=${mapped.pending.id}, questions=${mapped.event.request.questions.length})',
+    );
+    _addEvent(mapped.event);
+    _emitStatus(
+      AgentProviderStatus(
+        state: AgentProviderConnectionState.running,
+        message: 'Waiting for answers: ${mapped.event.request.title}',
       ),
     );
   }
@@ -1786,6 +1945,33 @@ class GrokAcpAgentProvider
       pending.requestId,
       runtimeScope: pending.runtimeScope,
       result: const <String, Object?>{'outcome': 'abandoned'},
+    );
+  }
+
+  /// 跳过已 park 的用户提问（cancel/dispose）；会清 pending 并发出 resolved。
+  Future<void> _respondQuestionSkipped(
+    GrokPendingQuestion pending, {
+    required String reason,
+  }) async {
+    _pendingQuestions.remove(pending.id);
+    try {
+      await _peer.sendScopedResponse(
+        pending.requestId,
+        runtimeScope: pending.runtimeScope,
+        result: _questionMapper.response(
+          AgentQuestionResponse(requestId: pending.id),
+          pending: pending,
+        ),
+      );
+    } catch (_) {
+      // peer 已关闭时忽略。
+    }
+    _addEvent(
+      AgentQuestionResolvedEvent(
+        requestId: pending.id,
+        threadId: pending.sessionId ?? '',
+        raw: <String, Object?>{'reason': reason},
+      ),
     );
   }
 
