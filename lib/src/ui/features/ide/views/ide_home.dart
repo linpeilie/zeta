@@ -266,7 +266,7 @@ class _IdeHomeState extends State<IdeHome> {
       titleBarActions: <WindowTitleBarAction>[
         WindowTitleBarAction(
           key: const ValueKey('titlebar-usage-statistics-action'),
-          icon: Icons.query_stats_rounded,
+          icon: sf.LucideIcons.chartLine,
           tooltip: 'Usage statistics',
           semanticLabel: 'Open usage statistics page',
           active: _page == _IdeHomePage.usageStatistics,

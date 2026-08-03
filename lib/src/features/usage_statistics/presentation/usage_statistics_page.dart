@@ -1369,7 +1369,7 @@ class _EmptyUsageState extends StatelessWidget {
         child: Column(
           children: [
             Icon(
-              Icons.query_stats_rounded,
+              sf.LucideIcons.chartLine,
               size: 36,
               color: colors.textTertiary,
             ),
