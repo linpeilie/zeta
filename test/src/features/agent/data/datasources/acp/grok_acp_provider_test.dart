@@ -866,6 +866,269 @@ void main() {
       await provider.dispose();
     });
 
+    test(
+      'keeps concurrent session prompts isolated and defers global ready',
+      () async {
+        final peer = _FakeJsonRpcPeer()
+          ..promptCompleterQueue = <Completer<Object?>>[];
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+        addTearDown(() async {
+          await subscription.cancel();
+          await provider.dispose();
+        });
+
+        final sessionA = await provider.startSession(
+          context: const AgentContext(projectPath: r'/repo'),
+        );
+        final sessionB = await provider.resumeSession(
+          'sess-2',
+          context: const AgentContext(projectPath: r'/repo'),
+        );
+        expect(sessionA.id, isNot(sessionB.id));
+
+        final turnAFuture = provider.sendMessage(
+          session: sessionA,
+          context: const AgentContext(projectPath: r'/repo'),
+          message: 'work A',
+        );
+        final turnBFuture = provider.sendMessage(
+          session: sessionB,
+          context: const AgentContext(projectPath: r'/repo'),
+          message: 'work B',
+        );
+        await _waitUntil(() => peer.promptCompleterQueue!.length == 2);
+
+        final started = events.whereType<AgentTurnStartedEvent>().toList();
+        expect(started, hasLength(2));
+        expect(started.map((e) => e.turn.sessionId).toSet(), <String>{
+          sessionA.id,
+          sessionB.id,
+        });
+
+        int readyCount() => events
+            .whereType<AgentStatusEvent>()
+            .where((e) => e.status.state == AgentProviderConnectionState.ready)
+            .length;
+        // initialize 会先发 ready；之后只关心是否新增 ready。
+        final readyBeforeComplete = readyCount();
+
+        // 完成 A 后，B 仍 running：不得新增 ready。
+        peer.promptCompleterQueue![0].complete(<String, Object?>{
+          'stopReason': 'end_turn',
+        });
+        await turnAFuture;
+        await Future<void>.delayed(Duration.zero);
+        expect(readyCount(), readyBeforeComplete);
+
+        peer.promptCompleterQueue![1].complete(<String, Object?>{
+          'stopReason': 'end_turn',
+        });
+        await turnBFuture;
+        await Future<void>.delayed(Duration.zero);
+
+        expect(readyCount(), greaterThan(readyBeforeComplete));
+      },
+    );
+
+    test(
+      'cancelTurn only clears pending interactions for that session',
+      () async {
+        final peer = _FakeJsonRpcPeer()
+          ..promptCompleterQueue = <Completer<Object?>>[];
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+        addTearDown(() async {
+          await subscription.cancel();
+          await provider.dispose();
+        });
+
+        final sessionA = await provider.startSession(
+          context: const AgentContext(projectPath: r'/repo'),
+        );
+        final sessionB = await provider.resumeSession(
+          'sess-2',
+          context: const AgentContext(projectPath: r'/repo'),
+        );
+
+        final turnAFuture = provider.sendMessage(
+          session: sessionA,
+          context: const AgentContext(projectPath: r'/repo'),
+          message: 'A',
+        );
+        final turnBFuture = provider.sendMessage(
+          session: sessionB,
+          context: const AgentContext(projectPath: r'/repo'),
+          message: 'B',
+        );
+        await _waitUntil(() => peer.promptCompleterQueue!.length == 2);
+
+        peer.emitServerRequest(
+          id: 201,
+          method: 'session/request_permission',
+          params: <String, Object?>{
+            'sessionId': sessionA.id,
+            'toolCall': <String, Object?>{
+              'toolCallId': 'perm-a',
+              'title': 'A only',
+            },
+            'options': <Object?>[
+              <String, Object?>{
+                'optionId': 'allow-once',
+                'name': 'Allow once',
+                'kind': 'allow_once',
+              },
+            ],
+          },
+        );
+        peer.emitServerRequest(
+          id: 202,
+          method: '_x.ai/ask_user_question',
+          params: <String, Object?>{
+            'sessionId': sessionB.id,
+            'toolCallId': 'ask-b',
+            'questions': <Object?>[
+              <String, Object?>{
+                'question': 'Keep B?',
+                'options': <Object?>[
+                  <String, Object?>{'label': 'Yes'},
+                ],
+              },
+            ],
+          },
+        );
+        await _waitUntil(
+          () =>
+              events.whereType<AgentPermissionRequestedEvent>().isNotEmpty &&
+              events.whereType<AgentQuestionRequestedEvent>().isNotEmpty,
+        );
+
+        final turnA = events
+            .whereType<AgentTurnStartedEvent>()
+            .firstWhere((e) => e.turn.sessionId == sessionA.id)
+            .turn;
+        await provider.cancelTurn(turnA);
+        await Future<void>.delayed(Duration.zero);
+
+        // A 的 permission 被 cancel；B 的 question 仍 park，尚未响应。
+        expect(peer.responses.any((r) => r['id'] == 201), isTrue);
+        expect(peer.responses.any((r) => r['id'] == 202), isFalse);
+        expect(events.whereType<AgentQuestionRequestedEvent>(), hasLength(1));
+
+        // B 仍可正常作答。
+        await provider.respondToQuestion(
+          AgentQuestionResponse(
+            requestId: 'ask-b',
+            answers: <String, List<String>>{
+              'Keep B?': <String>['Yes'],
+            },
+          ),
+        );
+        expect(peer.responses.any((r) => r['id'] == 202), isTrue);
+
+        peer.promptCompleterQueue![0].complete(<String, Object?>{
+          'stopReason': 'cancelled',
+        });
+        peer.promptCompleterQueue![1].complete(<String, Object?>{
+          'stopReason': 'end_turn',
+        });
+        await Future.wait(<Future<void>>[turnAFuture, turnBFuture]);
+      },
+    );
+
+    test('rejects a second prompt on the same session while running', () async {
+      final peer = _FakeJsonRpcPeer()..promptCompleter = Completer<Object?>();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+
+      final session = await provider.startSession(
+        context: const AgentContext(projectPath: r'/repo'),
+      );
+      final first = provider.sendMessage(
+        session: session,
+        context: const AgentContext(projectPath: r'/repo'),
+        message: 'first',
+      );
+      await _waitUntil(() => peer.requestMethods.contains('session/prompt'));
+
+      await expectLater(
+        provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: r'/repo'),
+          message: 'second',
+        ),
+        throwsA(isA<StateError>()),
+      );
+
+      peer.promptCompleter!.complete(<String, Object?>{
+        'stopReason': 'end_turn',
+      });
+      await first;
+    });
+
+    test(
+      'prompt_complete notification can finish a running turn as fallback',
+      () async {
+        final peer = _FakeJsonRpcPeer()..promptCompleter = Completer<Object?>();
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+        addTearDown(() async {
+          await subscription.cancel();
+          await provider.dispose();
+        });
+
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'/repo'),
+        );
+        final promptFuture = provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: r'/repo'),
+          message: 'hang until notification',
+        );
+        await _waitUntil(() => peer.requestMethods.contains('session/prompt'));
+
+        peer.emitNotification(
+          '_x.ai/session/prompt_complete',
+          <String, Object?>{'sessionId': session.id, 'stopReason': 'end_turn'},
+        );
+        await _waitUntil(
+          () => events.whereType<AgentTurnCompletedEvent>().isNotEmpty,
+        );
+
+        expect(
+          events.whereType<AgentTurnCompletedEvent>().last.status,
+          AgentHistoryTurnStatus.completed,
+        );
+        expect(
+          events.whereType<AgentStatusEvent>().any(
+            (e) => e.status.state == AgentProviderConnectionState.ready,
+          ),
+          isTrue,
+        );
+
+        // 迟到的 RPC 终态应被 first-terminal-wins 吸收，不抛错。
+        peer.promptCompleter!.complete(<String, Object?>{
+          'stopReason': 'end_turn',
+        });
+        await promptFuture;
+      },
+    );
+
     test('suppresses session/load replay updates from live timeline', () async {
       final peer = _FakeJsonRpcPeer()..loadSessionEmitsReplay = true;
       final provider = GrokAcpAgentProvider(
@@ -1983,6 +2246,9 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
   /// 非空时延迟 `session/prompt` 响应，便于测试 live 通知竞态。
   Completer<Object?>? promptCompleter;
 
+  /// 非空时每个 `session/prompt` 入队独立 Completer，支持多 session 并发。
+  List<Completer<Object?>>? promptCompleterQueue;
+
   @override
   Stream<JsonRpcNotification> get notifications => _notifications.stream;
 
@@ -2006,8 +2272,16 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
   }) async {
     requestMethods.add(method);
     requestParams.add(params);
-    if (method == 'session/prompt' && promptCompleter != null) {
-      return promptCompleter!.future;
+    if (method == 'session/prompt') {
+      final queue = promptCompleterQueue;
+      if (queue != null) {
+        final completer = Completer<Object?>();
+        queue.add(completer);
+        return completer.future;
+      }
+      if (promptCompleter != null) {
+        return promptCompleter!.future;
+      }
     }
     return switch (method) {
       'initialize' => <String, Object?>{

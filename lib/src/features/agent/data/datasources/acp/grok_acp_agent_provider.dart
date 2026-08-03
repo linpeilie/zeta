@@ -782,6 +782,14 @@ class GrokAcpAgentProvider
   }) async {
     final meta = _promptMetaFor(configuration.conversationMode);
     await initialize();
+    // 同 session 同时只允许一个 live prompt；覆盖 runningTurnId 会丢终态关联。
+    final existingTurnId = _runningTurnIdsBySessionId[session.id];
+    if (existingTurnId != null) {
+      throw StateError(
+        'Grok session ${session.id} already has an active turn '
+        '($existingTurnId); wait for it to finish or cancel it first',
+      );
+    }
     // 模型是 session 级配置；共享 Provider 下必须按本次发送目标应用，不能依赖
     // “最后激活会话”这种全局可变状态。
     await _applyModelSelectionIfNeeded(session.id);
@@ -871,12 +879,8 @@ class GrokAcpAgentProvider
       );
       _noteTurnCompletedFromMapped(sessionId: session.id, mapped: mapped);
       _emitMapped(mapped);
-      _emitStatus(
-        AgentProviderStatus(
-          state: AgentProviderConnectionState.ready,
-          message: '${config.displayName} ready',
-        ),
-      );
+      // 多 session 共享进程：仅当没有任何 running turn 时才广播 ready。
+      _emitReadyIfIdle();
     } catch (error, stackTrace) {
       final failure = _normalizePromptFailure(error);
       _emitPromptFailure(
@@ -894,6 +898,10 @@ class GrokAcpAgentProvider
         promptId: null,
         reason: GrokIdentityInvalidationReason.promptError,
       );
+      // prompt 失败也要清掉本 session 的 running 标记，否则会永久挡后续发送。
+      if (_runningTurnIdsBySessionId[session.id] == turnId) {
+        _runningTurnIdsBySessionId.remove(session.id);
+      }
       if (failure.connectionLost) {
         if (_runningTurnIdsBySessionId.isEmpty) {
           _notificationMapper.invalidateRuntime(
@@ -903,12 +911,7 @@ class GrokAcpAgentProvider
         }
         _emitConnectionUnavailableStatus();
       } else {
-        _emitStatus(
-          AgentProviderStatus(
-            state: AgentProviderConnectionState.ready,
-            message: '${config.displayName} ready',
-          ),
-        );
+        _emitReadyIfIdle();
       }
     }
 
@@ -974,17 +977,12 @@ class GrokAcpAgentProvider
         reason: GrokIdentityInvalidationReason.cancel,
       );
     }
-    // 取消时关闭所有挂起的审批与用户提问，避免 shell 继续 park。
-    for (final entry in List<_PendingAcpPermission>.from(
-      _pendingPermissions.values,
-    )) {
-      await _respondPermissionCancelled(entry);
-    }
-    for (final pending in List<GrokPendingQuestion>.from(
-      _pendingQuestions.values,
-    )) {
-      await _respondQuestionSkipped(pending, reason: 'turnCancelled');
-    }
+    // 只清理本 session 的挂起交互，避免多 session 并发时误伤其它会话。
+    await _clearPendingInteractionsForSession(
+      turn.sessionId,
+      reason: 'turnCancelled',
+    );
+    _emitReadyIfIdle();
   }
 
   @override
@@ -1230,6 +1228,7 @@ class GrokAcpAgentProvider
       );
       _noteTurnCompletedFromMapped(sessionId: sessionId, mapped: mapped);
       _emitMapped(mapped);
+      _emitReadyIfIdle();
       return;
     }
 
@@ -1245,13 +1244,40 @@ class GrokAcpAgentProvider
       );
       _noteTurnCompletedFromMapped(sessionId: sessionId, mapped: mapped);
       _emitMapped(mapped);
+      _emitReadyIfIdle();
+      return;
+    }
+
+    // 终态兜底：prompt RPC 可能晚于 extension 通知；first-terminal-wins 去重。
+    if (method == '_x.ai/session/prompt_complete' ||
+        method == 'x.ai/session/prompt_complete') {
+      _handlePromptCompleteNotification(
+        params: params,
+        runtimeScope: notificationRuntimeScope,
+      );
       return;
     }
 
     // x.ai/session_notification 携带 sessionUpdate 枚举（tag `sessionUpdate`）；
     // 插件/hooks 变更会增删 skill，需失效本地 skill 目录让 composer 重新拉取。
+    // turn_completed 亦可能经此通道到达，作为 running turn 终态兜底。
     if (method == 'x.ai/session_notification' ||
         method == '_x.ai/session_notification') {
+      final update = _asStringKeyedMap(params['update']);
+      final updateType = update?['sessionUpdate']?.toString();
+      if (updateType == 'turn_completed') {
+        final sessionId = params['sessionId']?.toString();
+        final merged = <String, Object?>{
+          ...params,
+          ...?update,
+          'sessionId': ?sessionId,
+        };
+        _handlePromptCompleteNotification(
+          params: merged,
+          runtimeScope: notificationRuntimeScope,
+        );
+        return;
+      }
       _handleSessionNotificationInvalidation(params);
       return;
     }
@@ -1830,6 +1856,7 @@ class GrokAcpAgentProvider
     _pendingPlanApprovals[toolCallId] = _PendingPlanApproval(
       requestId: request.id,
       runtimeScope: request.runtimeScope,
+      sessionId: sessionId,
     );
 
     _log.info('Grok plan approval requested (tool=$toolCallId)');
@@ -2210,6 +2237,95 @@ class GrokAcpAgentProvider
     _addEvent(AgentStatusEvent(status));
   }
 
+  /// 多 session 共享进程时，只有全部 turn 结束后才广播 ready。
+  void _emitReadyIfIdle() {
+    if (_runningTurnIdsBySessionId.isNotEmpty) {
+      return;
+    }
+    _emitStatus(
+      AgentProviderStatus(
+        state: AgentProviderConnectionState.ready,
+        message: '${config.displayName} ready',
+      ),
+    );
+  }
+
+  /// 将 `_x.ai/session/prompt_complete` / `turn_completed` 收敛为 turn 终态。
+  ///
+  /// 仅在该 session 仍有 running turn 时生效；与 prompt RPC 通过
+  /// first-terminal-wins 去重，避免双重完成。
+  void _handlePromptCompleteNotification({
+    required Map<String, Object?> params,
+    required AgentRuntimeScope runtimeScope,
+  }) {
+    final sessionId = params['sessionId']?.toString();
+    if (sessionId == null || sessionId.isEmpty) {
+      return;
+    }
+    final turnId = _runningTurnIdsBySessionId[sessionId];
+    if (turnId == null) {
+      return;
+    }
+    final stopReason =
+        params['stopReason']?.toString() ??
+        params['stop_reason']?.toString() ??
+        params['reason']?.toString() ??
+        'end_turn';
+    final mapped = _notificationMapper.mapPromptTerminal(
+      runtimeScope: runtimeScope,
+      sessionId: sessionId,
+      turnId: turnId,
+      stopReason: stopReason,
+      source: GrokTerminalSource.xaiNotification,
+      raw: params,
+    );
+    if (mapped.events.isEmpty) {
+      return;
+    }
+    _log.fine(
+      'Grok prompt terminal from notification for $sessionId '
+      '(stopReason=$stopReason)',
+    );
+    _noteTurnCompletedFromMapped(sessionId: sessionId, mapped: mapped);
+    _emitMapped(mapped);
+    _emitReadyIfIdle();
+  }
+
+  /// 清理指定 session 上 park 的 permission / question / plan approval。
+  Future<void> _clearPendingInteractionsForSession(
+    String sessionId, {
+    required String reason,
+  }) async {
+    for (final entry in List<_PendingAcpPermission>.from(
+      _pendingPermissions.values,
+    )) {
+      if (entry.mapping.request.sessionId != sessionId) {
+        continue;
+      }
+      await _respondPermissionCancelled(entry);
+    }
+    for (final pending in List<GrokPendingQuestion>.from(
+      _pendingQuestions.values,
+    )) {
+      if (pending.sessionId != sessionId) {
+        continue;
+      }
+      await _respondQuestionSkipped(pending, reason: reason);
+    }
+    for (final entry in _pendingPlanApprovals.entries.toList()) {
+      if (entry.value.sessionId != sessionId) {
+        continue;
+      }
+      _pendingPlanApprovals.remove(entry.key);
+      try {
+        await _respondPlanApprovalAbandoned(entry.value);
+      } catch (_) {
+        // peer 已关闭时忽略。
+      }
+      _addEvent(AgentPlanApprovalResolvedEvent(requestId: entry.key));
+    }
+  }
+
   void _emitConnectionUnavailableStatus() {
     _emitStatus(
       const AgentProviderStatus(
@@ -2262,12 +2378,19 @@ class _PendingAcpPermission {
 
 /// 已 park 的 `x.ai/exit_plan_mode` 反请求，等待用户作出审批决定后回写响应。
 class _PendingPlanApproval {
-  _PendingPlanApproval({required this.requestId, required this.runtimeScope});
+  _PendingPlanApproval({
+    required this.requestId,
+    required this.runtimeScope,
+    required this.sessionId,
+  });
 
   /// ext_method 的 JSON-RPC request id（响应的目标）。
   final Object requestId;
 
   final AgentRuntimeScope? runtimeScope;
+
+  /// 所属 session，cancel 时只清理本会话，避免误伤并行会话。
+  final String sessionId;
 }
 
 final class _GrokPromptFailure {
