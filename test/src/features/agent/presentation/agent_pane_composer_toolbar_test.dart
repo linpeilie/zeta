@@ -75,17 +75,18 @@ void main() {
         expect(sessionSelector, findsOneWidget);
         expect(modelSelector, findsOneWidget);
         expect(permissionSelector, findsOneWidget);
+        // 左侧：模式 → 会话配置 → 审批；模型选择器固定在右侧。
         expect(
           tester.getTopLeft(modeSelector).dx,
           lessThan(tester.getTopLeft(sessionSelector).dx),
         );
         expect(
           tester.getTopLeft(sessionSelector).dx,
-          lessThan(tester.getTopLeft(modelSelector).dx),
+          lessThan(tester.getTopLeft(permissionSelector).dx),
         );
         expect(
-          tester.getTopLeft(modelSelector).dx,
-          lessThan(tester.getTopLeft(permissionSelector).dx),
+          tester.getTopLeft(permissionSelector).dx,
+          lessThan(tester.getTopLeft(modelSelector).dx),
         );
 
         var selectionNotifications = 0;
@@ -581,10 +582,13 @@ void main() {
         );
         final toolbar = find.byKey(const ValueKey('agent-composer-toolbar'));
         final sendButton = find.byKey(const ValueKey('agent-send-button'));
+        final modelSelector = find.byKey(
+          const ValueKey('agent-model-selector'),
+        );
+        // 仅左侧可裁切区；模型选择器在工具栏右侧，不参与 clip 组。
         final selectorControls = <Finder>[
           find.byKey(const ValueKey('agent-mode-selector')),
           find.byKey(const ValueKey('agent-session-config-cursor-model')),
-          find.byKey(const ValueKey('agent-model-selector')),
           find.byKey(const ValueKey('agent-permission-policy-selector')),
         ];
         final wideSelectorsLeft = tester.getTopLeft(selectors).dx;
@@ -607,6 +611,7 @@ void main() {
         expect(toolbar, findsOneWidget);
         expect(moreActionsButton, findsOneWidget);
         expect(selectors, findsOneWidget);
+        expect(modelSelector, findsOneWidget);
         expect(sendButton, findsOneWidget);
         expect(
           find.byKey(const ValueKey('agent-composer-selector-scroll')),
@@ -618,6 +623,10 @@ void main() {
             matching: find.byKey(const ValueKey('agent-mode-selector')),
           ),
           findsOneWidget,
+        );
+        expect(
+          find.descendant(of: selectors, matching: modelSelector),
+          findsNothing,
         );
         expect(
           find.descendant(of: selectors, matching: moreActionsButton),
@@ -644,6 +653,10 @@ void main() {
           findsOneWidget,
         );
         expect(
+          find.descendant(of: toolbar, matching: modelSelector),
+          findsOneWidget,
+        );
+        expect(
           find.descendant(of: toolbar, matching: sendButton),
           findsOneWidget,
         );
@@ -657,8 +670,21 @@ void main() {
           moreOrLessEquals(toolbarCenterY, epsilon: 0.5),
         );
         expect(
+          tester.getCenter(modelSelector).dy,
+          moreOrLessEquals(toolbarCenterY, epsilon: 0.5),
+        );
+        expect(
           tester.getCenter(sendButton).dy,
           moreOrLessEquals(toolbarCenterY, epsilon: 0.5),
+        );
+        // 模型选择器在左侧选择器之后、发送按钮之前。
+        expect(
+          tester.getTopLeft(modelSelector).dx,
+          greaterThan(tester.getTopLeft(selectors).dx),
+        );
+        expect(
+          tester.getTopLeft(modelSelector).dx,
+          lessThan(tester.getTopLeft(sendButton).dx),
         );
         final narrowSelectorsLeft = tester.getTopLeft(selectors).dx;
         for (var index = 0; index < selectorControls.length; index++) {

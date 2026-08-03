@@ -3,7 +3,8 @@ part of '../agent_pane.dart';
 /// 底部输入面板。
 ///
 /// 上半部分是多行输入框，下半部分是操作行：左侧通过“更多操作”菜单承载文件、
-/// 图片和 Plan 快捷入口，并渐进展示模型、思考程度和 Fast，右侧放发送/取消按钮。
+/// 图片和 Plan 快捷入口，并渐进展示模式/会话配置/审批策略；模型选择器固定在右侧，
+/// 位于上下文进度圆圈左侧，发送/取消按钮最右。
 class _AgentComposer extends StatelessWidget {
   const _AgentComposer({
     required this.controller,
@@ -143,6 +144,7 @@ class _AgentComposer extends StatelessWidget {
     final contextWindowTokenProgress = _contextWindowTokenUsageProgressValue(
       currentWindowTokenUsage,
     );
+    // 左侧可裁切选择器：模式、会话配置、审批策略。模型选择器单独放右侧。
     final selectorControls = <Widget>[];
     void addSelector(Widget control) {
       if (selectorControls.isNotEmpty) {
@@ -172,20 +174,6 @@ class _AgentComposer extends StatelessWidget {
         ),
       );
     }
-    if (showModelSelection &&
-        (modelConfigState.models.isNotEmpty || modelConfigState.isRefreshing)) {
-      addSelector(
-        _AgentModelConfig(
-          state: modelConfigState,
-          onSelectModel: onSelectModel,
-          onSelectReasoningEffort: onSelectReasoningEffort,
-          onSelectFastEnabled: onSelectFastEnabled,
-          onResolveCompatibility: onResolveModelCompatibility,
-          onRetrySave: onRetryModelConfiguration,
-          onPopoverClosed: onCloseModelConfiguration,
-        ),
-      );
-    }
     if (showPermissionPolicy) {
       addSelector(
         _PermissionPolicyButton(
@@ -196,6 +184,21 @@ class _AgentComposer extends StatelessWidget {
         ),
       );
     }
+    // 模型选择器固定在上下文进度圆圈左侧，不参与左侧裁切区。
+    final Widget? modelSelector =
+        showModelSelection &&
+            (modelConfigState.models.isNotEmpty ||
+                modelConfigState.isRefreshing)
+        ? _AgentModelConfig(
+            state: modelConfigState,
+            onSelectModel: onSelectModel,
+            onSelectReasoningEffort: onSelectReasoningEffort,
+            onSelectFastEnabled: onSelectFastEnabled,
+            onResolveCompatibility: onResolveModelCompatibility,
+            onRetrySave: onRetryModelConfiguration,
+            onPopoverClosed: onCloseModelConfiguration,
+          )
+        : null;
     return ListenableBuilder(
       listenable: focusNode,
       builder: (context, _) {
@@ -297,7 +300,7 @@ class _AgentComposer extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: IdeSpacing.space6),
-                  // 工具栏始终保持单行；空间不足时裁切右侧选择器，不移动已有控件。
+                  // 工具栏始终保持单行：中间区左侧可裁切；模型贴右，位于进度圆圈左侧。
                   Builder(
                     builder: (context) {
                       final moreActions = _buildMoreActions(context);
@@ -309,38 +312,83 @@ class _AgentComposer extends StatelessWidget {
                       final tokenUsage = contextWindowTokenProgress == null
                           ? null
                           : Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: IdeSpacing.space8,
+                              padding: EdgeInsets.only(
+                                left: modelSelector == null
+                                    ? IdeSpacing.space8
+                                    : IdeSpacing.space6,
+                                right: IdeSpacing.space8,
                               ),
                               child: _ComposerContextWindowUsage(
                                 tooltip: contextWindowTokenTooltip,
                                 progress: contextWindowTokenProgress,
                               ),
                             );
+                      final hasLeftSelectors = selectorControls.isNotEmpty;
+                      final hasModel = modelSelector != null;
 
                       return Row(
                         key: const ValueKey('agent-composer-toolbar'),
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           moreActions,
-                          if (selectorControls.isNotEmpty) ...[
+                          if (hasLeftSelectors || hasModel) ...[
                             const SizedBox(width: IdeSpacing.space4),
                             Expanded(
-                              child: SizedBox(
-                                height: 28,
-                                child: ClipRect(
-                                  key: const ValueKey(
-                                    'agent-composer-selectors',
-                                  ),
-                                  child: OverflowBox(
-                                    alignment: Alignment.centerLeft,
-                                    maxWidth: double.infinity,
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: selectorControls,
-                                    ),
-                                  ),
-                                ),
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  return Row(
+                                    children: [
+                                      // 左侧选择器占用剩余空间并可裁切，把模型顶到贴进度圆圈。
+                                      Expanded(
+                                        child: hasLeftSelectors
+                                            ? SizedBox(
+                                                height: 28,
+                                                child: ClipRect(
+                                                  key: const ValueKey(
+                                                    'agent-composer-selectors',
+                                                  ),
+                                                  child: OverflowBox(
+                                                    alignment:
+                                                        Alignment.centerLeft,
+                                                    maxWidth: double.infinity,
+                                                    child: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children:
+                                                          selectorControls,
+                                                    ),
+                                                  ),
+                                                ),
+                                              )
+                                            : const SizedBox.shrink(),
+                                      ),
+                                      if (modelSelector
+                                          case final Widget model) ...[
+                                        // 按固有宽度占位并靠右；极窄时裁切，避免撑破工具栏。
+                                        ConstrainedBox(
+                                          constraints: BoxConstraints(
+                                            maxWidth: constraints.maxWidth,
+                                          ),
+                                          child: UnconstrainedBox(
+                                            constrainedAxis: Axis.vertical,
+                                            clipBehavior: Clip.hardEdge,
+                                            alignment: Alignment.centerLeft,
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                if (hasLeftSelectors)
+                                                  const SizedBox(
+                                                    width: IdeSpacing.space4,
+                                                  ),
+                                                model,
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  );
+                                },
                               ),
                             ),
                           ] else
