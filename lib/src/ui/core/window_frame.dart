@@ -153,19 +153,6 @@ class _TitleBar extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                             horizontal: IdeSpacing.space10,
                           ),
-                          // heightFactor 避免 Row 在无限高约束下把 Align 拉爆。
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            heightFactor: 1,
-                            child: Text(
-                              appTitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: textStyles.bodyMedium.copyWith(
-                                color: colors.textSecondary,
-                              ),
-                            ),
-                          ),
                         ),
                 ),
               ),
