@@ -62,6 +62,8 @@ class _AgentMentionFilePickerPopover extends StatefulWidget {
     required this.candidatesFor,
     required this.onSelect,
     required this.onRequestClose,
+    this.filesListenable,
+    this.isIndexReady,
   });
 
   final double width;
@@ -71,6 +73,12 @@ class _AgentMentionFilePickerPopover extends StatefulWidget {
   final List<WorkspaceNode> Function(String query) candidatesFor;
   final ValueChanged<WorkspaceNode> onSelect;
   final VoidCallback onRequestClose;
+
+  /// 后台语料就绪时通知，用于在 popover 打开期间刷新候选。
+  final Listenable? filesListenable;
+
+  /// 完整文件索引是否已就绪；未注入时视为就绪。
+  final bool Function()? isIndexReady;
 
   @override
   State<_AgentMentionFilePickerPopover> createState() =>
@@ -84,13 +92,25 @@ class _AgentMentionFilePickerPopoverState
     super.initState();
     widget.documentController.addListener(_handleDocumentChanged);
     widget.listController.addListener(_handleListChanged);
+    widget.filesListenable?.addListener(_handleFilesChanged);
     _refreshCandidates();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AgentMentionFilePickerPopover oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.filesListenable != widget.filesListenable) {
+      oldWidget.filesListenable?.removeListener(_handleFilesChanged);
+      widget.filesListenable?.addListener(_handleFilesChanged);
+      _refreshCandidates();
+    }
   }
 
   @override
   void dispose() {
     widget.documentController.removeListener(_handleDocumentChanged);
     widget.listController.removeListener(_handleListChanged);
+    widget.filesListenable?.removeListener(_handleFilesChanged);
     super.dispose();
   }
 
@@ -110,6 +130,14 @@ class _AgentMentionFilePickerPopoverState
     }
   }
 
+  /// 索引完成/失效时重算候选，避免 popover 卡在惰性树空结果。
+  void _handleFilesChanged() {
+    if (!mounted) {
+      return;
+    }
+    _refreshCandidates();
+  }
+
   void _refreshCandidates() {
     final query = widget.documentController.activeMentionQuery ?? '';
     widget.listController.syncCandidates(widget.candidatesFor(query));
@@ -121,6 +149,8 @@ class _AgentMentionFilePickerPopoverState
     final textStyles = IdeTextStyles.of(context);
     final candidates = widget.listController.candidates;
     final highlightIndex = widget.listController.highlightIndex;
+    final indexing =
+        candidates.isEmpty && !(widget.isIndexReady?.call() ?? true);
 
     return Semantics(
       label: 'Mention file',
@@ -135,7 +165,7 @@ class _AgentMentionFilePickerPopoverState
                 ? Padding(
                     padding: IdeSpacing.all12,
                     child: Text(
-                      'No files found',
+                      indexing ? 'Indexing workspace…' : 'No files found',
                       style: textStyles.bodyMedium.copyWith(
                         color: colors.textTertiary,
                       ),

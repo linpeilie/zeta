@@ -82,8 +82,10 @@ class IdeShellController extends ChangeNotifier {
         agentProviderRuntimeRegistry ??
         AgentProviderRuntimeRegistry(providerFactory: agentProviderFactory);
     _ownsAgentProviderRuntimeRegistry = agentProviderRuntimeRegistry == null;
+    _ownsFileIndexController = workspaceFileIndexController == null;
     _fileIndexController =
         workspaceFileIndexController ?? WorkspaceFileIndexController();
+    _fileIndexController.addListener(_handleFileIndexChanged);
     agentProviderController = ActiveAgentProviderController(
       providerFactory: agentProviderFactory,
       configStore: agentProviderConfigStore,
@@ -103,6 +105,14 @@ class IdeShellController extends ChangeNotifier {
           }
         }
         return _workspaceTree;
+      },
+      workspaceFilesListenable: _fileIndexController,
+      workspaceFilesIndexReady: () {
+        final root = _projectPath;
+        if (root == null) {
+          return true;
+        }
+        return _fileIndexController.isReady(root);
       },
       modelCatalogRepository: agentProviderController.modelCatalogRepository,
       runtimeRegistry: this.agentProviderRuntimeRegistry,
@@ -148,6 +158,7 @@ class IdeShellController extends ChangeNotifier {
   late final AgentProviderRuntimeRegistry agentProviderRuntimeRegistry;
   late final bool _ownsAgentProviderRuntimeRegistry;
   late final WorkspaceFileIndexController _fileIndexController;
+  late final bool _ownsFileIndexController;
   late final ActiveAgentProviderController agentProviderController;
   late final AgentThreadWorkspaceController agentWorkspaceController;
   late final AgentThreadWorkspaceEntry _bootstrapAgentEntry;
@@ -1257,6 +1268,11 @@ class IdeShellController extends ChangeNotifier {
     }
   }
 
+  /// 后台文件语料就绪/失效时刷新 shell 状态，并让 @mention 等监听者拿到新语料。
+  void _handleFileIndexChanged() {
+    _notifyStateChanged();
+  }
+
   @override
   void dispose() {
     if (_isDisposed) {
@@ -1286,6 +1302,11 @@ class IdeShellController extends ChangeNotifier {
     projectThreadsViewModel.dispose();
     agentWorkspaceController.dispose();
     agentProviderController.dispose();
+    // 在 workspace 条目释放后再拆索引监听，避免 popover 仍挂在 listenable 上。
+    _fileIndexController.removeListener(_handleFileIndexChanged);
+    if (_ownsFileIndexController) {
+      _fileIndexController.dispose();
+    }
     if (_ownsAgentProviderRuntimeRegistry) {
       unawaited(agentProviderRuntimeRegistry.close());
     }

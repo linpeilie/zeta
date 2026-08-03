@@ -70,6 +70,50 @@ void main() {
     expect(controller.isReady('/repo'), isTrue);
   });
 
+  test('walk 期间 invalidate 后并发 index 会重新发起 walk 并就绪', () async {
+    final gate = Completer<void>();
+    var walkCount = 0;
+    final controller = WorkspaceFileIndexController(
+      runWalk: (root) async {
+        walkCount += 1;
+        await gate.future;
+        return <WorkspaceNode>[_file('$root/a.dart')];
+      },
+    );
+    addTearDown(controller.dispose);
+
+    // 模拟：大项目打开后索引中 → 清除工作区 → 立刻重新打开。
+    final first = controller.index('/repo');
+    controller.invalidate('/repo');
+    final second = controller.index('/repo');
+    gate.complete();
+    await Future.wait([first, second]);
+
+    expect(walkCount, 2);
+    expect(controller.isReady('/repo'), isTrue);
+    expect(controller.filesFor('/repo')!.single.path, '/repo/a.dart');
+  });
+
+  test('语料就绪与 invalidate 会通知监听者', () async {
+    final controller = WorkspaceFileIndexController(
+      runWalk: (root) async => <WorkspaceNode>[_file('$root/a.dart')],
+    );
+    addTearDown(controller.dispose);
+
+    var ticks = 0;
+    controller.addListener(() => ticks += 1);
+
+    await controller.index('/repo');
+    expect(ticks, 1);
+
+    controller.invalidate('/repo');
+    expect(ticks, 2);
+
+    // 重复 invalidate 且无语料时不额外通知。
+    controller.invalidate('/repo');
+    expect(ticks, 2);
+  });
+
   test('invalidate 丢弃已提交语料', () async {
     final controller = WorkspaceFileIndexController(
       runWalk: (root) async => <WorkspaceNode>[_file('$root/a.dart')],

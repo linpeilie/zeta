@@ -61,6 +61,8 @@ class AgentConversationViewModel {
     AgentConversationPermissionSelectionController?
     permissionSelectionController,
     this.workspaceFilesProvider,
+    this.workspaceFilesListenable,
+    this.workspaceFilesIndexReady,
     this.onTurnCompleted,
     AgentFrameScheduler? uiFrameScheduler,
   }) : _timeline = timelineStore ?? AgentConversationTimelineStore(),
@@ -138,8 +140,18 @@ class AgentConversationViewModel {
   /// 可选：从 shell 注入工作区文件列表，供 @mention 选择器使用。
   final List<WorkspaceNode> Function()? workspaceFilesProvider;
 
+  /// 可选：工作区文件语料就绪/失效时通知（例如后台索引完成），供 @mention 刷新。
+  final Listenable? workspaceFilesListenable;
+
+  /// 可选：后台完整语料是否已就绪；未注入时视为就绪（直接使用 provider 结果）。
+  final bool Function()? workspaceFilesIndexReady;
+
   /// 当前会话的回合进入终态后通知应用组合层。
   final VoidCallback? onTurnCompleted;
+
+  /// 后台文件索引是否已就绪；无注入时恒为 true。
+  bool get isWorkspaceFileIndexReady =>
+      workspaceFilesIndexReady?.call() ?? true;
 
   final ActiveAgentProviderController providerController;
   final AgentConversationTimelineStore _timeline;

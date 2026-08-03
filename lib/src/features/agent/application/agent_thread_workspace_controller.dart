@@ -210,6 +210,8 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     required this._workspaceFilesProvider,
     required this._modelCatalogRepository,
     required this.runtimeRegistry,
+    this._workspaceFilesListenable,
+    this._workspaceFilesIndexReady,
     this._onTurnCompleted,
     this.uiFrameSchedulerFactory,
   });
@@ -217,6 +219,8 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
   final AgentProviderFactory _providerFactory;
   final AgentProviderConfigStore _configStore;
   final List<WorkspaceNode> Function() _workspaceFilesProvider;
+  final Listenable? _workspaceFilesListenable;
+  final bool Function()? _workspaceFilesIndexReady;
   final AgentModelCatalogRepository _modelCatalogRepository;
   final AgentProviderRuntimeRegistry runtimeRegistry;
   final VoidCallback? _onTurnCompleted;
@@ -416,6 +420,8 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     final viewModel = AgentConversationViewModel(
       providerController: providerController,
       workspaceFilesProvider: _workspaceFilesProvider,
+      workspaceFilesListenable: _workspaceFilesListenable,
+      workspaceFilesIndexReady: _workspaceFilesIndexReady,
       onTurnCompleted: _onTurnCompleted,
       uiFrameScheduler: uiFrameSchedulerFactory?.call(),
     );

@@ -2394,6 +2394,62 @@ void main() {
       });
 
       testWidgets(
+        'mention picker shows indexing empty state then refreshes on ready',
+        (tester) async {
+          const mentionFile = WorkspaceNode(
+            path: '/repo/lib/main.dart',
+            name: 'main.dart',
+            type: WorkspaceNodeType.file,
+          );
+          final corpus = <WorkspaceNode>[];
+          var indexReady = false;
+          final filesListenable = ChangeNotifier();
+          addTearDown(filesListenable.dispose);
+
+          final provider = _FakeAgentProvider();
+          final viewModel = _createViewModel(
+            provider,
+            workspaceFilesProvider: () => List<WorkspaceNode>.of(corpus),
+            workspaceFilesListenable: filesListenable,
+            workspaceFilesIndexReady: () => indexReady,
+          );
+          addTearDown(provider.dispose);
+          addTearDown(viewModel.dispose);
+          await tester.pumpWidget(_TestApp(viewModel: viewModel));
+          await _pumpAgentPaneUi(tester);
+
+          final input = find.byKey(const ValueKey('agent-message-input'));
+          await tester.enterText(input, '@');
+
+          await _pumpUntilFinder(
+            tester,
+            find.byKey(const ValueKey('agent-mention-picker-popover')),
+          );
+          expect(find.text('Indexing workspace…'), findsOneWidget);
+          expect(
+            find.byKey(
+              const ValueKey('agent-mention-option-/repo/lib/main.dart'),
+            ),
+            findsNothing,
+          );
+
+          // 后台索引完成后通知：打开中的 picker 应刷新候选。
+          corpus.add(mentionFile);
+          indexReady = true;
+          filesListenable.notifyListeners();
+          await tester.pump();
+
+          expect(find.text('Indexing workspace…'), findsNothing);
+          expect(
+            find.byKey(
+              const ValueKey('agent-mention-option-/repo/lib/main.dart'),
+            ),
+            findsOneWidget,
+          );
+        },
+      );
+
+      testWidgets(
         'completed Plan shows local handoff and Run plan starts Default turn',
         (tester) async {
           final provider = _ModeFakeAgentProvider(models: _modelConfigList);
@@ -3869,12 +3925,16 @@ AgentConversationViewModel _createViewModel(
   _FakeAgentProvider provider, {
   AgentConversationModeController? conversationModeController,
   List<WorkspaceNode> Function()? workspaceFilesProvider,
+  Listenable? workspaceFilesListenable,
+  bool Function()? workspaceFilesIndexReady,
 }) {
   return _createViewModelWithStore(
     provider,
     MemoryAgentProviderConfigStore(),
     conversationModeController: conversationModeController,
     workspaceFilesProvider: workspaceFilesProvider,
+    workspaceFilesListenable: workspaceFilesListenable,
+    workspaceFilesIndexReady: workspaceFilesIndexReady,
   );
 }
 
@@ -3883,6 +3943,8 @@ AgentConversationViewModel _createViewModelWithStore(
   AgentProviderConfigStore configStore, {
   AgentConversationModeController? conversationModeController,
   List<WorkspaceNode> Function()? workspaceFilesProvider,
+  Listenable? workspaceFilesListenable,
+  bool Function()? workspaceFilesIndexReady,
 }) {
   final controller = ActiveAgentProviderController(
     providerFactory: _FakeAgentProviderFactory(provider),
@@ -3893,6 +3955,8 @@ AgentConversationViewModel _createViewModelWithStore(
     providerController: controller,
     conversationModeController: conversationModeController,
     workspaceFilesProvider: workspaceFilesProvider,
+    workspaceFilesListenable: workspaceFilesListenable,
+    workspaceFilesIndexReady: workspaceFilesIndexReady,
   );
   viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
   return viewModel;

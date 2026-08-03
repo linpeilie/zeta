@@ -1124,6 +1124,8 @@ class _AgentPaneState extends State<AgentPane> {
           listController: _mentionFileListController,
           candidatesFor: (query) =>
               widget.viewModel.mentionCandidateFiles(query: query),
+          filesListenable: widget.viewModel.workspaceFilesListenable,
+          isIndexReady: () => widget.viewModel.isWorkspaceFileIndexReady,
           onSelect: _selectMentionFromPicker,
           onRequestClose: _mentionPopoverController.dismiss,
         ),

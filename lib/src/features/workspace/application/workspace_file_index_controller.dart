@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:flutter/foundation.dart';
+
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/workspace/application/workspace_file_indexer.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
@@ -19,8 +21,11 @@ typedef WorkspaceFileWalkRunner =
 /// - **单飞**：同一 root 的遍历只会发起一次，重复 `index` 复用进行中的 walk。
 /// - **generation 拒陈旧**：`invalidate`/新一轮 `index` 会使在途 walk 的结果失效，
 ///   快速切换项目 A→B 时 A 的慢 walk 不会覆盖 B 的语料。
+/// - **join 后补跑**：若 await 到的 walk 因 invalidate/失败未提交语料，后续 `index`
+///   会重新发起 walk，避免 root 在本轮打开周期内永久未就绪。
+/// - 语料提交或失效时通过 [ChangeNotifier] 通知监听者（@mention 等可刷新）。
 /// - 遍历失败仅记日志，语料保持未就绪，调用方回退惰性目录树。
-class WorkspaceFileIndexController {
+class WorkspaceFileIndexController extends ChangeNotifier {
   WorkspaceFileIndexController({WorkspaceFileWalkRunner? runWalk})
     : _runWalk = runWalk ?? _defaultRunWalk;
 
@@ -44,11 +49,18 @@ class WorkspaceFileIndexController {
     if (_disposed) {
       return;
     }
+
+    // 单飞：先加入进行中的 walk。结束后若仍未就绪（invalidate / 失败），再开新一轮。
     final existing = _inFlight[root];
     if (existing != null) {
       await existing;
-      return;
+      if (_disposed || isReady(root)) {
+        return;
+      }
+      // 在途结果已被作废或失败：重新请求（仍受单飞约束）。
+      return index(root);
     }
+
     final generation = (_generations[root] ?? 0) + 1;
     _generations[root] = generation;
     final operation = () async {
@@ -59,6 +71,7 @@ class WorkspaceFileIndexController {
         }
         _corpora[root] = List<WorkspaceNode>.unmodifiable(files);
         _log.fine('Indexed workspace: $root (${files.length} files)');
+        _notifyChanged();
       } catch (error, stackTrace) {
         _log.warning('Could not index workspace: $root', error, stackTrace);
       }
@@ -76,7 +89,10 @@ class WorkspaceFileIndexController {
   /// 作废旧语料并让在途 walk 的结果失效（项目清除时调用）。
   void invalidate(String root) {
     _generations[root] = (_generations[root] ?? 0) + 1;
-    _corpora.remove(root);
+    final hadCorpus = _corpora.remove(root) != null;
+    if (hadCorpus) {
+      _notifyChanged();
+    }
   }
 
   /// 就绪时返回扁平文件语料（不可变）；未就绪或已失效返回 null。
@@ -85,10 +101,18 @@ class WorkspaceFileIndexController {
   /// 该 root 的语料是否已就绪。
   bool isReady(String root) => _corpora.containsKey(root);
 
+  void _notifyChanged() {
+    if (!_disposed) {
+      notifyListeners();
+    }
+  }
+
+  @override
   void dispose() {
     _disposed = true;
     _inFlight.clear();
     _corpora.clear();
     _generations.clear();
+    super.dispose();
   }
 }
