@@ -574,7 +574,7 @@ class _IdeHomeState extends State<IdeHome> {
       leadingActions: [
         IdeRailAction(
           key: const ValueKey('left-projects-action'),
-          icon: Icons.account_tree_rounded,
+          icon: sf.BootstrapIcons.slack,
           tooltip: 'Projects',
           semanticLabel: 'Toggle projects panel',
           active:
