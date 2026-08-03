@@ -316,6 +316,8 @@ void expectMarkdownWidgetDefaults(MarkdownWidget widget) {
   expect(widget.padding, EdgeInsets.zero);
   expect(widget.enableCopyFullDocumentShortcut, isFalse);
   expect(widget.showCopyAllInContextMenu, isFalse);
+  // 对话 Markdown 通过空 contextMenuBuilder 完全抑制右键菜单。
+  expect(widget.contextMenuBuilder, isNotNull);
 }
 
 class AgentPaneFakeProviderFactory implements AgentProviderFactory {

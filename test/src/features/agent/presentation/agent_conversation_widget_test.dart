@@ -2729,6 +2729,7 @@ void main() {
     expect(markdownWidget.padding, EdgeInsets.zero);
     expect(markdownWidget.enableCopyFullDocumentShortcut, isFalse);
     expect(markdownWidget.showCopyAllInContextMenu, isFalse);
+    expect(markdownWidget.contextMenuBuilder, isNotNull);
   });
 
   testWidgets('does not render final-answer card for commentary-only turns', (

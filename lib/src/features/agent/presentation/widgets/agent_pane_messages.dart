@@ -639,6 +639,8 @@ class _AgentMarkdownBodyState extends State<_AgentMarkdownBody> {
         padding: EdgeInsets.zero,
         enableCopyFullDocumentShortcut: false,
         showCopyAllInContextMenu: false,
+        // 包无 enableContextMenu 开关；返回空组件以完全不显示右键菜单。
+        contextMenuBuilder: _suppressMarkdownContextMenu,
       ),
     );
   }
@@ -662,9 +664,20 @@ class _AgentRawMarkdownBody extends StatelessWidget {
         padding: EdgeInsets.zero,
         enableCopyFullDocumentShortcut: false,
         showCopyAllInContextMenu: false,
+        contextMenuBuilder: _suppressMarkdownContextMenu,
       ),
     );
   }
+}
+
+/// 抑制 mixin_markdown 右键菜单：仍会走 show，但不渲染任何菜单项。
+Widget _suppressMarkdownContextMenu(
+  BuildContext context,
+  MarkdownSelectionController selectionController,
+  List<ContextMenuButtonItem> buttonItems,
+  TextSelectionToolbarAnchors anchors,
+) {
+  return const SizedBox.shrink();
 }
 
 /// Agent 完成汇总卡片：对应 Codex `agent_message` + `phase=final_answer`。
