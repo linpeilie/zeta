@@ -42,8 +42,7 @@ class _AgentComposer extends StatelessWidget {
     required this.onCloseModelConfiguration,
     required this.onSelectPermissionPreset,
     required this.onSelectSessionConfigOption,
-    required this.mentionCandidates,
-    required this.onInsertMention,
+    required this.onOpenMentionPicker,
     required this.onInsertSkill,
   });
 
@@ -112,11 +111,8 @@ class _AgentComposer extends StatelessWidget {
   final void Function(String configId, Object value)
   onSelectSessionConfigOption;
 
-  /// @mention 候选文件查询。
-  final List<WorkspaceNode> Function({String query}) mentionCandidates;
-
-  /// 选中 mention 文件后的回调。
-  final ValueChanged<WorkspaceNode> onInsertMention;
+  /// 打开 @-mention 文件 picker（More actions 菜单入口）。
+  final VoidCallback onOpenMentionPicker;
 
   /// 打开 skill 插入选择器。
   final VoidCallback onInsertSkill;
@@ -386,7 +382,7 @@ class _AgentComposer extends StatelessWidget {
       contextId: conversationModeContextId,
       onSelectPlan: () =>
           onSelectConversationMode(AgentConversationModeId.plan),
-      onMentionFile: () => _showMentionPicker(context),
+      onMentionFile: onOpenMentionPicker,
       onInsertSkill: onInsertSkill,
       onAttachImage: onAttachImages,
     );
@@ -448,64 +444,6 @@ class _AgentComposer extends StatelessWidget {
     final visibleLines = lineCount.clamp(3, 10);
     final desiredHeight = (visibleLines * lineHeight) + 8;
     return desiredHeight.clamp(minHeight, maxHeight).toDouble();
-  }
-
-  Future<void> _showMentionPicker(BuildContext context) async {
-    final files = mentionCandidates();
-    if (files.isEmpty) {
-      return;
-    }
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
-    await showIdeDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return IdeDialog(
-          title: const Text('Mention file'),
-          content: SizedBox(
-            width: 360,
-            height: 280,
-            child: ListView.builder(
-              itemCount: files.length,
-              itemBuilder: (context, index) {
-                final file = files[index];
-                return PaneInteractiveSurface(
-                  key: ValueKey('agent-mention-option-${file.path}'),
-                  onPressed: () {
-                    Navigator.of(dialogContext).pop();
-                    onInsertMention(file);
-                  },
-                  child: Padding(
-                    padding: IdeSpacing.all8,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          file.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: textStyles.bodyMedium.copyWith(
-                            color: colors.textPrimary,
-                          ),
-                        ),
-                        Text(
-                          file.path,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: textStyles.bodySmall.copyWith(
-                            color: colors.textTertiary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        );
-      },
-    );
   }
 }
 

@@ -31,6 +31,7 @@ import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_ui_state.dart';
 import 'package:zeta/src/features/agent/presentation/agent_ui_update_scheduler.dart';
 import 'package:zeta/src/features/agent/presentation/model_config_ui_state.dart';
+import 'package:zeta/src/features/workspace/domain/workspace_file_query.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 
@@ -717,9 +718,18 @@ class AgentConversationViewModel {
     return _autoReviewsByTurnId[turnId];
   }
 
-  /// 供 @mention 选择器使用的工作区文件（已扁平化）。
+  /// 供 @mention 选择器使用的工作区文件（已扁平化 + 模糊子序列排序）。
   List<WorkspaceNode> mentionCandidateFiles({String query = ''}) {
-    final roots = workspaceFilesProvider?.call() ?? const <WorkspaceNode>[];
+    final source = workspaceFilesProvider?.call() ?? const <WorkspaceNode>[];
+    return fuzzyRankWorkspaceFiles(
+      _flattenFileNodes(source),
+      query: query,
+      limit: 40,
+    );
+  }
+
+  /// 递归收集 file 节点；provider 返回扁平语料时等价于一次廉价复制。
+  List<WorkspaceNode> _flattenFileNodes(List<WorkspaceNode> nodes) {
     final files = <WorkspaceNode>[];
     void walk(WorkspaceNode node) {
       if (node.isDirectory) {
@@ -731,22 +741,10 @@ class AgentConversationViewModel {
       files.add(node);
     }
 
-    for (final root in roots) {
-      walk(root);
+    for (final node in nodes) {
+      walk(node);
     }
-    final trimmed = query.trim().toLowerCase();
-    if (trimmed.isEmpty) {
-      return List<WorkspaceNode>.unmodifiable(files.take(40));
-    }
-    return List<WorkspaceNode>.unmodifiable(
-      files
-          .where(
-            (file) =>
-                file.name.toLowerCase().contains(trimmed) ||
-                file.path.toLowerCase().contains(trimmed),
-          )
-          .take(40),
-    );
+    return files;
   }
 
   String? get sessionId => _session?.id ?? _restoredSessionId;

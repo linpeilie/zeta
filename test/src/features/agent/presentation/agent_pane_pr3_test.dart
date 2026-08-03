@@ -2264,9 +2264,134 @@ void main() {
             find.byKey(const ValueKey('agent-more-actions-popover')),
             findsNothing,
           );
-          expect(find.text('Mention file'), findsOneWidget);
+          expect(
+            find.byKey(const ValueKey('agent-mention-picker-overlay')),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(const ValueKey('agent-mention-picker-popover')),
+            findsOneWidget,
+          );
         },
       );
+
+      testWidgets('typing @ opens inline mention picker and lists candidates', (
+        tester,
+      ) async {
+        const mentionFile = WorkspaceNode(
+          path: '/repo/lib/main.dart',
+          name: 'main.dart',
+          type: WorkspaceNodeType.file,
+        );
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(
+          provider,
+          workspaceFilesProvider: () => const <WorkspaceNode>[mentionFile],
+        );
+        addTearDown(provider.dispose);
+        addTearDown(viewModel.dispose);
+        await tester.pumpWidget(_TestApp(viewModel: viewModel));
+        await _pumpAgentPaneUi(tester);
+
+        final input = find.byKey(const ValueKey('agent-message-input'));
+        await tester.enterText(input, '@');
+
+        await _pumpUntilFinder(
+          tester,
+          find.byKey(const ValueKey('agent-mention-picker-overlay')),
+        );
+        expect(
+          find.byKey(
+            const ValueKey('agent-mention-option-/repo/lib/main.dart'),
+          ),
+          findsOneWidget,
+        );
+      });
+
+      testWidgets('mention picker accepts highlighted file via arrow + enter', (
+        tester,
+      ) async {
+        const mainFile = WorkspaceNode(
+          path: '/repo/lib/main.dart',
+          name: 'main.dart',
+          type: WorkspaceNodeType.file,
+        );
+        const helperFile = WorkspaceNode(
+          path: '/repo/lib/helper.dart',
+          name: 'helper.dart',
+          type: WorkspaceNodeType.file,
+        );
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(
+          provider,
+          workspaceFilesProvider: () => const <WorkspaceNode>[
+            helperFile,
+            mainFile,
+          ],
+        );
+        addTearDown(provider.dispose);
+        addTearDown(viewModel.dispose);
+        await tester.pumpWidget(_TestApp(viewModel: viewModel));
+        await _pumpAgentPaneUi(tester);
+
+        final input = find.byKey(const ValueKey('agent-message-input'));
+        await tester.enterText(input, '@ma');
+
+        await _pumpUntilFinder(
+          tester,
+          find.byKey(
+            const ValueKey('agent-mention-option-/repo/lib/main.dart'),
+          ),
+        );
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await _pumpUntilFinderAbsent(
+          tester,
+          find.byKey(const ValueKey('agent-mention-picker-overlay')),
+        );
+
+        // 接受后渲染为原子 mention chip（label 为 @name）。
+        expect(find.text('@main.dart'), findsOneWidget);
+      });
+
+      testWidgets('escape dismisses mention picker without inserting', (
+        tester,
+      ) async {
+        const mentionFile = WorkspaceNode(
+          path: '/repo/lib/main.dart',
+          name: 'main.dart',
+          type: WorkspaceNodeType.file,
+        );
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(
+          provider,
+          workspaceFilesProvider: () => const <WorkspaceNode>[mentionFile],
+        );
+        addTearDown(provider.dispose);
+        addTearDown(viewModel.dispose);
+        await tester.pumpWidget(_TestApp(viewModel: viewModel));
+        await _pumpAgentPaneUi(tester);
+
+        final input = find.byKey(const ValueKey('agent-message-input'));
+        await tester.enterText(input, '@ma');
+
+        await _pumpUntilFinder(
+          tester,
+          find.byKey(const ValueKey('agent-mention-picker-overlay')),
+        );
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await _pumpUntilFinderAbsent(
+          tester,
+          find.byKey(const ValueKey('agent-mention-picker-overlay')),
+        );
+
+        final editable = tester.widget<EditableText>(
+          find.descendant(of: input, matching: find.byType(EditableText)),
+        );
+        expect(editable.controller.text, '@ma');
+      });
 
       testWidgets(
         'completed Plan shows local handoff and Run plan starts Default turn',

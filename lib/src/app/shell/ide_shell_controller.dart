@@ -24,6 +24,7 @@ import 'package:zeta/src/features/project_threads/application/project_threads_co
 import 'package:zeta/src/features/project_threads/application/project_threads_session_snapshot_codec.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/project_threads/presentation/project_threads_view_model.dart';
+import 'package:zeta/src/features/workspace/application/workspace_file_index_controller.dart';
 import 'package:zeta/src/features/workspace/application/workspace_tree_builder.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
@@ -66,6 +67,7 @@ class IdeShellController extends ChangeNotifier {
     this._projectLocationOpener = openPathInSystemFileManager,
     this._statusReporter,
     AgentModelCatalogRepository? agentModelCatalogRepository,
+    WorkspaceFileIndexController? workspaceFileIndexController,
     AgentProviderRuntimeRegistry? agentProviderRuntimeRegistry,
     AgentFrameScheduler Function()? agentUiFrameSchedulerFactory,
     VoidCallback? onAgentTurnCompleted,
@@ -80,6 +82,8 @@ class IdeShellController extends ChangeNotifier {
         agentProviderRuntimeRegistry ??
         AgentProviderRuntimeRegistry(providerFactory: agentProviderFactory);
     _ownsAgentProviderRuntimeRegistry = agentProviderRuntimeRegistry == null;
+    _fileIndexController =
+        workspaceFileIndexController ?? WorkspaceFileIndexController();
     agentProviderController = ActiveAgentProviderController(
       providerFactory: agentProviderFactory,
       configStore: agentProviderConfigStore,
@@ -89,7 +93,17 @@ class IdeShellController extends ChangeNotifier {
     agentWorkspaceController = AgentThreadWorkspaceController(
       providerFactory: agentProviderFactory,
       configStore: agentProviderConfigStore,
-      workspaceFilesProvider: () => _workspaceTree,
+      workspaceFilesProvider: () {
+        // @mention 候选优先用后台预建的完整语料；未就绪时回退惰性目录树。
+        final root = _projectPath;
+        if (root != null) {
+          final ready = _fileIndexController.filesFor(root);
+          if (ready != null) {
+            return ready;
+          }
+        }
+        return _workspaceTree;
+      },
       modelCatalogRepository: agentProviderController.modelCatalogRepository,
       runtimeRegistry: this.agentProviderRuntimeRegistry,
       onTurnCompleted: onAgentTurnCompleted,
@@ -133,6 +147,7 @@ class IdeShellController extends ChangeNotifier {
 
   late final AgentProviderRuntimeRegistry agentProviderRuntimeRegistry;
   late final bool _ownsAgentProviderRuntimeRegistry;
+  late final WorkspaceFileIndexController _fileIndexController;
   late final ActiveAgentProviderController agentProviderController;
   late final AgentThreadWorkspaceController agentWorkspaceController;
   late final AgentThreadWorkspaceEntry _bootstrapAgentEntry;
@@ -578,6 +593,7 @@ class IdeShellController extends ChangeNotifier {
       }
       _markProjectOpened(path);
 
+      unawaited(_fileIndexController.index(path));
       projectThreadsController.retainProjects(_projects);
       if (activateThreads) {
         projectThreadsController.activateProject(path);
@@ -648,6 +664,9 @@ class IdeShellController extends ChangeNotifier {
         ..clear()
         ..addAll(session.projectPaths);
       _projectPath = session.activeProjectPath;
+      if (session.activeProjectPath != null) {
+        unawaited(_fileIndexController.index(session.activeProjectPath!));
+      }
       _workspaceTree = tree;
       _expandedDirectoryPaths = Set<String>.from(
         session.expandedDirectoryPaths,
@@ -736,6 +755,10 @@ class IdeShellController extends ChangeNotifier {
 
   void _clearActiveWorkspace() {
     _homeRefreshToken += 1;
+    final root = _projectPath;
+    if (root != null) {
+      _fileIndexController.invalidate(root);
+    }
     _projectPath = null;
     _projectHomeActive = false;
     _currentFilePath = null;

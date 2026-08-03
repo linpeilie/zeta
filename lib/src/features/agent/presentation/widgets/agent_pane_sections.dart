@@ -799,7 +799,7 @@ class _AgentComposerSection extends StatelessWidget {
     required this.onAttachImages,
     required this.onRemoveImage,
     required this.onSend,
-    required this.onInsertMention,
+    required this.onOpenMentionPicker,
     required this.onInsertSkill,
     required this.pagePadding,
     this.anchorKey,
@@ -815,7 +815,7 @@ class _AgentComposerSection extends StatelessWidget {
   final VoidCallback onAttachImages;
   final ValueChanged<String> onRemoveImage;
   final VoidCallback onSend;
-  final ValueChanged<WorkspaceNode> onInsertMention;
+  final VoidCallback onOpenMentionPicker;
   final VoidCallback onInsertSkill;
   final EdgeInsets pagePadding;
 
@@ -877,8 +877,7 @@ class _AgentComposerSection extends StatelessWidget {
                 onSelectPermissionPreset: viewModel.selectPermissionPreset,
                 onSelectSessionConfigOption:
                     viewModel.selectSessionConfigOption,
-                mentionCandidates: viewModel.mentionCandidateFiles,
-                onInsertMention: onInsertMention,
+                onOpenMentionPicker: onOpenMentionPicker,
                 onInsertSkill: onInsertSkill,
               ),
             );

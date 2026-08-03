@@ -61,6 +61,7 @@ part 'widgets/agent_model_config.dart';
 part 'widgets/agent_mode_selector.dart';
 part 'widgets/agent_skill_picker.dart';
 part 'widgets/agent_slash_command_picker.dart';
+part 'widgets/agent_mention_file_picker.dart';
 part 'widgets/agent_pane_sections.dart';
 part 'widgets/agent_pane_styles.dart';
 
@@ -114,8 +115,6 @@ class _AgentPaneState extends State<AgentPane> {
   late final IdeSmoothScrollController _scrollController;
   final ValueNotifier<bool> _canSendNotifier = ValueNotifier<bool>(false);
   final List<String> _draftImagePaths = <String>[];
-  final List<({String name, String path})> _draftMentions =
-      <({String name, String path})>[];
   final GlobalKey _composerAnchorKey = GlobalKey(
     debugLabel: 'agent-composer-skill-anchor',
   );
@@ -138,9 +137,21 @@ class _AgentPaneState extends State<AgentPane> {
   /// 防止 `/` 监听并发预热时重复 show。
   bool _slashPickerOpening = false;
 
+  late final _ComposerSelectorPopoverController _mentionPopoverController;
+  final _MentionFileListController _mentionFileListController =
+      _MentionFileListController();
+
+  /// 允许下一次 `@` 触发自动打开 mention picker（关闭后需先离开 @token 再进入）。
+  bool _mentionQueryArmed = true;
+
+  /// 防止 `@` 监听与菜单入口并发预热时重复 show。
+  bool _mentionPickerOpening = false;
+
   bool get _skillPickerOpen => _skillPopoverController.isOpen;
 
   bool get _slashPickerOpen => _slashPopoverController.isOpen;
+
+  bool get _mentionPickerOpen => _mentionPopoverController.isOpen;
 
   /// 是否具备可展示的斜线命令（当前仅 Plan）。
   bool get _hasSlashPlanCommand {
@@ -203,10 +214,15 @@ class _AgentPaneState extends State<AgentPane> {
       triggerFocusNode: _composerFocusNode,
       onOpenChanged: _handleSlashPopoverOpenChanged,
     );
+    _mentionPopoverController = _ComposerSelectorPopoverController(
+      triggerFocusNode: _composerFocusNode,
+      onOpenChanged: _handleMentionPopoverOpenChanged,
+    );
     _responsiveBodyBuilder = _createResponsiveBodyBuilder();
     _inputController.addListener(_handleInputChanged);
     _inputController.addListener(_handleSkillQueryChanged);
     _inputController.addListener(_handleSlashQueryChanged);
+    _inputController.addListener(_handleMentionQueryChanged);
     _scrollController = IdeSmoothScrollController();
     _scrollDriver = IdeScrollControllerDriver(_scrollController);
     _scrollCoordinator = IdeVirtualScrollCoordinator(driver: _scrollDriver)
@@ -261,12 +277,15 @@ class _AgentPaneState extends State<AgentPane> {
     _inputController.removeListener(_handleInputChanged);
     _inputController.removeListener(_handleSkillQueryChanged);
     _inputController.removeListener(_handleSlashQueryChanged);
+    _inputController.removeListener(_handleMentionQueryChanged);
     _scrollController.removeListener(_handleScrollChanged);
     _scrollCoordinator.onModeChanged = null;
     _skillPopoverController.dispose();
     _skillPickerListController.dispose();
     _slashPopoverController.dispose();
     _slashMenuListController.dispose();
+    _mentionPopoverController.dispose();
+    _mentionFileListController.dispose();
     _inputController.dispose();
     _composerFocusNode.dispose();
     _scrollController.dispose();
@@ -434,7 +453,7 @@ class _AgentPaneState extends State<AgentPane> {
                                 onAttachImages: _pickImages,
                                 onRemoveImage: _removeDraftImage,
                                 onSend: _sendMessage,
-                                onInsertMention: _insertMention,
+                                onOpenMentionPicker: _openMentionPickerFromMenu,
                                 onInsertSkill: _openSkillPickerFromMenu,
                               ),
                           ],
@@ -487,9 +506,12 @@ class _AgentPaneState extends State<AgentPane> {
     if (!_skillQueryArmed) {
       return;
     }
-    // `$` 与 `/` 互斥：进入 skill 触发时关闭斜线菜单。
+    // `$` 与 `/`/`@` 互斥：进入 skill 触发时关闭斜线菜单与 mention picker。
     if (_slashPickerOpen) {
       _slashPopoverController.dismiss();
+    }
+    if (_mentionPickerOpen) {
+      _mentionPopoverController.dismiss();
     }
     _skillQueryArmed = false;
     unawaited(_showSkillPicker());
@@ -522,9 +544,12 @@ class _AgentPaneState extends State<AgentPane> {
     if (!_slashQueryArmed) {
       return;
     }
-    // `/` 与 `$` 互斥：进入斜线触发时关闭 skill picker。
+    // `/` 与 `$`/`@` 互斥：进入斜线触发时关闭 skill picker 与 mention picker。
     if (_skillPickerOpen) {
       _skillPopoverController.dismiss();
+    }
+    if (_mentionPickerOpen) {
+      _mentionPopoverController.dismiss();
     }
     _slashQueryArmed = false;
     unawaited(_showSlashCommandPicker());
@@ -535,6 +560,44 @@ class _AgentPaneState extends State<AgentPane> {
       _slashMenuListController.reset();
       if (_inputController.activeSlashQuery == null) {
         _slashQueryArmed = true;
+      }
+    }
+  }
+
+  void _handleMentionQueryChanged() {
+    if (!widget.viewModel.canMentionResources) {
+      return;
+    }
+    final query = _inputController.activeMentionQuery;
+    if (query == null) {
+      if (_mentionPickerOpen) {
+        _mentionPopoverController.dismiss();
+      }
+      _mentionQueryArmed = true;
+      return;
+    }
+    if (_mentionPickerOpen) {
+      return;
+    }
+    if (!_mentionQueryArmed) {
+      return;
+    }
+    // `@` 与 `$`/`/` 互斥：进入 mention 触发时关闭 skill/slash picker。
+    if (_skillPickerOpen) {
+      _skillPopoverController.dismiss();
+    }
+    if (_slashPickerOpen) {
+      _slashPopoverController.dismiss();
+    }
+    _mentionQueryArmed = false;
+    unawaited(_showMentionFilePicker());
+  }
+
+  void _handleMentionPopoverOpenChanged() {
+    if (!_mentionPickerOpen) {
+      _mentionFileListController.reset();
+      if (_inputController.activeMentionQuery == null) {
+        _mentionQueryArmed = true;
       }
     }
   }
@@ -605,6 +668,42 @@ class _AgentPaneState extends State<AgentPane> {
         final skill = _skillPickerListController.highlighted;
         if (skill != null) {
           _selectSkillFromPicker(skill);
+        }
+        return KeyEventResult.handled;
+      }
+    }
+
+    if (_mentionPickerOpen) {
+      if (event.logicalKey == LogicalKeyboardKey.escape) {
+        _mentionPopoverController.dismiss();
+        return KeyEventResult.handled;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+        _mentionFileListController.move(1);
+        return KeyEventResult.handled;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+        _mentionFileListController.move(-1);
+        return KeyEventResult.handled;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.tab) {
+        final file = _mentionFileListController.highlighted;
+        if (file != null) {
+          _selectMentionFromPicker(file);
+        }
+        return KeyEventResult.handled;
+      }
+      final isEnter =
+          event.logicalKey == LogicalKeyboardKey.enter ||
+          event.logicalKey == LogicalKeyboardKey.numpadEnter;
+      if (isEnter) {
+        final composing = _inputController.value.composing;
+        if (composing.isValid && !composing.isCollapsed) {
+          return KeyEventResult.ignored;
+        }
+        final file = _mentionFileListController.highlighted;
+        if (file != null) {
+          _selectMentionFromPicker(file);
         }
         return KeyEventResult.handled;
       }
@@ -782,7 +881,7 @@ class _AgentPaneState extends State<AgentPane> {
     }
     final serialized = _inputController.serialize();
     final images = List<String>.from(_draftImagePaths);
-    final mentions = List<({String name, String path})>.from(_draftMentions);
+    final mentions = serialized.mentions;
     if (serialized.text.trim().isEmpty &&
         images.isEmpty &&
         mentions.isEmpty &&
@@ -790,10 +889,9 @@ class _AgentPaneState extends State<AgentPane> {
       return;
     }
     _inputController.clear();
-    if (_draftImagePaths.isNotEmpty || _draftMentions.isNotEmpty) {
+    if (_draftImagePaths.isNotEmpty) {
       setState(() {
         _draftImagePaths.clear();
-        _draftMentions.clear();
       });
     }
     _syncCanSend();
@@ -989,44 +1087,105 @@ class _AgentPaneState extends State<AgentPane> {
     }
   }
 
-  /// 从工作区文件列表插入 @mention。
+  /// 选中 @-mention 候选后插入并关闭弹层。
+  void _selectMentionFromPicker(WorkspaceNode file) {
+    _mentionPopoverController.dismiss();
+    _insertMention(file);
+  }
+
+  Future<void> _showMentionFilePicker() async {
+    if (!widget.viewModel.canMentionResources ||
+        _mentionPickerOpen ||
+        _mentionPickerOpening ||
+        !mounted) {
+      return;
+    }
+    if (_composerAnchorKey.currentContext == null) {
+      return;
+    }
+    _mentionPickerOpening = true;
+    try {
+      if (!mounted || _mentionPickerOpen) {
+        return;
+      }
+      final openContext = _composerAnchorKey.currentContext;
+      if (openContext == null || !openContext.mounted) {
+        return;
+      }
+      _mentionPopoverController.show(
+        context: openContext,
+        preferredWidth: _agentMentionFilePickerPreferredWidth,
+        preferredMaxHeight: _agentMentionFilePickerPreferredMaxHeight,
+        key: const ValueKey('agent-mention-picker-overlay'),
+        builder: (context, layout) => _AgentMentionFilePickerPopover(
+          width: layout.width,
+          maxHeight: layout.maxHeight,
+          documentController: _inputController,
+          listController: _mentionFileListController,
+          candidatesFor: (query) =>
+              widget.viewModel.mentionCandidateFiles(query: query),
+          onSelect: _selectMentionFromPicker,
+          onRequestClose: _mentionPopoverController.dismiss,
+        ),
+      );
+    } finally {
+      _mentionPickerOpening = false;
+    }
+  }
+
+  /// More actions → Mention file：确保进入 `@query` 后再弹出列表。
+  void _openMentionPickerFromMenu() {
+    if (!widget.viewModel.canMentionResources ||
+        _mentionPickerOpen ||
+        _mentionPickerOpening) {
+      return;
+    }
+    // 先解除 `@` 自动打开，避免插入触发与本次 show 并发。
+    _mentionQueryArmed = false;
+    if (_slashPickerOpen) {
+      _slashPopoverController.dismiss();
+    }
+    if (_skillPickerOpen) {
+      _skillPopoverController.dismiss();
+    }
+    _ensureMentionQueryTrigger();
+    unawaited(_showMentionFilePicker());
+  }
+
+  /// 在光标处写入 `@` 触发片段（必要时补前导空格）。
+  void _ensureMentionQueryTrigger() {
+    if (_inputController.activeMentionQuery != null) {
+      return;
+    }
+    final text = _inputController.text;
+    final selection = _inputController.selection;
+    final cursor = selection.isValid
+        ? selection.extentOffset.clamp(0, text.length)
+        : text.length;
+    final start = selection.isValid
+        ? selection.baseOffset.clamp(0, text.length)
+        : cursor;
+    final left = math.min(start, cursor);
+    final right = math.max(start, cursor);
+    final before = text.substring(0, left);
+    final after = text.substring(right);
+    final needsSpace = before.isNotEmpty && !RegExp(r'\s$').hasMatch(before);
+    final insert = needsSpace ? ' @' : '@';
+    _inputController.value = TextEditingValue(
+      text: '$before$insert$after',
+      selection: TextSelection.collapsed(offset: before.length + insert.length),
+      composing: TextRange.empty,
+    );
+  }
+
+  /// 从工作区文件列表插入 @mention（原子 chip；光标在有效 @-token 内时替换该片段）。
   void _insertMention(WorkspaceNode file) {
     if (!widget.viewModel.canMentionResources) {
       return;
     }
-    final mention = (name: file.name, path: file.path);
-    final text = _inputController.text;
-    final selection = _inputController.selection;
-    final atIndex = text.lastIndexOf(
-      '@',
-      selection.start > 0 ? selection.start - 1 : 0,
-    );
-    String nextText;
-    int cursor;
-    if (atIndex >= 0 &&
-        (atIndex == 0 || text[atIndex - 1].trim().isEmpty) &&
-        !text
-            .substring(atIndex + 1, selection.start.clamp(0, text.length))
-            .contains(' ')) {
-      // 替换当前 @query 片段。
-      nextText =
-          '${text.substring(0, atIndex)}@${file.name} ${text.substring(selection.start.clamp(0, text.length))}';
-      cursor = atIndex + file.name.length + 2;
-    } else {
-      final insertAt = selection.start.clamp(0, text.length);
-      nextText =
-          '${text.substring(0, insertAt)}@${file.name} ${text.substring(insertAt)}';
-      cursor = insertAt + file.name.length + 2;
-    }
-    _inputController
-      ..text = nextText
-      ..selection = TextSelection.collapsed(offset: cursor);
-    setState(() {
-      if (!_draftMentions.any((item) => item.path == file.path)) {
-        _draftMentions.add(mention);
-      }
-    });
+    _inputController.insertMention(name: file.name, path: file.path);
     _syncCanSend();
+    _composerFocusNode.requestFocus();
   }
 
   void _handleUiEffect(AgentUiEffect effect) {
