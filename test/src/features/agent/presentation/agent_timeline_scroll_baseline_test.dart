@@ -288,6 +288,89 @@ void main() {
     },
   );
 
+  testWidgets('turn 完成迁入 history 后保持自由阅读锚点', (tester) async {
+    _configureTestView(tester, const Size(1400, 700));
+    final directory = Directory.systemTemp.createTempSync(
+      'zeta_turn_completion_anchor_',
+    );
+    tempDirectories.add(directory);
+    final provider = FakeAgentProvider(
+      completeTurns: false,
+      includeConversationTestThread: true,
+      responseText: List<String>.generate(
+        160,
+        (index) => 'Stable completion anchor line $index',
+      ).join('\n'),
+    );
+    final session = _activeProjectSession(directory);
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+    await _openConversation(tester);
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('agent-message-input')),
+      'Keep my reading position',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey<String>('agent-send-button')));
+    await _pumpLiveUi(tester);
+
+    final scrollView = find.byKey(const ValueKey<String>('agent-message-list'));
+    final controller = tester.widget<ScrollView>(scrollView).controller!;
+    await _pumpUntilScrollMetricsStable(tester, controller);
+    controller.jumpTo(controller.position.maxScrollExtent);
+    await _pumpUntilScrollMetricsStable(tester, controller);
+
+    await tester.drag(scrollView, const Offset(0, 320));
+    await _pumpUntilScrollMetricsStable(tester, controller);
+    final messageKey = const ValueKey<String>(
+      'timeline-viewport-turn-block-turn-1-message-message-1',
+    );
+    expect(find.byKey(messageKey), findsOneWidget);
+    final pixelsBefore = controller.position.pixels;
+    final messageTopBefore = itemViewportTop(
+      tester,
+      scrollView: scrollView,
+      itemKey: messageKey,
+    );
+    expect(
+      controller.position.maxScrollExtent - pixelsBefore,
+      greaterThan(48),
+      reason: '测试必须先进入离底部足够远的自由阅读状态。',
+    );
+
+    provider.emit(
+      const AgentTurnCompletedEvent(sessionId: 'thread-1', turnId: 'turn-1'),
+    );
+    await _pumpLiveUi(tester);
+    await _pumpUntilScrollMetricsStable(tester, controller);
+
+    expect(find.byKey(messageKey), findsOneWidget);
+    expect(
+      controller.position.pixels,
+      closeTo(pixelsBefore, 1),
+      reason: 'live → history 不能因 item 身份变化把自由阅读位置拉回 turn 开头。',
+    );
+    expect(
+      itemViewportTop(tester, scrollView: scrollView, itemKey: messageKey),
+      closeTo(messageTopBefore, 1),
+      reason: '完成迁移后当前消息应保持原视口坐标。',
+    );
+    expect(
+      find.byKey(
+        const ValueKey<String>('timeline-viewport-live-activity-turn-1'),
+      ),
+      findsNothing,
+    );
+  });
+
   testWidgets(
     'baseline characterization: command before and file edit after anchor move differently',
     (tester) async {
@@ -398,7 +481,7 @@ void main() {
         const ValueKey<String>('agent-message-list'),
       );
       final anchorKey = const ValueKey<String>(
-        'timeline-viewport-history-block-turn-baseline-message-history-anchor',
+        'timeline-viewport-turn-block-turn-baseline-message-history-anchor',
       );
       final controller = tester.widget<ScrollView>(scrollView).controller!;
       for (var attempt = 0; attempt < 20; attempt += 1) {

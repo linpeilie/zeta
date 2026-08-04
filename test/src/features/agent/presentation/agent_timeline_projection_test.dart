@@ -19,12 +19,12 @@ void main() {
 
       expect(items.map((item) => item.id).toList(growable: false), <String>[
         'standby-block-standby-message-standby-msg',
-        'history-block-h1-message-h1-msg',
-        'history-footer-h1',
-        'history-block-h2-message-h2-msg',
-        'history-footer-h2',
-        'live-block-live-message-live-msg',
-        'live-footer-live',
+        'turn-block-h1-message-h1-msg',
+        'turn-footer-h1',
+        'turn-block-h2-message-h2-msg',
+        'turn-footer-h2',
+        'turn-block-live-message-live-msg',
+        'turn-footer-live',
       ]);
     });
 
@@ -48,10 +48,33 @@ void main() {
       );
 
       expect(items.map((item) => item.id).toList(growable: false), <String>[
-        'live-block-live-message-live-msg',
+        'turn-block-live-message-live-msg',
         'live-activity-live',
-        'live-footer-live',
+        'turn-footer-live',
       ]);
+    });
+
+    test('同一 turn 从 live 迁入 history 后保持 block 与 footer 身份', () {
+      final turn = _turn(id: 't1', status: AgentHistoryTurnStatus.running);
+      final liveItems = projectAgentTimelineViewportItems(
+        standbyTurn: null,
+        visibleHistoryTurns: const <AgentConversationTurnGroup>[],
+        liveTurn: turn,
+        resolveBlocks: _blocks,
+      );
+      final historyItems = projectAgentTimelineViewportItems(
+        standbyTurn: null,
+        visibleHistoryTurns: <AgentConversationTurnGroup>[_turn(id: 't1')],
+        liveTurn: null,
+        resolveBlocks: _blocks,
+      );
+
+      expect(
+        liveItems
+            .where((item) => item is! AgentLiveActivityViewportItem)
+            .map((item) => item.id),
+        historyItems.map((item) => item.id),
+      );
     });
 
     test('viewport key 稳定且包含 turn/block 身份', () {
@@ -64,7 +87,7 @@ void main() {
       );
       expect(
         agentTimelineViewportItemKey(item),
-        'timeline-viewport-history-block-t1-message-t1-msg',
+        'timeline-viewport-turn-block-t1-message-t1-msg',
       );
     });
   });

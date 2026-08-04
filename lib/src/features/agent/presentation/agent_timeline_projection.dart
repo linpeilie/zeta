@@ -21,7 +21,7 @@ final class AgentBlockViewportItem extends AgentTimelineViewportItem {
     required this.isLive,
   }) : super(
          id:
-             '${_turnScope(turn: turn, isLive: isLive)}-block-'
+             '${_turnScope(turn: turn)}-block-'
              '${turn.id}-${block.id}',
        );
 
@@ -41,9 +41,7 @@ final class AgentLiveActivityViewportItem extends AgentTimelineViewportItem {
 /// 非 standby turn 的耗时、token 与模型配置 footer。
 final class AgentTurnFooterViewportItem extends AgentTimelineViewportItem {
   AgentTurnFooterViewportItem({required this.turn, required this.isLive})
-    : super(
-        id: '${_turnScope(turn: turn, isLive: isLive)}-footer-${turn.id}',
-      );
+    : super(id: '${_turnScope(turn: turn)}-footer-${turn.id}');
 
   final AgentConversationTurnGroup turn;
   final bool isLive;
@@ -86,6 +84,10 @@ List<AgentTimelineViewportItem> projectAgentTimelineViewportItems({
   if (liveTurn != null) {
     appendTurn(liveTurn, isLive: true);
   }
+  assert(
+    items.map((item) => item.id).toSet().length == items.length,
+    'Agent timeline viewport item ID 必须唯一。',
+  );
   return List<AgentTimelineViewportItem>.unmodifiable(items);
 }
 
@@ -94,12 +96,7 @@ String agentTimelineViewportItemKey(AgentTimelineViewportItem item) {
   return 'timeline-viewport-${item.id}';
 }
 
-String _turnScope({
-  required AgentConversationTurnGroup turn,
-  required bool isLive,
-}) {
-  if (isLive) {
-    return 'live';
-  }
-  return turn.isStandby ? 'standby' : 'history';
+String _turnScope({required AgentConversationTurnGroup turn}) {
+  // live/history 是同一 turn 的展示阶段，不能进入虚拟列表的稳定身份。
+  return turn.isStandby ? 'standby' : 'turn';
 }

@@ -30,13 +30,13 @@ void main() {
 
     // 600px 视口 / 80px item ≈ 8 + cache，应远小于 100。
     expect(builtIds.length, lessThan(30));
-    expect(builtIds, contains('history-footer-t0'));
-    expect(builtIds, isNot(contains('history-footer-t99')));
+    expect(builtIds, contains('turn-footer-t0'));
+    expect(builtIds, isNot(contains('turn-footer-t99')));
 
     controller.jumpTo(controller.position.maxScrollExtent);
     await tester.pumpAndSettle();
 
-    expect(builtIds, contains('history-footer-t99'));
+    expect(builtIds, contains('turn-footer-t99'));
     final visibleTiles = find.byType(_FixedHeightTile, skipOffstage: false);
     expect(visibleTiles.evaluate().length, lessThan(40));
   });
@@ -70,7 +70,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final stateT1 = tester.state<_StatefulNoteTileState>(
-      find.byKey(const ValueKey<String>('timeline-viewport-history-footer-t1')),
+      find.byKey(const ValueKey<String>('timeline-viewport-turn-footer-t1')),
     );
     stateT1.note = 'anchor-t1';
 
@@ -85,13 +85,13 @@ void main() {
     await tester.pumpAndSettle();
 
     final stateAfter = tester.state<_StatefulNoteTileState>(
-      find.byKey(const ValueKey<String>('timeline-viewport-history-footer-t1')),
+      find.byKey(const ValueKey<String>('timeline-viewport-turn-footer-t1')),
     );
     expect(stateAfter, same(stateT1));
     expect(stateAfter.note, 'anchor-t1');
     // 旧 index0 的 State 不应错误落到 t0 上。
-    expect(find.text('history-footer-t0:'), findsOneWidget);
-    expect(find.text('history-footer-t1:anchor-t1'), findsOneWidget);
+    expect(find.text('turn-footer-t0:'), findsOneWidget);
+    expect(find.text('turn-footer-t1:anchor-t1'), findsOneWidget);
   });
 
   testWidgets('19.5 IdeAnchoredDynamicSliverList 固定高度仍只构建视口+cache', (
