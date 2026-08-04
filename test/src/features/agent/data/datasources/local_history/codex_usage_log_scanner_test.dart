@@ -292,17 +292,77 @@ void main() {
     );
   });
 
-  test('rejects non-Codex and damaged first lines and reuses fingerprints', () async {
-    await _writeRollout(tempDirectory, <Map<String, Object?>>[
-      _meta(originator: 'other'),
+  test('accepts any valid session_meta originator including zeta', () async {
+    final zeta = await _writeRollout(tempDirectory, <Map<String, Object?>>[
+      _meta(originator: 'zeta', sessionId: 'thread-zeta'),
+      _event('task_started', timestamp: '2026-07-08T09:00:01Z'),
+      _tokenEvent(
+        timestamp: '2026-07-08T09:00:02Z',
+        total: _usage(
+          input: 40,
+          cached: 10,
+          output: 8,
+          reasoning: 2,
+          total: 50,
+        ),
+        last: _usage(input: 40, cached: 10, output: 8, reasoning: 2, total: 50),
+      ),
+      _event('task_complete', timestamp: '2026-07-08T09:00:03Z'),
+    ], name: 'rollout-zeta.jsonl');
+    final other = await _writeRollout(tempDirectory, <Map<String, Object?>>[
+      _meta(originator: 'other', sessionId: 'thread-other'),
     ], name: 'rollout-other.jsonl');
+
+    final result = await const FileSystemCodexUsageLogScanner().scan(
+      codexHome: tempDirectory.path,
+      cachedSessions: const <String, CodexUsageSessionSnapshot>{},
+    );
+
+    expect(result.sessions.keys, containsAll(<String>[zeta.path, other.path]));
+    expect(result.sessions[zeta.path]!.sourceKind, 'zeta');
+    expect(result.sessions[zeta.path]!.threadId, 'thread-zeta');
+    expect(result.sessions[zeta.path]!.turns.single.samples, hasLength(1));
+    expect(
+      result.sessions[zeta.path]!.turns.single.samples.single.totalTokens,
+      50,
+    );
+    expect(result.sessions[other.path]!.sourceKind, 'other');
+  });
+
+  test('rejects invalid first lines and reuses fingerprints', () async {
+    // 非 session_meta 首行：不合法，整份跳过。
+    final notMeta = File(
+      '${tempDirectory.path}${Platform.pathSeparator}sessions${Platform.pathSeparator}'
+      '2026${Platform.pathSeparator}07${Platform.pathSeparator}08${Platform.pathSeparator}'
+      'rollout-not-meta.jsonl',
+    );
+    await notMeta.parent.create(recursive: true);
+    await notMeta.writeAsString(
+      '${jsonEncode(<String, Object?>{
+        'timestamp': '2026-07-08T09:00:00Z',
+        'type': 'event_msg',
+        'payload': <String, Object?>{'type': 'task_started'},
+      })}\n',
+    );
+    // 损坏的首行。
     final damaged = File(
       '${tempDirectory.path}${Platform.pathSeparator}sessions${Platform.pathSeparator}'
       '2026${Platform.pathSeparator}07${Platform.pathSeparator}08${Platform.pathSeparator}'
       'rollout-damaged.jsonl',
     );
-    await damaged.parent.create(recursive: true);
     await damaged.writeAsString('{broken\n');
+    // 合法但缺少可解析时间戳。
+    final noTimestamp = File(
+      '${tempDirectory.path}${Platform.pathSeparator}sessions${Platform.pathSeparator}'
+      '2026${Platform.pathSeparator}07${Platform.pathSeparator}08${Platform.pathSeparator}'
+      'rollout-no-ts.jsonl',
+    );
+    await noTimestamp.writeAsString(
+      '${jsonEncode(<String, Object?>{
+        'type': 'session_meta',
+        'payload': <String, Object?>{'originator': 'zeta', 'session_id': 'thread-no-ts'},
+      })}\n',
+    );
     final valid = await _writeRollout(tempDirectory, <Map<String, Object?>>[
       _meta(),
     ], name: 'rollout-valid.jsonl');
@@ -327,6 +387,7 @@ void main() {
     );
 
     expect(first.sessions, hasLength(1));
+    expect(first.sessions.keys, contains(valid.path));
     expect(
       identical(first.sessions[valid.path], second.sessions[valid.path]),
       isTrue,

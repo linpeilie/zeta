@@ -476,24 +476,27 @@ class _CodexUsageFileParser {
   }
 
   bool _consumeSessionMeta(Map<String, Object?> record) {
+    // 只校验合法 rollout 结构：首行必须是 session_meta 且能解析时间戳。
+    // originator 可能是 codex_cli_rs / Codex Desktop / zeta 等客户端名，
+    // 不得用前缀白名单过滤，否则 Zeta 等客户端会话的 Token 会整份丢失。
     if (_string(record['type']) != 'session_meta') {
       return false;
     }
     final payload = _map(record['payload']);
-    final originator = _string(payload['originator']);
-    if (originator == null || !originator.toLowerCase().startsWith('codex')) {
+    final createdAt =
+        _dateTime(record['timestamp']) ?? _dateTime(payload['timestamp']);
+    if (createdAt == null) {
       return false;
     }
     _sessionId =
         _string(payload['session_id']) ?? _basenameWithoutExtension(file.path);
     _forkedFromId = _string(payload['forked_from_id']);
     _projectPath = _string(payload['cwd']);
-    _sourceKind = originator;
+    _sourceKind = _string(payload['originator']) ?? 'codex';
     _sessionModel = _string(payload['model']);
-    _createdAt =
-        _dateTime(record['timestamp']) ?? _dateTime(payload['timestamp']);
-    if (_forkedFromId != null && _createdAt != null) {
-      _forkCutoff = _createdAt!.add(const Duration(seconds: 5));
+    _createdAt = createdAt;
+    if (_forkedFromId != null) {
+      _forkCutoff = createdAt.add(const Duration(seconds: 5));
     }
     return true;
   }

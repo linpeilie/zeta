@@ -447,6 +447,9 @@ Fast 是产品语义，运行时仍必须传递 provider 的精确 `serviceTierI
   provider 在通用 `AgentProvider` 上制造强制实现。Grok 通过 `_x.ai/billing` 映射
   到 `AgentUsageQuotaSnapshot`，原始 billing JSON 不得泄漏到 presentation。
 - 调用统计依赖中立 `AgentUsageRecord`，provider 原始 JSON key 只允许出现在 data 层。
+- Codex 使用统计扫描 `$CODEX_HOME/sessions/**/rollout-*.jsonl`：只要首行是合法
+  `session_meta`（含可解析时间戳）即收录，**不得**按 `originator` 前缀白名单过滤；
+  `zeta`、`Codex Desktop`、`codex_cli_rs` 等客户端会话均应计入 Token。
 - Codex `token_count` 是 thread 累计值，写入 turn 记录前必须相对上一 turn 做非负差分。
 - `UsageStatisticsIndexStore` 的 JSON 必须保持版本化和宽容读取；索引损坏时从 provider
   历史重建，不得阻断页面或应用启动。
