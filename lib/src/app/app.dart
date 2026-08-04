@@ -235,7 +235,25 @@ class MainAppState extends State<MainApp>
   void onWindowMinimize() => _setNativeWindowSuspended(true);
 
   @override
-  void onWindowRestore() => _setNativeWindowSuspended(false);
+  void onWindowRestore() => _resumeNativeWindowTickers();
+
+  @override
+  void onWindowMaximize() => _resumeNativeWindowTickers();
+
+  @override
+  void onWindowFocus() => _resumeNativeWindowTickers();
+
+  @override
+  void onWindowEnterFullScreen() => _resumeNativeWindowTickers();
+
+  @override
+  void onWindowEvent(String eventName) {
+    // window_manager 0.5.x 会从 Windows WM_SHOWWINDOW 发出 show，
+    // 但 WindowListener 尚无对应的强类型回调。
+    if (eventName == 'show') {
+      _resumeNativeWindowTickers();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -318,6 +336,12 @@ class MainAppState extends State<MainApp>
         state == AppLifecycleState.resumed ||
         state == AppLifecycleState.inactive;
     return lifecycleAllowsTickers && !_nativeWindowSuspended;
+  }
+
+  void _resumeNativeWindowTickers() {
+    // Windows 从“最小化前为最大化/全屏”恢复时，平台事件
+    // 可能是 maximize/enter-full-screen 而不是 restore。
+    _setNativeWindowSuspended(false);
   }
 
   void _setNativeWindowSuspended(bool suspended) {

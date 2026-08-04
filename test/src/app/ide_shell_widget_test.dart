@@ -54,7 +54,7 @@ void main() {
     expect(find.text('No tools running'), findsNothing);
   });
 
-  testWidgets('应用生命周期和窗口最小化会暂停全局 ticker', (tester) async {
+  testWidgets('窗口从最小化恢复可重启全局 ticker', (tester) async {
     await _pumpIde(tester);
     final appState = tester.state<MainAppState>(find.byType(MainApp));
     final homeContext = tester.element(
@@ -70,6 +70,22 @@ void main() {
     expect(TickerMode.valuesOf(homeContext).enabled, isFalse);
 
     appState.onWindowRestore();
+    await tester.pump();
+    expect(TickerMode.valuesOf(homeContext).enabled, isTrue);
+
+    // Windows 会把“最小化前为最大化”的恢复报告为 maximize。
+    appState.onWindowMinimize();
+    appState.onWindowMaximize();
+    await tester.pump();
+    expect(TickerMode.valuesOf(homeContext).enabled, isTrue);
+
+    appState.onWindowMinimize();
+    appState.onWindowFocus();
+    await tester.pump();
+    expect(TickerMode.valuesOf(homeContext).enabled, isTrue);
+
+    appState.onWindowMinimize();
+    appState.onWindowEvent('show');
     await tester.pump();
     expect(TickerMode.valuesOf(homeContext).enabled, isTrue);
 

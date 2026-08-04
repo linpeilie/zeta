@@ -73,8 +73,13 @@ final class _IdeSmoothScrollPosition extends ScrollPositionWithSingleContext {
 
   @override
   void pointerScroll(double delta) {
-    if (!_enabled() || duration == Duration.zero) {
+    final tickerModeEnabled = TickerMode.getValuesNotifier(
+      context.storageContext,
+    ).value.enabled;
+    if (!_enabled() || !tickerModeEnabled || duration == Duration.zero) {
       _resetPointerAnimationTarget();
+      // 全局/页面级 ticker 暂停时 driven activity 不会推进；回退到 Flutter
+      // 原生即时滚动，避免滚轮失效而 scrollbar 拖拽仍可用的不一致状态。
       super.pointerScroll(delta);
       return;
     }
