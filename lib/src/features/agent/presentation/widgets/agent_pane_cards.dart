@@ -498,11 +498,12 @@ String _toolCardTitle(AgentToolCall toolCall) {
 }
 
 /// 计划类 pending 卡片的统一视觉壳：顶栏固定、正文可滚、底栏固定。
+///
+/// 色板与对话流计划消息卡一致（surfaceElevated / border），不引入 success/warning 等额外语义色。
 class _AgentPlanDockCard extends StatelessWidget {
   const _AgentPlanDockCard({
     required this.title,
     required this.leading,
-    required this.accent,
     required this.body,
     required this.footer,
     this.subtitle,
@@ -512,7 +513,6 @@ class _AgentPlanDockCard extends StatelessWidget {
 
   final String title;
   final Widget leading;
-  final Color accent;
   final Widget body;
   final Widget footer;
   final String? subtitle;
@@ -545,7 +545,7 @@ class _AgentPlanDockCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: textStyles.titleSmall.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: colors.textPrimary,
+                    color: colors.textSecondary.withValues(alpha: 0.9),
                   ),
                 ),
                 if (subtitle case final text? when text.trim().isNotEmpty) ...[
@@ -583,9 +583,9 @@ class _AgentPlanDockCard extends StatelessWidget {
     );
 
     return PanelCard(
-      color: accent.withValues(alpha: 0.08),
+      color: colors.surfaceElevated,
       showBorder: true,
-      borderColor: accent.withValues(alpha: 0.28),
+      borderColor: colors.border,
       borderRadius: IdeRadius.allMedium,
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -650,12 +650,11 @@ class _AgentPlanApprovalCard extends StatelessWidget {
     return _AgentPlanDockCard(
       key: ValueKey<String>('agent-plan-approval-card-${request.id}'),
       title: request.title,
-      accent: colors.warning,
       maxBodyHeight: maxBodyHeight,
       leading: Icon(
         Icons.account_tree_outlined,
         size: 16,
-        color: colors.warning,
+        color: colors.textSecondary.withValues(alpha: 0.78),
       ),
       subtitle: '接受计划仅确认方案；命令、文件与网络权限仍会单独请求。',
       body: Column(
@@ -780,12 +779,11 @@ class _AgentPlanExecutionCardState extends State<_AgentPlanExecutionCard> {
     return _AgentPlanDockCard(
       key: ValueKey<String>('agent-plan-execution-card-${request.id}'),
       title: request.title,
-      accent: colors.success,
       maxBodyHeight: widget.maxBodyHeight,
       leading: Icon(
-        Icons.playlist_add_check_circle_outlined,
+        Icons.checklist_rounded,
         size: 16,
-        color: colors.success,
+        color: colors.textSecondary.withValues(alpha: 0.78),
       ),
       subtitle: '执行将开启新的 Default 回合；命令、文件与网络权限仍会单独确认。',
       body: _AgentRawMarkdownBody(data: request.markdown),
