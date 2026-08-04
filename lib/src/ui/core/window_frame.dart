@@ -147,9 +147,14 @@ class _TitleBar extends StatelessWidget {
                 child: DragToMoveArea(
                   child: isWindows
                       ? const SizedBox(height: IdeMetrics.titleBarHeight)
-                      : Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: IdeSpacing.space10,
+                      : const SizedBox(
+                          // 外层上下各有 space2，这里填满标题栏的内容高度，
+                          // 否则自绘标题栏的 DragToMoveArea 会因无 child 而变成零高度。
+                          height: IdeMetrics.titleBarHeight - IdeSpacing.space4,
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: IdeSpacing.space10,
+                            ),
                           ),
                         ),
                 ),

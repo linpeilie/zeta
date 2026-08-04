@@ -8,6 +8,7 @@ import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/window_frame.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'ide_component_test_harness.dart';
 
@@ -122,4 +123,24 @@ void main() {
     expect(logoSvg.height, 22);
     expect(tester.takeException(), isNull);
   }, skip: !Platform.isWindows);
+
+  testWidgets('macOS 标题栏拖拽区覆盖可见标题栏高度', (tester) async {
+    await pumpIdeComponent(
+      tester,
+      size: const Size(960, 640),
+      child: WindowFrame(
+        enableNativeWindowFrame: true,
+        showWindowControls: false,
+        child: const ColoredBox(color: Colors.black),
+      ),
+    );
+
+    final dragArea = find.byType(DragToMoveArea);
+    expect(dragArea, findsOneWidget);
+    expect(
+      tester.getSize(dragArea).height,
+      IdeMetrics.titleBarHeight - IdeSpacing.space4,
+    );
+    expect(tester.takeException(), isNull);
+  }, skip: !Platform.isMacOS);
 }
