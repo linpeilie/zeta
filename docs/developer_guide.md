@@ -1,6 +1,6 @@
 # 开发者文档
 
-最后更新：2026-07-31
+最后更新：2026-08-04
 
 ## 1. 项目简介
 
@@ -14,6 +14,9 @@ Zeta 是一个 Flutter Desktop 项目，当前支持 macOS、Linux 和 Windows �
   `--listen` 时使用 stdio。
 - Codex 适配层按 pinned schema 开发；协议版本与升级流程见
   [Codex app-server 协议版本锁定](./codex_app_server_protocol.md)。
+- 如需使用 Grok ACP，建议安装 Grok CLI（grok-build）`0.2.119` 或更高版本。
+  `0.2.119` 是 Zeta 的 Grok 多会话兼容基线；此前版本不支持多会话，在同时打开或执行
+  多个 Grok 会话时可能出现会话状态、流式通知或回合终态无法正确隔离的问题。
 - 当前活跃 Provider 为 Codex 与 Grok。Cursor 已退役，不参与 catalog、UI、运行时组合、
   进程启动或会话恢复；旧配置仅用于 unavailable/fallback 兼容。
 

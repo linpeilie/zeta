@@ -51,6 +51,8 @@ Provider 的原始协议仅留在数据适配层。Zeta 将它们规范化为中
 
 - 一套兼容 `pubspec.yaml` 中 Dart `^3.12.2` 约束的 Flutter Desktop 开发环境。
 - 若使用默认 Provider，`codex app-server` 应可在本机执行；也可在 Agent 管理页配置并启用 Grok。
+- 使用 Grok ACP 时，建议安装 Grok CLI（grok-build）`0.2.119` 或更高版本。`0.2.119`
+  之前的版本不支持多会话，无法可靠承载 Zeta 的多会话工作区。
 
 ### 从源码运行
 
