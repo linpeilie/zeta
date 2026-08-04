@@ -1,6 +1,6 @@
 # 设计文档
 
-最后更新：2026-07-31
+最后更新：2026-08-04
 
 ## 1. 设计目标
 
@@ -16,6 +16,8 @@ Zeta 的设计目标是让 Flutter UI、Agent provider、会话持久化和本�
 - features/agent_management：Agent CLI 检测、版本与账号诊断、模型读取、配置安全编辑、
   CLI 磁盘日志读取和管理页面。
 - features/ide_session：会话状态、版本化持久化、恢复计划和恢复协调。
+- features/desktop_notifications：Provider 中立注意力信号的可见性判定、
+  进程内未读、系统通知和平台任务栏/Dock 端口。
 - features/project_threads：项目 thread 快照、列表状态、分页控制器和 presentation view model。
 - features/usage_statistics：跨项目调用记录、统计口径、Codex 历史索引、套餐限额与
   使用统计页面。
@@ -64,7 +66,7 @@ AgentConversationViewModel
       -> AgentConversationReducer（live/history/replay 独立实例）
       -> AgentConversationTimelineStore
       -> AgentConversationEffectRunner
-        -> turn completed / model catalog / structured error log
+        -> turn completed / attention / model catalog / structured error log
       -> AgentConversationThreadSnapshot
   -> AgentUiUpdatePort
     -> AgentUiUpdateScheduler（presentation，按 Flutter frame 合并）
@@ -106,7 +108,18 @@ UsageStatisticsController
     -> GrokUsageStatisticsRepository
       -> 本地 Grok updates.jsonl 历史
       -> AgentUsageQuotaProvider / `_x.ai/billing`
+
+DesktopAttentionController
+  -> GeneralSettingsController
+  -> DesktopNotificationService -> flutter_local_notifications
+  -> DesktopAttentionIndicator -> Windows taskbar / macOS Dock / Linux urgency
+  -> IdeHome visibility + IdeShellController thread activation
 ```
+
+Agent turn 终态、权限、问题、Provider 计划审批和本地 Plan 执行交接统一转换为
+`AgentAttentionSignal`。只有在目标 Agent thread 不可见时才发系统通知；点击通知
+恢复窗口并选中对应 Provider thread。详细契约、幂等、脱敏和平台实现见
+[Agent 桌面通知与任务栏未读提醒详细设计](./desktop_agent_notification_design.md)。
 
 ## 4. UI 设计
 

@@ -6,7 +6,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:window_manager/window_manager.dart';
 
-import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
@@ -126,7 +125,6 @@ class _TitleBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
     final isMac = Platform.isMacOS;
     final isWindows = Platform.isWindows;
     // 最小高度保证无菜单时仍可拖拽；有 Menubar 时由内容撑开，不再锁死固定像素。

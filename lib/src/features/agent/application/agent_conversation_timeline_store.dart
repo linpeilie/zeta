@@ -1385,6 +1385,16 @@ class AgentConversationTimelineStore {
   }
 
   void _renameTurnGroup(String oldId, String newId) {
+    if (oldId == newId) {
+      return;
+    }
+    // 目标 id 已占用时先从两侧 order 卸下，避免 rename 后 history/live 双挂同一 id。
+    // Provider 应保证 turn id 唯一；此处仅做防御，不合并旧 group 内容。
+    if (_turnGroups.containsKey(newId)) {
+      _historicalTurnOrder.remove(newId);
+      _liveTurnOrder.remove(newId);
+      _turnGroups.remove(newId);
+    }
     for (var index = 0; index < _timelineEntryTurnIds.length; index += 1) {
       if (_timelineEntryTurnIds[index] == oldId) {
         _timelineEntryTurnIds[index] = newId;

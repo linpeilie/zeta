@@ -42,6 +42,33 @@ class GeneralSettingsController extends ChangeNotifier {
     await _applySettings(_settings.copyWith(sendMessageShortcut: shortcut));
   }
 
+  /// 更新 Agent 系统通知总开关。
+  Future<void> setNotificationsEnabled(bool enabled) =>
+      _updateNotifications((value) => value.copyWith(enabled: enabled));
+
+  /// 更新 turn 终态通知分类开关。
+  Future<void> setTurnTerminalNotificationsEnabled(bool enabled) =>
+      _updateNotifications(
+        (value) => value.copyWith(turnTerminalEnabled: enabled),
+      );
+
+  /// 更新需要用户确认的通知分类开关。
+  Future<void> setActionRequiredNotificationsEnabled(bool enabled) =>
+      _updateNotifications(
+        (value) => value.copyWith(actionRequiredEnabled: enabled),
+      );
+
+  Future<void> _updateNotifications(
+    AgentNotificationSettings Function(AgentNotificationSettings value) update,
+  ) async {
+    await load();
+    final next = update(_settings.notifications);
+    if (next == _settings.notifications) {
+      return;
+    }
+    await _applySettings(_settings.copyWith(notifications: next));
+  }
+
   Future<GeneralSettings> _loadOnce() async {
     _settings = await store.load();
     _notify();

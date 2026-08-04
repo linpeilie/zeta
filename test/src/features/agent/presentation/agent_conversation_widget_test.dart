@@ -286,11 +286,12 @@ void main() {
     await tester.tap(
       find.byKey(ValueKey<String>('project-thread-${directory.path}-thread-a')),
     );
-    // 该历史回合处于 running，界面会持续播放 spinner，不能等待所有动画结束。
+    // 历史快照中的 running 不升 live、不驱动 isTurnRunning，故无 Cancel；
+    // 界面也可能没有无限 spinner，但仍推进有限帧等待 thread 切换完成。
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('History A'), findsOneWidget);
-    expect(find.byKey(const ValueKey('agent-cancel-button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-cancel-button')), findsNothing);
 
     await tester.tap(
       find.byKey(ValueKey<String>('project-thread-${directory.path}-thread-b')),
@@ -314,7 +315,7 @@ void main() {
   });
 
   testWidgets(
-    'shows Cancel for a running thread until text is entered, then steers on Send',
+    'shows Cancel for a live running turn until text is entered, then steers on Send',
     (tester) async {
       final session = MemorySessionStore();
       final directory = Directory.systemTemp.createTempSync('zeta_test_');
@@ -323,14 +324,16 @@ void main() {
         '${directory.path}${Platform.pathSeparator}sample.txt',
       ).writeAsStringSync('hello from zeta');
 
+      // Cancel/Steer 仅绑定本进程 live turn；历史 running 不升 live。
       final provider = FakeAgentProvider(
+        completeTurns: false,
         threadHistories: <String, AgentThreadHistorySnapshot>{
           'thread-a': AgentThreadHistorySnapshot(
             threadId: 'thread-a',
             turns: const <AgentHistoryTurn>[
               AgentHistoryTurn(
                 id: 'turn-a-1',
-                status: AgentHistoryTurnStatus.running,
+                status: AgentHistoryTurnStatus.completed,
                 entries: <AgentHistoryEntry>[
                   AgentHistoryMessageEntry(
                     id: 'history-a',
@@ -376,7 +379,15 @@ void main() {
           ValueKey<String>('project-thread-${directory.path}-thread-a'),
         ),
       );
-      // 运行中的历史回合会持续播放 spinner，仅推进有限帧等待 thread 切换完成。
+      await tester.pumpAndSettle();
+
+      // 先发一条消息进入本进程 live running，再验证 Cancel / Steer 切换。
+      await tester.enterText(
+        find.byKey(const ValueKey('agent-message-input')),
+        'start live turn',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('agent-send-button')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
@@ -397,7 +408,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(provider.resumedSessions, <String>['thread-a']);
-      expect(provider.sentMessages, isEmpty);
+      expect(provider.sentMessages, <String>['start live turn']);
       expect(provider.steeredMessages, <String>['follow up']);
     },
   );

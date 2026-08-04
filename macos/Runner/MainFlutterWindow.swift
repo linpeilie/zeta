@@ -5,6 +5,7 @@ import FlutterMacOS
 class MainFlutterWindow: NSWindow {
   /// 字体目录通道必须与 Flutter 引擎一起注册，避免 Dart 启动后才补注册的竞态。
   private var systemFontCatalogChannel: FlutterMethodChannel?
+  private var desktopAttentionChannel: FlutterMethodChannel?
 
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
@@ -16,8 +17,38 @@ class MainFlutterWindow: NSWindow {
     setupSystemFontCatalogChannel(
       binaryMessenger: flutterViewController.engine.binaryMessenger
     )
+    setupDesktopAttentionChannel(
+      binaryMessenger: flutterViewController.engine.binaryMessenger
+    )
 
     super.awakeFromNib()
+  }
+
+  /// 建立桌面提醒通道，使用 Dock 角标展示运行期未读数量。
+  private func setupDesktopAttentionChannel(
+    binaryMessenger: FlutterBinaryMessenger
+  ) {
+    let channel = FlutterMethodChannel(
+      name: "zeta/desktop_attention",
+      binaryMessenger: binaryMessenger
+    )
+    channel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "setUnreadCount":
+        let arguments = call.arguments as? [String: Any]
+        let count = max(arguments?["count"] as? Int ?? 0, 0)
+        NSApp.dockTile.badgeLabel = count == 0
+          ? nil
+          : (count > 99 ? "99+" : String(count))
+        result(nil)
+      case "requestAttention":
+        NSApp.requestUserAttention(.informationalRequest)
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+    desktopAttentionChannel = channel
   }
 
   /// 建立 `zeta/system_fonts` 通道，返回 CoreText 可见字体家族。

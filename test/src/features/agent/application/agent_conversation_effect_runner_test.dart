@@ -26,6 +26,7 @@ void main() {
       final effect = AgentTurnCompletedEffect(
         scope: _scope(providerLifecycleState: 'running', turnId: 'turn-1'),
         turnId: 'turn-1',
+        attention: _turnCompletedAttention,
       );
 
       // Act
@@ -48,7 +49,11 @@ void main() {
         ),
       ]) {
         runner.run(
-          AgentTurnCompletedEffect(scope: mismatchedScope, turnId: 'turn-1'),
+          AgentTurnCompletedEffect(
+            scope: mismatchedScope,
+            turnId: 'turn-1',
+            attention: _turnCompletedAttention,
+          ),
         );
       }
       expect(callbackCount, 1);
@@ -61,6 +66,7 @@ void main() {
         AgentTurnCompletedEffect(
           scope: _scope(turnId: 'turn-1'),
           turnId: 'turn-1',
+          attention: _turnCompletedAttention,
         ),
       );
       expect(callbackCount, 2);
@@ -231,6 +237,7 @@ void main() {
         AgentTurnCompletedEffect(
           scope: _scope(turnId: 'turn-1'),
           turnId: 'turn-1',
+          attention: _turnCompletedAttention,
         ),
       );
       runner.run(
@@ -272,6 +279,14 @@ void main() {
     });
   });
 }
+
+const _turnCompletedAttention = AgentAttentionSignal(
+  kind: AgentAttentionKind.turnCompleted,
+  phase: AgentAttentionPhase.raised,
+  sourceId: 'turn-1',
+  threadId: 'thread-1',
+  turnId: 'turn-1',
+);
 
 AgentConversationEffectScope _scope({
   AgentConversationReductionScope reductionScope =

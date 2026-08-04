@@ -198,6 +198,8 @@ void main() {
       );
       expect(first.effects.providerErrorCount, first.delivery.errorCount);
       expect(first.effects.effectTypes, const <Type>[
+        AgentAttentionEffect,
+        AgentAttentionEffect,
         AgentLogProviderErrorEffect,
         AgentTurnCompletedEffect,
       ]);
@@ -445,6 +447,8 @@ final class _CountingEffectRunner implements AgentConversationEffectRunner {
       case AgentTurnCompletedEffect():
         turnCompletedCount += 1;
       case AgentRecordModelCatalogEffect():
+        break;
+      case AgentAttentionEffect():
         break;
       case AgentLogProviderErrorEffect():
         providerErrorCount += 1;

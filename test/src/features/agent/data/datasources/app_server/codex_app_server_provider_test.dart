@@ -706,7 +706,7 @@ void main() {
         final tool = events.whereType<AgentToolCallEvent>().single.toolCall;
         expect(tool.id, 'reasoning-1');
         expect(tool.kind, AgentToolKind.think);
-        expect(tool.title, '??');
+        expect(tool.title, '思考');
         expect(tool.content, 'final summary');
 
         await subscription.cancel();
@@ -1320,27 +1320,27 @@ void main() {
         final tools = events.whereType<AgentToolCallEvent>().toList();
         expect(tools, hasLength(4));
         expect(tools[0].toolCall.kind, AgentToolKind.search);
-        expect(tools[0].toolCall.title, 'Web ??');
+        expect(tools[0].toolCall.title, 'Web 搜索');
         expect(tools[0].toolCall.content, 'https://example.com/docs');
         expect(tools[1].toolCall.kind, AgentToolKind.read);
         expect(tools[1].toolCall.content, '/tmp/preview.png');
         expect(tools[2].toolCall.kind, AgentToolKind.fetch);
         expect(tools[2].toolCall.status, AgentToolStatus.completed);
         expect(tools[2].toolCall.locations, <String>['/tmp/out.png']);
-        expect(tools[3].toolCall.title, '??: spawnAgent');
+        expect(tools[3].toolCall.title, '协作: spawnAgent');
         expect(tools[3].toolCall.content, 'Investigate auth');
 
         final systemItems = events.whereType<AgentSystemItemEvent>().toList();
         expect(systemItems, hasLength(5));
-        expect(systemItems[0].entry.title, '??????');
+        expect(systemItems[0].entry.title, '进入评审模式');
         expect(systemItems[0].entry.description, 'Review uncommitted changes');
-        expect(systemItems[1].entry.title, '??????');
-        expect(systemItems[2].entry.title, 'Hook ??');
+        expect(systemItems[1].entry.title, '上下文已压缩');
+        expect(systemItems[2].entry.title, 'Hook 提示');
         expect(systemItems[2].entry.content, 'Pre-commit checks');
-        expect(systemItems[3].entry.title, '???');
-        expect(systemItems[3].entry.description, '?? 1 ?');
-        expect(systemItems[4].entry.title, '?????');
-        expect(systemItems[4].entry.description, '??? ? worker/auth');
+        expect(systemItems[3].entry.title, '等待中');
+        expect(systemItems[3].entry.description, '休眠 1 秒');
+        expect(systemItems[4].entry.title, '子代理活动');
+        expect(systemItems[4].entry.description, '已启动 · worker/auth');
 
         await subscription.cancel();
         await provider.dispose();
@@ -1915,12 +1915,12 @@ void main() {
       expect(quota!.planType, 'plus');
       expect(quota.limitName, 'Codex');
       expect(quota.windows, hasLength(2));
-      // primary 300min / secondary 10080min ? ??????? limitName / ?????
-      expect(quota.windows.first.label, '5 ??');
+      // primary 300min / secondary 10080min：标签走 windowDuration，limitName 仍用套餐名
+      expect(quota.windows.first.label, '5 小时');
       expect(quota.windows.first.usedPercent, 36);
       expect(quota.windows.first.resetsAt, isNotNull);
       expect(quota.windows.first.windowDuration, const Duration(minutes: 300));
-      expect(quota.windows.last.label, '1 ?');
+      expect(quota.windows.last.label, '1 周');
       expect(quota.windows.last.usedPercent, 72);
       expect(quota.windows.last.windowDuration, const Duration(minutes: 10080));
       expect(quota.credits?.unlimited, isFalse);
@@ -2248,17 +2248,17 @@ void main() {
 
       final webSearch = _historyEntries(history)[5] as AgentHistoryToolEntry;
       expect(webSearch.toolCall.kind, AgentToolKind.search);
-      expect(webSearch.toolCall.title, 'Web ??');
+      expect(webSearch.toolCall.title, 'Web 搜索');
       expect(webSearch.toolCall.content, 'zeta design system');
 
       final review = _historyEntries(history)[6] as AgentHistoryEventEntry;
       expect(review.kind, AgentHistoryEventKind.system);
-      expect(review.title, '??????');
+      expect(review.title, '进入评审模式');
       expect(review.description, 'Review branch diff');
 
       final compact = _historyEntries(history)[7] as AgentHistoryEventEntry;
       expect(compact.kind, AgentHistoryEventKind.system);
-      expect(compact.title, '??????');
+      expect(compact.title, '上下文已压缩');
       await provider.dispose();
     });
 

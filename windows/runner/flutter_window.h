@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "win32_window.h"
+#include "desktop_attention_channel.h"
 #include "system_font_catalog_channel.h"
 
 // A window that does nothing but host a Flutter view.
@@ -31,6 +32,7 @@ class FlutterWindow : public Win32Window {
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       system_font_catalog_channel_;
+  std::unique_ptr<DesktopAttentionChannel> desktop_attention_channel_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

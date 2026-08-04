@@ -42,8 +42,13 @@ void main() {
       final saved =
           jsonDecode(await settingsFile.readAsString()) as Map<String, Object?>;
       expect(saved, <String, Object?>{
-        'version': 1,
+        'version': 2,
         'sendMessageShortcut': 'primaryModifierEnter',
+        'notifications': <String, Object?>{
+          'enabled': true,
+          'turnTerminalEnabled': true,
+          'actionRequiredEnabled': true,
+        },
       });
       expect(await store.load(), settings);
     });

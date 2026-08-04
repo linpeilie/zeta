@@ -13,6 +13,7 @@ typedef AgentModelCatalogRecorder =
       required AgentModelList models,
       required String source,
     });
+typedef AgentAttentionCallback = void Function(AgentAttentionSignal signal);
 
 /// application effect 的执行端口。
 abstract interface class AgentConversationEffectRunner {
@@ -31,16 +32,19 @@ final class DefaultAgentConversationEffectRunner
     required AgentConversationEffectScopeReader currentScope,
     required AgentModelCatalogRecorder recordModelCatalog,
     void Function()? onTurnCompleted,
+    AgentAttentionCallback? onAttention,
   }) => DefaultAgentConversationEffectRunner._(
     currentScope,
     recordModelCatalog,
     onTurnCompleted,
+    onAttention,
   );
 
   DefaultAgentConversationEffectRunner._(
     this._currentScope,
     this._recordModelCatalog,
     this._onTurnCompleted,
+    this._onAttention,
   );
 
   static final _log = loggerFor('zeta.agent.conversation.effects');
@@ -48,6 +52,7 @@ final class DefaultAgentConversationEffectRunner
   final AgentConversationEffectScopeReader _currentScope;
   final AgentModelCatalogRecorder _recordModelCatalog;
   final void Function()? _onTurnCompleted;
+  final AgentAttentionCallback? _onAttention;
   Expando<bool> _executed = Expando<bool>(
     'AgentConversationEffectRunner.executed',
   );
@@ -72,6 +77,17 @@ final class DefaultAgentConversationEffectRunner
           effect,
           operation: 'turn/completed-callback',
           callback: () => _onTurnCompleted?.call(),
+        );
+        _runSynchronous(
+          effect,
+          operation: 'turn/completed-attention',
+          callback: () => _onAttention?.call(effect.attention),
+        );
+      case AgentAttentionEffect():
+        _runSynchronous(
+          effect,
+          operation: 'agent-attention',
+          callback: () => _onAttention?.call(effect.signal),
         );
       case AgentRecordModelCatalogEffect():
         _runModelCatalogRecord(effect);

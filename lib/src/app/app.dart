@@ -15,6 +15,7 @@ import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dar
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/data/default_agent_provider_factory.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
@@ -53,6 +54,8 @@ class MainApp extends StatefulWidget {
     this.agentUsagePanelRepository,
     this.agentModelCatalogRepository,
     this.agentProviderRuntimeRegistry,
+    this.desktopNotificationService,
+    this.desktopAttentionIndicator,
   });
 
   final Future<String?> Function()? directoryPicker;
@@ -92,6 +95,8 @@ class MainApp extends StatefulWidget {
 
   /// 应用级 Provider 运行时池；测试可注入以验证实例复用与退出回收。
   final AgentProviderRuntimeRegistry? agentProviderRuntimeRegistry;
+  final DesktopNotificationService? desktopNotificationService;
+  final DesktopAttentionIndicator? desktopAttentionIndicator;
 
   @override
   State<MainApp> createState() => MainAppState();
@@ -300,6 +305,8 @@ class MainAppState extends State<MainApp>
                 sessionStore: _createSessionStore(),
                 agentProviderFactory: _agentProviderFactory,
                 agentProviderRuntimeRegistry: _agentProviderRuntimeRegistry,
+                desktopNotificationService: widget.desktopNotificationService,
+                desktopAttentionIndicator: widget.desktopAttentionIndicator,
                 agentProviderConfigStore:
                     widget.agentProviderConfigStore ??
                     _createAgentProviderConfigStore(),

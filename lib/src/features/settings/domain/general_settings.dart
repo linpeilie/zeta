@@ -11,27 +11,97 @@ enum MessageSendShortcut {
   primaryModifierEnter,
 }
 
+/// Agent 系统通知的应用内分类开关。
+@immutable
+final class AgentNotificationSettings {
+  const AgentNotificationSettings({
+    this.enabled = true,
+    this.turnTerminalEnabled = true,
+    this.actionRequiredEnabled = true,
+  });
+
+  final bool enabled;
+  final bool turnTerminalEnabled;
+  final bool actionRequiredEnabled;
+
+  AgentNotificationSettings copyWith({
+    bool? enabled,
+    bool? turnTerminalEnabled,
+    bool? actionRequiredEnabled,
+  }) {
+    return AgentNotificationSettings(
+      enabled: enabled ?? this.enabled,
+      turnTerminalEnabled: turnTerminalEnabled ?? this.turnTerminalEnabled,
+      actionRequiredEnabled:
+          actionRequiredEnabled ?? this.actionRequiredEnabled,
+    );
+  }
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'enabled': enabled,
+    'turnTerminalEnabled': turnTerminalEnabled,
+    'actionRequiredEnabled': actionRequiredEnabled,
+  };
+
+  static AgentNotificationSettings tryDecode(Object? raw) {
+    if (raw is! Map) {
+      return const AgentNotificationSettings();
+    }
+    final map = Map<Object?, Object?>.from(raw);
+    return AgentNotificationSettings(
+      enabled: map['enabled'] is bool ? map['enabled']! as bool : true,
+      turnTerminalEnabled: map['turnTerminalEnabled'] is bool
+          ? map['turnTerminalEnabled']! as bool
+          : true,
+      actionRequiredEnabled: map['actionRequiredEnabled'] is bool
+          ? map['actionRequiredEnabled']! as bool
+          : true,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is AgentNotificationSettings &&
+        other.enabled == enabled &&
+        other.turnTerminalEnabled == turnTerminalEnabled &&
+        other.actionRequiredEnabled == actionRequiredEnabled;
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(enabled, turnTerminalEnabled, actionRequiredEnabled);
+}
+
 /// Zeta 的全局常规设置。
 @immutable
 class GeneralSettings {
-  const GeneralSettings({this.sendMessageShortcut = MessageSendShortcut.enter});
+  const GeneralSettings({
+    this.sendMessageShortcut = MessageSendShortcut.enter,
+    this.notifications = const AgentNotificationSettings(),
+  });
 
   /// 消息输入框当前使用的发送快捷键。
   final MessageSendShortcut sendMessageShortcut;
+  final AgentNotificationSettings notifications;
 
-  GeneralSettings copyWith({MessageSendShortcut? sendMessageShortcut}) {
+  GeneralSettings copyWith({
+    MessageSendShortcut? sendMessageShortcut,
+    AgentNotificationSettings? notifications,
+  }) {
     return GeneralSettings(
       sendMessageShortcut: sendMessageShortcut ?? this.sendMessageShortcut,
+      notifications: notifications ?? this.notifications,
     );
   }
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
-      'version': 1,
+      'version': 2,
       'sendMessageShortcut': switch (sendMessageShortcut) {
         MessageSendShortcut.enter => 'enter',
         MessageSendShortcut.primaryModifierEnter => 'primaryModifierEnter',
       },
+      'notifications': notifications.toJson(),
     };
   }
 
@@ -41,7 +111,8 @@ class GeneralSettings {
       return const GeneralSettings();
     }
     final map = Map<Object?, Object?>.from(raw);
-    if (map['version'] != 1) {
+    final version = map['version'];
+    if (version != 1 && version != 2) {
       return const GeneralSettings();
     }
     return GeneralSettings(
@@ -50,15 +121,19 @@ class GeneralSettings {
         'enter' => MessageSendShortcut.enter,
         _ => MessageSendShortcut.enter,
       },
+      notifications: version == 2
+          ? AgentNotificationSettings.tryDecode(map['notifications'])
+          : const AgentNotificationSettings(),
     );
   }
 
   @override
   bool operator ==(Object other) {
     return other is GeneralSettings &&
-        other.sendMessageShortcut == sendMessageShortcut;
+        other.sendMessageShortcut == sendMessageShortcut &&
+        other.notifications == notifications;
   }
 
   @override
-  int get hashCode => sendMessageShortcut.hashCode;
+  int get hashCode => Object.hash(sendMessageShortcut, notifications);
 }

@@ -366,6 +366,9 @@ class AgentPaneFakeProvider
   final List<AgentTurnConfiguration> turnConfigurations =
       <AgentTurnConfiguration>[];
 
+  /// 每次 sendMessage 递增，避免复用 turn id 导致 history/live 双挂。
+  int _nextTurnSequence = 0;
+
   void emitEvent(AgentEvent event) {
     _events.add(event);
   }
@@ -474,7 +477,8 @@ class AgentPaneFakeProvider
     if (sentText != null) {
       sentMessages.add(sentText);
     }
-    return AgentTurn(id: 'turn-1', sessionId: session.id);
+    _nextTurnSequence += 1;
+    return AgentTurn(id: 'turn-$_nextTurnSequence', sessionId: session.id);
   }
 
   @override

@@ -8,6 +8,7 @@
 - [发版指南](./release_guide.md)
 - [工程规范](./engineering_standards.md)
 - [Codex app-server 协议版本锁定](./codex_app_server_protocol.md)
+- [Agent 桌面通知与任务栏未读提醒详细设计](./desktop_agent_notification_design.md)
 - [Cursor Agent 退役历史说明](./cursor_agent_guide.md)
 - [Cursor ACP 历史发布门禁](./cursor_acp_release_validation.md)
 - [开发记录](./development_log.md)

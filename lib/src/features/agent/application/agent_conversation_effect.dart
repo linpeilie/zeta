@@ -84,9 +84,21 @@ sealed class AgentConversationEffect {
 
 /// 当前 turn 完成后通知应用组合层。
 final class AgentTurnCompletedEffect extends AgentConversationEffect {
-  const AgentTurnCompletedEffect({required super.scope, required this.turnId});
+  const AgentTurnCompletedEffect({
+    required super.scope,
+    required this.turnId,
+    required this.attention,
+  });
 
   final String turnId;
+  final AgentAttentionSignal attention;
+}
+
+/// 当前 turn 产生或解决了一条需要用户注意的交互。
+final class AgentAttentionEffect extends AgentConversationEffect {
+  const AgentAttentionEffect({required super.scope, required this.signal});
+
+  final AgentAttentionSignal signal;
 }
 
 /// 记录 Provider 主动推送的模型目录。

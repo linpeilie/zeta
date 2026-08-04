@@ -119,9 +119,38 @@ void main() {
     },
   );
 
+  test(
+    'activates the provider thread targeted by a system notification',
+    () async {
+      final directory = Directory.systemTemp.createTempSync('zeta_shell_');
+      tempDirectories.add(directory);
+      final harness = await _openShellWithSelectedThread(
+        directory: directory,
+        threadIds: const <String>['thread-a', 'thread-b'],
+        selectedThreadId: 'thread-a',
+      );
+      addTearDown(harness.shell.dispose);
+
+      final activated = await harness.shell.activateAgentThread(
+        providerId: defaultAgentProviderId,
+        threadId: 'thread-b',
+      );
+      final missing = await harness.shell.activateAgentThread(
+        providerId: defaultAgentProviderId,
+        threadId: 'missing-thread',
+      );
+
+      expect(activated, isTrue);
+      expect(missing, isFalse);
+      expect(harness.shell.activeProjectPath, directory.path);
+      expect(harness.shell.selectedAgentViewModel.sessionId, 'thread-b');
+    },
+  );
+
   test('notifies when the selected Agent turn completes', () async {
     // Arrange
     var completedTurns = 0;
+    final attentions = <AgentWorkspaceAttention>[];
     final backend = _ProviderBackend(
       config: AgentProviderConfig.defaultCodex,
       threadHistories: const <String, AgentThreadHistorySnapshot>{},
@@ -147,6 +176,7 @@ void main() {
       onAgentTurnCompleted: () {
         completedTurns += 1;
       },
+      onAgentAttention: attentions.add,
     );
     addTearDown(shell.dispose);
     await _flushAsync();
@@ -157,6 +187,11 @@ void main() {
 
     // Assert
     expect(completedTurns, 1);
+    expect(attentions, hasLength(1));
+    expect(attentions.single.signal.kind, AgentAttentionKind.turnCompleted);
+    expect(attentions.single.signal.phase, AgentAttentionPhase.raised);
+    expect(attentions.single.providerId, defaultAgentProviderId);
+    expect(attentions.single.threadId, isNotEmpty);
   });
 
   test(

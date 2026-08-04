@@ -71,6 +71,7 @@ class IdeShellController extends ChangeNotifier {
     AgentProviderRuntimeRegistry? agentProviderRuntimeRegistry,
     AgentFrameScheduler Function()? agentUiFrameSchedulerFactory,
     VoidCallback? onAgentTurnCompleted,
+    ValueChanged<AgentWorkspaceAttention>? onAgentAttention,
     DateTime Function()? now,
   }) : projectThreadsViewModel = ProjectThreadsViewModel(),
        _sessionCoordinator = IdeSessionPersistenceCoordinator(
@@ -117,6 +118,7 @@ class IdeShellController extends ChangeNotifier {
       modelCatalogRepository: agentProviderController.modelCatalogRepository,
       runtimeRegistry: this.agentProviderRuntimeRegistry,
       onTurnCompleted: onAgentTurnCompleted,
+      onAttention: onAgentAttention,
       uiFrameSchedulerFactory: agentUiFrameSchedulerFactory,
     );
     _bootstrapAgentEntry = agentWorkspaceController.ensureDraftEntry(
@@ -187,6 +189,7 @@ class IdeShellController extends ChangeNotifier {
   bool _isLoadingProject = false;
   bool _projectHomeActive = false;
   bool _initialRestoreCompleted = false;
+  final Completer<void> _initialRestoreCompleter = Completer<void>();
   int _homeRefreshToken = 0;
   bool _isDisposed = false;
 
@@ -210,6 +213,9 @@ class IdeShellController extends ChangeNotifier {
 
   /// 初始会话恢复已完成；此后无活动项目时可以稳定展示全局首页。
   bool get initialRestoreCompleted => _initialRestoreCompleted;
+
+  /// 等待启动会话恢复收敛，供冷启动通知定位避免与恢复竞态。
+  Future<void> get initialRestoreDone => _initialRestoreCompleter.future;
 
   /// 近期项目按最后访问时间排序；旧数据没有时间时保持原项目顺序。
   List<RecentProjectSummary> get recentProjects {
@@ -540,6 +546,56 @@ class IdeShellController extends ChangeNotifier {
     );
   }
 
+  /// 从系统通知恢复并选中对应的 Provider thread。
+  Future<bool> activateAgentThread({
+    required String providerId,
+    required String threadId,
+  }) async {
+    AgentThreadSummary? target;
+    String? projectPath;
+    for (final path in _projects) {
+      for (final thread in projectThreadsController.stateFor(path).threads) {
+        if (thread.providerId == providerId && thread.id == threadId) {
+          target = thread;
+          projectPath = path;
+          break;
+        }
+      }
+      if (target != null) {
+        break;
+      }
+    }
+
+    final openEntry = agentWorkspaceController.entryForThread(
+      providerId: providerId,
+      threadId: threadId,
+    );
+    if (target == null &&
+        openEntry != null &&
+        openEntry.projectPath.isNotEmpty) {
+      final now = _now();
+      projectPath = openEntry.projectPath;
+      target = AgentThreadSummary(
+        id: threadId,
+        providerId: providerId,
+        projectPath: projectPath,
+        title: openEntry.viewModel.currentThreadTitle,
+        preview: openEntry.viewModel.currentThreadTitle,
+        createdAt: now,
+        updatedAt: now,
+        status:
+            openEntry.threadSnapshot.runtimeStatus ??
+            AgentThreadRuntimeStatus.idle,
+      );
+    }
+    if (target == null || projectPath == null) {
+      return false;
+    }
+    await selectProjectThread(projectPath, target);
+    final selected = agentWorkspaceController.selectedEntry;
+    return selected?.providerId == providerId && selected?.threadId == threadId;
+  }
+
   void handleTreeExpansionChanged(String key, bool expanded) {
     final node = _findTreeNode(key);
     if (node == null || !node.isDirectory) {
@@ -617,6 +673,9 @@ class IdeShellController extends ChangeNotifier {
       _log.warning('Could not open project folder: $path', error, stackTrace);
       _statusReporter?.call('Could not open folder: $error');
     } finally {
+      if (!_initialRestoreCompleter.isCompleted) {
+        _initialRestoreCompleter.complete();
+      }
       if (!_isDisposed) {
         _isLoadingProject = false;
         _notifyStateChanged();

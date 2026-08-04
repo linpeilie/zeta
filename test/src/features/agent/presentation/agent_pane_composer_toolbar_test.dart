@@ -542,13 +542,15 @@ void main() {
           provider.turnConfigurations.last.conversationMode!.modeId,
           AgentConversationModeId.defaultMode,
         );
+        // Fake 每次 sendMessage 递增 turn id：Plan 为 turn-1，执行回合为 turn-2。
+        // 必须结束 live 执行回合，否则 elapsed ticker 会在 dispose 后仍 pending。
         provider.emitEvent(
           const AgentTurnCompletedEvent(
             sessionId: 'session-1',
-            turnId: 'turn-1',
+            turnId: 'turn-2',
           ),
         );
-        await tester.pump();
+        await pumpLiveAgentUi(tester);
       },
     );
 

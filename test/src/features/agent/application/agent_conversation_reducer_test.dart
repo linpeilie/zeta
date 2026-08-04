@@ -438,9 +438,45 @@ void main() {
       final effect = mutation.effects.single as AgentTurnCompletedEffect;
 
       expect(effect.turnId, _turnId);
+      expect(effect.attention.kind, AgentAttentionKind.turnCompleted);
+      expect(effect.attention.phase, AgentAttentionPhase.raised);
+      expect(effect.attention.sourceId, _turnId);
+      expect(effect.attention.threadId, _threadId);
       expect(effect.timing, AgentConversationEffectTiming.afterMutation);
       expect(effect.requireThread, isTrue);
       _expectDefaultScope(effect.scope, turnId: _turnId);
+    });
+
+    test('pending interaction effects carry raised and resolved identity', () {
+      final requested = AgentConversationReducer.live().reduce(
+        const AgentPermissionRequestedEvent(
+          AgentPermissionRequest(
+            id: 'permission-1',
+            title: 'Run',
+            kind: AgentPermissionKind.commandExecution,
+            sessionId: _threadId,
+            turnId: _turnId,
+          ),
+        ),
+        _context(),
+      );
+      final resolved = AgentConversationReducer.live().reduce(
+        const AgentPermissionResolvedEvent(
+          requestId: 'permission-1',
+          threadId: _threadId,
+        ),
+        _context(),
+      );
+
+      final raisedSignal =
+          (requested.effects.single as AgentAttentionEffect).signal;
+      final resolvedSignal =
+          (resolved.effects.single as AgentAttentionEffect).signal;
+      expect(raisedSignal.kind, AgentAttentionKind.permissionRequired);
+      expect(raisedSignal.phase, AgentAttentionPhase.raised);
+      expect(resolvedSignal.kind, raisedSignal.kind);
+      expect(resolvedSignal.phase, AgentAttentionPhase.resolved);
+      expect(resolvedSignal.sourceId, raisedSignal.sourceId);
     });
 
     test('model catalog effect is thread-independent and preserves source', () {
@@ -933,6 +969,7 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           AgentUiRegion.pendingInteraction,
         },
         uiUrgency: AgentUiUpdateUrgency.immediate,
+        applicationEffectTypes: <Type>[AgentAttentionEffect],
       ),
       const _ReductionCase(
         name: 'permission resolved',
@@ -946,6 +983,7 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           AgentUiRegion.pendingInteraction,
         },
         uiUrgency: AgentUiUpdateUrgency.immediate,
+        applicationEffectTypes: <Type>[AgentAttentionEffect],
       ),
       const _ReductionCase(
         name: 'question requested',
@@ -966,6 +1004,7 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           AgentUiRegion.pendingInteraction,
         },
         uiUrgency: AgentUiUpdateUrgency.immediate,
+        applicationEffectTypes: <Type>[AgentAttentionEffect],
       ),
       const _ReductionCase(
         name: 'question resolved',
@@ -979,6 +1018,7 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           AgentUiRegion.pendingInteraction,
         },
         uiUrgency: AgentUiUpdateUrgency.immediate,
+        applicationEffectTypes: <Type>[AgentAttentionEffect],
       ),
       const _ReductionCase(
         name: 'plan approval requested',
@@ -997,6 +1037,7 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           AgentUiRegion.pendingInteraction,
         },
         uiUrgency: AgentUiUpdateUrgency.immediate,
+        applicationEffectTypes: <Type>[AgentAttentionEffect],
       ),
       const _ReductionCase(
         name: 'plan approval resolved',
@@ -1010,6 +1051,7 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           AgentUiRegion.pendingInteraction,
         },
         uiUrgency: AgentUiUpdateUrgency.immediate,
+        applicationEffectTypes: <Type>[AgentAttentionEffect],
       ),
     ],
     'batch G error/system/model': <_ReductionCase>[

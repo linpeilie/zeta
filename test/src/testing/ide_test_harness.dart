@@ -190,6 +190,9 @@ class FakeAgentProvider
   final List<AgentTurnConfiguration> turnConfigurations =
       <AgentTurnConfiguration>[];
 
+  /// 每次 sendMessage 递增，避免复用 turn id 导致 history/live 双挂。
+  int _nextTurnSequence = 0;
+
   @override
   AgentProviderCapabilities get capabilities => declaredCapabilities;
 
@@ -325,7 +328,11 @@ class FakeAgentProvider
         .map((item) => item.text)
         .join('\n');
     sentMessages.add(text);
-    final turn = AgentTurn(id: 'turn-1', sessionId: session.id);
+    _nextTurnSequence += 1;
+    final turn = AgentTurn(
+      id: 'turn-$_nextTurnSequence',
+      sessionId: session.id,
+    );
     _events.add(AgentTurnStartedEvent(turn));
     final errorMessage = turnErrorMessage;
     if (errorMessage != null) {

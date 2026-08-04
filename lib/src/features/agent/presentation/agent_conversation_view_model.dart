@@ -64,6 +64,7 @@ class AgentConversationViewModel {
     this.workspaceFilesListenable,
     this.workspaceFilesIndexReady,
     this.onTurnCompleted,
+    this.onAttention,
     AgentFrameScheduler? uiFrameScheduler,
   }) : _timeline = timelineStore ?? AgentConversationTimelineStore(),
        _ownsModelSelectionController = modelSelectionController == null,
@@ -112,6 +113,7 @@ class AgentConversationViewModel {
                 source: source,
               ),
       onTurnCompleted: onTurnCompleted,
+      onAttention: _handleAttentionSignal,
     );
     _eventProcessor = AgentConversationEventProcessor(
       reducer: _eventReducerContexts.live,
@@ -148,6 +150,9 @@ class AgentConversationViewModel {
 
   /// 当前会话的回合进入终态后通知应用组合层。
   final VoidCallback? onTurnCompleted;
+
+  /// 当前会话产生或解决待用户注意事项后通知应用组合层。
+  final AgentAttentionCallback? onAttention;
 
   /// 后台文件索引是否已就绪；无注入时恒为 true。
   bool get isWorkspaceFileIndexReady =>
@@ -467,6 +472,7 @@ class AgentConversationViewModel {
     if (!_planExecutionHandoffController.resolve(request)) {
       return;
     }
+    _resolvePlanExecutionAttention(request);
     _conversationModeController.selectMode(AgentConversationModeId.defaultMode);
     _publishUiChanges(
       AgentUiUpdateRequest(
@@ -486,6 +492,7 @@ class AgentConversationViewModel {
         !_planExecutionHandoffController.resolve(request)) {
       return;
     }
+    _resolvePlanExecutionAttention(request);
     _conversationModeController.selectMode(AgentConversationModeId.plan);
     _publishUiChanges(
       AgentUiUpdateRequest(
@@ -504,6 +511,7 @@ class AgentConversationViewModel {
         !_planExecutionHandoffController.resolve(request)) {
       return;
     }
+    _resolvePlanExecutionAttention(request);
     _publishUiChanges(
       AgentUiUpdateRequest(
         regions: const <AgentUiRegion>{
@@ -2169,6 +2177,12 @@ class AgentConversationViewModel {
     List<String> execpolicyAmendment = const <String>[],
   }) async {
     _timeline.removePermissionRequest(request.id);
+    _resolvePendingAttention(
+      kind: AgentAttentionKind.permissionRequired,
+      sourceId: request.id,
+      threadId: request.sessionId,
+      turnId: request.turnId,
+    );
     _publishUiChanges(
       AgentUiUpdateRequest(
         regions: const <AgentUiRegion>{
@@ -2205,6 +2219,12 @@ class AgentConversationViewModel {
     Map<String, List<String>> answers = const <String, List<String>>{},
   }) async {
     _timeline.removeQuestionRequest(request.id);
+    _resolvePendingAttention(
+      kind: AgentAttentionKind.questionRequired,
+      sourceId: request.id,
+      threadId: request.sessionId,
+      turnId: request.turnId,
+    );
     _publishUiChanges(
       AgentUiUpdateRequest(
         regions: const <AgentUiRegion>{
@@ -2233,6 +2253,12 @@ class AgentConversationViewModel {
     AgentPlanApprovalDecisionKind kind,
   ) async {
     _timeline.removePlanApprovalRequest(request.id);
+    _resolvePendingAttention(
+      kind: AgentAttentionKind.planApprovalRequired,
+      sourceId: request.id,
+      threadId: request.sessionId,
+      turnId: request.turnId,
+    );
     _publishUiChanges(
       AgentUiUpdateRequest(
         regions: const <AgentUiRegion>{
@@ -3008,6 +3034,56 @@ class AgentConversationViewModel {
   bool _canResolvePlanExecution(AgentPlanExecutionRequest request) {
     return planExecutionRequest?.id == request.id &&
         sessionId == request.sessionId;
+  }
+
+  void _handleAttentionSignal(AgentAttentionSignal signal) {
+    final resolvedThreadId = signal.threadId ?? sessionId;
+    if (resolvedThreadId == null || resolvedThreadId.trim().isEmpty) {
+      return;
+    }
+    var resolved = signal.withThreadId(resolvedThreadId);
+    final handoff = planExecutionRequest;
+    if (resolved.kind == AgentAttentionKind.turnCompleted &&
+        handoff != null &&
+        handoff.turnId == resolved.turnId) {
+      resolved = AgentAttentionSignal(
+        kind: AgentAttentionKind.planExecutionRequired,
+        phase: AgentAttentionPhase.raised,
+        sourceId: handoff.id,
+        threadId: resolvedThreadId,
+        turnId: handoff.turnId,
+      );
+    }
+    onAttention?.call(resolved);
+  }
+
+  void _resolvePlanExecutionAttention(AgentPlanExecutionRequest request) {
+    _handleAttentionSignal(
+      AgentAttentionSignal(
+        kind: AgentAttentionKind.planExecutionRequired,
+        phase: AgentAttentionPhase.resolved,
+        sourceId: request.id,
+        threadId: request.sessionId,
+        turnId: request.turnId,
+      ),
+    );
+  }
+
+  void _resolvePendingAttention({
+    required AgentAttentionKind kind,
+    required String sourceId,
+    required String? threadId,
+    required String? turnId,
+  }) {
+    _handleAttentionSignal(
+      AgentAttentionSignal(
+        kind: kind,
+        phase: AgentAttentionPhase.resolved,
+        sourceId: sourceId,
+        threadId: threadId,
+        turnId: turnId,
+      ),
+    );
   }
 
   /// 在 live turn 被归档前捕获计划正文，生成与 Provider 审批无关的本地交接请求。

@@ -1,6 +1,6 @@
 # 工程规范
 
-最后更新：2026-07-31
+最后更新：2026-08-04
 
 本文从当前 `lib/` 重构后的代码结构中提炼长期遵循的工程规范。它补充根目录 `AGENTS.md`，用于指导后续功能开发、重构和评审。
 
@@ -25,6 +25,10 @@ lib/
         data/
         domain/
         presentation/
+      desktop_notifications/
+        application/
+        data/
+        domain/
       ide_session/
         application/
         data/
@@ -144,6 +148,13 @@ main -> app -> presentation/application -> domain
 - mapper 文件负责字段兼容、默认值和协议名称转换；不要在 widget 中写散落的 JSON key。
 - 模型目录的 Reasoning 和 service tier 在 data mapper 中转为中立领域模型，保留服务端顺序和
   精确 tier id；Fast 等产品语义可在 domain/application 层识别，但不得改写 provider 协议值。
+- 需要系统提醒的事件必须先映射为 Provider 中立的 `AgentAttentionSignal`。
+  Provider adapter/reducer 决定 identity 来源，workspace 只补齐定位上下文，通知 Store
+  只按规范化 identity 去重和清除，不得增加厂商分支。
+- 操作系统通知不得包含 prompt、回复、命令、问题、错误原文、完整路径或 raw payload；
+  payload 只保留定位与幂等必需的版本、Provider/thread 和 identity。
+- 窗口获得焦点、Agent Canvas 可见且当前 thread 一致时必须抑制系统通知并清除
+  该 thread 未读。任务栏/Dock 只是内部未读的投影，不是业务真源。
 - Conversation mode 通过可选 `conversationModes` 端口和运行时目录发现，不按 provider kind
   或 CLI 版本硬编码。模式是 thread 粘性、逐 turn 提交的状态，由 application controller
   管理 draft / confirmed / pending；不得写入 Provider 全局可变配置。

@@ -42,4 +42,24 @@ void main() {
     expect(await store.load(), expected);
     expect(notifications, greaterThanOrEqualTo(2));
   });
+
+  test('updates and persists notification switches', () async {
+    final store = MemoryGeneralSettingsStore();
+    final controller = GeneralSettingsController(store: store);
+    addTearDown(controller.dispose);
+
+    await controller.setTurnTerminalNotificationsEnabled(false);
+    await controller.setActionRequiredNotificationsEnabled(false);
+    await controller.setNotificationsEnabled(false);
+
+    const expected = GeneralSettings(
+      notifications: AgentNotificationSettings(
+        enabled: false,
+        turnTerminalEnabled: false,
+        actionRequiredEnabled: false,
+      ),
+    );
+    expect(controller.settings, expected);
+    expect(await store.load(), expected);
+  });
 }

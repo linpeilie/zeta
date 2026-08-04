@@ -8,6 +8,7 @@ import 'package:zeta/src/features/agent/application/agent_conversation_thread_sn
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/agent/domain/agent_attention_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
@@ -213,6 +214,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     this._workspaceFilesListenable,
     this._workspaceFilesIndexReady,
     this._onTurnCompleted,
+    this._onAttention,
     this.uiFrameSchedulerFactory,
   });
 
@@ -224,6 +226,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
   final AgentModelCatalogRepository _modelCatalogRepository;
   final AgentProviderRuntimeRegistry runtimeRegistry;
   final VoidCallback? _onTurnCompleted;
+  final ValueChanged<AgentWorkspaceAttention>? _onAttention;
 
   /// 为每个常驻 ViewModel 创建独立 frame 端口；生产环境为空时使用 Flutter 实现。
   final AgentFrameScheduler Function()? uiFrameSchedulerFactory;
@@ -417,15 +420,31 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
       modelCatalogRepository: _modelCatalogRepository,
       runtimeRegistry: runtimeRegistry,
     );
-    final viewModel = AgentConversationViewModel(
+    late final AgentThreadWorkspaceEntry entry;
+    late final AgentConversationViewModel viewModel;
+    viewModel = AgentConversationViewModel(
       providerController: providerController,
       workspaceFilesProvider: _workspaceFilesProvider,
       workspaceFilesListenable: _workspaceFilesListenable,
       workspaceFilesIndexReady: _workspaceFilesIndexReady,
       onTurnCompleted: _onTurnCompleted,
+      onAttention: (signal) {
+        final threadId = signal.threadId ?? entry.threadId;
+        if (threadId == null || threadId.trim().isEmpty) {
+          return;
+        }
+        _onAttention?.call(
+          AgentWorkspaceAttention(
+            signal: signal.withThreadId(threadId),
+            providerId: entry.providerId,
+            threadId: threadId,
+            projectPath: entry.projectPath,
+          ),
+        );
+      },
       uiFrameScheduler: uiFrameSchedulerFactory?.call(),
     );
-    final entry = AgentThreadWorkspaceEntry(
+    entry = AgentThreadWorkspaceEntry(
       entryId: 'agent-workspace-entry-${_nextEntryId += 1}',
       key: key,
       projectPath: projectPath,

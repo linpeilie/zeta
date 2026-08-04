@@ -500,6 +500,23 @@ final class AgentConversationReducer {
         AgentTurnCompletedEffect(
           scope: context.effectScope.forTurn(event.turnId),
           turnId: event.turnId,
+          attention: AgentAttentionSignal(
+            kind: switch (event.status) {
+              AgentHistoryTurnStatus.completed =>
+                AgentAttentionKind.turnCompleted,
+              AgentHistoryTurnStatus.failed => AgentAttentionKind.turnFailed,
+              AgentHistoryTurnStatus.interrupted =>
+                AgentAttentionKind.turnInterrupted,
+              AgentHistoryTurnStatus.running =>
+                AgentAttentionKind.turnInterrupted,
+              AgentHistoryTurnStatus.unknown =>
+                AgentAttentionKind.turnInterrupted,
+            },
+            phase: AgentAttentionPhase.raised,
+            sourceId: event.turnId,
+            threadId: event.sessionId,
+            turnId: event.turnId,
+          ),
         ),
       ],
     );
@@ -742,6 +759,16 @@ final class AgentConversationReducer {
     }
     return _pendingInteraction(
       AgentAddPermissionRequestTimelineMutation(event.request),
+      effect: AgentAttentionEffect(
+        scope: context.effectScope.forTurn(event.request.turnId),
+        signal: AgentAttentionSignal(
+          kind: AgentAttentionKind.permissionRequired,
+          phase: AgentAttentionPhase.raised,
+          sourceId: event.request.id,
+          threadId: event.request.sessionId,
+          turnId: event.request.turnId,
+        ),
+      ),
     );
   }
 
@@ -754,6 +781,15 @@ final class AgentConversationReducer {
     }
     return _pendingInteraction(
       AgentRemovePermissionRequestTimelineMutation(event.requestId),
+      effect: AgentAttentionEffect(
+        scope: context.effectScope,
+        signal: AgentAttentionSignal(
+          kind: AgentAttentionKind.permissionRequired,
+          phase: AgentAttentionPhase.resolved,
+          sourceId: event.requestId,
+          threadId: event.threadId,
+        ),
+      ),
     );
   }
 
@@ -770,6 +806,16 @@ final class AgentConversationReducer {
     }
     return _pendingInteraction(
       AgentAddQuestionRequestTimelineMutation(event.request),
+      effect: AgentAttentionEffect(
+        scope: context.effectScope.forTurn(event.request.turnId),
+        signal: AgentAttentionSignal(
+          kind: AgentAttentionKind.questionRequired,
+          phase: AgentAttentionPhase.raised,
+          sourceId: event.request.id,
+          threadId: event.request.sessionId,
+          turnId: event.request.turnId,
+        ),
+      ),
     );
   }
 
@@ -782,6 +828,15 @@ final class AgentConversationReducer {
     }
     return _pendingInteraction(
       AgentRemoveQuestionRequestTimelineMutation(event.requestId),
+      effect: AgentAttentionEffect(
+        scope: context.effectScope,
+        signal: AgentAttentionSignal(
+          kind: AgentAttentionKind.questionRequired,
+          phase: AgentAttentionPhase.resolved,
+          sourceId: event.requestId,
+          threadId: event.threadId,
+        ),
+      ),
     );
   }
 
@@ -798,6 +853,16 @@ final class AgentConversationReducer {
     }
     return _pendingInteraction(
       AgentAddPlanApprovalRequestTimelineMutation(event.request),
+      effect: AgentAttentionEffect(
+        scope: context.effectScope.forTurn(event.request.turnId),
+        signal: AgentAttentionSignal(
+          kind: AgentAttentionKind.planApprovalRequired,
+          phase: AgentAttentionPhase.raised,
+          sourceId: event.request.id,
+          threadId: event.request.sessionId,
+          turnId: event.request.turnId,
+        ),
+      ),
     );
   }
 
@@ -810,12 +875,22 @@ final class AgentConversationReducer {
     }
     return _pendingInteraction(
       AgentRemovePlanApprovalRequestTimelineMutation(event.requestId),
+      effect: AgentAttentionEffect(
+        scope: context.effectScope,
+        signal: AgentAttentionSignal(
+          kind: AgentAttentionKind.planApprovalRequired,
+          phase: AgentAttentionPhase.resolved,
+          sourceId: event.requestId,
+          threadId: event.sessionId,
+        ),
+      ),
     );
   }
 
   AgentConversationMutation _pendingInteraction(
-    AgentTimelineMutation timelineMutation,
-  ) {
+    AgentTimelineMutation timelineMutation, {
+    AgentConversationEffect? effect,
+  }) {
     return AgentConversationMutation(
       accepted: true,
       timelineMutations: <AgentTimelineMutation>[timelineMutation],
@@ -826,6 +901,7 @@ final class AgentConversationReducer {
         },
         urgency: AgentUiUpdateUrgency.immediate,
       ),
+      effects: <AgentConversationEffect>[?effect],
     );
   }
 

@@ -79,6 +79,10 @@ lib/
         data/
         domain/
         presentation/
+      desktop_notifications/
+        application/
+        data/
+        domain/
       ide_session/
         application/
         data/
@@ -114,6 +118,8 @@ windows/
   调度单测使用 `FakeAgentFrameScheduler` 手动推进 frame。
 - `lib/src/features/agent_management`：Codex/Grok CLI 检测、身份/版本/账号诊断、
   无计费连接测试、配置安全编辑和 Agent 管理页面。
+- `lib/src/features/desktop_notifications`：Agent attention 去重、可见性抑制、
+  系统通知插件适配和三端任务栏/Dock/urgency MethodChannel。
 - `lib/src/features/ide_session`：IDE 会话模型、状态构建、恢复协调和持久化。
 - `lib/src/features/project_threads`：项目 thread 列表状态、恢复快照、分页控制器和 view model；
   打开中 thread 的执行中/等待态由常驻 workspace 的 `threadSnapshot` 经
@@ -126,6 +132,11 @@ windows/
 - `test/src`：app、core、feature 各层的单元测试和 widget 测试。
 - `tool/`：仓库维护脚本（含 Codex schema 导出与真实 CLI smoke）。
 - `third_party/codex_app_server_schema/`：pinned Codex app-server JSON Schema 快照。
+
+桌面通知不得从 Provider raw payload 直接组装；应复用归一化
+`AgentAttentionSignal`，并保证正文不含 prompt、回复、命令和完整路径。扩展事件类别或
+平台行为前先阅读
+[Agent 桌面通知与任务栏未读提醒详细设计](./desktop_agent_notification_design.md)。
 
 ## 5. 开发流程
 

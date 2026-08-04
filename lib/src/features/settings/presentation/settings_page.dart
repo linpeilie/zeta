@@ -335,6 +335,88 @@ class _GeneralSettingsPane extends StatelessWidget {
                           ),
                         ),
                       ),
+                      const SizedBox(height: IdeSpacing.space12),
+                      IdeSurface.pane(
+                        key: const ValueKey(
+                          'settings-agent-notifications-group',
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            IdeSettingsRow(
+                              key: const ValueKey(
+                                'settings-notifications-enabled-row',
+                              ),
+                              label: '系统通知',
+                              description: '在任务转入后台或其他会话时发送系统提醒。',
+                              control: sf.Switch(
+                                key: const ValueKey(
+                                  'settings-notifications-enabled-switch',
+                                ),
+                                value: settings.notifications.enabled,
+                                onChanged: (value) {
+                                  unawaited(
+                                    generalSettingsController
+                                        .setNotificationsEnabled(value),
+                                  );
+                                },
+                              ),
+                            ),
+                            IdeSettingsRow(
+                              key: const ValueKey(
+                                'settings-turn-terminal-notifications-row',
+                              ),
+                              label: '任务结束',
+                              description: '任务完成、失败或中断时提醒。',
+                              control: sf.Switch(
+                                key: const ValueKey(
+                                  'settings-turn-terminal-notifications-switch',
+                                ),
+                                value:
+                                    settings.notifications.turnTerminalEnabled,
+                                enabled: settings.notifications.enabled,
+                                onChanged: settings.notifications.enabled
+                                    ? (value) {
+                                        unawaited(
+                                          generalSettingsController
+                                              .setTurnTerminalNotificationsEnabled(
+                                                value,
+                                              ),
+                                        );
+                                      }
+                                    : null,
+                              ),
+                            ),
+                            IdeSettingsRow(
+                              key: const ValueKey(
+                                'settings-action-required-notifications-row',
+                              ),
+                              label: '需要确认',
+                              description: '权限、问题、计划审批或执行确认等待处理时提醒。',
+                              showDivider: false,
+                              control: sf.Switch(
+                                key: const ValueKey(
+                                  'settings-action-required-notifications-switch',
+                                ),
+                                value: settings
+                                    .notifications
+                                    .actionRequiredEnabled,
+                                enabled: settings.notifications.enabled,
+                                onChanged: settings.notifications.enabled
+                                    ? (value) {
+                                        unawaited(
+                                          generalSettingsController
+                                              .setActionRequiredNotificationsEnabled(
+                                                value,
+                                              ),
+                                        );
+                                      }
+                                    : null,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 );

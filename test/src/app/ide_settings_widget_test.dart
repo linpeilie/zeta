@@ -57,6 +57,36 @@ void main() {
       MessageSendShortcut.primaryModifierEnter,
     );
     expect(find.text('按 Ctrl + Enter 发送消息，按 Enter 换行。'), findsOneWidget);
+
+    expect(
+      find.byKey(const ValueKey('settings-agent-notifications-group')),
+      findsOneWidget,
+    );
+    expect(find.text('系统通知'), findsOneWidget);
+    expect(find.text('任务结束'), findsOneWidget);
+    expect(find.text('需要确认'), findsOneWidget);
+    expect(
+      tester
+          .widget<sf.Switch>(
+            find.byKey(
+              const ValueKey('settings-action-required-notifications-switch'),
+            ),
+          )
+          .value,
+      isTrue,
+    );
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('settings-action-required-notifications-switch'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      generalController.settings.notifications.actionRequiredEnabled,
+      isFalse,
+    );
   });
 
   testWidgets('general settings uses Cmd label on macOS', (tester) async {
@@ -81,7 +111,7 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('ide-settings-row-stacked')),
-      findsOneWidget,
+      findsWidgets,
     );
     expect(tester.takeException(), isNull);
   });

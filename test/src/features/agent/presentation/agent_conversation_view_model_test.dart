@@ -253,10 +253,14 @@ void main() {
     test(
       'offers a local handoff after Plan completion and starts Default execution',
       () async {
+        final attentions = <AgentAttentionSignal>[];
         final provider = _ModeFakeAgentProvider(
           availableModels: _conversationModeModels,
         );
-        final viewModel = _createViewModel(provider);
+        final viewModel = _createViewModel(
+          provider,
+          onAttention: attentions.add,
+        );
         addTearDown(viewModel.dispose);
 
         await viewModel.loadModels();
@@ -269,6 +273,12 @@ void main() {
         expect(request!.sessionId, 'thread-1');
         expect(request.turnId, 'turn-1');
         expect(request.markdown, '# Final plan\n\n- Implement the change');
+        expect(attentions, hasLength(1));
+        expect(
+          attentions.single.kind,
+          AgentAttentionKind.planExecutionRequired,
+        );
+        expect(attentions.single.phase, AgentAttentionPhase.raised);
 
         await viewModel.startPlanExecution(request);
 
@@ -286,6 +296,8 @@ void main() {
           viewModel.messages.map((message) => message.text),
           contains(AgentConversationViewModel.planExecutionPrompt),
         );
+        expect(attentions.last.kind, AgentAttentionKind.planExecutionRequired);
+        expect(attentions.last.phase, AgentAttentionPhase.resolved);
       },
     );
 
@@ -4181,6 +4193,7 @@ AgentConversationViewModel _createViewModel(
   AgentModelCatalogRepository? modelCatalogRepository,
   AgentConversationModeController? conversationModeController,
   void Function()? onTurnCompleted,
+  void Function(AgentAttentionSignal signal)? onAttention,
 }) {
   final controller = ActiveAgentProviderController(
     providerFactory: _FakeAgentProviderFactory(provider),
@@ -4192,6 +4205,7 @@ AgentConversationViewModel _createViewModel(
     providerController: controller,
     conversationModeController: conversationModeController,
     onTurnCompleted: onTurnCompleted,
+    onAttention: onAttention,
     uiFrameScheduler: _createUiFrameScheduler(),
   );
   viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);

@@ -26,6 +26,8 @@ bool FlutterWindow::OnCreate() {
   }
   system_font_catalog_channel_ = CreateSystemFontCatalogChannel(
       flutter_controller_->engine()->messenger());
+  desktop_attention_channel_ = std::make_unique<DesktopAttentionChannel>(
+      flutter_controller_->engine()->messenger(), GetHandle());
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
@@ -43,6 +45,7 @@ bool FlutterWindow::OnCreate() {
 
 void FlutterWindow::OnDestroy() {
   if (flutter_controller_) {
+    desktop_attention_channel_ = nullptr;
     system_font_catalog_channel_ = nullptr;
     flutter_controller_ = nullptr;
   }
@@ -68,6 +71,10 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
       break;
+  }
+
+  if (desktop_attention_channel_) {
+    desktop_attention_channel_->HandleWindowMessage(message);
   }
 
   return Win32Window::MessageHandler(hwnd, message, wparam, lparam);

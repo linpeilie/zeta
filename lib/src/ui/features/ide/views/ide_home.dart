@@ -13,6 +13,10 @@ import 'package:zeta/src/features/agent/application/agent_provider_runtime_regis
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_controller.dart';
+import 'package:zeta/src/features/desktop_notifications/data/flutter_desktop_notification_service.dart';
+import 'package:zeta/src/features/desktop_notifications/data/method_channel_desktop_attention_indicator.dart';
+import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
 import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart';
 import 'package:zeta/src/features/agent_management/data/grok_agent_management_repository.dart';
@@ -81,6 +85,8 @@ class IdeHome extends StatefulWidget {
     this.homeProviderDetectionLoader,
     this.agentUsagePanelRepository,
     this.showWindowControls = true,
+    this.desktopNotificationService,
+    this.desktopAttentionIndicator,
     super.key,
   });
 
@@ -109,12 +115,14 @@ class IdeHome extends StatefulWidget {
   final HomeProviderDetectionLoader? homeProviderDetectionLoader;
   final AgentUsagePanelRepository? agentUsagePanelRepository;
   final bool showWindowControls;
+  final DesktopNotificationService? desktopNotificationService;
+  final DesktopAttentionIndicator? desktopAttentionIndicator;
 
   @override
   State<IdeHome> createState() => _IdeHomeState();
 }
 
-class _IdeHomeState extends State<IdeHome> {
+class _IdeHomeState extends State<IdeHome> with WindowListener {
   static const double _initialPanelWidth = IdeMetrics.sidePaneDefaultWidth;
   static const double _minPanelWidth = IdeMetrics.sidePaneMinWidth;
   static const double _maxPanelWidth = IdeMetrics.sidePaneMaxWidth;
@@ -127,6 +135,8 @@ class _IdeHomeState extends State<IdeHome> {
   late final UsageStatisticsController _usageStatisticsController;
   late final AgentUsagePanelController _agentUsagePanelController;
   late final AgentUsageRefreshCoordinator _agentUsageRefreshCoordinator;
+  late final DesktopAttentionController _desktopAttentionController;
+  bool _windowFocused = true;
 
   bool _leftTopVisible = true;
   bool _leftBottomVisible = false;
@@ -172,6 +182,22 @@ class _IdeHomeState extends State<IdeHome> {
     super.initState();
     unawaited(widget.appearanceController.load());
     unawaited(widget.generalSettingsController.load());
+    final notificationService =
+        widget.desktopNotificationService ??
+        (widget.enableNativeWindowFrame
+            ? FlutterDesktopNotificationService()
+            : const NoopDesktopNotificationService());
+    final attentionIndicator =
+        widget.desktopAttentionIndicator ??
+        (widget.enableNativeWindowFrame
+            ? MethodChannelDesktopAttentionIndicator()
+            : const NoopDesktopAttentionIndicator());
+    _desktopAttentionController = DesktopAttentionController(
+      notificationService: notificationService,
+      indicator: attentionIndicator,
+      generalSettingsController: widget.generalSettingsController,
+      activateTarget: _activateAttentionTarget,
+    );
     _shellController = IdeShellController(
       directoryPicker: widget.directoryPicker,
       sessionStore: widget.sessionStore,
@@ -182,7 +208,14 @@ class _IdeHomeState extends State<IdeHome> {
       agentModelCatalogRepository: widget.agentModelCatalogRepository,
       agentProviderRuntimeRegistry: widget.agentProviderRuntimeRegistry,
       onAgentTurnCompleted: _handleAgentTurnCompleted,
+      onAgentAttention: (attention) {
+        unawaited(_desktopAttentionController.handleAttention(attention));
+      },
     )..addListener(_handleShellChanged);
+    if (widget.enableNativeWindowFrame) {
+      windowManager.addListener(this);
+    }
+    unawaited(_desktopAttentionController.initialize());
     _agentManagementController = AgentManagementController(
       repositories: <String, AgentCliManagementRepository>{
         AgentDefinition.codex.id: CodexAgentManagementRepository(
@@ -241,6 +274,7 @@ class _IdeHomeState extends State<IdeHome> {
   void dispose() {
     if (widget.enableNativeWindowFrame) {
       MenuActionBridge.instance.setOpenProject(null);
+      windowManager.removeListener(this);
     }
     _shellController.removeListener(_handleShellChanged);
     _usageStatisticsController.dispose();
@@ -249,6 +283,7 @@ class _IdeHomeState extends State<IdeHome> {
     _agentManagementController.removeListener(_handleAgentManagementChanged);
     _agentManagementController.dispose();
     _shellController.dispose();
+    _desktopAttentionController.dispose();
     _leftProjectsFocusNode.dispose();
     _leftContextFocusNode.dispose();
     _rightFilesFocusNode.dispose();
@@ -996,9 +1031,85 @@ class _IdeHomeState extends State<IdeHome> {
 
   void _handleShellChanged() {
     _maybeStartGlobalHomeLoad();
+    _updateDesktopAttentionVisibility();
     if (mounted) {
       setState(() {});
     }
+  }
+
+  @override
+  void onWindowFocus() {
+    _windowFocused = true;
+    _updateDesktopAttentionVisibility();
+  }
+
+  @override
+  void onWindowBlur() {
+    _windowFocused = false;
+    _updateDesktopAttentionVisibility();
+  }
+
+  @override
+  void onWindowMinimize() {
+    _windowFocused = false;
+    _updateDesktopAttentionVisibility();
+  }
+
+  @override
+  void onWindowRestore() {
+    _windowFocused = true;
+    _updateDesktopAttentionVisibility();
+  }
+
+  void _updateDesktopAttentionVisibility() {
+    final entry = _shellController.agentWorkspaceController.selectedEntry;
+    _desktopAttentionController.updateVisibility(
+      DesktopAttentionVisibility(
+        windowFocused: _windowFocused,
+        agentCanvasVisible:
+            _page == _IdeHomePage.home && !_shellController.isProjectHomeActive,
+        providerId: entry?.providerId,
+        threadId: entry?.threadId,
+      ),
+    );
+  }
+
+  Future<bool> _activateAttentionTarget(
+    String providerId,
+    String threadId,
+  ) async {
+    await _shellController.initialRestoreDone;
+    if (!mounted) {
+      return false;
+    }
+    if (widget.enableNativeWindowFrame) {
+      if (await windowManager.isMinimized()) {
+        await windowManager.restore();
+      }
+      await windowManager.show();
+      await windowManager.focus();
+    }
+    final activated = await _shellController.activateAgentThread(
+      providerId: providerId,
+      threadId: threadId,
+    );
+    if (!mounted) {
+      return activated;
+    }
+    setState(() {
+      _page = _IdeHomePage.home;
+      _activeOverlay = null;
+      _overlayTriggerFocusNode = null;
+    });
+    if (!activated) {
+      showIdeToast(
+        context,
+        message: '无法打开通知对应的会话：该会话可能已被删除或不在当前项目列表中。',
+        tone: IdeToastTone.error,
+      );
+    }
+    _updateDesktopAttentionVisibility();
+    return activated;
   }
 
   void _maybeStartGlobalHomeLoad() {
@@ -1140,6 +1251,7 @@ class _IdeHomeState extends State<IdeHome> {
       _activeOverlay = null;
       _overlayTriggerFocusNode = null;
     });
+    _updateDesktopAttentionVisibility();
   }
 
   void _openUsageStatisticsPage() {
@@ -1152,6 +1264,7 @@ class _IdeHomeState extends State<IdeHome> {
       _activeOverlay = null;
       _overlayTriggerFocusNode = null;
     });
+    _updateDesktopAttentionVisibility();
   }
 
   void _closeUsageStatisticsPage() {
@@ -1163,6 +1276,7 @@ class _IdeHomeState extends State<IdeHome> {
       _activeOverlay = null;
       _overlayTriggerFocusNode = null;
     });
+    _updateDesktopAttentionVisibility();
   }
 
   void _openAgentManagementFromUsage() {
@@ -1173,6 +1287,7 @@ class _IdeHomeState extends State<IdeHome> {
       _activeOverlay = null;
       _overlayTriggerFocusNode = null;
     });
+    _updateDesktopAttentionVisibility();
   }
 
   Future<void> _selectSettingsSection(SettingsSection section) async {
@@ -1184,6 +1299,7 @@ class _IdeHomeState extends State<IdeHome> {
     setState(() {
       _settingsSection = section;
     });
+    _updateDesktopAttentionVisibility();
   }
 
   Future<void> _closeSettingsPage() async {
@@ -1197,6 +1313,7 @@ class _IdeHomeState extends State<IdeHome> {
       _activeOverlay = null;
       _overlayTriggerFocusNode = null;
     });
+    _updateDesktopAttentionVisibility();
   }
 
   void _toggleSettingsNavigationOverlay() {
