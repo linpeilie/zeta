@@ -791,40 +791,26 @@ class _AgentPlanExecutionCardState extends State<_AgentPlanExecutionCard> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: colors.controlSurface,
-              borderRadius: IdeRadius.allMedium,
-              border: Border.all(color: colors.borderSubtle),
+          // 无独立描边/底色，仅依赖计划卡外框，避免输入区双重边框。
+          sf.TextField(
+            key: ValueKey<String>('agent-plan-execution-input-${request.id}'),
+            controller: _revisionController,
+            focusNode: _revisionFocusNode,
+            maxLines: 1,
+            filled: false,
+            border: const Border(),
+            borderRadius: BorderRadius.zero,
+            padding: EdgeInsets.zero,
+            placeholder: Text(
+              '补充或修改计划…',
+              style: textStyles.bodySmall.copyWith(color: colors.textTertiary),
             ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: IdeSpacing.space10,
-                vertical: IdeSpacing.space4,
-              ),
-              child: sf.TextField(
-                key: ValueKey<String>(
-                  'agent-plan-execution-input-${request.id}',
-                ),
-                controller: _revisionController,
-                focusNode: _revisionFocusNode,
-                maxLines: 1,
-                placeholder: Text(
-                  '补充或修改计划…',
-                  style: textStyles.bodySmall.copyWith(
-                    color: colors.textTertiary,
-                  ),
-                ),
-                style: textStyles.bodyMedium.copyWith(
-                  color: colors.textPrimary,
-                ),
-                onSubmitted: (_) {
-                  if (hasRevision) {
-                    _submitRevision();
-                  }
-                },
-              ),
-            ),
+            style: textStyles.bodyMedium.copyWith(color: colors.textPrimary),
+            onSubmitted: (_) {
+              if (hasRevision) {
+                _submitRevision();
+              }
+            },
           ),
           const SizedBox(height: IdeSpacing.space10),
           Wrap(
