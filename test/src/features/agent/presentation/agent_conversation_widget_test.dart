@@ -2908,11 +2908,29 @@ void main() {
           .widget<ScrollView>(messageList)
           .controller!;
       expect(timelineController.position.maxScrollExtent, greaterThan(100));
-      timelineController.jumpTo(0);
-      await tester.pump();
+      // 浮层叠在时间线之上：viewport 仍铺到 footer，两侧可透出对话流。
+      expect(
+        tester.getRect(messageList).bottom,
+        closeTo(tester.getRect(footer).top, 0.5),
+      );
       final cardRect = tester.getRect(card);
       final sidePoint = Offset(cardRect.left - 12, cardRect.center.dy);
       expect(tester.getRect(messageList).contains(sidePoint), isTrue);
+      // 滚动内容底部 inset ≈ 浮层高度，滑到底时末项可停在浮层上方。
+      await tester.pump(); // 等待 extent reporter microtask
+      await tester.pump();
+      final collapsedMaxExtent = timelineController.position.maxScrollExtent;
+      final panelHeight = tester.getSize(floatingPanel).height;
+      expect(panelHeight, greaterThan(0));
+      timelineController.jumpTo(timelineController.position.maxScrollExtent);
+      await tester.pump();
+      // inset 生效后，内容可滚动越过浮层顶部一段距离。
+      expect(
+        timelineController.position.maxScrollExtent,
+        greaterThanOrEqualTo(panelHeight * 0.5),
+      );
+      timelineController.jumpTo(0);
+      await tester.pump();
       await tester.dragFrom(sidePoint, const Offset(0, -120));
       await tester.pump();
       expect(timelineController.offset, greaterThan(0));
@@ -2945,6 +2963,17 @@ void main() {
       expect(body, findsOneWidget);
       expect(scroll, findsOneWidget);
       expect(tester.getSize(scroll).height, lessThanOrEqualTo(200));
+      // 展开后浮层变高，底部滚动 inset 随之增大；viewport 仍铺满。
+      await tester.pump();
+      await tester.pump();
+      expect(
+        tester.getRect(messageList).bottom,
+        closeTo(tester.getRect(footer).top, 0.5),
+      );
+      expect(
+        timelineController.position.maxScrollExtent,
+        greaterThan(collapsedMaxExtent),
+      );
       expect(find.bySemanticsLabel('已完成：Inspect code'), findsOneWidget);
       expect(find.bySemanticsLabel('进行中：$longPlanStep'), findsOneWidget);
       final shortStepText = find.descendant(

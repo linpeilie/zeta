@@ -4,7 +4,8 @@ part of '../agent_pane.dart';
 ///
 /// Footer 始终是同一棵带稳定 Key 的子树；空会话时靠近 Canvas 视觉中心，
 /// 首个 turn 出现或正在加载历史时落到底部。时间线只按 Composer 与阻塞交互的
-/// 实际高度让位；紧凑浮层独立叠放，避免其窄卡片制造整行空白。
+/// 实际高度让位；紧凑 Plan 浮层独立叠放（两侧仍可见对话流）。末项不被遮挡
+/// 靠时间线内部的底部滚动 inset（见 [floatingPanelExtent]），而非缩短 viewport。
 enum _AgentConversationSlot { timeline, floatingPanel, footer }
 
 class _AgentConversationLayout extends StatefulWidget {
@@ -157,7 +158,7 @@ class _AgentConversationLayoutDelegate extends MultiChildLayoutDelegate {
         centeredFooterTop + ((bottomFooterTop - centeredFooterTop) * progress);
 
     if (hasChild(_AgentConversationSlot.timeline)) {
-      // 贴底时时间线高度让位给 footer；居中空态时时间线铺满（自身透明）。
+      // 贴底时时间线高度只让位 footer；Plan 浮层叠在上方，两侧仍透出对话流。
       final timelineHeight = pinFooterToBottom ? bottomFooterTop : size.height;
       layoutChild(
         _AgentConversationSlot.timeline,
@@ -302,6 +303,7 @@ class _AgentConversationTimeline extends StatelessWidget {
     required this.isActive,
     required this.scrollController,
     required this.pagePadding,
+    required this.floatingPanelExtent,
     required this.projectionCache,
     required this.descriptorFactory,
     required this.markdownCache,
@@ -318,6 +320,9 @@ class _AgentConversationTimeline extends StatelessWidget {
   final bool isActive;
   final ScrollController scrollController;
   final EdgeInsets pagePadding;
+
+  /// Plan 进度浮层实测高度；写入滚动底部 inset，使末项可滑到浮层上方。
+  final ValueListenable<double> floatingPanelExtent;
   final AgentTimelineProjectionCache projectionCache;
   final AgentTimelineExtentDescriptorFactory descriptorFactory;
   final AgentMarkdownCache markdownCache;
@@ -335,11 +340,13 @@ class _AgentConversationTimeline extends StatelessWidget {
             viewModel.historyStateListenable,
             viewModel.liveTurnListenable,
             viewModel.expansionStateListenable,
+            floatingPanelExtent,
             ?viewModel.liveTurnState,
           ])
         : Listenable.merge(<Listenable>[
             viewModel.historyStateListenable,
             viewModel.expansionStateListenable,
+            floatingPanelExtent,
           ]);
 
     return _AgentContentAlign(
@@ -441,14 +448,20 @@ class _AgentConversationTimeline extends StatelessWidget {
               addSemanticIndexes: false,
             );
 
+            // Plan 浮层叠在时间线之上：viewport 不缩短，只在滚动内容底部加
+            // inset，使 stick-to-bottom / 手动滑到底时末项停在浮层上方。
+            final listPadding = pagePadding.copyWith(
+              bottom: pagePadding.bottom + floatingPanelExtent.value,
+            );
             final scrollView = CustomScrollView(
               key: const ValueKey('agent-message-list'),
               controller: scrollController,
               // 默认 cacheExtent 保留少量视口外 block，兼顾滚动流畅与虚拟化收益。
               slivers: [
                 // 保留 pagePadding；内容最大宽由外层 _AgentContentAlign 约束。
+                // 底部额外 inset = Plan 浮层高度；两侧仍可透出对话流。
                 SliverPadding(
-                  padding: pagePadding,
+                  padding: listPadding,
                   sliver: IdeAnchoredDynamicSliverList(
                     controller: virtualListController,
                     delegate: delegate,

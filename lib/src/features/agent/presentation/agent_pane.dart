@@ -7,6 +7,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
@@ -180,6 +181,9 @@ class _AgentPaneState extends State<AgentPane> {
   /// 驱动滚到底部按钮可见性刷新（不触发全页 setState）。
   final ValueNotifier<int> _scrollChromeTick = ValueNotifier<int>(0);
 
+  /// Plan 进度浮层实测高度；写入对话流底部滚动 inset，不缩短 viewport。
+  final ValueNotifier<double> _activePlanPanelExtent = ValueNotifier<double>(0);
+
   /// 最近一次 timeline 末项 ID，供 follow reveal 使用。
   String? _lastTimelineItemId;
 
@@ -292,6 +296,7 @@ class _AgentPaneState extends State<AgentPane> {
     _scrollController.dispose();
     _canSendNotifier.dispose();
     _scrollChromeTick.dispose();
+    _activePlanPanelExtent.dispose();
     _projectionCache.clear();
     _descriptorFactory.clearCache();
     _markdownCache.dispose();
@@ -300,6 +305,13 @@ class _AgentPaneState extends State<AgentPane> {
 
   void _notifyScrollChrome() {
     _scrollChromeTick.value += 1;
+  }
+
+  void _handleActivePlanPanelExtentChanged(double extent) {
+    if (_activePlanPanelExtent.value == extent) {
+      return;
+    }
+    _activePlanPanelExtent.value = extent;
   }
 
   @override
@@ -385,6 +397,7 @@ class _AgentPaneState extends State<AgentPane> {
                         isActive: widget.isActive,
                         scrollController: _scrollController,
                         pagePadding: pagePadding,
+                        floatingPanelExtent: _activePlanPanelExtent,
                         projectionCache: _projectionCache,
                         descriptorFactory: _descriptorFactory,
                         markdownCache: _markdownCache,
@@ -399,6 +412,7 @@ class _AgentPaneState extends State<AgentPane> {
                 floatingPanel: _AgentActivePlanSection(
                   viewModel: widget.viewModel,
                   pagePadding: pagePadding,
+                  onExtentChanged: _handleActivePlanPanelExtentChanged,
                 ),
                 footer: Column(
                   mainAxisSize: MainAxisSize.min,

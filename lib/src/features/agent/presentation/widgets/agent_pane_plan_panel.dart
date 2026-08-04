@@ -8,80 +8,133 @@ class _AgentActivePlanSection extends StatelessWidget {
   const _AgentActivePlanSection({
     required this.viewModel,
     required this.pagePadding,
+    required this.onExtentChanged,
   });
 
   final AgentConversationViewModel viewModel;
   final EdgeInsets pagePadding;
 
+  /// 向时间线同步浮层实测高度，用于滚动底部 inset（不缩短 viewport）。
+  final ValueChanged<double> onExtentChanged;
+
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: Listenable.merge(<Listenable>[
-        viewModel.liveTurnListenable,
-        viewModel.headerStateListenable,
-        viewModel.pendingInteractionStateListenable,
-        viewModel.expansionStateListenable,
-      ]),
-      builder: (context, _) {
-        final turnState = viewModel.liveTurnState;
-        if (turnState == null) {
-          return const SizedBox.shrink();
-        }
-        return ListenableBuilder(
-          listenable: turnState,
-          builder: (context, _) {
-            final headerState = viewModel.headerState;
-            final pendingState = viewModel.pendingInteractionState;
-            final entries = turnState.planEntries;
-            final shouldShow =
-                headerState.isTurnRunning &&
-                !headerState.isReadOnly &&
-                entries.length >= 2 &&
-                pendingState.isEmpty &&
-                !headerState.waitingOnApproval &&
-                !headerState.waitingOnUserInput;
-            if (!shouldShow) {
-              return const SizedBox.shrink();
-            }
-            return _AgentContentAlign(
-              // CustomMultiChildLayout 会给浮层一个有界最大高度；这里必须按内容
-              // 收缩，否则 Align 会占满 Footer 上方空间并把卡片留在时间线顶部。
-              shrinkWrapHeight: true,
-              child: Padding(
-                padding: pagePadding.copyWith(
-                  top: IdeSpacing.space8,
-                  bottom: 0,
-                ),
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  heightFactor: 1,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxWidth: _activePlanPanelMaxWidth,
-                    ),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: _AgentActivePlanCard(
-                        key: ValueKey<String>(
-                          'agent-active-plan-card-${turnState.id}',
+    return _FloatingPanelExtentReporter(
+      onExtent: onExtentChanged,
+      child: ListenableBuilder(
+        listenable: Listenable.merge(<Listenable>[
+          viewModel.liveTurnListenable,
+          viewModel.headerStateListenable,
+          viewModel.pendingInteractionStateListenable,
+          viewModel.expansionStateListenable,
+        ]),
+        builder: (context, _) {
+          final turnState = viewModel.liveTurnState;
+          if (turnState == null) {
+            return const SizedBox.shrink();
+          }
+          return ListenableBuilder(
+            listenable: turnState,
+            builder: (context, _) {
+              final headerState = viewModel.headerState;
+              final pendingState = viewModel.pendingInteractionState;
+              final entries = turnState.planEntries;
+              final shouldShow =
+                  headerState.isTurnRunning &&
+                  !headerState.isReadOnly &&
+                  entries.length >= 2 &&
+                  pendingState.isEmpty &&
+                  !headerState.waitingOnApproval &&
+                  !headerState.waitingOnUserInput;
+              if (!shouldShow) {
+                return const SizedBox.shrink();
+              }
+              return _AgentContentAlign(
+                // CustomMultiChildLayout 会给浮层一个有界最大高度；这里必须按内容
+                // 收缩，否则 Align 会占满 Footer 上方空间并把卡片留在时间线顶部。
+                shrinkWrapHeight: true,
+                child: Padding(
+                  padding: pagePadding.copyWith(
+                    top: IdeSpacing.space8,
+                    bottom: 0,
+                  ),
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    heightFactor: 1,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: _activePlanPanelMaxWidth,
+                      ),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: _AgentActivePlanCard(
+                          key: ValueKey<String>(
+                            'agent-active-plan-card-${turnState.id}',
+                          ),
+                          turnId: turnState.id,
+                          entries: entries,
+                          expanded: viewModel.expansionState
+                              .isActivePlanExpanded(turnState.id),
+                          onToggle: () =>
+                              viewModel.toggleActivePlan(turnState.id),
                         ),
-                        turnId: turnState.id,
-                        entries: entries,
-                        expanded: viewModel.expansionState.isActivePlanExpanded(
-                          turnState.id,
-                        ),
-                        onToggle: () =>
-                            viewModel.toggleActivePlan(turnState.id),
                       ),
                     ),
                   ),
                 ),
-              ),
-            );
-          },
-        );
-      },
+              );
+            },
+          );
+        },
+      ),
     );
+  }
+}
+
+/// 在 layout 完成后上报子树高度；高度未变时不回调，避免无意义重建。
+class _FloatingPanelExtentReporter extends SingleChildRenderObjectWidget {
+  const _FloatingPanelExtentReporter({required this.onExtent, super.child});
+
+  final ValueChanged<double> onExtent;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) {
+    return _RenderFloatingPanelExtentReporter(onExtent: onExtent);
+  }
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant _RenderFloatingPanelExtentReporter renderObject,
+  ) {
+    renderObject.onExtent = onExtent;
+  }
+}
+
+class _RenderFloatingPanelExtentReporter extends RenderProxyBox {
+  _RenderFloatingPanelExtentReporter({required this.onExtent});
+
+  ValueChanged<double> onExtent;
+  double? _lastExtent;
+  double? _reportedExtent;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    final extent = size.height;
+    if (_lastExtent == extent) {
+      return;
+    }
+    _lastExtent = extent;
+    // 避免在 layout 阶段同步改动 listenable；同帧多次 layout 取最终高度。
+    scheduleMicrotask(() {
+      final pending = _lastExtent;
+      if (pending == null || pending == _reportedExtent) {
+        return;
+      }
+      _reportedExtent = pending;
+      onExtent(pending);
+    });
   }
 }
 
