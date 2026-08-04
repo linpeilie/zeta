@@ -1,16 +1,11 @@
 part of '../agent_pane.dart';
 
-/// thread 详情头部：左侧标题 + 运行图标，右侧 token、分叉与更多菜单。
+/// thread 详情头部：左侧项目与会话标题，右侧 token、分叉与更多菜单。
 class _AgentHeader extends StatelessWidget {
-  const _AgentHeader({
-    required this.viewModel,
-    required this.state,
-    required this.isActive,
-  });
+  const _AgentHeader({required this.viewModel, required this.state});
 
   final AgentConversationViewModel viewModel;
   final AgentHeaderState state;
-  final bool isActive;
 
   @override
   Widget build(BuildContext context) {
@@ -23,18 +18,7 @@ class _AgentHeader extends StatelessWidget {
     final threadOpenStatusText = _threadOpenStatusText(state);
     final offerCompact = state.shouldOfferContextCompact;
     final canFork = state.canFork;
-    Widget runningStatus(DateTime now) {
-      return Text(
-        _headerRunningStatusText(state, now),
-        key: const ValueKey('agent-header-running-status'),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: textStyles.caption.copyWith(
-          color: colors.mutedText.withValues(alpha: 0.86),
-          fontWeight: FontWeight.w500,
-        ),
-      );
-    }
+    final projectName = viewModel.projectName;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -50,6 +34,61 @@ class _AgentHeader extends StatelessWidget {
                 children: [
                   Row(
                     children: [
+                      if (projectName case final name?) ...[
+                        Flexible(
+                          fit: FlexFit.loose,
+                          child: IdeTooltip(
+                            message: viewModel.projectPath ?? name,
+                            child: Semantics(
+                              label: '项目 $name',
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 180,
+                                ),
+                                child: Row(
+                                  key: const ValueKey(
+                                    'agent-header-project-name',
+                                  ),
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.folder_outlined,
+                                      size: 13,
+                                      color: colors.textSecondary,
+                                    ),
+                                    const SizedBox(width: IdeSpacing.space4),
+                                    Flexible(
+                                      child: Text(
+                                        name,
+                                        key: const ValueKey(
+                                          'agent-header-project-name-text',
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: textStyles.caption.copyWith(
+                                          color: colors.textSecondary,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: IdeSpacing.space6,
+                          ),
+                          child: Icon(
+                            Icons.chevron_right_rounded,
+                            key: ValueKey('agent-header-project-separator'),
+                            size: 14,
+                            color: colors.textTertiary,
+                          ),
+                        ),
+                      ],
                       Flexible(
                         child: Text(
                           state.title,
@@ -84,24 +123,6 @@ class _AgentHeader extends StatelessWidget {
                               : Icons.error_outline_rounded,
                           trailingIcon: null,
                           semanticLabel: label,
-                        ),
-                      ] else if (state.showRunningIndicator) ...[
-                        const SizedBox(width: 6),
-                        const IdeBusySpinner(
-                          key: ValueKey('agent-header-running-icon'),
-                          size: 14,
-                          strokeWidth: 2,
-                          semanticsLabel: 'Thread running',
-                        ),
-                        const SizedBox(width: IdeSpacing.space6),
-                        Flexible(
-                          child: isActive
-                              ? ListenableBuilder(
-                                  listenable: viewModel.elapsedClockListenable,
-                                  builder: (context, _) =>
-                                      runningStatus(viewModel.elapsedNow),
-                                )
-                              : runningStatus(DateTime.now()),
                         ),
                       ],
                     ],

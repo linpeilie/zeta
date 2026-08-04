@@ -79,7 +79,7 @@ class _AgentLiveActivityStatus extends StatelessWidget {
           final isWaiting = waitingLabel != null;
           final statusText = isWaiting
               ? waitingLabel
-              : _headerRunningStatusText(state, now);
+              : _liveActivityStatusText(state, now);
           final accent = isWaiting ? colors.warning : colors.accent;
           return Padding(
             key: const ValueKey<String>('agent-live-activity-status'),

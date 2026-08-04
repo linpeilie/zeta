@@ -1539,15 +1539,12 @@ void main() {
 
       expect(headerTitleText(tester), 'Running thread');
       expect(
-        find.byKey(const ValueKey('agent-header-running-icon')),
+        find.byKey(const ValueKey('agent-header-project-name-text')),
         findsOneWidget,
       );
       expect(
-        find.descendant(
-          of: find.byKey(const ValueKey('agent-header-running-icon')),
-          matching: find.byType(sf.CircularProgressIndicator),
-        ),
-        findsOneWidget,
+        find.byKey(const ValueKey('agent-header-running-icon')),
+        findsNothing,
       );
       expect(find.byKey(const ValueKey('agent-header-token')), findsOneWidget);
       expect(
@@ -1592,7 +1589,7 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey('agent-header-running-status')),
-        findsOneWidget,
+        findsNothing,
       );
 
       final tooltip = tester.widget<IdeTooltip>(
@@ -1682,7 +1679,7 @@ void main() {
   );
 
   testWidgets(
-    'shows running icons in both the header and project thread list for an active thread',
+    'keeps running feedback in the project thread list for an active thread',
     (tester) async {
       final session = MemorySessionStore();
       final directory = Directory.systemTemp.createTempSync('zeta_test_');
@@ -1729,6 +1726,15 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      final projectName = directory.path.replaceAll('\\', '/').split('/').last;
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('agent-header-project-name-text')),
+            )
+            .data,
+        projectName,
+      );
       expect(
         find.byKey(const ValueKey('agent-composer-running-glow')),
         findsNothing,
@@ -1744,25 +1750,14 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
 
-      final headerRunning = find.byKey(
-        const ValueKey('agent-header-running-icon'),
-      );
       final listRunning = find.byKey(
         ValueKey<String>(
           'project-thread-running-icon-${directory.path}-thread-a',
         ),
       );
-      expect(headerRunning, findsOneWidget);
       expect(listRunning, findsOneWidget);
       expect(
         find.byKey(const ValueKey('agent-composer-running-glow')),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(
-          of: headerRunning,
-          matching: find.byType(sf.CircularProgressIndicator),
-        ),
         findsOneWidget,
       );
       expect(
@@ -1777,7 +1772,10 @@ void main() {
       await tester.pump();
       await tester.pumpAndSettle();
 
-      expect(headerRunning, findsNothing);
+      expect(
+        find.byKey(const ValueKey('agent-header-running-icon')),
+        findsNothing,
+      );
       expect(listRunning, findsNothing);
       expect(
         find.byKey(const ValueKey('agent-composer-running-glow')),

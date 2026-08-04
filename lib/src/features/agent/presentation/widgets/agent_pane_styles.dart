@@ -345,10 +345,10 @@ Map<String, TextStyle> _agentHighlightTheme(BuildContext context) {
 String? _formatDuration(Duration? duration, {bool includeSubSecond = false}) =>
     formatAgentDuration(duration, includeSubSecond: includeSubSecond);
 
-/// 标题栏 / 对话流执行中文案：主 segment 时长 + turn 总时长。
+/// 对话流执行中文案：主 segment 时长 + turn 总时长。
 ///
 /// 例：`思考中 · 24s · 共 1m 12s`、`启动中 · 共 3s`。
-String _headerRunningStatusText(AgentHeaderState state, DateTime now) {
+String _liveActivityStatusText(AgentHeaderState state, DateTime now) {
   final segmentLabel = state.runningActivityLabel;
   final segmentElapsed = _formatDuration(
     resolveAgentElapsed(now: now, startedAt: state.segmentStartedAt),

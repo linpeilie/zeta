@@ -352,11 +352,7 @@ class _AgentPaneState extends State<AgentPane> {
             child: ValueListenableBuilder<AgentHeaderState>(
               valueListenable: widget.viewModel.headerStateListenable,
               builder: (context, state, _) {
-                return _AgentHeader(
-                  viewModel: widget.viewModel,
-                  state: state,
-                  isActive: widget.isActive,
-                );
+                return _AgentHeader(viewModel: widget.viewModel, state: state);
               },
             ),
           ),

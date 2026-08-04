@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/core/logging/structured_error_logging.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_effect.dart';
@@ -795,7 +796,17 @@ class AgentConversationViewModel {
   bool get showRunningIndicator =>
       isTurnRunning && threadStatusCapsuleLabel == null;
 
-  /// 共享 1 秒时钟；header/卡片用其计算 live elapsed。
+  /// 当前项目名称；标题栏仅显示路径的最后一级目录。
+  String? get projectName {
+    final path = _projectPath?.trim();
+    if (path == null || path.isEmpty) {
+      return null;
+    }
+    final name = fileName(path).trim();
+    return name.isEmpty ? null : name;
+  }
+
+  /// 共享 1 秒时钟；对话流和工具卡用其计算 live elapsed。
   Listenable get elapsedClockListenable => _elapsedTicker;
 
   /// 最近一次 tick 的本地时间。
