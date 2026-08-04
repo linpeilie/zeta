@@ -122,7 +122,9 @@ void main() {
       find.byKey(const ValueKey('agent-usage-provider-loading-grok-personal')),
       findsOneWidget,
     );
-    expect(find.text('正在读取 Grok Personal 用量…'), findsOneWidget);
+    // 无 entry 时用呼吸 Skeleton 占位，不再展示进度条文案。
+    expect(find.bySemanticsLabel('正在读取 Agent 用量'), findsOneWidget);
+    expect(find.textContaining('正在读取'), findsNothing);
 
     events
       ..add(AgentUsagePanelProviderLoaded(_usageEntries.last))
@@ -185,10 +187,15 @@ void main() {
 
     final refresh = controller.refresh();
     await tester.pump();
+    // 有旧数据时不替换为 Skeleton，也不再展示顶栏进度条。
     expect(find.text('1.6K'), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('agent-usage-provider-refreshing-codex-work')),
-      findsOneWidget,
+      find.byKey(const ValueKey('agent-usage-panel-loading')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('agent-usage-provider-loading-codex-work')),
+      findsNothing,
     );
 
     final events = repository.refreshEvents;
@@ -212,7 +219,7 @@ void main() {
     expect(find.text('Codex 暂时不可用'), findsOneWidget);
   });
 
-  testWidgets('静默刷新保留旧内容且不展示顶部加载横条', (tester) async {
+  testWidgets('静默刷新保留旧内容且不展示加载 Skeleton', (tester) async {
     final repository = _RefreshPanelRepository(_usageEntries.first);
     final controller = AgentUsagePanelController(repository: repository);
     addTearDown(controller.dispose);
@@ -223,11 +230,11 @@ void main() {
     await tester.pump();
     expect(find.text('1.6K'), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('agent-usage-provider-refreshing-codex-work')),
+      find.byKey(const ValueKey('agent-usage-panel-loading')),
       findsNothing,
     );
     expect(
-      find.byKey(const ValueKey('agent-usage-panel-loading')),
+      find.byKey(const ValueKey('agent-usage-provider-loading-codex-work')),
       findsNothing,
     );
 
@@ -242,6 +249,21 @@ void main() {
 
     expect(find.text('1.6K'), findsOneWidget);
     expect(controller.isLoading, isFalse);
+  });
+
+  testWidgets('冷加载展示呼吸 Skeleton 而非进度条', (tester) async {
+    final repository = _ControlledPanelRepository();
+    final controller = AgentUsagePanelController(repository: repository);
+    addTearDown(controller.dispose);
+    await _pumpPanel(tester, controller);
+
+    expect(
+      find.byKey(const ValueKey('agent-usage-panel-loading')),
+      findsOneWidget,
+    );
+    expect(find.byType(sf.LinearProgressIndicator), findsNothing);
+    expect(find.byType(sf.Progress), findsNothing);
+    expect(find.bySemanticsLabel('正在读取 Agent 用量'), findsOneWidget);
   });
 
   testWidgets('单 Provider 不显示 Tabs', (tester) async {

@@ -6,9 +6,7 @@ import '../../../../testing/fixture_reader.dart';
 void main() {
   group('mapGrokSkillsEntry', () {
     test('maps skills/list envelope with snake_case skill fields', () {
-      final raw = readFixtureJsonMap(
-        'grok/acp/xai_skills_list_response.json',
-      );
+      final raw = readFixtureJsonMap('grok/acp/xai_skills_list_response.json');
 
       final mapping = mapGrokSkillsEntry(raw, cwd: '/repo');
 
@@ -41,17 +39,14 @@ void main() {
     });
 
     test('tolerates bare skills payload without the result envelope', () {
-      final mapping = mapGrokSkillsEntry(
-        <String, Object?>{
-          'skills': <Object?>[
-            <String, Object?>{
-              'name': 'bare',
-              'path': '/repo/.grok/skills/bare/SKILL.md',
-            },
-          ],
-        },
-        cwd: '/repo',
-      );
+      final mapping = mapGrokSkillsEntry(<String, Object?>{
+        'skills': <Object?>[
+          <String, Object?>{
+            'name': 'bare',
+            'path': '/repo/.grok/skills/bare/SKILL.md',
+          },
+        ],
+      }, cwd: '/repo');
 
       expect(mapping.invalidEntryCount, 0);
       expect(mapping.entry.skills, hasLength(1));
@@ -61,19 +56,16 @@ void main() {
     });
 
     test('tolerates camelCase display fields as fallback', () {
-      final mapping = mapGrokSkillsEntry(
-        <String, Object?>{
-          'skills': <Object?>[
-            <String, Object?>{
-              'name': 'cam',
-              'displayName': 'Camel',
-              'shortDescription': 'short',
-              'path': '/repo/.grok/skills/cam/SKILL.md',
-            },
-          ],
-        },
-        cwd: '/repo',
-      );
+      final mapping = mapGrokSkillsEntry(<String, Object?>{
+        'skills': <Object?>[
+          <String, Object?>{
+            'name': 'cam',
+            'displayName': 'Camel',
+            'shortDescription': 'short',
+            'path': '/repo/.grok/skills/cam/SKILL.md',
+          },
+        ],
+      }, cwd: '/repo');
 
       final skill = mapping.entry.skills.single;
       expect(skill.displayName, 'Camel');
@@ -81,20 +73,17 @@ void main() {
     });
 
     test('drops skills missing name or path', () {
-      final mapping = mapGrokSkillsEntry(
-        <String, Object?>{
-          'skills': <Object?>[
-            <String, Object?>{'name': 'no-path'},
-            <String, Object?>{'path': '/repo/x/SKILL.md'},
-            'not-a-map',
-            <String, Object?>{
-              'name': 'ok',
-              'path': '/repo/.grok/skills/ok/SKILL.md',
-            },
-          ],
-        },
-        cwd: '/repo',
-      );
+      final mapping = mapGrokSkillsEntry(<String, Object?>{
+        'skills': <Object?>[
+          <String, Object?>{'name': 'no-path'},
+          <String, Object?>{'path': '/repo/x/SKILL.md'},
+          'not-a-map',
+          <String, Object?>{
+            'name': 'ok',
+            'path': '/repo/.grok/skills/ok/SKILL.md',
+          },
+        ],
+      }, cwd: '/repo');
 
       expect(mapping.droppedSkillCount, 3);
       expect(mapping.entry.skills, hasLength(1));
@@ -110,10 +99,9 @@ void main() {
       expect(notObject.invalidEntryCount, 1);
       expect(notObject.entry.skills, isEmpty);
 
-      final noSkills = mapGrokSkillsEntry(
-        <String, Object?>{'result': <String, Object?>{}},
-        cwd: '/repo',
-      );
+      final noSkills = mapGrokSkillsEntry(<String, Object?>{
+        'result': <String, Object?>{},
+      }, cwd: '/repo');
       expect(noSkills.invalidEntryCount, 1);
       expect(noSkills.entry.skills, isEmpty);
     });

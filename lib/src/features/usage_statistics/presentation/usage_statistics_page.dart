@@ -15,6 +15,7 @@ import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_select.dart';
+import 'package:zeta/src/ui/core/ide_skeleton.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_status_card.dart';
 import 'package:zeta/src/ui/core/ide_tabs.dart';
@@ -104,10 +105,7 @@ class _UsageStatisticsPageState extends State<UsageStatisticsPage> {
                     children: [
                       _UsageFilters(controller: controller, report: report),
                       const SizedBox(height: IdeSpacing.space12),
-                      if (controller.loading) ...[
-                        const sf.Progress(progress: null),
-                        const SizedBox(height: IdeSpacing.space12),
-                      ],
+                      // 冷加载用 Skeleton 占位；有旧数据时的刷新保留内容，不再插顶栏进度条。
                       if (controller.errorMessage case final error?)
                         IdeStatusCard(
                           tone: IdeStatusCardTone.error,
@@ -1397,25 +1395,164 @@ class _EmptyUsageState extends StatelessWidget {
   }
 }
 
+/// 使用统计冷加载骨架：概况卡 + 趋势区 + 列表行，贴近真实页面结构。
 class _LoadingState extends StatelessWidget {
   const _LoadingState();
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 48),
-      child: Column(
+    return Semantics(
+      label: '正在加载使用统计',
+      container: true,
+      child: const Column(
+        key: ValueKey('usage-statistics-loading'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(width: 220, child: sf.Progress(progress: null)),
-          const SizedBox(height: IdeSpacing.space12),
-          Text(
-            '正在索引 Codex 使用记录…',
-            style: textStyles.bodyMedium.copyWith(color: colors.textSecondary),
+          _OverviewSkeleton(),
+          SizedBox(height: IdeSpacing.space12),
+          _TrendSkeleton(),
+          SizedBox(height: IdeSpacing.space16),
+          _DetailSkeleton(),
+        ],
+      ),
+    );
+  }
+}
+
+class _OverviewSkeleton extends StatelessWidget {
+  const _OverviewSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final stacked = constraints.maxWidth < IdeMetrics.stackedRowBreakpoint;
+        final cards = const [
+          _OverviewMetricSkeleton(),
+          _OverviewMetricSkeleton(),
+        ];
+        if (stacked) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              cards[0],
+              const SizedBox(height: IdeSpacing.space8),
+              cards[1],
+            ],
+          );
+        }
+        return IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: cards[0]),
+              const SizedBox(width: IdeSpacing.space8),
+              Expanded(child: cards[1]),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _OverviewMetricSkeleton extends StatelessWidget {
+  const _OverviewMetricSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return IdeSurface.pane(
+      padding: IdeSpacing.panelPadding,
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          IdeSkeletonBlock(width: 36, height: 36),
+          SizedBox(width: IdeSpacing.space12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IdeSkeletonLine(width: 72, height: 10),
+                SizedBox(height: IdeSpacing.space4),
+                IdeSkeletonLine(width: 96, height: 22),
+                SizedBox(height: IdeSpacing.space6),
+                IdeSkeletonLine(height: 10),
+              ],
+            ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _TrendSkeleton extends StatelessWidget {
+  const _TrendSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return IdeSurface.pane(
+      padding: IdeSpacing.panelPadding,
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          IdeSkeletonLine(width: 72, height: 14),
+          SizedBox(height: IdeSpacing.space4),
+          IdeSkeletonLine(width: 180, height: 10),
+          SizedBox(height: IdeSpacing.space12),
+          IdeSkeletonBlock(height: 180),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailSkeleton extends StatelessWidget {
+  const _DetailSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return IdeSurface.pane(
+      padding: IdeSpacing.panelPadding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Row(
+            children: [
+              IdeSkeletonLine(width: 72, height: 28),
+              SizedBox(width: IdeSpacing.space8),
+              IdeSkeletonLine(width: 72, height: 28),
+              SizedBox(width: IdeSpacing.space8),
+              IdeSkeletonLine(width: 72, height: 28),
+              SizedBox(width: IdeSpacing.space8),
+              IdeSkeletonLine(width: 72, height: 28),
+            ],
+          ),
+          const SizedBox(height: IdeSpacing.space12),
+          for (var i = 0; i < 5; i++) ...[
+            if (i > 0) const SizedBox(height: IdeSpacing.space8),
+            const _DetailRowSkeleton(),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailRowSkeleton extends StatelessWidget {
+  const _DetailRowSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      children: [
+        Expanded(flex: 3, child: IdeSkeletonLine(height: 14)),
+        SizedBox(width: IdeSpacing.space12),
+        Expanded(flex: 2, child: IdeSkeletonLine(height: 14)),
+        SizedBox(width: IdeSpacing.space12),
+        IdeSkeletonLine(width: 48, height: 14),
+      ],
     );
   }
 }

@@ -10,6 +10,7 @@ import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_mode
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_formatters.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_skeleton.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
@@ -60,14 +61,10 @@ class _AgentUsagePanelBody extends StatelessWidget {
   Widget build(BuildContext context) {
     if (controller.providers.isEmpty) {
       if (controller.isLoading) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: const [
-            _AgentUsageTopLoadingBar(
-              key: ValueKey<String>('agent-usage-panel-loading'),
-            ),
-            Expanded(child: Center(child: Text('正在读取 Agent 用量…'))),
-          ],
+        // 冷加载：呼吸 Skeleton 替代顶栏不定进度条与文案。
+        return const _AgentUsageSkeleton(
+          key: ValueKey<String>('agent-usage-panel-loading'),
+          showProviderTitle: true,
         );
       }
       if (controller.errorMessage != null) {
@@ -83,16 +80,7 @@ class _AgentUsagePanelBody extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 加载中在面板顶部展示不定进度线性条（含刷新保留旧内容的场景）。
-        if (controller.isLoading)
-          _AgentUsageTopLoadingBar(
-            key: ValueKey<String>(
-              selected.entry != null && selected.isLoading
-                  ? 'agent-usage-provider-refreshing-'
-                        '${selected.provider.providerId}'
-                  : 'agent-usage-panel-loading',
-            ),
-          ),
+        // 有旧数据时的刷新只靠 Tab loading 呼吸提示，不再插入顶栏进度条。
         if (controller.providers.length > 1)
           Padding(
             padding: const EdgeInsets.fromLTRB(
@@ -158,21 +146,6 @@ class _AgentUsagePanelBody extends StatelessWidget {
   }
 }
 
-/// Agent 统计面板顶部不定进度条，使用 shadcn [sf.LinearProgressIndicator]。
-class _AgentUsageTopLoadingBar extends StatelessWidget {
-  const _AgentUsageTopLoadingBar({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    return sf.LinearProgressIndicator(
-      minHeight: 2,
-      color: colors.accent,
-      backgroundColor: colors.borderSubtle,
-    );
-  }
-}
-
 class _SelectedProviderBody extends StatelessWidget {
   const _SelectedProviderBody({required this.state, required this.controller});
 
@@ -184,7 +157,12 @@ class _SelectedProviderBody extends StatelessWidget {
     final entry = state.entry;
     if (entry == null) {
       if (state.isLoading) {
-        return _ProviderLoadingState(provider: state.provider);
+        return _AgentUsageSkeleton(
+          key: ValueKey<String>(
+            'agent-usage-provider-loading-${state.provider.providerId}',
+          ),
+          showProviderTitle: controller.providers.length == 1,
+        );
       }
       if (state.loadError case final error?) {
         return _RetryState(
@@ -212,21 +190,86 @@ class _SelectedProviderBody extends StatelessWidget {
   }
 }
 
-class _ProviderLoadingState extends StatelessWidget {
-  const _ProviderLoadingState({required this.provider});
+/// Agent 统计冷加载骨架：套餐区 + 今日 Token 行，布局贴近 [_ProviderUsage]。
+class _AgentUsageSkeleton extends StatelessWidget {
+  const _AgentUsageSkeleton({required this.showProviderTitle, super.key});
 
-  final AgentUsagePanelProvider provider;
+  final bool showProviderTitle;
 
   @override
   Widget build(BuildContext context) {
-    // 顶部已由 [_AgentUsageTopLoadingBar] 展示线性进度，正文仅保留说明文案。
-    return Center(
-      key: ValueKey<String>(
-        'agent-usage-provider-loading-${provider.providerId}',
+    return Semantics(
+      label: '正在读取 Agent 用量',
+      container: true,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(IdeSpacing.space12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (showProviderTitle) ...[
+              const IdeSkeletonLine(width: 120, height: 16),
+              const SizedBox(height: IdeSpacing.space12),
+            ],
+            const IdeSkeletonLine(width: 40, height: 10),
+            const SizedBox(height: IdeSpacing.space4),
+            const IdeSkeletonLine(width: 140, height: 22),
+            const SizedBox(height: IdeSpacing.space2),
+            const IdeSkeletonLine(width: 88, height: 10),
+            const SizedBox(height: IdeSpacing.space10),
+            const _SkeletonQuotaWindow(),
+            const SizedBox(height: IdeSpacing.space8),
+            const _SkeletonQuotaWindow(),
+            const SizedBox(height: IdeSpacing.space12),
+            const IdeSkeletonLine(width: 56, height: 10),
+            const SizedBox(height: IdeSpacing.space4),
+            const IdeSkeletonLine(width: 96, height: 24),
+            const SizedBox(height: IdeSpacing.space10),
+            for (var i = 0; i < 4; i++) ...[
+              if (i > 0) const SizedBox(height: IdeSpacing.space2),
+              const _SkeletonMetricRow(),
+            ],
+          ],
+        ),
       ),
-      child: Text(
-        '正在读取 ${provider.providerName} 用量…',
-        textAlign: TextAlign.center,
+    );
+  }
+}
+
+class _SkeletonQuotaWindow extends StatelessWidget {
+  const _SkeletonQuotaWindow();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(child: IdeSkeletonLine(height: 12)),
+            SizedBox(width: IdeSpacing.space8),
+            IdeSkeletonLine(width: 56, height: 10),
+          ],
+        ),
+        SizedBox(height: IdeSpacing.space4),
+        IdeSkeletonLine(height: 6),
+      ],
+    );
+  }
+}
+
+class _SkeletonMetricRow extends StatelessWidget {
+  const _SkeletonMetricRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: IdeSpacing.space2),
+      child: Row(
+        children: [
+          Expanded(child: IdeSkeletonLine(height: 12)),
+          SizedBox(width: IdeSpacing.space8),
+          IdeSkeletonLine(width: 40, height: 12),
+        ],
       ),
     );
   }

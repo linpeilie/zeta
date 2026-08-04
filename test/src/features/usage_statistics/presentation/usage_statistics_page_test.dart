@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
@@ -464,6 +465,49 @@ void main() {
     expect(find.text('暂无使用记录'), findsOneWidget);
     expect(find.byKey(const ValueKey('usage-detail-tabs')), findsNothing);
   });
+
+  testWidgets('cold load shows breathing skeleton instead of progress bar', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    try {
+      final now = DateTime(2026, 7, 10, 12);
+      final repository = _DeferredUsageRepository(_source(now));
+      final controller = UsageStatisticsController(
+        repository: repository,
+        clock: () => now,
+      );
+      addTearDown(controller.dispose);
+
+      // 不 await initialize：保持 loading，断言 Skeleton。
+      unawaited(controller.initialize());
+      await _pumpUsagePage(tester, controller: controller);
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('usage-statistics-loading')),
+        findsOneWidget,
+      );
+      expect(find.byType(sf.Progress), findsNothing);
+      expect(find.bySemanticsLabel('正在加载使用统计'), findsOneWidget);
+      expect(find.textContaining('正在索引'), findsNothing);
+
+      repository.complete();
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('usage-statistics-loading')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('usage-overview-tokens')),
+        findsOneWidget,
+      );
+    } finally {
+      semantics.dispose();
+    }
+  });
 }
 
 Future<void> _pumpUsagePage(
@@ -574,4 +618,25 @@ class _UsageRepository implements UsageStatisticsRepository {
     required DateTime earliest,
     bool forceRefresh = false,
   }) async => snapshot;
+}
+
+/// 可控延迟仓库：用于断言冷加载 Skeleton，完成后再返回真实数据。
+class _DeferredUsageRepository implements UsageStatisticsRepository {
+  _DeferredUsageRepository(this.snapshot);
+
+  final UsageStatisticsSourceSnapshot snapshot;
+  final Completer<UsageStatisticsSourceSnapshot> _completer =
+      Completer<UsageStatisticsSourceSnapshot>();
+
+  void complete() {
+    if (!_completer.isCompleted) {
+      _completer.complete(snapshot);
+    }
+  }
+
+  @override
+  Future<UsageStatisticsSourceSnapshot> load({
+    required DateTime earliest,
+    bool forceRefresh = false,
+  }) => _completer.future;
 }
