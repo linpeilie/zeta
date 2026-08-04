@@ -497,31 +497,167 @@ String _toolCardTitle(AgentToolCall toolCall) {
   return '执行中 · $resolved';
 }
 
-/// 审批卡片。
-///
-/// 用户点击后 ViewModel 会把 approve/deny 回写给 provider。
-/// 支持独立计划审批的 provider 所使用的审批卡片。
-class _AgentPlanApprovalCard extends StatelessWidget {
-  const _AgentPlanApprovalCard({
-    required this.request,
-    required this.onRespond,
+/// 计划类 pending 卡片的统一视觉壳：顶栏固定、正文可滚、底栏固定。
+class _AgentPlanDockCard extends StatelessWidget {
+  const _AgentPlanDockCard({
+    required this.title,
+    required this.leading,
+    required this.accent,
+    required this.body,
+    required this.footer,
+    this.subtitle,
+    this.maxBodyHeight = 180,
+    super.key,
   });
 
-  final AgentPlanApprovalRequest request;
-  final ValueChanged<AgentPlanApprovalDecisionKind> onRespond;
+  final String title;
+  final Widget leading;
+  final Color accent;
+  final Widget body;
+  final Widget footer;
+  final String? subtitle;
+  final double maxBodyHeight;
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    return IdeStatusCard(
-      tone: IdeStatusCardTone.warning,
+    final header = Padding(
+      padding: const EdgeInsets.fromLTRB(
+        IdeSpacing.space12,
+        IdeSpacing.space10,
+        IdeSpacing.space12,
+        IdeSpacing.space8,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          leading,
+          const SizedBox(width: IdeSpacing.space8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textStyles.titleSmall.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: colors.textPrimary,
+                  ),
+                ),
+                if (subtitle case final text? when text.trim().isNotEmpty) ...[
+                  const SizedBox(height: IdeSpacing.space4),
+                  Text(
+                    text,
+                    style: textStyles.bodySmall.copyWith(
+                      color: colors.textSecondary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+    final scrollBody = SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(
+        IdeSpacing.space12,
+        IdeSpacing.space10,
+        IdeSpacing.space12,
+        IdeSpacing.space10,
+      ),
+      child: body,
+    );
+    final footerBar = Padding(
+      padding: const EdgeInsets.fromLTRB(
+        IdeSpacing.space12,
+        IdeSpacing.space10,
+        IdeSpacing.space12,
+        IdeSpacing.space10,
+      ),
+      child: footer,
+    );
+
+    return PanelCard(
+      color: accent.withValues(alpha: 0.08),
+      showBorder: true,
+      borderColor: accent.withValues(alpha: 0.28),
+      borderRadius: IdeRadius.allMedium,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final tightHeight =
+              constraints.hasBoundedHeight &&
+              constraints.maxHeight.isFinite &&
+              constraints.maxHeight < double.infinity;
+          if (tightHeight) {
+            // 父级给定固定高度：正文 Expanded 可滚，底栏始终贴底。
+            return SizedBox(
+              height: constraints.maxHeight,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  header,
+                  Container(height: 1, color: colors.borderSubtle),
+                  Expanded(child: scrollBody),
+                  Container(height: 1, color: colors.borderSubtle),
+                  footerBar,
+                ],
+              ),
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              header,
+              Container(height: 1, color: colors.borderSubtle),
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: maxBodyHeight),
+                child: scrollBody,
+              ),
+              Container(height: 1, color: colors.borderSubtle),
+              footerBar,
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// 支持独立计划审批的 provider 所使用的审批卡片。
+///
+/// 用户点击后 ViewModel 会把 approve/deny 回写给 provider。
+class _AgentPlanApprovalCard extends StatelessWidget {
+  const _AgentPlanApprovalCard({
+    required this.request,
+    required this.onRespond,
+    this.maxBodyHeight = 180,
+  });
+
+  final AgentPlanApprovalRequest request;
+  final ValueChanged<AgentPlanApprovalDecisionKind> onRespond;
+  final double maxBodyHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    return _AgentPlanDockCard(
+      key: ValueKey<String>('agent-plan-approval-card-${request.id}'),
       title: request.title,
+      accent: colors.warning,
+      maxBodyHeight: maxBodyHeight,
       leading: Icon(
         Icons.account_tree_outlined,
         size: 16,
         color: colors.warning,
       ),
+      subtitle: '接受计划仅确认方案；命令、文件与网络权限仍会单独请求。',
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -540,7 +676,7 @@ class _AgentPlanApprovalCard extends StatelessWidget {
             _AgentRawMarkdownBody(data: request.markdown),
           if (request.todos.isNotEmpty) ...[
             const SizedBox(height: IdeSpacing.space8),
-            _AgentPlanTodoList(title: 'Todos', todos: request.todos),
+            _AgentPlanTodoList(title: '步骤', todos: request.todos),
           ],
           for (final phase in request.phases) ...[
             const SizedBox(height: IdeSpacing.space8),
@@ -553,24 +689,24 @@ class _AgentPlanApprovalCard extends StatelessWidget {
         spacing: IdeSpacing.space8,
         runSpacing: IdeSpacing.space6,
         children: [
-          sf.GhostButton(
+          IdeButton(
             key: ValueKey<String>('agent-plan-cancel-${request.id}'),
+            label: '取消回合',
+            variant: IdeButtonVariant.ghost,
             onPressed: () => onRespond(AgentPlanApprovalDecisionKind.cancelled),
-            size: sf.ButtonSize.small,
-            child: const Text('Cancel turn'),
           ),
-          sf.OutlineButton(
+          IdeButton(
             key: ValueKey<String>('agent-plan-reject-${request.id}'),
+            label: '拒绝',
+            variant: IdeButtonVariant.outline,
             onPressed: () => onRespond(AgentPlanApprovalDecisionKind.rejected),
-            size: sf.ButtonSize.small,
-            child: const Text('Reject'),
           ),
-          sf.PrimaryButton(
+          IdeButton(
             key: ValueKey<String>('agent-plan-accept-${request.id}'),
+            label: '接受计划',
+            variant: IdeButtonVariant.primary,
+            leadingIcon: Icons.check_rounded,
             onPressed: () => onRespond(AgentPlanApprovalDecisionKind.accepted),
-            size: sf.ButtonSize.small,
-            leading: const Icon(Icons.check_rounded, size: 16),
-            child: const Text('Accept plan'),
           ),
         ],
       ),
@@ -581,69 +717,149 @@ class _AgentPlanApprovalCard extends StatelessWidget {
 /// Zeta 本地的 Plan → Default 执行交接卡片。
 ///
 /// 与 Provider 计划审批不同，本卡片不会向服务端回写审批，也不会预先授予任何权限。
-class _AgentPlanExecutionCard extends StatelessWidget {
+/// 底栏整合修订输入与执行动作；主 Composer 在交接期间由 [blocksComposer] 隐藏。
+class _AgentPlanExecutionCard extends StatefulWidget {
   const _AgentPlanExecutionCard({
     required this.request,
     required this.onDismiss,
     required this.onRevise,
     required this.onStart,
+    this.maxBodyHeight = 180,
     super.key,
   });
 
   final AgentPlanExecutionRequest request;
   final VoidCallback onDismiss;
-  final VoidCallback onRevise;
+  final ValueChanged<String?> onRevise;
   final VoidCallback onStart;
+  final double maxBodyHeight;
+
+  @override
+  State<_AgentPlanExecutionCard> createState() =>
+      _AgentPlanExecutionCardState();
+}
+
+class _AgentPlanExecutionCardState extends State<_AgentPlanExecutionCard> {
+  late final TextEditingController _revisionController;
+  late final FocusNode _revisionFocusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _revisionController = TextEditingController();
+    _revisionFocusNode = FocusNode(debugLabel: 'PlanExecutionRevision');
+    _revisionController.addListener(_handleRevisionChanged);
+  }
+
+  @override
+  void dispose() {
+    _revisionController.removeListener(_handleRevisionChanged);
+    _revisionController.dispose();
+    _revisionFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _handleRevisionChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _submitRevision() {
+    final text = _revisionController.text.trim();
+    widget.onRevise(text.isEmpty ? null : text);
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    return IdeStatusCard(
-      tone: IdeStatusCardTone.success,
+    final request = widget.request;
+    final hasRevision = _revisionController.text.trim().isNotEmpty;
+
+    return _AgentPlanDockCard(
+      key: ValueKey<String>('agent-plan-execution-card-${request.id}'),
       title: request.title,
+      accent: colors.success,
+      maxBodyHeight: widget.maxBodyHeight,
       leading: Icon(
         Icons.playlist_add_check_circle_outlined,
         size: 16,
         color: colors.success,
       ),
-      body: Column(
+      subtitle: '执行将开启新的 Default 回合；命令、文件与网络权限仍会单独确认。',
+      body: _AgentRawMarkdownBody(data: request.markdown),
+      footer: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            'Review the generated plan, then run it in a new Default turn or '
-            'keep planning. Tool and file permissions are still requested '
-            'separately when needed.',
-            style: textStyles.bodyMedium.copyWith(color: colors.textSecondary),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: colors.controlSurface,
+              borderRadius: IdeRadius.allMedium,
+              border: Border.all(color: colors.borderSubtle),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: IdeSpacing.space10,
+                vertical: IdeSpacing.space4,
+              ),
+              child: sf.TextField(
+                key: ValueKey<String>(
+                  'agent-plan-execution-input-${request.id}',
+                ),
+                controller: _revisionController,
+                focusNode: _revisionFocusNode,
+                maxLines: 1,
+                placeholder: Text(
+                  '补充或修改计划…',
+                  style: textStyles.bodySmall.copyWith(
+                    color: colors.textTertiary,
+                  ),
+                ),
+                style: textStyles.bodyMedium.copyWith(
+                  color: colors.textPrimary,
+                ),
+                onSubmitted: (_) {
+                  if (hasRevision) {
+                    _submitRevision();
+                  }
+                },
+              ),
+            ),
           ),
-          const SizedBox(height: IdeSpacing.space8),
-          _AgentRawMarkdownBody(data: request.markdown),
-        ],
-      ),
-      footer: Wrap(
-        alignment: WrapAlignment.end,
-        spacing: IdeSpacing.space8,
-        runSpacing: IdeSpacing.space6,
-        children: [
-          sf.GhostButton(
-            key: ValueKey<String>('agent-plan-execution-dismiss-${request.id}'),
-            onPressed: onDismiss,
-            size: sf.ButtonSize.small,
-            child: const Text('Dismiss'),
-          ),
-          sf.OutlineButton(
-            key: ValueKey<String>('agent-plan-execution-revise-${request.id}'),
-            onPressed: onRevise,
-            size: sf.ButtonSize.small,
-            child: const Text('Keep planning'),
-          ),
-          sf.PrimaryButton(
-            key: ValueKey<String>('agent-plan-execution-start-${request.id}'),
-            onPressed: onStart,
-            size: sf.ButtonSize.small,
-            leading: const Icon(Icons.play_arrow_rounded, size: 16),
-            child: const Text('Run plan'),
+          const SizedBox(height: IdeSpacing.space10),
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: IdeSpacing.space8,
+            runSpacing: IdeSpacing.space6,
+            children: [
+              IdeButton(
+                key: ValueKey<String>(
+                  'agent-plan-execution-dismiss-${request.id}',
+                ),
+                label: '关闭',
+                variant: IdeButtonVariant.ghost,
+                onPressed: widget.onDismiss,
+              ),
+              IdeButton(
+                key: ValueKey<String>(
+                  'agent-plan-execution-revise-${request.id}',
+                ),
+                label: hasRevision ? '发送修改' : '继续规划',
+                variant: IdeButtonVariant.outline,
+                onPressed: _submitRevision,
+              ),
+              IdeButton(
+                key: ValueKey<String>(
+                  'agent-plan-execution-start-${request.id}',
+                ),
+                label: '执行计划',
+                variant: IdeButtonVariant.primary,
+                leadingIcon: Icons.play_arrow_rounded,
+                onPressed: widget.onStart,
+              ),
+            ],
           ),
         ],
       ),

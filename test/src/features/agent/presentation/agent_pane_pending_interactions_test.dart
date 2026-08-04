@@ -528,8 +528,18 @@ void main() {
           tester.getTopLeft(permission).dy,
           lessThan(tester.getTopLeft(plan).dy),
         );
-        expect(tester.getSize(dock).height, lessThanOrEqualTo(140));
-        // 权限卡与提问卡一致：待处理时隐藏 Composer。
+        // 含计划卡时 dock 上限约 50% 面板高度（400 → 200），避免占满对话区。
+        expect(tester.getSize(dock).height, lessThanOrEqualTo(200));
+        // 计划卡底栏固定：Accept 按钮落在 dock 可见范围内。
+        final accept = find.byKey(
+          const ValueKey('agent-plan-accept-plan-long'),
+        );
+        expect(accept, findsOneWidget);
+        expect(
+          tester.getRect(accept).bottom,
+          lessThanOrEqualTo(tester.getRect(dock).bottom + 0.5),
+        );
+        // 权限 / 计划审批待处理时隐藏主 Composer。
         expect(composer, findsNothing);
       },
     );

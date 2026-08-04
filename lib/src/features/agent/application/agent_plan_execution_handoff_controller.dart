@@ -33,7 +33,7 @@ final class AgentPlanExecutionHandoffController {
       id: 'plan-execution:$sessionId:$turnId',
       sessionId: sessionId,
       turnId: turnId,
-      title: 'Plan ready',
+      title: '计划就绪',
       markdown: markdown,
     );
     _pendingRequest = request;

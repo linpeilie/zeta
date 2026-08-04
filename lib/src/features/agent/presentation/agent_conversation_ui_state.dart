@@ -301,7 +301,12 @@ final class AgentPendingInteractionState {
       planApprovals.isEmpty &&
       planExecutionHandoff == null;
 
-  bool get blocksComposer => permissions.isNotEmpty || questions.isNotEmpty;
+  /// 权限、提问、计划审批与本地执行交接均占用底部交互区，隐藏主 Composer。
+  bool get blocksComposer =>
+      permissions.isNotEmpty ||
+      questions.isNotEmpty ||
+      planApprovals.isNotEmpty ||
+      planExecutionHandoff != null;
 
   AgentAutoApprovalReviewEvent? autoReviewForTurn(String? turnId) =>
       turnId == null ? null : autoReviewsByTurnId[turnId];

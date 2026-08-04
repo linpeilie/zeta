@@ -249,8 +249,12 @@ Dock，但不得共享 request/decision 模型或 pending registry。
 - Plan 终态的执行确认由 `AgentPlanExecutionHandoffController` 管理，是非持久化的本地
   application 状态。必须在 `completeLiveTurnGroup` 清除 structured plan 之前捕获快照；
   Widget 只渲染请求并调用 ViewModel 的 start/revise/dismiss 动作。
+- 执行交接与 Provider 计划审批共用 `_AgentPlanDockCard` 壳（正文可滚、底栏固定）；
+  交接卡出现时 `blocksComposer` 为 true，隐藏主 Composer。交接底栏整合修订输入与
+  「执行计划」：执行始终新建 Default 回合；「继续规划 / 发送修改」保持 Plan，可选
+  发送修订文本。对话流中的 `AgentMessageKind.plan` 折叠消息卡保持独立，不承载执行动作。
 - Run plan 必须先选择 Default，再创建一个新的 turn；不得把它实现成当前 turn steer，
-  也不得调用 `AgentPlanApprovalPort`。Keep planning 显式保留 Plan，Dismiss 不改变权限状态。
+  也不得调用 `AgentPlanApprovalPort`。继续规划显式保留 Plan，关闭不改变权限状态。
 - 新增或修改该流程时至少覆盖：成功 Plan 展示、失败/中断不展示、结构化步骤回退、
   Default 执行快照、继续规划模式、陈旧请求与 thread/provider/workspace 切换清理。
 - 模式来自 `bundle.conversationModes` 的运行时目录。端口为空、method-not-found、目录损坏

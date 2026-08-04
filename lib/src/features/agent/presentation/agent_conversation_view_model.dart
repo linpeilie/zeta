@@ -487,8 +487,14 @@ class AgentConversationViewModel {
     await sendMessage(planExecutionPrompt);
   }
 
-  /// 返回 Composer 继续修改计划，并确保下一回合仍使用 Plan 模式。
-  void revisePlanExecution(AgentPlanExecutionRequest request) {
+  /// 继续修改计划，并确保下一回合仍使用 Plan 模式。
+  ///
+  /// [revisionMessage] 非空时在关闭交接后立即以 Plan 模式发送；
+  /// 为空时仅关闭交接卡，恢复主 Composer 供用户继续输入。
+  Future<void> revisePlanExecution(
+    AgentPlanExecutionRequest request, {
+    String? revisionMessage,
+  }) async {
     if (!_canResolvePlanExecution(request) ||
         !_planExecutionHandoffController.resolve(request)) {
       return;
@@ -504,6 +510,14 @@ class AgentConversationViewModel {
         urgency: AgentUiUpdateUrgency.immediate,
       ),
     );
+    final text = revisionMessage?.trim();
+    if (text == null || text.isEmpty) {
+      return;
+    }
+    if (isTurnRunning || !canSubmitMessage) {
+      return;
+    }
+    await sendMessage(text);
   }
 
   /// 关闭本地执行提示，不向 Provider 回写任何审批结果。

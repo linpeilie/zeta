@@ -662,71 +662,82 @@ class _AgentPendingInteractionSection extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final hasPlanDock =
+        planApprovalRequests.isNotEmpty || planExecutionRequest != null;
+    final hasNonPlanDock =
+        permissionRequests.isNotEmpty || questionRequests.isNotEmpty;
+    // 计划卡自带固定底栏，需要更高 dock；普通 pending 保持紧凑。
     final maxHeight = panelHeight.isFinite
-        ? math.min<double>(360, panelHeight * 0.35)
-        : 360.0;
+        ? math.min<double>(
+            hasPlanDock ? 420.0 : 360.0,
+            panelHeight * (hasPlanDock ? 0.5 : 0.35),
+          )
+        : (hasPlanDock ? 420.0 : 360.0);
     final scrollIdentity = <String>[
       for (final request in permissionRequests) 'permission:${request.id}',
       for (final request in questionRequests) 'question:${request.id}',
       for (final request in planApprovalRequests) 'plan:${request.id}',
       if (planExecutionRequest != null) 'execution:${planExecutionRequest.id}',
     ].join('|');
+
+    final nonPlanCards = <Widget>[
+      for (var index = 0; index < permissionRequests.length; index++)
+        Padding(
+          key: ValueKey(
+            'agent-pending-permission-${permissionRequests[index].id}',
+          ),
+          padding: EdgeInsets.only(
+            bottom:
+                index < permissionRequests.length - 1 ||
+                    questionRequests.isNotEmpty
+                ? IdeSpacing.space8
+                : 0,
+          ),
+          child: _buildPermissionCard(permissionRequests[index], state),
+        ),
+      for (var index = 0; index < questionRequests.length; index++)
+        Padding(
+          key: ValueKey('agent-pending-question-${questionRequests[index].id}'),
+          padding: EdgeInsets.only(
+            bottom: index < questionRequests.length - 1 ? IdeSpacing.space8 : 0,
+          ),
+          child: _AgentQuestionCard(
+            request: questionRequests[index],
+            onRespond: (answers) => viewModel.respondToQuestion(
+              questionRequests[index],
+              answers: answers,
+            ),
+          ),
+        ),
+    ];
+
     return _AgentContentAlign(
       child: Padding(
         padding: pagePadding.copyWith(top: IdeSpacing.space8, bottom: 0),
         child: ConstrainedBox(
           key: const ValueKey('agent-pending-interaction-dock'),
           constraints: BoxConstraints(maxHeight: maxHeight),
-          child: SingleChildScrollView(
-            key: ValueKey<String>(
-              'agent-pending-interaction-scroll-$scrollIdentity',
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                for (var index = 0; index < permissionRequests.length; index++)
-                  Padding(
-                    key: ValueKey(
-                      'agent-pending-permission-'
-                      '${permissionRequests[index].id}',
-                    ),
-                    padding: EdgeInsets.only(
-                      bottom:
-                          index < permissionRequests.length - 1 ||
-                              questionRequests.isNotEmpty ||
-                              planApprovalRequests.isNotEmpty ||
-                              planExecutionRequest != null
-                          ? IdeSpacing.space8
-                          : 0,
-                    ),
-                    child: _buildPermissionCard(
-                      permissionRequests[index],
-                      state,
-                    ),
-                  ),
-                for (var index = 0; index < questionRequests.length; index++)
-                  Padding(
-                    key: ValueKey(
-                      'agent-pending-question-'
-                      '${questionRequests[index].id}',
-                    ),
-                    padding: EdgeInsets.only(
-                      bottom:
-                          index < questionRequests.length - 1 ||
-                              planApprovalRequests.isNotEmpty ||
-                              planExecutionRequest != null
-                          ? IdeSpacing.space8
-                          : 0,
-                    ),
-                    child: _AgentQuestionCard(
-                      request: questionRequests[index],
-                      onRespond: (answers) => viewModel.respondToQuestion(
-                        questionRequests[index],
-                        answers: answers,
-                      ),
-                    ),
-                  ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final available = constraints.maxHeight;
+              // 非计划卡可滚动占用上方；计划卡不进外层滚动，保证底栏固定可见。
+              final nonPlanMaxHeight = hasNonPlanDock && hasPlanDock
+                  ? math.min(available * 0.32, 120.0)
+                  : available;
+              final planBudget = hasNonPlanDock && hasPlanDock
+                  ? math.max(
+                      0.0,
+                      available - nonPlanMaxHeight - IdeSpacing.space8,
+                    )
+                  : available;
+              // 顶栏 + 底栏（含单行输入）约占 132–156；正文吃掉剩余。
+              final planChrome = planExecutionRequest != null ? 156.0 : 128.0;
+              final planBodyMaxHeight = math.max(
+                56.0,
+                math.min(200.0, planBudget - planChrome),
+              );
+
+              final planCards = <Widget>[
                 for (
                   var index = 0;
                   index < planApprovalRequests.length;
@@ -734,8 +745,7 @@ class _AgentPendingInteractionSection extends StatelessWidget {
                 )
                   Padding(
                     key: ValueKey(
-                      'agent-pending-plan-'
-                      '${planApprovalRequests[index].id}',
+                      'agent-pending-plan-${planApprovalRequests[index].id}',
                     ),
                     padding: EdgeInsets.only(
                       bottom:
@@ -746,6 +756,7 @@ class _AgentPendingInteractionSection extends StatelessWidget {
                     ),
                     child: _AgentPlanApprovalCard(
                       request: planApprovalRequests[index],
+                      maxBodyHeight: planBodyMaxHeight,
                       onRespond: (kind) => viewModel.respondToPlanApproval(
                         planApprovalRequests[index],
                         kind,
@@ -758,16 +769,70 @@ class _AgentPendingInteractionSection extends StatelessWidget {
                       'agent-pending-plan-execution-${request.id}',
                     ),
                     request: request,
+                    maxBodyHeight: planBodyMaxHeight,
                     onDismiss: () => viewModel.dismissPlanExecution(request),
-                    onRevise: () {
-                      viewModel.revisePlanExecution(request);
-                      onPlanRevisionRequested();
+                    onRevise: (revision) {
+                      unawaited(
+                        viewModel.revisePlanExecution(
+                          request,
+                          revisionMessage: revision,
+                        ),
+                      );
+                      if (revision == null || revision.trim().isEmpty) {
+                        onPlanRevisionRequested();
+                      }
                     },
                     onStart: () =>
                         unawaited(viewModel.startPlanExecution(request)),
                   ),
-              ],
-            ),
+              ];
+
+              if (!hasPlanDock) {
+                return SingleChildScrollView(
+                  key: ValueKey<String>(
+                    'agent-pending-interaction-scroll-$scrollIdentity',
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: nonPlanCards,
+                  ),
+                );
+              }
+
+              // 使用紧密高度，让计划卡在剩余空间内 Expanded 固定底栏。
+              return SizedBox(
+                height: available,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (hasNonPlanDock) ...[
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: nonPlanMaxHeight,
+                        ),
+                        child: SingleChildScrollView(
+                          key: ValueKey<String>(
+                            'agent-pending-interaction-scroll-$scrollIdentity',
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            mainAxisSize: MainAxisSize.min,
+                            children: nonPlanCards,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: IdeSpacing.space8),
+                    ],
+                    Expanded(
+                      child: planCards.length == 1
+                          ? planCards.single
+                          : ListView(children: planCards),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ),
       ),

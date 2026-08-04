@@ -510,23 +510,29 @@ void main() {
           ),
         );
 
-        await pumpUntilFinder(tester, find.text('Run plan'));
+        const startKey = ValueKey<String>(
+          'agent-plan-execution-start-plan-execution:session-1:turn-1',
+        );
+        await pumpUntilFinder(tester, find.byKey(startKey));
 
-        expect(find.text('Plan ready'), findsOneWidget);
-        expect(find.text('Dismiss'), findsOneWidget);
-        expect(find.text('Keep planning'), findsOneWidget);
-        expect(find.text('Run plan'), findsOneWidget);
+        expect(find.text('计划就绪'), findsOneWidget);
+        expect(find.text('关闭'), findsOneWidget);
+        expect(find.text('继续规划'), findsOneWidget);
+        expect(find.text('执行计划'), findsOneWidget);
+        expect(find.byKey(startKey), findsOneWidget);
         expect(
           find.byKey(
             const ValueKey(
-              'agent-plan-execution-start-'
+              'agent-plan-execution-input-'
               'plan-execution:session-1:turn-1',
             ),
           ),
           findsOneWidget,
         );
+        // 交接卡占用底部交互时隐藏主 Composer。
+        expect(find.byKey(const ValueKey('agent-message-input')), findsNothing);
 
-        await tester.tap(find.text('Run plan'));
+        await tester.tap(find.byKey(startKey));
         await pumpLiveAgentUi(tester);
 
         expect(viewModel.planExecutionRequest, isNull);

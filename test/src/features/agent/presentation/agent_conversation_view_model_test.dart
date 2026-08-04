@@ -316,12 +316,49 @@ void main() {
       await _emitCompletedPlan(provider);
       final request = viewModel.planExecutionRequest!;
 
-      viewModel.revisePlanExecution(request);
+      await viewModel.revisePlanExecution(request);
 
       expect(viewModel.planExecutionRequest, isNull);
       expect(viewModel.selectedConversationMode, AgentConversationModeId.plan);
       expect(provider.turnConfigurations, hasLength(1));
     });
+
+    test(
+      'sends revision text as a Plan-mode turn when revising handoff',
+      () async {
+        final provider = _ModeFakeAgentProvider(
+          availableModels: _conversationModeModels,
+        );
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.loadModels();
+        viewModel.selectConversationMode(AgentConversationModeId.plan);
+        await viewModel.sendMessage('plan this change');
+        await _emitCompletedPlan(provider);
+        final request = viewModel.planExecutionRequest!;
+
+        await viewModel.revisePlanExecution(
+          request,
+          revisionMessage: '请改为分三阶段实施，并补充回滚步骤',
+        );
+
+        expect(viewModel.planExecutionRequest, isNull);
+        expect(
+          viewModel.selectedConversationMode,
+          AgentConversationModeId.plan,
+        );
+        expect(provider.turnConfigurations, hasLength(2));
+        expect(
+          provider.turnConfigurations.last.conversationMode!.modeId,
+          AgentConversationModeId.plan,
+        );
+        expect(
+          viewModel.messages.map((message) => message.text),
+          contains('请改为分三阶段实施，并补充回滚步骤'),
+        );
+      },
+    );
 
     test(
       'dismisses the local handoff without sending or changing mode',
