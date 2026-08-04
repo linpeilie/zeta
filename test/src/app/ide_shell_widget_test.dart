@@ -857,6 +857,10 @@ void main() {
         findsOneWidget,
       );
       expect(
+        find.byKey(const ValueKey('workbench-leading-rail')),
+        findsNothing,
+      );
+      expect(
         find.descendant(
           of: find.byKey(const ValueKey('workbench-navigation-inline')),
           matching: find.byKey(const ValueKey('settings-nav-panel')),
@@ -884,6 +888,28 @@ void main() {
         MessageSendShortcut.primaryModifierEnter,
       );
       expect(retained.inputController.text, retained.draft);
+
+      // 设置页不依赖 Activity Rail；窄窗口也必须保留可见的设置分区导航。
+      tester.view.physicalSize = const Size(700, 900);
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('workbench-leading-rail')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('workbench-navigation-inline')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('settings-nav-panel')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('settings-navigation-action')),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+
+      tester.view.physicalSize = const Size(1400, 900);
+      await tester.pump();
 
       await tester.tap(find.byKey(const ValueKey('settings-nav-agents')));
       await tester.pump();
@@ -918,6 +944,7 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const ValueKey('usage-statistics-page')), findsOneWidget);
+    expect(find.byKey(const ValueKey('workbench-leading-rail')), findsNothing);
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('workbench-canvas')),

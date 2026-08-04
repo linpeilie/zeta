@@ -43,6 +43,7 @@ class IdeWorkbenchScaffold extends StatelessWidget {
     this.inspectorResizeHandle,
     this.trailingRailBuilder,
     this.navigationVisible = true,
+    this.navigationInlineInCompact = false,
     this.inspectorVisible = true,
     this.activeOverlay,
     this.navigationWidth = IdeMetrics.sidePaneDefaultWidth,
@@ -61,6 +62,12 @@ class IdeWorkbenchScaffold extends StatelessWidget {
   final Widget? inspectorResizeHandle;
   final IdeWorkbenchRailBuilder? trailingRailBuilder;
   final bool navigationVisible;
+
+  /// 是否在紧凑模式下仍以内联方式保留导航面板。
+  ///
+  /// 适用于没有 Activity Rail 触发入口、但仍必须保持导航可用的页面。
+  final bool navigationInlineInCompact;
+
   final bool inspectorVisible;
   final IdeWorkbenchOverlay? activeOverlay;
   final double navigationWidth;
@@ -96,7 +103,8 @@ class IdeWorkbenchScaffold extends StatelessWidget {
         final navigationInline =
             navigation != null &&
             navigationVisible &&
-            mode != IdeWorkbenchLayoutMode.compact;
+            (mode != IdeWorkbenchLayoutMode.compact ||
+                navigationInlineInCompact);
         final inspectorInline =
             inspector != null &&
             inspectorVisible &&

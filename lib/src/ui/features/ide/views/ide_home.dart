@@ -62,7 +62,7 @@ typedef HomeProviderDetectionLoader = Future<List<ManagedAgent>> Function();
 
 /// IDE 主界面。
 ///
-/// 当前布局是左右图标栏、左右活动面板与中间 Agent 主编辑区组成的五列结构；
+/// 首页布局是左右图标栏、左右活动面板与中间 Agent 主编辑区组成的五列结构；
 /// 具体项目、会话和 Agent thread 编排由 [IdeShellController] 承接。
 ///
 /// Trailing Rail（Files/Tools）暂时关闭；加回时将 [_trailingRailEnabled]
@@ -170,9 +170,6 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   );
   final FocusNode _rightToolsFocusNode = FocusNode(
     debugLabel: 'RightToolsRailAction',
-  );
-  final FocusNode _settingsNavigationFocusNode = FocusNode(
-    debugLabel: 'SettingsNavigationRailAction',
   );
   final GlobalKey<SettingsPageCanvasState> _settingsCanvasKey =
       GlobalKey<SettingsPageCanvasState>();
@@ -288,7 +285,6 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     _leftContextFocusNode.dispose();
     _rightFilesFocusNode.dispose();
     _rightToolsFocusNode.dispose();
-    _settingsNavigationFocusNode.dispose();
     super.dispose();
   }
 
@@ -356,9 +352,9 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   ///
   /// - Agent 首页：Wide/Medium 内联 Navigation，Inspector 仅 Wide 内联；其余
   ///   模式通过 Workbench Overlay 展示对应 Pane。
-  /// - 设置与 Agent 管理：Wide/Medium 内联设置 Navigation，Compact 按需打开
-  ///   Navigation Overlay，不提供 Inspector。
-  /// - 使用统计：只提供 Canvas，左右 Rail 仍保留在同一骨架中。
+  /// - 设置与 Agent 管理：不显示 Activity Rail，设置 Navigation 在所有模式下
+  ///   保持内联，不提供 Inspector。
+  /// - 使用统计：不显示 Activity Rail，只提供 Canvas。
   Widget _buildWorkbench() {
     final homePage = _page == _IdeHomePage.home;
     final settingsPage = _page == _IdeHomePage.settings;
@@ -369,7 +365,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
         homePage && (_rightTopVisible || _rightBottomVisible);
     return IdeWorkbenchScaffold(
       key: const ValueKey('ide-workbench'),
-      leadingRailBuilder: _buildLeadingRail,
+      leadingRailBuilder: homePage ? _buildLeadingRail : null,
       navigationPane: settingsPage
           ? SettingsNavigationPane(
               activeSection: _settingsSection,
@@ -388,6 +384,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
           ? _buildNavigationResizeHandle()
           : null,
       navigationVisible: navigationVisible,
+      navigationInlineInCompact: settingsPage,
       navigationWidth: _leftPanelWidth,
       canvas: _buildRetainedCanvasStack(),
       inspectorPane: homePage ? _buildRightPanel() : null,
@@ -568,42 +565,6 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   }
 
   Widget _buildLeadingRail(BuildContext context, IdeWorkbenchLayoutMode mode) {
-    if (_page == _IdeHomePage.settings) {
-      final compact = mode == IdeWorkbenchLayoutMode.compact;
-      return IdeActivityRail(
-        leadingActions: [
-          IdeRailAction(
-            key: const ValueKey('settings-navigation-action'),
-            icon: Icons.tune_rounded,
-            tooltip: 'Settings navigation',
-            semanticLabel: 'Toggle settings navigation',
-            active:
-                !compact || _activeOverlay == IdeWorkbenchOverlay.navigation,
-            focusNode: _settingsNavigationFocusNode,
-            onPressed: () {
-              if (compact) {
-                _toggleSettingsNavigationOverlay();
-              }
-            },
-          ),
-        ],
-      );
-    }
-    if (_page == _IdeHomePage.usageStatistics) {
-      return IdeActivityRail(
-        leadingActions: [
-          IdeRailAction(
-            key: const ValueKey('usage-home-action'),
-            icon: Icons.smart_toy_outlined,
-            tooltip: 'Agent',
-            semanticLabel: 'Return to Agent page',
-            active: false,
-            onPressed: _closeUsageStatisticsPage,
-          ),
-        ],
-      );
-    }
-
     final useOverlay = mode == IdeWorkbenchLayoutMode.compact;
     return IdeActivityRail(
       leadingActions: [
@@ -1314,16 +1275,6 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       _overlayTriggerFocusNode = null;
     });
     _updateDesktopAttentionVisibility();
-  }
-
-  void _toggleSettingsNavigationOverlay() {
-    setState(() {
-      final navigationOpen = _activeOverlay == IdeWorkbenchOverlay.navigation;
-      _activeOverlay = navigationOpen ? null : IdeWorkbenchOverlay.navigation;
-      _overlayTriggerFocusNode = navigationOpen
-          ? null
-          : _settingsNavigationFocusNode;
-    });
   }
 }
 
