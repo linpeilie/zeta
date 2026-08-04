@@ -9,7 +9,7 @@ Agent turn 可能在用户切换项目、打开设置页或最小化 Zeta 后才
 中立事件统一映射为用户注意力信号，并在目标会话不可见时提供：
 
 - Windows、macOS 和 Linux 系统通知；
-- Windows 任务栏 overlay、macOS Dock 未读角标、Linux urgency 提醒；
+- Windows 任务栏闪烁、macOS Dock 未读角标、Linux urgency 提醒；
 - 通知点击后恢复窗口并打开对应 Provider thread；
 - 任务终态和需要确认两类通知的独立开关。
 
@@ -157,7 +157,7 @@ Unread -- category disabled --> Absent + cancel system notification
 2. 关闭总开关或对应分类时不接受新信号；
 3. 目标 thread 可见时抑制新通知；
 4. identity 已存在时 no-op；
-5. 首条未读使任务栏/Dock 请求用户注意，每次变更同步未读数；
+5. 首条未读使任务栏/Dock 请求用户注意，并在支持角标的平台同步未读数；
 6. 系统通知失败只写脱敏日志，内部未读仍是权威状态。
 
 本地 Plan 完成时，ViewModel 在 effect 执行前已建立
@@ -214,10 +214,10 @@ Dart 端通过 `zeta/desktop_attention` MethodChannel 调用：
 
 ### 9.1 Windows
 
-- `ITaskbarList3::SetOverlayIcon` 在任务栏图标右下角展示红色未读点；
 - `FlashWindowEx(FLASHW_TRAY | FLASHW_TIMERNOFG)` 请求任务栏闪烁；
-- 处理 `TaskbarButtonCreated` 消息，Explorer 重启后重画 overlay；
-- 未读为 0 时清除 overlay。
+- 不使用 `ITaskbarList3::SetOverlayIcon`，任务栏图标不显示红点或未读数；
+- `setUnreadCount` 在 Windows Runner 中仅返回成功，用于保持跨平台
+  MethodChannel 契约。
 
 ### 9.2 macOS
 
@@ -274,7 +274,7 @@ Dart 端通过 `zeta/desktop_attention` MethodChannel 调用：
   尚未处理的提醒数。
 - 高频 delta、reasoning、tool progress 不产生 attention effect，不进入通知链路。
 - 日志使用 `zeta.desktop_attention`，只记录操作名与异常，不记录通知正文和 payload。
-- Windows 只缓存未读数，overlay icon 每次应用后即销毁 GDI handle。
+- Windows 不创建 overlay icon 或 GDI 资源，仅处理任务栏闪烁请求。
 
 ## 13. 测试与验收
 
@@ -299,7 +299,7 @@ Dart 端通过 `zeta/desktop_attention` MethodChannel 调用：
 
 ## 14. 已知限制与后续扩展
 
-- Windows 任务栏 overlay 当前是红点，不在 16x16 图标上绘制数字；macOS 显示数字。
+- Windows 仅使用任务栏闪烁提醒，不显示红点或未读数；macOS Dock 继续显示数字角标。
 - Linux urgency 的视觉效果依赖 GNOME/KDE 等桌面环境，系统通知依赖 D-Bus 通知服务。
 - 进程退出后不恢复未读；如后续需要跨重启恢复，必须先定义通知过期时间、
   request 仍然 pending 的验证方式和不保存敏感内容的版本化结构。

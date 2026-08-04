@@ -7,7 +7,7 @@
 
 #include <memory>
 
-// Manages the taskbar unread overlay and window attention requests.
+// Manages Windows taskbar flash attention requests without an icon badge.
 class DesktopAttentionChannel {
  public:
   DesktopAttentionChannel(flutter::BinaryMessenger* messenger, HWND window);
@@ -15,8 +15,6 @@ class DesktopAttentionChannel {
 
   DesktopAttentionChannel(const DesktopAttentionChannel&) = delete;
   DesktopAttentionChannel& operator=(const DesktopAttentionChannel&) = delete;
-
-  void HandleWindowMessage(UINT message);
 
  private:
   class Impl;

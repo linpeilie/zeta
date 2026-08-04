@@ -73,9 +73,5 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       break;
   }
 
-  if (desktop_attention_channel_) {
-    desktop_attention_channel_->HandleWindowMessage(message);
-  }
-
   return Win32Window::MessageHandler(hwnd, message, wparam, lparam);
 }

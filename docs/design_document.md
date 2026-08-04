@@ -112,7 +112,7 @@ UsageStatisticsController
 DesktopAttentionController
   -> GeneralSettingsController
   -> DesktopNotificationService -> flutter_local_notifications
-  -> DesktopAttentionIndicator -> Windows taskbar / macOS Dock / Linux urgency
+  -> DesktopAttentionIndicator -> Windows taskbar flash / macOS Dock badge / Linux urgency
   -> IdeHome visibility + IdeShellController thread activation
 ```
 
