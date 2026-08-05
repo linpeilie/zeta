@@ -32,8 +32,9 @@ class DesktopAttentionChannel::Impl {
             return;
           }
           if (call.method_name() == kRequestAttentionMethod) {
+            // Keep the taskbar flash finite so taskbar activation remains normal.
             FLASHWINFO info = {sizeof(FLASHWINFO), window_,
-                               FLASHW_TRAY | FLASHW_TIMERNOFG, 3, 0};
+                               FLASHW_TRAY, 3, 0};
             FlashWindowEx(&info);
             result->Success();
             return;
