@@ -609,29 +609,62 @@ void main() {
       );
     });
 
-    test('domain contains no provider permission protocol strings', () {
-      final domainFiles = Directory('lib/src/features/agent/domain')
-          .listSync(recursive: true)
-          .whereType<File>()
-          .where((file) => file.path.endsWith('.dart'));
+    test('shared application domain and presentation contain no provider '
+        'permission protocol', () {
+      final sharedFiles =
+          <String>[
+            'lib/src/features/agent/application',
+            'lib/src/features/agent/domain',
+            'lib/src/features/agent/presentation',
+            'lib/src/features/project_threads/application',
+            'lib/src/features/project_threads/domain',
+            'lib/src/features/project_threads/presentation',
+            'lib/src/ui',
+          ].expand(
+            (root) => Directory(root)
+                .listSync(recursive: true)
+                .whereType<File>()
+                .where((file) => file.path.endsWith('.dart')),
+          );
 
-      for (final file in domainFiles) {
+      for (final file in sharedFiles) {
         final source = file.readAsStringSync();
         for (final forbidden in const <String>[
           ':workspace',
           ':read-only',
           ':danger-full-access',
+          'permissionProfile/list',
           'approvalPolicy',
           'sandboxPolicy',
+          'activePermissionProfile',
           'selectedPermissionProfileId',
           'selectedPermissionMode',
-          'yolo',
+          "'permission_mode'",
+          '"permission_mode"',
+          'yoloMode',
           'always-approve',
+          'workspace-write',
+          'danger-full-access',
+          'on-request',
+          'on-failure',
         ]) {
           expect(
             source,
             isNot(contains(forbidden)),
             reason: '${file.path}: $forbidden',
+          );
+        }
+        for (final parserShape in const <String>[
+          'optionId.split(',
+          'optionId.startsWith(',
+          'optionId.endsWith(',
+          'optionId.contains(',
+          'optionId.substring(',
+        ]) {
+          expect(
+            source,
+            isNot(contains(parserShape)),
+            reason: '${file.path}: provider-specific $parserShape',
           );
         }
       }

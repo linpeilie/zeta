@@ -1,10 +1,9 @@
 import 'dart:async';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
-import 'package:zeta/src/features/agent/application/agent_permission_request_resolver.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_event_listener_gate.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -510,6 +509,7 @@ class ProjectThreadsController {
     }
     final requestPermissionSnapshot = await _resolveForkPermissionSnapshot(
       provider: provider,
+      threadId: threadId,
       supplied: permissionSnapshot,
     );
     final session = await threadBranching.forkThread(
@@ -537,18 +537,28 @@ class ProjectThreadsController {
 
   Future<AgentPermissionRequestSnapshot> _resolveForkPermissionSnapshot({
     required AgentProvider provider,
+    required String threadId,
     required AgentPermissionRequestSnapshot? supplied,
   }) async {
     if (supplied != null &&
         supplied.source != AgentPermissionRequestSource.providerFallback) {
       return supplied;
     }
-    final configuredId = provider.config.selectedPermissionOptionId?.trim();
-    final providerDefault = configuredId == null || configuredId.isEmpty
-        ? null
-        : AgentPermissionSelection(optionId: configuredId);
+    final identity = providerController.activeProviderRuntimeIdentity;
+    final stateStore = providerController.permissionStateStore;
+    if (identity == null ||
+        identity.providerId != provider.config.id ||
+        !stateStore.isCurrent(identity)) {
+      // 正常应用路径在 provider acquisition 后一定有 current identity；这里只保留
+      // data adapter 的显式兼容 fallback，不从 config 重建第二套 application 状态。
+      return const AgentPermissionRequestSnapshot.providerFallback();
+    }
+
     AgentPermissionSelection? catalogDefault;
-    if (providerDefault == null) {
+    final effectiveState = stateStore
+        .stateFor(identity)
+        .effectiveStateForThread(threadId);
+    if (effectiveState == null) {
       final permissionPolicy = provider.bundle.permissionPolicy;
       if (permissionPolicy != null) {
         try {
@@ -562,8 +572,9 @@ class ProjectThreadsController {
         }
       }
     }
-    return AgentPermissionRequestResolver.resolve(
-      providerDefault: providerDefault,
+    return stateStore.takeRequestSnapshot(
+      identity: identity,
+      threadId: threadId,
       catalogDefault: catalogDefault,
     );
   }

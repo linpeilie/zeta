@@ -1,10 +1,10 @@
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 
-/// Phase 2 迁移期的 Provider 能力端口集合。
+/// Provider 的稳定能力端口集合。
 ///
-/// 当前仍由旧 [AgentProvider] 适配生成，应用层逐步改为依赖 bundle 暴露的端口，
-/// 避免继续通过 `is SomeOptionalProvider` 直接耦合旧接口层。
+/// 由 [AgentProvider] 适配生成；application/presentation 只依赖这里暴露的中立
+/// capability port，避免按 Provider 类型分支或接触协议实现。
 final class AgentProviderBundle {
   const AgentProviderBundle({
     required this.runtime,

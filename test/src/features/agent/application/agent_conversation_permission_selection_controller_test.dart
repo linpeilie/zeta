@@ -439,6 +439,88 @@ void main() {
       expect(controller.defaultOptionId, 'team-safe');
     });
 
+    test('rapid runtime rebind drops an old generation apply result', () async {
+      final delayedResult = Completer<AgentPermissionApplyResult>();
+      final oldPort = _FakePermissionPort(
+        options: const <AgentPermissionOption>[
+          AgentPermissionOption(id: 'old-runtime', label: 'Old runtime'),
+        ],
+        applyCompleter: delayedResult,
+      );
+      final newPort = _FakePermissionPort(
+        options: const <AgentPermissionOption>[
+          AgentPermissionOption(id: 'new-runtime', label: 'New runtime'),
+        ],
+      );
+      final persisted = <String>[];
+      final controller = AgentConversationPermissionSelectionController(
+        persistOptionId: (optionId) async => persisted.add(optionId),
+      );
+      addTearDown(controller.dispose);
+      controller.bind(
+        port: oldPort,
+        persistedOptionId: 'old-default',
+        runtimeIdentity: const AgentProviderRuntimeIdentity(
+          providerId: 'shared-provider',
+          generation: 1,
+        ),
+      );
+      controller.bindThread('thread-a');
+
+      final pending = controller.selectOption(oldPort.options.single);
+      expect(oldPort.applyCalls, 1);
+      controller.bind(
+        port: newPort,
+        persistedOptionId: 'new-default',
+        runtimeIdentity: const AgentProviderRuntimeIdentity(
+          providerId: 'shared-provider',
+          generation: 2,
+        ),
+      );
+      delayedResult.complete(
+        const AgentPermissionApplyResult(
+          normalizedSelection: AgentPermissionSelection(
+            optionId: 'old-runtime',
+          ),
+          scope: AgentPermissionApplyScope.currentSession,
+        ),
+      );
+      await pending;
+
+      expect(controller.runtimeIdentity.generation, 2);
+      expect(controller.selectedOptionId, 'new-default');
+      expect(controller.state.threadStates['thread-a'], isNull);
+      expect(persisted, isEmpty);
+    });
+
+    test('dispose drops a delayed permission apply completion', () async {
+      final delayedResult = Completer<AgentPermissionApplyResult>();
+      final port = _FakePermissionPort(
+        options: const <AgentPermissionOption>[
+          AgentPermissionOption(id: 'late', label: 'Late'),
+        ],
+        applyCompleter: delayedResult,
+      );
+      var persistCalls = 0;
+      final controller = AgentConversationPermissionSelectionController(
+        persistOptionId: (_) async => persistCalls += 1,
+      );
+      controller.bind(port: port, persistedOptionId: 'safe');
+
+      final pending = controller.selectOption(port.options.single);
+      expect(port.applyCalls, 1);
+      controller.dispose();
+      delayedResult.complete(
+        const AgentPermissionApplyResult(
+          normalizedSelection: AgentPermissionSelection(optionId: 'late'),
+          scope: AgentPermissionApplyScope.runtime,
+        ),
+      );
+      await pending;
+
+      expect(persistCalls, 0);
+    });
+
     test('dispose blocks further catalog writes', () async {
       final port = _FakePermissionPort(
         options: const <AgentPermissionOption>[
@@ -465,6 +547,7 @@ class _FakePermissionPort implements AgentPermissionPolicyPort {
     this.applyError,
     this.applyScope = AgentPermissionApplyScope.runtime,
     this.normalizeSelection,
+    this.applyCompleter,
   });
 
   final List<AgentPermissionOption> options;
@@ -473,6 +556,7 @@ class _FakePermissionPort implements AgentPermissionPolicyPort {
   final AgentPermissionApplyScope applyScope;
   final AgentPermissionApplyResult Function(AgentPermissionSelection selection)?
   normalizeSelection;
+  final Completer<AgentPermissionApplyResult>? applyCompleter;
 
   Object? listError;
   int listCalls = 0;
@@ -505,6 +589,10 @@ class _FakePermissionPort implements AgentPermissionPolicyPort {
     final error = applyError;
     if (error != null) {
       throw error;
+    }
+    final completer = applyCompleter;
+    if (completer != null) {
+      return completer.future;
     }
     final normalize = normalizeSelection;
     if (normalize != null) {

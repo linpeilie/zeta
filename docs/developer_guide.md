@@ -227,7 +227,9 @@ Dock，但不得共享 request/decision 模型或 pending registry。
   `AgentPermissionCatalogController` 独立管理目录加载和 stale retention。Composer 展示
   effective；持久化只写 default optionId。
   create/resume/fork/send 前由 application 冻结 `AgentPermissionRequestSnapshot`，优先级为
-  thread-effective → provider default → catalog default。
+  thread-effective → provider default → catalog default。`AgentPermissionRequestResolver` 只定义
+  这条无状态优先级；真正的 selection 均来自 store。无打开 Canvas 的 Project Threads fork
+  也通过 active runtime identity 从同一 store 取值，不得从持久化 config 重建运行态默认。
 - **Settings feedback**：Codex notification mapper 通过专属 codec 原子解码
   profile/approval/sandbox，domain 只接收 `AgentPermissionSelection`。application 按通知
   threadId 写入 `serverSettings` effective；其他 thread 的事件也可入库，但不会修改当前
@@ -260,6 +262,21 @@ Dock，但不得共享 request/decision 模型或 pending registry。
   `copyWith` + `agentProviderConfigUnset` 哨兵），禁止 `value ?? oldValue` 无法清空。
 - Provider、bundle 与 `AgentTurnConfiguration` 只接受 `AgentPermissionRequestSnapshot`；旧裸
   selection 参数与兼容合并 facade 已删除，fake/harness 也不得重新引入。
+
+最终权限调用链固定为：
+
+```text
+provider config --seed--> runtime registry --> AgentPermissionStateStore
+thread settings --> data codec --> neutral event --> state controller --> store
+user selection --> policy port --> AgentPermissionApplyResult ----------> store
+                                                                  |
+create/resume/fork/send --> store.takeRequestSnapshot() --> immutable snapshot
+  --> bundle port --> Codex/Grok provider --> provider data codec --> wire request
+```
+
+验收时必须覆盖：两个 thread/两个 Canvas 的真实 wire 参数、runtime scope 广播、快速 Provider
+重绑后的迟到 apply、disposed controller 的迟到结果、旧 runtime generation 的 commit/broadcast，
+以及 provider apply 成功但配置持久化失败时，无 Canvas fork 仍读取内存中的 application 默认。
 
 ### Skill 输入与 Composer token
 

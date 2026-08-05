@@ -103,8 +103,8 @@ main -> app -> presentation/application -> domain
 
 ## 4. Provider 与协议边界
 
-迁移期内，`AgentProviderBundle` 是 application / presentation 首选能力边界；
-`AgentProvider` 保留为 data adapter 的兼容门面。
+`AgentProviderBundle` 是 application / presentation 的稳定能力边界；
+`AgentProvider` 只作为 data adapter 的生命周期宿主与 bundle 适配入口。
 
 - UI 只消费 `AgentEvent`、`AgentThreadSummary`、`AgentPermissionRequest`、
   `AgentQuestionRequest`、`AgentToolCall` 等中立模型。
@@ -145,6 +145,14 @@ main -> app -> presentation/application -> domain
   fallback；用户选择或 `thread/settings/updated` 不得改写跨 thread 共享的请求权限状态。
   旧裸 `permissionSelection` 参数、`AgentTurnConfiguration.permissionSelection` 与 Provider
   内兼容合并 setter/facade 均不得恢复。
+- runtime 激活后，`AgentPermissionStateStore` 是 provider default、thread effective 与
+  runtime-global selection 的唯一运行态真源；provider config 只负责初次 seed 和持久化。
+  Project Threads 等无活动 Canvas 的 application 工作流也必须用当前 runtime identity +
+  threadId 从 store 冻结请求，禁止重新读取 config 拼出第二套默认状态。
+  `AgentPermissionRequestResolver` 只能是无状态优先级函数，不得缓存 selection。
+- 所有异步 catalog/apply/request 路径必须同时验证 controller binding generation、provider
+  runtime generation 与 disposed/token 状态。快速切换 Provider 后的旧结果、已销毁 Canvas 的
+  迟到结果以及 retired runtime 广播均必须丢弃，且不得触发偏好持久化。
 - `thread/settings/updated` 的 Codex profile/approval/sandbox 必须由 data codec 一次性解码
   为 `AgentPermissionSelection`；domain event 不得暴露协议字段。reducer 允许权限事实按事件
   threadId 路由到 store，即使该 thread 不是当前 Canvas；同一通知不得更新 provider default、

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
+import 'package:zeta/src/features/agent/application/agent_permission_state_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -951,6 +952,78 @@ void main() {
         expect(
           provider.forkPermissionSnapshots.single.selection?.optionId,
           ':workspace',
+        );
+      },
+    );
+
+    test(
+      'fork uses application default when persisted config is stale',
+      () async {
+        final provider = _FakeAgentProvider(
+          pages: const <AgentThreadPage>[],
+          config: AgentProviderConfig.defaultCodex.withPermissionPreference(
+            ':workspace',
+          ),
+        );
+        final providerController = ActiveAgentProviderController(
+          providerFactory: _FakeAgentProviderFactory(provider),
+          configStore: MemoryAgentProviderConfigStore(
+            AgentProviderSettings(
+              providers: <AgentProviderConfig>[provider.config],
+              activeProviderId: provider.config.id,
+            ),
+          ),
+        );
+        final controller = ProjectThreadsController(
+          providerController: providerController,
+        );
+        addTearDown(() {
+          controller.dispose();
+          providerController.dispose();
+        });
+        await providerController.activeProvider();
+        final identity = providerController.activeProviderRuntimeIdentity!;
+        expect(
+          providerController.permissionStateStore.commitApplyResult(
+            identity: identity,
+            threadId: null,
+            result: const AgentPermissionApplyResult(
+              normalizedSelection: AgentPermissionSelection(
+                optionId: ':read-only',
+              ),
+              scope: AgentPermissionApplyScope.currentSession,
+            ),
+            source: AgentPermissionStateSource.userSelection,
+            updateDefault: true,
+          ),
+          isTrue,
+        );
+        expect(
+          provider.config.resolvedPermissionOptionId,
+          ':workspace',
+          reason: 'fixture keeps persistence behind the applied runtime state',
+        );
+        controller.registerSession(
+          '/repo',
+          const AgentSession(
+            id: 'source-thread',
+            providerId: defaultAgentProviderId,
+          ),
+        );
+
+        await controller.forkThread(
+          projectPath: '/repo',
+          threadId: 'source-thread',
+        );
+
+        expect(provider.forkPermissionSnapshots, hasLength(1));
+        expect(
+          provider.forkPermissionSnapshots.single.source,
+          AgentPermissionRequestSource.providerDefault,
+        );
+        expect(
+          provider.forkPermissionSnapshots.single.selection?.optionId,
+          ':read-only',
         );
       },
     );

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'package:zeta/src/features/agent/application/agent_permission_request_resolver.dart';
 import 'package:zeta/src/features/agent/domain/agent_permission_policy_models.dart';
 
 /// 一个 Provider 进程实例的稳定身份。
@@ -447,36 +448,18 @@ final class AgentPermissionStateStore extends ChangeNotifier {
       }
     }
 
-    final runtime = current.runtimeSelection;
-    if (runtime != null) {
-      return AgentPermissionRequestSnapshot.resolved(
-        selection: runtime,
-        source: AgentPermissionRequestSource.threadEffective,
-      );
-    }
-    if (normalizedThread != null) {
-      final thread = current.threadStates[normalizedThread];
-      if (thread != null) {
-        return AgentPermissionRequestSnapshot.resolved(
-          selection: thread.selection,
-          source: AgentPermissionRequestSource.threadEffective,
-        );
-      }
-    }
-    final providerDefault = current.providerDefaultPreference;
-    if (providerDefault != null) {
-      return AgentPermissionRequestSnapshot.resolved(
-        selection: providerDefault,
-        source: AgentPermissionRequestSource.providerDefault,
-      );
-    }
-    if (catalogDefault != null) {
-      return AgentPermissionRequestSnapshot.resolved(
-        selection: catalogDefault,
-        source: AgentPermissionRequestSource.catalogDefault,
-      );
-    }
-    return const AgentPermissionRequestSnapshot.providerFallback();
+    // runtime-global 对所有 thread 生效，因此作为显式 effective override 参与同一
+    // 中立优先级解析；resolver 本身不拥有状态，只集中定义来源顺序。
+    final threadEffective =
+        current.runtimeSelection ??
+        (normalizedThread == null
+            ? null
+            : current.threadStates[normalizedThread]?.selection);
+    return AgentPermissionRequestResolver.resolve(
+      threadEffective: threadEffective,
+      providerDefault: current.providerDefaultPreference,
+      catalogDefault: catalogDefault,
+    );
   }
 
   void recordPersistenceFailure({

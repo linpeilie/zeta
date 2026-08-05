@@ -388,6 +388,23 @@ settings 修改，因此共享 Provider 的多 thread / 多 Canvas 请求彼此�
 `AgentProviderConfig.tryDecode` / `AgentProviderSettings.tryDecode` 过渡门面。Provider API、
 bundle port 与 turn configuration 也只接受显式 request snapshot，不再接受裸 selection。
 
+最终依赖方向如下；箭头反向依赖均不允许：
+
+```text
+presentation
+  -> application selection/catalog controller
+  -> AgentPermissionStateStore (runtime identity + generation + threadId)
+  -> immutable AgentPermissionRequestSnapshot
+  -> domain bundle port
+  -> data provider adapter
+  -> Codex/Grok codec + RPC/ACP wire
+
+Codex settings wire -> data notification codec -> neutral domain event
+  -> application state store (event thread only)
+Grok live apply -> neutral runtime result -> state store runtime broadcast
+  -> consumers bound to the same current generation
+```
+
 权限运行态由 application 级 `AgentPermissionStateStore` 统一拥有。Provider runtime registry
 为每个进程实例分配递增的 `AgentProviderRuntimeIdentity(providerId, generation)`；状态再按
 threadId 隔离，并以不可变快照暴露 provider default、thread effective、source、last scope、
@@ -395,6 +412,10 @@ warning 与持久化失败。`AgentPermissionCatalogController` 独立承担目�
 last-known-good、非阻断错误和旧 generation 防回写；selection controller 只编排 apply result
 与持久化。Codex catalog adapter 将错误分为 unsupported/transient/malformed：仅明确
 unsupported 返回 built-ins，其他失败抛出；分页失败不提交部分结果，重复 cursor 安全终止。
+Provider config 在 runtime 激活时只 seed store，之后不再作为 application 请求默认的并行真源；
+包括无活动 Canvas 的 Project Threads fork 在内，所有 application 请求均按当前 runtime identity
+从 store 冻结快照。只有中立快照缺少 selection 时，data provider 才使用构造期不可变 config
+fallback 维持旧运行时兼容。
 
 `AgentPermissionApplyResult` 的提交规则固定为：`currentTurn` 生成一次性 request override；
 `currentSession` 更新目标 thread；`runtime` 更新显式 runtime state 并向同 generation 的所有
@@ -407,7 +428,8 @@ Codex `thread/settings/updated` 权限反馈在 data mapper 处经专属 codec �
 thread 也不会丢失反馈；该路径不改 provider default、不调用 Provider apply，模型和
 conversation mode 的 UI 回写仍受当前 thread gate 约束。
 
-其余剩余收口项是：继续从旧 `AgentProvider` 删除其它已迁移门面方法（非权限域）。
+权限域的状态、请求、事件、迁移与 catalog 边界已完成收口。旧 `AgentProvider` 中仍可能存在的
+其它门面只涉及非权限能力，不构成权限运行态的第二真源。
 
 ### 当前已落地的对话体验
 
