@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
@@ -746,6 +747,23 @@ void main() {
       config: AgentProviderConfig.defaultGrok,
       declaredCapabilities: AgentProviderCapabilities.grokAcp,
       includeConversationTestThread: true,
+      permissionProfiles: const <AgentPermissionProfileSummary>[
+        AgentPermissionProfileSummary(
+          id: 'ask',
+          allowed: true,
+          description: 'Ask',
+        ),
+        AgentPermissionProfileSummary(
+          id: 'auto',
+          allowed: true,
+          description: 'Auto',
+        ),
+        AgentPermissionProfileSummary(
+          id: 'always-approve',
+          allowed: true,
+          description: 'Always approve',
+        ),
+      ],
     );
     await tester.pumpWidget(
       MainApp(
@@ -780,15 +798,47 @@ void main() {
       tester,
       () =>
           moreActionsButton.evaluate().isNotEmpty &&
-          permissionPolicySelector.evaluate().isEmpty,
+          permissionPolicySelector.evaluate().isNotEmpty,
       failureMessage: 'Grok composer controls did not become ready',
     );
+
+    // Grok 支持权限策略选择：选择器可见；catalog 为 Ask/Auto/Always approve。
+    expect(permissionPolicySelector, findsOneWidget);
+    await tester.tap(permissionPolicySelector);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final permissionPopover = find.byKey(
+      const ValueKey('agent-permission-policy-popover'),
+    );
+    expect(permissionPopover, findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('agent-permission-profile-ask')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('agent-permission-profile-auto')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('agent-permission-profile-always-approve')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('agent-permission-profile-default')),
+      findsNothing,
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+    expect(permissionPopover, findsNothing);
 
     expect(attachImageButton, findsNothing);
     expect(mentionFileButton, findsNothing);
     expect(planAction, findsNothing);
 
     await tester.tap(moreActionsButton);
+    await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(
@@ -796,7 +846,6 @@ void main() {
       findsOneWidget,
     );
     expect(attachImageButton, findsNothing);
-    expect(permissionPolicySelector, findsNothing);
     expect(planAction, findsNothing);
     expect(mentionFileButton, findsOneWidget);
   });

@@ -592,22 +592,20 @@ class GrokAcpAgentProvider
   }
 
   /// 向 Grok shell 广播权限模式变更（best-effort，不抛错）。
+  ///
+  /// 只发送 [GrokPermissionModeCodec.yoloModeChangedMethod]（`_x.ai/`），
+  /// 与 billing/skills 等可验证 client→agent 扩展前缀一致，避免双发副作用。
   void _broadcastPermissionMode(GrokPermissionMode mode) {
     final params = GrokPermissionModeCodec.yoloModeChangedParams(mode);
-    // grok-build 扩展通知常见 `x.ai/`；同时兼容 `_x.ai/` 前缀消费端。
-    for (final method in const <String>[
-      'x.ai/yolo_mode_changed',
-      '_x.ai/yolo_mode_changed',
-    ]) {
-      try {
-        _peer.sendNotification(method, params: params);
-      } catch (error, stackTrace) {
-        _log.fine(
-          'Failed to notify $method for permission mode',
-          error,
-          stackTrace,
-        );
-      }
+    final method = GrokPermissionModeCodec.yoloModeChangedMethod;
+    try {
+      _peer.sendNotification(method, params: params);
+    } catch (error, stackTrace) {
+      _log.fine(
+        'Failed to notify $method for permission mode',
+        error,
+        stackTrace,
+      );
     }
   }
 

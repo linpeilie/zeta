@@ -143,6 +143,7 @@ class FakeAgentProvider
     this.config = AgentProviderConfig.defaultCodex,
     this.includeConversationTestThread = false,
     this.conversationThreadProviderId,
+    this.permissionProfiles = const <AgentPermissionProfileSummary>[],
     List<AgentThreadPage> threadPages = const <AgentThreadPage>[],
     Map<String, AgentThreadHistorySnapshot> threadHistories =
         const <String, AgentThreadHistorySnapshot>{},
@@ -165,6 +166,7 @@ class FakeAgentProvider
   final AgentProviderConfig config;
   final bool includeConversationTestThread;
   final String? conversationThreadProviderId;
+  final List<AgentPermissionProfileSummary> permissionProfiles;
   final List<AgentThreadPage> _threadPages;
   final Map<String, AgentThreadHistorySnapshot> _threadHistories;
   bool _conversationTestThreadReturned = false;
@@ -478,7 +480,7 @@ class FakeAgentProvider
 
   @override
   Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
-    return const <AgentPermissionProfileSummary>[];
+    return List<AgentPermissionProfileSummary>.unmodifiable(permissionProfiles);
   }
 
   @override

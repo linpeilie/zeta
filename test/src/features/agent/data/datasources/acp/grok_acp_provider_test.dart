@@ -68,30 +68,134 @@ void main() {
       expect(meta.containsKey('autoMode'), isFalse);
     });
 
-    test('broadcasts yolo_mode_changed when permission mode updates', () async {
+    test('session/new and session/load share identical Ask meta', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: AgentProviderConfig.defaultGrok.copyWith(
+          // 旧 default 别名必须归一化为 Ask。
+          selectedPermissionOptionId: 'default',
+        ),
         peer: peer,
       );
       addTearDown(provider.dispose);
-      await provider.initialize();
 
-      provider.updatePermissionSelection(
-        const AgentPermissionSelection(optionId: 'auto'),
+      await provider.startSession(
+        context: const AgentContext(projectPath: r'D:\repo\zeta'),
+      );
+      await provider.resumeSession(
+        'sess-1',
+        context: const AgentContext(projectPath: r'D:\repo\zeta'),
       );
 
-      expect(peer.notificationsSent, contains('x.ai/yolo_mode_changed'));
-      expect(peer.notificationsSent, contains('_x.ai/yolo_mode_changed'));
-      final params =
-          peer.notificationParams[peer.notificationsSent.indexOf(
-                'x.ai/yolo_mode_changed',
-              )]!
+      final newIndex = peer.requestMethods.indexOf('session/new');
+      final loadIndex = peer.requestMethods.indexOf('session/load');
+      expect(newIndex, isNonNegative);
+      expect(loadIndex, isNonNegative);
+      final newMeta =
+          (peer.requestParams[newIndex]! as Map<String, Object?>)['_meta']!
               as Map<String, Object?>;
-      expect(params['permission_mode'], 'auto');
-      expect(params['auto_mode'], isTrue);
-      expect(params['yolo_mode'], isFalse);
+      final loadMeta =
+          (peer.requestParams[loadIndex]! as Map<String, Object?>)['_meta']!
+              as Map<String, Object?>;
+      expect(newMeta, <String, Object?>{'clientIdentifier': 'zeta'});
+      expect(loadMeta, newMeta);
+      expect(newMeta.containsKey('yoloMode'), isFalse);
+      expect(newMeta.containsKey('autoMode'), isFalse);
     });
+
+    test('session/new meta covers Auto and Ask elevated baselines', () async {
+      Future<Map<String, Object?>> metaFor(String optionId) async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok.copyWith(
+            selectedPermissionOptionId: optionId,
+          ),
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+        await provider.startSession(
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+        );
+        final newIndex = peer.requestMethods.indexOf('session/new');
+        return (peer.requestParams[newIndex]! as Map<String, Object?>)['_meta']!
+            as Map<String, Object?>;
+      }
+
+      expect(await metaFor('auto'), <String, Object?>{
+        'autoMode': true,
+        'clientIdentifier': 'zeta',
+      });
+      expect(await metaFor('ask'), <String, Object?>{
+        'clientIdentifier': 'zeta',
+      });
+      expect(await metaFor(''), <String, Object?>{'clientIdentifier': 'zeta'});
+    });
+
+    test(
+      'broadcasts single _x.ai/yolo_mode_changed on permission updates',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+        await provider.initialize();
+
+        provider.updatePermissionSelection(
+          const AgentPermissionSelection(optionId: 'auto'),
+        );
+
+        expect(peer.notificationsSent, <String>['_x.ai/yolo_mode_changed']);
+        expect(
+          peer.notificationsSent,
+          isNot(contains('x.ai/yolo_mode_changed')),
+        );
+        final params = peer.notificationParams.single! as Map<String, Object?>;
+        expect(params['permission_mode'], 'auto');
+        expect(params['auto_mode'], isTrue);
+        expect(params['yolo_mode'], isFalse);
+
+        // Always approve → Ask 后必须显式关闭自动批准。
+        provider.updatePermissionSelection(
+          const AgentPermissionSelection(optionId: 'always-approve'),
+        );
+        provider.updatePermissionSelection(
+          const AgentPermissionSelection(optionId: 'ask'),
+        );
+        final askParams = peer.notificationParams.last! as Map<String, Object?>;
+        expect(askParams['permission_mode'], 'ask');
+        expect(askParams['yolo_mode'], isFalse);
+        expect(askParams['auto_mode'], isFalse);
+        expect(
+          peer.notificationsSent.where((m) => m == '_x.ai/yolo_mode_changed'),
+          hasLength(3),
+        );
+      },
+    );
+
+    test(
+      'listPermissionProfiles exposes only Ask Auto Always approve',
+      () async {
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: _FakeJsonRpcPeer(),
+        );
+        addTearDown(provider.dispose);
+
+        final options = await provider.listPermissionProfiles();
+        expect(options.map((o) => o.id).toList(), <String>[
+          'ask',
+          'auto',
+          'always-approve',
+        ]);
+        expect(options.map((o) => o.description).toList(), <String>[
+          'Ask',
+          'Auto',
+          'Always approve',
+        ]);
+      },
+    );
 
     test('reads Grok billing plan windows and reset time', () async {
       final peer = _FakeJsonRpcPeer();
