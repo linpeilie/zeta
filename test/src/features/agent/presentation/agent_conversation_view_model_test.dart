@@ -2689,6 +2689,7 @@ void main() {
             .toList();
         expect(errorTexts, hasLength(1));
         expect(errorTexts.single, isNot(contains('Turn failed')));
+        expect(errorTexts.single, contains('压缩上下文'));
 
         final turn = viewModel.conversationTurns.singleWhere(
           (turn) => turn.id == 'turn-1',
@@ -2696,6 +2697,44 @@ void main() {
         expect(turn.status, AgentHistoryTurnStatus.failed);
       },
     );
+
+    test('shows capacity guidance for serverOverloaded live errors', () async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.sendMessage('hello');
+      provider.emit(
+        const AgentErrorEvent(
+          message:
+              'Selected model is at capacity. Please try a different model.',
+          code: 'serverOverloaded',
+          willRetry: false,
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      );
+      provider.emit(
+        const AgentTurnCompletedEvent(
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          status: AgentHistoryTurnStatus.failed,
+          errorMessage:
+              'Selected model is at capacity. Please try a different model.',
+          errorCode: 'serverOverloaded',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final errorTexts = viewModel.timelineEntries
+          .whereType<AgentMessageTimelineEntry>()
+          .map((entry) => entry.message.text)
+          .where((text) => text.contains('at capacity'))
+          .toList();
+      expect(errorTexts, hasLength(1));
+      expect(errorTexts.single, contains('当前模型容量已满'));
+      expect(errorTexts.single, isNot(contains('Turn failed')));
+    });
 
     test('logs normalized error events for every provider', () async {
       final records = <LogRecord>[];

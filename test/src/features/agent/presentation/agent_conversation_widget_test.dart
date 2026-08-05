@@ -837,7 +837,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('agent-send-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text(errorMessage), findsOneWidget);
+    expect(find.textContaining(errorMessage), findsOneWidget);
+    expect(find.textContaining('用量或速率额度已用尽'), findsOneWidget);
     expect(find.textContaining('Agent request failed'), findsNothing);
     expect(find.textContaining('Turn failed'), findsNothing);
     expect(find.textContaining('prompt_error'), findsNothing);

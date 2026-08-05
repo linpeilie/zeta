@@ -467,6 +467,10 @@ class AgentConversationTimelineStore {
   }
 
   /// 历史快照只保存 turn 级错误时，将其恢复为该回合内的一条系统消息。
+  ///
+  /// 文案与 live 路径共用 [AgentProviderErrorPresentation]，确保
+  /// `serverOverloaded` 等错误码在历史回放中也能给出可操作引导。
+  /// 若快照内已有仅含原文的系统错误，会就地升级为带引导的完整文案。
   void _appendHistoryTurnFailure(AgentHistoryTurn turn) {
     final errorMessage = turn.errorMessage?.trim();
     if (turn.status != AgentHistoryTurnStatus.failed ||
@@ -474,22 +478,51 @@ class AgentConversationTimelineStore {
         errorMessage.isEmpty) {
       return;
     }
-    final alreadyIncluded = turn.entries
+    final displayText = AgentProviderErrorPresentation.formatUserVisibleText(
+      message: errorMessage,
+      code: turn.errorCode,
+    );
+    final existingSystem = turn.entries
         .whereType<AgentHistoryMessageEntry>()
-        .any(
-          (entry) =>
-              entry.role == AgentMessageRole.system &&
-              entry.text.trim() == errorMessage,
-        );
-    if (alreadyIncluded) {
+        .where((entry) {
+          if (entry.role != AgentMessageRole.system) {
+            return false;
+          }
+          final text = entry.text.trim();
+          return text == errorMessage ||
+              text == displayText ||
+              text.contains(errorMessage);
+        });
+    if (existingSystem.isNotEmpty) {
+      final entry = existingSystem.first;
+      final existingText = entry.text.trim();
+      if (existingText == displayText) {
+        return;
+      }
+      // 升级历史自带的原文错误为带引导的完整提示。
+      addConversationMessage(
+        AgentConversationMessage(
+          id: entry.id,
+          role: AgentMessageRole.system,
+          text: displayText,
+          raw: <String, Object?>{
+            ...entry.raw,
+            'historyTurnError': true,
+            if (turn.errorCode != null) 'errorCode': turn.errorCode,
+          },
+        ),
+      );
       return;
     }
     addConversationMessage(
       AgentConversationMessage(
         id: 'history-turn-error:${turn.id}',
         role: AgentMessageRole.system,
-        text: errorMessage,
-        raw: const <String, Object?>{'historyTurnError': true},
+        text: displayText,
+        raw: <String, Object?>{
+          'historyTurnError': true,
+          if (turn.errorCode != null) 'errorCode': turn.errorCode,
+        },
       ),
     );
   }

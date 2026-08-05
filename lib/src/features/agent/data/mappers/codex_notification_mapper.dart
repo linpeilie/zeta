@@ -155,6 +155,7 @@ class _CodexNotificationMapper {
               turnId: turnId,
               status: _turnFinalStatus(_string(turn['status'])),
               errorMessage: _string(_map(turn['error'])['message']),
+              errorCode: _codexErrorCode(_map(turn['error'])['codexErrorInfo']),
               duration: _durationFromMilliseconds(turn['durationMs']),
               raw: notification.params,
             ),

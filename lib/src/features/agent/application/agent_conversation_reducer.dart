@@ -467,7 +467,11 @@ final class AgentConversationReducer {
           AgentConversationMessageMutationData(
             id: _nextLocalTimelineId('turn-failed'),
             role: AgentMessageRole.system,
-            text: 'Turn failed: $errorMessage',
+            text: AgentProviderErrorPresentation.formatUserVisibleText(
+              message: errorMessage,
+              code: event.errorCode,
+              prefixTurnFailed: true,
+            ),
           ),
         ),
       );
@@ -1107,17 +1111,11 @@ final class AgentConversationReducer {
   }
 
   String _errorMessageText(AgentErrorEvent event) {
-    final buffer = StringBuffer(event.message);
-    final details = event.details;
-    if (details != null && details.isNotEmpty) {
-      buffer.write(': $details');
-    }
-    if (event.willRetry ?? false) {
-      buffer.write(' (Codex will retry automatically)');
-    }
-    if (event.code == 'contextWindowExceeded') {
-      buffer.write('。上下文已超限，可点击头栏「压缩上下文」后继续。');
-    }
-    return buffer.toString();
+    return AgentProviderErrorPresentation.formatUserVisibleText(
+      message: event.message,
+      details: event.details,
+      code: event.code,
+      willRetry: event.willRetry,
+    );
   }
 }

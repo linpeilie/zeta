@@ -2384,7 +2384,8 @@ void main() {
         sessionPath: sessionFile.path,
       );
 
-      expect(peer.requestMethods, <String>['initialize']);
+      // 本地 JSONL 仍优先；同时 best-effort 读 thread/read 以叠终态错误。
+      expect(peer.requestMethods, <String>['initialize', 'thread/read']);
       expect(history.threadId, 'thread-1');
       expect(_historyEntries(history), hasLength(4));
       expect(history.turns.map((turn) => turn.id), <String>['turn-local']);
@@ -2548,7 +2549,7 @@ void main() {
           sessionPath: sessionFile.path,
         );
 
-        expect(peer.requestMethods, <String>['initialize']);
+        expect(peer.requestMethods, <String>['initialize', 'thread/read']);
         expect(
           _historyTurn(history, 'turn-plan').collaborationMode,
           AgentConversationModeId.plan,
@@ -2656,7 +2657,7 @@ void main() {
           sessionPath: sessionFile.path,
         );
 
-        expect(peer.requestMethods, <String>['initialize']);
+        expect(peer.requestMethods, <String>['initialize', 'thread/read']);
         expect(_historyEntries(history), hasLength(4));
         expect(
           _historyEntries(
@@ -2872,7 +2873,7 @@ void main() {
         sessionPath: file.path,
       );
 
-      expect(peer.requestMethods, <String>['initialize']);
+      expect(peer.requestMethods, <String>['initialize', 'thread/read']);
       expect(_historyEntries(history), hasLength(2));
       expect(
         (_historyEntries(history)[0] as AgentHistoryToolEntry).toolCall.title,
@@ -3227,12 +3228,123 @@ void main() {
           completed[0].errorMessage,
           'Model provider rejected the request',
         );
+        expect(completed[0].errorCode, 'badRequest');
         expect(completed[0].duration, const Duration(milliseconds: 5250));
         expect(completed[1].turnId, 'turn-interrupted');
         expect(completed[1].status, AgentHistoryTurnStatus.interrupted);
         expect(completed[1].errorMessage, isNull);
+        expect(completed[1].errorCode, isNull);
         expect(completed[2].turnId, 'turn-ok');
         expect(completed[2].status, AgentHistoryTurnStatus.completed);
+      },
+    );
+
+    test('maps serverOverloaded error notifications for live UI', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+      await provider.initialize();
+
+      final events = <AgentEvent>[];
+      final sub = provider.events.listen(events.add);
+      addTearDown(sub.cancel);
+
+      peer.emitNotification('error', <String, Object?>{
+        'threadId': 'thread-1',
+        'turnId': 'turn-capacity',
+        'willRetry': false,
+        'error': <String, Object?>{
+          'message':
+              'Selected model is at capacity. Please try a different model.',
+          'codexErrorInfo': 'serverOverloaded',
+        },
+      });
+      await Future<void>.delayed(Duration.zero);
+
+      final error = events.whereType<AgentErrorEvent>().single;
+      expect(error.code, 'serverOverloaded');
+      expect(error.willRetry, isFalse);
+      expect(error.message, contains('at capacity'));
+      expect(error.sessionId, 'thread-1');
+      expect(error.turnId, 'turn-capacity');
+    });
+
+    test(
+      'overlays thread/read failed status onto local session history',
+      () async {
+        final peer = _FakeJsonRpcPeer(
+          threadReadResponseProvider: (params) async {
+            return <String, Object?>{
+              'thread': <String, Object?>{
+                'id': 'thread-capacity',
+                'turns': <Object?>[
+                  <String, Object?>{
+                    'id': 'turn-capacity',
+                    'status': 'failed',
+                    'items': <Object?>[],
+                    'error': <String, Object?>{
+                      'message':
+                          'Selected model is at capacity. Please try a different model.',
+                      'codexErrorInfo': 'serverOverloaded',
+                    },
+                  },
+                ],
+              },
+            };
+          },
+        );
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+
+        final sessionFile = await _writeJsonlFile(<Object?>[
+          <String, Object?>{
+            'timestamp': '2026-08-05T03:19:15.000Z',
+            'type': 'event_msg',
+            'payload': <String, Object?>{
+              'type': 'task_started',
+              'turn_id': 'turn-capacity',
+              'started_at': 1785899955,
+            },
+          },
+          <String, Object?>{
+            'timestamp': '2026-08-05T03:19:16.000Z',
+            'type': 'event_msg',
+            'payload': <String, Object?>{
+              'type': 'user_message',
+              'message': 'Continue',
+            },
+          },
+          <String, Object?>{
+            'timestamp': '2026-08-05T03:31:55.000Z',
+            'type': 'event_msg',
+            'payload': <String, Object?>{
+              'type': 'task_complete',
+              'turn_id': 'turn-capacity',
+              'completed_at': 1785900715,
+              'duration_ms': 760000,
+              'last_agent_message': null,
+            },
+          },
+        ]);
+        addTearDown(() => sessionFile.parent.delete(recursive: true));
+
+        final history = await provider.readThreadHistory(
+          threadId: 'thread-capacity',
+          sessionPath: sessionFile.path,
+        );
+
+        expect(peer.requestMethods, contains('thread/read'));
+        final turn = history.turns.single;
+        expect(turn.id, 'turn-capacity');
+        expect(turn.status, AgentHistoryTurnStatus.failed);
+        expect(turn.errorMessage, contains('at capacity'));
+        expect(turn.errorCode, 'serverOverloaded');
       },
     );
 

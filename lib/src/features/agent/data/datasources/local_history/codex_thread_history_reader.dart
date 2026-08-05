@@ -126,6 +126,110 @@ class _CodexThreadHistoryReader {
     return map.isEmpty ? null : map.keys.first;
   }
 
+  /// 将 thread/read 中的终态错误叠到本地 JSONL 历史上。
+  ///
+  /// Codex session JSONL 通常不持久化 `error` 通知；live 时 `serverOverloaded`
+  /// 等失败只会经 JSON-RPC 到达客户端。优先使用内容更完整的本地条目，仅在
+  /// 本地 turn 缺少 error/failed 状态时用远端补齐。
+  AgentThreadHistorySnapshot mergeRemoteTurnFailures({
+    required AgentThreadHistorySnapshot local,
+    required AgentThreadHistorySnapshot remote,
+  }) {
+    if (remote.turns.isEmpty) {
+      return local;
+    }
+    final remoteById = <String, AgentHistoryTurn>{
+      for (final turn in remote.turns) turn.id: turn,
+    };
+    var changed = false;
+    final mergedTurns = <AgentHistoryTurn>[];
+    for (final localTurn in local.turns) {
+      final remoteTurn = remoteById[localTurn.id];
+      if (remoteTurn == null) {
+        mergedTurns.add(localTurn);
+        continue;
+      }
+      final merged = _overlayRemoteFailure(localTurn, remoteTurn);
+      if (!identical(merged, localTurn)) {
+        changed = true;
+      }
+      mergedTurns.add(merged);
+    }
+    if (!changed) {
+      return local;
+    }
+    AgentHistoryTurn? currentTurn;
+    final currentId = local.currentTurn?.id;
+    if (currentId != null) {
+      for (final turn in mergedTurns) {
+        if (turn.id == currentId) {
+          currentTurn = turn;
+          break;
+        }
+      }
+    }
+    currentTurn ??= mergedTurns.isEmpty ? null : mergedTurns.last;
+    return AgentThreadHistorySnapshot(
+      threadId: local.threadId,
+      turns: List<AgentHistoryTurn>.unmodifiable(mergedTurns),
+      currentTurn: currentTurn,
+      raw: <String, Object?>{...local.raw, 'remoteFailureOverlay': true},
+    );
+  }
+
+  AgentHistoryTurn _overlayRemoteFailure(
+    AgentHistoryTurn local,
+    AgentHistoryTurn remote,
+  ) {
+    final remoteError = remote.errorMessage?.trim();
+    final hasRemoteFailure =
+        remote.status == AgentHistoryTurnStatus.failed &&
+        remoteError != null &&
+        remoteError.isNotEmpty;
+    if (!hasRemoteFailure) {
+      return local;
+    }
+
+    final localError = local.errorMessage?.trim();
+    final needsStatus =
+        local.status != AgentHistoryTurnStatus.failed &&
+        local.status != AgentHistoryTurnStatus.interrupted;
+    final needsMessage = localError == null || localError.isEmpty;
+    final needsCode =
+        (local.errorCode == null || local.errorCode!.trim().isEmpty) &&
+        remote.errorCode != null &&
+        remote.errorCode!.trim().isNotEmpty;
+    if (!needsStatus && !needsMessage && !needsCode) {
+      return local;
+    }
+
+    return AgentHistoryTurn(
+      id: local.id,
+      entries: local.entries,
+      status: needsStatus ? AgentHistoryTurnStatus.failed : local.status,
+      startedAt: local.startedAt ?? remote.startedAt,
+      completedAt: local.completedAt ?? remote.completedAt,
+      duration: local.duration ?? remote.duration,
+      timeToFirstToken: local.timeToFirstToken ?? remote.timeToFirstToken,
+      cwd: local.cwd ?? remote.cwd,
+      model: local.model ?? remote.model,
+      modelContextWindow: local.modelContextWindow ?? remote.modelContextWindow,
+      collaborationMode: local.collaborationMode ?? remote.collaborationMode,
+      tokenUsage: local.tokenUsage ?? remote.tokenUsage,
+      tokenUsageIsSessionCumulative: local.tokenUsageIsSessionCumulative,
+      errorMessage: needsMessage ? remote.errorMessage : local.errorMessage,
+      errorCode: needsCode ? remote.errorCode : local.errorCode,
+      raw: <String, Object?>{
+        ...local.raw,
+        'remoteFailureOverlay': <String, Object?>{
+          'status': remote.status.name,
+          'errorMessage': remote.errorMessage,
+          'errorCode': remote.errorCode,
+        },
+      },
+    );
+  }
+
   AgentHistoryEntry? _historyEntryFromItem(
     Object? value, {
     required String turnId,

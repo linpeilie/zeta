@@ -109,7 +109,8 @@ void main() {
       );
       await pumpAgentPaneUi(tester);
 
-      expect(find.text(errorMessage), findsOneWidget);
+      expect(find.textContaining(errorMessage), findsOneWidget);
+      expect(find.textContaining('用量或速率额度已用尽'), findsOneWidget);
       final footer = find.byKey(
         const ValueKey<String>('agent-turn-footer-turn-grok-failed'),
       );
@@ -120,6 +121,56 @@ void main() {
       );
       expect(
         find.descendant(of: footer, matching: find.text('grok-4.5')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('restores historical serverOverloaded capacity guidance', (
+      tester,
+    ) async {
+      const errorMessage =
+          'Selected model is at capacity. Please try a different model.';
+      await tester.binding.setSurfaceSize(const Size(800, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final viewModel = createAgentPaneViewModel(
+        AgentPaneFakeProvider(
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'thread-capacity': const AgentThreadHistorySnapshot(
+              threadId: 'thread-capacity',
+              turns: <AgentHistoryTurn>[
+                AgentHistoryTurn(
+                  id: 'turn-capacity',
+                  status: AgentHistoryTurnStatus.failed,
+                  duration: Duration(seconds: 12),
+                  model: 'gpt-5.6-luna',
+                  errorMessage: errorMessage,
+                  errorCode: 'serverOverloaded',
+                  entries: <AgentHistoryEntry>[
+                    AgentHistoryMessageEntry(
+                      id: 'history-user-capacity',
+                      role: AgentMessageRole.user,
+                      text: 'Continue the task',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          },
+        ),
+      );
+      addTearDown(viewModel.dispose);
+
+      await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
+      await viewModel.switchThread(
+        agentPaneThread(id: 'thread-capacity', title: 'Capacity failure'),
+      );
+      await pumpAgentPaneUi(tester);
+
+      expect(find.textContaining(errorMessage), findsOneWidget);
+      expect(find.textContaining('当前模型容量已满'), findsOneWidget);
+      expect(find.textContaining('切换其他模型'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('agent-turn-footer-turn-capacity')),
         findsOneWidget,
       );
     });

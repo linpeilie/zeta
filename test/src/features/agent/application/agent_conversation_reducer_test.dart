@@ -298,6 +298,53 @@ void main() {
       );
     });
 
+    test('serverOverloaded live error includes capacity guidance', () {
+      final mutation =
+          AgentConversationReducer.live(clock: () => _fixedClockValue).reduce(
+            const AgentErrorEvent(
+              message:
+                  'Selected model is at capacity. Please try a different model.',
+              code: 'serverOverloaded',
+              willRetry: false,
+              sessionId: _threadId,
+              turnId: _turnId,
+            ),
+            _context(),
+          );
+
+      final text =
+          (mutation.timelineMutations.single
+                  as AgentAddConversationMessageTimelineMutation)
+              .message
+              .text;
+      expect(text, contains('Selected model is at capacity'));
+      expect(text, contains('当前模型容量已满'));
+      expect(text, contains('切换其他模型'));
+    });
+
+    test('failed turn completion formats serverOverloaded guidance', () {
+      final mutation =
+          AgentConversationReducer.live(clock: () => _fixedClockValue).reduce(
+            const AgentTurnCompletedEvent(
+              sessionId: _threadId,
+              turnId: _turnId,
+              status: AgentHistoryTurnStatus.failed,
+              errorMessage:
+                  'Selected model is at capacity. Please try a different model.',
+              errorCode: 'serverOverloaded',
+            ),
+            _context(),
+          );
+
+      final text =
+          (mutation.timelineMutations.first
+                  as AgentAddConversationMessageTimelineMutation)
+              .message
+              .text;
+      expect(text.startsWith('Turn failed: '), isTrue);
+      expect(text, contains('当前模型容量已满'));
+    });
+
     test(
       'completed always emits prepare/finalize convergence and handoff boundary',
       () {

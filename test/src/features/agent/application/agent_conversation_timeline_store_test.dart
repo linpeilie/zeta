@@ -43,6 +43,9 @@ void main() {
 
     test('restores one system error for each failed historical turn', () {
       const errorMessage = 'Grok rate limit reached. Please try again later.';
+      final expectedText = AgentProviderErrorPresentation.formatUserVisibleText(
+        message: errorMessage,
+      );
       final store = AgentConversationTimelineStore();
       addTearDown(store.dispose);
 
@@ -85,7 +88,7 @@ void main() {
       );
 
       expect(
-        store.messages.where((message) => message.text == errorMessage),
+        store.messages.where((message) => message.text == expectedText),
         hasLength(2),
       );
       expect(
@@ -93,7 +96,7 @@ void main() {
             .singleWhere((turn) => turn.id == 'turn-generated')
             .entries
             .whereType<AgentMessageTimelineEntry>()
-            .where((entry) => entry.message.text == errorMessage),
+            .where((entry) => entry.message.text == expectedText),
         hasLength(1),
       );
       expect(
@@ -101,9 +104,47 @@ void main() {
             .singleWhere((turn) => turn.id == 'turn-existing')
             .entries
             .whereType<AgentMessageTimelineEntry>()
-            .where((entry) => entry.message.text == errorMessage),
+            .where((entry) => entry.message.text == expectedText),
         hasLength(1),
       );
+    });
+
+    test('formats serverOverloaded failures in historical turns', () {
+      const errorMessage =
+          'Selected model is at capacity. Please try a different model.';
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+
+      store.applyHistorySnapshot(
+        const AgentThreadHistorySnapshot(
+          threadId: 'thread-1',
+          turns: <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-capacity',
+              status: AgentHistoryTurnStatus.failed,
+              errorMessage: errorMessage,
+              errorCode: 'serverOverloaded',
+              entries: <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'user-1',
+                  role: AgentMessageRole.user,
+                  text: 'Continue',
+                ),
+              ],
+            ),
+          ],
+        ),
+        _thread(),
+      );
+
+      final errorTexts = store.messages
+          .where((message) => message.role == AgentMessageRole.system)
+          .map((message) => message.text)
+          .toList();
+      expect(errorTexts, hasLength(1));
+      expect(errorTexts.single, contains(errorMessage));
+      expect(errorTexts.single, contains('当前模型容量已满'));
+      expect(errorTexts.single, contains('切换其他模型'));
     });
 
     test('stores session total and per-turn token deltas', () {

@@ -260,15 +260,39 @@ class _CodexAppServerClient {
   }) async {
     final localHistory = await _threadHistoryReader
         .threadHistoryFromSessionFile(threadId, sessionPath);
-    if (localHistory != null) {
-      return localHistory;
+
+    // 本地 JSONL 优先（内容更完整），但 error 通知通常不落盘；
+    // 再 best-effort 读 thread/read，把 failed + error 叠到对应 turn。
+    Object? remoteResult;
+    try {
+      remoteResult = await _peer.sendRequest(
+        'thread/read',
+        params: <String, Object?>{'threadId': threadId, 'includeTurns': true},
+      );
+    } catch (error, stackTrace) {
+      if (localHistory != null) {
+        _log.fine(
+          'thread/read failed while enriching local history for $threadId; '
+          'keeping session-file snapshot',
+          error,
+          stackTrace,
+        );
+        return localHistory;
+      }
+      rethrow;
     }
 
-    final result = await _peer.sendRequest(
-      'thread/read',
-      params: <String, Object?>{'threadId': threadId, 'includeTurns': true},
+    final remoteHistory = _threadHistoryReader.threadHistoryFromReadResult(
+      remoteResult,
+      threadId,
     );
-    return _threadHistoryReader.threadHistoryFromReadResult(result, threadId);
+    if (localHistory == null) {
+      return remoteHistory;
+    }
+    return _threadHistoryReader.mergeRemoteTurnFailures(
+      local: localHistory,
+      remote: remoteHistory,
+    );
   }
 
   /// 取消 thread 通知订阅；返回协议 status（未加载/未订阅/已取消）。

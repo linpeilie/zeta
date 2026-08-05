@@ -14,6 +14,7 @@ export 'package:zeta/src/features/agent/domain/agent_permission_selection_models
 export 'package:zeta/src/features/agent/domain/agent_plan_approval_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_plan_execution_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_provider_capabilities.dart';
+export 'package:zeta/src/features/agent/domain/agent_provider_error_presentation.dart';
 export 'package:zeta/src/features/agent/domain/agent_provider_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_question_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_runtime_models.dart';

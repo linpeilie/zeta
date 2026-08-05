@@ -234,6 +234,7 @@ class AgentTurnCompletedEvent extends AgentEvent {
     required this.turnId,
     this.status = AgentHistoryTurnStatus.completed,
     this.errorMessage,
+    this.errorCode,
     this.duration,
     this.raw = const <String, Object?>{},
   });
@@ -249,6 +250,9 @@ class AgentTurnCompletedEvent extends AgentEvent {
 
   /// 失败原因；仅 `turn.error` 存在时携带。
   final String? errorMessage;
+
+  /// 稳定错误码（如 Codex `turn.error.codexErrorInfo`）；用于 UI 引导。
+  final String? errorCode;
 
   /// provider 上报的回合耗时（`turn.durationMs`）。
   final Duration? duration;
@@ -723,10 +727,10 @@ class AgentErrorEvent extends AgentEvent {
   final String? details;
 
   /// Codex 错误码（`codexErrorInfo`），如 `contextWindowExceeded`、
-  /// `unauthorized`、`sessionBudgetExceeded`、`httpConnectionFailed`；
-  /// 非协议错误或旧版协议为空。
+  /// `serverOverloaded`、`unauthorized`、`sessionBudgetExceeded`、
+  /// `httpConnectionFailed`；非协议错误或旧版协议为空。
   ///
-  /// UI 可据此提供针对性引导（如上下文超限时建议压缩会话）。
+  /// UI 可据此提供针对性引导（如容量满时建议换模型，上下文超限时建议压缩）。
   final String? code;
 
   /// 服务端是否会自动重试本回合；仅 `error` 通知携带，其余场景为空。
