@@ -80,6 +80,34 @@ void main() {
       },
     );
 
+    test(
+      'stale custom profile lost to V2 built-in option on decode and rewrite',
+      () {
+        // 真实冲突 fixture：V2 已是 :read-only，磁盘上仍残留 team-safe profile。
+        final json = <String, Object?>{
+          'id': 'codex',
+          'displayName': 'Codex',
+          'kind': 'codexAppServer',
+          'command': 'codex',
+          'selectedPermissionOptionId': ':read-only',
+          'selectedPermissionProfileId': 'team-safe',
+          'selectedApprovalPolicy': 'on-request',
+          'selectedSandboxPolicy': 'workspaceWrite',
+          'enabled': true,
+        };
+
+        final config = AgentProviderConfig.tryDecode(json)!;
+        expect(config.selectedPermissionOptionId, ':read-only');
+        expect(config.resolvedPermissionOptionId, ':read-only');
+
+        final encoded = config.toJson();
+        expect(encoded['selectedPermissionOptionId'], ':read-only');
+        expect(encoded.containsKey('selectedPermissionProfileId'), isFalse);
+        expect(encoded.containsKey('selectedApprovalPolicy'), isFalse);
+        expect(encoded.containsKey('selectedSandboxPolicy'), isFalse);
+      },
+    );
+
     test('Grok selectedPermissionOptionId auto is opaque option only', () {
       final json = <String, Object?>{
         'id': 'grok',

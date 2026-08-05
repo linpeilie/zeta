@@ -3,8 +3,30 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 void main() {
   group('AgentPermissionPreferenceMigration', () {
-    group('Codex', () {
-      test('profile id wins over approval/sandbox', () {
+    group('Codex migration matrix', () {
+      test('V2 optionId wins over stale V1 profile and policies', () {
+        // stale custom profile + 新 built-in option 冲突：option 必须获胜。
+        expect(
+          AgentPermissionPreferenceMigration.resolveOptionId(
+            kindName: 'codexAppServer',
+            selectedPermissionOptionId: ':read-only',
+            selectedPermissionProfileId: 'team-safe',
+            selectedApprovalPolicy: 'never',
+            selectedSandboxPolicy: 'dangerFullAccess',
+          ),
+          ':read-only',
+        );
+        expect(
+          AgentPermissionPreferenceMigration.resolveOptionId(
+            kindName: 'codexAppServer',
+            selectedPermissionOptionId: ':workspace',
+            selectedPermissionProfileId: 'team-safe',
+          ),
+          ':workspace',
+        );
+      });
+
+      test('profile id wins over approval/sandbox when optionId missing', () {
         expect(
           AgentPermissionPreferenceMigration.resolveOptionId(
             kindName: 'codexAppServer',
@@ -62,6 +84,50 @@ void main() {
           'team-safe',
         );
       });
+
+      test('incomplete or unknown policies fail-closed to null', () {
+        // 仅 approval：不得默认填 sandbox 推导为 :workspace。
+        expect(
+          AgentPermissionPreferenceMigration.resolveOptionId(
+            kindName: 'codexAppServer',
+            selectedApprovalPolicy: 'on-request',
+          ),
+          isNull,
+        );
+        // 仅 sandbox：不得默认填 approval。
+        expect(
+          AgentPermissionPreferenceMigration.resolveOptionId(
+            kindName: 'codexAppServer',
+            selectedSandboxPolicy: 'dangerFullAccess',
+          ),
+          isNull,
+        );
+        // 未知组合：不得抬升为更高权限。
+        expect(
+          AgentPermissionPreferenceMigration.resolveOptionId(
+            kindName: 'codexAppServer',
+            selectedApprovalPolicy: 'never',
+            selectedSandboxPolicy: 'workspaceWrite',
+          ),
+          isNull,
+        );
+        expect(
+          AgentPermissionPreferenceMigration.resolveOptionId(
+            kindName: 'codexAppServer',
+            selectedApprovalPolicy: 'weird-policy',
+            selectedSandboxPolicy: 'dangerFullAccess',
+          ),
+          isNull,
+        );
+        expect(
+          AgentPermissionPreferenceMigration.resolveOptionId(
+            kindName: 'codexAppServer',
+            selectedApprovalPolicy: 'on-request',
+            selectedSandboxPolicy: 'not-a-sandbox',
+          ),
+          isNull,
+        );
+      });
     });
 
     group('Grok (acp)', () {
@@ -70,6 +136,17 @@ void main() {
           AgentPermissionPreferenceMigration.resolveOptionId(
             kindName: 'acp',
             selectedPermissionOptionId: 'auto',
+          ),
+          'auto',
+        );
+      });
+
+      test('V2 optionId wins over conflicting legacy mode', () {
+        expect(
+          AgentPermissionPreferenceMigration.resolveOptionId(
+            kindName: 'acp',
+            selectedPermissionOptionId: 'auto',
+            selectedPermissionMode: 'always-approve',
           ),
           'auto',
         );
@@ -160,7 +237,37 @@ void main() {
 
       final json = custom.toJson();
       expect(json['selectedPermissionOptionId'], 'team-safe');
+      // V2 写出不得恢复任何 legacy 字段。
+      expect(json.containsKey('selectedPermissionProfileId'), isFalse);
+      expect(json.containsKey('selectedApprovalPolicy'), isFalse);
+      expect(json.containsKey('selectedSandboxPolicy'), isFalse);
     });
+
+    test(
+      'stale V1 profile + V2 option conflict decodes option and writes option only',
+      () {
+        final conflict = AgentProviderConfig.tryDecode(<String, Object?>{
+          'id': 'codex',
+          'displayName': 'Codex',
+          'kind': 'codexAppServer',
+          'command': 'codex',
+          // 用户从 custom 切到 built-in 后残留的 stale profile。
+          'selectedPermissionOptionId': ':read-only',
+          'selectedPermissionProfileId': 'team-safe',
+          'selectedApprovalPolicy': 'never',
+          'selectedSandboxPolicy': 'dangerFullAccess',
+          'enabled': true,
+        });
+        expect(conflict, isNotNull);
+        expect(conflict!.selectedPermissionOptionId, ':read-only');
+
+        final encoded = conflict.toJson();
+        expect(encoded['selectedPermissionOptionId'], ':read-only');
+        expect(encoded.containsKey('selectedPermissionProfileId'), isFalse);
+        expect(encoded.containsKey('selectedApprovalPolicy'), isFalse);
+        expect(encoded.containsKey('selectedSandboxPolicy'), isFalse);
+      },
+    );
 
     test('V1 Grok default/unknown migrate to ask', () {
       final fromDefault = AgentProviderConfig.tryDecode(<String, Object?>{

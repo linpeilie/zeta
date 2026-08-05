@@ -6,10 +6,13 @@ abstract final class AgentPermissionPreferenceMigration {
   ///
   /// [kindName] 为 [AgentProviderKind.name]（如 `codexAppServer`、`acp`）。
   ///
-  /// - Codex：profile 优先；无 profile 时由 approval/sandbox 推导 built-in；
-  ///   自定义 profile 原样保留。
-  /// - Grok（`acp`）：兼容 mode；default/空/未知 → `ask`。
-  /// - 其它 provider：仅接受通用 optionId，不猜语义。
+  /// **优先级（所有 provider）：**
+  /// 1. V2 `selectedPermissionOptionId` 存在且非空 → 唯一真源
+  /// 2. 否则 Codex：V1 profile → approval/sandbox 推导 built-in
+  /// 3. 否则 Grok：V1 `selectedPermissionMode`（default/空/未知 → `ask`）
+  /// 4. 其它 provider：仅接受 optionId，不猜语义
+  ///
+  /// 未知或损坏的 policy 组合不得推导为更高权限（返回 null）。
   static String? resolveOptionId({
     required String kindName,
     String? selectedPermissionOptionId,
@@ -39,22 +42,24 @@ abstract final class AgentPermissionPreferenceMigration {
     String? selectedApprovalPolicy,
     String? selectedSandboxPolicy,
   }) {
-    final profile = _nonEmpty(selectedPermissionProfileId);
-    if (profile != null) {
-      return profile;
-    }
+    // V2 真源：optionId 优先于全部 V1 字段（含 stale profile）。
     final option = _nonEmpty(selectedPermissionOptionId);
     if (option != null) {
       return option;
     }
+    final profile = _nonEmpty(selectedPermissionProfileId);
+    if (profile != null) {
+      return profile;
+    }
     final approval = _nonEmpty(selectedApprovalPolicy);
     final sandbox = _nonEmpty(selectedSandboxPolicy);
-    if (approval == null && sandbox == null) {
+    // 不完整 policy 不填默认值，避免把残缺数据抬升为内置权限。
+    if (approval == null || sandbox == null) {
       return null;
     }
     return _builtInFromPolicies(
-      approvalPolicy: approval ?? 'on-request',
-      sandboxPolicy: sandbox ?? 'workspaceWrite',
+      approvalPolicy: approval,
+      sandboxPolicy: sandbox,
     );
   }
 
@@ -62,15 +67,24 @@ abstract final class AgentPermissionPreferenceMigration {
     String? selectedPermissionOptionId,
     String? selectedPermissionMode,
   }) {
-    final hasField =
-        selectedPermissionOptionId != null || selectedPermissionMode != null;
-    final raw =
-        _nonEmpty(selectedPermissionOptionId) ??
-        _nonEmpty(selectedPermissionMode);
-    if (raw == null) {
-      // 字段存在但为空 → Ask；完全未配置 → null。
-      return hasField ? 'ask' : null;
+    // V2 optionId 优先；仅在缺失时回退 legacy mode。
+    final option = _nonEmpty(selectedPermissionOptionId);
+    if (option != null) {
+      return _normalizeGrokMode(option);
     }
+    final hasModeField = selectedPermissionMode != null;
+    final mode = _nonEmpty(selectedPermissionMode);
+    if (mode == null) {
+      // 字段存在但为空 → Ask；完全未配置 → null。
+      // 亦覆盖：optionId 字段存在但为空串、且无 mode 的情况。
+      final hasOptionField = selectedPermissionOptionId != null;
+      return (hasOptionField || hasModeField) ? 'ask' : null;
+    }
+    return _normalizeGrokMode(mode);
+  }
+
+  /// Grok mode / option 归一化：合法三态保留；default/未知 fail-closed 为 ask。
+  static String _normalizeGrokMode(String raw) {
     return switch (raw.toLowerCase()) {
       'default' || 'ask' => 'ask',
       'auto' => 'auto',
@@ -89,6 +103,8 @@ abstract final class AgentPermissionPreferenceMigration {
   }
 
   /// 与 Codex built-in 表一致的推导（迁移输入）。
+  ///
+  /// 未知 approval/sandbox 返回 null，不默认同化为更高权限组合。
   static String? _builtInFromPolicies({
     required String approvalPolicy,
     required String sandboxPolicy,
@@ -96,19 +112,23 @@ abstract final class AgentPermissionPreferenceMigration {
     final approval = switch (approvalPolicy) {
       'untrusted' || 'on-request' || 'never' => approvalPolicy,
       'on-failure' => 'on-request',
-      _ => 'on-request',
+      _ => null,
     };
     final sandbox = switch (sandboxPolicy) {
       'readOnly' || 'workspaceWrite' || 'dangerFullAccess' => sandboxPolicy,
       'read-only' => 'readOnly',
       'workspace-write' => 'workspaceWrite',
       'danger-full-access' => 'dangerFullAccess',
-      _ => 'workspaceWrite',
+      _ => null,
     };
+    if (approval == null || sandbox == null) {
+      return null;
+    }
     return switch ((approval, sandbox)) {
       ('on-request', 'readOnly') => ':read-only',
       ('on-request', 'workspaceWrite') => ':workspace',
       ('never', 'dangerFullAccess') => ':danger-full-access',
+      // untrusted 等无稳定 built-in 映射 → null（fail-closed）
       _ => null,
     };
   }
