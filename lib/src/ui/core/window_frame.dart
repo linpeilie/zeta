@@ -351,12 +351,13 @@ class _WindowButtonsState extends State<_WindowButtons> with WindowListener {
     return Row(
       children: [
         _WindowButton(
-          icon: Icons.minimize_rounded,
+          icon: sf.LucideIcons.minus,
           tooltip: 'Minimize',
           onPressed: () => windowManager.minimize(),
         ),
         _WindowButton(
-          icon: _maximized ? Icons.restore_rounded : Icons.crop_square_rounded,
+          // 未最大化：maximize；已最大化：minimize（还原）
+          icon: _maximized ? sf.LucideIcons.minimize : sf.LucideIcons.maximize,
           tooltip: _maximized ? 'Restore' : 'Maximize',
           onPressed: () async {
             if (_maximized) {
@@ -367,7 +368,7 @@ class _WindowButtonsState extends State<_WindowButtons> with WindowListener {
           },
         ),
         _WindowButton(
-          icon: Icons.close_rounded,
+          icon: sf.LucideIcons.x,
           tooltip: 'Close',
           isClose: true,
           onPressed: () => windowManager.close(),
