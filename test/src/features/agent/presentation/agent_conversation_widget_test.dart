@@ -2716,7 +2716,6 @@ void main() {
       find.byKey(const ValueKey('agent-final-answer-card-message-1')),
       findsOneWidget,
     );
-    expect(find.text('完成汇总'), findsOneWidget);
     expect(
       find.textContaining('First markdown item', findRichText: true),
       findsOneWidget,

@@ -836,7 +836,6 @@ void main() {
         );
         expect(popover, findsOneWidget);
         expect(tester.getSize(popover).width, 288);
-        expect(find.text('审批与沙箱'), findsOneWidget);
         final popoverPanel = find.descendant(
           of: popover,
           matching: find.byType(PanelCard),

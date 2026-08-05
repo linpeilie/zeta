@@ -701,7 +701,6 @@ class _AgentFinalAnswerCard extends StatelessWidget {
     return RepaintBoundary(
       child: PanelCard(
         key: ValueKey<String>('agent-final-answer-card-${message.id}'),
-        color: colors.surfaceElevated,
         borderColor: colors.border,
         borderRadius: IdeRadius.allMedium,
         child: Padding(
@@ -710,23 +709,6 @@ class _AgentFinalAnswerCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.check_circle_outline_rounded,
-                    size: 16,
-                    color: colors.success.withValues(alpha: 0.9),
-                  ),
-                  const SizedBox(width: IdeSpacing.space8),
-                  Text(
-                    '完成汇总',
-                    style: textStyles.titleLarge.copyWith(
-                      color: colors.textSecondary.withValues(alpha: 0.9),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: IdeSpacing.space10),
               _AgentMarkdownBody(
                 message: message,
                 useStreamingMarkdown: useStreamingMarkdown,
