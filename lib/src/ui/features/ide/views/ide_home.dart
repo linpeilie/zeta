@@ -570,7 +570,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       leadingActions: [
         IdeRailAction(
           key: const ValueKey('left-projects-action'),
-          icon: sf.BootstrapIcons.slack,
+          icon: sf.BootstrapIcons.appIndicator,
           tooltip: 'Projects',
           semanticLabel: 'Toggle projects panel',
           active:
