@@ -1,8 +1,7 @@
-// 阶段 0：Agent 权限 Review 问题（P-01～P-05）修复前失败基线。
+// Agent 权限 Review 问题（P-01～P-05）回归基线。
 //
-// 本文件只新增回归断言与测试 harness，不修改生产代码。
-// 预期：当前实现下各组测试稳定失败；修复后应变绿。
-// 不要通过放宽断言让本文件“变绿”。
+// - P-01 / P-02：阶段 1 已修复，预期通过。
+// - P-03 / P-04 / P-05：后续阶段修复前应稳定失败；不要放宽断言让其变绿。
 
 import 'dart:async';
 
@@ -37,14 +36,14 @@ void main() {
         );
         await controller.refreshOptions();
 
-        // Thread A → team-safe（写入 controller thread 缓存 + provider 全局快照）。
+        // Thread A → team-safe（thread-local effective）。
         controller.bindThread('thread-a');
         await controller.selectOption(
           const AgentPermissionOption(id: 'team-safe', label: 'Team safe'),
         );
         expect(controller.selectedOptionId, 'team-safe');
 
-        // Thread B → :read-only（覆盖 provider 全局 _permissionSelection）。
+        // Thread B → :read-only。
         controller.bindThread('thread-b');
         await controller.selectOption(
           const AgentPermissionOption(id: ':read-only', label: 'Read only'),
@@ -59,15 +58,18 @@ void main() {
           reason: 'controller thread-local effective must restore for A',
         );
 
-        // 模拟 ViewModel 发送路径：不重新 selectOption，直接 start + send。
-        // 目标：turn/start 必须携带 thread A 的 team-safe，而非 B 残留的 :read-only。
+        // 模拟 ViewModel：将当前 thread effective 冻结进请求快照。
         final session = await provider.startSession(
           context: const AgentContext(projectPath: '/repo'),
+          permissionSelection: controller.effectiveSelection,
         );
         await provider.sendMessage(
           session: session,
           message: 'from thread A',
           context: const AgentContext(projectPath: '/repo'),
+          configuration: AgentTurnConfiguration(
+            permissionSelection: controller.effectiveSelection,
+          ),
         );
 
         final turnStartIndex = peer.requestMethods.lastIndexOf('turn/start');
@@ -116,11 +118,15 @@ void main() {
       );
       final sessionA = await provider.startSession(
         context: const AgentContext(projectPath: '/repo'),
+        permissionSelection: controller.effectiveSelection,
       );
       await provider.sendMessage(
         session: sessionA,
         message: 'A',
         context: const AgentContext(projectPath: '/repo'),
+        configuration: AgentTurnConfiguration(
+          permissionSelection: controller.effectiveSelection,
+        ),
       );
 
       controller.bindThread('thread-b');
@@ -129,20 +135,27 @@ void main() {
       );
       final sessionB = await provider.startSession(
         context: const AgentContext(projectPath: '/repo'),
+        permissionSelection: controller.effectiveSelection,
       );
       await provider.sendMessage(
         session: sessionB,
         message: 'B',
         context: const AgentContext(projectPath: '/repo'),
+        configuration: AgentTurnConfiguration(
+          permissionSelection: controller.effectiveSelection,
+        ),
       );
 
-      // 切回 A 后再次发送：请求参数必须仍是 team-safe。
+      // 切回 A 后再次发送：请求快照必须是 A 的 team-safe。
       controller.bindThread('thread-a');
       expect(controller.selectedOptionId, 'team-safe');
       await provider.sendMessage(
         session: sessionA,
         message: 'A again',
         context: const AgentContext(projectPath: '/repo'),
+        configuration: AgentTurnConfiguration(
+          permissionSelection: controller.effectiveSelection,
+        ),
       );
 
       final turnPermissions = <String?>[];
@@ -215,13 +228,18 @@ void main() {
         final event = events
             .whereType<AgentThreadSettingsUpdatedEvent>()
             .single;
-        expect(event.approvalPolicy, 'on-request');
-        expect(event.sandboxPolicy, 'readOnly');
-        expect(event.activePermissionProfileId, isNull);
+        expect(
+          event.permissionSelection?.optionId,
+          ':read-only',
+          reason:
+              'P-02: mapper must atomically decode policy-only settings to '
+              'neutral :read-only selection',
+        );
 
-        // 生产 ViewModel 当前只转发 activePermissionProfileId（缺陷点）。
+        // 生产 ViewModel 路径：中立 selection + 事件 thread + 默认不同步 port。
         await controller.applyThreadSettings(
-          optionId: event.activePermissionProfileId,
+          threadId: event.threadId,
+          permissionSelection: event.permissionSelection,
         );
 
         expect(

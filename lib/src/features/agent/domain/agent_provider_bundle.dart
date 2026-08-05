@@ -145,11 +145,15 @@ abstract interface class AgentRuntimePort {
 
 /// 对话核心端口。
 abstract interface class AgentConversationPort {
-  Future<AgentSession> startSession({required AgentContext context});
+  Future<AgentSession> startSession({
+    required AgentContext context,
+    AgentPermissionSelection? permissionSelection,
+  });
 
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
+    AgentPermissionSelection? permissionSelection,
   });
 
   /// 发起新回合，并把 [configuration] 作为该次调用独占的不可变快照传给 Provider。
@@ -197,6 +201,7 @@ abstract interface class AgentThreadBranchingPort {
     required String threadId,
     required AgentContext context,
     AgentForkBoundary boundary = const AgentForkCurrentHead(),
+    AgentPermissionSelection? permissionSelection,
   });
 }
 
@@ -332,8 +337,13 @@ final class _LegacyAgentConversationPort implements AgentConversationPort {
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
+    AgentPermissionSelection? permissionSelection,
   }) {
-    return _provider.resumeSession(sessionId, context: context);
+    return _provider.resumeSession(
+      sessionId,
+      context: context,
+      permissionSelection: permissionSelection,
+    );
   }
 
   @override
@@ -356,8 +366,14 @@ final class _LegacyAgentConversationPort implements AgentConversationPort {
   }
 
   @override
-  Future<AgentSession> startSession({required AgentContext context}) {
-    return _provider.startSession(context: context);
+  Future<AgentSession> startSession({
+    required AgentContext context,
+    AgentPermissionSelection? permissionSelection,
+  }) {
+    return _provider.startSession(
+      context: context,
+      permissionSelection: permissionSelection,
+    );
   }
 }
 
@@ -433,11 +449,13 @@ final class _LegacyAgentThreadBranchingPort
     required String threadId,
     required AgentContext context,
     AgentForkBoundary boundary = const AgentForkCurrentHead(),
+    AgentPermissionSelection? permissionSelection,
   }) {
     return _provider.forkThread(
       threadId: threadId,
       context: context,
       boundary: boundary,
+      permissionSelection: permissionSelection,
     );
   }
 }

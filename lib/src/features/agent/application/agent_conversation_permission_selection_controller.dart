@@ -322,16 +322,34 @@ class AgentConversationPermissionSelectionController {
     }
   }
 
-  /// `thread/settings/updated`：只更新当前 thread 有效 option，不改全局默认。
-  Future<void> applyThreadSettings({String? optionId}) async {
-    final id = optionId?.trim();
+  /// `thread/settings/updated` 服务端事实回写。
+  ///
+  /// - 只更新 [threadId] 的 effective，不改全局默认、不持久化
+  /// - 默认 [syncPort]=false，避免二次 RPC apply
+  /// - 事件 thread 与当前绑定不一致时，仅写入 thread 缓存，不污染当前 UI
+  Future<void> applyThreadSettings({
+    required String threadId,
+    AgentPermissionSelection? permissionSelection,
+    bool syncPort = false,
+  }) async {
+    if (_disposed) {
+      return;
+    }
+    final id = permissionSelection?.optionId.trim();
     if (id == null || id.isEmpty) {
       return;
     }
-    await applyEffectiveSelection(
-      AgentPermissionSelection(optionId: id),
-      syncPort: true,
-    );
+    final normalizedThread = threadId.trim();
+    if (normalizedThread.isEmpty) {
+      return;
+    }
+    final next = AgentPermissionSelection(optionId: id);
+    _effectiveByThread[normalizedThread] = next;
+    if (_boundThreadId != normalizedThread) {
+      // 非当前 thread：只缓存，待 bindThread 时恢复。
+      return;
+    }
+    await applyEffectiveSelection(next, syncPort: syncPort);
   }
 
   /// 读取并清除最近错误（供 UI 一次性 toast）。

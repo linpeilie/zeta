@@ -21,14 +21,22 @@ abstract class AgentProvider {
   Future<void> initialize();
 
   /// 创建新会话。
-  Future<AgentSession> startSession({required AgentContext context});
+  ///
+  /// [permissionSelection] 为请求级中立权限快照（当前 thread / 新建默认）；
+  /// 为空时 Provider 仅可使用 config 默认，不得依赖其它 thread 的共享可变状态。
+  Future<AgentSession> startSession({
+    required AgentContext context,
+    AgentPermissionSelection? permissionSelection,
+  });
 
   /// 恢复已有会话。
   ///
   /// 如果底层 provider 无法恢复，调用方可以回退到 [startSession]。
+  /// [permissionSelection] 语义同 [startSession]。
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
+    AgentPermissionSelection? permissionSelection,
   });
 
   /// 分页读取指定项目下的 thread 摘要列表。
@@ -86,6 +94,7 @@ abstract class AgentProvider {
     required String threadId,
     required AgentContext context,
     AgentForkBoundary boundary = const AgentForkCurrentHead(),
+    AgentPermissionSelection? permissionSelection,
   });
 
   /// 启动上下文压缩（对应 `thread/compact/start`）。

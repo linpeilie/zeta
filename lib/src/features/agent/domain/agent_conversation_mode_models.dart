@@ -1,3 +1,5 @@
+import 'package:zeta/src/features/agent/domain/agent_permission_policy_models.dart';
+
 /// Agent 对话运行模式的中立分类。
 ///
 /// Provider 新增但 Zeta 尚未识别的模式映射为 [unknown]，避免协议演进阻断历史读取。
@@ -184,21 +186,43 @@ final class AgentConversationModeSelection {
       Object.hash(modeId, effectiveModelId, effectiveReasoningEffort);
 }
 
-/// 一次 `turn/start` 的不可变 Agent 配置快照。
+/// 一次 `turn/start`（及同请求边界）的不可变 Agent 配置快照。
 final class AgentTurnConfiguration {
   /// 创建一个与后续 UI 选择相互隔离的回合配置。
-  const AgentTurnConfiguration({this.conversationMode});
+  ///
+  /// [permissionSelection] 为当前 thread 的中立权限快照；Codex 在 data 层编码
+  /// 为协议字段。为空时 Provider 仅可回落 config 默认，不得用其它 thread 的
+  /// 共享可变状态填充。
+  const AgentTurnConfiguration({
+    this.conversationMode,
+    this.permissionSelection,
+  });
 
   /// 本回合的对话模式；为空表示 Provider 沿用原有发送行为。
   final AgentConversationModeSelection? conversationMode;
 
+  /// 本请求所属 thread 的权限选择；为空表示未提供请求级权限。
+  final AgentPermissionSelection? permissionSelection;
+
+  /// 复制并覆盖部分字段。
+  AgentTurnConfiguration copyWith({
+    AgentConversationModeSelection? conversationMode,
+    AgentPermissionSelection? permissionSelection,
+  }) {
+    return AgentTurnConfiguration(
+      conversationMode: conversationMode ?? this.conversationMode,
+      permissionSelection: permissionSelection ?? this.permissionSelection,
+    );
+  }
+
   @override
   bool operator ==(Object other) =>
       other is AgentTurnConfiguration &&
-      other.conversationMode == conversationMode;
+      other.conversationMode == conversationMode &&
+      other.permissionSelection == permissionSelection;
 
   @override
-  int get hashCode => conversationMode.hashCode;
+  int get hashCode => Object.hash(conversationMode, permissionSelection);
 }
 
 String _requireNonEmpty(String value, String name) {

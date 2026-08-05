@@ -2060,16 +2060,12 @@ void main() {
         final full = events
             .whereType<AgentThreadSettingsUpdatedEvent>()
             .firstWhere((event) => event.threadId == 'thread-perm');
-        expect(full.approvalPolicy, 'never');
-        expect(full.sandboxPolicy, 'dangerFullAccess');
-        expect(full.activePermissionProfileId, 'team-safe');
+        expect(full.permissionSelection?.optionId, 'team-safe');
 
         final empty = events
             .whereType<AgentThreadSettingsUpdatedEvent>()
             .firstWhere((event) => event.threadId == 'thread-perm-empty');
-        expect(empty.approvalPolicy, isNull);
-        expect(empty.sandboxPolicy, isNull);
-        expect(empty.activePermissionProfileId, isNull);
+        expect(empty.permissionSelection, isNull);
       },
     );
 

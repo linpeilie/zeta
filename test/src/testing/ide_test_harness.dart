@@ -230,7 +230,10 @@ class FakeAgentProvider
   }
 
   @override
-  Future<AgentSession> startSession({required AgentContext context}) async {
+  Future<AgentSession> startSession({
+    required AgentContext context,
+    AgentPermissionSelection? permissionSelection,
+  }) async {
     await initialize();
     return AgentSession(
       id: 'thread-1',
@@ -243,6 +246,7 @@ class FakeAgentProvider
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
+    AgentPermissionSelection? permissionSelection,
   }) async {
     await initialize();
     resumedSessions.add(sessionId);

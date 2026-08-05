@@ -113,17 +113,54 @@ void main() {
         controller.bindThread('thread-a');
         await controller.refreshOptions();
 
-        await controller.applyThreadSettings(optionId: 'team-safe');
+        await controller.applyThreadSettings(
+          threadId: 'thread-a',
+          permissionSelection: const AgentPermissionSelection(
+            optionId: 'team-safe',
+          ),
+        );
 
         expect(controller.selectedOptionId, 'team-safe');
         expect(controller.defaultOptionId, ':workspace');
-        expect(port.applyCalls, 1);
+        // 服务端回写默认不同步 port。
+        expect(port.applyCalls, 0);
 
         controller.bindThread('thread-b');
         expect(controller.selectedOptionId, ':workspace');
 
         controller.bindThread('thread-a');
         expect(controller.selectedOptionId, 'team-safe');
+      },
+    );
+
+    test(
+      'thread settings for other thread only cache without touching current UI',
+      () async {
+        final port = _FakePermissionPort(
+          options: const <AgentPermissionOption>[
+            AgentPermissionOption(id: ':workspace', label: 'Workspace write'),
+            AgentPermissionOption(id: ':read-only', label: 'Read only'),
+          ],
+        );
+        final controller = AgentConversationPermissionSelectionController(
+          persistOptionId: (_) async {
+            fail('settings must not persist global default');
+          },
+        );
+        controller.bind(port: port, persistedOptionId: ':workspace');
+        controller.bindThread('thread-b');
+        await controller.refreshOptions();
+
+        await controller.applyThreadSettings(
+          threadId: 'thread-a',
+          permissionSelection: const AgentPermissionSelection(
+            optionId: ':read-only',
+          ),
+        );
+
+        expect(controller.selectedOptionId, ':workspace');
+        controller.bindThread('thread-a');
+        expect(controller.selectedOptionId, ':read-only');
       },
     );
 

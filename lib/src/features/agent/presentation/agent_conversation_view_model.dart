@@ -1844,12 +1844,17 @@ class AgentConversationViewModel {
       );
       requestSession = session;
       final conversation = provider.bundle.conversation;
-      final turnConfiguration = isNewTurn
+      // 模式 + 当前 thread 权限一并冻结进请求快照，避免共享 provider 可变状态串 thread。
+      final modeSnapshot = isNewTurn
           ? _conversationModeController.snapshotForNewTurn(
               effectiveModelId: _effectiveConversationModeModelId(),
               selectedReasoningEffort: selectedReasoningEffort,
             )
           : const AgentTurnConfiguration();
+      final turnConfiguration = AgentTurnConfiguration(
+        conversationMode: modeSnapshot.conversationMode,
+        permissionSelection: _permissionSelectionController.effectiveSelection,
+      );
       requestModeSelection = turnConfiguration.conversationMode;
       // 新会话在 Grok 异步 generated_title 出现前，先用首条用户消息作临时标题。
       if (_isStillSelectedThread(switchToken, session.id) &&
@@ -2382,6 +2387,9 @@ class AgentConversationViewModel {
           filePath: _contextFilePath,
         ),
         boundary: AgentForkThroughTurn(boundaryTurnId),
+        permissionSelection:
+            _permissionSelectionController.defaultPreference ??
+            _permissionSelectionController.effectiveSelection,
       );
       if (!_isCurrentSwitch(switchToken)) {
         return;
@@ -2438,6 +2446,9 @@ class AgentConversationViewModel {
           projectPath: _projectPath,
           filePath: _contextFilePath,
         ),
+        permissionSelection:
+            _permissionSelectionController.defaultPreference ??
+            _permissionSelectionController.effectiveSelection,
       );
       if (!_isCurrentSwitch(switchToken)) {
         return session;
@@ -2896,6 +2907,8 @@ class AgentConversationViewModel {
         final session = await provider.bundle.conversation.resumeSession(
           restoredSessionId,
           context: context,
+          permissionSelection:
+              _permissionSelectionController.effectiveSelection,
         );
         if (_isStillSelectedThread(switchToken, expectedThreadId)) {
           await _replaceProviderEventSubscription(
@@ -2946,6 +2959,7 @@ class AgentConversationViewModel {
     _log.fine('Starting new Agent session with provider ${provider.config.id}');
     final session = await provider.bundle.conversation.startSession(
       context: context,
+      permissionSelection: _permissionSelectionController.effectiveSelection,
     );
     if (_isStillSelectedThread(switchToken, expectedThreadId)) {
       await _replaceProviderEventSubscription(provider, threadId: session.id);
@@ -3660,11 +3674,17 @@ final class _AgentConversationEventStateTarget
         _viewModel._applyThreadSelectionFromThreadSettings(
           modelId: event.model,
         );
-        unawaited(
-          _viewModel._permissionSelectionController.applyThreadSettings(
-            optionId: event.activePermissionProfileId,
-          ),
-        );
+        // 中立 permissionSelection 已由 data mapper 解码；此处只回写事件所属
+        // thread 的 effective，不二次 apply、不持久化全局默认。
+        final permissionSelection = event.permissionSelection;
+        if (permissionSelection != null) {
+          unawaited(
+            _viewModel._permissionSelectionController.applyThreadSettings(
+              threadId: event.threadId,
+              permissionSelection: permissionSelection,
+            ),
+          );
+        }
         _viewModel._conversationModeController.applyThreadSettings(event);
       case AgentApplySessionConfigChange():
         _viewModel._sessionConfigOptions = change.options;

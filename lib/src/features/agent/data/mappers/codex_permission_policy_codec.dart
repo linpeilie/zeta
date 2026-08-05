@@ -208,7 +208,10 @@ abstract final class CodexPermissionPolicyCodec {
 
   /// 解码 `thread/settings/updated` 中的权限字段为完整快照。
   ///
-  /// 缺失/空串/不可识别字段保持 null，由调用方决定是否合并。
+  /// 规则：
+  /// 1. 有 active profile → optionId/profileId 取 profile
+  /// 2. 无 profile 时，完整可映射的 approval+sandbox → 对应 built-in optionId
+  /// 3. 无法确定稳定 optionId 时返回 null（不猜测更高权限）
   static CodexPermissionRuntimeSnapshot? decodeThreadSettings(
     Map<String, Object?> settings,
   ) {
@@ -227,15 +230,39 @@ abstract final class CodexPermissionPolicyCodec {
         profileId = id.trim();
       }
     }
-    if (approval == null && sandbox == null && profileId == null) {
+    if (profileId != null) {
+      return CodexPermissionRuntimeSnapshot(
+        optionId: profileId,
+        approvalPolicy: approval ?? defaultApprovalPolicy,
+        sandboxPolicy: sandbox ?? defaultSandboxPolicy,
+        permissionProfileId: profileId,
+      );
+    }
+    if (approval != null && sandbox != null) {
+      final optionId = builtInOptionIdFromPolicies(
+        approvalPolicy: approval,
+        sandboxPolicy: sandbox,
+      );
+      if (optionId == null) {
+        return null;
+      }
+      return snapshotForOptionId(optionId);
+    }
+    return null;
+  }
+
+  /// 将 thread settings 原子解码为中立 [AgentPermissionSelection]。
+  ///
+  /// 无法确定稳定 optionId 时返回 null。
+  static AgentPermissionSelection? selectionFromThreadSettings(
+    Map<String, Object?> settings,
+  ) {
+    final snapshot = decodeThreadSettings(settings);
+    final optionId = snapshot?.selectedOptionId?.trim();
+    if (optionId == null || optionId.isEmpty) {
       return null;
     }
-    return CodexPermissionRuntimeSnapshot(
-      optionId: profileId,
-      approvalPolicy: approval ?? defaultApprovalPolicy,
-      sandboxPolicy: sandbox ?? defaultSandboxPolicy,
-      permissionProfileId: profileId,
-    );
+    return AgentPermissionSelection(optionId: optionId);
   }
 
   /// RPC `permissionProfile/list` 单条 → 中立 option。

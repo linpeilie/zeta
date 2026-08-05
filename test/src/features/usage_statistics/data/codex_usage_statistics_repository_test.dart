@@ -558,13 +558,14 @@ class _UsageProvider
   }
 
   @override
-  Future<AgentSession> startSession({required AgentContext context}) =>
+  Future<AgentSession> startSession({required AgentContext context, AgentPermissionSelection? permissionSelection}) =>
       throw UnimplementedError();
 
   @override
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
+    AgentPermissionSelection? permissionSelection,
   }) => throw UnimplementedError();
 
   @override

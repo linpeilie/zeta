@@ -63,9 +63,8 @@ class CodexAppServerAgentProvider
          reasoningEffort: config.selectedReasoningEffort,
          serviceTierId: config.selectedServiceTier,
        ),
-       _permissionSelection = CodexPermissionPolicyCodec.snapshotFromConfig(
-         config,
-       ) {
+       _defaultPermissionSnapshot =
+           CodexPermissionPolicyCodec.snapshotFromConfig(config) {
     _peer = ProviderRuntimeJsonRpcPeer(
       peer ?? (peerFactory ?? _defaultPeerFactory)(config),
       providerId: config.id,
@@ -94,10 +93,12 @@ class CodexAppServerAgentProvider
       sendRequest: (method, {Map<String, Object?> params = const {}}) async {
         return _peer.sendRequest(method, params: params);
       },
+      // 用户主动选择可更新「新 thread / 无请求快照」时的默认偏好，
+      // 不得再作为任意 thread 请求的共享可变真源。
       onSelectionApplied: (snapshot) {
-        _permissionSelection = snapshot;
+        _defaultPermissionSnapshot = snapshot;
       },
-      currentSnapshot: () => _permissionSelection,
+      currentSnapshot: () => _defaultPermissionSnapshot,
     );
   }
 
@@ -132,8 +133,11 @@ class CodexAppServerAgentProvider
   /// 用户在输入框选择的模型组合。
   AgentModelSelection _modelSelection;
 
-  /// Codex 运行时权限快照（data 层；不泄漏到共享 domain）。
-  CodexPermissionRuntimeSnapshot _permissionSelection;
+  /// Provider 默认权限快照（来自 config / 用户默认偏好）。
+  ///
+  /// 仅作请求未携带 [AgentPermissionSelection] 时的 fallback；
+  /// 不得单独决定多 thread / 多 Canvas 的实际请求权限。
+  CodexPermissionRuntimeSnapshot _defaultPermissionSnapshot;
 
   AgentProviderCapabilities _capabilities =
       AgentProviderCapabilities.codexAppServer;
@@ -346,13 +350,16 @@ class CodexAppServerAgentProvider
   }
 
   @override
-  Future<AgentSession> startSession({required AgentContext context}) async {
+  Future<AgentSession> startSession({
+    required AgentContext context,
+    AgentPermissionSelection? permissionSelection,
+  }) async {
     await initialize();
     _log.fine('Starting Codex thread for provider ${config.id}');
 
     final session = await _client.startSession(
       context: context,
-      permissionSelection: _permissionSelection,
+      permissionSelection: _resolvePermissionSnapshot(permissionSelection),
       previousSessionId: null,
     );
     _events.add(AgentSessionStartedEvent(session));
@@ -364,6 +371,7 @@ class CodexAppServerAgentProvider
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
+    AgentPermissionSelection? permissionSelection,
   }) => _scheduleThreadOperation(
     sessionId,
     ProviderOperationAccess.exclusive,
@@ -374,7 +382,7 @@ class CodexAppServerAgentProvider
       final session = await _client.resumeSession(
         sessionId,
         context: context,
-        permissionSelection: _permissionSelection,
+        permissionSelection: _resolvePermissionSnapshot(permissionSelection),
         previousSessionId: null,
       );
       _events.add(AgentSessionStartedEvent(session));
@@ -673,6 +681,7 @@ class CodexAppServerAgentProvider
     required String threadId,
     required AgentContext context,
     AgentForkBoundary boundary = const AgentForkCurrentHead(),
+    AgentPermissionSelection? permissionSelection,
   }) => _scheduleThreadOperation(
     threadId,
     ProviderOperationAccess.exclusive,
@@ -686,7 +695,7 @@ class CodexAppServerAgentProvider
         threadId: threadId,
         context: context,
         boundary: boundary,
-        permissionSelection: _permissionSelection,
+        permissionSelection: _resolvePermissionSnapshot(permissionSelection),
         previousSessionId: null,
       );
       _events.add(AgentSessionStartedEvent(session));
@@ -744,7 +753,10 @@ class CodexAppServerAgentProvider
       inputs: resolvedInputs,
       context: context,
       selection: _modelSelection,
-      permissionSelection: _permissionSelection,
+      // 请求级权限优先；无则回落 config/默认偏好，绝不读其它 thread 的共享状态。
+      permissionSelection: _resolvePermissionSnapshot(
+        configuration.permissionSelection,
+      ),
       turnConfiguration: configuration,
       clientUserMessageId: clientUserMessageId,
     );
@@ -798,6 +810,19 @@ class CodexAppServerAgentProvider
     return List<AgentUserInput>.unmodifiable(<AgentUserInput>[
       AgentUserInput.text(text),
     ]);
+  }
+
+  /// 请求级中立 selection → Codex 运行时快照；空选择回落默认偏好。
+  CodexPermissionRuntimeSnapshot _resolvePermissionSnapshot(
+    AgentPermissionSelection? requestSelection,
+  ) {
+    final optionId = requestSelection?.optionId.trim();
+    if (optionId != null && optionId.isNotEmpty) {
+      return CodexPermissionPolicyCodec.applySelection(
+        AgentPermissionSelection(optionId: optionId),
+      );
+    }
+    return _defaultPermissionSnapshot;
   }
 
   @override

@@ -4559,7 +4559,7 @@ class _FakeAgentProvider
   }
 
   @override
-  Future<AgentSession> startSession({required AgentContext context}) async {
+  Future<AgentSession> startSession({required AgentContext context, AgentPermissionSelection? permissionSelection}) async {
     calls.add('start');
     return AgentSession(
       id: 'thread-1',
@@ -4572,6 +4572,7 @@ class _FakeAgentProvider
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
+    AgentPermissionSelection? permissionSelection,
   }) async {
     calls.add('resume:$sessionId');
     if (failResume) {
@@ -4646,6 +4647,7 @@ class _FakeAgentProvider
     required String threadId,
     required AgentContext context,
     AgentForkBoundary boundary = const AgentForkCurrentHead(),
+    AgentPermissionSelection? permissionSelection,
   }) async {
     final boundaryLabel = switch (boundary) {
       AgentForkCurrentHead() => 'head',

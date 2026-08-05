@@ -357,7 +357,11 @@ class GrokAcpAgentProvider
   }
 
   @override
-  Future<AgentSession> startSession({required AgentContext context}) async {
+  Future<AgentSession> startSession({
+    required AgentContext context,
+    // Grok 权限为 runtime-global；请求级 selection 由 port apply 处理。
+    AgentPermissionSelection? permissionSelection,
+  }) async {
     await initialize();
     final cwd = context.projectPath?.trim();
     if (cwd == null || cwd.isEmpty) {
@@ -397,6 +401,7 @@ class GrokAcpAgentProvider
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
+    AgentPermissionSelection? permissionSelection,
   }) => _scheduleThreadOperation(
     sessionId,
     ProviderOperationAccess.exclusive,
@@ -775,6 +780,7 @@ class GrokAcpAgentProvider
     required String threadId,
     required AgentContext context,
     AgentForkBoundary boundary = const AgentForkCurrentHead(),
+    AgentPermissionSelection? permissionSelection,
   }) async {
     throw UnsupportedError('Grok ACP does not support forking threads');
   }

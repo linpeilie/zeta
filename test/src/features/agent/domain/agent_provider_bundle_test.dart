@@ -428,7 +428,7 @@ class _MinimalBundleFakeProvider implements AgentProvider {
   Future<void> initialize() async {}
 
   @override
-  Future<AgentSession> startSession({required AgentContext context}) async {
+  Future<AgentSession> startSession({required AgentContext context, AgentPermissionSelection? permissionSelection}) async {
     startedContexts.add(context);
     return const AgentSession(
       id: 'thread-1',
@@ -440,6 +440,7 @@ class _MinimalBundleFakeProvider implements AgentProvider {
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
+    AgentPermissionSelection? permissionSelection,
   }) async {
     resumedSessions.add(sessionId);
     return AgentSession(id: sessionId, providerId: defaultAgentProviderId);
@@ -522,6 +523,7 @@ class _MinimalBundleFakeProvider implements AgentProvider {
     required String threadId,
     required AgentContext context,
     AgentForkBoundary boundary = const AgentForkCurrentHead(),
+    AgentPermissionSelection? permissionSelection,
   }) async {
     forkedThreads.add(threadId);
     forkBoundaries.add(boundary);

@@ -105,12 +105,10 @@ class _CodexNotificationMapper {
           return const _NotificationMapping();
         }
         final settings = _map(notification.params['threadSettings']);
-        // 权限字段经 codec 解码；空串/不可识别值保持 null，由 controller 原子合并。
-        final sandboxPolicy =
-            CodexPermissionPolicyCodec.sandboxPolicyFromProtocol(
-              settings['sandboxPolicy'] ?? settings['sandbox'],
-            );
-        final activeProfile = _map(settings['activePermissionProfile']);
+        // 权限在 data 层原子解码为中立 selection；application 不得再解析
+        // approval/sandbox/profile 原始字段。
+        final permissionSelection =
+            CodexPermissionPolicyCodec.selectionFromThreadSettings(settings);
         return _NotificationMapping(
           events: <AgentEvent>[
             AgentThreadSettingsUpdatedEvent(
@@ -121,9 +119,7 @@ class _CodexNotificationMapper {
               collaborationMode: _conversationModeCodec.selectionFromValue(
                 settings['collaborationMode'],
               ),
-              approvalPolicy: _string(settings['approvalPolicy']),
-              sandboxPolicy: sandboxPolicy,
-              activePermissionProfileId: _string(activeProfile['id']),
+              permissionSelection: permissionSelection,
             ),
           ],
         );

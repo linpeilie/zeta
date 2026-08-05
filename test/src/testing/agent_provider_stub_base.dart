@@ -49,6 +49,7 @@ mixin AgentProviderThreadLifecycleStub {
     required String threadId,
     required AgentContext context,
     AgentForkBoundary boundary = const AgentForkCurrentHead(),
+    AgentPermissionSelection? permissionSelection,
   }) async {
     forkedThreads.add(threadId);
     forkBoundaries.add(boundary);

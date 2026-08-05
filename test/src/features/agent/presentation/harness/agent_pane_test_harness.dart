@@ -431,7 +431,7 @@ class AgentPaneFakeProvider
   Future<void> initialize() async {}
 
   @override
-  Future<AgentSession> startSession({required AgentContext context}) async {
+  Future<AgentSession> startSession({required AgentContext context, AgentPermissionSelection? permissionSelection}) async {
     return const AgentSession(
       id: 'session-1',
       providerId: defaultAgentProviderId,
@@ -442,6 +442,7 @@ class AgentPaneFakeProvider
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
+    AgentPermissionSelection? permissionSelection,
   }) async {
     return AgentSession(id: sessionId, providerId: defaultAgentProviderId);
   }

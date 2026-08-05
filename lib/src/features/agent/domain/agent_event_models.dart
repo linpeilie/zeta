@@ -2,6 +2,7 @@ import 'package:zeta/src/features/agent/domain/agent_message_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_conversation_mode_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_model_selection_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_permission_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_permission_policy_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_plan_approval_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_question_models.dart';
@@ -164,9 +165,7 @@ class AgentThreadSettingsUpdatedEvent extends AgentEvent {
     this.reasoningEffort,
     this.serviceTierId,
     this.collaborationMode,
-    this.approvalPolicy,
-    this.sandboxPolicy,
-    this.activePermissionProfileId,
+    this.permissionSelection,
   });
 
   /// 线程 id。
@@ -184,14 +183,8 @@ class AgentThreadSettingsUpdatedEvent extends AgentEvent {
   /// 服务端确认的当前协作模式及其有效模型配置。
   final AgentConversationModeSelection? collaborationMode;
 
-  /// 审批策略字符串变体（若有）。
-  final String? approvalPolicy;
-
-  /// 沙箱策略域内标识（readOnly/workspaceWrite/dangerFullAccess）。
-  final String? sandboxPolicy;
-
-  /// 当前生效的 permission profile id。
-  final String? activePermissionProfileId;
+  /// 服务端回写的中立权限选择（data 层已原子解码；缺省表示本次未提供权限更新）。
+  final AgentPermissionSelection? permissionSelection;
 }
 
 /// Guardian 自动审批评审状态（`item/autoApprovalReview/*`）。
