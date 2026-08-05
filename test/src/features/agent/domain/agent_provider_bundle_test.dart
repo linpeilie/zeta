@@ -460,7 +460,6 @@ class _MinimalBundleFakeProvider implements AgentProvider {
     required AgentContext context,
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) async {
     startedContexts.add(context);
     startPermissionSnapshots.add(permissionSnapshot);
@@ -476,7 +475,6 @@ class _MinimalBundleFakeProvider implements AgentProvider {
     required AgentContext context,
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) async {
     resumedSessions.add(sessionId);
     resumePermissionSnapshots.add(permissionSnapshot);
@@ -562,7 +560,6 @@ class _MinimalBundleFakeProvider implements AgentProvider {
     AgentForkBoundary boundary = const AgentForkCurrentHead(),
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) async {
     forkedThreads.add(threadId);
     forkBoundaries.add(boundary);

@@ -362,7 +362,6 @@ class GrokAcpAgentProvider
     // Grok 权限为 runtime-global；请求快照仅显式标记调用边界，协议仍读取 runtime。
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) async {
     await initialize();
     final cwd = context.projectPath?.trim();
@@ -405,7 +404,6 @@ class GrokAcpAgentProvider
     required AgentContext context,
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) => _scheduleThreadOperation(
     sessionId,
     ProviderOperationAccess.exclusive,
@@ -786,7 +784,6 @@ class GrokAcpAgentProvider
     AgentForkBoundary boundary = const AgentForkCurrentHead(),
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) async {
     throw UnsupportedError('Grok ACP does not support forking threads');
   }

@@ -94,9 +94,6 @@ class CodexAppServerAgentProvider
       sendRequest: (method, {Map<String, Object?> params = const {}}) async {
         return _peer.sendRequest(method, params: params);
       },
-      fallbackOptionId:
-          configPermissionFallback.selectedOptionId ??
-          CodexPermissionPolicyCodec.defaultBuiltInOptionId,
     );
   }
 
@@ -346,17 +343,13 @@ class CodexAppServerAgentProvider
     required AgentContext context,
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) async {
     await initialize();
     _log.fine('Starting Codex thread for provider ${config.id}');
 
     final session = await _client.startSession(
       context: context,
-      permissionSnapshot: _withLegacyPermissionSelection(
-        permissionSnapshot,
-        permissionSelection,
-      ),
+      permissionSnapshot: permissionSnapshot,
       previousSessionId: null,
     );
     _events.add(AgentSessionStartedEvent(session));
@@ -370,7 +363,6 @@ class CodexAppServerAgentProvider
     required AgentContext context,
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) => _scheduleThreadOperation(
     sessionId,
     ProviderOperationAccess.exclusive,
@@ -381,10 +373,7 @@ class CodexAppServerAgentProvider
       final session = await _client.resumeSession(
         sessionId,
         context: context,
-        permissionSnapshot: _withLegacyPermissionSelection(
-          permissionSnapshot,
-          permissionSelection,
-        ),
+        permissionSnapshot: permissionSnapshot,
         previousSessionId: null,
       );
       _events.add(AgentSessionStartedEvent(session));
@@ -685,7 +674,6 @@ class CodexAppServerAgentProvider
     AgentForkBoundary boundary = const AgentForkCurrentHead(),
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) => _scheduleThreadOperation(
     threadId,
     ProviderOperationAccess.exclusive,
@@ -699,10 +687,7 @@ class CodexAppServerAgentProvider
         threadId: threadId,
         context: context,
         boundary: boundary,
-        permissionSnapshot: _withLegacyPermissionSelection(
-          permissionSnapshot,
-          permissionSelection,
-        ),
+        permissionSnapshot: permissionSnapshot,
         previousSessionId: null,
       );
       _events.add(AgentSessionStartedEvent(session));
@@ -760,10 +745,7 @@ class CodexAppServerAgentProvider
       inputs: resolvedInputs,
       context: context,
       selection: _modelSelection,
-      permissionSnapshot: _withLegacyPermissionSelection(
-        configuration.permissionSnapshot,
-        configuration.permissionSelection,
-      ),
+      permissionSnapshot: configuration.permissionSnapshot,
       turnConfiguration: configuration,
       clientUserMessageId: clientUserMessageId,
     );
@@ -817,25 +799,6 @@ class CodexAppServerAgentProvider
     return List<AgentUserInput>.unmodifiable(<AgentUserInput>[
       AgentUserInput.text(text),
     ]);
-  }
-
-  /// 将阶段 B 前的裸 selection 收敛进中立快照；新调用方直接返回原快照。
-  AgentPermissionRequestSnapshot _withLegacyPermissionSelection(
-    AgentPermissionRequestSnapshot request,
-    AgentPermissionSelection? legacySelection,
-  ) {
-    if (request.selection != null) {
-      return request;
-    }
-    final optionId = legacySelection?.optionId.trim();
-    if (optionId != null && optionId.isNotEmpty) {
-      // 旧 API 不携带来源；只在兼容入口将其标为 provider default。
-      return AgentPermissionRequestSnapshot.resolved(
-        selection: AgentPermissionSelection(optionId: optionId),
-        source: AgentPermissionRequestSource.providerDefault,
-      );
-    }
-    return request;
   }
 
   @override

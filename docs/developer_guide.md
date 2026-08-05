@@ -239,9 +239,15 @@ Dock，但不得共享 request/decision 模型或 pending registry。
 - **持久化恢复**：Provider apply 成功后再保存默认偏好；保存失败保留已生效状态并显示
   “已应用但保存失败”，通过 `retryPermissionPreferencePersistence` 只重试保存，不重复 apply。
 - **V1 → V2 配置迁移**：`AgentProviderSettings.currentVersion = 2`；decoder 宽容读
-  V1/V2。`AgentProviderSettingsCodec` 在 data/config 边界先检查 V2 optionId key；仅当
+  V1/V2。该 decoder 只存在于 data/config 的 `AgentProviderSettingsCodec`；domain config
+  不再暴露 `tryDecode`。codec 先检查 V2 optionId key；仅当
   key 缺失时，才通过组合层注册的 Codex/Grok migrator 迁到单一
   `selectedPermissionOptionId`。Domain 不认识 legacy 字段，writer 只写 optionId。
+- **Catalog 错误**：Codex adapter 只把明确的 `UnsupportedError`、JSON-RPC method-not-found
+  或实验 API 明确关闭归类为 unsupported 并返回 built-ins；超时、连接/服务错误与 malformed
+  response 均抛给 application。分页任一页失败不返回部分列表，重复 cursor 有界终止。
+  `AgentPermissionCatalogController` 保存完整 last-known-good、记录非阻断错误，并以 refresh
+  generation 防止旧请求回写。
 - **Provider 边界**：
   - Codex：`CodexPermissionPolicyAdapter` + `CodexPermissionPolicyCodec` /
     `CodexPermissionRuntimeSnapshot`（data 层单请求编码值，含 approval/sandbox/profile）。
@@ -252,6 +258,8 @@ Dock，但不得共享 request/decision 模型或 pending registry。
     不再由单个 ViewModel 隐式覆盖自己的 thread map。
 - 清空用户偏好使用 `AgentProviderConfig.withPermissionPreference(null)`（或
   `copyWith` + `agentProviderConfigUnset` 哨兵），禁止 `value ?? oldValue` 无法清空。
+- Provider、bundle 与 `AgentTurnConfiguration` 只接受 `AgentPermissionRequestSnapshot`；旧裸
+  selection 参数与兼容合并 facade 已删除，fake/harness 也不得重新引入。
 
 ### Skill 输入与 Composer token
 

@@ -562,7 +562,6 @@ class _UsageProvider
     required AgentContext context,
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) => throw UnimplementedError();
 
   @override
@@ -571,7 +570,6 @@ class _UsageProvider
     required AgentContext context,
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) => throw UnimplementedError();
 
   @override

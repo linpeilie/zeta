@@ -323,12 +323,12 @@ abstract final class CodexPermissionPolicyCodec {
     );
   }
 
-  /// 从 option 列表构造 catalog；默认取第一项或内置 workspace。
+  /// 从完整 option 列表构造 catalog；空成功目录不伪装为 built-ins。
   static AgentPermissionCatalog catalogFromOptions(
     Iterable<AgentPermissionOption> options,
   ) {
     final list = List<AgentPermissionOption>.from(options);
-    final defaultId = list.isNotEmpty ? list.first.id : defaultBuiltInOptionId;
+    final defaultId = list.isNotEmpty ? list.first.id : '';
     return AgentPermissionCatalog(options: list, defaultOptionId: defaultId);
   }
 

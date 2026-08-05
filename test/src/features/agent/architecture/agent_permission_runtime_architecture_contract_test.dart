@@ -20,7 +20,7 @@ import '../../../testing/recording_json_rpc_peer.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('phase A permission runtime architecture contracts', () {
+  group('permission runtime architecture contracts', () {
     test(
       'Codex create resume fork and send encode independent request snapshots',
       () async {
@@ -563,6 +563,50 @@ void main() {
       expect(dataMigration.existsSync(), isTrue);
       expect(appSource, contains('CodexPermissionPreferenceMigrator'));
       expect(appSource, contains('GrokPermissionPreferenceMigrator'));
+    });
+
+    test('legacy permission facades and domain config decoders are absent', () {
+      final providerApi = File(
+        'lib/src/features/agent/domain/agent_provider.dart',
+      ).readAsStringSync();
+      final turnConfiguration = File(
+        'lib/src/features/agent/domain/agent_conversation_mode_models.dart',
+      ).readAsStringSync();
+      final providerModels = File(
+        'lib/src/features/agent/domain/agent_provider_models.dart',
+      ).readAsStringSync();
+      final codexProvider = File(
+        'lib/src/features/agent/data/datasources/app_server/'
+        'codex_app_server_agent_provider.dart',
+      ).readAsStringSync();
+
+      expect(providerApi, isNot(contains('Use permissionSnapshot')));
+      expect(
+        turnConfiguration,
+        isNot(contains('AgentTurnConfiguration.permissionSelection')),
+      );
+      expect(codexProvider, isNot(contains('_withLegacyPermissionSelection')));
+      expect(
+        providerModels,
+        isNot(contains('static AgentProviderConfig? tryDecode')),
+      );
+      expect(
+        providerModels,
+        isNot(contains('static AgentProviderSettings tryDecode')),
+      );
+      expect(
+        File(
+          'test/src/features/agent/agent_permission_review_regression_test.dart',
+        ).existsSync(),
+        isFalse,
+      );
+      expect(
+        File(
+          'test/fixtures/agent_permission_runtime_architecture/'
+          'expected_api_changes.md',
+        ).existsSync(),
+        isFalse,
+      );
     });
 
     test('domain contains no provider permission protocol strings', () {

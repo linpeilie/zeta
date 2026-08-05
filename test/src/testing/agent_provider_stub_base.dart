@@ -53,7 +53,6 @@ mixin AgentProviderThreadLifecycleStub {
     AgentForkBoundary boundary = const AgentForkCurrentHead(),
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) async {
     forkedThreads.add(threadId);
     forkBoundaries.add(boundary);

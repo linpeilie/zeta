@@ -355,7 +355,6 @@ class _FakeAgentProvider
     required AgentContext context,
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) async {
     return const AgentSession(
       id: 'thread-1',
@@ -369,7 +368,6 @@ class _FakeAgentProvider
     required AgentContext context,
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) async {
     return AgentSession(id: sessionId, providerId: defaultAgentProviderId);
   }

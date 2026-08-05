@@ -149,8 +149,6 @@ abstract interface class AgentConversationPort {
     required AgentContext context,
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    @Deprecated('Use permissionSnapshot.')
-    AgentPermissionSelection? permissionSelection,
   });
 
   Future<AgentSession> resumeSession(
@@ -158,8 +156,6 @@ abstract interface class AgentConversationPort {
     required AgentContext context,
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    @Deprecated('Use permissionSnapshot.')
-    AgentPermissionSelection? permissionSelection,
   });
 
   /// 发起新回合，并把 [configuration] 作为该次调用独占的不可变快照传给 Provider。
@@ -209,8 +205,6 @@ abstract interface class AgentThreadBranchingPort {
     AgentForkBoundary boundary = const AgentForkCurrentHead(),
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    @Deprecated('Use permissionSnapshot.')
-    AgentPermissionSelection? permissionSelection,
   });
 }
 
@@ -348,13 +342,11 @@ final class _LegacyAgentConversationPort implements AgentConversationPort {
     required AgentContext context,
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) {
     return _provider.resumeSession(
       sessionId,
       context: context,
       permissionSnapshot: permissionSnapshot,
-      permissionSelection: permissionSelection,
     );
   }
 
@@ -382,12 +374,10 @@ final class _LegacyAgentConversationPort implements AgentConversationPort {
     required AgentContext context,
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) {
     return _provider.startSession(
       context: context,
       permissionSnapshot: permissionSnapshot,
-      permissionSelection: permissionSelection,
     );
   }
 }
@@ -466,14 +456,12 @@ final class _LegacyAgentThreadBranchingPort
     AgentForkBoundary boundary = const AgentForkCurrentHead(),
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) {
     return _provider.forkThread(
       threadId: threadId,
       context: context,
       boundary: boundary,
       permissionSnapshot: permissionSnapshot,
-      permissionSelection: permissionSelection,
     );
   }
 }

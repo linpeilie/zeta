@@ -136,7 +136,7 @@ void main() {
 
   group('AgentProviderSettings', () {
     test('normalizes legacy built-in provider display names', () {
-      final settings = AgentProviderSettings.tryDecode(<String, Object?>{
+      final settings = _codec().decode(<String, Object?>{
         'version': 1,
         'activeProviderId': defaultAgentProviderId,
         'providers': <Object?>[
@@ -175,7 +175,7 @@ void main() {
         },
       );
 
-      final decoded = AgentProviderConfig.tryDecode(config.toJson());
+      final decoded = _codec().decodeProvider(config.toJson());
 
       expect(decoded, isNotNull);
       expect(decoded!.selectedServiceTier, isNull);
@@ -196,7 +196,7 @@ void main() {
         },
       };
 
-      final decoded = AgentProviderConfig.tryDecode(raw);
+      final decoded = _codec().decodeProvider(raw);
 
       expect(decoded?.modelPreferences.keys, <String>['gpt-5.5']);
       expect(
@@ -206,7 +206,7 @@ void main() {
     });
 
     test('does not add Cursor to existing non-Cursor settings', () {
-      final settings = AgentProviderSettings.tryDecode(<String, Object?>{
+      final settings = _codec().decode(<String, Object?>{
         'version': 1,
         'activeProviderId': grokAgentProviderId,
         'providers': <Object?>[
@@ -259,9 +259,7 @@ void main() {
           ],
         };
 
-        final settings = AgentProviderSettings.tryDecode(<String, Object?>{
-          ...original,
-        });
+        final settings = _codec().decode(<String, Object?>{...original});
 
         expect(settings.activeProviderId, cursorAgentProviderId);
         final cursor = settings.providers.singleWhere(
@@ -292,7 +290,7 @@ void main() {
     );
 
     test('preserves a missing legacy Cursor active id for safe fallback', () {
-      final settings = AgentProviderSettings.tryDecode(<String, Object?>{
+      final settings = _codec().decode(<String, Object?>{
         'version': 1,
         'activeProviderId': cursorAgentProviderId,
         'providers': <Object?>[

@@ -192,14 +192,10 @@ final class AgentTurnConfiguration {
   ///
   /// [permissionSnapshot] 为 application 已按优先级冻结的中立请求快照；
   /// Provider 只在其来源为 fallback 时沿用旧默认逻辑。
-  ///
-  /// [permissionSelection] 是阶段 B 的兼容入口，新调用方应传
-  /// [permissionSnapshot]，后续阶段再删除旧字段。
   const AgentTurnConfiguration({
     this.conversationMode,
     this.permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    this.permissionSelection,
   });
 
   /// 本回合的对话模式；为空表示 Provider 沿用原有发送行为。
@@ -208,20 +204,14 @@ final class AgentTurnConfiguration {
   /// 本请求所属 thread 的权限快照。
   final AgentPermissionRequestSnapshot permissionSnapshot;
 
-  /// 旧版裸权限选择兼容字段。
-  @Deprecated('Use permissionSnapshot so the request source stays explicit.')
-  final AgentPermissionSelection? permissionSelection;
-
   /// 复制并覆盖部分字段。
   AgentTurnConfiguration copyWith({
     AgentConversationModeSelection? conversationMode,
     AgentPermissionRequestSnapshot? permissionSnapshot,
-    AgentPermissionSelection? permissionSelection,
   }) {
     return AgentTurnConfiguration(
       conversationMode: conversationMode ?? this.conversationMode,
       permissionSnapshot: permissionSnapshot ?? this.permissionSnapshot,
-      permissionSelection: permissionSelection ?? this.permissionSelection,
     );
   }
 
@@ -229,12 +219,10 @@ final class AgentTurnConfiguration {
   bool operator ==(Object other) =>
       other is AgentTurnConfiguration &&
       other.conversationMode == conversationMode &&
-      other.permissionSnapshot == permissionSnapshot &&
-      other.permissionSelection == permissionSelection;
+      other.permissionSnapshot == permissionSnapshot;
 
   @override
-  int get hashCode =>
-      Object.hash(conversationMode, permissionSnapshot, permissionSelection);
+  int get hashCode => Object.hash(conversationMode, permissionSnapshot);
 }
 
 String _requireNonEmpty(String value, String name) {

@@ -238,7 +238,6 @@ class FakeAgentProvider
     required AgentContext context,
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) async {
     await initialize();
     startPermissionSnapshots.add(permissionSnapshot);
@@ -255,7 +254,6 @@ class FakeAgentProvider
     required AgentContext context,
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) async {
     await initialize();
     resumePermissionSnapshots.add(permissionSnapshot);

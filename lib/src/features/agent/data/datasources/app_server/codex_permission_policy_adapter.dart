@@ -31,27 +31,19 @@ final class CodexPermissionPolicyAdapter implements AgentPermissionPolicyPort {
   /// 创建 adapter。
   ///
   /// [ensureInitialized] 在 list 前保证 app-server 已握手。
-  /// [fallbackOptionId] 仅处理异常空选择，不会被用户选择或 settings 回写修改。
   CodexPermissionPolicyAdapter({
     required this.ensureInitialized,
     required this.sendRequest,
-    required this.fallbackOptionId,
   });
 
   final Future<void> Function() ensureInitialized;
   final CodexPermissionRpcSender sendRequest;
-  final String fallbackOptionId;
 
   @override
   Future<AgentPermissionCatalog> listPermissionOptions() async {
     await ensureInitialized();
     try {
       final options = await _listAllPermissionOptions();
-      if (options.isEmpty) {
-        // 空成功响应：固定契约为内置目录（与“无自定义 profile”语义一致）。
-        _log.fine('permissionProfile/list empty; falling back to built-ins');
-        return CodexPermissionPolicyCodec.staticBuiltInCatalog();
-      }
       return CodexPermissionPolicyCodec.catalogFromOptions(options);
     } on Object catch (error, stackTrace) {
       final kind = _classifyPermissionCatalogFailure(error);
@@ -80,14 +72,10 @@ final class CodexPermissionPolicyAdapter implements AgentPermissionPolicyPort {
   ) async {
     final normalizedId = selection.optionId.trim();
     if (normalizedId.isEmpty) {
-      final configuredFallback = fallbackOptionId.trim();
-      final fallbackId = configuredFallback.isEmpty
-          ? CodexPermissionPolicyCodec.defaultBuiltInOptionId
-          : configuredFallback;
-      return AgentPermissionApplyResult(
-        normalizedSelection: AgentPermissionSelection(optionId: fallbackId),
-        scope: AgentPermissionApplyScope.currentSession,
-        warning: 'Empty permission option; kept configured fallback',
+      throw ArgumentError.value(
+        selection.optionId,
+        'selection.optionId',
+        'permission option id cannot be empty',
       );
     }
 
@@ -120,31 +108,43 @@ final class CodexPermissionPolicyAdapter implements AgentPermissionPolicyPort {
         );
       }
       final data = map['data'];
-      if (data != null && data is! List) {
+      if (data is! List) {
         throw const FormatException(
           'permissionProfile/list data is not a list',
         );
       }
-      if (data is List) {
-        for (final item in data) {
-          final entry = _asStringKeyedMap(item);
-          if (entry == null) {
-            continue;
-          }
-          final option = CodexPermissionPolicyCodec.optionFromRpcEntry(entry);
-          if (option == null || !seenIds.add(option.id)) {
-            continue;
-          }
+      for (final item in data) {
+        final entry = _asStringKeyedMap(item);
+        if (entry == null ||
+            (entry['allowed'] != null && entry['allowed'] is! bool) ||
+            (entry['description'] != null && entry['description'] is! String)) {
+          throw const FormatException(
+            'permissionProfile/list contains a malformed option',
+          );
+        }
+        final option = CodexPermissionPolicyCodec.optionFromRpcEntry(entry);
+        if (option == null) {
+          throw const FormatException(
+            'permissionProfile/list contains an option without a valid id',
+          );
+        }
+        if (seenIds.add(option.id)) {
           options.add(option);
         }
       }
       final nextCursor = map['nextCursor'];
-      if (nextCursor is String &&
-          nextCursor.isNotEmpty &&
-          seenCursors.add(nextCursor)) {
-        cursor = nextCursor;
-      } else {
+      if (nextCursor != null && nextCursor is! String) {
+        throw const FormatException(
+          'permissionProfile/list nextCursor is not a string',
+        );
+      }
+      final normalizedCursor = (nextCursor as String?)?.trim();
+      if (normalizedCursor == null ||
+          normalizedCursor.isEmpty ||
+          !seenCursors.add(normalizedCursor)) {
         cursor = null;
+      } else {
+        cursor = normalizedCursor;
       }
     } while (cursor != null);
     return options;
@@ -169,18 +169,13 @@ final class CodexPermissionPolicyAdapter implements AgentPermissionPolicyPort {
           (message.contains('disabled') || message.contains('not enabled'));
       if (error.error.code == -32601 ||
           experimentalDisabled ||
-          message.contains('method not found') ||
-          message.contains('not available') ||
-          message.contains('not supported')) {
+          message.contains('method not found')) {
         return _CodexPermissionCatalogFailureKind.unsupportedRuntime;
       }
       // 其它 JSON-RPC 业务错误视为临时/可重试，避免用 built-ins 覆盖。
       return _CodexPermissionCatalogFailureKind.transientFailure;
     }
-    final text = error.toString().toLowerCase();
-    if (text.contains('method not found') || text.contains('-32601')) {
-      return _CodexPermissionCatalogFailureKind.unsupportedRuntime;
-    }
+    // 未结构化异常不得依赖文本猜测 unsupported；一律视为可重试失败。
     return _CodexPermissionCatalogFailureKind.transientFailure;
   }
 

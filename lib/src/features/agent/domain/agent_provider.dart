@@ -23,13 +23,10 @@ abstract class AgentProvider {
   /// 创建新会话。
   ///
   /// [permissionSnapshot] 为 application 冻结的请求级中立权限快照。
-  /// [permissionSelection] 仅为阶段 B 兼容旧调用方；新调用方不得省略来源。
   Future<AgentSession> startSession({
     required AgentContext context,
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    @Deprecated('Use permissionSnapshot.')
-    AgentPermissionSelection? permissionSelection,
   });
 
   /// 恢复已有会话。
@@ -41,8 +38,6 @@ abstract class AgentProvider {
     required AgentContext context,
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    @Deprecated('Use permissionSnapshot.')
-    AgentPermissionSelection? permissionSelection,
   });
 
   /// 分页读取指定项目下的 thread 摘要列表。
@@ -102,8 +97,6 @@ abstract class AgentProvider {
     AgentForkBoundary boundary = const AgentForkCurrentHead(),
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    @Deprecated('Use permissionSnapshot.')
-    AgentPermissionSelection? permissionSelection,
   });
 
   /// 启动上下文压缩（对应 `thread/compact/start`）。

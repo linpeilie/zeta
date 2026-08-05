@@ -345,6 +345,7 @@ void main() {
       port.listError = TimeoutException('list timed out');
       await controller.refreshOptions();
       expect(controller.options.map((o) => o.id), <String>['team-safe']);
+      expect(controller.lastError, contains('list timed out'));
     });
 
     test(

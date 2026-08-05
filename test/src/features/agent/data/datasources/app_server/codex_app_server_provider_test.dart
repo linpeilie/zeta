@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logging/logging.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_permission_migration.dart';
 import 'package:zeta/src/features/agent/data/datasources/app_server/codex_app_server_agent_provider.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/provider_operation_scheduler.dart';
@@ -3926,7 +3928,14 @@ void main() {
         final config = AgentProviderConfig.defaultCodex
             .withPermissionPreference('team-safe');
         // V2 round-trip 只保留 optionId；自定义 profile 不得变成 :workspace。
-        final decoded = AgentProviderConfig.tryDecode(config.toJson());
+        final decoded = AgentProviderSettingsCodec(
+          migrationRegistry: AgentProviderPermissionMigrationRegistry(
+            <AgentProviderKind, AgentProviderPermissionPreferenceMigrator>{
+              AgentProviderKind.codexAppServer:
+                  const CodexPermissionPreferenceMigrator(),
+            },
+          ),
+        ).decodeProvider(config.toJson());
         expect(decoded, isNotNull);
         expect(decoded!.selectedPermissionOptionId, 'team-safe');
         expect(decoded.resolvedPermissionOptionId, 'team-safe');

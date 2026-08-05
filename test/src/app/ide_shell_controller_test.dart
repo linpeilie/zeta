@@ -1395,7 +1395,6 @@ class _ShellTestAgentProvider
     required AgentContext context,
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) async {
     return AgentSession(
       id: 'draft-${DateTime.now().microsecondsSinceEpoch}',
@@ -1410,7 +1409,6 @@ class _ShellTestAgentProvider
     required AgentContext context,
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) async {
     return AgentSession(id: sessionId, providerId: config.id, title: sessionId);
   }

@@ -125,11 +125,14 @@ main -> app -> presentation/application -> domain
   `selectedSandboxPolicy` / `selectedPermissionProfileId` / `selectedPermissionMode`）
   仅由 data/config 边界的 provider-specific migrator 读取，写入不得再出现。组合层必须按
   provider kind 注册中立 migrator；V2 optionId key 存在时不得调用 legacy migrator。
-  Domain `AgentProviderConfig` 只解码、保存归一化 optionId，不得包含 Codex/Grok 权限常量。
+  Domain `AgentProviderConfig` 只保存归一化 optionId，不提供配置 `tryDecode` 门面；V1/V2
+  宽容解码、内置 Provider 补齐与 legacy 迁移全部由 data `AgentProviderSettingsCodec` 负责。
   `AgentPermissionStateStore` 是 application
   权限状态真源，按 provider runtime identity/generation + threadId 隔离不可变快照；
   provider default、thread effective、state source、last scope、warning 与持久化失败不得
-  分散回 ViewModel 字段。catalog 加载由独立 `AgentPermissionCatalogController` 管理。
+  分散回 ViewModel 字段。catalog 加载由独立 `AgentPermissionCatalogController` 管理：只提交
+  adapter 返回的完整成功目录，transient/malformed 失败保留 last-known-good；旧 refresh
+  generation 不得覆盖新目录。Codex 只有明确 unsupported 才允许降级静态 built-ins。
 - 所有权限 apply 路径必须消费完整 `AgentPermissionApplyResult`：`currentTurn` 只形成下一次
   请求的一次性 override，`currentSession` 只更新目标 thread，`runtime` 更新显式 runtime
   state 并广播全部同 runtime 消费者，`nextSession` 只更新默认/待生效状态。runtime 广播必须
@@ -140,6 +143,8 @@ main -> app -> presentation/application -> domain
   application 按 thread-effective → provider default → catalog default 解析。Codex
   client/encoder 只能在该快照没有 selection 时使用 Provider 构造时冻结的 config
   fallback；用户选择或 `thread/settings/updated` 不得改写跨 thread 共享的请求权限状态。
+  旧裸 `permissionSelection` 参数、`AgentTurnConfiguration.permissionSelection` 与 Provider
+  内兼容合并 setter/facade 均不得恢复。
 - `thread/settings/updated` 的 Codex profile/approval/sandbox 必须由 data codec 一次性解码
   为 `AgentPermissionSelection`；domain event 不得暴露协议字段。reducer 允许权限事实按事件
   threadId 路由到 store，即使该 thread 不是当前 Canvas；同一通知不得更新 provider default、

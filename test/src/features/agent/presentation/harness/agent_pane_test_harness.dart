@@ -435,7 +435,6 @@ class AgentPaneFakeProvider
     required AgentContext context,
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) async {
     return const AgentSession(
       id: 'session-1',
@@ -449,7 +448,6 @@ class AgentPaneFakeProvider
     required AgentContext context,
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) async {
     return AgentSession(id: sessionId, providerId: defaultAgentProviderId);
   }

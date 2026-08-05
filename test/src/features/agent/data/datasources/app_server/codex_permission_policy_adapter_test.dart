@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/data/datasources/app_server/codex_permission_policy_adapter.dart';
+import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
 import 'package:zeta/src/features/agent/data/mappers/codex_permission_policy_codec.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
@@ -220,7 +221,6 @@ void main() {
             ],
           };
         },
-        fallbackOptionId: ':workspace',
       );
 
       final catalog = await adapter.listPermissionOptions();
@@ -233,13 +233,46 @@ void main() {
       expect(catalog.defaultOptionId, ':workspace');
     });
 
+    test('terminates safely when the server repeats a cursor', () async {
+      var calls = 0;
+      final adapter = CodexPermissionPolicyAdapter(
+        ensureInitialized: () async {},
+        sendRequest: (method, {Map<String, Object?> params = const {}}) async {
+          calls += 1;
+          if (calls == 1) {
+            expect(params, isEmpty);
+            return <String, Object?>{
+              'data': <Object?>[
+                <String, Object?>{'id': ':workspace'},
+              ],
+              'nextCursor': 'repeat',
+            };
+          }
+          expect(params['cursor'], 'repeat');
+          return <String, Object?>{
+            'data': <Object?>[
+              <String, Object?>{'id': 'team-safe'},
+            ],
+            'nextCursor': 'repeat',
+          };
+        },
+      );
+
+      final catalog = await adapter.listPermissionOptions();
+
+      expect(calls, 2);
+      expect(catalog.options.map((option) => option.id), <String>[
+        ':workspace',
+        'team-safe',
+      ]);
+    });
+
     test('falls back to built-ins when list is unsupported', () async {
       final adapter = CodexPermissionPolicyAdapter(
         ensureInitialized: () async {},
         sendRequest: (method, {Map<String, Object?> params = const {}}) async {
           throw UnsupportedError('permissionProfile/list not available');
         },
-        fallbackOptionId: ':workspace',
       );
 
       final catalog = await adapter.listPermissionOptions();
@@ -253,13 +286,88 @@ void main() {
       );
     });
 
+    test(
+      'keeps an explicit empty success empty instead of using built-ins',
+      () async {
+        final adapter = CodexPermissionPolicyAdapter(
+          ensureInitialized: () async {},
+          sendRequest:
+              (method, {Map<String, Object?> params = const {}}) async {
+                return <String, Object?>{'data': <Object?>[]};
+              },
+        );
+
+        final catalog = await adapter.listPermissionOptions();
+
+        expect(catalog.options, isEmpty);
+        expect(catalog.defaultOptionId, isEmpty);
+      },
+    );
+
+    test('falls back only for explicit JSON-RPC method-not-found', () async {
+      final adapter = CodexPermissionPolicyAdapter(
+        ensureInitialized: () async {},
+        sendRequest: (method, {Map<String, Object?> params = const {}}) async {
+          throw const JsonRpcException(
+            JsonRpcError(code: -32601, message: 'Method not found'),
+          );
+        },
+      );
+
+      final catalog = await adapter.listPermissionOptions();
+      expect(
+        catalog.options.map((option) => option.id),
+        contains(':workspace'),
+      );
+    });
+
+    test(
+      'rethrows structured server failures even when text says unavailable',
+      () async {
+        final adapter = CodexPermissionPolicyAdapter(
+          ensureInitialized: () async {},
+          sendRequest:
+              (method, {Map<String, Object?> params = const {}}) async {
+                throw const JsonRpcException(
+                  JsonRpcError(
+                    code: -32000,
+                    message: 'temporarily not available while reconnecting',
+                  ),
+                );
+              },
+        );
+
+        await expectLater(
+          adapter.listPermissionOptions(),
+          throwsA(isA<JsonRpcException>()),
+        );
+      },
+    );
+
+    test(
+      'does not infer unsupported from an unstructured error message',
+      () async {
+        final adapter = CodexPermissionPolicyAdapter(
+          ensureInitialized: () async {},
+          sendRequest:
+              (method, {Map<String, Object?> params = const {}}) async {
+                throw StateError('method not found after connection closed');
+              },
+        );
+
+        await expectLater(
+          adapter.listPermissionOptions(),
+          throwsA(isA<StateError>()),
+        );
+      },
+    );
+
     test('rethrows timeout so caller can retain previous catalog', () async {
       final adapter = CodexPermissionPolicyAdapter(
         ensureInitialized: () async {},
         sendRequest: (method, {Map<String, Object?> params = const {}}) async {
           throw TimeoutException('permissionProfile/list timed out');
         },
-        fallbackOptionId: ':workspace',
       );
 
       await expectLater(
@@ -291,7 +399,6 @@ void main() {
                 }
                 throw TimeoutException('page 2 timed out');
               },
-          fallbackOptionId: ':workspace',
         );
 
         await expectLater(
@@ -307,7 +414,6 @@ void main() {
         sendRequest: (method, {Map<String, Object?> params = const {}}) async {
           return 'not-an-object';
         },
-        fallbackOptionId: ':workspace',
       );
 
       await expectLater(
@@ -316,8 +422,36 @@ void main() {
       );
     });
 
+    test('throws when a page contains a malformed option or cursor', () async {
+      for (final response in <Map<String, Object?>>[
+        <String, Object?>{
+          'data': <Object?>[
+            <String, Object?>{'allowed': true},
+          ],
+        },
+        <String, Object?>{
+          'data': <Object?>[
+            <String, Object?>{'id': ':workspace'},
+          ],
+          'nextCursor': 42,
+        },
+      ]) {
+        final adapter = CodexPermissionPolicyAdapter(
+          ensureInitialized: () async {},
+          sendRequest:
+              (method, {Map<String, Object?> params = const {}}) async =>
+                  response,
+        );
+
+        await expectLater(
+          adapter.listPermissionOptions(),
+          throwsA(isA<FormatException>()),
+        );
+      }
+    });
+
     test(
-      'apply custom profile is pure and keeps configured fallback immutable',
+      'apply custom profile is pure and rejects an empty option id',
       () async {
         final adapter = CodexPermissionPolicyAdapter(
           ensureInitialized: () async {},
@@ -325,7 +459,6 @@ void main() {
               (method, {Map<String, Object?> params = const {}}) async {
                 fail('list should not be called');
               },
-          fallbackOptionId: ':workspace',
         );
 
         final result = await adapter.applyPermissionSelection(
@@ -333,10 +466,12 @@ void main() {
         );
         expect(result.normalizedSelection.optionId, 'team-safe');
         expect(result.scope, AgentPermissionApplyScope.currentSession);
-        final emptyResult = await adapter.applyPermissionSelection(
-          const AgentPermissionSelection(optionId: '  '),
+        await expectLater(
+          adapter.applyPermissionSelection(
+            const AgentPermissionSelection(optionId: '  '),
+          ),
+          throwsArgumentError,
         );
-        expect(emptyResult.normalizedSelection.optionId, ':workspace');
       },
     );
   });

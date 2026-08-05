@@ -1,4 +1,3 @@
-import 'package:zeta/src/features/agent/domain/agent_model_codec.dart';
 import 'package:zeta/src/features/agent/domain/agent_model_selection_models.dart';
 
 /// [AgentProviderConfig.copyWith] 中「未传参」与「显式传 null」的区分哨兵。
@@ -264,74 +263,6 @@ class AgentProviderConfig {
       'extra': extra,
     };
   }
-
-  /// 从持久化 JSON 宽容解码 provider 配置。
-  ///
-  /// 解码失败返回 `null`，调用方可以回退到默认 provider；未知字段不会阻断加载。
-  /// 权限只读取 V2 中立 optionId；V1 provider-specific 迁移由 data codec 完成。
-  static AgentProviderConfig? tryDecode(Object? value) {
-    final map = decodeObjectMap(value);
-    if (map.isEmpty) {
-      return null;
-    }
-
-    final id = decodeOptionalString(map['id']);
-    final displayName = decodeOptionalString(map['displayName']);
-    final command = decodeOptionalString(map['command']);
-    final kindName = decodeOptionalString(map['kind']);
-    final kind = _providerKind(kindName);
-
-    if (id == null || displayName == null || command == null || kind == null) {
-      return null;
-    }
-
-    return AgentProviderConfig(
-      id: id,
-      displayName: normalizeDisplayName(id, displayName),
-      kind: kind,
-      command: command,
-      arguments: decodeStringList(map['arguments']),
-      environment: decodeStringMap(map['environment']),
-      defaultModel: decodeOptionalString(map['defaultModel']),
-      selectedModel: decodeOptionalString(map['selectedModel']),
-      selectedReasoningEffort: decodeOptionalString(
-        map['selectedReasoningEffort'],
-      ),
-      selectedServiceTier: decodeOptionalString(map['selectedServiceTier']),
-      modelPreferences: _decodeModelPreferences(map['modelPreferences']),
-      selectedPermissionOptionId: _normalizePermissionOptionId(
-        decodeOptionalString(map['selectedPermissionOptionId']),
-      ),
-      enabled: map['enabled'] is bool ? map['enabled'] as bool : true,
-      extra: decodeObjectMap(map['extra']),
-    );
-  }
-}
-
-String? _normalizePermissionOptionId(String? value) {
-  final trimmed = value?.trim();
-  return trimmed == null || trimmed.isEmpty ? null : trimmed;
-}
-
-Map<String, AgentModelPreference> _decodeModelPreferences(Object? value) {
-  final decoded = <String, AgentModelPreference>{};
-  if (value is Map) {
-    for (final entry in value.entries) {
-      final preference = AgentModelPreference.tryDecode(entry.value);
-      if (preference != null) {
-        decoded[preference.modelId] = preference;
-      }
-    }
-  } else if (value is List) {
-    // 兼容早期设计稿或手工配置采用数组的形式。
-    for (final item in value) {
-      final preference = AgentModelPreference.tryDecode(item);
-      if (preference != null) {
-        decoded[preference.modelId] = preference;
-      }
-    }
-  }
-  return Map<String, AgentModelPreference>.unmodifiable(decoded);
 }
 
 /// 全局 Agent provider 设置。
@@ -385,71 +316,6 @@ class AgentProviderSettings {
       'activeProviderId': activeProviderId,
     };
   }
-
-  /// 读取版本化配置（宽容接受 V1/V2）。
-  ///
-  /// 配置缺失、版本不支持或内容损坏时都返回默认设置，保证 UI 启动不崩溃。
-  /// 旧 Cursor 配置仍会按原字段解码，但不会再自动加入新的产品目录。
-  static AgentProviderSettings tryDecode(Object? value) {
-    final map = decodeObjectMap(value);
-    final version = map['version'];
-    if (version is! int || !supportedVersions.contains(version)) {
-      return const AgentProviderSettings();
-    }
-
-    final providers = _ensureBuiltinProviders(_providerList(map['providers']));
-    final activeProviderId =
-        decodeOptionalString(map['activeProviderId']) ?? defaultAgentProviderId;
-
-    if (providers.isEmpty) {
-      return const AgentProviderSettings();
-    }
-
-    return AgentProviderSettings(
-      providers: List<AgentProviderConfig>.unmodifiable(providers),
-      activeProviderId:
-          providers.any((provider) => provider.id == activeProviderId) ||
-              activeProviderId == cursorAgentProviderId
-          ? activeProviderId
-          : providers.first.id,
-    );
-  }
-
-  static List<AgentProviderConfig> _providerList(Object? value) {
-    if (value is! List) {
-      return const <AgentProviderConfig>[
-        AgentProviderConfig.defaultCodex,
-        AgentProviderConfig.defaultGrok,
-      ];
-    }
-
-    final providers = <AgentProviderConfig>[];
-    final seen = <String>{};
-    for (final item in value) {
-      final provider = AgentProviderConfig.tryDecode(item);
-      if (provider != null && seen.add(provider.id)) {
-        providers.add(provider);
-      }
-    }
-    return providers;
-  }
-
-  /// 保证仍受支持的内置 Codex / Grok 始终出现。
-  ///
-  /// 输入中已有的旧 Cursor 配置会原样保留，但不再为新配置自动补齐。
-  static List<AgentProviderConfig> _ensureBuiltinProviders(
-    List<AgentProviderConfig> providers,
-  ) {
-    final result = List<AgentProviderConfig>.from(providers);
-    final ids = result.map((provider) => provider.id).toSet();
-    if (!ids.contains(AgentProviderConfig.defaultCodex.id)) {
-      result.insert(0, AgentProviderConfig.defaultCodex);
-    }
-    if (!ids.contains(AgentProviderConfig.defaultGrok.id)) {
-      result.add(AgentProviderConfig.defaultGrok);
-    }
-    return result;
-  }
 }
 
 /// Provider 当前状态和用户可读提示。
@@ -486,16 +352,4 @@ class AgentContext {
 
   /// 当前文件树选中的文件路径。
   final String? filePath;
-}
-
-AgentProviderKind? _providerKind(String? value) {
-  if (value == null) {
-    return null;
-  }
-  for (final kind in AgentProviderKind.values) {
-    if (kind.name == value) {
-      return kind;
-    }
-  }
-  return null;
 }

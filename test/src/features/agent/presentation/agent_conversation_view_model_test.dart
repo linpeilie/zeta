@@ -4606,7 +4606,6 @@ class _FakeAgentProvider
     required AgentContext context,
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) async {
     calls.add('start');
     startPermissionSnapshots.add(permissionSnapshot);
@@ -4623,7 +4622,6 @@ class _FakeAgentProvider
     required AgentContext context,
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) async {
     calls.add('resume:$sessionId');
     resumePermissionSnapshots.add(permissionSnapshot);
@@ -4701,7 +4699,6 @@ class _FakeAgentProvider
     AgentForkBoundary boundary = const AgentForkCurrentHead(),
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
-    AgentPermissionSelection? permissionSelection,
   }) async {
     final boundaryLabel = switch (boundary) {
       AgentForkCurrentHead() => 'head',

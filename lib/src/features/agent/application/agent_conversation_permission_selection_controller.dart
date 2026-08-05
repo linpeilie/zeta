@@ -73,7 +73,12 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
 
   String? get lastApplyWarning => state.warning;
 
-  String? get lastError => _lastError ?? state.persistenceFailure?.message;
+  bool get isCatalogLoading => _catalogController.isLoading;
+
+  String? get lastError =>
+      _lastError ??
+      state.persistenceFailure?.message ??
+      _catalogController.lastError?.toString();
 
   bool get canRetryPersistence => state.persistenceFailure != null;
 
@@ -185,7 +190,9 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
   }
 
   Future<void> refreshOptions() async {
-    final changed = await _catalogController.refresh();
+    final operation = _catalogController.refresh();
+    _notify();
+    final changed = await operation;
     if (!_disposed && changed) {
       _notify();
     }
@@ -324,6 +331,7 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
   String? takeLastError() {
     final error = lastError;
     _lastError = null;
+    _catalogController.takeLastError();
     return error;
   }
 

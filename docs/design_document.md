@@ -384,12 +384,17 @@ Codex create/resume/fork/send 全部消费 application 冻结的
 `AgentPermissionRequestSnapshot`；data codec 在单次 RPC 编码点展开 profile、approval 与
 sandbox。Provider 构造时的 config snapshot 仅作缺省 fallback，不再由用户选择或 thread
 settings 修改，因此共享 Provider 的多 thread / 多 Canvas 请求彼此隔离。
+配置 JSON 的 V1/V2 宽容解码完全属于 data `AgentProviderSettingsCodec`；domain 不再保留
+`AgentProviderConfig.tryDecode` / `AgentProviderSettings.tryDecode` 过渡门面。Provider API、
+bundle port 与 turn configuration 也只接受显式 request snapshot，不再接受裸 selection。
 
 权限运行态由 application 级 `AgentPermissionStateStore` 统一拥有。Provider runtime registry
 为每个进程实例分配递增的 `AgentProviderRuntimeIdentity(providerId, generation)`；状态再按
 threadId 隔离，并以不可变快照暴露 provider default、thread effective、source、last scope、
-warning 与持久化失败。`AgentPermissionCatalogController` 独立承担目录加载和旧 generation
-防回写，selection controller 只编排 apply result 与持久化。
+warning 与持久化失败。`AgentPermissionCatalogController` 独立承担目录加载、完整
+last-known-good、非阻断错误和旧 generation 防回写；selection controller 只编排 apply result
+与持久化。Codex catalog adapter 将错误分为 unsupported/transient/malformed：仅明确
+unsupported 返回 built-ins，其他失败抛出；分页失败不提交部分结果，重复 cursor 安全终止。
 
 `AgentPermissionApplyResult` 的提交规则固定为：`currentTurn` 生成一次性 request override；
 `currentSession` 更新目标 thread；`runtime` 更新显式 runtime state 并向同 generation 的所有
