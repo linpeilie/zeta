@@ -1391,7 +1391,12 @@ class _ShellTestAgentProvider
   Future<void> initialize() async {}
 
   @override
-  Future<AgentSession> startSession({required AgentContext context, AgentPermissionSelection? permissionSelection}) async {
+  Future<AgentSession> startSession({
+    required AgentContext context,
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
+    AgentPermissionSelection? permissionSelection,
+  }) async {
     return AgentSession(
       id: 'draft-${DateTime.now().microsecondsSinceEpoch}',
       providerId: config.id,
@@ -1403,6 +1408,8 @@ class _ShellTestAgentProvider
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
     AgentPermissionSelection? permissionSelection,
   }) async {
     return AgentSession(id: sessionId, providerId: config.id, title: sessionId);

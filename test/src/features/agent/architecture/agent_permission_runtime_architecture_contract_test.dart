@@ -30,22 +30,27 @@ void main() {
 
         await provider.startSession(
           context: const AgentContext(projectPath: '/repo'),
-          permissionSelection: const AgentPermissionSelection(
-            optionId: ':read-only',
+          permissionSnapshot: const AgentPermissionRequestSnapshot.resolved(
+            selection: AgentPermissionSelection(optionId: ':read-only'),
+            source: AgentPermissionRequestSource.catalogDefault,
           ),
         );
         await provider.resumeSession(
           'resume-thread',
           context: const AgentContext(projectPath: '/repo'),
-          permissionSelection: const AgentPermissionSelection(
-            optionId: ':danger-full-access',
+          permissionSnapshot: const AgentPermissionRequestSnapshot.resolved(
+            selection: AgentPermissionSelection(
+              optionId: ':danger-full-access',
+            ),
+            source: AgentPermissionRequestSource.providerDefault,
           ),
         );
         await provider.forkThread(
           threadId: 'source-thread',
           context: const AgentContext(projectPath: '/repo'),
-          permissionSelection: const AgentPermissionSelection(
-            optionId: ':workspace',
+          permissionSnapshot: const AgentPermissionRequestSnapshot.resolved(
+            selection: AgentPermissionSelection(optionId: ':workspace'),
+            source: AgentPermissionRequestSource.threadEffective,
           ),
         );
         await provider.sendMessage(
@@ -56,8 +61,9 @@ void main() {
           message: 'verify request-scoped permission',
           context: const AgentContext(projectPath: '/repo'),
           configuration: const AgentTurnConfiguration(
-            permissionSelection: AgentPermissionSelection(
-              optionId: 'team-safe',
+            permissionSnapshot: AgentPermissionRequestSnapshot.resolved(
+              selection: AgentPermissionSelection(optionId: 'team-safe'),
+              source: AgentPermissionRequestSource.threadEffective,
             ),
           ),
         );
@@ -224,6 +230,14 @@ void main() {
             optionId: ':danger-full-access',
           ),
         );
+        expect(
+          firstPermissions.snapshotForRequest(threadId: 'thread-a').source,
+          AgentPermissionRequestSource.threadEffective,
+        );
+        expect(
+          secondPermissions.snapshotForRequest(threadId: 'thread-b').source,
+          AgentPermissionRequestSource.threadEffective,
+        );
 
         await Future.wait(<Future<void>>[
           first.sendMessage('first canvas'),
@@ -255,7 +269,7 @@ void main() {
     );
 
     test(
-      '[TARGET-RED][FORK] current thread effective wins over provider default',
+      'current thread effective wins over provider default for fork',
       () async {
         final peer = RecordingJsonRpcPeer();
         final config = AgentProviderConfig.defaultCodex
@@ -299,6 +313,14 @@ void main() {
             optionId: ':read-only',
           ),
         );
+        final forkSnapshot = permissions.snapshotForRequest(
+          threadId: 'source-thread',
+        );
+        expect(forkSnapshot.selection?.optionId, ':read-only');
+        expect(
+          forkSnapshot.source,
+          AgentPermissionRequestSource.threadEffective,
+        );
 
         await viewModel.forkCurrentThread();
 
@@ -308,7 +330,6 @@ void main() {
           permissionProfileId: ':read-only',
         );
       },
-      tags: const <String>['architecture-red'],
     );
 
     test('thread settings domain event exposes neutral permission only', () {

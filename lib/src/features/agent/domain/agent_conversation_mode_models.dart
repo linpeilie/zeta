@@ -190,27 +190,37 @@ final class AgentConversationModeSelection {
 final class AgentTurnConfiguration {
   /// 创建一个与后续 UI 选择相互隔离的回合配置。
   ///
-  /// [permissionSelection] 为当前 thread 的中立权限快照；Codex 在 data 层编码
-  /// 为协议字段。为空时 Provider 仅可回落 config 默认，不得用其它 thread 的
-  /// 共享可变状态填充。
+  /// [permissionSnapshot] 为 application 已按优先级冻结的中立请求快照；
+  /// Provider 只在其来源为 fallback 时沿用旧默认逻辑。
+  ///
+  /// [permissionSelection] 是阶段 B 的兼容入口，新调用方应传
+  /// [permissionSnapshot]，后续阶段再删除旧字段。
   const AgentTurnConfiguration({
     this.conversationMode,
+    this.permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
     this.permissionSelection,
   });
 
   /// 本回合的对话模式；为空表示 Provider 沿用原有发送行为。
   final AgentConversationModeSelection? conversationMode;
 
-  /// 本请求所属 thread 的权限选择；为空表示未提供请求级权限。
+  /// 本请求所属 thread 的权限快照。
+  final AgentPermissionRequestSnapshot permissionSnapshot;
+
+  /// 旧版裸权限选择兼容字段。
+  @Deprecated('Use permissionSnapshot so the request source stays explicit.')
   final AgentPermissionSelection? permissionSelection;
 
   /// 复制并覆盖部分字段。
   AgentTurnConfiguration copyWith({
     AgentConversationModeSelection? conversationMode,
+    AgentPermissionRequestSnapshot? permissionSnapshot,
     AgentPermissionSelection? permissionSelection,
   }) {
     return AgentTurnConfiguration(
       conversationMode: conversationMode ?? this.conversationMode,
+      permissionSnapshot: permissionSnapshot ?? this.permissionSnapshot,
       permissionSelection: permissionSelection ?? this.permissionSelection,
     );
   }
@@ -219,10 +229,12 @@ final class AgentTurnConfiguration {
   bool operator ==(Object other) =>
       other is AgentTurnConfiguration &&
       other.conversationMode == conversationMode &&
+      other.permissionSnapshot == permissionSnapshot &&
       other.permissionSelection == permissionSelection;
 
   @override
-  int get hashCode => Object.hash(conversationMode, permissionSelection);
+  int get hashCode =>
+      Object.hash(conversationMode, permissionSnapshot, permissionSelection);
 }
 
 String _requireNonEmpty(String value, String name) {

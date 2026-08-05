@@ -918,6 +918,42 @@ void main() {
         'thread-wait',
       });
     });
+
+    test(
+      'fork makes provider default source explicit when no pane is open',
+      () async {
+        final provider = _FakeAgentProvider(
+          pages: const <AgentThreadPage>[],
+          config: AgentProviderConfig.defaultCodex.withPermissionPreference(
+            ':workspace',
+          ),
+        );
+        final controller = _createController(provider);
+        controller.registerSession(
+          '/repo',
+          const AgentSession(
+            id: 'source-thread',
+            providerId: defaultAgentProviderId,
+          ),
+        );
+
+        final session = await controller.forkThread(
+          projectPath: '/repo',
+          threadId: 'source-thread',
+        );
+
+        expect(session?.id, 'forked-source-thread');
+        expect(provider.forkPermissionSnapshots, hasLength(1));
+        expect(
+          provider.forkPermissionSnapshots.single.source,
+          AgentPermissionRequestSource.providerDefault,
+        );
+        expect(
+          provider.forkPermissionSnapshots.single.selection?.optionId,
+          ':workspace',
+        );
+      },
+    );
   });
 }
 
@@ -1130,7 +1166,12 @@ class _FakeAgentProvider
   Future<void> unsubscribeThread(String threadId) async {}
 
   @override
-  Future<AgentSession> startSession({required AgentContext context, AgentPermissionSelection? permissionSelection}) async {
+  Future<AgentSession> startSession({
+    required AgentContext context,
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
+    AgentPermissionSelection? permissionSelection,
+  }) async {
     return const AgentSession(
       id: 'thread-0',
       providerId: defaultAgentProviderId,
@@ -1141,6 +1182,8 @@ class _FakeAgentProvider
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
     AgentPermissionSelection? permissionSelection,
   }) async {
     return AgentSession(id: sessionId, providerId: defaultAgentProviderId);

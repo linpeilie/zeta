@@ -4471,6 +4471,10 @@ class _FakeAgentProvider
   int refreshModelsCalls = 0;
   final List<AgentTurnConfiguration> turnConfigurations =
       <AgentTurnConfiguration>[];
+  final List<AgentPermissionRequestSnapshot> startPermissionSnapshots =
+      <AgentPermissionRequestSnapshot>[];
+  final List<AgentPermissionRequestSnapshot> resumePermissionSnapshots =
+      <AgentPermissionRequestSnapshot>[];
 
   @override
   AgentProviderConfig get config => providerConfig;
@@ -4559,8 +4563,14 @@ class _FakeAgentProvider
   }
 
   @override
-  Future<AgentSession> startSession({required AgentContext context, AgentPermissionSelection? permissionSelection}) async {
+  Future<AgentSession> startSession({
+    required AgentContext context,
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
+    AgentPermissionSelection? permissionSelection,
+  }) async {
     calls.add('start');
+    startPermissionSnapshots.add(permissionSnapshot);
     return AgentSession(
       id: 'thread-1',
       providerId: providerConfig.id,
@@ -4572,9 +4582,12 @@ class _FakeAgentProvider
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
     AgentPermissionSelection? permissionSelection,
   }) async {
     calls.add('resume:$sessionId');
+    resumePermissionSnapshots.add(permissionSnapshot);
     if (failResume) {
       throw StateError('resume failed');
     }
@@ -4647,6 +4660,8 @@ class _FakeAgentProvider
     required String threadId,
     required AgentContext context,
     AgentForkBoundary boundary = const AgentForkCurrentHead(),
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
     AgentPermissionSelection? permissionSelection,
   }) async {
     final boundaryLabel = switch (boundary) {
@@ -4658,6 +4673,7 @@ class _FakeAgentProvider
       threadId: threadId,
       context: context,
       boundary: boundary,
+      permissionSnapshot: permissionSnapshot,
     );
   }
 

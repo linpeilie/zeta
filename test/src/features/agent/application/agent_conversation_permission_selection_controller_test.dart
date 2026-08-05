@@ -288,6 +288,73 @@ void main() {
       expect(controller.options.map((o) => o.id), <String>['team-safe']);
     });
 
+    test(
+      'request snapshot keeps catalog default distinct from provider default',
+      () async {
+        final port = _FakePermissionPort(
+          options: const <AgentPermissionOption>[
+            AgentPermissionOption(id: 'catalog-safe', label: 'Catalog safe'),
+          ],
+        );
+        final controller = AgentConversationPermissionSelectionController(
+          persistOptionId: (_) async {},
+        );
+        controller.bind(port: port, persistedOptionId: null);
+        await controller.refreshOptions();
+
+        final catalogSnapshot = controller.snapshotForRequest();
+        expect(controller.defaultOptionId, isNull);
+        expect(controller.selectedOptionId, 'catalog-safe');
+        expect(catalogSnapshot.selection?.optionId, 'catalog-safe');
+        expect(
+          catalogSnapshot.source,
+          AgentPermissionRequestSource.catalogDefault,
+        );
+
+        controller.seedFromConfig('provider-safe');
+        final providerSnapshot = controller.snapshotForRequest();
+        expect(providerSnapshot.selection?.optionId, 'provider-safe');
+        expect(
+          providerSnapshot.source,
+          AgentPermissionRequestSource.providerDefault,
+        );
+      },
+    );
+
+    test(
+      'request snapshot uses addressed thread effective before defaults',
+      () async {
+        final controller = AgentConversationPermissionSelectionController(
+          persistOptionId: (_) async {},
+        );
+        controller.bind(port: null, persistedOptionId: 'provider-safe');
+        await controller.applyThreadSettings(
+          threadId: 'thread-a',
+          permissionSelection: const AgentPermissionSelection(
+            optionId: 'thread-safe',
+          ),
+        );
+
+        final threadSnapshot = controller.snapshotForRequest(
+          threadId: 'thread-a',
+        );
+        final otherSnapshot = controller.snapshotForRequest(
+          threadId: 'thread-b',
+        );
+
+        expect(threadSnapshot.selection?.optionId, 'thread-safe');
+        expect(
+          threadSnapshot.source,
+          AgentPermissionRequestSource.threadEffective,
+        );
+        expect(otherSnapshot.selection?.optionId, 'provider-safe');
+        expect(
+          otherSnapshot.source,
+          AgentPermissionRequestSource.providerDefault,
+        );
+      },
+    );
+
     test('displayLabel uses catalog label without parsing id shape', () async {
       final port = _FakePermissionPort(
         options: const <AgentPermissionOption>[

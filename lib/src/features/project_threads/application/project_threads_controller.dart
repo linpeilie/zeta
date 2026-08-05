@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
+import 'package:zeta/src/features/agent/application/agent_permission_request_resolver.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_event_listener_gate.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -487,6 +488,7 @@ class ProjectThreadsController {
   Future<AgentSession?> forkThread({
     required String projectPath,
     required String threadId,
+    AgentPermissionRequestSnapshot? permissionSnapshot,
   }) async {
     final provider = await _providerForThread(
       projectPath: projectPath,
@@ -506,9 +508,14 @@ class ProjectThreadsController {
         '${provider.config.displayName} missing thread branching port',
       );
     }
+    final requestPermissionSnapshot = await _resolveForkPermissionSnapshot(
+      provider: provider,
+      supplied: permissionSnapshot,
+    );
     final session = await threadBranching.forkThread(
       threadId: threadId,
       context: AgentContext(projectPath: projectPath),
+      permissionSnapshot: requestPermissionSnapshot,
     );
     _registerThreadMapping(projectPath, session.id);
     viewModel.prependThread(
@@ -526,6 +533,39 @@ class ProjectThreadsController {
     );
     selectThreadId(projectPath, session.id);
     return session;
+  }
+
+  Future<AgentPermissionRequestSnapshot> _resolveForkPermissionSnapshot({
+    required AgentProvider provider,
+    required AgentPermissionRequestSnapshot? supplied,
+  }) async {
+    if (supplied != null &&
+        supplied.source != AgentPermissionRequestSource.providerFallback) {
+      return supplied;
+    }
+    final configuredId = provider.config.selectedPermissionOptionId?.trim();
+    final providerDefault = configuredId == null || configuredId.isEmpty
+        ? null
+        : AgentPermissionSelection(optionId: configuredId);
+    AgentPermissionSelection? catalogDefault;
+    if (providerDefault == null) {
+      final permissionPolicy = provider.bundle.permissionPolicy;
+      if (permissionPolicy != null) {
+        try {
+          final catalog = await permissionPolicy.listPermissionOptions();
+          final catalogId = catalog.defaultOptionId.trim();
+          if (catalogId.isNotEmpty) {
+            catalogDefault = AgentPermissionSelection(optionId: catalogId);
+          }
+        } catch (_) {
+          // 目录暂不可用时保留 adapter 的兼容 fallback，fork 不应因此失败。
+        }
+      }
+    }
+    return AgentPermissionRequestResolver.resolve(
+      providerDefault: providerDefault,
+      catalogDefault: catalogDefault,
+    );
   }
 
   void dispose() {

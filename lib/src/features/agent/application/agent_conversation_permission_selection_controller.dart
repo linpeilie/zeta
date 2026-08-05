@@ -1,4 +1,5 @@
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/application/agent_permission_request_resolver.dart';
 
 /// 权限选项选择的应用层控制器。
 ///
@@ -57,6 +58,31 @@ class AgentConversationPermissionSelectionController {
 
   /// Provider 默认偏好。
   AgentPermissionSelection? get defaultPreference => _defaultPreference;
+
+  /// 当前目录声明的默认选择；目录尚未加载时为空。
+  AgentPermissionSelection? get catalogDefault {
+    final optionId = _catalog?.defaultOptionId.trim();
+    if (optionId == null || optionId.isEmpty) {
+      return null;
+    }
+    return AgentPermissionSelection(optionId: optionId);
+  }
+
+  /// 为一次请求冻结权限来源，避免后续 UI/settings 更新改变已开始的异步调用。
+  AgentPermissionRequestSnapshot snapshotForRequest({String? threadId}) {
+    final normalized = threadId?.trim();
+    final effectiveThreadId = normalized == null || normalized.isEmpty
+        ? _boundThreadId
+        : normalized;
+    final threadEffective = effectiveThreadId == null
+        ? null
+        : _effectiveByThread[effectiveThreadId];
+    return AgentPermissionRequestResolver.resolve(
+      threadEffective: threadEffective,
+      providerDefault: _defaultPreference,
+      catalogDefault: catalogDefault,
+    );
+  }
 
   /// 最近一次 apply 的生效范围（用于 Composer 紧凑提示）。
   AgentPermissionApplyScope? get lastApplyScope => _lastApplyScope;
@@ -189,7 +215,6 @@ class AgentConversationPermissionSelectionController {
         _effectiveSelection = AgentPermissionSelection(
           optionId: catalog.defaultOptionId,
         );
-        _defaultPreference ??= _effectiveSelection;
       }
     } catch (_) {
       // 临时失败 / adapter 上抛：保留旧目录，不用空列表覆盖。
@@ -438,6 +463,6 @@ class AgentConversationPermissionSelectionController {
       _effectiveSelection = _effectiveByThread[threadId];
       return;
     }
-    _effectiveSelection = _defaultPreference;
+    _effectiveSelection = _defaultPreference ?? catalogDefault;
   }
 }

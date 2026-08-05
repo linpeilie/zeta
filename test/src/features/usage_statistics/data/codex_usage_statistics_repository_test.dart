@@ -558,13 +558,19 @@ class _UsageProvider
   }
 
   @override
-  Future<AgentSession> startSession({required AgentContext context, AgentPermissionSelection? permissionSelection}) =>
-      throw UnimplementedError();
+  Future<AgentSession> startSession({
+    required AgentContext context,
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
+    AgentPermissionSelection? permissionSelection,
+  }) => throw UnimplementedError();
 
   @override
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
     AgentPermissionSelection? permissionSelection,
   }) => throw UnimplementedError();
 

@@ -60,14 +60,18 @@ void main() {
         // 模拟 ViewModel：将当前 thread effective 冻结进请求快照。
         final session = await provider.startSession(
           context: const AgentContext(projectPath: '/repo'),
-          permissionSelection: controller.effectiveSelection,
+          permissionSnapshot: controller.snapshotForRequest(
+            threadId: 'thread-a',
+          ),
         );
         await provider.sendMessage(
           session: session,
           message: 'from thread A',
           context: const AgentContext(projectPath: '/repo'),
           configuration: AgentTurnConfiguration(
-            permissionSelection: controller.effectiveSelection,
+            permissionSnapshot: controller.snapshotForRequest(
+              threadId: 'thread-a',
+            ),
           ),
         );
 
@@ -117,14 +121,16 @@ void main() {
       );
       final sessionA = await provider.startSession(
         context: const AgentContext(projectPath: '/repo'),
-        permissionSelection: controller.effectiveSelection,
+        permissionSnapshot: controller.snapshotForRequest(threadId: 'thread-a'),
       );
       await provider.sendMessage(
         session: sessionA,
         message: 'A',
         context: const AgentContext(projectPath: '/repo'),
         configuration: AgentTurnConfiguration(
-          permissionSelection: controller.effectiveSelection,
+          permissionSnapshot: controller.snapshotForRequest(
+            threadId: 'thread-a',
+          ),
         ),
       );
 
@@ -134,14 +140,16 @@ void main() {
       );
       final sessionB = await provider.startSession(
         context: const AgentContext(projectPath: '/repo'),
-        permissionSelection: controller.effectiveSelection,
+        permissionSnapshot: controller.snapshotForRequest(threadId: 'thread-b'),
       );
       await provider.sendMessage(
         session: sessionB,
         message: 'B',
         context: const AgentContext(projectPath: '/repo'),
         configuration: AgentTurnConfiguration(
-          permissionSelection: controller.effectiveSelection,
+          permissionSnapshot: controller.snapshotForRequest(
+            threadId: 'thread-b',
+          ),
         ),
       );
 
@@ -153,7 +161,9 @@ void main() {
         message: 'A again',
         context: const AgentContext(projectPath: '/repo'),
         configuration: AgentTurnConfiguration(
-          permissionSelection: controller.effectiveSelection,
+          permissionSnapshot: controller.snapshotForRequest(
+            threadId: 'thread-a',
+          ),
         ),
       );
 

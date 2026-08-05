@@ -147,12 +147,18 @@ abstract interface class AgentRuntimePort {
 abstract interface class AgentConversationPort {
   Future<AgentSession> startSession({
     required AgentContext context,
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
+    @Deprecated('Use permissionSnapshot.')
     AgentPermissionSelection? permissionSelection,
   });
 
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
+    @Deprecated('Use permissionSnapshot.')
     AgentPermissionSelection? permissionSelection,
   });
 
@@ -201,6 +207,9 @@ abstract interface class AgentThreadBranchingPort {
     required String threadId,
     required AgentContext context,
     AgentForkBoundary boundary = const AgentForkCurrentHead(),
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
+    @Deprecated('Use permissionSnapshot.')
     AgentPermissionSelection? permissionSelection,
   });
 }
@@ -337,11 +346,14 @@ final class _LegacyAgentConversationPort implements AgentConversationPort {
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
     AgentPermissionSelection? permissionSelection,
   }) {
     return _provider.resumeSession(
       sessionId,
       context: context,
+      permissionSnapshot: permissionSnapshot,
       permissionSelection: permissionSelection,
     );
   }
@@ -368,10 +380,13 @@ final class _LegacyAgentConversationPort implements AgentConversationPort {
   @override
   Future<AgentSession> startSession({
     required AgentContext context,
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
     AgentPermissionSelection? permissionSelection,
   }) {
     return _provider.startSession(
       context: context,
+      permissionSnapshot: permissionSnapshot,
       permissionSelection: permissionSelection,
     );
   }
@@ -449,12 +464,15 @@ final class _LegacyAgentThreadBranchingPort
     required String threadId,
     required AgentContext context,
     AgentForkBoundary boundary = const AgentForkCurrentHead(),
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
     AgentPermissionSelection? permissionSelection,
   }) {
     return _provider.forkThread(
       threadId: threadId,
       context: context,
       boundary: boundary,
+      permissionSnapshot: permissionSnapshot,
       permissionSelection: permissionSelection,
     );
   }

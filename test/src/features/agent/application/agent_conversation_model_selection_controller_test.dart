@@ -351,7 +351,12 @@ class _FakeAgentProvider
   Future<void> unsubscribeThread(String threadId) async {}
 
   @override
-  Future<AgentSession> startSession({required AgentContext context, AgentPermissionSelection? permissionSelection}) async {
+  Future<AgentSession> startSession({
+    required AgentContext context,
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
+    AgentPermissionSelection? permissionSelection,
+  }) async {
     return const AgentSession(
       id: 'thread-1',
       providerId: defaultAgentProviderId,
@@ -362,6 +367,8 @@ class _FakeAgentProvider
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
     AgentPermissionSelection? permissionSelection,
   }) async {
     return AgentSession(id: sessionId, providerId: defaultAgentProviderId);

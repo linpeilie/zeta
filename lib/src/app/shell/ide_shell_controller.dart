@@ -425,9 +425,16 @@ class IdeShellController extends ChangeNotifier {
     if (!_canMutateAgentHistory()) {
       return;
     }
+    final sourceEntry = agentWorkspaceController.entryForThread(
+      providerId: thread.providerId,
+      threadId: thread.id,
+    );
     final session = await projectThreadsController.forkThread(
       projectPath: projectPath,
       threadId: thread.id,
+      permissionSnapshot: sourceEntry?.viewModel.permissionSnapshotForThread(
+        thread.id,
+      ),
     );
     if (session == null) {
       return;

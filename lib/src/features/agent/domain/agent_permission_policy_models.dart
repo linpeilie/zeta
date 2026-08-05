@@ -127,6 +127,64 @@ class AgentPermissionSelection {
   String toString() => 'AgentPermissionSelection(optionId: $optionId)';
 }
 
+/// 请求权限快照的解析来源。
+///
+/// 来源只描述 Zeta application 的优先级决策，不携带任何 Provider 协议字段。
+enum AgentPermissionRequestSource {
+  /// 当前 thread 已由 settings feedback 或本地选择确定的有效值。
+  threadEffective,
+
+  /// Provider 配置中持久化的默认偏好。
+  providerDefault,
+
+  /// Provider 权限目录声明的默认项。
+  catalogDefault,
+
+  /// application 没有可解析的选择，允许 adapter 沿用兼容 fallback。
+  providerFallback,
+}
+
+/// 一次 create/resume/fork/send 请求独占的中立权限快照。
+///
+/// 快照不可变，且只保存不透明的 [AgentPermissionSelection] 与解析来源。
+/// [providerFallback] 快照不携带 selection，由 data adapter 兼容现有默认逻辑。
+final class AgentPermissionRequestSnapshot {
+  /// 创建已经由 application 解析完成的请求快照。
+  const AgentPermissionRequestSnapshot.resolved({
+    required this.selection,
+    required this.source,
+  }) : assert(selection != null),
+       assert(source != AgentPermissionRequestSource.providerFallback);
+
+  /// 创建不覆盖 Provider 兼容 fallback 的请求快照。
+  const AgentPermissionRequestSnapshot.providerFallback()
+    : selection = null,
+      source = AgentPermissionRequestSource.providerFallback;
+
+  /// 本次请求使用的中立权限选择。
+  final AgentPermissionSelection? selection;
+
+  /// application 解析该选择时命中的优先级来源。
+  final AgentPermissionRequestSource source;
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is AgentPermissionRequestSnapshot &&
+            other.selection == selection &&
+            other.source == source;
+  }
+
+  @override
+  int get hashCode => Object.hash(selection, source);
+
+  @override
+  String toString() {
+    return 'AgentPermissionRequestSnapshot('
+        'selection: $selection, source: $source)';
+  }
+}
+
 /// 权限选择生效范围。
 enum AgentPermissionApplyScope {
   /// 仅影响当前 turn。

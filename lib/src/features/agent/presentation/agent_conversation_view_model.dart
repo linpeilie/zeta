@@ -741,6 +741,11 @@ class AgentConversationViewModel {
   AgentPermissionSelection? get permissionSelection =>
       _permissionSelectionController.effectiveSelection;
 
+  /// 为外层 application 工作流冻结指定 thread 的请求权限来源。
+  AgentPermissionRequestSnapshot permissionSnapshotForThread(
+    String? threadId,
+  ) => _permissionSelectionController.snapshotForRequest(threadId: threadId);
+
   String get permissionPolicyLabel =>
       _permissionSelectionController.displayLabel;
 
@@ -1835,12 +1840,15 @@ class AgentConversationViewModel {
         projectPath: _projectPath,
         filePath: _contextFilePath,
       );
+      final permissionSnapshot = _permissionSelectionController
+          .snapshotForRequest(threadId: selectedThreadId);
       providerOperation = 'session/ensure';
       final session = await _ensureSession(
         provider,
         context,
         switchToken: switchToken,
         expectedThreadId: selectedThreadId,
+        permissionSnapshot: permissionSnapshot,
       );
       requestSession = session;
       final conversation = provider.bundle.conversation;
@@ -1853,7 +1861,7 @@ class AgentConversationViewModel {
           : const AgentTurnConfiguration();
       final turnConfiguration = AgentTurnConfiguration(
         conversationMode: modeSnapshot.conversationMode,
-        permissionSelection: _permissionSelectionController.effectiveSelection,
+        permissionSnapshot: permissionSnapshot,
       );
       requestModeSelection = turnConfiguration.conversationMode;
       // 新会话在 Grok 异步 generated_title 出现前，先用首条用户消息作临时标题。
@@ -2387,9 +2395,9 @@ class AgentConversationViewModel {
           filePath: _contextFilePath,
         ),
         boundary: AgentForkThroughTurn(boundaryTurnId),
-        permissionSelection:
-            _permissionSelectionController.defaultPreference ??
-            _permissionSelectionController.effectiveSelection,
+        permissionSnapshot: _permissionSelectionController.snapshotForRequest(
+          threadId: threadId,
+        ),
       );
       if (!_isCurrentSwitch(switchToken)) {
         return;
@@ -2446,9 +2454,9 @@ class AgentConversationViewModel {
           projectPath: _projectPath,
           filePath: _contextFilePath,
         ),
-        permissionSelection:
-            _permissionSelectionController.defaultPreference ??
-            _permissionSelectionController.effectiveSelection,
+        permissionSnapshot: _permissionSelectionController.snapshotForRequest(
+          threadId: threadId,
+        ),
       );
       if (!_isCurrentSwitch(switchToken)) {
         return session;
@@ -2894,6 +2902,7 @@ class AgentConversationViewModel {
     AgentContext context, {
     required int switchToken,
     required String? expectedThreadId,
+    required AgentPermissionRequestSnapshot permissionSnapshot,
   }) async {
     final existing = _session;
     if (existing != null) {
@@ -2907,8 +2916,7 @@ class AgentConversationViewModel {
         final session = await provider.bundle.conversation.resumeSession(
           restoredSessionId,
           context: context,
-          permissionSelection:
-              _permissionSelectionController.effectiveSelection,
+          permissionSnapshot: permissionSnapshot,
         );
         if (_isStillSelectedThread(switchToken, expectedThreadId)) {
           await _replaceProviderEventSubscription(
@@ -2959,7 +2967,7 @@ class AgentConversationViewModel {
     _log.fine('Starting new Agent session with provider ${provider.config.id}');
     final session = await provider.bundle.conversation.startSession(
       context: context,
-      permissionSelection: _permissionSelectionController.effectiveSelection,
+      permissionSnapshot: permissionSnapshot,
     );
     if (_isStillSelectedThread(switchToken, expectedThreadId)) {
       await _replaceProviderEventSubscription(provider, threadId: session.id);

@@ -352,6 +352,8 @@ class CodexAppServerAgentProvider
   @override
   Future<AgentSession> startSession({
     required AgentContext context,
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
     AgentPermissionSelection? permissionSelection,
   }) async {
     await initialize();
@@ -359,7 +361,9 @@ class CodexAppServerAgentProvider
 
     final session = await _client.startSession(
       context: context,
-      permissionSelection: _resolvePermissionSnapshot(permissionSelection),
+      permissionSelection: _resolvePermissionSnapshot(
+        permissionSnapshot.selection ?? permissionSelection,
+      ),
       previousSessionId: null,
     );
     _events.add(AgentSessionStartedEvent(session));
@@ -371,6 +375,8 @@ class CodexAppServerAgentProvider
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
     AgentPermissionSelection? permissionSelection,
   }) => _scheduleThreadOperation(
     sessionId,
@@ -382,7 +388,9 @@ class CodexAppServerAgentProvider
       final session = await _client.resumeSession(
         sessionId,
         context: context,
-        permissionSelection: _resolvePermissionSnapshot(permissionSelection),
+        permissionSelection: _resolvePermissionSnapshot(
+          permissionSnapshot.selection ?? permissionSelection,
+        ),
         previousSessionId: null,
       );
       _events.add(AgentSessionStartedEvent(session));
@@ -681,6 +689,8 @@ class CodexAppServerAgentProvider
     required String threadId,
     required AgentContext context,
     AgentForkBoundary boundary = const AgentForkCurrentHead(),
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
     AgentPermissionSelection? permissionSelection,
   }) => _scheduleThreadOperation(
     threadId,
@@ -695,7 +705,9 @@ class CodexAppServerAgentProvider
         threadId: threadId,
         context: context,
         boundary: boundary,
-        permissionSelection: _resolvePermissionSnapshot(permissionSelection),
+        permissionSelection: _resolvePermissionSnapshot(
+          permissionSnapshot.selection ?? permissionSelection,
+        ),
         previousSessionId: null,
       );
       _events.add(AgentSessionStartedEvent(session));
@@ -755,7 +767,8 @@ class CodexAppServerAgentProvider
       selection: _modelSelection,
       // 请求级权限优先；无则回落 config/默认偏好，绝不读其它 thread 的共享状态。
       permissionSelection: _resolvePermissionSnapshot(
-        configuration.permissionSelection,
+        configuration.permissionSnapshot.selection ??
+            configuration.permissionSelection,
       ),
       turnConfiguration: configuration,
       clientUserMessageId: clientUserMessageId,

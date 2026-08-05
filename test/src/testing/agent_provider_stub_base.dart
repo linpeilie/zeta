@@ -18,6 +18,8 @@ mixin AgentProviderThreadLifecycleStub {
   final List<String> deletedThreads = <String>[];
   final List<String> forkedThreads = <String>[];
   final List<AgentForkBoundary> forkBoundaries = <AgentForkBoundary>[];
+  final List<AgentPermissionRequestSnapshot> forkPermissionSnapshots =
+      <AgentPermissionRequestSnapshot>[];
   final List<String> compactedThreads = <String>[];
 
   /// 分叉时返回的会话；为空则用 `forked-<threadId>`。
@@ -49,10 +51,13 @@ mixin AgentProviderThreadLifecycleStub {
     required String threadId,
     required AgentContext context,
     AgentForkBoundary boundary = const AgentForkCurrentHead(),
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
     AgentPermissionSelection? permissionSelection,
   }) async {
     forkedThreads.add(threadId);
     forkBoundaries.add(boundary);
+    forkPermissionSnapshots.add(permissionSnapshot);
     return forkResult ??
         AgentSession(
           id: 'forked-$threadId',

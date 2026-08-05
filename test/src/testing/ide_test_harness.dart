@@ -206,6 +206,10 @@ class FakeAgentProvider
   final List<String> removedLocalThreads = <String>[];
   final List<AgentTurnConfiguration> turnConfigurations =
       <AgentTurnConfiguration>[];
+  final List<AgentPermissionRequestSnapshot> startPermissionSnapshots =
+      <AgentPermissionRequestSnapshot>[];
+  final List<AgentPermissionRequestSnapshot> resumePermissionSnapshots =
+      <AgentPermissionRequestSnapshot>[];
 
   /// 每次 sendMessage 递增，避免复用 turn id 导致 history/live 双挂。
   int _nextTurnSequence = 0;
@@ -232,9 +236,12 @@ class FakeAgentProvider
   @override
   Future<AgentSession> startSession({
     required AgentContext context,
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
     AgentPermissionSelection? permissionSelection,
   }) async {
     await initialize();
+    startPermissionSnapshots.add(permissionSnapshot);
     return AgentSession(
       id: 'thread-1',
       providerId: config.id,
@@ -246,9 +253,12 @@ class FakeAgentProvider
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
     AgentPermissionSelection? permissionSelection,
   }) async {
     await initialize();
+    resumePermissionSnapshots.add(permissionSnapshot);
     resumedSessions.add(sessionId);
     final onResumeSession = this.onResumeSession;
     if (onResumeSession != null) {

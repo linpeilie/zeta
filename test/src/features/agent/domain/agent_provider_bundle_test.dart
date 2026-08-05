@@ -40,6 +40,22 @@ void main() {
             effectiveModelId: 'model-1',
             effectiveReasoningEffort: 'high',
           ),
+          permissionSnapshot: const AgentPermissionRequestSnapshot.resolved(
+            selection: AgentPermissionSelection(optionId: 'turn-safe'),
+            source: AgentPermissionRequestSource.threadEffective,
+          ),
+        );
+        const startPermission = AgentPermissionRequestSnapshot.resolved(
+          selection: AgentPermissionSelection(optionId: 'start-safe'),
+          source: AgentPermissionRequestSource.catalogDefault,
+        );
+        const resumePermission = AgentPermissionRequestSnapshot.resolved(
+          selection: AgentPermissionSelection(optionId: 'resume-safe'),
+          source: AgentPermissionRequestSource.providerDefault,
+        );
+        const forkPermission = AgentPermissionRequestSnapshot.resolved(
+          selection: AgentPermissionSelection(optionId: 'fork-safe'),
+          source: AgentPermissionRequestSource.threadEffective,
         );
 
         expect(bundle.provider, same(provider));
@@ -66,10 +82,12 @@ void main() {
 
         final started = await bundle.conversation.startSession(
           context: const AgentContext(projectPath: '/workspace'),
+          permissionSnapshot: startPermission,
         );
         final resumed = await bundle.conversation.resumeSession(
           'thread-2',
           context: const AgentContext(projectPath: '/workspace'),
+          permissionSnapshot: resumePermission,
         );
         final turn = await bundle.conversation.sendMessage(
           session: started,
@@ -102,6 +120,7 @@ void main() {
           threadId: 'thread-1',
           context: const AgentContext(projectPath: '/workspace'),
           boundary: const AgentForkThroughTurn('turn-7'),
+          permissionSnapshot: forkPermission,
         );
         await bundle.turnSteering!.steerTurn(
           session: started,
@@ -154,7 +173,9 @@ void main() {
         expect(models.models, hasLength(1));
         expect(provider.startedContexts, hasLength(1));
         expect(provider.startedContexts.single.projectPath, '/workspace');
+        expect(provider.startPermissionSnapshots.single, startPermission);
         expect(provider.resumedSessions, <String>['thread-2']);
+        expect(provider.resumePermissionSnapshots.single, resumePermission);
         expect(provider.sentMessages, <String>['hello']);
         expect(provider.sentConfigurations.single, same(turnConfiguration));
         expect(provider.cancelledTurns, <String>['turn-1']);
@@ -172,6 +193,7 @@ void main() {
         expect(provider.forkedThreads, <String>['thread-1']);
         expect(provider.forkBoundaries, hasLength(1));
         expect(provider.forkBoundaries.single, isA<AgentForkThroughTurn>());
+        expect(provider.forkPermissionSnapshots.single, forkPermission);
         expect(
           (provider.forkBoundaries.single as AgentForkThroughTurn).turnId,
           'turn-7',
@@ -388,7 +410,11 @@ class _MinimalBundleFakeProvider implements AgentProvider {
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
   final List<AgentContext> startedContexts = <AgentContext>[];
+  final List<AgentPermissionRequestSnapshot> startPermissionSnapshots =
+      <AgentPermissionRequestSnapshot>[];
   final List<String> resumedSessions = <String>[];
+  final List<AgentPermissionRequestSnapshot> resumePermissionSnapshots =
+      <AgentPermissionRequestSnapshot>[];
   final List<String> sentMessages = <String>[];
   final List<AgentTurnConfiguration> sentConfigurations =
       <AgentTurnConfiguration>[];
@@ -405,6 +431,8 @@ class _MinimalBundleFakeProvider implements AgentProvider {
   final List<String> compactedThreads = <String>[];
   final List<String> forkedThreads = <String>[];
   final List<AgentForkBoundary> forkBoundaries = <AgentForkBoundary>[];
+  final List<AgentPermissionRequestSnapshot> forkPermissionSnapshots =
+      <AgentPermissionRequestSnapshot>[];
   final List<AgentPermissionDecision> permissionDecisions =
       <AgentPermissionDecision>[];
   final List<String> guardianApprovals = <String>[];
@@ -428,8 +456,14 @@ class _MinimalBundleFakeProvider implements AgentProvider {
   Future<void> initialize() async {}
 
   @override
-  Future<AgentSession> startSession({required AgentContext context, AgentPermissionSelection? permissionSelection}) async {
+  Future<AgentSession> startSession({
+    required AgentContext context,
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
+    AgentPermissionSelection? permissionSelection,
+  }) async {
     startedContexts.add(context);
+    startPermissionSnapshots.add(permissionSnapshot);
     return const AgentSession(
       id: 'thread-1',
       providerId: defaultAgentProviderId,
@@ -440,9 +474,12 @@ class _MinimalBundleFakeProvider implements AgentProvider {
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
     AgentPermissionSelection? permissionSelection,
   }) async {
     resumedSessions.add(sessionId);
+    resumePermissionSnapshots.add(permissionSnapshot);
     return AgentSession(id: sessionId, providerId: defaultAgentProviderId);
   }
 
@@ -523,10 +560,13 @@ class _MinimalBundleFakeProvider implements AgentProvider {
     required String threadId,
     required AgentContext context,
     AgentForkBoundary boundary = const AgentForkCurrentHead(),
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
     AgentPermissionSelection? permissionSelection,
   }) async {
     forkedThreads.add(threadId);
     forkBoundaries.add(boundary);
+    forkPermissionSnapshots.add(permissionSnapshot);
     return AgentSession(
       id: 'fork-$threadId',
       providerId: defaultAgentProviderId,
