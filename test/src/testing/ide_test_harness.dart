@@ -475,8 +475,17 @@ class FakeAgentProvider
   @override
   void updateModelSelection(AgentModelSelection selection) {}
 
+  /// 最近一次 [updatePermissionSelection] 快照（权限选择同步断言用）。
+  AgentPermissionSelection? lastPermissionSelection;
+
+  /// [updatePermissionSelection] 调用次数。
+  int permissionSelectionUpdateCount = 0;
+
   @override
-  void updatePermissionSelection(AgentPermissionSelection selection) {}
+  void updatePermissionSelection(AgentPermissionSelection selection) {
+    lastPermissionSelection = selection;
+    permissionSelectionUpdateCount += 1;
+  }
 
   @override
   Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {

@@ -98,10 +98,7 @@ const List<AgentPermissionProfileSummary> agentPaneDefaultPermissionProfiles =
         allowed: true,
         description: 'Workspace write',
       ),
-      AgentPermissionProfileSummary(
-        id: ':danger-full-access',
-        allowed: true,
-      ),
+      AgentPermissionProfileSummary(id: ':danger-full-access', allowed: true),
       AgentPermissionProfileSummary(
         id: ':team-safe',
         allowed: false,
@@ -452,8 +449,16 @@ class AgentPaneFakeProvider
   @override
   void updateModelSelection(AgentModelSelection selection) {}
 
+  /// 最近一次权限选择（Codex/Grok Composer 同步断言用）。
+  AgentPermissionSelection? lastPermissionSelection;
+
+  int permissionSelectionUpdateCount = 0;
+
   @override
-  void updatePermissionSelection(AgentPermissionSelection selection) {}
+  void updatePermissionSelection(AgentPermissionSelection selection) {
+    lastPermissionSelection = selection;
+    permissionSelectionUpdateCount += 1;
+  }
 
   @override
   Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {

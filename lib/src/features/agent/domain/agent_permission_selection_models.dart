@@ -21,7 +21,10 @@ class AgentPermissionProfileSummary {
   AgentPermissionPreset? get matchedPreset =>
       AgentPermissionSelection.presetForOptionId(id);
 
-  /// Composer / 触发器展示名。
+  /// Composer 触发器 / 选项主标题：短 option label。
+  ///
+  /// 产品契约：触发器与 popover 选项均使用短标签（如 `Workspace write`、`Ask`），
+  /// 不在触发器拼接审批副标题（` · Ask first`）。副标题见 [displaySubtitle]。
   String get displayName {
     final trimmed = description?.trim();
     if (trimmed != null && trimmed.isNotEmpty) {
@@ -38,7 +41,7 @@ class AgentPermissionProfileSummary {
     return rawId;
   }
 
-  /// 列表副标题。
+  /// 可选副标题（审批策略等）；Composer 触发器不使用。
   String get displaySubtitle {
     final preset = matchedPreset;
     if (preset != null) {
@@ -163,30 +166,31 @@ class AgentPermissionSelection {
   }
 
   /// 展示标签（无选项列表时的回落）。
+  ///
+  /// 产品契约（与 Composer 触发器一致）：
+  /// - 内置 Codex option → 短标签（`Workspace write` / `Read only` / `Full access`）
+  /// - 显式非内置 option（含 Grok `ask`/`auto`/`always-approve`、自定义 profile id）
+  ///   → 使用 option id 本身，**不得**按 approval/sandbox 误判成内置预设
+  /// - 无 option、仅策略时 → 短预设名或策略组合回落
   String get displayLabel {
     final id = selectedOptionId;
-    if (id != null) {
+    if (id != null && id.isNotEmpty) {
       final preset = presetForOptionId(id);
       if (preset != null) {
         return preset.label;
       }
+      // Grok mode / 自定义 profile id：短 option 文案。
+      return id;
     }
     final approvalLabel = approvalPolicyDisplayLabel(approvalPolicy);
+    final sandboxLabel = sandboxPolicyDisplayLabel(sandboxPolicy);
     final presetId = matchedPresetId;
     if (presetId != null) {
       for (final preset in presets) {
         if (preset.id == presetId) {
-          return '${preset.label} · $approvalLabel';
+          return preset.label;
         }
       }
-    }
-    final sandboxLabel = sandboxPolicyDisplayLabel(sandboxPolicy);
-    final profileId = permissionProfileId?.trim();
-    if (profileId != null && profileId.isNotEmpty) {
-      return '$sandboxLabel · $approvalLabel · $profileId';
-    }
-    if (id != null && id.isNotEmpty) {
-      return id;
     }
     return '$sandboxLabel · $approvalLabel';
   }

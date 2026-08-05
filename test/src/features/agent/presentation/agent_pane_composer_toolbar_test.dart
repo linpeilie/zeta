@@ -825,7 +825,10 @@ void main() {
         expect(permissionSurface.borderRadius, modelSurface.borderRadius);
         expect(permissionSurface.backgroundColor, modelSurface.backgroundColor);
         expect(permissionSurface.borderColor, modelSurface.borderColor);
+        // 触发器短标签契约：option label，不含审批副标题。
         expect(find.text('Workspace write'), findsOneWidget);
+        expect(viewModel.permissionPolicyLabel, 'Workspace write');
+        expect(viewModel.permissionPolicyLabel, isNot(contains('Ask first')));
 
         await tester.tap(permissionSelector);
         await tester.pump();
@@ -864,6 +867,7 @@ void main() {
           ),
           findsWidgets,
         );
+        // popover 选项仅短 displayName，不渲染审批副标题。
         expect(find.text('Ask first'), findsNothing);
 
         await tester.tap(
@@ -874,8 +878,13 @@ void main() {
 
         expect(viewModel.permissionSelection.permissionProfileId, ':read-only');
         expect(viewModel.permissionSelection.matchedPresetId, 'readOnly');
+        expect(
+          provider.lastPermissionSelection?.permissionProfileId,
+          ':read-only',
+        );
         expect(popover, findsNothing);
         expect(find.text('Read only'), findsOneWidget);
+        expect(viewModel.permissionPolicyLabel, 'Read only');
         expect(
           FocusManager.instance.primaryFocus?.debugLabel,
           'agent-permission-policy-trigger',

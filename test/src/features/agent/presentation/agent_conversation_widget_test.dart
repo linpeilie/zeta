@@ -850,6 +850,117 @@ void main() {
     expect(mentionFileButton, findsOneWidget);
   });
 
+  testWidgets(
+    'Grok permission picker selects options, persists and syncs provider',
+    (tester) async {
+      final session = activeProjectSessionStore(tempDirectories);
+      final configStore = MemoryAgentProviderConfigStore(
+        AgentProviderSettings(
+          providers: <AgentProviderConfig>[
+            AgentProviderConfig.defaultGrok.copyWith(
+              selectedPermissionOptionId: 'ask',
+            ),
+          ],
+          activeProviderId: grokAgentProviderId,
+        ),
+      );
+      final provider = FakeAgentProvider(
+        config: AgentProviderConfig.defaultGrok.copyWith(
+          selectedPermissionOptionId: 'ask',
+        ),
+        declaredCapabilities: AgentProviderCapabilities.grokAcp,
+        includeConversationTestThread: true,
+        permissionProfiles: const <AgentPermissionProfileSummary>[
+          AgentPermissionProfileSummary(
+            id: 'ask',
+            allowed: true,
+            description: 'Ask',
+          ),
+          AgentPermissionProfileSummary(
+            id: 'auto',
+            allowed: true,
+            description: 'Auto',
+          ),
+          AgentPermissionProfileSummary(
+            id: 'always-approve',
+            allowed: true,
+            description: 'Always approve',
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MainApp(
+          enableNativeWindowFrame: false,
+          directoryPicker: () async => null,
+          sessionLoader: session.load,
+          sessionSaver: session.save,
+          agentProviderFactory: FakeAgentProviderFactory(provider),
+          agentProviderConfigStore: configStore,
+        ),
+      );
+      await openConversationTestThread(tester);
+      final permissionSelector = find.byKey(
+        const ValueKey('agent-permission-policy-selector'),
+      );
+      await pumpUntilCondition(
+        tester,
+        () => permissionSelector.evaluate().isNotEmpty,
+        failureMessage: 'Grok permission selector did not appear',
+      );
+
+      // 触发器短标签 Ask，无 Default。
+      expect(find.text('Ask'), findsWidgets);
+      expect(find.text('Default'), findsNothing);
+
+      Future<void> selectPermission(String profileId) async {
+        await tester.tap(permissionSelector);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        final item = find.byKey(
+          ValueKey<String>('agent-permission-profile-$profileId'),
+        );
+        expect(item, findsOneWidget);
+        await tester.tap(item);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+
+      final updatesBefore = provider.permissionSelectionUpdateCount;
+      await selectPermission('always-approve');
+      expect(find.text('Always approve'), findsWidgets);
+      expect(provider.lastPermissionSelection?.optionId, 'always-approve');
+      expect(provider.lastPermissionSelection?.permissionProfileId, isNull);
+      expect(
+        provider.permissionSelectionUpdateCount,
+        greaterThan(updatesBefore),
+      );
+
+      var settings = await configStore.load();
+      var grok = settings.providers.singleWhere(
+        (p) => p.id == grokAgentProviderId,
+      );
+      expect(grok.selectedPermissionOptionId, 'always-approve');
+      expect(grok.selectedPermissionProfileId, isNull);
+
+      await selectPermission('auto');
+      expect(find.text('Auto'), findsWidgets);
+      expect(provider.lastPermissionSelection?.optionId, 'auto');
+      settings = await configStore.load();
+      grok = settings.providers.singleWhere((p) => p.id == grokAgentProviderId);
+      expect(grok.selectedPermissionOptionId, 'auto');
+
+      // 切回 Ask：触发器短标签，provider 同步 optionId=ask。
+      await selectPermission('ask');
+      expect(find.text('Ask'), findsWidgets);
+      expect(provider.lastPermissionSelection?.optionId, 'ask');
+      expect(provider.lastPermissionSelection?.permissionProfileId, isNull);
+      settings = await configStore.load();
+      grok = settings.providers.singleWhere((p) => p.id == grokAgentProviderId);
+      expect(grok.selectedPermissionOptionId, 'ask');
+    },
+  );
+
   testWidgets('renders one friendly Grok prompt error and allows retry', (
     tester,
   ) async {

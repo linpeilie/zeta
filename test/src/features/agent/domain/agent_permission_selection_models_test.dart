@@ -22,12 +22,24 @@ void main() {
       );
     });
 
-    test('derives built-in permission profiles and readable labels', () {
+    test('trigger labels use short option names without approval subtitle', () {
+      // 默认策略匹配 :workspace 内置预设 → 触发器短标签。
       const workspace = AgentPermissionSelection();
       expect(workspace.protocolPermissionProfileId, ':workspace');
-      // selectedOptionId 回落到 protocol profile 后走内置预设 label。
       expect(workspace.displayLabel, 'Workspace write');
+      expect(workspace.displayLabel, isNot(contains('Ask first')));
 
+      // 显式 built-in option 同样短标签。
+      final readOnly = AgentPermissionSelection.forProfileId(':read-only');
+      expect(readOnly.displayLabel, 'Read only');
+      expect(readOnly.displayLabel, isNot(contains('·')));
+
+      final fullAccess = AgentPermissionSelection.forProfileId(
+        ':danger-full-access',
+      );
+      expect(fullAccess.displayLabel, 'Full access');
+
+      // 自定义 profile：selectedOptionId 回落到 profile id，触发器用短 id。
       const custom = AgentPermissionSelection(
         approvalPolicy: 'on-request',
         sandboxPolicy: 'workspaceWrite',
@@ -35,7 +47,39 @@ void main() {
       );
       expect(custom.matchedPresetId, isNull);
       expect(custom.protocolPermissionProfileId, ':team-safe');
-      expect(custom.displayLabel, 'Workspace write · Ask first · :team-safe');
+      expect(custom.displayLabel, ':team-safe');
+      expect(custom.displayLabel, isNot(contains('Ask first')));
+    });
+
+    test('Grok option ids use short labels and never invent Default', () {
+      const ask = AgentPermissionProfileSummary(
+        id: 'ask',
+        allowed: true,
+        description: 'Ask',
+      );
+      const auto = AgentPermissionProfileSummary(
+        id: 'auto',
+        allowed: true,
+        description: 'Auto',
+      );
+      const always = AgentPermissionProfileSummary(
+        id: 'always-approve',
+        allowed: true,
+        description: 'Always approve',
+      );
+      expect(ask.displayName, 'Ask');
+      expect(auto.displayName, 'Auto');
+      expect(always.displayName, 'Always approve');
+
+      // selection 回落：Grok option 不得被默认 approval/sandbox 显示成 Workspace write。
+      final autoSelection = AgentPermissionSelection.forOptionId('auto');
+      expect(autoSelection.displayLabel, 'auto');
+      expect(autoSelection.displayLabel, isNot('Workspace write'));
+      expect(autoSelection.permissionProfileId, isNull);
+
+      const bareAsk = AgentPermissionProfileSummary(id: 'ask', allowed: true);
+      expect(bareAsk.displayName, 'ask');
+      expect(bareAsk.displayName.toLowerCase(), isNot('default'));
     });
 
     test('forProfileId maps known built-ins and keeps custom ids', () {
