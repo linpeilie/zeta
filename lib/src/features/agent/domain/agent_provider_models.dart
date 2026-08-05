@@ -49,9 +49,6 @@ class AgentProviderConfig {
     this.selectedReasoningEffort,
     this.selectedServiceTier,
     this.modelPreferences = const <String, AgentModelPreference>{},
-    this.selectedApprovalPolicy,
-    this.selectedSandboxPolicy,
-    this.selectedPermissionProfileId,
     this.selectedPermissionOptionId,
     this.enabled = true,
     this.extra = const <String, Object?>{},
@@ -90,34 +87,19 @@ class AgentProviderConfig {
   /// 按模型保存的最近一次有效配置。
   final Map<String, AgentModelPreference> modelPreferences;
 
-  /// V1 遗留审批策略（仅解码迁移输入；V2 不再写出）。
-  final String? selectedApprovalPolicy;
-
-  /// V1 遗留沙箱策略（仅解码迁移输入；V2 不再写出）。
-  final String? selectedSandboxPolicy;
-
-  /// V1 遗留 permission profile id（仅解码迁移输入；V2 不再写出）。
-  final String? selectedPermissionProfileId;
-
   /// 中立权限选项 id（V2 唯一权限真源：Codex profile 或 Grok mode 等）。
   ///
-  /// V1 读取时由 [AgentPermissionPreferenceMigration] 从旧字段推导。
+  /// V1 JSON 字段仅在 [tryDecode] 中作为迁移输入读取，不进入运行时字段。
   final String? selectedPermissionOptionId;
 
   /// 是否在配置列表中启用。
   final bool enabled;
 
-  /// 解析后的权限选项 id（V2 以 [selectedPermissionOptionId] 为准）。
-  ///
-  /// 若内存中仍带 V1 字段（测试/未完整迁移对象），再做一次轻量回落。
+  /// 解析后的权限选项 id（等同 [selectedPermissionOptionId] 去空白）。
   String? get resolvedPermissionOptionId {
     final option = selectedPermissionOptionId?.trim();
     if (option != null && option.isNotEmpty) {
       return option;
-    }
-    final profile = selectedPermissionProfileId?.trim();
-    if (profile != null && profile.isNotEmpty) {
-      return profile;
     }
     return null;
   }
@@ -184,9 +166,6 @@ class AgentProviderConfig {
     String? selectedReasoningEffort,
     String? selectedServiceTier,
     Map<String, AgentModelPreference>? modelPreferences,
-    Object? selectedApprovalPolicy = agentProviderConfigUnset,
-    Object? selectedSandboxPolicy = agentProviderConfigUnset,
-    Object? selectedPermissionProfileId = agentProviderConfigUnset,
     Object? selectedPermissionOptionId = agentProviderConfigUnset,
     bool? enabled,
     Map<String, Object?>? extra,
@@ -204,18 +183,6 @@ class AgentProviderConfig {
           selectedReasoningEffort ?? this.selectedReasoningEffort,
       selectedServiceTier: selectedServiceTier ?? this.selectedServiceTier,
       modelPreferences: modelPreferences ?? this.modelPreferences,
-      selectedApprovalPolicy:
-          identical(selectedApprovalPolicy, agentProviderConfigUnset)
-          ? this.selectedApprovalPolicy
-          : selectedApprovalPolicy as String?,
-      selectedSandboxPolicy:
-          identical(selectedSandboxPolicy, agentProviderConfigUnset)
-          ? this.selectedSandboxPolicy
-          : selectedSandboxPolicy as String?,
-      selectedPermissionProfileId:
-          identical(selectedPermissionProfileId, agentProviderConfigUnset)
-          ? this.selectedPermissionProfileId
-          : selectedPermissionProfileId as String?,
       selectedPermissionOptionId:
           identical(selectedPermissionOptionId, agentProviderConfigUnset)
           ? this.selectedPermissionOptionId
@@ -225,7 +192,7 @@ class AgentProviderConfig {
     );
   }
 
-  /// 原子设置权限偏好为单一 optionId，并清空全部 V1 权限遗留字段。
+  /// 原子设置权限偏好为单一 optionId。
   ///
   /// [optionId] 为 null 或空白时表示清除用户偏好（回落 provider 默认）。
   AgentProviderConfig withPermissionPreference(String? optionId) {
@@ -243,9 +210,6 @@ class AgentProviderConfig {
       selectedReasoningEffort: selectedReasoningEffort,
       selectedServiceTier: selectedServiceTier,
       modelPreferences: modelPreferences,
-      selectedApprovalPolicy: null,
-      selectedSandboxPolicy: null,
-      selectedPermissionProfileId: null,
       selectedPermissionOptionId: normalized,
       enabled: enabled,
       extra: extra,
@@ -274,9 +238,6 @@ class AgentProviderConfig {
       modelPreferences: Map<String, AgentModelPreference>.unmodifiable(
         preferences,
       ),
-      selectedApprovalPolicy: selectedApprovalPolicy,
-      selectedSandboxPolicy: selectedSandboxPolicy,
-      selectedPermissionProfileId: selectedPermissionProfileId,
       selectedPermissionOptionId: selectedPermissionOptionId,
       enabled: enabled,
       extra: extra,
@@ -359,10 +320,6 @@ class AgentProviderConfig {
       ),
       selectedServiceTier: decodeOptionalString(map['selectedServiceTier']),
       modelPreferences: _decodeModelPreferences(map['modelPreferences']),
-      // V1 字段不进入运行时真源。
-      selectedApprovalPolicy: null,
-      selectedSandboxPolicy: null,
-      selectedPermissionProfileId: null,
       selectedPermissionOptionId: optionId,
       enabled: map['enabled'] is bool ? map['enabled'] as bool : true,
       extra: decodeObjectMap(map['extra']),

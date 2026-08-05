@@ -145,9 +145,6 @@ void main() {
       });
       expect(builtIn, isNotNull);
       expect(builtIn!.selectedPermissionOptionId, ':danger-full-access');
-      expect(builtIn.selectedApprovalPolicy, isNull);
-      expect(builtIn.selectedSandboxPolicy, isNull);
-      expect(builtIn.selectedPermissionProfileId, isNull);
 
       final custom = AgentProviderConfig.tryDecode(<String, Object?>{
         'id': 'codex',
@@ -160,12 +157,8 @@ void main() {
         'enabled': true,
       });
       expect(custom!.selectedPermissionOptionId, 'team-safe');
-      expect(custom.selectedPermissionProfileId, isNull);
 
       final json = custom.toJson();
-      expect(json.containsKey('selectedApprovalPolicy'), isFalse);
-      expect(json.containsKey('selectedSandboxPolicy'), isFalse);
-      expect(json.containsKey('selectedPermissionProfileId'), isFalse);
       expect(json['selectedPermissionOptionId'], 'team-safe');
     });
 
@@ -206,20 +199,11 @@ void main() {
 
     test('withPermissionPreference clears nullable preference', () {
       final withPref = AgentProviderConfig.defaultCodex
-          .withPermissionPreference('team-safe')
-          .copyWith(
-            // legacy fields if somehow present should be wiped by withPermissionPreference
-            selectedApprovalPolicy: 'never',
-          );
-      // copyWith can re-set approval for test of wipe:
-      final dirty = withPref.copyWith(selectedApprovalPolicy: 'never');
-      expect(dirty.selectedApprovalPolicy, 'never');
+          .withPermissionPreference('team-safe');
+      expect(withPref.selectedPermissionOptionId, 'team-safe');
 
-      final cleared = dirty.withPermissionPreference(null);
+      final cleared = withPref.withPermissionPreference(null);
       expect(cleared.selectedPermissionOptionId, isNull);
-      expect(cleared.selectedApprovalPolicy, isNull);
-      expect(cleared.selectedSandboxPolicy, isNull);
-      expect(cleared.selectedPermissionProfileId, isNull);
 
       final json = cleared.toJson();
       expect(json['selectedPermissionOptionId'], isNull);
@@ -285,7 +269,6 @@ void main() {
       );
       expect(grokJson['selectedPermissionOptionId'], 'auto');
       expect(grokJson.containsKey('selectedPermissionMode'), isFalse);
-      expect(grokJson.containsKey('selectedApprovalPolicy'), isFalse);
     });
 
     test('unsupported settings version falls back to defaults', () {

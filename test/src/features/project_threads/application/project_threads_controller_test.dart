@@ -1182,14 +1182,6 @@ class _FakeAgentProvider
   void updateModelSelection(AgentModelSelection selection) {}
 
   @override
-  void updatePermissionSelection(AgentPermissionSelectionSnapshot selection) {}
-
-  @override
-  Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
-    return const <AgentPermissionProfileSummary>[];
-  }
-
-  @override
   Future<void> approveGuardianDeniedAction({
     required String threadId,
     required Object event,

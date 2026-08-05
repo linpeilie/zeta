@@ -144,30 +144,15 @@ class FakeAgentProvider
     this.config = AgentProviderConfig.defaultCodex,
     this.includeConversationTestThread = false,
     this.conversationThreadProviderId,
-    List<AgentPermissionProfileSummary> permissionProfiles =
-        const <AgentPermissionProfileSummary>[],
     List<AgentPermissionOption> permissionOptions =
         const <AgentPermissionOption>[],
     this.permissionPolicyOverride,
     List<AgentThreadPage> threadPages = const <AgentThreadPage>[],
     Map<String, AgentThreadHistorySnapshot> threadHistories =
         const <String, AgentThreadHistorySnapshot>{},
-  }) : permissionProfiles = permissionProfiles.isNotEmpty
-           ? List<AgentPermissionProfileSummary>.unmodifiable(
-               permissionProfiles,
-             )
-           : List<AgentPermissionProfileSummary>.unmodifiable(
-               permissionOptions.map(
-                 AgentPermissionPolicyAdapters.profileSummaryFromOption,
-               ),
-             ),
-       permissionOptions = permissionOptions.isNotEmpty
-           ? List<AgentPermissionOption>.unmodifiable(permissionOptions)
-           : List<AgentPermissionOption>.unmodifiable(
-               permissionProfiles.map(
-                 AgentPermissionPolicyAdapters.optionFromProfileSummary,
-               ),
-             ),
+  }) : permissionOptions = List<AgentPermissionOption>.unmodifiable(
+         permissionOptions,
+       ),
        _threadPages = List<AgentThreadPage>.from(threadPages),
        _threadHistories = Map<String, AgentThreadHistorySnapshot>.from(
          threadHistories,
@@ -190,10 +175,7 @@ class FakeAgentProvider
   final bool includeConversationTestThread;
   final String? conversationThreadProviderId;
 
-  /// 旧 profile 列表（[listPermissionProfiles]）。
-  final List<AgentPermissionProfileSummary> permissionProfiles;
-
-  /// 中立 option 列表（与 [permissionProfiles] 双向薄适配）。
+  /// 中立权限选项（[AgentPermissionPolicyPort.listPermissionOptions]）。
   final List<AgentPermissionOption> permissionOptions;
 
   /// 可选显式权限 port；非 null 时覆盖默认 fake port。
@@ -227,6 +209,12 @@ class FakeAgentProvider
 
   /// 每次 sendMessage 递增，避免复用 turn id 导致 history/live 双挂。
   int _nextTurnSequence = 0;
+
+  /// 最近一次经 port 应用的权限 optionId。
+  String? lastAppliedPermissionOptionId;
+
+  /// 权限 port apply 次数。
+  int permissionApplyCount = 0;
 
   @override
   AgentProviderCapabilities get capabilities => declaredCapabilities;
@@ -508,23 +496,6 @@ class FakeAgentProvider
   @override
   void updateModelSelection(AgentModelSelection selection) {}
 
-  /// 最近一次 [updatePermissionSelection] 快照（权限选择同步断言用）。
-  AgentPermissionSelectionSnapshot? lastPermissionSelection;
-
-  /// [updatePermissionSelection] 调用次数。
-  int permissionSelectionUpdateCount = 0;
-
-  @override
-  void updatePermissionSelection(AgentPermissionSelectionSnapshot selection) {
-    lastPermissionSelection = selection;
-    permissionSelectionUpdateCount += 1;
-  }
-
-  @override
-  Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
-    return permissionProfiles;
-  }
-
   @override
   AgentPermissionPolicyPort get permissionPolicy =>
       permissionPolicyOverride ?? _defaultPermissionPolicy;
@@ -569,13 +540,15 @@ final class _FakeAgentPermissionPolicyPort
 
   final FakeAgentProvider _host;
 
+  /// 最近一次 apply 的 optionId（权限选择同步断言用）。
+  String? lastAppliedOptionId;
+
+  /// apply 调用次数。
+  int applyCount = 0;
+
   @override
   Future<AgentPermissionCatalog> listPermissionOptions() async {
-    final options = _host.permissionOptions.isNotEmpty
-        ? _host.permissionOptions
-        : _host.permissionProfiles
-              .map(AgentPermissionPolicyAdapters.optionFromProfileSummary)
-              .toList(growable: false);
+    final options = _host.permissionOptions;
     return AgentPermissionCatalog(
       options: options,
       defaultOptionId: options.isNotEmpty ? options.first.id : '',
@@ -586,19 +559,14 @@ final class _FakeAgentPermissionPolicyPort
   Future<AgentPermissionApplyResult> applyPermissionSelection(
     AgentPermissionSelection selection,
   ) async {
-    final preferProfile = _host.capabilities.supportsPermissionProfileSelection;
-    final snapshot = AgentPermissionPolicyAdapters.snapshotFromSelection(
-      selection,
-      preferProfileBinding: preferProfile,
-    );
-    _host.updatePermissionSelection(snapshot);
+    final optionId = selection.optionId.trim();
+    lastAppliedOptionId = optionId;
+    applyCount += 1;
+    _host.lastAppliedPermissionOptionId = optionId;
+    _host.permissionApplyCount += 1;
     return AgentPermissionApplyResult(
-      normalizedSelection: AgentPermissionSelection(
-        optionId: snapshot.selectedOptionId ?? selection.optionId,
-      ),
-      scope: preferProfile
-          ? AgentPermissionApplyScope.currentSession
-          : AgentPermissionApplyScope.runtime,
+      normalizedSelection: AgentPermissionSelection(optionId: optionId),
+      scope: AgentPermissionApplyScope.runtime,
     );
   }
 }

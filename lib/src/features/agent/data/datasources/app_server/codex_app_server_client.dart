@@ -95,7 +95,7 @@ class _CodexAppServerClient {
 
   Future<AgentSession> startSession({
     required AgentContext context,
-    required AgentPermissionSelectionSnapshot permissionSelection,
+    required CodexPermissionRuntimeSnapshot permissionSelection,
     String? previousSessionId,
   }) async {
     final result = await _peer.sendRequest(
@@ -111,7 +111,7 @@ class _CodexAppServerClient {
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
-    required AgentPermissionSelectionSnapshot permissionSelection,
+    required CodexPermissionRuntimeSnapshot permissionSelection,
     String? previousSessionId,
   }) async {
     final result = await _peer.sendRequest(
@@ -336,7 +336,7 @@ class _CodexAppServerClient {
     required String threadId,
     required AgentContext context,
     required AgentForkBoundary boundary,
-    required AgentPermissionSelectionSnapshot permissionSelection,
+    required CodexPermissionRuntimeSnapshot permissionSelection,
     String? previousSessionId,
   }) async {
     final result = await _peer.sendRequest(
@@ -366,7 +366,7 @@ class _CodexAppServerClient {
     required List<AgentUserInput> inputs,
     required AgentContext context,
     required AgentModelSelection selection,
-    required AgentPermissionSelectionSnapshot permissionSelection,
+    required CodexPermissionRuntimeSnapshot permissionSelection,
     required AgentTurnConfiguration turnConfiguration,
     String? clientUserMessageId,
   }) async {
@@ -414,47 +414,6 @@ class _CodexAppServerClient {
     );
   }
 
-  /// @nodoc 保留给测试/旧路径；生产路径走 [CodexPermissionPolicyAdapter]。
-  Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
-    try {
-      final options = <AgentPermissionOption>[];
-      final seenIds = <String>{};
-      final seenCursors = <String>{};
-      String? cursor;
-      do {
-        final result = await _peer.sendRequest(
-          'permissionProfile/list',
-          params: <String, Object?>{
-            if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
-          },
-        );
-        final map = _map(result);
-        final data = map['data'];
-        if (data is List) {
-          for (final item in data) {
-            final entry = _map(item);
-            final option = CodexPermissionPolicyCodec.optionFromRpcEntry(entry);
-            if (option == null || !seenIds.add(option.id)) {
-              continue;
-            }
-            options.add(option);
-          }
-        }
-        final nextCursor = _string(map['nextCursor']);
-        if (nextCursor != null && seenCursors.add(nextCursor)) {
-          cursor = nextCursor;
-        } else {
-          cursor = null;
-        }
-      } while (cursor != null);
-      return List<AgentPermissionProfileSummary>.unmodifiable(
-        options.map(AgentPermissionPolicyAdapters.profileSummaryFromOption),
-      );
-    } catch (_) {
-      return const <AgentPermissionProfileSummary>[];
-    }
-  }
-
   Future<void> approveGuardianDeniedAction({
     required String threadId,
     required Object event,
@@ -467,7 +426,7 @@ class _CodexAppServerClient {
 
   Map<String, Object?> _threadParams(
     AgentContext context,
-    AgentPermissionSelectionSnapshot permissionSelection,
+    CodexPermissionRuntimeSnapshot permissionSelection,
   ) {
     return <String, Object?>{
       if (context.projectPath != null) 'cwd': context.projectPath,

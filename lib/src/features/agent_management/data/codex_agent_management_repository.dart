@@ -859,10 +859,6 @@ List<String> _capabilitySummary(AgentProviderCapabilities? capabilities) {
     if (capabilities.canPrompt) 'prompt',
     if (capabilities.canSteerTurn) 'steer',
     if (capabilities.canForkThreadAtTurn) 'fork-at-turn',
-    if (capabilities.supportsPermissionProfileDiscovery)
-      'permission-profile-discovery',
-    if (capabilities.supportsPermissionProfileSelection)
-      'permission-profile-selection',
   ];
 }
 

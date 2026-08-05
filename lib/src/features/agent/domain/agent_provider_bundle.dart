@@ -86,12 +86,10 @@ final class AgentProviderBundle {
           _LegacyAgentPlanApprovalPort(planApprovalProvider),
         _ => null,
       },
-      // 权限策略 port：优先 data 层 adapter；否则 legacy list/update 桥接。
+      // 权限策略 port：仅由实现 AgentPermissionPolicyProvider 的 data adapter 暴露。
       permissionPolicy: switch (provider) {
         final AgentPermissionPolicyProvider policyProvider =>
           policyProvider.permissionPolicy,
-        _ when capabilities.supportsPermissionPolicySelection =>
-          _LegacyAgentPermissionPolicyPort(provider),
         _ => null,
       },
     );
@@ -591,53 +589,5 @@ final class _LegacyAgentPlanApprovalPort implements AgentPlanApprovalPort {
   @override
   Future<void> respondToPlanApproval(AgentPlanApprovalDecision decision) {
     return _provider.respondToPlanApproval(decision);
-  }
-}
-
-/// 将旧 [AgentProvider.listPermissionProfiles] /
-/// [AgentProvider.updatePermissionSelection] 薄适配为中立权限 port。
-final class _LegacyAgentPermissionPolicyPort
-    implements AgentPermissionPolicyPort {
-  const _LegacyAgentPermissionPolicyPort(this._provider);
-
-  final AgentProvider _provider;
-
-  @override
-  Future<AgentPermissionCatalog> listPermissionOptions() async {
-    // 迁移期桥接：刻意调用 deprecated 旧 API。
-    // ignore: deprecated_member_use_from_same_package
-    final profiles = await _provider.listPermissionProfiles();
-    final options = profiles
-        .map(AgentPermissionPolicyAdapters.optionFromProfileSummary)
-        .toList(growable: false);
-    final defaultOptionId = options.isNotEmpty ? options.first.id : '';
-    return AgentPermissionCatalog(
-      options: options,
-      defaultOptionId: defaultOptionId,
-    );
-  }
-
-  @override
-  Future<AgentPermissionApplyResult> applyPermissionSelection(
-    AgentPermissionSelection selection,
-  ) async {
-    final preferProfile =
-        _provider.capabilities.supportsPermissionProfileSelection;
-    final snapshot = AgentPermissionPolicyAdapters.snapshotFromSelection(
-      selection,
-      preferProfileBinding: preferProfile,
-    );
-    // ignore: deprecated_member_use_from_same_package
-    _provider.updatePermissionSelection(snapshot);
-    final normalizedId = snapshot.selectedOptionId?.trim();
-    return AgentPermissionApplyResult(
-      normalizedSelection: AgentPermissionSelection(
-        optionId: (normalizedId != null && normalizedId.isNotEmpty)
-            ? normalizedId
-            : selection.optionId,
-      ),
-      // 旧 updatePermissionSelection 立即写入 runtime 内存选择。
-      scope: AgentPermissionApplyScope.runtime,
-    );
   }
 }

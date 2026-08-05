@@ -110,10 +110,21 @@ main -> app -> presentation/application -> domain
   `AgentQuestionRequest`、`AgentToolCall` 等中立模型。
 - 已迁移能力域（`conversation`、`threadCatalog`、`threadMutations`、
   `threadBranching`、`turnSteering`、`interactions`、`modelCatalog`、
-  `localThreadList`、`sessionConfiguration`、`planApproval`、`conversationModes`）
-  优先通过 bundle 端口访问；
+  `localThreadList`、`sessionConfiguration`、`planApproval`、`conversationModes`、
+  `permissionPolicy`）优先通过 bundle 端口访问；
   controller / view model 不再通过 provider kind、`is SomeProvider` 或直接调用
   已迁移旧方法做分支。
+- 权限选项选择只走中立 `AgentPermissionPolicyPort`（`listPermissionOptions` /
+  `applyPermissionSelection`）。共享层仅使用 `AgentPermissionOption` /
+  `AgentPermissionSelection.optionId`；Codex approval/sandbox/profile 与 Grok mode
+  协议字段只允许出现在 data adapter/codec。是否展示权限选择器由
+  `bundle.permissionPolicy != null` 决定，不得再使用
+  `supportsPermissionPolicySelection` / `supportsPermissionProfile*` 静态位。
+- Provider 默认权限偏好持久化在 `~/.zeta` 的 provider settings V2 中，真源为单一
+  `selectedPermissionOptionId`。V1 字段（`selectedApprovalPolicy` /
+  `selectedSandboxPolicy` / `selectedPermissionProfileId` / `selectedPermissionMode`）
+  仅在 decoder/migration 读取，写入不得再出现。application 维护 default vs
+  thread-effective 两层状态；生效范围由 adapter 返回的 `AgentPermissionApplyScope` 表达。
 - 每个 provider 必须通过不可变 `AgentProviderCapabilities` 声明真实能力；presentation
   隐藏不支持入口，application 和 data 层执行前仍要校验。禁止以静默 no-op 或语义不等价
   的降级伪造 thread/turn 能力。

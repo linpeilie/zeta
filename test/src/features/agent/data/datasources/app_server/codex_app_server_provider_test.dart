@@ -3884,7 +3884,6 @@ void main() {
         final decoded = AgentProviderConfig.tryDecode(config.toJson());
         expect(decoded, isNotNull);
         expect(decoded!.selectedPermissionOptionId, 'team-safe');
-        expect(decoded.selectedPermissionProfileId, isNull);
         expect(decoded.resolvedPermissionOptionId, 'team-safe');
 
         final peer = _FakeJsonRpcPeer();
@@ -3932,11 +3931,8 @@ void main() {
           serviceTierId: 'priority',
         ),
       );
-      provider.updatePermissionSelection(
-        const AgentPermissionSelectionSnapshot(
-          approvalPolicy: 'never',
-          sandboxPolicy: 'dangerFullAccess',
-        ),
+      await provider.permissionPolicy.applyPermissionSelection(
+        const AgentPermissionSelection(optionId: ':danger-full-access'),
       );
 
       await provider.sendMessage(
@@ -3982,12 +3978,8 @@ void main() {
             serviceTierId: 'priority',
           ),
         );
-        provider.updatePermissionSelection(
-          const AgentPermissionSelectionSnapshot(
-            approvalPolicy: 'on-request',
-            sandboxPolicy: 'workspaceWrite',
-            permissionProfileId: ':workspace',
-          ),
+        await provider.permissionPolicy.applyPermissionSelection(
+          const AgentPermissionSelection(optionId: ':workspace'),
         );
 
         await provider.sendMessage(
@@ -4127,11 +4119,8 @@ void main() {
         );
         addTearDown(provider.dispose);
 
-        provider.updatePermissionSelection(
-          const AgentPermissionSelectionSnapshot(
-            approvalPolicy: 'never',
-            sandboxPolicy: 'dangerFullAccess',
-          ),
+        await provider.permissionPolicy.applyPermissionSelection(
+          const AgentPermissionSelection(optionId: ':danger-full-access'),
         );
 
         final session = await provider.startSession(
@@ -4173,12 +4162,8 @@ void main() {
         );
         addTearDown(provider.dispose);
 
-        provider.updatePermissionSelection(
-          const AgentPermissionSelectionSnapshot(
-            approvalPolicy: 'on-request',
-            sandboxPolicy: 'workspaceWrite',
-            permissionProfileId: ':workspace',
-          ),
+        await provider.permissionPolicy.applyPermissionSelection(
+          const AgentPermissionSelection(optionId: ':workspace'),
         );
 
         final session = await provider.startSession(
@@ -4251,8 +4236,8 @@ void main() {
           peer: peer,
         );
         addTearDown(provider.dispose);
-        provider.updatePermissionSelection(
-          const AgentPermissionSelectionSnapshot(approvalPolicy: 'on-failure'),
+        await provider.permissionPolicy.applyPermissionSelection(
+          const AgentPermissionSelection(optionId: ':workspace'),
         );
 
         await provider.startSession(
@@ -4287,14 +4272,6 @@ void main() {
           AgentRuntimeCompatibilityStatus.supported,
         );
         expect(provider.capabilities.canForkThreadAtTurn, isTrue);
-        expect(
-          provider.capabilities.supportsPermissionProfileDiscovery,
-          isTrue,
-        );
-        expect(
-          provider.capabilities.supportsPermissionProfileSelection,
-          isTrue,
-        );
       },
     );
 

@@ -33,6 +33,9 @@ class AgentProviderBootstrapPolicy {
 ///
 /// 能力默认采用保守语义：只有 provider 能真实完成操作时才设为 `true`。
 /// UI 用它隐藏不可用入口，应用层和 provider 自身仍需在执行前再次校验。
+///
+/// 权限选项选择不使用静态 capability 位：是否可用由
+/// [AgentProviderBundle.permissionPolicy] 端口是否非空决定。
 class AgentProviderCapabilities {
   const AgentProviderCapabilities({
     this.canCreateSession = false,
@@ -61,9 +64,6 @@ class AgentProviderCapabilities {
     this.supportsModeSelection = false,
     this.supportsReasoningOptions = false,
     this.supportsServiceTierSelection = false,
-    this.supportsPermissionPolicySelection = false,
-    this.supportsPermissionProfileDiscovery = false,
-    this.supportsPermissionProfileSelection = false,
     this.supportsUsage = false,
     this.bootstrapPolicy = AgentProviderBootstrapPolicy.eager,
   });
@@ -100,20 +100,6 @@ class AgentProviderCapabilities {
   final bool supportsModeSelection;
   final bool supportsReasoningOptions;
   final bool supportsServiceTierSelection;
-
-  /// 是否支持会话级权限策略选择（统一入口）。
-  ///
-  /// 为 true 时 UI 展示权限选择器；选项列表由
-  /// [AgentProvider.listPermissionProfiles] 提供（RPC 或静态 catalog）。
-  final bool supportsPermissionPolicySelection;
-
-  /// 是否可发现 provider 提供的权限配置档案（如 Codex `permissionProfile/list`）。
-  ///
-  /// 为 false 时仍可返回静态选项（如 Grok mode catalog）。
-  final bool supportsPermissionProfileDiscovery;
-
-  /// 是否可把权限配置档案作为运行时选择发送给 provider。
-  final bool supportsPermissionProfileSelection;
   final bool supportsUsage;
   final AgentProviderBootstrapPolicy bootstrapPolicy;
 
@@ -144,9 +130,6 @@ class AgentProviderCapabilities {
     bool? supportsModeSelection,
     bool? supportsReasoningOptions,
     bool? supportsServiceTierSelection,
-    bool? supportsPermissionPolicySelection,
-    bool? supportsPermissionProfileDiscovery,
-    bool? supportsPermissionProfileSelection,
     bool? supportsUsage,
     AgentProviderBootstrapPolicy? bootstrapPolicy,
   }) {
@@ -186,15 +169,6 @@ class AgentProviderCapabilities {
           supportsReasoningOptions ?? this.supportsReasoningOptions,
       supportsServiceTierSelection:
           supportsServiceTierSelection ?? this.supportsServiceTierSelection,
-      supportsPermissionPolicySelection:
-          supportsPermissionPolicySelection ??
-          this.supportsPermissionPolicySelection,
-      supportsPermissionProfileDiscovery:
-          supportsPermissionProfileDiscovery ??
-          this.supportsPermissionProfileDiscovery,
-      supportsPermissionProfileSelection:
-          supportsPermissionProfileSelection ??
-          this.supportsPermissionProfileSelection,
       supportsUsage: supportsUsage ?? this.supportsUsage,
       bootstrapPolicy: bootstrapPolicy ?? this.bootstrapPolicy,
     );
@@ -227,11 +201,6 @@ class AgentProviderCapabilities {
     supportsModelSelection: true,
     supportsReasoningOptions: true,
     supportsServiceTierSelection: true,
-    supportsPermissionPolicySelection: true,
-    supportsPermissionProfileDiscovery: true,
-    // 运行时通过 experimentalApi 协商并做版本门控；静态阶段先保留入口，避免
-    // 在 provider initialize 前清空已持久化的 profile 选择。
-    supportsPermissionProfileSelection: true,
     supportsUsage: true,
   );
 
@@ -258,8 +227,6 @@ class AgentProviderCapabilities {
     supportsPlanApproval: true,
     supportsModelSelection: true,
     supportsReasoningOptions: true,
-    // 统一权限选择入口；选项由 listPermissionProfiles 静态 catalog 提供。
-    supportsPermissionPolicySelection: true,
     supportsUsage: true,
   );
 

@@ -372,8 +372,14 @@ repository；协议 transport 不记录 prompt、文件内容或 stderr 原文�
 - Codex Default / Plan 运行时目录、逐 turn mode 快照、settings/history 回写与
   Composer 紧凑选择器；不支持 mode 的 Provider 保持原布局和普通发送路径。
 
-当前剩余的收口项是：从旧 `AgentProvider` 删除已迁移的方法和静态布尔字段。Permission
-Profile 仍仅承诺稳定的发现能力，不承诺实验性选择能力。
+权限选项选择已收口到中立 `AgentPermissionPolicyPort`：application/presentation 只消费
+option 目录与 optionId；Codex/Grok 协议映射留在 data adapter/codec。Provider 配置 V2
+仅持久化 `selectedPermissionOptionId`，V1 多字段只作 decoder 迁移输入。旧
+`listPermissionProfiles` / `updatePermissionSelection`、共享层 fat snapshot、
+`AgentPermissionPreset` / `AgentPermissionProfileSummary` 及
+`supportsPermissionPolicySelection` / `supportsPermissionProfile*` 已删除。
+
+其余剩余收口项是：继续从旧 `AgentProvider` 删除其它已迁移门面方法（非权限域）。
 
 ### 当前已落地的对话体验
 

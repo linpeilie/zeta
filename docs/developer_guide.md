@@ -173,8 +173,8 @@ thread 或清空其 reducer/运行中 turn；窗口退出流程会等待注册�
 1. 先确认现有 `AgentProviderBundle` 端口是否足够。已迁移的能力域优先接到
    `conversation`、`threadCatalog`、`threadMutations`、`threadBranching`、
    `turnSteering`、`interactions`、`modelCatalog`、`localThreadList`、
-   `sessionConfiguration`、`planApproval`、`conversationModes`、`skills` 等端口，不要继续优先扩张
-   `AgentProvider` 旧必选接口。
+   `sessionConfiguration`、`planApproval`、`conversationModes`、`skills`、
+   `permissionPolicy` 等端口，不要继续优先扩张 `AgentProvider` 旧必选接口。
 2. 在领域层定义初始化前可判断的静态 `AgentProviderCapabilities` 与 bootstrap
    policy；握手后若能力发生变化，应返回更精确的动态 capabilities。
 3. 在 data 层新增具体 provider 实现，不让 UI 直接依赖 provider 协议。
@@ -210,6 +210,29 @@ thread 或清空其 reducer/运行中 turn；窗口退出流程会等待注册�
 `AgentQuestionResponseProvider` 的 Provider 通过 `respondToQuestion` 回写，空 answers
 表示 Skip；计划审批仍使用 `AgentPlanApprovalPort`。三类请求可以共享 Pending Interaction
 Dock，但不得共享 request/decision 模型或 pending registry。
+
+### 权限选项选择（Permission Policy Port）
+
+- **端口**：实现 `AgentPermissionPolicyProvider` 的 Provider 经
+  `AgentProviderBundle.permissionPolicy` 暴露 `AgentPermissionPolicyPort`。
+  UI / application 只调用 `listPermissionOptions` 与 `applyPermissionSelection`；
+  已删除 `listPermissionProfiles` / `updatePermissionSelection` 及旧 capability 位。
+- **中立模型**：`AgentPermissionOption`（id/label/description/allowed）与
+  `AgentPermissionSelection(optionId)`。共享层不得解析 `:workspace`、`yoloMode`、
+  `approvalPolicy` 等协议字符串。
+- **default vs effective**：
+  `AgentConversationPermissionSelectionController` 持有 provider 默认偏好与
+  thread-effective 选择；Composer 展示 effective；持久化只写 default optionId。
+- **V1 → V2 配置迁移**：`AgentProviderSettings.currentVersion = 2`；decoder 宽容读
+  V1/V2，`AgentPermissionPreferenceMigration` 在 domain 内把 Codex profile/approval
+  sandbox 与 Grok mode 迁到单一 `selectedPermissionOptionId`。writer 只写 optionId。
+- **Provider 边界**：
+  - Codex：`CodexPermissionPolicyAdapter` + `CodexPermissionPolicyCodec` /
+    `CodexPermissionRuntimeSnapshot`（data 层 runtime 快照，含 approval/sandbox/profile）。
+  - Grok：`GrokPermissionPolicyAdapter` + `GrokPermissionModeCodec`（mode ↔ session
+    meta / live 通知）。
+- 清空用户偏好使用 `AgentProviderConfig.withPermissionPreference(null)`（或
+  `copyWith` + `agentProviderConfigUnset` 哨兵），禁止 `value ?? oldValue` 无法清空。
 
 ### Skill 输入与 Composer token
 

@@ -877,10 +877,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 300));
 
         expect(viewModel.permissionSelection?.optionId, ':read-only');
-        expect(
-          provider.lastPermissionSelection?.permissionProfileId,
-          ':read-only',
-        );
+        expect(provider.lastAppliedPermissionOptionId, ':read-only');
         expect(popover, findsNothing);
         expect(find.text('Read only'), findsOneWidget);
         expect(viewModel.permissionPolicyLabel, 'Read only');

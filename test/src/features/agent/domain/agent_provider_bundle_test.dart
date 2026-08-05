@@ -248,18 +248,19 @@ void main() {
     test(
       'exposes permissionPolicy port when policy selection is supported',
       () async {
-        final provider = _MinimalBundleFakeProvider(
-          capabilities: AgentProviderCapabilities.codexAppServer,
-          permissionProfiles: const <AgentPermissionProfileSummary>[
-            AgentPermissionProfileSummary(
+        final provider = _PermissionBundleFakeProvider(
+          permissionOptions: const <AgentPermissionOption>[
+            AgentPermissionOption(
               id: ':workspace',
-              allowed: true,
+              label: 'Workspace write',
               description: 'Workspace write',
-            ),
-            AgentPermissionProfileSummary(
-              id: 'team-safe',
               allowed: true,
+            ),
+            AgentPermissionOption(
+              id: 'team-safe',
+              label: 'Team safe',
               description: 'Team safe',
+              allowed: true,
             ),
           ],
         );
@@ -279,23 +280,15 @@ void main() {
         );
         expect(result.normalizedSelection.optionId, 'team-safe');
         expect(result.scope, AgentPermissionApplyScope.runtime);
-        expect(
-          provider.lastPermissionSelection?.permissionProfileId,
-          'team-safe',
-        );
+        expect(provider.lastAppliedPermissionOptionId, 'team-safe');
         expect(provider.permissionApplyCount, 1);
       },
     );
 
     test(
-      'permissionPolicy is null when policy selection capability is off',
+      'permissionPolicy is null when provider does not implement policy port',
       () {
-        final bundle = _MinimalBundleFakeProvider(
-          capabilities: AgentProviderCapabilities.codexAppServer.copyWith(
-            supportsPermissionPolicySelection: false,
-          ),
-        ).bundle;
-
+        final bundle = _MinimalBundleFakeProvider().bundle;
         expect(bundle.permissionPolicy, isNull);
       },
     );
@@ -389,7 +382,7 @@ class _MinimalBundleFakeProvider implements AgentProvider {
     this.config = AgentProviderConfig.defaultCodex,
     this.capabilities = AgentProviderCapabilities.codexAppServer,
     this.availableModels = const AgentModelList(models: <AgentModelInfo>[]),
-    this.permissionProfiles = const <AgentPermissionProfileSummary>[],
+    this.permissionOptions = const <AgentPermissionOption>[],
   });
 
   final StreamController<AgentEvent> _events =
@@ -416,8 +409,8 @@ class _MinimalBundleFakeProvider implements AgentProvider {
       <AgentPermissionDecision>[];
   final List<String> guardianApprovals = <String>[];
   int modelListCalls = 0;
-  AgentPermissionSelectionSnapshot? lastPermissionSelection;
   int permissionApplyCount = 0;
+  String? lastAppliedPermissionOptionId;
 
   @override
   final AgentProviderConfig config;
@@ -426,7 +419,7 @@ class _MinimalBundleFakeProvider implements AgentProvider {
   final AgentProviderCapabilities capabilities;
 
   final AgentModelList availableModels;
-  final List<AgentPermissionProfileSummary> permissionProfiles;
+  final List<AgentPermissionOption> permissionOptions;
 
   @override
   Stream<AgentEvent> get events => _events.stream;
@@ -474,17 +467,6 @@ class _MinimalBundleFakeProvider implements AgentProvider {
 
   @override
   void updateModelSelection(AgentModelSelection selection) {}
-
-  @override
-  void updatePermissionSelection(AgentPermissionSelectionSnapshot selection) {
-    lastPermissionSelection = selection;
-    permissionApplyCount += 1;
-  }
-
-  @override
-  Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
-    return permissionProfiles;
-  }
 
   @override
   Future<void> approveGuardianDeniedAction({
@@ -726,5 +708,42 @@ class _BundleFakeProvider extends _MinimalBundleFakeProvider
   Future<void> dispose() async {
     await _skillsChanged.close();
     await super.dispose();
+  }
+}
+
+class _PermissionBundleFakeProvider extends _MinimalBundleFakeProvider
+    implements AgentPermissionPolicyProvider {
+  _PermissionBundleFakeProvider({
+    super.permissionOptions = const <AgentPermissionOption>[],
+  }) : super(capabilities: AgentProviderCapabilities.codexAppServer);
+
+  @override
+  AgentPermissionPolicyPort get permissionPolicy =>
+      _BundleFakePermissionPort(this);
+}
+
+final class _BundleFakePermissionPort implements AgentPermissionPolicyPort {
+  _BundleFakePermissionPort(this._host);
+  final _MinimalBundleFakeProvider _host;
+
+  @override
+  Future<AgentPermissionCatalog> listPermissionOptions() async {
+    final options = _host.permissionOptions;
+    return AgentPermissionCatalog(
+      options: options,
+      defaultOptionId: options.isNotEmpty ? options.first.id : '',
+    );
+  }
+
+  @override
+  Future<AgentPermissionApplyResult> applyPermissionSelection(
+    AgentPermissionSelection selection,
+  ) async {
+    _host.lastAppliedPermissionOptionId = selection.optionId;
+    _host.permissionApplyCount += 1;
+    return AgentPermissionApplyResult(
+      normalizedSelection: selection,
+      scope: AgentPermissionApplyScope.runtime,
+    );
   }
 }

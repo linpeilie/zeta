@@ -85,24 +85,31 @@ class AgentPaneTestApp extends StatelessWidget {
   }
 }
 
-/// Composer 权限下拉默认测试数据（模拟 `permissionProfile/list`）。
-const List<AgentPermissionProfileSummary> agentPaneDefaultPermissionProfiles =
-    <AgentPermissionProfileSummary>[
-      AgentPermissionProfileSummary(
+/// Composer 权限下拉默认测试数据（模拟 port catalog）。
+const List<AgentPermissionOption> agentPaneDefaultPermissionOptions =
+    <AgentPermissionOption>[
+      AgentPermissionOption(
         id: ':read-only',
-        allowed: true,
+        label: 'Read only',
         description: 'Read only',
-      ),
-      AgentPermissionProfileSummary(
-        id: ':workspace',
         allowed: true,
-        description: 'Workspace write',
       ),
-      AgentPermissionProfileSummary(id: ':danger-full-access', allowed: true),
-      AgentPermissionProfileSummary(
+      AgentPermissionOption(
+        id: ':workspace',
+        label: 'Workspace write',
+        description: 'Workspace write',
+        allowed: true,
+      ),
+      AgentPermissionOption(
+        id: ':danger-full-access',
+        label: 'Full access',
+        allowed: true,
+      ),
+      AgentPermissionOption(
         id: ':team-safe',
-        allowed: false,
+        label: 'Team safe',
         description: 'Team safe',
+        allowed: false,
       ),
     ];
 
@@ -364,7 +371,7 @@ class AgentPaneFakeProvider
     this.models = const AgentModelList(models: <AgentModelInfo>[]),
     this.canSteerTurn = true,
     this.historyLoadGate,
-    this.permissionProfiles = agentPaneDefaultPermissionProfiles,
+    this.permissionOptions = agentPaneDefaultPermissionOptions,
   }) : _historySnapshotsByThread = Map<String, AgentThreadHistorySnapshot>.from(
          historySnapshotsByThread,
        ) {
@@ -375,8 +382,8 @@ class AgentPaneFakeProvider
   final AgentModelList models;
   final bool canSteerTurn;
 
-  /// `permissionProfile/list` 测试数据；默认覆盖常见内置 profile。
-  final List<AgentPermissionProfileSummary> permissionProfiles;
+  /// 权限 port catalog 测试数据。
+  final List<AgentPermissionOption> permissionOptions;
   late final AgentPermissionPolicyPort _permissionPolicy;
 
   /// 非空时 [readThreadHistory] 会先 await 该 Future，便于测试加载态 UI。
@@ -394,6 +401,12 @@ class AgentPaneFakeProvider
   final List<String> sentMessages = <String>[];
   final List<AgentTurnConfiguration> turnConfigurations =
       <AgentTurnConfiguration>[];
+
+  /// 最近一次经 port 应用的权限 optionId。
+  String? lastAppliedPermissionOptionId;
+
+  /// 权限 port apply 次数。
+  int permissionApplyCount = 0;
 
   /// 每次 sendMessage 递增，避免复用 turn id 导致 history/live 双挂。
   int _nextTurnSequence = 0;
@@ -455,23 +468,9 @@ class AgentPaneFakeProvider
   void updateModelSelection(AgentModelSelection selection) {}
 
   /// 最近一次权限选择（Codex/Grok Composer 同步断言用）。
-  AgentPermissionSelectionSnapshot? lastPermissionSelection;
-
-  int permissionSelectionUpdateCount = 0;
 
   @override
   AgentPermissionPolicyPort get permissionPolicy => _permissionPolicy;
-
-  @override
-  void updatePermissionSelection(AgentPermissionSelectionSnapshot selection) {
-    lastPermissionSelection = selection;
-    permissionSelectionUpdateCount += 1;
-  }
-
-  @override
-  Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
-    return permissionProfiles;
-  }
 
   @override
   Future<void> approveGuardianDeniedAction({
@@ -578,22 +577,7 @@ final class _AgentPanePermissionPolicyPort
 
   @override
   Future<AgentPermissionCatalog> listPermissionOptions() async {
-    final options = _host.permissionProfiles
-        .map(
-          (profile) => AgentPermissionOption(
-            id: profile.id,
-            label: () {
-              final description = profile.description?.trim();
-              if (description != null && description.isNotEmpty) {
-                return description;
-              }
-              return profile.displayName;
-            }(),
-            description: profile.description,
-            allowed: profile.allowed,
-          ),
-        )
-        .toList(growable: false);
+    final options = _host.permissionOptions;
     final defaultId = options.any((option) => option.id == ':workspace')
         ? ':workspace'
         : (options.isNotEmpty ? options.first.id : '');
@@ -604,14 +588,11 @@ final class _AgentPanePermissionPolicyPort
   Future<AgentPermissionApplyResult> applyPermissionSelection(
     AgentPermissionSelection selection,
   ) async {
-    final snapshot = AgentPermissionSelectionSnapshot.forProfileId(
-      selection.optionId,
-    );
-    _host.updatePermissionSelection(snapshot);
+    final optionId = selection.optionId.trim();
+    _host.lastAppliedPermissionOptionId = optionId;
+    _host.permissionApplyCount += 1;
     return AgentPermissionApplyResult(
-      normalizedSelection: AgentPermissionSelection(
-        optionId: snapshot.selectedOptionId ?? selection.optionId,
-      ),
+      normalizedSelection: AgentPermissionSelection(optionId: optionId),
       scope: AgentPermissionApplyScope.currentSession,
     );
   }

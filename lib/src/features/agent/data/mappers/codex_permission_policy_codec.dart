@@ -107,7 +107,7 @@ abstract final class CodexPermissionPolicyCodec {
 
   /// 供协议层使用的 profile id：显式 profile 优先，不按策略覆盖自定义 id。
   static String? protocolPermissionProfileId(
-    AgentPermissionSelectionSnapshot selection,
+    CodexPermissionRuntimeSnapshot selection,
   ) {
     final explicitProfileId = selection.permissionProfileId?.trim();
     if (explicitProfileId != null && explicitProfileId.isNotEmpty) {
@@ -133,18 +133,18 @@ abstract final class CodexPermissionPolicyCodec {
   ///
   /// - 内置 id：回填 approval/sandbox/profileId
   /// - 其它 id：仅 optionId（不写入 profile，避免 Grok mode 误绑）
-  static AgentPermissionSelectionSnapshot snapshotForOptionId(String optionId) {
+  static CodexPermissionRuntimeSnapshot snapshotForOptionId(String optionId) {
     final normalized = optionId.trim();
     final builtIn = builtInForId(normalized);
     if (builtIn != null) {
-      return AgentPermissionSelectionSnapshot(
+      return CodexPermissionRuntimeSnapshot(
         optionId: normalized,
         approvalPolicy: builtIn.approvalPolicy,
         sandboxPolicy: builtIn.sandboxPolicy,
         permissionProfileId: normalized,
       );
     }
-    return AgentPermissionSelectionSnapshot(
+    return CodexPermissionRuntimeSnapshot(
       optionId: normalized,
       approvalPolicy: defaultApprovalPolicy,
       sandboxPolicy: defaultSandboxPolicy,
@@ -152,15 +152,13 @@ abstract final class CodexPermissionPolicyCodec {
   }
 
   /// 按 Codex profile id 构造（自定义 id 无 `:` 要求，始终绑定 profile）。
-  static AgentPermissionSelectionSnapshot snapshotForProfileId(
-    String profileId,
-  ) {
+  static CodexPermissionRuntimeSnapshot snapshotForProfileId(String profileId) {
     final normalized = profileId.trim();
     final builtIn = builtInForId(normalized);
     if (builtIn != null) {
       return snapshotForOptionId(normalized);
     }
-    return AgentPermissionSelectionSnapshot(
+    return CodexPermissionRuntimeSnapshot(
       optionId: normalized,
       approvalPolicy: defaultApprovalPolicy,
       sandboxPolicy: defaultSandboxPolicy,
@@ -173,30 +171,15 @@ abstract final class CodexPermissionPolicyCodec {
   /// V2 仅有 [AgentProviderConfig.selectedPermissionOptionId]：按 profile 语义
   /// 绑定（自定义 id 无损）。V1 遗留 approval/sandbox/profile 字段若仍在内存中
   /// 则优先显式 profile，否则由 option 展开。
-  static AgentPermissionSelectionSnapshot snapshotFromConfig(
+  static CodexPermissionRuntimeSnapshot snapshotFromConfig(
     AgentProviderConfig config,
   ) {
-    final explicitProfile = config.selectedPermissionProfileId?.trim();
-    if (explicitProfile != null && explicitProfile.isNotEmpty) {
-      return snapshotForProfileId(explicitProfile).copyWith(
-        optionId: config.resolvedPermissionOptionId ?? explicitProfile,
-        approvalPolicy: config.selectedApprovalPolicy ?? defaultApprovalPolicy,
-        sandboxPolicy: config.selectedSandboxPolicy ?? defaultSandboxPolicy,
-      );
-    }
+    // V2：配置真源仅为 selectedPermissionOptionId（解码时已完成 V1 迁移）。
     final optionId = config.resolvedPermissionOptionId?.trim();
     if (optionId != null && optionId.isNotEmpty) {
-      // V2 optionId 即 Codex 侧不透明 profile / built-in id。
       return snapshotForProfileId(optionId);
     }
-    final derived = builtInOptionIdFromPolicies(
-      approvalPolicy: config.selectedApprovalPolicy ?? defaultApprovalPolicy,
-      sandboxPolicy: config.selectedSandboxPolicy ?? defaultSandboxPolicy,
-    );
-    if (derived != null) {
-      return snapshotForOptionId(derived);
-    }
-    return const AgentPermissionSelectionSnapshot();
+    return const CodexPermissionRuntimeSnapshot();
   }
 
   /// 无 profile 的旧 approval/sandbox 组合 → 内置 option（迁移输入）。
@@ -217,7 +200,7 @@ abstract final class CodexPermissionPolicyCodec {
   /// 将中立 selection 应用到 Codex 运行时快照。
   ///
   /// 任意非空 optionId 均作为 profile 绑定（Codex 语义）；不要求前导 `:`。
-  static AgentPermissionSelectionSnapshot applySelection(
+  static CodexPermissionRuntimeSnapshot applySelection(
     AgentPermissionSelection selection,
   ) {
     return snapshotForProfileId(selection.optionId);
@@ -226,7 +209,7 @@ abstract final class CodexPermissionPolicyCodec {
   /// 解码 `thread/settings/updated` 中的权限字段为完整快照。
   ///
   /// 缺失/空串/不可识别字段保持 null，由调用方决定是否合并。
-  static AgentPermissionSelectionSnapshot? decodeThreadSettings(
+  static CodexPermissionRuntimeSnapshot? decodeThreadSettings(
     Map<String, Object?> settings,
   ) {
     final approvalRaw = settings['approvalPolicy'];
@@ -247,7 +230,7 @@ abstract final class CodexPermissionPolicyCodec {
     if (approval == null && sandbox == null && profileId == null) {
       return null;
     }
-    return AgentPermissionSelectionSnapshot(
+    return CodexPermissionRuntimeSnapshot(
       optionId: profileId,
       approvalPolicy: approval ?? defaultApprovalPolicy,
       sandboxPolicy: sandbox ?? defaultSandboxPolicy,
@@ -309,7 +292,7 @@ abstract final class CodexPermissionPolicyCodec {
 
   /// `thread/start` 权限相关字段。
   static Map<String, Object?> encodeThreadPermissionFields(
-    AgentPermissionSelectionSnapshot selection,
+    CodexPermissionRuntimeSnapshot selection,
   ) {
     final profileId = protocolPermissionProfileId(selection);
     return <String, Object?>{
@@ -323,7 +306,7 @@ abstract final class CodexPermissionPolicyCodec {
 
   /// `turn/start` 权限相关字段。
   static Map<String, Object?> encodeTurnPermissionFields(
-    AgentPermissionSelectionSnapshot selection,
+    CodexPermissionRuntimeSnapshot selection,
   ) {
     final profileId = protocolPermissionProfileId(selection);
     return <String, Object?>{
@@ -334,6 +317,84 @@ abstract final class CodexPermissionPolicyCodec {
           : null),
     };
   }
+}
+
+/// Codex 运行时权限快照（data 层；含 approval/sandbox/profile 协议字段）。
+///
+/// 不得泄漏到 application/presentation；共享层只使用 [AgentPermissionSelection]。
+final class CodexPermissionRuntimeSnapshot {
+  /// 创建 Codex 运行时快照。
+  const CodexPermissionRuntimeSnapshot({
+    this.optionId,
+    this.approvalPolicy = CodexPermissionPolicyCodec.defaultApprovalPolicy,
+    this.sandboxPolicy = CodexPermissionPolicyCodec.defaultSandboxPolicy,
+    this.permissionProfileId,
+  });
+
+  /// 中立 option id（与 profile id 对齐）。
+  final String? optionId;
+
+  /// 审批策略。
+  final String approvalPolicy;
+
+  /// 沙箱策略（域内 camelCase）。
+  final String sandboxPolicy;
+
+  /// 显式 Codex permission profile id。
+  final String? permissionProfileId;
+
+  /// 解析后的 option/profile id。
+  String? get selectedOptionId {
+    final explicit = optionId?.trim();
+    if (explicit != null && explicit.isNotEmpty) {
+      return explicit;
+    }
+    return CodexPermissionPolicyCodec.protocolPermissionProfileId(this);
+  }
+
+  /// 展示标签（内置短名 / 自定义 id）。
+  String get displayLabel {
+    final id = selectedOptionId;
+    if (id != null && id.isNotEmpty) {
+      return CodexPermissionPolicyCodec.displayLabelForOptionId(id);
+    }
+    return CodexPermissionPolicyCodec.displayLabelForOptionId(
+      CodexPermissionPolicyCodec.defaultBuiltInOptionId,
+    );
+  }
+
+  /// 复制并覆盖字段。
+  CodexPermissionRuntimeSnapshot copyWith({
+    String? optionId,
+    String? approvalPolicy,
+    String? sandboxPolicy,
+    String? permissionProfileId,
+    bool clearOptionId = false,
+    bool clearPermissionProfileId = false,
+  }) {
+    return CodexPermissionRuntimeSnapshot(
+      optionId: clearOptionId ? null : (optionId ?? this.optionId),
+      approvalPolicy: approvalPolicy ?? this.approvalPolicy,
+      sandboxPolicy: sandboxPolicy ?? this.sandboxPolicy,
+      permissionProfileId: clearPermissionProfileId
+          ? null
+          : (permissionProfileId ?? this.permissionProfileId),
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is CodexPermissionRuntimeSnapshot &&
+            other.optionId == optionId &&
+            other.approvalPolicy == approvalPolicy &&
+            other.sandboxPolicy == sandboxPolicy &&
+            other.permissionProfileId == permissionProfileId;
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(optionId, approvalPolicy, sandboxPolicy, permissionProfileId);
 }
 
 /// Codex 内置 profile 元数据（data 层公开，供 adapter/测试使用）。

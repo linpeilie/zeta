@@ -591,20 +591,6 @@ class GrokAcpAgentProvider
   @override
   AgentPermissionPolicyPort get permissionPolicy => _permissionPolicyAdapter;
 
-  @override
-  void updatePermissionSelection(AgentPermissionSelectionSnapshot selection) {
-    // 旧 API 薄适配：经 adapter 归一化 mode，并在已初始化时发 live 通知。
-    final optionId = selection.selectedOptionId;
-    if (optionId == null || optionId.trim().isEmpty) {
-      return;
-    }
-    unawaited(
-      _permissionPolicyAdapter.applyPermissionSelection(
-        AgentPermissionSelection(optionId: optionId),
-      ),
-    );
-  }
-
   /// 读取 Grok 账号套餐剩余与重置时间。
   ///
   /// 走 xAI 扩展 `_x.ai/billing`；失败时向上抛出，由 usage 层降级为无套餐展示。
@@ -692,17 +678,6 @@ class GrokAcpAgentProvider
         }
         return AgentSkillsCatalog(entries: entries);
       },
-    );
-  }
-
-  @override
-  Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
-    // 旧 API 薄适配：经 adapter catalog 再映回 profile 摘要。
-    final catalog = await _permissionPolicyAdapter.listPermissionOptions();
-    return List<AgentPermissionProfileSummary>.unmodifiable(
-      catalog.options.map(
-        AgentPermissionPolicyAdapters.profileSummaryFromOption,
-      ),
     );
   }
 

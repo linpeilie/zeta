@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/features/agent/data/mappers/codex_permission_policy_codec.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_permission_mode_codec.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
@@ -23,16 +24,10 @@ void main() {
       final config = AgentProviderConfig.tryDecode(json);
       expect(config, isNotNull);
       expect(config!.selectedPermissionOptionId, ':workspace');
-      expect(config.selectedPermissionProfileId, isNull);
-      expect(config.selectedApprovalPolicy, isNull);
-      expect(config.selectedSandboxPolicy, isNull);
       expect(config.resolvedPermissionOptionId, ':workspace');
 
       final encoded = config.toJson();
       expect(encoded['selectedPermissionOptionId'], ':workspace');
-      expect(encoded.containsKey('selectedPermissionProfileId'), isFalse);
-      expect(encoded.containsKey('selectedApprovalPolicy'), isFalse);
-      expect(encoded.containsKey('selectedSandboxPolicy'), isFalse);
     });
 
     test(
@@ -52,14 +47,17 @@ void main() {
 
         final config = AgentProviderConfig.tryDecode(json)!;
         expect(config.selectedPermissionOptionId, 'team-safe');
-        expect(config.selectedPermissionProfileId, isNull);
         expect(config.resolvedPermissionOptionId, 'team-safe');
 
-        final selection = AgentPermissionSelectionSnapshot.forProfileId(
+        final selection = CodexPermissionPolicyCodec.snapshotForProfileId(
           config.resolvedPermissionOptionId!,
         );
-        expect(selection.protocolPermissionProfileId, 'team-safe');
-        expect(selection.protocolPermissionProfileId, isNot(':workspace'));
+        expect(selection.permissionProfileId, 'team-safe');
+        expect(
+          CodexPermissionPolicyCodec.protocolPermissionProfileId(selection),
+          'team-safe',
+        );
+        expect(selection.permissionProfileId, isNot(':workspace'));
       },
     );
 
@@ -78,9 +76,6 @@ void main() {
 
         final config = AgentProviderConfig.tryDecode(json)!;
         expect(config.selectedPermissionOptionId, ':danger-full-access');
-        expect(config.selectedPermissionProfileId, isNull);
-        expect(config.selectedApprovalPolicy, isNull);
-        expect(config.selectedSandboxPolicy, isNull);
         expect(config.resolvedPermissionOptionId, ':danger-full-access');
       },
     );
@@ -97,7 +92,6 @@ void main() {
 
       final config = AgentProviderConfig.tryDecode(json)!;
       expect(config.selectedPermissionOptionId, 'auto');
-      expect(config.selectedPermissionProfileId, isNull);
       expect(config.resolvedPermissionOptionId, 'auto');
       expect(
         GrokPermissionModeCodec.parse(config.resolvedPermissionOptionId),
@@ -123,7 +117,7 @@ void main() {
           GrokPermissionModeCodec.parse(config.selectedPermissionOptionId),
           GrokPermissionMode.ask,
         );
-        final catalogIds = GrokPermissionModeCodec.catalogAsOptions()
+        final catalogIds = GrokPermissionModeCodec.catalog().options
             .map((o) => o.id)
             .toList();
         expect(catalogIds, <String>['ask', 'auto', 'always-approve']);
@@ -193,17 +187,20 @@ void main() {
       })!;
 
       expect(config.resolvedPermissionOptionId, 'team-safe');
-      final selection = AgentPermissionSelectionSnapshot.forProfileId(
+      final selection = CodexPermissionPolicyCodec.snapshotForProfileId(
         config.resolvedPermissionOptionId!,
       );
 
       expect(selection.permissionProfileId, 'team-safe');
-      expect(selection.protocolPermissionProfileId, 'team-safe');
-      expect(selection.protocolPermissionProfileId, isNot(':workspace'));
+      expect(
+        CodexPermissionPolicyCodec.protocolPermissionProfileId(selection),
+        'team-safe',
+      );
+      expect(selection.permissionProfileId, isNot(':workspace'));
     });
 
     test('defect2: settings merge must not rebuild via forProfileId', () {
-      var next = const AgentPermissionSelectionSnapshot(
+      var next = const CodexPermissionRuntimeSnapshot(
         optionId: 'team-safe',
         approvalPolicy: 'on-request',
         sandboxPolicy: 'workspaceWrite',
@@ -223,7 +220,9 @@ void main() {
       expect(next.sandboxPolicy, 'dangerFullAccess');
       expect(next.permissionProfileId, 'team-safe');
 
-      final broken = AgentPermissionSelectionSnapshot.forProfileId('team-safe');
+      final broken = CodexPermissionPolicyCodec.snapshotForProfileId(
+        'team-safe',
+      );
       expect(broken.approvalPolicy, 'on-request');
       expect(broken.sandboxPolicy, 'workspaceWrite');
       expect(next.approvalPolicy, isNot(broken.approvalPolicy));
@@ -232,7 +231,7 @@ void main() {
     test(
       'defect3: catalog has three modes and default aliases to ask meta',
       () {
-        final ids = GrokPermissionModeCodec.catalogAsOptions()
+        final ids = GrokPermissionModeCodec.catalog().options
             .map((o) => o.id)
             .toList();
         expect(ids, <String>['ask', 'auto', 'always-approve']);

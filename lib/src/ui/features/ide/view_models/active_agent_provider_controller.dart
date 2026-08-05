@@ -345,18 +345,6 @@ class ActiveAgentProviderController extends ChangeNotifier {
     _notify();
   }
 
-  /// @nodoc 兼容旧 Snapshot 持久化入口。
-  @Deprecated('Use persistPermissionOptionId')
-  Future<void> persistPermissionSelection(
-    AgentPermissionSelectionSnapshot selection,
-  ) async {
-    final optionId = selection.selectedOptionId;
-    if (optionId == null || optionId.trim().isEmpty) {
-      return;
-    }
-    await persistPermissionOptionId(optionId);
-  }
-
   /// 加载全局 provider 设置。
   Future<AgentProviderSettings> loadSettings() {
     final existing = _settingsFuture;

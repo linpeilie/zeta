@@ -132,8 +132,8 @@ class CodexAppServerAgentProvider
   /// 用户在输入框选择的模型组合。
   AgentModelSelection _modelSelection;
 
-  /// 用户选择的审批/沙箱策略。
-  AgentPermissionSelectionSnapshot _permissionSelection;
+  /// Codex 运行时权限快照（data 层；不泄漏到共享 domain）。
+  CodexPermissionRuntimeSnapshot _permissionSelection;
 
   AgentProviderCapabilities _capabilities =
       AgentProviderCapabilities.codexAppServer;
@@ -569,27 +569,6 @@ class CodexAppServerAgentProvider
 
   @override
   AgentPermissionPolicyPort get permissionPolicy => _permissionPolicyAdapter;
-
-  @override
-  void updatePermissionSelection(AgentPermissionSelectionSnapshot selection) {
-    // 旧 API 薄适配：直接写 runtime 快照（阶段 4 前 controller 仍走此路径）。
-    _permissionSelection = selection;
-    _log.fine(
-      'Updated permission selection: approval=${selection.approvalPolicy} '
-      'sandbox=${selection.sandboxPolicy}',
-    );
-  }
-
-  @override
-  Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
-    // 旧 API 薄适配：经 adapter catalog 再映回 profile 摘要。
-    final catalog = await _permissionPolicyAdapter.listPermissionOptions();
-    return List<AgentPermissionProfileSummary>.unmodifiable(
-      catalog.options.map(
-        AgentPermissionPolicyAdapters.profileSummaryFromOption,
-      ),
-    );
-  }
 
   @override
   Future<void> approveGuardianDeniedAction({

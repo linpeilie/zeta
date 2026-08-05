@@ -28,7 +28,7 @@ final class _CodexTurnStartParamsEncoder {
     required List<AgentUserInput> inputs,
     required AgentContext context,
     required AgentModelSelection modelSelection,
-    required AgentPermissionSelectionSnapshot permissionSelection,
+    required CodexPermissionRuntimeSnapshot permissionSelection,
     required AgentTurnConfiguration turnConfiguration,
     String? clientUserMessageId,
   }) {

@@ -57,9 +57,6 @@ AgentProviderCapabilities _codexCapabilitiesForRuntime(
     canPrompt: !isUnsupported,
     canForkThreadAtTurn:
         !isUnsupported && version != null && version >= _codexTargetVersion,
-    supportsPermissionProfileDiscovery: !isUnsupported,
-    supportsPermissionProfileSelection:
-        !isUnsupported && runtime.experimentalApiEnabled,
   );
 }
 

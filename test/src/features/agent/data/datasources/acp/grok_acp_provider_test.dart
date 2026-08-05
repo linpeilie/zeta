@@ -142,8 +142,8 @@ void main() {
         addTearDown(provider.dispose);
         await provider.initialize();
 
-        provider.updatePermissionSelection(
-          const AgentPermissionSelectionSnapshot(optionId: 'auto'),
+        await provider.permissionPolicy.applyPermissionSelection(
+          const AgentPermissionSelection(optionId: 'auto'),
         );
 
         expect(peer.notificationsSent, <String>['_x.ai/yolo_mode_changed']);
@@ -157,11 +157,11 @@ void main() {
         expect(params['yolo_mode'], isFalse);
 
         // Always approve → Ask 后必须显式关闭自动批准。
-        provider.updatePermissionSelection(
-          const AgentPermissionSelectionSnapshot(optionId: 'always-approve'),
+        await provider.permissionPolicy.applyPermissionSelection(
+          const AgentPermissionSelection(optionId: 'always-approve'),
         );
-        provider.updatePermissionSelection(
-          const AgentPermissionSelectionSnapshot(optionId: 'ask'),
+        await provider.permissionPolicy.applyPermissionSelection(
+          const AgentPermissionSelection(optionId: 'ask'),
         );
         final askParams = peer.notificationParams.last! as Map<String, Object?>;
         expect(askParams['permission_mode'], 'ask');
@@ -175,7 +175,7 @@ void main() {
     );
 
     test(
-      'listPermissionProfiles exposes only Ask Auto Always approve',
+      'permissionPolicy catalog exposes only Ask Auto Always approve',
       () async {
         final provider = GrokAcpAgentProvider(
           config: AgentProviderConfig.defaultGrok,
@@ -183,7 +183,8 @@ void main() {
         );
         addTearDown(provider.dispose);
 
-        final options = await provider.listPermissionProfiles();
+        final catalog = await provider.permissionPolicy.listPermissionOptions();
+        final options = catalog.options;
         expect(options.map((o) => o.id).toList(), <String>[
           'ask',
           'auto',

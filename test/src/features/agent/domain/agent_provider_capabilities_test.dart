@@ -15,9 +15,6 @@ void main() {
       expect(capabilities.canCompactThread, isTrue);
       expect(capabilities.supportsLocalImageInput, isTrue);
       expect(capabilities.supportsSkillInput, isTrue);
-      expect(capabilities.supportsPermissionPolicySelection, isTrue);
-      expect(capabilities.supportsPermissionProfileDiscovery, isTrue);
-      expect(capabilities.supportsPermissionProfileSelection, isTrue);
       expect(capabilities.supportsPlanApproval, isFalse);
       expect(capabilities.supportsModeSelection, isFalse);
     });
@@ -49,9 +46,6 @@ void main() {
       expect(capabilities.supportsResourceInput, isTrue);
       expect(capabilities.supportsSkillInput, isTrue);
       expect(capabilities.supportsPermissionRequests, isTrue);
-      expect(capabilities.supportsPermissionPolicySelection, isTrue);
-      expect(capabilities.supportsPermissionProfileDiscovery, isFalse);
-      expect(capabilities.supportsPermissionProfileSelection, isFalse);
       expect(capabilities.supportsUserQuestions, isTrue);
       expect(capabilities.supportsPlanApproval, isTrue);
     });

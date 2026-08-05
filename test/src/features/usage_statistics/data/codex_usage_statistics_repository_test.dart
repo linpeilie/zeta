@@ -577,11 +577,13 @@ class _UsageProvider
   void updateModelSelection(AgentModelSelection selection) {}
 
   @override
-  void updatePermissionSelection(AgentPermissionSelectionSnapshot selection) {}
+  Future<void> dispose() async {}
 
   @override
-  Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async =>
-      const <AgentPermissionProfileSummary>[];
+  Future<void> cancelTurn(AgentTurn turn) async {}
+
+  @override
+  Future<void> respondToPermission(AgentPermissionDecision decision) async {}
 
   @override
   Future<void> approveGuardianDeniedAction({
@@ -611,13 +613,4 @@ class _UsageProvider
     List<AgentUserInput>? inputs,
     String? clientUserMessageId,
   }) async {}
-
-  @override
-  Future<void> cancelTurn(AgentTurn turn) async {}
-
-  @override
-  Future<void> respondToPermission(AgentPermissionDecision decision) async {}
-
-  @override
-  Future<void> dispose() async {}
 }

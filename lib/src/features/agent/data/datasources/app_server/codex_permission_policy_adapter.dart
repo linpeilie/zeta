@@ -27,9 +27,9 @@ final class CodexPermissionPolicyAdapter implements AgentPermissionPolicyPort {
 
   final Future<void> Function() ensureInitialized;
   final CodexPermissionRpcSender sendRequest;
-  final void Function(AgentPermissionSelectionSnapshot snapshot)
+  final void Function(CodexPermissionRuntimeSnapshot snapshot)
   onSelectionApplied;
-  final AgentPermissionSelectionSnapshot Function() currentSnapshot;
+  final CodexPermissionRuntimeSnapshot Function() currentSnapshot;
 
   @override
   Future<AgentPermissionCatalog> listPermissionOptions() async {

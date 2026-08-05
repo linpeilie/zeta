@@ -118,7 +118,7 @@ void main() {
           };
         },
         onSelectionApplied: (_) {},
-        currentSnapshot: () => const AgentPermissionSelectionSnapshot(),
+        currentSnapshot: () => const CodexPermissionRuntimeSnapshot(),
       );
 
       final catalog = await adapter.listPermissionOptions();
@@ -138,7 +138,7 @@ void main() {
           throw UnsupportedError('permissionProfile/list not available');
         },
         onSelectionApplied: (_) {},
-        currentSnapshot: () => const AgentPermissionSelectionSnapshot(),
+        currentSnapshot: () => const CodexPermissionRuntimeSnapshot(),
       );
 
       final catalog = await adapter.listPermissionOptions();
@@ -155,7 +155,7 @@ void main() {
     test(
       'apply custom profile writes snapshot without colon requirement',
       () async {
-        AgentPermissionSelectionSnapshot? applied;
+        CodexPermissionRuntimeSnapshot? applied;
         final adapter = CodexPermissionPolicyAdapter(
           ensureInitialized: () async {},
           sendRequest:
@@ -163,7 +163,7 @@ void main() {
                 fail('list should not be called');
               },
           onSelectionApplied: (snapshot) => applied = snapshot,
-          currentSnapshot: () => const AgentPermissionSelectionSnapshot(),
+          currentSnapshot: () => const CodexPermissionRuntimeSnapshot(),
         );
 
         final result = await adapter.applyPermissionSelection(

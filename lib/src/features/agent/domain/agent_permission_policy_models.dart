@@ -1,14 +1,9 @@
-import 'package:zeta/src/features/agent/domain/agent_permission_selection_models.dart';
-
-/// 中立权限策略领域模型与端口（解耦目标形态）。
-///
-/// 本文件中的 [AgentPermissionOption] / [AgentPermissionCatalog] /
-/// [AgentPermissionSelection] / [AgentPermissionApplyResult] **不得**包含
-/// Codex/Grok 协议字段名、raw payload 或协议编码方法。协议映射只允许出现在
-/// data adapter/codec 中。
-///
-/// 迁移期与 [AgentPermissionSelectionSnapshot] / [AgentPermissionProfileSummary]
-/// 并存；阶段 4+ 将 application/UI 迁到本端口，阶段 6 删除旧模型。
+// 中立权限策略领域模型与端口。
+//
+// 本文件中的 AgentPermissionOption / AgentPermissionCatalog /
+// AgentPermissionSelection / AgentPermissionApplyResult 不得包含
+// Codex/Grok 协议字段名、raw payload 或协议编码方法。协议映射只允许出现在
+// data adapter/codec 中。
 
 /// 共享层可见的单个权限选项。
 ///
@@ -111,8 +106,7 @@ class AgentPermissionCatalog {
 
 /// 中立权限选择（仅 [optionId]）。
 ///
-/// 这是 [AgentPermissionPolicyPort] 的输入/输出规范形态。迁移期运行时仍可能
-/// 使用带协议字段的 [AgentPermissionSelectionSnapshot]。
+/// 这是 [AgentPermissionPolicyPort] 的输入/输出规范形态。
 class AgentPermissionSelection {
   /// 创建仅含 optionId 的选择。
   const AgentPermissionSelection({required this.optionId});
@@ -192,62 +186,4 @@ abstract interface class AgentPermissionPolicyPort {
   Future<AgentPermissionApplyResult> applyPermissionSelection(
     AgentPermissionSelection selection,
   );
-}
-
-/// 旧 profile 摘要与中立 [AgentPermissionOption] 之间的薄适配。
-///
-/// 仅做字段映射，不解析 id 协议语义。
-abstract final class AgentPermissionPolicyAdapters {
-  /// 将旧 [AgentPermissionProfileSummary] 转为中立 option。
-  static AgentPermissionOption optionFromProfileSummary(
-    AgentPermissionProfileSummary summary,
-  ) {
-    final description = summary.description?.trim();
-    final label = (description != null && description.isNotEmpty)
-        ? description
-        : summary.id;
-    return AgentPermissionOption(
-      id: summary.id,
-      label: label,
-      description: summary.description,
-      allowed: summary.allowed,
-    );
-  }
-
-  /// 将中立 option 转回旧 profile 摘要（兼容旧 UI/API）。
-  static AgentPermissionProfileSummary profileSummaryFromOption(
-    AgentPermissionOption option,
-  ) {
-    return AgentPermissionProfileSummary(
-      id: option.id,
-      allowed: option.allowed,
-      description: option.description ?? option.label,
-    );
-  }
-
-  /// 从运行时快照提取中立选择（优先 optionId，再 profileId）。
-  static AgentPermissionSelection? selectionFromSnapshot(
-    AgentPermissionSelectionSnapshot snapshot,
-  ) {
-    final id = snapshot.selectedOptionId?.trim();
-    if (id == null || id.isEmpty) {
-      return null;
-    }
-    return AgentPermissionSelection(optionId: id);
-  }
-
-  /// 将中立选择展开为运行时快照（供旧 [AgentProvider.updatePermissionSelection]）。
-  ///
-  /// [preferProfileBinding] 为 true 时绑定 permissionProfileId（Codex 风格）；
-  /// 为 false 时仅写 optionId（Grok 风格）。
-  static AgentPermissionSelectionSnapshot snapshotFromSelection(
-    AgentPermissionSelection selection, {
-    bool preferProfileBinding = false,
-  }) {
-    final id = selection.optionId.trim();
-    if (preferProfileBinding) {
-      return AgentPermissionSelectionSnapshot.forProfileId(id);
-    }
-    return AgentPermissionSelectionSnapshot.forOptionId(id);
-  }
 }

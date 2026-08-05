@@ -47,28 +47,6 @@ abstract class AgentProvider {
   /// 持久化由调用方（controller/ViewModel）负责，此方法只同步运行时状态。
   void updateModelSelection(AgentModelSelection selection);
 
-  /// 更新权限策略选择（迁移期运行时快照）。
-  ///
-  /// Provider 自行解释 optionId：Codex 映射 approval/sandbox/profile，
-  /// Grok 映射 permission mode 并写会话 meta / 通知。
-  ///
-  /// 新代码应优先使用 [AgentPermissionPolicyPort.applyPermissionSelection]。
-  @Deprecated(
-    'Use AgentPermissionPolicyPort.applyPermissionSelection via AgentProviderBundle.permissionPolicy',
-  )
-  void updatePermissionSelection(AgentPermissionSelectionSnapshot selection);
-
-  /// 拉取权限选项列表（统一入口）。
-  ///
-  /// Codex：`permissionProfile/list`；Grok：静态 mode catalog。
-  /// 失败或未支持时返回空列表。
-  ///
-  /// 新代码应优先使用 [AgentPermissionPolicyPort.listPermissionOptions]。
-  @Deprecated(
-    'Use AgentPermissionPolicyPort.listPermissionOptions via AgentProviderBundle.permissionPolicy',
-  )
-  Future<List<AgentPermissionProfileSummary>> listPermissionProfiles();
-
   /// Guardian 拒绝后的人工放行（`thread/approveGuardianDeniedAction`）。
   Future<void> approveGuardianDeniedAction({
     required String threadId,
@@ -190,8 +168,8 @@ abstract interface class AgentConversationModeCatalogProvider {
 
 /// 直接暴露中立权限策略 port 的 Provider 可选接口。
 ///
-/// Bundle 优先使用该 port；未实现时回退到
-/// [listPermissionProfiles] / [updatePermissionSelection] 的 legacy 桥接。
+/// [AgentProviderBundle.adapt] 仅在实现本接口时暴露
+/// [AgentProviderBundle.permissionPolicy]；否则 port 为 null（UI 隐藏选择器）。
 abstract interface class AgentPermissionPolicyProvider {
   /// Provider 拥有的权限策略 port（通常为 data 层 adapter）。
   AgentPermissionPolicyPort get permissionPolicy;

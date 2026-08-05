@@ -110,13 +110,13 @@ void main() {
     );
 
     test('catalog exposes exactly three modes in stable order', () {
-      final catalog = GrokPermissionModeCodec.catalogAsOptions();
+      final catalog = GrokPermissionModeCodec.catalog().options;
       expect(catalog.map((item) => item.id).toList(), <String>[
         'ask',
         'auto',
         'always-approve',
       ]);
-      expect(catalog.map((item) => item.displayName).toList(), <String>[
+      expect(catalog.map((item) => item.label).toList(), <String>[
         'Ask',
         'Auto',
         'Always approve',

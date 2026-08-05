@@ -747,21 +747,24 @@ void main() {
       config: AgentProviderConfig.defaultGrok,
       declaredCapabilities: AgentProviderCapabilities.grokAcp,
       includeConversationTestThread: true,
-      permissionProfiles: const <AgentPermissionProfileSummary>[
-        AgentPermissionProfileSummary(
+      permissionOptions: const <AgentPermissionOption>[
+        AgentPermissionOption(
           id: 'ask',
-          allowed: true,
+          label: 'Ask',
           description: 'Ask',
+          allowed: true,
         ),
-        AgentPermissionProfileSummary(
+        AgentPermissionOption(
           id: 'auto',
-          allowed: true,
+          label: 'Auto',
           description: 'Auto',
-        ),
-        AgentPermissionProfileSummary(
-          id: 'always-approve',
           allowed: true,
+        ),
+        AgentPermissionOption(
+          id: 'always-approve',
+          label: 'Always approve',
           description: 'Always approve',
+          allowed: true,
         ),
       ],
     );
@@ -870,21 +873,24 @@ void main() {
         ),
         declaredCapabilities: AgentProviderCapabilities.grokAcp,
         includeConversationTestThread: true,
-        permissionProfiles: const <AgentPermissionProfileSummary>[
-          AgentPermissionProfileSummary(
+        permissionOptions: const <AgentPermissionOption>[
+          AgentPermissionOption(
             id: 'ask',
-            allowed: true,
+            label: 'Ask',
             description: 'Ask',
+            allowed: true,
           ),
-          AgentPermissionProfileSummary(
+          AgentPermissionOption(
             id: 'auto',
-            allowed: true,
+            label: 'Auto',
             description: 'Auto',
-          ),
-          AgentPermissionProfileSummary(
-            id: 'always-approve',
             allowed: true,
+          ),
+          AgentPermissionOption(
+            id: 'always-approve',
+            label: 'Always approve',
             description: 'Always approve',
+            allowed: true,
           ),
         ],
       );
@@ -926,26 +932,21 @@ void main() {
         await tester.pump(const Duration(milliseconds: 300));
       }
 
-      final updatesBefore = provider.permissionSelectionUpdateCount;
+      final updatesBefore = provider.permissionApplyCount;
       await selectPermission('always-approve');
       expect(find.text('Always approve'), findsWidgets);
-      expect(provider.lastPermissionSelection?.optionId, 'always-approve');
-      expect(provider.lastPermissionSelection?.permissionProfileId, isNull);
-      expect(
-        provider.permissionSelectionUpdateCount,
-        greaterThan(updatesBefore),
-      );
+      expect(provider.lastAppliedPermissionOptionId, 'always-approve');
+      expect(provider.permissionApplyCount, greaterThan(updatesBefore));
 
       var settings = await configStore.load();
       var grok = settings.providers.singleWhere(
         (p) => p.id == grokAgentProviderId,
       );
       expect(grok.selectedPermissionOptionId, 'always-approve');
-      expect(grok.selectedPermissionProfileId, isNull);
 
       await selectPermission('auto');
       expect(find.text('Auto'), findsWidgets);
-      expect(provider.lastPermissionSelection?.optionId, 'auto');
+      expect(provider.lastAppliedPermissionOptionId, 'auto');
       settings = await configStore.load();
       grok = settings.providers.singleWhere((p) => p.id == grokAgentProviderId);
       expect(grok.selectedPermissionOptionId, 'auto');
@@ -953,8 +954,7 @@ void main() {
       // 切回 Ask：触发器短标签，provider 同步 optionId=ask。
       await selectPermission('ask');
       expect(find.text('Ask'), findsWidgets);
-      expect(provider.lastPermissionSelection?.optionId, 'ask');
-      expect(provider.lastPermissionSelection?.permissionProfileId, isNull);
+      expect(provider.lastAppliedPermissionOptionId, 'ask');
       settings = await configStore.load();
       grok = settings.providers.singleWhere((p) => p.id == grokAgentProviderId);
       expect(grok.selectedPermissionOptionId, 'ask');
