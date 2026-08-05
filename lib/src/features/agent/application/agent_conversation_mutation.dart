@@ -52,6 +52,20 @@ final class AgentApplyThreadSettingsChange
   final AgentThreadSettingsUpdatedEvent event;
 }
 
+/// 将服务端 settings 中已中立化的权限事实写入事件所属 thread。
+///
+/// 此变化不要求该 thread 是当前 Canvas，也不触发 provider apply。
+final class AgentApplyThreadPermissionSettingsChange
+    extends AgentConversationStateChange {
+  const AgentApplyThreadPermissionSettingsChange({
+    required this.threadId,
+    required this.permissionSelection,
+  });
+
+  final String threadId;
+  final AgentPermissionSelection permissionSelection;
+}
+
 final class AgentApplySessionConfigChange extends AgentConversationStateChange {
   const AgentApplySessionConfigChange(this.options);
 

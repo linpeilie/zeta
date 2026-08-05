@@ -99,6 +99,34 @@ void main() {
       _expectRejected(rejected, reason: 'currentThreadMismatch');
     });
 
+    test('other-thread settings routes only its neutral permission state', () {
+      final event = AgentThreadSettingsUpdatedEvent(
+        threadId: _threadId,
+        model: 'must-not-touch-current-canvas',
+        collaborationMode: AgentConversationModeSelection(
+          modeId: AgentConversationModeId.plan,
+          effectiveModelId: 'gpt-test',
+        ),
+        permissionSelection: AgentPermissionSelection(optionId: ':read-only'),
+      );
+
+      final mutation = AgentConversationReducer.live().reduce(
+        event,
+        _context(selectedThreadId: 'other-thread'),
+      );
+
+      expect(mutation.accepted, isTrue);
+      expect(mutation.uiUpdate, isNull);
+      expect(_runtimeTypes(mutation.stateChanges), <Type>[
+        AgentApplyThreadPermissionSettingsChange,
+      ]);
+      final change =
+          mutation.stateChanges.single
+              as AgentApplyThreadPermissionSettingsChange;
+      expect(change.threadId, _threadId);
+      expect(change.permissionSelection.optionId, ':read-only');
+    });
+
     test('turn identity falls back to timeline and pending turn group', () {
       const knownTurnEvent = AgentMessageDeltaEvent(
         messageId: 'known-turn-message',

@@ -911,6 +911,45 @@ void main() {
       },
     );
 
+    test(
+      'other-thread permission settings update only that thread effective',
+      () async {
+        final provider = _FakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.loadModels();
+        await viewModel.switchThread(
+          _thread(id: 'thread-2', title: 'Thread two'),
+        );
+        final currentBefore = viewModel.permissionSnapshotForThread('thread-2');
+
+        provider.emit(
+          const AgentThreadSettingsUpdatedEvent(
+            threadId: 'thread-1',
+            model: 'must-not-touch-current-canvas',
+            permissionSelection: AgentPermissionSelection(
+              optionId: ':read-only',
+            ),
+          ),
+        );
+        await _drainTypedUiScheduling();
+
+        final otherThread = viewModel.permissionSnapshotForThread('thread-1');
+        final currentAfter = viewModel.permissionSnapshotForThread('thread-2');
+        expect(otherThread.selection?.optionId, ':read-only');
+        expect(
+          otherThread.source,
+          AgentPermissionRequestSource.threadEffective,
+        );
+        expect(currentAfter, currentBefore);
+        expect(
+          viewModel.selectedModelId,
+          isNot('must-not-touch-current-canvas'),
+        );
+      },
+    );
+
     test('rapid thread switch discards a late history mode', () async {
       final threadAHistory = Completer<AgentThreadHistorySnapshot>();
       final provider = _ModeFakeAgentProvider(

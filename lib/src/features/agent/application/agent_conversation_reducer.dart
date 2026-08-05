@@ -329,18 +329,28 @@ final class AgentConversationReducer {
     AgentThreadSettingsUpdatedEvent event,
     AgentConversationReducerContext context,
   ) {
-    if (!_shouldHandleCurrent(context, sessionId: event.threadId)) {
+    final permissionSelection = event.permissionSelection;
+    final isCurrent = _shouldHandleCurrent(context, sessionId: event.threadId);
+    if (!isCurrent && permissionSelection == null) {
       return AgentConversationMutation.rejected('currentThreadMismatch');
     }
+    final stateChanges = <AgentConversationStateChange>[
+      if (permissionSelection != null)
+        AgentApplyThreadPermissionSettingsChange(
+          threadId: event.threadId,
+          permissionSelection: permissionSelection,
+        ),
+      if (isCurrent) AgentApplyThreadSettingsChange(event),
+    ];
     return AgentConversationMutation(
       accepted: true,
-      stateChanges: <AgentConversationStateChange>[
-        AgentApplyThreadSettingsChange(event),
-      ],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{AgentUiRegion.composer},
-        urgency: AgentUiUpdateUrgency.immediate,
-      ),
+      stateChanges: stateChanges,
+      uiUpdate: isCurrent
+          ? AgentUiUpdateRequest(
+              regions: const <AgentUiRegion>{AgentUiRegion.composer},
+              urgency: AgentUiUpdateUrgency.immediate,
+            )
+          : null,
     );
   }
 

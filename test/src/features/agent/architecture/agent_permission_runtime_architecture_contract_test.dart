@@ -296,6 +296,88 @@ void main() {
     );
 
     test(
+      'settings feedback updates only its thread across two ViewModels',
+      () async {
+        final peer = RecordingJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        final providerController = ActiveAgentProviderController(
+          providerFactory: FixedAgentProviderFactory(provider),
+          configStore: MemoryAgentProviderConfigStore(),
+        );
+        addTearDown(providerController.dispose);
+
+        final first = AgentConversationViewModel(
+          providerController: providerController,
+          uiFrameScheduler: FakeAgentFrameScheduler(),
+        );
+        final second = AgentConversationViewModel(
+          providerController: providerController,
+          uiFrameScheduler: FakeAgentFrameScheduler(),
+        );
+        addTearDown(first.dispose);
+        addTearDown(second.dispose);
+        first.updateWorkspace(
+          projectPath: '/repo',
+          contextFilePath: null,
+          restoredSessionId: 'thread-a',
+          restoredProviderId: defaultAgentProviderId,
+          resetConversation: true,
+        );
+        second.updateWorkspace(
+          projectPath: '/repo',
+          contextFilePath: null,
+          restoredSessionId: 'thread-b',
+          restoredProviderId: defaultAgentProviderId,
+          resetConversation: true,
+        );
+        await Future.wait(<Future<void>>[
+          first.loadModels(),
+          second.loadModels(),
+        ]);
+        final runtimeIdentity =
+            providerController.activeProviderRuntimeIdentity!;
+        final defaultBefore = providerController.permissionStateStore
+            .stateFor(runtimeIdentity)
+            .providerDefaultPreference;
+        final secondBefore = second.permissionSelection;
+        final callsBefore = peer.calls.length;
+
+        peer.emitNotification('thread/settings/updated', <String, Object?>{
+          'threadId': 'thread-a',
+          'threadSettings': <String, Object?>{
+            'approvalPolicy': 'on-request',
+            'sandboxPolicy': <String, Object?>{'type': 'readOnly'},
+          },
+        });
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+
+        final permissionState = providerController.permissionStateStore
+            .stateFor(runtimeIdentity);
+        expect(
+          permissionState.threadStates['thread-a']?.selection.optionId,
+          ':read-only',
+        );
+        expect(
+          permissionState.threadStates['thread-a']?.source,
+          AgentPermissionStateSource.serverSettings,
+        );
+        expect(permissionState.threadStates['thread-b'], isNull);
+        expect(permissionState.providerDefaultPreference, defaultBefore);
+        expect(first.permissionSelection?.optionId, ':read-only');
+        expect(second.permissionSelection, secondBefore);
+        expect(
+          peer.calls.length,
+          callsBefore,
+          reason: 'settings feedback must not trigger a second provider apply',
+        );
+      },
+    );
+
+    test(
       'current thread effective wins over provider default for fork',
       () async {
         final peer = RecordingJsonRpcPeer();
@@ -383,6 +465,40 @@ void main() {
         expect(declaration, isNot(contains(forbidden)));
       }
     });
+
+    test(
+      'shared application and presentation do not decode Codex settings',
+      () {
+        for (final rootPath in const <String>[
+          'lib/src/features/agent/application',
+          'lib/src/features/agent/presentation',
+        ]) {
+          final files = Directory(rootPath)
+              .listSync(recursive: true)
+              .whereType<File>()
+              .where((file) => file.path.endsWith('.dart'));
+          for (final file in files) {
+            final source = file.readAsStringSync();
+            expect(
+              source,
+              isNot(contains('CodexPermissionPolicyCodec')),
+              reason: file.path,
+            );
+            for (final protocolField in const <String>[
+              'approvalPolicy',
+              'sandboxPolicy',
+              'activePermissionProfile',
+            ]) {
+              expect(
+                source,
+                isNot(contains(protocolField)),
+                reason: '${file.path}: $protocolField',
+              );
+            }
+          }
+        }
+      },
+    );
 
     test('V2 priority and provider migrator fixture table stays executable', () {
       final fixture = readFixtureJsonMap(

@@ -137,6 +137,10 @@ main -> app -> presentation/application -> domain
   application 按 thread-effective → provider default → catalog default 解析。Codex
   client/encoder 只能在该快照没有 selection 时使用 Provider 构造时冻结的 config
   fallback；用户选择或 `thread/settings/updated` 不得改写跨 thread 共享的请求权限状态。
+- `thread/settings/updated` 的 Codex profile/approval/sandbox 必须由 data codec 一次性解码
+  为 `AgentPermissionSelection`；domain event 不得暴露协议字段。reducer 允许权限事实按事件
+  threadId 路由到 store，即使该 thread 不是当前 Canvas；同一通知不得更新 provider default、
+  不得再次调用 Provider apply，模型和协作模式仍只作用于当前 thread。
 - 每个 provider 必须通过不可变 `AgentProviderCapabilities` 声明真实能力；presentation
   隐藏不支持入口，application 和 data 层执行前仍要校验。禁止以静默 no-op 或语义不等价
   的降级伪造 thread/turn 能力。

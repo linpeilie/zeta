@@ -72,6 +72,21 @@ abstract final class CodexPermissionPolicyCodec {
     return value == null ? null : normalizeApprovalPolicy(value);
   }
 
+  /// `thread/settings/updated` 中的审批策略采用严格解码。
+  ///
+  /// settings 是服务端事实回写；未知值不能按客户端默认值猜测，否则会把无法
+  /// 识别的组合错误地更新为某个有效权限。`on-failure` 是已知 legacy 别名。
+  static String? _approvalPolicyFromThreadSettings(Object? value) {
+    if (value is! String) {
+      return null;
+    }
+    return switch (value.trim()) {
+      'untrusted' || 'on-request' || 'never' => value.trim(),
+      'on-failure' => 'on-request',
+      _ => null,
+    };
+  }
+
   /// 协议 sandbox（kebab / camel / 对象）→ 域内 camelCase。
   static String? sandboxPolicyFromProtocol(Object? value) {
     if (value is String) {
@@ -230,10 +245,9 @@ abstract final class CodexPermissionPolicyCodec {
   static CodexPermissionRuntimeSnapshot? decodeThreadSettings(
     Map<String, Object?> settings,
   ) {
-    final approvalRaw = settings['approvalPolicy'];
-    final approval = approvalRaw is String && approvalRaw.trim().isNotEmpty
-        ? normalizeApprovalPolicy(approvalRaw)
-        : null;
+    final approval = _approvalPolicyFromThreadSettings(
+      settings['approvalPolicy'],
+    );
     final sandbox = sandboxPolicyFromProtocol(
       settings['sandboxPolicy'] ?? settings['sandbox'],
     );

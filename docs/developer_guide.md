@@ -228,6 +228,10 @@ Dock，但不得共享 request/decision 模型或 pending registry。
   effective；持久化只写 default optionId。
   create/resume/fork/send 前由 application 冻结 `AgentPermissionRequestSnapshot`，优先级为
   thread-effective → provider default → catalog default。
+- **Settings feedback**：Codex notification mapper 通过专属 codec 原子解码
+  profile/approval/sandbox，domain 只接收 `AgentPermissionSelection`。application 按通知
+  threadId 写入 `serverSettings` effective；其他 thread 的事件也可入库，但不会修改当前
+  Canvas 的模型/模式、provider default，也不会再次调用 permission port apply。
 - **Apply 状态机**：`currentTurn` 在下一次 snapshot 冻结时原子取走；`currentSession` 只提交
   目标 thread；`runtime` 发布带 runtime identity/generation 的共享状态，所有同 runtime
   Canvas 同步读取；`nextSession` 只更新 preference/pending hint。旧 generation 的 apply 和

@@ -394,6 +394,12 @@ warning 与持久化失败。`AgentPermissionCatalogController` 独立承担目�
 Canvas 广播；`nextSession` 更新默认/待生效提示。旧 generation 的迟到结果不能提交。Provider
 apply 成功但配置保存失败时不回滚运行态，并暴露只重试持久化、不重复 apply 的入口。
 
+Codex `thread/settings/updated` 权限反馈在 data mapper 处经专属 codec 原子收敛为中立
+`AgentPermissionSelection`；domain event 不再承载 approval/sandbox/profile。reducer 将权限
+变化独立路由到事件 thread 的 `serverSettings` effective，因此共享 Provider 下的非当前
+thread 也不会丢失反馈；该路径不改 provider default、不调用 Provider apply，模型和
+conversation mode 的 UI 回写仍受当前 thread gate 约束。
+
 其余剩余收口项是：继续从旧 `AgentProvider` 删除其它已迁移门面方法（非权限域）。
 
 ### 当前已落地的对话体验

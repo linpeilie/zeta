@@ -3721,22 +3721,20 @@ final class _AgentConversationEventStateTarget
         }
       case AgentSetCompactingChange():
         _viewModel._isCompacting = change.value;
+      case AgentApplyThreadPermissionSettingsChange():
+        // data mapper 已将 Codex 私有字段原子解码为中立 selection。settings
+        // 只回写事件所属 thread effective，不二次 apply、不持久化 provider 默认。
+        unawaited(
+          _viewModel._permissionSelectionController.applyThreadSettings(
+            threadId: change.threadId,
+            permissionSelection: change.permissionSelection,
+          ),
+        );
       case AgentApplyThreadSettingsChange():
         final event = change.event;
         _viewModel._applyThreadSelectionFromThreadSettings(
           modelId: event.model,
         );
-        // 中立 permissionSelection 已由 data mapper 解码；此处只回写事件所属
-        // thread 的 effective，不二次 apply、不持久化全局默认。
-        final permissionSelection = event.permissionSelection;
-        if (permissionSelection != null) {
-          unawaited(
-            _viewModel._permissionSelectionController.applyThreadSettings(
-              threadId: event.threadId,
-              permissionSelection: permissionSelection,
-            ),
-          );
-        }
         _viewModel._conversationModeController.applyThreadSettings(event);
       case AgentApplySessionConfigChange():
         _viewModel._sessionConfigOptions = change.options;

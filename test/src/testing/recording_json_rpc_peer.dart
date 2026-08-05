@@ -179,6 +179,17 @@ final class RecordingJsonRpcPeer implements JsonRpcPeer {
     await _protocolErrors.close();
   }
 
+  /// 向真实 provider notification mapper 注入一条协议通知。
+  void emitNotification(String method, Map<String, Object?> params) {
+    _notifications.add(
+      JsonRpcNotification(
+        method: method,
+        params: params,
+        raw: <String, Object?>{'method': method, 'params': params},
+      ),
+    );
+  }
+
   String _nextThreadId(String prefix) {
     _threadSequence += 1;
     return '$prefix-thread-$_threadSequence';

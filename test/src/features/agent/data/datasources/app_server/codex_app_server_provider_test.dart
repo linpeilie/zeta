@@ -2021,53 +2021,102 @@ void main() {
       await provider.dispose();
     });
 
-    test(
-      'maps thread settings permission fields into one atomic event',
-      () async {
-        final peer = _FakeJsonRpcPeer();
-        final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
-          peer: peer,
+    test('atomically maps all thread settings permission shapes', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+      addTearDown(subscription.cancel);
+      await provider.initialize();
+
+      final cases =
+          <
+            ({
+              String threadId,
+              Map<String, Object?> settings,
+              String? expectedOptionId,
+            })
+          >[
+            (
+              threadId: 'thread-policy-only',
+              settings: <String, Object?>{
+                'approvalPolicy': 'on-request',
+                'sandboxPolicy': <String, Object?>{'type': 'readOnly'},
+              },
+              expectedOptionId: ':read-only',
+            ),
+            (
+              threadId: 'thread-profile-only',
+              settings: <String, Object?>{
+                'activePermissionProfile': <String, Object?>{'id': 'team-safe'},
+              },
+              expectedOptionId: 'team-safe',
+            ),
+            (
+              threadId: 'thread-combined',
+              settings: <String, Object?>{
+                'approvalPolicy': 'never',
+                'sandboxPolicy': <String, Object?>{'type': 'dangerFullAccess'},
+                'activePermissionProfile': <String, Object?>{
+                  'id': 'team-safe',
+                  'name': 'Team safe',
+                },
+              },
+              expectedOptionId: 'team-safe',
+            ),
+            (
+              threadId: 'thread-empty',
+              settings: <String, Object?>{
+                'approvalPolicy': '',
+                'sandboxPolicy': '',
+                'activePermissionProfile': <String, Object?>{'id': ''},
+              },
+              expectedOptionId: null,
+            ),
+            (
+              threadId: 'thread-unknown-approval',
+              settings: <String, Object?>{
+                'approvalPolicy': 'future-policy',
+                'sandboxPolicy': <String, Object?>{'type': 'readOnly'},
+              },
+              expectedOptionId: null,
+            ),
+            (
+              threadId: 'thread-unknown-sandbox',
+              settings: <String, Object?>{
+                'approvalPolicy': 'on-request',
+                'sandboxPolicy': <String, Object?>{'type': 'future-sandbox'},
+              },
+              expectedOptionId: null,
+            ),
+          ];
+      for (final testCase in cases) {
+        peer.emitNotification('thread/settings/updated', <String, Object?>{
+          'threadId': testCase.threadId,
+          'threadSettings': testCase.settings,
+        });
+      }
+      await Future<void>.delayed(Duration.zero);
+
+      final settingsEvents = events
+          .whereType<AgentThreadSettingsUpdatedEvent>()
+          .toList(growable: false);
+      expect(settingsEvents, hasLength(cases.length));
+      for (final testCase in cases) {
+        final event = settingsEvents.singleWhere(
+          (event) => event.threadId == testCase.threadId,
         );
-        addTearDown(provider.dispose);
-        final events = <AgentEvent>[];
-        final subscription = provider.events.listen(events.add);
-        addTearDown(subscription.cancel);
-        await provider.initialize();
-
-        peer.emitNotification('thread/settings/updated', <String, Object?>{
-          'threadId': 'thread-perm',
-          'threadSettings': <String, Object?>{
-            'approvalPolicy': 'never',
-            'sandboxPolicy': <String, Object?>{'type': 'dangerFullAccess'},
-            'activePermissionProfile': <String, Object?>{
-              'id': 'team-safe',
-              'name': 'Team safe',
-            },
-          },
-        });
-        // 空 profile id / 损坏策略不得被映射成有效字段。
-        peer.emitNotification('thread/settings/updated', <String, Object?>{
-          'threadId': 'thread-perm-empty',
-          'threadSettings': <String, Object?>{
-            'approvalPolicy': '',
-            'sandboxPolicy': 'not-a-sandbox',
-            'activePermissionProfile': <String, Object?>{'id': ''},
-          },
-        });
-        await Future<void>.delayed(Duration.zero);
-
-        final full = events
-            .whereType<AgentThreadSettingsUpdatedEvent>()
-            .firstWhere((event) => event.threadId == 'thread-perm');
-        expect(full.permissionSelection?.optionId, 'team-safe');
-
-        final empty = events
-            .whereType<AgentThreadSettingsUpdatedEvent>()
-            .firstWhere((event) => event.threadId == 'thread-perm-empty');
-        expect(empty.permissionSelection, isNull);
-      },
-    );
+        expect(
+          event.permissionSelection?.optionId,
+          testCase.expectedOptionId,
+          reason: testCase.threadId,
+        );
+      }
+    });
 
     test(
       'maps scoped thread settings collaboration modes into typed events',

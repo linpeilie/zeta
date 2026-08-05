@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_permission_selection_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_permission_state_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 void main() {
@@ -161,8 +162,18 @@ void main() {
         );
 
         expect(controller.selectedOptionId, ':workspace');
+        expect(controller.defaultOptionId, ':workspace');
+        expect(port.applyCalls, 0);
+        expect(
+          controller.state.threadStates['thread-a']?.source,
+          AgentPermissionStateSource.serverSettings,
+        );
         controller.bindThread('thread-a');
         expect(controller.selectedOptionId, ':read-only');
+        expect(
+          controller.stateSource,
+          AgentPermissionStateSource.serverSettings,
+        );
       },
     );
 
