@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "id": "codex-v2-wins-over-stale-v1",
+      "providerKind": "codexAppServer",
+      "expectedMigrator": "v2-short-circuit",
+      "input": {
+        "id": "codex",
+        "displayName": "Codex",
+        "kind": "codexAppServer",
+        "command": "codex",
+        "selectedPermissionOptionId": ":read-only",
+        "selectedPermissionProfileId": "team-safe",
+        "selectedApprovalPolicy": "never",
+        "selectedSandboxPolicy": "dangerFullAccess",
+        "enabled": true
+      },
+      "expectedOptionId": ":read-only"
+    },
+    {
+      "id": "grok-v2-wins-over-legacy-mode",
+      "providerKind": "acp",
+      "expectedMigrator": "v2-short-circuit",
+      "input": {
+        "id": "grok",
+        "displayName": "Grok",
+        "kind": "acp",
+        "command": "grok",
+        "selectedPermissionOptionId": "auto",
+        "selectedPermissionMode": "yolo",
+        "enabled": true
+      },
+      "expectedOptionId": "auto"
+    },
+    {
+      "id": "codex-profile-uses-codex-migrator",
+      "providerKind": "codexAppServer",
+      "expectedMigrator": "codex",
+      "input": {
+        "id": "codex",
+        "displayName": "Codex",
+        "kind": "codexAppServer",
+        "command": "codex",
+        "selectedPermissionProfileId": "team-safe",
+        "enabled": true
+      },
+      "expectedOptionId": "team-safe"
+    },
+    {
+      "id": "codex-policies-use-codex-migrator",
+      "providerKind": "codexAppServer",
+      "expectedMigrator": "codex",
+      "input": {
+        "id": "codex",
+        "displayName": "Codex",
+        "kind": "codexAppServer",
+        "command": "codex",
+        "selectedApprovalPolicy": "never",
+        "selectedSandboxPolicy": "dangerFullAccess",
+        "enabled": true
+      },
+      "expectedOptionId": ":danger-full-access"
+    },
+    {
+      "id": "grok-yolo-uses-grok-migrator",
+      "providerKind": "acp",
+      "expectedMigrator": "grok",
+      "input": {
+        "id": "grok",
+        "displayName": "Grok",
+        "kind": "acp",
+        "command": "grok",
+        "selectedPermissionMode": "yolo",
+        "enabled": true
+      },
+      "expectedOptionId": "always-approve"
+    },
+    {
+      "id": "generic-provider-does-not-guess-grok-fields",
+      "providerKind": "claudeCode",
+      "expectedMigrator": "generic",
+      "input": {
+        "id": "claude",
+        "displayName": "Claude",
+        "kind": "claudeCode",
+        "command": "claude",
+        "selectedPermissionMode": "yolo",
+        "enabled": true
+      },
+      "expectedOptionId": null
+    }
+  ]
+}
