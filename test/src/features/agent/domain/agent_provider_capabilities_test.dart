@@ -49,6 +49,9 @@ void main() {
       expect(capabilities.supportsResourceInput, isTrue);
       expect(capabilities.supportsSkillInput, isTrue);
       expect(capabilities.supportsPermissionRequests, isTrue);
+      expect(capabilities.supportsPermissionPolicySelection, isTrue);
+      expect(capabilities.supportsPermissionProfileDiscovery, isFalse);
+      expect(capabilities.supportsPermissionProfileSelection, isFalse);
       expect(capabilities.supportsUserQuestions, isTrue);
       expect(capabilities.supportsPlanApproval, isTrue);
     });

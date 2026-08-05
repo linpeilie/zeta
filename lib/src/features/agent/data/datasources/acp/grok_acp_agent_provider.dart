@@ -15,6 +15,7 @@ import 'package:zeta/src/features/agent/data/mappers/acp_permission_mapper.dart'
 import 'package:zeta/src/features/agent/data/mappers/grok_acp_notification_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_billing_quota_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_error_normalizer.dart';
+import 'package:zeta/src/features/agent/data/mappers/grok_permission_mode_codec.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_question_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_skills_mapper.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -56,6 +57,9 @@ class GrokAcpAgentProvider
          modelId: config.selectedModel ?? config.defaultModel,
          reasoningEffort: config.selectedReasoningEffort,
          serviceTierId: config.selectedServiceTier,
+       ),
+       _permissionMode = GrokPermissionModeCodec.parse(
+         config.resolvedPermissionOptionId,
        ),
        _sessionHistoryReader =
            sessionHistoryReader ?? GrokSessionHistoryReader(),
@@ -149,6 +153,7 @@ class GrokAcpAgentProvider
   final Map<String, int> _titlePollTokensBySessionId = <String, int>{};
 
   AgentModelSelection _modelSelection;
+  GrokPermissionMode _permissionMode;
   AgentModelList? _modelList;
   bool _initialized = false;
   Future<void>? _initializationOperation;
@@ -347,7 +352,11 @@ class GrokAcpAgentProvider
 
     final result = await _peer.sendRequest(
       'session/new',
-      params: <String, Object?>{'cwd': cwd, 'mcpServers': <Object?>[]},
+      params: <String, Object?>{
+        'cwd': cwd,
+        'mcpServers': <Object?>[],
+        '_meta': GrokPermissionModeCodec.sessionMeta(_permissionMode),
+      },
       timeout: const Duration(seconds: 60),
     );
     final map = _asStringKeyedMap(result) ?? const <String, Object?>{};
@@ -396,6 +405,7 @@ class GrokAcpAgentProvider
               'sessionId': sessionId,
               if (cwd != null && cwd.isNotEmpty) 'cwd': cwd,
               'mcpServers': <Object?>[],
+              '_meta': GrokPermissionModeCodec.sessionMeta(_permissionMode),
             },
             timeout: const Duration(seconds: 120),
           );
@@ -566,11 +576,39 @@ class GrokAcpAgentProvider
 
   @override
   void updatePermissionSelection(AgentPermissionSelection selection) {
-    // Grok ACP 使用 session/request_permission 交互审批，无 Codex 策略模型。
+    // 统一入口：只解释 optionId（中立）；不读 Codex approval/sandbox。
+    final next = GrokPermissionModeCodec.parse(selection.selectedOptionId);
+    final changed = next != _permissionMode;
+    _permissionMode = next;
     _log.fine(
-      'Ignoring permission selection for Grok ACP '
-      '(approval=${selection.approvalPolicy})',
+      'Updated Grok permission mode to '
+      '${GrokPermissionModeCodec.wireId(next)}'
+      '${changed ? '' : ' (unchanged)'}',
     );
+    if (!changed || !_initialized || _disposed) {
+      return;
+    }
+    _broadcastPermissionMode(next);
+  }
+
+  /// 向 Grok shell 广播权限模式变更（best-effort，不抛错）。
+  void _broadcastPermissionMode(GrokPermissionMode mode) {
+    final params = GrokPermissionModeCodec.yoloModeChangedParams(mode);
+    // grok-build 扩展通知常见 `x.ai/`；同时兼容 `_x.ai/` 前缀消费端。
+    for (final method in const <String>[
+      'x.ai/yolo_mode_changed',
+      '_x.ai/yolo_mode_changed',
+    ]) {
+      try {
+        _peer.sendNotification(method, params: params);
+      } catch (error, stackTrace) {
+        _log.fine(
+          'Failed to notify $method for permission mode',
+          error,
+          stackTrace,
+        );
+      }
+    }
   }
 
   /// 读取 Grok 账号套餐剩余与重置时间。
@@ -665,7 +703,8 @@ class GrokAcpAgentProvider
 
   @override
   Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
-    return const <AgentPermissionProfileSummary>[];
+    // 静态 catalog；统一走 listPermissionProfiles 入口。
+    return GrokPermissionModeCodec.catalogAsOptions();
   }
 
   @override

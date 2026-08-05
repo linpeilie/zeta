@@ -100,9 +100,16 @@ class AgentProviderCapabilities {
   final bool supportsModeSelection;
   final bool supportsReasoningOptions;
   final bool supportsServiceTierSelection;
+
+  /// 是否支持会话级权限策略选择（统一入口）。
+  ///
+  /// 为 true 时 UI 展示权限选择器；选项列表由
+  /// [AgentProvider.listPermissionProfiles] 提供（RPC 或静态 catalog）。
   final bool supportsPermissionPolicySelection;
 
-  /// 是否可发现 provider 提供的权限配置档案。
+  /// 是否可发现 provider 提供的权限配置档案（如 Codex `permissionProfile/list`）。
+  ///
+  /// 为 false 时仍可返回静态选项（如 Grok mode catalog）。
   final bool supportsPermissionProfileDiscovery;
 
   /// 是否可把权限配置档案作为运行时选择发送给 provider。
@@ -251,6 +258,8 @@ class AgentProviderCapabilities {
     supportsPlanApproval: true,
     supportsModelSelection: true,
     supportsReasoningOptions: true,
+    // 统一权限选择入口；选项由 listPermissionProfiles 静态 catalog 提供。
+    supportsPermissionPolicySelection: true,
     supportsUsage: true,
   );
 

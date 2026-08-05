@@ -45,6 +45,54 @@ void main() {
       expect(provider.lifecycleState, AgentProviderLifecycleState.closed);
     });
 
+    test('injects permission mode meta on session/new', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok.copyWith(
+          selectedPermissionOptionId: 'always-approve',
+        ),
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+
+      await provider.startSession(
+        context: const AgentContext(projectPath: r'D:\repo\zeta'),
+      );
+
+      final newIndex = peer.requestMethods.indexOf('session/new');
+      expect(newIndex, isNonNegative);
+      final params = peer.requestParams[newIndex]! as Map<String, Object?>;
+      final meta = params['_meta']! as Map<String, Object?>;
+      expect(meta['yoloMode'], isTrue);
+      expect(meta['clientIdentifier'], 'zeta');
+      expect(meta.containsKey('autoMode'), isFalse);
+    });
+
+    test('broadcasts yolo_mode_changed when permission mode updates', () async {
+      final peer = _FakeJsonRpcPeer();
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+      await provider.initialize();
+
+      provider.updatePermissionSelection(
+        const AgentPermissionSelection(optionId: 'auto'),
+      );
+
+      expect(peer.notificationsSent, contains('x.ai/yolo_mode_changed'));
+      expect(peer.notificationsSent, contains('_x.ai/yolo_mode_changed'));
+      final params =
+          peer.notificationParams[peer.notificationsSent.indexOf(
+                'x.ai/yolo_mode_changed',
+              )]!
+              as Map<String, Object?>;
+      expect(params['permission_mode'], 'auto');
+      expect(params['auto_mode'], isTrue);
+      expect(params['yolo_mode'], isFalse);
+    });
+
     test('reads Grok billing plan windows and reset time', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
@@ -2233,6 +2281,7 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
   final requestParams = <Object?>[];
   final responses = <Map<String, Object?>>[];
   final notificationsSent = <String>[];
+  final notificationParams = <Object?>[];
 
   /// 模拟 session/load 期间推送 isReplay 更新。
   bool loadSessionEmitsReplay = false;
@@ -2332,6 +2381,7 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
   @override
   void sendNotification(String method, {Object? params}) {
     notificationsSent.add(method);
+    notificationParams.add(params);
   }
 
   @override

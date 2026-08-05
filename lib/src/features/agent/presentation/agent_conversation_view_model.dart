@@ -628,7 +628,7 @@ class AgentConversationViewModel {
     return selectedModelId?.trim() ?? '';
   }
 
-  /// Provider 支持会话级审批/沙箱策略时显示选择器。
+  /// Provider 支持会话级权限策略选择时显示选择器（统一入口）。
   bool get showPermissionPolicy =>
       activeCapabilities.supportsPermissionPolicySelection;
 

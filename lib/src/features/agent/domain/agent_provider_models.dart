@@ -49,6 +49,7 @@ class AgentProviderConfig {
     this.selectedApprovalPolicy,
     this.selectedSandboxPolicy,
     this.selectedPermissionProfileId,
+    this.selectedPermissionOptionId,
     this.enabled = true,
     this.extra = const <String, Object?>{},
   });
@@ -92,11 +93,30 @@ class AgentProviderConfig {
   /// 用户选择的沙箱策略（域内 camelCase）。
   final String? selectedSandboxPolicy;
 
-  /// 用户选择的 permission profile id（可选）。
+  /// 用户选择的 permission profile id（可选；Codex 兼容字段）。
   final String? selectedPermissionProfileId;
+
+  /// 中立权限选项 id（统一主键：Codex profile 或 Grok mode 等）。
+  ///
+  /// 读取时若为空，会回落 [selectedPermissionProfileId] 或旧
+  /// `selectedPermissionMode` 字段（见 [tryDecode]）。
+  final String? selectedPermissionOptionId;
 
   /// 是否在配置列表中启用。
   final bool enabled;
+
+  /// 解析后的权限选项 id（option → profile 兼容回落）。
+  String? get resolvedPermissionOptionId {
+    final option = selectedPermissionOptionId?.trim();
+    if (option != null && option.isNotEmpty) {
+      return option;
+    }
+    final profile = selectedPermissionProfileId?.trim();
+    if (profile != null && profile.isNotEmpty) {
+      return profile;
+    }
+    return null;
+  }
 
   /// 未来 provider 专属配置的扩展字段。
   final Map<String, Object?> extra;
@@ -160,6 +180,7 @@ class AgentProviderConfig {
     String? selectedApprovalPolicy,
     String? selectedSandboxPolicy,
     String? selectedPermissionProfileId,
+    String? selectedPermissionOptionId,
     bool? enabled,
     Map<String, Object?>? extra,
   }) {
@@ -182,6 +203,8 @@ class AgentProviderConfig {
           selectedSandboxPolicy ?? this.selectedSandboxPolicy,
       selectedPermissionProfileId:
           selectedPermissionProfileId ?? this.selectedPermissionProfileId,
+      selectedPermissionOptionId:
+          selectedPermissionOptionId ?? this.selectedPermissionOptionId,
       enabled: enabled ?? this.enabled,
       extra: extra ?? this.extra,
     );
@@ -212,6 +235,7 @@ class AgentProviderConfig {
       selectedApprovalPolicy: selectedApprovalPolicy,
       selectedSandboxPolicy: selectedSandboxPolicy,
       selectedPermissionProfileId: selectedPermissionProfileId,
+      selectedPermissionOptionId: selectedPermissionOptionId,
       enabled: enabled,
       extra: extra,
     );
@@ -236,6 +260,7 @@ class AgentProviderConfig {
       'selectedApprovalPolicy': selectedApprovalPolicy,
       'selectedSandboxPolicy': selectedSandboxPolicy,
       'selectedPermissionProfileId': selectedPermissionProfileId,
+      'selectedPermissionOptionId': selectedPermissionOptionId,
       'enabled': enabled,
       'extra': extra,
     };
@@ -283,6 +308,11 @@ class AgentProviderConfig {
       selectedPermissionProfileId: decodeOptionalString(
         map['selectedPermissionProfileId'],
       ),
+      // 统一 optionId；兼容旧 selectedPermissionMode / profile 字段。
+      selectedPermissionOptionId:
+          decodeOptionalString(map['selectedPermissionOptionId']) ??
+          decodeOptionalString(map['selectedPermissionMode']) ??
+          decodeOptionalString(map['selectedPermissionProfileId']),
       enabled: map['enabled'] is bool ? map['enabled'] as bool : true,
       extra: decodeObjectMap(map['extra']),
     );

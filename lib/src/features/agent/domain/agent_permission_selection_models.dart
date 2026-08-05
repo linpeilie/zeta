@@ -1,4 +1,6 @@
-/// `permissionProfile/list` 返回的权限配置摘要。
+/// 中立权限选项摘要（Codex profile 或 Grok mode 等均用此结构）。
+///
+/// [id] 对共享层不透明；具体协议含义由各 Provider 解释。
 class AgentPermissionProfileSummary {
   const AgentPermissionProfileSummary({
     required this.id,
@@ -6,23 +8,20 @@ class AgentPermissionProfileSummary {
     this.description,
   });
 
-  /// 配置 id（如 `:workspace`）。
+  /// 选项 id（如 `:workspace`、`ask`）。
   final String id;
 
-  /// 当前环境是否允许选择该配置。
+  /// 当前环境是否允许选择。
   final bool allowed;
 
-  /// 可选的用户可见说明。
+  /// 可选说明；非空时优先作为 [displayName]。
   final String? description;
 
-  /// 与本 profile id 关联的内置 Composer 预设（若有）。
+  /// 与本 id 关联的内置 Composer 预设（若有）。
   AgentPermissionPreset? get matchedPreset =>
-      AgentPermissionSelection.presetForProfileId(id);
+      AgentPermissionSelection.presetForOptionId(id);
 
   /// Composer / 触发器展示名。
-  ///
-  /// 优先级：服务端 description → 内置预设 label → 去掉前导 `:` 的 id。
-  /// Codex 当前 list 常不返回 description，因此已知内置 id 回落到旧预设文案。
   String get displayName {
     final trimmed = description?.trim();
     if (trimmed != null && trimmed.isNotEmpty) {
@@ -39,7 +38,7 @@ class AgentPermissionProfileSummary {
     return rawId;
   }
 
-    /// 列表副标题：优先预设审批策略文案，否则展示 profile id。
+  /// 列表副标题。
   String get displaySubtitle {
     final preset = matchedPreset;
     if (preset != null) {
@@ -63,11 +62,13 @@ class AgentPermissionProfileSummary {
   int get hashCode => Object.hash(id, allowed, description);
 }
 
-/// Composer 中选择的审批/沙箱策略组合。
+/// 用户选择的权限策略快照。
 ///
-/// 持久化到 [AgentProviderConfig]，并在 `turn/start` / `thread/start` 时下发。
+/// 共享层以 [optionId] 为唯一选择主键；[approvalPolicy] / [sandboxPolicy] /
+/// [permissionProfileId] 是 Provider 可选编码细节（Codex turn/start 等）。
 class AgentPermissionSelection {
   const AgentPermissionSelection({
+    this.optionId,
     this.approvalPolicy = defaultApprovalPolicy,
     this.sandboxPolicy = defaultSandboxPolicy,
     this.permissionProfileId,
@@ -79,18 +80,18 @@ class AgentPermissionSelection {
   /// 默认沙箱策略（域内 camelCase；编码时再映射到协议形状）。
   static const String defaultSandboxPolicy = 'workspaceWrite';
 
-  /// 审批策略：`untrusted` / `on-request` / `never`。
+  /// 中立选项 id（唯一选择主键）。
   ///
-  /// 旧配置中的 `on-failure` 会在读取和协议编码前迁移为 `on-request`。
+  /// Codex 多为 `:workspace` 等 profile id；Grok 为 `ask` / `auto` 等。
+  final String? optionId;
+
+  /// 审批策略：`untrusted` / `on-request` / `never`。
   final String approvalPolicy;
 
   /// 沙箱策略：`readOnly` / `workspaceWrite` / `dangerFullAccess`。
   final String sandboxPolicy;
 
-  /// 可选的 permission profile id。
-  ///
-  /// Codex experimental API 可直接消费该值；未显式指定时，内置预设会回填
-  /// 对应的稳定 built-in profile id。
+  /// Codex permission profile id；未显式指定时可由内置预设回填。
   final String? permissionProfileId;
 
   /// UI 预设组合。
@@ -118,6 +119,15 @@ class AgentPermissionSelection {
     ),
   ];
 
+  /// 解析后的选项 id：显式 [optionId] → profile id → 预设回填。
+  String? get selectedOptionId {
+    final explicit = optionId?.trim();
+    if (explicit != null && explicit.isNotEmpty) {
+      return explicit;
+    }
+    return protocolPermissionProfileId;
+  }
+
   /// 匹配预设 id；无匹配时返回 null。
   String? get matchedPresetId {
     for (final preset in presets) {
@@ -131,13 +141,17 @@ class AgentPermissionSelection {
     return null;
   }
 
-  /// 供协议层使用的权限 profile id。
-  ///
-  /// 先使用显式 profile；否则对内置预设回填其稳定 id，避免预设仅落成旧版 sandbox。
+  /// 供 Codex 协议层使用的权限 profile id。
   String? get protocolPermissionProfileId {
     final explicitProfileId = permissionProfileId?.trim();
     if (explicitProfileId != null && explicitProfileId.isNotEmpty) {
       return explicitProfileId;
+    }
+    final fromOption = optionId?.trim();
+    if (fromOption != null &&
+        fromOption.isNotEmpty &&
+        presetForOptionId(fromOption) != null) {
+      return fromOption;
     }
     for (final preset in presets) {
       if (preset.approvalPolicy == approvalPolicy &&
@@ -148,8 +162,15 @@ class AgentPermissionSelection {
     return null;
   }
 
-  /// 展示标签。
+  /// 展示标签（无选项列表时的回落）。
   String get displayLabel {
+    final id = selectedOptionId;
+    if (id != null) {
+      final preset = presetForOptionId(id);
+      if (preset != null) {
+        return preset.label;
+      }
+    }
     final approvalLabel = approvalPolicyDisplayLabel(approvalPolicy);
     final presetId = matchedPresetId;
     if (presetId != null) {
@@ -164,16 +185,22 @@ class AgentPermissionSelection {
     if (profileId != null && profileId.isNotEmpty) {
       return '$sandboxLabel · $approvalLabel · $profileId';
     }
+    if (id != null && id.isNotEmpty) {
+      return id;
+    }
     return '$sandboxLabel · $approvalLabel';
   }
 
   AgentPermissionSelection copyWith({
+    String? optionId,
     String? approvalPolicy,
     String? sandboxPolicy,
     String? permissionProfileId,
+    bool clearOptionId = false,
     bool clearPermissionProfileId = false,
   }) {
     return AgentPermissionSelection(
+      optionId: clearOptionId ? null : (optionId ?? this.optionId),
       approvalPolicy: approvalPolicy ?? this.approvalPolicy,
       sandboxPolicy: sandboxPolicy ?? this.sandboxPolicy,
       permissionProfileId: clearPermissionProfileId
@@ -196,7 +223,6 @@ class AgentPermissionSelection {
     };
   }
 
-  /// 把持久化或 UI 输入归一化为 0.144.5 稳定协议支持的审批策略。
   static String normalizeApprovalPolicy(String? value) {
     return switch (value) {
       'untrusted' || 'on-request' || 'never' => value!,
@@ -205,12 +231,10 @@ class AgentPermissionSelection {
     };
   }
 
-  /// 可空配置的迁移入口；未配置仍保持 `null`，由上层应用默认值。
   static String? normalizePersistedApprovalPolicy(String? value) {
     return value == null ? null : normalizeApprovalPolicy(value);
   }
 
-  /// 用户可见的审批策略标签。
   static String approvalPolicyDisplayLabel(String? value) {
     return switch (normalizeApprovalPolicy(value)) {
       'never' => 'Never ask',
@@ -219,7 +243,6 @@ class AgentPermissionSelection {
     };
   }
 
-  /// 用户可见的沙箱标签。
   static String sandboxPolicyDisplayLabel(String? value) {
     return switch (value) {
       'readOnly' => 'Read only',
@@ -228,7 +251,6 @@ class AgentPermissionSelection {
     };
   }
 
-  /// 从协议 sandbox 对象或 SandboxMode 字符串解析域内 sandboxPolicy。
   static String? sandboxPolicyFromProtocol(Object? value) {
     if (value is String) {
       return switch (value) {
@@ -247,12 +269,9 @@ class AgentPermissionSelection {
     return null;
   }
 
-  /// 将 Codex `permissionProfile/list` 的 id 关联到内置 Composer 预设。
-  ///
-  /// 仅匹配显式声明了 [AgentPermissionPreset.permissionProfileId] 的项
-  ///（如 `:read-only`、`:workspace`）。
-  static AgentPermissionPreset? presetForProfileId(String? profileId) {
-    final normalized = profileId?.trim();
+  /// 将选项 id 关联到内置 Composer 预设（Codex built-in profile）。
+  static AgentPermissionPreset? presetForOptionId(String? optionId) {
+    final normalized = optionId?.trim();
     if (normalized == null || normalized.isEmpty) {
       return null;
     }
@@ -267,22 +286,43 @@ class AgentPermissionSelection {
     return null;
   }
 
-  /// 按 `permissionProfile/list` 的 id 构造选择。
+  /// @nodoc 兼容旧名。
+  static AgentPermissionPreset? presetForProfileId(String? profileId) =>
+      presetForOptionId(profileId);
+
+  /// 按中立选项 id 构造选择快照。
   ///
-  /// 已知内置 profile 会回填对应 approval/sandbox；自定义 profile 仅绑定
-  /// `permissionProfileId`，approval/sandbox 保留域内默认（协议侧有 profile 时
-  /// 不再下发 sandbox）。
-  static AgentPermissionSelection forProfileId(String profileId) {
-    final normalized = profileId.trim();
-    final preset = presetForProfileId(normalized);
+  /// - 命中 Codex 内置 profile：回填 approval/sandbox/profileId
+  /// - 其它不透明 id（含 Grok mode）：只记录 [optionId]，approval/sandbox 用默认
+  static AgentPermissionSelection forOptionId(String optionId) {
+    final normalized = optionId.trim();
+    final preset = presetForOptionId(normalized);
     if (preset != null) {
       return AgentPermissionSelection(
+        optionId: normalized,
         approvalPolicy: preset.approvalPolicy,
         sandboxPolicy: preset.sandboxPolicy,
         permissionProfileId: normalized,
       );
     }
     return AgentPermissionSelection(
+      optionId: normalized,
+      approvalPolicy: defaultApprovalPolicy,
+      sandboxPolicy: defaultSandboxPolicy,
+      // 非内置 id 不自动当作 Codex profile，避免 Grok mode 误写入 profile 字段。
+    );
+  }
+
+  /// 兼容旧 API：按 profile id 构造（等同 [forOptionId] 且绑定 profile）。
+  static AgentPermissionSelection forProfileId(String profileId) {
+    final normalized = profileId.trim();
+    final preset = presetForOptionId(normalized);
+    if (preset != null) {
+      return forOptionId(normalized);
+    }
+    // 自定义 Codex profile：仍绑定 permissionProfileId。
+    return AgentPermissionSelection(
+      optionId: normalized,
       approvalPolicy: defaultApprovalPolicy,
       sandboxPolicy: defaultSandboxPolicy,
       permissionProfileId: normalized,

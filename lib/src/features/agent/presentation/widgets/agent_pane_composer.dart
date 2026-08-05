@@ -1347,8 +1347,8 @@ class _PermissionPolicyButtonState extends State<_PermissionPolicyButton> {
     final displayLabel = _displayLabel;
     return _ComposerSelectorTrigger(
       surfaceKey: const ValueKey('agent-permission-policy-selector'),
-      tooltip: 'Approval & sandbox',
-      semanticLabel: '$displayLabel，审批与沙箱',
+      tooltip: 'Permission mode',
+      semanticLabel: '$displayLabel，权限模式',
       open: open,
       focusNode: _triggerFocusNode,
       onPressed: widget.profiles.isEmpty ? null : _togglePopover,
@@ -1413,7 +1413,7 @@ class _PermissionPolicyPopover extends StatelessWidget {
     return Semantics(
       container: true,
       explicitChildNodes: true,
-      label: '审批与沙箱',
+      label: '权限模式',
       child: SizedBox(
         key: const ValueKey('agent-permission-policy-popover'),
         width: width,

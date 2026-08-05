@@ -60,15 +60,7 @@ class CodexAppServerAgentProvider
          reasoningEffort: config.selectedReasoningEffort,
          serviceTierId: config.selectedServiceTier,
        ),
-       _permissionSelection = AgentPermissionSelection(
-         approvalPolicy:
-             config.selectedApprovalPolicy ??
-             AgentPermissionSelection.defaultApprovalPolicy,
-         sandboxPolicy:
-             config.selectedSandboxPolicy ??
-             AgentPermissionSelection.defaultSandboxPolicy,
-         permissionProfileId: config.selectedPermissionProfileId,
-       ) {
+       _permissionSelection = _permissionSelectionFromConfig(config) {
     _peer = ProviderRuntimeJsonRpcPeer(
       peer ?? (peerFactory ?? _defaultPeerFactory)(config),
       providerId: config.id,
@@ -1174,6 +1166,32 @@ class CodexAppServerAgentProvider
       _ => false,
     };
   }
+}
+
+AgentPermissionSelection _permissionSelectionFromConfig(
+  AgentProviderConfig config,
+) {
+  final optionId = config.resolvedPermissionOptionId;
+  if (optionId != null && optionId.isNotEmpty) {
+    return AgentPermissionSelection.forProfileId(optionId).copyWith(
+      approvalPolicy:
+          config.selectedApprovalPolicy ??
+          AgentPermissionSelection.defaultApprovalPolicy,
+      sandboxPolicy:
+          config.selectedSandboxPolicy ??
+          AgentPermissionSelection.defaultSandboxPolicy,
+    );
+  }
+  return AgentPermissionSelection(
+    approvalPolicy:
+        config.selectedApprovalPolicy ??
+        AgentPermissionSelection.defaultApprovalPolicy,
+    sandboxPolicy:
+        config.selectedSandboxPolicy ??
+        AgentPermissionSelection.defaultSandboxPolicy,
+    permissionProfileId: config.selectedPermissionProfileId,
+    optionId: config.selectedPermissionProfileId,
+  );
 }
 
 /// 默认通过 stdio 启动 Codex app-server 子进程。

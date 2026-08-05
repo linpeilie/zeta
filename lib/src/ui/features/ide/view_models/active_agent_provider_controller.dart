@@ -306,6 +306,7 @@ class ActiveAgentProviderController extends ChangeNotifier {
         selectedApprovalPolicy: selection.approvalPolicy,
         selectedSandboxPolicy: selection.sandboxPolicy,
         selectedPermissionProfileId: selection.permissionProfileId,
+        selectedPermissionOptionId: selection.selectedOptionId,
       );
     }).toList();
     _settings = AgentProviderSettings(
