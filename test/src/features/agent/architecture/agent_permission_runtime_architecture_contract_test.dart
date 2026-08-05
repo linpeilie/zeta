@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_permission_selection_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_permission_state_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_permission_policy_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/app_server/codex_app_server_agent_provider.dart';
@@ -116,60 +117,77 @@ void main() {
       expect(controller.selectedOptionId, ':read-only');
     });
 
-    test(
-      '[TARGET-RED][GROK-RUNTIME] runtime scope broadcasts to every controller',
-      () async {
-        var runtimeMode = GrokPermissionMode.ask;
-        final notifications =
-            <({String method, Map<String, Object?> params})>[];
-        final adapter = GrokPermissionPolicyAdapter(
-          isInitialized: () => true,
-          isDisposed: () => false,
-          currentMode: () => runtimeMode,
-          onModeApplied: (next) => runtimeMode = next,
-          notifyLive: (method, params) {
-            notifications.add((method: method, params: params));
-          },
-        );
-        final first = AgentConversationPermissionSelectionController(
-          persistOptionId: (_) async {},
-        );
-        final second = AgentConversationPermissionSelectionController(
-          persistOptionId: (_) async {},
-        );
-        addTearDown(first.dispose);
-        addTearDown(second.dispose);
-        first.bind(port: adapter, persistedOptionId: 'ask');
-        first.bindThread('thread-a');
-        second.bind(port: adapter, persistedOptionId: 'ask');
-        second.bindThread('thread-b');
+    test('Grok runtime scope broadcasts to every controller', () async {
+      var runtimeMode = GrokPermissionMode.ask;
+      final notifications = <({String method, Map<String, Object?> params})>[];
+      final adapter = GrokPermissionPolicyAdapter(
+        isInitialized: () => true,
+        isDisposed: () => false,
+        currentMode: () => runtimeMode,
+        onModeApplied: (next) => runtimeMode = next,
+        notifyLive: (method, params) {
+          notifications.add((method: method, params: params));
+        },
+      );
+      final stateStore = AgentPermissionStateStore();
+      const runtimeIdentity = AgentProviderRuntimeIdentity(
+        providerId: grokAgentProviderId,
+        generation: 1,
+      );
+      stateStore.activateRuntime(
+        runtimeIdentity,
+        initialProviderDefault: const AgentPermissionSelection(optionId: 'ask'),
+      );
+      final first = AgentConversationPermissionSelectionController(
+        persistOptionId: (_) async {},
+        stateStore: stateStore,
+      );
+      final second = AgentConversationPermissionSelectionController(
+        persistOptionId: (_) async {},
+        stateStore: stateStore,
+      );
+      addTearDown(() {
+        first.dispose();
+        second.dispose();
+        stateStore.dispose();
+      });
+      first.bind(
+        port: adapter,
+        persistedOptionId: 'ask',
+        runtimeIdentity: runtimeIdentity,
+      );
+      first.bindThread('thread-a');
+      second.bind(
+        port: adapter,
+        persistedOptionId: 'ask',
+        runtimeIdentity: runtimeIdentity,
+      );
+      second.bindThread('thread-b');
 
-        await first.selectOption(
-          const AgentPermissionOption(
-            id: 'always-approve',
-            label: 'Always approve',
-          ),
-        );
+      await first.selectOption(
+        const AgentPermissionOption(
+          id: 'always-approve',
+          label: 'Always approve',
+        ),
+      );
 
-        expect(runtimeMode, GrokPermissionMode.alwaysApprove);
-        expect(notifications, hasLength(1));
-        expect(notifications.single.method, '_x.ai/yolo_mode_changed');
-        expect(notifications.single.params, <String, Object?>{
-          'permission_mode': 'always-approve',
-          'yolo_mode': true,
-          'auto_mode': false,
-          'clientIdentifier': 'zeta',
-        });
-        expect(first.selectedOptionId, 'always-approve');
-        expect(
-          second.selectedOptionId,
-          'always-approve',
-          reason:
-              'runtime-global Grok state needs an explicit shared runtime signal',
-        );
-      },
-      tags: const <String>['architecture-red'],
-    );
+      expect(runtimeMode, GrokPermissionMode.alwaysApprove);
+      expect(notifications, hasLength(1));
+      expect(notifications.single.method, '_x.ai/yolo_mode_changed');
+      expect(notifications.single.params, <String, Object?>{
+        'permission_mode': 'always-approve',
+        'yolo_mode': true,
+        'auto_mode': false,
+        'clientIdentifier': 'zeta',
+      });
+      expect(first.selectedOptionId, 'always-approve');
+      expect(
+        second.selectedOptionId,
+        'always-approve',
+        reason:
+            'runtime-global Grok state needs an explicit shared runtime signal',
+      );
+    });
 
     test(
       'two ViewModels sharing Codex keep real resume and turn params isolated',
@@ -185,21 +203,12 @@ void main() {
         );
         addTearDown(providerController.dispose);
 
-        final firstPermissions = AgentConversationPermissionSelectionController(
-          persistOptionId: (_) async {},
-        );
-        final secondPermissions =
-            AgentConversationPermissionSelectionController(
-              persistOptionId: (_) async {},
-            );
         final first = AgentConversationViewModel(
           providerController: providerController,
-          permissionSelectionController: firstPermissions,
           uiFrameScheduler: FakeAgentFrameScheduler(),
         );
         final second = AgentConversationViewModel(
           providerController: providerController,
-          permissionSelectionController: secondPermissions,
           uiFrameScheduler: FakeAgentFrameScheduler(),
         );
         addTearDown(first.dispose);
@@ -218,24 +227,42 @@ void main() {
           restoredProviderId: defaultAgentProviderId,
           resetConversation: true,
         );
-        await firstPermissions.applyThreadSettings(
+        await Future.wait(<Future<void>>[
+          first.loadModels(),
+          second.loadModels(),
+        ]);
+        final runtimeIdentity =
+            providerController.activeProviderRuntimeIdentity!;
+        providerController.permissionStateStore.commitApplyResult(
+          identity: runtimeIdentity,
           threadId: 'thread-a',
-          permissionSelection: const AgentPermissionSelection(
-            optionId: ':read-only',
+          result: const AgentPermissionApplyResult(
+            normalizedSelection: AgentPermissionSelection(
+              optionId: ':read-only',
+            ),
+            scope: AgentPermissionApplyScope.currentSession,
           ),
+          source: AgentPermissionStateSource.serverSettings,
+          updateDefault: false,
         );
-        await secondPermissions.applyThreadSettings(
+        providerController.permissionStateStore.commitApplyResult(
+          identity: runtimeIdentity,
           threadId: 'thread-b',
-          permissionSelection: const AgentPermissionSelection(
-            optionId: ':danger-full-access',
+          result: const AgentPermissionApplyResult(
+            normalizedSelection: AgentPermissionSelection(
+              optionId: ':danger-full-access',
+            ),
+            scope: AgentPermissionApplyScope.currentSession,
           ),
+          source: AgentPermissionStateSource.serverSettings,
+          updateDefault: false,
         );
         expect(
-          firstPermissions.snapshotForRequest(threadId: 'thread-a').source,
+          first.permissionSnapshotForThread('thread-a').source,
           AgentPermissionRequestSource.threadEffective,
         );
         expect(
-          secondPermissions.snapshotForRequest(threadId: 'thread-b').source,
+          second.permissionSnapshotForThread('thread-b').source,
           AgentPermissionRequestSource.threadEffective,
         );
 

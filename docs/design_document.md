@@ -383,6 +383,17 @@ Codex create/resume/fork/send 全部消费 application 冻结的
 sandbox。Provider 构造时的 config snapshot 仅作缺省 fallback，不再由用户选择或 thread
 settings 修改，因此共享 Provider 的多 thread / 多 Canvas 请求彼此隔离。
 
+权限运行态由 application 级 `AgentPermissionStateStore` 统一拥有。Provider runtime registry
+为每个进程实例分配递增的 `AgentProviderRuntimeIdentity(providerId, generation)`；状态再按
+threadId 隔离，并以不可变快照暴露 provider default、thread effective、source、last scope、
+warning 与持久化失败。`AgentPermissionCatalogController` 独立承担目录加载和旧 generation
+防回写，selection controller 只编排 apply result 与持久化。
+
+`AgentPermissionApplyResult` 的提交规则固定为：`currentTurn` 生成一次性 request override；
+`currentSession` 更新目标 thread；`runtime` 更新显式 runtime state 并向同 generation 的所有
+Canvas 广播；`nextSession` 更新默认/待生效提示。旧 generation 的迟到结果不能提交。Provider
+apply 成功但配置保存失败时不回滚运行态，并暴露只重试持久化、不重复 apply 的入口。
+
 其余剩余收口项是：继续从旧 `AgentProvider` 删除其它已迁移门面方法（非权限域）。
 
 ### 当前已落地的对话体验

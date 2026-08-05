@@ -84,6 +84,7 @@ class AgentConversationViewModel {
            permissionSelectionController ??
            AgentConversationPermissionSelectionController(
              persistOptionId: providerController.persistPermissionOptionId,
+             stateStore: providerController.permissionStateStore,
            ) {
     _eventReducerContexts = AgentConversationReducerContexts(
       liveTimelineIds: _localTimelineIds,
@@ -127,6 +128,7 @@ class AgentConversationViewModel {
     _modelSelectionController.addListener(_handleModelSelectionChanged);
     _conversationModeController.addListener(_handleConversationModeChanged);
     _skillsCatalogController.addListener(_handleSkillsCatalogChanged);
+    _permissionSelectionController.addListener(_handlePermissionStateChanged);
     providerController.addListener(_handleProviderSettingsChanged);
     _threadSnapshotListenable = ValueNotifier<AgentConversationThreadSnapshot>(
       _buildThreadSnapshot(),
@@ -710,6 +712,7 @@ class AgentConversationViewModel {
     _permissionSelectionController.resetForProvider(
       port: null,
       persistedOptionId: config.resolvedPermissionOptionId,
+      providerId: config.id,
     );
     // 切换后清空当前会话草稿，避免跨协议 thread id 混用。
     _session = null;
@@ -751,6 +754,10 @@ class AgentConversationViewModel {
 
   String? get permissionApplyScopeHint =>
       _permissionSelectionController.applyScopeHint;
+
+  /// Provider apply 已成功但默认偏好保存失败时，允许 UI 显示重试入口。
+  bool get canRetryPermissionPreferencePersistence =>
+      _permissionSelectionController.canRetryPersistence;
 
   AgentAutoApprovalReviewEvent? get latestDeniedAutoReview =>
       _latestDeniedAutoReview;
@@ -1223,6 +1230,19 @@ class AgentConversationViewModel {
   /// 最近一次权限 apply 的紧凑提示（下次会话生效等）。
   String? takePermissionApplyHint() =>
       _permissionSelectionController.takeApplyHint();
+
+  /// 只重试默认偏好持久化，不重复调用 Provider apply。
+  Future<bool> retryPermissionPreferencePersistence() async {
+    final succeeded = await _permissionSelectionController
+        .retryPersistOptionId();
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{AgentUiRegion.composer},
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
+    return succeeded;
+  }
 
   /// Guardian 拒绝后的人工放行。
   Future<void> approveGuardianDeniedAction() async {
@@ -2617,6 +2637,9 @@ class AgentConversationViewModel {
     _modelSelectionController.removeListener(_handleModelSelectionChanged);
     _conversationModeController.removeListener(_handleConversationModeChanged);
     _skillsCatalogController.removeListener(_handleSkillsCatalogChanged);
+    _permissionSelectionController.removeListener(
+      _handlePermissionStateChanged,
+    );
     if (_ownsModelSelectionController) {
       _modelSelectionController.dispose();
     }
@@ -2722,6 +2745,18 @@ class AgentConversationViewModel {
     );
   }
 
+  void _handlePermissionStateChanged() {
+    if (_disposed) {
+      return;
+    }
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{AgentUiRegion.composer},
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
+  }
+
   /// 确保拿到正确的共享 provider 实例。
   ///
   /// [preferredProviderId] 非空且与当前 active 不同时，会先切换 active（不清理
@@ -2735,6 +2770,12 @@ class AgentConversationViewModel {
     }
 
     final provider = await providerController.activeProvider();
+    final runtimeIdentity = providerController.activeProviderRuntimeIdentity;
+    if (runtimeIdentity == null) {
+      throw StateError(
+        'Provider ${provider.config.id} has no current runtime identity',
+      );
+    }
     if (targetId != null &&
         targetId.isNotEmpty &&
         provider.config.id != targetId) {
@@ -2745,6 +2786,7 @@ class AgentConversationViewModel {
       );
     }
     if (identical(_provider, provider) &&
+        _permissionSelectionController.runtimeIdentity == runtimeIdentity &&
         _hasCurrentProviderEventListener(
           provider,
           threadId: _selectedThreadId,
@@ -2760,6 +2802,7 @@ class AgentConversationViewModel {
       _permissionSelectionController.bind(
         port: provider.bundle.permissionPolicy,
         persistedOptionId: provider.config.resolvedPermissionOptionId,
+        runtimeIdentity: runtimeIdentity,
       );
       unawaited(_permissionSelectionController.refreshOptions());
     }
@@ -2865,6 +2908,7 @@ class AgentConversationViewModel {
     _permissionSelectionController.resetForProvider(
       port: null,
       persistedOptionId: config.resolvedPermissionOptionId,
+      providerId: config.id,
     );
     _selectedProviderId ??= providerId;
   }

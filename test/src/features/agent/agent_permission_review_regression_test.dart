@@ -402,7 +402,11 @@ void main() {
               'P-04: runtime scope must broadcast normalized selection to '
               'all bound threads',
         );
-        expect(controller.defaultOptionId, 'ask');
+        expect(
+          controller.defaultOptionId,
+          'auto',
+          reason: 'runtime state must remain separate from provider default',
+        );
       },
     );
   });

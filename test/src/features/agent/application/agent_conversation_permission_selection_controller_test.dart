@@ -223,6 +223,50 @@ void main() {
     });
 
     test(
+      'persistence failure keeps applied state and exposes retry without reapply',
+      () async {
+        var persistCalls = 0;
+        final port = _FakePermissionPort(
+          options: const <AgentPermissionOption>[
+            AgentPermissionOption(id: 'ask', label: 'Ask'),
+            AgentPermissionOption(id: 'auto', label: 'Auto'),
+          ],
+          applyScope: AgentPermissionApplyScope.runtime,
+        );
+        final controller = AgentConversationPermissionSelectionController(
+          persistOptionId: (optionId) async {
+            persistCalls += 1;
+            if (persistCalls == 1) {
+              throw StateError('disk unavailable');
+            }
+          },
+        );
+        controller.bind(port: port, persistedOptionId: 'ask');
+        controller.bindThread('thread-a');
+
+        await controller.selectOption(
+          const AgentPermissionOption(id: 'auto', label: 'Auto'),
+        );
+
+        expect(controller.selectedOptionId, 'auto');
+        expect(controller.defaultOptionId, 'auto');
+        expect(controller.canRetryPersistence, isTrue);
+        expect(controller.lastError, contains('已应用'));
+        expect(port.applyCalls, 1);
+
+        expect(await controller.retryPersistOptionId(), isTrue);
+        expect(controller.canRetryPersistence, isFalse);
+        expect(controller.lastError, isNull);
+        expect(persistCalls, 2);
+        expect(
+          port.applyCalls,
+          1,
+          reason: 'retry must not apply provider twice',
+        );
+      },
+    );
+
+    test(
       'applyEffectiveSelection commits normalizedSelection and runtime scope',
       () async {
         final port = _FakePermissionPort(
@@ -266,7 +310,11 @@ void main() {
         expect(controller.lastApplyWarning, 'normalized');
         controller.bindThread('t2');
         expect(controller.selectedOptionId, 'ask');
-        expect(controller.defaultOptionId, 'ask');
+        expect(
+          controller.defaultOptionId,
+          'auto',
+          reason: 'runtime broadcast must not rewrite provider preference',
+        );
       },
     );
 

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/application/agent_permission_state_store.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
@@ -40,6 +41,10 @@ class ActiveAgentProviderController extends ChangeNotifier {
   final AgentProviderRuntimeRegistry runtimeRegistry;
   final bool _ownsRuntimeRegistry;
 
+  /// 多 Canvas 共享的 application permission state store。
+  AgentPermissionStateStore get permissionStateStore =>
+      runtimeRegistry.permissionStateStore;
+
   AgentProviderSettings _settings = const AgentProviderSettings();
   CursorRetirementResolution _runtimeSelection = CursorRetirementPolicy.resolve(
     const AgentProviderSettings(),
@@ -52,6 +57,12 @@ class ActiveAgentProviderController extends ChangeNotifier {
   AgentProvider? get _provider {
     final lease = _providerLease;
     return lease != null && lease.isCurrent ? lease.provider : null;
+  }
+
+  /// 当前 active provider 租约的稳定 runtime identity。
+  AgentProviderRuntimeIdentity? get activeProviderRuntimeIdentity {
+    final lease = _providerLease;
+    return lease != null && lease.isCurrent ? lease.runtimeIdentity : null;
   }
 
   /// 当前 active provider 设置。

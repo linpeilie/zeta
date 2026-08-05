@@ -123,8 +123,16 @@ main -> app -> presentation/application -> domain
 - Provider 默认权限偏好持久化在 `~/.zeta` 的 provider settings V2 中，真源为单一
   `selectedPermissionOptionId`。V1 字段（`selectedApprovalPolicy` /
   `selectedSandboxPolicy` / `selectedPermissionProfileId` / `selectedPermissionMode`）
-  仅在 decoder/migration 读取，写入不得再出现。application 维护 default vs
-  thread-effective 两层状态；生效范围由 adapter 返回的 `AgentPermissionApplyScope` 表达。
+  仅在 decoder/migration 读取，写入不得再出现。`AgentPermissionStateStore` 是 application
+  权限状态真源，按 provider runtime identity/generation + threadId 隔离不可变快照；
+  provider default、thread effective、state source、last scope、warning 与持久化失败不得
+  分散回 ViewModel 字段。catalog 加载由独立 `AgentPermissionCatalogController` 管理。
+- 所有权限 apply 路径必须消费完整 `AgentPermissionApplyResult`：`currentTurn` 只形成下一次
+  请求的一次性 override，`currentSession` 只更新目标 thread，`runtime` 更新显式 runtime
+  state 并广播全部同 runtime 消费者，`nextSession` 只更新默认/待生效状态。runtime 广播必须
+  携带 identity/generation；旧 generation 结果必须丢弃，不得靠遍历改写 thread map 模拟广播。
+- Provider apply 成功后的偏好持久化失败不得回滚 effective/runtime 状态；application 必须保留
+  可见错误与只重试持久化的入口，重试不得再次调用 Provider apply。
 - create/resume/fork/send 必须携带不可变 `AgentPermissionRequestSnapshot`，由
   application 按 thread-effective → provider default → catalog default 解析。Codex
   client/encoder 只能在该快照没有 selection 时使用 Provider 构造时冻结的 config

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/application/agent_permission_state_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 
@@ -14,12 +15,20 @@ final _log = loggerFor('zeta.agent.runtime_registry');
 /// 项目列表和诊断功能通过 [AgentProviderRuntimeLease] 共享实例，不再分别拉起
 /// app-server 或 stdio 子进程。
 class AgentProviderRuntimeRegistry extends ChangeNotifier {
-  AgentProviderRuntimeRegistry({required this.providerFactory});
+  AgentProviderRuntimeRegistry({
+    required this.providerFactory,
+    AgentPermissionStateStore? permissionStateStore,
+  }) : permissionStateStore =
+           permissionStateStore ?? AgentPermissionStateStore(),
+       _ownsPermissionStateStore = permissionStateStore == null;
 
   final AgentProviderFactory providerFactory;
+  final AgentPermissionStateStore permissionStateStore;
+  final bool _ownsPermissionStateStore;
 
   final Map<String, _AgentProviderRuntimeEntry> _entries =
       <String, _AgentProviderRuntimeEntry>{};
+  final Map<String, int> _generationByProviderId = <String, int>{};
   bool _closed = false;
   Future<void>? _closeFuture;
 
@@ -64,7 +73,12 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
         );
       }
 
-      final entry = _AgentProviderRuntimeEntry(provider);
+      final generation = (_generationByProviderId[config.id] ?? 0) + 1;
+      final identity = AgentProviderRuntimeIdentity(
+        providerId: config.id,
+        generation: generation,
+      );
+      final entry = _AgentProviderRuntimeEntry(provider, identity);
       // acquire 在此之前没有让出执行权；若未来 factory 改成异步，这个保护仍可避免
       // 覆盖已登记的共享实例。
       final raced = _entries[config.id];
@@ -75,7 +89,16 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
         }
         continue;
       }
+      _generationByProviderId[config.id] = generation;
       _entries[config.id] = entry;
+      final configuredOptionId = config.resolvedPermissionOptionId?.trim();
+      permissionStateStore.activateRuntime(
+        identity,
+        initialProviderDefault:
+            configuredOptionId == null || configuredOptionId.isEmpty
+            ? null
+            : AgentPermissionSelection(optionId: configuredOptionId),
+      );
       notifyListeners();
       return _createLease(entry);
     }
@@ -142,6 +165,7 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
     }
     _entries.remove(providerId);
     expected.invalidated = true;
+    permissionStateStore.retireRuntime(expected.identity);
     notifyListeners();
     await _disposeEntry(expected);
   }
@@ -155,9 +179,13 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
     _entries.clear();
     for (final entry in entries) {
       entry.invalidated = true;
+      permissionStateStore.retireRuntime(entry.identity);
     }
     notifyListeners();
     await Future.wait(entries.map(_disposeEntry));
+    if (_ownsPermissionStateStore) {
+      permissionStateStore.dispose();
+    }
   }
 
   Future<void> _disposeEntry(_AgentProviderRuntimeEntry entry) {
@@ -199,6 +227,9 @@ final class AgentProviderRuntimeLease {
 
   AgentProvider get provider => _entry.provider;
 
+  /// 当前租约绑定的 provider runtime identity/generation。
+  AgentProviderRuntimeIdentity get runtimeIdentity => _entry.identity;
+
   /// 租约是否仍指向注册表中的当前运行实例。
   bool get isCurrent => _registry?._isCurrent(_entry) ?? false;
 
@@ -214,9 +245,10 @@ final class AgentProviderRuntimeLease {
 }
 
 final class _AgentProviderRuntimeEntry {
-  _AgentProviderRuntimeEntry(this.provider);
+  _AgentProviderRuntimeEntry(this.provider, this.identity);
 
   final AgentProvider provider;
+  final AgentProviderRuntimeIdentity identity;
   int leaseCount = 0;
   bool invalidated = false;
   Future<void>? disposeFuture;

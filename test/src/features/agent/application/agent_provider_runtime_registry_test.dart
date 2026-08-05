@@ -73,6 +73,29 @@ void main() {
       expect((second.provider as _FakeProvider).disposeCount, 1);
     });
 
+    test('重建 Provider 时递增 runtime generation 并退役旧状态', () async {
+      final factory = _CountingProviderFactory();
+      final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+      final first = await registry.acquire(AgentProviderConfig.defaultGrok);
+      final firstIdentity = first.runtimeIdentity;
+
+      await registry.invalidateProvider(AgentProviderConfig.defaultGrok.id);
+      final second = await registry.acquire(AgentProviderConfig.defaultGrok);
+
+      expect(first.isCurrent, isFalse);
+      expect(second.runtimeIdentity.providerId, firstIdentity.providerId);
+      expect(second.runtimeIdentity.generation, firstIdentity.generation + 1);
+      expect(registry.permissionStateStore.isCurrent(firstIdentity), isFalse);
+      expect(
+        registry.permissionStateStore.isCurrent(second.runtimeIdentity),
+        isTrue,
+      );
+
+      await first.release();
+      await second.release();
+      await registry.close();
+    });
+
     test('关闭后拒绝创建新运行时且 close 幂等', () async {
       final factory = _CountingProviderFactory();
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);

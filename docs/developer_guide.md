@@ -221,10 +221,19 @@ Dock，但不得共享 request/decision 模型或 pending registry。
   `AgentPermissionSelection(optionId)`。共享层不得解析 `:workspace`、`yoloMode`、
   `approvalPolicy` 等协议字符串。
 - **default vs effective**：
-  `AgentConversationPermissionSelectionController` 持有 provider 默认偏好与
-  thread-effective 选择；Composer 展示 effective；持久化只写 default optionId。
+  `AgentPermissionStateStore` 按 provider runtime identity/generation + threadId 保存不可变的
+  provider default、thread effective、source、last scope、warning 和持久化失败；
+  `AgentConversationPermissionSelectionController` 只编排 apply/持久化与当前 Canvas 绑定，
+  `AgentPermissionCatalogController` 独立管理目录加载和 stale retention。Composer 展示
+  effective；持久化只写 default optionId。
   create/resume/fork/send 前由 application 冻结 `AgentPermissionRequestSnapshot`，优先级为
   thread-effective → provider default → catalog default。
+- **Apply 状态机**：`currentTurn` 在下一次 snapshot 冻结时原子取走；`currentSession` 只提交
+  目标 thread；`runtime` 发布带 runtime identity/generation 的共享状态，所有同 runtime
+  Canvas 同步读取；`nextSession` 只更新 preference/pending hint。旧 generation 的 apply 和
+  runtime 广播直接丢弃。
+- **持久化恢复**：Provider apply 成功后再保存默认偏好；保存失败保留已生效状态并显示
+  “已应用但保存失败”，通过 `retryPermissionPreferencePersistence` 只重试保存，不重复 apply。
 - **V1 → V2 配置迁移**：`AgentProviderSettings.currentVersion = 2`；decoder 宽容读
   V1/V2，`AgentPermissionPreferenceMigration` 在 domain 内把 Codex profile/approval
   sandbox 与 Grok mode 迁到单一 `selectedPermissionOptionId`。writer 只写 optionId。
@@ -234,7 +243,8 @@ Dock，但不得共享 request/decision 模型或 pending registry。
     adapter apply 只归一化 optionId，不保存共享选择；client/encoder 逐请求把中立快照编码为
     profile/approval/sandbox。Provider config 只在请求没有 selection 时作不可变 fallback。
   - Grok：`GrokPermissionPolicyAdapter` + `GrokPermissionModeCodec`（mode ↔ session
-    meta / live 通知）。
+    meta / live 通知）。adapter 返回 `runtime` scope 后由 application store 发布显式广播，
+    不再由单个 ViewModel 隐式覆盖自己的 thread map。
 - 清空用户偏好使用 `AgentProviderConfig.withPermissionPreference(null)`（或
   `copyWith` + `agentProviderConfigUnset` 哨兵），禁止 `value ?? oldValue` 无法清空。
 
