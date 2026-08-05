@@ -1575,6 +1575,12 @@ class _ReasoningEffortSliderState extends State<_ReasoningEffortSlider>
               height: 22,
               child: Row(
                 children: [
+                  Icon(
+                    sf.LucideIcons.brain,
+                    size: 12,
+                    color: colors.textSecondary,
+                  ),
+                  const SizedBox(width: IdeSpacing.space4),
                   Text(
                     '思考程度',
                     style: textStyles.bodySmall.copyWith(
