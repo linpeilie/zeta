@@ -239,8 +239,9 @@ Dock，但不得共享 request/decision 模型或 pending registry。
 - **持久化恢复**：Provider apply 成功后再保存默认偏好；保存失败保留已生效状态并显示
   “已应用但保存失败”，通过 `retryPermissionPreferencePersistence` 只重试保存，不重复 apply。
 - **V1 → V2 配置迁移**：`AgentProviderSettings.currentVersion = 2`；decoder 宽容读
-  V1/V2，`AgentPermissionPreferenceMigration` 在 domain 内把 Codex profile/approval
-  sandbox 与 Grok mode 迁到单一 `selectedPermissionOptionId`。writer 只写 optionId。
+  V1/V2。`AgentProviderSettingsCodec` 在 data/config 边界先检查 V2 optionId key；仅当
+  key 缺失时，才通过组合层注册的 Codex/Grok migrator 迁到单一
+  `selectedPermissionOptionId`。Domain 不认识 legacy 字段，writer 只写 optionId。
 - **Provider 边界**：
   - Codex：`CodexPermissionPolicyAdapter` + `CodexPermissionPolicyCodec` /
     `CodexPermissionRuntimeSnapshot`（data 层单请求编码值，含 approval/sandbox/profile）。

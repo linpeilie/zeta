@@ -7,6 +7,35 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 void main() {
   group('CodexPermissionPolicyCodec', () {
+    test('keeps built-in labels and legacy aliases in the data codec', () {
+      expect(
+        CodexPermissionPolicyCodec.normalizeApprovalPolicy('on-failure'),
+        'on-request',
+      );
+      expect(
+        CodexPermissionPolicyCodec.snapshotForProfileId(
+          ':read-only',
+        ).displayLabel,
+        'Read only',
+      );
+      expect(
+        CodexPermissionPolicyCodec.snapshotForProfileId(
+          ':workspace',
+        ).displayLabel,
+        'Workspace write',
+      );
+      expect(
+        CodexPermissionPolicyCodec.snapshotForProfileId(
+          ':danger-full-access',
+        ).displayLabel,
+        'Full access',
+      );
+
+      final opaque = CodexPermissionPolicyCodec.snapshotForOptionId('auto');
+      expect(opaque.optionId, 'auto');
+      expect(opaque.permissionProfileId, isNull);
+    });
+
     test(
       'custom profile id without colon binds profile and is not overwritten',
       () {

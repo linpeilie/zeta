@@ -11,6 +11,28 @@ import '../../../../testing/ide_test_harness.dart';
 
 void main() {
   group('ActiveAgentProviderController', () {
+    test('persists only normalized V2 permission optionId', () async {
+      final store = _RecordingConfigStore(const AgentProviderSettings());
+      final controller = ActiveAgentProviderController(
+        providerFactory: FakeAgentProviderFactory(_TrackingFakeAgentProvider()),
+        configStore: store,
+      );
+      addTearDown(controller.dispose);
+      await controller.loadSettings();
+
+      await controller.persistPermissionOptionId('  team-safe  ');
+
+      final codex = store.settings.providers.singleWhere(
+        (provider) => provider.id == defaultAgentProviderId,
+      );
+      expect(codex.selectedPermissionOptionId, 'team-safe');
+      expect(store.saveCount, 1);
+      final encoded = codex.toJson();
+      expect(encoded['selectedPermissionOptionId'], 'team-safe');
+      expect(encoded.keys, isNot(contains('selectedPermissionProfileId')));
+      expect(encoded.keys, isNot(contains('selectedPermissionMode')));
+    });
+
     test(
       'does not dispose the active provider when disabling another one',
       () async {

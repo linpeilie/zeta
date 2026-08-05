@@ -123,7 +123,10 @@ main -> app -> presentation/application -> domain
 - Provider 默认权限偏好持久化在 `~/.zeta` 的 provider settings V2 中，真源为单一
   `selectedPermissionOptionId`。V1 字段（`selectedApprovalPolicy` /
   `selectedSandboxPolicy` / `selectedPermissionProfileId` / `selectedPermissionMode`）
-  仅在 decoder/migration 读取，写入不得再出现。`AgentPermissionStateStore` 是 application
+  仅由 data/config 边界的 provider-specific migrator 读取，写入不得再出现。组合层必须按
+  provider kind 注册中立 migrator；V2 optionId key 存在时不得调用 legacy migrator。
+  Domain `AgentProviderConfig` 只解码、保存归一化 optionId，不得包含 Codex/Grok 权限常量。
+  `AgentPermissionStateStore` 是 application
   权限状态真源，按 provider runtime identity/generation + threadId 隔离不可变快照；
   provider default、thread effective、state source、last scope、warning 与持久化失败不得
   分散回 ViewModel 字段。catalog 加载由独立 `AgentPermissionCatalogController` 管理。

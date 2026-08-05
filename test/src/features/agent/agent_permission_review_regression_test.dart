@@ -6,6 +6,8 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_permission_selection_controller.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_permission_migration.dart';
 import 'package:zeta/src/features/agent/data/datasources/app_server/codex_app_server_agent_provider.dart';
 import 'package:zeta/src/features/agent/data/datasources/app_server/codex_permission_policy_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
@@ -292,21 +294,15 @@ void main() {
     test('conflict fixture option=:read-only + profile=team-safe resolves to '
         ':read-only', () {
       // 同时含 V2 optionId 与 stale V1 profile 的真实冲突 fixture。
-      expect(
-        AgentPermissionPreferenceMigration.resolveOptionId(
-          kindName: 'codexAppServer',
-          selectedPermissionOptionId: ':read-only',
-          selectedPermissionProfileId: 'team-safe',
-          selectedApprovalPolicy: 'on-request',
-          selectedSandboxPolicy: 'workspaceWrite',
+      final codec = AgentProviderSettingsCodec(
+        migrationRegistry: AgentProviderPermissionMigrationRegistry(
+          <AgentProviderKind, AgentProviderPermissionPreferenceMigrator>{
+            AgentProviderKind.codexAppServer:
+                const CodexPermissionPreferenceMigrator(),
+          },
         ),
-        ':read-only',
-        reason:
-            'P-03: V2 selectedPermissionOptionId is the only source of truth '
-            'when present; stale V1 profile must not win',
       );
-
-      final config = AgentProviderConfig.tryDecode(<String, Object?>{
+      final config = codec.decodeProvider(<String, Object?>{
         'id': 'codex',
         'displayName': 'Codex',
         'kind': 'codexAppServer',
@@ -322,7 +318,7 @@ void main() {
         config!.selectedPermissionOptionId,
         ':read-only',
         reason:
-            'P-03: AgentProviderConfig.tryDecode must prefer V2 optionId '
+            'P-03: data config codec must prefer V2 optionId '
             'over stale V1 profile in the conflict fixture',
       );
       expect(config.resolvedPermissionOptionId, ':read-only');

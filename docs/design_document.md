@@ -374,7 +374,9 @@ repository；协议 transport 不记录 prompt、文件内容或 stderr 原文�
 
 权限选项选择已收口到中立 `AgentPermissionPolicyPort`：application/presentation 只消费
 option 目录与 optionId；Codex/Grok 协议映射留在 data adapter/codec。Provider 配置 V2
-仅持久化 `selectedPermissionOptionId`，V1 多字段只作 decoder 迁移输入。旧
+仅持久化 `selectedPermissionOptionId`。V1 多字段由 data/config 的
+`AgentProviderPermissionMigrationRegistry` 按 provider kind 路由到 Codex/Grok 专属实现；
+组合层负责注册，V2 key 存在时短路迁移。Domain config 只保存归一化 optionId。旧
 `listPermissionProfiles` / `updatePermissionSelection`、共享层 fat snapshot、
 `AgentPermissionPreset` / `AgentPermissionProfileSummary` 及
 `supportsPermissionPolicySelection` / `supportsPermissionProfile*` 已删除。

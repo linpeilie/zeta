@@ -1,7 +1,7 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:zeta/src/core/storage/atomic_text_file.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 /// 全局 provider 配置的旧版 shared_preferences key。
@@ -20,15 +20,20 @@ abstract class AgentProviderConfigStore {
 
 /// 基于 JSON 文件的生产配置仓库。
 class FileAgentProviderConfigStore implements AgentProviderConfigStore {
-  FileAgentProviderConfigStore({required File file})
-    : _storage = AtomicTextFile(file);
+  factory FileAgentProviderConfigStore({
+    required File file,
+    required AgentProviderSettingsCodec codec,
+  }) => FileAgentProviderConfigStore._(AtomicTextFile(file), codec);
+
+  FileAgentProviderConfigStore._(this._storage, this._codec);
 
   final AtomicTextFile _storage;
+  final AgentProviderSettingsCodec _codec;
 
   @override
   Future<AgentProviderSettings> load() async {
     try {
-      return _decodeSettings(await _storage.read());
+      return _codec.decodeJson(await _storage.read());
     } on IOException {
       // 配置文件不可读时继续使用内置 provider，不阻断应用启动。
       return const AgentProviderSettings();
@@ -40,7 +45,7 @@ class FileAgentProviderConfigStore implements AgentProviderConfigStore {
 
   @override
   Future<void> save(AgentProviderSettings settings) async {
-    await _storage.write(jsonEncode(settings.toJson()));
+    await _storage.write(_codec.encodeJson(settings));
   }
 }
 
@@ -51,19 +56,21 @@ class CallbackAgentProviderConfigStore implements AgentProviderConfigStore {
   const CallbackAgentProviderConfigStore({
     required this.loadJson,
     required this.saveJson,
+    required this.codec,
   });
 
   final Future<String?> Function() loadJson;
   final Future<void> Function(String value) saveJson;
+  final AgentProviderSettingsCodec codec;
 
   @override
   Future<AgentProviderSettings> load() async {
-    return _decodeSettings(await loadJson());
+    return codec.decodeJson(await loadJson());
   }
 
   @override
   Future<void> save(AgentProviderSettings settings) {
-    return saveJson(jsonEncode(settings.toJson()));
+    return saveJson(codec.encodeJson(settings));
   }
 }
 
@@ -82,21 +89,5 @@ class MemoryAgentProviderConfigStore implements AgentProviderConfigStore {
   @override
   Future<void> save(AgentProviderSettings settings) async {
     _settings = settings;
-  }
-}
-
-/// 宽容解析 provider 设置。
-///
-/// 配置为空、损坏或版本不匹配时返回默认值，让 Agent 面板可以继续显示。
-AgentProviderSettings _decodeSettings(String? value) {
-  if (value == null || value.isEmpty) {
-    return const AgentProviderSettings();
-  }
-
-  try {
-    final decoded = jsonDecode(value);
-    return AgentProviderSettings.tryDecode(decoded);
-  } catch (_) {
-    return const AgentProviderSettings();
   }
 }

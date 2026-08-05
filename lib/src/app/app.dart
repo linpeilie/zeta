@@ -12,8 +12,11 @@ import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_permission_migration.dart';
 import 'package:zeta/src/features/agent/data/default_agent_provider_factory.dart';
+import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
@@ -109,6 +112,7 @@ class MainAppState extends State<MainApp>
   late final AgentProviderFactory _defaultAgentProviderFactory;
   late final AgentProviderFactory _agentProviderFactory;
   late final AgentProviderRuntimeRegistry _agentProviderRuntimeRegistry;
+  late final AgentProviderSettingsCodec _agentProviderSettingsCodec;
   late final Future<void> Function() _providerRuntimeShutdownHook;
   late final UsageStatisticsIndexStore _usageStatisticsIndexStore;
   late final AgentModelCatalogRepository _agentModelCatalogRepository;
@@ -137,6 +141,15 @@ class MainAppState extends State<MainApp>
     final useFilePersistence = _useFilePersistence;
     final dataPaths = widget.dataPaths;
     _defaultAgentProviderFactory = const DefaultAgentProviderFactory();
+    _agentProviderSettingsCodec = AgentProviderSettingsCodec(
+      migrationRegistry: AgentProviderPermissionMigrationRegistry(
+        <AgentProviderKind, AgentProviderPermissionPreferenceMigrator>{
+          AgentProviderKind.codexAppServer:
+              const CodexPermissionPreferenceMigrator(),
+          AgentProviderKind.acp: const GrokPermissionPreferenceMigrator(),
+        },
+      ),
+    );
     _agentProviderFactory =
         widget.agentProviderFactory ?? _defaultAgentProviderFactory;
     final injectedRuntimeRegistry = widget.agentProviderRuntimeRegistry;
@@ -385,7 +398,10 @@ class MainAppState extends State<MainApp>
     }
     final dataPaths = widget.dataPaths;
     if (_useFilePersistence && dataPaths != null) {
-      return FileAgentProviderConfigStore(file: dataPaths.providersFile);
+      return FileAgentProviderConfigStore(
+        file: dataPaths.providersFile,
+        codec: _agentProviderSettingsCodec,
+      );
     }
     return MemoryAgentProviderConfigStore();
   }

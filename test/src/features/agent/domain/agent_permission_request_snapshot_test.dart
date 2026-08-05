@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_permission_request_resolver.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -67,31 +65,6 @@ void main() {
           configuration,
           reason: 'copying must preserve the same request snapshot value',
         );
-      },
-    );
-
-    test(
-      'domain snapshot declaration contains no provider protocol fields',
-      () {
-        final source = File(
-          'lib/src/features/agent/domain/agent_permission_policy_models.dart',
-        ).readAsStringSync();
-        final start = source.indexOf(
-          'final class AgentPermissionRequestSnapshot',
-        );
-        final end = source.indexOf('\n/// 权限选择生效范围', start);
-        expect(start, isNonNegative);
-        expect(end, greaterThan(start));
-        final declaration = source.substring(start, end);
-
-        for (final forbidden in const <String>[
-          'approvalPolicy',
-          'sandboxPolicy',
-          'permission_mode',
-          'yolo_mode',
-        ]) {
-          expect(declaration, isNot(contains(forbidden)));
-        }
       },
     );
   });

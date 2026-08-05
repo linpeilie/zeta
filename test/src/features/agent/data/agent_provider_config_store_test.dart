@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_permission_migration.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 void main() {
@@ -26,7 +28,7 @@ void main() {
     });
 
     test('loads the default Codex provider when storage is empty', () async {
-      final store = FileAgentProviderConfigStore(file: settingsFile);
+      final store = _fileStore(settingsFile);
 
       final settings = await store.load();
 
@@ -40,7 +42,7 @@ void main() {
     });
 
     test('saves provider settings as versioned JSON', () async {
-      final store = FileAgentProviderConfigStore(file: settingsFile);
+      final store = _fileStore(settingsFile);
       const settings = AgentProviderSettings(
         providers: <AgentProviderConfig>[
           AgentProviderConfig.defaultCodex,
@@ -67,7 +69,7 @@ void main() {
 
     test('falls back to defaults when the JSON file is damaged', () async {
       await settingsFile.writeAsString('{not-json');
-      final store = FileAgentProviderConfigStore(file: settingsFile);
+      final store = _fileStore(settingsFile);
 
       final settings = await store.load();
 
@@ -76,7 +78,7 @@ void main() {
 
     test('falls back to defaults when the file is not valid UTF-8', () async {
       await settingsFile.writeAsBytes(<int>[0xff]);
-      final store = FileAgentProviderConfigStore(file: settingsFile);
+      final store = _fileStore(settingsFile);
 
       final settings = await store.load();
 
@@ -92,12 +94,43 @@ void main() {
         file: File(
           '${blockedParent.path}${Platform.pathSeparator}providers.json',
         ),
+        codec: _codec(),
       );
 
       await expectLater(
         store.save(const AgentProviderSettings()),
         throwsA(isA<FileSystemException>()),
       );
+    });
+
+    test('loads V1 permission fields and rewrites V2 only', () async {
+      await settingsFile.writeAsString(
+        jsonEncode(<String, Object?>{
+          'version': 1,
+          'activeProviderId': 'grok',
+          'providers': <Object?>[
+            <String, Object?>{
+              'id': 'grok',
+              'displayName': 'Grok',
+              'kind': 'acp',
+              'command': 'grok',
+              'selectedPermissionMode': 'yolo',
+            },
+          ],
+        }),
+      );
+      final store = _fileStore(settingsFile);
+
+      final settings = await store.load();
+      expect(
+        settings.activeProvider.selectedPermissionOptionId,
+        'always-approve',
+      );
+
+      await store.save(settings);
+      final rewritten = await settingsFile.readAsString();
+      expect(rewritten, contains('"selectedPermissionOptionId"'));
+      expect(rewritten, isNot(contains('selectedPermissionMode')));
     });
   });
 
@@ -275,4 +308,20 @@ void main() {
       );
     });
   });
+}
+
+FileAgentProviderConfigStore _fileStore(File file) {
+  return FileAgentProviderConfigStore(file: file, codec: _codec());
+}
+
+AgentProviderSettingsCodec _codec() {
+  return AgentProviderSettingsCodec(
+    migrationRegistry: AgentProviderPermissionMigrationRegistry(
+      <AgentProviderKind, AgentProviderPermissionPreferenceMigrator>{
+        AgentProviderKind.codexAppServer:
+            const CodexPermissionPreferenceMigrator(),
+        AgentProviderKind.acp: const GrokPermissionPreferenceMigrator(),
+      },
+    ),
+  );
 }

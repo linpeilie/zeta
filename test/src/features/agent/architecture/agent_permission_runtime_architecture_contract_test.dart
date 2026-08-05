@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_permission_selection_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_permission_state_store.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_permission_migration.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_permission_policy_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/app_server/codex_app_server_agent_provider.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_permission_mode_codec.dart';
@@ -513,7 +515,7 @@ void main() {
           (key, item) => MapEntry(key.toString(), item),
         );
         final input = row['input']! as Map<Object?, Object?>;
-        final config = AgentProviderConfig.tryDecode(input);
+        final config = _permissionConfigCodec().decodeProvider(input);
         expect(config, isNotNull, reason: row['id']!.toString());
         expect(
           config!.selectedPermissionOptionId,
@@ -532,34 +534,77 @@ void main() {
       );
     });
 
-    test(
-      '[TARGET-RED][MIGRATION] provider-specific migration is data-owned',
-      () {
-        final providerModelSource = File(
-          'lib/src/features/agent/domain/agent_provider_models.dart',
-        ).readAsStringSync();
-        final legacyDomainMigration = File(
-          'lib/src/features/agent/domain/agent_permission_preference_migration.dart',
-        );
+    test('provider-specific permission migration is data-owned and registered', () {
+      final providerModelSource = File(
+        'lib/src/features/agent/domain/agent_provider_models.dart',
+      ).readAsStringSync();
+      final legacyDomainMigration = File(
+        'lib/src/features/agent/domain/agent_permission_preference_migration.dart',
+      );
+      final dataMigration = File(
+        'lib/src/features/agent/data/agent_provider_permission_migration.dart',
+      );
+      final appSource = File('lib/src/app/app.dart').readAsStringSync();
 
-        expect(
-          providerModelSource.contains(
-            'AgentPermissionPreferenceMigration.resolveOptionId',
-          ),
-          isFalse,
-          reason:
-              'domain config decoding must delegate legacy fields to a data migrator registry',
-        );
-        expect(
-          legacyDomainMigration.existsSync(),
-          isFalse,
-          reason:
-              'Codex/Grok legacy protocol strings must leave the shared domain',
-        );
-      },
-      tags: const <String>['architecture-red'],
-    );
+      expect(
+        providerModelSource.contains(
+          'AgentPermissionPreferenceMigration.resolveOptionId',
+        ),
+        isFalse,
+        reason:
+            'domain config decoding must delegate legacy fields to a data migrator registry',
+      );
+      expect(
+        legacyDomainMigration.existsSync(),
+        isFalse,
+        reason:
+            'Codex/Grok legacy protocol strings must leave the shared domain',
+      );
+      expect(dataMigration.existsSync(), isTrue);
+      expect(appSource, contains('CodexPermissionPreferenceMigrator'));
+      expect(appSource, contains('GrokPermissionPreferenceMigrator'));
+    });
+
+    test('domain contains no provider permission protocol strings', () {
+      final domainFiles = Directory('lib/src/features/agent/domain')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((file) => file.path.endsWith('.dart'));
+
+      for (final file in domainFiles) {
+        final source = file.readAsStringSync();
+        for (final forbidden in const <String>[
+          ':workspace',
+          ':read-only',
+          ':danger-full-access',
+          'approvalPolicy',
+          'sandboxPolicy',
+          'selectedPermissionProfileId',
+          'selectedPermissionMode',
+          'yolo',
+          'always-approve',
+        ]) {
+          expect(
+            source,
+            isNot(contains(forbidden)),
+            reason: '${file.path}: $forbidden',
+          );
+        }
+      }
+    });
   });
+}
+
+AgentProviderSettingsCodec _permissionConfigCodec() {
+  return AgentProviderSettingsCodec(
+    migrationRegistry: AgentProviderPermissionMigrationRegistry(
+      <AgentProviderKind, AgentProviderPermissionPreferenceMigrator>{
+        AgentProviderKind.codexAppServer:
+            const CodexPermissionPreferenceMigrator(),
+        AgentProviderKind.acp: const GrokPermissionPreferenceMigrator(),
+      },
+    ),
+  );
 }
 
 void _expectCodexPermissionParams(

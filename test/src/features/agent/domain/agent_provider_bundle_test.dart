@@ -273,9 +273,9 @@ void main() {
         final provider = _PermissionBundleFakeProvider(
           permissionOptions: const <AgentPermissionOption>[
             AgentPermissionOption(
-              id: ':workspace',
-              label: 'Workspace write',
-              description: 'Workspace write',
+              id: 'default-option',
+              label: 'Default permission',
+              description: 'Default permission',
               allowed: true,
             ),
             AgentPermissionOption(
@@ -290,12 +290,12 @@ void main() {
 
         expect(bundle.permissionPolicy, isNotNull);
         final catalog = await bundle.permissionPolicy!.listPermissionOptions();
-        expect(catalog.defaultOptionId, ':workspace');
+        expect(catalog.defaultOptionId, 'default-option');
         expect(catalog.options.map((o) => o.id).toList(), <String>[
-          ':workspace',
+          'default-option',
           'team-safe',
         ]);
-        expect(catalog.options.first.label, 'Workspace write');
+        expect(catalog.options.first.label, 'Default permission');
 
         final result = await bundle.permissionPolicy!.applyPermissionSelection(
           const AgentPermissionSelection(optionId: 'team-safe'),

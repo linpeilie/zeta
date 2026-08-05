@@ -1,6 +1,5 @@
 import 'package:zeta/src/features/agent/domain/agent_model_codec.dart';
 import 'package:zeta/src/features/agent/domain/agent_model_selection_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_permission_preference_migration.dart';
 
 /// [AgentProviderConfig.copyWith] 中「未传参」与「显式传 null」的区分哨兵。
 const Object agentProviderConfigUnset = Object();
@@ -88,8 +87,6 @@ class AgentProviderConfig {
   final Map<String, AgentModelPreference> modelPreferences;
 
   /// 中立权限选项 id（V2 唯一权限真源：Codex profile 或 Grok mode 等）。
-  ///
-  /// V1 JSON 字段仅在 [tryDecode] 中作为迁移输入读取，不进入运行时字段。
   final String? selectedPermissionOptionId;
 
   /// 是否在配置列表中启用。
@@ -261,18 +258,17 @@ class AgentProviderConfig {
         for (final entry in modelPreferences.entries)
           entry.key: entry.value.toJson(),
       },
-      // V2：不再写出 selectedApprovalPolicy / selectedSandboxPolicy /
-      // selectedPermissionProfileId / selectedPermissionMode。
-      'selectedPermissionOptionId': selectedPermissionOptionId,
+      // Provider-specific legacy migration 由 data codec 负责；domain 只写 V2。
+      'selectedPermissionOptionId': resolvedPermissionOptionId,
       'enabled': enabled,
       'extra': extra,
     };
   }
 
-  /// 从持久化 JSON 宽容解码 provider 配置（同时接受 V1/V2 权限字段）。
+  /// 从持久化 JSON 宽容解码 provider 配置。
   ///
   /// 解码失败返回 `null`，调用方可以回退到默认 provider；未知字段不会阻断加载。
-  /// V1 旧权限字段只作迁移输入，结果中仅保留归一化后的 optionId。
+  /// 权限只读取 V2 中立 optionId；V1 provider-specific 迁移由 data codec 完成。
   static AgentProviderConfig? tryDecode(Object? value) {
     final map = decodeObjectMap(value);
     if (map.isEmpty) {
@@ -289,23 +285,6 @@ class AgentProviderConfig {
       return null;
     }
 
-    final optionId = AgentPermissionPreferenceMigration.resolveOptionId(
-      kindName: kind.name,
-      selectedPermissionOptionId: decodeOptionalString(
-        map['selectedPermissionOptionId'],
-      ),
-      selectedPermissionProfileId: decodeOptionalString(
-        map['selectedPermissionProfileId'],
-      ),
-      selectedPermissionMode: decodeOptionalString(
-        map['selectedPermissionMode'],
-      ),
-      selectedApprovalPolicy: decodeOptionalString(
-        map['selectedApprovalPolicy'],
-      ),
-      selectedSandboxPolicy: decodeOptionalString(map['selectedSandboxPolicy']),
-    );
-
     return AgentProviderConfig(
       id: id,
       displayName: normalizeDisplayName(id, displayName),
@@ -320,11 +299,18 @@ class AgentProviderConfig {
       ),
       selectedServiceTier: decodeOptionalString(map['selectedServiceTier']),
       modelPreferences: _decodeModelPreferences(map['modelPreferences']),
-      selectedPermissionOptionId: optionId,
+      selectedPermissionOptionId: _normalizePermissionOptionId(
+        decodeOptionalString(map['selectedPermissionOptionId']),
+      ),
       enabled: map['enabled'] is bool ? map['enabled'] as bool : true,
       extra: decodeObjectMap(map['extra']),
     );
   }
+}
+
+String? _normalizePermissionOptionId(String? value) {
+  final trimmed = value?.trim();
+  return trimmed == null || trimmed.isEmpty ? null : trimmed;
 }
 
 Map<String, AgentModelPreference> _decodeModelPreferences(Object? value) {
@@ -389,7 +375,7 @@ class AgentProviderSettings {
   /// 当前写入的 settings 结构版本（V2：权限仅 optionId）。
   static const int currentVersion = 2;
 
-  /// 可解码的 settings 版本（V1 权限多字段 / V2 单一 optionId）。
+  /// 可解码的 settings 外层版本；V1 权限迁移由 data codec 预处理。
   static const Set<int> supportedVersions = <int>{1, 2};
 
   Map<String, Object?> toJson() {
