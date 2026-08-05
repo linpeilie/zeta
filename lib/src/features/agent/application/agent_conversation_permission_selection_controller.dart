@@ -46,16 +46,8 @@ class AgentConversationPermissionSelectionController {
 
   void bindProvider(AgentProvider provider) {
     _provider = provider;
-    final supportsProfiles =
-        provider.capabilities.supportsPermissionProfileSelection;
-    if (!supportsProfiles && _selection.permissionProfileId != null) {
-      // 不支持 profile 下发时清掉 profile 字段，保留 optionId。
-      _selection = AgentPermissionSelection(
-        optionId: _selection.selectedOptionId,
-        approvalPolicy: _selection.approvalPolicy,
-        sandboxPolicy: _selection.sandboxPolicy,
-      );
-    }
+    // 不根据 capability 清除 permissionProfileId：配置中的显式字段原样下发，
+    // 不支持 profile 的 Provider（如 Grok）只会读取 optionId，自然忽略 Codex 字段。
     provider.updatePermissionSelection(_selection);
   }
 
@@ -67,49 +59,18 @@ class AgentConversationPermissionSelectionController {
   }
 
   void seedFromConfig(AgentProviderConfig config) {
-    final optionId = config.resolvedPermissionOptionId;
-    if (optionId != null && optionId.isNotEmpty) {
-      // forOptionId：Codex 内置 profile 会回填 approval/sandbox；
-      // 不透明 id（含 Grok mode）只记 optionId。
-      // 自定义 Codex profile 用 forProfileId 保留 permissionProfileId。
-      final looksLikeCodexProfile =
-          optionId.startsWith(':') ||
-          AgentPermissionSelection.presetForOptionId(optionId) != null;
-      _selection = looksLikeCodexProfile
-          ? AgentPermissionSelection.forProfileId(optionId)
-          : AgentPermissionSelection.forOptionId(optionId);
-      // 配置里若仍有 approval/sandbox，覆盖 forOptionId 默认值。
-      if (config.selectedApprovalPolicy != null ||
-          config.selectedSandboxPolicy != null) {
-        _selection = _selection.copyWith(
-          approvalPolicy: AgentPermissionSelection.normalizeApprovalPolicy(
-            config.selectedApprovalPolicy,
-          ),
-          sandboxPolicy:
-              config.selectedSandboxPolicy ?? _selection.sandboxPolicy,
-        );
-      }
-    } else {
-      _selection = AgentPermissionSelection(
-        approvalPolicy: AgentPermissionSelection.normalizeApprovalPolicy(
-          config.selectedApprovalPolicy,
-        ),
-        sandboxPolicy:
-            config.selectedSandboxPolicy ??
-            AgentPermissionSelection.defaultSandboxPolicy,
-        permissionProfileId: config.selectedPermissionProfileId,
-        optionId: config.selectedPermissionProfileId,
-      );
-    }
-    if (_provider != null &&
-        !_provider!.capabilities.supportsPermissionProfileSelection &&
-        _selection.permissionProfileId != null) {
-      _selection = AgentPermissionSelection(
-        optionId: _selection.selectedOptionId,
-        approvalPolicy: _selection.approvalPolicy,
-        sandboxPolicy: _selection.sandboxPolicy,
-      );
-    }
+    // 按显式持久化字段构造快照，不通过 startsWith(':') / 内置预设猜测协议类型。
+    // selectedPermissionOptionId 仅作通用选择 ID；selectedPermissionProfileId 原样保留。
+    _selection = AgentPermissionSelection(
+      optionId: config.resolvedPermissionOptionId,
+      approvalPolicy: AgentPermissionSelection.normalizeApprovalPolicy(
+        config.selectedApprovalPolicy,
+      ),
+      sandboxPolicy:
+          config.selectedSandboxPolicy ??
+          AgentPermissionSelection.defaultSandboxPolicy,
+      permissionProfileId: config.selectedPermissionProfileId,
+    );
     _provider?.updatePermissionSelection(_selection);
   }
 

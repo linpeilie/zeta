@@ -3823,6 +3823,52 @@ void main() {
       ]);
     });
 
+    test(
+      'restores custom team-safe profile from config and encodes permissions',
+      () async {
+        final config = AgentProviderConfig.defaultCodex.copyWith(
+          selectedPermissionOptionId: 'team-safe',
+          selectedPermissionProfileId: 'team-safe',
+          selectedApprovalPolicy: 'on-request',
+          selectedSandboxPolicy: 'workspaceWrite',
+        );
+        // 配置 round-trip 后仍保留自定义 profile，不得变成 :workspace。
+        final decoded = AgentProviderConfig.tryDecode(config.toJson());
+        expect(decoded, isNotNull);
+        expect(decoded!.selectedPermissionProfileId, 'team-safe');
+        expect(decoded.resolvedPermissionOptionId, 'team-safe');
+
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: decoded,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+
+        await provider.sendMessage(
+          session: const AgentSession(
+            id: 'thread-team-safe',
+            providerId: defaultAgentProviderId,
+          ),
+          message: 'hello',
+          context: const AgentContext(projectPath: '/repo'),
+          clientUserMessageId: 'client-team-safe',
+        );
+
+        final turnStartIndex = peer.requestMethods.indexOf('turn/start');
+        expect(peer.requestParams[turnStartIndex], <String, Object?>{
+          'threadId': 'thread-team-safe',
+          'input': <Object?>[
+            <String, Object?>{'type': 'text', 'text': 'hello'},
+          ],
+          'cwd': '/repo',
+          'approvalPolicy': 'on-request',
+          'permissions': 'team-safe',
+          'clientUserMessageId': 'client-team-safe',
+        });
+      },
+    );
+
     test('keeps legacy turn/start params unchanged without mode', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(

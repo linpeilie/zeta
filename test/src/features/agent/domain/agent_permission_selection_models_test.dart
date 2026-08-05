@@ -25,7 +25,8 @@ void main() {
     test('derives built-in permission profiles and readable labels', () {
       const workspace = AgentPermissionSelection();
       expect(workspace.protocolPermissionProfileId, ':workspace');
-      expect(workspace.displayLabel, 'Workspace write · Ask first');
+      // selectedOptionId 回落到 protocol profile 后走内置预设 label。
+      expect(workspace.displayLabel, 'Workspace write');
 
       const custom = AgentPermissionSelection(
         approvalPolicy: 'on-request',
@@ -48,6 +49,22 @@ void main() {
       expect(custom.permissionProfileId, ':team-safe');
       expect(custom.sandboxPolicy, 'workspaceWrite');
       expect(custom.protocolPermissionProfileId, ':team-safe');
+
+      // 不以 `:` 开头的自定义 Codex profile 也必须保留，不得回落 :workspace。
+      final teamSafe = AgentPermissionSelection.forProfileId('team-safe');
+      expect(teamSafe.permissionProfileId, 'team-safe');
+      expect(teamSafe.optionId, 'team-safe');
+      expect(teamSafe.protocolPermissionProfileId, 'team-safe');
+      expect(teamSafe.protocolPermissionProfileId, isNot(':workspace'));
+    });
+
+    test('forOptionId leaves Grok mode out of permissionProfileId', () {
+      final auto = AgentPermissionSelection.forOptionId('auto');
+      expect(auto.optionId, 'auto');
+      expect(auto.permissionProfileId, isNull);
+      // 无显式 profile 时，默认 approval/sandbox 可能匹配内置 preset；
+      // forOptionId 本身不得把 auto 写入 permissionProfileId。
+      expect(auto.permissionProfileId, isNot('auto'));
     });
 
     test('profile summary maps Codex ids to built-in preset labels', () {

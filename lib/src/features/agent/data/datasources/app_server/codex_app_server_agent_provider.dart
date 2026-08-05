@@ -1168,21 +1168,15 @@ class CodexAppServerAgentProvider
   }
 }
 
+/// 从全局配置恢复权限快照。
+///
+/// 显式 [AgentProviderConfig.selectedPermissionProfileId] 必须原样保留，
+/// 不得仅凭 approval/sandbox 回填为内置 `:workspace` 等 profile。
 AgentPermissionSelection _permissionSelectionFromConfig(
   AgentProviderConfig config,
 ) {
-  final optionId = config.resolvedPermissionOptionId;
-  if (optionId != null && optionId.isNotEmpty) {
-    return AgentPermissionSelection.forProfileId(optionId).copyWith(
-      approvalPolicy:
-          config.selectedApprovalPolicy ??
-          AgentPermissionSelection.defaultApprovalPolicy,
-      sandboxPolicy:
-          config.selectedSandboxPolicy ??
-          AgentPermissionSelection.defaultSandboxPolicy,
-    );
-  }
   return AgentPermissionSelection(
+    optionId: config.resolvedPermissionOptionId,
     approvalPolicy:
         config.selectedApprovalPolicy ??
         AgentPermissionSelection.defaultApprovalPolicy,
@@ -1190,7 +1184,6 @@ AgentPermissionSelection _permissionSelectionFromConfig(
         config.selectedSandboxPolicy ??
         AgentPermissionSelection.defaultSandboxPolicy,
     permissionProfileId: config.selectedPermissionProfileId,
-    optionId: config.selectedPermissionProfileId,
   );
 }
 
