@@ -160,6 +160,8 @@ class AgentConversationPermissionSelectionController {
   }
 
   /// 拉取选项目录；旧 generation / 已 dispose 的结果不得回写。
+  ///
+  /// 临时失败保留旧目录；不用空目录覆盖已有成功目录。
   Future<void> refreshOptions() async {
     if (_disposed) {
       return;
@@ -177,6 +179,10 @@ class AgentConversationPermissionSelectionController {
           !identical(port, _port)) {
         return;
       }
+      // 不用空目录覆盖已有成功目录。
+      if (catalog.options.isEmpty && (_catalog?.options.isNotEmpty ?? false)) {
+        return;
+      }
       _catalog = catalog;
       // 无有效选择时回落 catalog 默认。
       if (_effectiveSelection == null && catalog.defaultOptionId.isNotEmpty) {
@@ -186,7 +192,7 @@ class AgentConversationPermissionSelectionController {
         _defaultPreference ??= _effectiveSelection;
       }
     } catch (_) {
-      // 临时失败保留旧目录，不用空列表覆盖。
+      // 临时失败 / adapter 上抛：保留旧目录，不用空列表覆盖。
       if (_disposed ||
           generation != _bindingGeneration ||
           !identical(port, _port)) {
@@ -208,6 +214,9 @@ class AgentConversationPermissionSelectionController {
     final generation = _bindingGeneration;
     final previousEffective = _effectiveSelection;
     final previousDefault = _defaultPreference;
+    final previousByThread = Map<String, AgentPermissionSelection>.from(
+      _effectiveByThread,
+    );
     final requested = AgentPermissionSelection(optionId: option.id);
     _lastError = null;
     _lastApplyWarning = null;
@@ -219,31 +228,10 @@ class AgentConversationPermissionSelectionController {
           !identical(port, _port)) {
         return;
       }
-      final normalized = result.normalizedSelection;
-      _lastApplyScope = result.scope;
-      _lastApplyWarning = result.warning;
-
-      if (result.scope == AgentPermissionApplyScope.runtime) {
-        // Grok runtime-global：同步全部 thread 有效值与默认偏好。
-        _defaultPreference = normalized;
-        _effectiveSelection = normalized;
-        for (final key in _effectiveByThread.keys.toList(growable: false)) {
-          _effectiveByThread[key] = normalized;
-        }
-        if (_boundThreadId != null) {
-          _effectiveByThread[_boundThreadId!] = normalized;
-        }
-      } else {
-        _effectiveSelection = normalized;
-        if (_boundThreadId != null) {
-          _effectiveByThread[_boundThreadId!] = normalized;
-        }
-        // 产品语义：用户主动选择同时更新后续默认。
-        _defaultPreference = normalized;
-      }
+      _commitApplyResult(result, updateDefault: true);
 
       try {
-        await persistOptionId(normalized.optionId);
+        await persistOptionId(result.normalizedSelection.optionId);
       } catch (error) {
         // 持久化失败：不伪造 provider 未应用，但报告错误。
         if (!_disposed && generation == _bindingGeneration) {
@@ -254,15 +242,11 @@ class AgentConversationPermissionSelectionController {
       if (_disposed || generation != _bindingGeneration) {
         return;
       }
-      _effectiveSelection = previousEffective;
-      _defaultPreference = previousDefault;
-      if (_boundThreadId != null) {
-        if (previousEffective != null) {
-          _effectiveByThread[_boundThreadId!] = previousEffective;
-        } else {
-          _effectiveByThread.remove(_boundThreadId);
-        }
-      }
+      _restoreApplySnapshot(
+        effective: previousEffective,
+        defaultPreference: previousDefault,
+        byThread: previousByThread,
+      );
       _lastError = '权限模式切换失败';
       _lastApplyScope = null;
       _lastApplyWarning = null;
@@ -271,7 +255,7 @@ class AgentConversationPermissionSelectionController {
 
   /// 服务端 / 外部将当前 thread 有效选择设为 [selection]（不持久化全局默认）。
   ///
-  /// 可选经 port 同步 runtime 内存，失败时回滚 effective。
+  /// 可选经 port 同步 runtime 内存；成功时提交完整 [AgentPermissionApplyResult]。
   Future<void> applyEffectiveSelection(
     AgentPermissionSelection selection, {
     bool syncPort = true,
@@ -284,41 +268,57 @@ class AgentConversationPermissionSelectionController {
       return;
     }
     final next = AgentPermissionSelection(optionId: trimmed);
-    if (_effectiveSelection?.optionId == next.optionId) {
-      return;
-    }
-    final previous = _effectiveSelection;
-    _effectiveSelection = next;
-    if (_boundThreadId != null) {
-      _effectiveByThread[_boundThreadId!] = next;
-    }
+
     if (!syncPort) {
+      if (_effectiveSelection?.optionId == next.optionId) {
+        return;
+      }
+      _effectiveSelection = next;
+      if (_boundThreadId != null) {
+        _effectiveByThread[_boundThreadId!] = next;
+      }
       return;
     }
+
     final port = _port;
     final generation = _bindingGeneration;
     if (port == null) {
+      if (_effectiveSelection?.optionId == next.optionId) {
+        return;
+      }
+      _effectiveSelection = next;
+      if (_boundThreadId != null) {
+        _effectiveByThread[_boundThreadId!] = next;
+      }
       return;
     }
+
+    final previousEffective = _effectiveSelection;
+    final previousDefault = _defaultPreference;
+    final previousByThread = Map<String, AgentPermissionSelection>.from(
+      _effectiveByThread,
+    );
+
     try {
-      await port.applyPermissionSelection(next);
+      final result = await port.applyPermissionSelection(next);
       if (_disposed ||
           generation != _bindingGeneration ||
           !identical(port, _port)) {
         return;
       }
+      // 外部/settings 同步：消费完整 result，但不把用户默认偏好改写为本次回写。
+      _commitApplyResult(result, updateDefault: false);
     } catch (_) {
       if (_disposed || generation != _bindingGeneration) {
         return;
       }
-      _effectiveSelection = previous;
-      if (_boundThreadId != null) {
-        if (previous != null) {
-          _effectiveByThread[_boundThreadId!] = previous;
-        } else {
-          _effectiveByThread.remove(_boundThreadId);
-        }
-      }
+      _restoreApplySnapshot(
+        effective: previousEffective,
+        defaultPreference: previousDefault,
+        byThread: previousByThread,
+      );
+      _lastApplyScope = null;
+      _lastApplyWarning = null;
     }
   }
 
@@ -372,6 +372,64 @@ class AgentConversationPermissionSelectionController {
     _port = null;
     _catalog = null;
     _effectiveByThread.clear();
+  }
+
+  /// 统一提交 port apply 结果：normalized / scope / warning。
+  ///
+  /// - [updateDefault]：用户主动选择时为 true（同步默认偏好并持久化路径外的内存默认）
+  /// - runtime：同步全部 thread + 默认
+  /// - currentSession / currentTurn：仅当前 thread effective
+  /// - nextSession：更新默认并展示提示；用户选择时同步 UI 选中态
+  void _commitApplyResult(
+    AgentPermissionApplyResult result, {
+    required bool updateDefault,
+  }) {
+    final normalized = result.normalizedSelection;
+    _lastApplyScope = result.scope;
+    _lastApplyWarning = result.warning;
+
+    switch (result.scope) {
+      case AgentPermissionApplyScope.runtime:
+        // Grok runtime-global：同步全部 thread 与默认偏好。
+        _defaultPreference = normalized;
+        _effectiveSelection = normalized;
+        for (final key in _effectiveByThread.keys.toList(growable: false)) {
+          _effectiveByThread[key] = normalized;
+        }
+        if (_boundThreadId != null) {
+          _effectiveByThread[_boundThreadId!] = normalized;
+        }
+      case AgentPermissionApplyScope.nextSession:
+        // 下次会话生效：更新默认；用户选择时仍展示为当前选中项。
+        _defaultPreference = normalized;
+        if (updateDefault) {
+          _effectiveSelection = normalized;
+          if (_boundThreadId != null) {
+            _effectiveByThread[_boundThreadId!] = normalized;
+          }
+        }
+      case AgentPermissionApplyScope.currentSession:
+      case AgentPermissionApplyScope.currentTurn:
+        _effectiveSelection = normalized;
+        if (_boundThreadId != null) {
+          _effectiveByThread[_boundThreadId!] = normalized;
+        }
+        if (updateDefault) {
+          _defaultPreference = normalized;
+        }
+    }
+  }
+
+  void _restoreApplySnapshot({
+    required AgentPermissionSelection? effective,
+    required AgentPermissionSelection? defaultPreference,
+    required Map<String, AgentPermissionSelection> byThread,
+  }) {
+    _effectiveSelection = effective;
+    _defaultPreference = defaultPreference;
+    _effectiveByThread
+      ..clear()
+      ..addAll(byThread);
   }
 
   void _restoreEffectiveForBoundThread() {

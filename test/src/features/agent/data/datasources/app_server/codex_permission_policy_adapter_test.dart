@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/data/datasources/app_server/codex_permission_policy_adapter.dart';
 import 'package:zeta/src/features/agent/data/mappers/codex_permission_policy_codec.dart';
@@ -149,6 +151,72 @@ void main() {
           ':read-only',
           ':danger-full-access',
         ]),
+      );
+    });
+
+    test('rethrows timeout so caller can retain previous catalog', () async {
+      final adapter = CodexPermissionPolicyAdapter(
+        ensureInitialized: () async {},
+        sendRequest: (method, {Map<String, Object?> params = const {}}) async {
+          throw TimeoutException('permissionProfile/list timed out');
+        },
+        onSelectionApplied: (_) {},
+        currentSnapshot: () => const CodexPermissionRuntimeSnapshot(),
+      );
+
+      await expectLater(
+        adapter.listPermissionOptions(),
+        throwsA(isA<TimeoutException>()),
+      );
+    });
+
+    test(
+      'rethrows when a later page fails without returning partial data',
+      () async {
+        var page = 0;
+        final adapter = CodexPermissionPolicyAdapter(
+          ensureInitialized: () async {},
+          sendRequest:
+              (method, {Map<String, Object?> params = const {}}) async {
+                page += 1;
+                if (page == 1) {
+                  return <String, Object?>{
+                    'data': <Object?>[
+                      <String, Object?>{
+                        'id': 'team-safe',
+                        'allowed': true,
+                        'description': 'Team safe',
+                      },
+                    ],
+                    'nextCursor': 'page-2',
+                  };
+                }
+                throw TimeoutException('page 2 timed out');
+              },
+          onSelectionApplied: (_) {},
+          currentSnapshot: () => const CodexPermissionRuntimeSnapshot(),
+        );
+
+        await expectLater(
+          adapter.listPermissionOptions(),
+          throwsA(isA<TimeoutException>()),
+        );
+      },
+    );
+
+    test('throws on malformed list response instead of built-ins', () async {
+      final adapter = CodexPermissionPolicyAdapter(
+        ensureInitialized: () async {},
+        sendRequest: (method, {Map<String, Object?> params = const {}}) async {
+          return 'not-an-object';
+        },
+        onSelectionApplied: (_) {},
+        currentSnapshot: () => const CodexPermissionRuntimeSnapshot(),
+      );
+
+      await expectLater(
+        adapter.listPermissionOptions(),
+        throwsA(isA<FormatException>()),
       );
     });
 

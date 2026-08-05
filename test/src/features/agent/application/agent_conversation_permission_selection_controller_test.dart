@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_permission_selection_controller.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -220,6 +222,72 @@ void main() {
       expect(controller.applyScopeHint, '下次会话生效');
     });
 
+    test(
+      'applyEffectiveSelection commits normalizedSelection and runtime scope',
+      () async {
+        final port = _FakePermissionPort(
+          options: const <AgentPermissionOption>[
+            AgentPermissionOption(id: 'ask', label: 'Ask'),
+            AgentPermissionOption(id: 'default', label: 'Default'),
+          ],
+          normalizeSelection: (selection) {
+            final raw = selection.optionId;
+            return AgentPermissionApplyResult(
+              normalizedSelection: AgentPermissionSelection(
+                optionId: raw == 'default' ? 'ask' : raw,
+              ),
+              scope: AgentPermissionApplyScope.runtime,
+              warning: 'normalized',
+            );
+          },
+        );
+        final controller = AgentConversationPermissionSelectionController(
+          persistOptionId: (_) async {},
+        );
+        controller.bind(port: port, persistedOptionId: 'auto');
+        controller.bindThread('t1');
+        await controller.applyEffectiveSelection(
+          const AgentPermissionSelection(optionId: 'auto'),
+          syncPort: false,
+        );
+        controller.bindThread('t2');
+        await controller.applyEffectiveSelection(
+          const AgentPermissionSelection(optionId: 'auto'),
+          syncPort: false,
+        );
+        controller.bindThread('t1');
+
+        await controller.applyEffectiveSelection(
+          const AgentPermissionSelection(optionId: 'default'),
+        );
+
+        expect(controller.selectedOptionId, 'ask');
+        expect(controller.lastApplyScope, AgentPermissionApplyScope.runtime);
+        expect(controller.lastApplyWarning, 'normalized');
+        controller.bindThread('t2');
+        expect(controller.selectedOptionId, 'ask');
+        expect(controller.defaultOptionId, 'ask');
+      },
+    );
+
+    test('refreshOptions keeps catalog when port throws transiently', () async {
+      final port = _FakePermissionPort(
+        options: const <AgentPermissionOption>[
+          AgentPermissionOption(id: 'team-safe', label: 'Team safe'),
+        ],
+      );
+      final controller = AgentConversationPermissionSelectionController(
+        persistOptionId: (_) async {},
+      );
+      controller.bind(port: port, persistedOptionId: null);
+      await controller.refreshOptions();
+      expect(controller.options.map((o) => o.id), <String>['team-safe']);
+
+      port.listError = TimeoutException('list timed out');
+      await controller.refreshOptions();
+      expect(controller.options.map((o) => o.id), <String>['team-safe']);
+    });
+
     test('displayLabel uses catalog label without parsing id shape', () async {
       final port = _FakePermissionPort(
         options: const <AgentPermissionOption>[
@@ -269,13 +337,17 @@ class _FakePermissionPort implements AgentPermissionPolicyPort {
     this.listDelay,
     this.applyError,
     this.applyScope = AgentPermissionApplyScope.runtime,
+    this.normalizeSelection,
   });
 
   final List<AgentPermissionOption> options;
   final Duration? listDelay;
   final Object? applyError;
   final AgentPermissionApplyScope applyScope;
+  final AgentPermissionApplyResult Function(AgentPermissionSelection selection)?
+  normalizeSelection;
 
+  Object? listError;
   int listCalls = 0;
   int applyCalls = 0;
   AgentPermissionSelection? lastApplied;
@@ -286,6 +358,10 @@ class _FakePermissionPort implements AgentPermissionPolicyPort {
     final delay = listDelay;
     if (delay != null) {
       await Future<void>.delayed(delay);
+    }
+    final error = listError;
+    if (error != null) {
+      throw error;
     }
     return AgentPermissionCatalog(
       options: options,
@@ -302,6 +378,10 @@ class _FakePermissionPort implements AgentPermissionPolicyPort {
     final error = applyError;
     if (error != null) {
       throw error;
+    }
+    final normalize = normalizeSelection;
+    if (normalize != null) {
+      return normalize(selection);
     }
     return AgentPermissionApplyResult(
       normalizedSelection: selection,

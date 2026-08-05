@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
 import 'package:zeta/src/features/agent/data/mappers/codex_permission_policy_codec.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
@@ -8,6 +11,18 @@ final _log = loggerFor('zeta.agent.codex_permission_policy');
 typedef CodexPermissionRpcSender =
     Future<Object?> Function(String method, {Map<String, Object?> params});
 
+/// `permissionProfile/list` 失败分类（adapter 内部；不泄漏到 domain）。
+enum _CodexPermissionCatalogFailureKind {
+  /// 运行时明确不支持该方法 → 可安全回退 built-ins。
+  unsupportedRuntime,
+
+  /// 超时、断线、server 错误等临时失败 → 向上抛出，保留旧目录。
+  transientFailure,
+
+  /// 响应形状损坏 → 向上抛出，不用空/静态目录覆盖。
+  malformedResponse,
+}
+
 /// Codex 权限策略 adapter：实现中立 [AgentPermissionPolicyPort]。
 ///
 /// 负责完整分页 `permissionProfile/list`、built-in label、自定义 profile、
@@ -16,8 +31,8 @@ final class CodexPermissionPolicyAdapter implements AgentPermissionPolicyPort {
   /// 创建 adapter。
   ///
   /// [ensureInitialized] 在 list 前保证 app-server 已握手。
-  /// [onSelectionApplied] 将归一化快照写回 provider 内存。
-  /// [currentSnapshot] 读取当前 runtime 快照（用于 merge 诊断）。
+  /// [onSelectionApplied] 将归一化快照写回 provider 默认偏好（fallback）。
+  /// [currentSnapshot] 读取当前默认快照（用于空选择回落）。
   CodexPermissionPolicyAdapter({
     required this.ensureInitialized,
     required this.sendRequest,
@@ -37,18 +52,29 @@ final class CodexPermissionPolicyAdapter implements AgentPermissionPolicyPort {
     try {
       final options = await _listAllPermissionOptions();
       if (options.isEmpty) {
+        // 空成功响应：固定契约为内置目录（与“无自定义 profile”语义一致）。
         _log.fine('permissionProfile/list empty; falling back to built-ins');
         return CodexPermissionPolicyCodec.staticBuiltInCatalog();
       }
       return CodexPermissionPolicyCodec.catalogFromOptions(options);
     } on Object catch (error, stackTrace) {
+      final kind = _classifyPermissionCatalogFailure(error);
+      if (kind == _CodexPermissionCatalogFailureKind.unsupportedRuntime) {
+        _log.fine(
+          'permissionProfile/list unsupported; falling back to built-ins',
+          error,
+          stackTrace,
+        );
+        return CodexPermissionPolicyCodec.staticBuiltInCatalog();
+      }
       _log.fine(
-        'permissionProfile/list failed; falling back to built-ins',
+        'permissionProfile/list failed '
+        '(${kind.name}); preserving caller catalog by rethrowing',
         error,
         stackTrace,
       );
-      // unsupported / 临时失败：静态内置，避免 UI 空目录。
-      return CodexPermissionPolicyCodec.staticBuiltInCatalog();
+      // transient / malformed：向上抛出，由 controller 保留旧目录。
+      Error.throwWithStackTrace(error, stackTrace);
     }
   }
 
@@ -64,7 +90,7 @@ final class CodexPermissionPolicyAdapter implements AgentPermissionPolicyPort {
           CodexPermissionPolicyCodec.defaultBuiltInOptionId;
       return AgentPermissionApplyResult(
         normalizedSelection: AgentPermissionSelection(optionId: fallbackId),
-        scope: AgentPermissionApplyScope.runtime,
+        scope: AgentPermissionApplyScope.currentSession,
         warning: 'Empty permission option; kept previous selection',
       );
     }
@@ -80,12 +106,14 @@ final class CodexPermissionPolicyAdapter implements AgentPermissionPolicyPort {
         normalizedId;
     return AgentPermissionApplyResult(
       normalizedSelection: AgentPermissionSelection(optionId: effectiveId),
-      // Codex 权限随 thread/turn 参数发送；内存选择立即更新，跨 thread 不自动广播。
+      // Codex 权限随 thread/turn 参数发送；内存默认仅作 fallback，跨 thread 不广播。
       scope: AgentPermissionApplyScope.currentSession,
     );
   }
 
   /// 完整 cursor 分页读取 `permissionProfile/list`。
+  ///
+  /// 任一页失败或损坏会抛出，调用方不得提交部分目录。
   Future<List<AgentPermissionOption>> _listAllPermissionOptions() async {
     final options = <AgentPermissionOption>[];
     final seenIds = <String>{};
@@ -98,8 +126,18 @@ final class CodexPermissionPolicyAdapter implements AgentPermissionPolicyPort {
           if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
         },
       );
-      final map = _asStringKeyedMap(result) ?? const <String, Object?>{};
+      final map = _asStringKeyedMap(result);
+      if (map == null) {
+        throw const FormatException(
+          'permissionProfile/list result is not an object',
+        );
+      }
       final data = map['data'];
+      if (data != null && data is! List) {
+        throw const FormatException(
+          'permissionProfile/list data is not a list',
+        );
+      }
       if (data is List) {
         for (final item in data) {
           final entry = _asStringKeyedMap(item);
@@ -123,6 +161,40 @@ final class CodexPermissionPolicyAdapter implements AgentPermissionPolicyPort {
       }
     } while (cursor != null);
     return options;
+  }
+
+  static _CodexPermissionCatalogFailureKind _classifyPermissionCatalogFailure(
+    Object error,
+  ) {
+    if (error is FormatException) {
+      return _CodexPermissionCatalogFailureKind.malformedResponse;
+    }
+    if (error is TimeoutException) {
+      return _CodexPermissionCatalogFailureKind.transientFailure;
+    }
+    if (error is UnsupportedError) {
+      return _CodexPermissionCatalogFailureKind.unsupportedRuntime;
+    }
+    if (error is JsonRpcException) {
+      final message = error.error.message.toLowerCase();
+      final experimentalDisabled =
+          message.contains('experimental') &&
+          (message.contains('disabled') || message.contains('not enabled'));
+      if (error.error.code == -32601 ||
+          experimentalDisabled ||
+          message.contains('method not found') ||
+          message.contains('not available') ||
+          message.contains('not supported')) {
+        return _CodexPermissionCatalogFailureKind.unsupportedRuntime;
+      }
+      // 其它 JSON-RPC 业务错误视为临时/可重试，避免用 built-ins 覆盖。
+      return _CodexPermissionCatalogFailureKind.transientFailure;
+    }
+    final text = error.toString().toLowerCase();
+    if (text.contains('method not found') || text.contains('-32601')) {
+      return _CodexPermissionCatalogFailureKind.unsupportedRuntime;
+    }
+    return _CodexPermissionCatalogFailureKind.transientFailure;
   }
 
   static Map<String, Object?>? _asStringKeyedMap(Object? value) {
