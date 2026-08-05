@@ -403,10 +403,8 @@ class AgentPaneFakeProvider
   }
 
   @override
-  AgentProviderConfig get config => AgentProviderConfig.defaultCodex.copyWith(
-    selectedPermissionOptionId: ':workspace',
-    selectedPermissionProfileId: ':workspace',
-  );
+  AgentProviderConfig get config =>
+      AgentProviderConfig.defaultCodex.withPermissionPreference(':workspace');
 
   @override
   AgentProviderCapabilities get capabilities => AgentProviderCapabilities

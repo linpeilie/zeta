@@ -9,11 +9,11 @@ class AgentConversationPermissionSelectionController {
   ///
   /// [persistOptionId] 仅持久化通用 optionId（provider 默认偏好）。
   AgentConversationPermissionSelectionController({
-    required Future<void> Function(String optionId) persistOptionId,
-  }) : _persistOptionId = persistOptionId;
+    required this.persistOptionId,
+  });
 
   /// 持久化 provider 默认 optionId。
-  final Future<void> Function(String optionId) _persistOptionId;
+  final Future<void> Function(String optionId) persistOptionId;
 
   AgentPermissionPolicyPort? _port;
   AgentPermissionCatalog? _catalog;
@@ -183,19 +183,14 @@ class AgentConversationPermissionSelectionController {
         _effectiveSelection = AgentPermissionSelection(
           optionId: catalog.defaultOptionId,
         );
-        if (_defaultPreference == null) {
-          _defaultPreference = _effectiveSelection;
-        }
+        _defaultPreference ??= _effectiveSelection;
       }
     } catch (_) {
+      // 临时失败保留旧目录，不用空列表覆盖。
       if (_disposed ||
           generation != _bindingGeneration ||
           !identical(port, _port)) {
         return;
-      }
-      // 临时失败保留旧目录，不用空列表覆盖。
-      if (_catalog == null) {
-        _catalog = null;
       }
     }
   }
@@ -248,7 +243,7 @@ class AgentConversationPermissionSelectionController {
       }
 
       try {
-        await _persistOptionId(normalized.optionId);
+        await persistOptionId(normalized.optionId);
       } catch (error) {
         // 持久化失败：不伪造 provider 未应用，但报告错误。
         if (!_disposed && generation == _bindingGeneration) {

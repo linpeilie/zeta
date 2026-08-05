@@ -3878,16 +3878,13 @@ void main() {
     test(
       'restores custom team-safe profile from config and encodes permissions',
       () async {
-        final config = AgentProviderConfig.defaultCodex.copyWith(
-          selectedPermissionOptionId: 'team-safe',
-          selectedPermissionProfileId: 'team-safe',
-          selectedApprovalPolicy: 'on-request',
-          selectedSandboxPolicy: 'workspaceWrite',
-        );
-        // 配置 round-trip 后仍保留自定义 profile，不得变成 :workspace。
+        final config = AgentProviderConfig.defaultCodex
+            .withPermissionPreference('team-safe');
+        // V2 round-trip 只保留 optionId；自定义 profile 不得变成 :workspace。
         final decoded = AgentProviderConfig.tryDecode(config.toJson());
         expect(decoded, isNotNull);
-        expect(decoded!.selectedPermissionProfileId, 'team-safe');
+        expect(decoded!.selectedPermissionOptionId, 'team-safe');
+        expect(decoded.selectedPermissionProfileId, isNull);
         expect(decoded.resolvedPermissionOptionId, 'team-safe');
 
         final peer = _FakeJsonRpcPeer();

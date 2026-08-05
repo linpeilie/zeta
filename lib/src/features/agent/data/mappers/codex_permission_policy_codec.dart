@@ -168,16 +168,35 @@ abstract final class CodexPermissionPolicyCodec {
     );
   }
 
-  /// 从全局配置恢复快照；显式 profile id 原样保留。
+  /// 从全局配置恢复快照。
+  ///
+  /// V2 仅有 [AgentProviderConfig.selectedPermissionOptionId]：按 profile 语义
+  /// 绑定（自定义 id 无损）。V1 遗留 approval/sandbox/profile 字段若仍在内存中
+  /// 则优先显式 profile，否则由 option 展开。
   static AgentPermissionSelectionSnapshot snapshotFromConfig(
     AgentProviderConfig config,
   ) {
-    return AgentPermissionSelectionSnapshot(
-      optionId: config.resolvedPermissionOptionId,
+    final explicitProfile = config.selectedPermissionProfileId?.trim();
+    if (explicitProfile != null && explicitProfile.isNotEmpty) {
+      return snapshotForProfileId(explicitProfile).copyWith(
+        optionId: config.resolvedPermissionOptionId ?? explicitProfile,
+        approvalPolicy: config.selectedApprovalPolicy ?? defaultApprovalPolicy,
+        sandboxPolicy: config.selectedSandboxPolicy ?? defaultSandboxPolicy,
+      );
+    }
+    final optionId = config.resolvedPermissionOptionId?.trim();
+    if (optionId != null && optionId.isNotEmpty) {
+      // V2 optionId 即 Codex 侧不透明 profile / built-in id。
+      return snapshotForProfileId(optionId);
+    }
+    final derived = builtInOptionIdFromPolicies(
       approvalPolicy: config.selectedApprovalPolicy ?? defaultApprovalPolicy,
       sandboxPolicy: config.selectedSandboxPolicy ?? defaultSandboxPolicy,
-      permissionProfileId: config.selectedPermissionProfileId,
     );
+    if (derived != null) {
+      return snapshotForOptionId(derived);
+    }
+    return const AgentPermissionSelectionSnapshot();
   }
 
   /// 无 profile 的旧 approval/sandbox 组合 → 内置 option（迁移输入）。

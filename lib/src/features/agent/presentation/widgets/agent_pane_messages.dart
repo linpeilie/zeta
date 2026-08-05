@@ -697,7 +697,6 @@ class _AgentFinalAnswerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
     return RepaintBoundary(
       child: PanelCard(
         key: ValueKey<String>('agent-final-answer-card-${message.id}'),

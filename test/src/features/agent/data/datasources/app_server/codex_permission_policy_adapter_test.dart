@@ -75,12 +75,9 @@ void main() {
       expect(turn.containsKey('sandboxPolicy'), isFalse);
     });
 
-    test('config snapshot keeps explicit profile id', () {
-      final config = AgentProviderConfig.defaultCodex.copyWith(
-        selectedPermissionOptionId: 'team-safe',
-        selectedPermissionProfileId: 'team-safe',
-        selectedApprovalPolicy: 'on-request',
-        selectedSandboxPolicy: 'workspaceWrite',
+    test('config snapshot keeps explicit profile id from V2 optionId', () {
+      final config = AgentProviderConfig.defaultCodex.withPermissionPreference(
+        'team-safe',
       );
       final snapshot = CodexPermissionPolicyCodec.snapshotFromConfig(config);
       expect(snapshot.permissionProfileId, 'team-safe');

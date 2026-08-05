@@ -58,7 +58,8 @@ void main() {
       final raw =
           jsonDecode(await settingsFile.readAsString()) as Map<String, Object?>;
 
-      expect(raw['version'], 1);
+      expect(raw['version'], AgentProviderSettings.currentVersion);
+      expect(raw['version'], 2);
       expect(raw['activeProviderId'], 'claude');
       expect(await store.load(), isA<AgentProviderSettings>());
       expect((await store.load()).activeProvider.id, 'claude');
@@ -189,20 +190,39 @@ void main() {
     });
 
     test(
-      'decodes and round-trips legacy Cursor settings without migration',
+      'decodes legacy Cursor settings and rewrites as V2 without migration IO',
       () {
-        final legacyCursor = AgentProviderConfig.defaultCursor.copyWith(
-          enabled: true,
-          command: '/legacy/cursor-agent',
-          extra: const <String, Object?>{'legacyMarker': 'keep-me'},
-        );
+        // V1 磁盘形态：旧 Cursor 条目仍解码保留；写出时统一升为 V2。
+        final legacyCursorJson = <String, Object?>{
+          'id': cursorAgentProviderId,
+          'displayName': 'Cursor Agent',
+          'kind': 'cursorAcp',
+          'command': '/legacy/cursor-agent',
+          'arguments': <String>['acp'],
+          'enabled': true,
+          'extra': <String, Object?>{'legacyMarker': 'keep-me'},
+        };
         final original = <String, Object?>{
           'version': 1,
           'activeProviderId': cursorAgentProviderId,
           'providers': <Object?>[
-            AgentProviderConfig.defaultCodex.toJson(),
-            AgentProviderConfig.defaultGrok.toJson(),
-            legacyCursor.toJson(),
+            <String, Object?>{
+              'id': defaultAgentProviderId,
+              'displayName': 'Codex',
+              'kind': 'codexAppServer',
+              'command': 'codex',
+              'arguments': <String>['app-server'],
+              'enabled': true,
+            },
+            <String, Object?>{
+              'id': grokAgentProviderId,
+              'displayName': 'Grok',
+              'kind': 'acp',
+              'command': 'grok',
+              'arguments': <String>['agent', 'stdio'],
+              'enabled': true,
+            },
+            legacyCursorJson,
           ],
         };
 
@@ -218,7 +238,23 @@ void main() {
         expect(cursor.enabled, isTrue);
         expect(cursor.command, '/legacy/cursor-agent');
         expect(cursor.extra['legacyMarker'], 'keep-me');
-        expect(settings.toJson(), original);
+
+        final rewritten = settings.toJson();
+        expect(rewritten['version'], AgentProviderSettings.currentVersion);
+        expect(rewritten['version'], 2);
+        expect(rewritten['activeProviderId'], cursorAgentProviderId);
+        final providers = rewritten['providers'] as List<Object?>;
+        final cursorOut = providers.cast<Map<String, Object?>>().singleWhere(
+          (provider) => provider['id'] == cursorAgentProviderId,
+        );
+        expect(cursorOut['command'], '/legacy/cursor-agent');
+        expect(cursorOut['enabled'], isTrue);
+        expect(cursorOut['extra'], <String, Object?>{
+          'legacyMarker': 'keep-me',
+        });
+        expect(cursorOut.containsKey('selectedPermissionOptionId'), isTrue);
+        expect(cursorOut.containsKey('selectedApprovalPolicy'), isFalse);
+        expect(cursorOut.containsKey('selectedPermissionMode'), isFalse);
       },
     );
 

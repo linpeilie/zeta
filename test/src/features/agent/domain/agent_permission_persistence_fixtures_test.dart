@@ -2,13 +2,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_permission_mode_codec.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
-/// 阶段 0 脱敏持久化 / 协议样例基线。
+/// 权限持久化 / 协议样例基线（阶段 0 + 阶段 5 V2）。
 ///
-/// 这些用例锁定当前 V1 配置形态与 Grok 协议契约，供阶段 5 迁移与阶段 1+
-/// 回归对照。样例全部为合成数据，不读取 ~/.zeta / ~/.grok / ~/.codex。
+/// 样例全部为合成数据，不读取 ~/.zeta / ~/.grok / ~/.codex。
 void main() {
-  group('permission persistence fixtures (phase 0)', () {
-    test('Codex built-in :workspace round-trips V1 fields', () {
+  group('permission persistence fixtures (V2)', () {
+    test('Codex built-in :workspace migrates and writes optionId only', () {
       final json = <String, Object?>{
         'id': 'codex',
         'displayName': 'Codex',
@@ -24,16 +23,16 @@ void main() {
       final config = AgentProviderConfig.tryDecode(json);
       expect(config, isNotNull);
       expect(config!.selectedPermissionOptionId, ':workspace');
-      expect(config.selectedPermissionProfileId, ':workspace');
-      expect(config.selectedApprovalPolicy, 'on-request');
-      expect(config.selectedSandboxPolicy, 'workspaceWrite');
+      expect(config.selectedPermissionProfileId, isNull);
+      expect(config.selectedApprovalPolicy, isNull);
+      expect(config.selectedSandboxPolicy, isNull);
       expect(config.resolvedPermissionOptionId, ':workspace');
 
       final encoded = config.toJson();
       expect(encoded['selectedPermissionOptionId'], ':workspace');
-      expect(encoded['selectedPermissionProfileId'], ':workspace');
-      expect(encoded['selectedApprovalPolicy'], 'on-request');
-      expect(encoded['selectedSandboxPolicy'], 'workspaceWrite');
+      expect(encoded.containsKey('selectedPermissionProfileId'), isFalse);
+      expect(encoded.containsKey('selectedApprovalPolicy'), isFalse);
+      expect(encoded.containsKey('selectedSandboxPolicy'), isFalse);
     });
 
     test(
@@ -52,22 +51,12 @@ void main() {
         };
 
         final config = AgentProviderConfig.tryDecode(json)!;
-        expect(config.selectedPermissionProfileId, 'team-safe');
         expect(config.selectedPermissionOptionId, 'team-safe');
+        expect(config.selectedPermissionProfileId, isNull);
         expect(config.resolvedPermissionOptionId, 'team-safe');
-        // 不得因缺少 ':' 被当成非 profile。
-        expect(config.selectedPermissionProfileId!.startsWith(':'), isFalse);
 
-        final selection = AgentPermissionSelectionSnapshot(
-          optionId: config.resolvedPermissionOptionId,
-          approvalPolicy:
-              AgentPermissionSelectionSnapshot.normalizeApprovalPolicy(
-                config.selectedApprovalPolicy,
-              ),
-          sandboxPolicy:
-              config.selectedSandboxPolicy ??
-              AgentPermissionSelectionSnapshot.defaultSandboxPolicy,
-          permissionProfileId: config.selectedPermissionProfileId,
+        final selection = AgentPermissionSelectionSnapshot.forProfileId(
+          config.resolvedPermissionOptionId!,
         );
         expect(selection.protocolPermissionProfileId, 'team-safe');
         expect(selection.protocolPermissionProfileId, isNot(':workspace'));
@@ -75,7 +64,7 @@ void main() {
     );
 
     test(
-      'Codex legacy approval/sandbox only config still decodes without profile',
+      'Codex legacy approval/sandbox only config migrates to built-in option',
       () {
         final json = <String, Object?>{
           'id': 'codex',
@@ -88,24 +77,11 @@ void main() {
         };
 
         final config = AgentProviderConfig.tryDecode(json)!;
+        expect(config.selectedPermissionOptionId, ':danger-full-access');
         expect(config.selectedPermissionProfileId, isNull);
-        expect(config.selectedPermissionOptionId, isNull);
-        expect(config.selectedApprovalPolicy, 'never');
-        expect(config.selectedSandboxPolicy, 'dangerFullAccess');
-        expect(config.resolvedPermissionOptionId, isNull);
-
-        // 无显式 profile 时，protocolPermissionProfileId 可按策略回落 built-in
-        //（阶段 5 迁移 codec 的输入语义；共享层现状保留该行为）。
-        final selection = AgentPermissionSelectionSnapshot(
-          approvalPolicy:
-              AgentPermissionSelectionSnapshot.normalizeApprovalPolicy(
-                config.selectedApprovalPolicy,
-              ),
-          sandboxPolicy:
-              config.selectedSandboxPolicy ??
-              AgentPermissionSelectionSnapshot.defaultSandboxPolicy,
-        );
-        expect(selection.protocolPermissionProfileId, ':danger-full-access');
+        expect(config.selectedApprovalPolicy, isNull);
+        expect(config.selectedSandboxPolicy, isNull);
+        expect(config.resolvedPermissionOptionId, ':danger-full-access');
       },
     );
 
@@ -137,18 +113,16 @@ void main() {
           'displayName': 'Grok',
           'kind': 'acp',
           'command': 'grok',
-          // 旧字段：tryDecode 回落到 selectedPermissionOptionId。
           'selectedPermissionMode': 'default',
           'enabled': true,
         };
 
         final config = AgentProviderConfig.tryDecode(json)!;
-        expect(config.selectedPermissionOptionId, 'default');
+        expect(config.selectedPermissionOptionId, 'ask');
         expect(
           GrokPermissionModeCodec.parse(config.selectedPermissionOptionId),
           GrokPermissionMode.ask,
         );
-        // catalog 不再暴露 default wire id。
         final catalogIds = GrokPermissionModeCodec.catalogAsOptions()
             .map((o) => o.id)
             .toList();
@@ -205,7 +179,6 @@ void main() {
   });
 
   group('historical defect contracts (would fail before focused fixes)', () {
-    /// 修复前：seed 用 startsWith(':') / preset 猜测会丢掉 team-safe profile。
     test('defect1: custom profile seed must keep team-safe protocol id', () {
       final config = AgentProviderConfig.tryDecode(<String, Object?>{
         'id': 'codex',
@@ -219,26 +192,16 @@ void main() {
         'enabled': true,
       })!;
 
-      // 模拟修复后的 seedFromConfig 语义（显式字段）。
-      final selection = AgentPermissionSelectionSnapshot(
-        optionId: config.resolvedPermissionOptionId,
-        approvalPolicy:
-            AgentPermissionSelectionSnapshot.normalizeApprovalPolicy(
-              config.selectedApprovalPolicy,
-            ),
-        sandboxPolicy:
-            config.selectedSandboxPolicy ??
-            AgentPermissionSelectionSnapshot.defaultSandboxPolicy,
-        permissionProfileId: config.selectedPermissionProfileId,
+      expect(config.resolvedPermissionOptionId, 'team-safe');
+      final selection = AgentPermissionSelectionSnapshot.forProfileId(
+        config.resolvedPermissionOptionId!,
       );
 
       expect(selection.permissionProfileId, 'team-safe');
       expect(selection.protocolPermissionProfileId, 'team-safe');
-      // 修复前错误结果：protocol id 变成 :workspace。
       expect(selection.protocolPermissionProfileId, isNot(':workspace'));
     });
 
-    /// 修复前：forProfileId 整对象替换冲掉已合并的 approval/sandbox。
     test('defect2: settings merge must not rebuild via forProfileId', () {
       var next = const AgentPermissionSelectionSnapshot(
         optionId: 'team-safe',
@@ -247,7 +210,6 @@ void main() {
         permissionProfileId: 'team-safe',
       );
 
-      // 正确路径：同一 next 上 copyWith 合并（修复后）。
       next = next.copyWith(
         approvalPolicy: 'never',
         sandboxPolicy: 'dangerFullAccess',
@@ -261,15 +223,12 @@ void main() {
       expect(next.sandboxPolicy, 'dangerFullAccess');
       expect(next.permissionProfileId, 'team-safe');
 
-      // 错误路径对照：forProfileId 会把策略重置为默认 on-request/workspaceWrite。
       final broken = AgentPermissionSelectionSnapshot.forProfileId('team-safe');
       expect(broken.approvalPolicy, 'on-request');
       expect(broken.sandboxPolicy, 'workspaceWrite');
-      // 因此 settings 路径禁止用 forProfileId 替换已合并的 next。
       expect(next.approvalPolicy, isNot(broken.approvalPolicy));
     });
 
-    /// 修复前：catalog 同时暴露 default 与 ask，session meta 无法区分。
     test(
       'defect3: catalog has three modes and default aliases to ask meta',
       () {
@@ -291,8 +250,6 @@ void main() {
     );
   });
 }
-
-// --- 脱敏协议 fixture（与 plan/phase0 文档一致）---
 
 const _fixtureSessionMetaAsk = <String, Object?>{'clientIdentifier': 'zeta'};
 

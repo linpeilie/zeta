@@ -293,31 +293,18 @@ class ActiveAgentProviderController extends ChangeNotifier {
     _notify();
   }
 
-  /// 持久化权限 optionId（provider 默认偏好）。
-  ///
-  /// V1 仍兼容写入 profileId=optionId，供 Codex 自定义 profile 迁移期 round-trip；
-  /// 阶段 5 将收敛为仅写 selectedPermissionOptionId。
+  /// 持久化权限 optionId（V2 唯一权限真源）。
   Future<void> persistPermissionOptionId(String optionId) async {
     final trimmed = optionId.trim();
     if (trimmed.isEmpty) {
       return;
     }
     final providerId = activeProviderId;
-    final supportsProfile = capabilitiesForProviderId(
-      providerId,
-    ).supportsPermissionProfileSelection;
     final updatedProviders = _settings.providers.map((provider) {
       if (provider.id != providerId) {
         return provider;
       }
-      // Codex：同步 profileId 以便自定义 profile round-trip；Grok 只写 optionId。
-      if (supportsProfile) {
-        return provider.copyWith(
-          selectedPermissionOptionId: trimmed,
-          selectedPermissionProfileId: trimmed,
-        );
-      }
-      return provider.copyWith(selectedPermissionOptionId: trimmed);
+      return provider.withPermissionPreference(trimmed);
     }).toList();
     _settings = AgentProviderSettings(
       providers: List<AgentProviderConfig>.unmodifiable(updatedProviders),
@@ -329,6 +316,30 @@ class ActiveAgentProviderController extends ChangeNotifier {
       _log.fine('Persisted permission option for provider $providerId');
     } catch (error, stackTrace) {
       _log.warning('Could not persist permission option', error, stackTrace);
+      rethrow;
+    }
+    _notify();
+  }
+
+  /// 清除当前 provider 的权限偏好（写回 null optionId）。
+  Future<void> clearPermissionPreference() async {
+    final providerId = activeProviderId;
+    final updatedProviders = _settings.providers.map((provider) {
+      if (provider.id != providerId) {
+        return provider;
+      }
+      return provider.withPermissionPreference(null);
+    }).toList();
+    _settings = AgentProviderSettings(
+      providers: List<AgentProviderConfig>.unmodifiable(updatedProviders),
+      activeProviderId: _settings.activeProviderId,
+    );
+    _applyRuntimeSelection();
+    try {
+      await configStore.save(_settings);
+      _log.fine('Cleared permission preference for provider $providerId');
+    } catch (error, stackTrace) {
+      _log.warning('Could not clear permission preference', error, stackTrace);
       rethrow;
     }
     _notify();

@@ -1,6 +1,9 @@
 import 'package:zeta/src/features/agent/domain/agent_model_codec.dart';
 import 'package:zeta/src/features/agent/domain/agent_model_selection_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_permission_selection_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_permission_preference_migration.dart';
+
+/// [AgentProviderConfig.copyWith] 中「未传参」与「显式传 null」的区分哨兵。
+const Object agentProviderConfigUnset = Object();
 
 /// Agent 后端的类型。
 ///
@@ -87,25 +90,26 @@ class AgentProviderConfig {
   /// 按模型保存的最近一次有效配置。
   final Map<String, AgentModelPreference> modelPreferences;
 
-  /// 用户选择的审批策略（`AskForApproval` 字符串变体）。
+  /// V1 遗留审批策略（仅解码迁移输入；V2 不再写出）。
   final String? selectedApprovalPolicy;
 
-  /// 用户选择的沙箱策略（域内 camelCase）。
+  /// V1 遗留沙箱策略（仅解码迁移输入；V2 不再写出）。
   final String? selectedSandboxPolicy;
 
-  /// 用户选择的 permission profile id（可选；Codex 兼容字段）。
+  /// V1 遗留 permission profile id（仅解码迁移输入；V2 不再写出）。
   final String? selectedPermissionProfileId;
 
-  /// 中立权限选项 id（统一主键：Codex profile 或 Grok mode 等）。
+  /// 中立权限选项 id（V2 唯一权限真源：Codex profile 或 Grok mode 等）。
   ///
-  /// 读取时若为空，会回落 [selectedPermissionProfileId] 或旧
-  /// `selectedPermissionMode` 字段（见 [tryDecode]）。
+  /// V1 读取时由 [AgentPermissionPreferenceMigration] 从旧字段推导。
   final String? selectedPermissionOptionId;
 
   /// 是否在配置列表中启用。
   final bool enabled;
 
-  /// 解析后的权限选项 id（option → profile 兼容回落）。
+  /// 解析后的权限选项 id（V2 以 [selectedPermissionOptionId] 为准）。
+  ///
+  /// 若内存中仍带 V1 字段（测试/未完整迁移对象），再做一次轻量回落。
   String? get resolvedPermissionOptionId {
     final option = selectedPermissionOptionId?.trim();
     if (option != null && option.isNotEmpty) {
@@ -164,7 +168,10 @@ class AgentProviderConfig {
     enabled: false,
   );
 
-  /// 复制配置并覆盖部分字段，主要用于持久化用户在输入框中的模型选择。
+  /// 复制配置并覆盖部分字段。
+  ///
+  /// 权限偏好请优先用 [withPermissionPreference] 以支持显式清空；
+  /// [selectedPermissionOptionId] 使用 [agentProviderConfigUnset] 区分未传与 null。
   AgentProviderConfig copyWith({
     String? id,
     String? displayName,
@@ -177,10 +184,10 @@ class AgentProviderConfig {
     String? selectedReasoningEffort,
     String? selectedServiceTier,
     Map<String, AgentModelPreference>? modelPreferences,
-    String? selectedApprovalPolicy,
-    String? selectedSandboxPolicy,
-    String? selectedPermissionProfileId,
-    String? selectedPermissionOptionId,
+    Object? selectedApprovalPolicy = agentProviderConfigUnset,
+    Object? selectedSandboxPolicy = agentProviderConfigUnset,
+    Object? selectedPermissionProfileId = agentProviderConfigUnset,
+    Object? selectedPermissionOptionId = agentProviderConfigUnset,
     bool? enabled,
     Map<String, Object?>? extra,
   }) {
@@ -198,15 +205,50 @@ class AgentProviderConfig {
       selectedServiceTier: selectedServiceTier ?? this.selectedServiceTier,
       modelPreferences: modelPreferences ?? this.modelPreferences,
       selectedApprovalPolicy:
-          selectedApprovalPolicy ?? this.selectedApprovalPolicy,
+          identical(selectedApprovalPolicy, agentProviderConfigUnset)
+          ? this.selectedApprovalPolicy
+          : selectedApprovalPolicy as String?,
       selectedSandboxPolicy:
-          selectedSandboxPolicy ?? this.selectedSandboxPolicy,
+          identical(selectedSandboxPolicy, agentProviderConfigUnset)
+          ? this.selectedSandboxPolicy
+          : selectedSandboxPolicy as String?,
       selectedPermissionProfileId:
-          selectedPermissionProfileId ?? this.selectedPermissionProfileId,
+          identical(selectedPermissionProfileId, agentProviderConfigUnset)
+          ? this.selectedPermissionProfileId
+          : selectedPermissionProfileId as String?,
       selectedPermissionOptionId:
-          selectedPermissionOptionId ?? this.selectedPermissionOptionId,
+          identical(selectedPermissionOptionId, agentProviderConfigUnset)
+          ? this.selectedPermissionOptionId
+          : selectedPermissionOptionId as String?,
       enabled: enabled ?? this.enabled,
       extra: extra ?? this.extra,
+    );
+  }
+
+  /// 原子设置权限偏好为单一 optionId，并清空全部 V1 权限遗留字段。
+  ///
+  /// [optionId] 为 null 或空白时表示清除用户偏好（回落 provider 默认）。
+  AgentProviderConfig withPermissionPreference(String? optionId) {
+    final trimmed = optionId?.trim();
+    final normalized = (trimmed == null || trimmed.isEmpty) ? null : trimmed;
+    return AgentProviderConfig(
+      id: id,
+      displayName: displayName,
+      kind: kind,
+      command: command,
+      arguments: arguments,
+      environment: environment,
+      defaultModel: defaultModel,
+      selectedModel: selectedModel,
+      selectedReasoningEffort: selectedReasoningEffort,
+      selectedServiceTier: selectedServiceTier,
+      modelPreferences: modelPreferences,
+      selectedApprovalPolicy: null,
+      selectedSandboxPolicy: null,
+      selectedPermissionProfileId: null,
+      selectedPermissionOptionId: normalized,
+      enabled: enabled,
+      extra: extra,
     );
   }
 
@@ -241,6 +283,7 @@ class AgentProviderConfig {
     );
   }
 
+  /// 序列化为 V2 白名单字段；权限只写 [selectedPermissionOptionId]。
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'id': id,
@@ -257,19 +300,18 @@ class AgentProviderConfig {
         for (final entry in modelPreferences.entries)
           entry.key: entry.value.toJson(),
       },
-      'selectedApprovalPolicy': selectedApprovalPolicy,
-      'selectedSandboxPolicy': selectedSandboxPolicy,
-      'selectedPermissionProfileId': selectedPermissionProfileId,
+      // V2：不再写出 selectedApprovalPolicy / selectedSandboxPolicy /
+      // selectedPermissionProfileId / selectedPermissionMode。
       'selectedPermissionOptionId': selectedPermissionOptionId,
       'enabled': enabled,
       'extra': extra,
     };
   }
 
-  /// 从持久化 JSON 宽容解码 provider 配置。
+  /// 从持久化 JSON 宽容解码 provider 配置（同时接受 V1/V2 权限字段）。
   ///
-  /// 解码失败返回 `null`，调用方可以回退到默认 provider；未知字段不会阻断加载，
-  /// 后续协议扩展可放在 [extra] 中。
+  /// 解码失败返回 `null`，调用方可以回退到默认 provider；未知字段不会阻断加载。
+  /// V1 旧权限字段只作迁移输入，结果中仅保留归一化后的 optionId。
   static AgentProviderConfig? tryDecode(Object? value) {
     final map = decodeObjectMap(value);
     if (map.isEmpty) {
@@ -286,6 +328,23 @@ class AgentProviderConfig {
       return null;
     }
 
+    final optionId = AgentPermissionPreferenceMigration.resolveOptionId(
+      kindName: kind.name,
+      selectedPermissionOptionId: decodeOptionalString(
+        map['selectedPermissionOptionId'],
+      ),
+      selectedPermissionProfileId: decodeOptionalString(
+        map['selectedPermissionProfileId'],
+      ),
+      selectedPermissionMode: decodeOptionalString(
+        map['selectedPermissionMode'],
+      ),
+      selectedApprovalPolicy: decodeOptionalString(
+        map['selectedApprovalPolicy'],
+      ),
+      selectedSandboxPolicy: decodeOptionalString(map['selectedSandboxPolicy']),
+    );
+
     return AgentProviderConfig(
       id: id,
       displayName: normalizeDisplayName(id, displayName),
@@ -300,19 +359,11 @@ class AgentProviderConfig {
       ),
       selectedServiceTier: decodeOptionalString(map['selectedServiceTier']),
       modelPreferences: _decodeModelPreferences(map['modelPreferences']),
-      selectedApprovalPolicy:
-          AgentPermissionSelectionSnapshot.normalizePersistedApprovalPolicy(
-            decodeOptionalString(map['selectedApprovalPolicy']),
-          ),
-      selectedSandboxPolicy: decodeOptionalString(map['selectedSandboxPolicy']),
-      selectedPermissionProfileId: decodeOptionalString(
-        map['selectedPermissionProfileId'],
-      ),
-      // 统一 optionId；兼容旧 selectedPermissionMode / profile 字段。
-      selectedPermissionOptionId:
-          decodeOptionalString(map['selectedPermissionOptionId']) ??
-          decodeOptionalString(map['selectedPermissionMode']) ??
-          decodeOptionalString(map['selectedPermissionProfileId']),
+      // V1 字段不进入运行时真源。
+      selectedApprovalPolicy: null,
+      selectedSandboxPolicy: null,
+      selectedPermissionProfileId: null,
+      selectedPermissionOptionId: optionId,
       enabled: map['enabled'] is bool ? map['enabled'] as bool : true,
       extra: decodeObjectMap(map['extra']),
     );
@@ -378,21 +429,28 @@ class AgentProviderSettings {
     );
   }
 
+  /// 当前写入的 settings 结构版本（V2：权限仅 optionId）。
+  static const int currentVersion = 2;
+
+  /// 可解码的 settings 版本（V1 权限多字段 / V2 单一 optionId）。
+  static const Set<int> supportedVersions = <int>{1, 2};
+
   Map<String, Object?> toJson() {
     return <String, Object?>{
-      'version': 1,
+      'version': currentVersion,
       'providers': providers.map((provider) => provider.toJson()).toList(),
       'activeProviderId': activeProviderId,
     };
   }
 
-  /// 读取版本化配置。
+  /// 读取版本化配置（宽容接受 V1/V2）。
   ///
-  /// 配置缺失、版本不匹配或内容损坏时都返回默认设置，保证 UI 启动不崩溃。
+  /// 配置缺失、版本不支持或内容损坏时都返回默认设置，保证 UI 启动不崩溃。
   /// 旧 Cursor 配置仍会按原字段解码，但不会再自动加入新的产品目录。
   static AgentProviderSettings tryDecode(Object? value) {
     final map = decodeObjectMap(value);
-    if (map['version'] != 1) {
+    final version = map['version'];
+    if (version is! int || !supportedVersions.contains(version)) {
       return const AgentProviderSettings();
     }
 
