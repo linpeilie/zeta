@@ -3753,7 +3753,8 @@ void main() {
         'effort': 'high',
         'serviceTier': 'priority',
         'approvalPolicy': 'never',
-        'sandboxPolicy': <String, Object?>{'type': 'dangerFullAccess'},
+        // Full access 已关联内置 profile，优先下发 permissions。
+        'permissions': ':danger-full-access',
         'clientUserMessageId': 'client-legacy',
       });
     });
@@ -3934,7 +3935,8 @@ void main() {
         final threadParams =
             peer.requestParams[threadStartIndex]! as Map<String, Object?>;
         expect(threadParams['approvalPolicy'], 'never');
-        expect(threadParams['sandbox'], 'danger-full-access');
+        expect(threadParams['permissions'], ':danger-full-access');
+        expect(threadParams.containsKey('sandbox'), isFalse);
 
         await provider.sendMessage(
           session: session,
@@ -3948,9 +3950,8 @@ void main() {
         final params =
             peer.requestParams[turnStartIndex]! as Map<String, Object?>;
         expect(params['approvalPolicy'], 'never');
-        expect(params['sandboxPolicy'], <String, Object?>{
-          'type': 'dangerFullAccess',
-        });
+        expect(params['permissions'], ':danger-full-access');
+        expect(params.containsKey('sandboxPolicy'), isFalse);
         expect(params['clientUserMessageId'], 'client-msg-1');
       },
     );

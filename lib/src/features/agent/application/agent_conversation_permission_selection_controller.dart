@@ -19,9 +19,29 @@ class AgentConversationPermissionSelectionController {
 
   AgentPermissionSelection get selection => _selection;
 
-  List<AgentPermissionProfileSummary> get profiles => _profiles;
+  List<AgentPermissionProfileSummary> get profiles =>
+      List<AgentPermissionProfileSummary>.unmodifiable(_profiles);
 
-  String get displayLabel => _selection.displayLabel;
+  /// 当前选择对应的 profile id（优先显式 id，否则内置预设回填）。
+  String? get selectedProfileId => _selection.protocolPermissionProfileId;
+
+  /// Composer 展示文案：list 命中时用 profile.displayName（含预设回落）。
+  String get displayLabel {
+    final profileId = selectedProfileId;
+    if (profileId != null) {
+      for (final profile in _profiles) {
+        if (profile.id == profileId) {
+          return profile.displayName;
+        }
+      }
+      // list 尚未返回时，仍用内置预设 label 覆盖纯 id。
+      final preset = AgentPermissionSelection.presetForProfileId(profileId);
+      if (preset != null) {
+        return preset.label;
+      }
+    }
+    return _selection.displayLabel;
+  }
 
   void bindProvider(AgentProvider provider) {
     _provider = provider;
@@ -40,6 +60,8 @@ class AgentConversationPermissionSelectionController {
   }
 
   void seedFromConfig(AgentProviderConfig config) {
+    // provider 尚未 bind 时也先保留持久化的 profile id；真正不支持时在
+    // [bindProvider] 再清除，避免 list 驱动的选择在预加载阶段丢失。
     _selection = AgentPermissionSelection(
       approvalPolicy: AgentPermissionSelection.normalizeApprovalPolicy(
         config.selectedApprovalPolicy,
@@ -47,14 +69,31 @@ class AgentConversationPermissionSelectionController {
       sandboxPolicy:
           config.selectedSandboxPolicy ??
           AgentPermissionSelection.defaultSandboxPolicy,
-      permissionProfileId:
-          _provider?.capabilities.supportsPermissionProfileSelection == true
-          ? config.selectedPermissionProfileId
-          : null,
+      permissionProfileId: config.selectedPermissionProfileId,
     );
+    if (_provider != null &&
+        !_provider!.capabilities.supportsPermissionProfileSelection &&
+        _selection.permissionProfileId != null) {
+      _selection = _selection.copyWith(clearPermissionProfileId: true);
+    }
     _provider?.updatePermissionSelection(_selection);
   }
 
+  /// 选择 `permissionProfile/list` 中的一项。
+  Future<void> selectProfile(AgentPermissionProfileSummary profile) async {
+    if (!profile.allowed) {
+      return;
+    }
+    final supportsProfile =
+        _provider?.capabilities.supportsPermissionProfileSelection == true;
+    final next = AgentPermissionSelection.forProfileId(profile.id);
+    _selection = supportsProfile
+        ? next
+        : next.copyWith(clearPermissionProfileId: true);
+    await _syncSelection();
+  }
+
+  /// 兼容旧预设入口；新 UI 应走 [selectProfile]。
   Future<void> selectPreset(AgentPermissionPreset preset) async {
     _selection = AgentPermissionSelection(
       approvalPolicy: preset.approvalPolicy,

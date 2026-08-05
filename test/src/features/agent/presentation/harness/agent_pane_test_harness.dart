@@ -85,6 +85,30 @@ class AgentPaneTestApp extends StatelessWidget {
   }
 }
 
+/// Composer 权限下拉默认测试数据（模拟 `permissionProfile/list`）。
+const List<AgentPermissionProfileSummary> agentPaneDefaultPermissionProfiles =
+    <AgentPermissionProfileSummary>[
+      AgentPermissionProfileSummary(
+        id: ':read-only',
+        allowed: true,
+        description: 'Read only',
+      ),
+      AgentPermissionProfileSummary(
+        id: ':workspace',
+        allowed: true,
+        description: 'Workspace write',
+      ),
+      AgentPermissionProfileSummary(
+        id: ':danger-full-access',
+        allowed: true,
+      ),
+      AgentPermissionProfileSummary(
+        id: ':team-safe',
+        allowed: false,
+        description: 'Team safe',
+      ),
+    ];
+
 const AgentModelList agentPaneModelConfigList = AgentModelList(
   models: <AgentModelInfo>[
     AgentModelInfo(
@@ -342,6 +366,7 @@ class AgentPaneFakeProvider
     this.models = const AgentModelList(models: <AgentModelInfo>[]),
     this.canSteerTurn = true,
     this.historyLoadGate,
+    this.permissionProfiles = agentPaneDefaultPermissionProfiles,
   }) : _historySnapshotsByThread = Map<String, AgentThreadHistorySnapshot>.from(
          historySnapshotsByThread,
        );
@@ -349,6 +374,9 @@ class AgentPaneFakeProvider
   final Map<String, AgentThreadHistorySnapshot> _historySnapshotsByThread;
   final AgentModelList models;
   final bool canSteerTurn;
+
+  /// `permissionProfile/list` 测试数据；默认覆盖常见内置 profile。
+  final List<AgentPermissionProfileSummary> permissionProfiles;
 
   /// 非空时 [readThreadHistory] 会先 await 该 Future，便于测试加载态 UI。
   final Future<void>? historyLoadGate;
@@ -429,7 +457,7 @@ class AgentPaneFakeProvider
 
   @override
   Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
-    return const <AgentPermissionProfileSummary>[];
+    return permissionProfiles;
   }
 
   @override

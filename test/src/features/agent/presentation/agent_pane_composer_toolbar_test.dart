@@ -847,32 +847,36 @@ void main() {
         expect(permissionPopoverPanel.borderRadius, IdeRadius.allSmall);
         expect(permissionPopoverPanel.boxShadow, isEmpty);
         expect(
-          find.byType(sf.SelectPopup<AgentPermissionPreset>),
+          find.byType(sf.SelectPopup<AgentPermissionProfileSummary>),
           findsOneWidget,
         );
         final selectedOption = tester
-            .widget<sf.SelectItemButton<AgentPermissionPreset>>(
-              find.byKey(const ValueKey('agent-permission-preset-workspace')),
+            .widget<sf.SelectItemButton<AgentPermissionProfileSummary>>(
+              find.byKey(const ValueKey('agent-permission-profile-:workspace')),
             );
-        expect(selectedOption.value.id, 'workspace');
+        expect(selectedOption.value.id, ':workspace');
         expect(selectedOption.enabled, isNull);
         expect(
           find.descendant(
-            of: find.byKey(const ValueKey('agent-permission-preset-workspace')),
-            matching: find.text('Ask first'),
+            of: find.byKey(
+              const ValueKey('agent-permission-profile-:workspace'),
+            ),
+            matching: find.text('Workspace write'),
           ),
-          findsOneWidget,
+          findsWidgets,
         );
+        expect(find.text('Ask first'), findsNothing);
 
         await tester.tap(
-          find.byKey(const ValueKey('agent-permission-preset-fullAccess')),
+          find.byKey(const ValueKey('agent-permission-profile-:read-only')),
         );
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
 
-        expect(viewModel.permissionSelection.matchedPresetId, 'fullAccess');
+        expect(viewModel.permissionSelection.permissionProfileId, ':read-only');
+        expect(viewModel.permissionSelection.matchedPresetId, 'readOnly');
         expect(popover, findsNothing);
-        expect(find.text('Full access'), findsOneWidget);
+        expect(find.text('Read only'), findsOneWidget);
         expect(
           FocusManager.instance.primaryFocus?.debugLabel,
           'agent-permission-policy-trigger',

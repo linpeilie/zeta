@@ -1196,6 +1196,19 @@ class AgentConversationViewModel {
   Future<bool> selectReasoningEffort(String? effort) =>
       _modelSelectionController.selectReasoningEffort(effort);
 
+  Future<void> selectPermissionProfile(
+    AgentPermissionProfileSummary profile,
+  ) async {
+    await _permissionSelectionController.selectProfile(profile);
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{AgentUiRegion.composer},
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
+  }
+
+  /// 兼容旧预设入口；Composer 已改走 [selectPermissionProfile]。
   Future<void> selectPermissionPreset(AgentPermissionPreset preset) async {
     await _permissionSelectionController.selectPreset(preset);
     _publishUiChanges(
@@ -3487,7 +3500,9 @@ class AgentConversationViewModel {
       modelConfigState: modelConfigUiState,
       showPermissionPolicy: showPermissionPolicy,
       permissionPolicyLabel: permissionPolicyLabel,
-      selectedPermissionPresetId: permissionSelection.matchedPresetId,
+      permissionProfiles: _permissionSelectionController.profiles,
+      selectedPermissionProfileId:
+          _permissionSelectionController.selectedProfileId,
       sessionConfigOptions: sessionConfigOptions,
     );
   }

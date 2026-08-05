@@ -32,8 +32,8 @@ class _AgentComposer extends StatelessWidget {
     required this.modelConfigState,
     required this.showPermissionPolicy,
     required this.permissionPolicyLabel,
-    required this.permissionPresets,
-    required this.selectedPermissionPresetId,
+    required this.permissionProfiles,
+    required this.selectedPermissionProfileId,
     required this.sessionConfigOptions,
     required this.onSelectModel,
     required this.onSelectReasoningEffort,
@@ -41,7 +41,7 @@ class _AgentComposer extends StatelessWidget {
     required this.onResolveModelCompatibility,
     required this.onRetryModelConfiguration,
     required this.onCloseModelConfiguration,
-    required this.onSelectPermissionPreset,
+    required this.onSelectPermissionProfile,
     required this.onSelectSessionConfigOption,
     required this.onOpenMentionPicker,
     required this.onInsertSkill,
@@ -90,11 +90,11 @@ class _AgentComposer extends StatelessWidget {
   /// 策略按钮展示文案。
   final String permissionPolicyLabel;
 
-  /// 可选策略预设。
-  final List<AgentPermissionPreset> permissionPresets;
+  /// 来自 `permissionProfile/list` 的可选 profile。
+  final List<AgentPermissionProfileSummary> permissionProfiles;
 
-  /// 当前匹配的预设 id。
-  final String? selectedPermissionPresetId;
+  /// 当前选中的 permission profile id。
+  final String? selectedPermissionProfileId;
 
   /// 当前 session 由 provider 动态下发的配置项。
   final List<AgentSessionConfigOption> sessionConfigOptions;
@@ -105,7 +105,7 @@ class _AgentComposer extends StatelessWidget {
   final Future<bool> Function() onResolveModelCompatibility;
   final Future<bool> Function() onRetryModelConfiguration;
   final VoidCallback onCloseModelConfiguration;
-  final ValueChanged<AgentPermissionPreset> onSelectPermissionPreset;
+  final ValueChanged<AgentPermissionProfileSummary> onSelectPermissionProfile;
   final void Function(String configId, Object value)
   onSelectSessionConfigOption;
 
@@ -172,9 +172,9 @@ class _AgentComposer extends StatelessWidget {
       addSelector(
         _PermissionPolicyButton(
           label: permissionPolicyLabel,
-          presets: permissionPresets,
-          selectedPresetId: selectedPermissionPresetId,
-          onSelect: onSelectPermissionPreset,
+          profiles: permissionProfiles,
+          selectedProfileId: selectedPermissionProfileId,
+          onSelect: onSelectPermissionProfile,
         ),
       );
     }
@@ -1248,19 +1248,19 @@ IconData _sessionConfigIcon(String? category) {
   };
 }
 
-/// 审批/沙箱策略预设选择按钮。
+/// 审批/沙箱策略：选项来自 `permissionProfile/list`，使用 Composer 共用 Popover 选择器。
 class _PermissionPolicyButton extends StatefulWidget {
   const _PermissionPolicyButton({
     required this.label,
-    required this.presets,
-    required this.selectedPresetId,
+    required this.profiles,
+    required this.selectedProfileId,
     required this.onSelect,
   });
 
   final String label;
-  final List<AgentPermissionPreset> presets;
-  final String? selectedPresetId;
-  final ValueChanged<AgentPermissionPreset> onSelect;
+  final List<AgentPermissionProfileSummary> profiles;
+  final String? selectedProfileId;
+  final ValueChanged<AgentPermissionProfileSummary> onSelect;
 
   @override
   State<_PermissionPolicyButton> createState() =>
@@ -1290,8 +1290,8 @@ class _PermissionPolicyButtonState extends State<_PermissionPolicyButton> {
   void didUpdateWidget(covariant _PermissionPolicyButton oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_popoverController.isOpen &&
-        (oldWidget.selectedPresetId != widget.selectedPresetId ||
-            widget.presets.isEmpty)) {
+        (oldWidget.selectedProfileId != widget.selectedProfileId ||
+            widget.profiles.isEmpty)) {
       final entry = _popoverController.handle;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -1309,7 +1309,7 @@ class _PermissionPolicyButtonState extends State<_PermissionPolicyButton> {
   }
 
   void _togglePopover() {
-    if (!_popoverController.isOpen && widget.presets.isEmpty) {
+    if (!_popoverController.isOpen && widget.profiles.isEmpty) {
       return;
     }
     _popoverController.toggle(
@@ -1319,21 +1319,21 @@ class _PermissionPolicyButtonState extends State<_PermissionPolicyButton> {
       builder: (context, layout) => _PermissionPolicyPopover(
         width: layout.width,
         maxHeight: layout.maxHeight,
-        presets: widget.presets,
-        selectedPresetId: widget.selectedPresetId,
-        onSelect: _selectPreset,
+        profiles: widget.profiles,
+        selectedProfileId: widget.selectedProfileId,
+        onSelect: _selectProfile,
       ),
     );
   }
 
-  void _selectPreset(AgentPermissionPreset preset) {
-    widget.onSelect(preset);
+  void _selectProfile(AgentPermissionProfileSummary profile) {
+    widget.onSelect(profile);
   }
 
   String get _displayLabel {
-    for (final preset in widget.presets) {
-      if (preset.id == widget.selectedPresetId) {
-        return preset.label;
+    for (final profile in widget.profiles) {
+      if (profile.id == widget.selectedProfileId) {
+        return profile.displayName;
       }
     }
     return widget.label;
@@ -1351,7 +1351,7 @@ class _PermissionPolicyButtonState extends State<_PermissionPolicyButton> {
       semanticLabel: '$displayLabel，审批与沙箱',
       open: open,
       focusNode: _triggerFocusNode,
-      onPressed: widget.presets.isEmpty ? null : _togglePopover,
+      onPressed: widget.profiles.isEmpty ? null : _togglePopover,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1392,23 +1392,23 @@ class _PermissionPolicyPopover extends StatelessWidget {
   const _PermissionPolicyPopover({
     required this.width,
     required this.maxHeight,
-    required this.presets,
-    required this.selectedPresetId,
+    required this.profiles,
+    required this.selectedProfileId,
     required this.onSelect,
   });
 
   final double width;
   final double maxHeight;
-  final List<AgentPermissionPreset> presets;
-  final String? selectedPresetId;
-  final ValueChanged<AgentPermissionPreset> onSelect;
+  final List<AgentPermissionProfileSummary> profiles;
+  final String? selectedProfileId;
+  final ValueChanged<AgentPermissionProfileSummary> onSelect;
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final selectedPreset = presets
-        .where((preset) => preset.id == selectedPresetId)
+    final selectedProfile = profiles
+        .where((profile) => profile.id == selectedProfileId)
         .firstOrNull;
     return Semantics(
       container: true,
@@ -1420,75 +1420,39 @@ class _PermissionPolicyPopover extends StatelessWidget {
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: maxHeight),
           child: _ComposerSelectorPanel(
-            child: _ComposerSelectPopup<AgentPermissionPreset>(
-              value: selectedPreset,
-              onChanged: (preset, selected) {
-                // 保持旧行为：点击当前预设也先通知业务层，再由 Select 关层。
-                onSelect(preset);
-                return true;
+            child: _ComposerSelectPopup<AgentPermissionProfileSummary>(
+              value: selectedProfile,
+              onChanged: (profile, selected) {
+                // 保持旧行为：点击当前项也先通知业务层，再由 Select 关层。
+                if (profile.allowed) {
+                  onSelect(profile);
+                }
+                return profile.allowed;
               },
               items: <Widget>[
-                SizedBox(
-                  height: 28,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: IdeSpacing.space8,
-                    ),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        '审批与沙箱',
-                        style: textStyles.bodySmall.copyWith(
-                          color: colors.textTertiary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: colors.borderSubtle.withValues(alpha: 0.6),
-                ),
-                for (final preset in presets)
-                  sf.SelectItemButton<AgentPermissionPreset>(
+                for (final profile in profiles)
+                  sf.SelectItemButton<AgentPermissionProfileSummary>(
                     key: ValueKey<String>(
-                      'agent-permission-preset-${preset.id}',
+                      'agent-permission-profile-${profile.id}',
                     ),
-                    value: preset,
+                    value: profile,
+                    enabled: profile.allowed ? null : false,
                     child: Semantics(
                       label:
-                          '${preset.label}，'
-                          '${AgentPermissionSelection.approvalPolicyDisplayLabel(preset.approvalPolicy)}'
-                          '${preset.id == selectedPresetId ? '，已选择' : ''}',
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            preset.label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: textStyles.bodySmall.copyWith(
-                              color: colors.textPrimary,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          Text(
-                            AgentPermissionSelection.approvalPolicyDisplayLabel(
-                              preset.approvalPolicy,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: textStyles.bodySmall.copyWith(
-                              color: colors.textTertiary,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
+                          '${profile.displayName}'
+                          '${profile.allowed ? '' : '，不可用'}'
+                          '${profile.id == selectedProfileId ? '，已选择' : ''}',
+                      child: Text(
+                        profile.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textStyles.bodySmall.copyWith(
+                          color: profile.allowed
+                              ? colors.textPrimary
+                              : colors.textTertiary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ),

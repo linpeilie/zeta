@@ -938,8 +938,8 @@ class _AgentComposerSection extends StatelessWidget {
                 modelConfigState: state.modelConfigState,
                 showPermissionPolicy: state.showPermissionPolicy,
                 permissionPolicyLabel: state.permissionPolicyLabel,
-                permissionPresets: AgentPermissionSelection.presets,
-                selectedPermissionPresetId: state.selectedPermissionPresetId,
+                permissionProfiles: state.permissionProfiles,
+                selectedPermissionProfileId: state.selectedPermissionProfileId,
                 sessionConfigOptions: state.sessionConfigOptions,
                 onSelectModel: viewModel.selectModel,
                 onSelectReasoningEffort: viewModel.selectReasoningEffort,
@@ -950,7 +950,7 @@ class _AgentComposerSection extends StatelessWidget {
                     viewModel.retryModelConfigurationSave,
                 onCloseModelConfiguration:
                     viewModel.clearModelConfigurationTransientState,
-                onSelectPermissionPreset: viewModel.selectPermissionPreset,
+                onSelectPermissionProfile: viewModel.selectPermissionProfile,
                 onSelectSessionConfigOption:
                     viewModel.selectSessionConfigOption,
                 onOpenMentionPicker: onOpenMentionPicker,

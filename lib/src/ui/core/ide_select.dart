@@ -10,13 +10,24 @@ import 'ide_text_styles.dart';
 @immutable
 class IdeSelectOption<T> {
   /// 创建一个值 + 展示文案的选项。
-  const IdeSelectOption(this.value, this.label);
+  const IdeSelectOption(
+    this.value,
+    this.label, {
+    this.enabled = true,
+    this.key,
+  });
 
   /// 选中后回传的业务值。
   final T value;
 
   /// 触发器与下拉项显示的文案。
   final String label;
+
+  /// 是否允许选择；`false` 时在弹层中禁用该项。
+  final bool enabled;
+
+  /// 选项 Widget 稳定 key（测试与状态保留）。
+  final Key? key;
 }
 
 /// 统一 IDE 紧凑下拉选择器。
@@ -108,8 +119,19 @@ class IdeSelect<T> extends StatelessWidget {
           children: [
             for (final option in options)
               sf.SelectItemButton(
+                key: option.key,
                 value: option.value,
-                child: Text(option.label, style: labelStyle),
+                enabled: option.enabled ? null : false,
+                child: Text(
+                  option.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: labelStyle.copyWith(
+                    color: option.enabled
+                        ? labelStyle.color
+                        : colors.textTertiary,
+                  ),
+                ),
               ),
           ],
         ),

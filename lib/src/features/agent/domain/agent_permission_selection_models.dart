@@ -14,6 +14,53 @@ class AgentPermissionProfileSummary {
 
   /// 可选的用户可见说明。
   final String? description;
+
+  /// 与本 profile id 关联的内置 Composer 预设（若有）。
+  AgentPermissionPreset? get matchedPreset =>
+      AgentPermissionSelection.presetForProfileId(id);
+
+  /// Composer / 触发器展示名。
+  ///
+  /// 优先级：服务端 description → 内置预设 label → 去掉前导 `:` 的 id。
+  /// Codex 当前 list 常不返回 description，因此已知内置 id 回落到旧预设文案。
+  String get displayName {
+    final trimmed = description?.trim();
+    if (trimmed != null && trimmed.isNotEmpty) {
+      return trimmed;
+    }
+    final preset = matchedPreset;
+    if (preset != null) {
+      return preset.label;
+    }
+    final rawId = id.trim();
+    if (rawId.startsWith(':') && rawId.length > 1) {
+      return rawId.substring(1);
+    }
+    return rawId;
+  }
+
+    /// 列表副标题：优先预设审批策略文案，否则展示 profile id。
+  String get displaySubtitle {
+    final preset = matchedPreset;
+    if (preset != null) {
+      return AgentPermissionSelection.approvalPolicyDisplayLabel(
+        preset.approvalPolicy,
+      );
+    }
+    return id.trim();
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is AgentPermissionProfileSummary &&
+            other.id == id &&
+            other.allowed == allowed &&
+            other.description == description;
+  }
+
+  @override
+  int get hashCode => Object.hash(id, allowed, description);
 }
 
 /// Composer 中选择的审批/沙箱策略组合。
@@ -67,6 +114,7 @@ class AgentPermissionSelection {
       label: 'Full access',
       approvalPolicy: 'never',
       sandboxPolicy: 'dangerFullAccess',
+      permissionProfileId: ':danger-full-access',
     ),
   ];
 
@@ -197,6 +245,48 @@ class AgentPermissionSelection {
       }
     }
     return null;
+  }
+
+  /// 将 Codex `permissionProfile/list` 的 id 关联到内置 Composer 预设。
+  ///
+  /// 仅匹配显式声明了 [AgentPermissionPreset.permissionProfileId] 的项
+  ///（如 `:read-only`、`:workspace`）。
+  static AgentPermissionPreset? presetForProfileId(String? profileId) {
+    final normalized = profileId?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    for (final preset in presets) {
+      final presetProfileId = preset.permissionProfileId?.trim();
+      if (presetProfileId != null &&
+          presetProfileId.isNotEmpty &&
+          presetProfileId == normalized) {
+        return preset;
+      }
+    }
+    return null;
+  }
+
+  /// 按 `permissionProfile/list` 的 id 构造选择。
+  ///
+  /// 已知内置 profile 会回填对应 approval/sandbox；自定义 profile 仅绑定
+  /// `permissionProfileId`，approval/sandbox 保留域内默认（协议侧有 profile 时
+  /// 不再下发 sandbox）。
+  static AgentPermissionSelection forProfileId(String profileId) {
+    final normalized = profileId.trim();
+    final preset = presetForProfileId(normalized);
+    if (preset != null) {
+      return AgentPermissionSelection(
+        approvalPolicy: preset.approvalPolicy,
+        sandboxPolicy: preset.sandboxPolicy,
+        permissionProfileId: normalized,
+      );
+    }
+    return AgentPermissionSelection(
+      approvalPolicy: defaultApprovalPolicy,
+      sandboxPolicy: defaultSandboxPolicy,
+      permissionProfileId: normalized,
+    );
   }
 }
 

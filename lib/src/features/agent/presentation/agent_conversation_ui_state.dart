@@ -125,10 +125,14 @@ final class AgentComposerState {
     required this.modelConfigState,
     required this.showPermissionPolicy,
     required this.permissionPolicyLabel,
-    required this.selectedPermissionPresetId,
+    required Iterable<AgentPermissionProfileSummary> permissionProfiles,
+    required this.selectedPermissionProfileId,
     required Iterable<AgentSessionConfigOption> sessionConfigOptions,
   }) : conversationModeOptions = List<AgentConversationModePreset>.unmodifiable(
          conversationModeOptions,
+       ),
+       permissionProfiles = List<AgentPermissionProfileSummary>.unmodifiable(
+         permissionProfiles,
        ),
        sessionConfigOptions = List<AgentSessionConfigOption>.unmodifiable(
          sessionConfigOptions,
@@ -157,7 +161,12 @@ final class AgentComposerState {
   final AgentModelConfigUiState modelConfigState;
   final bool showPermissionPolicy;
   final String permissionPolicyLabel;
-  final String? selectedPermissionPresetId;
+
+  /// 来自 `permissionProfile/list` 的可选 profile。
+  final List<AgentPermissionProfileSummary> permissionProfiles;
+
+  /// 当前选中的 permission profile id。
+  final String? selectedPermissionProfileId;
   final List<AgentSessionConfigOption> sessionConfigOptions;
 
   final Object _modelConfigSignature;
@@ -191,7 +200,8 @@ final class AgentComposerState {
             _deepUiEquals(other._modelConfigSignature, _modelConfigSignature) &&
             other.showPermissionPolicy == showPermissionPolicy &&
             other.permissionPolicyLabel == permissionPolicyLabel &&
-            other.selectedPermissionPresetId == selectedPermissionPresetId &&
+            listEquals(other.permissionProfiles, permissionProfiles) &&
+            other.selectedPermissionProfileId == selectedPermissionProfileId &&
             _deepUiEquals(
               other._sessionConfigSignature,
               _sessionConfigSignature,
@@ -219,7 +229,8 @@ final class AgentComposerState {
     _deepUiHash(_modelConfigSignature),
     showPermissionPolicy,
     permissionPolicyLabel,
-    selectedPermissionPresetId,
+    Object.hashAll(permissionProfiles),
+    selectedPermissionProfileId,
     _deepUiHash(_sessionConfigSignature),
   ]);
 }
