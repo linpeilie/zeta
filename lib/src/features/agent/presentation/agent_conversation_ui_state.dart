@@ -125,14 +125,15 @@ final class AgentComposerState {
     required this.modelConfigState,
     required this.showPermissionPolicy,
     required this.permissionPolicyLabel,
-    required Iterable<AgentPermissionProfileSummary> permissionProfiles,
-    required this.selectedPermissionProfileId,
+    required Iterable<AgentPermissionOption> permissionOptions,
+    required this.selectedPermissionOptionId,
+    this.permissionApplyScopeHint,
     required Iterable<AgentSessionConfigOption> sessionConfigOptions,
   }) : conversationModeOptions = List<AgentConversationModePreset>.unmodifiable(
          conversationModeOptions,
        ),
-       permissionProfiles = List<AgentPermissionProfileSummary>.unmodifiable(
-         permissionProfiles,
+       permissionOptions = List<AgentPermissionOption>.unmodifiable(
+         permissionOptions,
        ),
        sessionConfigOptions = List<AgentSessionConfigOption>.unmodifiable(
          sessionConfigOptions,
@@ -162,11 +163,14 @@ final class AgentComposerState {
   final bool showPermissionPolicy;
   final String permissionPolicyLabel;
 
-  /// 来自 `permissionProfile/list` 的可选 profile。
-  final List<AgentPermissionProfileSummary> permissionProfiles;
+  /// 中立权限选项目录（label 来自 adapter）。
+  final List<AgentPermissionOption> permissionOptions;
 
-  /// 当前选中的 permission profile id。
-  final String? selectedPermissionProfileId;
+  /// 当前选中的权限 option id。
+  final String? selectedPermissionOptionId;
+
+  /// apply scope 紧凑提示（如「下次会话生效」）。
+  final String? permissionApplyScopeHint;
   final List<AgentSessionConfigOption> sessionConfigOptions;
 
   final Object _modelConfigSignature;
@@ -200,8 +204,9 @@ final class AgentComposerState {
             _deepUiEquals(other._modelConfigSignature, _modelConfigSignature) &&
             other.showPermissionPolicy == showPermissionPolicy &&
             other.permissionPolicyLabel == permissionPolicyLabel &&
-            listEquals(other.permissionProfiles, permissionProfiles) &&
-            other.selectedPermissionProfileId == selectedPermissionProfileId &&
+            listEquals(other.permissionOptions, permissionOptions) &&
+            other.selectedPermissionOptionId == selectedPermissionOptionId &&
+            other.permissionApplyScopeHint == permissionApplyScopeHint &&
             _deepUiEquals(
               other._sessionConfigSignature,
               _sessionConfigSignature,
@@ -229,8 +234,9 @@ final class AgentComposerState {
     _deepUiHash(_modelConfigSignature),
     showPermissionPolicy,
     permissionPolicyLabel,
-    Object.hashAll(permissionProfiles),
-    selectedPermissionProfileId,
+    Object.hashAll(permissionOptions),
+    selectedPermissionOptionId,
+    permissionApplyScopeHint,
     _deepUiHash(_sessionConfigSignature),
   ]);
 }

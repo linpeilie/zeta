@@ -71,7 +71,7 @@ void main() {
           const ValueKey('agent-model-selector'),
         );
         final permissionSelector = find.byKey(
-          const ValueKey('agent-permission-policy-selector'),
+          const ValueKey('agent-permission-option-selector'),
         );
         // Default：不展示模式选择器 / Plan 标识。
         expect(find.byKey(const ValueKey('agent-mode-selector')), findsNothing);
@@ -579,7 +579,7 @@ void main() {
           findsOneWidget,
         );
         expect(
-          find.byKey(const ValueKey('agent-permission-policy-selector')),
+          find.byKey(const ValueKey('agent-permission-option-selector')),
           findsOneWidget,
         );
         expect(tester.takeException(), isNull);
@@ -665,7 +665,7 @@ void main() {
         final selectorControls = <Finder>[
           planBadge,
           find.byKey(const ValueKey('agent-session-config-cursor-model')),
-          find.byKey(const ValueKey('agent-permission-policy-selector')),
+          find.byKey(const ValueKey('agent-permission-option-selector')),
         ];
         final wideSelectorsLeft = tester.getTopLeft(selectors).dx;
         final wideOffsets = <double>[
@@ -813,7 +813,7 @@ void main() {
           const ValueKey('agent-model-selector'),
         );
         final permissionSelector = find.byKey(
-          const ValueKey('agent-permission-policy-selector'),
+          const ValueKey('agent-permission-option-selector'),
         );
         final modelSurface = tester.widget<PaneInteractiveSurface>(
           modelSelector,
@@ -835,7 +835,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 300));
 
         final popover = find.byKey(
-          const ValueKey('agent-permission-policy-popover'),
+          const ValueKey('agent-permission-option-popover'),
         );
         expect(popover, findsOneWidget);
         expect(tester.getSize(popover).width, 288);
@@ -849,35 +849,34 @@ void main() {
         expect(permissionPopoverPanel.borderRadius, IdeRadius.allSmall);
         expect(permissionPopoverPanel.boxShadow, isEmpty);
         expect(
-          find.byType(sf.SelectPopup<AgentPermissionProfileSummary>),
+          find.byType(sf.SelectPopup<AgentPermissionOption>),
           findsOneWidget,
         );
         final selectedOption = tester
-            .widget<sf.SelectItemButton<AgentPermissionProfileSummary>>(
-              find.byKey(const ValueKey('agent-permission-profile-:workspace')),
+            .widget<sf.SelectItemButton<AgentPermissionOption>>(
+              find.byKey(const ValueKey('agent-permission-option-:workspace')),
             );
         expect(selectedOption.value.id, ':workspace');
         expect(selectedOption.enabled, isNull);
         expect(
           find.descendant(
             of: find.byKey(
-              const ValueKey('agent-permission-profile-:workspace'),
+              const ValueKey('agent-permission-option-:workspace'),
             ),
             matching: find.text('Workspace write'),
           ),
           findsWidgets,
         );
-        // popover 选项仅短 displayName，不渲染审批副标题。
+        // popover 选项仅短 label，不渲染审批副标题。
         expect(find.text('Ask first'), findsNothing);
 
         await tester.tap(
-          find.byKey(const ValueKey('agent-permission-profile-:read-only')),
+          find.byKey(const ValueKey('agent-permission-option-:read-only')),
         );
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
 
-        expect(viewModel.permissionSelection.permissionProfileId, ':read-only');
-        expect(viewModel.permissionSelection.matchedPresetId, 'readOnly');
+        expect(viewModel.permissionSelection?.optionId, ':read-only');
         expect(
           provider.lastPermissionSelection?.permissionProfileId,
           ':read-only',
@@ -887,7 +886,7 @@ void main() {
         expect(viewModel.permissionPolicyLabel, 'Read only');
         expect(
           FocusManager.instance.primaryFocus?.debugLabel,
-          'agent-permission-policy-trigger',
+          'agent-permission-option-trigger',
         );
 
         await tester.tap(permissionSelector);
@@ -901,7 +900,7 @@ void main() {
         expect(popover, findsNothing);
         expect(
           FocusManager.instance.primaryFocus?.debugLabel,
-          'agent-permission-policy-trigger',
+          'agent-permission-option-trigger',
         );
       },
     );

@@ -293,21 +293,31 @@ class ActiveAgentProviderController extends ChangeNotifier {
     _notify();
   }
 
-  /// 持久化审批/沙箱策略选择。
-  Future<void> persistPermissionSelection(
-    AgentPermissionSelectionSnapshot selection,
-  ) async {
+  /// 持久化权限 optionId（provider 默认偏好）。
+  ///
+  /// V1 仍兼容写入 profileId=optionId，供 Codex 自定义 profile 迁移期 round-trip；
+  /// 阶段 5 将收敛为仅写 selectedPermissionOptionId。
+  Future<void> persistPermissionOptionId(String optionId) async {
+    final trimmed = optionId.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
     final providerId = activeProviderId;
+    final supportsProfile = capabilitiesForProviderId(
+      providerId,
+    ).supportsPermissionProfileSelection;
     final updatedProviders = _settings.providers.map((provider) {
       if (provider.id != providerId) {
         return provider;
       }
-      return provider.copyWith(
-        selectedApprovalPolicy: selection.approvalPolicy,
-        selectedSandboxPolicy: selection.sandboxPolicy,
-        selectedPermissionProfileId: selection.permissionProfileId,
-        selectedPermissionOptionId: selection.selectedOptionId,
-      );
+      // Codex：同步 profileId 以便自定义 profile round-trip；Grok 只写 optionId。
+      if (supportsProfile) {
+        return provider.copyWith(
+          selectedPermissionOptionId: trimmed,
+          selectedPermissionProfileId: trimmed,
+        );
+      }
+      return provider.copyWith(selectedPermissionOptionId: trimmed);
     }).toList();
     _settings = AgentProviderSettings(
       providers: List<AgentProviderConfig>.unmodifiable(updatedProviders),
@@ -316,11 +326,24 @@ class ActiveAgentProviderController extends ChangeNotifier {
     _applyRuntimeSelection();
     try {
       await configStore.save(_settings);
-      _log.fine('Persisted permission selection for provider $providerId');
+      _log.fine('Persisted permission option for provider $providerId');
     } catch (error, stackTrace) {
-      _log.warning('Could not persist permission selection', error, stackTrace);
+      _log.warning('Could not persist permission option', error, stackTrace);
+      rethrow;
     }
     _notify();
+  }
+
+  /// @nodoc 兼容旧 Snapshot 持久化入口。
+  @Deprecated('Use persistPermissionOptionId')
+  Future<void> persistPermissionSelection(
+    AgentPermissionSelectionSnapshot selection,
+  ) async {
+    final optionId = selection.selectedOptionId;
+    if (optionId == null || optionId.trim().isEmpty) {
+      return;
+    }
+    await persistPermissionOptionId(optionId);
   }
 
   /// 加载全局 provider 设置。

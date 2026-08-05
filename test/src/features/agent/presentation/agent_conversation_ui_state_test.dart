@@ -361,14 +361,14 @@ AgentComposerState _composerState({
     ),
     showPermissionPolicy: true,
     permissionPolicyLabel: 'Workspace write',
-    permissionProfiles: const <AgentPermissionProfileSummary>[
-      AgentPermissionProfileSummary(
+    permissionOptions: const <AgentPermissionOption>[
+      AgentPermissionOption(
         id: ':workspace',
-        allowed: true,
+        label: 'Workspace write',
         description: 'Workspace write',
       ),
     ],
-    selectedPermissionProfileId: ':workspace',
+    selectedPermissionOptionId: ':workspace',
     sessionConfigOptions: sessionConfigOptions,
   );
 }

@@ -787,7 +787,7 @@ void main() {
       const ValueKey('agent-attach-image-button'),
     );
     final permissionPolicySelector = find.byKey(
-      const ValueKey('agent-permission-policy-selector'),
+      const ValueKey('agent-permission-option-selector'),
     );
     final mentionFileButton = find.byKey(
       const ValueKey('agent-mention-file-button'),
@@ -808,23 +808,23 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     final permissionPopover = find.byKey(
-      const ValueKey('agent-permission-policy-popover'),
+      const ValueKey('agent-permission-option-popover'),
     );
     expect(permissionPopover, findsOneWidget);
     expect(
-      find.byKey(const ValueKey('agent-permission-profile-ask')),
+      find.byKey(const ValueKey('agent-permission-option-ask')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('agent-permission-profile-auto')),
+      find.byKey(const ValueKey('agent-permission-option-auto')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('agent-permission-profile-always-approve')),
+      find.byKey(const ValueKey('agent-permission-option-always-approve')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('agent-permission-profile-default')),
+      find.byKey(const ValueKey('agent-permission-option-default')),
       findsNothing,
     );
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
@@ -901,7 +901,7 @@ void main() {
       );
       await openConversationTestThread(tester);
       final permissionSelector = find.byKey(
-        const ValueKey('agent-permission-policy-selector'),
+        const ValueKey('agent-permission-option-selector'),
       );
       await pumpUntilCondition(
         tester,
@@ -918,7 +918,7 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
         final item = find.byKey(
-          ValueKey<String>('agent-permission-profile-$profileId'),
+          ValueKey<String>('agent-permission-option-$profileId'),
         );
         expect(item, findsOneWidget);
         await tester.tap(item);

@@ -356,7 +356,8 @@ class AgentPaneFakeProvider
         AgentProvider,
         AgentSessionConfigProvider,
         AgentPlanApprovalProvider,
-        AgentQuestionResponseProvider {
+        AgentQuestionResponseProvider,
+        AgentPermissionPolicyProvider {
   AgentPaneFakeProvider({
     Map<String, AgentThreadHistorySnapshot> historySnapshotsByThread =
         const <String, AgentThreadHistorySnapshot>{},
@@ -366,7 +367,9 @@ class AgentPaneFakeProvider
     this.permissionProfiles = agentPaneDefaultPermissionProfiles,
   }) : _historySnapshotsByThread = Map<String, AgentThreadHistorySnapshot>.from(
          historySnapshotsByThread,
-       );
+       ) {
+    _permissionPolicy = _AgentPanePermissionPolicyPort(this);
+  }
 
   final Map<String, AgentThreadHistorySnapshot> _historySnapshotsByThread;
   final AgentModelList models;
@@ -374,6 +377,7 @@ class AgentPaneFakeProvider
 
   /// `permissionProfile/list` 测试数据；默认覆盖常见内置 profile。
   final List<AgentPermissionProfileSummary> permissionProfiles;
+  late final AgentPermissionPolicyPort _permissionPolicy;
 
   /// 非空时 [readThreadHistory] 会先 await 该 Future，便于测试加载态 UI。
   final Future<void>? historyLoadGate;
@@ -399,7 +403,10 @@ class AgentPaneFakeProvider
   }
 
   @override
-  AgentProviderConfig get config => AgentProviderConfig.defaultCodex;
+  AgentProviderConfig get config => AgentProviderConfig.defaultCodex.copyWith(
+    selectedPermissionOptionId: ':workspace',
+    selectedPermissionProfileId: ':workspace',
+  );
 
   @override
   AgentProviderCapabilities get capabilities => AgentProviderCapabilities
@@ -453,6 +460,9 @@ class AgentPaneFakeProvider
   AgentPermissionSelectionSnapshot? lastPermissionSelection;
 
   int permissionSelectionUpdateCount = 0;
+
+  @override
+  AgentPermissionPolicyPort get permissionPolicy => _permissionPolicy;
 
   @override
   void updatePermissionSelection(AgentPermissionSelectionSnapshot selection) {
@@ -559,6 +569,53 @@ class AgentPaneFakeProvider
   @override
   Future<void> dispose() async {
     await _events.close();
+  }
+}
+
+final class _AgentPanePermissionPolicyPort
+    implements AgentPermissionPolicyPort {
+  _AgentPanePermissionPolicyPort(this._host);
+
+  final AgentPaneFakeProvider _host;
+
+  @override
+  Future<AgentPermissionCatalog> listPermissionOptions() async {
+    final options = _host.permissionProfiles
+        .map(
+          (profile) => AgentPermissionOption(
+            id: profile.id,
+            label: () {
+              final description = profile.description?.trim();
+              if (description != null && description.isNotEmpty) {
+                return description;
+              }
+              return profile.displayName;
+            }(),
+            description: profile.description,
+            allowed: profile.allowed,
+          ),
+        )
+        .toList(growable: false);
+    final defaultId = options.any((option) => option.id == ':workspace')
+        ? ':workspace'
+        : (options.isNotEmpty ? options.first.id : '');
+    return AgentPermissionCatalog(options: options, defaultOptionId: defaultId);
+  }
+
+  @override
+  Future<AgentPermissionApplyResult> applyPermissionSelection(
+    AgentPermissionSelection selection,
+  ) async {
+    final snapshot = AgentPermissionSelectionSnapshot.forProfileId(
+      selection.optionId,
+    );
+    _host.updatePermissionSelection(snapshot);
+    return AgentPermissionApplyResult(
+      normalizedSelection: AgentPermissionSelection(
+        optionId: snapshot.selectedOptionId ?? selection.optionId,
+      ),
+      scope: AgentPermissionApplyScope.currentSession,
+    );
   }
 }
 

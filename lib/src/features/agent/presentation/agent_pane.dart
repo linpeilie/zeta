@@ -33,6 +33,7 @@ import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_button.dart';
 import 'package:zeta/src/ui/core/ide_status_card.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
+import 'package:zeta/src/ui/core/ide_toast.dart';
 import 'package:zeta/src/ui/core/layout/ide_constraint_bucket_builder.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';

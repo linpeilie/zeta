@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 import 'agent_provider_stub_base.dart';
 
@@ -129,7 +128,8 @@ class FakeAgentProvider
     implements
         AgentProvider,
         AgentLocalThreadListProvider,
-        AgentQuestionResponseProvider {
+        AgentQuestionResponseProvider,
+        AgentPermissionPolicyProvider {
   FakeAgentProvider({
     this.emitToolAndApproval = false,
     this.emitCompletedCommentary = false,
@@ -171,7 +171,9 @@ class FakeAgentProvider
        _threadPages = List<AgentThreadPage>.from(threadPages),
        _threadHistories = Map<String, AgentThreadHistorySnapshot>.from(
          threadHistories,
-       );
+       ) {
+    _defaultPermissionPolicy = _FakeAgentPermissionPolicyPort(this);
+  }
 
   final bool emitToolAndApproval;
   final bool emitCompletedCommentary;
@@ -194,8 +196,10 @@ class FakeAgentProvider
   /// 中立 option 列表（与 [permissionProfiles] 双向薄适配）。
   final List<AgentPermissionOption> permissionOptions;
 
-  /// 可选显式权限 port；非 null 时测试可直接使用而不经 legacy bridge。
+  /// 可选显式权限 port；非 null 时覆盖默认 fake port。
   final AgentPermissionPolicyPort? permissionPolicyOverride;
+
+  late final AgentPermissionPolicyPort _defaultPermissionPolicy;
   final List<AgentThreadPage> _threadPages;
   final Map<String, AgentThreadHistorySnapshot> _threadHistories;
   bool _conversationTestThreadReturned = false;
@@ -521,17 +525,12 @@ class FakeAgentProvider
     return permissionProfiles;
   }
 
-  /// 供测试直接拿到新旧并存的权限 port。
-  ///
-  /// 优先 [permissionPolicyOverride]；否则在 capability 开启时走
-  /// [AgentProviderBundle.adapt] 的 legacy 桥接。
-  AgentPermissionPolicyPort? get permissionPolicyPort {
-    final override = permissionPolicyOverride;
-    if (override != null) {
-      return override;
-    }
-    return bundle.permissionPolicy;
-  }
+  @override
+  AgentPermissionPolicyPort get permissionPolicy =>
+      permissionPolicyOverride ?? _defaultPermissionPolicy;
+
+  /// 供测试直接拿到权限 port。
+  AgentPermissionPolicyPort? get permissionPolicyPort => permissionPolicy;
 
   @override
   Future<void> approveGuardianDeniedAction({
@@ -561,5 +560,45 @@ class FakeAgentProvider
 
   void emit(AgentEvent event) {
     _events.add(event);
+  }
+}
+
+final class _FakeAgentPermissionPolicyPort
+    implements AgentPermissionPolicyPort {
+  _FakeAgentPermissionPolicyPort(this._host);
+
+  final FakeAgentProvider _host;
+
+  @override
+  Future<AgentPermissionCatalog> listPermissionOptions() async {
+    final options = _host.permissionOptions.isNotEmpty
+        ? _host.permissionOptions
+        : _host.permissionProfiles
+              .map(AgentPermissionPolicyAdapters.optionFromProfileSummary)
+              .toList(growable: false);
+    return AgentPermissionCatalog(
+      options: options,
+      defaultOptionId: options.isNotEmpty ? options.first.id : '',
+    );
+  }
+
+  @override
+  Future<AgentPermissionApplyResult> applyPermissionSelection(
+    AgentPermissionSelection selection,
+  ) async {
+    final preferProfile = _host.capabilities.supportsPermissionProfileSelection;
+    final snapshot = AgentPermissionPolicyAdapters.snapshotFromSelection(
+      selection,
+      preferProfileBinding: preferProfile,
+    );
+    _host.updatePermissionSelection(snapshot);
+    return AgentPermissionApplyResult(
+      normalizedSelection: AgentPermissionSelection(
+        optionId: snapshot.selectedOptionId ?? selection.optionId,
+      ),
+      scope: preferProfile
+          ? AgentPermissionApplyScope.currentSession
+          : AgentPermissionApplyScope.runtime,
+    );
   }
 }

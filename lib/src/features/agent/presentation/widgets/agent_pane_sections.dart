@@ -938,8 +938,9 @@ class _AgentComposerSection extends StatelessWidget {
                 modelConfigState: state.modelConfigState,
                 showPermissionPolicy: state.showPermissionPolicy,
                 permissionPolicyLabel: state.permissionPolicyLabel,
-                permissionProfiles: state.permissionProfiles,
-                selectedPermissionProfileId: state.selectedPermissionProfileId,
+                permissionOptions: state.permissionOptions,
+                selectedPermissionOptionId: state.selectedPermissionOptionId,
+                permissionApplyScopeHint: state.permissionApplyScopeHint,
                 sessionConfigOptions: state.sessionConfigOptions,
                 onSelectModel: viewModel.selectModel,
                 onSelectReasoningEffort: viewModel.selectReasoningEffort,
@@ -950,7 +951,24 @@ class _AgentComposerSection extends StatelessWidget {
                     viewModel.retryModelConfigurationSave,
                 onCloseModelConfiguration:
                     viewModel.clearModelConfigurationTransientState,
-                onSelectPermissionProfile: viewModel.selectPermissionProfile,
+                onSelectPermissionOption: (option) async {
+                  final error = await viewModel.selectPermissionOption(option);
+                  if (!context.mounted) {
+                    return;
+                  }
+                  if (error != null && error.isNotEmpty) {
+                    showIdeToast(
+                      context,
+                      message: error,
+                      tone: IdeToastTone.error,
+                    );
+                    return;
+                  }
+                  final hint = viewModel.takePermissionApplyHint();
+                  if (hint != null && hint.isNotEmpty) {
+                    showIdeToast(context, message: hint);
+                  }
+                },
                 onSelectSessionConfigOption:
                     viewModel.selectSessionConfigOption,
                 onOpenMentionPicker: onOpenMentionPicker,

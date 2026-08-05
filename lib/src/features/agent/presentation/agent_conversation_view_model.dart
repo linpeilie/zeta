@@ -83,7 +83,7 @@ class AgentConversationViewModel {
        _permissionSelectionController =
            permissionSelectionController ??
            AgentConversationPermissionSelectionController(
-             persistSelection: providerController.persistPermissionSelection,
+             persistOptionId: providerController.persistPermissionOptionId,
            ) {
     _eventReducerContexts = AgentConversationReducerContexts(
       liveTimelineIds: _localTimelineIds,
@@ -708,7 +708,10 @@ class AgentConversationViewModel {
     _provider = null;
     final config = providerController.activeProviderConfig;
     _modelSelectionController.resetForProvider(config);
-    _permissionSelectionController.resetForProvider(config);
+    _permissionSelectionController.resetForProvider(
+      port: null,
+      persistedOptionId: config.resolvedPermissionOptionId,
+    );
     // 切换后清空当前会话草稿，避免跨协议 thread id 混用。
     _session = null;
     _sessionConfigOptions = const <AgentSessionConfigOption>[];
@@ -736,11 +739,14 @@ class AgentConversationViewModel {
     await loadModels();
   }
 
-  AgentPermissionSelectionSnapshot get permissionSelection =>
-      _permissionSelectionController.selection;
+  AgentPermissionSelection? get permissionSelection =>
+      _permissionSelectionController.effectiveSelection;
 
   String get permissionPolicyLabel =>
       _permissionSelectionController.displayLabel;
+
+  String? get permissionApplyScopeHint =>
+      _permissionSelectionController.applyScopeHint;
 
   AgentAutoApprovalReviewEvent? get latestDeniedAutoReview =>
       _latestDeniedAutoReview;
@@ -1115,7 +1121,9 @@ class AgentConversationViewModel {
     }
     final config = providerController.activeProviderConfig;
     _modelSelectionController.seedFromConfig(config);
-    _permissionSelectionController.seedFromConfig(config);
+    _permissionSelectionController.seedFromConfig(
+      config.resolvedPermissionOptionId,
+    );
     final capabilities = providerController.capabilitiesForProviderId(
       config.id,
     );
@@ -1175,7 +1183,7 @@ class AgentConversationViewModel {
       if (initializedProvider == null) {
         await provider.initialize();
       }
-      await _permissionSelectionController.refreshProfiles();
+      await _permissionSelectionController.refreshOptions();
     } catch (error) {
       _log.warning('Could not preload Agent models (${error.runtimeType})');
       _modelRefreshError = '模型列表刷新失败，已保留现有配置。';
@@ -1196,28 +1204,21 @@ class AgentConversationViewModel {
   Future<bool> selectReasoningEffort(String? effort) =>
       _modelSelectionController.selectReasoningEffort(effort);
 
-  Future<void> selectPermissionProfile(
-    AgentPermissionProfileSummary profile,
-  ) async {
-    await _permissionSelectionController.selectProfile(profile);
+  /// 用户选择权限选项；返回错误文案（供 UI toast），成功时返回 null。
+  Future<String?> selectPermissionOption(AgentPermissionOption option) async {
+    await _permissionSelectionController.selectOption(option);
     _publishUiChanges(
       AgentUiUpdateRequest(
         regions: const <AgentUiRegion>{AgentUiRegion.composer},
         urgency: AgentUiUpdateUrgency.immediate,
       ),
     );
+    return _permissionSelectionController.takeLastError();
   }
 
-  /// 兼容旧预设入口；Composer 已改走 [selectPermissionProfile]。
-  Future<void> selectPermissionPreset(AgentPermissionPreset preset) async {
-    await _permissionSelectionController.selectPreset(preset);
-    _publishUiChanges(
-      AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{AgentUiRegion.composer},
-        urgency: AgentUiUpdateUrgency.immediate,
-      ),
-    );
-  }
+  /// 最近一次权限 apply 的紧凑提示（下次会话生效等）。
+  String? takePermissionApplyHint() =>
+      _permissionSelectionController.takeApplyHint();
 
   /// Guardian 拒绝后的人工放行。
   Future<void> approveGuardianDeniedAction() async {
@@ -1677,6 +1678,7 @@ class AgentConversationViewModel {
       _conversationModeController.bindThread(
         threadId: effectiveRestoredSessionId,
       );
+      _permissionSelectionController.bindThread(effectiveRestoredSessionId);
       _threadOpenPhase = AgentThreadOpenPhase.idle;
       _requiresResumedSelectedThread = false;
       _currentThreadTitle = defaultThreadTitle;
@@ -1719,6 +1721,7 @@ class AgentConversationViewModel {
       _conversationModeController.bindThread(
         threadId: effectiveRestoredSessionId,
       );
+      _permissionSelectionController.bindThread(effectiveRestoredSessionId);
       _threadOpenPhase = AgentThreadOpenPhase.idle;
       _requiresResumedSelectedThread = false;
     }
@@ -2028,6 +2031,7 @@ class AgentConversationViewModel {
     // 在第一个 await 前让旧 thread listener 失效，避免其微任务事件污染新时间线。
     _invalidateProviderEventListener();
     _conversationModeController.bindThread(threadId: thread.id);
+    _permissionSelectionController.bindThread(thread.id);
     // Provider 配置可能仍在应用启动阶段读取；必须等待其完成后再判断 thread 归属，
     // 否则会先看到内置 Codex、随后却从磁盘加载出 Grok，并用错误后端读取历史。
     await loadSettings();
@@ -2099,6 +2103,7 @@ class AgentConversationViewModel {
     _restoredSessionId = thread.id;
     _selectedProviderId = thread.providerId;
     _conversationModeController.bindThread(threadId: thread.id);
+    _permissionSelectionController.bindThread(thread.id);
     _requiresResumedSelectedThread = true;
     _threadOpenPhase = AgentThreadOpenPhase.loadingHistory;
     _currentThreadTitle = thread.displayName;
@@ -2169,6 +2174,7 @@ class AgentConversationViewModel {
         threadId: thread.id,
         historyMode: history.latestCollaborationMode,
       );
+      _permissionSelectionController.bindThread(thread.id);
       _conversationModeController.setTurnRunning(isTurnRunning);
       // 再次锁定 resume：避免异步路径把 requiresResumed 清掉。
       _restoredSessionId = thread.id;
@@ -2602,6 +2608,7 @@ class AgentConversationViewModel {
     if (_ownsSkillsCatalogController) {
       _skillsCatalogController.dispose();
     }
+    _permissionSelectionController.dispose();
     _elapsedTicker.dispose();
     _effectRunner.dispose();
     _uiUpdateScheduler.dispose();
@@ -2732,8 +2739,13 @@ class AgentConversationViewModel {
       _log.fine('Using shared Agent provider: ${provider.config.id}');
       _provider = provider;
       _modelSelectionController.bindProvider(provider);
-      _permissionSelectionController.bindProvider(provider);
+      _permissionSelectionController.bind(
+        port: provider.bundle.permissionPolicy,
+        persistedOptionId: provider.config.resolvedPermissionOptionId,
+      );
+      unawaited(_permissionSelectionController.refreshOptions());
     }
+    _permissionSelectionController.bindThread(_selectedThreadId);
     await _replaceProviderEventSubscription(
       provider,
       threadId: _selectedThreadId,
@@ -2786,6 +2798,7 @@ class AgentConversationViewModel {
       threadId: _selectedThreadId,
       historyMode: restoredMode,
     );
+    _permissionSelectionController.bindThread(_selectedThreadId);
     if (restoredDraft != null) {
       _conversationModeController.selectMode(restoredDraft);
     }
@@ -2831,7 +2844,10 @@ class AgentConversationViewModel {
     _sessionConfigOptions = const <AgentSessionConfigOption>[];
     final config = providerController.activeProviderConfig;
     _modelSelectionController.resetForProvider(config);
-    _permissionSelectionController.resetForProvider(config);
+    _permissionSelectionController.resetForProvider(
+      port: null,
+      persistedOptionId: config.resolvedPermissionOptionId,
+    );
     _selectedProviderId ??= providerId;
   }
 
@@ -2968,6 +2984,7 @@ class AgentConversationViewModel {
       threadId: threadId,
       historyMode: historyMode,
     );
+    _permissionSelectionController.bindThread(threadId);
     if (draftMode != null) {
       _conversationModeController.selectMode(draftMode);
     }
@@ -3500,9 +3517,10 @@ class AgentConversationViewModel {
       modelConfigState: modelConfigUiState,
       showPermissionPolicy: showPermissionPolicy,
       permissionPolicyLabel: permissionPolicyLabel,
-      permissionProfiles: _permissionSelectionController.profiles,
-      selectedPermissionProfileId:
-          _permissionSelectionController.selectedProfileId,
+      permissionOptions: _permissionSelectionController.options,
+      selectedPermissionOptionId:
+          _permissionSelectionController.selectedOptionId,
+      permissionApplyScopeHint: _permissionSelectionController.applyScopeHint,
       sessionConfigOptions: sessionConfigOptions,
     );
   }
@@ -3643,10 +3661,10 @@ final class _AgentConversationEventStateTarget
         _viewModel._applyThreadSelectionFromThreadSettings(
           modelId: event.model,
         );
-        _viewModel._permissionSelectionController.applyThreadSettings(
-          approvalPolicy: event.approvalPolicy,
-          sandboxPolicy: event.sandboxPolicy,
-          permissionProfileId: event.activePermissionProfileId,
+        unawaited(
+          _viewModel._permissionSelectionController.applyThreadSettings(
+            optionId: event.activePermissionProfileId,
+          ),
         );
         _viewModel._conversationModeController.applyThreadSettings(event);
       case AgentApplySessionConfigChange():
