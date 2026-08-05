@@ -28,7 +28,7 @@ final class _CodexTurnStartParamsEncoder {
     required List<AgentUserInput> inputs,
     required AgentContext context,
     required AgentModelSelection modelSelection,
-    required AgentPermissionSelection permissionSelection,
+    required AgentPermissionSelectionSnapshot permissionSelection,
     required AgentTurnConfiguration turnConfiguration,
     String? clientUserMessageId,
   }) {
@@ -47,9 +47,10 @@ final class _CodexTurnStartParamsEncoder {
       } else
         'collaborationMode': _encodeCollaborationMode(conversationMode),
       'serviceTier': ?modelSelection.serviceTierId,
-      'approvalPolicy': AgentPermissionSelection.normalizeApprovalPolicy(
-        permissionSelection.approvalPolicy,
-      ),
+      'approvalPolicy':
+          AgentPermissionSelectionSnapshot.normalizeApprovalPolicy(
+            permissionSelection.approvalPolicy,
+          ),
       'permissions': ?permissionProfileId,
       'sandboxPolicy': ?(permissionProfileId == null
           ? permissionSelection.toTurnSandboxPolicy()

@@ -1182,7 +1182,7 @@ class _FakeAgentProvider
   void updateModelSelection(AgentModelSelection selection) {}
 
   @override
-  void updatePermissionSelection(AgentPermissionSelection selection) {}
+  void updatePermissionSelection(AgentPermissionSelectionSnapshot selection) {}
 
   @override
   Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {

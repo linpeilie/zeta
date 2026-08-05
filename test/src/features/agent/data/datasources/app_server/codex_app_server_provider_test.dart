@@ -3936,7 +3936,7 @@ void main() {
         ),
       );
       provider.updatePermissionSelection(
-        const AgentPermissionSelection(
+        const AgentPermissionSelectionSnapshot(
           approvalPolicy: 'never',
           sandboxPolicy: 'dangerFullAccess',
         ),
@@ -3986,7 +3986,7 @@ void main() {
           ),
         );
         provider.updatePermissionSelection(
-          const AgentPermissionSelection(
+          const AgentPermissionSelectionSnapshot(
             approvalPolicy: 'on-request',
             sandboxPolicy: 'workspaceWrite',
             permissionProfileId: ':workspace',
@@ -4131,7 +4131,7 @@ void main() {
         addTearDown(provider.dispose);
 
         provider.updatePermissionSelection(
-          const AgentPermissionSelection(
+          const AgentPermissionSelectionSnapshot(
             approvalPolicy: 'never',
             sandboxPolicy: 'dangerFullAccess',
           ),
@@ -4177,7 +4177,7 @@ void main() {
         addTearDown(provider.dispose);
 
         provider.updatePermissionSelection(
-          const AgentPermissionSelection(
+          const AgentPermissionSelectionSnapshot(
             approvalPolicy: 'on-request',
             sandboxPolicy: 'workspaceWrite',
             permissionProfileId: ':workspace',
@@ -4255,7 +4255,7 @@ void main() {
         );
         addTearDown(provider.dispose);
         provider.updatePermissionSelection(
-          const AgentPermissionSelection(approvalPolicy: 'on-failure'),
+          const AgentPermissionSelectionSnapshot(approvalPolicy: 'on-failure'),
         );
 
         await provider.startSession(

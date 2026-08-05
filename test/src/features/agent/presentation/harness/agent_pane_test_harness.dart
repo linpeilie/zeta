@@ -450,12 +450,12 @@ class AgentPaneFakeProvider
   void updateModelSelection(AgentModelSelection selection) {}
 
   /// 最近一次权限选择（Codex/Grok Composer 同步断言用）。
-  AgentPermissionSelection? lastPermissionSelection;
+  AgentPermissionSelectionSnapshot? lastPermissionSelection;
 
   int permissionSelectionUpdateCount = 0;
 
   @override
-  void updatePermissionSelection(AgentPermissionSelection selection) {
+  void updatePermissionSelection(AgentPermissionSelectionSnapshot selection) {
     lastPermissionSelection = selection;
     permissionSelectionUpdateCount += 1;
   }

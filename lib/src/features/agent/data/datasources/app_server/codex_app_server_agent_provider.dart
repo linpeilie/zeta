@@ -117,7 +117,7 @@ class CodexAppServerAgentProvider
   AgentModelSelection _modelSelection;
 
   /// 用户选择的审批/沙箱策略。
-  AgentPermissionSelection _permissionSelection;
+  AgentPermissionSelectionSnapshot _permissionSelection;
 
   AgentProviderCapabilities _capabilities =
       AgentProviderCapabilities.codexAppServer;
@@ -552,7 +552,7 @@ class CodexAppServerAgentProvider
   }
 
   @override
-  void updatePermissionSelection(AgentPermissionSelection selection) {
+  void updatePermissionSelection(AgentPermissionSelectionSnapshot selection) {
     _permissionSelection = selection;
     _log.fine(
       'Updated permission selection: approval=${selection.approvalPolicy} '
@@ -1172,17 +1172,17 @@ class CodexAppServerAgentProvider
 ///
 /// 显式 [AgentProviderConfig.selectedPermissionProfileId] 必须原样保留，
 /// 不得仅凭 approval/sandbox 回填为内置 `:workspace` 等 profile。
-AgentPermissionSelection _permissionSelectionFromConfig(
+AgentPermissionSelectionSnapshot _permissionSelectionFromConfig(
   AgentProviderConfig config,
 ) {
-  return AgentPermissionSelection(
+  return AgentPermissionSelectionSnapshot(
     optionId: config.resolvedPermissionOptionId,
     approvalPolicy:
         config.selectedApprovalPolicy ??
-        AgentPermissionSelection.defaultApprovalPolicy,
+        AgentPermissionSelectionSnapshot.defaultApprovalPolicy,
     sandboxPolicy:
         config.selectedSandboxPolicy ??
-        AgentPermissionSelection.defaultSandboxPolicy,
+        AgentPermissionSelectionSnapshot.defaultSandboxPolicy,
     permissionProfileId: config.selectedPermissionProfileId,
   );
 }

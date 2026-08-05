@@ -95,7 +95,7 @@ class _CodexAppServerClient {
 
   Future<AgentSession> startSession({
     required AgentContext context,
-    required AgentPermissionSelection permissionSelection,
+    required AgentPermissionSelectionSnapshot permissionSelection,
     String? previousSessionId,
   }) async {
     final result = await _peer.sendRequest(
@@ -111,7 +111,7 @@ class _CodexAppServerClient {
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
-    required AgentPermissionSelection permissionSelection,
+    required AgentPermissionSelectionSnapshot permissionSelection,
     String? previousSessionId,
   }) async {
     final result = await _peer.sendRequest(
@@ -336,7 +336,7 @@ class _CodexAppServerClient {
     required String threadId,
     required AgentContext context,
     required AgentForkBoundary boundary,
-    required AgentPermissionSelection permissionSelection,
+    required AgentPermissionSelectionSnapshot permissionSelection,
     String? previousSessionId,
   }) async {
     final result = await _peer.sendRequest(
@@ -366,7 +366,7 @@ class _CodexAppServerClient {
     required List<AgentUserInput> inputs,
     required AgentContext context,
     required AgentModelSelection selection,
-    required AgentPermissionSelection permissionSelection,
+    required AgentPermissionSelectionSnapshot permissionSelection,
     required AgentTurnConfiguration turnConfiguration,
     String? clientUserMessageId,
   }) async {
@@ -458,15 +458,16 @@ class _CodexAppServerClient {
 
   Map<String, Object?> _threadParams(
     AgentContext context,
-    AgentPermissionSelection permissionSelection,
+    AgentPermissionSelectionSnapshot permissionSelection,
   ) {
     final permissionProfileId = permissionSelection.protocolPermissionProfileId;
     return <String, Object?>{
       if (context.projectPath != null) 'cwd': context.projectPath,
       if (_config.defaultModel != null) 'model': _config.defaultModel,
-      'approvalPolicy': AgentPermissionSelection.normalizeApprovalPolicy(
-        permissionSelection.approvalPolicy,
-      ),
+      'approvalPolicy':
+          AgentPermissionSelectionSnapshot.normalizeApprovalPolicy(
+            permissionSelection.approvalPolicy,
+          ),
       'permissions': ?permissionProfileId,
       'sandbox': ?(permissionProfileId == null
           ? permissionSelection.toThreadSandboxMode()

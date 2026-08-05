@@ -575,7 +575,7 @@ class GrokAcpAgentProvider
   }
 
   @override
-  void updatePermissionSelection(AgentPermissionSelection selection) {
+  void updatePermissionSelection(AgentPermissionSelectionSnapshot selection) {
     // 统一入口：只解释 optionId（中立）；不读 Codex approval/sandbox。
     final next = GrokPermissionModeCodec.parse(selection.selectedOptionId);
     final changed = next != _permissionMode;

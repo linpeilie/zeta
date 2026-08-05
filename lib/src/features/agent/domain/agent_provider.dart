@@ -47,16 +47,26 @@ abstract class AgentProvider {
   /// 持久化由调用方（controller/ViewModel）负责，此方法只同步运行时状态。
   void updateModelSelection(AgentModelSelection selection);
 
-  /// 更新权限策略选择（中立 [AgentPermissionSelection.optionId]）。
+  /// 更新权限策略选择（迁移期运行时快照）。
   ///
   /// Provider 自行解释 optionId：Codex 映射 approval/sandbox/profile，
   /// Grok 映射 permission mode 并写会话 meta / 通知。
-  void updatePermissionSelection(AgentPermissionSelection selection);
+  ///
+  /// 新代码应优先使用 [AgentPermissionPolicyPort.applyPermissionSelection]。
+  @Deprecated(
+    'Use AgentPermissionPolicyPort.applyPermissionSelection via AgentProviderBundle.permissionPolicy',
+  )
+  void updatePermissionSelection(AgentPermissionSelectionSnapshot selection);
 
   /// 拉取权限选项列表（统一入口）。
   ///
   /// Codex：`permissionProfile/list`；Grok：静态 mode catalog。
   /// 失败或未支持时返回空列表。
+  ///
+  /// 新代码应优先使用 [AgentPermissionPolicyPort.listPermissionOptions]。
+  @Deprecated(
+    'Use AgentPermissionPolicyPort.listPermissionOptions via AgentProviderBundle.permissionPolicy',
+  )
   Future<List<AgentPermissionProfileSummary>> listPermissionProfiles();
 
   /// Guardian 拒绝后的人工放行（`thread/approveGuardianDeniedAction`）。

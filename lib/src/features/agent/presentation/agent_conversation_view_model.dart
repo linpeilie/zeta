@@ -736,7 +736,7 @@ class AgentConversationViewModel {
     await loadModels();
   }
 
-  AgentPermissionSelection get permissionSelection =>
+  AgentPermissionSelectionSnapshot get permissionSelection =>
       _permissionSelectionController.selection;
 
   String get permissionPolicyLabel =>

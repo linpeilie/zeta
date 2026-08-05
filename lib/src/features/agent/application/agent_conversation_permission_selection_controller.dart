@@ -4,22 +4,23 @@ import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 /// 权限策略选择的应用层控制器（Codex / Grok 统一入口）。
 ///
 /// 只认中立 [AgentPermissionProfileSummary] 选项与
-/// [AgentPermissionSelection.optionId]；不按 provider kind 分支，也不 import
+/// [AgentPermissionSelectionSnapshot.optionId]；不按 provider kind 分支，也不 import
 /// 任何厂商 codec。选项列表一律经 [AgentProvider.listPermissionProfiles]。
 class AgentConversationPermissionSelectionController {
   AgentConversationPermissionSelectionController({
     required this._persistSelection,
   });
 
-  final Future<void> Function(AgentPermissionSelection selection)
+  final Future<void> Function(AgentPermissionSelectionSnapshot selection)
   _persistSelection;
 
   AgentProvider? _provider;
-  AgentPermissionSelection _selection = const AgentPermissionSelection();
+  AgentPermissionSelectionSnapshot _selection =
+      const AgentPermissionSelectionSnapshot();
   List<AgentPermissionProfileSummary> _profiles =
       const <AgentPermissionProfileSummary>[];
 
-  AgentPermissionSelection get selection => _selection;
+  AgentPermissionSelectionSnapshot get selection => _selection;
 
   List<AgentPermissionProfileSummary> get profiles =>
       List<AgentPermissionProfileSummary>.unmodifiable(_profiles);
@@ -36,7 +37,9 @@ class AgentConversationPermissionSelectionController {
           return profile.displayName;
         }
       }
-      final preset = AgentPermissionSelection.presetForOptionId(optionId);
+      final preset = AgentPermissionSelectionSnapshot.presetForOptionId(
+        optionId,
+      );
       if (preset != null) {
         return preset.label;
       }
@@ -61,14 +64,14 @@ class AgentConversationPermissionSelectionController {
   void seedFromConfig(AgentProviderConfig config) {
     // 按显式持久化字段构造快照，不通过 startsWith(':') / 内置预设猜测协议类型。
     // selectedPermissionOptionId 仅作通用选择 ID；selectedPermissionProfileId 原样保留。
-    _selection = AgentPermissionSelection(
+    _selection = AgentPermissionSelectionSnapshot(
       optionId: config.resolvedPermissionOptionId,
-      approvalPolicy: AgentPermissionSelection.normalizeApprovalPolicy(
+      approvalPolicy: AgentPermissionSelectionSnapshot.normalizeApprovalPolicy(
         config.selectedApprovalPolicy,
       ),
       sandboxPolicy:
           config.selectedSandboxPolicy ??
-          AgentPermissionSelection.defaultSandboxPolicy,
+          AgentPermissionSelectionSnapshot.defaultSandboxPolicy,
       permissionProfileId: config.selectedPermissionProfileId,
     );
     _provider?.updatePermissionSelection(_selection);
@@ -82,8 +85,8 @@ class AgentConversationPermissionSelectionController {
     final supportsProfile =
         _provider?.capabilities.supportsPermissionProfileSelection == true;
     final next = supportsProfile
-        ? AgentPermissionSelection.forProfileId(profile.id)
-        : AgentPermissionSelection.forOptionId(profile.id);
+        ? AgentPermissionSelectionSnapshot.forProfileId(profile.id)
+        : AgentPermissionSelectionSnapshot.forOptionId(profile.id);
     _selection = next;
     await _syncSelection();
   }
@@ -92,16 +95,16 @@ class AgentConversationPermissionSelectionController {
   Future<void> selectPreset(AgentPermissionPreset preset) async {
     final profileId = preset.permissionProfileId;
     if (profileId != null && profileId.isNotEmpty) {
-      _selection = AgentPermissionSelection.forProfileId(profileId);
+      _selection = AgentPermissionSelectionSnapshot.forProfileId(profileId);
     } else {
-      _selection = AgentPermissionSelection(
+      _selection = AgentPermissionSelectionSnapshot(
         optionId: preset.id,
         approvalPolicy: preset.approvalPolicy,
         sandboxPolicy: preset.sandboxPolicy,
       );
     }
     if (_provider?.capabilities.supportsPermissionProfileSelection != true) {
-      _selection = AgentPermissionSelection(
+      _selection = AgentPermissionSelectionSnapshot(
         optionId: _selection.selectedOptionId ?? preset.id,
         approvalPolicy: preset.approvalPolicy,
         sandboxPolicy: preset.sandboxPolicy,
@@ -110,7 +113,9 @@ class AgentConversationPermissionSelectionController {
     await _syncSelection();
   }
 
-  Future<void> selectSelection(AgentPermissionSelection selection) async {
+  Future<void> selectSelection(
+    AgentPermissionSelectionSnapshot selection,
+  ) async {
     final optionId = selection.selectedOptionId;
     if (optionId == null || optionId.isEmpty) {
       _selection = selection;
@@ -120,11 +125,11 @@ class AgentConversationPermissionSelectionController {
     final supportsProfile =
         _provider?.capabilities.supportsPermissionProfileSelection == true;
     _selection = supportsProfile
-        ? AgentPermissionSelection.forProfileId(optionId).copyWith(
+        ? AgentPermissionSelectionSnapshot.forProfileId(optionId).copyWith(
             approvalPolicy: selection.approvalPolicy,
             sandboxPolicy: selection.sandboxPolicy,
           )
-        : AgentPermissionSelection.forOptionId(optionId);
+        : AgentPermissionSelectionSnapshot.forOptionId(optionId);
     await _syncSelection();
   }
 

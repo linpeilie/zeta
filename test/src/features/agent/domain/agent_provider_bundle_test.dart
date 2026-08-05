@@ -236,6 +236,7 @@ void main() {
       expect(bundle.localThreadList, isNull);
       expect(bundle.sessionConfiguration, isNull);
       expect(bundle.planApproval, isNull);
+      expect(bundle.permissionPolicy, isNull);
       expect(bundle.runtime.runtimeInfo, isNull);
       expect(
         bundle.runtime.lifecycleState,
@@ -243,6 +244,61 @@ void main() {
       );
       expect(bundle.runtime.runtimeScope, isNull);
     });
+
+    test(
+      'exposes permissionPolicy port when policy selection is supported',
+      () async {
+        final provider = _MinimalBundleFakeProvider(
+          capabilities: AgentProviderCapabilities.codexAppServer,
+          permissionProfiles: const <AgentPermissionProfileSummary>[
+            AgentPermissionProfileSummary(
+              id: ':workspace',
+              allowed: true,
+              description: 'Workspace write',
+            ),
+            AgentPermissionProfileSummary(
+              id: 'team-safe',
+              allowed: true,
+              description: 'Team safe',
+            ),
+          ],
+        );
+        final bundle = provider.bundle;
+
+        expect(bundle.permissionPolicy, isNotNull);
+        final catalog = await bundle.permissionPolicy!.listPermissionOptions();
+        expect(catalog.defaultOptionId, ':workspace');
+        expect(catalog.options.map((o) => o.id).toList(), <String>[
+          ':workspace',
+          'team-safe',
+        ]);
+        expect(catalog.options.first.label, 'Workspace write');
+
+        final result = await bundle.permissionPolicy!.applyPermissionSelection(
+          const AgentPermissionSelection(optionId: 'team-safe'),
+        );
+        expect(result.normalizedSelection.optionId, 'team-safe');
+        expect(result.scope, AgentPermissionApplyScope.runtime);
+        expect(
+          provider.lastPermissionSelection?.permissionProfileId,
+          'team-safe',
+        );
+        expect(provider.permissionApplyCount, 1);
+      },
+    );
+
+    test(
+      'permissionPolicy is null when policy selection capability is off',
+      () {
+        final bundle = _MinimalBundleFakeProvider(
+          capabilities: AgentProviderCapabilities.codexAppServer.copyWith(
+            supportsPermissionPolicySelection: false,
+          ),
+        ).bundle;
+
+        expect(bundle.permissionPolicy, isNull);
+      },
+    );
 
     test('keeps concurrent turn configurations isolated by call', () async {
       final provider = _MinimalBundleFakeProvider();
@@ -333,6 +389,7 @@ class _MinimalBundleFakeProvider implements AgentProvider {
     this.config = AgentProviderConfig.defaultCodex,
     this.capabilities = AgentProviderCapabilities.codexAppServer,
     this.availableModels = const AgentModelList(models: <AgentModelInfo>[]),
+    this.permissionProfiles = const <AgentPermissionProfileSummary>[],
   });
 
   final StreamController<AgentEvent> _events =
@@ -359,6 +416,8 @@ class _MinimalBundleFakeProvider implements AgentProvider {
       <AgentPermissionDecision>[];
   final List<String> guardianApprovals = <String>[];
   int modelListCalls = 0;
+  AgentPermissionSelectionSnapshot? lastPermissionSelection;
+  int permissionApplyCount = 0;
 
   @override
   final AgentProviderConfig config;
@@ -367,6 +426,7 @@ class _MinimalBundleFakeProvider implements AgentProvider {
   final AgentProviderCapabilities capabilities;
 
   final AgentModelList availableModels;
+  final List<AgentPermissionProfileSummary> permissionProfiles;
 
   @override
   Stream<AgentEvent> get events => _events.stream;
@@ -416,11 +476,14 @@ class _MinimalBundleFakeProvider implements AgentProvider {
   void updateModelSelection(AgentModelSelection selection) {}
 
   @override
-  void updatePermissionSelection(AgentPermissionSelection selection) {}
+  void updatePermissionSelection(AgentPermissionSelectionSnapshot selection) {
+    lastPermissionSelection = selection;
+    permissionApplyCount += 1;
+  }
 
   @override
   Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
-    return const <AgentPermissionProfileSummary>[];
+    return permissionProfiles;
   }
 
   @override

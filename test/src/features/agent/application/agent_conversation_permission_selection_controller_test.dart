@@ -23,7 +23,7 @@ void main() {
     test(
       'selectProfile uses forOptionId when profile selection unsupported',
       () async {
-        AgentPermissionSelection? persisted;
+        AgentPermissionSelectionSnapshot? persisted;
         final controller = AgentConversationPermissionSelectionController(
           persistSelection: (selection) async {
             persisted = selection;
@@ -65,7 +65,7 @@ void main() {
     test(
       'selectProfile expands Codex profile when profile selection supported',
       () async {
-        AgentPermissionSelection? persisted;
+        AgentPermissionSelectionSnapshot? persisted;
         final controller = AgentConversationPermissionSelectionController(
           persistSelection: (selection) async {
             persisted = selection;
@@ -164,7 +164,7 @@ void main() {
     test(
       'selectProfile for Grok auto keeps permissionProfileId null',
       () async {
-        AgentPermissionSelection? persisted;
+        AgentPermissionSelectionSnapshot? persisted;
         final controller = AgentConversationPermissionSelectionController(
           persistSelection: (selection) async {
             persisted = selection;
@@ -189,7 +189,7 @@ void main() {
     );
 
     test('built-in Codex :read-only still expands via selectProfile', () async {
-      AgentPermissionSelection? persisted;
+      AgentPermissionSelectionSnapshot? persisted;
       final controller = AgentConversationPermissionSelectionController(
         persistSelection: (selection) async {
           persisted = selection;
@@ -214,7 +214,7 @@ void main() {
     });
 
     test('persist and re-seed round-trips custom team-safe profile', () async {
-      AgentPermissionSelection? persisted;
+      AgentPermissionSelectionSnapshot? persisted;
       final controller = AgentConversationPermissionSelectionController(
         persistSelection: (selection) async {
           persisted = selection;
@@ -437,7 +437,7 @@ void main() {
 }
 
 class _GrokLikeProvider extends FakeAgentProvider {
-  AgentPermissionSelection? lastSelection;
+  AgentPermissionSelectionSnapshot? lastSelection;
   int listCalls = 0;
 
   _GrokLikeProvider()
@@ -447,7 +447,7 @@ class _GrokLikeProvider extends FakeAgentProvider {
       );
 
   @override
-  void updatePermissionSelection(AgentPermissionSelection selection) {
+  void updatePermissionSelection(AgentPermissionSelectionSnapshot selection) {
     lastSelection = selection;
   }
 
@@ -470,7 +470,7 @@ class _GrokLikeProvider extends FakeAgentProvider {
 }
 
 class _CodexLikeProvider extends FakeAgentProvider {
-  AgentPermissionSelection? lastSelection;
+  AgentPermissionSelectionSnapshot? lastSelection;
   int updateCallCount = 0;
 
   _CodexLikeProvider()
@@ -484,7 +484,7 @@ class _CodexLikeProvider extends FakeAgentProvider {
   }
 
   @override
-  void updatePermissionSelection(AgentPermissionSelection selection) {
+  void updatePermissionSelection(AgentPermissionSelectionSnapshot selection) {
     lastSelection = selection;
     updateCallCount += 1;
   }

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 import 'agent_provider_stub_base.dart';
 
@@ -143,11 +144,31 @@ class FakeAgentProvider
     this.config = AgentProviderConfig.defaultCodex,
     this.includeConversationTestThread = false,
     this.conversationThreadProviderId,
-    this.permissionProfiles = const <AgentPermissionProfileSummary>[],
+    List<AgentPermissionProfileSummary> permissionProfiles =
+        const <AgentPermissionProfileSummary>[],
+    List<AgentPermissionOption> permissionOptions =
+        const <AgentPermissionOption>[],
+    this.permissionPolicyOverride,
     List<AgentThreadPage> threadPages = const <AgentThreadPage>[],
     Map<String, AgentThreadHistorySnapshot> threadHistories =
         const <String, AgentThreadHistorySnapshot>{},
-  }) : _threadPages = List<AgentThreadPage>.from(threadPages),
+  }) : permissionProfiles = permissionProfiles.isNotEmpty
+           ? List<AgentPermissionProfileSummary>.unmodifiable(
+               permissionProfiles,
+             )
+           : List<AgentPermissionProfileSummary>.unmodifiable(
+               permissionOptions.map(
+                 AgentPermissionPolicyAdapters.profileSummaryFromOption,
+               ),
+             ),
+       permissionOptions = permissionOptions.isNotEmpty
+           ? List<AgentPermissionOption>.unmodifiable(permissionOptions)
+           : List<AgentPermissionOption>.unmodifiable(
+               permissionProfiles.map(
+                 AgentPermissionPolicyAdapters.optionFromProfileSummary,
+               ),
+             ),
+       _threadPages = List<AgentThreadPage>.from(threadPages),
        _threadHistories = Map<String, AgentThreadHistorySnapshot>.from(
          threadHistories,
        );
@@ -166,7 +187,15 @@ class FakeAgentProvider
   final AgentProviderConfig config;
   final bool includeConversationTestThread;
   final String? conversationThreadProviderId;
+
+  /// 旧 profile 列表（[listPermissionProfiles]）。
   final List<AgentPermissionProfileSummary> permissionProfiles;
+
+  /// 中立 option 列表（与 [permissionProfiles] 双向薄适配）。
+  final List<AgentPermissionOption> permissionOptions;
+
+  /// 可选显式权限 port；非 null 时测试可直接使用而不经 legacy bridge。
+  final AgentPermissionPolicyPort? permissionPolicyOverride;
   final List<AgentThreadPage> _threadPages;
   final Map<String, AgentThreadHistorySnapshot> _threadHistories;
   bool _conversationTestThreadReturned = false;
@@ -476,20 +505,32 @@ class FakeAgentProvider
   void updateModelSelection(AgentModelSelection selection) {}
 
   /// 最近一次 [updatePermissionSelection] 快照（权限选择同步断言用）。
-  AgentPermissionSelection? lastPermissionSelection;
+  AgentPermissionSelectionSnapshot? lastPermissionSelection;
 
   /// [updatePermissionSelection] 调用次数。
   int permissionSelectionUpdateCount = 0;
 
   @override
-  void updatePermissionSelection(AgentPermissionSelection selection) {
+  void updatePermissionSelection(AgentPermissionSelectionSnapshot selection) {
     lastPermissionSelection = selection;
     permissionSelectionUpdateCount += 1;
   }
 
   @override
   Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
-    return List<AgentPermissionProfileSummary>.unmodifiable(permissionProfiles);
+    return permissionProfiles;
+  }
+
+  /// 供测试直接拿到新旧并存的权限 port。
+  ///
+  /// 优先 [permissionPolicyOverride]；否则在 capability 开启时走
+  /// [AgentProviderBundle.adapt] 的 legacy 桥接。
+  AgentPermissionPolicyPort? get permissionPolicyPort {
+    final override = permissionPolicyOverride;
+    if (override != null) {
+      return override;
+    }
+    return bundle.permissionPolicy;
   }
 
   @override

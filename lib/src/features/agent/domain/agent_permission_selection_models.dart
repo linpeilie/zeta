@@ -1,7 +1,14 @@
 /// 中立权限选项摘要（Codex profile 或 Grok mode 等均用此结构）。
 ///
 /// [id] 对共享层不透明；具体协议含义由各 Provider 解释。
+///
+/// 迁移期保留；新代码应优先使用 [AgentPermissionOption] 与
+/// [AgentPermissionPolicyPort]。
+@Deprecated(
+  'Use AgentPermissionOption via AgentPermissionPolicyPort.listPermissionOptions',
+)
 class AgentPermissionProfileSummary {
+  /// 创建旧版权限选项摘要。
   const AgentPermissionProfileSummary({
     required this.id,
     required this.allowed,
@@ -19,7 +26,7 @@ class AgentPermissionProfileSummary {
 
   /// 与本 id 关联的内置 Composer 预设（若有）。
   AgentPermissionPreset? get matchedPreset =>
-      AgentPermissionSelection.presetForOptionId(id);
+      AgentPermissionSelectionSnapshot.presetForOptionId(id);
 
   /// Composer 触发器 / 选项主标题：短 option label。
   ///
@@ -45,7 +52,7 @@ class AgentPermissionProfileSummary {
   String get displaySubtitle {
     final preset = matchedPreset;
     if (preset != null) {
-      return AgentPermissionSelection.approvalPolicyDisplayLabel(
+      return AgentPermissionSelectionSnapshot.approvalPolicyDisplayLabel(
         preset.approvalPolicy,
       );
     }
@@ -65,12 +72,15 @@ class AgentPermissionProfileSummary {
   int get hashCode => Object.hash(id, allowed, description);
 }
 
-/// 用户选择的权限策略快照。
+/// 迁移期权限策略运行时快照（含协议编码字段）。
 ///
-/// 共享层以 [optionId] 为唯一选择主键；[approvalPolicy] / [sandboxPolicy] /
-/// [permissionProfileId] 是 Provider 可选编码细节（Codex turn/start 等）。
-class AgentPermissionSelection {
-  const AgentPermissionSelection({
+/// 共享层以 [optionId] 为选择主键；[approvalPolicy] / [sandboxPolicy] /
+/// [permissionProfileId] 是 Provider 可选编码细节，将在阶段 6 退出共享层。
+///
+/// 新 port API 请使用仅含 optionId 的 [AgentPermissionSelection]。
+class AgentPermissionSelectionSnapshot {
+  /// 创建运行时权限快照。
+  const AgentPermissionSelectionSnapshot({
     this.optionId,
     this.approvalPolicy = defaultApprovalPolicy,
     this.sandboxPolicy = defaultSandboxPolicy,
@@ -195,7 +205,7 @@ class AgentPermissionSelection {
     return '$sandboxLabel · $approvalLabel';
   }
 
-  AgentPermissionSelection copyWith({
+  AgentPermissionSelectionSnapshot copyWith({
     String? optionId,
     String? approvalPolicy,
     String? sandboxPolicy,
@@ -203,7 +213,7 @@ class AgentPermissionSelection {
     bool clearOptionId = false,
     bool clearPermissionProfileId = false,
   }) {
-    return AgentPermissionSelection(
+    return AgentPermissionSelectionSnapshot(
       optionId: clearOptionId ? null : (optionId ?? this.optionId),
       approvalPolicy: approvalPolicy ?? this.approvalPolicy,
       sandboxPolicy: sandboxPolicy ?? this.sandboxPolicy,
@@ -298,18 +308,18 @@ class AgentPermissionSelection {
   ///
   /// - 命中 Codex 内置 profile：回填 approval/sandbox/profileId
   /// - 其它不透明 id（含 Grok mode）：只记录 [optionId]，approval/sandbox 用默认
-  static AgentPermissionSelection forOptionId(String optionId) {
+  static AgentPermissionSelectionSnapshot forOptionId(String optionId) {
     final normalized = optionId.trim();
     final preset = presetForOptionId(normalized);
     if (preset != null) {
-      return AgentPermissionSelection(
+      return AgentPermissionSelectionSnapshot(
         optionId: normalized,
         approvalPolicy: preset.approvalPolicy,
         sandboxPolicy: preset.sandboxPolicy,
         permissionProfileId: normalized,
       );
     }
-    return AgentPermissionSelection(
+    return AgentPermissionSelectionSnapshot(
       optionId: normalized,
       approvalPolicy: defaultApprovalPolicy,
       sandboxPolicy: defaultSandboxPolicy,
@@ -318,14 +328,14 @@ class AgentPermissionSelection {
   }
 
   /// 兼容旧 API：按 profile id 构造（等同 [forOptionId] 且绑定 profile）。
-  static AgentPermissionSelection forProfileId(String profileId) {
+  static AgentPermissionSelectionSnapshot forProfileId(String profileId) {
     final normalized = profileId.trim();
     final preset = presetForOptionId(normalized);
     if (preset != null) {
       return forOptionId(normalized);
     }
     // 自定义 Codex profile：仍绑定 permissionProfileId。
-    return AgentPermissionSelection(
+    return AgentPermissionSelectionSnapshot(
       optionId: normalized,
       approvalPolicy: defaultApprovalPolicy,
       sandboxPolicy: defaultSandboxPolicy,
@@ -334,8 +344,14 @@ class AgentPermissionSelection {
   }
 }
 
-/// Composer 策略预设项。
+/// Composer 策略预设项（Codex 内置 profile 表）。
+///
+/// 将迁入 Codex data codec；新代码不应在 application 层依赖本类型。
+@Deprecated(
+  'Codex built-in presets will move to data-layer codec; use opaque option ids',
+)
 class AgentPermissionPreset {
+  /// 创建内置预设。
   const AgentPermissionPreset({
     required this.id,
     required this.label,

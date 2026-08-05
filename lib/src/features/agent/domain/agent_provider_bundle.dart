@@ -20,6 +20,7 @@ final class AgentProviderBundle {
     this.localThreadList,
     this.sessionConfiguration,
     this.planApproval,
+    this.permissionPolicy,
   });
 
   factory AgentProviderBundle.adapt(AgentProvider provider) {
@@ -85,6 +86,10 @@ final class AgentProviderBundle {
           _LegacyAgentPlanApprovalPort(planApprovalProvider),
         _ => null,
       },
+      // 权限策略 port：能力开启时通过旧 list/update API 薄适配。
+      permissionPolicy: capabilities.supportsPermissionPolicySelection
+          ? _LegacyAgentPermissionPolicyPort(provider)
+          : null,
     );
   }
 
@@ -101,6 +106,9 @@ final class AgentProviderBundle {
   final AgentLocalThreadListPort? localThreadList;
   final AgentSessionConfigurationPort? sessionConfiguration;
   final AgentPlanApprovalPort? planApproval;
+
+  /// 可选权限策略端口；为 null 表示 provider 不支持权限模式/profile 选择。
+  final AgentPermissionPolicyPort? permissionPolicy;
 
   AgentProvider get provider => runtime.provider;
 
@@ -579,5 +587,53 @@ final class _LegacyAgentPlanApprovalPort implements AgentPlanApprovalPort {
   @override
   Future<void> respondToPlanApproval(AgentPlanApprovalDecision decision) {
     return _provider.respondToPlanApproval(decision);
+  }
+}
+
+/// 将旧 [AgentProvider.listPermissionProfiles] /
+/// [AgentProvider.updatePermissionSelection] 薄适配为中立权限 port。
+final class _LegacyAgentPermissionPolicyPort
+    implements AgentPermissionPolicyPort {
+  const _LegacyAgentPermissionPolicyPort(this._provider);
+
+  final AgentProvider _provider;
+
+  @override
+  Future<AgentPermissionCatalog> listPermissionOptions() async {
+    // 迁移期桥接：刻意调用 deprecated 旧 API。
+    // ignore: deprecated_member_use_from_same_package
+    final profiles = await _provider.listPermissionProfiles();
+    final options = profiles
+        .map(AgentPermissionPolicyAdapters.optionFromProfileSummary)
+        .toList(growable: false);
+    final defaultOptionId = options.isNotEmpty ? options.first.id : '';
+    return AgentPermissionCatalog(
+      options: options,
+      defaultOptionId: defaultOptionId,
+    );
+  }
+
+  @override
+  Future<AgentPermissionApplyResult> applyPermissionSelection(
+    AgentPermissionSelection selection,
+  ) async {
+    final preferProfile =
+        _provider.capabilities.supportsPermissionProfileSelection;
+    final snapshot = AgentPermissionPolicyAdapters.snapshotFromSelection(
+      selection,
+      preferProfileBinding: preferProfile,
+    );
+    // ignore: deprecated_member_use_from_same_package
+    _provider.updatePermissionSelection(snapshot);
+    final normalizedId = snapshot.selectedOptionId?.trim();
+    return AgentPermissionApplyResult(
+      normalizedSelection: AgentPermissionSelection(
+        optionId: (normalizedId != null && normalizedId.isNotEmpty)
+            ? normalizedId
+            : selection.optionId,
+      ),
+      // 旧 updatePermissionSelection 立即写入 runtime 内存选择。
+      scope: AgentPermissionApplyScope.runtime,
+    );
   }
 }

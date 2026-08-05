@@ -143,7 +143,7 @@ void main() {
         await provider.initialize();
 
         provider.updatePermissionSelection(
-          const AgentPermissionSelection(optionId: 'auto'),
+          const AgentPermissionSelectionSnapshot(optionId: 'auto'),
         );
 
         expect(peer.notificationsSent, <String>['_x.ai/yolo_mode_changed']);
@@ -158,10 +158,10 @@ void main() {
 
         // Always approve → Ask 后必须显式关闭自动批准。
         provider.updatePermissionSelection(
-          const AgentPermissionSelection(optionId: 'always-approve'),
+          const AgentPermissionSelectionSnapshot(optionId: 'always-approve'),
         );
         provider.updatePermissionSelection(
-          const AgentPermissionSelection(optionId: 'ask'),
+          const AgentPermissionSelectionSnapshot(optionId: 'ask'),
         );
         final askParams = peer.notificationParams.last! as Map<String, Object?>;
         expect(askParams['permission_mode'], 'ask');

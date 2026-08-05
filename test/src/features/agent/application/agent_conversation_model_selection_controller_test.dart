@@ -330,7 +330,7 @@ class _FakeAgentProvider
   }
 
   @override
-  void updatePermissionSelection(AgentPermissionSelection selection) {}
+  void updatePermissionSelection(AgentPermissionSelectionSnapshot selection) {}
 
   @override
   Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {

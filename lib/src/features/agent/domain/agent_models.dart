@@ -10,6 +10,7 @@ export 'package:zeta/src/features/agent/domain/agent_message_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_model_catalog_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_model_selection_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_permission_models.dart';
+export 'package:zeta/src/features/agent/domain/agent_permission_policy_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_permission_selection_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_plan_approval_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_plan_execution_models.dart';

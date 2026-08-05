@@ -2,45 +2,49 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 void main() {
-  group('AgentPermissionSelection', () {
+  group('AgentPermissionSelectionSnapshot', () {
     test('migrates removed on-failure policy and preserves stable values', () {
       // Arrange
       const legacy = 'on-failure';
 
       // Act
-      final migrated = AgentPermissionSelection.normalizeApprovalPolicy(legacy);
+      final migrated = AgentPermissionSelectionSnapshot.normalizeApprovalPolicy(
+        legacy,
+      );
 
       // Assert
       expect(migrated, 'on-request');
       expect(
-        AgentPermissionSelection.normalizeApprovalPolicy('never'),
+        AgentPermissionSelectionSnapshot.normalizeApprovalPolicy('never'),
         'never',
       );
       expect(
-        AgentPermissionSelection.normalizePersistedApprovalPolicy(null),
+        AgentPermissionSelectionSnapshot.normalizePersistedApprovalPolicy(null),
         isNull,
       );
     });
 
     test('trigger labels use short option names without approval subtitle', () {
       // 默认策略匹配 :workspace 内置预设 → 触发器短标签。
-      const workspace = AgentPermissionSelection();
+      const workspace = AgentPermissionSelectionSnapshot();
       expect(workspace.protocolPermissionProfileId, ':workspace');
       expect(workspace.displayLabel, 'Workspace write');
       expect(workspace.displayLabel, isNot(contains('Ask first')));
 
       // 显式 built-in option 同样短标签。
-      final readOnly = AgentPermissionSelection.forProfileId(':read-only');
+      final readOnly = AgentPermissionSelectionSnapshot.forProfileId(
+        ':read-only',
+      );
       expect(readOnly.displayLabel, 'Read only');
       expect(readOnly.displayLabel, isNot(contains('·')));
 
-      final fullAccess = AgentPermissionSelection.forProfileId(
+      final fullAccess = AgentPermissionSelectionSnapshot.forProfileId(
         ':danger-full-access',
       );
       expect(fullAccess.displayLabel, 'Full access');
 
       // 自定义 profile：selectedOptionId 回落到 profile id，触发器用短 id。
-      const custom = AgentPermissionSelection(
+      const custom = AgentPermissionSelectionSnapshot(
         approvalPolicy: 'on-request',
         sandboxPolicy: 'workspaceWrite',
         permissionProfileId: ':team-safe',
@@ -72,7 +76,9 @@ void main() {
       expect(always.displayName, 'Always approve');
 
       // selection 回落：Grok option 不得被默认 approval/sandbox 显示成 Workspace write。
-      final autoSelection = AgentPermissionSelection.forOptionId('auto');
+      final autoSelection = AgentPermissionSelectionSnapshot.forOptionId(
+        'auto',
+      );
       expect(autoSelection.displayLabel, 'auto');
       expect(autoSelection.displayLabel, isNot('Workspace write'));
       expect(autoSelection.permissionProfileId, isNull);
@@ -83,19 +89,25 @@ void main() {
     });
 
     test('forProfileId maps known built-ins and keeps custom ids', () {
-      final readOnly = AgentPermissionSelection.forProfileId(':read-only');
+      final readOnly = AgentPermissionSelectionSnapshot.forProfileId(
+        ':read-only',
+      );
       expect(readOnly.permissionProfileId, ':read-only');
       expect(readOnly.sandboxPolicy, 'readOnly');
       expect(readOnly.approvalPolicy, 'on-request');
       expect(readOnly.matchedPresetId, 'readOnly');
 
-      final custom = AgentPermissionSelection.forProfileId(':team-safe');
+      final custom = AgentPermissionSelectionSnapshot.forProfileId(
+        ':team-safe',
+      );
       expect(custom.permissionProfileId, ':team-safe');
       expect(custom.sandboxPolicy, 'workspaceWrite');
       expect(custom.protocolPermissionProfileId, ':team-safe');
 
       // 不以 `:` 开头的自定义 Codex profile 也必须保留，不得回落 :workspace。
-      final teamSafe = AgentPermissionSelection.forProfileId('team-safe');
+      final teamSafe = AgentPermissionSelectionSnapshot.forProfileId(
+        'team-safe',
+      );
       expect(teamSafe.permissionProfileId, 'team-safe');
       expect(teamSafe.optionId, 'team-safe');
       expect(teamSafe.protocolPermissionProfileId, 'team-safe');
@@ -103,7 +115,7 @@ void main() {
     });
 
     test('forOptionId leaves Grok mode out of permissionProfileId', () {
-      final auto = AgentPermissionSelection.forOptionId('auto');
+      final auto = AgentPermissionSelectionSnapshot.forOptionId('auto');
       expect(auto.optionId, 'auto');
       expect(auto.permissionProfileId, isNull);
       // 无显式 profile 时，默认 approval/sandbox 可能匹配内置 preset；
@@ -145,7 +157,7 @@ void main() {
       expect(bareFullAccess.matchedPreset?.id, 'fullAccess');
       expect(bareFullAccess.matchedPreset?.sandboxPolicy, 'dangerFullAccess');
 
-      final fullAccessSelection = AgentPermissionSelection.forProfileId(
+      final fullAccessSelection = AgentPermissionSelectionSnapshot.forProfileId(
         ':danger-full-access',
       );
       expect(fullAccessSelection.approvalPolicy, 'never');

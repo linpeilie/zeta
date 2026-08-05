@@ -301,7 +301,7 @@ class AgentProviderConfig {
       selectedServiceTier: decodeOptionalString(map['selectedServiceTier']),
       modelPreferences: _decodeModelPreferences(map['modelPreferences']),
       selectedApprovalPolicy:
-          AgentPermissionSelection.normalizePersistedApprovalPolicy(
+          AgentPermissionSelectionSnapshot.normalizePersistedApprovalPolicy(
             decodeOptionalString(map['selectedApprovalPolicy']),
           ),
       selectedSandboxPolicy: decodeOptionalString(map['selectedSandboxPolicy']),

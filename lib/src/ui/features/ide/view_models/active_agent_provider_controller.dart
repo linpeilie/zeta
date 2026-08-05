@@ -295,7 +295,7 @@ class ActiveAgentProviderController extends ChangeNotifier {
 
   /// 持久化审批/沙箱策略选择。
   Future<void> persistPermissionSelection(
-    AgentPermissionSelection selection,
+    AgentPermissionSelectionSnapshot selection,
   ) async {
     final providerId = activeProviderId;
     final updatedProviders = _settings.providers.map((provider) {

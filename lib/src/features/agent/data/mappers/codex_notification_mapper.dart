@@ -107,7 +107,7 @@ class _CodexNotificationMapper {
         final settings = _map(notification.params['threadSettings']);
         // 权限字段一次性解码进同一事件；空串/不可识别值保持 null，由 controller 原子合并。
         final sandboxPolicy =
-            AgentPermissionSelection.sandboxPolicyFromProtocol(
+            AgentPermissionSelectionSnapshot.sandboxPolicyFromProtocol(
               settings['sandboxPolicy'] ?? settings['sandbox'],
             );
         final activeProfile = _map(settings['activePermissionProfile']);
