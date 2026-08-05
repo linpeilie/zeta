@@ -262,6 +262,177 @@ void main() {
         isNot(':workspace'),
       );
     });
+
+    group('applyThreadSettings atomic merge', () {
+      test('merges profile, approval and sandbox from the same event', () {
+        final provider = _CodexLikeProvider();
+        final controller = AgentConversationPermissionSelectionController(
+          persistSelection: (_) async {
+            fail('settings must not persist as global default');
+          },
+        );
+        controller.seedFromConfig(AgentProviderConfig.defaultCodex);
+        controller.bindProvider(provider);
+        provider.resetUpdateCount();
+
+        controller.applyThreadSettings(
+          approvalPolicy: 'never',
+          sandboxPolicy: 'dangerFullAccess',
+          permissionProfileId: ':danger-full-access',
+        );
+
+        expect(controller.selection.approvalPolicy, 'never');
+        expect(controller.selection.sandboxPolicy, 'dangerFullAccess');
+        expect(controller.selection.permissionProfileId, ':danger-full-access');
+        expect(controller.selection.optionId, ':danger-full-access');
+        expect(provider.updateCallCount, 1);
+        expect(
+          provider.lastSelection?.permissionProfileId,
+          ':danger-full-access',
+        );
+        expect(provider.lastSelection?.approvalPolicy, 'never');
+        expect(provider.lastSelection?.sandboxPolicy, 'dangerFullAccess');
+      });
+
+      test('profile-only update keeps existing approval and sandbox', () {
+        final provider = _CodexLikeProvider();
+        final controller = AgentConversationPermissionSelectionController(
+          persistSelection: (_) async {},
+        );
+        controller.seedFromConfig(
+          AgentProviderConfig.defaultCodex.copyWith(
+            selectedPermissionOptionId: 'team-safe',
+            selectedPermissionProfileId: 'team-safe',
+            selectedApprovalPolicy: 'never',
+            selectedSandboxPolicy: 'dangerFullAccess',
+          ),
+        );
+        controller.bindProvider(provider);
+        provider.resetUpdateCount();
+
+        controller.applyThreadSettings(permissionProfileId: ':read-only');
+
+        expect(controller.selection.permissionProfileId, ':read-only');
+        expect(controller.selection.optionId, ':read-only');
+        // 不得被 forProfileId 重置为内置预设的 on-request/readOnly。
+        expect(controller.selection.approvalPolicy, 'never');
+        expect(controller.selection.sandboxPolicy, 'dangerFullAccess');
+        expect(provider.updateCallCount, 1);
+      });
+
+      test('approval and sandbox only update keeps existing profile', () {
+        final provider = _CodexLikeProvider();
+        final controller = AgentConversationPermissionSelectionController(
+          persistSelection: (_) async {},
+        );
+        controller.seedFromConfig(
+          AgentProviderConfig.defaultCodex.copyWith(
+            selectedPermissionOptionId: 'team-safe',
+            selectedPermissionProfileId: 'team-safe',
+            selectedApprovalPolicy: 'on-request',
+            selectedSandboxPolicy: 'workspaceWrite',
+          ),
+        );
+        controller.bindProvider(provider);
+        provider.resetUpdateCount();
+
+        controller.applyThreadSettings(
+          approvalPolicy: 'untrusted',
+          sandboxPolicy: 'readOnly',
+        );
+
+        expect(controller.selection.permissionProfileId, 'team-safe');
+        expect(controller.selection.optionId, 'team-safe');
+        expect(controller.selection.approvalPolicy, 'untrusted');
+        expect(controller.selection.sandboxPolicy, 'readOnly');
+        expect(provider.updateCallCount, 1);
+      });
+
+      test('custom profile with non-default policies stays atomic', () {
+        final provider = _CodexLikeProvider();
+        final controller = AgentConversationPermissionSelectionController(
+          persistSelection: (_) async {},
+        );
+        controller.seedFromConfig(AgentProviderConfig.defaultCodex);
+        controller.bindProvider(provider);
+        provider.resetUpdateCount();
+
+        controller.applyThreadSettings(
+          approvalPolicy: 'untrusted',
+          sandboxPolicy: 'readOnly',
+          permissionProfileId: 'team-safe',
+        );
+
+        expect(controller.selection.permissionProfileId, 'team-safe');
+        expect(controller.selection.optionId, 'team-safe');
+        expect(controller.selection.approvalPolicy, 'untrusted');
+        expect(controller.selection.sandboxPolicy, 'readOnly');
+        expect(controller.selection.protocolPermissionProfileId, 'team-safe');
+        expect(provider.updateCallCount, 1);
+      });
+
+      test('empty and damaged fields do not overwrite valid values', () {
+        final provider = _CodexLikeProvider();
+        final controller = AgentConversationPermissionSelectionController(
+          persistSelection: (_) async {},
+        );
+        controller.seedFromConfig(
+          AgentProviderConfig.defaultCodex.copyWith(
+            selectedPermissionOptionId: 'team-safe',
+            selectedPermissionProfileId: 'team-safe',
+            selectedApprovalPolicy: 'never',
+            selectedSandboxPolicy: 'dangerFullAccess',
+          ),
+        );
+        controller.bindProvider(provider);
+        provider.resetUpdateCount();
+
+        controller.applyThreadSettings(
+          approvalPolicy: '',
+          sandboxPolicy: '   ',
+          permissionProfileId: '',
+        );
+        expect(controller.selection.approvalPolicy, 'never');
+        expect(controller.selection.sandboxPolicy, 'dangerFullAccess');
+        expect(controller.selection.permissionProfileId, 'team-safe');
+        expect(provider.updateCallCount, 0);
+
+        controller.applyThreadSettings(
+          approvalPolicy: 'not-a-policy',
+          sandboxPolicy: 'not-a-sandbox',
+          permissionProfileId: '  ',
+        );
+        expect(controller.selection.approvalPolicy, 'never');
+        expect(controller.selection.sandboxPolicy, 'dangerFullAccess');
+        expect(controller.selection.permissionProfileId, 'team-safe');
+        expect(provider.updateCallCount, 0);
+      });
+
+      test('identical values do not re-sync provider', () {
+        final provider = _CodexLikeProvider();
+        final controller = AgentConversationPermissionSelectionController(
+          persistSelection: (_) async {},
+        );
+        controller.seedFromConfig(
+          AgentProviderConfig.defaultCodex.copyWith(
+            selectedPermissionOptionId: ':workspace',
+            selectedPermissionProfileId: ':workspace',
+            selectedApprovalPolicy: 'on-request',
+            selectedSandboxPolicy: 'workspaceWrite',
+          ),
+        );
+        controller.bindProvider(provider);
+        provider.resetUpdateCount();
+
+        controller.applyThreadSettings(
+          approvalPolicy: 'on-request',
+          sandboxPolicy: 'workspaceWrite',
+          permissionProfileId: ':workspace',
+        );
+
+        expect(provider.updateCallCount, 0);
+      });
+    });
   });
 }
 
@@ -300,6 +471,7 @@ class _GrokLikeProvider extends FakeAgentProvider {
 
 class _CodexLikeProvider extends FakeAgentProvider {
   AgentPermissionSelection? lastSelection;
+  int updateCallCount = 0;
 
   _CodexLikeProvider()
     : super(
@@ -307,8 +479,13 @@ class _CodexLikeProvider extends FakeAgentProvider {
         declaredCapabilities: AgentProviderCapabilities.codexAppServer,
       );
 
+  void resetUpdateCount() {
+    updateCallCount = 0;
+  }
+
   @override
   void updatePermissionSelection(AgentPermissionSelection selection) {
     lastSelection = selection;
+    updateCallCount += 1;
   }
 }

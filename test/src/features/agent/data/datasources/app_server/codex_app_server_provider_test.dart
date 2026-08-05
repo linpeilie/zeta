@@ -2022,6 +2022,58 @@ void main() {
     });
 
     test(
+      'maps thread settings permission fields into one atomic event',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+        addTearDown(subscription.cancel);
+        await provider.initialize();
+
+        peer.emitNotification('thread/settings/updated', <String, Object?>{
+          'threadId': 'thread-perm',
+          'threadSettings': <String, Object?>{
+            'approvalPolicy': 'never',
+            'sandboxPolicy': <String, Object?>{'type': 'dangerFullAccess'},
+            'activePermissionProfile': <String, Object?>{
+              'id': 'team-safe',
+              'name': 'Team safe',
+            },
+          },
+        });
+        // 空 profile id / 损坏策略不得被映射成有效字段。
+        peer.emitNotification('thread/settings/updated', <String, Object?>{
+          'threadId': 'thread-perm-empty',
+          'threadSettings': <String, Object?>{
+            'approvalPolicy': '',
+            'sandboxPolicy': 'not-a-sandbox',
+            'activePermissionProfile': <String, Object?>{'id': ''},
+          },
+        });
+        await Future<void>.delayed(Duration.zero);
+
+        final full = events
+            .whereType<AgentThreadSettingsUpdatedEvent>()
+            .firstWhere((event) => event.threadId == 'thread-perm');
+        expect(full.approvalPolicy, 'never');
+        expect(full.sandboxPolicy, 'dangerFullAccess');
+        expect(full.activePermissionProfileId, 'team-safe');
+
+        final empty = events
+            .whereType<AgentThreadSettingsUpdatedEvent>()
+            .firstWhere((event) => event.threadId == 'thread-perm-empty');
+        expect(empty.approvalPolicy, isNull);
+        expect(empty.sandboxPolicy, isNull);
+        expect(empty.activePermissionProfileId, isNull);
+      },
+    );
+
+    test(
       'maps scoped thread settings collaboration modes into typed events',
       () async {
         final peer = _FakeJsonRpcPeer();

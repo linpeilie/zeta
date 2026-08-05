@@ -129,6 +129,10 @@ class AgentConversationPermissionSelectionController {
   }
 
   /// 用服务端 `thread/settings/updated` 回写本地选择。
+  ///
+  /// 同一事件中的 approval / sandbox / profile 在同一 [next] 上原子合并；
+  /// 全部字段处理完后只写一次 `_selection`、只同步一次 provider。
+  /// 空串、缺失与无法识别的字段不覆盖已有有效值；不触发全局持久化。
   void applyThreadSettings({
     String? approvalPolicy,
     String? sandboxPolicy,
@@ -136,29 +140,70 @@ class AgentConversationPermissionSelectionController {
   }) {
     var changed = false;
     var next = _selection;
-    if (approvalPolicy != null &&
-        approvalPolicy.isNotEmpty &&
-        approvalPolicy != next.approvalPolicy) {
-      next = next.copyWith(approvalPolicy: approvalPolicy);
+
+    final nextApproval = _validApprovalPolicy(approvalPolicy);
+    if (nextApproval != null && nextApproval != next.approvalPolicy) {
+      next = next.copyWith(approvalPolicy: nextApproval);
       changed = true;
     }
-    if (sandboxPolicy != null &&
-        sandboxPolicy.isNotEmpty &&
-        sandboxPolicy != next.sandboxPolicy) {
-      next = next.copyWith(sandboxPolicy: sandboxPolicy);
+
+    final nextSandbox = _validSandboxPolicy(sandboxPolicy);
+    if (nextSandbox != null && nextSandbox != next.sandboxPolicy) {
+      next = next.copyWith(sandboxPolicy: nextSandbox);
       changed = true;
     }
+
+    final nextProfileId = _nonEmpty(permissionProfileId);
     if (_provider?.capabilities.supportsPermissionProfileSelection == true &&
-        permissionProfileId != null &&
-        permissionProfileId != next.permissionProfileId) {
-      next = AgentPermissionSelection.forProfileId(permissionProfileId);
+        nextProfileId != null &&
+        nextProfileId != next.permissionProfileId) {
+      // 只合并 profile 字段，禁止 forProfileId 整对象替换冲掉已合并的策略。
+      next = next.copyWith(
+        optionId: nextProfileId,
+        permissionProfileId: nextProfileId,
+      );
       changed = true;
     }
+
     if (!changed) {
       return;
     }
     _selection = next;
+    // 服务端 settings 只更新当前 thread 有效状态，不调用 _persistSelection。
     _provider?.updatePermissionSelection(_selection);
+  }
+
+  /// 可识别的审批策略；空串/未知值返回 null，避免覆盖本地有效值。
+  static String? _validApprovalPolicy(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    return switch (trimmed) {
+      'untrusted' || 'on-request' || 'never' => trimmed,
+      'on-failure' => 'on-request',
+      _ => null,
+    };
+  }
+
+  /// 可识别的沙箱策略；空串/未知值返回 null。
+  static String? _validSandboxPolicy(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    return switch (trimmed) {
+      'readOnly' || 'workspaceWrite' || 'dangerFullAccess' => trimmed,
+      _ => null,
+    };
+  }
+
+  static String? _nonEmpty(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    return trimmed;
   }
 
   Future<void> refreshProfiles() async {

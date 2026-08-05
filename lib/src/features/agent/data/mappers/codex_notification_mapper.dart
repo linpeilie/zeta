@@ -105,8 +105,7 @@ class _CodexNotificationMapper {
           return const _NotificationMapping();
         }
         final settings = _map(notification.params['threadSettings']);
-        final approvalRaw = settings['approvalPolicy'];
-        final approvalPolicy = approvalRaw is String ? approvalRaw : null;
+        // 权限字段一次性解码进同一事件；空串/不可识别值保持 null，由 controller 原子合并。
         final sandboxPolicy =
             AgentPermissionSelection.sandboxPolicyFromProtocol(
               settings['sandboxPolicy'] ?? settings['sandbox'],
@@ -122,7 +121,7 @@ class _CodexNotificationMapper {
               collaborationMode: _conversationModeCodec.selectionFromValue(
                 settings['collaborationMode'],
               ),
-              approvalPolicy: approvalPolicy,
+              approvalPolicy: _string(settings['approvalPolicy']),
               sandboxPolicy: sandboxPolicy,
               activePermissionProfileId: _string(activeProfile['id']),
             ),
