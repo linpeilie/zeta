@@ -229,20 +229,14 @@ class _AgentPaneState extends State<AgentPane> {
     _inputController.addListener(_handleSkillQueryChanged);
     _inputController.addListener(_handleSlashQueryChanged);
     _inputController.addListener(_handleMentionQueryChanged);
-    _scrollController = IdeSmoothScrollController();
+    _scrollController = IdeSmoothScrollController(
+      smoothScrollingEnabled: false,
+    );
     _scrollDriver = IdeScrollControllerDriver(_scrollController);
     _scrollCoordinator = IdeVirtualScrollCoordinator(driver: _scrollDriver)
       ..onModeChanged = _notifyScrollChrome;
     _scrollController.addListener(_handleScrollChanged);
     _uiEffectSubscription = widget.viewModel.uiEffects.listen(_handleUiEffect);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _scrollController.smoothScrollingEnabled = !MediaQuery.disableAnimationsOf(
-      context,
-    );
   }
 
   @override

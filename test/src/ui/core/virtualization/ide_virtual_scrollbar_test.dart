@@ -279,7 +279,9 @@ void main() {
     });
 
     testWidgets('桌面滚轮连续增量累加到同一个平滑目标', (tester) async {
-      final controller = IdeSmoothScrollController();
+      final controller = IdeSmoothScrollController(
+        smoothScrollingEnabled: true,
+      );
       addTearDown(controller.dispose);
 
       await pumpIdeComponent(

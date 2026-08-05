@@ -19,7 +19,7 @@ final class IdeSmoothScrollController extends ScrollController {
     super.debugLabel,
     this.pointerScrollDuration = IdeMotion.durationFast,
     this.pointerScrollCurve = IdeMotion.curveScroll,
-    this.smoothScrollingEnabled = true,
+    this.smoothScrollingEnabled = false,
   });
 
   /// 单次 pointer scroll 的过渡时长。
