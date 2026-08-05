@@ -223,12 +223,16 @@ Dock，但不得共享 request/decision 模型或 pending registry。
 - **default vs effective**：
   `AgentConversationPermissionSelectionController` 持有 provider 默认偏好与
   thread-effective 选择；Composer 展示 effective；持久化只写 default optionId。
+  create/resume/fork/send 前由 application 冻结 `AgentPermissionRequestSnapshot`，优先级为
+  thread-effective → provider default → catalog default。
 - **V1 → V2 配置迁移**：`AgentProviderSettings.currentVersion = 2`；decoder 宽容读
   V1/V2，`AgentPermissionPreferenceMigration` 在 domain 内把 Codex profile/approval
   sandbox 与 Grok mode 迁到单一 `selectedPermissionOptionId`。writer 只写 optionId。
 - **Provider 边界**：
   - Codex：`CodexPermissionPolicyAdapter` + `CodexPermissionPolicyCodec` /
-    `CodexPermissionRuntimeSnapshot`（data 层 runtime 快照，含 approval/sandbox/profile）。
+    `CodexPermissionRuntimeSnapshot`（data 层单请求编码值，含 approval/sandbox/profile）。
+    adapter apply 只归一化 optionId，不保存共享选择；client/encoder 逐请求把中立快照编码为
+    profile/approval/sandbox。Provider config 只在请求没有 selection 时作不可变 fallback。
   - Grok：`GrokPermissionPolicyAdapter` + `GrokPermissionModeCodec`（mode ↔ session
     meta / live 通知）。
 - 清空用户偏好使用 `AgentProviderConfig.withPermissionPreference(null)`（或

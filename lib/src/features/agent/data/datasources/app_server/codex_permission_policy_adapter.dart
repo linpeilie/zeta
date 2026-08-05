@@ -26,25 +26,21 @@ enum _CodexPermissionCatalogFailureKind {
 /// Codex 权限策略 adapter：实现中立 [AgentPermissionPolicyPort]。
 ///
 /// 负责完整分页 `permissionProfile/list`、built-in label、自定义 profile、
-/// 选择应用到 runtime 快照。协议编解码委托 [CodexPermissionPolicyCodec]。
+/// 以及无副作用的 optionId 归一化。协议编码委托 [CodexPermissionPolicyCodec]。
 final class CodexPermissionPolicyAdapter implements AgentPermissionPolicyPort {
   /// 创建 adapter。
   ///
   /// [ensureInitialized] 在 list 前保证 app-server 已握手。
-  /// [onSelectionApplied] 将归一化快照写回 provider 默认偏好（fallback）。
-  /// [currentSnapshot] 读取当前默认快照（用于空选择回落）。
+  /// [fallbackOptionId] 仅处理异常空选择，不会被用户选择或 settings 回写修改。
   CodexPermissionPolicyAdapter({
     required this.ensureInitialized,
     required this.sendRequest,
-    required this.onSelectionApplied,
-    required this.currentSnapshot,
+    required this.fallbackOptionId,
   });
 
   final Future<void> Function() ensureInitialized;
   final CodexPermissionRpcSender sendRequest;
-  final void Function(CodexPermissionRuntimeSnapshot snapshot)
-  onSelectionApplied;
-  final CodexPermissionRuntimeSnapshot Function() currentSnapshot;
+  final String fallbackOptionId;
 
   @override
   Future<AgentPermissionCatalog> listPermissionOptions() async {
@@ -84,29 +80,20 @@ final class CodexPermissionPolicyAdapter implements AgentPermissionPolicyPort {
   ) async {
     final normalizedId = selection.optionId.trim();
     if (normalizedId.isEmpty) {
-      final current = currentSnapshot();
-      final fallbackId =
-          current.selectedOptionId ??
-          CodexPermissionPolicyCodec.defaultBuiltInOptionId;
+      final configuredFallback = fallbackOptionId.trim();
+      final fallbackId = configuredFallback.isEmpty
+          ? CodexPermissionPolicyCodec.defaultBuiltInOptionId
+          : configuredFallback;
       return AgentPermissionApplyResult(
         normalizedSelection: AgentPermissionSelection(optionId: fallbackId),
         scope: AgentPermissionApplyScope.currentSession,
-        warning: 'Empty permission option; kept previous selection',
+        warning: 'Empty permission option; kept configured fallback',
       );
     }
 
-    // 自定义 id 不要求 `:`；显式 profile 绑定，不得被 approval/sandbox 覆盖。
-    final snapshot = CodexPermissionPolicyCodec.applySelection(
-      AgentPermissionSelection(optionId: normalizedId),
-    );
-    onSelectionApplied(snapshot);
-    final effectiveId =
-        snapshot.selectedOptionId ??
-        snapshot.permissionProfileId ??
-        normalizedId;
     return AgentPermissionApplyResult(
-      normalizedSelection: AgentPermissionSelection(optionId: effectiveId),
-      // Codex 权限随 thread/turn 参数发送；内存默认仅作 fallback，跨 thread 不广播。
+      // 自定义 id 不要求 `:`；真正 profile/approval/sandbox 编码发生在每次请求。
+      normalizedSelection: AgentPermissionSelection(optionId: normalizedId),
       scope: AgentPermissionApplyScope.currentSession,
     );
   }

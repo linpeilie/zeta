@@ -28,7 +28,8 @@ final class _CodexTurnStartParamsEncoder {
     required List<AgentUserInput> inputs,
     required AgentContext context,
     required AgentModelSelection modelSelection,
-    required CodexPermissionRuntimeSnapshot permissionSelection,
+    required AgentPermissionRequestSnapshot permissionSnapshot,
+    required CodexPermissionRuntimeSnapshot configPermissionFallback,
     required AgentTurnConfiguration turnConfiguration,
     String? clientUserMessageId,
   }) {
@@ -46,8 +47,9 @@ final class _CodexTurnStartParamsEncoder {
       } else
         'collaborationMode': _encodeCollaborationMode(conversationMode),
       'serviceTier': ?modelSelection.serviceTierId,
-      ...CodexPermissionPolicyCodec.encodeTurnPermissionFields(
-        permissionSelection,
+      ...CodexPermissionPolicyCodec.encodeTurnRequestPermissionFields(
+        permissionSnapshot,
+        configFallback: configPermissionFallback,
       ),
       'clientUserMessageId': ?clientUserMessageId,
     };

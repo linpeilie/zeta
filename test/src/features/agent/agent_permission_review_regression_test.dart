@@ -437,8 +437,7 @@ void main() {
                 // 临时失败：超时，不得被当成 unsupported 降级为 built-ins。
                 throw TimeoutException('permissionProfile/list timed out');
               },
-          onSelectionApplied: (_) {},
-          currentSnapshot: () => const CodexPermissionRuntimeSnapshot(),
+          fallbackOptionId: ':workspace',
         );
 
         final controller = AgentConversationPermissionSelectionController(

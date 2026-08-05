@@ -378,6 +378,10 @@ option 目录与 optionId；Codex/Grok 协议映射留在 data adapter/codec。P
 `listPermissionProfiles` / `updatePermissionSelection`、共享层 fat snapshot、
 `AgentPermissionPreset` / `AgentPermissionProfileSummary` 及
 `supportsPermissionPolicySelection` / `supportsPermissionProfile*` 已删除。
+Codex create/resume/fork/send 全部消费 application 冻结的
+`AgentPermissionRequestSnapshot`；data codec 在单次 RPC 编码点展开 profile、approval 与
+sandbox。Provider 构造时的 config snapshot 仅作缺省 fallback，不再由用户选择或 thread
+settings 修改，因此共享 Provider 的多 thread / 多 Canvas 请求彼此隔离。
 
 其余剩余收口项是：继续从旧 `AgentProvider` 删除其它已迁移门面方法（非权限域）。
 

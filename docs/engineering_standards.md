@@ -125,6 +125,10 @@ main -> app -> presentation/application -> domain
   `selectedSandboxPolicy` / `selectedPermissionProfileId` / `selectedPermissionMode`）
   仅在 decoder/migration 读取，写入不得再出现。application 维护 default vs
   thread-effective 两层状态；生效范围由 adapter 返回的 `AgentPermissionApplyScope` 表达。
+- create/resume/fork/send 必须携带不可变 `AgentPermissionRequestSnapshot`，由
+  application 按 thread-effective → provider default → catalog default 解析。Codex
+  client/encoder 只能在该快照没有 selection 时使用 Provider 构造时冻结的 config
+  fallback；用户选择或 `thread/settings/updated` 不得改写跨 thread 共享的请求权限状态。
 - 每个 provider 必须通过不可变 `AgentProviderCapabilities` 声明真实能力；presentation
   隐藏不支持入口，application 和 data 层执行前仍要校验。禁止以静默 no-op 或语义不等价
   的降级伪造 thread/turn 能力。

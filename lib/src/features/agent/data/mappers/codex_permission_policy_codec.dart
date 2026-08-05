@@ -206,6 +206,21 @@ abstract final class CodexPermissionPolicyCodec {
     return snapshotForProfileId(selection.optionId);
   }
 
+  /// 将阶段 B 的中立请求快照解析为本次 Codex RPC 独占的协议快照。
+  ///
+  /// 只有请求没有选择时才使用构造 Provider 时冻结的 [configFallback]；
+  /// 用户选择与 thread settings 不得修改该 fallback。
+  static CodexPermissionRuntimeSnapshot runtimeSnapshotForRequest(
+    AgentPermissionRequestSnapshot request, {
+    required CodexPermissionRuntimeSnapshot configFallback,
+  }) {
+    final optionId = request.selection?.optionId.trim();
+    if (optionId == null || optionId.isEmpty) {
+      return configFallback;
+    }
+    return snapshotForProfileId(optionId);
+  }
+
   /// 解码 `thread/settings/updated` 中的权限字段为完整快照。
   ///
   /// 规则：
@@ -331,6 +346,16 @@ abstract final class CodexPermissionPolicyCodec {
     };
   }
 
+  /// 阶段 B 请求快照 → `thread/start|resume|fork` 权限字段。
+  static Map<String, Object?> encodeThreadRequestPermissionFields(
+    AgentPermissionRequestSnapshot request, {
+    required CodexPermissionRuntimeSnapshot configFallback,
+  }) {
+    return encodeThreadPermissionFields(
+      runtimeSnapshotForRequest(request, configFallback: configFallback),
+    );
+  }
+
   /// `turn/start` 权限相关字段。
   static Map<String, Object?> encodeTurnPermissionFields(
     CodexPermissionRuntimeSnapshot selection,
@@ -343,6 +368,16 @@ abstract final class CodexPermissionPolicyCodec {
           ? toTurnSandboxPolicy(selection.sandboxPolicy)
           : null),
     };
+  }
+
+  /// 阶段 B 请求快照 → `turn/start` 权限字段。
+  static Map<String, Object?> encodeTurnRequestPermissionFields(
+    AgentPermissionRequestSnapshot request, {
+    required CodexPermissionRuntimeSnapshot configFallback,
+  }) {
+    return encodeTurnPermissionFields(
+      runtimeSnapshotForRequest(request, configFallback: configFallback),
+    );
   }
 }
 

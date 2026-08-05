@@ -85,6 +85,78 @@ void main() {
       expect(snapshot.permissionProfileId, 'team-safe');
       expect(snapshot.optionId, 'team-safe');
     });
+
+    test('encodes a built-in option from the neutral request snapshot', () {
+      const request = AgentPermissionRequestSnapshot.resolved(
+        selection: AgentPermissionSelection(optionId: ':danger-full-access'),
+        source: AgentPermissionRequestSource.threadEffective,
+      );
+      final fallback = CodexPermissionPolicyCodec.snapshotForProfileId(
+        ':workspace',
+      );
+
+      final runtime = CodexPermissionPolicyCodec.runtimeSnapshotForRequest(
+        request,
+        configFallback: fallback,
+      );
+      final thread =
+          CodexPermissionPolicyCodec.encodeThreadRequestPermissionFields(
+            request,
+            configFallback: fallback,
+          );
+      final turn = CodexPermissionPolicyCodec.encodeTurnRequestPermissionFields(
+        request,
+        configFallback: fallback,
+      );
+
+      expect(runtime.permissionProfileId, ':danger-full-access');
+      expect(runtime.approvalPolicy, 'never');
+      expect(runtime.sandboxPolicy, 'dangerFullAccess');
+      expect(thread, <String, Object?>{
+        'approvalPolicy': 'never',
+        'permissions': ':danger-full-access',
+      });
+      expect(turn, <String, Object?>{
+        'approvalPolicy': 'never',
+        'permissions': ':danger-full-access',
+      });
+    });
+
+    test(
+      'encodes custom profile and only falls back without request choice',
+      () {
+        const customRequest = AgentPermissionRequestSnapshot.resolved(
+          selection: AgentPermissionSelection(optionId: 'team-safe'),
+          source: AgentPermissionRequestSource.threadEffective,
+        );
+        const fallbackRequest =
+            AgentPermissionRequestSnapshot.providerFallback();
+        final fallback = CodexPermissionPolicyCodec.snapshotForProfileId(
+          ':read-only',
+        );
+
+        expect(
+          CodexPermissionPolicyCodec.encodeTurnRequestPermissionFields(
+            customRequest,
+            configFallback: fallback,
+          ),
+          <String, Object?>{
+            'approvalPolicy': 'on-request',
+            'permissions': 'team-safe',
+          },
+        );
+        expect(
+          CodexPermissionPolicyCodec.encodeTurnRequestPermissionFields(
+            fallbackRequest,
+            configFallback: fallback,
+          ),
+          <String, Object?>{
+            'approvalPolicy': 'on-request',
+            'permissions': ':read-only',
+          },
+        );
+      },
+    );
   });
 
   group('CodexPermissionPolicyAdapter', () {
@@ -119,8 +191,7 @@ void main() {
             ],
           };
         },
-        onSelectionApplied: (_) {},
-        currentSnapshot: () => const CodexPermissionRuntimeSnapshot(),
+        fallbackOptionId: ':workspace',
       );
 
       final catalog = await adapter.listPermissionOptions();
@@ -139,8 +210,7 @@ void main() {
         sendRequest: (method, {Map<String, Object?> params = const {}}) async {
           throw UnsupportedError('permissionProfile/list not available');
         },
-        onSelectionApplied: (_) {},
-        currentSnapshot: () => const CodexPermissionRuntimeSnapshot(),
+        fallbackOptionId: ':workspace',
       );
 
       final catalog = await adapter.listPermissionOptions();
@@ -160,8 +230,7 @@ void main() {
         sendRequest: (method, {Map<String, Object?> params = const {}}) async {
           throw TimeoutException('permissionProfile/list timed out');
         },
-        onSelectionApplied: (_) {},
-        currentSnapshot: () => const CodexPermissionRuntimeSnapshot(),
+        fallbackOptionId: ':workspace',
       );
 
       await expectLater(
@@ -193,8 +262,7 @@ void main() {
                 }
                 throw TimeoutException('page 2 timed out');
               },
-          onSelectionApplied: (_) {},
-          currentSnapshot: () => const CodexPermissionRuntimeSnapshot(),
+          fallbackOptionId: ':workspace',
         );
 
         await expectLater(
@@ -210,8 +278,7 @@ void main() {
         sendRequest: (method, {Map<String, Object?> params = const {}}) async {
           return 'not-an-object';
         },
-        onSelectionApplied: (_) {},
-        currentSnapshot: () => const CodexPermissionRuntimeSnapshot(),
+        fallbackOptionId: ':workspace',
       );
 
       await expectLater(
@@ -221,17 +288,15 @@ void main() {
     });
 
     test(
-      'apply custom profile writes snapshot without colon requirement',
+      'apply custom profile is pure and keeps configured fallback immutable',
       () async {
-        CodexPermissionRuntimeSnapshot? applied;
         final adapter = CodexPermissionPolicyAdapter(
           ensureInitialized: () async {},
           sendRequest:
               (method, {Map<String, Object?> params = const {}}) async {
                 fail('list should not be called');
               },
-          onSelectionApplied: (snapshot) => applied = snapshot,
-          currentSnapshot: () => const CodexPermissionRuntimeSnapshot(),
+          fallbackOptionId: ':workspace',
         );
 
         final result = await adapter.applyPermissionSelection(
@@ -239,12 +304,10 @@ void main() {
         );
         expect(result.normalizedSelection.optionId, 'team-safe');
         expect(result.scope, AgentPermissionApplyScope.currentSession);
-        expect(applied?.permissionProfileId, 'team-safe');
-        expect(applied?.optionId, 'team-safe');
-        expect(
-          CodexPermissionPolicyCodec.protocolPermissionProfileId(applied!),
-          'team-safe',
+        final emptyResult = await adapter.applyPermissionSelection(
+          const AgentPermissionSelection(optionId: '  '),
         );
+        expect(emptyResult.normalizedSelection.optionId, ':workspace');
       },
     );
   });

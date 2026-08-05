@@ -10,6 +10,7 @@ class _CodexAppServerClient {
     required this._skillsMapper,
     required this._turnStartParamsEncoder,
     required this._threadHistoryReader,
+    required this._configPermissionFallback,
   });
 
   final JsonRpcPeer _peer;
@@ -19,6 +20,7 @@ class _CodexAppServerClient {
   final _CodexSkillsMapper _skillsMapper;
   final _CodexTurnStartParamsEncoder _turnStartParamsEncoder;
   final _CodexThreadHistoryReader _threadHistoryReader;
+  final CodexPermissionRuntimeSnapshot _configPermissionFallback;
 
   Future<AgentModelList> fetchModelList({
     int limit = 20,
@@ -95,12 +97,12 @@ class _CodexAppServerClient {
 
   Future<AgentSession> startSession({
     required AgentContext context,
-    required CodexPermissionRuntimeSnapshot permissionSelection,
+    required AgentPermissionRequestSnapshot permissionSnapshot,
     String? previousSessionId,
   }) async {
     final result = await _peer.sendRequest(
       'thread/start',
-      params: _threadParams(context, permissionSelection),
+      params: _threadParams(context, permissionSnapshot),
     );
     return _sessionFromThreadStartResult(
       result,
@@ -111,14 +113,14 @@ class _CodexAppServerClient {
   Future<AgentSession> resumeSession(
     String sessionId, {
     required AgentContext context,
-    required CodexPermissionRuntimeSnapshot permissionSelection,
+    required AgentPermissionRequestSnapshot permissionSnapshot,
     String? previousSessionId,
   }) async {
     final result = await _peer.sendRequest(
       'thread/resume',
       params: <String, Object?>{
         'threadId': sessionId,
-        ..._threadParams(context, permissionSelection),
+        ..._threadParams(context, permissionSnapshot),
       },
     );
     return _sessionFromThreadStartResult(
@@ -336,7 +338,7 @@ class _CodexAppServerClient {
     required String threadId,
     required AgentContext context,
     required AgentForkBoundary boundary,
-    required CodexPermissionRuntimeSnapshot permissionSelection,
+    required AgentPermissionRequestSnapshot permissionSnapshot,
     String? previousSessionId,
   }) async {
     final result = await _peer.sendRequest(
@@ -345,7 +347,7 @@ class _CodexAppServerClient {
         'threadId': threadId,
         if (boundary case AgentForkThroughTurn(:final turnId))
           'lastTurnId': turnId,
-        ..._threadParams(context, permissionSelection),
+        ..._threadParams(context, permissionSnapshot),
       },
     );
     return _sessionFromThreadStartResult(
@@ -366,7 +368,7 @@ class _CodexAppServerClient {
     required List<AgentUserInput> inputs,
     required AgentContext context,
     required AgentModelSelection selection,
-    required CodexPermissionRuntimeSnapshot permissionSelection,
+    required AgentPermissionRequestSnapshot permissionSnapshot,
     required AgentTurnConfiguration turnConfiguration,
     String? clientUserMessageId,
   }) async {
@@ -377,7 +379,8 @@ class _CodexAppServerClient {
         inputs: inputs,
         context: context,
         modelSelection: selection,
-        permissionSelection: permissionSelection,
+        permissionSnapshot: permissionSnapshot,
+        configPermissionFallback: _configPermissionFallback,
         turnConfiguration: turnConfiguration,
         clientUserMessageId: clientUserMessageId,
       ),
@@ -426,13 +429,14 @@ class _CodexAppServerClient {
 
   Map<String, Object?> _threadParams(
     AgentContext context,
-    CodexPermissionRuntimeSnapshot permissionSelection,
+    AgentPermissionRequestSnapshot permissionSnapshot,
   ) {
     return <String, Object?>{
       if (context.projectPath != null) 'cwd': context.projectPath,
       if (_config.defaultModel != null) 'model': _config.defaultModel,
-      ...CodexPermissionPolicyCodec.encodeThreadPermissionFields(
-        permissionSelection,
+      ...CodexPermissionPolicyCodec.encodeThreadRequestPermissionFields(
+        permissionSnapshot,
+        configFallback: _configPermissionFallback,
       ),
     };
   }

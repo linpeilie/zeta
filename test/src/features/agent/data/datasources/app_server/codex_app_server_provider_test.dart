@@ -3927,9 +3927,6 @@ void main() {
           serviceTierId: 'priority',
         ),
       );
-      await provider.permissionPolicy.applyPermissionSelection(
-        const AgentPermissionSelection(optionId: ':danger-full-access'),
-      );
 
       await provider.sendMessage(
         session: const AgentSession(
@@ -3939,6 +3936,14 @@ void main() {
         message: 'hello',
         context: const AgentContext(projectPath: '/repo'),
         clientUserMessageId: 'client-legacy',
+        configuration: const AgentTurnConfiguration(
+          permissionSnapshot: AgentPermissionRequestSnapshot.resolved(
+            selection: AgentPermissionSelection(
+              optionId: ':danger-full-access',
+            ),
+            source: AgentPermissionRequestSource.threadEffective,
+          ),
+        ),
       );
 
       final turnStartIndex = peer.requestMethods.indexOf('turn/start');
@@ -3959,6 +3964,112 @@ void main() {
     });
 
     test(
+      'permission apply never mutates the config fallback used by requests',
+      () async {
+        final config = AgentProviderConfig.defaultCodex
+            .withPermissionPreference(':workspace');
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: config,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+
+        final applied = await provider.permissionPolicy
+            .applyPermissionSelection(
+              const AgentPermissionSelection(optionId: ':danger-full-access'),
+            );
+        expect(applied.normalizedSelection.optionId, ':danger-full-access');
+
+        await provider.startSession(
+          context: const AgentContext(projectPath: '/repo'),
+        );
+        await provider.sendMessage(
+          session: const AgentSession(
+            id: 'fallback-thread',
+            providerId: defaultAgentProviderId,
+          ),
+          message: 'uses config fallback',
+          context: const AgentContext(projectPath: '/repo'),
+        );
+
+        final threadParams =
+            peer.requestParams[peer.requestMethods.indexOf('thread/start')]!
+                as Map<String, Object?>;
+        final turnParams =
+            peer.requestParams[peer.requestMethods.indexOf('turn/start')]!
+                as Map<String, Object?>;
+        expect(threadParams['permissions'], ':workspace');
+        expect(turnParams['permissions'], ':workspace');
+        expect(threadParams['approvalPolicy'], 'on-request');
+        expect(turnParams['approvalPolicy'], 'on-request');
+      },
+    );
+
+    test(
+      'concurrent turns keep immutable permission snapshots per thread',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex.withPermissionPreference(
+            ':workspace',
+          ),
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+        const threadA = AgentSession(
+          id: 'thread-a',
+          providerId: defaultAgentProviderId,
+        );
+        const threadB = AgentSession(
+          id: 'thread-b',
+          providerId: defaultAgentProviderId,
+        );
+        const snapshotA = AgentPermissionRequestSnapshot.resolved(
+          selection: AgentPermissionSelection(optionId: 'team-safe'),
+          source: AgentPermissionRequestSource.threadEffective,
+        );
+        const snapshotB = AgentPermissionRequestSnapshot.resolved(
+          selection: AgentPermissionSelection(optionId: ':danger-full-access'),
+          source: AgentPermissionRequestSource.threadEffective,
+        );
+
+        await Future.wait(<Future<AgentTurn>>[
+          provider.sendMessage(
+            session: threadA,
+            message: 'A',
+            context: const AgentContext(projectPath: '/repo'),
+            configuration: const AgentTurnConfiguration(
+              permissionSnapshot: snapshotA,
+            ),
+          ),
+          provider.sendMessage(
+            session: threadB,
+            message: 'B',
+            context: const AgentContext(projectPath: '/repo'),
+            configuration: const AgentTurnConfiguration(
+              permissionSnapshot: snapshotB,
+            ),
+          ),
+        ]);
+
+        final turnParams = <Map<String, Object?>>[
+          for (var index = 0; index < peer.requestMethods.length; index++)
+            if (peer.requestMethods[index] == 'turn/start')
+              peer.requestParams[index]! as Map<String, Object?>,
+        ];
+        final byThread = <String, Map<String, Object?>>{
+          for (final params in turnParams)
+            params['threadId']! as String: params,
+        };
+        expect(byThread['thread-a']?['permissions'], 'team-safe');
+        expect(byThread['thread-a']?['approvalPolicy'], 'on-request');
+        expect(byThread['thread-b']?['permissions'], ':danger-full-access');
+        expect(byThread['thread-b']?['approvalPolicy'], 'never');
+      },
+    );
+
+    test(
       'encodes Plan mode without conflicting top-level model settings',
       () async {
         final peer = _FakeJsonRpcPeer();
@@ -3974,10 +4085,6 @@ void main() {
             serviceTierId: 'priority',
           ),
         );
-        await provider.permissionPolicy.applyPermissionSelection(
-          const AgentPermissionSelection(optionId: ':workspace'),
-        );
-
         await provider.sendMessage(
           session: const AgentSession(
             id: 'thread-plan',
@@ -4115,12 +4222,14 @@ void main() {
         );
         addTearDown(provider.dispose);
 
-        await provider.permissionPolicy.applyPermissionSelection(
-          const AgentPermissionSelection(optionId: ':danger-full-access'),
+        const permissionSnapshot = AgentPermissionRequestSnapshot.resolved(
+          selection: AgentPermissionSelection(optionId: ':danger-full-access'),
+          source: AgentPermissionRequestSource.threadEffective,
         );
 
         final session = await provider.startSession(
           context: const AgentContext(projectPath: '/repo'),
+          permissionSnapshot: permissionSnapshot,
         );
         final threadStartIndex = peer.requestMethods.indexOf('thread/start');
         expect(threadStartIndex, isNot(-1));
@@ -4135,6 +4244,9 @@ void main() {
           message: 'hello',
           context: const AgentContext(projectPath: '/repo'),
           clientUserMessageId: 'client-msg-1',
+          configuration: const AgentTurnConfiguration(
+            permissionSnapshot: permissionSnapshot,
+          ),
         );
 
         final turnStartIndex = peer.requestMethods.indexOf('turn/start');
@@ -4158,12 +4270,14 @@ void main() {
         );
         addTearDown(provider.dispose);
 
-        await provider.permissionPolicy.applyPermissionSelection(
-          const AgentPermissionSelection(optionId: ':workspace'),
+        const permissionSnapshot = AgentPermissionRequestSnapshot.resolved(
+          selection: AgentPermissionSelection(optionId: ':workspace'),
+          source: AgentPermissionRequestSource.threadEffective,
         );
 
         final session = await provider.startSession(
           context: const AgentContext(projectPath: '/repo'),
+          permissionSnapshot: permissionSnapshot,
         );
         final threadStartIndex = peer.requestMethods.indexOf('thread/start');
         final threadParams =
@@ -4175,6 +4289,9 @@ void main() {
           session: session,
           message: 'hello',
           context: const AgentContext(projectPath: '/repo'),
+          configuration: const AgentTurnConfiguration(
+            permissionSnapshot: permissionSnapshot,
+          ),
         );
 
         final turnStartIndex = peer.requestMethods.indexOf('turn/start');
@@ -4232,12 +4349,12 @@ void main() {
           peer: peer,
         );
         addTearDown(provider.dispose);
-        await provider.permissionPolicy.applyPermissionSelection(
-          const AgentPermissionSelection(optionId: ':workspace'),
-        );
-
         await provider.startSession(
           context: const AgentContext(projectPath: '/repo'),
+          permissionSnapshot: const AgentPermissionRequestSnapshot.resolved(
+            selection: AgentPermissionSelection(optionId: ':workspace'),
+            source: AgentPermissionRequestSource.threadEffective,
+          ),
         );
         final threadIndex = peer.requestMethods.indexOf('thread/start');
         final threadParams =
