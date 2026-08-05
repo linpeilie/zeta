@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent/domain/agent_permission_policy_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_permission_selection_models.dart';
 
 /// Grok ACP 权限模式编解码（协议私货，仅 Grok data 层使用）。
@@ -120,7 +121,7 @@ abstract final class GrokPermissionModeCodec {
     };
   }
 
-  /// 中立权限选项 catalog（固定三模式）。
+  /// 中立权限选项 catalog（固定三模式）— 旧 profile 摘要形态。
   static List<AgentPermissionProfileSummary> catalogAsOptions() {
     return List<AgentPermissionProfileSummary>.unmodifiable(
       catalogOrder.map(
@@ -130,6 +131,24 @@ abstract final class GrokPermissionModeCodec {
           description: displayLabel(mode),
         ),
       ),
+    );
+  }
+
+  /// 中立 [AgentPermissionCatalog]（port / adapter 使用）。
+  static AgentPermissionCatalog catalog() {
+    final options = catalogOrder
+        .map(
+          (mode) => AgentPermissionOption(
+            id: wireId(mode),
+            label: displayLabel(mode),
+            description: displayLabel(mode),
+            allowed: true,
+          ),
+        )
+        .toList(growable: false);
+    return AgentPermissionCatalog(
+      options: options,
+      defaultOptionId: defaultWireId,
     );
   }
 }

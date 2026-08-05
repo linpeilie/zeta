@@ -4,10 +4,12 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/data/datasources/app_server/codex_permission_policy_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/app_server/codex_process_starter.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/provider_operation_scheduler.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/provider_runtime_json_rpc_peer.dart';
+import 'package:zeta/src/features/agent/data/mappers/codex_permission_policy_codec.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
@@ -45,7 +47,8 @@ class CodexAppServerAgentProvider
         AgentRefreshableModelCatalogProvider,
         AgentQuestionResponseProvider,
         AgentConversationModeCatalogProvider,
-        AgentSkillsCatalogProvider {
+        AgentSkillsCatalogProvider,
+        AgentPermissionPolicyProvider {
   /// 创建 Codex app-server provider 实例。
   ///
   /// [config] 包含命令、参数、环境变量等 provider 配置。
@@ -60,7 +63,9 @@ class CodexAppServerAgentProvider
          reasoningEffort: config.selectedReasoningEffort,
          serviceTierId: config.selectedServiceTier,
        ),
-       _permissionSelection = _permissionSelectionFromConfig(config) {
+       _permissionSelection = CodexPermissionPolicyCodec.snapshotFromConfig(
+         config,
+       ) {
     _peer = ProviderRuntimeJsonRpcPeer(
       peer ?? (peerFactory ?? _defaultPeerFactory)(config),
       providerId: config.id,
@@ -84,6 +89,16 @@ class CodexAppServerAgentProvider
     _notificationMapper = _CodexNotificationMapper(providerId: config.id);
     _approvalMapper = _CodexApprovalMapper();
     _questionMapper = _CodexQuestionMapper();
+    _permissionPolicyAdapter = CodexPermissionPolicyAdapter(
+      ensureInitialized: initialize,
+      sendRequest: (method, {Map<String, Object?> params = const {}}) async {
+        return _peer.sendRequest(method, params: params);
+      },
+      onSelectionApplied: (snapshot) {
+        _permissionSelection = snapshot;
+      },
+      currentSnapshot: () => _permissionSelection,
+    );
   }
 
   /// JSON-RPC 通信对等体，负责与 Codex app-server 进程交换消息。
@@ -93,6 +108,7 @@ class CodexAppServerAgentProvider
   late final _CodexNotificationMapper _notificationMapper;
   late final _CodexApprovalMapper _approvalMapper;
   late final _CodexQuestionMapper _questionMapper;
+  late final CodexPermissionPolicyAdapter _permissionPolicyAdapter;
 
   /// 广播事件流控制器，所有 Agent 事件通过此流发出。
   final StreamController<AgentEvent> _events =
@@ -552,7 +568,11 @@ class CodexAppServerAgentProvider
   }
 
   @override
+  AgentPermissionPolicyPort get permissionPolicy => _permissionPolicyAdapter;
+
+  @override
   void updatePermissionSelection(AgentPermissionSelectionSnapshot selection) {
+    // 旧 API 薄适配：直接写 runtime 快照（阶段 4 前 controller 仍走此路径）。
     _permissionSelection = selection;
     _log.fine(
       'Updated permission selection: approval=${selection.approvalPolicy} '
@@ -562,8 +582,13 @@ class CodexAppServerAgentProvider
 
   @override
   Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
-    await initialize();
-    return _client.listPermissionProfiles();
+    // 旧 API 薄适配：经 adapter catalog 再映回 profile 摘要。
+    final catalog = await _permissionPolicyAdapter.listPermissionOptions();
+    return List<AgentPermissionProfileSummary>.unmodifiable(
+      catalog.options.map(
+        AgentPermissionPolicyAdapters.profileSummaryFromOption,
+      ),
+    );
   }
 
   @override
@@ -1166,25 +1191,6 @@ class CodexAppServerAgentProvider
       _ => false,
     };
   }
-}
-
-/// 从全局配置恢复权限快照。
-///
-/// 显式 [AgentProviderConfig.selectedPermissionProfileId] 必须原样保留，
-/// 不得仅凭 approval/sandbox 回填为内置 `:workspace` 等 profile。
-AgentPermissionSelectionSnapshot _permissionSelectionFromConfig(
-  AgentProviderConfig config,
-) {
-  return AgentPermissionSelectionSnapshot(
-    optionId: config.resolvedPermissionOptionId,
-    approvalPolicy:
-        config.selectedApprovalPolicy ??
-        AgentPermissionSelectionSnapshot.defaultApprovalPolicy,
-    sandboxPolicy:
-        config.selectedSandboxPolicy ??
-        AgentPermissionSelectionSnapshot.defaultSandboxPolicy,
-    permissionProfileId: config.selectedPermissionProfileId,
-  );
 }
 
 /// 默认通过 stdio 启动 Codex app-server 子进程。

@@ -34,7 +34,6 @@ final class _CodexTurnStartParamsEncoder {
   }) {
     validate(turnConfiguration);
     final conversationMode = turnConfiguration.conversationMode;
-    final permissionProfileId = permissionSelection.protocolPermissionProfileId;
 
     return <String, Object?>{
       'threadId': session.id,
@@ -47,14 +46,9 @@ final class _CodexTurnStartParamsEncoder {
       } else
         'collaborationMode': _encodeCollaborationMode(conversationMode),
       'serviceTier': ?modelSelection.serviceTierId,
-      'approvalPolicy':
-          AgentPermissionSelectionSnapshot.normalizeApprovalPolicy(
-            permissionSelection.approvalPolicy,
-          ),
-      'permissions': ?permissionProfileId,
-      'sandboxPolicy': ?(permissionProfileId == null
-          ? permissionSelection.toTurnSandboxPolicy()
-          : null),
+      ...CodexPermissionPolicyCodec.encodeTurnPermissionFields(
+        permissionSelection,
+      ),
       'clientUserMessageId': ?clientUserMessageId,
     };
   }

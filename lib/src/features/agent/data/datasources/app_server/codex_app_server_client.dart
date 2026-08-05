@@ -414,33 +414,42 @@ class _CodexAppServerClient {
     );
   }
 
+  /// @nodoc 保留给测试/旧路径；生产路径走 [CodexPermissionPolicyAdapter]。
   Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
     try {
-      final result = await _peer.sendRequest(
-        'permissionProfile/list',
-        params: const <String, Object?>{},
-      );
-      final map = _map(result);
-      final data = map['data'];
-      if (data is! List<Object?>) {
-        return const <AgentPermissionProfileSummary>[];
-      }
-      final profiles = <AgentPermissionProfileSummary>[];
-      for (final item in data) {
-        final entry = _map(item);
-        final id = _string(entry['id']);
-        if (id == null) {
-          continue;
-        }
-        profiles.add(
-          AgentPermissionProfileSummary(
-            id: id,
-            allowed: entry['allowed'] != false,
-            description: _string(entry['description']),
-          ),
+      final options = <AgentPermissionOption>[];
+      final seenIds = <String>{};
+      final seenCursors = <String>{};
+      String? cursor;
+      do {
+        final result = await _peer.sendRequest(
+          'permissionProfile/list',
+          params: <String, Object?>{
+            if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
+          },
         );
-      }
-      return List<AgentPermissionProfileSummary>.unmodifiable(profiles);
+        final map = _map(result);
+        final data = map['data'];
+        if (data is List) {
+          for (final item in data) {
+            final entry = _map(item);
+            final option = CodexPermissionPolicyCodec.optionFromRpcEntry(entry);
+            if (option == null || !seenIds.add(option.id)) {
+              continue;
+            }
+            options.add(option);
+          }
+        }
+        final nextCursor = _string(map['nextCursor']);
+        if (nextCursor != null && seenCursors.add(nextCursor)) {
+          cursor = nextCursor;
+        } else {
+          cursor = null;
+        }
+      } while (cursor != null);
+      return List<AgentPermissionProfileSummary>.unmodifiable(
+        options.map(AgentPermissionPolicyAdapters.profileSummaryFromOption),
+      );
     } catch (_) {
       return const <AgentPermissionProfileSummary>[];
     }
@@ -460,18 +469,12 @@ class _CodexAppServerClient {
     AgentContext context,
     AgentPermissionSelectionSnapshot permissionSelection,
   ) {
-    final permissionProfileId = permissionSelection.protocolPermissionProfileId;
     return <String, Object?>{
       if (context.projectPath != null) 'cwd': context.projectPath,
       if (_config.defaultModel != null) 'model': _config.defaultModel,
-      'approvalPolicy':
-          AgentPermissionSelectionSnapshot.normalizeApprovalPolicy(
-            permissionSelection.approvalPolicy,
-          ),
-      'permissions': ?permissionProfileId,
-      'sandbox': ?(permissionProfileId == null
-          ? permissionSelection.toThreadSandboxMode()
-          : null),
+      ...CodexPermissionPolicyCodec.encodeThreadPermissionFields(
+        permissionSelection,
+      ),
     };
   }
 

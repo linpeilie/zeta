@@ -188,6 +188,15 @@ abstract interface class AgentConversationModeCatalogProvider {
   Future<AgentConversationModeCatalog> listConversationModes();
 }
 
+/// 直接暴露中立权限策略 port 的 Provider 可选接口。
+///
+/// Bundle 优先使用该 port；未实现时回退到
+/// [listPermissionProfiles] / [updatePermissionSelection] 的 legacy 桥接。
+abstract interface class AgentPermissionPolicyProvider {
+  /// Provider 拥有的权限策略 port（通常为 data 层 adapter）。
+  AgentPermissionPolicyPort get permissionPolicy;
+}
+
 /// 支持 Skill 目录发现的 Provider 可选接口。
 ///
 /// 实现该接口只表示适配器具备 `skills/list` 入口；UI 是否展示仍由

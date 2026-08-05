@@ -86,10 +86,14 @@ final class AgentProviderBundle {
           _LegacyAgentPlanApprovalPort(planApprovalProvider),
         _ => null,
       },
-      // 权限策略 port：能力开启时通过旧 list/update API 薄适配。
-      permissionPolicy: capabilities.supportsPermissionPolicySelection
-          ? _LegacyAgentPermissionPolicyPort(provider)
-          : null,
+      // 权限策略 port：优先 data 层 adapter；否则 legacy list/update 桥接。
+      permissionPolicy: switch (provider) {
+        final AgentPermissionPolicyProvider policyProvider =>
+          policyProvider.permissionPolicy,
+        _ when capabilities.supportsPermissionPolicySelection =>
+          _LegacyAgentPermissionPolicyPort(provider),
+        _ => null,
+      },
     );
   }
 

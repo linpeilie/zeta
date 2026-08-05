@@ -15,6 +15,7 @@ import 'package:zeta/src/features/agent/data/mappers/acp_permission_mapper.dart'
 import 'package:zeta/src/features/agent/data/mappers/grok_acp_notification_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_billing_quota_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_error_normalizer.dart';
+import 'package:zeta/src/features/agent/data/datasources/acp/grok_permission_policy_adapter.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_permission_mode_codec.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_question_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_skills_mapper.dart';
@@ -43,7 +44,8 @@ class GrokAcpAgentProvider
         AgentSkillsCatalogProvider,
         AgentConversationModeCatalogProvider,
         AgentPlanApprovalProvider,
-        AgentQuestionResponseProvider {
+        AgentQuestionResponseProvider,
+        AgentPermissionPolicyProvider {
   GrokAcpAgentProvider({
     required this.config,
     JsonRpcPeer? peer,
@@ -78,6 +80,17 @@ class GrokAcpAgentProvider
               reasoningEffortResolver: () => _modelSelection.reasoningEffort,
             )))(config);
     _peer = ProviderRuntimeJsonRpcPeer(delegate, providerId: config.id);
+    _permissionPolicyAdapter = GrokPermissionPolicyAdapter(
+      isInitialized: () => _initialized,
+      isDisposed: () => _disposed,
+      currentMode: () => _permissionMode,
+      onModeApplied: (mode) {
+        _permissionMode = mode;
+      },
+      notifyLive: (method, params) {
+        _peer.sendNotification(method, params: params);
+      },
+    );
   }
 
   /// 首轮结束后轮询本地 `summary.json` 的间隔（Grok 异步写 generated_title）。
@@ -113,6 +126,7 @@ class GrokAcpAgentProvider
   }
 
   late final ProviderRuntimeJsonRpcPeer _peer;
+  late final GrokPermissionPolicyAdapter _permissionPolicyAdapter;
   final GrokSessionHistoryReader _sessionHistoryReader;
   final GrokModelsCli _modelsCli;
   final GrokAcpNotificationMapper _notificationMapper;
@@ -355,7 +369,7 @@ class GrokAcpAgentProvider
       params: <String, Object?>{
         'cwd': cwd,
         'mcpServers': <Object?>[],
-        '_meta': GrokPermissionModeCodec.sessionMeta(_permissionMode),
+        '_meta': _permissionPolicyAdapter.sessionMetaForCurrentMode(),
       },
       timeout: const Duration(seconds: 60),
     );
@@ -405,7 +419,7 @@ class GrokAcpAgentProvider
               'sessionId': sessionId,
               if (cwd != null && cwd.isNotEmpty) 'cwd': cwd,
               'mcpServers': <Object?>[],
-              '_meta': GrokPermissionModeCodec.sessionMeta(_permissionMode),
+              '_meta': _permissionPolicyAdapter.sessionMetaForCurrentMode(),
             },
             timeout: const Duration(seconds: 120),
           );
@@ -575,38 +589,20 @@ class GrokAcpAgentProvider
   }
 
   @override
+  AgentPermissionPolicyPort get permissionPolicy => _permissionPolicyAdapter;
+
+  @override
   void updatePermissionSelection(AgentPermissionSelectionSnapshot selection) {
-    // 统一入口：只解释 optionId（中立）；不读 Codex approval/sandbox。
-    final next = GrokPermissionModeCodec.parse(selection.selectedOptionId);
-    final changed = next != _permissionMode;
-    _permissionMode = next;
-    _log.fine(
-      'Updated Grok permission mode to '
-      '${GrokPermissionModeCodec.wireId(next)}'
-      '${changed ? '' : ' (unchanged)'}',
-    );
-    if (!changed || !_initialized || _disposed) {
+    // 旧 API 薄适配：经 adapter 归一化 mode，并在已初始化时发 live 通知。
+    final optionId = selection.selectedOptionId;
+    if (optionId == null || optionId.trim().isEmpty) {
       return;
     }
-    _broadcastPermissionMode(next);
-  }
-
-  /// 向 Grok shell 广播权限模式变更（best-effort，不抛错）。
-  ///
-  /// 只发送 [GrokPermissionModeCodec.yoloModeChangedMethod]（`_x.ai/`），
-  /// 与 billing/skills 等可验证 client→agent 扩展前缀一致，避免双发副作用。
-  void _broadcastPermissionMode(GrokPermissionMode mode) {
-    final params = GrokPermissionModeCodec.yoloModeChangedParams(mode);
-    final method = GrokPermissionModeCodec.yoloModeChangedMethod;
-    try {
-      _peer.sendNotification(method, params: params);
-    } catch (error, stackTrace) {
-      _log.fine(
-        'Failed to notify $method for permission mode',
-        error,
-        stackTrace,
-      );
-    }
+    unawaited(
+      _permissionPolicyAdapter.applyPermissionSelection(
+        AgentPermissionSelection(optionId: optionId),
+      ),
+    );
   }
 
   /// 读取 Grok 账号套餐剩余与重置时间。
@@ -701,8 +697,13 @@ class GrokAcpAgentProvider
 
   @override
   Future<List<AgentPermissionProfileSummary>> listPermissionProfiles() async {
-    // 静态 catalog；统一走 listPermissionProfiles 入口。
-    return GrokPermissionModeCodec.catalogAsOptions();
+    // 旧 API 薄适配：经 adapter catalog 再映回 profile 摘要。
+    final catalog = await _permissionPolicyAdapter.listPermissionOptions();
+    return List<AgentPermissionProfileSummary>.unmodifiable(
+      catalog.options.map(
+        AgentPermissionPolicyAdapters.profileSummaryFromOption,
+      ),
+    );
   }
 
   @override
