@@ -50,7 +50,12 @@ class AgentConversationTimelineStore {
   /// 当前会话的累计 token 用量（直接来自 Codex `total` breakdown）。
   AgentTokenUsage? _threadTokenUsage;
 
-  /// 当前流式请求的上下文窗口占用；与 turn/footer 计费用量隔离。
+  /// 当前 thread 的上下文窗口占用快照（上一次流式上报）。
+  ///
+  /// 语义是**会话级**：上下文占用随 turn 单调累积、属于整个 thread，不是
+  /// 某个 turn 的局部状态，因此 turn 结束（[completeLiveTurnGroup]）不清空，
+  /// 只在会话重建（[clearConversation] / 切换 thread）时复位。与 turn/footer
+  /// 计费用量隔离。
   AgentTokenUsage? _liveContextWindowUsage;
 
   /// 当前 live turn 主活动段；无 running turn 时为 idle。
@@ -1131,6 +1136,11 @@ class AgentConversationTimelineStore {
   ///
   /// [status] 为回合终态（完成/中断/失败）；[duration] 优先使用 provider
   /// 上报的耗时，缺失时按本地开始时间估算。
+  ///
+  /// 注意：不清理 [_liveContextWindowUsage]。上下文占用是会话级语义
+  /// （跨 turn 单调累积），turn 结束只收尾 turn 分组；若在 turn 结束处清空
+  /// 占用，GroK 这类不随 turn_completed 上报占用的 Provider 将没有可回退的
+  /// 数据，导致输入框下方上下文进度圈在回合完成后消失。
   void completeLiveTurnGroup(
     String turnId, {
     AgentHistoryTurnStatus status = AgentHistoryTurnStatus.completed,
@@ -1141,7 +1151,6 @@ class AgentConversationTimelineStore {
       _expandedActivePlanTurnIds.remove(turnId);
       currentTurnGroupId = null;
       _pendingTurnGroupId = null;
-      _liveContextWindowUsage = null;
       _clearActivity();
       return;
     }
@@ -1166,7 +1175,6 @@ class AgentConversationTimelineStore {
     _freezeOpenToolDurations(completedAt);
     _promoteTurnToHistorical(turnId);
     currentTurnGroupId = null;
-    _liveContextWindowUsage = null;
     _clearActivity();
   }
 

@@ -282,6 +282,34 @@ void main() {
       expect(store.currentThreadTokenUsage, isNull);
     });
 
+    test('keeps context occupancy across turn completion', () {
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+
+      store.startPendingLiveTurn();
+      store.beginLiveTurnGroup(
+        const AgentTurn(id: 'turn-live', sessionId: 'thread-1'),
+      );
+      store.syncLiveTurnBinding();
+      store.updateContextWindowUsage(
+        const AgentContextWindowUsageEvent(
+          sessionId: 'thread-1',
+          turnId: 'turn-live',
+          usedTokens: 1200,
+          modelContextWindow: 4000,
+        ),
+      );
+      expect(store.currentThreadLastTokenUsage!.totalTokens, 1200);
+
+      // turn 结束不应清空会话级上下文占用；进度圈在回合完成后仍可展示。
+      store.completeLiveTurnGroup('turn-live');
+      store.syncLiveTurnBinding();
+
+      expect(store.liveTurnState, isNull);
+      expect(store.currentThreadLastTokenUsage!.totalTokens, 1200);
+      expect(store.currentThreadLastTokenUsage!.modelContextWindow, 4000);
+    });
+
     test('attaches model config from history and live pending turn', () {
       final store = AgentConversationTimelineStore();
       addTearDown(store.dispose);
