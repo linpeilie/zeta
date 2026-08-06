@@ -252,7 +252,7 @@ main -> app -> presentation/application -> domain
 - 默认审批策略保持保守，不自动授权命令执行或文件写入。
 - Codex app-server 协议以 `third_party/codex_app_server_schema` 的 pinned
   快照为准；升级 CLI 时先用 `tool/gen_codex_schema.*` 导出并 diff，再改
-  适配层。流程见 `docs/codex_app_server_protocol.md`。
+  适配层。流程见 `docs/protocols/codex_app_server_protocol.md`。
 
 ### 4.1 Agent 流式身份与叙事边界
 

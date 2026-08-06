@@ -16,8 +16,8 @@ workspace 恢复和历史加载路径中退役。当前活跃 Provider 只有 Co
 
 ## 历史证据
 
-- [旧 Cursor 接入计划](../plan/cursor_acp_integration_plan.md) 仅记录删除前实现背景。
-- [历史发布门禁](./cursor_acp_release_validation.md) 记录退役前的验证要求与缺口。
+- `plan/cursor_acp_integration_plan.md`（已随 `plan/` 目录移除，仅存于 Git 历史） 仅记录删除前实现背景。
+- [历史发布门禁](cursor_acp_release_validation.md) 记录退役前的验证要求与缺口。
 - `test/fixtures/agent_stream_identity/` 中的 Cursor JSON 是 synthetic fixture，只用于退役
   决策和删除前行为审计，不代表真实协议或当前支持。
 

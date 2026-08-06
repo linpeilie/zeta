@@ -33,7 +33,7 @@
 - [Developer experience](https://docs.flutter.dev/ai/best-practices/developer-experience)
 
 其中 `Developer experience` 已单独整理为
-[flutter_ai_developer_experience_zh.md](./flutter_ai_developer_experience_zh.md)，本文件只做总览和落地衔接。
+[flutter_ai_developer_experience_zh.md](flutter_ai_developer_experience_zh.md)，本文件只做总览和落地衔接。
 
 ## 总体图景
 
@@ -52,7 +52,7 @@ Flutter 官方把 AI 相关能力分成两大方向：
 
 当前项目已经落地：
 
-- 根目录：[AGENTS.md](../AGENTS.md)
+- 根目录：[AGENTS.md](../../AGENTS.md)
 - 作用：约束 Flutter/Dart 风格、依赖策略、测试、布局、架构边界和项目清洁度。
 
 后续当项目引入路由、状态管理、网络、资产、Firebase 或 AI 功能时，需要同步更新 `AGENTS.md`。

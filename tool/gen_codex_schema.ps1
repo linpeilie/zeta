@@ -235,7 +235,7 @@ try {
     Write-Host "Wrote $fileCount schema files to $OutDir"
     Write-Host "Pinned Codex CLI version: $cliVersion"
     Write-Host 'Next: git diff --stat third_party/codex_app_server_schema'
-    Write-Host 'Then update docs/codex_app_server_protocol.md if the pin changed.'
+    Write-Host 'Then update docs/protocols/codex_app_server_protocol.md if the pin changed.'
 }
 finally {
     if (Test-Path -LiteralPath $tmpDir) {

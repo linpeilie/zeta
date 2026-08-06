@@ -8,7 +8,15 @@
 
 macOS · Windows · Linux ｜ 本地运行 ｜ 开源
 
+[![CI](https://github.com/linpeilie/zeta/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/linpeilie/zeta/actions/workflows/ci.yml)
+[![Release](https://github.com/linpeilie/zeta/actions/workflows/release.yml/badge.svg)](https://github.com/linpeilie/zeta/actions/workflows/release.yml)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+
 中文 ｜ [English](README.en.md)
+
+<!-- 截图待补：拍摄规格见 docs/images/README.md，拍好后删掉这行注释符即可
+<img src="docs/images/hero.png" alt="Zeta 三栏工作台" width="900" />
+-->
 
 </div>
 
@@ -32,8 +40,12 @@ macOS · Windows · Linux ｜ 本地运行 ｜ 开源
 **看得见的工作过程**
 AI 的回复、推理过程、工具调用、这一回合改动的代码 diff，全部在一条连续时间线里，带语法高亮。不用再从滚动的终端日志里考古。
 
+<!-- <img src="docs/images/timeline-tools.png" alt="工具调用与回合 diff" width="720" /> -->
+
 **该问你的时候一定会问**
 执行命令、写文件、访问网络，默认都要你点头。审批卡片固定在输入框上方，不会被新消息冲走。Zeta 从不替你自动授权。
+
+<!-- <img src="docs/images/approval.png" alt="权限审批卡片" width="720" /> -->
 
 **先看计划，再动手**
 可以让 AI 先出一份行动计划，你读完确认，它才开始真正执行。中途还能让它继续修改计划。计划和执行是两个明确分开的动作。
@@ -46,6 +58,8 @@ AI 的回复、推理过程、工具调用、这一回合改动的代码 diff，
 
 **用了多少一目了然**
 内置使用统计页：按时间、项目、模型筛选，看调用次数、成功率、Token 消耗和响应速度，也能看到当前套餐的用量窗口和重置时间——数据只取 Provider 真实返回的，不做估算。
+
+<!-- <img src="docs/images/usage.png" alt="使用统计" width="720" /> -->
 
 **顺手的输入框**
 粘贴或选择截图直接当输入、输入 `$` 唤出 Skills、输入 `/` 唤出命令菜单、`@` 引用项目文件。上下键选择，回车确认。
@@ -70,6 +84,8 @@ Zeta 采用能力协商机制：某个助手不支持的功能，界面上直接
 - **AI CLI 的配置保持原位。** Zeta 不会去动 `~/.codex`、`~/.grok` 里的文件。
 - **Zeta 自己的数据放在 `~/.zeta/`**（设置、会话状态、日志、缓存），都是明文 JSON，随时可以查看或删除。
 - **统计索引只存必要字段**：会话 ID、时间、项目、模型、状态、耗时、Token 数。不保存提示词、AI 回复正文、工具输出和原始错误文本。
+
+逐个文件的说明和清理方法见[故障排查与数据说明](docs/product/troubleshooting.md#zeta-在你电脑上存了什么)。
 
 ## 下载与安装
 
@@ -104,7 +120,15 @@ Zeta 是壳层，本身不含模型。先安装并登录 [Codex CLI](https://git
 
 > 没检测到 CLI？打开「设置 → Agent 管理」，那里有身份、版本、登录状态和连接测试，能直接告诉你卡在哪一步。连接测试只做握手，不会产生任何模型调用费用。
 
+## 遇到问题
+
+**[故障排查与数据说明](docs/product/troubleshooting.md)** 覆盖了常见问题：安装被系统拦截、CLI 检测不到、审批卡片消失、通知不弹、文件树缺目录、统计数字对不上，以及 `~/.zeta/` 里每个文件存了什么、怎么清理和重置。
+
+还是没解决就[提个 Issue](https://github.com/linpeilie/zeta/issues/new/choose)。
+
 ## 参与开发
+
+欢迎贡献。动手前请先读 **[贡献指南](CONTRIBUTING.md)**——本项目有一批必须遵守的架构约束（Provider 隔离、事件管线不变量、权限模型），违反的 PR 无论功能是否正确都不会合并。
 
 Zeta 是 Flutter Desktop 应用，Dart SDK `^3.12.2`，CI 使用 Flutter stable 3.44.4。
 
@@ -123,11 +147,14 @@ flutter test
 
 架构约定、Provider 接入流程、事件管线不变量和评审门禁，见 [`docs/`](docs/README.md)：
 
-- [产品需求文档](docs/product_requirements.md) — 目标用户、范围边界与用户流程
-- [设计文档](docs/design_document.md) — 分层结构、UI 骨架、Provider 抽象
-- [开发者文档](docs/developer_guide.md) — 命令、事件管线、UI 开发细则
-- [工程规范](docs/engineering_standards.md) — 架构评审规范
-- [发版指南](docs/release_guide.md) — Tag 规则与发布流程
+- [**架构总览**](docs/architecture/overview.md) — 分层、事件管线、能力协商，第一次读代码从这里开始
+- [**术语表**](docs/guides/glossary.md) — thread / turn / entryId / capability 等高频术语
+- [贡献指南](CONTRIBUTING.md) — 环境、命令、提交格式与架构红线
+- [产品需求文档](docs/product/product_requirements.md) — 目标用户、范围边界与用户流程
+- [设计文档](docs/architecture/design_document.md) — 分层结构、UI 骨架、Provider 抽象
+- [开发者文档](docs/guides/developer_guide.md) — 命令、事件管线、UI 开发细则
+- [工程规范](docs/architecture/engineering_standards.md) — 架构评审规范
+- [发版指南](docs/release/release_guide.md) — Tag 规则与发布流程
 - [AGENTS.md](AGENTS.md) — AI 协作规则与提交格式
 
 新增 Provider 的正常改动范围是：自有 data 文件 + 中立 domain 契约 + factory 组合 + 契约测试。共享层（decoder、事件管线、时间线 store）不允许出现任何 Provider 分支。
@@ -137,3 +164,7 @@ flutter test
 Zeta 定位是 Agent 协作面板，不是完整 IDE。以下能力目前**没有**，也不在近期计划中：
 
 内置代码编辑器 · 文件内容读取与编辑器内 diff · 远程仓库与云同步 · 账号体系 · 完整插件系统 · 移动端
+
+## 许可
+
+[GPL-3.0](LICENSE)。你可以自由使用、修改和分发本项目，但分发修改版时必须同样以 GPL-3.0 开源。

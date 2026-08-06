@@ -169,8 +169,8 @@ dart run build_runner build --delete-conflicting-outputs
 - 不要提交构建产物或 `.dart_tool` 内容。
 - 当项目引入路由、本地化、全局状态管理、网络、资源或正式的 feature/module
   结构时，更新此文件。
-- 当架构边界发生变化时，保持 `docs/engineering_standards.md`、
-  `docs/developer_guide.md` 和 `docs/design_document.md` 内容一致。
+- 当架构边界发生变化时，保持 `docs/architecture/engineering_standards.md`、
+  `docs/guides/developer_guide.md` 和 `docs/architecture/design_document.md` 内容一致。
 
 ## Git 提交信息
 每次你修改或更新完代码后，必须在回复的最后附加一个【Git 提交信息】模块。

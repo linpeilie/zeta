@@ -86,7 +86,7 @@
 
 - Codex app-server 协议变化可能导致 provider 映射失效；升级前先用
   `tool/gen_codex_schema.* --diff` 对照 `third_party/codex_app_server_schema`
-  （流程见 `docs/codex_app_server_protocol.md`）。
+  （流程见 `docs/protocols/codex_app_server_protocol.md`）。
 - JSON-RPC stdio 的请求、通知和服务端 request 处理需要保持严格测试覆盖。
 - Cursor 重新接入必须另立方案并重新采集真实协议 fixture；不得复用退役前的 synthetic
   fixture 推断协议语义。

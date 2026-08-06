@@ -119,7 +119,7 @@ DesktopAttentionController
 Agent turn 终态、权限、问题、Provider 计划审批和本地 Plan 执行交接统一转换为
 `AgentAttentionSignal`。只有在目标 Agent thread 不可见时才发系统通知；点击通知
 恢复窗口并选中对应 Provider thread。详细契约、幂等、脱敏和平台实现见
-[Agent 桌面通知与任务栏未读提醒详细设计](./desktop_agent_notification_design.md)。
+[Agent 桌面通知与任务栏未读提醒详细设计](desktop_agent_notification_design.md)。
 
 ## 4. UI 设计
 
@@ -357,9 +357,9 @@ repository；协议 transport 不记录 prompt、文件内容或 stderr 原文�
 
 协议基准锁定在 `third_party/codex_app_server_schema`（由
 `tool/gen_codex_schema.sh` / `.ps1` 从本机 Codex CLI 导出）。当前 pin 与
-升级流程见 [Codex app-server 协议版本锁定](./codex_app_server_protocol.md)；
+升级流程见 [Codex app-server 协议版本锁定](../protocols/codex_app_server_protocol.md)；
 功能缺口与分阶段适配见
-[`plan/codex_app_server_adaptation_plan.md`](../plan/codex_app_server_adaptation_plan.md)。
+`plan/codex_app_server_adaptation_plan.md`（已随 `plan/` 目录移除，仅存于 Git 历史）。
 
 **适配进度（截至 2026-07-23）：** Phase 0 完成协议对齐；Phase 1 完成
 核心流式体验；Phase 2 已完成 Provider Bundle 与多 Provider 能力端口迁移，并覆盖：

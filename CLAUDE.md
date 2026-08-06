@@ -9,7 +9,12 @@ Zeta 是 Flutter Desktop 的本地 Agent IDE 壳层（macOS / Windows / Linux）
 本仓库另有两份权威文档，规则冲突时以它们为准，修改架构边界时必须同步更新：
 
 - `AGENTS.md` — AI 协作规则（工作流、风格、依赖、Git 提交格式）。
-- `docs/` — `developer_guide.md`（命令、Provider/事件管线/UI 开发细则）、`engineering_standards.md`（架构评审规范）、`design_document.md`、`codex_app_server_protocol.md`（协议版本锁定流程）。
+- `docs/` — 按主题分目录，索引见 `docs/README.md`：
+  - `docs/architecture/` — `overview.md`（架构总览，含 Mermaid 图）、`design_document.md`、`engineering_standards.md`（架构评审规范）。
+  - `docs/guides/` — `developer_guide.md`（命令、Provider/事件管线/UI 开发细则）、`glossary.md`（术语表）。
+  - `docs/protocols/` — `codex_app_server_protocol.md`（协议版本锁定流程）。
+  - `docs/product/`、`docs/release/`、`docs/history/`、`docs/reference/` — 产品、发版、归档与外部资料。
+- `CONTRIBUTING.md` / `CONTRIBUTING.en.md` — 面向人类贡献者的架构红线摘要与 PR 流程。
 
 ## 常用命令
 

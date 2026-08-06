@@ -8,7 +8,15 @@
 
 macOS · Windows · Linux ｜ Runs locally ｜ Open source
 
+[![CI](https://github.com/linpeilie/zeta/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/linpeilie/zeta/actions/workflows/ci.yml)
+[![Release](https://github.com/linpeilie/zeta/actions/workflows/release.yml/badge.svg)](https://github.com/linpeilie/zeta/actions/workflows/release.yml)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+
 [中文](README.md) ｜ English
+
+<!-- Screenshot pending: see docs/images/README.md for specs; drop the comment markers once added
+<img src="docs/images/hero.png" alt="Zeta three-pane workbench" width="900" />
+-->
 
 </div>
 
@@ -32,8 +40,12 @@ It isn't trying to be your code editor, and it doesn't upload your code anywhere
 **The work is visible**
 Replies, reasoning, tool calls, and the per-turn code diff all live in one continuous, syntax-highlighted timeline. No more archaeology in scrollback.
 
+<!-- <img src="docs/images/timeline-tools.png" alt="Tool calls and per-turn diff" width="720" /> -->
+
 **It asks before it acts**
 Running commands, writing files, and network access all require your approval by default. Approval cards are pinned above the composer so new messages can't push them out of view. Zeta never pre-authorizes anything on your behalf.
+
+<!-- <img src="docs/images/approval.png" alt="Permission approval card" width="720" /> -->
 
 **Plan first, then execute**
 Ask the agent to draft a plan, read it, and only then let it run. You can send revisions mid-way. Planning and execution are two clearly separate actions — running a plan always starts a fresh turn.
@@ -46,6 +58,8 @@ Project list, current project, expanded folders, selected file, recent threads �
 
 **Know what you're spending**
 A built-in usage page: filter by time, project, agent, and model to see call counts, success rate, token usage, and latency, plus your plan's current usage window and reset time. Everything shown comes from what the provider actually returned — nothing is estimated.
+
+<!-- <img src="docs/images/usage.png" alt="Usage statistics" width="720" /> -->
 
 **A composer that gets out of the way**
 Paste or attach screenshots straight in, type `$` for Skills, `/` for the command menu, `@` to reference project files. Arrow keys to pick, Enter to confirm.
@@ -70,6 +84,8 @@ Zeta negotiates capabilities: anything an agent doesn't support simply isn't ren
 - **Your CLI config stays put.** Zeta does not touch `~/.codex` or `~/.grok`.
 - **Zeta's own data lives in `~/.zeta/`** (settings, session state, logs, cache) as plain versioned JSON you can inspect or delete at any time.
 - **The usage index stores only the essentials**: thread ID, timestamp, project, model, status, latency, token counts. No prompts, no response bodies, no tool output, no raw error text.
+
+For a file-by-file breakdown and cleanup instructions, see the [data reference](docs/product/troubleshooting.en.md#what-zeta-stores-on-your-machine).
 
 ## Download and install
 
@@ -104,7 +120,15 @@ Describe what you want in the composer and hit Enter. Want a plan first? Type `/
 
 > CLI not detected? Open **Settings → Agent management** for identity, version, sign-in state, and a connection test that tells you exactly where things break. The test performs a handshake only — it never triggers a billable model call.
 
+## Running into trouble
+
+**[Troubleshooting and data reference](docs/product/troubleshooting.en.md)** covers the usual suspects: OS install warnings, undetected CLIs, vanishing approval cards, missing notifications, hidden directories in the file tree, and confusing usage numbers — plus what every file under `~/.zeta/` holds and how to clean or reset it.
+
+Still stuck? [Open an issue](https://github.com/linpeilie/zeta/issues/new/choose).
+
 ## Contributing
+
+Contributions are welcome. Please read the **[contributing guide](CONTRIBUTING.en.md)** first — this project enforces a set of architectural constraints (provider isolation, event-pipeline invariants, the permission model), and PRs that violate them won't be merged even if the feature works.
 
 Zeta is a Flutter Desktop app on Dart SDK `^3.12.2`; CI builds with Flutter stable 3.44.4.
 
@@ -123,11 +147,14 @@ flutter test
 
 Architecture rules, provider onboarding, event-pipeline invariants, and review gates live in [`docs/`](docs/README.md) (Chinese):
 
-- [Product requirements](docs/product_requirements.md) — target users, scope, user flows
-- [Design document](docs/design_document.md) — layering, UI skeleton, provider abstraction
-- [Developer guide](docs/developer_guide.md) — commands, event pipeline, UI details
-- [Engineering standards](docs/engineering_standards.md) — architecture review rules
-- [Release guide](docs/release_guide.md) — tag rules and release workflow
+- [**Architecture overview**](docs/architecture/overview.md) — layering, event pipeline, capability negotiation; start here
+- [**Glossary**](docs/guides/glossary.md) — thread / turn / entryId / capability and other recurring terms
+- [Contributing guide](CONTRIBUTING.en.md) — setup, commands, commit format, hard lines
+- [Product requirements](docs/product/product_requirements.md) — target users, scope, user flows
+- [Design document](docs/architecture/design_document.md) — layering, UI skeleton, provider abstraction
+- [Developer guide](docs/guides/developer_guide.md) — commands, event pipeline, UI details
+- [Engineering standards](docs/architecture/engineering_standards.md) — architecture review rules
+- [Release guide](docs/release/release_guide.md) — tag rules and release workflow
 - [AGENTS.md](AGENTS.md) — AI collaboration rules and commit format
 
 Adding a provider should touch only its own data files, the neutral domain contracts, the factory wiring, and contract tests. Shared layers (decoder, event pipeline, timeline store) must contain no provider-specific branching.
@@ -137,3 +164,7 @@ Adding a provider should touch only its own data files, the neutral domain contr
 Zeta is an agent collaboration panel, not a full IDE. The following are **not** available and aren't planned near-term:
 
 Built-in code editor · file content reading and in-editor diff · remote repos and cloud sync · accounts · a full plugin system · mobile
+
+## License
+
+[GPL-3.0](LICENSE). You're free to use, modify, and distribute this project, but distributed modifications must also be released under GPL-3.0.

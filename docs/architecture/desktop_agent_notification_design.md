@@ -177,7 +177,7 @@ Unread -- category disabled --> Absent + cancel system notification
 
 Codex 方面以仓库 `0.144.5` stable schema pin 为审查基线，Plan/问题仍遵循现有
 experimental 能力探测和宽容降级，见
-[Codex app-server 协议版本锁定](./codex_app_server_protocol.md)。本功能未增加或猜测任何
+[Codex app-server 协议版本锁定](../protocols/codex_app_server_protocol.md)。本功能未增加或猜测任何
 app-server 原始 method。
 
 ## 8. 系统通知实现

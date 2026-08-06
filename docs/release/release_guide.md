@@ -4,7 +4,7 @@
 
 ## 1. 发布方式
 
-Zeta 使用 [GitHub Actions 发布工作流](../.github/workflows/release.yml) 自动构建并发布
+Zeta 使用 [GitHub Actions 发布工作流](../../.github/workflows/release.yml) 自动构建并发布
 Windows、macOS 和 Linux 桌面安装包。工作流只监听推送到 GitHub 的 `v*` Tag；
 创建普通分支、提交代码或推送不符合规则的 Tag 都不会发版。
 

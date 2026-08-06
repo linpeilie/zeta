@@ -32,6 +32,6 @@ already cover the same surface.
 1. Upgrade or select the target Codex CLI.
 2. Run the generator with `--force` / `-Force` if the pin changes.
 3. `git diff --stat third_party/codex_app_server_schema`
-4. Update adapter code and `docs/codex_app_server_protocol.md` before merging.
+4. Update adapter code and `docs/protocols/codex_app_server_protocol.md` before merging.
 
 Do not edit schema JSON by hand.

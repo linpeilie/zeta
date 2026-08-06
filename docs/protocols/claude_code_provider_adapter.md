@@ -6,7 +6,7 @@
 > MCP·hooks 透传等能力。本文档同时作为落地任务清单与评审基线。
 >
 > **约束基线**：本文档不重复 `CLAUDE.md`、`AGENTS.md`、
-> `docs/developer_guide.md` 已固化的规则。凡涉及事件管线、共享适配层、feature
+> `docs/guides/developer_guide.md` 已固化的规则。凡涉及事件管线、共享适配层、feature
 > 目录约束、Git 提交格式的部分，仍以那三份文档为准。发生冲突时，本文档服从
 > 上述权威文档，同时在此登记差异并触发同步修订。
 
@@ -266,7 +266,7 @@ claude \
 | `control_response` |  | 我们回写 control 的确认（我们不消费，只做诊断） | 忽略 |
 
 > stream-json schema 会随 CLI 版本演进。参照
-> `docs/codex_app_server_protocol.md` 的版本锁定流程，为 Claude Code 建立
+> `docs/protocols/codex_app_server_protocol.md` 的版本锁定流程，为 Claude Code 建立
 > 独立的 `docs/claude_code_stream_json_protocol.md` 与
 > `third_party/claude_code_stream_schema/`（后续任务，非 MVP 必须）。
 
@@ -375,8 +375,8 @@ Application 工作流（§6），不复用 permission 决策模型。
 
 ```
 + docs/claude_code_stream_json_protocol.md    # 协议版本锁定（对齐 codex_app_server_protocol.md）
-~ docs/developer_guide.md                     # 追加 CC 特有的启动/权限章节；§7 的 16 条清单以 CC 为例补充
-~ docs/design_document.md                     # 更新 Provider 表
+~ docs/guides/developer_guide.md                     # 追加 CC 特有的启动/权限章节；§7 的 16 条清单以 CC 为例补充
+~ docs/architecture/design_document.md                     # 更新 Provider 表
 ~ CLAUDE.md                                   # 若 Zeta 默认 provider 或 default model 有变更再改
 ```
 
@@ -687,7 +687,7 @@ UI 展示 plan Markdown → 用户 approve
 | **M2 · 工具时间线** | mapper 覆盖 `thinking`/`tool_use` 完整生命周期 + `AgentTokenUsageEvent` + turn 状态归一化 | 工具卡片、reasoning phase、usage 全部出；`agent_event_storm_fixture_test.dart` 追加 CC fixture |
 | **M3 · 权限 + Plan** | ControlRequestHandler + PermissionPolicyAdapter + PlanApprovalAdapter + 4 选项 catalog + 显式 Default 执行回合 | 权限模式条可切；plan → 审批 → 执行链路手工通；单测覆盖所有 4 个 optionId |
 | **M4 · 历史 / resume** | SessionHistoryReader + `--resume` 参数拼装 + hidden list | 重启 Zeta 后能看到历史 thread、点开恢复；损坏 jsonl 不阻断启动 |
-| **M5 · 打磨** | CLI 检测四阶段 + 日志页 + 详情页文案 + 图标 + 文档 | detect 完整跑通；`docs/claude_code_stream_json_protocol.md` 归档 schema；`docs/design_document.md` 更新 |
+| **M5 · 打磨** | CLI 检测四阶段 + 日志页 + 详情页文案 + 图标 + 文档 | detect 完整跑通；`docs/claude_code_stream_json_protocol.md` 归档 schema；`docs/architecture/design_document.md` 更新 |
 | **M6+ · 二期** | fork、skills（`~/.claude/agents/`）、MCP config 透传、thinkingBudget、Bedrock/Vertex | 独立 PR，按需排 |
 
 每个阶段结束：`dart format .` → `flutter analyze` → `flutter test`（对齐
@@ -695,7 +695,7 @@ CLAUDE.md「每次代码修改后」章节）。
 
 ## 9. 测试策略
 
-对齐 `docs/engineering_standards.md` 与 CLAUDE.md：
+对齐 `docs/architecture/engineering_standards.md` 与 CLAUDE.md：
 
 1. **共享层守卫**：新增 fixture-based 架构测试，断言
    `agent_event_coalescing_policy.dart`、`agent_event_pipeline.dart`、
@@ -708,7 +708,7 @@ CLAUDE.md「每次代码修改后」章节）。
 3. **单元测试**：permission adapter / plan adapter / session history reader
    各自 A/A/A，用 fake `StreamJsonPeer`；不 mock。
 4. **AgentEvent 16 条清单**：新增/改动 event 时逐项回答
-   `docs/developer_guide.md §7`；MVP 若不新增 event，只需在 PR
+   `docs/guides/developer_guide.md §7`；MVP 若不新增 event，只需在 PR
    描述中明示「未新增 AgentEvent」。
 5. **冒烟脚本**：`tool/smoke_claude_code_stream_json.py`，参照
    `tool/smoke_codex_app_server.py` 模式；CI 不跑（需真实 CLI），发布

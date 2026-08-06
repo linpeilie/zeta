@@ -17,9 +17,9 @@ Zeta 的默认 Agent provider（`CodexAppServerAgentProvider`）按 Codex CLI
 | --- | --- |
 | Pinned Codex CLI | **0.144.5**（见 `third_party/codex_app_server_schema/PINNED_VERSION`） |
 | 导出命令 | `codex app-server generate-json-schema --out <dir>` |
-| Schema 快照目录 | [`third_party/codex_app_server_schema/`](../third_party/codex_app_server_schema/) |
-| 生成脚本 | [`tool/gen_codex_schema.sh`](../tool/gen_codex_schema.sh)、[`tool/gen_codex_schema.ps1`](../tool/gen_codex_schema.ps1) |
-| 适配计划 | [`plan/codex_app_server_adaptation_plan.md`](../plan/codex_app_server_adaptation_plan.md) |
+| Schema 快照目录 | [`third_party/codex_app_server_schema/`](../../third_party/codex_app_server_schema/) |
+| 生成脚本 | [`tool/gen_codex_schema.sh`](../../tool/gen_codex_schema.sh)、[`tool/gen_codex_schema.ps1`](../../tool/gen_codex_schema.ps1) |
+| 适配计划 | `plan/codex_app_server_adaptation_plan.md`（已随 `plan/` 目录移除，仅存于 Git 历史） |
 
 > 说明：本次快照直接取自 `codex-rust-v0.144.5` release 源码中已生成的
 > stable JSON Schema；未纳入实验性 API，也继续排除键序不稳定的 v2 聚合文件。

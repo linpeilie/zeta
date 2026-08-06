@@ -1,0 +1,134 @@
+name: Bug 报告 / Bug report
+description: 报告 Zeta 的缺陷 / Report a defect in Zeta
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。Zeta 的问题高度依赖运行环境，请尽量填全下面的信息。
+
+        **贴日志前请先脱敏**：`~/.zeta/logs/` 下的日志可能包含你的项目路径和文件名。
+
+        ---
+
+        Thanks for the report. Zeta issues are highly environment-dependent, so please fill in as much as you can.
+
+        **Redact logs before pasting**: logs under `~/.zeta/logs/` may contain your project paths and filenames.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: 提交前检查 / Preflight
+      options:
+        - label: 我已搜索过现有 Issue，没有找到重复。/ I searched existing issues and found no duplicate.
+          required: true
+        - label: 我已查看过[故障排查文档](https://github.com/linpeilie/zeta/blob/dev/docs/product/troubleshooting.md)。/ I checked the [troubleshooting guide](https://github.com/linpeilie/zeta/blob/dev/docs/product/troubleshooting.en.md).
+          required: true
+        - label: 这不是安全漏洞（安全问题请走私密上报）。/ This is not a security vulnerability (those go through private reporting).
+          required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 问题描述 / What happened
+      description: 实际发生了什么？/ What actually happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为 / Expected behavior
+      description: 你期望发生什么？/ What did you expect instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤 / Steps to reproduce
+      description: 越具体越好。/ The more specific, the better.
+      placeholder: |
+        1. 打开项目 A / Open project A
+        2. 在 Agent 输入框发送 "..." / Send "..." in the composer
+        3. 观察到 ... / Observe ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及区域 / Area
+      description: 不确定就选「不清楚」。/ Pick "Not sure" if unclear.
+      multiple: true
+      options:
+        - Agent 对话与时间线 / Agent conversation and timeline
+        - 权限、提问或计划审批 / Permission, question, or plan approval
+        - Plan 模式与执行交接 / Plan mode and execution handoff
+        - 项目与文件树 / Projects and file tree
+        - 会话恢复 / Session restore
+        - Agent 管理与 CLI 检测 / Agent management and CLI detection
+        - 使用统计 / Usage statistics
+        - 桌面通知与未读提醒 / Desktop notifications
+        - 主题、布局或窗口 / Theme, layout, or window
+        - 安装与启动 / Install and launch
+        - 不清楚 / Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: 操作系统 / Operating system
+      placeholder: "macOS 15.3 (Apple Silicon) / Windows 11 23H2 / Ubuntu 24.04"
+    validations:
+      required: true
+
+  - type: input
+    id: zeta-version
+    attributes:
+      label: Zeta 版本 / Zeta version
+      description: 见关于页面或安装包文件名。/ From the About page or the installer filename.
+      placeholder: "0.1.0 / zeta-0.1.0-macos-universal.dmg / 源码运行 dev@d43dcbf"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: 使用的 Agent / Agent in use
+      options:
+        - Codex
+        - Grok
+        - 不涉及 Agent / Not agent-related
+    validations:
+      required: true
+
+  - type: input
+    id: cli-version
+    attributes:
+      label: Agent CLI 版本 / Agent CLI version
+      description: "`codex --version` 或 `grok --version` 的输出。/ Output of `codex --version` or `grok --version`."
+      placeholder: "codex 0.144.5 / grok-build 0.2.119"
+
+  - type: input
+    id: flutter-version
+    attributes:
+      label: Flutter 版本 / Flutter version
+      description: 仅从源码运行时需要填写。/ Only needed when running from source.
+      placeholder: "Flutter 3.44.4 · Dart 3.12.2"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 相关日志 / Relevant logs
+      description: |
+        来自 `~/.zeta/logs/zeta-YYYY-MM-DD.log`。**请先移除敏感路径。**
+        / From `~/.zeta/logs/zeta-YYYY-MM-DD.log`. **Strip sensitive paths first.**
+      render: text
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 补充信息 / Additional context
+      description: 截图、录屏或其他线索。/ Screenshots, recordings, or other clues.

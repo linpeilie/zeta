@@ -13,7 +13,7 @@ Zeta 是一个 Flutter Desktop 项目，当前支持 macOS、Linux 和 Windows �
 - 如需运行默认 Agent provider，需要本机可执行 `codex app-server`；未指定
   `--listen` 时使用 stdio。
 - Codex 适配层按 pinned schema 开发；协议版本与升级流程见
-  [Codex app-server 协议版本锁定](./codex_app_server_protocol.md)。
+  [Codex app-server 协议版本锁定](../protocols/codex_app_server_protocol.md)。
 - 如需使用 Grok ACP，建议安装 Grok CLI（grok-build）`0.2.119` 或更高版本。
   `0.2.119` 是 Zeta 的 Grok 多会话兼容基线；此前版本不支持多会话，在同时打开或执行
   多个 Grok 会话时可能出现会话状态、流式通知或回合终态无法正确隔离的问题。
@@ -56,7 +56,7 @@ Prompt、回复、文件内容、凭证、原始 JSONL、thread/turn id 或 stde
 `turn/plan/updated` 等实验事件缺失，脚本会保留实际方法名级诊断并返回失败。
 
 Cursor 的旧 smoke 与发布材料只作为
-[退役历史证据](./cursor_acp_release_validation.md) 保留，当前版本没有 Cursor 启动工具。
+[退役历史证据](../history/cursor_acp_release_validation.md) 保留，当前版本没有 Cursor 启动工具。
 
 Linux 或 Windows 开发时，将 `flutter run` 的设备改为对应桌面设备。
 
@@ -136,7 +136,7 @@ windows/
 桌面通知不得从 Provider raw payload 直接组装；应复用归一化
 `AgentAttentionSignal`，并保证正文不含 prompt、回复、命令和完整路径。扩展事件类别或
 平台行为前先阅读
-[Agent 桌面通知与任务栏未读提醒详细设计](./desktop_agent_notification_design.md)。
+[Agent 桌面通知与任务栏未读提醒详细设计](../architecture/desktop_agent_notification_design.md)。
 
 ## 5. 开发流程
 
@@ -158,7 +158,7 @@ windows/
 - 新实现中，对公共 API、协议适配、状态机、错误处理和不直观分支优先补充中文注释。
 - 不使用 `print`，需要保留的诊断信息使用 `dart:developer` 或项目日志封装。
 
-更完整的架构和评审规则见 [工程规范](./engineering_standards.md)。
+更完整的架构和评审规则见 [工程规范](../architecture/engineering_standards.md)。
 
 ## 7. Agent provider 开发指南
 
@@ -365,7 +365,7 @@ factory/catalog 组合以及 Provider 契约测试。`AgentEventCoalescingPolicy
 
 任一项不满足时，不得以“兼容性”或“临时兜底”为由合入共享层；应先回到对应 Provider
 adapter/reducer 修正。完整规范见
-[工程规范 §4.2](./engineering_standards.md#42-共享适配层纯度门禁)。
+[工程规范 §4.2](../architecture/engineering_standards.md#42-共享适配层纯度门禁)。
 
 注意：默认策略应保持保守，不自动授权命令执行或文件写入。
 未支持操作必须 capability=false，并抛出 `UnsupportedError`；不得静默成功。
@@ -415,7 +415,7 @@ stale-while-revalidate：先发布可用旧目录，再以 single-flight 刷新�
   presentation 仅在 typed UI scheduler 的安全发布回调中写入 listenable；turn 结束后若无
   waiting，不得让列表残留 sticky
   `active`。后台完成仅非选中 thread 记入 `completedThreadIds`。细节见
-  [执行中状态方案 §2.5](../plan/agent_running_status_ux_plan.md)。
+  `plan/agent_running_status_ux_plan.md`（已随 `plan/` 目录移除，仅存于 Git 历史）。
 
 ### 新增 AgentEvent 接入清单
 
@@ -441,8 +441,8 @@ stale-while-revalidate：先发布可用旧目录，再以 single-flight 刷新�
 以上问题未全部明确前，不得把事件接入主链路。
 
 修改 Codex 适配层前，先对照
-[`third_party/codex_app_server_schema`](../third_party/codex_app_server_schema/)
-与 [协议版本锁定文档](./codex_app_server_protocol.md)；升级 CLI 时先
+[`third_party/codex_app_server_schema`](../../third_party/codex_app_server_schema/)
+与 [协议版本锁定文档](../protocols/codex_app_server_protocol.md)；升级 CLI 时先
 `./tool/gen_codex_schema.sh --diff`（或 PowerShell `-Diff`）再改代码。
 
 新 provider 支持 Composer 模型配置时，必须把协议字段映射为中立
@@ -650,14 +650,14 @@ codex app-server
 ```
 
 如果命令不存在或协议变更，应用会显示 provider 不可用或错误状态。
-协议字段变更时，按 [协议版本锁定文档](./codex_app_server_protocol.md)
+协议字段变更时，按 [协议版本锁定文档](../protocols/codex_app_server_protocol.md)
 重新导出 schema 并 diff，再更新适配层。
 
 ### 旧 Cursor 配置显示 unavailable
 
 这是退役后的预期行为。应用只在内存中回退到已启用的 Codex/Grok，不会自动保存覆盖旧
 配置，也不会读取或修改 Cursor 会话数据。历史背景见
-[Cursor Agent 退役历史说明](./cursor_agent_guide.md)。
+[Cursor Agent 退役历史说明](../history/cursor_agent_guide.md)。
 
 ### 会话恢复后项目消失
 

@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 故障排查 / Troubleshooting
+    url: https://github.com/linpeilie/zeta/blob/dev/docs/product/troubleshooting.md
+    about: 提 Issue 前先看常见问题与数据说明。/ Check common problems and the data reference first.
+  - name: 提问与讨论 / Questions and discussion
+    url: https://github.com/linpeilie/zeta/discussions
+    about: 使用问题、想法交流请走 Discussions。/ Use Discussions for usage questions and open-ended ideas.
+  - name: 安全漏洞 / Security vulnerability
+    url: https://github.com/linpeilie/zeta/security/advisories/new
+    about: 请勿公开提交安全问题，使用私密上报。/ Do not report security issues publicly — use private reporting.
+  - name: 贡献指南 / Contributing guide
+    url: https://github.com/linpeilie/zeta/blob/dev/CONTRIBUTING.md
+    about: 提交代码前请先阅读架构红线。/ Read the architectural hard lines before submitting code.
