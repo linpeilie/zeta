@@ -528,7 +528,7 @@ void main() {
     });
 
     test(
-      'shares safe ignored-message diagnostics across Grok notification paths',
+      'logs original payload in shared ignored-message diagnostics across Grok notification paths',
       () async {
         final records = <LogRecord>[];
         await resetAppLoggingForTesting();
@@ -595,6 +595,7 @@ void main() {
           hasLength(2),
         );
         expect(fineMessages, everyElement(contains('Ignoring')));
+        expect(fineMessages, everyElement(contains('raw=')));
         expect(provider.ignoredNotificationCountsForTesting, <String, int>{
           'future/method|unsupported notification method': 2,
           'session/update|unknown_kind': 2,
@@ -604,8 +605,13 @@ void main() {
           'session/update': 2,
         });
         final renderedLogs = records.map((record) => record.message).join('\n');
-        expect(renderedLogs, isNot(contains('private notification content')));
-        expect(renderedLogs, isNot(contains('private update content')));
+        expect(renderedLogs, contains('"method":"future/method"'));
+        expect(renderedLogs, contains('"method":"session/update"'));
+        expect(
+          renderedLogs,
+          contains('"secret":"private notification content"'),
+        );
+        expect(renderedLogs, contains('"content":"private update content"'));
       },
     );
 
@@ -2596,7 +2602,11 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
 
   void emitNotification(String method, Map<String, Object?> params) {
     _notifications.add(
-      JsonRpcNotification(method: method, params: params, raw: params),
+      JsonRpcNotification(
+        method: method,
+        params: params,
+        raw: <String, Object?>{'method': method, 'params': params},
+      ),
     );
   }
 

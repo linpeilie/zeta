@@ -388,32 +388,6 @@ class AgentTokenUsage {
   /// 总 token 数展示值。
   String? get displayTotalTokens => _displayTokenCount(totalTokens);
 
-  /// 总 token 数扣除缓存命中后的展示值。
-  ///
-  /// 用于 turn 增量等「实际计费/占用」口径展示：
-  /// `totalTokens - cachedInputTokens`，差值为负时按 0 处理。
-  String? get displayExclusiveTotalTokens {
-    final total = totalTokens;
-    if (total == null || total <= 0) {
-      return null;
-    }
-    final exclusive = total - (cachedInputTokens ?? 0);
-    return _displayTokenCount(exclusive < 0 ? 0 : exclusive);
-  }
-
-  /// 最近一次请求的 token 数扣除缓存命中后的展示值。
-  ///
-  /// Codex 的 `last*` breakdown 是当前请求快照；与会话累计的普通字段
-  /// 分开，供实时 turn 状态使用。
-  String? get displayLastExclusiveTotalTokens {
-    final total = lastTotalTokens;
-    if (total == null || total <= 0) {
-      return null;
-    }
-    final exclusive = total - (lastCachedInputTokens ?? 0);
-    return _displayTokenCount(exclusive < 0 ? 0 : exclusive);
-  }
-
   /// 最近一次请求的输入 token 数。
   final int? lastInputTokens;
 

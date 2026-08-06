@@ -1255,6 +1255,7 @@ class GrokAcpAgentProvider
         method: method,
         reason: 'missing runtime scope',
         payload: params,
+        rawPayload: notification.raw,
       );
       return;
     }
@@ -1266,6 +1267,7 @@ class GrokAcpAgentProvider
         method: method,
         reason: 'suppressed replay notification',
         payload: params,
+        rawPayload: notification.raw,
       );
       return;
     }
@@ -1281,7 +1283,12 @@ class GrokAcpAgentProvider
         runtimeScope: notificationRuntimeScope,
       );
       _noteTurnCompletedFromMapped(sessionId: sessionId, mapped: mapped);
-      _emitMapped(mapped, method: method, params: params);
+      _emitMapped(
+        mapped,
+        method: method,
+        params: params,
+        rawPayload: notification.raw,
+      );
       _emitReadyIfIdle();
       return;
     }
@@ -1297,7 +1304,12 @@ class GrokAcpAgentProvider
         runtimeScope: notificationRuntimeScope,
       );
       _noteTurnCompletedFromMapped(sessionId: sessionId, mapped: mapped);
-      _emitMapped(mapped, method: method, params: params);
+      _emitMapped(
+        mapped,
+        method: method,
+        params: params,
+        rawPayload: notification.raw,
+      );
       _emitReadyIfIdle();
       return;
     }
@@ -1309,6 +1321,7 @@ class GrokAcpAgentProvider
         method: method,
         params: params,
         runtimeScope: notificationRuntimeScope,
+        rawPayload: notification.raw,
       );
       return;
     }
@@ -1331,10 +1344,15 @@ class GrokAcpAgentProvider
           method: method,
           params: merged,
           runtimeScope: notificationRuntimeScope,
+          rawPayload: notification.raw,
         );
         return;
       }
-      _handleSessionNotificationInvalidation(method: method, params: params);
+      _handleSessionNotificationInvalidation(
+        method: method,
+        params: params,
+        rawPayload: notification.raw,
+      );
       return;
     }
 
@@ -1344,6 +1362,7 @@ class GrokAcpAgentProvider
         method: method,
         reason: 'unsupported extension notification',
         payload: params,
+        rawPayload: notification.raw,
         unmatched: true,
       );
       return;
@@ -1353,6 +1372,7 @@ class GrokAcpAgentProvider
       method: method,
       reason: 'unsupported notification method',
       payload: params,
+      rawPayload: notification.raw,
       unmatched: true,
     );
   }
@@ -1365,6 +1385,7 @@ class GrokAcpAgentProvider
   void _handleSessionNotificationInvalidation({
     required String method,
     required Map<String, Object?> params,
+    required Map<String, Object?> rawPayload,
   }) {
     final update = _asStringKeyedMap(params['update']);
     final updateType = update?['sessionUpdate']?.toString();
@@ -1385,6 +1406,7 @@ class GrokAcpAgentProvider
       method: method,
       reason: 'unsupported session notification update',
       payload: params,
+      rawPayload: rawPayload,
       details: <String, Object?>{'updateKind': updateType},
     );
   }
@@ -1393,6 +1415,7 @@ class GrokAcpAgentProvider
     GrokAcpMappedUpdate mapped, {
     String method = 'provider',
     Map<String, Object?> params = const <String, Object?>{},
+    Object? rawPayload,
   }) {
     for (final event in mapped.events) {
       _addEvent(_enrichUsageEvent(event));
@@ -1404,6 +1427,7 @@ class GrokAcpAgentProvider
         method: method,
         reason: ignoredReason ?? 'unmatched update kind',
         payload: params,
+        rawPayload: rawPayload,
         details: <String, Object?>{'updateKind': ?unmatched},
         unmatched: unmatched != null,
       );
@@ -2336,6 +2360,7 @@ class GrokAcpAgentProvider
     required String method,
     required Map<String, Object?> params,
     required AgentRuntimeScope runtimeScope,
+    Object? rawPayload,
   }) {
     final sessionId = params['sessionId']?.toString();
     if (sessionId == null || sessionId.isEmpty) {
@@ -2343,6 +2368,7 @@ class GrokAcpAgentProvider
         method: method,
         reason: 'missing session id',
         payload: params,
+        rawPayload: rawPayload,
       );
       return;
     }
@@ -2352,6 +2378,7 @@ class GrokAcpAgentProvider
         method: method,
         reason: 'no active turn for session',
         payload: params,
+        rawPayload: rawPayload,
       );
       return;
     }
@@ -2369,7 +2396,12 @@ class GrokAcpAgentProvider
       raw: params,
     );
     if (mapped.events.isEmpty) {
-      _emitMapped(mapped, method: method, params: params);
+      _emitMapped(
+        mapped,
+        method: method,
+        params: params,
+        rawPayload: rawPayload,
+      );
       return;
     }
     _log.fine(
@@ -2377,7 +2409,7 @@ class GrokAcpAgentProvider
       '(stopReason=$stopReason)',
     );
     _noteTurnCompletedFromMapped(sessionId: sessionId, mapped: mapped);
-    _emitMapped(mapped, method: method, params: params);
+    _emitMapped(mapped, method: method, params: params, rawPayload: rawPayload);
     _emitReadyIfIdle();
   }
 

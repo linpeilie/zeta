@@ -941,6 +941,7 @@ class CodexAppServerAgentProvider
         method: notification.method,
         reason: 'filtered by provider policy',
         payload: notification.params,
+        rawPayload: notification.raw,
       );
       return;
     }
@@ -992,6 +993,7 @@ class CodexAppServerAgentProvider
         method: notification.method,
         reason: ignoredReason,
         payload: notification.params,
+        rawPayload: notification.raw,
         unmatched: mapping.unmatchedMethod != null,
       );
       return;

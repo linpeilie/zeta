@@ -382,11 +382,10 @@ String _liveActivityStatusText(AgentHeaderState state, DateTime now) {
 /// 当前 turn 的 token 用量短标签。
 ///
 /// Codex 的普通 breakdown 是 thread 累计，实时活动条优先使用当前 turn
-/// 的 `last*` 请求快照；旧 provider 没有该 breakdown 时才回退到 turn 增量。
+/// 的 `lastOutputTokens` 请求快照；旧 provider 没有该 breakdown 时才回退到
+/// turn 增量中的输出 token。
 String? _liveTurnTokenUsageLabel(AgentTokenUsage? usage) {
-  final display =
-      usage?.displayLastExclusiveTotalTokens ??
-      usage?.displayExclusiveTotalTokens;
+  final display = usage?.displayLastOutputTokens ?? usage?.displayOutputTokens;
   if (display == null) {
     return null;
   }

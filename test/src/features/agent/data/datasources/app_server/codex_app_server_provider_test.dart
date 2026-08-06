@@ -1006,8 +1006,9 @@ void main() {
           ),
         );
         final renderedLogs = records.map((record) => record.message).join('\n');
-        expect(renderedLogs, isNot(contains('private thread title')));
-        expect(renderedLogs, isNot(contains('private user content')));
+        expect(renderedLogs, contains('"method":"thread/started"'));
+        expect(renderedLogs, contains('"title":"private thread title"'));
+        expect(renderedLogs, contains('"text":"private user content"'));
       },
     );
 

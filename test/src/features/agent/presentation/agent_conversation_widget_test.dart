@@ -1861,11 +1861,11 @@ void main() {
         ),
         findsOneWidget,
       );
-      // 实时活动条展示当前 turn 的 last* 请求快照，而不是 thread 累计。
+      // 实时活动条展示当前 turn 的输出 token，而不是总 token 或缓存扣除值。
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('agent-live-activity-status')),
-          matching: find.textContaining('1.1k tokens'),
+          matching: find.textContaining('350 tokens'),
         ),
         findsOneWidget,
       );
