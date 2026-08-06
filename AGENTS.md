@@ -2,6 +2,18 @@
 
 这是一个名为 `zeta` 的 Flutter 项目。在此仓库中进行修改时，请遵循以下规则。
 
+> **本文件是 AI 协作规则的唯一权威源。**
+> `CLAUDE.md` 只是指向这里的索引，不承载规则正文。
+>
+> 相关文档分工：
+> - **为什么这样约束** → [`docs/architecture/overview.md`](docs/architecture/overview.md)（含图）
+> - **术语定义** → [`docs/guides/glossary.md`](docs/guides/glossary.md)
+> - **完整评审门禁** → [`docs/architecture/engineering_standards.md`](docs/architecture/engineering_standards.md)
+> - **接入清单与操作细则** → [`docs/guides/developer_guide.md`](docs/guides/developer_guide.md)
+> - **人类贡献者版摘要** → [`CONTRIBUTING.md`](CONTRIBUTING.md)
+>
+> 本文件与上述文档冲突时，以本文件为准，并**同步修正**被违反的那一份。
+
 ## 项目背景
 
 - 该应用是一个 Flutter 桌面端 Agent IDE 外壳，入口为 `lib/main.dart`，
@@ -169,8 +181,13 @@ dart run build_runner build --delete-conflicting-outputs
 - 不要提交构建产物或 `.dart_tool` 内容。
 - 当项目引入路由、本地化、全局状态管理、网络、资源或正式的 feature/module
   结构时，更新此文件。
-- 当架构边界发生变化时，保持 `docs/architecture/engineering_standards.md`、
-  `docs/guides/developer_guide.md` 和 `docs/architecture/design_document.md` 内容一致。
+- 当架构边界发生变化时，保持以下几处同步，不要只改其中一处：
+  - 本文件（AI 规则权威源）
+  - `docs/architecture/engineering_standards.md`、`docs/architecture/design_document.md`、
+    `docs/architecture/overview.md`
+  - `docs/guides/developer_guide.md`、`docs/guides/glossary.md`（新术语）
+  - `CONTRIBUTING.md` / `CONTRIBUTING.en.md`（人类贡献者版的架构红线摘要）
+- 用户可感知的变化要写进 `CHANGELOG.md` 的 `[未发布]` 小节；纯重构和内部调整不必写。
 
 ## Git 提交信息
 每次你修改或更新完代码后，必须在回复的最后附加一个【Git 提交信息】模块。

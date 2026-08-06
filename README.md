@@ -150,6 +150,9 @@ flutter test
 - [**架构总览**](docs/architecture/overview.md) — 分层、事件管线、能力协商，第一次读代码从这里开始
 - [**术语表**](docs/guides/glossary.md) — thread / turn / entryId / capability 等高频术语
 - [贡献指南](CONTRIBUTING.md) — 环境、命令、提交格式与架构红线
+- [更新日志](CHANGELOG.md) — 用户可感知的版本变化
+- [安全策略](SECURITY.md) — 威胁模型与漏洞上报方式
+- [行为准则](CODE_OF_CONDUCT.md)
 - [产品需求文档](docs/product/product_requirements.md) — 目标用户、范围边界与用户流程
 - [设计文档](docs/architecture/design_document.md) — 分层结构、UI 骨架、Provider 抽象
 - [开发者文档](docs/guides/developer_guide.md) — 命令、事件管线、UI 开发细则

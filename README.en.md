@@ -147,9 +147,12 @@ flutter test
 
 Architecture rules, provider onboarding, event-pipeline invariants, and review gates live in [`docs/`](docs/README.md) (Chinese):
 
-- [**Architecture overview**](docs/architecture/overview.md) — layering, event pipeline, capability negotiation; start here
-- [**Glossary**](docs/guides/glossary.md) — thread / turn / entryId / capability and other recurring terms
+- [**Architecture overview**](docs/architecture/overview.en.md) — layering, event pipeline, capability negotiation; start here
+- [**Glossary**](docs/guides/glossary.en.md) — thread / turn / entryId / capability and other recurring terms
 - [Contributing guide](CONTRIBUTING.en.md) — setup, commands, commit format, hard lines
+- [Changelog](CHANGELOG.md) — user-visible changes (Chinese)
+- [Security policy](SECURITY.md) — threat model and vulnerability reporting
+- [Code of conduct](CODE_OF_CONDUCT.md)
 - [Product requirements](docs/product/product_requirements.md) — target users, scope, user flows
 - [Design document](docs/architecture/design_document.md) — layering, UI skeleton, provider abstraction
 - [Developer guide](docs/guides/developer_guide.md) — commands, event pipeline, UI details

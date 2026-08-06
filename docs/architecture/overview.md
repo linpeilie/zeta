@@ -1,5 +1,7 @@
 # 架构总览
 
+中文 ｜ [English](./overview.en.md)
+
 面向第一次读这个仓库的人。目标是让你在十几分钟内建立整体心智模型，知道该去哪一层改代码。
 
 想查具体名词的定义，看[术语表](../guides/glossary.md)。想看完整规则和不变量，看[设计文档](./design_document.md)与[工程规范](./engineering_standards.md)。

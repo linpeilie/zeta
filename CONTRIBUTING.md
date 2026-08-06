@@ -196,8 +196,10 @@ chore: bump flutter action pin
 
 **贴日志前请先脱敏。** `~/.zeta/logs/` 下的日志可能包含你的项目路径和文件名。日志本身不记录 prompt、回复正文和凭证，但路径信息仍可能敏感。
 
-**安全漏洞请不要开公开 Issue**，改用 GitHub 的私密漏洞上报（Security → Report a vulnerability）。
+**安全漏洞请不要开公开 Issue**，改用 GitHub 的私密漏洞上报（Security → Report a vulnerability）。威胁模型与范围界定见[安全策略](SECURITY.md)。
 
 ## 许可
+
+参与本项目即表示你同意遵守[行为准则](CODE_OF_CONDUCT.md)。
 
 本项目采用 **GPL-3.0** 许可，见 [LICENSE](LICENSE)。提交贡献即表示你同意以相同许可授权你的代码。

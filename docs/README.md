@@ -8,7 +8,7 @@
 | **贡献者**，第一次读代码 | [架构总览](./architecture/overview.md) → [术语表](./guides/glossary.md) → [贡献指南](../CONTRIBUTING.md) |
 | **贡献者**，已经上手 | [开发者文档](./guides/developer_guide.md) → [工程规范](./architecture/engineering_standards.md) |
 | **评估者**，想了解设计取舍 | [产品需求文档](./product/product_requirements.md) → [设计文档](./architecture/design_document.md) |
-| **维护者**，要发版 | [发版指南](./release/release_guide.md) |
+| **维护者**，要发版 | [发版指南](./release/release_guide.md) → [更新日志](../CHANGELOG.md) |
 
 ## 目录结构
 
@@ -26,7 +26,7 @@ docs/
 
 ## architecture — 架构
 
-- [**架构总览**](./architecture/overview.md) ⭐ — 分层、事件管线、能力协商、三种审批的区别。新贡献者从这里开始
+- [**架构总览**](./architecture/overview.md)（[English](./architecture/overview.en.md)）⭐ — 分层、事件管线、能力协商、三种审批的区别。新贡献者从这里开始
 - [设计文档](./architecture/design_document.md) — 完整的分层结构、运行时组合、UI 骨架与流式适配职责矩阵
 - [工程规范](./architecture/engineering_standards.md) — 架构评审规范与门禁
 - [Agent 桌面通知与任务栏未读提醒详细设计](./architecture/desktop_agent_notification_design.md)
@@ -34,7 +34,7 @@ docs/
 ## guides — 开发
 
 - [开发者文档](./guides/developer_guide.md) — 环境、命令、目录结构、Provider 接入指南、UI 与测试细则、常见问题
-- [**术语表**](./guides/glossary.md) ⭐ — thread / turn / entryId / bundle / capability / coalescing / lease 等高频术语
+- [**术语表**](./guides/glossary.md)（[English](./guides/glossary.en.md)）⭐ — thread / turn / entryId / bundle / capability / coalescing / lease 等高频术语
 - [贡献指南](../CONTRIBUTING.md)（[English](../CONTRIBUTING.en.md)）— 环境、提交格式、架构红线摘要
 
 ## product — 产品
@@ -67,7 +67,15 @@ docs/
 - [Flutter Create with AI 中文整理](./reference/flutter_ai_create_with_ai_zh.md)
 - [Flutter AI 开发体验实践指南](./reference/flutter_ai_developer_experience_zh.md)
 
+## 仓库根目录的相关文件
+
+- [更新日志](../CHANGELOG.md) — 用户可感知的版本变化
+- [贡献指南](../CONTRIBUTING.md)（[English](../CONTRIBUTING.en.md)）
+- [安全策略](../SECURITY.md) — 威胁模型与漏洞上报方式（中英同页）
+- [行为准则](../CODE_OF_CONDUCT.md)（中英同页）
+- [AGENTS.md](../AGENTS.md) — AI 协作规则的唯一权威源
+
 ---
 
-> 文档以中文为主。README、贡献指南与故障排查页提供英文版本。
+> 文档以中文为主。README、贡献指南、故障排查、架构总览与术语表提供英文版本。
 > 部分历史文档引用的 `plan/` 目录已被移除，相关内容只存于 Git 历史。

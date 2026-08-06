@@ -23,7 +23,7 @@ Reading it once before you start will save you most of the rework.
 
 1. **The default branch is `dev`.** Branch from it and target it in PRs.
 2. **Keep changes small and focused.** For large refactors, new providers, or changes to event-pipeline contracts, open an issue to discuss the approach first — please don't drop a several-thousand-line PR unannounced.
-3. **This project enforces strict layering.** A PR that violates the [hard lines](#architectural-hard-lines) won't be merged even if the feature works. These constraints exist so that multiple providers can coexist without contaminating each other — they aren't box-ticking. The [architecture overview](docs/architecture/overview.md) explains why in about 15 minutes.
+3. **This project enforces strict layering.** A PR that violates the [hard lines](#architectural-hard-lines) won't be merged even if the feature works. These constraints exist so that multiple providers can coexist without contaminating each other — they aren't box-ticking. The [architecture overview](docs/architecture/overview.en.md) explains why in about 15 minutes.
 
 ## Setting up
 
@@ -129,7 +129,7 @@ Common types: `feat` / `fix` / `docs` / `refactor` / `test` / `chore` / `perf`.
 
 ## Architectural hard lines
 
-**Reading the code for the first time? Start with the [architecture overview](docs/architecture/overview.md)** (~15 minutes, with diagrams) and the [glossary](docs/guides/glossary.md). Full rules live in [engineering standards](docs/architecture/engineering_standards.md) and [developer guide §7](docs/guides/developer_guide.md). These are the ones most often tripped over:
+**Reading the code for the first time? Start with the [architecture overview](docs/architecture/overview.en.md)** (~15 minutes, with diagrams) and the [glossary](docs/guides/glossary.en.md). Full rules live in [engineering standards](docs/architecture/engineering_standards.md) and [developer guide §7](docs/guides/developer_guide.md). These are the ones most often tripped over:
 
 **Layering and dependency direction**
 
@@ -199,5 +199,7 @@ Please use the [issue templates](https://github.com/linpeilie/zeta/issues/new/ch
 **Do not open public issues for security vulnerabilities.** Use GitHub's private reporting instead (Security → Report a vulnerability).
 
 ## License
+
+By participating you also agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 This project is licensed under **GPL-3.0** — see [LICENSE](LICENSE). By contributing you agree to license your work under the same terms.
