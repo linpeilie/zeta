@@ -1736,9 +1736,30 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('agent-header-more')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    final forkAction = find.byKey(const ValueKey('agent-header-menu-fork'));
-    expect(forkAction, findsOneWidget);
 
+    // 菜单顺序：上下文 → 分隔符 → 重命名 → 分叉当前会话 → 归档。
+    final menuKeys = <String>[
+      'agent-header-menu-context',
+      'agent-header-menu-rename',
+      'agent-header-menu-fork',
+      'agent-header-menu-archive',
+    ];
+    final tops = <double>[];
+    for (final key in menuKeys) {
+      final finder = find.byKey(ValueKey<String>(key));
+      expect(finder, findsOneWidget);
+      tops.add(tester.getTopLeft(finder).dy);
+    }
+    for (var index = 1; index < tops.length; index += 1) {
+      expect(tops[index], greaterThan(tops[index - 1]));
+    }
+    // 分隔符恰好一个，位于「上下文」与「重命名」之间。
+    expect(find.byType(sf.MenuDivider), findsOneWidget);
+    final dividerTop = tester.getTopLeft(find.byType(sf.MenuDivider)).dy;
+    expect(dividerTop, greaterThan(tops[0]));
+    expect(dividerTop, lessThan(tops[1]));
+
+    final forkAction = find.byKey(const ValueKey('agent-header-menu-fork'));
     await tester.tap(forkAction);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));

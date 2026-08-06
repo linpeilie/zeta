@@ -230,6 +230,50 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
     final canRename = widget.state.canRename;
     final canArchive = widget.state.canArchive;
     final canFork = widget.state.canFork;
+    // 后续项按序构建；第一个可见项上方加分隔符，与「上下文」分开。
+    final contextFollowing = <IdeContextMenuAction>[
+      if (canRename)
+        IdeContextMenuAction(
+          key: const ValueKey('agent-header-menu-rename'),
+          label: '重命名',
+          leadingIcon: Icons.drive_file_rename_outline_rounded,
+          onPressed: () {
+            unawaited(_showRenameDialog());
+          },
+        ),
+      if (canFork)
+        IdeContextMenuAction(
+          key: const ValueKey('agent-header-menu-fork'),
+          label: '分叉当前会话',
+          leadingIcon: Icons.call_split_rounded,
+          onPressed: () {
+            unawaited(widget.viewModel.forkCurrentThread());
+          },
+        ),
+      if (canArchive)
+        IdeContextMenuAction(
+          key: const ValueKey('agent-header-menu-archive'),
+          label: '归档',
+          leadingIcon: Icons.archive_outlined,
+          onPressed: () {
+            unawaited(widget.viewModel.archiveCurrentThread());
+          },
+        ),
+    ];
+    final actions = <IdeContextMenuAction>[
+      IdeContextMenuAction(
+        key: const ValueKey('agent-header-menu-context'),
+        label: '上下文',
+        leadingIcon: Icons.account_tree_outlined,
+        onPressed: () {
+          widget.viewModel.toggleContextPanel();
+        },
+      ),
+      for (var index = 0; index < contextFollowing.length; index++)
+        index == 0
+            ? contextFollowing[index].withDividerAbove(true)
+            : contextFollowing[index],
+    ];
     final entry = showIdePopover<void>(
       context: context,
       alignment: Alignment.topRight,
@@ -239,45 +283,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
       builder: (context) {
         return ConstrainedBox(
           constraints: const BoxConstraints(minWidth: 140, maxWidth: 160),
-          child: IdeContextMenu(
-            actions: [
-              if (canRename)
-                IdeContextMenuAction(
-                  key: const ValueKey('agent-header-menu-rename'),
-                  label: '重命名',
-                  leadingIcon: Icons.drive_file_rename_outline_rounded,
-                  onPressed: () {
-                    unawaited(_showRenameDialog());
-                  },
-                ),
-              if (canArchive)
-                IdeContextMenuAction(
-                  key: const ValueKey('agent-header-menu-archive'),
-                  label: '归档',
-                  leadingIcon: Icons.archive_outlined,
-                  onPressed: () {
-                    unawaited(widget.viewModel.archiveCurrentThread());
-                  },
-                ),
-              if (canFork)
-                IdeContextMenuAction(
-                  key: const ValueKey('agent-header-menu-fork'),
-                  label: '分叉当前会话',
-                  leadingIcon: Icons.call_split_rounded,
-                  onPressed: () {
-                    unawaited(widget.viewModel.forkCurrentThread());
-                  },
-                ),
-              IdeContextMenuAction(
-                key: const ValueKey('agent-header-menu-context'),
-                label: '上下文',
-                leadingIcon: Icons.account_tree_outlined,
-                onPressed: () {
-                  widget.viewModel.toggleContextPanel();
-                },
-              ),
-            ],
-          ),
+          child: IdeContextMenu(actions: actions),
         );
       },
     );

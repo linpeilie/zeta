@@ -28,6 +28,20 @@ class IdeContextMenuAction {
   final String? semanticLabel;
   final bool dividerAbove;
   final VoidCallback onPressed;
+
+  /// 返回 [dividerAbove] 置为 [value] 的新菜单项（其余字段不变）。
+  IdeContextMenuAction withDividerAbove(bool value) {
+    return IdeContextMenuAction(
+      key: key,
+      label: label,
+      leadingIcon: leadingIcon,
+      enabled: enabled,
+      destructive: destructive,
+      semanticLabel: semanticLabel,
+      dividerAbove: value,
+      onPressed: onPressed,
+    );
+  }
 }
 
 /// 统一 IDE 上下文菜单容器与菜单项样式。
