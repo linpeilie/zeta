@@ -17,7 +17,6 @@ class _AgentHeader extends StatelessWidget {
     final tokenTooltip = _tokenUsageTooltip(tokenUsage);
     final threadOpenStatusText = _threadOpenStatusText(state);
     final offerCompact = state.shouldOfferContextCompact;
-    final canFork = state.canFork;
     final projectName = viewModel.projectName;
 
     return Column(
@@ -151,25 +150,6 @@ class _AgentHeader extends StatelessWidget {
                 ],
               ),
             ),
-            if (canFork) ...[
-              const SizedBox(width: IdeSpacing.space4),
-              IdeTooltip(
-                message: '分叉当前会话',
-                child: sf.IconButton.ghost(
-                  key: const ValueKey('agent-header-fork'),
-                  onPressed: () {
-                    unawaited(viewModel.forkCurrentThread());
-                  },
-                  size: sf.ButtonSize.small,
-                  density: sf.ButtonDensity.iconDense,
-                  icon: Icon(
-                    Icons.call_split_rounded,
-                    size: 15,
-                    color: colors.textSecondary,
-                  ),
-                ),
-              ),
-            ],
             if (tokenLabel != null) ...[
               const SizedBox(width: IdeSpacing.space8),
               IdeTooltip(
@@ -210,7 +190,7 @@ class _AgentHeader extends StatelessWidget {
   }
 }
 
-/// 标题栏右侧「更多」菜单：重命名 / 归档 / 上下文。
+/// 标题栏右侧「更多」菜单：分叉 / 重命名 / 归档 / 上下文。
 class _AgentHeaderMoreButton extends StatefulWidget {
   const _AgentHeaderMoreButton({required this.viewModel, required this.state});
 
@@ -249,6 +229,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
     });
     final canRename = widget.state.canRename;
     final canArchive = widget.state.canArchive;
+    final canFork = widget.state.canFork;
     final entry = showIdePopover<void>(
       context: context,
       alignment: Alignment.topRight,
@@ -257,7 +238,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
       modal: false,
       builder: (context) {
         return ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 100, maxWidth: 120),
+          constraints: const BoxConstraints(minWidth: 140, maxWidth: 160),
           child: IdeContextMenu(
             actions: [
               if (canRename)
@@ -276,6 +257,15 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
                   leadingIcon: Icons.archive_outlined,
                   onPressed: () {
                     unawaited(widget.viewModel.archiveCurrentThread());
+                  },
+                ),
+              if (canFork)
+                IdeContextMenuAction(
+                  key: const ValueKey('agent-header-menu-fork'),
+                  label: '分叉当前会话',
+                  leadingIcon: Icons.call_split_rounded,
+                  onPressed: () {
+                    unawaited(widget.viewModel.forkCurrentThread());
                   },
                 ),
               IdeContextMenuAction(

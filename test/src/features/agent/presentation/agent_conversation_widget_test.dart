@@ -1656,6 +1656,96 @@ void main() {
     expect(find.byKey(const ValueKey('agent-context-panel')), findsNothing);
   });
 
+  testWidgets('forks the current thread from the header more menu', (
+    tester,
+  ) async {
+    final createdAt = DateTime(2024, 1, 15, 10, 30);
+    final provider = FakeAgentProvider(
+      threadHistories: <String, AgentThreadHistorySnapshot>{
+        'thread-fork': AgentThreadHistorySnapshot(
+          threadId: 'thread-fork',
+          turns: <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-1',
+              status: AgentHistoryTurnStatus.completed,
+              entries: <AgentHistoryEntry>[
+                const AgentHistoryMessageEntry(
+                  id: 'msg-user-fork',
+                  role: AgentMessageRole.user,
+                  text: 'Hello',
+                ),
+              ],
+            ),
+          ],
+        ),
+      },
+    );
+    final controller = ActiveAgentProviderController(
+      providerFactory: FakeAgentProviderFactory(provider),
+      configStore: MemoryAgentProviderConfigStore(),
+    );
+    addTearDown(controller.dispose);
+    final viewModel = AgentConversationViewModel(
+      providerController: controller,
+    );
+    addTearDown(viewModel.dispose);
+    viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
+    await viewModel.switchThread(
+      AgentThreadSummary(
+        id: 'thread-fork',
+        providerId: defaultAgentProviderId,
+        projectPath: '/repo',
+        title: 'Fork thread',
+        preview: 'Fork thread',
+        sessionPath: '/repo/thread-fork.jsonl',
+        createdAt: createdAt,
+        updatedAt: createdAt,
+        recencyAt: createdAt,
+        status: AgentThreadRuntimeStatus.idle,
+      ),
+    );
+
+    final lightIdeTheme = buildIdeThemeData(
+      brightness: Brightness.light,
+      codeFontFamily: 'CodeFont',
+    );
+    final darkIdeTheme = buildIdeThemeData(
+      brightness: Brightness.dark,
+      codeFontFamily: 'CodeFont',
+    );
+    await tester.pumpWidget(
+      IdeThemeScope(
+        themeMode: ThemeMode.dark,
+        lightTheme: lightIdeTheme,
+        darkTheme: darkIdeTheme,
+        child: sf.ShadcnApp(
+          theme: buildShadcnTheme(lightIdeTheme),
+          darkTheme: buildShadcnTheme(darkIdeTheme),
+          materialTheme: buildMaterialTheme(darkIdeTheme),
+          themeMode: sf.ThemeMode.dark,
+          home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // 分叉不再作为标题栏独立按钮常驻。
+    expect(find.byKey(const ValueKey('agent-header-fork')), findsNothing);
+
+    // 通过「更多」菜单进入分叉。
+    await tester.tap(find.byKey(const ValueKey('agent-header-more')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final forkAction = find.byKey(const ValueKey('agent-header-menu-fork'));
+    expect(forkAction, findsOneWidget);
+
+    await tester.tap(forkAction);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(provider.forkedThreads, contains('thread-fork'));
+  });
+
   testWidgets(
     'shows session total token usage in header and context window in composer while running',
     (tester) async {
