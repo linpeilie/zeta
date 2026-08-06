@@ -39,12 +39,6 @@ final class AgentApplyThreadNameChange extends AgentConversationStateChange {
   final String? threadName;
 }
 
-final class AgentSetCompactingChange extends AgentConversationStateChange {
-  const AgentSetCompactingChange(this.value);
-
-  final bool value;
-}
-
 final class AgentApplyThreadSettingsChange
     extends AgentConversationStateChange {
   const AgentApplyThreadSettingsChange(this.event);

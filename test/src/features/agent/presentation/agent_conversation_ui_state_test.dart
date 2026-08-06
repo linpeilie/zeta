@@ -312,8 +312,6 @@ AgentHeaderState _headerState({
     segmentStartedAt: null,
     turnStartedAt: null,
     tokenUsage: tokenUsage,
-    shouldOfferContextCompact: false,
-    isCompacting: false,
     isTurnRunning: false,
     isReadOnly: false,
     canFork: false,

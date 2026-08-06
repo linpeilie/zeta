@@ -2728,7 +2728,7 @@ void main() {
             .toList();
         expect(errorTexts, hasLength(1));
         expect(errorTexts.single, isNot(contains('Turn failed')));
-        expect(errorTexts.single, contains('压缩上下文'));
+        expect(errorTexts.single, isNot(contains('压缩上下文')));
 
         final turn = viewModel.conversationTurns.singleWhere(
           (turn) => turn.id == 'turn-1',
@@ -3035,63 +3035,6 @@ void main() {
       expect(viewModel.currentThreadLastTokenUsage!.outputTokens, 320);
       expect(viewModel.currentThreadLastTokenUsage!.totalTokens, 1240);
       expect(viewModel.currentThreadLastTokenUsage!.modelContextWindow, 2000);
-    });
-
-    test('offers compact when context window usage is high', () async {
-      final provider = _FakeAgentProvider(
-        historySnapshot: AgentThreadHistorySnapshot(
-          threadId: 'thread-1',
-          turns: <AgentHistoryTurn>[
-            AgentHistoryTurn(
-              id: 'turn-1',
-              status: AgentHistoryTurnStatus.completed,
-              tokenUsage: const AgentTokenUsage(
-                totalTokens: 4000,
-                lastTotalTokens: 900,
-                modelContextWindow: 1000,
-              ),
-              entries: const <AgentHistoryEntry>[
-                AgentHistoryMessageEntry(
-                  id: 'user-1',
-                  role: AgentMessageRole.user,
-                  text: 'hello',
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
-      final viewModel = _createViewModel(provider);
-      addTearDown(viewModel.dispose);
-
-      await viewModel.switchThread(
-        AgentThreadSummary(
-          id: 'thread-1',
-          providerId: defaultAgentProviderId,
-          projectPath: '/repo',
-          preview: 'hello',
-          createdAt: DateTime(2026),
-          updatedAt: DateTime(2026),
-          status: AgentThreadRuntimeStatus.idle,
-        ),
-      );
-
-      expect(viewModel.currentThreadLastTokenUsage, isNotNull);
-      expect(viewModel.currentThreadLastTokenUsage!.totalTokens, 900);
-      expect(viewModel.contextWindowUsageRatio, closeTo(0.9, 0.001));
-      expect(viewModel.shouldOfferContextCompact, isTrue);
-      // 首回合前没有稳定的 lastTurnId 包含式边界，不能伪造分支能力。
-      expect(viewModel.canEditLastUserMessage, isFalse);
-
-      await viewModel.compactCurrentThread();
-      expect(provider.calls, contains('compact:thread-1'));
-      expect(viewModel.isCompacting, isTrue);
-
-      provider.emit(
-        const AgentThreadCompactedEvent(threadId: 'thread-1', turnId: 'turn-1'),
-      );
-      await Future<void>.delayed(Duration.zero);
-      expect(viewModel.isCompacting, isFalse);
     });
 
     test('renames the current thread and applies name updated event', () async {
@@ -4245,11 +4188,7 @@ void main() {
         await _drainTypedUiUpdate();
         _expectLastUiUpdate(
           viewModel,
-          regions: const <AgentUiRegion>{
-            AgentUiRegion.liveTurn,
-            AgentUiRegion.header,
-            AgentUiRegion.composer,
-          },
+          regions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
           urgency: AgentUiUpdateUrgency.immediate,
           effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
         );

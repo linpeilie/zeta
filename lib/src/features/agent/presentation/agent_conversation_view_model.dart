@@ -222,9 +222,6 @@ class AgentConversationViewModel {
   bool _modelsRefreshing = false;
   String? _modelRefreshError;
 
-  /// 是否正在执行上下文压缩。
-  bool _isCompacting = false;
-
   /// 上下文详情面板是否展开（头栏「上下文」菜单触发）。
   final ValueNotifier<bool> contextPanelVisible = ValueNotifier<bool>(false);
 
@@ -240,9 +237,6 @@ class AgentConversationViewModel {
 
   /// 最近一次被拒绝的自动评审（供放行按钮使用）。
   AgentAutoApprovalReviewEvent? _latestDeniedAutoReview;
-
-  /// 上下文占用达到该比例时提示压缩。
-  static const double contextCompactThreshold = 0.85;
 
   List<AgentConversationMessage> get messages => _timeline.messages;
 
@@ -674,13 +668,6 @@ class AgentConversationViewModel {
       !isTurnRunning &&
       activeCapabilities.canForkThread;
 
-  bool get canCompactCurrentThread =>
-      sessionId != null &&
-      !_isCompacting &&
-      !isTurnRunning &&
-      !isReadOnly &&
-      activeCapabilities.canCompactThread;
-
   /// 可切换的全局 provider 列表（已启用）。
   List<AgentProviderConfig> get availableProviders =>
       providerController.enabledProviders;
@@ -928,31 +915,6 @@ class AgentConversationViewModel {
     );
   }
 
-  /// 当前上下文窗口占用比例（0~1）。
-  ///
-  /// 基于 [currentThreadLastTokenUsage]（优先 `last*` 占用字段），
-  /// 不是会话计费累计 [currentThreadTokenUsage]。
-  double? get contextWindowUsageRatio {
-    final usage = currentThreadLastTokenUsage;
-    final total = usage?.totalTokens;
-    final window = usage?.modelContextWindow;
-    if (total == null || window == null || window <= 0) {
-      return null;
-    }
-    return (total / window).clamp(0.0, 1.0);
-  }
-
-  /// 是否应展示「压缩上下文」入口。
-  bool get shouldOfferContextCompact {
-    final ratio = contextWindowUsageRatio;
-    return activeCapabilities.canCompactThread &&
-        ratio != null &&
-        ratio >= contextCompactThreshold;
-  }
-
-  /// 是否正在压缩上下文。
-  bool get isCompacting => _isCompacting;
-
   /// 当前线程的创建时间；新会话无摘要时为空。
   DateTime? get threadCreatedAt => _threadCreatedAt;
 
@@ -973,8 +935,7 @@ class AgentConversationViewModel {
   bool get canEditLastUserMessage {
     if (!activeCapabilities.canForkThreadAtTurn ||
         !canSubmitMessage ||
-        isTurnRunning ||
-        _isCompacting) {
+        isTurnRunning) {
       return false;
     }
     final message = _lastEditableUserMessage();
@@ -2501,47 +2462,6 @@ class AgentConversationViewModel {
     }
   }
 
-  /// 启动上下文压缩。
-  Future<void> compactCurrentThread() async {
-    final threadId = sessionId;
-    if (threadId == null || !canCompactCurrentThread) {
-      return;
-    }
-    _isCompacting = true;
-    _publishUiChanges(
-      AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{
-          AgentUiRegion.header,
-          AgentUiRegion.composer,
-        },
-        urgency: AgentUiUpdateUrgency.immediate,
-      ),
-    );
-    try {
-      final provider = await _ensureProvider();
-      final threadMutations = provider.bundle.threadMutations;
-      if (threadMutations == null) {
-        throw UnsupportedError(
-          '${provider.config.displayName} does not support compacting threads',
-        );
-      }
-      await threadMutations.compactThread(threadId);
-    } catch (error) {
-      _isCompacting = false;
-      _log.warning('Could not compact thread $threadId (${error.runtimeType})');
-      _markError('Could not compact context', details: error.toString());
-      _publishUiChanges(
-        AgentUiUpdateRequest(
-          regions: const <AgentUiRegion>{
-            AgentUiRegion.header,
-            AgentUiRegion.composer,
-          },
-          urgency: AgentUiUpdateUrgency.immediate,
-        ),
-      );
-    }
-  }
-
   /// 重命名当前 thread；先乐观更新标题，再以 `thread/name/updated` 为准。
   Future<void> renameCurrentThread(String name) async {
     final trimmed = name.trim();
@@ -3550,8 +3470,6 @@ class AgentConversationViewModel {
       turnStartedAt: _timeline.currentTurnStartedAt,
       tokenUsage: _timeline.currentThreadTokenUsage,
       currentTurnTokenUsage: _timeline.currentTurnTokenUsage,
-      shouldOfferContextCompact: shouldOfferContextCompact,
-      isCompacting: _isCompacting,
       isTurnRunning: isTurnRunning,
       isReadOnly: isReadOnly,
       canFork: canForkCurrentThread,
@@ -3720,8 +3638,6 @@ final class _AgentConversationEventStateTarget
         if (name != null && name.isNotEmpty) {
           _viewModel._applyThreadTitle(name);
         }
-      case AgentSetCompactingChange():
-        _viewModel._isCompacting = change.value;
       case AgentApplyThreadPermissionSettingsChange():
         // data mapper 已将 Codex 私有字段原子解码为中立 selection。settings
         // 只回写事件所属 thread effective，不二次 apply、不持久化 provider 默认。

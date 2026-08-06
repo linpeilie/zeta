@@ -69,7 +69,6 @@ abstract final class AgentProviderErrorPresentation {
   static String? guidanceForCode(String? code) {
     return switch (code) {
       'serverOverloaded' => '。当前模型容量已满，请切换其他模型或稍后重试。',
-      'contextWindowExceeded' => '。上下文已超限，可点击头栏「压缩上下文」后继续。',
       'usageLimitExceeded' => '。用量或速率额度已用尽，请检查账户额度或稍后重试。',
       'sessionBudgetExceeded' => '。会话预算已用尽，请开启新会话或调整预算后继续。',
       'unauthorized' => '。认证失败，请检查登录状态或 API 凭证后重试。',

@@ -16,14 +16,14 @@ void main() {
       expect(text, isNot(contains('服务端将自动重试')));
     });
 
-    test('keeps contextWindowExceeded compact guidance', () {
+    test('does not add manual compact guidance for context overflow', () {
       final text = AgentProviderErrorPresentation.formatUserVisibleText(
         message: 'Context window exceeded',
         code: 'contextWindowExceeded',
       );
 
       expect(text, contains('Context window exceeded'));
-      expect(text, contains('压缩上下文'));
+      expect(text, isNot(contains('压缩上下文')));
     });
 
     test('infers serverOverloaded from capacity message without code', () {

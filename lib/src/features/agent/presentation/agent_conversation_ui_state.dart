@@ -24,8 +24,6 @@ final class AgentHeaderState {
     required this.turnStartedAt,
     required this.tokenUsage,
     this.currentTurnTokenUsage,
-    required this.shouldOfferContextCompact,
-    required this.isCompacting,
     required this.isTurnRunning,
     required this.isReadOnly,
     required this.canFork,
@@ -51,8 +49,6 @@ final class AgentHeaderState {
   /// 用于实时活动状态条展示；回合运行中可能暂未上报，此时为 null。
   final AgentTokenUsage? currentTurnTokenUsage;
 
-  final bool shouldOfferContextCompact;
-  final bool isCompacting;
   final bool isTurnRunning;
   final bool isReadOnly;
   final bool canFork;
@@ -79,8 +75,6 @@ final class AgentHeaderState {
               other.currentTurnTokenUsage,
               currentTurnTokenUsage,
             ) &&
-            other.shouldOfferContextCompact == shouldOfferContextCompact &&
-            other.isCompacting == isCompacting &&
             other.isTurnRunning == isTurnRunning &&
             other.isReadOnly == isReadOnly &&
             other.canFork == canFork &&
@@ -103,8 +97,6 @@ final class AgentHeaderState {
     turnStartedAt,
     _tokenUsageHash(tokenUsage),
     _tokenUsageHash(currentTurnTokenUsage),
-    shouldOfferContextCompact,
-    isCompacting,
     isTurnRunning,
     isReadOnly,
     canFork,

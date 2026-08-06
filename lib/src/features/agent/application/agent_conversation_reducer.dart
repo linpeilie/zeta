@@ -310,19 +310,7 @@ final class AgentConversationReducer {
     if (!_shouldHandleCurrent(context, sessionId: event.threadId)) {
       return AgentConversationMutation.rejected('currentThreadMismatch');
     }
-    return AgentConversationMutation(
-      accepted: true,
-      stateChanges: const <AgentConversationStateChange>[
-        AgentSetCompactingChange(false),
-      ],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{
-          AgentUiRegion.header,
-          AgentUiRegion.composer,
-        },
-        urgency: AgentUiUpdateUrgency.immediate,
-      ),
-    );
+    return AgentConversationMutation(accepted: true);
   }
 
   AgentConversationMutation _threadSettings(
@@ -997,28 +985,13 @@ final class AgentConversationReducer {
     )) {
       return AgentConversationMutation.rejected('currentThreadMismatch');
     }
-    final rawType = event.entry.raw['type']?.toString();
-    final completesCompaction =
-        (event.entry.title.contains('压缩') ||
-            event.entry.kind == AgentHistoryEventKind.system) &&
-        (rawType == 'contextCompaction' ||
-            event.entry.title.contains('上下文已压缩'));
     return AgentConversationMutation(
       accepted: true,
-      stateChanges: completesCompaction
-          ? const <AgentConversationStateChange>[
-              AgentSetCompactingChange(false),
-            ]
-          : const <AgentConversationStateChange>[],
       timelineMutations: <AgentTimelineMutation>[
         AgentAddHistoryEventTimelineMutation(event.entry),
       ],
       uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{
-          AgentUiRegion.liveTurn,
-          AgentUiRegion.header,
-          AgentUiRegion.composer,
-        },
+        regions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
         urgency: AgentUiUpdateUrgency.immediate,
         effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
       ),

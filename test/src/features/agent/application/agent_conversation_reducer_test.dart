@@ -811,12 +811,6 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
       const _ReductionCase(
         name: 'thread compacted',
         event: AgentThreadCompactedEvent(threadId: _threadId, turnId: _turnId),
-        afterStateTypes: <Type>[AgentSetCompactingChange],
-        uiRegions: <AgentUiRegion>{
-          AgentUiRegion.header,
-          AgentUiRegion.composer,
-        },
-        uiUrgency: AgentUiUpdateUrgency.immediate,
       ),
       const _ReductionCase(
         name: 'thread settings',
@@ -1172,12 +1166,7 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           turnId: _turnId,
         ),
         timelineTypes: <Type>[AgentAddHistoryEventTimelineMutation],
-        afterStateTypes: <Type>[AgentSetCompactingChange],
-        uiRegions: <AgentUiRegion>{
-          AgentUiRegion.liveTurn,
-          AgentUiRegion.header,
-          AgentUiRegion.composer,
-        },
+        uiRegions: <AgentUiRegion>{AgentUiRegion.liveTurn},
         uiUrgency: AgentUiUpdateUrgency.immediate,
         uiEffectTypes: <Type>[AgentRequestAutoScroll],
       ),

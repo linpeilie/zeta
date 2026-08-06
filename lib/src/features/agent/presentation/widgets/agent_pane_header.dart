@@ -16,7 +16,6 @@ class _AgentHeader extends StatelessWidget {
     final tokenLabel = _threadTotalTokenUsageLabel(tokenUsage);
     final tokenTooltip = _tokenUsageTooltip(tokenUsage);
     final threadOpenStatusText = _threadOpenStatusText(state);
-    final offerCompact = state.shouldOfferContextCompact;
     final projectName = viewModel.projectName;
 
     return Column(
@@ -181,10 +180,6 @@ class _AgentHeader extends StatelessWidget {
             _AgentHeaderMoreButton(viewModel: viewModel, state: state),
           ],
         ),
-        if (offerCompact || state.isCompacting) ...[
-          const SizedBox(height: IdeSpacing.space8),
-          _AgentCompactBanner(viewModel: viewModel, state: state),
-        ],
       ],
     );
   }
@@ -365,63 +360,6 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
           Icons.more_horiz_rounded,
           size: 15,
           color: _menuOpen ? colors.textPrimary : colors.textSecondary,
-        ),
-      ),
-    );
-  }
-}
-
-/// 上下文接近上限时的压缩提示条。
-class _AgentCompactBanner extends StatelessWidget {
-  const _AgentCompactBanner({required this.viewModel, required this.state});
-
-  final AgentConversationViewModel viewModel;
-  final AgentHeaderState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
-    final compacting = state.isCompacting;
-    return DecoratedBox(
-      key: const ValueKey('agent-compact-banner'),
-      decoration: BoxDecoration(
-        color: colors.warning.withValues(alpha: 0.12),
-        borderRadius: IdeRadius.allSmall,
-        border: Border.all(color: colors.warning.withValues(alpha: 0.35)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: IdeSpacing.space10,
-          vertical: IdeSpacing.space8,
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.compress_rounded, size: 16, color: colors.warning),
-            const SizedBox(width: IdeSpacing.space8),
-            Expanded(
-              child: Text(
-                compacting ? '正在压缩上下文…' : '上下文占用较高，可压缩以继续对话',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: textStyles.bodySmall.copyWith(color: colors.textPrimary),
-              ),
-            ),
-            const SizedBox(width: IdeSpacing.space8),
-            sf.OutlineButton(
-              key: const ValueKey('agent-compact-button'),
-              size: sf.ButtonSize.small,
-              onPressed: compacting || state.isTurnRunning
-                  ? null
-                  : () {
-                      unawaited(viewModel.compactCurrentThread());
-                    },
-              child: Text(
-                compacting ? '压缩中' : '压缩上下文',
-                style: textStyles.bodySmall,
-              ),
-            ),
-          ],
         ),
       ),
     );

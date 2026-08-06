@@ -963,10 +963,6 @@ class _ComposerContextWindowUsage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final progressColor =
-        progress >= AgentConversationViewModel.contextCompactThreshold
-        ? colors.warning
-        : colors.accent;
     return IdeTooltip(
       message: tooltip,
       child: Semantics(
@@ -984,7 +980,7 @@ class _ComposerContextWindowUsage extends StatelessWidget {
                 value: progress,
                 strokeWidth: 2.2,
                 backgroundColor: colors.border.withValues(alpha: 0.32),
-                valueColor: AlwaysStoppedAnimation<Color>(progressColor),
+                valueColor: AlwaysStoppedAnimation<Color>(colors.accent),
               ),
             ),
           ],

@@ -1783,7 +1783,7 @@ void main() {
           lastInputTokens: 900,
           lastCachedInputTokens: 180,
           lastOutputTokens: 320,
-          lastTotalTokens: 1200,
+          lastTotalTokens: 1800,
           modelContextWindow: 2000,
         ),
       );
@@ -1838,10 +1838,11 @@ void main() {
         find.byKey(const ValueKey('agent-composer-token-usage')),
         findsOneWidget,
       );
+      expect(find.byKey(const ValueKey('agent-compact-banner')), findsNothing);
       final progress = tester.widget<CircularProgressIndicator>(
         find.byKey(const ValueKey('agent-composer-token-progress')),
       );
-      expect(progress.value, closeTo(0.6, 0.001));
+      expect(progress.value, closeTo(0.9, 0.001));
 
       // 对话流内进行中状态条（与 header 同源；fake provider 会先推 agent delta → 回复中）。
       expect(
@@ -1878,8 +1879,8 @@ void main() {
           matching: find.byType(IdeTooltip),
         ),
       );
-      expect(tooltip.message, contains('Usage: 60%'));
-      expect(tooltip.message, contains('Used: 1.2k'));
+      expect(tooltip.message, contains('Usage: 90%'));
+      expect(tooltip.message, contains('Used: 1.8k'));
       expect(tooltip.message, contains('Total: 2k'));
       expect(tooltip.message, isNot(contains('input_tokens')));
       expect(tooltip.message, isNot(contains('output_tokens')));

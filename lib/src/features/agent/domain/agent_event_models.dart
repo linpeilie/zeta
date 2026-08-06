@@ -139,7 +139,7 @@ class AgentThreadClosedEvent extends AgentEvent {
 
 /// 上下文压缩已完成通知（`thread/compacted`，协议已 deprecated）。
 ///
-/// 主 UI 仍以 `contextCompaction` item 为准；本事件用于清除 compact 进行中标志。
+/// 保留该事件用于协议兼容；上下文压缩状态由 Provider 自行处理，不驱动手动压缩 UI。
 class AgentThreadCompactedEvent extends AgentEvent {
   const AgentThreadCompactedEvent({
     required this.threadId,
@@ -723,7 +723,7 @@ class AgentErrorEvent extends AgentEvent {
   /// `serverOverloaded`、`unauthorized`、`sessionBudgetExceeded`、
   /// `httpConnectionFailed`；非协议错误或旧版协议为空。
   ///
-  /// UI 可据此提供针对性引导（如容量满时建议换模型，上下文超限时建议压缩）。
+  /// UI 可据此提供针对性引导（如容量满时建议换模型）。
   final String? code;
 
   /// 服务端是否会自动重试本回合；仅 `error` 通知携带，其余场景为空。
