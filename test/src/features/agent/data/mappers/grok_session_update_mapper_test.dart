@@ -353,6 +353,56 @@ void main() {
       );
     });
 
+    test(
+      'maps agent_result error detail as the user-visible failure message',
+      () {
+        final mapped = mapper.mapXaiSessionUpdate(
+          params: _params(<String, Object?>{
+            'sessionUpdate': 'turn_completed',
+            'prompt_id': promptId,
+            'stop_reason': 'error',
+            'agent_result':
+                'API error (status 402 Payment Required): '
+                'Grok Build usage balance exhausted',
+          }, eventId: 'agent-error-terminal'),
+          runningTurnId: turnId,
+          runtimeScope: runtimeScope,
+        );
+
+        final completed = mapped.events
+            .whereType<AgentTurnCompletedEvent>()
+            .single;
+        expect(completed.status, AgentHistoryTurnStatus.failed);
+        expect(
+          completed.errorMessage,
+          'API error (status 402 Payment Required): '
+          'Grok Build usage balance exhausted',
+        );
+      },
+    );
+
+    test('reads camelCase agentResult from turn_completed raw payload', () {
+      final mapped = mapper.mapXaiSessionUpdate(
+        params: _params(<String, Object?>{
+          'sessionUpdate': 'turn_completed',
+          'prompt_id': promptId,
+          'stop_reason': 'error',
+          'agentResult': 'API error (status 402): balance exhausted',
+        }, eventId: 'agent-error-camel'),
+        runningTurnId: turnId,
+        runtimeScope: runtimeScope,
+      );
+
+      final completed = mapped.events
+          .whereType<AgentTurnCompletedEvent>()
+          .single;
+      expect(completed.status, AgentHistoryTurnStatus.failed);
+      expect(
+        completed.errorMessage,
+        'API error (status 402): balance exhausted',
+      );
+    });
+
     test('terminal permits known tool terminal update but no new tool', () {
       _mapTool(
         mapper,

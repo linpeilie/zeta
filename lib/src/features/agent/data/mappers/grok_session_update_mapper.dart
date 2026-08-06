@@ -259,6 +259,17 @@ final class GrokSessionUpdateMapper {
     return value;
   }
 
+  /// 从 turn_completed 原始 payload 读取 Grok 专属的 `agent_result`。
+  ///
+  /// Grok 在 `stop_reason=error` 时用该字段下发服务端真实错误文案；
+  /// 兼容 snake_case 与 camelCase 两种命名。该字段只在 Grok 适配层使用，
+  /// 共享 decoder 不感知它。
+  String? _agentResultFromRaw(Map<String, Object?> raw) {
+    final entry = _stringKeyedMap(raw);
+    final value = entry?['agent_result'] ?? entry?['agentResult'];
+    return value?.toString().trim();
+  }
+
   static Map<String, Object?>? _stringKeyedMap(Object? value) {
     if (value is! Map) {
       return null;
@@ -580,7 +591,10 @@ final class GrokSessionUpdateMapper {
             status: terminal.status,
             duration: duration,
             errorMessage: terminal.status == AgentHistoryTurnStatus.failed
-                ? grokTerminalErrorMessage(update.stopReason)
+                ? grokTerminalErrorMessage(
+                    update.stopReason,
+                    agentResult: _agentResultFromRaw(update.raw),
+                  )
                 : null,
             raw: update.raw,
           ),
