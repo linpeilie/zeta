@@ -379,13 +379,18 @@ String _liveActivityStatusText(AgentHeaderState state, DateTime now) {
   return parts.join(' · ');
 }
 
-/// 当前 turn 的 token 用量短标签（turn 增量口径）。
+/// 当前 turn 的 token 用量短标签。
+///
+/// Codex 的普通 breakdown 是 thread 累计，实时活动条优先使用当前 turn
+/// 的 `last*` 请求快照；旧 provider 没有该 breakdown 时才回退到 turn 增量。
 String? _liveTurnTokenUsageLabel(AgentTokenUsage? usage) {
-  final total = usage?.totalTokens;
-  if (total == null || total <= 0) {
+  final display =
+      usage?.displayLastExclusiveTotalTokens ??
+      usage?.displayExclusiveTotalTokens;
+  if (display == null) {
     return null;
   }
-  return '${usage!.displayTotalTokens!} tokens';
+  return '$display tokens';
 }
 
 /// 工具/思考卡旁的耗时文案。

@@ -1776,14 +1776,15 @@ void main() {
         sessionTitle: 'Running thread',
         includeConversationTestThread: true,
         tokenUsageDuringTurn: const AgentTokenUsage(
-          inputTokens: 1000,
-          cachedInputTokens: 200,
-          outputTokens: 350,
-          totalTokens: 1300,
-          lastInputTokens: 900,
-          lastCachedInputTokens: 180,
-          lastOutputTokens: 320,
-          lastTotalTokens: 1800,
+          // 普通字段模拟 thread 累计；last* 才是当前请求快照。
+          inputTokens: 10000,
+          cachedInputTokens: 9000,
+          outputTokens: 300,
+          totalTokens: 10300,
+          lastInputTokens: 1000,
+          lastCachedInputTokens: 200,
+          lastOutputTokens: 350,
+          lastTotalTokens: 1300,
           modelContextWindow: 2000,
         ),
       );
@@ -1826,11 +1827,11 @@ void main() {
         ),
         findsNothing,
       );
-      // 头栏展示会话累计 totalTokens（1300），与上下文面板「总 Token」一致。
+      // 头栏展示会话累计 totalTokens（10.3k），与上下文面板「总 Token」一致。
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('agent-header-token')),
-          matching: find.text('1.3k tokens'),
+          matching: find.text('10.3k tokens'),
         ),
         findsOneWidget,
       );
@@ -1842,7 +1843,7 @@ void main() {
       final progress = tester.widget<CircularProgressIndicator>(
         find.byKey(const ValueKey('agent-composer-token-progress')),
       );
-      expect(progress.value, closeTo(0.9, 0.001));
+      expect(progress.value, closeTo(0.65, 0.001));
 
       // 对话流内进行中状态条（与 header 同源；fake provider 会先推 agent delta → 回复中）。
       expect(
@@ -1860,11 +1861,11 @@ void main() {
         ),
         findsOneWidget,
       );
-      // 实时活动条同时展示当前 turn 的 token 用量。
+      // 实时活动条展示当前 turn 的 last* 请求快照，而不是 thread 累计。
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('agent-live-activity-status')),
-          matching: find.textContaining('1.3k tokens'),
+          matching: find.textContaining('1.1k tokens'),
         ),
         findsOneWidget,
       );
@@ -1879,8 +1880,8 @@ void main() {
           matching: find.byType(IdeTooltip),
         ),
       );
-      expect(tooltip.message, contains('Usage: 90%'));
-      expect(tooltip.message, contains('Used: 1.8k'));
+      expect(tooltip.message, contains('Usage: 65%'));
+      expect(tooltip.message, contains('Used: 1.3k'));
       expect(tooltip.message, contains('Total: 2k'));
       expect(tooltip.message, isNot(contains('input_tokens')));
       expect(tooltip.message, isNot(contains('output_tokens')));

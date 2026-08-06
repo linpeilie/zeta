@@ -35,4 +35,32 @@ void main() {
     expect(combined.reasoningOutputTokens, 25);
     expect(combined.outputTokens, 55);
   });
+
+  test(
+    'displayExclusiveTotalTokens subtracts cached input without negatives',
+    () {
+      const usage = AgentTokenUsage(cachedInputTokens: 200, totalTokens: 1300);
+      expect(usage.displayExclusiveTotalTokens, '1.1k');
+
+      const cachedHeavier = AgentTokenUsage(
+        cachedInputTokens: 800,
+        totalTokens: 500,
+      );
+      expect(cachedHeavier.displayExclusiveTotalTokens, '0');
+
+      const noTotal = AgentTokenUsage(totalTokens: null);
+      expect(noTotal.displayExclusiveTotalTokens, isNull);
+    },
+  );
+
+  test('displayLastExclusiveTotalTokens uses the latest request snapshot', () {
+    const usage = AgentTokenUsage(
+      totalTokens: 100000,
+      cachedInputTokens: 90000,
+      lastTotalTokens: 1300,
+      lastCachedInputTokens: 200,
+    );
+
+    expect(usage.displayLastExclusiveTotalTokens, '1.1k');
+  });
 }
