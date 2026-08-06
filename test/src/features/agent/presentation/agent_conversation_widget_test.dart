@@ -1861,13 +1861,12 @@ void main() {
         ),
         findsOneWidget,
       );
-      // 实时活动条展示当前 turn 的输出 token，而不是总 token 或缓存扣除值。
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('agent-live-activity-status')),
-          matching: find.textContaining('350 tokens'),
+          matching: find.textContaining('tokens'),
         ),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         find.byKey(const ValueKey('agent-header-running-status')),

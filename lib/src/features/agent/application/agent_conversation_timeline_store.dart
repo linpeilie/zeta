@@ -124,15 +124,6 @@ class AgentConversationTimelineStore {
 
   String? get pendingTurnGroupId => _pendingTurnGroupId;
 
-  /// 当前 live turn 的 token 用量（相对上一 turn 的增量）。
-  AgentTokenUsage? get currentTurnTokenUsage {
-    final runningTurnId = selectedRunningTurnId;
-    if (runningTurnId == null) {
-      return null;
-    }
-    return _turnGroups[runningTurnId]?.tokenUsage;
-  }
-
   /// 当前 thread 的会话累计 token 用量，直接取自最新上报，不再对各 turn 求和。
   AgentTokenUsage? get currentThreadTokenUsage => _threadTokenUsage;
 

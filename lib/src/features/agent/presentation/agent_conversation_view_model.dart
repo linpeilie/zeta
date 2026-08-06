@@ -884,8 +884,6 @@ class AgentConversationViewModel {
 
   bool get requiresResumedSelectedThread => _requiresResumedSelectedThread;
 
-  AgentTokenUsage? get currentTurnTokenUsage => _timeline.currentTurnTokenUsage;
-
   AgentTokenUsage? get currentThreadTokenUsage =>
       _timeline.currentThreadTokenUsage;
 
@@ -3469,7 +3467,6 @@ class AgentConversationViewModel {
       segmentStartedAt: activity.segmentStartedAt,
       turnStartedAt: _timeline.currentTurnStartedAt,
       tokenUsage: _timeline.currentThreadTokenUsage,
-      currentTurnTokenUsage: _timeline.currentTurnTokenUsage,
       isTurnRunning: isTurnRunning,
       isReadOnly: isReadOnly,
       canFork: canForkCurrentThread,

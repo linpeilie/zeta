@@ -345,9 +345,9 @@ Map<String, TextStyle> _agentHighlightTheme(BuildContext context) {
 String? _formatDuration(Duration? duration, {bool includeSubSecond = false}) =>
     formatAgentDuration(duration, includeSubSecond: includeSubSecond);
 
-/// 对话流执行中文案：主 segment 时长 + turn 总时长 + 当前 turn token 用量。
+/// 对话流执行中文案：主 segment 时长 + turn 总时长。
 ///
-/// 例：`思考中 · 24s · 共 1m 12s · 1.3k tokens`、`启动中 · 共 3s`。
+/// 例：`思考中 · 24s · 共 1m 12s`、`启动中 · 共 3s`。
 String _liveActivityStatusText(AgentHeaderState state, DateTime now) {
   final segmentLabel = state.runningActivityLabel;
   final segmentElapsed = _formatDuration(
@@ -369,27 +369,10 @@ String _liveActivityStatusText(AgentHeaderState state, DateTime now) {
   if (turnElapsed != null) {
     parts.add('共 $turnElapsed');
   }
-  final turnTokenUsage = _liveTurnTokenUsageLabel(state.currentTurnTokenUsage);
-  if (turnTokenUsage != null) {
-    parts.add(turnTokenUsage);
-  }
   if (parts.isEmpty) {
     return '运行中';
   }
   return parts.join(' · ');
-}
-
-/// 当前 turn 的 token 用量短标签。
-///
-/// Codex 的普通 breakdown 是 thread 累计，实时活动条优先使用当前 turn
-/// 的 `lastOutputTokens` 请求快照；旧 provider 没有该 breakdown 时才回退到
-/// turn 增量中的输出 token。
-String? _liveTurnTokenUsageLabel(AgentTokenUsage? usage) {
-  final display = usage?.displayLastOutputTokens ?? usage?.displayOutputTokens;
-  if (display == null) {
-    return null;
-  }
-  return '$display tokens';
 }
 
 /// 工具/思考卡旁的耗时文案。

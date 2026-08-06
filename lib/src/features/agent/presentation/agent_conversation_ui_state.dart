@@ -23,7 +23,6 @@ final class AgentHeaderState {
     required this.segmentStartedAt,
     required this.turnStartedAt,
     required this.tokenUsage,
-    this.currentTurnTokenUsage,
     required this.isTurnRunning,
     required this.isReadOnly,
     required this.canFork,
@@ -43,11 +42,6 @@ final class AgentHeaderState {
   final DateTime? segmentStartedAt;
   final DateTime? turnStartedAt;
   final AgentTokenUsage? tokenUsage;
-
-  /// 当前正在运行回合的 token 用量（相对上一 turn 的增量）。
-  ///
-  /// 用于实时活动状态条展示；回合运行中可能暂未上报，此时为 null。
-  final AgentTokenUsage? currentTurnTokenUsage;
 
   final bool isTurnRunning;
   final bool isReadOnly;
@@ -71,10 +65,6 @@ final class AgentHeaderState {
             other.segmentStartedAt == segmentStartedAt &&
             other.turnStartedAt == turnStartedAt &&
             _tokenUsageEquals(other.tokenUsage, tokenUsage) &&
-            _tokenUsageEquals(
-              other.currentTurnTokenUsage,
-              currentTurnTokenUsage,
-            ) &&
             other.isTurnRunning == isTurnRunning &&
             other.isReadOnly == isReadOnly &&
             other.canFork == canFork &&
@@ -96,7 +86,6 @@ final class AgentHeaderState {
     segmentStartedAt,
     turnStartedAt,
     _tokenUsageHash(tokenUsage),
-    _tokenUsageHash(currentTurnTokenUsage),
     isTurnRunning,
     isReadOnly,
     canFork,

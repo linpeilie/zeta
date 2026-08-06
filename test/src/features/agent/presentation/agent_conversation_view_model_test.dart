@@ -31,7 +31,6 @@ void main() {
         viewModel.currentThreadTitle,
         AgentConversationViewModel.defaultThreadTitle,
       );
-      expect(viewModel.currentTurnTokenUsage, isNull);
       expect(viewModel.currentThreadTokenUsage, isNull);
       expect(viewModel.currentThreadLastTokenUsage, isNull);
     });
@@ -2921,7 +2920,7 @@ void main() {
     });
 
     test(
-      'exposes header token usage only while the active turn is running',
+      'exposes thread token usage while the active turn is running',
       () async {
         final provider = _FakeAgentProvider();
         final viewModel = _createViewModel(provider);
@@ -2945,8 +2944,6 @@ void main() {
         );
         await Future<void>.delayed(Duration.zero);
 
-        expect(viewModel.currentTurnTokenUsage, isNotNull);
-        expect(viewModel.currentTurnTokenUsage!.totalTokens, 1300);
         expect(viewModel.currentThreadLastTokenUsage, isNotNull);
         expect(viewModel.currentThreadLastTokenUsage!.totalTokens, 1240);
 
@@ -2958,7 +2955,6 @@ void main() {
         );
         await Future<void>.delayed(Duration.zero);
 
-        expect(viewModel.currentTurnTokenUsage, isNull);
         expect(viewModel.currentThreadTokenUsage, isNotNull);
         expect(viewModel.currentThreadTokenUsage!.totalTokens, 1300);
         expect(viewModel.currentThreadLastTokenUsage!.totalTokens, 1240);
@@ -3021,9 +3017,9 @@ void main() {
       );
       await Future<void>.delayed(Duration.zero);
 
-      expect(viewModel.currentTurnTokenUsage, isNotNull);
-      expect(viewModel.currentTurnTokenUsage!.totalTokens, 1300);
-      expect(viewModel.currentTurnTokenUsage!.inputTokens, 1000);
+      expect(viewModel.liveTurnState?.tokenUsage, isNotNull);
+      expect(viewModel.liveTurnState!.tokenUsage!.totalTokens, 1300);
+      expect(viewModel.liveTurnState!.tokenUsage!.inputTokens, 1000);
       expect(viewModel.currentThreadTokenUsage, isNotNull);
       expect(viewModel.currentThreadTokenUsage!.inputTokens, 3000);
       expect(viewModel.currentThreadTokenUsage!.cachedInputTokens, 700);

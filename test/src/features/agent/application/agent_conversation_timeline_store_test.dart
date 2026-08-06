@@ -218,11 +218,11 @@ void main() {
       store.syncLiveTurnBinding();
 
       expect(store.liveTurnState, isNotNull);
-      expect(store.currentTurnTokenUsage, isNotNull);
-      expect(store.currentTurnTokenUsage!.inputTokens, 1000);
-      expect(store.currentTurnTokenUsage!.cachedInputTokens, 200);
-      expect(store.currentTurnTokenUsage!.outputTokens, 350);
-      expect(store.currentTurnTokenUsage!.totalTokens, 1300);
+      expect(store.liveTurnState!.tokenUsage, isNotNull);
+      expect(store.liveTurnState!.tokenUsage!.inputTokens, 1000);
+      expect(store.liveTurnState!.tokenUsage!.cachedInputTokens, 200);
+      expect(store.liveTurnState!.tokenUsage!.outputTokens, 350);
+      expect(store.liveTurnState!.tokenUsage!.totalTokens, 1300);
       expect(store.currentThreadTokenUsage, isNotNull);
       expect(store.currentThreadTokenUsage!.inputTokens, 3000);
       expect(store.currentThreadTokenUsage!.cachedInputTokens, 700);
@@ -239,7 +239,6 @@ void main() {
       store.syncLiveTurnBinding();
 
       expect(store.liveTurnState, isNull);
-      expect(store.currentTurnTokenUsage, isNull);
       expect(store.currentThreadTokenUsage!.totalTokens, 3550);
       expect(store.currentThreadLastTokenUsage!.totalTokens, 1240);
     });
@@ -264,7 +263,6 @@ void main() {
 
       expect(store.currentThreadLastTokenUsage!.totalTokens, 1200);
       expect(store.currentThreadLastTokenUsage!.modelContextWindow, 4000);
-      expect(store.currentTurnTokenUsage, isNull);
       expect(store.currentThreadTokenUsage, isNull);
       expect(store.liveTurnState!.tokenUsage, isNull);
 
@@ -278,7 +276,6 @@ void main() {
 
       expect(store.currentThreadLastTokenUsage!.totalTokens, 1500);
       expect(store.currentThreadLastTokenUsage!.modelContextWindow, 4000);
-      expect(store.currentTurnTokenUsage, isNull);
       expect(store.currentThreadTokenUsage, isNull);
     });
 
