@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:logging/logging.dart';
+import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_acp_agent_provider.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_models_cli.dart';
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_session_history_reader.dart';
@@ -524,6 +526,88 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(events.whereType<AgentErrorEvent>(), hasLength(1));
     });
+
+    test(
+      'shares safe ignored-message diagnostics across Grok notification paths',
+      () async {
+        final records = <LogRecord>[];
+        await resetAppLoggingForTesting();
+        configureAppLogging(level: Level.ALL, sink: records.add);
+        addTearDown(resetAppLoggingForTesting);
+
+        final peer = _FakeJsonRpcPeer();
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+        addTearDown(subscription.cancel);
+        addTearDown(provider.dispose);
+        await provider.initialize();
+        await Future<void>.delayed(Duration.zero);
+        events.clear();
+        records.clear();
+
+        peer.emitNotification('future/method', <String, Object?>{
+          'secret': 'private notification content',
+        });
+        peer.emitNotification('future/method', <String, Object?>{
+          'secret': 'private notification content',
+        });
+        peer.emitNotification('session/update', <String, Object?>{
+          'sessionId': 'sess-1',
+          'update': <String, Object?>{
+            'sessionUpdate': 'future_update',
+            'content': 'private update content',
+          },
+        });
+        peer.emitNotification('session/update', <String, Object?>{
+          'sessionId': 'sess-1',
+          'update': <String, Object?>{
+            'sessionUpdate': 'future_update',
+            'content': 'private update content',
+          },
+        });
+        await Future<void>.delayed(Duration.zero);
+
+        final fineMessages = records
+            .where(
+              (record) =>
+                  record.loggerName == 'zeta.agent.grok_acp' &&
+                  record.level == Level.FINE,
+            )
+            .map((record) => record.message)
+            .toList();
+        expect(
+          events.where(
+            (event) =>
+                event is! AgentStatusEvent && event is! AgentModelListEvent,
+          ),
+          isEmpty,
+        );
+        expect(
+          fineMessages.where((message) => message.contains('future/method')),
+          hasLength(2),
+        );
+        expect(
+          fineMessages.where((message) => message.contains('session/update')),
+          hasLength(2),
+        );
+        expect(fineMessages, everyElement(contains('Ignoring')));
+        expect(provider.ignoredNotificationCountsForTesting, <String, int>{
+          'future/method|unsupported notification method': 2,
+          'session/update|unknown_kind': 2,
+        });
+        expect(provider.unmatchedNotificationCountsForTesting, <String, int>{
+          'future/method': 2,
+          'session/update': 2,
+        });
+        final renderedLogs = records.map((record) => record.message).join('\n');
+        expect(renderedLogs, isNot(contains('private notification content')));
+        expect(renderedLogs, isNot(contains('private update content')));
+      },
+    );
 
     test('renames and deletes Grok sessions via xAI extensions', () async {
       final peer = _FakeJsonRpcPeer();

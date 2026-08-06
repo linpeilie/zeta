@@ -9,10 +9,12 @@ class GrokAcpMappedUpdate {
   const GrokAcpMappedUpdate({
     this.events = const <AgentEvent>[],
     this.unmatchedKind,
+    this.ignoredReason,
   });
 
   final List<AgentEvent> events;
   final String? unmatchedKind;
+  final String? ignoredReason;
 }
 
 /// Grok 专属 ACP update adapter。
@@ -71,7 +73,10 @@ final class GrokSessionUpdateMapper {
     final mapped = switch (decoded) {
       AcpUserMessageChunk() =>
         // live 用户消息由 ViewModel 乐观插入，避免重复气泡。
-        const GrokAcpMappedUpdate(unmatchedKind: 'user_message_chunk'),
+        const GrokAcpMappedUpdate(
+          unmatchedKind: 'user_message_chunk',
+          ignoredReason: 'user message is handled by the local send path',
+        ),
       AcpAgentMessageChunk() => _mapMessage(
         decoded,
         runningTurnId: runningTurnId,
@@ -107,7 +112,10 @@ final class GrokSessionUpdateMapper {
         decoded,
         runtimeScope: runtimeScope,
       ),
-      AcpUnknownUpdate() => GrokAcpMappedUpdate(unmatchedKind: decoded.kind),
+      AcpUnknownUpdate() => GrokAcpMappedUpdate(
+        unmatchedKind: decoded.kind,
+        ignoredReason: decoded.diagnostic ?? 'unsupported update kind',
+      ),
     };
     // usage_update 与 turn_completed 已携带完整 token 事件；普通 chunk 才追加
     // 独立的上下文占用事件，避免把实时占用混入计费 footer。
@@ -128,6 +136,7 @@ final class GrokSessionUpdateMapper {
         ),
       ],
       unmatchedKind: mapped.unmatchedKind,
+      ignoredReason: mapped.ignoredReason,
     );
   }
 
@@ -158,7 +167,9 @@ final class GrokSessionUpdateMapper {
       eventKind: 'session/prompt:${source.name}',
     );
     if (!terminal.accepted) {
-      return const GrokAcpMappedUpdate();
+      return const GrokAcpMappedUpdate(
+        ignoredReason: 'prompt terminal rejected as duplicate or stale',
+      );
     }
     return GrokAcpMappedUpdate(
       events: <AgentEvent>[
@@ -299,7 +310,10 @@ final class GrokSessionUpdateMapper {
   }) {
     final text = AcpContentCodec.textFromContent(update.content);
     if (text == null || text.isEmpty) {
-      return GrokAcpMappedUpdate(unmatchedKind: update.kind);
+      return GrokAcpMappedUpdate(
+        unmatchedKind: update.kind,
+        ignoredReason: 'empty agent message content',
+      );
     }
     final resolved = identity.resolveMessage(
       runtimeScope: runtimeScope,
@@ -311,7 +325,9 @@ final class GrokSessionUpdateMapper {
       eventKind: update.kind,
     );
     if (resolved == null) {
-      return const GrokAcpMappedUpdate();
+      return const GrokAcpMappedUpdate(
+        ignoredReason: 'unresolved message turn scope or duplicate event',
+      );
     }
     return GrokAcpMappedUpdate(
       events: <AgentEvent>[
@@ -337,7 +353,10 @@ final class GrokSessionUpdateMapper {
   }) {
     final text = AcpContentCodec.textFromContent(update.content);
     if (text == null || text.isEmpty) {
-      return GrokAcpMappedUpdate(unmatchedKind: update.kind);
+      return GrokAcpMappedUpdate(
+        unmatchedKind: update.kind,
+        ignoredReason: 'empty reasoning content',
+      );
     }
     final resolved = identity.resolveReasoning(
       runtimeScope: runtimeScope,
@@ -349,7 +368,9 @@ final class GrokSessionUpdateMapper {
       eventKind: update.kind,
     );
     if (resolved == null) {
-      return const GrokAcpMappedUpdate();
+      return const GrokAcpMappedUpdate(
+        ignoredReason: 'unresolved reasoning turn scope or duplicate event',
+      );
     }
     return GrokAcpMappedUpdate(
       events: <AgentEvent>[
@@ -381,7 +402,9 @@ final class GrokSessionUpdateMapper {
       eventKind: update.kind,
     );
     if (resolved == null) {
-      return const GrokAcpMappedUpdate();
+      return const GrokAcpMappedUpdate(
+        ignoredReason: 'unresolved tool turn scope or duplicate event',
+      );
     }
     final toolCall = _mapToolCall(
       update: update,
@@ -407,7 +430,9 @@ final class GrokSessionUpdateMapper {
       eventKind: update.kind,
     );
     if (resolved == null) {
-      return const GrokAcpMappedUpdate();
+      return const GrokAcpMappedUpdate(
+        ignoredReason: 'unresolved plan turn scope or duplicate event',
+      );
     }
     final entries = update.entries
         .map(
@@ -443,11 +468,14 @@ final class GrokSessionUpdateMapper {
   }) {
     final sessionId = update.sessionId;
     if (sessionId == null) {
-      return const GrokAcpMappedUpdate();
+      return const GrokAcpMappedUpdate(ignoredReason: 'missing session id');
     }
     final modeId = _normalizeGrokConversationModeId(update.modeId);
     if (modeId == null || modeId.kind == AgentConversationModeKind.unknown) {
-      return GrokAcpMappedUpdate(unmatchedKind: update.kind);
+      return GrokAcpMappedUpdate(
+        unmatchedKind: update.kind,
+        ignoredReason: 'unsupported conversation mode',
+      );
     }
     return GrokAcpMappedUpdate(
       events: <AgentEvent>[
@@ -492,7 +520,9 @@ final class GrokSessionUpdateMapper {
       eventKind: update.kind,
     );
     if (resolved == null) {
-      return const GrokAcpMappedUpdate();
+      return const GrokAcpMappedUpdate(
+        ignoredReason: 'unresolved usage turn scope or duplicate event',
+      );
     }
     // usage_update.used 表示当前上下文进度，同步刷新占用跟踪。
     if (update.used > 0) {
@@ -539,7 +569,9 @@ final class GrokSessionUpdateMapper {
         shouldEmitCompletion ||
         terminal.disposition == GrokTerminalDisposition.duplicate;
     if (!canApplyTerminalMetadata) {
-      return const GrokAcpMappedUpdate();
+      return const GrokAcpMappedUpdate(
+        ignoredReason: 'terminal update rejected as duplicate or stale',
+      );
     }
 
     // 即使生命周期终态已由 prompt RPC 接受，迟到的权威通知仍可补全 usage；

@@ -791,73 +791,73 @@ void main() {
       expect(renderedLogs, isNot(contains('flutter test')));
     });
 
+    test('logs every unmatched notification and counts occurrences', () async {
+      final records = <LogRecord>[];
+      await resetAppLoggingForTesting();
+      configureAppLogging(level: Level.ALL, sink: records.add);
+      addTearDown(resetAppLoggingForTesting);
+
+      final peer = _FakeJsonRpcPeer();
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+      addTearDown(provider.dispose);
+      final events = <AgentEvent>[];
+      final subscription = provider.events.listen(events.add);
+      addTearDown(subscription.cancel);
+
+      await provider.initialize();
+      await Future<void>.delayed(Duration.zero);
+      events.clear();
+      records.clear();
+
+      peer.emitNotification('account/updated', <String, Object?>{
+        'account': <String, Object?>{'type': 'chatgpt'},
+      });
+      peer.emitNotification('account/updated', <String, Object?>{
+        'account': <String, Object?>{'type': 'apiKey'},
+      });
+      peer.emitNotification('skills/changed', <String, Object?>{
+        'skills': <Object?>[],
+      });
+      await Future<void>.delayed(Duration.zero);
+
+      final unmatchedFineMessages = records
+          .where(
+            (record) =>
+                record.loggerName == 'zeta.agent.codex_app_server' &&
+                record.level == Level.FINE &&
+                record.message.contains(
+                  'Ignoring unmatched Codex notification',
+                ),
+          )
+          .map((record) => record.message)
+          .toList();
+      final skillsChangedMessages = records
+          .where(
+            (record) =>
+                record.loggerName == 'zeta.agent.codex_app_server' &&
+                record.level == Level.FINE &&
+                record.message.contains('skills/changed received'),
+          )
+          .map((record) => record.message)
+          .toList();
+
+      expect(events, isEmpty);
+      expect(unmatchedFineMessages, hasLength(2));
+      expect(unmatchedFineMessages, everyElement(contains('account/updated')));
+      expect(skillsChangedMessages, hasLength(1));
+      expect(provider.unmatchedNotificationCountsForTesting, <String, int>{
+        'account/updated': 2,
+      });
+      expect(provider.ignoredNotificationCountsForTesting, <String, int>{
+        'account/updated|unsupported notification method': 2,
+      });
+    });
+
     test(
-      'logs unmatched notifications once and counts further occurrences',
-      () async {
-        final records = <LogRecord>[];
-        await resetAppLoggingForTesting();
-        configureAppLogging(level: Level.ALL, sink: records.add);
-        addTearDown(resetAppLoggingForTesting);
-
-        final peer = _FakeJsonRpcPeer();
-        final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
-          peer: peer,
-        );
-        addTearDown(provider.dispose);
-        final events = <AgentEvent>[];
-        final subscription = provider.events.listen(events.add);
-        addTearDown(subscription.cancel);
-
-        await provider.initialize();
-        await Future<void>.delayed(Duration.zero);
-        events.clear();
-        records.clear();
-
-        peer.emitNotification('account/updated', <String, Object?>{
-          'account': <String, Object?>{'type': 'chatgpt'},
-        });
-        peer.emitNotification('account/updated', <String, Object?>{
-          'account': <String, Object?>{'type': 'apiKey'},
-        });
-        peer.emitNotification('skills/changed', <String, Object?>{
-          'skills': <Object?>[],
-        });
-        await Future<void>.delayed(Duration.zero);
-
-        final unmatchedFineMessages = records
-            .where(
-              (record) =>
-                  record.loggerName == 'zeta.agent.codex_app_server' &&
-                  record.level == Level.FINE &&
-                  record.message.contains(
-                    'Ignoring unmatched Codex notification',
-                  ),
-            )
-            .map((record) => record.message)
-            .toList();
-        final skillsChangedMessages = records
-            .where(
-              (record) =>
-                  record.loggerName == 'zeta.agent.codex_app_server' &&
-                  record.level == Level.FINE &&
-                  record.message.contains('skills/changed received'),
-            )
-            .map((record) => record.message)
-            .toList();
-
-        expect(events, isEmpty);
-        expect(unmatchedFineMessages, hasLength(1));
-        expect(unmatchedFineMessages.single, contains('account/updated'));
-        expect(skillsChangedMessages, hasLength(1));
-        expect(provider.unmatchedNotificationCountsForTesting, <String, int>{
-          'account/updated': 2,
-        });
-      },
-    );
-
-    test(
-      'ignores mcpServer/startupStatus/updated notifications for logs and events',
+      'logs provider-filtered notifications without creating events',
       () async {
         final records = <LogRecord>[];
         await resetAppLoggingForTesting();
@@ -898,9 +898,116 @@ void main() {
           codexFineMessages.where(
             (message) => message.contains('mcpServer/startupStatus/updated'),
           ),
-          isEmpty,
+          hasLength(1),
+        );
+        expect(
+          codexFineMessages.single,
+          contains('reason=filtered by provider policy'),
         );
         expect(provider.unmatchedNotificationCountsForTesting, isEmpty);
+        expect(provider.ignoredNotificationCountsForTesting, <String, int>{
+          'mcpServer/startupStatus/updated|filtered by provider policy': 1,
+        });
+      },
+    );
+
+    test(
+      'logs malformed thread and unsupported live item details safely',
+      () async {
+        final records = <LogRecord>[];
+        await resetAppLoggingForTesting();
+        configureAppLogging(level: Level.ALL, sink: records.add);
+        addTearDown(resetAppLoggingForTesting);
+
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+        addTearDown(subscription.cancel);
+
+        await provider.initialize();
+        await Future<void>.delayed(Duration.zero);
+        events.clear();
+        records.clear();
+
+        peer.emitNotification('thread/started', <String, Object?>{
+          'thread': <String, Object?>{'title': 'private thread title'},
+        });
+        peer.emitNotification('thread/status/changed', <String, Object?>{
+          'threadId': 'thread-1',
+        });
+        peer.emitNotification('item/completed', <String, Object?>{
+          'threadId': 'thread-1',
+          'turnId': 'turn-1',
+          'item': <String, Object?>{
+            'id': 'user-item-1',
+            'type': 'userMessage',
+            'text': 'private user content',
+          },
+        });
+        peer.emitNotification('thread/tokenUsage/updated', <String, Object?>{
+          'threadId': 'thread-1',
+          'tokenUsage': <String, Object?>{},
+        });
+        await Future<void>.delayed(Duration.zero);
+
+        final ignoredFineMessages = records
+            .where(
+              (record) =>
+                  record.loggerName == 'zeta.agent.codex_app_server' &&
+                  record.level == Level.FINE &&
+                  record.message.contains('Ignoring Codex notification'),
+            )
+            .map((record) => record.message)
+            .toList();
+
+        expect(events, isEmpty);
+        expect(ignoredFineMessages, hasLength(4));
+        expect(
+          ignoredFineMessages,
+          contains(
+            allOf(
+              contains('thread/started'),
+              contains('reason=missing thread details'),
+              contains('thread=present'),
+            ),
+          ),
+        );
+        expect(
+          ignoredFineMessages,
+          contains(
+            allOf(
+              contains('thread/status/changed'),
+              contains('reason=missing thread status details'),
+            ),
+          ),
+        );
+        expect(
+          ignoredFineMessages,
+          contains(
+            allOf(
+              contains('item/completed'),
+              contains('reason=user message is handled by the local send path'),
+              contains('itemType=userMessage'),
+            ),
+          ),
+        );
+        expect(
+          ignoredFineMessages,
+          contains(
+            allOf(
+              contains('thread/tokenUsage/updated'),
+              contains('reason=invalid token usage details'),
+            ),
+          ),
+        );
+        final renderedLogs = records.map((record) => record.message).join('\n');
+        expect(renderedLogs, isNot(contains('private thread title')));
+        expect(renderedLogs, isNot(contains('private user content')));
       },
     );
 

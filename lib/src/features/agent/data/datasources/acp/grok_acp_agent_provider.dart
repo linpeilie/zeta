@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/data/agent_ignored_message_logger.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_models_cli.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_process_starter.dart';
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_session_history_reader.dart';
@@ -182,7 +184,11 @@ class GrokAcpAgentProvider
   final Map<String, AgentThreadHistorySnapshot> _historyCache =
       <String, AgentThreadHistorySnapshot>{};
 
-  final Set<String> _loggedUnmatched = <String>{};
+  final AgentIgnoredMessageLogger _ignoredMessageLogger =
+      AgentIgnoredMessageLogger(
+        providerLabel: 'Grok',
+        loggerName: 'zeta.agent.grok_acp',
+      );
   final _random = Random();
 
   StreamSubscription<JsonRpcNotification>? _notificationSubscription;
@@ -210,6 +216,16 @@ class GrokAcpAgentProvider
   /// Grok identity reducer 的脱敏累计诊断。
   GrokStreamIdentityDiagnostics get streamIdentityDiagnostics =>
       _notificationMapper.diagnostics;
+
+  /// 开发诊断：被忽略消息按 method + reason 的累计次数。
+  @visibleForTesting
+  Map<String, int> get ignoredNotificationCountsForTesting =>
+      _ignoredMessageLogger.ignoredCounts;
+
+  /// 开发诊断：未匹配消息按 method 的累计次数。
+  @visibleForTesting
+  Map<String, int> get unmatchedNotificationCountsForTesting =>
+      _ignoredMessageLogger.unmatchedCounts;
 
   @override
   Future<void> initialize() async {
@@ -900,7 +916,7 @@ class GrokAcpAgentProvider
         raw: map,
       );
       _noteTurnCompletedFromMapped(sessionId: session.id, mapped: mapped);
-      _emitMapped(mapped);
+      _emitMapped(mapped, method: 'session/prompt', params: map);
       // 多 session 共享进程：仅当没有任何 running turn 时才广播 ready。
       _emitReadyIfIdle();
     } catch (error, stackTrace) {
@@ -990,7 +1006,11 @@ class GrokAcpAgentProvider
         source: GrokTerminalSource.cancel,
       );
       _noteTurnCompletedFromMapped(sessionId: turn.sessionId, mapped: mapped);
-      _emitMapped(mapped);
+      _emitMapped(
+        mapped,
+        method: 'session/cancel',
+        params: <String, Object?>{'sessionId': turn.sessionId},
+      );
       _notificationMapper.invalidateTurn(
         runtimeScope: currentRuntimeScope,
         sessionId: turn.sessionId,
@@ -1205,9 +1225,11 @@ class GrokAcpAgentProvider
       if (error.kind == JsonRpcProtocolErrorKind.unexpectedResponse) {
         // Grok 偶尔会补发已超时或已完成请求的响应。该诊断不影响当前 turn，
         // 只保留在日志中，避免把 transport 噪声渲染成对话错误。
-        _log.fine(
-          'Ignored unmatched Grok response '
-          '(${error.message.length} characters)',
+        _ignoredMessageLogger.record(
+          method: 'json-rpc/response',
+          reason: 'unexpected response',
+          details: <String, Object?>{'errorKind': error.kind.toString()},
+          unmatched: true,
         );
         return;
       }
@@ -1229,12 +1251,22 @@ class GrokAcpAgentProvider
     final params = notification.params;
     final notificationRuntimeScope = notification.runtimeScope;
     if (notificationRuntimeScope == null) {
+      _ignoredMessageLogger.record(
+        method: method,
+        reason: 'missing runtime scope',
+        payload: params,
+      );
       return;
     }
 
     // session/load 回放或带 isReplay 的更新：不进入直播时间线，避免与
     // readThreadHistory → applyHistorySnapshot 重复渲染。
     if (_shouldSuppressTimelineNotification(method: method, params: params)) {
+      _ignoredMessageLogger.record(
+        method: method,
+        reason: 'suppressed replay notification',
+        payload: params,
+      );
       return;
     }
 
@@ -1249,7 +1281,7 @@ class GrokAcpAgentProvider
         runtimeScope: notificationRuntimeScope,
       );
       _noteTurnCompletedFromMapped(sessionId: sessionId, mapped: mapped);
-      _emitMapped(mapped);
+      _emitMapped(mapped, method: method, params: params);
       _emitReadyIfIdle();
       return;
     }
@@ -1265,7 +1297,7 @@ class GrokAcpAgentProvider
         runtimeScope: notificationRuntimeScope,
       );
       _noteTurnCompletedFromMapped(sessionId: sessionId, mapped: mapped);
-      _emitMapped(mapped);
+      _emitMapped(mapped, method: method, params: params);
       _emitReadyIfIdle();
       return;
     }
@@ -1274,6 +1306,7 @@ class GrokAcpAgentProvider
     if (method == '_x.ai/session/prompt_complete' ||
         method == 'x.ai/session/prompt_complete') {
       _handlePromptCompleteNotification(
+        method: method,
         params: params,
         runtimeScope: notificationRuntimeScope,
       );
@@ -1295,34 +1328,44 @@ class GrokAcpAgentProvider
           'sessionId': ?sessionId,
         };
         _handlePromptCompleteNotification(
+          method: method,
           params: merged,
           runtimeScope: notificationRuntimeScope,
         );
         return;
       }
-      _handleSessionNotificationInvalidation(params);
+      _handleSessionNotificationInvalidation(method: method, params: params);
       return;
     }
 
-    // 其它 x.ai 扩展通知：诊断即可，避免刷屏。
+    // 其它 x.ai 扩展通知：逐条记录开发态诊断，生产构建由共享 logger 静默。
     if (method.startsWith('_x.ai/') || method.startsWith('x.ai/')) {
-      if (_loggedUnmatched.add(method)) {
-        _log.fine('Ignoring Grok extension notification: $method');
-      }
+      _ignoredMessageLogger.record(
+        method: method,
+        reason: 'unsupported extension notification',
+        payload: params,
+        unmatched: true,
+      );
       return;
     }
 
-    if (_loggedUnmatched.add(method)) {
-      _log.fine('Unmatched Grok notification: $method');
-    }
+    _ignoredMessageLogger.record(
+      method: method,
+      reason: 'unsupported notification method',
+      payload: params,
+      unmatched: true,
+    );
   }
 
   /// 处理 `x.ai/session_notification` 对 skill 目录的失效信号。
   ///
   /// `update.sessionUpdate` 为 snake_case 变体名（如 `plugins_changed`）。
   /// 命中会影响 skill 集合的变体时广播 [skillsChanged]，供 application 层刷新；
-  /// 其余变体仅记一条去重 fine 日志，避免刷屏。
-  void _handleSessionNotificationInvalidation(Map<String, Object?> params) {
+  /// 其余变体交给共享忽略消息诊断器记录。
+  void _handleSessionNotificationInvalidation({
+    required String method,
+    required Map<String, Object?> params,
+  }) {
     final update = _asStringKeyedMap(params['update']);
     final updateType = update?['sessionUpdate']?.toString();
     final invalidatesSkills = switch (updateType) {
@@ -1338,20 +1381,32 @@ class GrokAcpAgentProvider
       );
       return;
     }
-    if (_loggedUnmatched.add('x.ai/session_notification:$updateType')) {
-      _log.fine('Ignoring Grok session notification update: $updateType');
-    }
+    _ignoredMessageLogger.record(
+      method: method,
+      reason: 'unsupported session notification update',
+      payload: params,
+      details: <String, Object?>{'updateKind': updateType},
+    );
   }
 
-  void _emitMapped(GrokAcpMappedUpdate mapped) {
+  void _emitMapped(
+    GrokAcpMappedUpdate mapped, {
+    String method = 'provider',
+    Map<String, Object?> params = const <String, Object?>{},
+  }) {
     for (final event in mapped.events) {
       _addEvent(_enrichUsageEvent(event));
     }
     final unmatched = mapped.unmatchedKind;
-    if (unmatched != null &&
-        mapped.events.isEmpty &&
-        _loggedUnmatched.add(unmatched)) {
-      _log.fine('Unmatched Grok update kind: $unmatched');
+    final ignoredReason = mapped.ignoredReason;
+    if (ignoredReason != null || unmatched != null) {
+      _ignoredMessageLogger.record(
+        method: method,
+        reason: ignoredReason ?? 'unmatched update kind',
+        payload: params,
+        details: <String, Object?>{'updateKind': ?unmatched},
+        unmatched: unmatched != null,
+      );
     }
   }
 
@@ -1383,6 +1438,7 @@ class GrokAcpAgentProvider
       (event) => event is AgentTurnCompletedEvent,
     );
     if (!accepted) {
+      _emitMapped(mapped, method: 'session/prompt', params: failure.raw);
       return;
     }
 
@@ -1398,7 +1454,7 @@ class GrokAcpAgentProvider
       ),
     );
     _noteTurnCompletedFromMapped(sessionId: sessionId, mapped: mapped);
-    _emitMapped(mapped);
+    _emitMapped(mapped, method: 'session/prompt', params: failure.raw);
   }
 
   _GrokPromptFailure _normalizePromptFailure(Object error) {
@@ -2277,15 +2333,26 @@ class GrokAcpAgentProvider
   /// 仅在该 session 仍有 running turn 时生效；与 prompt RPC 通过
   /// first-terminal-wins 去重，避免双重完成。
   void _handlePromptCompleteNotification({
+    required String method,
     required Map<String, Object?> params,
     required AgentRuntimeScope runtimeScope,
   }) {
     final sessionId = params['sessionId']?.toString();
     if (sessionId == null || sessionId.isEmpty) {
+      _ignoredMessageLogger.record(
+        method: method,
+        reason: 'missing session id',
+        payload: params,
+      );
       return;
     }
     final turnId = _runningTurnIdsBySessionId[sessionId];
     if (turnId == null) {
+      _ignoredMessageLogger.record(
+        method: method,
+        reason: 'no active turn for session',
+        payload: params,
+      );
       return;
     }
     final stopReason =
@@ -2302,6 +2369,7 @@ class GrokAcpAgentProvider
       raw: params,
     );
     if (mapped.events.isEmpty) {
+      _emitMapped(mapped, method: method, params: params);
       return;
     }
     _log.fine(
@@ -2309,7 +2377,7 @@ class GrokAcpAgentProvider
       '(stopReason=$stopReason)',
     );
     _noteTurnCompletedFromMapped(sessionId: sessionId, mapped: mapped);
-    _emitMapped(mapped);
+    _emitMapped(mapped, method: method, params: params);
     _emitReadyIfIdle();
   }
 

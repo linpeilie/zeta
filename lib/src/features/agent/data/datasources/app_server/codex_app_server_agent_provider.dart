@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/data/agent_ignored_message_logger.dart';
 import 'package:zeta/src/features/agent/data/datasources/app_server/codex_permission_policy_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/app_server/codex_process_starter.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
@@ -162,11 +163,11 @@ class CodexAppServerAgentProvider
 
   Future<void>? _disposeOperation;
 
-  /// 已记过 fine 日志的未匹配通知 method（按 method 去重，避免刷屏）。
-  final Set<String> _loggedUnmatchedNotificationMethods = <String>{};
-
-  /// 未匹配通知按 method 的累计次数（开发期诊断用，每次到达都递增）。
-  final Map<String, int> _unmatchedNotificationCounts = <String, int>{};
+  final AgentIgnoredMessageLogger _ignoredMessageLogger =
+      AgentIgnoredMessageLogger(
+        providerLabel: 'Codex',
+        loggerName: 'zeta.agent.codex_app_server',
+      );
 
   StreamSubscription<JsonRpcNotification>? _notificationSubscription;
   StreamSubscription<JsonRpcRequest>? _serverRequestSubscription;
@@ -217,12 +218,15 @@ class CodexAppServerAgentProvider
   @override
   AgentRuntimeScope? get runtimeScope => _peer.runtimeScope;
 
+  /// 开发诊断：被忽略服务端通知按 method + reason 的累计次数。
+  @visibleForTesting
+  Map<String, int> get ignoredNotificationCountsForTesting =>
+      _ignoredMessageLogger.ignoredCounts;
+
   /// 开发诊断：未匹配服务端通知按 method 的累计次数。
-  ///
-  /// 首次见到某 method 会记一条 fine 日志；后续同名通知只递增计数。
   @visibleForTesting
   Map<String, int> get unmatchedNotificationCountsForTesting =>
-      Map<String, int>.unmodifiable(_unmatchedNotificationCounts);
+      _ignoredMessageLogger.unmatchedCounts;
 
   @override
   Future<void> initialize() async {
@@ -933,6 +937,11 @@ class CodexAppServerAgentProvider
   /// 将服务端通知委托给通知映射器，再由 provider 协调状态变更。
   void _handleNotification(JsonRpcNotification notification) {
     if (_shouldIgnoreNotification(notification.method)) {
+      _ignoredMessageLogger.record(
+        method: notification.method,
+        reason: 'filtered by provider policy',
+        payload: notification.params,
+      );
       return;
     }
     if (_isErrorNotification(notification.method)) {
@@ -977,10 +986,14 @@ class CodexAppServerAgentProvider
           _runningTurnIdsBySessionId[threadId],
     );
 
-    // 协议演进时未适配的通知：按 method 去重记 fine，并累计诊断计数。
-    final unmatchedMethod = mapping.unmatchedMethod;
-    if (unmatchedMethod != null) {
-      _recordUnmatchedNotification(unmatchedMethod);
+    final ignoredReason = mapping.ignoredReason;
+    if (ignoredReason != null) {
+      _ignoredMessageLogger.record(
+        method: notification.method,
+        reason: ignoredReason,
+        payload: notification.params,
+        unmatched: mapping.unmatchedMethod != null,
+      );
       return;
     }
 
@@ -1042,18 +1055,6 @@ class CodexAppServerAgentProvider
         unawaited(_unsubscribeThreadBestEffort(threadId));
       }
       _events.add(event);
-    }
-  }
-
-  /// 记录未匹配通知：首次 method 打 fine 日志，之后只递增计数。
-  void _recordUnmatchedNotification(String method) {
-    _unmatchedNotificationCounts[method] =
-        (_unmatchedNotificationCounts[method] ?? 0) + 1;
-    if (_loggedUnmatchedNotificationMethods.add(method)) {
-      _log.fine(
-        'Ignoring unmatched Codex notification: $method '
-        '(further occurrences counted silently)',
-      );
     }
   }
 

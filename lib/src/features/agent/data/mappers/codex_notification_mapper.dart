@@ -15,7 +15,7 @@ class _CodexNotificationMapper {
       case 'thread/started':
         final session = _sessionFromNotification(notification.params);
         if (session == null) {
-          return const _NotificationMapping();
+          return _ignored('missing thread details');
         }
         return _NotificationMapping(
           session: session,
@@ -24,8 +24,11 @@ class _CodexNotificationMapper {
       case 'thread/status/changed':
         final threadId = _string(notification.params['threadId']);
         final statusMap = _map(notification.params['status']);
-        if (threadId == null || statusMap.isEmpty) {
-          return const _NotificationMapping();
+        if (threadId == null) {
+          return _ignored('missing thread id');
+        }
+        if (statusMap.isEmpty) {
+          return _ignored('missing thread status details');
         }
         final flags = _threadActiveFlags(statusMap);
         return _NotificationMapping(
@@ -42,7 +45,7 @@ class _CodexNotificationMapper {
       case 'thread/name/updated':
         final threadId = _string(notification.params['threadId']);
         if (threadId == null) {
-          return const _NotificationMapping();
+          return _ignored('missing thread id');
         }
         return _NotificationMapping(
           events: <AgentEvent>[
@@ -88,7 +91,7 @@ class _CodexNotificationMapper {
       case 'thread/compacted':
         final threadId = _string(notification.params['threadId']);
         if (threadId == null) {
-          return const _NotificationMapping();
+          return _ignored('missing thread id');
         }
         return _NotificationMapping(
           events: <AgentEvent>[
@@ -102,7 +105,7 @@ class _CodexNotificationMapper {
       case 'thread/settings/updated':
         final threadId = _string(notification.params['threadId']);
         if (threadId == null) {
-          return const _NotificationMapping();
+          return _ignored('missing thread id');
         }
         final settings = _map(notification.params['threadSettings']);
         // 权限在 data 层原子解码为中立 selection；application 不得再解析
@@ -126,7 +129,7 @@ class _CodexNotificationMapper {
       case 'turn/started':
         final turn = _turnFromNotification(notification.params);
         if (turn == null) {
-          return const _NotificationMapping();
+          return _ignored('missing turn details');
         }
         return _NotificationMapping(
           startedTurn: turn,
@@ -139,8 +142,11 @@ class _CodexNotificationMapper {
             _string(turn['id']) ??
             _string(notification.params['turnId']) ??
             (threadId == null ? null : runningTurnIdForSession(threadId));
-        if (threadId == null || turnId == null) {
-          return const _NotificationMapping();
+        if (threadId == null) {
+          return _ignored('missing thread id');
+        }
+        if (turnId == null) {
+          return _ignored('missing turn completion details');
         }
         return _NotificationMapping(
           completedTurn: _CompletedTurn(sessionId: threadId, turnId: turnId),
@@ -159,8 +165,11 @@ class _CodexNotificationMapper {
       case 'item/agentMessage/delta':
         final delta = _string(notification.params['delta']);
         final itemId = _string(notification.params['itemId']);
-        if (delta == null || itemId == null) {
-          return const _NotificationMapping();
+        if (delta == null) {
+          return _ignored('missing agent message delta');
+        }
+        if (itemId == null) {
+          return _ignored('missing item id');
         }
         final item = _map(notification.params['item']);
         return _NotificationMapping(
@@ -206,8 +215,11 @@ class _CodexNotificationMapper {
       case 'item/plan/delta':
         final delta = _string(notification.params['delta']);
         final itemId = _string(notification.params['itemId']);
-        if (delta == null || itemId == null) {
-          return const _NotificationMapping();
+        if (delta == null) {
+          return _ignored('missing plan delta');
+        }
+        if (itemId == null) {
+          return _ignored('missing item id');
         }
         return _NotificationMapping(
           events: <AgentEvent>[
@@ -239,8 +251,14 @@ class _CodexNotificationMapper {
         final threadId = _string(notification.params['threadId']);
         final turnId = _string(notification.params['turnId']);
         final diff = notification.params['diff'];
-        if (threadId == null || turnId == null || diff is! String) {
-          return const _NotificationMapping();
+        if (threadId == null) {
+          return _ignored('missing thread id');
+        }
+        if (turnId == null) {
+          return _ignored('missing turn id');
+        }
+        if (diff is! String) {
+          return _ignored('missing turn diff');
         }
         return _NotificationMapping(
           events: <AgentEvent>[
@@ -254,30 +272,23 @@ class _CodexNotificationMapper {
         );
       case 'item/started':
       case 'item/completed':
-        final messageUpdate = _messageUpdateFromItemNotification(notification);
-        if (messageUpdate != null) {
-          return _NotificationMapping(events: <AgentEvent>[messageUpdate]);
-        }
-        final systemItem = _systemItemFromItemNotification(notification);
-        if (systemItem != null) {
-          return _NotificationMapping(events: <AgentEvent>[systemItem]);
-        }
-        final toolCall = _toolCallFromItemNotification(notification);
-        if (toolCall == null) {
-          return const _NotificationMapping();
-        }
-        return _NotificationMapping(
-          events: <AgentEvent>[AgentToolCallEvent(toolCall)],
-        );
+        return _itemNotificationMapping(notification);
       case 'item/commandExecution/outputDelta':
       case 'command/exec/outputDelta':
       case 'item/fileChange/outputDelta':
       case 'item/fileChange/patchUpdated':
       // MCP 工具进度消息；timeline 会追加到对应 item 的工具卡 content。
       case 'item/mcpToolCall/progress':
+        if (notification.method == 'item/mcpToolCall/progress') {
+          final itemId = _string(notification.params['itemId']);
+          final message = _string(notification.params['message']);
+          if (itemId == null || message == null) {
+            return _ignored('missing MCP tool progress details');
+          }
+        }
         final toolCall = _toolCallFromProgressNotification(notification);
         if (toolCall == null) {
-          return const _NotificationMapping();
+          return _ignored('unsupported tool progress details');
         }
         return _NotificationMapping(
           events: <AgentEvent>[AgentToolCallEvent(toolCall)],
@@ -291,7 +302,7 @@ class _CodexNotificationMapper {
         final usage = _tokenUsageFromNotification(notification.params);
         final threadId = _string(notification.params['threadId']);
         if (usage == null) {
-          return const _NotificationMapping();
+          return _ignored('invalid token usage details');
         }
         return _NotificationMapping(
           events: <AgentEvent>[
@@ -309,8 +320,11 @@ class _CodexNotificationMapper {
       case 'serverRequest/resolved':
         final requestId = _requestIdString(notification.params['requestId']);
         final threadId = _string(notification.params['threadId']);
-        if (requestId == null || threadId == null) {
-          return const _NotificationMapping();
+        if (requestId == null) {
+          return _ignored('missing server request id');
+        }
+        if (threadId == null) {
+          return _ignored('missing thread id');
         }
         return _NotificationMapping(
           events: <AgentEvent>[
@@ -328,12 +342,14 @@ class _CodexNotificationMapper {
         final fromModel = _string(notification.params['fromModel']);
         final toModel = _string(notification.params['toModel']);
         final reason = _string(notification.params['reason']);
-        if (threadId == null ||
-            turnId == null ||
-            fromModel == null ||
-            toModel == null ||
-            reason == null) {
-          return const _NotificationMapping();
+        if (threadId == null) {
+          return _ignored('missing thread id');
+        }
+        if (turnId == null) {
+          return _ignored('missing turn id');
+        }
+        if (fromModel == null || toModel == null || reason == null) {
+          return _ignored('missing model reroute details');
         }
         return _NotificationMapping(
           events: <AgentEvent>[
@@ -351,7 +367,7 @@ class _CodexNotificationMapper {
       case 'deprecationNotice':
         final summary = _string(notification.params['summary']);
         if (summary == null) {
-          return const _NotificationMapping();
+          return _ignored('missing deprecation summary');
         }
         return _NotificationMapping(
           events: <AgentEvent>[
@@ -389,8 +405,11 @@ class _CodexNotificationMapper {
         final threadId = _string(notification.params['threadId']);
         final turnId = _string(notification.params['turnId']);
         final reviewId = _string(notification.params['reviewId']);
-        if (threadId == null || turnId == null || reviewId == null) {
-          return const _NotificationMapping();
+        if (threadId == null) {
+          return _ignored('missing thread id');
+        }
+        if (turnId == null || reviewId == null) {
+          return _ignored('missing auto approval review details');
         }
         final review = _map(notification.params['review']);
         final status =
@@ -413,10 +432,51 @@ class _CodexNotificationMapper {
           ],
         );
       default:
-        // 未识别的通知不产生事件；由 provider 记 fine 日志并累计诊断计数。
-        return _NotificationMapping(unmatchedMethod: notification.method);
+        // 未识别的通知不产生事件；由 provider 记录开发诊断。
+        return _NotificationMapping(
+          ignoredReason: 'unsupported notification method',
+          unmatchedMethod: notification.method,
+        );
     }
   }
+
+  _NotificationMapping _itemNotificationMapping(
+    JsonRpcNotification notification,
+  ) {
+    final item = _map(notification.params['item']);
+    final type = _string(item['type']) ?? _string(notification.params['type']);
+    final normalizedType = _normalizedAgentItemType(type);
+    final id = _string(item['id']) ?? _string(notification.params['itemId']);
+    if (id == null) {
+      return _ignored('missing item id');
+    }
+
+    final messageUpdate = _messageUpdateFromItemNotification(notification);
+    if (messageUpdate != null) {
+      return _NotificationMapping(events: <AgentEvent>[messageUpdate]);
+    }
+    final systemItem = _systemItemFromItemNotification(notification);
+    if (systemItem != null) {
+      return _NotificationMapping(events: <AgentEvent>[systemItem]);
+    }
+    final toolCall = _toolCallFromItemNotification(notification);
+    if (toolCall == null) {
+      final reason = switch (normalizedType) {
+        null => 'missing item type',
+        'usermessage' => 'user message is handled by the local send path',
+        _ when _isSystemThreadItemType(normalizedType) =>
+          'unsupported system item details',
+        _ => 'unsupported item type',
+      };
+      return _ignored(reason);
+    }
+    return _NotificationMapping(
+      events: <AgentEvent>[AgentToolCallEvent(toolCall)],
+    );
+  }
+
+  _NotificationMapping _ignored(String reason) =>
+      _NotificationMapping(ignoredReason: reason);
 
   /// 解析 `error` 通知，兼容两代协议结构：
   ///
@@ -534,7 +594,7 @@ class _CodexNotificationMapper {
   ) {
     final threadId = _string(notification.params['threadId']);
     if (threadId == null) {
-      return const _NotificationMapping();
+      return _ignored('missing thread id');
     }
     return _NotificationMapping(events: <AgentEvent>[build(threadId)]);
   }
@@ -550,8 +610,11 @@ class _CodexNotificationMapper {
   }) {
     final itemId = _string(notification.params['itemId']);
     final delta = _string(notification.params['delta']) ?? '';
-    if (itemId == null || (requireDelta && delta.isEmpty)) {
-      return const _NotificationMapping();
+    if (itemId == null) {
+      return _ignored('missing reasoning item id');
+    }
+    if (requireDelta && delta.isEmpty) {
+      return _ignored('missing reasoning delta');
     }
     return _NotificationMapping(
       events: <AgentEvent>[
@@ -785,6 +848,7 @@ class _NotificationMapping {
     this.startedTurn,
     this.completedTurn,
     this.events = const <AgentEvent>[],
+    this.ignoredReason,
     this.unmatchedMethod,
   });
 
@@ -793,7 +857,10 @@ class _NotificationMapping {
   final _CompletedTurn? completedTurn;
   final List<AgentEvent> events;
 
-  /// 非空表示该方法未进入任何已知 case，供 provider 做可观测性记录。
+  /// 非空表示通知已被映射层忽略，供 provider 做开发期可观测性记录。
+  final String? ignoredReason;
+
+  /// 非空表示该方法未进入任何已知 case。
   final String? unmatchedMethod;
 }
 
