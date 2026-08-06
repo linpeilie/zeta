@@ -6,8 +6,6 @@ import 'package:zeta/src/features/agent/application/agent_conversation_mode_cont
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
-import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 
@@ -839,15 +837,12 @@ void main() {
         );
         expect(popover, findsOneWidget);
         expect(tester.getSize(popover).width, 288);
-        final popoverPanel = find.descendant(
-          of: popover,
-          matching: find.byType(PanelCard),
+        // 方案 B：弹层不再叠加 PanelCard 外层，由 shadcn SelectPopup 自带卡
+        // 作为唯一表面，避免「两层」视觉。
+        expect(
+          find.descendant(of: popover, matching: find.byType(PanelCard)),
+          findsNothing,
         );
-        final permissionPopoverPanel = tester.widget<PanelCard>(popoverPanel);
-        final colors = IdeColors.of(tester.element(permissionSelector));
-        expect(permissionPopoverPanel.color, colors.panel);
-        expect(permissionPopoverPanel.borderRadius, IdeRadius.allSmall);
-        expect(permissionPopoverPanel.boxShadow, isEmpty);
         expect(
           find.byType(sf.SelectPopup<AgentPermissionOption>),
           findsOneWidget,

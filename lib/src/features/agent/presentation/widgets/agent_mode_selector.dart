@@ -256,86 +256,84 @@ class _AgentModeSelectorPopover extends StatelessWidget {
         width: width,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: maxHeight),
-          child: _ComposerSelectorPanel(
-            child: _ComposerSelectPopup<AgentConversationModeId>(
-              value: selectedMode,
-              onChanged: (mode, selected) {
-                if (!selected) {
-                  return false;
-                }
-                final preset = presets
-                    .where((candidate) => candidate.id == mode)
-                    .firstOrNull;
-                if (preset == null || !preset.isSelectable) {
-                  return false;
-                }
-                onSelect(preset);
-                return true;
-              },
-              items: <Widget>[
-                if (unknownMode) ...[
-                  Padding(
-                    key: const ValueKey('agent-mode-unknown-notice'),
-                    padding: const EdgeInsets.fromLTRB(
-                      IdeSpacing.space10,
-                      IdeSpacing.space6,
-                      IdeSpacing.space10,
-                      IdeSpacing.space8,
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.info_outline_rounded,
-                          size: 14,
-                          color: colors.warning,
-                        ),
-                        const SizedBox(width: IdeSpacing.space6),
-                        Expanded(
-                          child: Text(
-                            '当前为只读的自定义模式，可选择内置模式覆盖。',
-                            style: textStyles.bodySmall.copyWith(
-                              color: colors.textSecondary,
-                            ),
+          child: _ComposerSelectPopup<AgentConversationModeId>(
+            value: selectedMode,
+            onChanged: (mode, selected) {
+              if (!selected) {
+                return false;
+              }
+              final preset = presets
+                  .where((candidate) => candidate.id == mode)
+                  .firstOrNull;
+              if (preset == null || !preset.isSelectable) {
+                return false;
+              }
+              onSelect(preset);
+              return true;
+            },
+            items: <Widget>[
+              if (unknownMode) ...[
+                Padding(
+                  key: const ValueKey('agent-mode-unknown-notice'),
+                  padding: const EdgeInsets.fromLTRB(
+                    IdeSpacing.space10,
+                    IdeSpacing.space6,
+                    IdeSpacing.space10,
+                    IdeSpacing.space8,
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.info_outline_rounded,
+                        size: 14,
+                        color: colors.warning,
+                      ),
+                      const SizedBox(width: IdeSpacing.space6),
+                      Expanded(
+                        child: Text(
+                          '当前为只读的自定义模式，可选择内置模式覆盖。',
+                          style: textStyles.bodySmall.copyWith(
+                            color: colors.textSecondary,
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  Divider(height: 1, thickness: 1, color: colors.borderSubtle),
-                ],
-                for (final preset in presets)
-                  sf.SelectItemButton<AgentConversationModeId>(
-                    key: ValueKey<String>(
-                      'agent-mode-option-${preset.id.rawValue}',
-                    ),
-                    value: preset.id,
-                    enabled: preset.isSelectable,
-                    child: Semantics(
-                      label:
-                          '${_agentModePresetLabel(preset)}，'
-                          '${preset.id == selectedMode
-                              ? '已选择'
-                              : preset.isSelectable
-                              ? '可选择'
-                              : '不可选择'}',
-                      child: Text(
-                        _agentModePresetLabel(preset),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: textStyles.bodyMedium.copyWith(
-                          color: preset.isSelectable
-                              ? colors.textPrimary
-                              : colors.textTertiary,
-                          fontWeight: preset.id == selectedMode
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                        ),
+                ),
+                Divider(height: 1, thickness: 1, color: colors.borderSubtle),
+              ],
+              for (final preset in presets)
+                sf.SelectItemButton<AgentConversationModeId>(
+                  key: ValueKey<String>(
+                    'agent-mode-option-${preset.id.rawValue}',
+                  ),
+                  value: preset.id,
+                  enabled: preset.isSelectable,
+                  child: Semantics(
+                    label:
+                        '${_agentModePresetLabel(preset)}，'
+                        '${preset.id == selectedMode
+                            ? '已选择'
+                            : preset.isSelectable
+                            ? '可选择'
+                            : '不可选择'}',
+                    child: Text(
+                      _agentModePresetLabel(preset),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: textStyles.bodyMedium.copyWith(
+                        color: preset.isSelectable
+                            ? colors.textPrimary
+                            : colors.textTertiary,
+                        fontWeight: preset.id == selectedMode
+                            ? FontWeight.w600
+                            : FontWeight.w400,
                       ),
                     ),
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
         ),
       ),

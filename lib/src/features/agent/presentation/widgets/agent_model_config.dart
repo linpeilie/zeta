@@ -462,8 +462,10 @@ class _ComposerSelectorTrigger extends StatelessWidget {
 
 /// Composer 选择器共用弹层表面。
 ///
-/// 使用与未展开触发器相同的面板色和小圆角，只保留细边界用于
-/// 区分 overlay，避免弹层呈现为另一套重卡片视觉。
+/// 与 [sf.SelectPopup] 自带卡统一：同一张 shadcn surface 卡（底色
+/// `colorScheme.card`、1px muted 边框、零内边距），避免选择弹层再叠一层
+/// 独立卡片造成「两层」视觉。非 SelectPopup 的 picker（skill/mention/
+/// slash/model 列表）使用本表面，与 SelectPopup 路径视觉一致。
 class _ComposerSelectorPanel extends StatelessWidget {
   const _ComposerSelectorPanel({required this.child});
 
@@ -471,12 +473,9 @@ class _ComposerSelectorPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    return PanelCard(
-      color: colors.panel,
-      borderColor: colors.borderSubtle,
-      borderRadius: IdeRadius.allSmall,
-      boxShadow: const <BoxShadow>[],
+    return sf.Card(
+      padding: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
       child: child,
     );
   }

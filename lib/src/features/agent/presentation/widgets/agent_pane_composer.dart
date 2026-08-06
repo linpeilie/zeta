@@ -1446,45 +1446,41 @@ class _PermissionOptionPopover extends StatelessWidget {
         width: width,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: maxHeight),
-          child: _ComposerSelectorPanel(
-            child: _ComposerSelectPopup<AgentPermissionOption>(
-              value: selectedOption,
-              onChanged: (option, selected) {
-                // 保持旧行为：点击当前项也先通知业务层，再由 Select 关层。
-                if (option.allowed) {
-                  onSelect(option);
-                }
-                return option.allowed;
-              },
-              items: <Widget>[
-                for (final option in options)
-                  sf.SelectItemButton<AgentPermissionOption>(
-                    key: ValueKey<String>(
-                      'agent-permission-option-${option.id}',
-                    ),
-                    value: option,
-                    enabled: option.allowed ? null : false,
-                    child: Semantics(
-                      label:
-                          '${option.label}'
-                          '${option.allowed ? '' : '，不可用'}'
-                          '${option.id == selectedOptionId ? '，已选择' : ''}',
-                      child: Text(
-                        option.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: textStyles.bodySmall.copyWith(
-                          color: option.allowed
-                              ? colors.textPrimary
-                              : colors.textTertiary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                        ),
+          child: _ComposerSelectPopup<AgentPermissionOption>(
+            value: selectedOption,
+            onChanged: (option, selected) {
+              // 保持旧行为：点击当前项也先通知业务层，再由 Select 关层。
+              if (option.allowed) {
+                onSelect(option);
+              }
+              return option.allowed;
+            },
+            items: <Widget>[
+              for (final option in options)
+                sf.SelectItemButton<AgentPermissionOption>(
+                  key: ValueKey<String>('agent-permission-option-${option.id}'),
+                  value: option,
+                  enabled: option.allowed ? null : false,
+                  child: Semantics(
+                    label:
+                        '${option.label}'
+                        '${option.allowed ? '' : '，不可用'}'
+                        '${option.id == selectedOptionId ? '，已选择' : ''}',
+                    child: Text(
+                      option.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textStyles.bodySmall.copyWith(
+                        color: option.allowed
+                            ? colors.textPrimary
+                            : colors.textTertiary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
         ),
       ),
