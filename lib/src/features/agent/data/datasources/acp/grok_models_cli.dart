@@ -27,7 +27,7 @@ class GrokModelsCli {
   Future<AgentModelList> listModels(AgentProviderConfig config) async {
     final resolved = await locator.locate(config);
     if (resolved == null) {
-      _log.warning('Could not locate Grok CLI for models list');
+      _log.w('Could not locate Grok CLI for models list');
       return const AgentModelList(models: <AgentModelInfo>[]);
     }
 
@@ -41,7 +41,7 @@ class GrokModelsCli {
         },
       );
       if (result.exitCode != 0) {
-        _log.warning(
+        _log.w(
           'grok models exited with ${result.exitCode} '
           '(${result.stderr.toString().length} stderr characters)',
         );
@@ -49,7 +49,7 @@ class GrokModelsCli {
       }
       return parseModelsOutput(result.stdout.toString());
     } catch (error, stackTrace) {
-      _log.warning('Could not run grok models', error, stackTrace);
+      _log.w('Could not run grok models', error: error, stackTrace: stackTrace);
       return const AgentModelList(models: <AgentModelInfo>[]);
     }
   }

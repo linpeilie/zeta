@@ -15,7 +15,7 @@ class _CodexThreadHistoryReader {
 
     final file = File(path);
     if (!await file.exists()) {
-      _log.fine('Session file missing for thread $threadId: $path');
+      _log.t('Session file missing for thread $threadId: $path');
       return null;
     }
 
@@ -33,17 +33,17 @@ class _CodexThreadHistoryReader {
         parser.consumeLine(line);
       }
     } on FileSystemException catch (error, stackTrace) {
-      _log.warning(
+      _log.w(
         'Could not read Codex session file for thread $threadId: $path',
-        error,
-        stackTrace,
+        error: error,
+        stackTrace: stackTrace,
       );
       return null;
     }
 
     final snapshot = parser.build();
     if (snapshot.turns.isEmpty) {
-      _log.fine('Session file had no displayable history for thread $threadId');
+      _log.t('Session file had no displayable history for thread $threadId');
       return null;
     }
     return snapshot;

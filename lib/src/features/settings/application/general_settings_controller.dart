@@ -80,7 +80,11 @@ class GeneralSettingsController extends ChangeNotifier {
     try {
       await store.save(value);
     } catch (error, stackTrace) {
-      _log.warning('Could not persist general settings', error, stackTrace);
+      _log.w(
+        'Could not persist general settings',
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
     _notify();
   }

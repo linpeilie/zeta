@@ -3,21 +3,26 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:logging/logging.dart';
+import 'package:logger/logger.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
 
 void main() {
   group('JsonRpcStdioTransport', () {
-    final records = <LogRecord>[];
+    final records = <LogEvent>[];
+    late OutputCallback outputListener;
 
     setUp(() async {
       records.clear();
       await resetAppLoggingForTesting();
-      configureAppLogging(level: Level.ALL, sink: records.add);
+      outputListener = (event) => records.add(event.origin);
+      Logger.addOutputListener(outputListener);
+      Logger.level = Level.all;
+      configureAppLogging();
     });
 
     tearDown(() async {
+      Logger.removeOutputListener(outputListener);
       await resetAppLoggingForTesting();
     });
 
@@ -99,10 +104,7 @@ void main() {
         expect(await stderrFuture, 'stderr: ping');
         await transport.close();
 
-        final messages = records
-            .where((record) => record.loggerName == 'zeta.agent.json_rpc_stdio')
-            .map((record) => record.message)
-            .toList();
+        final messages = records.map((record) => record.message).toList();
         expect(
           messages,
           anyElement(

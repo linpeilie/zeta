@@ -76,7 +76,7 @@ ProcessStarter grokProcessStarter(
       modelId: modelIdResolver?.call(),
       reasoningEffort: reasoningEffortResolver?.call(),
     );
-    _log.info('Grok CLI executable resolved');
+    _log.i('Grok CLI executable resolved');
     return (delegate ?? Process.start)(
       command.executable,
       command.arguments,

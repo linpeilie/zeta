@@ -1,75 +1,76 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:logging/logging.dart';
+import 'package:logger/logger.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 
 void main() {
   group('app logging', () {
-    final records = <LogRecord>[];
+    final events = <LogEvent>[];
     late Directory logDirectory;
+    late OutputCallback outputListener;
 
     setUp(() async {
-      records.clear();
+      events.clear();
       await resetAppLoggingForTesting();
+      outputListener = (event) => events.add(event.origin);
+      Logger.addOutputListener(outputListener);
       logDirectory = await Directory.systemTemp.createTemp(
         'zeta-app-logging-test-',
       );
     });
 
     tearDown(() async {
+      Logger.removeOutputListener(outputListener);
       await resetAppLoggingForTesting();
       if (await logDirectory.exists()) {
         await logDirectory.delete(recursive: true);
       }
     });
 
-    test('forwards log records to the configured sink', () async {
-      configureAppLogging(level: Level.ALL, sink: records.add);
+    test('forwards log events to the configured listener', () async {
+      configureAppLogging();
+      Logger.level = Level.all;
 
-      loggerFor('zeta.test').info('hello logger');
+      loggerFor('zeta.test').i('hello logger');
       await Future<void>.delayed(Duration.zero);
 
-      expect(records, hasLength(1));
-      expect(records.single.loggerName, 'zeta.test');
-      expect(records.single.level, Level.INFO);
-      expect(records.single.message, 'hello logger');
+      expect(events, hasLength(1));
+      expect(events.single.level, Level.info);
+      expect(events.single.message, '[zeta] [zeta.test] hello logger');
     });
 
-    test('an explicit sink takes precedence over the file sink', () async {
-      configureAppLogging(
-        level: Level.ALL,
-        sink: records.add,
-        logDirectory: logDirectory,
-      );
+    test('no file is written when logDirectory is omitted', () async {
+      configureAppLogging();
 
-      loggerFor('zeta.test').info('custom sink only');
+      loggerFor('zeta.test').i('console only');
       await resetAppLoggingForTesting();
 
-      expect(records, hasLength(1));
+      expect(events, hasLength(1));
       expect(await logDirectory.list().isEmpty, isTrue);
     });
 
-    test('filters records below the configured level', () async {
-      configureAppLogging(level: Level.WARNING, sink: records.add);
-      final logger = loggerFor('zeta.test');
+    test('filters events below the configured level', () async {
+      configureAppLogging();
+      Logger.level = Level.warning;
 
-      logger.info('hidden');
-      logger.warning('visible');
+      final logger = loggerFor('zeta.test');
+      logger.i('hidden');
+      logger.w('visible');
       await Future<void>.delayed(Duration.zero);
 
-      expect(records, hasLength(1));
-      expect(records.single.message, 'visible');
+      expect(events, hasLength(1));
+      expect(events.single.message, '[zeta] [zeta.test] visible');
     });
 
-    test('reconfiguration does not duplicate records', () async {
-      configureAppLogging(level: Level.ALL, sink: records.add);
-      configureAppLogging(level: Level.ALL, sink: records.add);
+    test('reconfiguration does not duplicate events', () async {
+      configureAppLogging();
+      configureAppLogging();
 
-      loggerFor('zeta.test').info('once');
+      loggerFor('zeta.test').i('once');
       await Future<void>.delayed(Duration.zero);
 
-      expect(records, hasLength(1));
+      expect(events, hasLength(1));
     });
 
     test('appends records to the local-date daily log file', () async {
@@ -78,10 +79,10 @@ void main() {
         '${Platform.pathSeparator}logs',
       );
       final before = DateTime.now().toLocal();
-      configureAppLogging(level: Level.ALL, logDirectory: nestedLogDirectory);
+      configureAppLogging(logDirectory: nestedLogDirectory);
 
-      loggerFor('zeta.test').info('first record');
-      loggerFor('zeta.test').warning('second record');
+      loggerFor('zeta.test').i('first record');
+      loggerFor('zeta.test').w('second record');
       final after = DateTime.now().toLocal();
       await flushAppLogging();
 
@@ -104,18 +105,20 @@ void main() {
           matches(
             RegExp(
               r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} '
-              r'\[(INFO|WARNING)\] \[zeta\.test\] ',
+              r'\[(info|warning)\] \[zeta\] \[zeta\.test\] ',
             ),
           ),
         ),
       );
+      expect(firstRun, contains('[zeta] [zeta.test] first record'));
+      expect(firstRun, isNot(contains('[zeta] [zeta]')));
       expect(
         firstRun.indexOf('first record'),
         lessThan(firstRun.indexOf('second record')),
       );
 
-      configureAppLogging(level: Level.ALL, logDirectory: nestedLogDirectory);
-      loggerFor('zeta.test').info('third record');
+      configureAppLogging(logDirectory: nestedLogDirectory);
+      loggerFor('zeta.test').i('third record');
       await resetAppLoggingForTesting();
 
       final secondRun = await files.single.readAsString();
@@ -129,15 +132,15 @@ void main() {
           Platform.environment[Platform.isWindows ? 'USERPROFILE' : 'HOME'];
       expect(home, isNotNull);
       expect(home, isNotEmpty);
-      configureAppLogging(level: Level.ALL, logDirectory: logDirectory);
+      configureAppLogging(logDirectory: logDirectory);
 
-      loggerFor('zeta.test').warning(
+      loggerFor('zeta.test').w(
         'Authorization: Basic dXNlcjpwYXNz\n'
         'Proxy-Authorization: Bearer abc.def.ghi\n'
         'authorization=Basic c2Vjb25kLXNlY3JldA==\n'
         'token=message-secret path=$home/project',
-        StateError('password=error-secret'),
-        StackTrace.fromString(
+        error: StateError('password=error-secret'),
+        stackTrace: StackTrace.fromString(
           'frame at $home/source.dart:10\napi_key=stack-secret',
         ),
       );
@@ -162,6 +165,7 @@ void main() {
       expect(content, isNot(contains('message-secret')));
       expect(content, isNot(contains('error-secret')));
       expect(content, isNot(contains('stack-secret')));
+      expect(content, isNot(contains('\x1B[')));
       expect(content, isNot(contains(home!)));
       expect('\n'.allMatches(content), hasLength(1));
     });

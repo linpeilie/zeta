@@ -51,7 +51,7 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
         return _createLease(existing);
       }
 
-      _log.fine('Creating application Agent provider: ${config.id}');
+      _log.t('Creating application Agent provider: ${config.id}');
       final provider = providerFactory.create(config);
       if (provider.config.id != config.id) {
         // 测试/嵌入宿主的简化 factory 可能为不同配置返回同一对象；若该对象已由
@@ -60,11 +60,11 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
           try {
             await provider.dispose();
           } catch (error, stackTrace) {
-            _log.warning(
+            _log.w(
               'Could not dispose mismatched Agent provider '
               '${provider.config.id}',
-              error,
-              stackTrace,
+              error: error,
+              stackTrace: stackTrace,
             );
           }
         }
@@ -197,10 +197,10 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
       Object error,
       StackTrace stackTrace,
     ) {
-      _log.warning(
+      _log.w(
         'Could not close Agent provider ${entry.provider.config.id}',
-        error,
-        stackTrace,
+        error: error,
+        stackTrace: stackTrace,
       );
     });
     entry.disposeFuture = future;

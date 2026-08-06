@@ -1056,11 +1056,9 @@ class AgentConversationViewModel {
           message: '$activeProviderName ready',
         );
       }
-      _log.fine('Loaded Agent provider settings: $activeProviderId');
+      _log.t('Loaded Agent provider settings: $activeProviderId');
     } catch (error) {
-      _log.warning(
-        'Could not load Agent provider settings (${error.runtimeType})',
-      );
+      _log.w('Could not load Agent provider settings (${error.runtimeType})');
       _status = AgentProviderStatus(
         state: AgentProviderConnectionState.error,
         message: 'Could not load Agent providers',
@@ -1099,9 +1097,7 @@ class AgentConversationViewModel {
     );
     final bootstrapPolicy = capabilities.bootstrapPolicy;
     if (!bootstrapPolicy.allowsEagerModelPreload) {
-      _log.fine(
-        'Deferring ${config.displayName} preload until session bootstrap',
-      );
+      _log.t('Deferring ${config.displayName} preload until session bootstrap');
       _publishUiChanges(
         AgentUiUpdateRequest(
           regions: const <AgentUiRegion>{AgentUiRegion.composer},
@@ -1112,7 +1108,7 @@ class AgentConversationViewModel {
     }
     final hasWorkspace = _projectPath?.trim().isNotEmpty ?? false;
     if (bootstrapPolicy.requiresWorkspace && !hasWorkspace) {
-      _log.fine(
+      _log.t(
         'Deferring ${config.displayName} preload until a workspace is ready',
       );
       _publishUiChanges(
@@ -1155,7 +1151,7 @@ class AgentConversationViewModel {
       }
       await _permissionSelectionController.refreshOptions();
     } catch (error) {
-      _log.warning('Could not preload Agent models (${error.runtimeType})');
+      _log.w('Could not preload Agent models (${error.runtimeType})');
       _modelRefreshError = '模型列表刷新失败，已保留现有配置。';
     } finally {
       _modelsRefreshing = false;
@@ -1231,9 +1227,7 @@ class AgentConversationViewModel {
         ),
       );
     } catch (error) {
-      _log.warning(
-        'Could not approve guardian-denied action (${error.runtimeType})',
-      );
+      _log.w('Could not approve guardian-denied action (${error.runtimeType})');
     }
   }
 
@@ -1266,7 +1260,7 @@ class AgentConversationViewModel {
         value: value,
       );
     } catch (error) {
-      _log.warning(
+      _log.w(
         'Could not update Agent session config $configId '
         '(${error.runtimeType})',
       );
@@ -1633,7 +1627,7 @@ class AgentConversationViewModel {
         ? restoredSessionId
         : null;
     if (!canRestoreSession) {
-      _log.warning(
+      _log.w(
         'Ignoring restored Agent session $restoredSessionId without provider ownership',
       );
     }
@@ -1855,7 +1849,7 @@ class AgentConversationViewModel {
           ),
         );
       }
-      _log.info('Sending Agent request with provider ${provider.config.id}');
+      _log.i('Sending Agent request with provider ${provider.config.id}');
       if (isNewTurn) {
         providerOperation = 'conversation/sendMessage';
         final turn = await conversation.sendMessage(
@@ -1999,7 +1993,7 @@ class AgentConversationViewModel {
     if (turnId == null || sessionId == null || provider == null) {
       return;
     }
-    _log.info('Cancelling Agent turn $turnId');
+    _log.i('Cancelling Agent turn $turnId');
     await provider.bundle.conversation.cancelTurn(
       AgentTurn(id: turnId, sessionId: sessionId),
     );
@@ -2064,7 +2058,7 @@ class AgentConversationViewModel {
         if (!_isCurrentSwitch(switchToken)) {
           return;
         }
-        _log.warning(
+        _log.w(
           'Could not switch provider to ${thread.providerId} for thread '
           '${thread.id} (${error.runtimeType})',
         );
@@ -2193,7 +2187,7 @@ class AgentConversationViewModel {
         return;
       }
       _threadOpenPhase = AgentThreadOpenPhase.openFailed;
-      _log.warning(
+      _log.w(
         'Could not load Agent thread history ${thread.id} '
         '(${error.runtimeType})',
       );
@@ -2228,7 +2222,7 @@ class AgentConversationViewModel {
         urgency: AgentUiUpdateUrgency.immediate,
       ),
     );
-    _log.info(
+    _log.i(
       'Responding to Agent permission ${request.kind.name}: approved=$approved',
     );
     final interactions = _provider?.bundle.interactions;
@@ -2270,7 +2264,7 @@ class AgentConversationViewModel {
         urgency: AgentUiUpdateUrgency.immediate,
       ),
     );
-    _log.info(
+    _log.i(
       'Responding to Agent question '
       '(${answers.length} answered questions)',
     );
@@ -2401,7 +2395,7 @@ class AgentConversationViewModel {
       if (!_isCurrentSwitch(switchToken)) {
         return;
       }
-      _log.warning(
+      _log.w(
         'Could not create branch and retry thread $threadId '
         '(${error.runtimeType})',
       );
@@ -2454,7 +2448,7 @@ class AgentConversationViewModel {
       );
       return session;
     } catch (error) {
-      _log.warning('Could not fork thread $threadId (${error.runtimeType})');
+      _log.w('Could not fork thread $threadId (${error.runtimeType})');
       _markError('Could not fork thread', details: error.toString());
       return null;
     }
@@ -2497,7 +2491,7 @@ class AgentConversationViewModel {
           ),
         );
       }
-      _log.warning('Could not rename thread $threadId (${error.runtimeType})');
+      _log.w('Could not rename thread $threadId (${error.runtimeType})');
       _markError('Could not rename thread', details: error.toString());
     }
   }
@@ -2518,7 +2512,7 @@ class AgentConversationViewModel {
       }
       await threadMutations.archiveThread(threadId);
     } catch (error) {
-      _log.warning('Could not archive thread $threadId (${error.runtimeType})');
+      _log.w('Could not archive thread $threadId (${error.runtimeType})');
       _markError('Could not archive thread', details: error.toString());
     }
   }
@@ -2714,7 +2708,7 @@ class AgentConversationViewModel {
     }
 
     if (!identical(_provider, provider)) {
-      _log.fine('Using shared Agent provider: ${provider.config.id}');
+      _log.t('Using shared Agent provider: ${provider.config.id}');
       _provider = provider;
       _modelSelectionController.bindProvider(provider);
       _permissionSelectionController.bind(
@@ -2800,7 +2794,7 @@ class AgentConversationViewModel {
     if (!enabled) {
       throw StateError('Provider $providerId is not enabled');
     }
-    _log.info(
+    _log.i(
       'Rebinding active provider to $providerId without clearing conversation',
     );
     _invalidateProviderEventListener();
@@ -2874,7 +2868,7 @@ class AgentConversationViewModel {
     final restoredSessionId = _restoredSessionId;
     if (restoredSessionId != null) {
       try {
-        _log.fine('Resuming Agent session $restoredSessionId');
+        _log.t('Resuming Agent session $restoredSessionId');
         final session = await provider.bundle.conversation.resumeSession(
           restoredSessionId,
           context: context,
@@ -2909,7 +2903,7 @@ class AgentConversationViewModel {
         }
         return session;
       } catch (error) {
-        _log.warning(
+        _log.w(
           'Could not resume Agent session $restoredSessionId '
           '(${error.runtimeType})',
         );
@@ -2926,7 +2920,7 @@ class AgentConversationViewModel {
       }
     }
 
-    _log.fine('Starting new Agent session with provider ${provider.config.id}');
+    _log.t('Starting new Agent session with provider ${provider.config.id}');
     final session = await provider.bundle.conversation.startSession(
       context: context,
       permissionSnapshot: permissionSnapshot,
@@ -3013,9 +3007,7 @@ class AgentConversationViewModel {
         _eventProcessor.process(event);
       },
       onSourceError: (error, _) {
-        _log.warning(
-          'Agent provider event stream failed (${error.runtimeType})',
-        );
+        _log.w('Agent provider event stream failed (${error.runtimeType})');
       },
       onDone: () {
         if (!identical(_eventPipeline, pipeline)) {
@@ -3025,7 +3017,7 @@ class AgentConversationViewModel {
         if (_disposed || !identical(_provider, provider)) {
           return;
         }
-        _log.warning(
+        _log.w(
           'Agent provider event stream closed '
           '(provider: ${provider.config.id}, thread: ${threadId ?? 'detached'})',
         );
@@ -3036,7 +3028,7 @@ class AgentConversationViewModel {
       replaces: previous,
       onBackpressure: (pendingEventCount) {
         // 诊断仅记录键数量，不泄露对话或工具输出正文。
-        _log.warning(
+        _log.w(
           'Flushing Agent event buffer after backpressure '
           '(pending keys: $pendingEventCount)',
         );
@@ -3324,7 +3316,7 @@ class AgentConversationViewModel {
       }
       await threadCatalog.unsubscribeThread(threadId);
     } catch (error) {
-      _log.warning(
+      _log.w(
         'Could not unsubscribe Agent thread $threadId '
         '(${error.runtimeType})',
       );

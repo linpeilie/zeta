@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:logging/logging.dart';
+import 'package:logger/logger.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
@@ -2775,9 +2775,10 @@ void main() {
     });
 
     test('logs normalized error events for every provider', () async {
-      final records = <LogRecord>[];
-      final subscription = Logger.root.onRecord.listen(records.add);
-      addTearDown(subscription.cancel);
+      final records = <LogEvent>[];
+      final listener = records.add;
+      Logger.addLogListener(listener);
+      addTearDown(() => Logger.removeLogListener(listener));
       final provider = _FakeAgentProvider();
       final viewModel = _createViewModel(provider);
       addTearDown(viewModel.dispose);
@@ -2821,9 +2822,10 @@ void main() {
     });
 
     test('logs exceptions thrown by any provider conversation call', () async {
-      final records = <LogRecord>[];
-      final subscription = Logger.root.onRecord.listen(records.add);
-      addTearDown(subscription.cancel);
+      final records = <LogEvent>[];
+      final listener = records.add;
+      Logger.addLogListener(listener);
+      addTearDown(() => Logger.removeLogListener(listener));
       final error = StateError('request failed token=operation-secret');
       final provider = _FakeAgentProvider(sendError: error);
       final viewModel = _createViewModel(provider);
@@ -4769,7 +4771,7 @@ class _ConversationModelCatalogStore implements AgentModelCatalogCacheStore {
 }
 
 Map<String, Object?> _structuredLogContext(
-  LogRecord record, {
+  LogEvent record, {
   required String prefix,
 }) {
   return jsonDecode(record.message.substring(prefix.length))

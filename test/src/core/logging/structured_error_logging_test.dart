@@ -1,15 +1,16 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:logging/logging.dart';
+import 'package:logger/logger.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/core/logging/structured_error_logging.dart';
 
 void main() {
   test('writes structured diagnostics with recursive redaction', () async {
-    final records = <LogRecord>[];
-    final subscription = Logger.root.onRecord.listen(records.add);
-    addTearDown(subscription.cancel);
+    final events = <LogEvent>[];
+    final listener = events.add;
+    Logger.addLogListener(listener);
+    addTearDown(() => Logger.removeLogListener(listener));
     final error = _DiagnosticException();
     final stackTrace = StackTrace.current;
 
@@ -27,12 +28,12 @@ void main() {
     );
     await Future<void>.delayed(Duration.zero);
 
-    final record = records.single;
-    const prefix = 'Provider operation failed: ';
+    final record = events.single;
+    const prefix = '[zeta] [zeta.test.provider] Provider operation failed: ';
     final context =
         jsonDecode(record.message.substring(prefix.length))
             as Map<String, Object?>;
-    expect(record.level, Level.WARNING);
+    expect(record.level, Level.warning);
     expect(record.error, same(error));
     expect(record.stackTrace, same(stackTrace));
     expect(context['providerId'], 'provider-a');

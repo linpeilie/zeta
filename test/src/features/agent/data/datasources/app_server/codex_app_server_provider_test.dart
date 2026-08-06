@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:logging/logging.dart';
+import 'package:logger/logger.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_permission_migration.dart';
@@ -718,10 +718,17 @@ void main() {
 
     test('does not log realtime notifications and server requests', () async {
       const privateCodexHome = r'C:\private\codex-home-sentinel';
-      final records = <LogRecord>[];
+      final records = <LogEvent>[];
+      late OutputCallback logListener;
+      logListener = (event) => records.add(event.origin);
       await resetAppLoggingForTesting();
-      configureAppLogging(level: Level.ALL, sink: records.add);
-      addTearDown(resetAppLoggingForTesting);
+      Logger.addOutputListener(logListener);
+      Logger.level = Level.all;
+      configureAppLogging();
+      addTearDown(() {
+        Logger.removeOutputListener(logListener);
+        return resetAppLoggingForTesting();
+      });
 
       final peer = _FakeJsonRpcPeer(
         initializeResponse: const <String, Object?>{
@@ -760,11 +767,7 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       final fineMessages = records
-          .where(
-            (record) =>
-                record.loggerName == 'zeta.agent.codex_app_server' &&
-                record.level == Level.FINE,
-          )
+          .where((record) => record.level == Level.trace)
           .map((record) => record.message)
           .toList();
 
@@ -792,10 +795,17 @@ void main() {
     });
 
     test('logs every unmatched notification and counts occurrences', () async {
-      final records = <LogRecord>[];
+      final records = <LogEvent>[];
+      late OutputCallback logListener;
+      logListener = (event) => records.add(event.origin);
       await resetAppLoggingForTesting();
-      configureAppLogging(level: Level.ALL, sink: records.add);
-      addTearDown(resetAppLoggingForTesting);
+      Logger.addOutputListener(logListener);
+      Logger.level = Level.all;
+      configureAppLogging();
+      addTearDown(() {
+        Logger.removeOutputListener(logListener);
+        return resetAppLoggingForTesting();
+      });
 
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
@@ -826,8 +836,7 @@ void main() {
       final unmatchedFineMessages = records
           .where(
             (record) =>
-                record.loggerName == 'zeta.agent.codex_app_server' &&
-                record.level == Level.FINE &&
+                record.level == Level.trace &&
                 record.message.contains(
                   'Ignoring unmatched Codex notification',
                 ),
@@ -837,8 +846,7 @@ void main() {
       final skillsChangedMessages = records
           .where(
             (record) =>
-                record.loggerName == 'zeta.agent.codex_app_server' &&
-                record.level == Level.FINE &&
+                record.level == Level.trace &&
                 record.message.contains('skills/changed received'),
           )
           .map((record) => record.message)
@@ -859,10 +867,17 @@ void main() {
     test(
       'logs provider-filtered notifications without creating events',
       () async {
-        final records = <LogRecord>[];
+        final records = <LogEvent>[];
+        late OutputCallback logListener;
+        logListener = (event) => records.add(event.origin);
         await resetAppLoggingForTesting();
-        configureAppLogging(level: Level.ALL, sink: records.add);
-        addTearDown(resetAppLoggingForTesting);
+        Logger.addOutputListener(logListener);
+        Logger.level = Level.all;
+        configureAppLogging();
+        addTearDown(() {
+          Logger.removeOutputListener(logListener);
+          return resetAppLoggingForTesting();
+        });
 
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
@@ -885,11 +900,7 @@ void main() {
         await Future<void>.delayed(Duration.zero);
 
         final codexFineMessages = records
-            .where(
-              (record) =>
-                  record.loggerName == 'zeta.agent.codex_app_server' &&
-                  record.level == Level.FINE,
-            )
+            .where((record) => record.level == Level.trace)
             .map((record) => record.message)
             .toList();
 
@@ -914,10 +925,17 @@ void main() {
     test(
       'logs malformed thread and unsupported live item details safely',
       () async {
-        final records = <LogRecord>[];
+        final records = <LogEvent>[];
+        late OutputCallback logListener;
+        logListener = (event) => records.add(event.origin);
         await resetAppLoggingForTesting();
-        configureAppLogging(level: Level.ALL, sink: records.add);
-        addTearDown(resetAppLoggingForTesting);
+        Logger.addOutputListener(logListener);
+        Logger.level = Level.all;
+        configureAppLogging();
+        addTearDown(() {
+          Logger.removeOutputListener(logListener);
+          return resetAppLoggingForTesting();
+        });
 
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
@@ -958,8 +976,7 @@ void main() {
         final ignoredFineMessages = records
             .where(
               (record) =>
-                  record.loggerName == 'zeta.agent.codex_app_server' &&
-                  record.level == Level.FINE &&
+                  record.level == Level.trace &&
                   record.message.contains('Ignoring Codex notification'),
             )
             .map((record) => record.message)

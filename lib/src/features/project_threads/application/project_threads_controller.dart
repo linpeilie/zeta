@@ -687,10 +687,10 @@ class ProjectThreadsController {
         ),
       );
     } catch (error, stackTrace) {
-      _log.warning(
+      _log.w(
         'Could not load threads for $projectPath',
-        error,
-        stackTrace,
+        error: error,
+        stackTrace: stackTrace,
       );
       if (_loadTokens[projectPath] != token) {
         return;
@@ -747,10 +747,10 @@ class ProjectThreadsController {
           );
           threadsByProviderId[config.id] = collected;
         } catch (error, stackTrace) {
-          _log.warning(
+          _log.w(
             'Could not list threads from ${config.id}',
-            error,
-            stackTrace,
+            error: error,
+            stackTrace: stackTrace,
           );
           failures.add(config.displayName);
         } finally {
@@ -780,7 +780,7 @@ class ProjectThreadsController {
       for (final config in enabled)
         '${config.id}:${threadsByProviderId[config.id]?.length ?? 0}',
     ].join(',');
-    _log.info(
+    _log.i(
       'Aggregated project threads for $projectPath '
       'providers=[$counts] total=${merged.length} offset=$offset '
       'page=${pageThreads.length} next=${nextCursor != null}',
@@ -928,10 +928,10 @@ class ProjectThreadsController {
         )) {
           return;
         }
-        _log.warning(
+        _log.w(
           'Project thread provider event stream failed',
-          error,
-          stackTrace,
+          error: error,
+          stackTrace: stackTrace,
         );
       },
       onDone: () {
@@ -987,10 +987,10 @@ class ProjectThreadsController {
       try {
         await providerController.setActiveProvider(ownerId);
       } catch (error, stackTrace) {
-        _log.warning(
+        _log.w(
           'Could not switch active provider to $ownerId for thread $threadId',
-          error,
-          stackTrace,
+          error: error,
+          stackTrace: stackTrace,
         );
       }
     }

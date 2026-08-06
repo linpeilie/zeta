@@ -64,7 +64,7 @@ class _CodexAppServerClient {
     );
     final mapping = _collaborationModeMapper.catalogFromResult(result);
     if (mapping.invalidEntryCount > 0 || mapping.duplicateEntryCount > 0) {
-      _log.fine(
+      _log.t(
         'Normalized Codex collaboration mode catalog '
         '(invalid=${mapping.invalidEntryCount}, '
         'duplicates=${mapping.duplicateEntryCount})',
@@ -86,7 +86,7 @@ class _CodexAppServerClient {
     );
     final mapping = _skillsMapper.catalogFromResult(result);
     if (mapping.invalidEntryCount > 0 || mapping.droppedSkillCount > 0) {
-      _log.fine(
+      _log.t(
         'Normalized Codex skills catalog '
         '(invalid=${mapping.invalidEntryCount}, '
         'dropped=${mapping.droppedSkillCount})',
@@ -273,11 +273,11 @@ class _CodexAppServerClient {
       );
     } catch (error, stackTrace) {
       if (localHistory != null) {
-        _log.fine(
+        _log.t(
           'thread/read failed while enriching local history for $threadId; '
           'keeping session-file snapshot',
-          error,
-          stackTrace,
+          error: error,
+          stackTrace: stackTrace,
         );
         return localHistory;
       }

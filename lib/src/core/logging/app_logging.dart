@@ -1,92 +1,210 @@
-import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:logging/logging.dart';
+import 'package:logger/logger.dart' as logger;
 
 import 'package:zeta/src/core/security/sensitive_data_redactor.dart';
 
-typedef AppLogSink = void Function(LogRecord record);
-
-StreamSubscription<LogRecord>? _rootLogSubscription;
-_DailyFileLogSink? _dailyFileLogSink;
-Future<void> _retiredFileLogDrain = Future<void>.value();
-
-/// 配置应用根日志。
+/// 统一的应用日志器。
 ///
-/// 未显式传入 [sink] 时保留 developer 日志，并在 [logDirectory] 非空时同时追加
-/// 每日文件日志。测试等调用方显式传入 [sink] 时只向该 sink 转发，沿用原有注入语义。
-void configureAppLogging({
-  Level? level,
-  AppLogSink? sink,
-  Directory? logDirectory,
-}) {
-  final previousSubscription = _rootLogSubscription;
-  _rootLogSubscription = null;
-  unawaited(previousSubscription?.cancel());
-  _retireDailyFileLogSink();
+/// 业务代码不直接依赖第三方 `logger` 实例；日志级别、格式化器、输出和
+/// 文件落盘策略都由 [configureAppLogging] 统一配置。每个实例只携带一个
+/// 稳定的 scope，方便在默认终端输出和文件日志中定位来源。
+final class AppLogger {
+  AppLogger._(this.name) : _logger = logger.Logger();
 
-  Logger.root.level = level ?? (kReleaseMode ? Level.WARNING : Level.ALL);
-  if (sink != null) {
-    _rootLogSubscription = Logger.root.onRecord.listen(sink);
-    return;
+  /// 当前日志器的稳定 scope。
+  final String name;
+  final logger.Logger _logger;
+
+  /// 记录 trace 级别日志。
+  void t(
+    dynamic message, {
+    DateTime? time,
+    Object? error,
+    StackTrace? stackTrace,
+  }) {
+    _logger.t(
+      _messageWithScope(message),
+      time: time,
+      error: error,
+      stackTrace: stackTrace,
+    );
   }
 
-  final dailyFileLogSink = logDirectory == null
-      ? null
-      : _DailyFileLogSink(logDirectory, initialBarrier: _retiredFileLogDrain);
-  _dailyFileLogSink = dailyFileLogSink;
-  _rootLogSubscription = Logger.root.onRecord.listen((record) {
-    _writeDeveloperLog(record);
-    dailyFileLogSink?.add(record);
-  });
+  /// 记录 debug 级别日志。
+  void d(
+    dynamic message, {
+    DateTime? time,
+    Object? error,
+    StackTrace? stackTrace,
+  }) {
+    _logger.d(
+      _messageWithScope(message),
+      time: time,
+      error: error,
+      stackTrace: stackTrace,
+    );
+  }
+
+  /// 记录 info 级别日志。
+  void i(
+    dynamic message, {
+    DateTime? time,
+    Object? error,
+    StackTrace? stackTrace,
+  }) {
+    _logger.i(
+      _messageWithScope(message),
+      time: time,
+      error: error,
+      stackTrace: stackTrace,
+    );
+  }
+
+  /// 记录 warning 级别日志。
+  void w(
+    dynamic message, {
+    DateTime? time,
+    Object? error,
+    StackTrace? stackTrace,
+  }) {
+    _logger.w(
+      _messageWithScope(message),
+      time: time,
+      error: error,
+      stackTrace: stackTrace,
+    );
+  }
+
+  /// 记录 error 级别日志。
+  void e(
+    dynamic message, {
+    DateTime? time,
+    Object? error,
+    StackTrace? stackTrace,
+  }) {
+    _logger.e(
+      _messageWithScope(message),
+      time: time,
+      error: error,
+      stackTrace: stackTrace,
+    );
+  }
+
+  /// 记录 fatal 级别日志。
+  void f(
+    dynamic message, {
+    DateTime? time,
+    Object? error,
+    StackTrace? stackTrace,
+  }) {
+    _logger.f(
+      _messageWithScope(message),
+      time: time,
+      error: error,
+      stackTrace: stackTrace,
+    );
+  }
+
+  /// 记录指定级别的日志。
+  void log(
+    logger.Level level,
+    dynamic message, {
+    DateTime? time,
+    Object? error,
+    StackTrace? stackTrace,
+  }) {
+    _logger.log(
+      level,
+      _messageWithScope(message),
+      time: time,
+      error: error,
+      stackTrace: stackTrace,
+    );
+  }
+
+  /// 关闭当前 logger 实例。
+  Future<void> close() => _logger.close();
+
+  /// 当前实例是否已关闭。
+  bool isClosed() => _logger.isClosed();
+
+  String _messageWithScope(dynamic message) {
+    final value = message is Function
+        ? Function.apply(message, const <Object?>[])
+        : message;
+    return '[zeta] [$name] $value';
+  }
 }
 
-/// 返回指定名称的应用日志器。
-Logger loggerFor(String name) => Logger(name);
+ZetaFileLogOutput? _fileLogOutput;
+Future<void> _retiredFileLogDrain = Future<void>.value();
 
-/// 等待已经进入文件 sink 的日志完成写入。
+/// 确保第三方 logger 的默认组件只在统一入口配置一次。
 ///
-/// 此方法不会停止接收新记录；应用退出应使用 [shutdownAppLogging]。
+/// 顶层 logger 会惰性初始化，不能依赖 import 副作用；因此由
+/// [loggerFor] 和 [configureAppLogging] 显式调用。
+bool _loggingDefaultsWired = false;
+
+void ensureLoggingDefaults() {
+  if (_loggingDefaultsWired) {
+    return;
+  }
+  _loggingDefaultsWired = true;
+  // 保留 logger 默认的 PrettyPrinter(colors: true) 和 ConsoleOutput()，
+  // 这里只替换 release 下会丢弃全部日志的默认 DevelopmentFilter。
+  logger.Logger.defaultFilter = () => _ZetaLogFilter();
+  logger.Logger.addOutputListener(_writeFileLog);
+}
+
+/// 配置应用日志。
+///
+/// 使用 logger 默认的 PrettyPrinter 和 ConsoleOutput 输出控制台日志；当
+/// [logDirectory] 非空时，同时按本地日期追加脱敏文件日志。未传入 [level]
+/// 时，debug/profile 保留全部日志，release 默认只保留 warning 及以上级别。
+void configureAppLogging({logger.Level? level, Directory? logDirectory}) {
+  ensureLoggingDefaults();
+  logger.Logger.level =
+      level ?? (kReleaseMode ? logger.Level.warning : logger.Level.all);
+  _retireFileLogOutput();
+  _fileLogOutput = logDirectory == null
+      ? null
+      : ZetaFileLogOutput(logDirectory, initialBarrier: _retiredFileLogDrain);
+}
+
+/// 返回指定 scope 的统一应用日志器。
+AppLogger loggerFor(String name) {
+  ensureLoggingDefaults();
+  return AppLogger._(_normalizeLoggerName(name));
+}
+
+/// 等待已经进入文件输出队列的日志完成写入。
 Future<void> flushAppLogging() async {
   await _retiredFileLogDrain;
-  await _dailyFileLogSink?.flush();
+  final output = _fileLogOutput;
+  if (output != null) {
+    await output.flush();
+  }
 }
 
-/// 停止接收新的根日志，并排空当前文件写入队列。
-///
-/// 仅用于应用正常退出；完成后需重新调用 [configureAppLogging] 才会恢复记录。
+/// 停止文件输出并等待已经排队的日志完成写入。
 Future<void> shutdownAppLogging() async {
-  final previousSubscription = _rootLogSubscription;
-  _rootLogSubscription = null;
-  await previousSubscription?.cancel();
-  _retireDailyFileLogSink();
+  _retireFileLogOutput();
   await _retiredFileLogDrain;
 }
 
-void _writeDeveloperLog(LogRecord record) {
-  developer.log(
-    '${_formatLogHeader(record)} ${record.message}',
-    time: record.time,
-    sequenceNumber: record.sequenceNumber,
-    level: record.level.value,
-    name: record.loggerName,
-    error: record.error,
-    stackTrace: record.stackTrace,
-  );
-}
-
-void _retireDailyFileLogSink() {
-  final previousSink = _dailyFileLogSink;
-  _dailyFileLogSink = null;
-  if (previousSink == null) {
+void _retireFileLogOutput() {
+  final previous = _fileLogOutput;
+  _fileLogOutput = null;
+  if (previous == null) {
     return;
   }
   final previousDrain = _retiredFileLogDrain;
   _retiredFileLogDrain = Future.wait<void>(<Future<void>>[
     previousDrain,
-    previousSink.close(),
+    previous.destroy(),
   ]);
 }
 
@@ -94,27 +212,47 @@ void _retireDailyFileLogSink() {
 Future<void> resetAppLoggingForTesting() async {
   await shutdownAppLogging();
   _retiredFileLogDrain = Future<void>.value();
-  Logger.root.level = Level.INFO;
+  logger.Logger.level = logger.Level.info;
 }
 
-class _DailyFileLogSink {
-  _DailyFileLogSink(this.logDirectory, {Future<void>? initialBarrier})
+/// 统一的过滤：按 [logger.Logger.level] 过滤，release 模式同样生效。
+///
+/// `logger` 包的默认 [logger.DevelopmentFilter] 会在 release 下丢弃全部日志，
+/// 这里改为仅按统一级别过滤，保证 warning/error 仍能进入正式日志。
+class _ZetaLogFilter extends logger.LogFilter {
+  @override
+  bool shouldLog(logger.LogEvent event) {
+    final currentLevel = level;
+    if (currentLevel == null) {
+      return true;
+    }
+    return event.level >= currentLevel;
+  }
+}
+
+void _writeFileLog(logger.OutputEvent event) {
+  _fileLogOutput?.add(event);
+}
+
+/// 按天轮转的文本文件输出。
+class ZetaFileLogOutput {
+  ZetaFileLogOutput(this.logDirectory, {Future<void>? initialBarrier})
     : _writeQueue = initialBarrier ?? Future<void>.value();
 
   final Directory logDirectory;
   Future<void> _writeQueue;
   bool _isClosed = false;
 
-  void add(LogRecord record) {
+  void add(logger.OutputEvent event) {
     if (_isClosed) {
       return;
     }
-    final fileName = _dailyLogFileName(record.time.toLocal());
-    final line = _formatFileLogRecord(record);
+    final fileName = _dailyLogFileName(event.origin.time.toLocal());
+    final line = _formatFileLogRecord(event);
     _writeQueue = _writeQueue
         .then((_) => _append(fileName: fileName, line: line))
         .catchError((Object error, StackTrace stackTrace) {
-          // 文件日志故障不能再次进入根 Logger，否则会递归触发同一个 sink。
+          // 文件日志故障不能再次进入根 logger，否则会递归触发同一个 sink。
           developer.log(
             'Could not write Zeta file log',
             name: 'zeta.logging.file',
@@ -124,12 +262,12 @@ class _DailyFileLogSink {
         });
   }
 
-  Future<void> close() async {
+  Future<void> flush() => _writeQueue;
+
+  Future<void> destroy() async {
     _isClosed = true;
     await _writeQueue;
   }
-
-  Future<void> flush() => _writeQueue;
 
   Future<void> _append({required String fileName, required String line}) async {
     await logDirectory.create(recursive: true);
@@ -147,20 +285,19 @@ String _dailyLogFileName(DateTime localTime) {
   return 'zeta-${localTime.year}-$month-$day.log';
 }
 
-String _formatFileLogRecord(LogRecord record) {
-  final message = _escapeLogValue(redactSensitiveText(record.message));
-  final buffer = StringBuffer()
-    ..write(_formatLogHeader(record))
-    ..write(' ')
-    ..write(message);
-  final error = record.error;
+String _formatFileLogRecord(logger.OutputEvent event) {
+  final origin = event.origin;
+  final rendered = '${_formatLogHeader(origin)} ${origin.message}';
+  final message = _escapeLogValue(redactSensitiveText(rendered));
+  final buffer = StringBuffer(message);
+  final error = origin.error;
   if (error != null) {
     // error.toString() 可能携带 prompt、协议 payload 或凭据，只持久化类型。
     buffer
       ..write(' error=')
       ..write(error.runtimeType);
   }
-  final stackTrace = record.stackTrace;
+  final stackTrace = origin.stackTrace;
   if (stackTrace != null) {
     buffer
       ..write(' stack=')
@@ -169,9 +306,8 @@ String _formatFileLogRecord(LogRecord record) {
   return buffer.toString();
 }
 
-String _formatLogHeader(LogRecord record) {
-  return '${_formatLogTime(record.time)} '
-      '[${record.level.name}] [${record.loggerName}]';
+String _formatLogHeader(logger.LogEvent event) {
+  return '${_formatLogTime(event.time)} [${event.level.name}]';
 }
 
 String _formatLogTime(DateTime time) {
@@ -191,4 +327,9 @@ String _escapeLogValue(String value) {
       .replaceAll(r'\', r'\\')
       .replaceAll('\r', r'\r')
       .replaceAll('\n', r'\n');
+}
+
+String _normalizeLoggerName(String name) {
+  final normalized = name.replaceAll(RegExp(r'[\r\n]'), ' ').trim();
+  return normalized.isEmpty ? 'zeta' : normalized;
 }

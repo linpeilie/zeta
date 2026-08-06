@@ -55,10 +55,10 @@ final class DesktopAttentionController {
         unawaited(handleActivation(initialPayload));
       }
     } catch (error, stackTrace) {
-      _log.warning(
+      _log.w(
         'Could not initialize desktop notifications',
-        error,
-        stackTrace,
+        error: error,
+        stackTrace: stackTrace,
       );
     }
   }
@@ -116,7 +116,11 @@ final class DesktopAttentionController {
         ),
       );
     } catch (error, stackTrace) {
-      _log.warning('Could not show desktop notification', error, stackTrace);
+      _log.w(
+        'Could not show desktop notification',
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
   }
 
@@ -160,10 +164,10 @@ final class DesktopAttentionController {
         await _removeIdentity(identity);
       }
     } catch (error, stackTrace) {
-      _log.warning(
+      _log.w(
         'Could not handle notification activation',
-        error,
-        stackTrace,
+        error: error,
+        stackTrace: stackTrace,
       );
     }
   }
@@ -214,10 +218,10 @@ final class DesktopAttentionController {
     try {
       await notificationService.requestPermissions();
     } catch (error, stackTrace) {
-      _log.warning(
+      _log.w(
         'Could not request desktop notification permissions',
-        error,
-        stackTrace,
+        error: error,
+        stackTrace: stackTrace,
       );
     }
   }
@@ -228,7 +232,11 @@ final class DesktopAttentionController {
         await notificationService.cancel(value.notificationId);
       } catch (error, stackTrace) {
         // Windows 非 MSIX 运行时可能无法撤回通知；内部未读仍是权威状态。
-        _log.fine('Could not cancel desktop notification', error, stackTrace);
+        _log.t(
+          'Could not cancel desktop notification',
+          error: error,
+          stackTrace: stackTrace,
+        );
       }
     }
   }
@@ -240,10 +248,10 @@ final class DesktopAttentionController {
         await indicator.requestAttention();
       }
     } catch (error, stackTrace) {
-      _log.warning(
+      _log.w(
         'Could not update desktop attention indicator',
-        error,
-        stackTrace,
+        error: error,
+        stackTrace: stackTrace,
       );
     }
   }

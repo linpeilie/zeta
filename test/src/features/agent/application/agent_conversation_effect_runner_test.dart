@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:logging/logging.dart';
+import 'package:logger/logger.dart';
 
 import 'package:zeta/src/features/agent/application/agent_conversation_effect.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_effect_runner.dart';
@@ -153,9 +153,10 @@ void main() {
       'logs provider errors only for matching provider generation and runtime',
       () async {
         // Arrange
-        final records = <LogRecord>[];
-        final subscription = Logger.root.onRecord.listen(records.add);
-        addTearDown(subscription.cancel);
+        final records = <LogEvent>[];
+        final listener = records.add;
+        Logger.addLogListener(listener);
+        addTearDown(() => Logger.removeLogListener(listener));
         final runner = DefaultAgentConversationEffectRunner(
           currentScope: () => _scope(threadId: 'thread-current'),
           recordModelCatalog: _discardCatalog,
@@ -215,9 +216,10 @@ void main() {
       // Arrange
       var callbackCount = 0;
       var recordCount = 0;
-      final records = <LogRecord>[];
-      final subscription = Logger.root.onRecord.listen(records.add);
-      addTearDown(subscription.cancel);
+      final records = <LogEvent>[];
+      final listener = records.add;
+      Logger.addLogListener(listener);
+      addTearDown(() => Logger.removeLogListener(listener));
       final runner = DefaultAgentConversationEffectRunner(
         currentScope: _scope,
         recordModelCatalog:
@@ -317,7 +319,7 @@ Future<void> _discardCatalog({
   required String source,
 }) async {}
 
-Map<String, Object?> _structuredContext(LogRecord record) {
+Map<String, Object?> _structuredContext(LogEvent record) {
   const prefix = 'Agent provider error event: ';
   final message = record.message;
   expect(message, startsWith(prefix));

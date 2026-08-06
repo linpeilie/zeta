@@ -195,14 +195,14 @@ class GrokSessionHistoryReader {
         if (snapshot.turns.isNotEmpty) {
           return snapshot;
         }
-        _log.fine(
+        _log.t(
           'updates.jsonl for $threadId produced empty turns; trying chat_history',
         );
       } catch (error, stackTrace) {
-        _log.warning(
+        _log.w(
           'Could not parse updates.jsonl for $threadId',
-          error,
-          stackTrace,
+          error: error,
+          stackTrace: stackTrace,
         );
       }
     }
@@ -219,10 +219,10 @@ class GrokSessionHistoryReader {
           raw: <String, Object?>{...meta, 'source': 'chat_history.jsonl'},
         );
       } catch (error, stackTrace) {
-        _log.warning(
+        _log.w(
           'Could not parse chat_history.jsonl for $threadId',
-          error,
-          stackTrace,
+          error: error,
+          stackTrace: stackTrace,
         );
       }
     }
@@ -305,10 +305,10 @@ class GrokSessionHistoryReader {
         sessionSummary: _nonEmpty(raw['session_summary']?.toString()),
       );
     } catch (error, stackTrace) {
-      _log.fine(
+      _log.t(
         'Could not read Grok title snapshot for $threadId',
-        error,
-        stackTrace,
+        error: error,
+        stackTrace: stackTrace,
       );
       return GrokSessionTitleSnapshot(sessionPath: resolved.path);
     }
@@ -399,10 +399,10 @@ class GrokSessionHistoryReader {
           }
         }
       } catch (error, stackTrace) {
-        _log.fine(
+        _log.t(
           'Could not parse Grok summary.json for $id',
-          error,
-          stackTrace,
+          error: error,
+          stackTrace: stackTrace,
         );
       }
     }

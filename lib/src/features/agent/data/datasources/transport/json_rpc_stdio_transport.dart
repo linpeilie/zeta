@@ -272,7 +272,7 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
   }
 
   Future<void> _startProcess() async {
-    _log.info('Starting JSON-RPC process with ${arguments.length} arguments');
+    _log.i('Starting JSON-RPC process with ${arguments.length} arguments');
 
     final mergedEnvironment = environment.isEmpty
         ? null
@@ -291,7 +291,7 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
       );
     }
     _process = process;
-    _log.info('JSON-RPC process started with pid ${process.pid}');
+    _log.i('JSON-RPC process started with pid ${process.pid}');
 
     // Windows 启动器和本地化诊断偶尔会夹带非 UTF-8 字节。若使用严格
     // 解码，单个受损字符会终止整条订阅，进而让子进程因管道断开退出。
@@ -325,7 +325,7 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
     _pendingTimers[id] = Timer(timeout, () {
       final pending = _pending.remove(id);
       _pendingTimers.remove(id);
-      _log.warning('JSON-RPC request timed out: $method');
+      _log.w('JSON-RPC request timed out: $method');
       pending?.completeError(
         TimeoutException('JSON-RPC request timed out: $method', timeout),
       );
@@ -386,7 +386,7 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
     if (_closing) {
       return;
     }
-    _log.fine('Closing JSON-RPC transport');
+    _log.t('Closing JSON-RPC transport');
     _closing = true;
     // 关闭时主动完成所有 pending future，调用方不会无限等待。
     for (final timer in _pendingTimers.values) {
@@ -429,7 +429,7 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
     try {
       decoded = jsonDecode(line);
     } catch (error) {
-      _log.warning(
+      _log.w(
         'Invalid JSON-RPC stdout line '
         '(${error.runtimeType}, $payloadLength characters)',
       );
@@ -445,7 +445,7 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
 
     final raw = _objectMap(decoded);
     if (raw == null) {
-      _log.warning('JSON-RPC stdout message was not an object');
+      _log.w('JSON-RPC stdout message was not an object');
       _protocolErrors.add(
         JsonRpcProtocolException(
           'JSON-RPC message must be an object',
@@ -459,7 +459,7 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
     final id = raw['id'];
     // JSON-RPC 响应：带 id 且包含 result 或 error。
     if (id != null && (raw.containsKey('result') || raw.containsKey('error'))) {
-      _log.fine(
+      _log.t(
         'Received JSON-RPC response idType=${id.runtimeType} '
         '($payloadLength characters)',
       );
@@ -469,7 +469,7 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
 
     // 服务端请求：带 id 和 method，需要客户端稍后 sendResponse。
     if (method is String && id != null) {
-      _log.fine(
+      _log.t(
         'Received JSON-RPC server request $method '
         'idType=${id.runtimeType} ($payloadLength characters)',
       );
@@ -496,7 +496,7 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
       return;
     }
 
-    _log.warning('Unknown JSON-RPC message shape');
+    _log.w('Unknown JSON-RPC message shape');
     _protocolErrors.add(
       JsonRpcProtocolException(
         'Unknown JSON-RPC message shape',
@@ -514,14 +514,12 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
         matchedId = numericId;
         completer = _pending.remove(matchedId);
         if (completer != null) {
-          _log.fine('Matched stringified numeric JSON-RPC response id');
+          _log.t('Matched stringified numeric JSON-RPC response id');
         }
       }
     }
     if (completer == null) {
-      _log.warning(
-        'JSON-RPC response for unknown request id (${id.runtimeType})',
-      );
+      _log.w('JSON-RPC response for unknown request id (${id.runtimeType})');
       _protocolErrors.add(
         JsonRpcProtocolException(
           'Response for unknown request id (${id.runtimeType})',
@@ -535,7 +533,7 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
     final error = raw['error'];
     if (error != null) {
       final decodedError = _decodeError(error);
-      _log.warning('JSON-RPC error response code=${decodedError.code}');
+      _log.w('JSON-RPC error response code=${decodedError.code}');
       completer.completeError(JsonRpcException(decodedError));
       return;
     }
@@ -548,7 +546,7 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
       return;
     }
     _closing = true;
-    _log.warning('JSON-RPC process exited with code $exitCode');
+    _log.w('JSON-RPC process exited with code $exitCode');
     final error = JsonRpcTransportClosedException(
       'JSON-RPC process exited with code $exitCode',
     );
@@ -565,7 +563,7 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
   }
 
   void _handleStreamError(Object error, StackTrace _) {
-    _log.warning('JSON-RPC process stream error (${error.runtimeType})');
+    _log.w('JSON-RPC process stream error (${error.runtimeType})');
     _protocolErrors.add(
       JsonRpcProtocolException(
         'Process stream error',
@@ -581,7 +579,7 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
     }
     // stderr 可能包含本地路径、账号或凭证诊断；上层可消费脱敏后的内容，
     // transport 日志只记录长度，避免把原文复制到应用日志。
-    _log.fine('Received JSON-RPC stderr line (${line.length} characters)');
+    _log.t('Received JSON-RPC stderr line (${line.length} characters)');
     _stderrLines.add(line);
   }
 
@@ -591,7 +589,7 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
   }) {
     final encoded = jsonEncode(message);
     // 请求参数可能包含 prompt、文件内容或认证信息；协议日志不得记录 payload。
-    _log.fine('Sending $description (${encoded.length} characters)');
+    _log.t('Sending $description (${encoded.length} characters)');
     // IOSink 在 flush/addStream 期间不允许并发写入；所有 JSONL 输出都走同一条队列。
     final operation = _writeQueue.then((_) async {
       final process = _process;
@@ -605,14 +603,14 @@ class JsonRpcStdioTransport implements JsonRpcPeer {
       await process.stdin.flush();
     });
     _writeQueue = operation.catchError((Object error, StackTrace _) {
-      _log.warning('JSON-RPC stdin write failed (${error.runtimeType})');
+      _log.w('JSON-RPC stdin write failed (${error.runtimeType})');
     });
     return operation;
   }
 
   void _ensureOpen() {
     if (!_started || _closing || _process == null) {
-      _log.warning('JSON-RPC transport is not open');
+      _log.w('JSON-RPC transport is not open');
       throw const JsonRpcTransportClosedException(
         'JSON-RPC transport is not open',
       );

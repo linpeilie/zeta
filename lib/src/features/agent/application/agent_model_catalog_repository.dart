@@ -105,10 +105,10 @@ class AgentModelCatalogRepository {
       if (cached == null) {
         rethrow;
       }
-      _log.warning(
+      _log.w(
         'Could not refresh model catalog for ${config.id}; using stale cache',
-        error,
-        stackTrace,
+        error: error,
+        stackTrace: stackTrace,
       );
       return AgentModelCatalogLoadResult(
         models: cached.models,
@@ -252,7 +252,7 @@ class AgentModelCatalogRepository {
     );
     _snapshots[_cacheKey(config.id, includeHidden)] = snapshot;
     _stateRevision += 1;
-    _log.info(
+    _log.i(
       'Stored model catalog for ${config.id} '
       '(source=$source, includeHidden=$includeHidden): '
       '${normalized.describeForLog()}',
@@ -314,7 +314,11 @@ class AgentModelCatalogRepository {
           }
         }
       } catch (error, stackTrace) {
-        _log.warning('Could not read model catalog cache', error, stackTrace);
+        _log.w(
+          'Could not read model catalog cache',
+          error: error,
+          stackTrace: stackTrace,
+        );
       }
     }();
     _loadOperation = operation;
@@ -357,10 +361,10 @@ class AgentModelCatalogRepository {
         await store.save(snapshots);
         _persistedRevision = revision;
       } catch (error, stackTrace) {
-        _log.warning(
+        _log.w(
           'Could not persist model catalog cache',
-          error,
-          stackTrace,
+          error: error,
+          stackTrace: stackTrace,
         );
         return false;
       }

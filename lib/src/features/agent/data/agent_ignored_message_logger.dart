@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:logging/logging.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 
 /// 统一记录 agent provider 丢弃的协议消息。
@@ -17,7 +16,7 @@ final class AgentIgnoredMessageLogger {
 
   /// 用于日志前缀的稳定 provider 名称。
   final String providerLabel;
-  final Logger _log;
+  final AppLogger _log;
 
   final Map<String, int> _ignoredCounts = <String, int>{};
   final Map<String, int> _unmatchedCounts = <String, int>{};
@@ -62,7 +61,7 @@ final class AgentIgnoredMessageLogger {
         ? ''
         : '; ${fields.entries.map((entry) => '${entry.key}=${entry.value}').join(', ')}';
     final rawText = _encodeRawPayload(rawPayload ?? payload);
-    _log.fine(
+    _log.t(
       '$prefix: ${_safeLogLabel(method)} '
       '(reason=${_safeLogLabel(reason)}$suffix; raw=$rawText)',
     );

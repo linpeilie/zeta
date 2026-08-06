@@ -1,8 +1,7 @@
 import 'dart:convert';
 import 'dart:math' as math;
 
-import 'package:logging/logging.dart';
-
+import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/core/security/sensitive_data_redactor.dart';
 
 /// 异常可实现此接口，为通用结构化日志补充协议诊断字段。
@@ -13,10 +12,10 @@ abstract interface class StructuredLogDiagnostic {
 /// 写入带结构化、脱敏上下文的异常日志。
 ///
 /// 调用方只应传身份、状态和协议诊断，不应传用户输入正文。敏感键和文本会在
-/// 进入结构化消息前完成遮挡；原始异常仍作为 [LogRecord.error] 交给诊断 sink，
+/// 进入结构化消息前完成遮挡；原始异常仍作为 error/stackTrace 连同事件输出，
 /// 应用文件日志只持久化其类型。
 void logStructuredFailure(
-  Logger logger, {
+  AppLogger logger, {
   required String message,
   Map<String, Object?> context = const <String, Object?>{},
   Object? error,
@@ -34,7 +33,7 @@ void logStructuredFailure(
     ...context,
     'exception': ?exceptionContext,
   });
-  logger.warning('$message: $encoded', error, stackTrace);
+  logger.w('$message: $encoded', error: error, stackTrace: stackTrace);
 }
 
 /// 将日志上下文递归脱敏并编码为单行 JSON。

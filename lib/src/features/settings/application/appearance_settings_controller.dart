@@ -240,10 +240,10 @@ class AppearanceSettingsController extends ChangeNotifier {
       try {
         await store.save(normalized);
       } catch (error, stackTrace) {
-        _log.warning(
+        _log.w(
           'Could not persist normalized appearance settings',
-          error,
-          stackTrace,
+          error: error,
+          stackTrace: stackTrace,
         );
       }
     }
@@ -255,7 +255,11 @@ class AppearanceSettingsController extends ChangeNotifier {
     try {
       await store.save(value);
     } catch (error, stackTrace) {
-      _log.warning('Could not persist appearance settings', error, stackTrace);
+      _log.w(
+        'Could not persist appearance settings',
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
     _notify();
   }
@@ -266,7 +270,7 @@ class AppearanceSettingsController extends ChangeNotifier {
   }) async {
     final family = await fontCatalog.resolveFontFamily(choice.fontFamily!);
     if (family == null || (requireMonospace && !family.isMonospace)) {
-      _log.warning('Could not resolve system font: ${choice.fontFamily}');
+      _log.w('Could not resolve system font: ${choice.fontFamily}');
       return null;
     }
     _rememberFontDisplayNames(<SystemFontFamily>[family]);
@@ -283,10 +287,10 @@ class AppearanceSettingsController extends ChangeNotifier {
         requireMonospace: requireMonospace,
       );
     } catch (error, stackTrace) {
-      _log.warning(
+      _log.w(
         'Could not query system font: ${choice.fontFamily}',
-        error,
-        stackTrace,
+        error: error,
+        stackTrace: stackTrace,
       );
       return null;
     }
@@ -303,10 +307,10 @@ class AppearanceSettingsController extends ChangeNotifier {
       );
     } catch (error, stackTrace) {
       // 原生目录暂时不可用时保留用户设置，避免一次通道故障清空偏好。
-      _log.warning(
+      _log.w(
         'Could not normalize stored system font: ${choice.fontFamily}',
-        error,
-        stackTrace,
+        error: error,
+        stackTrace: stackTrace,
       );
       return choice;
     }

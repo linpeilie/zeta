@@ -82,10 +82,10 @@ final class GrokPermissionPolicyAdapter implements AgentPermissionPolicyPort {
     try {
       notifyLive(method, params);
     } catch (error, stackTrace) {
-      _log.fine(
+      _log.t(
         'Failed to notify $method for permission mode',
-        error,
-        stackTrace,
+        error: error,
+        stackTrace: stackTrace,
       );
       return AgentPermissionApplyResult(
         normalizedSelection: AgentPermissionSelection(optionId: wire),

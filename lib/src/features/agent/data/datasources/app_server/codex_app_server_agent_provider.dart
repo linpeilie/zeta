@@ -258,7 +258,7 @@ class CodexAppServerAgentProvider
   /// 执行一次完整的初始化流程：启动 JSON-RPC 对等体、订阅流、
   /// 发送 LSP 风格的 initialize 请求与 initialized 通知。
   Future<void> _initializeOnce() async {
-    _log.info('Initializing Agent provider ${config.id}');
+    _log.i('Initializing Agent provider ${config.id}');
     _emitStatus(
       const AgentProviderStatus(
         state: AgentProviderConnectionState.connecting,
@@ -291,7 +291,7 @@ class CodexAppServerAgentProvider
           },
         },
       );
-      _log.info('Codex initialize completed for ${config.id}');
+      _log.i('Codex initialize completed for ${config.id}');
 
       _runtimeInfo = _codexRuntimeInfoFromInitialize(
         initializeResult,
@@ -310,10 +310,10 @@ class CodexAppServerAgentProvider
           message: '${config.displayName} ready',
         ),
       );
-      _log.info('Agent provider ${config.id} initialized');
+      _log.i('Agent provider ${config.id} initialized');
     } on ProcessException catch (error) {
       _peer.markFailed();
-      _log.warning(
+      _log.w(
         'Could not start Agent provider process ${config.id} '
         '(errorCode=${error.errorCode})',
       );
@@ -321,7 +321,7 @@ class CodexAppServerAgentProvider
       rethrow;
     } catch (error) {
       _peer.markFailed();
-      _log.warning(
+      _log.w(
         'Could not initialize Agent provider ${config.id} '
         '(${error.runtimeType})',
       );
@@ -349,7 +349,7 @@ class CodexAppServerAgentProvider
         const AgentPermissionRequestSnapshot.providerFallback(),
   }) async {
     await initialize();
-    _log.fine('Starting Codex thread for provider ${config.id}');
+    _log.t('Starting Codex thread for provider ${config.id}');
 
     final session = await _client.startSession(
       context: context,
@@ -357,7 +357,7 @@ class CodexAppServerAgentProvider
       previousSessionId: null,
     );
     _events.add(AgentSessionStartedEvent(session));
-    _log.info('Started Codex thread ${session.id}');
+    _log.i('Started Codex thread ${session.id}');
     return session;
   }
 
@@ -372,7 +372,7 @@ class CodexAppServerAgentProvider
     ProviderOperationAccess.exclusive,
     () async {
       await initialize();
-      _log.fine('Resuming Codex thread $sessionId');
+      _log.t('Resuming Codex thread $sessionId');
 
       final session = await _client.resumeSession(
         sessionId,
@@ -381,7 +381,7 @@ class CodexAppServerAgentProvider
         previousSessionId: null,
       );
       _events.add(AgentSessionStartedEvent(session));
-      _log.info('Resumed Codex thread ${session.id}');
+      _log.i('Resumed Codex thread ${session.id}');
       return session;
     },
   );
@@ -396,7 +396,7 @@ class CodexAppServerAgentProvider
         access: ProviderOperationAccess.sharedRead,
         operation: () async {
           await initialize();
-          _log.fine(
+          _log.t(
             'Listing Codex threads for ${query.projectPath} '
             'limit=${query.limit} cursor=${query.cursor}',
           );
@@ -516,7 +516,7 @@ class CodexAppServerAgentProvider
       _capabilities = _capabilities.copyWith(
         supportsModeSelection: supportsModeSelection,
       );
-      _log.fine(
+      _log.t(
         'Loaded ${catalog.presets.length} Codex collaboration modes '
         '(selectable=$supportsModeSelection)',
       );
@@ -529,7 +529,7 @@ class CodexAppServerAgentProvider
         _unsupportedConversationModeCatalogScope = scope;
         _capabilities = _capabilities.copyWith(supportsModeSelection: false);
       }
-      _log.warning(
+      _log.w(
         'Could not load Codex collaboration modes '
         '(failure=${failure.name}, error=${error.runtimeType})',
       );
@@ -564,7 +564,7 @@ class CodexAppServerAgentProvider
   @override
   void updateModelSelection(AgentModelSelection selection) {
     _modelSelection = selection;
-    _log.fine(
+    _log.t(
       'Updated model selection: model=${selection.modelId} '
       'effort=${selection.reasoningEffort} tier=${selection.serviceTierId}',
     );
@@ -579,7 +579,7 @@ class CodexAppServerAgentProvider
     required Object event,
   }) async {
     await initialize();
-    _log.info('Approving guardian-denied action for thread $threadId');
+    _log.i('Approving guardian-denied action for thread $threadId');
     await _client.approveGuardianDeniedAction(threadId: threadId, event: event);
   }
 
@@ -594,7 +594,7 @@ class CodexAppServerAgentProvider
     );
     _modelLists[includeHidden] = list;
     _events.add(AgentModelListEvent(list));
-    _log.info(
+    _log.i(
       'Fetched Codex model list '
       '(includeHidden=$includeHidden, limit=$limit): '
       '${list.describeForLog()}',
@@ -612,7 +612,7 @@ class CodexAppServerAgentProvider
     ProviderOperationAccess.sharedRead,
     () async {
       await initialize();
-      _log.fine('Reading Codex thread history $threadId');
+      _log.t('Reading Codex thread history $threadId');
       return _client.readThreadHistory(
         threadId: threadId,
         sessionPath: sessionPath,
@@ -695,7 +695,7 @@ class CodexAppServerAgentProvider
         previousSessionId: null,
       );
       _events.add(AgentSessionStartedEvent(session));
-      _log.info('Forked Codex thread $threadId -> ${session.id}');
+      _log.i('Forked Codex thread $threadId -> ${session.id}');
       return session;
     },
   );
@@ -706,7 +706,7 @@ class CodexAppServerAgentProvider
     ProviderOperationAccess.exclusive,
     () async {
       await initialize();
-      _log.info('Starting compact for Codex thread $threadId');
+      _log.i('Starting compact for Codex thread $threadId');
       await _client.compactThread(threadId);
     },
   );
@@ -736,7 +736,7 @@ class CodexAppServerAgentProvider
     _client.validateTurnConfiguration(configuration);
     await initialize();
     final resolvedInputs = _resolveUserInputs(message: message, inputs: inputs);
-    _log.info('Starting Codex turn for thread ${session.id}');
+    _log.i('Starting Codex turn for thread ${session.id}');
     _emitStatus(
       const AgentProviderStatus(
         state: AgentProviderConnectionState.running,
@@ -755,7 +755,7 @@ class CodexAppServerAgentProvider
     );
     _markRunningTurn(session.id, turn.id);
     _events.add(AgentTurnStartedEvent(turn));
-    _log.fine('Started Codex turn ${turn.id}');
+    _log.t('Started Codex turn ${turn.id}');
     return turn;
   }
 
@@ -779,7 +779,7 @@ class CodexAppServerAgentProvider
       );
     }
     final resolvedInputs = _resolveUserInputs(message: message, inputs: inputs);
-    _log.info('Steering Codex turn for thread ${session.id}');
+    _log.i('Steering Codex turn for thread ${session.id}');
     await _client.steerTurn(
       session: session,
       inputs: resolvedInputs,
@@ -807,7 +807,7 @@ class CodexAppServerAgentProvider
 
   @override
   Future<void> cancelTurn(AgentTurn turn) async {
-    _log.info('Interrupting Codex turn ${turn.id}');
+    _log.i('Interrupting Codex turn ${turn.id}');
     await _client.cancelTurn(turn);
   }
 
@@ -815,13 +815,13 @@ class CodexAppServerAgentProvider
   Future<void> respondToPermission(AgentPermissionDecision decision) async {
     final pending = _pendingApprovals.remove(decision.requestId);
     if (pending == null) {
-      _log.warning(
+      _log.w(
         'Ignoring response for unknown Codex permission ${decision.requestId}',
       );
       return;
     }
 
-    _log.info(
+    _log.i(
       'Responding to Codex permission ${pending.method}: '
       'approved=${decision.approved}',
     );
@@ -836,13 +836,13 @@ class CodexAppServerAgentProvider
   Future<void> respondToQuestion(AgentQuestionResponse response) async {
     final pending = _pendingQuestions.remove(response.requestId);
     if (pending == null) {
-      _log.warning(
+      _log.w(
         'Ignoring response for unknown Codex question ${response.requestId}',
       );
       return;
     }
 
-    _log.info(
+    _log.i(
       'Responding to Codex user question '
       '(${response.answers.length} answered questions)',
     );
@@ -865,7 +865,7 @@ class CodexAppServerAgentProvider
   }
 
   Future<void> _disposeOnce() async {
-    _log.fine('Disposing Agent provider ${config.id}');
+    _log.t('Disposing Agent provider ${config.id}');
     _disposed = true;
     _clearConversationModeCatalogState();
     _operationScheduler.beginClosing();
@@ -904,7 +904,7 @@ class CodexAppServerAgentProvider
           Object error,
           StackTrace _,
         ) {
-          _log.warning(
+          _log.w(
             'Codex server request ${request.method} did not complete '
             '(${error.runtimeType})',
           );
@@ -918,10 +918,10 @@ class CodexAppServerAgentProvider
       // stderr 是 app-server 的 tracing/诊断通道，其中也包含回合内工具失败的
       // 日志。用户可见错误必须以 JSON-RPC `error`、`turn/completed` 或 item
       // 事件为准，不能把每一行 stderr 拆成对话消息。
-      _log.fine('Codex stderr line received (${line.length} characters)');
+      _log.t('Codex stderr line received (${line.length} characters)');
     });
     _protocolErrorSubscription ??= _peer.protocolErrors.listen((error) {
-      _log.warning(
+      _log.w(
         'Codex protocol warning (${error.message.length} characters; '
         'cause=${error.causeType ?? 'unknown'})',
       );
@@ -952,7 +952,7 @@ class CodexAppServerAgentProvider
           _string(_map(notification.params['error'])['message']) ??
           _string(notification.params['summary']) ??
           'No message';
-      _log.warning(
+      _log.w(
         'Codex ${notification.method} '
         '(${message.length} message characters)',
       );
@@ -960,7 +960,7 @@ class CodexAppServerAgentProvider
       // 弃用提示需可观测，便于升级适配层；UI 侧再做一次性展示。
       final summary = _string(notification.params['summary']) ?? 'No summary';
       final details = _string(notification.params['details']);
-      _log.warning(
+      _log.w(
         'Codex deprecationNotice '
         '(${summary.length} summary characters, '
         '${details?.length ?? 0} detail characters)',
@@ -969,7 +969,7 @@ class CodexAppServerAgentProvider
       final fromModel = _string(notification.params['fromModel']);
       final toModel = _string(notification.params['toModel']);
       final reason = _string(notification.params['reason']);
-      _log.info(
+      _log.i(
         'Codex model/rerouted: $fromModel → $toModel '
         '(${reason?.length ?? 0} reason characters)',
       );
@@ -977,7 +977,7 @@ class CodexAppServerAgentProvider
       if (!_skillsChanged.isClosed) {
         _skillsChanged.add(null);
       }
-      _log.fine('Codex skills/changed received');
+      _log.t('Codex skills/changed received');
       return;
     }
 
@@ -1022,7 +1022,7 @@ class CodexAppServerAgentProvider
       if (event is AgentPermissionResolvedEvent) {
         final pendingQuestion = _pendingQuestions.remove(event.requestId);
         if (pendingQuestion != null) {
-          _log.info(
+          _log.i(
             'Codex user question ${event.requestId} resolved externally; '
             'dismissing local question',
           );
@@ -1037,12 +1037,12 @@ class CodexAppServerAgentProvider
         }
         final pending = _pendingApprovals.remove(event.requestId);
         if (pending != null) {
-          _log.info(
+          _log.i(
             'Codex server request ${event.requestId} resolved externally '
             '(${pending.method}); dismissing local approval',
           );
         } else {
-          _log.fine(
+          _log.t(
             'Codex server request ${event.requestId} resolved externally '
             'with no local pending approval',
           );
@@ -1073,7 +1073,7 @@ class CodexAppServerAgentProvider
     // 成功应答会违反响应 schema，可能让服务端 turn 永久卡住。
     final rejection = _approvalMapper.rejectionFor(request);
     if (rejection != null) {
-      _log.warning(
+      _log.w(
         'Declining unsupported Codex server request ${request.method}: '
         '${rejection.message}',
       );
@@ -1156,12 +1156,12 @@ class CodexAppServerAgentProvider
   Future<void> _unsubscribeThreadBestEffort(String threadId) async {
     try {
       final status = await _client.unsubscribeThread(threadId);
-      _log.fine(
+      _log.t(
         'Unsubscribed Codex thread $threadId'
         '${status == null ? '' : ' (status=$status)'}',
       );
     } catch (error) {
-      _log.warning(
+      _log.w(
         'Could not unsubscribe Codex thread $threadId '
         '(${error.runtimeType})',
       );

@@ -105,13 +105,17 @@ class WorkspaceFileIndexController extends ChangeNotifier {
         final previous = _corpora[root];
         final next = List<WorkspaceNode>.unmodifiable(files);
         _corpora[root] = next;
-        _log.fine('Indexed workspace: $root (${files.length} files)');
+        _log.t('Indexed workspace: $root (${files.length} files)');
         // 首次就绪，或路径集合变化时通知；无变化的重扫不打扰 UI。
         if (previous == null || !_sameFilePaths(previous, next)) {
           _notifyChanged();
         }
       } catch (error, stackTrace) {
-        _log.warning('Could not index workspace: $root', error, stackTrace);
+        _log.w(
+          'Could not index workspace: $root',
+          error: error,
+          stackTrace: stackTrace,
+        );
       }
     }();
     _inFlight[root] = operation;
@@ -154,13 +158,21 @@ class WorkspaceFileIndexController extends ChangeNotifier {
       _watches[root] = stream.listen(
         (event) => _handleWatchEvent(root, event),
         onError: (Object error, StackTrace stackTrace) {
-          _log.warning('Workspace watch error: $root', error, stackTrace);
+          _log.w(
+            'Workspace watch error: $root',
+            error: error,
+            stackTrace: stackTrace,
+          );
         },
         cancelOnError: false,
       );
-      _log.fine('Watching workspace for file-index: $root');
+      _log.t('Watching workspace for file-index: $root');
     } catch (error, stackTrace) {
-      _log.warning('Could not watch workspace: $root', error, stackTrace);
+      _log.w(
+        'Could not watch workspace: $root',
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
   }
 

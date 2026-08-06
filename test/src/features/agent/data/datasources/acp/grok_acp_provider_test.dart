@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:logging/logging.dart';
+import 'package:logger/logger.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_acp_agent_provider.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_models_cli.dart';
@@ -530,10 +530,19 @@ void main() {
     test(
       'logs original payload in shared ignored-message diagnostics across Grok notification paths',
       () async {
-        final records = <LogRecord>[];
+        final records = <LogEvent>[];
+        void listener(OutputEvent event) {
+          records.add(event.origin);
+        }
+
         await resetAppLoggingForTesting();
-        configureAppLogging(level: Level.ALL, sink: records.add);
-        addTearDown(resetAppLoggingForTesting);
+        Logger.addOutputListener(listener);
+        Logger.level = Level.all;
+        configureAppLogging();
+        addTearDown(() {
+          Logger.removeOutputListener(listener);
+          return resetAppLoggingForTesting();
+        });
 
         final peer = _FakeJsonRpcPeer();
         final provider = GrokAcpAgentProvider(
@@ -572,11 +581,7 @@ void main() {
         await Future<void>.delayed(Duration.zero);
 
         final fineMessages = records
-            .where(
-              (record) =>
-                  record.loggerName == 'zeta.agent.grok_acp' &&
-                  record.level == Level.FINE,
-            )
+            .where((record) => record.level == Level.trace)
             .map((record) => record.message)
             .toList();
         expect(

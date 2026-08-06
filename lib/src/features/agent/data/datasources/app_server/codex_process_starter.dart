@@ -63,7 +63,7 @@ ProcessStarter codexProcessStarter(
     Map<String, String>? environment,
   }) async {
     final command = await resolveCodexProcessCommand(config, locator: locator);
-    _log.info('Codex CLI executable resolved');
+    _log.i('Codex CLI executable resolved');
     return (delegate ?? Process.start)(
       command.executable,
       command.arguments,

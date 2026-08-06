@@ -267,7 +267,7 @@ class ActiveAgentProviderController extends ChangeNotifier {
     _settings = _settings.copyWith(activeProviderId: providerId);
     _applyRuntimeSelection();
     await configStore.save(_settings);
-    _log.info('Switched active Agent provider to $providerId');
+    _log.i('Switched active Agent provider to $providerId');
     _notify();
   }
 
@@ -296,9 +296,13 @@ class ActiveAgentProviderController extends ChangeNotifier {
       await configStore.save(updatedSettings);
       _settings = updatedSettings;
       _applyRuntimeSelection();
-      _log.fine('Persisted model selection for provider $providerId');
+      _log.t('Persisted model selection for provider $providerId');
     } catch (error, stackTrace) {
-      _log.warning('Could not persist model selection', error, stackTrace);
+      _log.w(
+        'Could not persist model selection',
+        error: error,
+        stackTrace: stackTrace,
+      );
       rethrow;
     }
     _notify();
@@ -324,9 +328,13 @@ class ActiveAgentProviderController extends ChangeNotifier {
     _applyRuntimeSelection();
     try {
       await configStore.save(_settings);
-      _log.fine('Persisted permission option for provider $providerId');
+      _log.t('Persisted permission option for provider $providerId');
     } catch (error, stackTrace) {
-      _log.warning('Could not persist permission option', error, stackTrace);
+      _log.w(
+        'Could not persist permission option',
+        error: error,
+        stackTrace: stackTrace,
+      );
       rethrow;
     }
     _notify();
@@ -348,9 +356,13 @@ class ActiveAgentProviderController extends ChangeNotifier {
     _applyRuntimeSelection();
     try {
       await configStore.save(_settings);
-      _log.fine('Cleared permission preference for provider $providerId');
+      _log.t('Cleared permission preference for provider $providerId');
     } catch (error, stackTrace) {
-      _log.warning('Could not clear permission preference', error, stackTrace);
+      _log.w(
+        'Could not clear permission preference',
+        error: error,
+        stackTrace: stackTrace,
+      );
       rethrow;
     }
     _notify();
@@ -366,7 +378,7 @@ class ActiveAgentProviderController extends ChangeNotifier {
     final future = configStore.load().then((settings) {
       _settings = settings;
       _applyRuntimeSelection();
-      _log.fine(
+      _log.t(
         'Loaded Agent provider selection ${settings.activeProviderId}; '
         'effective=$activeProviderId',
       );
@@ -447,7 +459,7 @@ class ActiveAgentProviderController extends ChangeNotifier {
     _providerLease = null;
     await existingLease?.release();
     final expectedConfig = activeProviderConfig;
-    _log.fine('Acquiring shared Agent provider: ${expectedConfig.id}');
+    _log.t('Acquiring shared Agent provider: ${expectedConfig.id}');
     final lease = await runtimeRegistry.acquire(expectedConfig);
     _providerLease = lease;
     _notify();

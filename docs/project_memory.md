@@ -24,7 +24,8 @@
 - `file_selector` 用于选择本地目录。
 - `shared_preferences` 仅用于读取旧版 Zeta key 并一次性迁移。
 - Zeta 自有配置、会话状态与派生索引使用 `~/.zeta` 下的版本化 JSON 文件。
-- `logging` 同时输出 developer 日志与 `~/.zeta/logs/zeta-YYYY-MM-DD.log`。
+- 统一 `AppLogger` 同时输出 developer 日志与
+  `~/.zeta/logs/zeta-YYYY-MM-DD.log`，业务代码通过 `loggerFor(scope)` 获取实例。
 
 ## 3. 架构决策
 

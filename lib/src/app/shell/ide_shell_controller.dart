@@ -145,7 +145,7 @@ class IdeShellController extends ChangeNotifier {
     try {
       await agentProviderController.loadActiveModelCatalog();
     } catch (error) {
-      _log.fine(
+      _log.t(
         'Could not prewarm active Agent model catalog (${error.runtimeType})',
       );
     }
@@ -492,10 +492,10 @@ class IdeShellController extends ChangeNotifier {
     try {
       await _projectLocationOpener(projectPath);
     } catch (error, stackTrace) {
-      _log.warning(
+      _log.w(
         'Could not open project location in system file manager: $projectPath',
-        error,
-        stackTrace,
+        error: error,
+        stackTrace: stackTrace,
       );
       _statusReporter?.call('Could not open project location: $error');
     }
@@ -639,7 +639,7 @@ class IdeShellController extends ChangeNotifier {
 
   Future<void> _loadProject(String path, {bool activateThreads = true}) async {
     _homeRefreshToken += 1;
-    _log.info('Opening project folder: $path');
+    _log.i('Opening project folder: $path');
     _isLoadingProject = true;
     _notifyStateChanged();
 
@@ -674,10 +674,14 @@ class IdeShellController extends ChangeNotifier {
       }
       _enterProjectHome(refreshThreads: true);
       _requestSessionSave();
-      _log.info('Opened project folder: $path');
+      _log.i('Opened project folder: $path');
       _notifyStateChanged();
     } catch (error, stackTrace) {
-      _log.warning('Could not open project folder: $path', error, stackTrace);
+      _log.w(
+        'Could not open project folder: $path',
+        error: error,
+        stackTrace: stackTrace,
+      );
       _statusReporter?.call('Could not open folder: $error');
     } finally {
       if (!_initialRestoreCompleter.isCompleted) {
@@ -766,7 +770,7 @@ class IdeShellController extends ChangeNotifier {
         final thread = _threadSummaryFor(entry.key, entry.value);
         if (thread == null) {
           // provider 归属只存在于完整摘要；缺失时不能猜测 active provider。
-          _log.warning(
+          _log.w(
             'Discarding restored thread ${entry.value} without provider ownership',
           );
           _agentThreadIdsByProject.remove(entry.key);
@@ -781,7 +785,7 @@ class IdeShellController extends ChangeNotifier {
       } else {
         await _syncSelectedAgentWorkspace();
       }
-      _log.info(
+      _log.i(
         'Restored IDE session with ${session.projectPaths.length} projects',
       );
       if (result.shouldRequestSave) {
@@ -920,9 +924,7 @@ class IdeShellController extends ChangeNotifier {
         ? null
         : _threadSummaryFor(projectPath, restoredSessionId);
     if (restoredSessionId != null && restoredThread == null) {
-      _log.warning(
-        'Discarding thread $restoredSessionId without provider ownership',
-      );
+      _log.w('Discarding thread $restoredSessionId without provider ownership');
       _agentThreadIdsByProject.remove(projectPath);
       projectThreadsController.clearSelectedThread(projectPath);
       restoredSessionId = null;
@@ -947,10 +949,10 @@ class IdeShellController extends ChangeNotifier {
         persistSelection: false,
       );
     } catch (error, stackTrace) {
-      _log.warning(
+      _log.w(
         'Could not restore draft workspace for $projectPath',
-        error,
-        stackTrace,
+        error: error,
+        stackTrace: stackTrace,
       );
     }
   }
@@ -972,10 +974,10 @@ class IdeShellController extends ChangeNotifier {
       try {
         await entry.viewModel.switchActiveProvider(providerId);
       } catch (error, stackTrace) {
-        _log.warning(
+        _log.w(
           'Could not select provider $providerId for project draft $projectPath',
-          error,
-          stackTrace,
+          error: error,
+          stackTrace: stackTrace,
         );
         _statusReporter?.call('Could not select Agent provider: $error');
         rethrow;

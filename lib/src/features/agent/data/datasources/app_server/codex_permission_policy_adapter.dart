@@ -48,18 +48,18 @@ final class CodexPermissionPolicyAdapter implements AgentPermissionPolicyPort {
     } on Object catch (error, stackTrace) {
       final kind = _classifyPermissionCatalogFailure(error);
       if (kind == _CodexPermissionCatalogFailureKind.unsupportedRuntime) {
-        _log.fine(
+        _log.t(
           'permissionProfile/list unsupported; falling back to built-ins',
-          error,
-          stackTrace,
+          error: error,
+          stackTrace: stackTrace,
         );
         return CodexPermissionPolicyCodec.staticBuiltInCatalog();
       }
-      _log.fine(
+      _log.t(
         'permissionProfile/list failed '
         '(${kind.name}); preserving caller catalog by rethrowing',
-        error,
-        stackTrace,
+        error: error,
+        stackTrace: stackTrace,
       );
       // transient / malformed：向上抛出，由 controller 保留旧目录。
       Error.throwWithStackTrace(error, stackTrace);

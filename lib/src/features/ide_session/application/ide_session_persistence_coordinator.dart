@@ -46,7 +46,11 @@ class IdeSessionPersistenceCoordinator {
         sanitizeIdeSessionState(snapshot),
       );
     } catch (error, stackTrace) {
-      _log.warning('Could not restore IDE session', error, stackTrace);
+      _log.w(
+        'Could not restore IDE session',
+        error: error,
+        stackTrace: stackTrace,
+      );
       if (!_isActiveRestore(restoreToken)) {
         return const IdeSessionRestoreResult.cancelled();
       }
@@ -114,7 +118,11 @@ class IdeSessionPersistenceCoordinator {
     try {
       await store.save(snapshot);
     } catch (error, stackTrace) {
-      _log.warning('Could not save IDE session', error, stackTrace);
+      _log.w(
+        'Could not save IDE session',
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
   }
 }

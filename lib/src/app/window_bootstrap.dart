@@ -86,7 +86,7 @@ class _LoggingWindowCloseListener with WindowListener {
         try {
           await hook();
         } catch (_) {
-          // 单个资源关闭失败不能阻止窗口退出；日志仍会在下方统一 flush。
+          // 单个资源关闭失败不能阻止窗口退出。
         }
       }
       await shutdownAppLogging();

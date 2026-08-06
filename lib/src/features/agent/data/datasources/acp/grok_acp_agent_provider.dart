@@ -254,7 +254,7 @@ class GrokAcpAgentProvider
   }
 
   Future<void> _initializeOnce() async {
-    _log.info('Initializing Grok ACP provider ${config.id}');
+    _log.i('Initializing Grok ACP provider ${config.id}');
     _emitStatus(
       const AgentProviderStatus(
         state: AgentProviderConnectionState.connecting,
@@ -288,7 +288,7 @@ class GrokAcpAgentProvider
           _asStringKeyedMap(initResult) ?? const <String, Object?>{};
       final caps = _asStringKeyedMap(initMap['agentCapabilities']);
       _loadSessionSupported = caps?['loadSession'] != false;
-      _log.info(
+      _log.i(
         'Grok initialize completed for ${config.id}; '
         'loadSession=$_loadSessionSupported',
       );
@@ -311,17 +311,15 @@ class GrokAcpAgentProvider
           message: '${config.displayName} ready',
         ),
       );
-      _log.info('Grok ACP provider ${config.id} initialized');
+      _log.i('Grok ACP provider ${config.id} initialized');
     } on ProcessException catch (error) {
       _peer.markFailed();
-      _log.warning('Could not start Grok CLI (errorCode=${error.errorCode})');
+      _log.w('Could not start Grok CLI (errorCode=${error.errorCode})');
       _emitUnavailable(error.message, details: error.toString());
       rethrow;
     } catch (error) {
       _peer.markFailed();
-      _log.warning(
-        'Could not initialize Grok ACP provider (${error.runtimeType})',
-      );
+      _log.w('Could not initialize Grok ACP provider (${error.runtimeType})');
       _emitStatus(
         AgentProviderStatus(
           state: AgentProviderConnectionState.error,
@@ -363,9 +361,9 @@ class GrokAcpAgentProvider
         params: <String, Object?>{'methodId': methodId},
         timeout: const Duration(seconds: 20),
       );
-      _log.fine('Grok ACP authenticated via $methodId');
+      _log.t('Grok ACP authenticated via $methodId');
     } catch (error) {
-      _log.warning(
+      _log.w(
         'Grok ACP authenticate($methodId) failed; continuing '
         '(${error.runtimeType})',
       );
@@ -410,7 +408,7 @@ class GrokAcpAgentProvider
     );
     _rememberProjectPath(sessionId, cwd);
     _addEvent(AgentSessionStartedEvent(session));
-    _log.info('Started Grok ACP session $sessionId');
+    _log.i('Started Grok ACP session $sessionId');
     return session;
   }
 
@@ -460,12 +458,10 @@ class GrokAcpAgentProvider
           // 恢复已有会话时也可能已有 generated_title，主动同步一次。
           _scheduleGeneratedTitlePoll(sessionId);
           _addEvent(AgentSessionStartedEvent(session));
-          _log.info('Loaded Grok ACP session $sessionId (replay suppressed)');
+          _log.i('Loaded Grok ACP session $sessionId (replay suppressed)');
           return session;
         } catch (error) {
-          _log.warning(
-            'session/load failed for $sessionId (${error.runtimeType})',
-          );
+          _log.w('session/load failed for $sessionId (${error.runtimeType})');
           rethrow;
         } finally {
           _suppressingSessionLoadReplay = false;
@@ -528,10 +524,10 @@ class GrokAcpAgentProvider
       try {
         await initialize();
       } catch (error, stackTrace) {
-        _log.fine(
+        _log.t(
           'Could not load Grok model metadata before reading history',
-          error,
-          stackTrace,
+          error: error,
+          stackTrace: stackTrace,
         );
       }
     }
@@ -578,7 +574,7 @@ class GrokAcpAgentProvider
     if (!_disposed && fromCli.models.isNotEmpty) {
       _setModelList(fromCli, source: 'grok models CLI');
     } else {
-      _log.info(
+      _log.i(
         'Grok listModels returned empty '
         '(includeHidden=$includeHidden): ${fromCli.describeForLog()}',
       );
@@ -597,7 +593,7 @@ class GrokAcpAgentProvider
       _setModelList(fromCli, source: 'grok models CLI refresh');
       return _modelList!;
     }
-    _log.info(
+    _log.i(
       'Grok refreshModels kept previous list '
       '(cliEmpty=${fromCli.models.isEmpty}, '
       'cached=${_modelList?.models.length ?? 0}): '
@@ -691,7 +687,7 @@ class GrokAcpAgentProvider
           );
           final mapped = mapGrokSkillsEntry(result, cwd: cwd);
           if (mapped.invalidEntryCount > 0 || mapped.droppedSkillCount > 0) {
-            _log.fine(
+            _log.t(
               'Normalized Grok skills for $cwd '
               '(invalid=${mapped.invalidEntryCount}, '
               'dropped=${mapped.droppedSkillCount})',
@@ -709,7 +705,7 @@ class GrokAcpAgentProvider
     required String threadId,
     required Object event,
   }) async {
-    _log.fine('Grok ACP has no Guardian; ignore approveGuardianDeniedAction');
+    _log.t('Grok ACP has no Guardian; ignore approveGuardianDeniedAction');
   }
 
   @override
@@ -756,7 +752,7 @@ class GrokAcpAgentProvider
       _addEvent(
         AgentThreadNameUpdatedEvent(threadId: threadId, threadName: trimmed),
       );
-      _log.info('Renamed Grok session $threadId');
+      _log.i('Renamed Grok session $threadId');
     },
   );
 
@@ -789,7 +785,7 @@ class GrokAcpAgentProvider
           (_titlePollTokensBySessionId[threadId] ?? 0) + 1;
       _runningTurnIdsBySessionId.remove(threadId);
       _addEvent(AgentThreadDeletedEvent(threadId: threadId));
-      _log.info('Deleted Grok session $threadId');
+      _log.i('Deleted Grok session $threadId');
     },
   );
 
@@ -991,7 +987,7 @@ class GrokAcpAgentProvider
 
   @override
   Future<void> cancelTurn(AgentTurn turn) async {
-    _log.info('Cancelling Grok ACP turn ${turn.id}');
+    _log.i('Cancelling Grok ACP turn ${turn.id}');
     final currentRuntimeScope = _peer.runtimeScope;
     _peer.sendNotification(
       'session/cancel',
@@ -1031,7 +1027,7 @@ class GrokAcpAgentProvider
   Future<void> respondToPermission(AgentPermissionDecision decision) async {
     final pending = _pendingPermissions.remove(decision.requestId);
     if (pending == null) {
-      _log.warning(
+      _log.w(
         'Ignoring response for unknown Grok permission ${decision.requestId}',
       );
       return;
@@ -1066,7 +1062,7 @@ class GrokAcpAgentProvider
   Future<void> respondToPlanApproval(AgentPlanApprovalDecision decision) async {
     final pending = _pendingPlanApprovals.remove(decision.requestId);
     if (pending == null) {
-      _log.warning(
+      _log.w(
         'Ignoring response for unknown Grok plan approval ${decision.requestId}',
       );
       return;
@@ -1096,13 +1092,13 @@ class GrokAcpAgentProvider
   Future<void> respondToQuestion(AgentQuestionResponse response) async {
     final pending = _pendingQuestions.remove(response.requestId);
     if (pending == null) {
-      _log.warning(
+      _log.w(
         'Ignoring response for unknown Grok question ${response.requestId}',
       );
       return;
     }
 
-    _log.info(
+    _log.i(
       'Responding to Grok user question '
       '(${response.answers.length} answered questions)',
     );
@@ -1208,7 +1204,7 @@ class GrokAcpAgentProvider
           Object error,
           StackTrace _,
         ) {
-          _log.warning(
+          _log.w(
             'Grok server request ${request.method} did not complete '
             '(${error.runtimeType})',
           );
@@ -1219,7 +1215,7 @@ class GrokAcpAgentProvider
       if (line.trim().isEmpty) {
         return;
       }
-      _log.fine('Grok stderr (${line.length} chars)');
+      _log.t('Grok stderr (${line.length} chars)');
     });
     _protocolErrorSubscription ??= _peer.protocolErrors.listen((error) {
       if (error.kind == JsonRpcProtocolErrorKind.unexpectedResponse) {
@@ -1233,7 +1229,7 @@ class GrokAcpAgentProvider
         );
         return;
       }
-      _log.warning(
+      _log.w(
         'Grok protocol warning (${error.message.length} characters; '
         'cause=${error.causeType ?? 'unknown'})',
       );
@@ -1397,7 +1393,7 @@ class GrokAcpAgentProvider
       if (!_skillsChanged.isClosed) {
         _skillsChanged.add(null);
       }
-      _log.fine(
+      _log.t(
         'Grok session notification $updateType → skills catalog invalidated',
       );
       return;
@@ -1611,7 +1607,7 @@ class GrokAcpAgentProvider
           return;
         }
         _emittedTitlesBySessionId[sessionId] = authoritative;
-        _log.info(
+        _log.i(
           'Grok session $sessionId generated_title ready '
           '(${authoritative.length} characters)',
         );
@@ -1631,7 +1627,7 @@ class GrokAcpAgentProvider
       }
       final fallback = snapshot?.sessionSummary?.trim();
       if (fallback == null || fallback.isEmpty) {
-        _log.fine(
+        _log.t(
           'Grok session $sessionId title poll finished without generated_title',
         );
         return;
@@ -1640,7 +1636,7 @@ class GrokAcpAgentProvider
         return;
       }
       _emittedTitlesBySessionId[sessionId] = fallback;
-      _log.fine(
+      _log.t(
         'Grok session $sessionId falling back to session_summary '
         '(${fallback.length} characters)',
       );
@@ -1699,9 +1695,7 @@ class GrokAcpAgentProvider
             ),
           );
         default:
-          _log.fine(
-            'Rejecting unsupported Grok server request ${request.method}',
-          );
+          _log.t('Rejecting unsupported Grok server request ${request.method}');
           await _peer.sendScopedResponse(
             request.id,
             runtimeScope: request.runtimeScope,
@@ -1713,7 +1707,7 @@ class GrokAcpAgentProvider
       }
     } catch (error) {
       // 服务端请求必须始终应答，否则 session/prompt 会一直挂起。
-      _log.warning(
+      _log.w(
         'Grok server request ${request.method} failed '
         '(${error.runtimeType})',
       );
@@ -1800,11 +1794,11 @@ class GrokAcpAgentProvider
     );
     _pendingPermissions[requestKey] = pending;
 
-    _log.info('Grok permission requested; options=${mapping.options.length}');
+    _log.i('Grok permission requested; options=${mapping.options.length}');
 
     // 无选项时无法交互批准，立即 cancelled，避免 prompt 永久挂起。
     if (mapping.options.isEmpty) {
-      _log.warning(
+      _log.w(
         'Grok permission $requestKey has no options; cancelling to unblock',
       );
       await _respondPermissionCancelled(pending);
@@ -1850,7 +1844,7 @@ class GrokAcpAgentProvider
     // 同领域 id 已有在途提问时，先对旧 JSON-RPC 回 skip，再 park 新请求。
     final existing = _pendingQuestions.remove(mapped.pending.id);
     if (existing != null) {
-      _log.warning(
+      _log.w(
         'Replacing pending Grok question ${mapped.pending.id} '
         '(old rpc=${existing.requestId}, new rpc=${request.id})',
       );
@@ -1876,9 +1870,7 @@ class GrokAcpAgentProvider
     }
 
     if (mapped.event.request.questions.isEmpty) {
-      _log.warning(
-        'Grok question ${mapped.pending.id} has no questions; skipping',
-      );
+      _log.w('Grok question ${mapped.pending.id} has no questions; skipping');
       await _peer.sendScopedResponse(
         request.id,
         runtimeScope: request.runtimeScope,
@@ -1893,7 +1885,7 @@ class GrokAcpAgentProvider
     _pendingQuestions[mapped.pending.id] = mapped.pending.copyWith(
       runtimeScope: request.runtimeScope,
     );
-    _log.info(
+    _log.i(
       'Grok user question requested '
       '(id=${mapped.pending.id}, questions=${mapped.event.request.questions.length})',
     );
@@ -1933,7 +1925,7 @@ class GrokAcpAgentProvider
     // 再 park 新请求；否则 shell 会永远等旧 request id 的响应。
     final existing = _pendingPlanApprovals.remove(toolCallId);
     if (existing != null) {
-      _log.warning(
+      _log.w(
         'Replacing pending plan approval for $sessionId '
         '(old rpc=${existing.requestId}, new rpc=${request.id})',
       );
@@ -1961,7 +1953,7 @@ class GrokAcpAgentProvider
       sessionId: sessionId,
     );
 
-    _log.info('Grok plan approval requested (tool=$toolCallId)');
+    _log.i('Grok plan approval requested (tool=$toolCallId)');
     _addEvent(AgentPlanApprovalRequestedEvent(approval));
 
     // 更新状态文案，避免 UI 看起来像「无响应卡住」。
@@ -2170,7 +2162,7 @@ class GrokAcpAgentProvider
     );
     _modelList = merged;
     _addEvent(AgentModelListEvent(merged));
-    _log.info(
+    _log.i(
       'Applied Grok model list (source=$source): ${merged.describeForLog()}',
     );
 
@@ -2325,7 +2317,11 @@ class GrokAcpAgentProvider
         timeout: const Duration(seconds: 15),
       );
     } catch (error, stackTrace) {
-      _log.fine('session/set_model failed for $modelId', error, stackTrace);
+      _log.t(
+        'session/set_model failed for $modelId',
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
   }
 
@@ -2404,7 +2400,7 @@ class GrokAcpAgentProvider
       );
       return;
     }
-    _log.fine(
+    _log.t(
       'Grok prompt terminal from notification for $sessionId '
       '(stopReason=$stopReason)',
     );
