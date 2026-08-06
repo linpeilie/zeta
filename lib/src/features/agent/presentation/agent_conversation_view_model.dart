@@ -3549,6 +3549,7 @@ class AgentConversationViewModel {
       segmentStartedAt: activity.segmentStartedAt,
       turnStartedAt: _timeline.currentTurnStartedAt,
       tokenUsage: _timeline.currentThreadTokenUsage,
+      currentTurnTokenUsage: _timeline.currentTurnTokenUsage,
       shouldOfferContextCompact: shouldOfferContextCompact,
       isCompacting: _isCompacting,
       isTurnRunning: isTurnRunning,

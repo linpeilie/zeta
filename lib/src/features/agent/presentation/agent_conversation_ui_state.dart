@@ -23,6 +23,7 @@ final class AgentHeaderState {
     required this.segmentStartedAt,
     required this.turnStartedAt,
     required this.tokenUsage,
+    this.currentTurnTokenUsage,
     required this.shouldOfferContextCompact,
     required this.isCompacting,
     required this.isTurnRunning,
@@ -44,6 +45,12 @@ final class AgentHeaderState {
   final DateTime? segmentStartedAt;
   final DateTime? turnStartedAt;
   final AgentTokenUsage? tokenUsage;
+
+  /// 当前正在运行回合的 token 用量（相对上一 turn 的增量）。
+  ///
+  /// 用于实时活动状态条展示；回合运行中可能暂未上报，此时为 null。
+  final AgentTokenUsage? currentTurnTokenUsage;
+
   final bool shouldOfferContextCompact;
   final bool isCompacting;
   final bool isTurnRunning;
@@ -68,6 +75,10 @@ final class AgentHeaderState {
             other.segmentStartedAt == segmentStartedAt &&
             other.turnStartedAt == turnStartedAt &&
             _tokenUsageEquals(other.tokenUsage, tokenUsage) &&
+            _tokenUsageEquals(
+              other.currentTurnTokenUsage,
+              currentTurnTokenUsage,
+            ) &&
             other.shouldOfferContextCompact == shouldOfferContextCompact &&
             other.isCompacting == isCompacting &&
             other.isTurnRunning == isTurnRunning &&
@@ -91,6 +102,7 @@ final class AgentHeaderState {
     segmentStartedAt,
     turnStartedAt,
     _tokenUsageHash(tokenUsage),
+    _tokenUsageHash(currentTurnTokenUsage),
     shouldOfferContextCompact,
     isCompacting,
     isTurnRunning,

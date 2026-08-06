@@ -1859,6 +1859,14 @@ void main() {
         ),
         findsOneWidget,
       );
+      // 实时活动条同时展示当前 turn 的 token 用量。
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('agent-live-activity-status')),
+          matching: find.textContaining('1.3k tokens'),
+        ),
+        findsOneWidget,
+      );
       expect(
         find.byKey(const ValueKey('agent-header-running-status')),
         findsNothing,
