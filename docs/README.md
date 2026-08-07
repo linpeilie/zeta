@@ -43,7 +43,8 @@ docs/
 
 - [**提示词库**](./prompts/README.md) ⭐ — 三档复杂度判定与模板选择
 - [日常任务提示词](./prompts/daily.md) — 新增功能 / 需求变更 / Bug 修复 / 重构，各 3 档
-- [开发流程与阶段提示词](./prompts/workflow.md) — 需求分析 → 方案设计 → 任务拆解 → 实现 → 验收，含 Provider 接入与 AgentEvent 接入专项流程
+- [功能开发流程](./prompts/workflow.md) — 需求分析 → 方案设计 → 任务拆解 → 实现 → 验收，含 Provider 接入与 AgentEvent 接入专项流程
+- [重构开发流程](./prompts/refactoring.md) — 动机 → 测绘 → 安全网 → 目标态 → 执行 → 等价性验收，含重构分型与 Zeta 陷阱表
 - [可拼接片段](./prompts/snippets.md) — 约束尾缀、测试尾缀、输出格式约定、反模式禁令
 
 ## product — 产品
