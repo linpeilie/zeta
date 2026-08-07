@@ -3,8 +3,8 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 /// IDE 统一弹窗入口。
 ///
-/// 当前委托给 `shadcn_flutter`，以确保 overlay、对齐和过渡效果一致；
-/// 后续若切换 UI 库，只需在这一层替换实现。
+/// 当前委托给 `shadcn_flutter` 的 [sf.showOverlay] / [sf.DialogConfiguration]，
+/// 以确保 overlay、对齐和过渡效果一致；后续若切换 UI 库，只需在这一层替换实现。
 Future<T?> showIdeDialog<T>({
   required BuildContext context,
   required WidgetBuilder builder,
@@ -19,20 +19,25 @@ Future<T?> showIdeDialog<T>({
   AlignmentGeometry? alignment,
   bool fullScreen = false,
 }) {
-  return sf.showDialog<T>(
-    context: context,
-    builder: builder,
-    useRootNavigator: useRootNavigator,
-    barrierDismissible: barrierDismissible,
-    barrierColor: barrierColor,
-    barrierLabel: barrierLabel,
-    useSafeArea: useSafeArea,
-    routeSettings: routeSettings,
-    anchorPoint: anchorPoint,
-    traversalEdgeBehavior: traversalEdgeBehavior,
-    alignment: alignment,
-    fullScreen: fullScreen,
-  );
+  return sf
+      .showOverlay<T>(
+        context,
+        sf.DialogConfiguration(
+          builder: builder,
+          useRootNavigator: useRootNavigator,
+          barrierDismissible: barrierDismissible,
+          barrierColor: barrierColor,
+          barrierLabel: barrierLabel,
+          useSafeArea: useSafeArea,
+          routeSettings: routeSettings,
+          anchorPoint: anchorPoint,
+          traversalEdgeBehavior: traversalEdgeBehavior,
+          alignment: alignment,
+          fullScreen: fullScreen,
+        ),
+        adaptive: false,
+      )
+      .future;
 }
 
 /// 统一弹窗 action 语义，避免调用方直接依赖某个 UI 库的按钮组件。

@@ -142,7 +142,7 @@ class _ContextMenuActionButton extends StatelessWidget implements sf.MenuItem {
   bool get hasLeading => action.leadingIcon != null;
 
   @override
-  sf.PopoverController? get popoverController => null;
+  sf.OverlayController? get overlayController => null;
 
   @override
   Widget build(BuildContext context) {

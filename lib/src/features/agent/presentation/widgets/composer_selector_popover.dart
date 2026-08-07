@@ -211,6 +211,7 @@ class _ComposerSelectPopup<T extends Object> extends StatelessWidget {
         autoClose: true,
         hasSelection: value != null,
         enabled: true,
+        expandIcon: null,
         isSelected: (candidate) => candidate == value,
         onChanged: (candidate, selected) {
           if (candidate is! T) {

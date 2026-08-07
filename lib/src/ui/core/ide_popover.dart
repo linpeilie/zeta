@@ -17,12 +17,11 @@ enum IdePopoverConstraint {
 /// 对业务层隐藏第三方 overlay completer 类型；后续若切换 UI 库，
 /// 调用方继续依赖本类型即可。
 class IdePopoverHandle<T> {
-  IdePopoverHandle._(this._delegate, this._stateKey) {
+  IdePopoverHandle._(this._delegate) {
     unawaited(_forwardResult());
   }
 
   final sf.OverlayCompleter<T?> _delegate;
-  final GlobalKey<sf.OverlayHandlerStateMixin> _stateKey;
   final Completer<T?> _result = Completer<T?>();
   final Completer<void> _animation = Completer<void>();
   final Completer<void> _stopForwarding = Completer<void>();
@@ -35,24 +34,25 @@ class IdePopoverHandle<T> {
 
   Future<void> get animationFuture => _animation.future;
 
-  /// 通过底层状态机关闭弹层，确保结果 Future 与退出动画正常收尾。
+  /// 通过底层 completer 关闭弹层，确保结果 Future 与退出动画正常收尾。
   ///
-  /// 第三方 completer 的 `remove()` 只移除 Overlay，并不会完成 `future`；
-  /// 因此仅在弹层尚未挂载时将其作为兜底，并由本句柄补齐完成语义。
+  /// 0.0.53 起 [sf.OverlayCompleter.close] 已负责动画关闭；若弹层尚未挂载
+  /// 导致 close 空操作，再退回 `remove()` 并由本句柄补齐完成语义。
   void dismiss() {
     if (_result.isCompleted) {
       return;
     }
-    final state = _stateKey.currentState;
-    if (state != null) {
-      unawaited(state.close());
-      return;
-    }
-    _delegate.remove();
-    _delegate.dispose();
-    _stopForwardingIfNeeded();
-    _completeAnimation();
-    _complete(null);
+    unawaited(() async {
+      await _delegate.close();
+      if (_result.isCompleted || _delegate.isCompleted) {
+        return;
+      }
+      _delegate.remove();
+      _delegate.dispose();
+      _stopForwardingIfNeeded();
+      _completeAnimation();
+      _complete(null);
+    }());
   }
 
   void dispose() {
@@ -105,8 +105,11 @@ class IdePopoverHandle<T> {
 
 /// IDE 统一 popover 入口。
 ///
-/// 当前底层实现委托给 `shadcn_flutter`；调用方不应再直接依赖
-/// `sf.showPopover`、`sf.OverlayCompleter` 或 `sf.PopoverConstraint`。
+/// 当前底层实现委托给 `shadcn_flutter` 的 [sf.showOverlay] /
+/// [sf.PopoverConfiguration]；调用方不应再直接依赖这些类型。
+///
+/// [adaptive] 默认关闭：桌面 IDE 始终使用真实 popover，避免移动端自适应
+/// 把 popover 转成 bottom drawer。
 IdePopoverHandle<T> showIdePopover<T>({
   required BuildContext context,
   required AlignmentGeometry alignment,
@@ -129,36 +132,36 @@ IdePopoverHandle<T> showIdePopover<T>({
   AlignmentGeometry? transitionAlignment,
   Duration? showDuration,
   Duration? dismissDuration,
+  bool adaptive = false,
 }) {
-  final stateKey = GlobalKey<sf.OverlayHandlerStateMixin>(
-    debugLabel: 'IdePopoverOverlay',
+  final delegate = sf.showOverlay<T>(
+    context,
+    sf.PopoverConfiguration(
+      alignment: alignment,
+      builder: key == null
+          ? builder
+          : (context) => KeyedSubtree(key: key, child: builder(context)),
+      anchorAlignment: anchorAlignment,
+      widthConstraint: _toSfConstraint(widthConstraint),
+      heightConstraint: _toSfConstraint(heightConstraint),
+      rootOverlay: rootOverlay,
+      modal: modal,
+      barrierDismissable: barrierDismissible,
+      clipBehavior: clipBehavior,
+      offset: offset,
+      margin: margin,
+      follow: follow,
+      consumeOutsideTaps: consumeOutsideTaps,
+      allowInvertHorizontal: allowInvertHorizontal,
+      allowInvertVertical: allowInvertVertical,
+      dismissBackdropFocus: dismissBackdropFocus,
+      transitionAlignment: transitionAlignment,
+      showDuration: showDuration,
+      dismissDuration: dismissDuration,
+    ),
+    adaptive: adaptive,
   );
-  final delegate = sf.showPopover<T>(
-    context: context,
-    alignment: alignment,
-    builder: key == null
-        ? builder
-        : (context) => KeyedSubtree(key: key, child: builder(context)),
-    anchorAlignment: anchorAlignment,
-    widthConstraint: _toSfConstraint(widthConstraint),
-    heightConstraint: _toSfConstraint(heightConstraint),
-    key: stateKey,
-    rootOverlay: rootOverlay,
-    modal: modal,
-    barrierDismissable: barrierDismissible,
-    clipBehavior: clipBehavior,
-    offset: offset,
-    margin: margin,
-    follow: follow,
-    consumeOutsideTaps: consumeOutsideTaps,
-    allowInvertHorizontal: allowInvertHorizontal,
-    allowInvertVertical: allowInvertVertical,
-    dismissBackdropFocus: dismissBackdropFocus,
-    transitionAlignment: transitionAlignment,
-    showDuration: showDuration,
-    dismissDuration: dismissDuration,
-  );
-  return IdePopoverHandle<T>._(delegate, stateKey);
+  return IdePopoverHandle<T>._(delegate);
 }
 
 sf.PopoverConstraint _toSfConstraint(IdePopoverConstraint constraint) {
