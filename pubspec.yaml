@@ -21,7 +21,7 @@ dependencies:
   mixin_markdown_widget: 0.3.1
   multi_split_view: ^3.6.2
   pasteboard: ^0.5.0
-  shadcn_flutter: 0.0.52
+  shadcn_flutter: ^0.0.53
   shared_preferences: ^2.5.5
   toml: ^0.18.0
   window_manager: ^0.5.1

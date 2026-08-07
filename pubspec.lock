@@ -681,10 +681,10 @@ packages:
     dependency: "direct main"
     description:
       name: shadcn_flutter
-      sha256: b04e2f790e182007d02b78234c647df393f2ea95b39d8da88d7cbdaed56f7701
+      sha256: "52ce655e0d81e2fc5fa9e69a3871c1b98bd4fb34f62e7a58e9810a5bfe101955"
       url: "https://pub.flutter-io.cn"
     source: hosted
-    version: "0.0.52"
+    version: "0.0.53"
   shared_preferences:
     dependency: "direct main"
     description:
