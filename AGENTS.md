@@ -278,6 +278,7 @@ flutter test test/src/features/agent/presentation/agent_conversation_widget_test
 - 保留 Flutter 生成的 `linux/` `macos/` `windows/` 目录，除非任务明确针对原生桌面行为。生成文件出现非预期改动时，先确认是不是 Flutter 工具产生的，保留就要说明原因。
 - 不提交构建产物、`.dart_tool`、日志或其他工具链产物。本仓库没有 Cargo.toml，`Cargo.lock` 已加入 `.gitignore`。
 - 不建空占位目录（只放 `.gitkeep` 的目录不要入库）——它们会和 G6 的「不要新建顶层宽泛目录」直接冲突。
+- 走流程的任务，阶段产物写入 `.workflow/<类型>/<日期>-<任务>/<NN>-<阶段>.md` 并跟代码一起提交。约定见 [`.workflow/README.md`](.workflow/README.md)，提示词见 [`docs/prompts/`](docs/prompts/README.md)。**这些文件入 git，粘日志或路径前必须脱敏**（G8 的精神同样适用）。
 - 用户可感知的变化写进 `CHANGELOG.md` 的 `[未发布]`；纯重构和内部调整不必写。
 - Dart / Flutter 技能同时装在 `.agents/skills` 和 `.claude/skills`（内容一致）。处理 widget 测试、集成测试、静态分析、路由、本地化、JSON 序列化、响应式布局、依赖冲突、覆盖率这类聚焦任务时用对应技能。
 - 仓库已由 CodeGraph 索引（存在 `.codegraph/`）。定位或理解代码时优先用 `codegraph explore "<问题或符号名>"`，比 grep + 逐个读文件省一个数量级的往返。

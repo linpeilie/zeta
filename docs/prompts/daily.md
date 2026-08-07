@@ -121,7 +121,12 @@
 - Provider CLI：<~/.grok/logs/unified.jsonl 或对应 CLI 日志>
 - 会话目录：<对应 session 目录的 summary / events 尾部>
 
-输出：事件时间线（对齐三处时间戳）+ 根因假设 + 支持该假设的证据 + 无法坐实的部分。
+输出写入 .workflow/bugfix/<YYYY-MM-DD>-<现象简称>/01-时间线交叉验证.md：
+事件时间线（对齐三处时间戳）+ 根因假设 + 支持该假设的证据 + 无法坐实的部分。
+
+日志必须脱敏 —— 这个文件会入 git。写「RPC id 3f2 未返回」这类结论，
+不要整段粘贴日志，不要留完整项目路径。
+
 我确认根因后再谈修复。
 ```
 
@@ -132,7 +137,12 @@
 所有异步路径校验 listener generation、runtime/epoch 和 disposed 状态。
 如果修复要区分 Provider 行为差异（比如并发能力），
 按 capability 建模，不要按 provider 名字硬编码（G4）。
+
+根因结论和修复方案写入同一文件夹的 02-根因与修复.md。
 ```
+
+> 时序类 bug 的排查产物值得留档：**同一类症状会反复出现**，下次先翻 `.workflow/bugfix/`
+> 往往能直接命中。S/M 档 bug 不需要建文件夹。
 
 ---
 

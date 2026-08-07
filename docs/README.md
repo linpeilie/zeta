@@ -85,6 +85,7 @@ docs/
 - [安全策略](../SECURITY.md) — 威胁模型与漏洞上报方式（中英同页）
 - [行为准则](../CODE_OF_CONDUCT.md)（中英同页）
 - [AGENTS.md](../AGENTS.md) — AI 协作规则的唯一权威源
+- [.workflow/](../.workflow/README.md) — 开发过程产物（各流程的阶段输出，随代码提交）
 
 ---
 
