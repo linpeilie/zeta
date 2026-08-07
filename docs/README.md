@@ -7,6 +7,7 @@
 | **用户**，想装上用起来 | [README](../README.md) → [故障排查与数据说明](./product/troubleshooting.md) |
 | **贡献者**，第一次读代码 | [架构总览](./architecture/overview.md) → [术语表](./guides/glossary.md) → [贡献指南](../CONTRIBUTING.md) |
 | **贡献者**，已经上手 | [开发者文档](./guides/developer_guide.md) → [工程规范](./architecture/engineering_standards.md) |
+| **贡献者**，用 AI 辅助开发 | [提示词库](./prompts/README.md) → [日常任务模板](./prompts/daily.md) |
 | **评估者**，想了解设计取舍 | [产品需求文档](./product/product_requirements.md) → [设计文档](./architecture/design_document.md) |
 | **维护者**，要发版 | [发版指南](./release/release_guide.md) → [更新日志](../CHANGELOG.md) |
 
@@ -16,6 +17,7 @@
 docs/
 ├── architecture/   架构总览、设计文档、工程规范、详细设计
 ├── guides/         开发者文档、术语表
+├── prompts/        AI 辅助开发的提示词模板与开发流程
 ├── product/        产品需求、故障排查与数据说明（中英）
 ├── protocols/      Provider 协议锁定与适配方案
 ├── release/        发版流程
@@ -36,6 +38,13 @@ docs/
 - [开发者文档](./guides/developer_guide.md) — 环境、命令、目录结构、Provider 接入指南、UI 与测试细则、常见问题
 - [**术语表**](./guides/glossary.md)（[English](./guides/glossary.en.md)）⭐ — thread / turn / entryId / bundle / capability / coalescing / lease 等高频术语
 - [贡献指南](../CONTRIBUTING.md)（[English](../CONTRIBUTING.en.md)）— 环境、提交格式、架构红线摘要
+
+## prompts — AI 辅助开发
+
+- [**提示词库**](./prompts/README.md) ⭐ — 三档复杂度判定与模板选择
+- [日常任务提示词](./prompts/daily.md) — 新增功能 / 需求变更 / Bug 修复 / 重构，各 3 档
+- [开发流程与阶段提示词](./prompts/workflow.md) — 需求分析 → 方案设计 → 任务拆解 → 实现 → 验收，含 Provider 接入与 AgentEvent 接入专项流程
+- [可拼接片段](./prompts/snippets.md) — 约束尾缀、测试尾缀、输出格式约定、反模式禁令
 
 ## product — 产品
 
