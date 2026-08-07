@@ -126,6 +126,12 @@
       "sourceType": "github",
       "skillPath": "skills/flutter-use-http-package/SKILL.md",
       "computedHash": "17efcf4da9933afaf9c1d41940bd6b92f1ae73dcae4bf6c59cfe24f7e487ee9f"
+    },
+    "shadcn-flutter": {
+      "source": "sunarya-thito/shadcn_flutter",
+      "sourceType": "github",
+      "skillPath": "packages/shadcn_flutter/skills/shadcn-flutter/SKILL.md",
+      "computedHash": "efe2854f7276882097f33993fe25f46314e21cb25bbd1b30914150dca97600d9"
     }
   }
 }
