@@ -231,3 +231,159 @@
 - 第 10 条：UI urgency 选 next-frame 还是 immediate，理由是什么？
 - 第 16 条：有没有 raw payload、source id 推断或 Provider 分支漏到 presentation/Store？
 ```
+
+---
+
+## 专项流程 C：协议升级
+
+Agent CLI 发新版时的跟版本流程。**顺序不能变**：先 diff schema，再改代码，最后真机验证。反过来做会把「协议真的变了」和「我理解错了」混在一起。
+
+当前 pin：Codex CLI `0.144.5`（schema 快照在 `third_party/codex_app_server_schema/`）；Grok CLI 基线 `0.2.119`。
+
+### 第一步 · Diff（不写代码）
+
+```text
+要把 Codex 从 <旧版本> 升到 <新版本>。
+
+先只做 schema diff，不要改任何适配层代码：
+
+./tool/gen_codex_schema.sh --diff        # Windows: ./tool/gen_codex_schema.ps1 -Diff
+
+把差异按四类分门别类，逐条列出：
+- A 新增字段/方法：我们要不要用？不用就明确说不用
+- B 改名/移位：影响哪些 mapper/codec
+- C 删除：我们有没有在依赖它？没有替代品的话是 breaking
+- D 语义变化（字段名没变但含义变了）—— 这类最危险，schema diff 看不出来，
+  要结合 changelog 和实际抓包判断
+
+输出分类表 + 你判断的影响面。先不要动代码。
+```
+
+**阶段门：** 每条差异都归了类；D 类（语义变化）单独标出并说明判断依据。
+
+### 第二步 · 改适配层
+
+```text
+差异分类：<粘贴第一步的产出>
+
+改适配层。守住 G1/G6：
+
+- 协议字段的解析、兼容、默认值只能出现在 data 层的 mapper/codec/client
+- domain 模型和 AgentEvent 的形状不因协议升级而暴露新的协议字段
+- 如果新协议带来的是全新语义（不只是字段搬家），先停下来说明，
+  可能需要走「专项流程 B：新增 AgentEvent」
+
+先用 fake contract test 覆盖新旧两种 payload，跑绿了再进真机验证。
+```
+
+**阶段门：** fake contract test 覆盖新旧 payload 且全绿；`flutter analyze` 干净。
+
+### 第三步 · 真机 smoke
+
+```text
+适配层改完，跑真实 CLI 冒烟：
+
+python tool/smoke_codex_app_server.py --expected-version <新版本>
+python tool/smoke_codex_plan_mode.py --expected-version <新版本>
+
+记录：OS/架构、CLI 版本、Schema/包装器类型、逐项通过或失败。
+
+硬要求：
+- 记录里不得出现 prompt、回复、文件内容、凭证、原始 payload、
+  thread/turn id 或 stderr 原文
+- 实验协议缺少预期事件时，保留实际方法名级差异并**返回失败**，
+  不能用 stable schema 或 fake peer 的结果顶替
+- 没有设备或凭据跑不了的部分，标「待执行/阻塞」，**不得推断通过**
+```
+
+**阶段门：** smoke 记录完整；失败项如实保留。
+
+### 第四步 · 收口
+
+```text
+1. 更新 third_party/codex_app_server_schema/ 的 pin 快照
+2. 更新 docs/protocols/codex_app_server_protocol.md 的版本与升级记录
+3. 如果最低版本要求变了，同步改 CONTRIBUTING.md、docs/guides/developer_guide.md §2
+   和 AGENTS.md §5 的事实清单
+4. 用户可感知的兼容性变化写进 CHANGELOG.md
+5. 给出提交信息
+```
+
+> Grok / ACP 升级同理，只是没有 schema 导出工具：用 changelog + 脱敏 fixture 抓包代替第一步，其余不变。**Grok 的多会话隔离是 `0.2.119` 才有的**，降低基线要重新验证并发行为。
+
+---
+
+## 专项流程 D：持久化格式演进
+
+改 `~/.zeta` 下任何落盘结构。**失败代价是用户数据读不出来，且通常不可逆** —— 所以这个流程的核心是「先想清楚旧数据怎么办」。
+
+### 第一步 · 定性变更
+
+```text
+要改的持久化结构：<文件名 + 改什么>
+
+先定性，不要写代码。这次属于哪一类：
+
+- 加字段 → 给默认值就行，不用升版本
+- 改字段语义（名字没变，含义变了）→ **必须升版本**，否则旧数据会被误读
+- 改字段名 / 改结构 → 升版本 + 迁移
+- 删字段 → 确认没有读取方，decoder 要能忽略未知字段
+
+然后回答：
+1. 已经落盘的旧数据长什么样？（列出实际的旧版本 JSON 形状）
+2. 用户升级后第一次启动，读到旧数据会发生什么？
+3. 用户降级回旧版本，读到新数据会发生什么？（至少不能崩）
+```
+
+**阶段门：** 变更定性明确；旧数据的读取路径想清楚了。
+
+> 「加字段」是唯一不用升版本的情况。**拿不准就升版本** —— 版本号很便宜，数据丢了很贵。
+
+### 第二步 · 设计兼容策略
+
+```text
+变更定性：<第一步产出>
+
+设计兼容策略：
+
+1. 版本号怎么变（参考 AgentProviderSettings.currentVersion = 2 的做法）
+2. tryDecode 的宽容路径：缺字段、损坏 JSON、旧版本、未知字段，
+   四种情况分别怎么处理 —— 任何一种都不能阻断应用启动
+3. 需要迁移的话：迁移在哪一层做？
+   （只能在 data/config 边界，domain 不认识 legacy 字段）
+4. 迁移必须幂等，且**以已存在的目标文件为准**，不能用空值覆盖待迁移数据
+5. 写不写 migration marker？部分失败怎么办？
+   （本次运行用内存状态，不标完成，不阻断启动，下次继续重试）
+
+守住 G8：新增的落盘字段只能是规范化白名单。
+不得写入 prompt、回复、工具输出、原始错误文本、环境变量、凭证或 Provider raw payload。
+```
+
+**阶段门：** 四种宽容路径都有说法；迁移幂等性和失败处理明确。
+
+### 第三步 · 实现与验证
+
+```text
+按策略实现，测试必须覆盖这五条（缺一不可）：
+
+1. 新版本写 → 新版本读，往返一致
+2. 旧版本 JSON → 新版本读，字段正确迁移或补默认值
+3. 损坏 JSON（截断、非法字符、类型不对）→ 不崩，降级到可用状态
+4. 缺字段 / 多出未知字段 → 不崩
+5. 迁移跑两次 → 结果一致（幂等）
+
+用真实的旧版本 JSON 做 fixture，不要自己捏一个理想化的。
+```
+
+**阶段门：** 五条测试全绿；用的是真实旧数据形状。
+
+### 第四步 · 收口
+
+```text
+1. 同步 docs/guides/developer_guide.md §9 的目录结构和字段说明
+2. 如果改了 ~/.zeta 的可见文件，同步 docs/product/troubleshooting.md
+   的「Zeta 在你电脑上存了什么」
+3. 按 AGENTS.md §6 检查其余文档
+4. 用户可感知的（比如需要重新配置）写 CHANGELOG.md
+5. 给出提交信息
+```

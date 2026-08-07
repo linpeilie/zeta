@@ -41,10 +41,11 @@ docs/
 
 ## prompts — AI 辅助开发
 
-- [**提示词库**](./prompts/README.md) ⭐ — 三档复杂度判定与模板选择
-- [日常任务提示词](./prompts/daily.md) — 新增功能 / 需求变更 / Bug 修复 / 重构，各 3 档
-- [功能开发流程](./prompts/workflow.md) — 需求分析 → 方案设计 → 任务拆解 → 实现 → 验收，含 Provider 接入与 AgentEvent 接入专项流程
-- [重构开发流程](./prompts/refactoring.md) — 动机 → 测绘 → 安全网 → 目标态 → 执行 → 等价性验收，含重构分型与 Zeta 陷阱表
+- [**提示词库**](./prompts/README.md) ⭐ — 三档复杂度判定、三套流程怎么选
+- [日常任务提示词](./prompts/daily.md) — 新增功能 / 需求变更 / Bug 修复 / 重构各 3 档，外加平台适配、提交前自审、CI 排查、紧急修复、技术调研
+- [功能开发流程](./prompts/workflow.md) — 需求分析 → 方案设计 → 任务拆解 → 实现 → 验收；专项：Provider 接入、AgentEvent 接入、协议升级、持久化格式演进
+- [重构流程](./prompts/refactoring.md) — 动机 → 测绘 → 安全网 → 目标态 → 执行 → 等价性验收，含重构分型与 Zeta 陷阱表
+- [性能优化流程](./prompts/performance.md) — 基线 → 归因 → 改动 → 同基线复测 → 固化，含项目性能指标与回归排查
 - [可拼接片段](./prompts/snippets.md) — 约束尾缀、测试尾缀、输出格式约定、反模式禁令
 
 ## product — 产品
