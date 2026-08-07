@@ -188,6 +188,3 @@ google-services.json
 
 target
 .vscode
-
-# AI 协作工具的本地会话数据（规则文件 CLAUDE.md / AGENTS.md 仍然入库）
-.claude/
