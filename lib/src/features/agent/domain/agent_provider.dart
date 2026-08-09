@@ -1,8 +1,8 @@
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
-/// Agent provider 的统一能力接口。
+/// Data adapter 的统一生命周期宿主与 bundle 适配入口。
 ///
-/// UI 只依赖这个接口，不关心底层是 Codex app-server、ACP 还是 Claude Code CLI。
+/// Application / Presentation 依赖 [AgentProviderBundle] 的中立端口，不直接持有本接口。
 /// 每个 provider 负责把自己的协议事件映射成 [AgentEvent]。
 abstract class AgentProvider {
   /// 当前 provider 的启动和显示配置。

@@ -1,8 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_permission_state.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_permission_selection_controller.dart';
-import 'package:zeta/src/features/agent/application/agent_permission_state_store.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_identity.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
@@ -103,7 +104,14 @@ void main() {
         },
       );
       addTearDown(controller.dispose);
-      controller.bind(port: null, persistedOptionId: ':workspace');
+      controller.bind(
+        port: null,
+        persistedOptionId: ':workspace',
+        runtimeIdentity: const AgentProviderRuntimeIdentity(
+          providerId: defaultAgentProviderId,
+          generation: 1,
+        ),
+      );
       controller.bindThread('thread-a');
 
       await controller.applyThreadSettings(
@@ -118,53 +126,55 @@ void main() {
       controller.bindThread('thread-b');
       expect(controller.selectedOptionId, ':workspace');
       controller.bindThread('thread-a');
-      expect(controller.selectedOptionId, ':read-only');
+      expect(controller.selectedOptionId, ':workspace');
     });
 
-    test('Grok runtime scope broadcasts to every controller', () async {
-      var runtimeMode = GrokPermissionMode.ask;
+    test('Grok runtime scope stays inside its owning Binding', () async {
+      var firstRuntimeMode = GrokPermissionMode.ask;
+      var secondRuntimeMode = GrokPermissionMode.ask;
       final notifications = <({String method, Map<String, Object?> params})>[];
-      final adapter = GrokPermissionPolicyAdapter(
+      final firstAdapter = GrokPermissionPolicyAdapter(
         isInitialized: () => true,
         isDisposed: () => false,
-        currentMode: () => runtimeMode,
-        onModeApplied: (next) => runtimeMode = next,
+        currentMode: () => firstRuntimeMode,
+        onModeApplied: (next) => firstRuntimeMode = next,
         notifyLive: (method, params) {
           notifications.add((method: method, params: params));
         },
       );
-      final stateStore = AgentPermissionStateStore();
-      const runtimeIdentity = AgentProviderRuntimeIdentity(
-        providerId: grokAgentProviderId,
-        generation: 1,
-      );
-      stateStore.activateRuntime(
-        runtimeIdentity,
-        initialProviderDefault: const AgentPermissionSelection(optionId: 'ask'),
+      final secondAdapter = GrokPermissionPolicyAdapter(
+        isInitialized: () => true,
+        isDisposed: () => false,
+        currentMode: () => secondRuntimeMode,
+        onModeApplied: (next) => secondRuntimeMode = next,
+        notifyLive: (_, _) {},
       );
       final first = AgentConversationPermissionSelectionController(
         persistOptionId: (_) async {},
-        stateStore: stateStore,
       );
       final second = AgentConversationPermissionSelectionController(
         persistOptionId: (_) async {},
-        stateStore: stateStore,
       );
       addTearDown(() {
         first.dispose();
         second.dispose();
-        stateStore.dispose();
       });
       first.bind(
-        port: adapter,
+        port: firstAdapter,
         persistedOptionId: 'ask',
-        runtimeIdentity: runtimeIdentity,
+        runtimeIdentity: const AgentProviderRuntimeIdentity(
+          providerId: grokAgentProviderId,
+          generation: 1,
+        ),
       );
       first.bindThread('thread-a');
       second.bind(
-        port: adapter,
+        port: secondAdapter,
         persistedOptionId: 'ask',
-        runtimeIdentity: runtimeIdentity,
+        runtimeIdentity: const AgentProviderRuntimeIdentity(
+          providerId: grokAgentProviderId,
+          generation: 2,
+        ),
       );
       second.bindThread('thread-b');
 
@@ -175,7 +185,8 @@ void main() {
         ),
       );
 
-      expect(runtimeMode, GrokPermissionMode.alwaysApprove);
+      expect(firstRuntimeMode, GrokPermissionMode.alwaysApprove);
+      expect(secondRuntimeMode, GrokPermissionMode.ask);
       expect(notifications, hasLength(1));
       expect(notifications.single.method, '_x.ai/yolo_mode_changed');
       expect(notifications.single.params, <String, Object?>{
@@ -185,12 +196,7 @@ void main() {
         'clientIdentifier': 'zeta',
       });
       expect(first.selectedOptionId, 'always-approve');
-      expect(
-        second.selectedOptionId,
-        'always-approve',
-        reason:
-            'runtime-global Grok state needs an explicit shared runtime signal',
-      );
+      expect(second.selectedOptionId, 'ask');
     });
 
     test(
@@ -375,15 +381,15 @@ void main() {
 
         final permissionState = firstBinding.binding.permissions.state;
         expect(
-          permissionState.threadStates['thread-a']?.selection.optionId,
+          permissionState.sessionEffective?.selection.optionId,
           ':read-only',
         );
         expect(
-          permissionState.threadStates['thread-a']?.source,
+          permissionState.sessionEffective?.source,
           AgentPermissionStateSource.serverSettings,
         );
         expect(
-          secondBinding.binding.permissions.state.threadStates['thread-a'],
+          secondBinding.binding.permissions.state.sessionEffective,
           isNull,
         );
         expect(permissionState.providerDefaultPreference, defaultBefore);

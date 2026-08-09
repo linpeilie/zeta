@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:zeta/src/features/agent/data/datasources/local_history/codex_usage_log_scanner.dart';
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_usage_log_scanner.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_global_runtime.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/usage_statistics/data/codex_usage_statistics_repository.dart';
 import 'package:zeta/src/features/usage_statistics/data/grok_usage_statistics_repository.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_index_store.dart';
@@ -97,7 +100,7 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
           config,
           (context) => _loadProviderInstance(
             config,
-            provider: context.bundle.runtime.provider,
+            bundle: context.bundle,
             seedFuture: seedFuture,
             forceRefresh: forceRefresh,
           ),
@@ -147,11 +150,15 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
 
   Future<AgentUsagePanelLoadEvent> _loadProviderInstance(
     AgentProviderConfig config, {
-    required AgentProvider provider,
+    AgentProvider? provider,
+    AgentProviderBundle? bundle,
     required Future<UsageStatisticsIndexSnapshot> seedFuture,
     required bool forceRefresh,
   }) async {
-    final quota = await _readQuota(provider);
+    assert(provider != null || bundle != null);
+    final quota = bundle == null
+        ? await _readProviderQuota(provider!)
+        : await _readQuotaPort(bundle.usageQuota);
     if (config.kind != AgentProviderKind.codexAppServer &&
         config.kind != AgentProviderKind.acp) {
       return AgentUsagePanelProviderLoaded(
@@ -171,13 +178,15 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
       final source = switch (config.kind) {
         AgentProviderKind.codexAppServer => await _loadCodexUsage(
           provider: provider,
+          config: config,
           seedFuture: seedFuture,
           earliest: earliest,
           forceRefresh: forceRefresh,
         ),
         AgentProviderKind.acp => await GrokUsageStatisticsRepository(
-          providerLoader: () async => provider,
+          providerLoader: provider == null ? null : () async => provider,
           scanner: grokScanner,
+          environment: provider == null ? _runtimeEnvironment(config) : null,
           includeQuota: false,
           clock: _clock,
         ).load(earliest: earliest, forceRefresh: forceRefresh),
@@ -203,7 +212,8 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
   }
 
   Future<UsageStatisticsSourceSnapshot> _loadCodexUsage({
-    required AgentProvider provider,
+    required AgentProvider? provider,
+    required AgentProviderConfig config,
     required Future<UsageStatisticsIndexSnapshot> seedFuture,
     required DateTime earliest,
     required bool forceRefresh,
@@ -211,9 +221,10 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
     final seed = await seedFuture;
     final memoryIndex = MemoryUsageStatisticsIndexStore()..snapshot = seed;
     return CodexUsageStatisticsRepository(
-      providerLoader: () async => provider,
+      providerLoader: provider == null ? null : () async => provider,
       indexStore: memoryIndex,
       scanner: scanner,
+      environment: provider == null ? _runtimeEnvironment(config) : null,
       includeQuota: false,
       clock: _clock,
     ).load(earliest: earliest, forceRefresh: forceRefresh);
@@ -226,15 +237,30 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
     );
   }
 
-  Future<AgentUsageQuotaSnapshot?> _readQuota(AgentProvider provider) async {
+  Future<AgentUsageQuotaSnapshot?> _readProviderQuota(
+    AgentProvider provider,
+  ) async {
     if (provider case final AgentUsageQuotaProvider quotaProvider) {
-      try {
-        return await quotaProvider.readUsageQuota();
-      } catch (_) {
-        return null;
-      }
+      return _readQuotaPort(quotaProvider);
     }
     return null;
+  }
+
+  Future<AgentUsageQuotaSnapshot?> _readQuotaPort(
+    AgentUsageQuotaProvider? quotaPort,
+  ) async {
+    if (quotaPort == null) {
+      return null;
+    }
+    try {
+      return await quotaPort.readUsageQuota();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Map<String, String> _runtimeEnvironment(AgentProviderConfig config) {
+    return <String, String>{...Platform.environment, ...config.environment};
   }
 
   UsageTokenBreakdown _sumTokens(List<AgentUsageRecord> records) {

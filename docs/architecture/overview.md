@@ -109,6 +109,9 @@ flowchart TD
 
 **UI 按 capability 渲染，绝不按 provider 名字硬编码。** 端口缺失或 `capability = false` 时，对应入口根本不会出现在菜单里；应用层误调用会抛 `UnsupportedError`——**不允许静默成功**，因为静默成功会让用户以为操作生效了。
 
+Bundle 是严格边界：它和 `AgentRuntimePort` 不提供取回原始 `AgentProvider` 的通道；
+ViewModel 只持有中立端口。
+
 这也是"新增 Provider 不用改共享层"的底气所在。正常的接入范围是：
 
 ```
@@ -132,7 +135,7 @@ flowchart LR
 ```
 
 - Registry 是实例和子进程的唯一所有者；global runtime 每个 Provider ID 一个，永不空闲回收。
-- Binding 以 draft/thread key 唯一代表一个逻辑会话，并独占 session runtime、事件 generation、权限和活跃操作。
+- Binding 以 draft/thread key 唯一代表一个逻辑会话，并独占 session runtime、事件 generation、单会话权限快照和活跃操作；权限状态不再使用跨会话注册表。
 - 新建草稿、打开 thread、读取历史/模型/Skill 不启动 session runtime；只有首次提交调用 `beginTurn()`。
 - cancel、steer、审批回写等迟到操作只能 `runCurrent()`，runtime 已回收时 fail-closed。
 - Manager 每分钟 single-flight 扫描；没有 turn/RPC 且空闲满 10 分钟才按精确 identity 回收。旧进程未 dispose 完前同会话不能启动新进程。

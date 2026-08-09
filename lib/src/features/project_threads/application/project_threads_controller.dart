@@ -8,7 +8,6 @@ import 'package:zeta/src/features/agent/application/agent_provider_global_runtim
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/project_threads/domain/project_threads_session_snapshot.dart';
 import 'package:zeta/src/features/project_threads/presentation/project_threads_view_model.dart';
@@ -358,16 +357,17 @@ class ProjectThreadsController {
     await _runForThread<void>(
       projectPath: projectPath,
       threadId: threadId,
-      operation: (provider) async {
+      operation: (bundle) async {
         _requireCapability(
-          provider: provider,
-          supported: provider.capabilities.canRenameThread,
+          bundle: bundle,
+          supported: bundle.capabilities.canRenameThread,
           operation: 'rename threads',
         );
-        final threadMutations = provider.bundle.threadMutations;
+        final threadMutations = bundle.threadMutations;
         if (threadMutations == null) {
           throw StateError(
-            '${provider.config.displayName} missing thread mutation port',
+            '${bundle.runtime.config.displayName} '
+            'missing thread mutation port',
           );
         }
         viewModel.updateThreadTitle(
@@ -388,16 +388,17 @@ class ProjectThreadsController {
     await _runForThread<void>(
       projectPath: projectPath,
       threadId: threadId,
-      operation: (provider) async {
+      operation: (bundle) async {
         _requireCapability(
-          provider: provider,
-          supported: provider.capabilities.canArchiveThread,
+          bundle: bundle,
+          supported: bundle.capabilities.canArchiveThread,
           operation: 'archive threads',
         );
-        final threadMutations = provider.bundle.threadMutations;
+        final threadMutations = bundle.threadMutations;
         if (threadMutations == null) {
           throw StateError(
-            '${provider.config.displayName} missing thread mutation port',
+            '${bundle.runtime.config.displayName} '
+            'missing thread mutation port',
           );
         }
         await threadMutations.archiveThread(threadId);
@@ -418,16 +419,17 @@ class ProjectThreadsController {
     await _runForThread<void>(
       projectPath: projectPath,
       threadId: threadId,
-      operation: (provider) async {
+      operation: (bundle) async {
         _requireCapability(
-          provider: provider,
-          supported: provider.capabilities.canUnarchiveThread,
+          bundle: bundle,
+          supported: bundle.capabilities.canUnarchiveThread,
           operation: 'unarchive threads',
         );
-        final threadMutations = provider.bundle.threadMutations;
+        final threadMutations = bundle.threadMutations;
         if (threadMutations == null) {
           throw StateError(
-            '${provider.config.displayName} missing thread mutation port',
+            '${bundle.runtime.config.displayName} '
+            'missing thread mutation port',
           );
         }
         await threadMutations.unarchiveThread(threadId);
@@ -448,29 +450,30 @@ class ProjectThreadsController {
     await _runForThread<void>(
       projectPath: projectPath,
       threadId: threadId,
-      operation: (provider) async {
-        if (provider.capabilities.canDeleteThread) {
-          final threadMutations = provider.bundle.threadMutations;
+      operation: (bundle) async {
+        if (bundle.capabilities.canDeleteThread) {
+          final threadMutations = bundle.threadMutations;
           if (threadMutations == null) {
             throw StateError(
-              '${provider.config.displayName} missing thread mutation port',
+              '${bundle.runtime.config.displayName} '
+              'missing thread mutation port',
             );
           }
           await threadMutations.deleteThread(threadId);
-        } else if (provider.capabilities.canRemoveThreadFromList) {
-          final localThreadList = provider.bundle.localThreadList;
+        } else if (bundle.capabilities.canRemoveThreadFromList) {
+          final localThreadList = bundle.localThreadList;
           if (localThreadList != null) {
             await localThreadList.removeThreadFromList(threadId);
           } else {
             _requireCapability(
-              provider: provider,
+              bundle: bundle,
               supported: false,
               operation: 'delete or remove threads',
             );
           }
         } else {
           _requireCapability(
-            provider: provider,
+            bundle: bundle,
             supported: false,
             operation: 'delete or remove threads',
           );
@@ -493,20 +496,21 @@ class ProjectThreadsController {
     final session = await _runForThread<AgentSession>(
       projectPath: projectPath,
       threadId: threadId,
-      operation: (provider) async {
+      operation: (bundle) async {
         _requireCapability(
-          provider: provider,
-          supported: provider.capabilities.canForkThread,
+          bundle: bundle,
+          supported: bundle.capabilities.canForkThread,
           operation: 'fork threads',
         );
-        final threadBranching = provider.bundle.threadBranching;
+        final threadBranching = bundle.threadBranching;
         if (threadBranching == null) {
           throw StateError(
-            '${provider.config.displayName} missing thread branching port',
+            '${bundle.runtime.config.displayName} '
+            'missing thread branching port',
           );
         }
         final requestPermissionSnapshot = await _resolveForkPermissionSnapshot(
-          provider: provider,
+          bundle: bundle,
           threadId: threadId,
           supplied: permissionSnapshot,
         );
@@ -539,7 +543,7 @@ class ProjectThreadsController {
   }
 
   Future<AgentPermissionRequestSnapshot> _resolveForkPermissionSnapshot({
-    required AgentProvider provider,
+    required AgentProviderBundle bundle,
     required String threadId,
     required AgentPermissionRequestSnapshot? supplied,
   }) async {
@@ -547,19 +551,20 @@ class ProjectThreadsController {
         supplied.source != AgentPermissionRequestSource.providerFallback) {
       return supplied;
     }
+    final providerId = bundle.runtime.config.id;
     final binding = bindingManager?.bindingForThread(
-      providerId: provider.config.id,
+      providerId: providerId,
       threadId: threadId,
     );
     if (binding != null) {
       return binding.permissions.snapshotForRequest(threadId: threadId);
     }
     final configuredId = providerController
-        .providerConfigById(provider.config.id)
+        .providerConfigById(providerId)
         ?.resolvedPermissionOptionId
         ?.trim();
     AgentPermissionSelection? catalogDefault;
-    final permissionPolicy = provider.bundle.permissionPolicy;
+    final permissionPolicy = bundle.permissionPolicy;
     if (permissionPolicy != null) {
       try {
         final catalog = await permissionPolicy.listPermissionOptions();
@@ -721,7 +726,7 @@ class ProjectThreadsController {
           final collected = await globalRuntime.run(
             config,
             (runtime) => _collectProviderThreads(
-              provider: runtime.bundle.runtime.provider,
+              bundle: runtime.bundle,
               projectPath: projectPath,
               archived: archived,
               searchTerm: searchTerm,
@@ -775,12 +780,12 @@ class ProjectThreadsController {
 
   /// 单个 provider 拉取至多 [projectThreadPerProviderFetchCap] 条。
   Future<List<AgentThreadSummary>> _collectProviderThreads({
-    required AgentProvider provider,
+    required AgentProviderBundle bundle,
     required String projectPath,
     required bool archived,
     required String? searchTerm,
   }) async {
-    final threadCatalog = provider.bundle.threadCatalog;
+    final threadCatalog = bundle.threadCatalog;
     if (threadCatalog == null) {
       return const <AgentThreadSummary>[];
     }
@@ -819,13 +824,13 @@ class ProjectThreadsController {
   }
 
   void _requireCapability({
-    required AgentProvider provider,
+    required AgentProviderBundle bundle,
     required bool supported,
     required String operation,
   }) {
     if (!supported) {
       throw UnsupportedError(
-        '${provider.config.displayName} does not support $operation',
+        '${bundle.runtime.config.displayName} does not support $operation',
       );
     }
   }
@@ -869,7 +874,7 @@ class ProjectThreadsController {
   Future<T?> _runForThread<T>({
     required String projectPath,
     required String threadId,
-    required Future<T> Function(AgentProvider provider) operation,
+    required Future<T> Function(AgentProviderBundle bundle) operation,
   }) async {
     await providerController.loadSettings();
     final ownerId = _providerIdForThread(projectPath, threadId);
@@ -880,10 +885,7 @@ class ProjectThreadsController {
     if (config == null) {
       return null;
     }
-    return globalRuntime.run(
-      config,
-      (runtime) => operation(runtime.bundle.runtime.provider),
-    );
+    return globalRuntime.run(config, (runtime) => operation(runtime.bundle));
   }
 
   String? _providerIdForThread(String projectPath, String threadId) {

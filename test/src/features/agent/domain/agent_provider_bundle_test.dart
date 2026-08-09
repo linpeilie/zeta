@@ -58,7 +58,6 @@ void main() {
           source: AgentPermissionRequestSource.threadEffective,
         );
 
-        expect(bundle.provider, same(provider));
         expect(bundle.runtime.config, same(provider.config));
         expect(bundle.runtime.capabilities, same(provider.capabilities));
         expect(bundle.runtime.runtimeInfo?.runtimeId, 'runtime-1');

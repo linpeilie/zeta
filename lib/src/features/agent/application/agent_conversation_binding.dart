@@ -6,7 +6,6 @@ import 'package:zeta/src/features/agent/application/agent_conversation_permissio
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 /// 一个逻辑会话的稳定身份；草稿拿到真实 threadId 后会原子晋升。
@@ -84,9 +83,6 @@ final class AgentConversationRuntimeContext {
   AgentProviderConfig get config => bundle.runtime.config;
   AgentProviderCapabilities get capabilities => bundle.runtime.capabilities;
   AgentRuntimeScope? get runtimeScope => bundle.runtime.runtimeScope;
-
-  // 兼容尚未迁完的 application 调用；新的调用应优先消费 bundle 端口。
-  AgentProvider get provider => bundle.runtime.provider;
 }
 
 /// 空闲扫描使用的不可变候选，带精确 runtime identity 防止 ABA。
@@ -159,7 +155,6 @@ final class AgentConversationBinding extends ChangeNotifier {
     permissions.resetForProvider(
       port: null,
       persistedOptionId: config.resolvedPermissionOptionId,
-      providerId: config.id,
     );
     permissions.bindThread(_threadIdOf(key));
   }
@@ -379,7 +374,6 @@ final class AgentConversationBinding extends ChangeNotifier {
         persistedOptionId: config.resolvedPermissionOptionId,
         runtimeIdentity: runtime.runtimeIdentity,
       );
-      permissions.bindThread(threadId);
       await _replaceProviderEvents(runtime);
       _touch();
       notifyListeners();

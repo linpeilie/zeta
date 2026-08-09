@@ -183,11 +183,13 @@ dispose 完成前同 scope acquire 必须等待。配置失效会同时清理 gl
    `turnSteering`、`interactions`、`modelCatalog`、`localThreadList`、
    `sessionConfiguration`、`planApproval`、`conversationModes`、`skills`、
    `permissionPolicy` 等端口，不要继续优先扩张 `AgentProvider` 旧必选接口。
+   Bundle、`AgentRuntimePort` 与 Binding context 都不得提供取回原始 `AgentProvider` 的
+   getter；controller / ViewModel 必须始终停留在中立端口边界。
 2. 在领域层定义初始化前可判断的静态 `AgentProviderCapabilities` 与 bootstrap
    policy；握手后若能力发生变化，应返回更精确的动态 capabilities。
 3. 在 data 层新增具体 provider 实现，不让 UI 直接依赖 provider 协议。
-   `AgentProviderFactory` 当前仍返回 `AgentProvider`，应用层通过 `provider.bundle`
-   获取端口化能力。
+   `AgentProviderFactory` 当前仍返回 `AgentProvider`，但仅 registry、global runtime 与
+   Binding 的内部适配代码可以接触它；其余 application/presentation 只接收 bundle 端口。
 4. 把 provider 原始事件映射成 `AgentEvent`、`AgentToolCall`、
    `AgentPermissionRequest`、`AgentQuestionRequest`、`AgentThreadSummary`、
    `AgentSessionConfigOption` 等中立模型。
@@ -231,23 +233,24 @@ Dock，但不得共享 request/decision 模型或 pending registry。
   `AgentPermissionSelection(optionId)`。共享层不得解析 `:workspace`、`yoloMode`、
   `approvalPolicy` 等协议字符串。
 - **default vs effective**：
-  `AgentPermissionStateStore` 按 provider runtime identity/generation + threadId 保存不可变的
-  provider default、thread effective、source、last scope、warning 和持久化失败；
-  `AgentConversationPermissionSelectionController` 只编排 apply/持久化与当前 Canvas 绑定，
+  每个 `AgentConversationBinding` 独占一个不可变的
+  `AgentConversationPermissionState`，只保存本 Binding 的 threadId、provider default、
+  session effective、一次性 current-turn override、runtime selection、source、last scope、
+  warning 和持久化失败；不得维护跨 provider/runtime/thread map 或 active runtime 注册表。
+  `AgentConversationPermissionSelectionController` 编排 apply/持久化，
   `AgentPermissionCatalogController` 独立管理目录加载和 stale retention。Composer 展示
   effective；持久化只写 default optionId。
   create/resume/fork/send 前由 application 冻结 `AgentPermissionRequestSnapshot`，优先级为
   thread-effective → provider default → catalog default。`AgentPermissionRequestResolver` 只定义
-  这条无状态优先级；真正的 selection 均来自 store。无打开 Canvas 的 Project Threads fork
-  也通过 active runtime identity 从同一 store 取值，不得从持久化 config 重建运行态默认。
+  这条无状态优先级；真正的 selection 均来自 Binding。无打开 Canvas 的 Project Threads
+  fork 在 Binding 存在时读取该 Binding；不存在时才使用持久化 provider default 与 catalog default。
 - **Settings feedback**：Codex notification mapper 通过专属 codec 原子解码
   profile/approval/sandbox，domain 只接收 `AgentPermissionSelection`。application 按通知
-  threadId 写入 `serverSettings` effective；其他 thread 的事件也可入库，但不会修改当前
-  Canvas 的模型/模式、provider default，也不会再次调用 permission port apply。
+  threadId 写入匹配 Binding 的 `serverSettings` effective；当前 Binding 不接收其他 thread
+  的通知，也不会修改 provider default 或再次调用 permission port apply。
 - **Apply 状态机**：`currentTurn` 在下一次 snapshot 冻结时原子取走；`currentSession` 只提交
-  目标 thread；`runtime` 发布带 runtime identity/generation 的共享状态，所有同 runtime
-  Canvas 同步读取；`nextSession` 只更新 preference/pending hint。旧 generation 的 apply 和
-  runtime 广播直接丢弃。
+  当前 Binding；`runtime` 只更新该 Binding 所属 CLI 实例的状态，不广播到其他 Binding；
+  `nextSession` 只更新 preference/pending hint。旧 generation 的迟到 apply 直接丢弃。
 - **持久化恢复**：Provider apply 成功后再保存默认偏好；保存失败保留已生效状态并显示
   “已应用但保存失败”，通过 `retryPermissionPreferencePersistence` 只重试保存，不重复 apply。
 - **V1 → V2 配置迁移**：`AgentProviderSettings.currentVersion = 2`；decoder 宽容读
@@ -266,8 +269,8 @@ Dock，但不得共享 request/decision 模型或 pending registry。
     adapter apply 只归一化 optionId，不保存共享选择；client/encoder 逐请求把中立快照编码为
     profile/approval/sandbox。Provider config 只在请求没有 selection 时作不可变 fallback。
   - Grok：`GrokPermissionPolicyAdapter` + `GrokPermissionModeCodec`（mode ↔ session
-    meta / live 通知）。adapter 返回 `runtime` scope 后由 application store 发布显式广播，
-    不再由单个 ViewModel 隐式覆盖自己的 thread map。
+    meta / live 通知）。adapter 返回 `runtime` scope 后只提交到拥有该 runtime 的 Binding，
+    不改写其他会话。
 - 清空用户偏好使用 `AgentProviderConfig.withPermissionPreference(null)`（或
   `copyWith` + `agentProviderConfigUnset` 哨兵），禁止 `value ?? oldValue` 无法清空。
 - Provider、bundle 与 `AgentTurnConfiguration` 只接受 `AgentPermissionRequestSnapshot`；旧裸
@@ -276,17 +279,18 @@ Dock，但不得共享 request/decision 模型或 pending registry。
 最终权限调用链固定为：
 
 ```text
-provider config --seed--> runtime registry --> AgentPermissionStateStore
-thread settings --> data codec --> neutral event --> state controller --> store
-user selection --> policy port --> AgentPermissionApplyResult ----------> store
-                                                                  |
-create/resume/fork/send --> store.takeRequestSnapshot() --> immutable snapshot
+provider config --seed--> ConversationBinding --> AgentConversationPermissionState
+thread settings --> data codec --> neutral event --> matching Binding state
+user selection --> policy port --> AgentPermissionApplyResult --> owning Binding state
+
+create/resume/fork/send --> Binding.permissions.snapshotForRequest()
+  --> immutable snapshot
   --> bundle port --> Codex/Grok provider --> provider data codec --> wire request
 ```
 
-验收时必须覆盖：两个 thread/两个 Canvas 的真实 wire 参数、runtime scope 广播、快速 Provider
-重绑后的迟到 apply、disposed controller 的迟到结果、旧 runtime generation 的 commit/broadcast，
-以及 provider apply 成功但配置持久化失败时，无 Canvas fork 仍读取内存中的 application 默认。
+验收时必须覆盖：两个 thread/两个 Canvas 的真实 wire 参数、runtime scope 只影响所属 Binding、
+快速 Provider 重绑后的迟到 apply、disposed controller 的迟到结果、旧 runtime generation 丢弃，
+以及 provider apply 成功但配置持久化失败时的只重试持久化语义。
 
 ### Skill 输入与 Composer token
 

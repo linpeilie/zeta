@@ -1,9 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_permission_state.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_permission_selection_controller.dart';
-import 'package:zeta/src/features/agent/application/agent_permission_state_store.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+
+const _runtimeIdentity = AgentProviderRuntimeIdentity(
+  providerId: 'test-provider',
+  generation: 1,
+);
 
 void main() {
   group('AgentConversationPermissionSelectionController', () {
@@ -33,7 +39,11 @@ void main() {
       final controller = AgentConversationPermissionSelectionController(
         persistOptionId: (id) async => persisted = id,
       );
-      controller.bind(port: port, persistedOptionId: 'ask');
+      controller.bind(
+        port: port,
+        persistedOptionId: 'ask',
+        runtimeIdentity: _runtimeIdentity,
+      );
       await controller.refreshOptions();
 
       await controller.selectOption(
@@ -66,9 +76,17 @@ void main() {
         persistOptionId: (_) async {},
       );
 
-      controller.bind(port: slow, persistedOptionId: null);
+      controller.bind(
+        port: slow,
+        persistedOptionId: null,
+        runtimeIdentity: _runtimeIdentity,
+      );
       final slowRefresh = controller.refreshOptions();
-      controller.bind(port: fast, persistedOptionId: null);
+      controller.bind(
+        port: fast,
+        persistedOptionId: null,
+        runtimeIdentity: _runtimeIdentity,
+      );
       await controller.refreshOptions();
       await slowRefresh;
 
@@ -87,7 +105,11 @@ void main() {
       final controller = AgentConversationPermissionSelectionController(
         persistOptionId: (_) async {},
       );
-      controller.bind(port: port, persistedOptionId: 'ask');
+      controller.bind(
+        port: port,
+        persistedOptionId: 'ask',
+        runtimeIdentity: _runtimeIdentity,
+      );
       await controller.refreshOptions();
 
       await controller.selectOption(
@@ -99,7 +121,7 @@ void main() {
     });
 
     test(
-      'thread settings update effective only without changing default',
+      'thread settings update the binding effective without changing default',
       () async {
         final port = _FakePermissionPort(
           options: const <AgentPermissionOption>[
@@ -112,7 +134,11 @@ void main() {
             fail('settings must not persist global default');
           },
         );
-        controller.bind(port: port, persistedOptionId: ':workspace');
+        controller.bind(
+          port: port,
+          persistedOptionId: ':workspace',
+          runtimeIdentity: _runtimeIdentity,
+        );
         controller.bindThread('thread-a');
         await controller.refreshOptions();
 
@@ -132,84 +158,98 @@ void main() {
         expect(controller.selectedOptionId, ':workspace');
 
         controller.bindThread('thread-a');
-        expect(controller.selectedOptionId, 'team-safe');
-      },
-    );
-
-    test(
-      'thread settings for other thread only cache without touching current UI',
-      () async {
-        final port = _FakePermissionPort(
-          options: const <AgentPermissionOption>[
-            AgentPermissionOption(id: ':workspace', label: 'Workspace write'),
-            AgentPermissionOption(id: ':read-only', label: 'Read only'),
-          ],
-        );
-        final controller = AgentConversationPermissionSelectionController(
-          persistOptionId: (_) async {
-            fail('settings must not persist global default');
-          },
-        );
-        controller.bind(port: port, persistedOptionId: ':workspace');
-        controller.bindThread('thread-b');
-        await controller.refreshOptions();
-
-        await controller.applyThreadSettings(
-          threadId: 'thread-a',
-          permissionSelection: const AgentPermissionSelection(
-            optionId: ':read-only',
-          ),
-        );
-
-        expect(controller.selectedOptionId, ':workspace');
-        expect(controller.defaultOptionId, ':workspace');
-        expect(port.applyCalls, 0);
         expect(
-          controller.state.threadStates['thread-a']?.source,
-          AgentPermissionStateSource.serverSettings,
-        );
-        controller.bindThread('thread-a');
-        expect(controller.selectedOptionId, ':read-only');
-        expect(
-          controller.stateSource,
-          AgentPermissionStateSource.serverSettings,
+          controller.selectedOptionId,
+          ':workspace',
+          reason: 'single Binding state must not cache a detached thread',
         );
       },
     );
 
-    test('runtime scope syncs all thread effectives and default', () async {
+    test('thread settings for another Binding are ignored', () async {
       final port = _FakePermissionPort(
+        options: const <AgentPermissionOption>[
+          AgentPermissionOption(id: ':workspace', label: 'Workspace write'),
+          AgentPermissionOption(id: ':read-only', label: 'Read only'),
+        ],
+      );
+      final controller = AgentConversationPermissionSelectionController(
+        persistOptionId: (_) async {
+          fail('settings must not persist global default');
+        },
+      );
+      controller.bind(
+        port: port,
+        persistedOptionId: ':workspace',
+        runtimeIdentity: _runtimeIdentity,
+      );
+      controller.bindThread('thread-b');
+      await controller.refreshOptions();
+
+      await controller.applyThreadSettings(
+        threadId: 'thread-a',
+        permissionSelection: const AgentPermissionSelection(
+          optionId: ':read-only',
+        ),
+      );
+
+      expect(controller.selectedOptionId, ':workspace');
+      expect(controller.defaultOptionId, ':workspace');
+      expect(port.applyCalls, 0);
+      expect(controller.state.sessionEffective, isNull);
+      expect(
+        controller.stateSource,
+        AgentPermissionStateSource.providerDefault,
+      );
+    });
+
+    test('runtime scope stays inside the owning Binding', () async {
+      final firstPort = _FakePermissionPort(
         options: const <AgentPermissionOption>[
           AgentPermissionOption(id: 'ask', label: 'Ask'),
           AgentPermissionOption(id: 'auto', label: 'Auto'),
         ],
         applyScope: AgentPermissionApplyScope.runtime,
       );
-      final controller = AgentConversationPermissionSelectionController(
+      final secondPort = _FakePermissionPort(
+        options: firstPort.options,
+        applyScope: AgentPermissionApplyScope.runtime,
+      );
+      final first = AgentConversationPermissionSelectionController(
         persistOptionId: (_) async {},
       );
-      controller.bind(port: port, persistedOptionId: 'ask');
-      controller.bindThread('t1');
-      await controller.applyEffectiveSelection(
-        const AgentPermissionSelection(optionId: 'ask'),
-        syncPort: false,
+      final second = AgentConversationPermissionSelectionController(
+        persistOptionId: (_) async {},
       );
-      controller.bindThread('t2');
-      await controller.applyEffectiveSelection(
-        const AgentPermissionSelection(optionId: 'ask'),
-        syncPort: false,
+      first.bind(
+        port: firstPort,
+        persistedOptionId: 'ask',
+        runtimeIdentity: _runtimeIdentity,
       );
-      controller.bindThread('t1');
-      await controller.refreshOptions();
+      first.bindThread('t1');
+      second.bind(
+        port: secondPort,
+        persistedOptionId: 'ask',
+        runtimeIdentity: const AgentProviderRuntimeIdentity(
+          providerId: 'test',
+          generation: 2,
+        ),
+      );
+      second.bindThread('t2');
+      await Future.wait(<Future<void>>[
+        first.refreshOptions(),
+        second.refreshOptions(),
+      ]);
 
-      await controller.selectOption(
+      await first.selectOption(
         const AgentPermissionOption(id: 'auto', label: 'Auto'),
       );
 
-      expect(controller.defaultOptionId, 'auto');
-      expect(controller.selectedOptionId, 'auto');
-      controller.bindThread('t2');
-      expect(controller.selectedOptionId, 'auto');
+      expect(first.defaultOptionId, 'auto');
+      expect(first.selectedOptionId, 'auto');
+      expect(first.stateSource, AgentPermissionStateSource.runtimeSelection);
+      expect(second.defaultOptionId, 'ask');
+      expect(second.selectedOptionId, 'ask');
     });
 
     test('nextSession scope exposes compact hint', () async {
@@ -223,7 +263,11 @@ void main() {
       final controller = AgentConversationPermissionSelectionController(
         persistOptionId: (_) async {},
       );
-      controller.bind(port: port, persistedOptionId: 'ask');
+      controller.bind(
+        port: port,
+        persistedOptionId: 'ask',
+        runtimeIdentity: _runtimeIdentity,
+      );
       await controller.refreshOptions();
       await controller.selectOption(
         const AgentPermissionOption(id: 'auto', label: 'Auto'),
@@ -252,7 +296,11 @@ void main() {
             }
           },
         );
-        controller.bind(port: port, persistedOptionId: 'ask');
+        controller.bind(
+          port: port,
+          persistedOptionId: 'ask',
+          runtimeIdentity: _runtimeIdentity,
+        );
         controller.bindThread('thread-a');
 
         await controller.selectOption(
@@ -299,16 +347,10 @@ void main() {
         final controller = AgentConversationPermissionSelectionController(
           persistOptionId: (_) async {},
         );
-        controller.bind(port: port, persistedOptionId: 'auto');
-        controller.bindThread('t1');
-        await controller.applyEffectiveSelection(
-          const AgentPermissionSelection(optionId: 'auto'),
-          syncPort: false,
-        );
-        controller.bindThread('t2');
-        await controller.applyEffectiveSelection(
-          const AgentPermissionSelection(optionId: 'auto'),
-          syncPort: false,
+        controller.bind(
+          port: port,
+          persistedOptionId: 'auto',
+          runtimeIdentity: _runtimeIdentity,
         );
         controller.bindThread('t1');
 
@@ -319,12 +361,10 @@ void main() {
         expect(controller.selectedOptionId, 'ask');
         expect(controller.lastApplyScope, AgentPermissionApplyScope.runtime);
         expect(controller.lastApplyWarning, 'normalized');
-        controller.bindThread('t2');
-        expect(controller.selectedOptionId, 'ask');
         expect(
           controller.defaultOptionId,
           'auto',
-          reason: 'runtime broadcast must not rewrite provider preference',
+          reason: 'runtime selection must not rewrite provider preference',
         );
       },
     );
@@ -338,7 +378,11 @@ void main() {
       final controller = AgentConversationPermissionSelectionController(
         persistOptionId: (_) async {},
       );
-      controller.bind(port: port, persistedOptionId: null);
+      controller.bind(
+        port: port,
+        persistedOptionId: null,
+        runtimeIdentity: _runtimeIdentity,
+      );
       await controller.refreshOptions();
       expect(controller.options.map((o) => o.id), <String>['team-safe']);
 
@@ -359,7 +403,11 @@ void main() {
         final controller = AgentConversationPermissionSelectionController(
           persistOptionId: (_) async {},
         );
-        controller.bind(port: port, persistedOptionId: null);
+        controller.bind(
+          port: port,
+          persistedOptionId: null,
+          runtimeIdentity: _runtimeIdentity,
+        );
         await controller.refreshOptions();
 
         final catalogSnapshot = controller.snapshotForRequest();
@@ -387,7 +435,11 @@ void main() {
         final controller = AgentConversationPermissionSelectionController(
           persistOptionId: (_) async {},
         );
-        controller.bind(port: null, persistedOptionId: 'provider-safe');
+        controller.bind(
+          port: null,
+          persistedOptionId: 'provider-safe',
+          runtimeIdentity: _runtimeIdentity,
+        );
         await controller.applyThreadSettings(
           threadId: 'thread-a',
           permissionSelection: const AgentPermissionSelection(
@@ -424,7 +476,11 @@ void main() {
       final controller = AgentConversationPermissionSelectionController(
         persistOptionId: (_) async {},
       );
-      controller.bind(port: port, persistedOptionId: 'team-safe');
+      controller.bind(
+        port: port,
+        persistedOptionId: 'team-safe',
+        runtimeIdentity: _runtimeIdentity,
+      );
       await controller.refreshOptions();
 
       expect(controller.displayLabel, 'Team safe');
@@ -487,9 +543,13 @@ void main() {
       );
       await pending;
 
-      expect(controller.runtimeIdentity.generation, 2);
-      expect(controller.selectedOptionId, 'new-default');
-      expect(controller.state.threadStates['thread-a'], isNull);
+      expect(controller.runtimeIdentity?.generation, 2);
+      expect(
+        controller.selectedOptionId,
+        'old-default',
+        reason: 'an opened Binding keeps its logical provider default snapshot',
+      );
+      expect(controller.state.sessionEffective, isNull);
       expect(persisted, isEmpty);
     });
 
@@ -505,7 +565,11 @@ void main() {
       final controller = AgentConversationPermissionSelectionController(
         persistOptionId: (_) async => persistCalls += 1,
       );
-      controller.bind(port: port, persistedOptionId: 'safe');
+      controller.bind(
+        port: port,
+        persistedOptionId: 'safe',
+        runtimeIdentity: _runtimeIdentity,
+      );
 
       final pending = controller.selectOption(port.options.single);
       expect(port.applyCalls, 1);
@@ -531,7 +595,11 @@ void main() {
       final controller = AgentConversationPermissionSelectionController(
         persistOptionId: (_) async {},
       );
-      controller.bind(port: port, persistedOptionId: null);
+      controller.bind(
+        port: port,
+        persistedOptionId: null,
+        runtimeIdentity: _runtimeIdentity,
+      );
       final refresh = controller.refreshOptions();
       controller.dispose();
       await refresh;

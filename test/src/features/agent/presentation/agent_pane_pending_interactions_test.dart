@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/ui/core/ide_motion.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 
@@ -20,6 +21,7 @@ void main() {
       await viewModel.switchThread(
         agentPaneThread(id: 'thread-question', title: 'Question thread'),
       );
+      await _startLiveTurn(tester, viewModel);
       await pumpAgentPaneUi(tester);
       final messageInput = find.byKey(const ValueKey('agent-message-input'));
       await tester.enterText(messageInput, '需要保留的草稿');
@@ -112,6 +114,7 @@ void main() {
             .text,
         '需要保留的草稿',
       );
+      await _finishLiveTurn(tester, provider, sessionId: 'thread-question');
     });
 
     testWidgets(
@@ -126,6 +129,7 @@ void main() {
         await viewModel.switchThread(
           agentPaneThread(id: 'thread-wizard', title: 'Question wizard'),
         );
+        await _startLiveTurn(tester, viewModel);
 
         provider.emitEvent(
           const AgentQuestionRequestedEvent(
@@ -238,6 +242,7 @@ void main() {
           find.byKey(const ValueKey('agent-composer-focus-ring')),
           findsOneWidget,
         );
+        await _finishLiveTurn(tester, provider, sessionId: 'thread-wizard');
       },
     );
 
@@ -253,6 +258,7 @@ void main() {
         await viewModel.switchThread(
           agentPaneThread(id: 'thread-other', title: 'Other answer'),
         );
+        await _startLiveTurn(tester, viewModel);
 
         provider.emitEvent(
           const AgentQuestionRequestedEvent(
@@ -359,6 +365,7 @@ void main() {
 
         expect(provider.questionResponses, hasLength(2));
         expect(provider.questionResponses.last.answers, isEmpty);
+        await _finishLiveTurn(tester, provider, sessionId: 'thread-other');
       },
     );
 
@@ -374,6 +381,7 @@ void main() {
       await viewModel.switchThread(
         agentPaneThread(id: 'thread-reduced-motion', title: 'Reduced motion'),
       );
+      await _startLiveTurn(tester, viewModel);
 
       provider.emitEvent(
         const AgentQuestionRequestedEvent(
@@ -412,6 +420,11 @@ void main() {
       expect(find.text('First reduced-motion question'), findsNothing);
       expect(find.text('Second reduced-motion question'), findsOneWidget);
       expect(find.text('2 of 2'), findsOneWidget);
+      await _finishLiveTurn(
+        tester,
+        provider,
+        sessionId: 'thread-reduced-motion',
+      );
     });
 
     testWidgets('renders and accepts an independent plan approval card', (
@@ -426,6 +439,7 @@ void main() {
       await viewModel.switchThread(
         agentPaneThread(id: 'thread-plan', title: 'Plan thread'),
       );
+      await _startLiveTurn(tester, viewModel);
       provider.emitEvent(
         const AgentPlanApprovalRequestedEvent(
           AgentPlanApprovalRequest(
@@ -470,6 +484,7 @@ void main() {
         find.byKey(const ValueKey('agent-plan-accept-plan-1')),
         findsNothing,
       );
+      await _finishLiveTurn(tester, provider, sessionId: 'thread-plan');
     });
 
     testWidgets(
@@ -486,6 +501,7 @@ void main() {
         await viewModel.switchThread(
           agentPaneThread(id: 'thread-pending', title: 'Pending thread'),
         );
+        await _startLiveTurn(tester, viewModel);
 
         provider.emitEvent(
           const AgentPermissionRequestedEvent(
@@ -541,7 +557,27 @@ void main() {
         );
         // 权限 / 计划审批待处理时隐藏主 Composer。
         expect(composer, findsNothing);
+        await _finishLiveTurn(tester, provider, sessionId: 'thread-pending');
       },
     );
   });
+}
+
+Future<void> _startLiveTurn(
+  WidgetTester tester,
+  AgentConversationViewModel viewModel,
+) async {
+  await viewModel.sendMessage('Start live interaction');
+  await pumpLiveAgentUi(tester);
+}
+
+Future<void> _finishLiveTurn(
+  WidgetTester tester,
+  AgentPaneFakeProvider provider, {
+  required String sessionId,
+}) async {
+  provider.emitEvent(
+    AgentTurnCompletedEvent(sessionId: sessionId, turnId: 'turn-1'),
+  );
+  await tester.pump();
 }

@@ -35,6 +35,7 @@
 - Codex CLI app-server 接入（默认 Provider），支持会话列表、历史读取、恢复、分支、模型切换、Skills 与 Plan 模式
 - Grok ACP 接入，能力按握手结果自动降级
 - 会话级 Provider Binding：打开草稿或历史不启动 CLI；首次提交时按会话创建实例，空闲 10 分钟自动回收并在下次提交时恢复
+- 会话权限状态收敛到各自 Binding，runtime 权限变化不再影响其他会话
 - 能力协商机制：Provider 不支持的功能在界面上不出现，而非点了无反应
 - Agent 管理页：CLI 身份、版本、账号与连接诊断；连接测试只做握手，不产生模型调用费用
 

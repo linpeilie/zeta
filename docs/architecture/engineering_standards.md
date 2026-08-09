@@ -111,7 +111,8 @@ main -> app -> presentation/application -> domain
 - 已迁移能力域（`conversation`、`threadCatalog`、`threadMutations`、
   `threadBranching`、`turnSteering`、`interactions`、`modelCatalog`、
   `localThreadList`、`sessionConfiguration`、`planApproval`、`conversationModes`、
-  `permissionPolicy`）优先通过 bundle 端口访问；
+  `permissionPolicy`、`usageQuota`）优先通过 bundle 端口访问；Bundle 和
+  `AgentRuntimePort` 不得向 controller / ViewModel 暴露原始 `AgentProvider`；
   controller / view model 不再通过 provider kind、`is SomeProvider` 或直接调用
   已迁移旧方法做分支。
 - 权限选项选择只走中立 `AgentPermissionPolicyPort`（`listPermissionOptions` /
@@ -127,16 +128,18 @@ main -> app -> presentation/application -> domain
   provider kind 注册中立 migrator；V2 optionId key 存在时不得调用 legacy migrator。
   Domain `AgentProviderConfig` 只保存归一化 optionId，不提供配置 `tryDecode` 门面；V1/V2
   宽容解码、内置 Provider 补齐与 legacy 迁移全部由 data `AgentProviderSettingsCodec` 负责。
-  每个 `AgentConversationBinding` 独占一份 application 权限状态，按 provider runtime
-  identity/generation + threadId 隔离不可变快照；
+  每个 `AgentConversationBinding` 独占一个 `AgentConversationPermissionState` 不可变快照；
+  快照只保存该 Binding 的 thread、provider default、session effective、一次性 turn
+  override、runtime selection 和精确 runtime identity，不得再维护跨 provider/runtime/thread
+  的 map 或 active-runtime 注册表；
   provider default、thread effective、state source、last scope、warning 与持久化失败不得
   分散回 ViewModel 字段。catalog 加载由独立 `AgentPermissionCatalogController` 管理：只提交
   adapter 返回的完整成功目录，transient/malformed 失败保留 last-known-good；旧 refresh
   generation 不得覆盖新目录。Codex 只有明确 unsupported 才允许降级静态 built-ins。
 - 所有权限 apply 路径必须消费完整 `AgentPermissionApplyResult`：`currentTurn` 只形成下一次
   请求的一次性 override，`currentSession` 只更新目标 thread，`runtime` 更新显式 runtime
-  state 并广播全部同 runtime 消费者，`nextSession` 只更新默认/待生效状态。runtime 广播必须
-  携带 identity/generation；旧 generation 结果必须丢弃，不得靠遍历改写 thread map 模拟广播。
+  state 且只影响拥有该 runtime 的 Binding，`nextSession` 只更新默认/待生效状态。所有迟到
+  apply 必须用精确 identity/generation 拒绝；不得靠遍历或广播改写其他 Binding。
 - Provider apply 成功后的偏好持久化失败不得回滚 effective/runtime 状态；application 必须保留
   可见错误与只重试持久化的入口，重试不得再次调用 Provider apply。
 - create/resume/fork/send 必须携带不可变 `AgentPermissionRequestSnapshot`，由
@@ -145,18 +148,18 @@ main -> app -> presentation/application -> domain
   fallback；用户选择或 `thread/settings/updated` 不得改写跨 thread 共享的请求权限状态。
   旧裸 `permissionSelection` 参数、`AgentTurnConfiguration.permissionSelection` 与 Provider
   内兼容合并 setter/facade 均不得恢复。
-- session runtime 激活后，Binding 内的 `AgentPermissionStateStore` 是 provider default、
-  thread effective 与 runtime selection 的唯一运行态真源；provider config 只负责初次
+- session runtime 激活后，Binding 内的 `AgentConversationPermissionState` 是 provider
+  default、session effective 与 runtime selection 的唯一运行态真源；provider config 只负责初次
   seed 和持久化。Project Threads 必须优先从已存在 Binding 冻结 thread 请求；没有
   Binding 时才使用 provider default 与 catalog default，禁止从其他会话借用 runtime 状态。
   `AgentPermissionRequestResolver` 只能是无状态优先级函数，不得缓存 selection。
 - 所有异步 catalog/apply/request 路径必须同时验证 controller binding generation、provider
   runtime generation 与 disposed/token 状态。快速切换 Provider 后的旧结果、已销毁 Canvas 的
-  迟到结果以及 retired runtime 广播均必须丢弃，且不得触发偏好持久化。
+  迟到结果以及 retired runtime 回写均必须丢弃，且不得触发偏好持久化。
 - `thread/settings/updated` 的 Codex profile/approval/sandbox 必须由 data codec 一次性解码
   为 `AgentPermissionSelection`；domain event 不得暴露协议字段。reducer 允许权限事实按事件
-  threadId 路由到 store，即使该 thread 不是当前 Canvas；同一通知不得更新 provider default、
-  不得再次调用 Provider apply，模型和协作模式仍只作用于当前 thread。
+  threadId 路由到对应 Binding；Binding 只接受自己的 thread，其他 thread 的迟到通知必须丢弃。
+  同一通知不得更新 provider default、不得再次调用 Provider apply，模型和协作模式仍只作用于当前 thread。
 - 每个 provider 必须通过不可变 `AgentProviderCapabilities` 声明真实能力；presentation
   隐藏不支持入口，application 和 data 层执行前仍要校验。禁止以静默 no-op 或语义不等价
   的降级伪造 thread/turn 能力。

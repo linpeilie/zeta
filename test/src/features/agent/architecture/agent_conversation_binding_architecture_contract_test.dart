@@ -57,6 +57,44 @@ void main() {
       expect(source, isNot(contains('_ensureCatalogProvider')));
       expect(source, isNot(contains('_ensureSessionProvider')));
       expect(source, isNot(contains('_ensureProvider')));
+      expect(source, isNot(contains("domain/agent_provider.dart")));
+      expect(source, isNot(matches(RegExp(r'\bAgentProvider[? ]'))));
+    });
+
+    test('Binding and Bundle do not expose the raw provider', () {
+      final binding = File(
+        'lib/src/features/agent/application/agent_conversation_binding.dart',
+      ).readAsStringSync();
+      final bundle = File(
+        'lib/src/features/agent/domain/agent_provider_bundle.dart',
+      ).readAsStringSync();
+
+      expect(binding, isNot(contains('AgentProvider get provider')));
+      expect(bundle, isNot(contains('AgentProvider get provider')));
+      expect(bundle, isNot(contains('runtime.provider')));
+    });
+
+    test('permission state belongs to one Binding without registries', () {
+      expect(
+        File(
+          'lib/src/features/agent/application/agent_permission_state_store.dart',
+        ).existsSync(),
+        isFalse,
+      );
+      final state = File(
+        'lib/src/features/agent/application/agent_conversation_permission_state.dart',
+      ).readAsStringSync();
+      final controller = File(
+        'lib/src/features/agent/application/'
+        'agent_conversation_permission_selection_controller.dart',
+      ).readAsStringSync();
+
+      for (final source in <String>[state, controller]) {
+        expect(source, isNot(contains('AgentPermissionStateStore')));
+        expect(source, isNot(contains('_activeByProvider')));
+        expect(source, isNot(contains('Map<AgentProviderRuntimeIdentity')));
+        expect(source, isNot(contains('Map<String, AgentPermission')));
+      }
     });
 
     test(

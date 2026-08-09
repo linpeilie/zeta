@@ -76,7 +76,7 @@ reducer 唯一的副作用出口。带作用域校验（generation / runtime / t
 一个 Agent CLI 的接入实现。当前活跃的是 Codex（默认）与 Grok。Cursor 已退役。
 
 **AgentProviderBundle（能力包）**
-Provider 能力的入口。必选端口 `runtime` 和 `conversation`；其余（`threadCatalog`、`threadMutations`、`threadBranching`、`turnSteering`、`interactions`、`modelCatalog`、`localThreadList`、`sessionConfiguration`、`planApproval`、`conversationModes`、`skills`）都是可选的。
+Provider 能力的严格中立入口。必选端口 `runtime` 和 `conversation`；其余（`threadCatalog`、`threadMutations`、`threadBranching`、`turnSteering`、`interactions`、`modelCatalog`、`localThreadList`、`sessionConfiguration`、`planApproval`、`conversationModes`、`skills`、`permissionPolicy`、`usageQuota`）都是可选的。Bundle 不暴露原始 `AgentProvider`。
 `agent_provider_bundle.dart`
 
 **Capability（能力声明）**
@@ -87,7 +87,7 @@ Provider 声明自己支持什么。**UI 一律按 capability 渲染，不按 pr
 Registry 对 Provider 实例的可释放引用。它只在基础设施与 global runtime/Binding 内流转，ViewModel 和 Pane 不直接持有。
 
 **Conversation Binding（会话绑定）**
-一个逻辑会话的 application 聚合根，以 draft 或 thread key 唯一标识。它维护可选 session runtime、过滤旧 generation 的事件流、会话权限和活跃操作；只有 `beginTurn()` 能创建 runtime。Binding Manager 负责映射、草稿晋升以及 10 分钟空闲回收。
+一个逻辑会话的 application 聚合根，以 draft 或 thread key 唯一标识。它维护可选 session runtime、过滤旧 generation 的事件流、单 Binding 不可变权限快照和活跃操作；只有 `beginTurn()` 能创建 runtime。Binding Manager 负责映射、草稿晋升以及 10 分钟空闲回收。
 
 **Global runtime（全局运行时）**
 每个 Provider ID 唯一且不参与空闲回收的实例，用于历史、thread 管理、模型、Skill、用量和连接探测等会话前/全局信息。

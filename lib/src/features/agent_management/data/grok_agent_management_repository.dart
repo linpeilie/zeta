@@ -696,19 +696,20 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
     required bool hasModelCatalog,
     required bool forceRefresh,
   }) async {
-    if (!hasModelCatalog) {
+    final modelCatalog = provider.bundle.modelCatalog;
+    if (!hasModelCatalog || modelCatalog == null) {
       return const AgentModelList(models: <AgentModelInfo>[]);
     }
     final repository = modelCatalogRepository;
     if (repository == null) {
-      return fetchAgentProviderModels(provider, forceRefresh: forceRefresh);
+      return fetchAgentProviderModels(modelCatalog, forceRefresh: forceRefresh);
     }
     final result = await repository.load(
       config: config,
       source: 'Grok ACP',
       forceRefresh: forceRefresh,
       refreshLoader: () =>
-          fetchAgentProviderModels(provider, forceRefresh: true),
+          fetchAgentProviderModels(modelCatalog, forceRefresh: true),
     );
     return result.models;
   }

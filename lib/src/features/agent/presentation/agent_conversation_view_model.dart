@@ -15,9 +15,9 @@ import 'package:zeta/src/features/agent/application/agent_conversation_mutation.
 import 'package:zeta/src/features/agent/application/agent_conversation_reducer.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
-import 'package:zeta/src/features/agent/application/agent_permission_state_store.dart';
 import 'package:zeta/src/features/agent/application/agent_plan_execution_handoff_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_global_runtime.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_identity.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
@@ -32,7 +32,6 @@ import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_ui_state.dart';
 import 'package:zeta/src/features/agent/presentation/agent_ui_update_scheduler.dart';
 import 'package:zeta/src/features/agent/presentation/model_config_ui_state.dart';
@@ -194,9 +193,9 @@ class AgentConversationViewModel {
   late final ValueNotifier<AgentConversationThreadSnapshot>
   _threadSnapshotListenable;
 
-  /// Provider 只由 Binding 持有；ViewModel 不缓存实例或租约。
-  AgentProvider? get _currentProvider =>
-      conversationBinding.currentRuntime?.provider;
+  /// ViewModel 只读取 Binding 暴露的中立运行时端口。
+  AgentRuntimePort? get _currentRuntime =>
+      conversationBinding.currentRuntime?.bundle.runtime;
 
   /// global 握手得到的中立能力快照；只保存 domain 值，不让 Provider 逃逸出回调。
   final Map<String, AgentProviderCapabilities> _globalCapabilitiesByProviderId =
@@ -416,9 +415,9 @@ class AgentConversationViewModel {
   AgentProviderCapabilities get activeCapabilities {
     final providerId =
         _session?.providerId ?? _selectedProviderId ?? activeProviderId;
-    final provider = _currentProvider;
-    if (provider != null && provider.config.id == providerId) {
-      return provider.capabilities;
+    final runtime = _currentRuntime;
+    if (runtime != null && runtime.config.id == providerId) {
+      return runtime.capabilities;
     }
     final globalCapabilities = _globalCapabilitiesByProviderId[providerId];
     if (globalCapabilities != null) {
@@ -678,7 +677,7 @@ class AgentConversationViewModel {
       return;
     }
     // catalog：skill 目录属于「会话之前的信息」（04 §0.4），不建立订阅。
-    await _runGlobalProvider(
+    await _runGlobalBundle(
       _ensureSkillsCatalog,
       preferredProviderId: _selectedProviderId,
     );
@@ -1130,15 +1129,21 @@ class AgentConversationViewModel {
         forceRefresh: forceRefresh,
         onCacheHit: (snapshot) => _handleModelList(snapshot.models),
         // catalog：模型列表是「会话之前的信息」（04 §0.4：listModels → 全局实例）。
-        refreshLoader: () => _runGlobalProvider(
-          (provider) => fetchAgentProviderModels(provider, forceRefresh: true),
-        ),
+        refreshLoader: () => _runGlobalBundle((bundle) {
+          final modelCatalog = bundle.modelCatalog;
+          if (modelCatalog == null) {
+            return Future<AgentModelList>.value(
+              const AgentModelList(models: <AgentModelInfo>[]),
+            );
+          }
+          return fetchAgentProviderModels(modelCatalog, forceRefresh: true);
+        }),
       );
       _handleModelList(result.models);
       if (result.refreshError != null) {
         _modelRefreshError = '模型目录刷新失败，正在使用本地缓存。';
       }
-      await _runGlobalProvider((_) async {}, hydrateCatalogs: true);
+      await _runGlobalBundle((_) async {}, hydrateCatalogs: true);
       await _permissionSelectionController.refreshOptions();
     } catch (error) {
       _log.w('Could not preload Agent models (${error.runtimeType})');
@@ -1197,8 +1202,8 @@ class AgentConversationViewModel {
       return;
     }
     try {
-      await _runCurrentSession<void>((provider) async {
-        final interactions = provider.bundle.interactions;
+      await _runCurrentBundle<void>((bundle) async {
+        final interactions = bundle.interactions;
         if (interactions == null) {
           return;
         }
@@ -1243,8 +1248,8 @@ class AgentConversationViewModel {
       return;
     }
     try {
-      await _runCurrentSession<void>((provider) async {
-        final sessionConfiguration = provider.bundle.sessionConfiguration;
+      await _runCurrentBundle<void>((bundle) async {
+        final sessionConfiguration = bundle.sessionConfiguration;
         if (sessionConfiguration == null) {
           return;
         }
@@ -1756,7 +1761,7 @@ class AgentConversationViewModel {
     final clearedPlanExecution =
         isNewTurn && _planExecutionHandoffController.clear();
     var providerOperation = 'provider/settings';
-    AgentProvider? requestProvider;
+    AgentRuntimePort? requestRuntime;
     AgentSession? requestSession;
     AgentConversationModeSelection? requestModeSelection;
     var modeRequestAccepted = false;
@@ -1800,7 +1805,7 @@ class AgentConversationViewModel {
       providerOperation = 'provider/ensure';
       // 已选中 thread 时必须落到该 thread 所属 provider，避免用 Codex 去 resume Grok id。
       // session：sendMessage 是唯一应该触发首次启动运行实例的入口（04 §0.4 / 02 §2.4）。
-      final AgentProvider provider;
+      final AgentProviderBundle bundle;
       final selectedProviderId = _selectedProviderId?.trim();
       if (selectedProviderId != null &&
           selectedProviderId.isNotEmpty &&
@@ -1811,16 +1816,14 @@ class AgentConversationViewModel {
         );
       }
       _turnActivity ??= await conversationBinding.beginTurn();
-      provider = _turnActivity!.runtime.provider;
-      _modelSelectionController.bindRuntime(
-        _turnActivity!.runtime.bundle.runtime,
-      );
-      await _bindLiveProvider(
-        provider,
+      bundle = _turnActivity!.runtime.bundle;
+      _modelSelectionController.bindRuntime(bundle.runtime);
+      await _bindLiveRuntime(
+        bundle,
         runtimeIdentity: _turnActivity!.runtime.runtimeIdentity,
         threadId: _selectedThreadId,
       );
-      requestProvider = provider;
+      requestRuntime = bundle.runtime;
       // steer 复用同一个仍在运行的活动令牌；终态前 Binding 不会被空闲回收。
       final context = AgentContext(
         projectPath: _projectPath,
@@ -1830,7 +1833,7 @@ class AgentConversationViewModel {
           .snapshotForRequest(threadId: selectedThreadId);
       providerOperation = 'session/ensure';
       final session = await _ensureSession(
-        provider,
+        bundle,
         context,
         switchToken: switchToken,
         expectedThreadId: selectedThreadId,
@@ -1840,7 +1843,7 @@ class AgentConversationViewModel {
       if (conversationBinding.threadId == null) {
         await conversationBinding.promoteToThread(session.id);
       }
-      final conversation = provider.bundle.conversation;
+      final conversation = bundle.conversation;
       // 模式 + 当前 thread 权限一并冻结进请求快照，避免共享 provider 可变状态串 thread。
       final modeSnapshot = isNewTurn
           ? _conversationModeController.snapshotForNewTurn(
@@ -1865,7 +1868,7 @@ class AgentConversationViewModel {
           ),
         );
       }
-      _log.i('Sending Agent request with provider ${provider.config.id}');
+      _log.i('Sending Agent request with provider ${bundle.runtime.config.id}');
       if (isNewTurn) {
         providerOperation = 'conversation/sendMessage';
         final turn = await conversation.sendMessage(
@@ -1898,10 +1901,11 @@ class AgentConversationViewModel {
         }
       } else {
         providerOperation = 'turn/steer';
-        final turnSteering = provider.bundle.turnSteering;
+        final turnSteering = bundle.turnSteering;
         if (turnSteering == null) {
           throw UnsupportedError(
-            '${provider.config.displayName} does not support steering turns',
+            '${bundle.runtime.config.displayName} '
+            'does not support steering turns',
           );
         }
         await turnSteering.steerTurn(
@@ -1917,7 +1921,7 @@ class AgentConversationViewModel {
         error: error,
         stackTrace: stackTrace,
         operation: providerOperation,
-        provider: requestProvider,
+        runtime: requestRuntime,
         session: requestSession,
         selectedThreadId: selectedThreadId,
         runningTurnId: runningTurnId,
@@ -1937,7 +1941,7 @@ class AgentConversationViewModel {
         error: error,
         stackTrace: stackTrace,
         operation: providerOperation,
-        provider: requestProvider,
+        runtime: requestRuntime,
         session: requestSession,
         selectedThreadId: selectedThreadId,
         runningTurnId: runningTurnId,
@@ -1953,7 +1957,7 @@ class AgentConversationViewModel {
         error: error,
         stackTrace: stackTrace,
         operation: providerOperation,
-        provider: requestProvider,
+        runtime: requestRuntime,
         session: requestSession,
         selectedThreadId: selectedThreadId,
         runningTurnId: runningTurnId,
@@ -1984,7 +1988,7 @@ class AgentConversationViewModel {
     required Object error,
     required StackTrace stackTrace,
     required String operation,
-    required AgentProvider? provider,
+    required AgentRuntimePort? runtime,
     required AgentSession? session,
     required String? selectedThreadId,
     required String? runningTurnId,
@@ -1996,7 +2000,7 @@ class AgentConversationViewModel {
       error: error,
       stackTrace: stackTrace,
       context: <String, Object?>{
-        ..._providerRuntimeLogContext(provider),
+        ..._providerRuntimeLogContext(runtime),
         'operation': operation,
         'sessionId': session?.id ?? selectedThreadId,
         'turnId': runningTurnId ?? _timeline.pendingTurnGroupId,
@@ -2013,8 +2017,8 @@ class AgentConversationViewModel {
       return;
     }
     _log.i('Cancelling Agent turn $turnId');
-    await _runCurrentSession<void>(
-      (provider) => provider.bundle.conversation.cancelTurn(
+    await _runCurrentBundle<void>(
+      (bundle) => bundle.conversation.cancelTurn(
         AgentTurn(id: turnId, sessionId: sessionId),
       ),
     );
@@ -2122,11 +2126,12 @@ class AgentConversationViewModel {
           ),
         );
       }
-      final history = await _runGlobalProvider((provider) {
-        final threadCatalog = provider.bundle.threadCatalog;
+      final history = await _runGlobalBundle((bundle) {
+        final threadCatalog = bundle.threadCatalog;
         if (threadCatalog == null) {
           throw UnsupportedError(
-            '${provider.config.displayName} does not support thread history',
+            '${bundle.runtime.config.displayName} '
+            'does not support thread history',
           );
         }
         return threadCatalog.readThreadHistory(
@@ -2217,8 +2222,8 @@ class AgentConversationViewModel {
     _log.i(
       'Responding to Agent permission ${request.kind.name}: approved=$approved',
     );
-    await _runCurrentSession<void>((provider) async {
-      final interactions = provider.bundle.interactions;
+    await _runCurrentBundle<void>((bundle) async {
+      final interactions = bundle.interactions;
       if (interactions == null) {
         return;
       }
@@ -2262,8 +2267,8 @@ class AgentConversationViewModel {
       'Responding to Agent question '
       '(${answers.length} answered questions)',
     );
-    await _runCurrentSession<void>((provider) async {
-      final interactions = provider.bundle.interactions;
+    await _runCurrentBundle<void>((bundle) async {
+      final interactions = bundle.interactions;
       if (interactions == null) {
         return;
       }
@@ -2294,8 +2299,8 @@ class AgentConversationViewModel {
         urgency: AgentUiUpdateUrgency.immediate,
       ),
     );
-    await _runCurrentSession<void>((provider) async {
-      final planApproval = provider.bundle.planApproval;
+    await _runCurrentBundle<void>((bundle) async {
+      final planApproval = bundle.planApproval;
       if (planApproval == null) {
         return;
       }
@@ -2354,11 +2359,12 @@ class AgentConversationViewModel {
     try {
       // fork 属于 thread 管理操作，使用 global runtime；新 Binding 仍保持 dormant，
       // 直到用户真正提交输入。
-      final session = await _runGlobalProvider((provider) {
-        final threadBranching = provider.bundle.threadBranching;
+      final session = await _runGlobalBundle((bundle) {
+        final threadBranching = bundle.threadBranching;
         if (threadBranching == null) {
           throw UnsupportedError(
-            '${provider.config.displayName} does not support thread branching',
+            '${bundle.runtime.config.displayName} '
+            'does not support thread branching',
           );
         }
         return threadBranching.forkThread(
@@ -2415,11 +2421,12 @@ class AgentConversationViewModel {
     }
     final switchToken = _threadSwitchToken;
     try {
-      final session = await _runGlobalProvider((provider) {
-        final threadBranching = provider.bundle.threadBranching;
+      final session = await _runGlobalBundle((bundle) {
+        final threadBranching = bundle.threadBranching;
         if (threadBranching == null) {
           throw UnsupportedError(
-            '${provider.config.displayName} does not support thread branching',
+            '${bundle.runtime.config.displayName} '
+            'does not support thread branching',
           );
         }
         return threadBranching.forkThread(
@@ -2475,11 +2482,12 @@ class AgentConversationViewModel {
       ),
     );
     try {
-      await _runGlobalProvider((provider) {
-        final threadMutations = provider.bundle.threadMutations;
+      await _runGlobalBundle((bundle) {
+        final threadMutations = bundle.threadMutations;
         if (threadMutations == null) {
           throw UnsupportedError(
-            '${provider.config.displayName} does not support renaming threads',
+            '${bundle.runtime.config.displayName} '
+            'does not support renaming threads',
           );
         }
         return threadMutations.renameThread(threadId: threadId, name: trimmed);
@@ -2506,11 +2514,12 @@ class AgentConversationViewModel {
       return;
     }
     try {
-      await _runGlobalProvider((provider) {
-        final threadMutations = provider.bundle.threadMutations;
+      await _runGlobalBundle((bundle) {
+        final threadMutations = bundle.threadMutations;
         if (threadMutations == null) {
           throw UnsupportedError(
-            '${provider.config.displayName} does not support archiving threads',
+            '${bundle.runtime.config.displayName} '
+            'does not support archiving threads',
           );
         }
         return threadMutations.archiveThread(threadId);
@@ -2718,8 +2727,8 @@ class AgentConversationViewModel {
   ///
   /// Provider 实例不会从回调中逸出或缓存在 ViewModel；历史、模型、Skill 与
   /// thread 管理因此都不会创建或占用 session runtime。
-  Future<T> _runGlobalProvider<T>(
-    Future<T> Function(AgentProvider provider) operation, {
+  Future<T> _runGlobalBundle<T>(
+    Future<T> Function(AgentProviderBundle bundle) operation, {
     String? preferredProviderId,
     bool hydrateCatalogs = false,
   }) async {
@@ -2733,75 +2742,80 @@ class AgentConversationViewModel {
     }
     return globalRuntime.run(config, (runtime) async {
       _globalCapabilitiesByProviderId[providerId] = runtime.capabilities;
-      final provider = runtime.bundle.runtime.provider;
-      if (provider.config.id != providerId) {
+      final bundle = runtime.bundle;
+      if (bundle.runtime.config.id != providerId) {
         throw StateError(
-          'Expected provider $providerId but received ${provider.config.id}',
+          'Expected provider $providerId but received '
+          '${bundle.runtime.config.id}',
         );
       }
       if (hydrateCatalogs) {
         await conversationBinding.bindPermissionCatalog(
-          port: runtime.bundle.permissionPolicy,
+          port: bundle.permissionPolicy,
           persistedOptionId: config.resolvedPermissionOptionId,
         );
-        await _ensureConversationModeCatalog(provider);
-        await _ensureSkillsCatalog(provider);
+        await _ensureConversationModeCatalog(bundle);
+        await _ensureSkillsCatalog(bundle);
       }
-      return operation(provider);
+      return operation(bundle);
     });
   }
 
-  Future<T?> _runCurrentSession<T>(
-    Future<T> Function(AgentProvider provider) operation,
+  Future<T?> _runCurrentBundle<T>(
+    Future<T> Function(AgentProviderBundle bundle) operation,
   ) {
     return conversationBinding.runCurrent(
-      (runtime) => operation(runtime.provider),
+      (runtime) => operation(runtime.bundle),
     );
   }
 
   /// 绑定当前 session runtime 的事件、模型、权限和能力目录。
-  Future<void> _bindLiveProvider(
-    AgentProvider provider, {
+  Future<void> _bindLiveRuntime(
+    AgentProviderBundle bundle, {
     required AgentProviderRuntimeIdentity runtimeIdentity,
     required String? threadId,
   }) async {
-    if (identical(_currentProvider, provider) &&
+    if (identical(_currentRuntime, bundle.runtime) &&
         _permissionSelectionController.runtimeIdentity == runtimeIdentity &&
-        _hasCurrentProviderEventListener(provider, threadId: threadId)) {
-      await _ensureConversationModeCatalog(provider);
+        _hasCurrentProviderEventListener(bundle, threadId: threadId)) {
+      await _ensureConversationModeCatalog(bundle);
       return;
     }
 
-    _modelSelectionController.bindRuntime(provider.bundle.runtime);
+    _modelSelectionController.bindRuntime(bundle.runtime);
     _permissionSelectionController.bindThread(threadId);
-    await _replaceProviderEventSubscription(provider, threadId: threadId);
-    _log.t('Bound conversation runtime: ${provider.config.id}');
+    await _replaceProviderEventSubscription(bundle, threadId: threadId);
+    _log.t('Bound conversation runtime: ${bundle.runtime.config.id}');
   }
 
-  Future<void> _ensureSkillsCatalog(AgentProvider provider) async {
-    final supportsSkills = provider.capabilities.supportsSkillInput;
-    final port = supportsSkills ? provider.bundle.skills : null;
+  Future<void> _ensureSkillsCatalog(AgentProviderBundle bundle) async {
+    final runtime = bundle.runtime;
+    final supportsSkills = runtime.capabilities.supportsSkillInput;
+    final port = supportsSkills ? bundle.skills : null;
     await _skillsCatalogController.bind(
-      providerId: provider.config.id,
+      providerId: runtime.config.id,
       projectPath: _projectPath,
       port: port,
-      configFingerprint: provider.config.id,
+      configFingerprint: runtime.config.id,
     );
   }
 
   /// 去重键使用 providerId + [_runtimeScopeOf]（协议连接身份）。
   ///
   /// global 与 session 两条路径共享目录缓存，但会话状态只在当前 runtime 上应用。
-  Future<void> _ensureConversationModeCatalog(AgentProvider provider) async {
-    final runtimeScope = _runtimeScopeOf(provider);
-    if (_conversationModeCatalogProviderId == provider.config.id &&
+  Future<void> _ensureConversationModeCatalog(
+    AgentProviderBundle bundle,
+  ) async {
+    final runtime = bundle.runtime;
+    final runtimeScope = runtime.runtimeScope;
+    if (_conversationModeCatalogProviderId == runtime.config.id &&
         _conversationModeCatalogRuntimeScope == runtimeScope) {
       return;
     }
 
     final generation = ++_conversationModeCatalogLoadGeneration;
     final preservesCurrentMode =
-        _conversationModeCatalogProviderId == provider.config.id;
+        _conversationModeCatalogProviderId == runtime.config.id;
     final restoredMode = preservesCurrentMode
         ? _conversationModeController.state.confirmedMode
         : null;
@@ -2809,16 +2823,16 @@ class AgentConversationViewModel {
         ? _conversationModeController.state.draftMode
         : null;
     await _conversationModeController.loadCatalog(
-      providerId: provider.config.id,
-      port: provider.bundle.conversationModes,
+      providerId: runtime.config.id,
+      port: bundle.conversationModes,
     );
     if (_disposed || generation != _conversationModeCatalogLoadGeneration) {
       return;
     }
 
-    _conversationModeCatalogProviderId = provider.config.id;
+    _conversationModeCatalogProviderId = runtime.config.id;
     _conversationModeCatalogRuntimeScope = runtimeScope;
-    if (provider.config.id == conversationBinding.providerId) {
+    if (runtime.config.id == conversationBinding.providerId) {
       _conversationModeController.bindThread(
         threadId: _selectedThreadId,
         historyMode: restoredMode,
@@ -2860,7 +2874,7 @@ class AgentConversationViewModel {
   }
 
   Future<AgentSession> _ensureSession(
-    AgentProvider provider,
+    AgentProviderBundle bundle,
     AgentContext context, {
     required int switchToken,
     required String? expectedThreadId,
@@ -2875,16 +2889,13 @@ class AgentConversationViewModel {
     if (restoredSessionId != null) {
       try {
         _log.t('Resuming Agent session $restoredSessionId');
-        final session = await provider.bundle.conversation.resumeSession(
+        final session = await bundle.conversation.resumeSession(
           restoredSessionId,
           context: context,
           permissionSnapshot: permissionSnapshot,
         );
         if (_isStillSelectedThread(switchToken, expectedThreadId)) {
-          await _replaceProviderEventSubscription(
-            provider,
-            threadId: session.id,
-          );
+          await _replaceProviderEventSubscription(bundle, threadId: session.id);
         }
         if (_isStillSelectedThread(switchToken, expectedThreadId)) {
           _session = session;
@@ -2926,13 +2937,15 @@ class AgentConversationViewModel {
       }
     }
 
-    _log.t('Starting new Agent session with provider ${provider.config.id}');
-    final session = await provider.bundle.conversation.startSession(
+    _log.t(
+      'Starting new Agent session with provider ${bundle.runtime.config.id}',
+    );
+    final session = await bundle.conversation.startSession(
       context: context,
       permissionSnapshot: permissionSnapshot,
     );
     if (_isStillSelectedThread(switchToken, expectedThreadId)) {
-      await _replaceProviderEventSubscription(provider, threadId: session.id);
+      await _replaceProviderEventSubscription(bundle, threadId: session.id);
     }
     if (_isStillSelectedThread(switchToken, expectedThreadId)) {
       _session = session;
@@ -2973,27 +2986,23 @@ class AgentConversationViewModel {
     }
   }
 
-  AgentRuntimeScope? _runtimeScopeOf(AgentProvider provider) {
-    return provider.bundle.runtime.runtimeScope;
-  }
-
   bool _hasCurrentProviderEventListener(
-    AgentProvider provider, {
+    AgentProviderBundle bundle, {
     required String? threadId,
   }) {
     return _eventPipeline?.matches(
-          providerId: provider.config.id,
+          providerId: bundle.runtime.config.id,
           threadId: threadId,
           runtimeScope:
               conversationBinding.currentRuntime?.runtimeScope ??
-              _runtimeScopeOf(provider),
+              bundle.runtime.runtimeScope,
         ) ??
         false;
   }
 
   /// 先安装新 Pipeline，再由其异步关闭旧资源；共享 gate 隔离重叠窗口。
   Future<void> _replaceProviderEventSubscription(
-    AgentProvider provider, {
+    AgentProviderBundle bundle, {
     required String? threadId,
   }) async {
     if (_disposed) {
@@ -3003,11 +3012,11 @@ class AgentConversationViewModel {
     final eventSource = conversationBinding.events;
     AgentRuntimeScope? currentRuntimeScope() =>
         conversationBinding.currentRuntime?.runtimeScope ??
-        _runtimeScopeOf(provider);
+        bundle.runtime.runtimeScope;
     late final AgentEventPipeline pipeline;
     pipeline = AgentEventPipeline(
       source: eventSource,
-      providerId: provider.config.id,
+      providerId: bundle.runtime.config.id,
       threadId: threadId,
       runtimeScope: currentRuntimeScope(),
       currentRuntimeScope: currentRuntimeScope,
@@ -3032,7 +3041,8 @@ class AgentConversationViewModel {
         }
         _log.w(
           'Agent provider event stream closed '
-          '(provider: ${provider.config.id}, thread: ${threadId ?? 'detached'})',
+          '(provider: ${bundle.runtime.config.id}, '
+          'thread: ${threadId ?? 'detached'})',
         );
         _eventProcessor.settleInterruptedTurn(
           fallbackTurnId: 'provider-disconnected',
@@ -3061,11 +3071,10 @@ class AgentConversationViewModel {
     unawaited(pipeline.close(reason: reason));
   }
 
-  Map<String, Object?> _providerRuntimeLogContext(AgentProvider? provider) {
-    final runtime = provider?.bundle.runtime;
+  Map<String, Object?> _providerRuntimeLogContext(AgentRuntimePort? runtime) {
     final scope = runtime?.runtimeScope;
     return <String, Object?>{
-      'providerId': provider?.config.id ?? _selectedProviderId ?? 'unknown',
+      'providerId': runtime?.config.id ?? _selectedProviderId ?? 'unknown',
       if (runtime != null) 'lifecycleState': runtime.lifecycleState.name,
       if (scope != null) ...<String, Object?>{
         'runtimeId': scope.runtimeId,
@@ -3323,8 +3332,8 @@ class AgentConversationViewModel {
     String threadId,
   ) async {
     try {
-      await _runGlobalProvider((provider) async {
-        final threadCatalog = provider.bundle.threadCatalog;
+      await _runGlobalBundle((bundle) async {
+        final threadCatalog = bundle.threadCatalog;
         if (threadCatalog == null) {
           return;
         }
@@ -3368,14 +3377,14 @@ class AgentConversationViewModel {
     if (listener == null) {
       return null;
     }
-    final provider = _currentProvider;
+    final runtime = _currentRuntime;
     return AgentConversationEffectScope(
       reductionScope: AgentConversationReductionScope.live,
       providerId: listener.providerId,
       listenerGeneration: listener.listenerGeneration,
       runtimeId: listener.runtimeId,
       connectionEpoch: listener.connectionEpoch,
-      providerLifecycleState: provider?.bundle.runtime.lifecycleState.name,
+      providerLifecycleState: runtime?.lifecycleState.name,
       threadId: _selectedThreadId,
     );
   }

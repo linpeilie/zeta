@@ -76,7 +76,7 @@ Does exactly three things: update on matching entryId, create on new entryId, up
 An integration with one agent CLI. Currently active: Codex (default) and Grok. Cursor is retired.
 
 **AgentProviderBundle**
-The entry point to a provider's capabilities. Required ports: `runtime` and `conversation`. Everything else (`threadCatalog`, `threadMutations`, `threadBranching`, `turnSteering`, `interactions`, `modelCatalog`, `localThreadList`, `sessionConfiguration`, `planApproval`, `conversationModes`, `skills`) is optional.
+The strict neutral entry point to a provider's capabilities. Required ports: `runtime` and `conversation`. Everything else (`threadCatalog`, `threadMutations`, `threadBranching`, `turnSteering`, `interactions`, `modelCatalog`, `localThreadList`, `sessionConfiguration`, `planApproval`, `conversationModes`, `skills`, `permissionPolicy`, `usageQuota`) is optional. The bundle does not expose the raw `AgentProvider`.
 `agent_provider_bundle.dart`
 
 **Capability**
@@ -87,7 +87,7 @@ A provider's declaration of what it supports. **UI renders by capability, never 
 A releasable registry reference to a provider instance. It stays inside infrastructure and global-runtime/binding code; view models and panes do not own it directly.
 
 **Conversation binding**
-The application aggregate for one logical conversation, uniquely keyed as a draft or thread. It owns the optional session runtime, generation-filtered events, conversation permissions, and active operations. Only `beginTurn()` may create a runtime. The binding manager owns mapping, draft promotion, and ten-minute idle reclamation.
+The application aggregate for one logical conversation, uniquely keyed as a draft or thread. It owns the optional session runtime, generation-filtered events, a single-binding immutable permission snapshot, and active operations. Only `beginTurn()` may create a runtime. The binding manager owns mapping, draft promotion, and ten-minute idle reclamation.
 
 **Global runtime**
 The single non-reaped instance per provider ID, used for history, thread management, models, skills, usage, connection tests, and other pre-session/global information.

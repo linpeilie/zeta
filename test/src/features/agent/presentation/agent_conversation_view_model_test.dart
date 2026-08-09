@@ -914,7 +914,7 @@ void main() {
     );
 
     test(
-      'other-thread permission settings update only that thread effective',
+      'other-thread permission settings are ignored by this Binding',
       () async {
         final provider = _FakeAgentProvider();
         final viewModel = _createViewModel(provider);
@@ -940,10 +940,10 @@ void main() {
 
         final otherThread = viewModel.permissionSnapshotForThread('thread-1');
         final currentAfter = viewModel.permissionSnapshotForThread('thread-2');
-        expect(otherThread.selection?.optionId, ':read-only');
+        expect(otherThread.selection?.optionId, isNot(':read-only'));
         expect(
           otherThread.source,
-          AgentPermissionRequestSource.threadEffective,
+          isNot(AgentPermissionRequestSource.threadEffective),
         );
         expect(currentAfter, currentBefore);
         expect(

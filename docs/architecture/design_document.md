@@ -214,15 +214,16 @@ projection 与 unified diff 以 turn render revision 缓存，代码高亮复用
 
 ### Provider 抽象
 
-迁移期内，Application / Presentation 侧以 `AgentProviderBundle` 作为首选能力入口；
-`AgentProvider` 保留为 provider 中立兼容门面与 data 层协议适配承载体。
+Application / Presentation 只以 `AgentProviderBundle` 的中立端口作为能力入口；
+`AgentProvider` 仅保留为 data adapter 的生命周期宿主和 bundle 适配入口，不通过
+Bundle、RuntimePort 或 Binding 暴露给 ViewModel。
 
 `AgentProviderBundle` 当前负责把会话与线程能力拆成明确端口：
 
 - 必选：`runtime`、`conversation`。
 - 可选：`threadCatalog`、`threadMutations`、`threadBranching`、`turnSteering`、
   `interactions`、`modelCatalog`、`localThreadList`、`sessionConfiguration`、
-  `planApproval`。
+  `planApproval`、`permissionPolicy`、`conversationModes`、`skills`、`usageQuota`。
 
 `AgentProvider` 仍负责承载具体 CLI 对接和运行时边界，核心职责包括：
 
@@ -402,34 +403,37 @@ bundle port 与 turn configuration 也只接受显式 request snapshot，不再�
 
 ```text
 presentation
-  -> application selection/catalog controller
-  -> AgentPermissionStateStore (runtime identity + generation + threadId)
+  -> Binding-owned selection/catalog controller
+  -> AgentConversationPermissionState (one immutable snapshot per Binding)
   -> immutable AgentPermissionRequestSnapshot
   -> domain bundle port
   -> data provider adapter
   -> Codex/Grok codec + RPC/ACP wire
 
 Codex settings wire -> data notification codec -> neutral domain event
-  -> application state store (event thread only)
-Grok live apply -> neutral runtime result -> state store runtime broadcast
-  -> consumers bound to the same current generation
+  -> matching Binding permission state only
+Grok live apply -> neutral runtime result -> owning Binding runtime selection
 ```
 
-权限运行态由 application 级 `AgentPermissionStateStore` 统一拥有。Provider runtime registry
-为每个进程实例分配递增的 `AgentProviderRuntimeIdentity(providerId, generation)`；状态再按
-threadId 隔离，并以不可变快照暴露 provider default、thread effective、source、last scope、
-warning 与持久化失败。`AgentPermissionCatalogController` 独立承担目录加载、完整
+权限运行态由每个 `AgentConversationBinding` 独占的
+`AgentConversationPermissionState` 统一拥有。它只保存本逻辑会话的 threadId、provider
+default、session effective、一次性 current-turn override、runtime selection、source、last
+scope、warning 与持久化失败，不再维护 provider/runtime/thread map 或 active runtime 注册表。
+Provider runtime registry 为每个进程实例分配递增的
+`AgentProviderRuntimeIdentity(providerId, generation)`，这里只把精确 identity 当作迟到结果
+门闩。`AgentPermissionCatalogController` 独立承担目录加载、完整
 last-known-good、非阻断错误和旧 generation 防回写；selection controller 只编排 apply result
 与持久化。Codex catalog adapter 将错误分为 unsupported/transient/malformed：仅明确
 unsupported 返回 built-ins，其他失败抛出；分页失败不提交部分结果，重复 cursor 安全终止。
-Provider config 在 runtime 激活时只 seed store，之后不再作为 application 请求默认的并行真源；
-包括无活动 Canvas 的 Project Threads fork 在内，所有 application 请求均按当前 runtime identity
-从 store 冻结快照。只有中立快照缺少 selection 时，data provider 才使用构造期不可变 config
-fallback 维持旧运行时兼容。
+Provider config 在 Binding 建立时只 seed 默认值，之后不再作为该 Binding 请求默认的并行真源；
+Project Threads fork 优先从已有 Binding 冻结快照，没有 Binding 时才由 provider default 与
+catalog default 解析。只有中立快照缺少 selection 时，data provider 才使用构造期不可变
+config fallback 维持旧运行时兼容。
 
 `AgentPermissionApplyResult` 的提交规则固定为：`currentTurn` 生成一次性 request override；
-`currentSession` 更新目标 thread；`runtime` 更新显式 runtime state 并向同 generation 的所有
-Canvas 广播；`nextSession` 更新默认/待生效提示。旧 generation 的迟到结果不能提交。Provider
+`currentSession` 更新当前 Binding；`runtime` 更新该 Binding 所属 CLI 实例的显式 runtime
+state，不广播到其他 Binding；`nextSession` 更新默认/待生效提示。旧 generation 的迟到结果
+不能提交。Provider
 apply 成功但配置保存失败时不回滚运行态，并暴露只重试持久化、不重复 apply 的入口。
 
 Codex `thread/settings/updated` 权限反馈在 data mapper 处经专属 codec 原子收敛为中立

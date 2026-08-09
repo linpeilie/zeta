@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 final _log = loggerFor('zeta.agent.model_catalog');
 
@@ -385,18 +385,16 @@ final class _AgentModelCatalogRefreshSuperseded implements Exception {
 
 /// 按 Provider 能力选择普通读取或强制刷新。
 Future<AgentModelList> fetchAgentProviderModels(
-  AgentProvider provider, {
+  AgentModelCatalogPort modelCatalog, {
   bool forceRefresh = false,
   int limit = 20,
   bool includeHidden = false,
 }) {
-  if (forceRefresh && provider is AgentRefreshableModelCatalogProvider) {
-    return (provider as AgentRefreshableModelCatalogProvider).refreshModels(
-      limit: limit,
-      includeHidden: includeHidden,
-    );
-  }
-  return provider.listModels(limit: limit, includeHidden: includeHidden);
+  return modelCatalog.listModels(
+    limit: limit,
+    includeHidden: includeHidden,
+    forceRefresh: forceRefresh,
+  );
 }
 
 String _cacheKey(String providerId, bool includeHidden) =>

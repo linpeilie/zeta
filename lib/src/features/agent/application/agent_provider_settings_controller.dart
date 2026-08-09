@@ -373,13 +373,15 @@ class AgentProviderSettingsController extends ChangeNotifier
       forceRefresh: forceRefresh,
       onCacheHit: onCacheHit,
       refreshLoader: () async {
-        return _globalRuntime.run(
-          config,
-          (runtime) => fetchAgentProviderModels(
-            runtime.bundle.runtime.provider,
-            forceRefresh: true,
-          ),
-        );
+        return _globalRuntime.run(config, (runtime) {
+          final modelCatalog = runtime.bundle.modelCatalog;
+          if (modelCatalog == null) {
+            return Future<AgentModelList>.value(
+              const AgentModelList(models: <AgentModelInfo>[]),
+            );
+          }
+          return fetchAgentProviderModels(modelCatalog, forceRefresh: true);
+        });
       },
     );
   }

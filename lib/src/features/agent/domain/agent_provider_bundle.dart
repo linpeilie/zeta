@@ -21,6 +21,7 @@ final class AgentProviderBundle {
     this.sessionConfiguration,
     this.planApproval,
     this.permissionPolicy,
+    this.usageQuota,
   });
 
   factory AgentProviderBundle.adapt(AgentProvider provider) {
@@ -92,6 +93,10 @@ final class AgentProviderBundle {
           policyProvider.permissionPolicy,
         _ => null,
       },
+      usageQuota: switch (provider) {
+        final AgentUsageQuotaProvider usageQuotaProvider => usageQuotaProvider,
+        _ => null,
+      },
     );
   }
 
@@ -112,7 +117,8 @@ final class AgentProviderBundle {
   /// 可选权限策略端口；为 null 表示 provider 不支持权限模式/profile 选择。
   final AgentPermissionPolicyPort? permissionPolicy;
 
-  AgentProvider get provider => runtime.provider;
+  /// 可选账号套餐与用量窗口读取端口。
+  final AgentUsageQuotaProvider? usageQuota;
 
   AgentProviderCapabilities get capabilities => runtime.capabilities;
 }
@@ -124,8 +130,6 @@ extension AgentProviderBundleAdapter on AgentProvider {
 
 /// 运行时基础端口，收敛配置、生命周期和连接诊断信息。
 abstract interface class AgentRuntimePort {
-  AgentProvider get provider;
-
   AgentProviderConfig get config;
 
   AgentProviderCapabilities get capabilities;
@@ -243,6 +247,7 @@ abstract interface class AgentModelCatalogPort {
   Future<AgentModelList> listModels({
     int limit = 20,
     bool includeHidden = false,
+    bool forceRefresh = false,
   });
 }
 
@@ -286,23 +291,22 @@ abstract interface class AgentPlanApprovalPort {
 }
 
 final class _LegacyAgentRuntimePort implements AgentRuntimePort {
-  const _LegacyAgentRuntimePort(this.provider);
+  const _LegacyAgentRuntimePort(this._provider);
+
+  final AgentProvider _provider;
 
   @override
-  final AgentProvider provider;
+  AgentProviderConfig get config => _provider.config;
 
   @override
-  AgentProviderConfig get config => provider.config;
+  AgentProviderCapabilities get capabilities => _provider.capabilities;
 
   @override
-  AgentProviderCapabilities get capabilities => provider.capabilities;
-
-  @override
-  Stream<AgentEvent> get events => provider.events;
+  Stream<AgentEvent> get events => _provider.events;
 
   @override
   AgentRuntimeInfo? get runtimeInfo {
-    return switch (provider) {
+    return switch (_provider) {
       final AgentRuntimeInfoProvider runtimeInfoProvider =>
         runtimeInfoProvider.runtimeInfo,
       _ => null,
@@ -311,7 +315,7 @@ final class _LegacyAgentRuntimePort implements AgentRuntimePort {
 
   @override
   AgentProviderLifecycleState get lifecycleState {
-    return switch (provider) {
+    return switch (_provider) {
       final AgentRuntimeLifecycleProvider lifecycleProvider =>
         lifecycleProvider.lifecycleState,
       _ => AgentProviderLifecycleState.stopped,
@@ -320,7 +324,7 @@ final class _LegacyAgentRuntimePort implements AgentRuntimePort {
 
   @override
   AgentRuntimeScope? get runtimeScope {
-    return switch (provider) {
+    return switch (_provider) {
       final AgentRuntimeScopeProvider scopeProvider =>
         scopeProvider.runtimeScope,
       _ => null,
@@ -329,14 +333,14 @@ final class _LegacyAgentRuntimePort implements AgentRuntimePort {
 
   @override
   void updateModelSelection(AgentModelSelection selection) {
-    provider.updateModelSelection(selection);
+    _provider.updateModelSelection(selection);
   }
 
   @override
-  Future<void> dispose() => provider.dispose();
+  Future<void> dispose() => _provider.dispose();
 
   @override
-  Future<void> initialize() => provider.initialize();
+  Future<void> initialize() => _provider.initialize();
 }
 
 final class _LegacyAgentConversationPort implements AgentConversationPort {
@@ -545,7 +549,14 @@ final class _LegacyAgentModelCatalogPort implements AgentModelCatalogPort {
   Future<AgentModelList> listModels({
     int limit = 20,
     bool includeHidden = false,
+    bool forceRefresh = false,
   }) {
+    if (forceRefresh && _provider is AgentRefreshableModelCatalogProvider) {
+      return (_provider as AgentRefreshableModelCatalogProvider).refreshModels(
+        limit: limit,
+        includeHidden: includeHidden,
+      );
+    }
     return _provider.listModels(limit: limit, includeHidden: includeHidden);
   }
 }

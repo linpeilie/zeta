@@ -109,6 +109,8 @@ flowchart TD
 
 **UI renders by capability, never by provider name.** When a port is absent or `capability = false`, the corresponding entry point never appears in the menu, and an accidental call from the application layer throws `UnsupportedError` — **silent success is forbidden**, because it makes users believe something took effect when it didn't.
 
+The bundle is a strict boundary: neither it nor `AgentRuntimePort` provides a way to recover the raw `AgentProvider`; view models only retain neutral ports.
+
 This is also what makes "adding a provider without touching shared code" realistic. The normal scope of a new provider is:
 
 ```
@@ -132,7 +134,7 @@ flowchart LR
 ```
 
 - The registry is the sole owner of instances and child processes. There is one non-reaped global runtime per provider ID.
-- A binding uniquely represents one logical conversation by draft/thread key and owns its session runtime, event generation, permissions, and active operations.
+- A binding uniquely represents one logical conversation by draft/thread key and owns its session runtime, event generation, single-conversation permission snapshot, and active operations; permission state is not kept in a cross-conversation registry.
 - Creating a draft, opening a thread, or reading history/models/skills does not start a session runtime. Only the first submitted turn calls `beginTurn()`.
 - Late cancel, steer, and interaction responses may only use `runCurrent()` and fail closed after runtime reclamation.
 - The manager runs a single-flight sweep every minute. A session is reaped only after ten idle minutes with no active turn/RPC, using an exact runtime identity; a replacement waits for the old process to finish disposing.
