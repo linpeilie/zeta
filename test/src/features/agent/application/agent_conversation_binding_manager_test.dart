@@ -293,11 +293,30 @@ void main() {
       expect(lease.binding.hasRuntime, isFalse);
       expect(lease.binding.permissions.isRuntimeAttached, isFalse);
       expect(factory.providers, hasLength(1));
+      expect(manager.bindings.values, contains(lease.binding));
 
       final replacement = await lease.binding.beginTurn();
       expect(factory.providers, hasLength(2));
       expect(replacement.runtime.runtimeIdentity, isNot(firstIdentity));
       await replacement.release();
+    });
+
+    test('无消费者 Binding 在外部 invalidate 后立即从映射移除', () async {
+      final lease = acquireDraft();
+      final activity = await lease.binding.beginTurn();
+      await activity.release();
+      final binding = lease.binding;
+      await lease.release();
+
+      expect(binding.consumerCount, 0);
+      expect(binding.hasRuntime, isTrue);
+      expect(manager.bindings.values, contains(binding));
+
+      await registry.invalidateProvider(defaultAgentProviderId);
+
+      expect(binding.hasRuntime, isFalse);
+      expect(manager.bindings.values, isNot(contains(binding)));
+      expect(manager.bindings, isEmpty);
     });
 
     test('global runtime 不参与 Binding 空闲回收', () async {

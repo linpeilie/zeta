@@ -151,6 +151,7 @@ final class AgentConversationBindingManager extends ChangeNotifier {
       persistPermissionOptionId: persistPermissionOptionId,
       clock: clock,
       promote: _promote,
+      onRuntimeCleared: _handleRuntimeCleared,
     );
     _bindings[key] = binding;
     binding.attachConsumer();
@@ -179,10 +180,29 @@ final class AgentConversationBindingManager extends ChangeNotifier {
 
   void _release(AgentConversationBinding binding) {
     binding.detachConsumer();
-    if (binding.consumerCount == 0 && !binding.hasRuntime) {
-      _removeBinding(binding);
-    }
+    _pruneIfOrphan(binding);
     notifyListeners();
+  }
+
+  /// Binding 在外部失效或 idle reap 后清除 runtime 时回调。
+  ///
+  /// 与 [_release] 共用「无消费者且无 runtime → 移除」不变量，避免只清进程、
+  /// 却把轻量 Binding 永久留在映射中。
+  void _handleRuntimeCleared(AgentConversationBinding binding) {
+    if (_closed) {
+      return;
+    }
+    if (_pruneIfOrphan(binding)) {
+      notifyListeners();
+    }
+  }
+
+  bool _pruneIfOrphan(AgentConversationBinding binding) {
+    if (binding.consumerCount != 0 || binding.hasRuntime) {
+      return false;
+    }
+    _removeBinding(binding);
+    return true;
   }
 
   Future<void> _sweepOnce() async {

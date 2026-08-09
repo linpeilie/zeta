@@ -126,6 +126,10 @@ typedef AgentConversationBindingPromotion =
       AgentConversationThreadBindingKey nextKey,
     );
 
+/// runtime 被清除后通知 Manager，以便立刻回收无消费者空壳 Binding。
+typedef AgentConversationBindingRuntimeCleared =
+    void Function(AgentConversationBinding binding);
+
 /// 一个逻辑会话的运行时聚合根。
 ///
 /// 它长期保存会话权限和事件入口，但 session Provider 仍由 registry 唯一拥有；
@@ -140,6 +144,7 @@ final class AgentConversationBinding extends ChangeNotifier {
     required Future<void> Function(String optionId) persistPermissionOptionId,
     required DateTime Function() clock,
     required AgentConversationBindingPromotion promote,
+    required AgentConversationBindingRuntimeCleared onRuntimeCleared,
   }) : _key = key,
        _runtimeScope = AgentProviderRuntimeScopeKey.session(runtimeScopeId),
        _clock = clock,
@@ -151,6 +156,7 @@ final class AgentConversationBinding extends ChangeNotifier {
     _runtimeRegistry.addListener(_handleRuntimeRegistryChanged);
     _resolveConfig = resolveConfig;
     _promote = promote;
+    _onRuntimeCleared = onRuntimeCleared;
     final config = _resolveConfig(key.providerId);
     permissions.resetForProvider(
       port: null,
@@ -165,6 +171,7 @@ final class AgentConversationBinding extends ChangeNotifier {
   late final AgentProviderConfig Function(String providerId) _resolveConfig;
   final DateTime Function() _clock;
   late final AgentConversationBindingPromotion _promote;
+  late final AgentConversationBindingRuntimeCleared _onRuntimeCleared;
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast(sync: true);
 
@@ -434,6 +441,9 @@ final class AgentConversationBinding extends ChangeNotifier {
     _providerEvents = null;
     permissions.detachRuntime();
     notifyListeners();
+    // runtime 事后消失时复检「无消费者空壳」不变量；不能只靠 _release /
+    // 带 runtime 的 idle sweep，否则外部 invalidate 会留下永久幽灵 Binding。
+    _notifyRuntimeCleared();
     // 先调用 registry 的条件失效：该调用在第一次 await 前会移除旧 entry 并
     // 建立 dispose barrier。这样并发 beginTurn/acquire 要么看见旧 identity 已
     // 失效，要么等待旧 CLI 完全退出，不能在 cancel/release 窗口复用旧进程。
@@ -448,6 +458,13 @@ final class AgentConversationBinding extends ChangeNotifier {
     await invalidation;
     await lease.release();
     return true;
+  }
+
+  void _notifyRuntimeCleared() {
+    if (_disposed) {
+      return;
+    }
+    _onRuntimeCleared(this);
   }
 
   void _finishActivity(AgentProviderRuntimeIdentity identity) {
@@ -477,6 +494,7 @@ final class AgentConversationBinding extends ChangeNotifier {
     permissions.detachRuntime();
     unawaited(lease.release());
     notifyListeners();
+    _notifyRuntimeCleared();
   }
 
   @override
