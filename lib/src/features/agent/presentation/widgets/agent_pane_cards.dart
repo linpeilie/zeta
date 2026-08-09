@@ -2197,7 +2197,6 @@ class _AgentUserInputQaRow extends StatelessWidget {
               style: textStyles.bodySmall.copyWith(
                 color: colors.textTertiary,
                 fontWeight: FontWeight.w600,
-                fontSize: 11,
                 height: 1.15,
               ),
             ),
@@ -2217,10 +2216,11 @@ class _AgentUserInputQaRow extends StatelessWidget {
                 ),
                 child: Text(
                   '${index + 1}',
-                  style: textStyles.bodySmall.copyWith(
+                  // 固定 16x16 徽标内的序号：保持 UI 字体，跟随界面字号而非
+                  // 代码字号，避免用户调大代码字号时撑破固定尺寸容器。
+                  style: textStyles.caption.copyWith(
                     color: colors.info,
                     fontWeight: FontWeight.w700,
-                    fontSize: 10,
                     height: 1,
                   ),
                 ),

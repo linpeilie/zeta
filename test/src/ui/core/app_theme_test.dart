@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/core/constants/app_typography.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 
@@ -33,7 +34,7 @@ void main() {
       );
     });
 
-    test('系统默认字体同步平台主字体到三套主题投影', () {
+    test('跟随应用默认时把内置 Geist 同步到三套主题投影', () {
       final ideTheme = buildIdeThemeData(
         brightness: Brightness.light,
         codeFontFamily: 'JetBrainsMono',
@@ -49,31 +50,35 @@ void main() {
         uiFontFamilyFallback: ideTheme.uiFontFamilyFallback,
       ).rowTitle;
 
-      expect(ideTheme.uiFontFamily, 'Segoe UI');
+      // 主字体是内置 Geist；中文仍然靠平台 fallback 链承接。
+      expect(ideTheme.uiFontFamily, bundledUiFontFamily);
       expect(ideTheme.uiFontFamilyFallback, const <String>[
         'Microsoft YaHei UI',
         'Microsoft YaHei',
       ]);
-      expect(shadcnTypography.sans.fontFamily, 'Segoe UI');
+      expect(shadcnTypography.sans.fontFamily, bundledUiFontFamily);
       expect(
         shadcnTypography.sans.fontFamilyFallback,
         ideTheme.uiFontFamilyFallback,
       );
-      expect(materialTextStyle?.fontFamily, 'Segoe UI');
+      expect(materialTextStyle?.fontFamily, bundledUiFontFamily);
       expect(
         materialTextStyle?.fontFamilyFallback,
         ideTheme.uiFontFamilyFallback,
       );
-      expect(materialTheme.primaryTextTheme.bodyMedium?.fontFamily, 'Segoe UI');
+      expect(
+        materialTheme.primaryTextTheme.bodyMedium?.fontFamily,
+        bundledUiFontFamily,
+      );
       expect(
         materialTheme.primaryTextTheme.bodyMedium?.fontFamilyFallback,
         ideTheme.uiFontFamilyFallback,
       );
-      expect(ideTextStyle.fontFamily, 'Segoe UI');
+      expect(ideTextStyle.fontFamily, bundledUiFontFamily);
       expect(ideTextStyle.fontFamilyFallback, ideTheme.uiFontFamilyFallback);
     });
 
-    test('没有稳定主字体的平台会清除 GeistSans', () {
+    test('没有稳定系统主字体的平台同样落到内置 Geist', () {
       final ideTheme = buildIdeThemeData(
         brightness: Brightness.light,
         codeFontFamily: 'JetBrainsMono',
@@ -82,8 +87,10 @@ void main() {
 
       final typography = buildShadcnTheme(ideTheme).typography;
 
-      expect(ideTheme.uiFontFamily, isNull);
-      expect(typography.sans.fontFamily, isNull);
+      // Linux 没有稳定的系统 UI 字体名，过去会退成 null 交给引擎；
+      // 现在统一落到内置 Geist，三平台观感一致。
+      expect(ideTheme.uiFontFamily, bundledUiFontFamily);
+      expect(typography.sans.fontFamily, bundledUiFontFamily);
       expect(typography.sans.fontFamilyFallback, ideTheme.uiFontFamilyFallback);
     });
 

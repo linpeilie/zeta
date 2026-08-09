@@ -37,7 +37,24 @@ flutter:
     - assets/branding/
     - assets/icons/agents/
   fonts:
+    # 界面无衬线体。Geist 不含中日韩字形，中文由平台回退链承接
+    # （见 resolvePlatformUiFontFamilyFallback）。
+    - family: Geist
+      fonts:
+        - asset: assets/fonts/Geist-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Geist-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Geist-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Geist-Bold.ttf
+          weight: 700
+    # 代码与机器标识符等宽体。
     - family: JetBrainsMono
       fonts:
+        - asset: assets/fonts/JetBrainsMono-Regular.ttf
+          weight: 400
         - asset: assets/fonts/JetBrainsMono-Medium.ttf
           weight: 500
+        - asset: assets/fonts/JetBrainsMono-Bold.ttf
+          weight: 700

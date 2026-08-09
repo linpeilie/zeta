@@ -360,7 +360,7 @@ class _ModelConfigTrigger extends StatelessWidget {
               modelLabel,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: textStyles.bodySmall.copyWith(
+              style: textStyles.identifier.copyWith(
                 color: colors.textSecondary,
                 fontWeight: FontWeight.w600,
               ),
@@ -385,13 +385,10 @@ class _ModelConfigTrigger extends StatelessWidget {
           ],
           const SizedBox(width: IdeSpacing.space4),
           if (state.isRefreshing)
-            SizedBox(
-              width: 12,
-              height: 12,
-              child: CircularProgressIndicator(
-                strokeWidth: 1.5,
-                color: colors.textTertiary,
-              ),
+            IdeBusySpinner(
+              size: 12,
+              strokeWidth: 1.5,
+              color: colors.textTertiary,
             )
           else
             AnimatedRotation(
@@ -939,21 +936,16 @@ class _ModelListItem extends StatelessWidget {
               model.displayName,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: textStyles.bodySmall.copyWith(
+              style: textStyles.identifier.copyWith(
                 color: model.enabled ? colors.textPrimary : colors.textTertiary,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
               ),
             ),
           ),
           if (saving)
-            SizedBox(
-              width: 12,
-              height: 12,
-              child: CircularProgressIndicator(
-                strokeWidth: 1.5,
-                color: colors.textSecondary,
-              ),
+            IdeBusySpinner(
+              size: 12,
+              strokeWidth: 1.5,
+              color: colors.textSecondary,
             )
           else if (!model.enabled)
             Icon(
@@ -1235,11 +1227,9 @@ class _FastConfigRow extends StatelessWidget {
           Expanded(
             child: Text(
               'Fast',
-              style: IdeTextStyles.of(context).bodyMedium.copyWith(
-                color: colors.textPrimary,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
+              style: IdeTextStyles.of(
+                context,
+              ).rowTitle.copyWith(color: colors.textPrimary),
             ),
           ),
           Semantics(
@@ -1582,22 +1572,18 @@ class _ReasoningEffortSliderState extends State<_ReasoningEffortSlider>
                   const SizedBox(width: IdeSpacing.space4),
                   Text(
                     '思考程度',
-                    style: textStyles.bodySmall.copyWith(
+                    style: textStyles.rowTitle.copyWith(
                       color: colors.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   const Spacer(),
                   AnimatedDefaultTextStyle(
                     duration: duration,
                     curve: IdeMotion.curveDefault,
-                    style: textStyles.bodySmall.copyWith(
+                    style: textStyles.titleSmall.copyWith(
                       color: maxActive
                           ? colors.intelligenceAccent
                           : colors.textPrimary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
                     ),
                     child: Text(
                       _displayLabel,
@@ -1608,13 +1594,10 @@ class _ReasoningEffortSliderState extends State<_ReasoningEffortSlider>
                   ),
                   if (widget.saving) ...[
                     const SizedBox(width: IdeSpacing.space6),
-                    SizedBox(
-                      width: 10,
-                      height: 10,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 1.4,
-                        color: colors.textSecondary,
-                      ),
+                    IdeBusySpinner(
+                      size: 10,
+                      strokeWidth: 1.4,
+                      color: colors.textSecondary,
                     ),
                   ],
                 ],

@@ -9,6 +9,7 @@ import 'package:zeta/src/ui/core/ide_chip.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
+import 'package:zeta/src/ui/core/rows/ide_row_divider.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
@@ -403,20 +404,16 @@ class _HomeSection extends StatelessWidget {
                   ),
                 if (loading) ...[
                   if (warning != null) const SizedBox(width: IdeSpacing.space8),
-                  SizedBox(
+                  IdeBusySpinner(
                     key: ValueKey<String>('global-home-loading-$title'),
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: colors.accent,
-                    ),
+                    size: 14,
+                    color: colors.accent,
                   ),
                 ],
               ],
             ),
           ),
-          Divider(height: 1, thickness: 1, color: colors.borderSubtle),
+          const IdeRowDivider(),
           child,
         ],
       ),
@@ -526,7 +523,7 @@ class _ProviderStatusItem extends StatelessWidget {
                       provider.displayName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: textStyles.rowTitle,
+                      style: textStyles.identifier,
                     ),
                     Text(
                       version == null || version.isEmpty
@@ -585,14 +582,7 @@ class _HomeSectionState extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (loading)
-            SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: colors.accent,
-              ),
-            )
+            IdeBusySpinner(size: 18, color: colors.accent)
           else
             Icon(icon, size: 18, color: foreground),
           const SizedBox(width: IdeSpacing.space10),

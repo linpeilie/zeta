@@ -272,7 +272,7 @@ void main() {
     );
     expect(popupFinder, findsOneWidget);
     expect(
-      find.descendant(of: popupFinder, matching: find.text('系统默认')),
+      find.descendant(of: popupFinder, matching: find.text('Geist（内置默认）')),
       findsOneWidget,
     );
     expect(

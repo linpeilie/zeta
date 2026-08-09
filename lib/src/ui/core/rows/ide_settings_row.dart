@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 import '../ide_colors.dart';
 import '../ide_metrics.dart';

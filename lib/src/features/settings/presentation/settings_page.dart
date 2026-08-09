@@ -907,7 +907,7 @@ String _fontChoiceLabel(
   String? systemFontDisplayName,
 }) {
   return switch (choice.kind) {
-    AppearanceFontChoiceKind.systemDefault => '系统默认',
+    AppearanceFontChoiceKind.systemDefault => 'Geist（内置默认）',
     AppearanceFontChoiceKind.bundledJetBrainsMono => 'JetBrainsMono（内置默认）',
     AppearanceFontChoiceKind.system =>
       systemFontDisplayName ?? choice.fontFamily!,

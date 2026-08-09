@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'ide_colors.dart';
 import 'ide_effects.dart';
+import 'ide_metrics.dart';
 import 'ide_spacing.dart';
 import 'pane_widgets.dart';
 
@@ -93,7 +94,11 @@ class _RailActionButton extends StatelessWidget {
         backgroundColor: Colors.transparent,
         selectedBackgroundColor: colors.selectedSurface,
         semanticLabel: action.semanticLabel,
-        child: Icon(action.icon, size: 19, color: iconColor),
+        child: Icon(
+          action.icon,
+          size: IdeMetrics.activityRailIconSize,
+          color: iconColor,
+        ),
       ),
     );
   }

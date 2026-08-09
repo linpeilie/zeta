@@ -21,8 +21,49 @@ void main() {
     expect(styles.toolbarLabel.fontSize, closeTo(12.8333, 0.0001));
     expect(styles.proseBody.fontSize, closeTo(15.1667, 0.0001));
     expect(styles.meta.fontSize, closeTo(11.6667, 0.0001));
-    expect(styles.metricValue.fontSize, 21);
     expect(styles.placeholder.fontSize, 14);
+    // 机器标识符与数值按代码字号缩放（codeScale = 18/12 = 1.5），
+    // 不跟随界面字号。
+    expect(styles.identifier.fontSize, 18);
+    expect(styles.numeric.fontSize, 16.5);
+    expect(styles.metricValue.fontSize, 27);
+  });
+
+  test('机器标识符与数值使用等宽字体', () {
+    final styles = IdeTextStyles.resolve(
+      colors: IdeColors.light,
+      uiFontFamily: 'Geist',
+      codeFontFamily: 'JetBrainsMono',
+    );
+
+    expect(styles.identifier.fontFamily, 'JetBrainsMono');
+    expect(styles.numeric.fontFamily, 'JetBrainsMono');
+    expect(styles.metricValue.fontFamily, 'JetBrainsMono');
+    // 对照：普通界面文本仍走 UI 字体。
+    expect(styles.bodyMedium.fontFamily, 'Geist');
+    expect(styles.rowTitle.fontFamily, 'Geist');
+  });
+
+  test('表格数值与指标数值启用等宽数字，保证按位对齐', () {
+    final styles = IdeTextStyles.resolve(colors: IdeColors.light);
+
+    expect(
+      styles.numeric.fontFeatures,
+      contains(const FontFeature.tabularFigures()),
+    );
+    expect(
+      styles.metricValue.fontFeatures,
+      contains(const FontFeature.tabularFigures()),
+    );
+    // 普通正文不应被强制等宽数字。
+    expect(styles.bodyMedium.fontFeatures, isNull);
+  });
+
+  test('identifier 尺寸对齐 rowTitle，便于在列表行里直接替换', () {
+    final styles = IdeTextStyles.resolve(colors: IdeColors.light);
+
+    expect(styles.identifier.fontSize, styles.rowTitle.fontSize);
+    expect(styles.identifier.fontWeight, styles.rowTitle.fontWeight);
   });
 
   test('高层语义样式使用统一字重与前景色', () {

@@ -10,6 +10,7 @@ import 'package:zeta/src/ui/core/ide_button.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_motion.dart';
+import 'package:zeta/src/ui/core/rows/ide_row_divider.dart';
 import 'package:zeta/src/ui/core/ide_popover.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
@@ -294,7 +295,7 @@ class _UsageTimeRangePopoverState extends State<_UsageTimeRangePopover> {
                 ),
                 child: shortcuts,
               ),
-              Divider(height: 1, color: colors.borderSubtle),
+              const IdeRowDivider(),
               Padding(padding: IdeSpacing.all12, child: calendar),
             ],
           )
@@ -313,7 +314,7 @@ class _UsageTimeRangePopoverState extends State<_UsageTimeRangePopover> {
                     child: shortcuts,
                   ),
                 ),
-                VerticalDivider(width: 1, color: colors.borderSubtle),
+                const IdeColumnDivider(),
                 Padding(padding: IdeSpacing.all12, child: calendar),
               ],
             ),

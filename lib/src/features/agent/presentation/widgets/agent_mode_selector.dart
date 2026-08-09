@@ -197,14 +197,11 @@ class _AgentModeSelectorState extends State<AgentModeSelector> {
               ),
               const SizedBox(width: IdeSpacing.space4),
               if (isLoading)
-                SizedBox(
+                IdeBusySpinner(
                   key: const ValueKey('agent-mode-selector-loading'),
-                  width: 12,
-                  height: 12,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 1.5,
-                    color: colors.textTertiary,
-                  ),
+                  size: 12,
+                  strokeWidth: 1.5,
+                  color: colors.textTertiary,
                 )
               else
                 AnimatedRotation(
@@ -301,7 +298,7 @@ class _AgentModeSelectorPopover extends StatelessWidget {
                     ],
                   ),
                 ),
-                Divider(height: 1, thickness: 1, color: colors.borderSubtle),
+                const IdeRowDivider(),
               ],
               for (final preset in presets)
                 sf.SelectItemButton<AgentConversationModeId>(

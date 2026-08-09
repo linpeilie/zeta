@@ -1915,7 +1915,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.byKey(const ValueKey('agent-compact-banner')), findsNothing);
-      final progress = tester.widget<CircularProgressIndicator>(
+      final progress = tester.widget<IdeBusySpinner>(
         find.byKey(const ValueKey('agent-composer-token-progress')),
       );
       expect(progress.value, closeTo(0.65, 0.001));
@@ -2009,7 +2009,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 20));
 
-      var progress = tester.widget<CircularProgressIndicator>(
+      var progress = tester.widget<IdeBusySpinner>(
         find.byKey(const ValueKey('agent-composer-token-progress')),
       );
       expect(progress.value, closeTo(0.25, 0.001));
@@ -2026,7 +2026,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 20));
 
-      progress = tester.widget<CircularProgressIndicator>(
+      progress = tester.widget<IdeBusySpinner>(
         find.byKey(const ValueKey('agent-composer-token-progress')),
       );
       expect(progress.value, closeTo(0.5, 0.001));

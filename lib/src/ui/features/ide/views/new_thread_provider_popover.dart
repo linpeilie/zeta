@@ -107,14 +107,7 @@ class _NewThreadProviderPopoverState extends State<NewThreadProviderPopover> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: colors.accent,
-              ),
-            ),
+            IdeBusySpinner(size: 18, color: colors.accent),
             const SizedBox(width: IdeSpacing.space10),
             Flexible(
               child: Text(
@@ -200,7 +193,7 @@ class _NewThreadProviderPopoverState extends State<NewThreadProviderPopover> {
                           provider.displayName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: textStyles.bodyMedium.copyWith(
+                          style: textStyles.identifier.copyWith(
                             fontWeight: FontWeight.w600,
                           ),
                         ),

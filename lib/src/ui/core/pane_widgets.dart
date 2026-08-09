@@ -5,6 +5,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'ide_colors.dart';
 import 'ide_effects.dart';
+import 'ide_metrics.dart';
 import 'ide_motion.dart';
 import 'ide_spacing.dart';
 import 'ide_text_styles.dart';
@@ -204,12 +205,21 @@ class IdeBusySpinner extends StatelessWidget {
     this.size = 14,
     this.strokeWidth = 2,
     this.color,
+    this.backgroundColor,
+    this.value,
     this.semanticsLabel = 'Running',
   });
 
   final double size;
   final double strokeWidth;
   final Color? color;
+
+  /// 轨道底色；默认透明，只有需要显示「剩余量」的确定态才传。
+  final Color? backgroundColor;
+
+  /// 进度值 `0..1`。为空时是不确定态并持续旋转；传值则渲染静态进度环。
+  final double? value;
+
   final String semanticsLabel;
 
   @override
@@ -223,11 +233,12 @@ class IdeBusySpinner extends StatelessWidget {
           width: size,
           height: size,
           child: sf.CircularProgressIndicator(
+            value: value,
             size: size,
             strokeWidth: strokeWidth,
             color: indicatorColor,
-            backgroundColor: Colors.transparent,
-            animated: true,
+            backgroundColor: backgroundColor ?? Colors.transparent,
+            animated: value == null,
           ),
         ),
       ),
@@ -552,16 +563,10 @@ class Pane extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            height: 38,
+            height: IdeMetrics.paneHeaderHeight,
             decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: resolvePanelBorderColor(
-                    context,
-                  ).withValues(alpha: 0.6),
-                  width: 1,
-                ),
-              ),
+              // 极简边框：全局只用一种 1px 分隔线色，不再叠魔法透明度。
+              border: Border(bottom: BorderSide(color: colors.borderSubtle)),
             ),
             padding: const EdgeInsets.only(
               left: IdeSpacing.space12,

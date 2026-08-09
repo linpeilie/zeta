@@ -24,9 +24,13 @@ abstract final class IdeMetrics {
 
   /// 侧栏 / Pane 内部标题条高度。
   ///
-  /// 目标生效位置：`Pane` 头部条。
-  /// 当前未引用：计划文档要求接入，实现侧仍用局部高度。
+  /// 生效位置：`Pane` 头部条。
   static const double paneHeaderHeight = 38;
+
+  /// macOS 自绘标题栏左侧为原生交通灯按钮让出的宽度。
+  ///
+  /// 生效位置：`WindowFrame` 标题栏；仅 macOS 生效，且该区域不拦截点击。
+  static const double macOSTrafficLightGutter = 76;
 
   /// 工具条最小高度。
   ///
@@ -63,6 +67,12 @@ abstract final class IdeMetrics {
   /// `activityRailWidth + IdeSpacing.space4`（内侧 gap `space4`，外侧贴
   /// scaffold 边；窗口级外距由 `IdeHome` 的 `space4` 工作台 padding 提供）。
   static const double activityRailWidth = 36;
+
+  /// Activity Rail 图标尺寸。
+  ///
+  /// 生效位置：`IdeActivityRail` 的图标；比通用图标略大，保证 36pt 窄条里
+  /// 仍有清晰的点击目标。
+  static const double activityRailIconSize = 19;
 
   // ---------------------------------------------------------------------------
   // 侧栏与导航宽度

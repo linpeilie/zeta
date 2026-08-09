@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 /// 惰性保留页面描述：稳定 [id] + 页面内容。
 ///

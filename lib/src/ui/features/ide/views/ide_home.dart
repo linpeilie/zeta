@@ -548,16 +548,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     return ColoredBox(
       key: const ValueKey<String>('global-home-restoring'),
       color: colors.canvasSurface,
-      child: Center(
-        child: SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: colors.accent,
-          ),
-        ),
-      ),
+      child: Center(child: IdeBusySpinner(size: 20, color: colors.accent)),
     );
   }
 

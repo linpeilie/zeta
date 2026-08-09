@@ -4,6 +4,7 @@ import '../ide_colors.dart';
 import '../ide_metrics.dart';
 import '../ide_spacing.dart';
 import '../ide_text_styles.dart';
+import '../rows/ide_row_divider.dart';
 import '../pane_widgets.dart';
 
 /// 紧凑指标条中的单个语义指标。
@@ -73,12 +74,9 @@ class CompactMetricBar extends StatelessWidget {
                   ),
                 ),
                 if (index < items.length - 1)
-                  SizedBox(
+                  const SizedBox(
                     height: IdeMetrics.metricBarDividerHeight,
-                    child: VerticalDivider(
-                      width: 1,
-                      color: colors.borderSubtle,
-                    ),
+                    child: IdeColumnDivider(),
                   ),
               ],
             ],

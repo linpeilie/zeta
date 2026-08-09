@@ -129,8 +129,13 @@ class _TitleBar extends StatelessWidget {
     final isWindows = Platform.isWindows;
     // 最小高度保证无菜单时仍可拖拽；有 Menubar 时由内容撑开，不再锁死固定像素。
     // Column 给非 flex 子项无限高约束，不能用 CrossAxisAlignment.stretch。
-    return ColoredBox(
-      color: colors.frame,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.frame,
+        // 标题栏与工作台之间用一条 1px 分隔线划界，而不是靠背景色差；
+        // 桌面应用的标题栏需要一个明确但克制的下边界。
+        border: Border(bottom: BorderSide(color: colors.borderSubtle)),
+      ),
       child: ConstrainedBox(
         key: const ValueKey('window-title-bar'),
         constraints: const BoxConstraints(minHeight: IdeMetrics.titleBarHeight),
@@ -140,7 +145,8 @@ class _TitleBar extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               // macOS 下左侧让出交通灯按钮的空间，且不拦截点击。
-              if (isMac) const SizedBox(width: 76),
+              if (isMac)
+                const SizedBox(width: IdeMetrics.macOSTrafficLightGutter),
               if (isWindows) const _WindowsTitleBarLogo(),
               if (menus.isNotEmpty) _WindowMenuBar(menus: menus),
               Expanded(

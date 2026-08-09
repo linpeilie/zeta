@@ -228,17 +228,14 @@ class _AgentThreadHistoryLoading extends StatelessWidget {
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    SizedBox(
-                      width: 72,
-                      height: 72,
-                      child: CircularProgressIndicator(
-                        key: const ValueKey(
-                          'agent-thread-history-loading-spinner',
-                        ),
-                        strokeWidth: 2.2,
-                        color: colors.accent.withValues(alpha: 0.55),
-                        backgroundColor: colors.border.withValues(alpha: 0.28),
+                    IdeBusySpinner(
+                      key: const ValueKey(
+                        'agent-thread-history-loading-spinner',
                       ),
+                      size: 72,
+                      strokeWidth: 2.2,
+                      color: colors.accent.withValues(alpha: 0.55),
+                      backgroundColor: colors.border.withValues(alpha: 0.28),
                     ),
                     DecoratedBox(
                       decoration: BoxDecoration(

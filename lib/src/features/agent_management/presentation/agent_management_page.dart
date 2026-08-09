@@ -1558,7 +1558,7 @@ class _ModelCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(model.displayName, style: textStyles.rowTitle),
+                        Text(model.displayName, style: textStyles.identifier),
                         SelectableText(
                           model.model,
                           style: textStyles.codeSmall.copyWith(

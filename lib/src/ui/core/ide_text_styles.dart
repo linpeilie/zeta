@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 import 'package:zeta/src/core/constants/app_typography.dart';
 
@@ -26,6 +26,8 @@ class IdeTextStyles {
     required this.caption,
     required this.codeMedium,
     required this.codeSmall,
+    required this.identifier,
+    required this.numeric,
     required this.pageTitle,
     required this.sectionTitle,
     required this.rowTitle,
@@ -88,6 +90,27 @@ class IdeTextStyles {
   /// 消息体、上下文面板 JSON/路径、Markdown 代码块基样式等。
   final TextStyle codeSmall;
 
+  /// 机器标识符（基准 12 / 代码字体 / w500）。
+  ///
+  /// 桌面 IDE 的排版分工：人类文案走 UI 字体，机器标识符走等宽字体，
+  /// 让用户一眼分辨「可读的话」和「可复制的值」。
+  ///
+  /// 尺寸对齐 [rowTitle]，因此可以在列表行里直接替换它而不改变行高。
+  ///
+  /// 生效位置：模型 ID（`gpt-5-codex`）、Provider 名（Codex / Grok）、
+  /// thread ID 等稳定标识符。
+  ///
+  /// 次级标识符（文件路径、可执行文件路径）继续用 [codeSmall]，
+  /// 它已经是等宽 + 次级色，不再另立同义 token。
+  final TextStyle identifier;
+
+  /// 表格数值（基准 11 / 代码字体 / w500 / 等宽数字）。
+  ///
+  /// 启用 `tabularFigures`，保证多行数字按位对齐；配合右对齐使用。
+  ///
+  /// 生效位置：`IdeDataRow` 的数字列（调用次数、Token 数、成功率、耗时）。
+  final TextStyle numeric;
+
   /// 页面顶栏标题（基准 15 / w600）。
   ///
   /// 生效位置：`IdePageHeader` 标题；Agent 日志页标题。
@@ -120,9 +143,12 @@ class IdeTextStyles {
   /// Agent 管理状态 meta。
   final TextStyle meta;
 
-  /// 指标数值（基准 18 / w600）。
+  /// 指标数值（基准 18 / 代码字体 / w600 / 等宽数字）。
   ///
-  /// 生效位置：`CompactMetricBar` 大号数值。
+  /// 按代码字号缩放（`codeScale`）而非 UI 字号：它显示的是 Token 计数这类
+  /// 机器数据，应与其他等宽数值一起变化。
+  ///
+  /// 生效位置：`CompactMetricBar` 大号数值、使用统计页概览卡、Agent 用量面板。
   final TextStyle metricValue;
 
   /// 输入占位符（基准 12 / 三级色）。
@@ -236,6 +262,23 @@ class IdeTextStyles {
         height: 1.35,
         fontWeight: FontWeight.w400,
       ),
+      identifier: _textStyle(
+        color: colors.textPrimary,
+        fontFamily: codeFontFamily,
+        fontFamilyFallback: uiFontFamilyFallback,
+        fontSize: 12 * codeScale,
+        height: 1.35,
+        fontWeight: FontWeight.w500,
+      ),
+      numeric: _textStyle(
+        color: colors.textPrimary,
+        fontFamily: codeFontFamily,
+        fontFamilyFallback: uiFontFamilyFallback,
+        fontSize: 11 * codeScale,
+        height: 1.35,
+        fontWeight: FontWeight.w500,
+        fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+      ),
       pageTitle: _textStyle(
         color: colors.textPrimary,
         fontFamily: uiFontFamily,
@@ -286,11 +329,12 @@ class IdeTextStyles {
       ),
       metricValue: _textStyle(
         color: colors.textPrimary,
-        fontFamily: uiFontFamily,
+        fontFamily: codeFontFamily,
         fontFamilyFallback: uiFontFamilyFallback,
-        fontSize: 18 * uiScale,
+        fontSize: 18 * codeScale,
         height: 1.2,
         fontWeight: FontWeight.w600,
+        fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
       ),
       placeholder: _textStyle(
         color: colors.textTertiary,
@@ -311,6 +355,7 @@ TextStyle _textStyle({
   required FontWeight fontWeight,
   String? fontFamily,
   List<String>? fontFamilyFallback,
+  List<FontFeature>? fontFeatures,
 }) {
   return TextStyle(
     color: color,
@@ -319,5 +364,6 @@ TextStyle _textStyle({
     fontSize: fontSize,
     height: height,
     fontWeight: fontWeight,
+    fontFeatures: fontFeatures,
   );
 }

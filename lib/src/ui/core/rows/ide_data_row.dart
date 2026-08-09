@@ -20,6 +20,8 @@ class IdeDataRow extends StatelessWidget {
     this.onPressed,
     this.showDivider = true,
     this.semanticLabel,
+    this.numericColumns = const <int>{},
+    this.identifierColumns = const <int>{},
   }) : assert(values.length == flexes.length);
 
   /// 各列显示的单行文本。
@@ -27,6 +29,17 @@ class IdeDataRow extends StatelessWidget {
 
   /// 与 [values] 一一对应的列宽权重。
   final List<int> flexes;
+
+  /// 需要按数值列渲染的列下标。
+  ///
+  /// 数值列使用等宽 + `tabularFigures` 的 [IdeTextStyles.numeric] 并右对齐，
+  /// 让多行数字按位对齐；表头同样右对齐以保持列轴一致。
+  final Set<int> numericColumns;
+
+  /// 需要按机器标识符渲染的列下标（模型 ID、Provider 名等）。
+  ///
+  /// 使用等宽的 [IdeTextStyles.identifier]，但保持左对齐。
+  final Set<int> identifierColumns;
 
   /// 是否按工具栏表头样式呈现。
   final bool header;
@@ -47,6 +60,22 @@ class IdeDataRow extends StatelessWidget {
     final textStyle = header
         ? styles.toolbarLabel.copyWith(color: colors.textSecondary)
         : styles.bodySmall.copyWith(color: colors.textPrimary);
+    final numericStyle = header
+        ? textStyle
+        : styles.numeric.copyWith(color: colors.textPrimary);
+    final identifierStyle = header
+        ? textStyle
+        : styles.identifier.copyWith(color: colors.textPrimary);
+
+    TextStyle styleFor(int index) {
+      if (numericColumns.contains(index)) {
+        return numericStyle;
+      }
+      if (identifierColumns.contains(index)) {
+        return identifierStyle;
+      }
+      return textStyle;
+    }
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -81,7 +110,10 @@ class IdeDataRow extends StatelessWidget {
                       values[index],
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: textStyle,
+                      textAlign: numericColumns.contains(index)
+                          ? TextAlign.right
+                          : TextAlign.left,
+                      style: styleFor(index),
                     ),
                   ),
                 ),

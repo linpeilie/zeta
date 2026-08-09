@@ -979,16 +979,14 @@ class _ComposerContextWindowUsage extends StatelessWidget {
           key: const ValueKey('agent-composer-token-usage'),
           mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(
-              width: 12,
-              height: 12,
-              child: CircularProgressIndicator(
-                key: const ValueKey('agent-composer-token-progress'),
-                value: progress,
-                strokeWidth: 2.2,
-                backgroundColor: colors.border.withValues(alpha: 0.32),
-                valueColor: AlwaysStoppedAnimation<Color>(colors.accent),
-              ),
+            IdeBusySpinner(
+              key: const ValueKey('agent-composer-token-progress'),
+              size: 12,
+              strokeWidth: 2.2,
+              value: progress,
+              color: colors.accent,
+              backgroundColor: colors.border.withValues(alpha: 0.32),
+              semanticsLabel: 'Token 用量',
             ),
           ],
         ),
@@ -1393,7 +1391,6 @@ class _PermissionOptionButtonState extends State<_PermissionOptionButton> {
                 overflow: TextOverflow.ellipsis,
                 style: textStyles.bodySmall.copyWith(
                   color: colors.textTertiary,
-                  fontSize: 11,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -1473,12 +1470,10 @@ class _PermissionOptionPopover extends StatelessWidget {
                       option.label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: textStyles.bodySmall.copyWith(
+                      style: textStyles.rowTitle.copyWith(
                         color: option.allowed
                             ? colors.textPrimary
                             : colors.textTertiary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),

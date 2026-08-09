@@ -196,9 +196,10 @@ IdeThemeData buildIdeThemeData({
   TargetPlatform? platform,
 }) {
   final resolvedPlatform = platform ?? defaultTargetPlatform;
+  // 「跟随应用默认」解析到内置 Geist，而不是平台系统字体：这样老用户持久化的
+  // systemDefault 无需迁移即可获得新默认字体，显式选了系统字体的用户不受影响。
   final resolvedUiFontFamily =
-      _normalizeFontFamily(uiFontFamily) ??
-      resolvePlatformUiFontFamily(resolvedPlatform);
+      _normalizeFontFamily(uiFontFamily) ?? bundledUiFontFamily;
   return IdeThemeData(
     brightness: brightness,
     colors: _baseIdeColorsForBrightness(brightness),
@@ -230,8 +231,9 @@ sf.ThemeData buildShadcnTheme(IdeThemeData ideTheme) {
 
 /// 为仍在使用 Material widget 的区域提供最小主题投影。
 ///
-/// 生效位置：`MainApp` 中 `MaterialApp` / `Theme`；Scaffold 背景、图标色、
-/// 分隔线、hover/focus 等走 Material 默认样式的区域。
+/// 生效位置：`MainApp` 中 `sf.ShadcnApp` 的 `materialTheme:`（应用没有
+/// `MaterialApp`）；覆盖 shadcn 内部与少量残留 Material widget 的背景、
+/// 图标色、分隔线、hover/focus 等默认样式。
 ThemeData buildMaterialTheme(IdeThemeData ideTheme) {
   final colors = ideTheme.colors;
   final baseTheme = ThemeData(

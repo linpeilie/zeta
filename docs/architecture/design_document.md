@@ -202,15 +202,30 @@ projection 与 unified diff 以 turn render revision 缓存，代码高亮复用
 - 全部视觉取值集中在 `lib/src/ui/core/` 的 token 类：`IdeColors`（语义色）、
   `IdeRadius`/`IdeEffects`（圆角四档 6/8/12/16、阴影预设与 scrim）、
   `IdeSpacing`（4px 基准间距）、`IdeTextStyles`（语义字号）、
-  `IdeMotion`（动效）。
+  `IdeMetrics`（组件尺寸与响应式断点）、`IdeMotion`（动效）。
+- 字体分工：界面文本用内置 Geist（`bundledUiFontFamily`），
+  **机器标识符与数值一律用内置 JetBrains Mono**（`bundledCodeFontFamily`）。
+  对应 token 为 `identifier`（模型 ID、Provider 名、thread ID）、
+  `numeric`（表格数字列，启用 `tabularFigures` 并右对齐）、
+  `metricValue`（指标大数字，同样等宽 + `tabularFigures`），
+  路径类次级标识符继续用 `codeSmall`。
+  UI 样式按界面字号缩放，等宽样式按代码字号缩放，两者在设置页各自可调。
+- Geist 不含中日韩字形，中文由 `resolvePlatformUiFontFamilyFallback`
+  的平台回退链（PingFang SC / Microsoft YaHei UI / Noto Sans CJK SC）承接；
+  外观设置里「跟随应用默认」解析到内置 Geist，用户仍可显式改回系统字体。
 - Graphite token 通过 `IdeThemeScope` / `IdeThemeData` 成为运行时真源；
   `buildShadcnTheme` 只把项目 token 投影到 `shadcn_flutter` 的 `sf.ThemeData`，
   不再反向从第三方 theme 回读语义色。
 - 第三方组件统一 `import ... as sf;`；业务页面优先消费 `ui/core` primitives
   （`Pane` / `PanelCard` / `IdeTabs` / `IdeTab` / `IdeChip` / `IdeButton` /
   `IdeSelect` / `IdeContextMenu` / `showIdeToast` 等）。
-- 业务代码禁止硬编码颜色、圆角和阴影。
+- 业务代码禁止硬编码颜色、圆角、阴影和字号；需要新字号时加 token，
+  不要在调用点写 `fontSize:`（那会绕过用户的字号设置）。
 - 面板圆角 8、间距紧凑，适合桌面工具密度。
+- 极简边框：分隔一律是 1px `borderSubtle`，不叠额外透明度。横向用
+  `IdeRowDivider`，纵向用 `IdeColumnDivider`；不要使用 Material
+  `Divider` / `VerticalDivider`。进度指示统一走 `IdeBusySpinner`
+  （支持不确定态与 `value` 确定态）和 `IdeLoadingIndicator`。
 
 ## 5. Agent 设计
 

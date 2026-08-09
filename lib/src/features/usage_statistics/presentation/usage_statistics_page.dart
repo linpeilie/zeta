@@ -674,6 +674,8 @@ class _AgentStatsPanel extends StatelessWidget {
           minWidth: 620,
           headers: const ['Agent', '调用次数', '成功率', 'Token', '失败', '平均耗时'],
           flexes: const [3, 2, 2, 2, 2, 2],
+          identifierColumns: const {0},
+          numericColumns: const {1, 2, 3, 4, 5},
           rows: [
             for (final entry in entries)
               [
@@ -751,6 +753,8 @@ class _ModelStatsPanel extends StatelessWidget {
             minWidth: 520,
             headers: const ['模型', 'Token', '占比'],
             flexes: const [4, 2, 2],
+            identifierColumns: const {0},
+            numericColumns: const {1, 2},
             rows: [
               for (final share in report.modelShares)
                 [
@@ -795,6 +799,7 @@ class _ProjectListPanel extends StatelessWidget {
           minWidth: 620,
           headers: const ['项目', '调用次数', 'Token', '平均耗时', '最近使用'],
           flexes: const [3, 2, 2, 2, 2],
+          numericColumns: const {1, 2, 3},
           rows: [
             for (final entry in entries)
               [
@@ -855,6 +860,8 @@ class _TaskListPanel extends StatelessWidget {
           minWidth: 780,
           headers: const ['时间', '项目', 'Agent', '模型', '耗时', 'Token', '状态'],
           flexes: const [2, 3, 2, 3, 2, 2, 2],
+          identifierColumns: const {2, 3},
+          numericColumns: const {4, 5},
           rows: [
             for (final record in visible)
               [
@@ -925,6 +932,8 @@ class _UsageTable extends StatelessWidget {
     required this.rows,
     this.rowKeys,
     this.onRowPressed,
+    this.numericColumns = const <int>{},
+    this.identifierColumns = const <int>{},
   });
 
   final double minWidth;
@@ -933,6 +942,12 @@ class _UsageTable extends StatelessWidget {
   final List<List<String>> rows;
   final List<String>? rowKeys;
   final ValueChanged<int>? onRowPressed;
+
+  /// 按数值列渲染的列下标，交给 [IdeDataRow] 做等宽右对齐。
+  final Set<int> numericColumns;
+
+  /// 按机器标识符渲染的列下标（模型 ID、Agent 名）。
+  final Set<int> identifierColumns;
 
   @override
   Widget build(BuildContext context) {
@@ -956,12 +971,19 @@ class _UsageTable extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  IdeDataRow(values: headers, flexes: flexes, header: true),
+                  IdeDataRow(
+                    values: headers,
+                    flexes: flexes,
+                    header: true,
+                    numericColumns: numericColumns,
+                  ),
                   for (var index = 0; index < rows.length; index += 1)
                     IdeDataRow(
                       key: _rowKey(index),
                       values: rows[index],
                       flexes: flexes,
+                      numericColumns: numericColumns,
+                      identifierColumns: identifierColumns,
                       onPressed: onRowPressed == null
                           ? null
                           : () => onRowPressed!(index),

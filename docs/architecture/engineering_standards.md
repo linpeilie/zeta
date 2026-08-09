@@ -443,7 +443,7 @@ Zeta 是桌面工具，不是营销页。界面应紧凑、克制、可扫描。
   cache 与稳定 `HighlightView` identity；数据未变化的 resize 解析增量必须为 0。
 - Footer、Pending interaction 与 Active plan 必须在单次 layout 内定位；禁止
   post-frame 读取高度后 `setState`。
-- 设计系统底层是 `shadcn_flutter`（固定 `0.0.52`）+ Graphite token。语义色/字号
+- 设计系统底层是 `shadcn_flutter`（`^0.0.53`）+ Graphite token。语义色/字号
   走 `IdeThemeScope` / `IdeColors` / `IdeTextStyles`；第三方组件走 `sf.*`。
 - 统一 `import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;`，禁止旧
   `shadcn_ui` / `Shad*` / `showShadDialog` API。

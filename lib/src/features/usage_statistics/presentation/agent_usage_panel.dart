@@ -11,6 +11,7 @@ import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_model
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_formatters.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_skeleton.dart';
+import 'package:zeta/src/ui/core/rows/ide_row_divider.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
@@ -306,7 +307,7 @@ class _ProviderUsage extends StatelessWidget {
         if (entry.hasSubscriptionPlan) ...[
           _PlanSection(quota: entry.quota!),
           const SizedBox(height: IdeSpacing.space12),
-          Divider(height: 1, color: colors.borderSubtle),
+          const IdeRowDivider(),
           const SizedBox(height: IdeSpacing.space12),
         ],
         _TokenSection(tokens: entry.todayTokens),
@@ -379,7 +380,7 @@ class _MetricRow extends StatelessWidget {
               style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
             ),
           ),
-          Text(formatUsageCount(value), style: textStyles.codeSmall),
+          Text(formatUsageCount(value), style: textStyles.numeric),
         ],
       ),
     );
@@ -393,7 +394,6 @@ class _PlanSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     // 有套餐但缺少窗口百分比时，按未使用处理，进度条默认剩余 100%。
     final windows = quota.windows.isNotEmpty

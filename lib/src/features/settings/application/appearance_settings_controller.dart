@@ -26,10 +26,14 @@ class AppearanceFontOption {
     );
   }
 
+  /// 界面字体的「跟随应用默认」选项。
+  ///
+  /// `systemDefault` 这个 kind 名保留是为了兼容已持久化的偏好；它现在解析到
+  /// 内置 Geist（见 `buildIdeThemeData`），所以展示名按内置字体来写。
   const AppearanceFontOption.systemDefault()
     : choice = const AppearanceFontChoice.systemDefault(),
-      label = '系统默认',
-      searchAliases = const <String>[];
+      label = 'Geist（内置默认）',
+      searchAliases = const <String>['Geist', '系统默认'];
 
   const AppearanceFontOption.bundledJetBrainsMono()
     : choice = const AppearanceFontChoice.bundledJetBrainsMono(),

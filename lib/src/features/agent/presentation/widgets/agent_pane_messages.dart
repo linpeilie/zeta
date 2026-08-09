@@ -193,6 +193,13 @@ class _AgentTurnFooter extends StatelessWidget {
       color: colors.textSecondary.withValues(alpha: 0.72),
       fontWeight: FontWeight.w500,
     );
+    // 模型 ID 与 Token 计数是机器数据，在同一条 meta 带里改用等宽字体，
+    // 但沿用 meta 的字号与颜色，避免这一行出现两种视觉重量。
+    final metaMonoStyle = metaStyle.copyWith(
+      fontFamily: textStyles.codeSmall.fontFamily,
+      fontFamilyFallback: textStyles.codeSmall.fontFamilyFallback,
+      fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+    );
     final durationLabel = _turnDurationLabel(turn);
     final modelConfig = turn.modelConfig;
     final modelLabel = _nonEmptyTrimmed(modelConfig?.modelId);
@@ -228,6 +235,7 @@ class _AgentTurnFooter extends StatelessWidget {
             children: _turnFooterMetaItems(
               turnId: turn.id,
               style: metaStyle,
+              monoStyle: metaMonoStyle,
               durationLabel: durationLabel,
               modelLabel: modelLabel,
               effortLabel: effortLabel,
@@ -292,6 +300,7 @@ String? _nonEmptyTrimmed(String? value) {
 List<Widget> _turnFooterMetaItems({
   required String turnId,
   required TextStyle style,
+  required TextStyle monoStyle,
   required String? durationLabel,
   required String? modelLabel,
   required String? effortLabel,
@@ -333,7 +342,7 @@ List<Widget> _turnFooterMetaItems({
         key: ValueKey<String>('agent-turn-footer-model-$turnId'),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: style,
+        style: monoStyle,
       ),
     );
   }
@@ -359,7 +368,7 @@ List<Widget> _turnFooterMetaItems({
     add(
       IdeTooltip(
         message: tokenTooltip,
-        child: Text(tokenLabel, style: style),
+        child: Text(tokenLabel, style: monoStyle),
       ),
     );
   }
