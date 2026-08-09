@@ -153,17 +153,18 @@ void ensureLoggingDefaults() {
     return;
   }
   _loggingDefaultsWired = true;
-  // 保留 logger 默认的 PrettyPrinter(colors: true) 和 ConsoleOutput()，
-  // 这里只替换 release 下会丢弃全部日志的默认 DevelopmentFilter。
+  // ConsoleOutput 保持默认；Printer 用无框线、整行按级别着色的控制台格式。
+  // Filter 替换 DevelopmentFilter，保证 release 仍按级别输出。
   logger.Logger.defaultFilter = () => _ZetaLogFilter();
+  logger.Logger.defaultPrinter = () => _ZetaConsolePrinter();
   logger.Logger.addOutputListener(_writeFileLog);
 }
 
 /// 配置应用日志。
 ///
-/// 使用 logger 默认的 PrettyPrinter 和 ConsoleOutput 输出控制台日志；当
-/// [logDirectory] 非空时，同时按本地日期追加脱敏文件日志。未传入 [level]
-/// 时，debug/profile 保留全部日志，release 默认只保留 warning 及以上级别。
+/// 控制台使用 [_ZetaConsolePrinter]（无框、整行着色）；当 [logDirectory]
+/// 非空时，同时按本地日期追加脱敏文件日志。未传入 [level] 时，debug/profile
+/// 保留全部日志，release 默认只保留 warning 及以上级别。
 void configureAppLogging({logger.Level? level, Directory? logDirectory}) {
   ensureLoggingDefaults();
   logger.Logger.level =
@@ -227,6 +228,36 @@ class _ZetaLogFilter extends logger.LogFilter {
       return true;
     }
     return event.level >= currentLevel;
+  }
+}
+
+/// 无框控制台输出：整行按日志级别着色（不只是级别前缀）。
+final class _ZetaConsolePrinter extends logger.LogPrinter {
+  static const _levelPrefixes = <logger.Level, String>{
+    logger.Level.trace: '[T]',
+    logger.Level.debug: '[D]',
+    logger.Level.info: '[I]',
+    logger.Level.warning: '[W]',
+    logger.Level.error: '[E]',
+    logger.Level.fatal: '[FATAL]',
+  };
+
+  static final _levelColors = <logger.Level, logger.AnsiColor>{
+    logger.Level.trace: logger.AnsiColor.fg(logger.AnsiColor.grey(0.5)),
+    logger.Level.debug: const logger.AnsiColor.none(),
+    logger.Level.info: const logger.AnsiColor.fg(12),
+    logger.Level.warning: const logger.AnsiColor.fg(208),
+    logger.Level.error: const logger.AnsiColor.fg(196),
+    logger.Level.fatal: const logger.AnsiColor.fg(199),
+  };
+
+  @override
+  List<String> log(logger.LogEvent event) {
+    final prefix = _levelPrefixes[event.level] ?? '[?]';
+    final error = event.error == null ? '' : '  ERROR: ${event.error}';
+    final line = '$prefix ${event.message}$error';
+    final color = _levelColors[event.level] ?? const logger.AnsiColor.none();
+    return <String>[color(line)];
   }
 }
 
