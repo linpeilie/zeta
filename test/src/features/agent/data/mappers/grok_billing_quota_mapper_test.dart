@@ -95,5 +95,55 @@ void main() {
       expect(quota.windows, isEmpty);
       expect(quota.credits, isNull);
     });
+
+    test(
+      'treats omitted weekly creditUsagePercent as 0% and keeps reset time',
+      () {
+        // 周额度刚重置时后端常省略 proto3 默认的 0 百分比，但仍返回周期边界。
+        final quota = mapGrokBillingQuota(
+          <String, Object?>{
+            'subscription_tier': 'SuperGrok',
+            'config': <String, Object?>{
+              'currentPeriod': <String, Object?>{
+                'type': 'USAGE_PERIOD_TYPE_WEEKLY',
+                'start': '2026-08-01T08:38:01.643958+00:00',
+                'end': '2026-08-08T08:38:01.643958+00:00',
+              },
+            },
+          },
+          providerId: 'grok',
+          providerName: 'Grok',
+        );
+
+        expect(quota, isNotNull);
+        expect(quota!.limitName, '周额度');
+        expect(quota.windows, hasLength(1));
+        expect(quota.windows.single.label, '周额度');
+        expect(quota.windows.single.usedPercent, 0);
+        expect(
+          quota.windows.single.resetsAt,
+          DateTime.parse('2026-08-08T08:38:01.643958+00:00').toLocal(),
+        );
+      },
+    );
+
+    test('does not invent a zero window when period end is also missing', () {
+      final quota = mapGrokBillingQuota(
+        <String, Object?>{
+          'subscription_tier': 'SuperGrok',
+          'config': <String, Object?>{
+            'currentPeriod': <String, Object?>{
+              'type': 'USAGE_PERIOD_TYPE_WEEKLY',
+            },
+          },
+        },
+        providerId: 'grok',
+        providerName: 'Grok',
+      );
+
+      expect(quota, isNotNull);
+      expect(quota!.limitName, '周额度');
+      expect(quota.windows, isEmpty);
+    });
   });
 }

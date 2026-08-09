@@ -44,27 +44,41 @@ AgentUsageQuotaSnapshot? mapGrokBillingQuota(
 }
 
 AgentUsageWindow? _primaryWindow(Map<String, Object?> config) {
-  final usedPercent = _percent(config['creditUsagePercent']);
-  if (usedPercent == null) {
-    return null;
-  }
-
   final period = _asMap(config['currentPeriod']) ?? const <String, Object?>{};
   final periodType = _nonEmptyString(period['type']);
   final start =
       _parseDateTime(period['start']) ??
       _parseDateTime(config['billingPeriodStart']);
+  // 优先 currentPeriod.end；旧字段 billingPeriodEnd 仅作回退。
   final end =
       _parseDateTime(period['end']) ??
       _parseDateTime(config['billingPeriodEnd']);
 
+  final usedPercent = _percent(config['creditUsagePercent']);
+  // proto3 在 0% 时常省略 creditUsagePercent。周/月额度刚重置时仍会带
+  // currentPeriod（含 end）；此时按 0% 建窗口，否则 UI 会用「周额度」合成
+  // 无 resetsAt 的占位条。
+  final resolvedPercent =
+      usedPercent ??
+      (_isRecognizedUsagePeriod(periodType) && end != null ? 0 : null);
+  if (resolvedPercent == null) {
+    return null;
+  }
+
   return AgentUsageWindow(
     label: _periodLabel(periodType),
-    usedPercent: usedPercent,
+    usedPercent: resolvedPercent,
     resetsAt: end?.toLocal(),
     windowDuration: _durationBetween(start, end),
   );
 }
+
+bool _isRecognizedUsagePeriod(String? periodType) => switch (periodType) {
+  'USAGE_PERIOD_TYPE_WEEKLY' ||
+  'USAGE_PERIOD_TYPE_MONTHLY' ||
+  'USAGE_PERIOD_TYPE_DAILY' => true,
+  _ => false,
+};
 
 AgentUsageWindow? _onDemandWindow(Map<String, Object?> config) {
   final cap = _moneyVal(config['onDemandCap']);
