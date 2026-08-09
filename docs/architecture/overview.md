@@ -117,6 +117,26 @@ flowchart TD
 
 如果你发现非改共享层不可，先停下来开个 Issue——那通常意味着抽象没做对。
 
+## 会话 Binding 与 Provider 生命周期
+
+Provider 进程不会由 Pane 或 ViewModel 直接持有：
+
+```mermaid
+flowchart LR
+    Settings["ProviderSettingsController"] --> Global["ProviderGlobalRuntime"]
+    Global --> Registry["ProviderRuntimeRegistry"]
+    Manager["ConversationBindingManager"] --> Binding["ConversationBinding"]
+    Binding --> Registry
+    VM["ConversationViewModel"] --> Global
+    VM --> Binding
+```
+
+- Registry 是实例和子进程的唯一所有者；global runtime 每个 Provider ID 一个，永不空闲回收。
+- Binding 以 draft/thread key 唯一代表一个逻辑会话，并独占 session runtime、事件 generation、权限和活跃操作。
+- 新建草稿、打开 thread、读取历史/模型/Skill 不启动 session runtime；只有首次提交调用 `beginTurn()`。
+- cancel、steer、审批回写等迟到操作只能 `runCurrent()`，runtime 已回收时 fail-closed。
+- Manager 每分钟 single-flight 扫描；没有 turn/RPC 且空闲满 10 分钟才按精确 identity 回收。旧进程未 dispose 完前同会话不能启动新进程。
+
 ## 三种审批，别搞混
 
 这是新人最容易踩的坑。看起来都是"弹个卡片让用户点"，但它们是**三种独立的领域语义**，不共享 request/decision 模型：

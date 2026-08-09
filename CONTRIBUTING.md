@@ -143,6 +143,7 @@ chore: bump flutter action pin
 - 共享层（decoder、CoalescingPolicy/Buffer、Pipeline、TimelineStore）**禁止出现任何 Provider 的 import、kind 分支、id 分支或 raw 字段读取**。
 - 新增 Provider 的正常改动范围 = 自有 data 文件 + 中立 domain 契约 + factory 组合 + 契约测试。如果你发现必须改共享层，说明抽象没做对，先开 Issue 讨论。
 - UI 一律按 **capability** 渲染，不按 provider kind 或名称硬编码。未支持的能力必须 `capability = false` 并抛 `UnsupportedError`，**不得静默成功**。
+- Provider 进程只由 `AgentProviderRuntimeRegistry` 创建；全局操作走 `AgentProviderGlobalRuntime`，会话实例只由 `AgentConversationBinding.beginTurn()` 惰性创建。ViewModel 不持有 lease/scope/pin，空闲回收归 Binding Manager。
 
 **事件管线**
 

@@ -6,7 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_global_runtime.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_thread_workspace_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
@@ -27,7 +29,6 @@ import 'package:zeta/src/features/project_threads/presentation/project_threads_v
 import 'package:zeta/src/features/workspace/application/workspace_file_index_controller.dart';
 import 'package:zeta/src/features/workspace/application/workspace_tree_builder.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
-import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 import 'package:zeta/src/app/app_constants.dart';
 
 final _log = loggerFor('zeta.app.ide_shell_controller');
@@ -82,20 +83,22 @@ class IdeShellController extends ChangeNotifier {
     this.agentProviderRuntimeRegistry =
         agentProviderRuntimeRegistry ??
         AgentProviderRuntimeRegistry(providerFactory: agentProviderFactory);
+    agentProviderGlobalRuntime = AgentProviderGlobalRuntime(
+      runtimeRegistry: this.agentProviderRuntimeRegistry,
+    );
     _ownsAgentProviderRuntimeRegistry = agentProviderRuntimeRegistry == null;
     _ownsFileIndexController = workspaceFileIndexController == null;
     _fileIndexController =
         workspaceFileIndexController ?? WorkspaceFileIndexController();
     _fileIndexController.addListener(_handleFileIndexChanged);
-    agentProviderController = ActiveAgentProviderController(
-      providerFactory: agentProviderFactory,
+    agentProviderController = AgentProviderSettingsController(
       configStore: agentProviderConfigStore,
       modelCatalogRepository: agentModelCatalogRepository,
       runtimeRegistry: this.agentProviderRuntimeRegistry,
+      globalRuntime: agentProviderGlobalRuntime,
     );
     agentWorkspaceController = AgentThreadWorkspaceController(
-      providerFactory: agentProviderFactory,
-      configStore: agentProviderConfigStore,
+      providerController: agentProviderController,
       workspaceFilesProvider: () {
         // @mention 候选优先用后台预建的完整语料；未就绪时回退惰性目录树。
         final root = _projectPath;
@@ -115,8 +118,8 @@ class IdeShellController extends ChangeNotifier {
         }
         return _fileIndexController.isReady(root);
       },
-      modelCatalogRepository: agentProviderController.modelCatalogRepository,
       runtimeRegistry: this.agentProviderRuntimeRegistry,
+      globalRuntime: agentProviderGlobalRuntime,
       onTurnCompleted: onAgentTurnCompleted,
       onAttention: onAgentAttention,
       uiFrameSchedulerFactory: agentUiFrameSchedulerFactory,
@@ -128,6 +131,8 @@ class IdeShellController extends ChangeNotifier {
     agentWorkspaceController.selectEntry(_bootstrapAgentEntry.entryId);
     projectThreadsController = ProjectThreadsController(
       providerController: agentProviderController,
+      globalRuntime: agentProviderGlobalRuntime,
+      bindingManager: agentWorkspaceController.bindingManager,
       viewModel: projectThreadsViewModel,
     );
     projectThreadsController.onActiveThreadCleared = _handleActiveThreadCleared;
@@ -158,10 +163,11 @@ class IdeShellController extends ChangeNotifier {
   final DateTime Function() _now;
 
   late final AgentProviderRuntimeRegistry agentProviderRuntimeRegistry;
+  late final AgentProviderGlobalRuntime agentProviderGlobalRuntime;
   late final bool _ownsAgentProviderRuntimeRegistry;
   late final WorkspaceFileIndexController _fileIndexController;
   late final bool _ownsFileIndexController;
-  late final ActiveAgentProviderController agentProviderController;
+  late final AgentProviderSettingsController agentProviderController;
   late final AgentThreadWorkspaceController agentWorkspaceController;
   late final AgentThreadWorkspaceEntry _bootstrapAgentEntry;
   late final ProjectThreadsController projectThreadsController;
@@ -175,8 +181,6 @@ class IdeShellController extends ChangeNotifier {
     VoidCallback listener,
   })?
   _selectedWorkspaceThreadSnapshotBinding;
-  ({ActiveAgentProviderController providerController, VoidCallback listener})?
-  _selectedProviderControllerBinding;
 
   List<WorkspaceNode> _workspaceTree = const <WorkspaceNode>[];
   Set<String> _expandedDirectoryPaths = <String>{};
@@ -1137,26 +1141,6 @@ class IdeShellController extends ChangeNotifier {
         listener: listener,
       );
     }
-
-    final currentProviderBinding = _selectedProviderControllerBinding;
-    if (currentProviderBinding != null &&
-        !identical(
-          currentProviderBinding.providerController,
-          selectedEntry?.providerController,
-        )) {
-      currentProviderBinding.providerController.removeListener(
-        currentProviderBinding.listener,
-      );
-      _selectedProviderControllerBinding = null;
-    }
-    if (selectedEntry != null && _selectedProviderControllerBinding == null) {
-      final listener = _handleSelectedProviderControllerChanged;
-      selectedEntry.providerController.addListener(listener);
-      _selectedProviderControllerBinding = (
-        providerController: selectedEntry.providerController,
-        listener: listener,
-      );
-    }
   }
 
   void _handleWorkspaceEntryChanged(String entryId) {
@@ -1230,11 +1214,6 @@ class IdeShellController extends ChangeNotifier {
   }
 
   void _handleSelectedWorkspaceThreadSnapshotChanged() {
-    _notifyStateChanged();
-  }
-
-  void _handleSelectedProviderControllerChanged() {
-    unawaited(agentProviderController.reloadSettings());
     _notifyStateChanged();
   }
 
@@ -1358,13 +1337,6 @@ class IdeShellController extends ChangeNotifier {
         selectedSnapshotBinding.listener,
       );
       _selectedWorkspaceThreadSnapshotBinding = null;
-    }
-    final selectedProviderBinding = _selectedProviderControllerBinding;
-    if (selectedProviderBinding != null) {
-      selectedProviderBinding.providerController.removeListener(
-        selectedProviderBinding.listener,
-      );
-      _selectedProviderControllerBinding = null;
     }
     projectThreadsController.dispose();
     projectThreadsViewModel.dispose();

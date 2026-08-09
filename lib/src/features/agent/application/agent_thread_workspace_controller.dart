@@ -3,16 +3,16 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_binding.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_binding_manager.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_global_runtime.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/agent/domain/agent_attention_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
-import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 
 /// Agent Canvas 中单个常驻线程/草稿的逻辑标识。
 sealed class AgentThreadWorkspaceKey {
@@ -73,15 +73,15 @@ final class AgentThreadWorkspaceDraftKey extends AgentThreadWorkspaceKey {
 
 /// Agent Canvas 中单个常驻 Pane 的运行时条目。
 ///
-/// 一个 entry 对应独立的 provider controller 与 conversation view model，但
-/// Provider 进程通过应用级注册表共享；entryId 在草稿晋升为真实 thread 后保持
-/// 不变，从而保住 Pane 本地状态。
+/// 一个 entry 对应独立的 Binding 与 conversation view model；Provider 设置由
+/// Workspace 共享，entryId 在草稿晋升为真实 thread 后保持不变。
 class AgentThreadWorkspaceEntry extends ChangeNotifier {
   AgentThreadWorkspaceEntry({
     required this.entryId,
     required this._key,
     required this.projectPath,
     required this.providerController,
+    required this.bindingLease,
     required this.viewModel,
   }) : _threadSnapshot = viewModel.threadSnapshot {
     viewModel.threadSnapshotListenable.addListener(_handleRuntimeChanged);
@@ -89,8 +89,11 @@ class AgentThreadWorkspaceEntry extends ChangeNotifier {
   }
 
   final String entryId;
-  final ActiveAgentProviderController providerController;
+  final AgentProviderSettingsPort providerController;
+  final AgentConversationBindingLease bindingLease;
   final AgentConversationViewModel viewModel;
+
+  AgentConversationBinding get binding => bindingLease.binding;
 
   String projectPath;
   AgentThreadWorkspaceKey _key;
@@ -192,7 +195,7 @@ class AgentThreadWorkspaceEntry extends ChangeNotifier {
     viewModel.threadSnapshotListenable.removeListener(_handleRuntimeChanged);
     providerController.removeListener(_handleRuntimeChanged);
     viewModel.dispose();
-    providerController.dispose();
+    unawaited(bindingLease.release());
     super.dispose();
   }
 
@@ -206,25 +209,34 @@ class AgentThreadWorkspaceEntry extends ChangeNotifier {
 /// 管理 Agent Canvas 中多个常驻 thread/draft 运行时。
 class AgentThreadWorkspaceController extends ChangeNotifier {
   AgentThreadWorkspaceController({
-    required this._providerFactory,
-    required this._configStore,
+    required this.providerController,
     required this._workspaceFilesProvider,
-    required this._modelCatalogRepository,
     required this.runtimeRegistry,
+    AgentConversationBindingManager? bindingManager,
+    AgentProviderGlobalRuntime? globalRuntime,
     this._workspaceFilesListenable,
     this._workspaceFilesIndexReady,
     this._onTurnCompleted,
     this._onAttention,
     this.uiFrameSchedulerFactory,
-  });
+  }) : bindingManager =
+           bindingManager ??
+           AgentConversationBindingManager(runtimeRegistry: runtimeRegistry),
+       globalRuntime =
+           globalRuntime ??
+           AgentProviderGlobalRuntime(runtimeRegistry: runtimeRegistry),
+       _ownsBindingManager = bindingManager == null {
+    this.bindingManager.start();
+  }
 
-  final AgentProviderFactory _providerFactory;
-  final AgentProviderConfigStore _configStore;
   final List<WorkspaceNode> Function() _workspaceFilesProvider;
   final Listenable? _workspaceFilesListenable;
   final bool Function()? _workspaceFilesIndexReady;
-  final AgentModelCatalogRepository _modelCatalogRepository;
   final AgentProviderRuntimeRegistry runtimeRegistry;
+  final AgentProviderSettingsPort providerController;
+  final AgentConversationBindingManager bindingManager;
+  final AgentProviderGlobalRuntime globalRuntime;
+  final bool _ownsBindingManager;
   final VoidCallback? _onTurnCompleted;
   final ValueChanged<AgentWorkspaceAttention>? _onAttention;
 
@@ -407,6 +419,9 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
       entry.dispose();
     }
     _entries.clear();
+    if (_ownsBindingManager) {
+      unawaited(bindingManager.close());
+    }
     super.dispose();
   }
 
@@ -414,20 +429,48 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     required AgentThreadWorkspaceKey key,
     required String projectPath,
   }) {
-    final providerController = ActiveAgentProviderController(
-      providerFactory: _providerFactory,
-      configStore: _configStore,
-      modelCatalogRepository: _modelCatalogRepository,
-      runtimeRegistry: runtimeRegistry,
-    );
+    // entryId 先生成，用作尚未取得 threadId 的稳定 Binding 身份；创建 entry 本身
+    // 不会创建 session Provider。
+    final entryId = 'agent-workspace-entry-${_nextEntryId += 1}';
+    final bindingLease = switch (key) {
+      AgentThreadWorkspaceThreadKey(:final providerId, :final threadId) =>
+        bindingManager.acquireThread(
+          providerId: providerId,
+          threadId: threadId,
+          resolveConfig: (id) =>
+              providerController.providerConfigById(id) ??
+              providerController.activeProviderConfig,
+          persistPermissionOptionId: (optionId) => providerController
+              .persistPermissionOptionIdForProvider(providerId, optionId),
+        ),
+      AgentThreadWorkspaceDraftKey(:final providerId) =>
+        bindingManager.acquireDraft(
+          providerId: providerId,
+          entryId: entryId,
+          resolveConfig: (id) =>
+              providerController.providerConfigById(id) ??
+              providerController.activeProviderConfig,
+          persistPermissionOptionId: (optionId) => providerController
+              .persistPermissionOptionIdForProvider(providerId, optionId),
+        ),
+    };
     late final AgentThreadWorkspaceEntry entry;
     late final AgentConversationViewModel viewModel;
     viewModel = AgentConversationViewModel(
       providerController: providerController,
+      conversationBinding: bindingLease.binding,
+      globalRuntime: globalRuntime,
       workspaceFilesProvider: _workspaceFilesProvider,
       workspaceFilesListenable: _workspaceFilesListenable,
       workspaceFilesIndexReady: _workspaceFilesIndexReady,
       onTurnCompleted: _onTurnCompleted,
+      onProviderSwitchRequested: (providerId) async {
+        final draft = ensureDraftEntry(
+          projectPath: entry.projectPath,
+          providerId: providerId,
+        );
+        selectEntry(draft.entryId);
+      },
       onAttention: (signal) {
         final threadId = signal.threadId ?? entry.threadId;
         if (threadId == null || threadId.trim().isEmpty) {
@@ -445,10 +488,11 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
       uiFrameScheduler: uiFrameSchedulerFactory?.call(),
     );
     entry = AgentThreadWorkspaceEntry(
-      entryId: 'agent-workspace-entry-${_nextEntryId += 1}',
+      entryId: entryId,
       key: key,
       projectPath: projectPath,
       providerController: providerController,
+      bindingLease: bindingLease,
       viewModel: viewModel,
     );
     entry.addListener(_handleEntryChanged);

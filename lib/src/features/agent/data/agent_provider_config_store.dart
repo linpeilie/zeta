@@ -1,22 +1,15 @@
 import 'dart:io';
 
 import 'package:zeta/src/core/storage/atomic_text_file.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
+export 'package:zeta/src/features/agent/application/agent_provider_config_store.dart'
+    show AgentProviderConfigStore;
+
 /// 全局 provider 配置的旧版 shared_preferences key。
 const String agentProviderConfigStorageKey = 'zeta.agent.providers.v1';
-
-/// Agent provider 配置仓库。
-///
-/// 这里保存的是全局 provider 定义和当前默认 provider；项目级 thread id 不放在这里。
-abstract class AgentProviderConfigStore {
-  /// 加载 provider 设置，失败时由实现回退到默认 Codex。
-  Future<AgentProviderSettings> load();
-
-  /// 保存 provider 设置。
-  Future<void> save(AgentProviderSettings settings);
-}
 
 /// 基于 JSON 文件的生产配置仓库。
 class FileAgentProviderConfigStore implements AgentProviderConfigStore {

@@ -1,6 +1,6 @@
 # 开发者文档
 
-最后更新：2026-08-04
+最后更新：2026-08-09
 
 ## 1. 项目简介
 
@@ -162,11 +162,19 @@ windows/
 
 ## 7. Agent provider 开发指南
 
-Provider 运行时由 app 组合层的 `AgentProviderRuntimeRegistry` 统一拥有。任何需要访问
-Provider 的功能（常驻对话、项目列表、用量统计、连接检测）都应获取并释放租约；
-`AgentProviderFactory.create` 只允许由注册表调用。租约释放不会反复启停进程，实例在配置
-失效或应用退出时统一关闭。共享实例必须支持多个 session 并存，切换会话不得隐式退订其他
-thread 或清空其 reducer/运行中 turn；窗口退出流程会等待注册表完成清理。
+Provider 实例只由 app 组合层的 `AgentProviderRuntimeRegistry` 创建和销毁；任何其他
+文件调用 `AgentProviderFactory.create` 都是架构错误。会话前/全局操作通过
+`AgentProviderGlobalRuntime` 使用每个 Provider ID 唯一的 global 实例，包括项目列表、
+历史、用量、连接检测、模型和 Skill 目录；global 不参与空闲回收。
+
+每个逻辑会话由 `AgentConversationBinding` 聚合，以 `draft(providerId, entryId)` 或
+`thread(providerId, threadId)` 为稳定 key。Workspace 只持有 Binding lease；新建/打开
+和历史读取不创建 session runtime。只有用户第一次提交输入时调用 `beginTurn()`，随后
+start/resume/send；其他 session RPC 只能 `runCurrent()`，runtime 不存在时 fail-closed。
+草稿拿到 threadId 后原子晋升，冲突必须拒绝。Binding Manager 每分钟 single-flight
+扫描，没有运行中 turn/RPC 且空闲满 10 分钟的 runtime 按精确 identity 条件回收；旧进程
+dispose 完成前同 scope acquire 必须等待。配置失效会同时清理 global 与全部 session，
+窗口退出等待 registry 完成清理。
 
 新增 provider 时：
 
@@ -203,8 +211,10 @@ thread 或清空其 reducer/运行中 turn；窗口退出流程会等待注册�
 11. 为流式 Provider 增加 adapter/reducer 序列测试；若同时支持 history/replay，必须使用
     独立 reducer 实例，并用完整 canonical signature regression 比较相对顺序。Store 只按
     entryId/tool id dumb merge，新增 Provider 不得修改 Store 来补叙事规则。
-12. 增加运行时复用测试：同一 Provider ID 的并发租约只创建一个实例；多个 session 并存时，
-    任一 session 的恢复、发送或结束不得破坏其他 session 的订阅和 reducer 状态。
+12. 增加 Binding 生命周期测试：创建/打开/读历史不启动 session，首次 `beginTurn` 才创建；
+    同一 Binding 最多一个实例，不同 thread 各自独立。覆盖 draft 晋升、TTL、运行中 turn/RPC、
+    重叠 sweep、ABA identity、dispose/acquire 屏障、配置失效、旧 generation 丢弃与 global
+    永不回收；任一 session 的恢复、发送或结束不得污染其他 session 的事件、权限或 reducer。
 
 交互响应按领域语义拆分：权限请求调用 `respondToPermission`；结构化用户提问仅由实现
 `AgentQuestionResponseProvider` 的 Provider 通过 `respondToQuestion` 回写，空 answers

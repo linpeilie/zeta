@@ -8,13 +8,17 @@ import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/core/logging/structured_error_logging.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_effect.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_binding.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_effect_runner.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_event_processor.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_mutation.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_reducer.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/application/agent_permission_state_store.dart';
 import 'package:zeta/src/features/agent/application/agent_plan_execution_handoff_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_global_runtime.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_permission_selection_controller.dart';
@@ -34,7 +38,6 @@ import 'package:zeta/src/features/agent/presentation/agent_ui_update_scheduler.d
 import 'package:zeta/src/features/agent/presentation/model_config_ui_state.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_file_query.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
-import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 
 export 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
 
@@ -55,17 +58,18 @@ String _modelCatalogSource(AgentProviderConfig config) {
 class AgentConversationViewModel {
   AgentConversationViewModel({
     required this.providerController,
+    required this.conversationBinding,
+    required this.globalRuntime,
     AgentConversationTimelineStore? timelineStore,
     AgentConversationModelSelectionController? modelSelectionController,
     AgentConversationModeController? conversationModeController,
     AgentSkillsCatalogController? skillsCatalogController,
-    AgentConversationPermissionSelectionController?
-    permissionSelectionController,
     this.workspaceFilesProvider,
     this.workspaceFilesListenable,
     this.workspaceFilesIndexReady,
     this.onTurnCompleted,
     this.onAttention,
+    this.onProviderSwitchRequested,
     AgentFrameScheduler? uiFrameScheduler,
   }) : _timeline = timelineStore ?? AgentConversationTimelineStore(),
        _ownsModelSelectionController = modelSelectionController == null,
@@ -80,12 +84,7 @@ class AgentConversationViewModel {
        _ownsSkillsCatalogController = skillsCatalogController == null,
        _skillsCatalogController =
            skillsCatalogController ?? AgentSkillsCatalogController(),
-       _permissionSelectionController =
-           permissionSelectionController ??
-           AgentConversationPermissionSelectionController(
-             persistOptionId: providerController.persistPermissionOptionId,
-             stateStore: providerController.permissionStateStore,
-           ) {
+       _permissionSelectionController = conversationBinding.permissions {
     _eventReducerContexts = AgentConversationReducerContexts(
       liveTimelineIds: _localTimelineIds,
     );
@@ -130,6 +129,7 @@ class AgentConversationViewModel {
     _skillsCatalogController.addListener(_handleSkillsCatalogChanged);
     _permissionSelectionController.addListener(_handlePermissionStateChanged);
     providerController.addListener(_handleProviderSettingsChanged);
+    conversationBinding.addListener(_handleConversationBindingChanged);
     _threadSnapshotListenable = ValueNotifier<AgentConversationThreadSnapshot>(
       _buildThreadSnapshot(),
     );
@@ -157,11 +157,16 @@ class AgentConversationViewModel {
   /// 当前会话产生或解决待用户注意事项后通知应用组合层。
   final AgentAttentionCallback? onAttention;
 
+  /// Binding 已锁定 Provider 时，请求 Workspace 创建并选中另一 Provider 的草稿。
+  final Future<void> Function(String providerId)? onProviderSwitchRequested;
+
   /// 后台文件索引是否已就绪；无注入时恒为 true。
   bool get isWorkspaceFileIndexReady =>
       workspaceFilesIndexReady?.call() ?? true;
 
-  final ActiveAgentProviderController providerController;
+  final AgentProviderSettingsPort providerController;
+  final AgentConversationBinding conversationBinding;
+  final AgentProviderGlobalRuntime globalRuntime;
   final AgentConversationTimelineStore _timeline;
   final bool _ownsModelSelectionController;
   final AgentConversationModelSelectionController _modelSelectionController;
@@ -189,8 +194,18 @@ class AgentConversationViewModel {
   late final ValueNotifier<AgentConversationThreadSnapshot>
   _threadSnapshotListenable;
 
-  AgentProvider? _provider;
+  /// Provider 只由 Binding 持有；ViewModel 不缓存实例或租约。
+  AgentProvider? get _currentProvider =>
+      conversationBinding.currentRuntime?.provider;
+
+  /// global 握手得到的中立能力快照；只保存 domain 值，不让 Provider 逃逸出回调。
+  final Map<String, AgentProviderCapabilities> _globalCapabilitiesByProviderId =
+      <String, AgentProviderCapabilities>{};
+
   AgentEventPipeline? _eventPipeline;
+
+  /// 从提交被接受起持有的长生命周期活动令牌；终态或 VM dispose 时释放。
+  AgentConversationTurnActivity? _turnActivity;
 
   AgentSession? _session;
   String? _projectPath;
@@ -204,7 +219,8 @@ class AgentConversationViewModel {
   bool _disposed = false;
   int _threadSwitchToken = 0;
   int _conversationModeCatalogLoadGeneration = 0;
-  AgentProvider? _conversationModeCatalogProvider;
+  // 全局目录与 session runtime 可来自不同实例，目录去重使用中立运行时 scope。
+  String? _conversationModeCatalogProviderId;
   AgentRuntimeScope? _conversationModeCatalogRuntimeScope;
 
   String _currentThreadTitle = defaultThreadTitle;
@@ -384,20 +400,29 @@ class AgentConversationViewModel {
 
   String? get contextFilePath => _contextFilePath;
 
-  String get activeProviderId => providerController.activeProviderId;
+  String get activeProviderId => conversationBinding.providerId;
 
-  String get activeProviderName => providerController.activeProviderName;
+  String get activeProviderName =>
+      providerController.providerConfigById(activeProviderId)?.displayName ??
+      providerController.activeProviderName;
 
-  AgentProviderKind get activeProviderKind =>
-      providerController.activeProviderConfig.kind;
+  AgentProviderConfig get _boundProviderConfig =>
+      providerController.providerConfigById(activeProviderId) ??
+      providerController.activeProviderConfig;
+
+  AgentProviderKind get activeProviderKind => _boundProviderConfig.kind;
 
   /// 当前 thread 所属 provider 的能力；未绑定实例时回退到 kind 的保守静态能力。
   AgentProviderCapabilities get activeCapabilities {
     final providerId =
         _session?.providerId ?? _selectedProviderId ?? activeProviderId;
-    final provider = _provider;
+    final provider = _currentProvider;
     if (provider != null && provider.config.id == providerId) {
       return provider.capabilities;
+    }
+    final globalCapabilities = _globalCapabilitiesByProviderId[providerId];
+    if (globalCapabilities != null) {
+      return globalCapabilities;
     }
     return providerController.capabilitiesForProviderId(providerId);
   }
@@ -625,7 +650,9 @@ class AgentConversationViewModel {
   }
 
   /// Provider 暴露 [AgentPermissionPolicyPort] 时显示权限选项选择器。
-  bool get showPermissionPolicy => _provider?.bundle.permissionPolicy != null;
+  bool get showPermissionPolicy =>
+      _permissionSelectionController.hasPort ||
+      conversationBinding.currentRuntime?.bundle.permissionPolicy != null;
 
   /// Provider 支持模型切换时显示模型选择器。
   bool get showModelSelection => activeCapabilities.supportsModelSelection;
@@ -650,10 +677,11 @@ class AgentConversationViewModel {
     if (!canUseSkills) {
       return;
     }
-    final provider = await _ensureProvider(
+    // catalog：skill 目录属于「会话之前的信息」（04 §0.4），不建立订阅。
+    await _runGlobalProvider(
+      _ensureSkillsCatalog,
       preferredProviderId: _selectedProviderId,
     );
-    await _ensureSkillsCatalog(provider);
   }
 
   bool get canRenameCurrentThread =>
@@ -677,55 +705,23 @@ class AgentConversationViewModel {
     if (providerId == activeProviderId) {
       return;
     }
-    _flushPendingStreamChangesNow();
-    _planExecutionHandoffController.clear();
-    _invalidateProviderEventListener();
-    _conversationModeCatalogLoadGeneration += 1;
-    _conversationModeCatalogProvider = null;
-    _conversationModeCatalogRuntimeScope = null;
-    await _conversationModeController.loadCatalog(
-      providerId: providerId,
-      port: null,
+    final unavailable = providerController.unavailableReasonForProviderId(
+      providerId,
     );
-    await _skillsCatalogController.bind(
-      providerId: providerId,
-      projectPath: _projectPath,
-      port: null,
-    );
-    await providerController.setActiveProvider(providerId);
-    _provider = null;
-    final config = providerController.activeProviderConfig;
-    _modelSelectionController.resetForProvider(config);
-    _permissionSelectionController.resetForProvider(
-      port: null,
-      persistedOptionId: config.resolvedPermissionOptionId,
-      providerId: config.id,
-    );
-    // 切换后清空当前会话草稿，避免跨协议 thread id 混用。
-    _session = null;
-    _sessionConfigOptions = const <AgentSessionConfigOption>[];
-    _restoredSessionId = null;
-    _selectedProviderId = providerId;
-    _requiresResumedSelectedThread = false;
-    _timeline.clearConversation();
-    _modelRerouteNotice = null;
-    _status = AgentProviderStatus(
-      state: AgentProviderConnectionState.connecting,
-      message: 'Loading $activeProviderName',
-    );
-    _publishUiChanges(
-      AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{
-          AgentUiRegion.history,
-          AgentUiRegion.liveTurnBinding,
-          AgentUiRegion.header,
-          AgentUiRegion.composer,
-          AgentUiRegion.pendingInteraction,
-        },
-        urgency: AgentUiUpdateUrgency.immediate,
-      ),
-    );
-    await loadModels();
+    if (unavailable != null) {
+      throw UnsupportedError(unavailable);
+    }
+    if (!providerController.isProviderEnabled(providerId)) {
+      throw StateError('Provider $providerId is not enabled');
+    }
+    final switchRequest = onProviderSwitchRequested;
+    if (switchRequest == null) {
+      throw StateError(
+        'Conversation ${conversationBinding.key} is bound to '
+        '${conversationBinding.providerId}',
+      );
+    }
+    await switchRequest(providerId);
   }
 
   AgentPermissionSelection? get permissionSelection =>
@@ -1087,7 +1083,7 @@ class AgentConversationViewModel {
       );
       return;
     }
-    final config = providerController.activeProviderConfig;
+    final config = _boundProviderConfig;
     _modelSelectionController.seedFromConfig(config);
     _permissionSelectionController.seedFromConfig(
       config.resolvedPermissionOptionId,
@@ -1128,27 +1124,21 @@ class AgentConversationViewModel {
       ),
     );
     try {
-      AgentProvider? initializedProvider;
       final result = await providerController.modelCatalogRepository.load(
         config: config,
         source: _modelCatalogSource(config),
         forceRefresh: forceRefresh,
         onCacheHit: (snapshot) => _handleModelList(snapshot.models),
-        refreshLoader: () async {
-          final provider = await _ensureProvider();
-          await provider.initialize();
-          initializedProvider = provider;
-          return fetchAgentProviderModels(provider, forceRefresh: true);
-        },
+        // catalog：模型列表是「会话之前的信息」（04 §0.4：listModels → 全局实例）。
+        refreshLoader: () => _runGlobalProvider(
+          (provider) => fetchAgentProviderModels(provider, forceRefresh: true),
+        ),
       );
       _handleModelList(result.models);
       if (result.refreshError != null) {
         _modelRefreshError = '模型目录刷新失败，正在使用本地缓存。';
       }
-      final provider = initializedProvider ?? await _ensureProvider();
-      if (initializedProvider == null) {
-        await provider.initialize();
-      }
+      await _runGlobalProvider((_) async {}, hydrateCatalogs: true);
       await _permissionSelectionController.refreshOptions();
     } catch (error) {
       _log.w('Could not preload Agent models (${error.runtimeType})');
@@ -1207,15 +1197,16 @@ class AgentConversationViewModel {
       return;
     }
     try {
-      final provider = await _ensureProvider();
-      final interactions = provider.bundle.interactions;
-      if (interactions == null) {
-        return;
-      }
-      await interactions.approveGuardianDeniedAction(
-        threadId: threadId,
-        event: review.raw,
-      );
+      await _runCurrentSession<void>((provider) async {
+        final interactions = provider.bundle.interactions;
+        if (interactions == null) {
+          return;
+        }
+        await interactions.approveGuardianDeniedAction(
+          threadId: threadId,
+          event: review.raw,
+        );
+      });
       _latestDeniedAutoReview = null;
       _publishUiChanges(
         AgentUiUpdateRequest(
@@ -1248,17 +1239,21 @@ class AgentConversationViewModel {
 
   Future<void> selectSessionConfigOption(String configId, Object value) async {
     final sessionId = _selectedThreadId;
-    final provider = _provider;
-    final sessionConfiguration = provider?.bundle.sessionConfiguration;
-    if (sessionId == null || sessionConfiguration == null) {
+    if (sessionId == null) {
       return;
     }
     try {
-      await sessionConfiguration.setSessionConfigOption(
-        sessionId: sessionId,
-        configId: configId,
-        value: value,
-      );
+      await _runCurrentSession<void>((provider) async {
+        final sessionConfiguration = provider.bundle.sessionConfiguration;
+        if (sessionConfiguration == null) {
+          return;
+        }
+        await sessionConfiguration.setSessionConfigOption(
+          sessionId: sessionId,
+          configId: configId,
+          value: value,
+        );
+      });
     } catch (error) {
       _log.w(
         'Could not update Agent session config $configId '
@@ -1633,11 +1628,8 @@ class AgentConversationViewModel {
     }
     _projectPath = projectPath;
     _contextFilePath = contextFilePath;
-    if (projectChanged) {
-      final provider = _provider;
-      if (provider != null) {
-        unawaited(_ensureSkillsCatalog(provider));
-      }
+    if (projectChanged && canUseSkills) {
+      unawaited(ensureSkillsCatalog());
     }
     if (projectChanged || resetConversation) {
       // 离开当前会话时取消订阅；恢复到另一 thread 时也退订旧 id。
@@ -1670,10 +1662,12 @@ class AgentConversationViewModel {
       _syncElapsedTicker();
       if (previousThreadId != null &&
           previousThreadId != effectiveRestoredSessionId) {
-        final provider = _provider;
-        if (provider != null) {
-          unawaited(_unsubscribeThreadBestEffort(provider, previousThreadId));
-        }
+        unawaited(
+          _unsubscribeThreadBestEffort(
+            conversationBinding.providerId,
+            previousThreadId,
+          ),
+        );
       }
       _publishUiChanges(
         AgentUiUpdateRequest(
@@ -1805,10 +1799,29 @@ class AgentConversationViewModel {
       await loadSettings();
       providerOperation = 'provider/ensure';
       // 已选中 thread 时必须落到该 thread 所属 provider，避免用 Codex 去 resume Grok id。
-      final provider = await _ensureProvider(
-        preferredProviderId: _selectedProviderId,
+      // session：sendMessage 是唯一应该触发首次启动运行实例的入口（04 §0.4 / 02 §2.4）。
+      final AgentProvider provider;
+      final selectedProviderId = _selectedProviderId?.trim();
+      if (selectedProviderId != null &&
+          selectedProviderId.isNotEmpty &&
+          selectedProviderId != conversationBinding.providerId) {
+        throw StateError(
+          'Conversation ${conversationBinding.key} is bound to '
+          '${conversationBinding.providerId}, not $selectedProviderId',
+        );
+      }
+      _turnActivity ??= await conversationBinding.beginTurn();
+      provider = _turnActivity!.runtime.provider;
+      _modelSelectionController.bindRuntime(
+        _turnActivity!.runtime.bundle.runtime,
+      );
+      await _bindLiveProvider(
+        provider,
+        runtimeIdentity: _turnActivity!.runtime.runtimeIdentity,
+        threadId: _selectedThreadId,
       );
       requestProvider = provider;
+      // steer 复用同一个仍在运行的活动令牌；终态前 Binding 不会被空闲回收。
       final context = AgentContext(
         projectPath: _projectPath,
         filePath: _contextFilePath,
@@ -1824,6 +1837,9 @@ class AgentConversationViewModel {
         permissionSnapshot: permissionSnapshot,
       );
       requestSession = session;
+      if (conversationBinding.threadId == null) {
+        await conversationBinding.promoteToThread(session.id);
+      }
       final conversation = provider.bundle.conversation;
       // 模式 + 当前 thread 权限一并冻结进请求快照，避免共享 provider 可变状态串 thread。
       final modeSnapshot = isNewTurn
@@ -1955,6 +1971,10 @@ class AgentConversationViewModel {
           selection: requestModeSelection,
         );
       }
+      if (isNewTurn && !modeRequestAccepted) {
+        // 未被 server 接受时不会有终态事件，必须在本地释放活动令牌。
+        _releaseTurnActivity();
+      }
       _timeline.clearPendingTurnGroupId();
     }
   }
@@ -1987,15 +2007,16 @@ class AgentConversationViewModel {
 
   /// 取消正在运行的回合。
   Future<void> cancelActiveTurn() async {
-    final provider = _provider;
     final turnId = _timeline.selectedCancelableTurnId();
     final sessionId = _selectedThreadId;
-    if (turnId == null || sessionId == null || provider == null) {
+    if (turnId == null || sessionId == null) {
       return;
     }
     _log.i('Cancelling Agent turn $turnId');
-    await provider.bundle.conversation.cancelTurn(
-      AgentTurn(id: turnId, sessionId: sessionId),
+    await _runCurrentSession<void>(
+      (provider) => provider.bundle.conversation.cancelTurn(
+        AgentTurn(id: turnId, sessionId: sessionId),
+      ),
     );
   }
 
@@ -2015,6 +2036,29 @@ class AgentConversationViewModel {
     }
     // 在第一个 await 前让旧 thread listener 失效，避免其微任务事件污染新时间线。
     _invalidateProviderEventListener();
+    if (thread.providerId != conversationBinding.providerId) {
+      _threadOpenPhase = AgentThreadOpenPhase.openFailed;
+      final unavailable = providerController.unavailableReasonForProviderId(
+        thread.providerId,
+      );
+      if (unavailable != null) {
+        _markUnavailable('Cursor Agent unavailable', details: unavailable);
+      } else {
+        _markError(
+          'Could not open thread',
+          details:
+              'Conversation is bound to ${conversationBinding.providerId}; '
+              '${thread.providerId} requires a separate workspace entry.',
+        );
+      }
+      return;
+    }
+    final boundThreadId = conversationBinding.threadId;
+    if (boundThreadId != null && boundThreadId != thread.id) {
+      throw StateError(
+        'Conversation Binding for $boundThreadId cannot open ${thread.id}',
+      );
+    }
     _conversationModeController.bindThread(threadId: thread.id);
     _permissionSelectionController.bindThread(thread.id);
     // Provider 配置可能仍在应用启动阶段读取；必须等待其完成后再判断 thread 归属，
@@ -2022,63 +2066,6 @@ class AgentConversationViewModel {
     await loadSettings();
     if (!_isCurrentSwitch(switchToken)) {
       return;
-    }
-    // 跨 provider thread：先切 active backend，再加载历史。
-    // 失败必须 fail-closed，禁止用错误 provider 读历史 / 后续 resume。
-    if (thread.providerId != activeProviderId) {
-      final canSwitch = availableProviders.any(
-        (provider) => provider.id == thread.providerId,
-      );
-      if (!canSwitch) {
-        _session = null;
-        _sessionConfigOptions = const <AgentSessionConfigOption>[];
-        _restoredSessionId = thread.id;
-        _selectedProviderId = thread.providerId;
-        _requiresResumedSelectedThread = true;
-        _threadOpenPhase = AgentThreadOpenPhase.openFailed;
-        _currentThreadTitle = thread.displayName;
-        _timeline.clearConversation();
-        final unavailable = providerController.unavailableReasonForProviderId(
-          thread.providerId,
-        );
-        if (unavailable != null) {
-          _markUnavailable('Cursor Agent unavailable', details: unavailable);
-        } else {
-          _markError(
-            'Could not open thread',
-            details:
-                'Provider ${thread.providerId} is not enabled; history is read-only or unavailable.',
-          );
-        }
-        return;
-      }
-      try {
-        await switchActiveProvider(thread.providerId);
-      } catch (error) {
-        if (!_isCurrentSwitch(switchToken)) {
-          return;
-        }
-        _log.w(
-          'Could not switch provider to ${thread.providerId} for thread '
-          '${thread.id} (${error.runtimeType})',
-        );
-        _session = null;
-        _sessionConfigOptions = const <AgentSessionConfigOption>[];
-        _restoredSessionId = thread.id;
-        _selectedProviderId = thread.providerId;
-        _requiresResumedSelectedThread = true;
-        _threadOpenPhase = AgentThreadOpenPhase.openFailed;
-        _currentThreadTitle = thread.displayName;
-        _timeline.clearConversation();
-        _markError(
-          'Could not switch Agent provider',
-          details: error.toString(),
-        );
-        return;
-      }
-      if (!_isCurrentSwitch(switchToken)) {
-        return;
-      }
     }
     // 离开旧会话时先记下 id，切走后取消服务端订阅，减少无关通知。
     final previousThreadId = _selectedThreadId;
@@ -2121,27 +2108,33 @@ class AgentConversationViewModel {
 
     try {
       await loadSettings();
-      final provider = await _ensureProvider(
-        preferredProviderId: thread.providerId,
-      );
+      // 读历史和目录只借用 global runtime；打开 thread 不创建 session runtime，
+      // 也不建立 live 事件订阅。下一次用户提交时才由 beginTurn resume。
       // Thread entry 是独立 VM：共享 catalog 预热不会写入本实例的 _modelList。
       // 打开历史时与读 history 并行 hydrate，避免 composer 因 models 为空隐藏选择器。
       final modelsFuture = loadModels();
       if (previousThreadId != null && previousThreadId != thread.id) {
         // 不阻塞历史加载：退订失败只记日志。
-        unawaited(_unsubscribeThreadBestEffort(provider, previousThreadId));
-      }
-      final threadCatalog = provider.bundle.threadCatalog;
-      if (threadCatalog == null) {
-        throw UnsupportedError(
-          '${provider.config.displayName} does not support thread history',
+        unawaited(
+          _unsubscribeThreadBestEffort(
+            conversationBinding.providerId,
+            previousThreadId,
+          ),
         );
       }
-      final history = await threadCatalog.readThreadHistory(
-        threadId: thread.id,
-        sessionPath: thread.sessionPath,
-        projectPath: thread.projectPath,
-      );
+      final history = await _runGlobalProvider((provider) {
+        final threadCatalog = provider.bundle.threadCatalog;
+        if (threadCatalog == null) {
+          throw UnsupportedError(
+            '${provider.config.displayName} does not support thread history',
+          );
+        }
+        return threadCatalog.readThreadHistory(
+          threadId: thread.id,
+          sessionPath: thread.sessionPath,
+          projectPath: thread.projectPath,
+        );
+      }, preferredProviderId: thread.providerId);
       if (!_isCurrentSwitch(switchToken)) {
         return;
       }
@@ -2149,7 +2142,6 @@ class AgentConversationViewModel {
       if (!_isCurrentSwitch(switchToken)) {
         return;
       }
-      await _replaceProviderEventSubscription(provider, threadId: thread.id);
       if (!_isCurrentSwitch(switchToken)) {
         return;
       }
@@ -2225,19 +2217,21 @@ class AgentConversationViewModel {
     _log.i(
       'Responding to Agent permission ${request.kind.name}: approved=$approved',
     );
-    final interactions = _provider?.bundle.interactions;
-    if (interactions == null) {
-      return;
-    }
-    await interactions.respondToPermission(
-      AgentPermissionDecision(
-        requestId: request.id,
-        approved: approved,
-        cancelTurn: cancelTurn,
-        commandDecision: commandDecision,
-        execpolicyAmendment: execpolicyAmendment,
-      ),
-    );
+    await _runCurrentSession<void>((provider) async {
+      final interactions = provider.bundle.interactions;
+      if (interactions == null) {
+        return;
+      }
+      await interactions.respondToPermission(
+        AgentPermissionDecision(
+          requestId: request.id,
+          approved: approved,
+          cancelTurn: cancelTurn,
+          commandDecision: commandDecision,
+          execpolicyAmendment: execpolicyAmendment,
+        ),
+      );
+    });
   }
 
   /// 回答或跳过独立用户提问。
@@ -2268,13 +2262,15 @@ class AgentConversationViewModel {
       'Responding to Agent question '
       '(${answers.length} answered questions)',
     );
-    final interactions = _provider?.bundle.interactions;
-    if (interactions == null) {
-      return;
-    }
-    await interactions.respondToQuestion(
-      AgentQuestionResponse(requestId: request.id, answers: answers),
-    );
+    await _runCurrentSession<void>((provider) async {
+      final interactions = provider.bundle.interactions;
+      if (interactions == null) {
+        return;
+      }
+      await interactions.respondToQuestion(
+        AgentQuestionResponse(requestId: request.id, answers: answers),
+      );
+    });
   }
 
   Future<void> respondToPlanApproval(
@@ -2298,13 +2294,15 @@ class AgentConversationViewModel {
         urgency: AgentUiUpdateUrgency.immediate,
       ),
     );
-    final planApproval = _provider?.bundle.planApproval;
-    if (planApproval == null) {
-      return;
-    }
-    await planApproval.respondToPlanApproval(
-      AgentPlanApprovalDecision(requestId: request.id, kind: kind),
-    );
+    await _runCurrentSession<void>((provider) async {
+      final planApproval = provider.bundle.planApproval;
+      if (planApproval == null) {
+        return;
+      }
+      await planApproval.respondToPlanApproval(
+        AgentPlanApprovalDecision(requestId: request.id, kind: kind),
+      );
+    });
     // provider 驱动的计划审批一旦作出决定，计划即被消费：接受 → grok 自行
     // 进入实施回合；放弃 → grok 退出 plan 模式。必须强制清空 pending turn
     // 模式：Grok 的 markTurnAccepted 在阻塞 session/prompt 返回后才执行，
@@ -2354,24 +2352,27 @@ class AgentConversationViewModel {
     );
 
     try {
-      final provider = await _ensureProvider();
-      final threadBranching = provider.bundle.threadBranching;
-      if (threadBranching == null) {
-        throw UnsupportedError(
-          '${provider.config.displayName} does not support thread branching',
-        );
-      }
-      final session = await threadBranching.forkThread(
-        threadId: threadId,
-        context: AgentContext(
-          projectPath: _projectPath,
-          filePath: _contextFilePath,
-        ),
-        boundary: AgentForkThroughTurn(boundaryTurnId),
-        permissionSnapshot: _permissionSelectionController.snapshotForRequest(
+      // fork 属于 thread 管理操作，使用 global runtime；新 Binding 仍保持 dormant，
+      // 直到用户真正提交输入。
+      final session = await _runGlobalProvider((provider) {
+        final threadBranching = provider.bundle.threadBranching;
+        if (threadBranching == null) {
+          throw UnsupportedError(
+            '${provider.config.displayName} does not support thread branching',
+          );
+        }
+        return threadBranching.forkThread(
           threadId: threadId,
-        ),
-      );
+          context: AgentContext(
+            projectPath: _projectPath,
+            filePath: _contextFilePath,
+          ),
+          boundary: AgentForkThroughTurn(boundaryTurnId),
+          permissionSnapshot: _permissionSelectionController.snapshotForRequest(
+            threadId: threadId,
+          ),
+        );
+      });
       if (!_isCurrentSwitch(switchToken)) {
         return;
       }
@@ -2414,23 +2415,24 @@ class AgentConversationViewModel {
     }
     final switchToken = _threadSwitchToken;
     try {
-      final provider = await _ensureProvider();
-      final threadBranching = provider.bundle.threadBranching;
-      if (threadBranching == null) {
-        throw UnsupportedError(
-          '${provider.config.displayName} does not support thread branching',
-        );
-      }
-      final session = await threadBranching.forkThread(
-        threadId: threadId,
-        context: AgentContext(
-          projectPath: _projectPath,
-          filePath: _contextFilePath,
-        ),
-        permissionSnapshot: _permissionSelectionController.snapshotForRequest(
+      final session = await _runGlobalProvider((provider) {
+        final threadBranching = provider.bundle.threadBranching;
+        if (threadBranching == null) {
+          throw UnsupportedError(
+            '${provider.config.displayName} does not support thread branching',
+          );
+        }
+        return threadBranching.forkThread(
           threadId: threadId,
-        ),
-      );
+          context: AgentContext(
+            projectPath: _projectPath,
+            filePath: _contextFilePath,
+          ),
+          permissionSnapshot: _permissionSelectionController.snapshotForRequest(
+            threadId: threadId,
+          ),
+        );
+      });
       if (!_isCurrentSwitch(switchToken)) {
         return session;
       }
@@ -2473,14 +2475,15 @@ class AgentConversationViewModel {
       ),
     );
     try {
-      final provider = await _ensureProvider();
-      final threadMutations = provider.bundle.threadMutations;
-      if (threadMutations == null) {
-        throw UnsupportedError(
-          '${provider.config.displayName} does not support renaming threads',
-        );
-      }
-      await threadMutations.renameThread(threadId: threadId, name: trimmed);
+      await _runGlobalProvider((provider) {
+        final threadMutations = provider.bundle.threadMutations;
+        if (threadMutations == null) {
+          throw UnsupportedError(
+            '${provider.config.displayName} does not support renaming threads',
+          );
+        }
+        return threadMutations.renameThread(threadId: threadId, name: trimmed);
+      });
     } catch (error) {
       if (sessionId == threadId && _currentThreadTitle == trimmed) {
         _applyThreadTitle(previousTitle);
@@ -2503,14 +2506,15 @@ class AgentConversationViewModel {
       return;
     }
     try {
-      final provider = await _ensureProvider();
-      final threadMutations = provider.bundle.threadMutations;
-      if (threadMutations == null) {
-        throw UnsupportedError(
-          '${provider.config.displayName} does not support archiving threads',
-        );
-      }
-      await threadMutations.archiveThread(threadId);
+      await _runGlobalProvider((provider) {
+        final threadMutations = provider.bundle.threadMutations;
+        if (threadMutations == null) {
+          throw UnsupportedError(
+            '${provider.config.displayName} does not support archiving threads',
+          );
+        }
+        return threadMutations.archiveThread(threadId);
+      });
     } catch (error) {
       _log.w('Could not archive thread $threadId (${error.runtimeType})');
       _markError('Could not archive thread', details: error.toString());
@@ -2542,10 +2546,13 @@ class AgentConversationViewModel {
 
   void dispose() {
     _disposed = true;
+    // Pane 关闭时兜底释放仍在运行的 Binding 活动令牌。
+    _releaseTurnActivity();
     _invalidateProviderEventListener(
       reason: AgentEventPipelineCloseReason.disposed,
     );
     providerController.removeListener(_handleProviderSettingsChanged);
+    conversationBinding.removeListener(_handleConversationBindingChanged);
     _modelSelectionController.removeListener(_handleModelSelectionChanged);
     _conversationModeController.removeListener(_handleConversationModeChanged);
     _skillsCatalogController.removeListener(_handleSkillsCatalogChanged);
@@ -2561,7 +2568,6 @@ class AgentConversationViewModel {
     if (_ownsSkillsCatalogController) {
       _skillsCatalogController.dispose();
     }
-    _permissionSelectionController.dispose();
     _elapsedTicker.dispose();
     _effectRunner.dispose();
     _uiUpdateScheduler.dispose();
@@ -2584,6 +2590,42 @@ class AgentConversationViewModel {
 
   /// 消费活动段脏标记；为 true 时应刷新 header。
   bool _consumeActivityDirty() => _timeline.takeActivityDirty();
+
+  /// 释放会话活动令牌。
+  ///
+  /// turn 完成、失败、取消和 dispose 共用的收尾入口。
+  void _releaseTurnActivity() {
+    final activity = _turnActivity;
+    _turnActivity = null;
+    unawaited(activity?.release());
+  }
+
+  void _handleConversationBindingChanged() {
+    if (_disposed) {
+      return;
+    }
+    if (conversationBinding.currentRuntime != null) {
+      return;
+    }
+    if (_session != null || _eventPipeline != null) {
+      _eventProcessor.settleInterruptedTurn(
+        fallbackTurnId: 'provider-disconnected',
+      );
+      _releaseTurnActivity();
+      _session = null;
+      _requiresResumedSelectedThread = _selectedThreadId != null;
+      _invalidateProviderEventListener();
+      _publishUiChanges(
+        AgentUiUpdateRequest(
+          regions: const <AgentUiRegion>{
+            AgentUiRegion.header,
+            AgentUiRegion.composer,
+          },
+          urgency: AgentUiUpdateUrgency.immediate,
+        ),
+      );
+    }
+  }
 
   void _handleProviderSettingsChanged() {
     if (_disposed) {
@@ -2669,63 +2711,71 @@ class AgentConversationViewModel {
     );
   }
 
-  /// 确保拿到正确的共享 provider 实例。
+  // 全局信息与会话运行时严格分流：catalog 只借用 global runtime；session
+  // 操作只读取 Binding 当前 runtime。只有 sendMessage 的 beginTurn 可以创建后者。
+
+  /// 在 global runtime 租约作用域内执行会话前操作。
   ///
-  /// [preferredProviderId] 非空且与当前 active 不同时，会先切换 active（不清理
-  /// 时间线），再绑定事件流。用于「已打开 Grok thread 却仍挂在 Codex」等错位场景。
-  Future<AgentProvider> _ensureProvider({String? preferredProviderId}) async {
-    final targetId = preferredProviderId?.trim();
-    if (targetId != null &&
-        targetId.isNotEmpty &&
-        targetId != activeProviderId) {
-      await _bindActiveProviderWithoutClearingConversation(targetId);
+  /// Provider 实例不会从回调中逸出或缓存在 ViewModel；历史、模型、Skill 与
+  /// thread 管理因此都不会创建或占用 session runtime。
+  Future<T> _runGlobalProvider<T>(
+    Future<T> Function(AgentProvider provider) operation, {
+    String? preferredProviderId,
+    bool hydrateCatalogs = false,
+  }) async {
+    final requestedId = preferredProviderId?.trim();
+    final providerId = requestedId == null || requestedId.isEmpty
+        ? conversationBinding.providerId
+        : requestedId;
+    final config = providerController.providerConfigById(providerId);
+    if (config == null || !providerController.isProviderEnabled(providerId)) {
+      throw StateError('Provider $providerId is not enabled');
     }
+    return globalRuntime.run(config, (runtime) async {
+      _globalCapabilitiesByProviderId[providerId] = runtime.capabilities;
+      final provider = runtime.bundle.runtime.provider;
+      if (provider.config.id != providerId) {
+        throw StateError(
+          'Expected provider $providerId but received ${provider.config.id}',
+        );
+      }
+      if (hydrateCatalogs) {
+        await conversationBinding.bindPermissionCatalog(
+          port: runtime.bundle.permissionPolicy,
+          persistedOptionId: config.resolvedPermissionOptionId,
+        );
+        await _ensureConversationModeCatalog(provider);
+        await _ensureSkillsCatalog(provider);
+      }
+      return operation(provider);
+    });
+  }
 
-    final provider = await providerController.activeProvider();
-    final runtimeIdentity = providerController.activeProviderRuntimeIdentity;
-    if (runtimeIdentity == null) {
-      throw StateError(
-        'Provider ${provider.config.id} has no current runtime identity',
-      );
-    }
-    if (targetId != null &&
-        targetId.isNotEmpty &&
-        provider.config.id != targetId) {
-      // 配置在异步获取 provider 期间发生变化时 fail-closed，禁止把 thread id
-      // 和 sessionPath 交给错误协议的历史读取器。
-      throw StateError(
-        'Expected provider $targetId but received ${provider.config.id}',
-      );
-    }
-    if (identical(_provider, provider) &&
-        _permissionSelectionController.runtimeIdentity == runtimeIdentity &&
-        _hasCurrentProviderEventListener(
-          provider,
-          threadId: _selectedThreadId,
-        )) {
-      await _ensureConversationModeCatalog(provider);
-      return provider;
-    }
-
-    if (!identical(_provider, provider)) {
-      _log.t('Using shared Agent provider: ${provider.config.id}');
-      _provider = provider;
-      _modelSelectionController.bindProvider(provider);
-      _permissionSelectionController.bind(
-        port: provider.bundle.permissionPolicy,
-        persistedOptionId: provider.config.resolvedPermissionOptionId,
-        runtimeIdentity: runtimeIdentity,
-      );
-      unawaited(_permissionSelectionController.refreshOptions());
-    }
-    _permissionSelectionController.bindThread(_selectedThreadId);
-    await _replaceProviderEventSubscription(
-      provider,
-      threadId: _selectedThreadId,
+  Future<T?> _runCurrentSession<T>(
+    Future<T> Function(AgentProvider provider) operation,
+  ) {
+    return conversationBinding.runCurrent(
+      (runtime) => operation(runtime.provider),
     );
-    await _ensureConversationModeCatalog(provider);
-    await _ensureSkillsCatalog(provider);
-    return provider;
+  }
+
+  /// 绑定当前 session runtime 的事件、模型、权限和能力目录。
+  Future<void> _bindLiveProvider(
+    AgentProvider provider, {
+    required AgentProviderRuntimeIdentity runtimeIdentity,
+    required String? threadId,
+  }) async {
+    if (identical(_currentProvider, provider) &&
+        _permissionSelectionController.runtimeIdentity == runtimeIdentity &&
+        _hasCurrentProviderEventListener(provider, threadId: threadId)) {
+      await _ensureConversationModeCatalog(provider);
+      return;
+    }
+
+    _modelSelectionController.bindRuntime(provider.bundle.runtime);
+    _permissionSelectionController.bindThread(threadId);
+    await _replaceProviderEventSubscription(provider, threadId: threadId);
+    _log.t('Bound conversation runtime: ${provider.config.id}');
   }
 
   Future<void> _ensureSkillsCatalog(AgentProvider provider) async {
@@ -2739,16 +2789,19 @@ class AgentConversationViewModel {
     );
   }
 
+  /// 去重键使用 providerId + [_runtimeScopeOf]（协议连接身份）。
+  ///
+  /// global 与 session 两条路径共享目录缓存，但会话状态只在当前 runtime 上应用。
   Future<void> _ensureConversationModeCatalog(AgentProvider provider) async {
     final runtimeScope = _runtimeScopeOf(provider);
-    if (identical(_conversationModeCatalogProvider, provider) &&
+    if (_conversationModeCatalogProviderId == provider.config.id &&
         _conversationModeCatalogRuntimeScope == runtimeScope) {
       return;
     }
 
     final generation = ++_conversationModeCatalogLoadGeneration;
     final preservesCurrentMode =
-        _conversationModeCatalogProvider?.config.id == provider.config.id;
+        _conversationModeCatalogProviderId == provider.config.id;
     final restoredMode = preservesCurrentMode
         ? _conversationModeController.state.confirmedMode
         : null;
@@ -2759,70 +2812,23 @@ class AgentConversationViewModel {
       providerId: provider.config.id,
       port: provider.bundle.conversationModes,
     );
-    if (_disposed ||
-        generation != _conversationModeCatalogLoadGeneration ||
-        !identical(_provider, provider)) {
+    if (_disposed || generation != _conversationModeCatalogLoadGeneration) {
       return;
     }
 
-    _conversationModeCatalogProvider = provider;
-    _conversationModeCatalogRuntimeScope = _runtimeScopeOf(provider);
-    _conversationModeController.bindThread(
-      threadId: _selectedThreadId,
-      historyMode: restoredMode,
-    );
-    _permissionSelectionController.bindThread(_selectedThreadId);
-    if (restoredDraft != null) {
-      _conversationModeController.selectMode(restoredDraft);
+    _conversationModeCatalogProviderId = provider.config.id;
+    _conversationModeCatalogRuntimeScope = runtimeScope;
+    if (provider.config.id == conversationBinding.providerId) {
+      _conversationModeController.bindThread(
+        threadId: _selectedThreadId,
+        historyMode: restoredMode,
+      );
+      _permissionSelectionController.bindThread(_selectedThreadId);
+      if (restoredDraft != null) {
+        _conversationModeController.selectMode(restoredDraft);
+      }
+      _conversationModeController.setTurnRunning(isTurnRunning);
     }
-    _conversationModeController.setTurnRunning(isTurnRunning);
-  }
-
-  /// 切换 active provider，但保留当前时间线与待 resume 的 thread id。
-  ///
-  /// 与 [switchActiveProvider] 不同：后者面向「用户主动换后端」会清空对话；
-  /// 本方法面向「已打开 thread 后纠偏到正确 backend」。
-  Future<void> _bindActiveProviderWithoutClearingConversation(
-    String providerId,
-  ) async {
-    if (providerId == activeProviderId) {
-      return;
-    }
-    final enabled = availableProviders.any(
-      (provider) => provider.id == providerId,
-    );
-    if (!enabled) {
-      throw StateError('Provider $providerId is not enabled');
-    }
-    _log.i(
-      'Rebinding active provider to $providerId without clearing conversation',
-    );
-    _invalidateProviderEventListener();
-    _conversationModeCatalogLoadGeneration += 1;
-    _conversationModeCatalogProvider = null;
-    _conversationModeCatalogRuntimeScope = null;
-    await _conversationModeController.loadCatalog(
-      providerId: providerId,
-      port: null,
-    );
-    await _skillsCatalogController.bind(
-      providerId: providerId,
-      projectPath: _projectPath,
-      port: null,
-    );
-    await providerController.setActiveProvider(providerId);
-    _provider = null;
-    // 旧 backend 上的 live session 不可复用。
-    _session = null;
-    _sessionConfigOptions = const <AgentSessionConfigOption>[];
-    final config = providerController.activeProviderConfig;
-    _modelSelectionController.resetForProvider(config);
-    _permissionSelectionController.resetForProvider(
-      port: null,
-      persistedOptionId: config.resolvedPermissionOptionId,
-      providerId: config.id,
-    );
-    _selectedProviderId ??= providerId;
   }
 
   /// 发送失败时结束本地 pending/running 回合，避免 UI 卡在 running 无法再发。
@@ -2978,7 +2984,9 @@ class AgentConversationViewModel {
     return _eventPipeline?.matches(
           providerId: provider.config.id,
           threadId: threadId,
-          runtimeScope: _runtimeScopeOf(provider),
+          runtimeScope:
+              conversationBinding.currentRuntime?.runtimeScope ??
+              _runtimeScopeOf(provider),
         ) ??
         false;
   }
@@ -2992,16 +3000,21 @@ class AgentConversationViewModel {
       return;
     }
     final previous = _eventPipeline;
+    final eventSource = conversationBinding.events;
+    AgentRuntimeScope? currentRuntimeScope() =>
+        conversationBinding.currentRuntime?.runtimeScope ??
+        _runtimeScopeOf(provider);
     late final AgentEventPipeline pipeline;
     pipeline = AgentEventPipeline(
-      source: provider.events,
+      source: eventSource,
       providerId: provider.config.id,
       threadId: threadId,
-      runtimeScope: _runtimeScopeOf(provider),
-      currentRuntimeScope: () => _runtimeScopeOf(provider),
+      runtimeScope: currentRuntimeScope(),
+      currentRuntimeScope: currentRuntimeScope,
       allowDetachedEvent: AgentConversationReducer.isCriticalDetachedEvent,
+      // pipeline 身份是事件 listener generation 的唯一真源。
       processEvent: (event) {
-        if (_disposed || !identical(_provider, provider)) {
+        if (_disposed || !identical(_eventPipeline, pipeline)) {
           return;
         }
         _eventProcessor.process(event);
@@ -3014,7 +3027,7 @@ class AgentConversationViewModel {
           return;
         }
         _eventPipeline = null;
-        if (_disposed || !identical(_provider, provider)) {
+        if (_disposed) {
           return;
         }
         _log.w(
@@ -3306,15 +3319,17 @@ class AgentConversationViewModel {
 
   /// 切换会话时 best-effort 取消旧 thread 订阅，失败不影响 UI。
   Future<void> _unsubscribeThreadBestEffort(
-    AgentProvider provider,
+    String providerId,
     String threadId,
   ) async {
     try {
-      final threadCatalog = provider.bundle.threadCatalog;
-      if (threadCatalog == null) {
-        return;
-      }
-      await threadCatalog.unsubscribeThread(threadId);
+      await _runGlobalProvider((provider) async {
+        final threadCatalog = provider.bundle.threadCatalog;
+        if (threadCatalog == null) {
+          return;
+        }
+        await threadCatalog.unsubscribeThread(threadId);
+      }, preferredProviderId: providerId);
     } catch (error) {
       _log.w(
         'Could not unsubscribe Agent thread $threadId '
@@ -3343,7 +3358,7 @@ class AgentConversationViewModel {
       isHistoryTurnId: _timeline.isHistoryTurnId,
       modelsRefreshing: _modelsRefreshing,
       activeProviderName: activeProviderName,
-      activeProviderConfig: providerController.activeProviderConfig,
+      activeProviderConfig: _boundProviderConfig,
       effectScope: effectScope,
     );
   }
@@ -3353,7 +3368,7 @@ class AgentConversationViewModel {
     if (listener == null) {
       return null;
     }
-    final provider = _provider;
+    final provider = _currentProvider;
     return AgentConversationEffectScope(
       reductionScope: AgentConversationReductionScope.live,
       providerId: listener.providerId,
@@ -3688,6 +3703,10 @@ final class _AgentConversationEventStateTarget
             waitingOnUserInput: false,
           );
         }
+        // completed/failed 终态后释放 Binding 活动令牌。
+        if (!_viewModel.isTurnRunning) {
+          _viewModel._releaseTurnActivity();
+        }
         _viewModel._consumeActivityDirty();
         _viewModel._syncElapsedTicker();
       case AgentPrepareInterruptedTurnChange():
@@ -3700,6 +3719,10 @@ final class _AgentConversationEventStateTarget
         _viewModel._conversationModeController.setTurnRunning(
           _viewModel.isTurnRunning,
         );
+        // 取消/中断同样结束 Binding 活动状态。
+        if (!_viewModel.isTurnRunning) {
+          _viewModel._releaseTurnActivity();
+        }
         _viewModel._consumeActivityDirty();
         _viewModel._syncElapsedTicker();
       case AgentApplyToolStatusChange():

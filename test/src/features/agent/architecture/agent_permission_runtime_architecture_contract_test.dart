@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_permission_selection_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_permission_state_store.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_permission_migration.dart';
@@ -14,6 +15,7 @@ import 'package:zeta/src/features/agent/presentation/agent_conversation_view_mod
 import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 
 import '../../../testing/fixture_reader.dart';
+import '../../../testing/agent_conversation_binding_test_harness.dart';
 import '../../../testing/fake_agent_frame_scheduler.dart';
 import '../../../testing/recording_json_rpc_peer.dart';
 
@@ -199,18 +201,33 @@ void main() {
           config: AgentProviderConfig.defaultCodex,
           peer: peer,
         );
-        final providerController = ActiveAgentProviderController(
+        final registry = AgentProviderRuntimeRegistry(
           providerFactory: FixedAgentProviderFactory(provider),
+        );
+        final providerController = ActiveAgentProviderController(
+          runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(),
         );
         addTearDown(providerController.dispose);
+        addTearDown(registry.close);
+        final bindingHarness = AgentConversationBindingTestHarness(
+          registry: registry,
+          settings: providerController,
+        );
+        addTearDown(bindingHarness.close);
+        final firstBinding = bindingHarness.acquireDraft(provider.config);
+        final secondBinding = bindingHarness.acquireDraft(provider.config);
 
         final first = AgentConversationViewModel(
           providerController: providerController,
+          conversationBinding: firstBinding.binding,
+          globalRuntime: bindingHarness.globalRuntime,
           uiFrameScheduler: FakeAgentFrameScheduler(),
         );
         final second = AgentConversationViewModel(
           providerController: providerController,
+          conversationBinding: secondBinding.binding,
+          globalRuntime: bindingHarness.globalRuntime,
           uiFrameScheduler: FakeAgentFrameScheduler(),
         );
         addTearDown(first.dispose);
@@ -233,31 +250,17 @@ void main() {
           first.loadModels(),
           second.loadModels(),
         ]);
-        final runtimeIdentity =
-            providerController.activeProviderRuntimeIdentity!;
-        providerController.permissionStateStore.commitApplyResult(
-          identity: runtimeIdentity,
+        await firstBinding.binding.permissions.applyThreadSettings(
           threadId: 'thread-a',
-          result: const AgentPermissionApplyResult(
-            normalizedSelection: AgentPermissionSelection(
-              optionId: ':read-only',
-            ),
-            scope: AgentPermissionApplyScope.currentSession,
+          permissionSelection: const AgentPermissionSelection(
+            optionId: ':read-only',
           ),
-          source: AgentPermissionStateSource.serverSettings,
-          updateDefault: false,
         );
-        providerController.permissionStateStore.commitApplyResult(
-          identity: runtimeIdentity,
+        await secondBinding.binding.permissions.applyThreadSettings(
           threadId: 'thread-b',
-          result: const AgentPermissionApplyResult(
-            normalizedSelection: AgentPermissionSelection(
-              optionId: ':danger-full-access',
-            ),
-            scope: AgentPermissionApplyScope.currentSession,
+          permissionSelection: const AgentPermissionSelection(
+            optionId: ':danger-full-access',
           ),
-          source: AgentPermissionStateSource.serverSettings,
-          updateDefault: false,
         );
         expect(
           first.permissionSnapshotForThread('thread-a').source,
@@ -273,7 +276,6 @@ void main() {
           second.sendMessage('second canvas'),
         ]);
 
-        expect(await providerController.activeProvider(), same(provider));
         _expectCodexPermissionParams(
           peer.callForThread('thread/resume', 'thread-a').paramsMap,
           approvalPolicy: 'on-request',
@@ -305,18 +307,33 @@ void main() {
           config: AgentProviderConfig.defaultCodex,
           peer: peer,
         );
-        final providerController = ActiveAgentProviderController(
+        final registry = AgentProviderRuntimeRegistry(
           providerFactory: FixedAgentProviderFactory(provider),
+        );
+        final providerController = ActiveAgentProviderController(
+          runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(),
         );
         addTearDown(providerController.dispose);
+        addTearDown(registry.close);
+        final bindingHarness = AgentConversationBindingTestHarness(
+          registry: registry,
+          settings: providerController,
+        );
+        addTearDown(bindingHarness.close);
+        final firstBinding = bindingHarness.acquireDraft(provider.config);
+        final secondBinding = bindingHarness.acquireDraft(provider.config);
 
         final first = AgentConversationViewModel(
           providerController: providerController,
+          conversationBinding: firstBinding.binding,
+          globalRuntime: bindingHarness.globalRuntime,
           uiFrameScheduler: FakeAgentFrameScheduler(),
         );
         final second = AgentConversationViewModel(
           providerController: providerController,
+          conversationBinding: secondBinding.binding,
+          globalRuntime: bindingHarness.globalRuntime,
           uiFrameScheduler: FakeAgentFrameScheduler(),
         );
         addTearDown(first.dispose);
@@ -339,11 +356,10 @@ void main() {
           first.loadModels(),
           second.loadModels(),
         ]);
-        final runtimeIdentity =
-            providerController.activeProviderRuntimeIdentity!;
-        final defaultBefore = providerController.permissionStateStore
-            .stateFor(runtimeIdentity)
-            .providerDefaultPreference;
+        // 打开历史只走 global runtime；首次提交后才建立 session 事件流。
+        await first.sendMessage('bind first canvas runtime');
+        final defaultBefore =
+            firstBinding.binding.permissions.defaultPreference;
         final secondBefore = second.permissionSelection;
         final callsBefore = peer.calls.length;
 
@@ -357,8 +373,7 @@ void main() {
         await Future<void>.delayed(Duration.zero);
         await Future<void>.delayed(Duration.zero);
 
-        final permissionState = providerController.permissionStateStore
-            .stateFor(runtimeIdentity);
+        final permissionState = firstBinding.binding.permissions.state;
         expect(
           permissionState.threadStates['thread-a']?.selection.optionId,
           ':read-only',
@@ -367,7 +382,10 @@ void main() {
           permissionState.threadStates['thread-a']?.source,
           AgentPermissionStateSource.serverSettings,
         );
-        expect(permissionState.threadStates['thread-b'], isNull);
+        expect(
+          secondBinding.binding.permissions.state.threadStates['thread-a'],
+          isNull,
+        );
         expect(permissionState.providerDefaultPreference, defaultBefore);
         expect(first.permissionSelection?.optionId, ':read-only');
         expect(second.permissionSelection, secondBefore);
@@ -389,8 +407,11 @@ void main() {
           config: config,
           peer: peer,
         );
-        final providerController = ActiveAgentProviderController(
+        final registry = AgentProviderRuntimeRegistry(
           providerFactory: FixedAgentProviderFactory(provider),
+        );
+        final providerController = ActiveAgentProviderController(
+          runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(
             AgentProviderSettings(
               providers: <AgentProviderConfig>[
@@ -402,12 +423,18 @@ void main() {
           ),
         );
         addTearDown(providerController.dispose);
-        final permissions = AgentConversationPermissionSelectionController(
-          persistOptionId: (_) async {},
+        addTearDown(registry.close);
+        final bindingHarness = AgentConversationBindingTestHarness(
+          registry: registry,
+          settings: providerController,
         );
+        addTearDown(bindingHarness.close);
+        final bindingLease = bindingHarness.acquireDraft(config);
+        final permissions = bindingLease.binding.permissions;
         final viewModel = AgentConversationViewModel(
           providerController: providerController,
-          permissionSelectionController: permissions,
+          conversationBinding: bindingLease.binding,
+          globalRuntime: bindingHarness.globalRuntime,
           uiFrameScheduler: FakeAgentFrameScheduler(),
         );
         addTearDown(viewModel.dispose);

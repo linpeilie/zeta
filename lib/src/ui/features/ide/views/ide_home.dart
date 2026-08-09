@@ -216,12 +216,10 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     _agentManagementController = AgentManagementController(
       repositories: <String, AgentCliManagementRepository>{
         AgentDefinition.codex.id: CodexAgentManagementRepository(
-          providerFactory: widget.agentProviderFactory,
           modelCatalogRepository: widget.agentModelCatalogRepository,
           runtimeRegistry: widget.agentProviderRuntimeRegistry,
         ),
         AgentDefinition.grok.id: GrokAgentManagementRepository(
-          providerFactory: widget.agentProviderFactory,
           modelCatalogRepository: widget.agentModelCatalogRepository,
           runtimeRegistry: widget.agentProviderRuntimeRegistry,
         ),
@@ -249,8 +247,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
           widget.agentUsagePanelRepository ??
           ProviderAgentUsagePanelRepository(
             enabledProviderLoader: _loadEnabledAgentProviders,
-            providerLeaseLoader:
-                _shellController.agentProviderController.acquireProvider,
+            globalRuntime: _shellController.agentProviderGlobalRuntime,
             seedIndexStore: widget.usageStatisticsIndexStore,
           ),
     );

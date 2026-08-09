@@ -1,8 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/codex_cli_locator.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent_management/data/cli_process_runner.dart';
 import 'package:zeta/src/features/agent_management/data/grok_agent_management_repository.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
@@ -66,10 +68,14 @@ done
         '${root.path}${Platform.pathSeparator}logs${Platform.pathSeparator}unified.jsonl',
       ).writeAsStringSync('{"msg":"hello"}\n');
 
-      final repository = GrokAgentManagementRepository(
+      final registry = AgentProviderRuntimeRegistry(
         providerFactory: FakeAgentProviderFactory(
           FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
         ),
+      );
+      addTearDown(registry.close);
+      final repository = GrokAgentManagementRepository(
+        runtimeRegistry: registry,
         processRunner: _scriptedRunner(<List<String>, CliProcessResult>{
           const <String>['--version']: const CliProcessResult(
             exitCode: 0,
@@ -117,10 +123,14 @@ done
         '${root.path}${Platform.pathSeparator}auth.json',
       ).writeAsStringSync('{"token":"x"}');
 
-      final repository = GrokAgentManagementRepository(
+      final registry = AgentProviderRuntimeRegistry(
         providerFactory: FakeAgentProviderFactory(
           FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
         ),
+      );
+      addTearDown(registry.close);
+      final repository = GrokAgentManagementRepository(
+        runtimeRegistry: registry,
         processRunner: _scriptedRunner(<List<String>, CliProcessResult>{
           const <String>['--version']: const CliProcessResult(
             exitCode: 0,
@@ -161,10 +171,14 @@ done
         '${root.path}${Platform.pathSeparator}auth.json',
       ).writeAsStringSync('{"token":"x"}');
 
-      final repository = GrokAgentManagementRepository(
+      final registry = AgentProviderRuntimeRegistry(
         providerFactory: FakeAgentProviderFactory(
           FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
         ),
+      );
+      addTearDown(registry.close);
+      final repository = GrokAgentManagementRepository(
+        runtimeRegistry: registry,
         processRunner: _scriptedRunner(<List<String>, CliProcessResult>{
           const <String>['--version']: const CliProcessResult(
             exitCode: 0,
@@ -201,10 +215,14 @@ done
         '${bin.path}${Platform.pathSeparator}${Platform.isWindows ? 'grok.exe' : 'grok'}',
       )..writeAsStringSync('stub');
 
-      final repository = GrokAgentManagementRepository(
+      final registry = AgentProviderRuntimeRegistry(
         providerFactory: FakeAgentProviderFactory(
           FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
         ),
+      );
+      addTearDown(registry.close);
+      final repository = GrokAgentManagementRepository(
+        runtimeRegistry: registry,
         processRunner: _scriptedRunner(<List<String>, CliProcessResult>{
           const <String>['--version']: const CliProcessResult(
             exitCode: 0,
@@ -237,10 +255,14 @@ done
       File(
         '${root.path}${Platform.pathSeparator}config.toml',
       ).writeAsStringSync('permission_mode = "default"\n');
-      final repository = GrokAgentManagementRepository(
+      final registry = AgentProviderRuntimeRegistry(
         providerFactory: FakeAgentProviderFactory(
           FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
         ),
+      );
+      addTearDown(registry.close);
+      final repository = GrokAgentManagementRepository(
+        runtimeRegistry: registry,
         grokHomeProvider: () => root.path,
       );
 
@@ -255,10 +277,14 @@ done
       // Arrange
       final grokScript = File('${root.path}${Platform.pathSeparator}grok.cmd')
         ..writeAsStringSync('stub');
-      final repository = GrokAgentManagementRepository(
+      final registry = AgentProviderRuntimeRegistry(
         providerFactory: FakeAgentProviderFactory(
           FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
         ),
+      );
+      addTearDown(registry.close);
+      final repository = GrokAgentManagementRepository(
+        runtimeRegistry: registry,
         grokHomeProvider: () => root.path,
       );
 
@@ -273,6 +299,84 @@ done
       expect(config.command, grokScript.path);
       expect(config.arguments, const <String>['agent', 'stdio']);
       expect(config.extra['cliPath'], grokScript.path);
+    });
+  });
+
+  // 04-目标态与步骤.md §S7：连接检测是"会话建立前"的一次性探测，_probeProvider
+  // 必须显式绑定全局实例，不依赖 registry 的默认 scope。
+  group('testConnection 显式绑定 global scope（S7）', () {
+    late Directory root;
+    late File grokExe;
+
+    setUp(() {
+      root = Directory.systemTemp.createTempSync('zeta-grok-mgmt-scope-');
+      final bin = Directory('${root.path}${Platform.pathSeparator}bin')
+        ..createSync();
+      grokExe = File(
+        '${bin.path}${Platform.pathSeparator}${Platform.isWindows ? 'grok.exe' : 'grok'}',
+      )..writeAsStringSync('stub');
+      File(
+        '${root.path}${Platform.pathSeparator}auth.json',
+      ).writeAsStringSync('{"token":"x"}');
+    });
+
+    tearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+
+    test('探测用的实例注册在全局 scope 下；探测结束租约归零', () async {
+      final factory = _ProbeProviderFactory();
+      final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+      addTearDown(registry.close);
+      final repository = GrokAgentManagementRepository(
+        processRunner: _scriptedRunner(
+          const <List<String>, CliProcessResult>{},
+        ),
+        grokHomeProvider: () => root.path,
+        runtimeRegistry: registry,
+      );
+
+      final (result, _) = await repository.testConnection(
+        providerConfig: AgentProviderConfig.defaultGrok.copyWith(
+          extra: <String, Object?>{'cliPath': grokExe.path},
+        ),
+      );
+
+      expect(result.success, isTrue);
+      expect(registry.debugLeaseCount, 0, reason: '探测借了要还，不能残留租约');
+      expect(factory.providers, hasLength(1));
+
+      // 探测只允许留下唯一的全局实例；session 隔离由下一条用例从行为侧验证。
+      expect(registry.debugProviderCount, 1);
+    });
+
+    test('探测拿到的实例与某个会话 scope 的实例不是同一个', () async {
+      final factory = _ProbeProviderFactory();
+      final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+      addTearDown(registry.close);
+      final repository = GrokAgentManagementRepository(
+        processRunner: _scriptedRunner(
+          const <List<String>, CliProcessResult>{},
+        ),
+        grokHomeProvider: () => root.path,
+        runtimeRegistry: registry,
+      );
+
+      await repository.testConnection(
+        providerConfig: AgentProviderConfig.defaultGrok.copyWith(
+          extra: <String, Object?>{'cliPath': grokExe.path},
+        ),
+      );
+      final probedProvider = factory.providers.single;
+
+      final sessionLease = await registry.acquire(
+        AgentProviderConfig.defaultGrok,
+        scope: const AgentProviderRuntimeScopeKey.session('entry-a'),
+      );
+      expect(identical(sessionLease.provider, probedProvider), isFalse);
+      await sessionLease.release();
     });
   });
 }
@@ -310,4 +414,35 @@ bool _listEquals(List<String> a, List<String> b) {
     }
   }
   return true;
+}
+
+/// 与 [FakeAgentProviderFactory] 不同：每次 create 返回**新**实例，用于证明
+/// 不同 scope 拿到的是可区分的对象（对齐
+/// codex_agent_management_repository_test.dart 里同名类的写法）。
+class _ProbeProviderFactory implements AgentProviderFactory {
+  final List<_ProbeFakeProvider> providers = <_ProbeFakeProvider>[];
+
+  @override
+  AgentProvider create(AgentProviderConfig config) {
+    final provider = _ProbeFakeProvider(config);
+    providers.add(provider);
+    return provider;
+  }
+}
+
+class _ProbeFakeProvider extends Fake implements AgentProvider {
+  _ProbeFakeProvider(this.config);
+
+  @override
+  final AgentProviderConfig config;
+
+  @override
+  AgentProviderCapabilities get capabilities =>
+      const AgentProviderCapabilities();
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  Future<void> dispose() async {}
 }

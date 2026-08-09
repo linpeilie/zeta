@@ -84,7 +84,13 @@ Provider 声明自己支持什么。**UI 一律按 capability 渲染，不按 pr
 `agent_provider_capabilities.dart`
 
 **Runtime lease（运行时租约）**
-`AgentProviderRuntimeRegistry` 统一持有 Provider 进程实例并按租约分发。多个 pane 共享同一个 runtime lease，不会重复拉起进程。
+Registry 对 Provider 实例的可释放引用。它只在基础设施与 global runtime/Binding 内流转，ViewModel 和 Pane 不直接持有。
+
+**Conversation Binding（会话绑定）**
+一个逻辑会话的 application 聚合根，以 draft 或 thread key 唯一标识。它维护可选 session runtime、过滤旧 generation 的事件流、会话权限和活跃操作；只有 `beginTurn()` 能创建 runtime。Binding Manager 负责映射、草稿晋升以及 10 分钟空闲回收。
+
+**Global runtime（全局运行时）**
+每个 Provider ID 唯一且不参与空闲回收的实例，用于历史、thread 管理、模型、Skill、用量和连接探测等会话前/全局信息。
 
 **runtimeId / connectionEpoch（运行时标识 / 连接纪元）**
 每次连接生成一对标识，用来判断某个事件或副作用是否还属于当前连接。加上 `providerId + threadId + listenerGeneration`，构成事件绑定的完整作用域。

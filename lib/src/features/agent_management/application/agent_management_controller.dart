@@ -6,12 +6,12 @@ import 'package:zeta/src/features/agent/data/codex_cli_locator.dart'
     show looksLikeCodexCliPath;
 import 'package:zeta/src/features/agent/data/grok_cli_locator.dart'
     show looksLikeGrokCliPath;
+import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart'
     show isNewerVersion;
 import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
-import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 
 /// Agent 管理页面的应用层协调器（支持多 Agent CLI）。
 class AgentManagementController extends ChangeNotifier {
@@ -50,7 +50,7 @@ class AgentManagementController extends ChangeNotifier {
   }
 
   final Map<String, AgentCliManagementRepository> _repositories;
-  final ActiveAgentProviderController providerController;
+  final AgentProviderSettingsPort providerController;
   final AgentRuntimeState Function()? runtimeStateProvider;
   final Listenable? runtimeListenable;
 

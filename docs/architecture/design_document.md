@@ -1,6 +1,6 @@
 # 设计文档
 
-最后更新：2026-08-04
+最后更新：2026-08-09
 
 ## 1. 设计目标
 
@@ -23,7 +23,7 @@ Zeta 的设计目标是让 Flutter UI、Agent provider、会话持久化和本�
   使用统计页面。
 - features/workspace：文件树规则、树构建、文件节点映射和文件 pane。
 - ui/core：窗口框架、主题、通用面板和共享 UI primitives。
-- ui/features/ide：IDE shell 视图和 provider 选择相关 view model。
+- ui/features/ide：IDE shell 视图；Provider 设置控制器位于 agent/application。
 
 依赖方向保持为 presentation/application 依赖 domain 接口，data 实现 domain 接口，app 负责组合默认实现。UI 不直接处理 Codex 原始协议或持久化 JSON。
 
@@ -35,7 +35,9 @@ main()
   -> ZetaStorageMigrator (legacy SharedPreferences -> JSON files)
   -> daily app log (~/.zeta/logs)
   -> MainApp
-    -> AgentProviderRuntimeRegistry（每个 Provider ID 一个运行实例）
+    -> AgentProviderRuntimeRegistry（Provider 进程唯一所有者）
+    -> AgentProviderGlobalRuntime（每个 Provider ID 一个全局实例）
+    -> AgentConversationBindingManager（会话映射 + 10 分钟空闲回收）
     -> IdeShellController
     -> IdeHome
       -> WindowFrame（常驻）
@@ -52,9 +54,9 @@ main()
 
 IdeShellController
   -> IdeSessionStore
-  -> ActiveAgentProviderController -> Provider runtime lease
-  -> AgentThreadWorkspaceController -> 每个 Pane 独立 VM/controller，共享 runtime lease
-  -> AgentConversationViewModel
+  -> ActiveAgentProviderController -> AgentProviderSettingsController
+  -> AgentThreadWorkspaceController -> 每个 Pane 持有 ConversationBinding lease
+  -> AgentConversationViewModel -> Binding（不持有 Provider lease/scope/pin）
   -> ProjectThreadsController
 
 AgentConversationViewModel
@@ -301,12 +303,20 @@ Provider 的业务策略。只有经过建模、命名与测试证明为协议�
 答案应为否。若答案为是，设计评审必须先证明是共享 domain contract 缺失，而不是 Provider
 quirk、协议证据不足或 mapper/reducer 未完成归一化。
 
-Agent Canvas 支持多 thread 常驻 entry（各自独立 conversation VM 与 provider controller）。
-所有 controller 通过应用级 `AgentProviderRuntimeRegistry` 获取租约，同一 Provider ID 在一个
-Zeta 进程内只维护一个 app-server/stdio 运行实例。Project Threads、用量统计和 Agent 管理
-探测也复用同一实例；租约释放只撤销引用，配置失效或窗口退出才统一关闭进程。Provider 内部
-的订阅、running turn 和 reducer 必须按 session ID 隔离，启动或恢复另一个会话不能隐式退订
-已有会话。
+Agent Canvas 支持多 thread 常驻 entry。`AgentProviderRuntimeRegistry` 是进程唯一
+所有者；`AgentProviderGlobalRuntime` 为每个 Provider ID 保留一个永不空闲回收的
+全局实例，承载用量、目录、历史和 thread 操作。`AgentConversationBindingManager`
+按草稿 key 或 thread key 唯一维护 Binding；Workspace entry 只持有 Binding lease。
+打开草稿、打开已有 thread 和读取历史均不创建 session Provider，只有第一次提交输入
+调用 `Binding.beginTurn()` 后才启动，并在已有 thread 上 resume。草稿取得 threadId 后
+原子晋升，碰到已有 key 时 fail-closed。
+
+Binding 持有该逻辑会话的可选 runtime、generation 过滤后的事件流、权限状态和活跃操作
+计数。运行中 turn 与短 RPC 都阻止回收；终态/操作完成时间是新的 TTL 起点。Manager 每
+分钟 single-flight 扫描一次，空闲满 10 分钟后按精确 runtime identity 条件失效，避免
+ABA；registry 还保证旧进程 dispose 完成前同 scope 的 acquire 等待。回收后保留会话权限
+默认值与 session effective，清除 runtime-only 状态；下一次提交才重建。配置失效或窗口
+退出时统一关闭关联进程，global runtime 永不参与空闲回收。
 Project Threads 侧栏对**已打开** thread 的执行中/等待指示，以 entry 的
 `AgentConversationThreadSnapshot` 为真源，经 shell 调用 `syncRuntimeSnapshot` 更新
 `runningThreadIds`、摘要 `status`/waiting 与内存态 `completedThreadIds`。分区 UI 信号
@@ -349,7 +359,7 @@ provider 或启动进程。退役不会迁移或改写任何 Cursor 用户数据
 ### 管理适配
 
 `AgentManagementController` 负责管理页异步编排，并复用
-`ActiveAgentProviderController` 的全局 provider 配置。各活跃 CLI 使用独立 management
+`AgentProviderSettingsController` 的全局 provider 配置。各活跃 CLI 使用独立 management
 repository；协议 transport 不记录 prompt、文件内容或 stderr 原文。
 
 检测摘要和真实 CLI 路径保存在 provider `extra` 中；项目 thread 仍只保存稳定的

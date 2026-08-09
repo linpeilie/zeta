@@ -1,13 +1,14 @@
 import 'dart:async';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/application/agent_permission_request_resolver.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_event_listener_gate.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_binding_manager.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_global_runtime.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
-import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/project_threads/domain/project_threads_session_snapshot.dart';
 import 'package:zeta/src/features/project_threads/presentation/project_threads_view_model.dart';
@@ -31,23 +32,20 @@ const String _aggregateCursorPrefix = 'agg:';
 class ProjectThreadsController {
   ProjectThreadsController({
     required this.providerController,
+    required this.globalRuntime,
+    this.bindingManager,
     ProjectThreadsViewModel? viewModel,
-  }) : viewModel = viewModel ?? ProjectThreadsViewModel() {
-    // active provider 切换后必须重绑事件流，否则列表收不到 TurnStarted，侧栏无执行动画。
-    providerController.addListener(_handleProviderControllerChanged);
-  }
+  }) : viewModel = viewModel ?? ProjectThreadsViewModel();
 
-  final ActiveAgentProviderController providerController;
+  final AgentProviderSettingsPort providerController;
+  final AgentProviderGlobalRuntime globalRuntime;
+  final AgentConversationBindingManager? bindingManager;
   final ProjectThreadsViewModel viewModel;
 
   final Map<String, int> _loadTokens = <String, int>{};
   final Map<String, String> _projectPathByThreadId = <String, String>{};
   final Map<String, Timer> _searchDebounceTimers = <String, Timer>{};
 
-  AgentProvider? _provider;
-  StreamSubscription<AgentEvent>? _providerEventSubscription;
-  final AgentProviderEventListenerGate _providerEventListenerGate =
-      AgentProviderEventListenerGate();
   bool _disposed = false;
 
   /// 当前会话因删除/归档/关闭而被清空时回调（projectPath, threadId）。
@@ -75,9 +73,6 @@ class ProjectThreadsController {
     viewModel.replaceStates(plan.states);
     for (final entry in plan.states.entries) {
       _registerStateThreadMappings(entry.key, entry.value);
-    }
-    if (plan.states.isNotEmpty) {
-      unawaited(_ensureProviderEventSubscription());
     }
     for (final path in plan.projectsToLoad) {
       unawaited(loadInitial(path));
@@ -258,8 +253,6 @@ class ProjectThreadsController {
     if (markRunning) {
       _setThreadRunning(session.id, isRunning: true);
     }
-    // 新 session 往往伴随 active provider 刚切换；立刻挂上事件流接收 TurnStarted。
-    unawaited(_ensureProviderEventSubscription());
   }
 
   /// 由详情侧 turn 状态同步列表执行中指示（不依赖 provider 事件是否已送达）。
@@ -291,6 +284,18 @@ class ProjectThreadsController {
       return;
     }
     _registerThreadMapping(projectPath, sessionId);
+    final threadTitle = snapshot.threadTitle.trim();
+    final currentTitle = stateFor(projectPath).threads
+        .where((thread) => thread.id == sessionId)
+        .map((thread) => thread.title?.trim())
+        .firstOrNull;
+    if (threadTitle.isNotEmpty && currentTitle != threadTitle) {
+      viewModel.updateThreadTitle(
+        projectPath: projectPath,
+        threadId: sessionId,
+        title: threadTitle,
+      );
+    }
     final runtimeStatus = _effectiveListRuntimeStatus(snapshot);
     if (runtimeStatus != null) {
       viewModel.updateThreadRuntimeStatus(
@@ -350,30 +355,29 @@ class ProjectThreadsController {
     if (trimmed.isEmpty) {
       return;
     }
-    final provider = await _providerForThread(
+    await _runForThread<void>(
       projectPath: projectPath,
       threadId: threadId,
+      operation: (provider) async {
+        _requireCapability(
+          provider: provider,
+          supported: provider.capabilities.canRenameThread,
+          operation: 'rename threads',
+        );
+        final threadMutations = provider.bundle.threadMutations;
+        if (threadMutations == null) {
+          throw StateError(
+            '${provider.config.displayName} missing thread mutation port',
+          );
+        }
+        viewModel.updateThreadTitle(
+          projectPath: projectPath,
+          threadId: threadId,
+          title: trimmed,
+        );
+        await threadMutations.renameThread(threadId: threadId, name: trimmed);
+      },
     );
-    if (provider == null) {
-      return;
-    }
-    _requireCapability(
-      provider: provider,
-      supported: provider.capabilities.canRenameThread,
-      operation: 'rename threads',
-    );
-    final threadMutations = provider.bundle.threadMutations;
-    if (threadMutations == null) {
-      throw StateError(
-        '${provider.config.displayName} missing thread mutation port',
-      );
-    }
-    viewModel.updateThreadTitle(
-      projectPath: projectPath,
-      threadId: threadId,
-      title: trimmed,
-    );
-    await threadMutations.renameThread(threadId: threadId, name: trimmed);
   }
 
   /// 归档 thread。
@@ -381,29 +385,28 @@ class ProjectThreadsController {
     required String projectPath,
     required String threadId,
   }) async {
-    final provider = await _providerForThread(
+    await _runForThread<void>(
       projectPath: projectPath,
       threadId: threadId,
-    );
-    if (provider == null) {
-      return;
-    }
-    _requireCapability(
-      provider: provider,
-      supported: provider.capabilities.canArchiveThread,
-      operation: 'archive threads',
-    );
-    final threadMutations = provider.bundle.threadMutations;
-    if (threadMutations == null) {
-      throw StateError(
-        '${provider.config.displayName} missing thread mutation port',
-      );
-    }
-    await threadMutations.archiveThread(threadId);
-    _removeThreadFromList(
-      projectPath: projectPath,
-      threadId: threadId,
-      notifyCleared: true,
+      operation: (provider) async {
+        _requireCapability(
+          provider: provider,
+          supported: provider.capabilities.canArchiveThread,
+          operation: 'archive threads',
+        );
+        final threadMutations = provider.bundle.threadMutations;
+        if (threadMutations == null) {
+          throw StateError(
+            '${provider.config.displayName} missing thread mutation port',
+          );
+        }
+        await threadMutations.archiveThread(threadId);
+        _removeThreadFromList(
+          projectPath: projectPath,
+          threadId: threadId,
+          notifyCleared: true,
+        );
+      },
     );
   }
 
@@ -412,29 +415,28 @@ class ProjectThreadsController {
     required String projectPath,
     required String threadId,
   }) async {
-    final provider = await _providerForThread(
+    await _runForThread<void>(
       projectPath: projectPath,
       threadId: threadId,
-    );
-    if (provider == null) {
-      return;
-    }
-    _requireCapability(
-      provider: provider,
-      supported: provider.capabilities.canUnarchiveThread,
-      operation: 'unarchive threads',
-    );
-    final threadMutations = provider.bundle.threadMutations;
-    if (threadMutations == null) {
-      throw StateError(
-        '${provider.config.displayName} missing thread mutation port',
-      );
-    }
-    await threadMutations.unarchiveThread(threadId);
-    _removeThreadFromList(
-      projectPath: projectPath,
-      threadId: threadId,
-      notifyCleared: true,
+      operation: (provider) async {
+        _requireCapability(
+          provider: provider,
+          supported: provider.capabilities.canUnarchiveThread,
+          operation: 'unarchive threads',
+        );
+        final threadMutations = provider.bundle.threadMutations;
+        if (threadMutations == null) {
+          throw StateError(
+            '${provider.config.displayName} missing thread mutation port',
+          );
+        }
+        await threadMutations.unarchiveThread(threadId);
+        _removeThreadFromList(
+          projectPath: projectPath,
+          threadId: threadId,
+          notifyCleared: true,
+        );
+      },
     );
   }
 
@@ -443,43 +445,42 @@ class ProjectThreadsController {
     required String projectPath,
     required String threadId,
   }) async {
-    final provider = await _providerForThread(
+    await _runForThread<void>(
       projectPath: projectPath,
       threadId: threadId,
-    );
-    if (provider == null) {
-      return;
-    }
-    if (provider.capabilities.canDeleteThread) {
-      final threadMutations = provider.bundle.threadMutations;
-      if (threadMutations == null) {
-        throw StateError(
-          '${provider.config.displayName} missing thread mutation port',
+      operation: (provider) async {
+        if (provider.capabilities.canDeleteThread) {
+          final threadMutations = provider.bundle.threadMutations;
+          if (threadMutations == null) {
+            throw StateError(
+              '${provider.config.displayName} missing thread mutation port',
+            );
+          }
+          await threadMutations.deleteThread(threadId);
+        } else if (provider.capabilities.canRemoveThreadFromList) {
+          final localThreadList = provider.bundle.localThreadList;
+          if (localThreadList != null) {
+            await localThreadList.removeThreadFromList(threadId);
+          } else {
+            _requireCapability(
+              provider: provider,
+              supported: false,
+              operation: 'delete or remove threads',
+            );
+          }
+        } else {
+          _requireCapability(
+            provider: provider,
+            supported: false,
+            operation: 'delete or remove threads',
+          );
+        }
+        _removeThreadFromList(
+          projectPath: projectPath,
+          threadId: threadId,
+          notifyCleared: true,
         );
-      }
-      await threadMutations.deleteThread(threadId);
-    } else if (provider.capabilities.canRemoveThreadFromList) {
-      final localThreadList = provider.bundle.localThreadList;
-      if (localThreadList != null) {
-        await localThreadList.removeThreadFromList(threadId);
-      } else {
-        _requireCapability(
-          provider: provider,
-          supported: false,
-          operation: 'delete or remove threads',
-        );
-      }
-    } else {
-      _requireCapability(
-        provider: provider,
-        supported: false,
-        operation: 'delete or remove threads',
-      );
-    }
-    _removeThreadFromList(
-      projectPath: projectPath,
-      threadId: threadId,
-      notifyCleared: true,
+      },
     );
   }
 
@@ -489,34 +490,36 @@ class ProjectThreadsController {
     required String threadId,
     AgentPermissionRequestSnapshot? permissionSnapshot,
   }) async {
-    final provider = await _providerForThread(
+    final session = await _runForThread<AgentSession>(
       projectPath: projectPath,
       threadId: threadId,
+      operation: (provider) async {
+        _requireCapability(
+          provider: provider,
+          supported: provider.capabilities.canForkThread,
+          operation: 'fork threads',
+        );
+        final threadBranching = provider.bundle.threadBranching;
+        if (threadBranching == null) {
+          throw StateError(
+            '${provider.config.displayName} missing thread branching port',
+          );
+        }
+        final requestPermissionSnapshot = await _resolveForkPermissionSnapshot(
+          provider: provider,
+          threadId: threadId,
+          supplied: permissionSnapshot,
+        );
+        return threadBranching.forkThread(
+          threadId: threadId,
+          context: AgentContext(projectPath: projectPath),
+          permissionSnapshot: requestPermissionSnapshot,
+        );
+      },
     );
-    if (provider == null) {
+    if (session == null) {
       return null;
     }
-    _requireCapability(
-      provider: provider,
-      supported: provider.capabilities.canForkThread,
-      operation: 'fork threads',
-    );
-    final threadBranching = provider.bundle.threadBranching;
-    if (threadBranching == null) {
-      throw StateError(
-        '${provider.config.displayName} missing thread branching port',
-      );
-    }
-    final requestPermissionSnapshot = await _resolveForkPermissionSnapshot(
-      provider: provider,
-      threadId: threadId,
-      supplied: permissionSnapshot,
-    );
-    final session = await threadBranching.forkThread(
-      threadId: threadId,
-      context: AgentContext(projectPath: projectPath),
-      permissionSnapshot: requestPermissionSnapshot,
-    );
     _registerThreadMapping(projectPath, session.id);
     viewModel.prependThread(
       projectPath: projectPath,
@@ -544,37 +547,34 @@ class ProjectThreadsController {
         supplied.source != AgentPermissionRequestSource.providerFallback) {
       return supplied;
     }
-    final identity = providerController.activeProviderRuntimeIdentity;
-    final stateStore = providerController.permissionStateStore;
-    if (identity == null ||
-        identity.providerId != provider.config.id ||
-        !stateStore.isCurrent(identity)) {
-      // 正常应用路径在 provider acquisition 后一定有 current identity；这里只保留
-      // data adapter 的显式兼容 fallback，不从 config 重建第二套 application 状态。
-      return const AgentPermissionRequestSnapshot.providerFallback();
+    final binding = bindingManager?.bindingForThread(
+      providerId: provider.config.id,
+      threadId: threadId,
+    );
+    if (binding != null) {
+      return binding.permissions.snapshotForRequest(threadId: threadId);
     }
-
+    final configuredId = providerController
+        .providerConfigById(provider.config.id)
+        ?.resolvedPermissionOptionId
+        ?.trim();
     AgentPermissionSelection? catalogDefault;
-    final effectiveState = stateStore
-        .stateFor(identity)
-        .effectiveStateForThread(threadId);
-    if (effectiveState == null) {
-      final permissionPolicy = provider.bundle.permissionPolicy;
-      if (permissionPolicy != null) {
-        try {
-          final catalog = await permissionPolicy.listPermissionOptions();
-          final catalogId = catalog.defaultOptionId.trim();
-          if (catalogId.isNotEmpty) {
-            catalogDefault = AgentPermissionSelection(optionId: catalogId);
-          }
-        } catch (_) {
-          // 目录暂不可用时保留 adapter 的兼容 fallback，fork 不应因此失败。
+    final permissionPolicy = provider.bundle.permissionPolicy;
+    if (permissionPolicy != null) {
+      try {
+        final catalog = await permissionPolicy.listPermissionOptions();
+        final catalogId = catalog.defaultOptionId.trim();
+        if (catalogId.isNotEmpty) {
+          catalogDefault = AgentPermissionSelection(optionId: catalogId);
         }
+      } catch (_) {
+        // 目录暂不可用时仍可使用持久化默认；两者都没有才走 adapter fallback。
       }
     }
-    return stateStore.takeRequestSnapshot(
-      identity: identity,
-      threadId: threadId,
+    return AgentPermissionRequestResolver.resolve(
+      providerDefault: configuredId == null || configuredId.isEmpty
+          ? null
+          : AgentPermissionSelection(optionId: configuredId),
       catalogDefault: catalogDefault,
     );
   }
@@ -584,25 +584,12 @@ class ProjectThreadsController {
       return;
     }
     _disposed = true;
-    _providerEventListenerGate.invalidate();
-    providerController.removeListener(_handleProviderControllerChanged);
-    _provider = null;
     _loadTokens.clear();
     _projectPathByThreadId.clear();
     for (final timer in _searchDebounceTimers.values) {
       timer.cancel();
     }
     _searchDebounceTimers.clear();
-    final subscription = _providerEventSubscription;
-    _providerEventSubscription = null;
-    unawaited(subscription?.cancel());
-  }
-
-  void _handleProviderControllerChanged() {
-    if (_disposed) {
-      return;
-    }
-    unawaited(_ensureProviderEventSubscription());
   }
 
   Future<void> _loadPage({
@@ -628,12 +615,6 @@ class ProjectThreadsController {
     );
 
     try {
-      // 保证 active provider 事件订阅仍在（运行中指示等）。
-      await _ensureProviderEventSubscription();
-      if (_disposed) {
-        return;
-      }
-
       final searchTerm = current.searchTerm.trim();
       final page = await _listThreadsAcrossProviders(
         projectPath: projectPath,
@@ -736,14 +717,15 @@ class ProjectThreadsController {
         if (!staticCapabilities.canListThreads) {
           return;
         }
-        AgentProviderRuntimeLease? lease;
         try {
-          lease = await providerController.acquireProvider(config);
-          final collected = await _collectProviderThreads(
-            provider: lease.provider,
-            projectPath: projectPath,
-            archived: archived,
-            searchTerm: searchTerm,
+          final collected = await globalRuntime.run(
+            config,
+            (runtime) => _collectProviderThreads(
+              provider: runtime.bundle.runtime.provider,
+              projectPath: projectPath,
+              archived: archived,
+              searchTerm: searchTerm,
+            ),
           );
           threadsByProviderId[config.id] = collected;
         } catch (error, stackTrace) {
@@ -753,8 +735,6 @@ class ProjectThreadsController {
             stackTrace: stackTrace,
           );
           failures.add(config.displayName);
-        } finally {
-          await lease?.release();
         }
       }),
     );
@@ -885,116 +865,25 @@ class ProjectThreadsController {
       ..sort(_compareThreadRecency);
   }
 
-  Future<AgentProvider?> _ensureProviderEventSubscription() async {
-    if (_disposed || !providerController.hasRuntimeProvider) {
-      return null;
-    }
-    final provider = await providerController.activeProvider();
-    if (_disposed) {
-      return null;
-    }
-    if (identical(provider, _provider) &&
-        _hasCurrentProviderEventListener(provider)) {
-      return provider;
-    }
-
-    final previousSubscription = _providerEventSubscription;
-    final scope = _providerEventListenerGate.activate(
-      providerId: provider.config.id,
-      threadId: null,
-      runtimeScope: _runtimeScopeOf(provider),
-    );
-    _provider = provider;
-    StreamSubscription<AgentEvent>? subscription;
-    subscription = provider.events.listen(
-      (event) {
-        if (_disposed || !identical(_provider, provider)) {
-          return;
-        }
-        if (!_providerEventListenerGate.accepts(
-          scope,
-          currentRuntimeScope: _runtimeScopeOf(provider),
-          allowDetachedRuntime: _isProjectThreadTerminalEvent(event),
-        )) {
-          return;
-        }
-        _handleProviderEvent(event);
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        if (!_providerEventListenerGate.accepts(
-          scope,
-          currentRuntimeScope: _runtimeScopeOf(provider),
-          allowDetachedRuntime: true,
-        )) {
-          return;
-        }
-        _log.w(
-          'Project thread provider event stream failed',
-          error: error,
-          stackTrace: stackTrace,
-        );
-      },
-      onDone: () {
-        if (!_providerEventListenerGate.release(scope)) {
-          return;
-        }
-        if (identical(_providerEventSubscription, subscription)) {
-          _providerEventSubscription = null;
-        }
-      },
-    );
-    _providerEventSubscription = subscription;
-    await previousSubscription?.cancel();
-    return provider;
-  }
-
-  AgentRuntimeScope? _runtimeScopeOf(AgentProvider provider) {
-    return provider.bundle.runtime.runtimeScope;
-  }
-
-  bool _hasCurrentProviderEventListener(AgentProvider provider) {
-    final scope = _providerEventListenerGate.current;
-    if (scope == null || scope.providerId != provider.config.id) {
-      return false;
-    }
-    final expectedRuntime = scope.runtimeScope;
-    if (expectedRuntime == null) {
-      return true;
-    }
-    return expectedRuntime == _runtimeScopeOf(provider);
-  }
-
-  bool _isProjectThreadTerminalEvent(AgentEvent event) {
-    return event is AgentTurnStartedEvent ||
-        event is AgentTurnCompletedEvent ||
-        event is AgentThreadStatusChangedEvent ||
-        event is AgentThreadNameUpdatedEvent ||
-        event is AgentThreadArchivedEvent ||
-        event is AgentThreadUnarchivedEvent ||
-        event is AgentThreadDeletedEvent ||
-        event is AgentThreadClosedEvent;
-  }
-
-  /// 解析 thread 所属 provider；必要时切换 active 以便后续写操作落到正确后端。
-  Future<AgentProvider?> _providerForThread({
+  /// 按 thread 的稳定 provider 归属执行 global 操作，不改变当前 active provider。
+  Future<T?> _runForThread<T>({
     required String projectPath,
     required String threadId,
+    required Future<T> Function(AgentProvider provider) operation,
   }) async {
+    await providerController.loadSettings();
     final ownerId = _providerIdForThread(projectPath, threadId);
-    if (ownerId != null &&
-        ownerId != providerController.activeProviderId &&
-        providerController.isProviderEnabled(ownerId)) {
-      try {
-        await providerController.setActiveProvider(ownerId);
-      } catch (error, stackTrace) {
-        _log.w(
-          'Could not switch active provider to $ownerId for thread $threadId',
-          error: error,
-          stackTrace: stackTrace,
-        );
-      }
+    if (ownerId == null || !providerController.isProviderEnabled(ownerId)) {
+      return null;
     }
-    return _ensureProviderEventSubscription();
+    final config = providerController.providerConfigById(ownerId);
+    if (config == null) {
+      return null;
+    }
+    return globalRuntime.run(
+      config,
+      (runtime) => operation(runtime.bundle.runtime.provider),
+    );
   }
 
   String? _providerIdForThread(String projectPath, String threadId) {
@@ -1004,77 +893,6 @@ class ProjectThreadsController {
       }
     }
     return null;
-  }
-
-  void _handleProviderEvent(AgentEvent event) {
-    switch (event) {
-      case AgentTurnStartedEvent():
-        _setThreadRunning(event.turn.sessionId, isRunning: true);
-      case AgentTurnCompletedEvent():
-        _setThreadRunning(event.sessionId, isRunning: false);
-      case AgentThreadStatusChangedEvent():
-        _applyThreadStatusChanged(event);
-      case AgentThreadNameUpdatedEvent():
-        _applyThreadNameUpdated(event);
-      case AgentThreadArchivedEvent():
-        _applyThreadRemoved(event.threadId, notifyCleared: true);
-      case AgentThreadUnarchivedEvent():
-        _applyThreadRemoved(event.threadId, notifyCleared: true);
-      case AgentThreadDeletedEvent():
-        _applyThreadRemoved(event.threadId, notifyCleared: true);
-      case AgentThreadClosedEvent():
-        _setThreadRunning(event.threadId, isRunning: false);
-        _applyThreadClosed(event.threadId);
-      default:
-        return;
-    }
-  }
-
-  void _applyThreadStatusChanged(AgentThreadStatusChangedEvent event) {
-    final projectPath = _projectPathByThreadId[event.threadId];
-    if (projectPath == null) {
-      return;
-    }
-    viewModel.updateThreadRuntimeStatus(
-      projectPath: projectPath,
-      threadId: event.threadId,
-      status: event.status,
-      waitingOnApproval: event.waitingOnApproval,
-      waitingOnUserInput: event.waitingOnUserInput,
-    );
-  }
-
-  void _applyThreadNameUpdated(AgentThreadNameUpdatedEvent event) {
-    final projectPath = _projectPathByThreadId[event.threadId];
-    if (projectPath == null) {
-      return;
-    }
-    viewModel.updateThreadTitle(
-      projectPath: projectPath,
-      threadId: event.threadId,
-      title: event.threadName,
-    );
-  }
-
-  void _applyThreadRemoved(String threadId, {required bool notifyCleared}) {
-    final projectPath = _projectPathByThreadId[threadId];
-    if (projectPath == null) {
-      return;
-    }
-    _removeThreadFromList(
-      projectPath: projectPath,
-      threadId: threadId,
-      notifyCleared: notifyCleared,
-    );
-  }
-
-  void _applyThreadClosed(String threadId) {
-    final projectPath = _projectPathByThreadId[threadId];
-    if (projectPath == null) {
-      return;
-    }
-    // 关闭即结束执行；若非当前选中会留下完成提示，与 turn 完成路径一致。
-    _setThreadRunning(threadId, isRunning: false);
   }
 
   void _removeThreadFromList({

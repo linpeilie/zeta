@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 typedef AgentModelSelectionPersistCallback =
     Future<void> Function(
@@ -58,7 +59,7 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
   final AgentModelSelectionPersistCallback persistSelection;
   final DateTime Function() _clock;
 
-  AgentProvider? _provider;
+  AgentRuntimePort? _runtime;
   AgentModelList? _modelList;
   AgentModelSelection _modelSelection = const AgentModelSelection();
   Map<String, AgentModelPreference> _preferences =
@@ -124,8 +125,12 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
   }
 
   void bindProvider(AgentProvider provider) {
-    _provider = provider;
-    provider.updateModelSelection(_modelSelection);
+    bindRuntime(provider.bundle.runtime);
+  }
+
+  void bindRuntime(AgentRuntimePort runtime) {
+    _runtime = runtime;
+    runtime.updateModelSelection(_modelSelection);
   }
 
   /// 切换 provider 时解绑旧实例，并按新配置清空、恢复模型状态。
@@ -139,7 +144,7 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
     _saveError = null;
     _selectionNotice = null;
     _failedSnapshot = null;
-    _provider = null;
+    _runtime = null;
     _modelList = null;
     seedFromConfig(config);
   }
@@ -170,7 +175,7 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
     _confirmedPreferences = Map<String, AgentModelPreference>.from(
       config.modelPreferences,
     );
-    _provider?.updateModelSelection(_modelSelection);
+    _runtime?.updateModelSelection(_modelSelection);
     _notify();
   }
 
@@ -236,7 +241,7 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
     _confirmedPreferences = Map<String, AgentModelPreference>.from(
       _preferences,
     );
-    _provider?.updateModelSelection(_modelSelection);
+    _runtime?.updateModelSelection(_modelSelection);
     _notify();
   }
 
@@ -400,7 +405,7 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
     }
     _modelSelection = failed.selection;
     _preferences = Map<String, AgentModelPreference>.from(failed.preferences);
-    _provider?.updateModelSelection(_modelSelection);
+    _runtime?.updateModelSelection(_modelSelection);
     _saveError = null;
     _compatibilityConflict = null;
     return _schedulePersistence(field: failed.field, modelId: failed.modelId);
@@ -423,7 +428,7 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
       preference.modelId: preference,
     };
     _modelSelection = preference.selection;
-    _provider?.updateModelSelection(_modelSelection);
+    _runtime?.updateModelSelection(_modelSelection);
     _compatibilityConflict = null;
     _saveError = null;
     _selectionNotice = null;
@@ -494,7 +499,7 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
         _preferences = Map<String, AgentModelPreference>.from(
           _confirmedPreferences,
         );
-        _provider?.updateModelSelection(_modelSelection);
+        _runtime?.updateModelSelection(_modelSelection);
         _savingModelIds.clear();
         _saveError = AgentModelSelectionSaveError(
           // 模型切换失败后 UI 已回到确认态，错误必须挂在当前展开卡片上；
@@ -583,7 +588,7 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
 
     _preferences = normalizedPreferences;
     _modelSelection = nextSelection;
-    _provider?.updateModelSelection(_modelSelection);
+    _runtime?.updateModelSelection(_modelSelection);
     _needsPreferenceMigration = false;
 
     if (changed) {

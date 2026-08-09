@@ -3,38 +3,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/features/agent/application/agent_permission_request_resolver.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_permission_policy_models.dart';
 
-/// 一个 Provider 进程实例的稳定身份。
-///
-/// [providerId] 相同但 [generation] 不同的状态永不互通，避免已失效 runtime 的
-/// 异步 apply 或广播污染新进程。
-final class AgentProviderRuntimeIdentity {
-  const AgentProviderRuntimeIdentity({
-    required this.providerId,
-    required this.generation,
-    this.isProvisional = false,
-  });
-
-  final String providerId;
-  final int generation;
-  final bool isProvisional;
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        other is AgentProviderRuntimeIdentity &&
-            other.providerId == providerId &&
-            other.generation == generation &&
-            other.isProvisional == isProvisional;
-  }
-
-  @override
-  int get hashCode => Object.hash(providerId, generation, isProvisional);
-
-  @override
-  String toString() => '$providerId@$generation${isProvisional ? "?" : ""}';
-}
+export 'package:zeta/src/features/agent/application/agent_provider_runtime_identity.dart';
 
 /// application 权限状态的事实来源。
 enum AgentPermissionStateSource {
@@ -287,15 +259,19 @@ final class AgentPermissionStateStore extends ChangeNotifier {
     if (provisional == null) {
       return;
     }
-    if (provisional.threadStates.isEmpty &&
-        provisional.pendingTurnStates.isEmpty) {
+    if (provisional.providerDefaultPreference == null &&
+        provisional.threadStates.isEmpty &&
+        provisional.pendingTurnStates.isEmpty &&
+        provisional.persistenceFailure == null) {
       _discardProvisional(provisionalIdentity);
       return;
     }
     final current = stateFor(runtimeIdentity);
     _states[runtimeIdentity] = AgentPermissionState(
       runtimeIdentity: runtimeIdentity,
-      providerDefaultPreference: current.providerDefaultPreference,
+      providerDefaultPreference:
+          provisional.providerDefaultPreference ??
+          current.providerDefaultPreference,
       runtimeSelection: current.runtimeSelection,
       threadStates: <String, AgentThreadPermissionState>{
         ...provisional.threadStates,
@@ -305,13 +281,54 @@ final class AgentPermissionStateStore extends ChangeNotifier {
         ...provisional.pendingTurnStates,
         ...current.pendingTurnStates,
       },
-      source: current.source ?? provisional.source,
-      lastApplyScope: current.lastApplyScope ?? provisional.lastApplyScope,
-      warning: current.warning ?? provisional.warning,
-      persistenceFailure: current.persistenceFailure,
+      source: provisional.source ?? current.source,
+      lastApplyScope: provisional.lastApplyScope ?? current.lastApplyScope,
+      warning: provisional.warning ?? current.warning,
+      persistenceFailure:
+          provisional.persistenceFailure ?? current.persistenceFailure,
       revision: current.revision + 1,
     );
     _discardProvisional(provisionalIdentity, notify: false);
+    _notify();
+  }
+
+  /// 将同一 Provider 的旧真实 runtime 状态迁入新 generation。
+  ///
+  /// 会话级 Provider 被空闲回收时，`runtime` scope 只属于旧进程，不能迁移；
+  /// provider default、thread effective、current-turn override 与持久化失败仍属于
+  /// 逻辑会话，需要保留到下次 resume。
+  void adoptRetiredRuntimeState({
+    required AgentProviderRuntimeIdentity previousIdentity,
+    required AgentProviderRuntimeIdentity runtimeIdentity,
+  }) {
+    if (previousIdentity.isProvisional ||
+        runtimeIdentity.isProvisional ||
+        previousIdentity == runtimeIdentity ||
+        previousIdentity.providerId != runtimeIdentity.providerId ||
+        !isCurrent(runtimeIdentity)) {
+      return;
+    }
+    final previous = _states[previousIdentity];
+    if (previous == null) {
+      return;
+    }
+    final current = stateFor(runtimeIdentity);
+    _states[runtimeIdentity] = AgentPermissionState(
+      runtimeIdentity: runtimeIdentity,
+      providerDefaultPreference:
+          previous.providerDefaultPreference ??
+          current.providerDefaultPreference,
+      // runtime selection 只属于已经退出的 CLI 进程，故意不迁移。
+      threadStates: previous.threadStates,
+      pendingTurnStates: previous.pendingTurnStates,
+      source: previous.source ?? current.source,
+      lastApplyScope: previous.lastApplyScope ?? current.lastApplyScope,
+      warning: previous.warning ?? current.warning,
+      persistenceFailure:
+          previous.persistenceFailure ?? current.persistenceFailure,
+      revision: previous.revision + 1,
+    );
+    _states.remove(previousIdentity);
     _notify();
   }
 

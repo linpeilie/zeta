@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -20,6 +21,7 @@ import 'package:zeta/src/ui/core/ide_motion.dart';
 import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 
 import '../../../../testing/agent_provider_stub_base.dart';
+import '../../../../testing/agent_conversation_binding_test_harness.dart';
 
 class AgentPaneTestApp extends StatelessWidget {
   const AgentPaneTestApp({
@@ -195,13 +197,25 @@ AgentConversationViewModel createAgentPaneViewModelWithStore(
   Listenable? workspaceFilesListenable,
   bool Function()? workspaceFilesIndexReady,
 }) {
-  final controller = ActiveAgentProviderController(
+  final registry = AgentProviderRuntimeRegistry(
     providerFactory: AgentPaneFakeProviderFactory(provider),
+  );
+  addTearDown(registry.close);
+  final controller = ActiveAgentProviderController(
+    runtimeRegistry: registry,
     configStore: configStore,
   );
   addTearDown(controller.dispose);
+  final bindingHarness = AgentConversationBindingTestHarness(
+    registry: registry,
+    settings: controller,
+  );
+  addTearDown(bindingHarness.close);
+  final bindingLease = bindingHarness.acquireDraft(provider.config);
   final viewModel = AgentConversationViewModel(
     providerController: controller,
+    conversationBinding: bindingLease.binding,
+    globalRuntime: bindingHarness.globalRuntime,
     conversationModeController: conversationModeController,
     workspaceFilesProvider: workspaceFilesProvider,
     workspaceFilesListenable: workspaceFilesListenable,

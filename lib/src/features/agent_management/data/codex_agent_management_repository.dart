@@ -18,28 +18,26 @@ import 'package:zeta/src/features/agent_management/domain/agent_management_model
 /// Codex CLI 的检测、配置与日志数据仓库。
 class CodexAgentManagementRepository implements AgentCliManagementRepository {
   CodexAgentManagementRepository({
-    required this.providerFactory,
+    required this.runtimeRegistry,
     CliProcessRunner? processRunner,
     CodexCliLocator? locator,
     HttpClient Function()? httpClientFactory,
     DateTime Function()? now,
     String Function()? codexHomeProvider,
     this.modelCatalogRepository,
-    this.runtimeRegistry,
   }) : _processRunner = processRunner ?? const CliProcessRunner(),
        _locator = locator ?? const CodexCliLocator(),
        _httpClientFactory = httpClientFactory ?? HttpClient.new,
        _now = now ?? DateTime.now,
        _codexHomeProvider = codexHomeProvider ?? _defaultCodexHome;
 
-  final AgentProviderFactory providerFactory;
   final CliProcessRunner _processRunner;
   final CodexCliLocator _locator;
   final HttpClient Function() _httpClientFactory;
   final DateTime Function() _now;
   final String Function() _codexHomeProvider;
   final AgentModelCatalogRepository? modelCatalogRepository;
-  final AgentProviderRuntimeRegistry? runtimeRegistry;
+  final AgentProviderRuntimeRegistry runtimeRegistry;
 
   @override
   String get agentId => AgentDefinition.codex.id;
@@ -580,13 +578,14 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
     required AgentAccountState accountState,
     required bool forceModelRefresh,
   }) async {
-    final registry =
-        runtimeRegistry ??
-        AgentProviderRuntimeRegistry(providerFactory: providerFactory);
-    final ownsRegistry = runtimeRegistry == null;
     AgentProviderRuntimeLease? lease;
     try {
-      lease = await registry.acquire(config);
+      // 04-目标态与步骤.md §S7：检测/连接测试是"会话建立前"的一次性探测，
+      // 显式绑定全局实例，不依赖 registry 的默认 scope。
+      lease = await runtimeRegistry.acquire(
+        config,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
       final provider = lease.provider;
       await provider.initialize().timeout(
         Duration(seconds: _timeoutSeconds(config)),
@@ -618,9 +617,9 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
       if (lease != null) {
         await lease.release();
       }
-      if (ownsRegistry) {
-        await registry.close();
-      }
+      // 04-目标态与步骤.md §S8：runtimeRegistry 现在总是外部注入的共享
+      // 实例，这里不再有"自建 registry 用完即关"的分支——关闭权归它的
+      // 唯一真所有者，不归这次探测。
     }
   }
 

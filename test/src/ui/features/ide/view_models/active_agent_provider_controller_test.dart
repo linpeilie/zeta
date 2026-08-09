@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -13,8 +14,12 @@ void main() {
   group('ActiveAgentProviderController', () {
     test('persists only normalized V2 permission optionId', () async {
       final store = _RecordingConfigStore(const AgentProviderSettings());
-      final controller = ActiveAgentProviderController(
+      final registry = AgentProviderRuntimeRegistry(
         providerFactory: FakeAgentProviderFactory(_TrackingFakeAgentProvider()),
+      );
+      addTearDown(registry.close);
+      final controller = ActiveAgentProviderController(
+        runtimeRegistry: registry,
         configStore: store,
       );
       addTearDown(controller.dispose);
@@ -33,28 +38,28 @@ void main() {
       expect(encoded.keys, isNot(contains('selectedPermissionMode')));
     });
 
-    test(
-      'does not dispose the active provider when disabling another one',
-      () async {
-        // Arrange
-        final activeProvider = _TrackingFakeAgentProvider();
-        final controller = ActiveAgentProviderController(
-          providerFactory: FakeAgentProviderFactory(activeProvider),
-          configStore: MemoryAgentProviderConfigStore(
-            const AgentProviderSettings(),
-          ),
-        );
-        addTearDown(controller.dispose);
-        await controller.activeProvider();
+    test('disabling another provider does not create a runtime', () async {
+      // Arrange
+      final activeProvider = _TrackingFakeAgentProvider();
+      final registry = AgentProviderRuntimeRegistry(
+        providerFactory: FakeAgentProviderFactory(activeProvider),
+      );
+      addTearDown(registry.close);
+      final controller = ActiveAgentProviderController(
+        runtimeRegistry: registry,
+        configStore: MemoryAgentProviderConfigStore(
+          const AgentProviderSettings(),
+        ),
+      );
+      addTearDown(controller.dispose);
+      // Act
+      await controller.setProviderEnabled(grokAgentProviderId, false);
 
-        // Act
-        await controller.setProviderEnabled(grokAgentProviderId, false);
-
-        // Assert
-        expect(activeProvider.disposeCount, 0);
-        expect(controller.activeProviderId, defaultAgentProviderId);
-      },
-    );
+      // Assert
+      expect(activeProvider.disposeCount, 0);
+      expect(registry.debugProviderCount, 0);
+      expect(controller.activeProviderId, defaultAgentProviderId);
+    });
 
     test('invalidates model cache when an environment value changes', () async {
       // Arrange
@@ -72,10 +77,14 @@ void main() {
         models: _modelList('cached'),
         source: 'test',
       );
-      final controller = ActiveAgentProviderController(
+      final registry = AgentProviderRuntimeRegistry(
         providerFactory: FakeAgentProviderFactory(
           _TrackingFakeAgentProvider(initial),
         ),
+      );
+      addTearDown(registry.close);
+      final controller = ActiveAgentProviderController(
+        runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(
           AgentProviderSettings(providers: <AgentProviderConfig>[initial]),
         ),
@@ -105,14 +114,22 @@ void main() {
       () async {
         // Arrange
         final activeProvider = _TrackingFakeAgentProvider();
-        final controller = ActiveAgentProviderController(
+        final registry = AgentProviderRuntimeRegistry(
           providerFactory: FakeAgentProviderFactory(activeProvider),
+        );
+        addTearDown(registry.close);
+        final controller = ActiveAgentProviderController(
+          runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(
             const AgentProviderSettings(),
           ),
         );
         addTearDown(controller.dispose);
-        await controller.activeProvider();
+        final lease = await registry.acquire(
+          controller.activeProviderConfig,
+          scope: AgentProviderRuntimeScopeKey.global,
+        );
+        await lease.release();
 
         // Act
         await controller.setProviderEnabled(defaultAgentProviderId, false);
@@ -127,8 +144,10 @@ void main() {
     test('never chooses Cursor through the fallback list index', () async {
       // Arrange
       final factory = _RuntimePathSpyFactory();
+      final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+      addTearDown(registry.close);
       final controller = ActiveAgentProviderController(
-        providerFactory: factory,
+        runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(
           AgentProviderSettings(
             providers: <AgentProviderConfig>[
@@ -140,48 +159,37 @@ void main() {
         ),
       );
       addTearDown(controller.dispose);
-      await controller.activeProvider();
 
       // Act
       await controller.setProviderEnabled(defaultAgentProviderId, false);
-      await controller.activeProvider();
 
       // Assert
       expect(controller.activeProviderId, grokAgentProviderId);
-      expect(factory.createdProviderIds, <String>[
-        defaultAgentProviderId,
-        grokAgentProviderId,
-      ]);
+      expect(factory.createdProviderIds, isEmpty);
       expect(factory.cursorProviderCreations, 0);
     });
 
-    test('rejects and disposes a provider with the wrong identity', () async {
+    test('loading settings never creates a provider runtime', () async {
       // Arrange
       final mismatchedProvider = _TrackingFakeAgentProvider(
         AgentProviderConfig.defaultGrok,
       );
-      final controller = ActiveAgentProviderController(
+      final registry = AgentProviderRuntimeRegistry(
         providerFactory: FakeAgentProviderFactory(mismatchedProvider),
+      );
+      addTearDown(registry.close);
+      final controller = ActiveAgentProviderController(
+        runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(
           const AgentProviderSettings(),
         ),
       );
       addTearDown(controller.dispose);
 
-      // Act + Assert
-      await expectLater(
-        controller.activeProvider(),
-        throwsA(
-          isA<StateError>().having(
-            (error) => error.message,
-            'message',
-            contains(
-              'returned $grokAgentProviderId for $defaultAgentProviderId',
-            ),
-          ),
-        ),
-      );
-      expect(mismatchedProvider.disposeCount, 1);
+      await controller.loadSettings();
+
+      expect(registry.debugProviderCount, 0);
+      expect(mismatchedProvider.disposeCount, 0);
     });
 
     test(
@@ -202,8 +210,10 @@ void main() {
           ),
         );
         final factory = _RuntimePathSpyFactory();
+        final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+        addTearDown(registry.close);
         final controller = ActiveAgentProviderController(
-          providerFactory: factory,
+          runtimeRegistry: registry,
           configStore: store,
         );
         addTearDown(controller.dispose);
@@ -211,7 +221,6 @@ void main() {
 
         // Act
         await controller.loadSettings();
-        await controller.activeProvider();
 
         // Assert
         expect(controller.settings.activeProviderId, cursorAgentProviderId);
@@ -223,7 +232,7 @@ void main() {
         );
         expect(store.saveCount, 0);
         expect(store.settings.toJson(), before);
-        expect(factory.createdProviderIds, <String>[defaultAgentProviderId]);
+        expect(factory.createdProviderIds, isEmpty);
         expect(factory.cursorProviderCreations, 0);
         expect(factory.cursorCliLocatorCalls, 0);
         expect(factory.cursorProcessStarts, 0);
@@ -250,8 +259,10 @@ void main() {
           ),
         );
         final factory = _RuntimePathSpyFactory();
+        final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+        addTearDown(registry.close);
         final controller = ActiveAgentProviderController(
-          providerFactory: factory,
+          runtimeRegistry: registry,
           configStore: store,
         );
         addTearDown(controller.dispose);
@@ -263,8 +274,6 @@ void main() {
         expect(controller.hasRuntimeProvider, isFalse);
         expect(controller.enabledProviders, isEmpty);
         expect(controller.unavailableSelectionReason, contains('没有已启用'));
-        await expectLater(controller.activeProvider(), throwsStateError);
-        await expectLater(controller.activeProvider(), throwsStateError);
         expect(factory.createdProviderIds, isEmpty);
         expect(factory.cursorCliLocatorCalls, 0);
         expect(factory.cursorProcessStarts, 0);
@@ -272,6 +281,31 @@ void main() {
         expect(store.saveCount, 0);
       },
     );
+  });
+
+  // 模型目录是会话建立前的信息，只允许走全局实例。
+  group('loadActiveModelCatalog 使用 global runtime', () {
+    test('目录刷新结束后释放租约并复用全局实例', () async {
+      final factory = _MultiInstanceFakeProviderFactory();
+      final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+      addTearDown(registry.close);
+      final controller = ActiveAgentProviderController(
+        configStore: MemoryAgentProviderConfigStore(),
+        runtimeRegistry: registry,
+      );
+      addTearDown(controller.dispose);
+
+      await controller.loadActiveModelCatalog(forceRefresh: true);
+
+      expect(registry.debugLeaseCount, 0, reason: '借了要还，不能残留租约');
+      expect(factory.providers, hasLength(1));
+      final globalLease = await registry.acquire(
+        controller.activeProviderConfig,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
+      expect(globalLease.provider, same(factory.providers.single));
+      globalLease.release();
+    });
   });
 }
 
@@ -323,6 +357,19 @@ class _RuntimePathSpyFactory implements AgentProviderFactory {
       throw StateError('Cursor runtime path must remain unreachable');
     }
     return _TrackingFakeAgentProvider(config);
+  }
+}
+
+/// 与 [FakeAgentProviderFactory] 不同：每次 create 返回**新**实例，用于证明
+/// 不同 scope 拿到的是可区分的对象。
+class _MultiInstanceFakeProviderFactory implements AgentProviderFactory {
+  final List<AgentProvider> providers = <AgentProvider>[];
+
+  @override
+  AgentProvider create(AgentProviderConfig config) {
+    final provider = _TrackingFakeAgentProvider(config);
+    providers.add(provider);
+    return provider;
   }
 }
 

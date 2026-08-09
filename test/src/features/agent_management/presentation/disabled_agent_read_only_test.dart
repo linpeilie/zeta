@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
@@ -10,14 +13,18 @@ import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 
 import '../../../testing/ide_test_harness.dart';
+import '../../../testing/agent_conversation_binding_test_harness.dart';
 
 void main() {
   testWidgets('disabled Agent keeps history visible and hides the composer', (
     tester,
   ) async {
     final provider = FakeAgentProvider();
-    final providerController = ActiveAgentProviderController(
+    final registry = AgentProviderRuntimeRegistry(
       providerFactory: FakeAgentProviderFactory(provider),
+    );
+    final providerController = ActiveAgentProviderController(
+      runtimeRegistry: registry,
       configStore: MemoryAgentProviderConfigStore(
         AgentProviderSettings(
           providers: <AgentProviderConfig>[
@@ -26,12 +33,23 @@ void main() {
         ),
       ),
     );
+    final bindingHarness = AgentConversationBindingTestHarness(
+      registry: registry,
+      settings: providerController,
+    );
+    final bindingLease = bindingHarness.acquireDraft(
+      AgentProviderConfig.defaultCodex.copyWith(enabled: false),
+    );
     final viewModel = AgentConversationViewModel(
       providerController: providerController,
+      conversationBinding: bindingLease.binding,
+      globalRuntime: bindingHarness.globalRuntime,
     );
     addTearDown(() {
       viewModel.dispose();
+      unawaited(bindingHarness.close());
       providerController.dispose();
+      unawaited(registry.close());
     });
 
     await viewModel.loadSettings();
@@ -70,18 +88,32 @@ void main() {
     tester,
   ) async {
     // Arrange
-    final providerController = ActiveAgentProviderController(
+    final registry = AgentProviderRuntimeRegistry(
       providerFactory: FakeAgentProviderFactory(FakeAgentProvider()),
+    );
+    final providerController = ActiveAgentProviderController(
+      runtimeRegistry: registry,
       configStore: MemoryAgentProviderConfigStore(
         const AgentProviderSettings(),
       ),
     );
+    final bindingHarness = AgentConversationBindingTestHarness(
+      registry: registry,
+      settings: providerController,
+    );
+    final bindingLease = bindingHarness.acquireDraft(
+      AgentProviderConfig.defaultCodex,
+    );
     final viewModel = AgentConversationViewModel(
       providerController: providerController,
+      conversationBinding: bindingLease.binding,
+      globalRuntime: bindingHarness.globalRuntime,
     );
     addTearDown(() {
       viewModel.dispose();
+      unawaited(bindingHarness.close());
       providerController.dispose();
+      unawaited(registry.close());
     });
     await viewModel.loadSettings();
     viewModel.updateWorkspace(

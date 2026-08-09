@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/main.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -22,6 +23,7 @@ import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 
 import '../../../testing/ide_test_harness.dart';
+import '../../../testing/agent_conversation_binding_test_harness.dart';
 
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
@@ -1329,13 +1331,25 @@ void main() {
     'updates header title when server renames a newly started thread',
     (tester) async {
       final provider = FakeAgentProvider();
-      final controller = ActiveAgentProviderController(
+      final registry = AgentProviderRuntimeRegistry(
         providerFactory: FakeAgentProviderFactory(provider),
+      );
+      addTearDown(registry.close);
+      final controller = ActiveAgentProviderController(
+        runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(),
       );
       addTearDown(controller.dispose);
+      final bindingHarness = AgentConversationBindingTestHarness(
+        registry: registry,
+        settings: controller,
+      );
+      addTearDown(bindingHarness.close);
+      final bindingLease = bindingHarness.acquireDraft(provider.config);
       final viewModel = AgentConversationViewModel(
         providerController: controller,
+        conversationBinding: bindingLease.binding,
+        globalRuntime: bindingHarness.globalRuntime,
       );
       addTearDown(viewModel.dispose);
       viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
@@ -1388,13 +1402,25 @@ void main() {
     tester,
   ) async {
     final provider = FakeAgentProvider();
-    final controller = ActiveAgentProviderController(
+    final registry = AgentProviderRuntimeRegistry(
       providerFactory: FakeAgentProviderFactory(provider),
+    );
+    addTearDown(registry.close);
+    final controller = ActiveAgentProviderController(
+      runtimeRegistry: registry,
       configStore: MemoryAgentProviderConfigStore(),
     );
     addTearDown(controller.dispose);
+    final bindingHarness = AgentConversationBindingTestHarness(
+      registry: registry,
+      settings: controller,
+    );
+    addTearDown(bindingHarness.close);
+    final bindingLease = bindingHarness.acquireDraft(provider.config);
     final viewModel = AgentConversationViewModel(
       providerController: controller,
+      conversationBinding: bindingLease.binding,
+      globalRuntime: bindingHarness.globalRuntime,
     );
     addTearDown(viewModel.dispose);
     viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
@@ -1510,13 +1536,25 @@ void main() {
         ),
       },
     );
-    final controller = ActiveAgentProviderController(
+    final registry = AgentProviderRuntimeRegistry(
       providerFactory: FakeAgentProviderFactory(provider),
+    );
+    addTearDown(registry.close);
+    final controller = ActiveAgentProviderController(
+      runtimeRegistry: registry,
       configStore: MemoryAgentProviderConfigStore(),
     );
     addTearDown(controller.dispose);
+    final bindingHarness = AgentConversationBindingTestHarness(
+      registry: registry,
+      settings: controller,
+    );
+    addTearDown(bindingHarness.close);
+    final bindingLease = bindingHarness.acquireDraft(provider.config);
     final viewModel = AgentConversationViewModel(
       providerController: controller,
+      conversationBinding: bindingLease.binding,
+      globalRuntime: bindingHarness.globalRuntime,
     );
     addTearDown(viewModel.dispose);
     viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
@@ -1680,13 +1718,25 @@ void main() {
         ),
       },
     );
-    final controller = ActiveAgentProviderController(
+    final registry = AgentProviderRuntimeRegistry(
       providerFactory: FakeAgentProviderFactory(provider),
+    );
+    addTearDown(registry.close);
+    final controller = ActiveAgentProviderController(
+      runtimeRegistry: registry,
       configStore: MemoryAgentProviderConfigStore(),
     );
     addTearDown(controller.dispose);
+    final bindingHarness = AgentConversationBindingTestHarness(
+      registry: registry,
+      settings: controller,
+    );
+    addTearDown(bindingHarness.close);
+    final bindingLease = bindingHarness.acquireDraft(provider.config);
     final viewModel = AgentConversationViewModel(
       providerController: controller,
+      conversationBinding: bindingLease.binding,
+      globalRuntime: bindingHarness.globalRuntime,
     );
     addTearDown(viewModel.dispose);
     viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);

@@ -38,6 +38,7 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
   late AgentProviderRuntimeIdentity _runtimeIdentity;
   String? _boundThreadId;
   int _bindingGeneration = 0;
+  bool _runtimeAttached = false;
   bool _disposed = false;
   String? _lastError;
 
@@ -48,6 +49,9 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
   AgentPermissionPolicyPort? get port => _catalogController.port;
 
   bool get hasPort => port != null;
+
+  /// 当前 permission port 是否属于这个会话的 session runtime。
+  bool get isRuntimeAttached => _runtimeAttached;
 
   List<AgentPermissionOption> get options => _catalogController.options;
 
@@ -127,7 +131,11 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
     _bindingGeneration += 1;
     _catalogController.bind(port);
     final previousIdentity = _runtimeIdentity;
+    final previousRuntimeWasAttached = _runtimeAttached;
     _runtimeIdentity = runtimeIdentity ?? _runtimeIdentity;
+    // `bind` 明确表示端口属于可写 session runtime。catalog-only 必须走
+    // [bindCatalogOnly]，不能用缺省 identity 来暗示 dormant。
+    _runtimeAttached = port != null;
     _lastError = null;
     _stateStore.activateRuntime(
       _runtimeIdentity,
@@ -137,6 +145,43 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
       provisionalIdentity: previousIdentity,
       runtimeIdentity: _runtimeIdentity,
     );
+    if (!previousRuntimeWasAttached) {
+      _stateStore.adoptRetiredRuntimeState(
+        previousIdentity: previousIdentity,
+        runtimeIdentity: _runtimeIdentity,
+      );
+    }
+    _notify();
+  }
+
+  /// 仅绑定由 global runtime 读取的权限目录，不把该 port 当成会话 apply 端口。
+  ///
+  /// dormant 会话在这里选择权限只更新默认值与下一次请求快照，不会把选择错误地
+  /// apply 到全局 Provider 进程，更不会因此创建 session runtime。
+  void bindCatalogOnly({
+    required AgentPermissionPolicyPort? port,
+    required String? persistedOptionId,
+  }) {
+    if (_disposed) {
+      return;
+    }
+    _bindingGeneration += 1;
+    _runtimeAttached = false;
+    _catalogController.bind(port);
+    _stateStore.seedProviderDefault(
+      _runtimeIdentity,
+      _selectionFromId(persistedOptionId),
+    );
+    _notify();
+  }
+
+  /// 标记 session runtime 已退出；保留逻辑会话权限，清除会话 apply 能力。
+  void detachRuntime() {
+    if (_disposed || !_runtimeAttached) {
+      return;
+    }
+    _bindingGeneration += 1;
+    _runtimeAttached = false;
     _notify();
   }
 
@@ -150,6 +195,7 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
       return;
     }
     _boundThreadId = null;
+    _runtimeAttached = false;
     final normalizedProvider = providerId?.trim();
     final detachedProviderId =
         normalizedProvider == null || normalizedProvider.isEmpty
@@ -164,6 +210,7 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
         isProvisional: true,
       ),
     );
+    _runtimeAttached = false;
   }
 
   /// 仅在当前状态尚无内存默认时从配置恢复 preference。
@@ -204,6 +251,10 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
       return;
     }
     final port = this.port;
+    if (!_runtimeAttached) {
+      await _selectDormantOption(option);
+      return;
+    }
     if (port == null) {
       _lastError = '当前 Provider 不支持权限选择';
       _notify();
@@ -217,6 +268,40 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
       updateDefault: true,
       persistDefault: true,
     );
+  }
+
+  Future<void> _selectDormantOption(AgentPermissionOption option) async {
+    final selection = AgentPermissionSelection(optionId: option.id);
+    final committed = _commitApplyResult(
+      AgentPermissionApplyResult(
+        normalizedSelection: selection,
+        scope: AgentPermissionApplyScope.nextSession,
+        warning: '下次发送时生效',
+      ),
+      threadId: _boundThreadId,
+      source: AgentPermissionStateSource.userSelection,
+      updateDefault: true,
+    );
+    if (!committed) {
+      return;
+    }
+    try {
+      await persistOptionId(option.id);
+      if (!_disposed) {
+        _stateStore.clearPersistenceFailure(
+          identity: _runtimeIdentity,
+          selection: selection,
+        );
+      }
+    } catch (_) {
+      if (!_disposed) {
+        _stateStore.recordPersistenceFailure(
+          identity: _runtimeIdentity,
+          selection: selection,
+          message: '权限偏好已更新，但保存失败；可重试',
+        );
+      }
+    }
   }
 
   /// 外部选择同步；无 port/无需 RPC 时也构造统一的 currentSession result 提交。

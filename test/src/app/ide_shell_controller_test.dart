@@ -113,8 +113,9 @@ void main() {
       expect(codexBackend.anyUnsubscribed('thread-a'), isFalse);
       expect(
         codexBackend.instances,
-        hasLength(1),
-        reason: '项目列表和多个任务页必须复用同一个 Provider 运行时',
+        hasLength(2),
+        reason:
+            '同一 shell 下不同 thread 各自独立一个 session scope 实例（S4 翻开关后），不再复用同一个运行时',
       );
     },
   );
@@ -204,6 +205,7 @@ void main() {
         directory: directory,
         threadIds: const <String>['thread-a'],
         selectedThreadId: 'thread-a',
+        startSessionRuntime: true,
       );
       final shell = harness.shell;
       final provider = harness.provider;
@@ -321,6 +323,7 @@ void main() {
       directory: directory,
       threadIds: <String>[fixture.sessionId],
       selectedThreadId: fixture.sessionId,
+      startSessionRuntime: true,
     );
     final shell = harness.shell;
     final provider = harness.provider;
@@ -402,6 +405,7 @@ void main() {
       directory: directory,
       threadIds: const <String>['thread-a'],
       selectedThreadId: 'thread-a',
+      startSessionRuntime: true,
     );
     final shell = harness.shell;
     final provider = harness.provider;
@@ -514,6 +518,7 @@ void main() {
       directory: directory,
       threadIds: const <String>['thread-a', 'thread-b'],
       selectedThreadId: 'thread-a',
+      startSessionRuntime: true,
     );
     final shell = harness.shell;
     final provider = harness.provider;
@@ -1171,11 +1176,12 @@ Future<_SelectedThreadShellHarness> _openShellWithSelectedThread({
   required Directory directory,
   required List<String> threadIds,
   required String selectedThreadId,
+  bool startSessionRuntime = false,
 }) async {
   final backend = _ProviderBackend(
     config: AgentProviderConfig.defaultCodex,
     threadHistories: const <String, AgentThreadHistorySnapshot>{},
-    completeTurns: false,
+    completeTurns: startSessionRuntime,
     threadPages: <AgentThreadPage>[
       AgentThreadPage(
         threads: <AgentThreadSummary>[
@@ -1217,6 +1223,10 @@ Future<_SelectedThreadShellHarness> _openShellWithSelectedThread({
       .singleWhere((thread) => thread.id == selectedThreadId);
   await shell.selectProjectThread(directory.path, thread);
   await _flushAsync();
+  if (startSessionRuntime) {
+    await shell.selectedAgentViewModel.sendMessage('bind test runtime');
+    await _flushAsync();
+  }
 
   return _SelectedThreadShellHarness(
     shell: shell,
@@ -1257,7 +1267,7 @@ class _SelectedThreadShellHarness {
   final _ProviderBackend backend;
   final _SessionSaveRecorder sessionSaves;
 
-  _ShellTestAgentProvider get provider => backend.instances.single;
+  _ShellTestAgentProvider get provider => backend.instances.last;
 }
 
 class _SessionSaveRecorder {

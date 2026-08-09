@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
@@ -73,7 +75,7 @@ void main() {
       expect((second.provider as _FakeProvider).disposeCount, 1);
     });
 
-    test('重建 Provider 时递增 runtime generation 并退役旧状态', () async {
+    test('重建 Provider 时递增 runtime generation', () async {
       final factory = _CountingProviderFactory();
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
       final first = await registry.acquire(AgentProviderConfig.defaultGrok);
@@ -85,11 +87,6 @@ void main() {
       expect(first.isCurrent, isFalse);
       expect(second.runtimeIdentity.providerId, firstIdentity.providerId);
       expect(second.runtimeIdentity.generation, firstIdentity.generation + 1);
-      expect(registry.permissionStateStore.isCurrent(firstIdentity), isFalse);
-      expect(
-        registry.permissionStateStore.isCurrent(second.runtimeIdentity),
-        isTrue,
-      );
 
       await first.release();
       await second.release();
@@ -223,6 +220,241 @@ void main() {
       await second.release();
     });
   });
+
+  // 04 §S2：_entries 的 key 扩成 (providerId, scope)。这一步仍是行为中性的——
+  // acquire 不传 scope 时默认 AgentProviderRuntimeScopeKey.global，等价于改造前
+  // "每个 Provider ID 一个实例"。下面的用例钉住复合键之后的新增行为：不同 scope
+  // 互相独立、invalidateScope 只影响单个 scope、invalidateProvider 仍然清空全部
+  // scope（兼容旧调用方）。
+  group('scope 复合键（S2）', () {
+    test('不传 scope 时默认走 global，与显式传入 global 是同一个实例', () async {
+      final factory = _CountingProviderFactory();
+      final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+      addTearDown(registry.close);
+
+      final implicit = await registry.acquire(AgentProviderConfig.defaultCodex);
+      final explicit = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
+
+      expect(factory.createCount, 1);
+      expect(identical(implicit.provider, explicit.provider), isTrue);
+
+      await implicit.release();
+      await explicit.release();
+    });
+
+    test('两个不同 session scope 各自拿到独立实例', () async {
+      final factory = _CountingProviderFactory();
+      final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+      addTearDown(registry.close);
+
+      final sessionA = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: const AgentProviderRuntimeScopeKey.session('entry-a'),
+      );
+      final sessionB = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: const AgentProviderRuntimeScopeKey.session('entry-b'),
+      );
+      // 同一个 session id 再次获取应复用同一个实例。
+      final sessionAAgain = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: const AgentProviderRuntimeScopeKey.session('entry-a'),
+      );
+
+      expect(factory.createCount, 2);
+      expect(identical(sessionA.provider, sessionB.provider), isFalse);
+      expect(identical(sessionA.provider, sessionAAgain.provider), isTrue);
+
+      await sessionA.release();
+      await sessionB.release();
+      await sessionAAgain.release();
+    });
+
+    test('global 与 session scope 互不干扰：各自独立实例，互相失效不影响对方', () async {
+      final factory = _CountingProviderFactory();
+      final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+      addTearDown(registry.close);
+      const sessionScope = AgentProviderRuntimeScopeKey.session('entry-a');
+
+      final global = await registry.acquire(AgentProviderConfig.defaultCodex);
+      final session = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: sessionScope,
+      );
+
+      expect(factory.createCount, 2);
+      expect(identical(global.provider, session.provider), isFalse);
+
+      await registry.invalidateScope(
+        AgentProviderConfig.defaultCodex.id,
+        sessionScope,
+      );
+
+      expect(global.isCurrent, isTrue);
+      expect(session.isCurrent, isFalse);
+      expect(registry.debugProviderCount, 1);
+
+      await global.release();
+    });
+
+    test('invalidateScope 只关闭指定 scope 的实例，其余 scope 不受影响', () async {
+      final factory = _CountingProviderFactory();
+      final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+      addTearDown(registry.close);
+      const scopeA = AgentProviderRuntimeScopeKey.session('entry-a');
+      const scopeB = AgentProviderRuntimeScopeKey.session('entry-b');
+
+      final leaseA = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: scopeA,
+      );
+      final leaseB = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: scopeB,
+      );
+
+      await registry.invalidateScope(
+        AgentProviderConfig.defaultCodex.id,
+        scopeA,
+      );
+
+      expect(leaseA.isCurrent, isFalse);
+      expect(leaseB.isCurrent, isTrue);
+      expect(registry.debugProviderCount, 1);
+      expect(
+        factory.providers
+            .firstWhere((provider) => identical(provider, leaseA.provider))
+            .disposeCount,
+        1,
+      );
+      expect(
+        factory.providers
+            .firstWhere((provider) => identical(provider, leaseB.provider))
+            .disposeCount,
+        0,
+      );
+
+      await leaseB.release();
+    });
+
+    test('invalidateProvider 仍会关闭该 Provider 在全部 scope 下的实例', () async {
+      final factory = _CountingProviderFactory();
+      final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+      addTearDown(registry.close);
+
+      final global = await registry.acquire(AgentProviderConfig.defaultCodex);
+      final sessionA = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: const AgentProviderRuntimeScopeKey.session('entry-a'),
+      );
+      final sessionB = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: const AgentProviderRuntimeScopeKey.session('entry-b'),
+      );
+      // 不同 Provider 的实例不应被误伤。
+      final grok = await registry.acquire(AgentProviderConfig.defaultGrok);
+
+      await registry.invalidateProvider(AgentProviderConfig.defaultCodex.id);
+
+      expect(global.isCurrent, isFalse);
+      expect(sessionA.isCurrent, isFalse);
+      expect(sessionB.isCurrent, isFalse);
+      expect(grok.isCurrent, isTrue);
+      expect(registry.debugProviderCount, 1);
+
+      await grok.release();
+    });
+
+    test('不同 session scope 各自维护独立的 runtime generation，identity 不会撞车', () async {
+      final factory = _CountingProviderFactory();
+      final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+      addTearDown(registry.close);
+
+      final global = await registry.acquire(AgentProviderConfig.defaultCodex);
+      final session = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: const AgentProviderRuntimeScopeKey.session('entry-a'),
+      );
+
+      expect(global.runtimeIdentity, isNot(session.runtimeIdentity));
+      expect(
+        global.runtimeIdentity.generation,
+        isNot(session.runtimeIdentity.generation),
+      );
+
+      await global.release();
+      await session.release();
+    });
+  });
+
+  group('Binding runtime 隔离', () {
+    test('session runtime 与 global runtime 使用不同 identity', () async {
+      final registry = AgentProviderRuntimeRegistry(
+        providerFactory: _CountingProviderFactory(),
+      );
+      addTearDown(registry.close);
+
+      final global = await registry.acquire(AgentProviderConfig.defaultCodex);
+      final session = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: const AgentProviderRuntimeScopeKey.session('binding-1'),
+      );
+
+      expect(session.runtimeIdentity, isNot(global.runtimeIdentity));
+      expect(
+        session.runtimeIdentity.providerId,
+        global.runtimeIdentity.providerId,
+      );
+      await global.release();
+      await session.release();
+    });
+
+    test('同 scope 重建会等待旧进程 dispose，旧 identity 不能误杀新实例', () async {
+      const scope = AgentProviderRuntimeScopeKey.session('binding-1');
+      final factory = _GatedDisposeProviderFactory();
+      final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+      addTearDown(registry.close);
+      final first = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: scope,
+      );
+
+      final invalidating = registry.invalidateScopeIfCurrent(
+        providerId: defaultAgentProviderId,
+        scope: scope,
+        expectedIdentity: first.runtimeIdentity,
+      );
+      await factory.disposeStarted.future;
+      var acquiredReplacement = false;
+      final replacementFuture = registry
+          .acquire(AgentProviderConfig.defaultCodex, scope: scope)
+          .then((lease) {
+            acquiredReplacement = true;
+            return lease;
+          });
+      await Future<void>.delayed(Duration.zero);
+
+      expect(acquiredReplacement, isFalse);
+      expect(factory.providers, hasLength(1));
+
+      factory.allowDispose.complete();
+      await invalidating;
+      final replacement = await replacementFuture;
+      expect(factory.providers, hasLength(2));
+      expect(
+        await registry.invalidateScopeIfCurrent(
+          providerId: defaultAgentProviderId,
+          scope: scope,
+          expectedIdentity: first.runtimeIdentity,
+        ),
+        isFalse,
+      );
+      expect(replacement.isCurrent, isTrue);
+    });
+  });
 }
 
 final class _CountingProviderFactory extends AgentProviderFactory {
@@ -267,4 +499,48 @@ final class _SingleProviderFactory extends AgentProviderFactory {
 
   @override
   AgentProvider create(AgentProviderConfig config) => provider;
+}
+
+final class _GatedDisposeProviderFactory implements AgentProviderFactory {
+  final List<_GatedDisposeProvider> providers = <_GatedDisposeProvider>[];
+  final Completer<void> disposeStarted = Completer<void>();
+  final Completer<void> allowDispose = Completer<void>();
+
+  @override
+  AgentProvider create(AgentProviderConfig config) {
+    final provider = _GatedDisposeProvider(
+      config,
+      isFirst: providers.isEmpty,
+      disposeStarted: disposeStarted,
+      allowDispose: allowDispose,
+    );
+    providers.add(provider);
+    return provider;
+  }
+}
+
+final class _GatedDisposeProvider extends Fake implements AgentProvider {
+  _GatedDisposeProvider(
+    this.config, {
+    required this.isFirst,
+    required this.disposeStarted,
+    required this.allowDispose,
+  });
+
+  @override
+  final AgentProviderConfig config;
+  final bool isFirst;
+  final Completer<void> disposeStarted;
+  final Completer<void> allowDispose;
+
+  @override
+  Future<void> dispose() async {
+    if (!isFirst) {
+      return;
+    }
+    if (!disposeStarted.isCompleted) {
+      disposeStarted.complete();
+    }
+    await allowDispose.future;
+  }
 }

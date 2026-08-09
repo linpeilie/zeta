@@ -231,8 +231,9 @@
    已完成身份、边界和终态决策
 2. 共享层回归：用 Provider 无关 fixture 跑 CoalescingPolicy/Buffer/Pipeline/TimelineStore，
    这些测试不应该依赖新 Provider 的任何类或 fixture
-3. 运行时复用测试：同一 Provider ID 的并发租约只创建一个实例；
-   多 session 并存时任一 session 的恢复、发送或结束不破坏其他 session
+3. 运行时复用测试：同一 scope（`global` 或同一个 `session(entryId)`）内并发租约只创建
+   一个实例，不同 session scope 各自独立；多 session 并存时任一 session 的恢复、发送
+   或结束不破坏其他 session
 4. 跑 G1 自查命令，贴结果
 
 结果写入同一任务文件夹的 04-验收报告.md。

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
@@ -57,9 +58,12 @@ void main() {
     // Arrange
     final provider = FakeAgentProvider();
     final providerFactory = FakeAgentProviderFactory(provider);
+    final registry = AgentProviderRuntimeRegistry(
+      providerFactory: providerFactory,
+    );
     final cursorRepository = _FakeCursorManagementRepository();
     final providerController = ActiveAgentProviderController(
-      providerFactory: providerFactory,
+      runtimeRegistry: registry,
       configStore: MemoryAgentProviderConfigStore(
         const AgentProviderSettings(
           providers: <AgentProviderConfig>[
@@ -77,6 +81,7 @@ void main() {
     );
     addTearDown(controller.dispose);
     addTearDown(providerController.dispose);
+    addTearDown(registry.close);
 
     // Act
     await controller.initialize(autoDetect: true);
@@ -103,11 +108,13 @@ class _ManagementHarness {
     required this.root,
     required this.providerController,
     required this.controller,
+    required this._registry,
   });
 
   final Directory root;
   final ActiveAgentProviderController providerController;
   final AgentManagementController controller;
+  final AgentProviderRuntimeRegistry _registry;
 
   static _ManagementHarness create({required AgentProviderConfig codexConfig}) {
     final root = Directory.systemTemp.createTempSync(
@@ -115,8 +122,11 @@ class _ManagementHarness {
     );
     final provider = FakeAgentProvider();
     final providerFactory = FakeAgentProviderFactory(provider);
-    final providerController = ActiveAgentProviderController(
+    final registry = AgentProviderRuntimeRegistry(
       providerFactory: providerFactory,
+    );
+    final providerController = ActiveAgentProviderController(
+      runtimeRegistry: registry,
       configStore: MemoryAgentProviderConfigStore(
         AgentProviderSettings(
           providers: <AgentProviderConfig>[
@@ -127,7 +137,7 @@ class _ManagementHarness {
       ),
     );
     final repository = CodexAgentManagementRepository(
-      providerFactory: providerFactory,
+      runtimeRegistry: registry,
       codexHomeProvider: () => root.path,
     );
     final controller = AgentManagementController(
@@ -140,12 +150,14 @@ class _ManagementHarness {
       root: root,
       providerController: providerController,
       controller: controller,
+      registry: registry,
     );
   }
 
   Future<void> dispose() async {
     controller.dispose();
     providerController.dispose();
+    await _registry.close();
     if (await root.exists()) {
       await root.delete(recursive: true);
     }

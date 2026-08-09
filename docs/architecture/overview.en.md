@@ -117,6 +117,26 @@ its own data files  +  neutral domain contracts  +  factory wiring  +  contract 
 
 If you find yourself needing to change a shared layer, stop and open an issue — that usually means the abstraction is wrong.
 
+## Conversation bindings and provider lifecycle
+
+Panes and view models never own provider processes directly:
+
+```mermaid
+flowchart LR
+    Settings["ProviderSettingsController"] --> Global["ProviderGlobalRuntime"]
+    Global --> Registry["ProviderRuntimeRegistry"]
+    Manager["ConversationBindingManager"] --> Binding["ConversationBinding"]
+    Binding --> Registry
+    VM["ConversationViewModel"] --> Global
+    VM --> Binding
+```
+
+- The registry is the sole owner of instances and child processes. There is one non-reaped global runtime per provider ID.
+- A binding uniquely represents one logical conversation by draft/thread key and owns its session runtime, event generation, permissions, and active operations.
+- Creating a draft, opening a thread, or reading history/models/skills does not start a session runtime. Only the first submitted turn calls `beginTurn()`.
+- Late cancel, steer, and interaction responses may only use `runCurrent()` and fail closed after runtime reclamation.
+- The manager runs a single-flight sweep every minute. A session is reaped only after ten idle minutes with no active turn/RPC, using an exact runtime identity; a replacement waits for the old process to finish disposing.
+
 ## Three kinds of approval — don't conflate them
 
 This is the most common newcomer trap. They all look like "show a card and wait for a click", but they are **three independent domain semantics** that do not share request/decision models:

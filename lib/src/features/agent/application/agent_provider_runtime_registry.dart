@@ -1,57 +1,72 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
-import 'package:zeta/src/features/agent/application/agent_permission_state_store.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 
 final _log = loggerFor('zeta.agent.runtime_registry');
 
+/// registry 内部使用的复合键：Provider ID + 所属 [AgentProviderRuntimeScopeKey]。
+typedef _RuntimeKey = ({String providerId, AgentProviderRuntimeScopeKey scope});
+
 /// 应用级 Provider 运行时注册表。
 ///
-/// 同一个 Provider ID 在一个 Zeta 进程内只对应一个运行实例。页面、任务工作区、
-/// 项目列表和诊断功能通过 [AgentProviderRuntimeLease] 共享实例，不再分别拉起
-/// app-server 或 stdio 子进程。
+/// 每个 Provider 在每个 [AgentProviderRuntimeScopeKey] 下各自维护一份运行实例；
+/// 同一 (providerId, scope) 只会有一个。未显式指定 `scope` 时默认为
+/// [AgentProviderRuntimeScopeKey.global]，行为等价于历史上"每个 Provider ID
+/// 一个实例"。页面、任务工作区、项目列表和诊断功能通过 [AgentProviderRuntimeLease]
+/// 共享同一 scope 下的实例，不再分别拉起 app-server 或 stdio 子进程。
 class AgentProviderRuntimeRegistry extends ChangeNotifier {
-  AgentProviderRuntimeRegistry({
-    required this.providerFactory,
-    AgentPermissionStateStore? permissionStateStore,
-  }) : permissionStateStore =
-           permissionStateStore ?? AgentPermissionStateStore(),
-       _ownsPermissionStateStore = permissionStateStore == null;
+  AgentProviderRuntimeRegistry({required this.providerFactory});
 
   final AgentProviderFactory providerFactory;
-  final AgentPermissionStateStore permissionStateStore;
-  final bool _ownsPermissionStateStore;
 
-  final Map<String, _AgentProviderRuntimeEntry> _entries =
-      <String, _AgentProviderRuntimeEntry>{};
+  final Map<_RuntimeKey, _AgentProviderRuntimeEntry> _entries =
+      <_RuntimeKey, _AgentProviderRuntimeEntry>{};
+  final Map<_RuntimeKey, Future<void>> _closingByKey =
+      <_RuntimeKey, Future<void>>{};
+
+  // generation 按 providerId 跨 scope 单调递增，保证旧候选中的 identity
+  // 永远不会与后来创建的 session runtime 相等。
   final Map<String, int> _generationByProviderId = <String, int>{};
   bool _closed = false;
   Future<void>? _closeFuture;
 
-  /// 获取指定 Provider 的共享运行时租约。
+  /// 获取指定 Provider 在指定 [scope] 下的共享运行时租约。
   ///
-  /// 创建过程会在首次 `await` 前登记实例，因此同一事件循环中的并发调用也只会
-  /// 触发一次 factory 创建。影响进程启动的配置变化会先关闭旧实例再创建新实例。
-  Future<AgentProviderRuntimeLease> acquire(AgentProviderConfig config) async {
+  /// 未显式传入 `scope` 时默认为 [AgentProviderRuntimeScopeKey.global]。创建过程
+  /// 会在首次 `await` 前登记实例，因此同一事件循环中的并发调用也只会触发一次
+  /// factory 创建。影响进程启动的配置变化会先关闭旧实例再创建新实例。
+  Future<AgentProviderRuntimeLease> acquire(
+    AgentProviderConfig config, {
+    AgentProviderRuntimeScopeKey scope = AgentProviderRuntimeScopeKey.global,
+  }) async {
+    final key = (providerId: config.id, scope: scope);
     while (true) {
       if (_closed) {
         throw StateError('Agent provider runtime registry is closed');
       }
 
-      final existing = _entries[config.id];
+      // 同一个逻辑会话的旧进程必须彻底退出后才能拉起新进程。仅从 _entries
+      // 移除旧 entry 会留下一个 dispose/acquire 窗口，使只能承载单会话的 CLI
+      // 在短时间内出现两个同 scope 进程。
+      final closing = _closingByKey[key];
+      if (closing != null) {
+        await closing;
+        continue;
+      }
+
+      final existing = _entries[key];
       if (existing != null) {
         if (_requiresRuntimeRestart(existing.provider.config, config)) {
-          await _invalidateEntry(config.id, existing);
+          await _invalidateEntry(key, existing);
           continue;
         }
         return _createLease(existing);
       }
 
-      _log.t('Creating application Agent provider: ${config.id}');
+      _log.t('Creating application Agent provider: ${config.id} ($scope)');
       final provider = providerFactory.create(config);
       if (provider.config.id != config.id) {
         // 测试/嵌入宿主的简化 factory 可能为不同配置返回同一对象；若该对象已由
@@ -78,10 +93,10 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
         providerId: config.id,
         generation: generation,
       );
-      final entry = _AgentProviderRuntimeEntry(provider, identity);
+      final entry = _AgentProviderRuntimeEntry(provider, identity, scope);
       // acquire 在此之前没有让出执行权；若未来 factory 改成异步，这个保护仍可避免
       // 覆盖已登记的共享实例。
-      final raced = _entries[config.id];
+      final raced = _entries[key];
       if (raced != null) {
         if (!identical(raced.provider, provider) &&
             !_isRegisteredProvider(provider)) {
@@ -90,29 +105,53 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
         continue;
       }
       _generationByProviderId[config.id] = generation;
-      _entries[config.id] = entry;
-      final configuredOptionId = config.resolvedPermissionOptionId?.trim();
-      permissionStateStore.activateRuntime(
-        identity,
-        initialProviderDefault:
-            configuredOptionId == null || configuredOptionId.isEmpty
-            ? null
-            : AgentPermissionSelection(optionId: configuredOptionId),
-      );
+      _entries[key] = entry;
       notifyListeners();
       return _createLease(entry);
     }
   }
 
-  /// 关闭并移除指定 Provider 的共享运行时。
+  /// 关闭并移除指定 Provider 在**全部** scope 下的共享运行时。
   ///
   /// 所有指向旧实例的租约会立即失效；控制器收到通知后会在下一次访问时重新获取。
   Future<void> invalidateProvider(String providerId) async {
-    final entry = _entries[providerId];
+    final matches = _entries.entries
+        .where((entry) => entry.key.providerId == providerId)
+        .toList(growable: false);
+    await Future.wait(
+      matches.map((entry) => _invalidateEntry(entry.key, entry.value)),
+    );
+  }
+
+  /// 关闭并移除指定 Provider 在**单个** [scope] 下的共享运行时；其余 scope 不受影响。
+  Future<void> invalidateScope(
+    String providerId,
+    AgentProviderRuntimeScopeKey scope,
+  ) async {
+    final key = (providerId: providerId, scope: scope);
+    final entry = _entries[key];
     if (entry == null) {
       return;
     }
-    await _invalidateEntry(providerId, entry);
+    await _invalidateEntry(key, entry);
+  }
+
+  /// 仅当 [scope] 仍指向 [expectedIdentity] 时失效运行时。
+  ///
+  /// 空闲扫描必须使用这个入口，避免扫描快照中的旧候选在 await 之后误杀同一
+  /// scope 下后来创建的新实例（ABA）。
+  Future<bool> invalidateScopeIfCurrent({
+    required String providerId,
+    required AgentProviderRuntimeScopeKey scope,
+    required AgentProviderRuntimeIdentity expectedIdentity,
+  }) async {
+    final key = (providerId: providerId, scope: scope);
+    final entry = _entries[key];
+    if (entry == null || entry.identity != expectedIdentity) {
+      return false;
+    }
+    await _invalidateEntry(key, entry);
+    return true;
   }
 
   /// 关闭注册表拥有的全部 Provider 进程。
@@ -141,9 +180,8 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
   }
 
   bool _isCurrent(_AgentProviderRuntimeEntry entry) {
-    return !_closed &&
-        !entry.invalidated &&
-        identical(_entries[entry.provider.config.id], entry);
+    final key = (providerId: entry.provider.config.id, scope: entry.scope);
+    return !_closed && !entry.invalidated && identical(_entries[key], entry);
   }
 
   bool _isRegisteredProvider(AgentProvider provider) {
@@ -157,17 +195,24 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
   }
 
   Future<void> _invalidateEntry(
-    String providerId,
+    _RuntimeKey key,
     _AgentProviderRuntimeEntry expected,
   ) async {
-    if (!identical(_entries[providerId], expected)) {
+    if (!identical(_entries[key], expected)) {
       return;
     }
-    _entries.remove(providerId);
+    _entries.remove(key);
     expected.invalidated = true;
-    permissionStateStore.retireRuntime(expected.identity);
     notifyListeners();
-    await _disposeEntry(expected);
+    final disposing = _disposeEntry(expected);
+    _closingByKey[key] = disposing;
+    try {
+      await disposing;
+    } finally {
+      if (identical(_closingByKey[key], disposing)) {
+        _closingByKey.remove(key);
+      }
+    }
   }
 
   Future<void> _closeOnce() async {
@@ -179,13 +224,13 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
     _entries.clear();
     for (final entry in entries) {
       entry.invalidated = true;
-      permissionStateStore.retireRuntime(entry.identity);
     }
     notifyListeners();
-    await Future.wait(entries.map(_disposeEntry));
-    if (_ownsPermissionStateStore) {
-      permissionStateStore.dispose();
-    }
+    await Future.wait(<Future<void>>[
+      ...entries.map(_disposeEntry),
+      ..._closingByKey.values,
+    ]);
+    _closingByKey.clear();
   }
 
   Future<void> _disposeEntry(_AgentProviderRuntimeEntry entry) {
@@ -245,11 +290,13 @@ final class AgentProviderRuntimeLease {
 }
 
 final class _AgentProviderRuntimeEntry {
-  _AgentProviderRuntimeEntry(this.provider, this.identity);
+  _AgentProviderRuntimeEntry(this.provider, this.identity, this.scope);
 
   final AgentProvider provider;
   final AgentProviderRuntimeIdentity identity;
+  final AgentProviderRuntimeScopeKey scope;
   int leaseCount = 0;
+
   bool invalidated = false;
   Future<void>? disposeFuture;
 }

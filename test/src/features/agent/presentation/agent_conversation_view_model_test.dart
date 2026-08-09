@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:logger/logger.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -14,6 +15,7 @@ import 'package:zeta/src/features/agent/presentation/agent_conversation_view_mod
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 
 import '../../../testing/agent_provider_stub_base.dart';
+import '../../../testing/agent_conversation_binding_test_harness.dart';
 import '../../../testing/fake_agent_frame_scheduler.dart';
 
 final List<FakeAgentFrameScheduler> _uiFrameSchedulers =
@@ -875,6 +877,7 @@ void main() {
           viewModel.selectedConversationMode,
           AgentConversationModeId.defaultMode,
         );
+        await viewModel.sendMessage('bind thread two runtime');
 
         provider.emit(
           AgentThreadSettingsUpdatedEvent(
@@ -921,6 +924,7 @@ void main() {
         await viewModel.switchThread(
           _thread(id: 'thread-2', title: 'Thread two'),
         );
+        await viewModel.sendMessage('bind thread two runtime');
         final currentBefore = viewModel.permissionSnapshotForThread('thread-2');
 
         provider.emit(
@@ -1051,20 +1055,15 @@ void main() {
         await Future<void>.delayed(Duration.zero);
       }
 
-      await viewModel.switchThread(
-        _thread(id: 'thread-2', title: 'Thread two'),
+      await expectLater(
+        viewModel.switchThread(_thread(id: 'thread-2', title: 'Thread two')),
+        throwsStateError,
       );
       sendResult.complete(const AgentTurn(id: 'turn-1', sessionId: 'thread-1'));
       await oldSend;
 
-      expect(
-        modeController.state.confirmedMode,
-        AgentConversationModeId.defaultMode,
-      );
-      expect(
-        modeController.state.draftMode,
-        AgentConversationModeId.defaultMode,
-      );
+      expect(modeController.state.confirmedMode, AgentConversationModeId.plan);
+      expect(modeController.state.draftMode, AgentConversationModeId.plan);
       expect(modeController.state.pendingTurnMode, isNull);
     });
 
@@ -1254,6 +1253,7 @@ void main() {
       addTearDown(viewModel.dispose);
 
       await viewModel.switchThread(_thread(id: 'thread-1'));
+      await viewModel.sendMessage('bind runtime one');
       provider.runtimeScope = const AgentRuntimeScope(
         runtimeId: 'runtime-2',
         connectionEpoch: 2,
@@ -1270,25 +1270,6 @@ void main() {
       expect(
         viewModel.messages.map((message) => message.text),
         isNot(contains('Event from mismatched runtime')),
-      );
-
-      // Thread 切换创建的新 generation 捕获 runtime-2，后续事件恢复正常。
-      await viewModel.switchThread(
-        _thread(id: 'thread-2', title: 'Thread two'),
-      );
-      provider.emit(
-        const AgentMessageDeltaEvent(
-          messageId: 'new-runtime-message',
-          delta: 'Event from current runtime',
-          role: AgentMessageRole.agent,
-          sessionId: 'thread-2',
-        ),
-      );
-      await Future<void>.delayed(Duration.zero);
-
-      expect(
-        viewModel.messages.map((message) => message.text),
-        contains('Event from current runtime'),
       );
     });
 
@@ -2799,10 +2780,10 @@ void main() {
           },
         ),
       );
-      await Future<void>.delayed(Duration.zero);
+      await _drainTypedUiScheduling();
 
       final record = records.singleWhere(
-        (record) => record.message.startsWith('Agent provider error event: '),
+        (record) => record.message.contains('Agent provider error event: '),
       );
       final context = _structuredLogContext(
         record,
@@ -2835,7 +2816,7 @@ void main() {
 
       final record = records.singleWhere(
         (record) =>
-            record.message.startsWith('Agent provider operation failed: '),
+            record.message.contains('Agent provider operation failed: '),
       );
       final context = _structuredLogContext(
         record,
@@ -3150,9 +3131,10 @@ void main() {
       final viewModel = _createViewModel(provider);
       addTearDown(viewModel.dispose);
 
-      // loadModels 会建立事件订阅；fake 的 listModels 返回空列表，
-      // 随后手动 emit 真实模型列表来验证事件处理。
-      await viewModel.loadModels();
+      // 打开 thread 只读取 global 历史，不创建 session runtime，也不订阅 live
+      // 事件。首次发送建立 Binding runtime 后，再验证模型目录事件的处理。
+      await viewModel.switchThread(_thread());
+      await viewModel.sendMessage('bind session runtime');
       provider.emit(
         const AgentModelListEvent(
           AgentModelList(
@@ -3356,6 +3338,7 @@ void main() {
 
         await viewModel.loadModels();
         await viewModel.switchThread(_thread());
+        await viewModel.sendMessage('bind session runtime');
         provider.emit(
           const AgentSessionConfigUpdatedEvent(
             sessionId: 'thread-1',
@@ -3404,8 +3387,10 @@ void main() {
           defaultAgentProviderId: codex,
           cursorAgentProviderId: cursor,
         });
+        final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+        addTearDown(registry.close);
         final controller = ActiveAgentProviderController(
-          providerFactory: factory,
+          runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(
             AgentProviderSettings(
               providers: <AgentProviderConfig>[
@@ -3416,8 +3401,16 @@ void main() {
           ),
         );
         addTearDown(controller.dispose);
+        final bindingHarness = AgentConversationBindingTestHarness(
+          registry: registry,
+          settings: controller,
+        );
+        addTearDown(bindingHarness.close);
+        final bindingLease = bindingHarness.acquireDraft(codex.config);
         final viewModel = AgentConversationViewModel(
           providerController: controller,
+          conversationBinding: bindingLease.binding,
+          globalRuntime: bindingHarness.globalRuntime,
           uiFrameScheduler: _createUiFrameScheduler(),
         );
         addTearDown(viewModel.dispose);
@@ -3449,8 +3442,10 @@ void main() {
         final factory = _MultiFakeAgentProviderFactory(<String, AgentProvider>{
           defaultAgentProviderId: codex,
         });
+        final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+        addTearDown(registry.close);
         final controller = ActiveAgentProviderController(
-          providerFactory: factory,
+          runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(
             AgentProviderSettings(
               providers: <AgentProviderConfig>[
@@ -3462,8 +3457,16 @@ void main() {
           ),
         );
         addTearDown(controller.dispose);
+        final bindingHarness = AgentConversationBindingTestHarness(
+          registry: registry,
+          settings: controller,
+        );
+        addTearDown(bindingHarness.close);
+        final bindingLease = bindingHarness.acquireDraft(codex.config);
         final viewModel = AgentConversationViewModel(
           providerController: controller,
+          conversationBinding: bindingLease.binding,
+          globalRuntime: bindingHarness.globalRuntime,
           uiFrameScheduler: _createUiFrameScheduler(),
         );
         addTearDown(viewModel.dispose);
@@ -3496,8 +3499,10 @@ void main() {
         defaultAgentProviderId: codex,
         cursorAgentProviderId: cursor,
       });
+      final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+      addTearDown(registry.close);
       final controller = ActiveAgentProviderController(
-        providerFactory: factory,
+        runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(
           AgentProviderSettings(
             providers: <AgentProviderConfig>[
@@ -3508,8 +3513,16 @@ void main() {
         ),
       );
       addTearDown(controller.dispose);
+      final bindingHarness = AgentConversationBindingTestHarness(
+        registry: registry,
+        settings: controller,
+      );
+      addTearDown(bindingHarness.close);
+      final bindingLease = bindingHarness.acquireDraft(codex.config);
       final viewModel = AgentConversationViewModel(
         providerController: controller,
+        conversationBinding: bindingLease.binding,
+        globalRuntime: bindingHarness.globalRuntime,
         uiFrameScheduler: _createUiFrameScheduler(),
       );
       addTearDown(viewModel.dispose);
@@ -3563,13 +3576,25 @@ void main() {
           ],
         ),
       );
-      final controller = ActiveAgentProviderController(
+      final registry = AgentProviderRuntimeRegistry(
         providerFactory: _FakeAgentProviderFactory(provider),
+      );
+      addTearDown(registry.close);
+      final controller = ActiveAgentProviderController(
+        runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(),
       );
       addTearDown(controller.dispose);
+      final bindingHarness = AgentConversationBindingTestHarness(
+        registry: registry,
+        settings: controller,
+      );
+      addTearDown(bindingHarness.close);
+      final bindingLease = bindingHarness.acquireDraft(provider.config);
       final viewModel = AgentConversationViewModel(
         providerController: controller,
+        conversationBinding: bindingLease.binding,
+        globalRuntime: bindingHarness.globalRuntime,
         uiFrameScheduler: _createUiFrameScheduler(),
       );
       addTearDown(viewModel.dispose);
@@ -3593,7 +3618,7 @@ void main() {
     });
 
     test(
-      'switchActiveProvider reloads models and selection for the target',
+      'switchActiveProvider requests a separate draft and keeps this Binding',
       () async {
         // Arrange
         final codexConfig = AgentProviderConfig.defaultCodex.copyWith(
@@ -3628,13 +3653,17 @@ void main() {
             ],
           ),
         );
-        final controller = ActiveAgentProviderController(
+        final registry = AgentProviderRuntimeRegistry(
           providerFactory: _MultiFakeAgentProviderFactory(
             <String, AgentProvider>{
               defaultAgentProviderId: codex,
               grokAgentProviderId: grok,
             },
           ),
+        );
+        addTearDown(registry.close);
+        final controller = ActiveAgentProviderController(
+          runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(
             AgentProviderSettings(
               providers: <AgentProviderConfig>[codexConfig, grokConfig],
@@ -3642,8 +3671,20 @@ void main() {
           ),
         );
         addTearDown(controller.dispose);
+        final bindingHarness = AgentConversationBindingTestHarness(
+          registry: registry,
+          settings: controller,
+        );
+        addTearDown(bindingHarness.close);
+        final bindingLease = bindingHarness.acquireDraft(codexConfig);
+        String? requestedProviderId;
         final viewModel = AgentConversationViewModel(
           providerController: controller,
+          conversationBinding: bindingLease.binding,
+          globalRuntime: bindingHarness.globalRuntime,
+          onProviderSwitchRequested: (providerId) async {
+            requestedProviderId = providerId;
+          },
           uiFrameScheduler: _createUiFrameScheduler(),
         );
         addTearDown(viewModel.dispose);
@@ -3655,14 +3696,12 @@ void main() {
         await viewModel.switchActiveProvider(grokAgentProviderId);
 
         // Assert
-        expect(viewModel.models.map((model) => model.id), <String>['grok-4.5']);
-        expect(viewModel.selectedModelId, 'grok-4.5');
-        expect(grok.lastModelSelection?.modelId, 'grok-4.5');
-        expect(
-          codex.disposed,
-          isFalse,
-          reason: '切换 active Provider 只释放租约，应用级运行时继续保温',
-        );
+        expect(requestedProviderId, grokAgentProviderId);
+        expect(viewModel.activeProviderId, defaultAgentProviderId);
+        expect(viewModel.models.map((model) => model.id), <String>['gpt-5.5']);
+        expect(viewModel.selectedModelId, 'gpt-5.5');
+        expect(grok.initializeCalls, 0);
+        expect(codex.disposed, isFalse);
       },
     );
 
@@ -3683,13 +3722,17 @@ void main() {
             ),
           },
         );
-        final controller = ActiveAgentProviderController(
+        final registry = AgentProviderRuntimeRegistry(
           providerFactory: _MultiFakeAgentProviderFactory(
             <String, AgentProvider>{
               defaultAgentProviderId: codex,
               grokAgentProviderId: grok,
             },
           ),
+        );
+        addTearDown(registry.close);
+        final controller = ActiveAgentProviderController(
+          runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(
             const AgentProviderSettings(
               providers: <AgentProviderConfig>[
@@ -3700,8 +3743,16 @@ void main() {
           ),
         );
         addTearDown(controller.dispose);
+        final bindingHarness = AgentConversationBindingTestHarness(
+          registry: registry,
+          settings: controller,
+        );
+        addTearDown(bindingHarness.close);
+        final bindingLease = bindingHarness.acquireDraft(grok.config);
         final viewModel = AgentConversationViewModel(
           providerController: controller,
+          conversationBinding: bindingLease.binding,
+          globalRuntime: bindingHarness.globalRuntime,
           uiFrameScheduler: _createUiFrameScheduler(),
         );
         addTearDown(viewModel.dispose);
@@ -3767,13 +3818,23 @@ void main() {
         defaultAgentProviderId: codex,
         grokAgentProviderId: grok,
       });
+      final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+      addTearDown(registry.close);
       final controller = ActiveAgentProviderController(
-        providerFactory: factory,
+        runtimeRegistry: registry,
         configStore: configStore,
       );
       addTearDown(controller.dispose);
+      final bindingHarness = AgentConversationBindingTestHarness(
+        registry: registry,
+        settings: controller,
+      );
+      addTearDown(bindingHarness.close);
+      final bindingLease = bindingHarness.acquireDraft(codex.config);
       final viewModel = AgentConversationViewModel(
         providerController: controller,
+        conversationBinding: bindingLease.binding,
+        globalRuntime: bindingHarness.globalRuntime,
         uiFrameScheduler: _createUiFrameScheduler(),
       );
       addTearDown(viewModel.dispose);
@@ -4247,14 +4308,26 @@ AgentConversationViewModel _createViewModel(
   void Function()? onTurnCompleted,
   void Function(AgentAttentionSignal signal)? onAttention,
 }) {
-  final controller = ActiveAgentProviderController(
+  final registry = AgentProviderRuntimeRegistry(
     providerFactory: _FakeAgentProviderFactory(provider),
+  );
+  addTearDown(registry.close);
+  final controller = ActiveAgentProviderController(
+    runtimeRegistry: registry,
     configStore: MemoryAgentProviderConfigStore(),
     modelCatalogRepository: modelCatalogRepository,
   );
   addTearDown(controller.dispose);
+  final bindingHarness = AgentConversationBindingTestHarness(
+    registry: registry,
+    settings: controller,
+  );
+  addTearDown(bindingHarness.close);
+  final bindingLease = bindingHarness.acquireDraft(provider.config);
   final viewModel = AgentConversationViewModel(
     providerController: controller,
+    conversationBinding: bindingLease.binding,
+    globalRuntime: bindingHarness.globalRuntime,
     conversationModeController: conversationModeController,
     onTurnCompleted: onTurnCompleted,
     onAttention: onAttention,
@@ -4774,7 +4847,11 @@ Map<String, Object?> _structuredLogContext(
   LogEvent record, {
   required String prefix,
 }) {
-  return jsonDecode(record.message.substring(prefix.length))
+  final prefixStart = record.message.indexOf(prefix);
+  if (prefixStart < 0) {
+    throw StateError('Missing structured log prefix: $prefix');
+  }
+  return jsonDecode(record.message.substring(prefixStart + prefix.length))
       as Map<String, Object?>;
 }
 

@@ -138,6 +138,12 @@ abstract interface class AgentRuntimePort {
 
   AgentRuntimeScope? get runtimeScope;
 
+  /// 将 Composer 当前选择同步到这个运行实例。
+  ///
+  /// 这是运行时配置动作，不属于模型目录读取；通过中立端口暴露后，application /
+  /// presentation 不需要为了同步选择而持有原始 [AgentProvider]。
+  void updateModelSelection(AgentModelSelection selection);
+
   Future<void> initialize();
 
   Future<void> dispose();
@@ -319,6 +325,11 @@ final class _LegacyAgentRuntimePort implements AgentRuntimePort {
         scopeProvider.runtimeScope,
       _ => null,
     };
+  }
+
+  @override
+  void updateModelSelection(AgentModelSelection selection) {
+    provider.updateModelSelection(selection);
   }
 
   @override

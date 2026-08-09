@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zeta/src/features/agent/application/agent_conversation_binding_manager.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -8,6 +9,7 @@ import 'package:zeta/src/features/agent/presentation/agent_conversation_view_mod
 import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
 
 import '../../../testing/fake_agent_frame_scheduler.dart';
+import '../../../testing/agent_conversation_binding_test_harness.dart';
 import 'harness/agent_pane_test_harness.dart';
 
 /// 会话级 Provider 实例改造会引入「闲置回收 + 再次发送时重建」。回收销毁的只应是
@@ -24,7 +26,11 @@ void main() {
       await harness.viewModel.sendMessage('first');
       harness.scheduler.drainFrames();
 
-      expect(harness.factory.created, hasLength(1));
+      expect(
+        harness.factory.created,
+        hasLength(2),
+        reason: 'workspace 目录使用 global runtime，发送使用独立 session runtime',
+      );
       expect(harness.messageTexts, contains('first'));
 
       await harness.registry.invalidateProvider(
@@ -33,7 +39,7 @@ void main() {
       await harness.viewModel.sendMessage('second');
       harness.scheduler.drainFrames();
 
-      expect(harness.factory.created, hasLength(2));
+      expect(harness.factory.created, hasLength(3));
       expect(
         harness.messageTexts,
         containsAllInOrder(<String>['first', 'second']),
@@ -46,20 +52,37 @@ void main() {
 
       await harness.viewModel.sendMessage('first');
       harness.scheduler.drainFrames();
-      final before = harness.controller.activeProviderRuntimeIdentity;
+      final before = harness
+          .bindingHarness
+          .manager
+          .bindings
+          .values
+          .single
+          .runtimeSnapshot
+          ?.runtimeIdentity;
 
       await harness.registry.invalidateProvider(
         AgentProviderConfig.defaultCodex.id,
       );
       await harness.viewModel.sendMessage('second');
       harness.scheduler.drainFrames();
-      final after = harness.controller.activeProviderRuntimeIdentity;
+      final after = harness
+          .bindingHarness
+          .manager
+          .bindings
+          .values
+          .single
+          .runtimeSnapshot
+          ?.runtimeIdentity;
 
       expect(before, isNotNull);
       expect(after, isNotNull);
       expect(after!.generation, before!.generation + 1);
-      expect(harness.registry.permissionStateStore.isCurrent(before), isFalse);
-      expect(harness.registry.permissionStateStore.isCurrent(after), isTrue);
+      expect(harness.factory.created.first.disposed, isTrue);
+      expect(
+        harness.bindingLease.binding.permissions.isRuntimeAttached,
+        isTrue,
+      );
     });
   });
 }
@@ -68,12 +91,20 @@ final class _RecycleHarness {
   _RecycleHarness() {
     registry = AgentProviderRuntimeRegistry(providerFactory: factory);
     controller = ActiveAgentProviderController(
-      providerFactory: factory,
       configStore: MemoryAgentProviderConfigStore(),
       runtimeRegistry: registry,
     );
+    bindingHarness = AgentConversationBindingTestHarness(
+      registry: registry,
+      settings: controller,
+    );
+    bindingLease = bindingHarness.acquireDraft(
+      AgentProviderConfig.defaultCodex,
+    );
     viewModel = AgentConversationViewModel(
       providerController: controller,
+      conversationBinding: bindingLease.binding,
+      globalRuntime: bindingHarness.globalRuntime,
       uiFrameScheduler: scheduler,
     )..updateWorkspace(projectPath: '/repo', contextFilePath: null);
   }
@@ -82,6 +113,8 @@ final class _RecycleHarness {
   final FakeAgentFrameScheduler scheduler = FakeAgentFrameScheduler();
   late final AgentProviderRuntimeRegistry registry;
   late final ActiveAgentProviderController controller;
+  late final AgentConversationBindingTestHarness bindingHarness;
+  late final AgentConversationBindingLease bindingLease;
   late final AgentConversationViewModel viewModel;
 
   List<String> get messageTexts =>
@@ -89,6 +122,7 @@ final class _RecycleHarness {
 
   Future<void> dispose() async {
     viewModel.dispose();
+    await bindingHarness.close();
     controller.dispose();
     await registry.close();
   }
@@ -97,12 +131,22 @@ final class _RecycleHarness {
 /// 与 [AgentPaneFakeProviderFactory] 不同：每次 create 返回**新**实例，
 /// 这样销毁旧实例后重建才能被观测到。
 final class _MultiInstanceProviderFactory implements AgentProviderFactory {
-  final List<AgentPaneFakeProvider> created = <AgentPaneFakeProvider>[];
+  final List<_RecycleProvider> created = <_RecycleProvider>[];
 
   @override
   AgentProvider create(AgentProviderConfig config) {
-    final provider = AgentPaneFakeProvider();
+    final provider = _RecycleProvider();
     created.add(provider);
     return provider;
+  }
+}
+
+final class _RecycleProvider extends AgentPaneFakeProvider {
+  bool disposed = false;
+
+  @override
+  Future<void> dispose() async {
+    disposed = true;
+    await super.dispose();
   }
 }

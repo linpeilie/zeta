@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
-import 'package:zeta/src/features/agent/application/agent_permission_state_store.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_binding_manager.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_global_runtime.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -162,7 +164,7 @@ void main() {
     });
 
     test(
-      'tracks running thread ids from provider turn lifecycle events',
+      'tracks running thread ids from conversation runtime snapshots',
       () async {
         final provider = _FakeAgentProvider(
           pages: <AgentThreadPage>[_page(_threads(1), nextCursor: null)],
@@ -172,35 +174,35 @@ void main() {
         controller.activateProject('/repo');
         await _flushAsync();
 
-        provider.emit(
-          const AgentTurnStartedEvent(
-            AgentTurn(id: 'turn-1', sessionId: 'thread-0'),
-          ),
-        );
-        await _flushAsync();
-
-        expect(controller.stateFor('/repo').runningThreadIds, <String>{
-          'thread-0',
-        });
-
-        provider.emit(
-          const AgentTurnStartedEvent(
-            AgentTurn(id: 'turn-2', sessionId: 'thread-unknown'),
-          ),
-        );
-        await _flushAsync();
-
-        expect(controller.stateFor('/repo').runningThreadIds, <String>{
-          'thread-0',
-        });
-
-        provider.emit(
-          const AgentTurnCompletedEvent(
+        controller.syncRuntimeSnapshot(
+          projectPath: '/repo',
+          snapshot: const AgentConversationThreadSnapshot(
             sessionId: 'thread-0',
-            turnId: 'turn-1',
+            providerId: defaultAgentProviderId,
+            threadTitle: 'Thread 0',
+            isTurnRunning: true,
+            runtimeStatus: AgentThreadRuntimeStatus.active,
+            waitingOnApproval: false,
+            waitingOnUserInput: false,
           ),
         );
-        await _flushAsync();
+
+        expect(controller.stateFor('/repo').runningThreadIds, <String>{
+          'thread-0',
+        });
+
+        controller.syncRuntimeSnapshot(
+          projectPath: '/repo',
+          snapshot: const AgentConversationThreadSnapshot(
+            sessionId: 'thread-0',
+            providerId: defaultAgentProviderId,
+            threadTitle: 'Thread 0',
+            isTurnRunning: false,
+            runtimeStatus: AgentThreadRuntimeStatus.idle,
+            waitingOnApproval: false,
+            waitingOnUserInput: false,
+          ),
+        );
 
         expect(controller.stateFor('/repo').runningThreadIds, isEmpty);
       },
@@ -224,12 +226,18 @@ void main() {
       ]);
       final previousRecency = before.last.recencyAt ?? before.last.updatedAt;
 
-      provider.emit(
-        const AgentTurnStartedEvent(
-          AgentTurn(id: 'turn-1', sessionId: 'thread-0'),
+      controller.syncRuntimeSnapshot(
+        projectPath: '/repo',
+        snapshot: const AgentConversationThreadSnapshot(
+          sessionId: 'thread-0',
+          providerId: defaultAgentProviderId,
+          threadTitle: 'Thread 0',
+          isTurnRunning: true,
+          runtimeStatus: AgentThreadRuntimeStatus.active,
+          waitingOnApproval: false,
+          waitingOnUserInput: false,
         ),
       );
-      await _flushAsync();
 
       final after = controller.stateFor('/repo').threads;
       expect(after.map((thread) => thread.id).toList(), <String>[
@@ -297,44 +305,56 @@ void main() {
       );
     });
 
-    test('applies thread/status/changed waiting flags to list state', () async {
-      final provider = _FakeAgentProvider(
-        pages: <AgentThreadPage>[_page(_threads(1), nextCursor: null)],
-      );
-      final controller = _createController(provider);
+    test(
+      'applies waiting flags from runtime snapshots to list state',
+      () async {
+        final provider = _FakeAgentProvider(
+          pages: <AgentThreadPage>[_page(_threads(1), nextCursor: null)],
+        );
+        final controller = _createController(provider);
 
-      controller.activateProject('/repo');
-      await _flushAsync();
+        controller.activateProject('/repo');
+        await _flushAsync();
 
-      provider.emit(
-        const AgentThreadStatusChangedEvent(
-          threadId: 'thread-0',
-          status: AgentThreadRuntimeStatus.active,
-          waitingOnApproval: true,
-        ),
-      );
-      await _flushAsync();
+        controller.syncRuntimeSnapshot(
+          projectPath: '/repo',
+          snapshot: const AgentConversationThreadSnapshot(
+            sessionId: 'thread-0',
+            providerId: defaultAgentProviderId,
+            threadTitle: 'Thread 0',
+            isTurnRunning: true,
+            runtimeStatus: AgentThreadRuntimeStatus.active,
+            waitingOnApproval: true,
+            waitingOnUserInput: false,
+          ),
+        );
 
-      final waiting = controller.stateFor('/repo').threads.single;
-      expect(waiting.status, AgentThreadRuntimeStatus.active);
-      expect(waiting.waitingOnApproval, isTrue);
-      expect(controller.stateFor('/repo').runningThreadIds, <String>{
-        'thread-0',
-      });
+        final waiting = controller.stateFor('/repo').threads.single;
+        expect(waiting.status, AgentThreadRuntimeStatus.active);
+        expect(waiting.waitingOnApproval, isTrue);
+        expect(controller.stateFor('/repo').runningThreadIds, <String>{
+          'thread-0',
+        });
 
-      provider.emit(
-        const AgentThreadStatusChangedEvent(
-          threadId: 'thread-0',
-          status: AgentThreadRuntimeStatus.idle,
-        ),
-      );
-      await _flushAsync();
+        controller.syncRuntimeSnapshot(
+          projectPath: '/repo',
+          snapshot: const AgentConversationThreadSnapshot(
+            sessionId: 'thread-0',
+            providerId: defaultAgentProviderId,
+            threadTitle: 'Thread 0',
+            isTurnRunning: false,
+            runtimeStatus: AgentThreadRuntimeStatus.idle,
+            waitingOnApproval: false,
+            waitingOnUserInput: false,
+          ),
+        );
 
-      final idle = controller.stateFor('/repo').threads.single;
-      expect(idle.status, AgentThreadRuntimeStatus.idle);
-      expect(idle.waitingOnApproval, isFalse);
-      expect(controller.stateFor('/repo').runningThreadIds, isEmpty);
-    });
+        final idle = controller.stateFor('/repo').threads.single;
+        expect(idle.status, AgentThreadRuntimeStatus.idle);
+        expect(idle.waitingOnApproval, isFalse);
+        expect(controller.stateFor('/repo').runningThreadIds, isEmpty);
+      },
+    );
 
     test(
       'ignores duplicate loads while a project is already loading',
@@ -554,31 +574,25 @@ void main() {
       expect(controller.stateFor('/repo').searchTerm, 'foo');
     });
 
-    test('renames thread and applies name updated event', () async {
-      final provider = _FakeAgentProvider(
-        pages: <AgentThreadPage>[_page(_threads(1), nextCursor: null)],
-      );
-      final controller = _createController(provider);
-      controller.activateProject('/repo');
-      await _flushAsync();
+    test(
+      'renames thread through global runtime and updates cached title',
+      () async {
+        final provider = _FakeAgentProvider(
+          pages: <AgentThreadPage>[_page(_threads(1), nextCursor: null)],
+        );
+        final controller = _createController(provider);
+        controller.activateProject('/repo');
+        await _flushAsync();
 
-      await controller.renameThread(
-        projectPath: '/repo',
-        threadId: 'thread-0',
-        name: 'Renamed',
-      );
-      expect(provider.renamedThreads.single.name, 'Renamed');
-      expect(controller.stateFor('/repo').threads.single.title, 'Renamed');
-
-      provider.emit(
-        const AgentThreadNameUpdatedEvent(
+        await controller.renameThread(
+          projectPath: '/repo',
           threadId: 'thread-0',
-          threadName: 'From server',
-        ),
-      );
-      await _flushAsync();
-      expect(controller.stateFor('/repo').threads.single.title, 'From server');
-    });
+          name: 'Renamed',
+        );
+        expect(provider.renamedThreads.single.name, 'Renamed');
+        expect(controller.stateFor('/repo').threads.single.title, 'Renamed');
+      },
+    );
 
     test('removes archived thread and notifies active clear', () async {
       final provider = _FakeAgentProvider(
@@ -956,77 +970,125 @@ void main() {
       },
     );
 
-    test(
-      'fork uses application default when persisted config is stale',
-      () async {
-        final provider = _FakeAgentProvider(
-          pages: const <AgentThreadPage>[],
-          config: AgentProviderConfig.defaultCodex.withPermissionPreference(
-            ':workspace',
-          ),
-        );
-        final providerController = ActiveAgentProviderController(
-          providerFactory: _FakeAgentProviderFactory(provider),
-          configStore: MemoryAgentProviderConfigStore(
-            AgentProviderSettings(
-              providers: <AgentProviderConfig>[provider.config],
-              activeProviderId: provider.config.id,
-            ),
-          ),
-        );
-        final controller = ProjectThreadsController(
-          providerController: providerController,
-        );
-        addTearDown(() {
-          controller.dispose();
-          providerController.dispose();
-        });
-        await providerController.activeProvider();
-        final identity = providerController.activeProviderRuntimeIdentity!;
-        expect(
-          providerController.permissionStateStore.commitApplyResult(
-            identity: identity,
-            threadId: null,
-            result: const AgentPermissionApplyResult(
-              normalizedSelection: AgentPermissionSelection(
-                optionId: ':read-only',
-              ),
-              scope: AgentPermissionApplyScope.currentSession,
-            ),
-            source: AgentPermissionStateSource.userSelection,
-            updateDefault: true,
-          ),
-          isTrue,
-        );
-        expect(
-          provider.config.resolvedPermissionOptionId,
+    test('fork without Binding uses the persisted provider default', () async {
+      final provider = _FakeAgentProvider(
+        pages: const <AgentThreadPage>[],
+        config: AgentProviderConfig.defaultCodex.withPermissionPreference(
           ':workspace',
-          reason: 'fixture keeps persistence behind the applied runtime state',
-        );
-        controller.registerSession(
-          '/repo',
-          const AgentSession(
-            id: 'source-thread',
-            providerId: defaultAgentProviderId,
+        ),
+      );
+      final registry = AgentProviderRuntimeRegistry(
+        providerFactory: _FakeAgentProviderFactory(provider),
+      );
+      final providerController = ActiveAgentProviderController(
+        runtimeRegistry: registry,
+        configStore: MemoryAgentProviderConfigStore(
+          AgentProviderSettings(
+            providers: <AgentProviderConfig>[provider.config],
+            activeProviderId: provider.config.id,
           ),
-        );
+        ),
+      );
+      final controller = ProjectThreadsController(
+        providerController: providerController,
+        globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
+      );
+      addTearDown(() {
+        controller.dispose();
+        providerController.dispose();
+        unawaited(registry.close());
+      });
+      controller.registerSession(
+        '/repo',
+        const AgentSession(
+          id: 'source-thread',
+          providerId: defaultAgentProviderId,
+        ),
+      );
 
-        await controller.forkThread(
-          projectPath: '/repo',
-          threadId: 'source-thread',
-        );
+      await controller.forkThread(
+        projectPath: '/repo',
+        threadId: 'source-thread',
+      );
 
-        expect(provider.forkPermissionSnapshots, hasLength(1));
-        expect(
-          provider.forkPermissionSnapshots.single.source,
-          AgentPermissionRequestSource.providerDefault,
-        );
-        expect(
-          provider.forkPermissionSnapshots.single.selection?.optionId,
-          ':read-only',
-        );
-      },
-    );
+      expect(provider.forkPermissionSnapshots, hasLength(1));
+      expect(
+        provider.forkPermissionSnapshots.single.source,
+        AgentPermissionRequestSource.providerDefault,
+      );
+      expect(
+        provider.forkPermissionSnapshots.single.selection?.optionId,
+        ':workspace',
+      );
+    });
+
+    test('fork 优先使用已存在 Binding 的 thread 权限快照', () async {
+      final provider = _FakeAgentProvider(
+        pages: const <AgentThreadPage>[],
+        config: AgentProviderConfig.defaultCodex.withPermissionPreference(
+          ':workspace',
+        ),
+      );
+      final registry = AgentProviderRuntimeRegistry(
+        providerFactory: _FakeAgentProviderFactory(provider),
+      );
+      final providerController = ActiveAgentProviderController(
+        runtimeRegistry: registry,
+        configStore: MemoryAgentProviderConfigStore(
+          AgentProviderSettings(
+            providers: <AgentProviderConfig>[provider.config],
+            activeProviderId: provider.config.id,
+          ),
+        ),
+      );
+      final bindingManager = AgentConversationBindingManager(
+        runtimeRegistry: registry,
+      );
+      final bindingLease = bindingManager.acquireThread(
+        providerId: defaultAgentProviderId,
+        threadId: 'source-thread',
+        resolveConfig: (_) => provider.config,
+        persistPermissionOptionId: (_) async {},
+      );
+      await bindingLease.binding.permissions.applyEffectiveSelection(
+        const AgentPermissionSelection(optionId: ':read-only'),
+        syncPort: false,
+      );
+      final controller = ProjectThreadsController(
+        providerController: providerController,
+        globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
+        bindingManager: bindingManager,
+      );
+      addTearDown(() async {
+        controller.dispose();
+        await bindingLease.release();
+        await bindingManager.close();
+        providerController.dispose();
+        await registry.close();
+      });
+      controller.registerSession(
+        '/repo',
+        const AgentSession(
+          id: 'source-thread',
+          providerId: defaultAgentProviderId,
+        ),
+      );
+
+      await controller.forkThread(
+        projectPath: '/repo',
+        threadId: 'source-thread',
+      );
+
+      expect(provider.forkPermissionSnapshots, hasLength(1));
+      expect(
+        provider.forkPermissionSnapshots.single.source,
+        AgentPermissionRequestSource.threadEffective,
+      );
+      expect(
+        provider.forkPermissionSnapshots.single.selection?.optionId,
+        ':read-only',
+      );
+    });
   });
 }
 
@@ -1035,8 +1097,11 @@ ProjectThreadsController _createController(
   ProjectThreadsViewModel? viewModel,
 }) {
   // 单 provider 配置，避免默认 Codex+Grok 下同一 fake 被聚合调用两次。
-  final providerController = ActiveAgentProviderController(
+  final registry = AgentProviderRuntimeRegistry(
     providerFactory: _FakeAgentProviderFactory(provider),
+  );
+  final providerController = ActiveAgentProviderController(
+    runtimeRegistry: registry,
     configStore: MemoryAgentProviderConfigStore(
       AgentProviderSettings(
         providers: <AgentProviderConfig>[provider.config],
@@ -1046,11 +1111,13 @@ ProjectThreadsController _createController(
   );
   final controller = ProjectThreadsController(
     providerController: providerController,
+    globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
     viewModel: viewModel,
   );
   addTearDown(() {
     controller.dispose();
     providerController.dispose();
+    unawaited(registry.close());
   });
   return controller;
 }
@@ -1062,13 +1129,16 @@ ProjectThreadsController _createMultiProviderController({
   List<String>? createdProviderIds,
   ProjectThreadsViewModel? viewModel,
 }) {
-  final providerController = ActiveAgentProviderController(
+  final registry = AgentProviderRuntimeRegistry(
     providerFactory: _MultiAgentProviderFactory(
       codex: codex,
       grok: grok,
       cursor: cursor,
       createdProviderIds: createdProviderIds,
     ),
+  );
+  final providerController = ActiveAgentProviderController(
+    runtimeRegistry: registry,
     configStore: MemoryAgentProviderConfigStore(
       AgentProviderSettings(
         providers: <AgentProviderConfig>[
@@ -1083,11 +1153,13 @@ ProjectThreadsController _createMultiProviderController({
   );
   final controller = ProjectThreadsController(
     providerController: providerController,
+    globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
     viewModel: viewModel,
   );
   addTearDown(() {
     controller.dispose();
     providerController.dispose();
+    unawaited(registry.close());
   });
   return controller;
 }

@@ -1,5 +1,6 @@
 import 'package:zeta/src/features/agent/data/datasources/local_history/codex_usage_log_scanner.dart';
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_usage_log_scanner.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_global_runtime.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -21,6 +22,7 @@ typedef AgentProviderRuntimeLeaseLoader =
 class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
   ProviderAgentUsagePanelRepository({
     required this.enabledProviderLoader,
+    this.globalRuntime,
     this.providerLeaseLoader,
     this.providerLoader,
     this.isSharedProvider,
@@ -29,12 +31,15 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
     this.grokScanner = const FileSystemGrokUsageLogScanner(),
     DateTime Function()? clock,
   }) : assert(
-         providerLeaseLoader != null || providerLoader != null,
-         'A Provider lease or instance loader is required',
+         globalRuntime != null ||
+             providerLeaseLoader != null ||
+             providerLoader != null,
+         'A global runtime, Provider lease, or instance loader is required',
        ),
        _clock = clock ?? DateTime.now;
 
   final EnabledAgentProviderLoader enabledProviderLoader;
+  final AgentProviderGlobalRuntime? globalRuntime;
   final AgentProviderRuntimeLeaseLoader? providerLeaseLoader;
 
   /// 旧测试/嵌入宿主兼容入口；生产代码应使用 [providerLeaseLoader]。
@@ -85,6 +90,26 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
     required Future<UsageStatisticsIndexSnapshot> seedFuture,
     required bool forceRefresh,
   }) async {
+    final runtime = globalRuntime;
+    if (runtime != null) {
+      try {
+        return await runtime.run(
+          config,
+          (context) => _loadProviderInstance(
+            config,
+            provider: context.bundle.runtime.provider,
+            seedFuture: seedFuture,
+            forceRefresh: forceRefresh,
+          ),
+        );
+      } catch (_) {
+        return AgentUsagePanelProviderFailed(
+          provider: _providerSummary(config),
+          message: '当前 Agent 暂时无法连接',
+        );
+      }
+    }
+
     AgentProviderRuntimeLease? lease;
     AgentProvider? provider;
     try {
@@ -95,54 +120,11 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
       } else {
         provider = await providerLoader!(config);
       }
-      final quota = await _readQuota(provider);
-      if (config.kind != AgentProviderKind.codexAppServer &&
-          config.kind != AgentProviderKind.acp) {
-        return AgentUsagePanelProviderLoaded(
-          AgentUsagePanelEntry(
-            providerId: config.id,
-            providerName: config.displayName,
-            quota: quota,
-          ),
-        );
-      }
-
-      UsageTokenBreakdown? todayTokens;
-      String? message;
-      try {
-        final now = _clock();
-        final earliest = DateTime(now.year, now.month, now.day);
-        final source = switch (config.kind) {
-          AgentProviderKind.codexAppServer => await _loadCodexUsage(
-            provider: provider,
-            seedFuture: seedFuture,
-            earliest: earliest,
-            forceRefresh: forceRefresh,
-          ),
-          AgentProviderKind.acp => await GrokUsageStatisticsRepository(
-            providerLoader: () async => provider!,
-            scanner: grokScanner,
-            includeQuota: false,
-            clock: _clock,
-          ).load(earliest: earliest, forceRefresh: forceRefresh),
-          _ => throw StateError('Unsupported usage provider: ${config.kind}'),
-        };
-        todayTokens = _sumTokens(
-          source.records
-              .where((record) => !record.startedAt.isAfter(now))
-              .toList(),
-        );
-      } catch (_) {
-        message = '今日 Token 暂时无法读取';
-      }
-      return AgentUsagePanelProviderLoaded(
-        AgentUsagePanelEntry(
-          providerId: config.id,
-          providerName: config.displayName,
-          todayTokens: todayTokens,
-          quota: quota,
-          message: message,
-        ),
+      return _loadProviderInstance(
+        config,
+        provider: provider,
+        seedFuture: seedFuture,
+        forceRefresh: forceRefresh,
       );
     } catch (_) {
       return AgentUsagePanelProviderFailed(
@@ -161,6 +143,63 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
         }
       }
     }
+  }
+
+  Future<AgentUsagePanelLoadEvent> _loadProviderInstance(
+    AgentProviderConfig config, {
+    required AgentProvider provider,
+    required Future<UsageStatisticsIndexSnapshot> seedFuture,
+    required bool forceRefresh,
+  }) async {
+    final quota = await _readQuota(provider);
+    if (config.kind != AgentProviderKind.codexAppServer &&
+        config.kind != AgentProviderKind.acp) {
+      return AgentUsagePanelProviderLoaded(
+        AgentUsagePanelEntry(
+          providerId: config.id,
+          providerName: config.displayName,
+          quota: quota,
+        ),
+      );
+    }
+
+    UsageTokenBreakdown? todayTokens;
+    String? message;
+    try {
+      final now = _clock();
+      final earliest = DateTime(now.year, now.month, now.day);
+      final source = switch (config.kind) {
+        AgentProviderKind.codexAppServer => await _loadCodexUsage(
+          provider: provider,
+          seedFuture: seedFuture,
+          earliest: earliest,
+          forceRefresh: forceRefresh,
+        ),
+        AgentProviderKind.acp => await GrokUsageStatisticsRepository(
+          providerLoader: () async => provider,
+          scanner: grokScanner,
+          includeQuota: false,
+          clock: _clock,
+        ).load(earliest: earliest, forceRefresh: forceRefresh),
+        _ => throw StateError('Unsupported usage provider: ${config.kind}'),
+      };
+      todayTokens = _sumTokens(
+        source.records
+            .where((record) => !record.startedAt.isAfter(now))
+            .toList(),
+      );
+    } catch (_) {
+      message = '今日 Token 暂时无法读取';
+    }
+    return AgentUsagePanelProviderLoaded(
+      AgentUsagePanelEntry(
+        providerId: config.id,
+        providerName: config.displayName,
+        todayTokens: todayTokens,
+        quota: quota,
+        message: message,
+      ),
+    );
   }
 
   Future<UsageStatisticsSourceSnapshot> _loadCodexUsage({

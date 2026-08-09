@@ -1,6 +1,6 @@
 # 工程规范
 
-最后更新：2026-08-04
+最后更新：2026-08-09
 
 本文从当前 `lib/` 重构后的代码结构中提炼长期遵循的工程规范。它补充根目录 `AGENTS.md`，用于指导后续功能开发、重构和评审。
 
@@ -127,8 +127,8 @@ main -> app -> presentation/application -> domain
   provider kind 注册中立 migrator；V2 optionId key 存在时不得调用 legacy migrator。
   Domain `AgentProviderConfig` 只保存归一化 optionId，不提供配置 `tryDecode` 门面；V1/V2
   宽容解码、内置 Provider 补齐与 legacy 迁移全部由 data `AgentProviderSettingsCodec` 负责。
-  `AgentPermissionStateStore` 是 application
-  权限状态真源，按 provider runtime identity/generation + threadId 隔离不可变快照；
+  每个 `AgentConversationBinding` 独占一份 application 权限状态，按 provider runtime
+  identity/generation + threadId 隔离不可变快照；
   provider default、thread effective、state source、last scope、warning 与持久化失败不得
   分散回 ViewModel 字段。catalog 加载由独立 `AgentPermissionCatalogController` 管理：只提交
   adapter 返回的完整成功目录，transient/malformed 失败保留 last-known-good；旧 refresh
@@ -145,10 +145,10 @@ main -> app -> presentation/application -> domain
   fallback；用户选择或 `thread/settings/updated` 不得改写跨 thread 共享的请求权限状态。
   旧裸 `permissionSelection` 参数、`AgentTurnConfiguration.permissionSelection` 与 Provider
   内兼容合并 setter/facade 均不得恢复。
-- runtime 激活后，`AgentPermissionStateStore` 是 provider default、thread effective 与
-  runtime-global selection 的唯一运行态真源；provider config 只负责初次 seed 和持久化。
-  Project Threads 等无活动 Canvas 的 application 工作流也必须用当前 runtime identity +
-  threadId 从 store 冻结请求，禁止重新读取 config 拼出第二套默认状态。
+- session runtime 激活后，Binding 内的 `AgentPermissionStateStore` 是 provider default、
+  thread effective 与 runtime selection 的唯一运行态真源；provider config 只负责初次
+  seed 和持久化。Project Threads 必须优先从已存在 Binding 冻结 thread 请求；没有
+  Binding 时才使用 provider default 与 catalog default，禁止从其他会话借用 runtime 状态。
   `AgentPermissionRequestResolver` 只能是无状态优先级函数，不得缓存 selection。
 - 所有异步 catalog/apply/request 路径必须同时验证 controller binding generation、provider
   runtime generation 与 disposed/token 状态。快速切换 Provider 后的旧结果、已销毁 Canvas 的
@@ -163,10 +163,21 @@ main -> app -> presentation/application -> domain
 - bundle 端口为空时，对应 capability 必须不可用；不支持功能不得靠 no-op 伪装成“已实现”。
 - 启动时机由 `AgentProviderBootstrapPolicy` 描述；需要项目目录的 provider 不得在获得
   workspace 前启动，也不得参与 eager model preload。
-- `AgentProviderRuntimeRegistry` 是应用进程内 Provider 实例和子进程的唯一所有者。
-  对话、Project Threads、用量统计和 Agent 管理探测只能获取可释放租约，不得直接调用
-  `AgentProviderFactory.create` 后自行持有或销毁。正常运行时每个 Provider ID 最多一个实例；
-  影响启动的配置变化必须先使旧实例及租约失效，再创建新实例。
+- `AgentProviderRuntimeRegistry` 是应用进程内 Provider 实例和子进程的唯一所有者，也是
+  唯一允许调用 `AgentProviderFactory.create` 的对象。`AgentProviderGlobalRuntime` 只借用
+  每个 Provider ID 唯一且永不空闲回收的 global runtime；模型、Skill、用量、历史和
+  thread 管理等会话前/全局操作不得创建 session runtime。
+- `AgentConversationBindingManager` 按 `draft(providerId, entryId)` 或
+  `thread(providerId, threadId)` 唯一映射逻辑会话。草稿拿到真实 threadId 后必须原子晋升；
+  目标 key 已存在时 fail-closed。Workspace 只持有 Binding lease，ViewModel 不得持有
+  registry lease、scope、pin 或 runtime identity 缓存。
+- `AgentConversationBinding.beginTurn()` 是创建 session runtime 的唯一入口；打开草稿、打开
+  thread 和读取历史都不得调用它。cancel、steer、审批/提问回写与 session configuration
+  只能通过 `runCurrent` 使用已存在实例，实例已回收时 fail-closed，不得为迟到操作重启 CLI。
+- Binding Manager 每分钟执行 single-flight 扫描。session runtime 在没有运行中 turn/RPC 且
+  最后活动满 10 分钟后回收，候选必须携带精确 runtime identity 防 ABA；同一 scope 的旧进程
+  dispose 完成前，新 acquire 必须等待，禁止新旧 CLI 重叠。配置变化仍会失效该 Provider 的
+  global 与全部 session runtime；旧 generation 的事件和权限 apply 必须丢弃。
 - 多个 Pane 共享 Provider 时，thread/session 状态必须按 ID 隔离。启动或恢复另一个会话
   不得隐式退订、清空或使其他会话的 reducer 失效；退订只由明确关闭对应会话的调用方发起。
 - 桌面窗口关闭必须等待运行时注册表关闭全部 Provider，再 flush 日志并退出，避免遗留

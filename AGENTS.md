@@ -189,7 +189,7 @@ grep -rn "import 'package:shadcn_flutter" lib | grep -v "as sf"
 | 接入新 Provider | G1 G2 G4 G6 | [工程规范 §4.2](docs/architecture/engineering_standards.md#42-共享适配层纯度门禁) + [开发者文档 §7](docs/guides/developer_guide.md) 十二步 | 改动范围应 = 自有 data 文件 + 中立 domain 契约 + factory 组合 + 契约测试 |
 | Provider adapter / reducer / 流式显示 | G1 G2 G3 | [工程规范 §4.1](docs/architecture/engineering_standards.md) | 带 Provider/CLI 版本的脱敏 fixture 序列测试；有 history/replay 就补 canonical signature 逐位置回归 |
 | 权限选项 / 审批 / Plan 模式 | G4 G5 | [开发者文档 §7「权限选项选择」+「Plan conversation mode」](docs/guides/developer_guide.md) | 覆盖两 thread 两 Canvas 的真实 wire 参数、runtime 广播、迟到 apply、旧 generation 丢弃 |
-| Provider 生命周期 / 进程 / 租约 | G4 G6 | [工程规范 §4](docs/architecture/engineering_standards.md) | 只经 `AgentProviderRuntimeRegistry` 取可释放租约，禁止自行 `AgentProviderFactory.create`；Thread 操作走 `ProviderOperationScheduler` |
+| Provider 生命周期 / 进程 / Binding | G4 G6 | [工程规范 §4](docs/architecture/engineering_standards.md) | factory 只由 registry 调用；全局操作走 `AgentProviderGlobalRuntime`；session 只由 `AgentConversationBinding.beginTurn()` 惰性创建，回收由 Binding Manager 负责；Thread 操作走 `ProviderOperationScheduler` |
 | 主题、UI 原语、工作台 slot | G6 G9 | [架构总览「工作台 UI」](docs/architecture/overview.md) + [开发者文档 §8](docs/guides/developer_guide.md) | `IdeHome` 是唯一 Workbench 组合边界，feature 页只填 Navigation / Canvas / Inspector 三个 slot |
 | 时间线渲染 / resize 热路径 | G9 | [工程规范 §6](docs/architecture/engineering_standards.md) | 禁止 post-frame 测高、`GlobalKey` 查高、layout 后 `setState` 反馈环；Windows Profile 采样，Debug 数据不作结论 |
 | 页面切换 / 跨页保活 | G6 G9 | [开发者文档 §8](docs/guides/developer_guide.md) | 用真实 `IdeHome` 补集成级 Widget 测试：常驻骨架、AgentPane Element、当前 Thread、草稿、滚动位置、Pane 宽度与可见性都不能被重置；用 `IdeRetainedPageView`，不用 `IndexedStack` |

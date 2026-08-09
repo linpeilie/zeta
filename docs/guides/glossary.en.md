@@ -84,7 +84,13 @@ A provider's declaration of what it supports. **UI renders by capability, never 
 `agent_provider_capabilities.dart`
 
 **Runtime lease**
-`AgentProviderRuntimeRegistry` owns provider process instances and hands them out as leases. Multiple panes share one lease rather than spawning duplicate processes.
+A releasable registry reference to a provider instance. It stays inside infrastructure and global-runtime/binding code; view models and panes do not own it directly.
+
+**Conversation binding**
+The application aggregate for one logical conversation, uniquely keyed as a draft or thread. It owns the optional session runtime, generation-filtered events, conversation permissions, and active operations. Only `beginTurn()` may create a runtime. The binding manager owns mapping, draft promotion, and ten-minute idle reclamation.
+
+**Global runtime**
+The single non-reaped instance per provider ID, used for history, thread management, models, skills, usage, connection tests, and other pre-session/global information.
 
 **runtimeId / connectionEpoch**
 A pair of identifiers minted per connection, used to decide whether an event or effect still belongs to the current connection. Together with `providerId + threadId + listenerGeneration` they form the full scope of an event binding.
