@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zeta/src/features/agent/application/agent_provider_global_runtime.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/datasources/local_history/codex_usage_log_scanner.dart';
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_usage_log_scanner.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -119,7 +121,11 @@ void main() {
   test(
     'panel repository groups enabled configs and limits tokens to today',
     () async {
-      final provider = _UsageProvider();
+      final factory = _CallbackUsageProviderFactory(
+        (config) => _UsageProvider(config: config),
+      );
+      final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+      addTearDown(registry.close);
       final scanner = _UsageScanner(_sessions());
       final grokScanner = _GrokUsageScanner(<GrokUsageSessionSnapshot>[
         _grokUsageSession(),
@@ -129,8 +135,7 @@ void main() {
           AgentProviderConfig.defaultCodex,
           AgentProviderConfig.defaultGrok,
         ],
-        providerLoader: (_) async => provider,
-        isSharedProvider: (_) => true,
+        globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
         seedIndexStore: MemoryUsageStatisticsIndexStore(),
         scanner: scanner,
         grokScanner: grokScanner,
@@ -169,7 +174,13 @@ void main() {
       expect(grok.todayTokens?.reasoningTokens, 2);
       expect(events.last, isA<AgentUsagePanelLoadCompleted>());
       expect(scanner.codexHomes, hasLength(1));
-      expect(provider.quotaReadCount, 2);
+      expect(
+        factory.providers.whereType<_UsageProvider>().fold<int>(
+          0,
+          (total, provider) => total + provider.quotaReadCount,
+        ),
+        2,
+      );
     },
   );
 
@@ -184,21 +195,26 @@ void main() {
         id: 'grok-second',
         displayName: 'Grok Second',
       );
-      final providerLoads = <String, Completer<AgentProvider>>{
-        firstConfig.id: Completer<AgentProvider>(),
-        secondConfig.id: Completer<AgentProvider>(),
+      final initializationGates = <String, Completer<void>>{
+        firstConfig.id: Completer<void>(),
+        secondConfig.id: Completer<void>(),
       };
       final startedProviders = <String>[];
+      final factory = _CallbackUsageProviderFactory((config) {
+        startedProviders.add(config.id);
+        return _UsageProvider(
+          config: config,
+          initialization: initializationGates[config.id]!.future,
+        );
+      });
+      final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+      addTearDown(registry.close);
       final repository = ProviderAgentUsagePanelRepository(
         enabledProviderLoader: () async => <AgentProviderConfig>[
           firstConfig,
           secondConfig,
         ],
-        providerLoader: (config) {
-          startedProviders.add(config.id);
-          return providerLoads[config.id]!.future;
-        },
-        isSharedProvider: (_) => true,
+        globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
         seedIndexStore: MemoryUsageStatisticsIndexStore(),
         scanner: _UsageScanner(const <String, CodexUsageSessionSnapshot>{}),
         grokScanner: _GrokUsageScanner(const <GrokUsageSessionSnapshot>[]),
@@ -213,14 +229,14 @@ void main() {
       expect(emitted, hasLength(1));
       expect(emitted.single, isA<AgentUsagePanelProvidersDiscovered>());
 
-      providerLoads['grok-second']!.complete(_UsageProvider());
+      initializationGates['grok-second']!.complete();
       await Future<void>.delayed(Duration.zero);
       expect(
         (emitted[1] as AgentUsagePanelProviderLoaded).entry.providerId,
         'grok-second',
       );
 
-      providerLoads['grok-first']!.completeError(StateError('offline'));
+      initializationGates['grok-first']!.completeError(StateError('offline'));
       await completed;
 
       expect(emitted[2], isA<AgentUsagePanelProviderFailed>());
@@ -511,24 +527,32 @@ class _UsageProvider
     with AgentProviderThreadLifecycleStub
     implements AgentProvider, AgentUsageQuotaProvider {
   _UsageProvider({
+    AgentProviderConfig? config,
     this.configuredCodexHome = r'C:\configured-codex',
     this.quotaFails = false,
-  });
+    this.initialization,
+  }) : _config =
+           config ??
+           AgentProviderConfig.defaultCodex.copyWith(
+             environment: <String, String>{'CODEX_HOME': ?configuredCodexHome},
+           );
 
+  final AgentProviderConfig _config;
   final String? configuredCodexHome;
   final bool quotaFails;
+  final Future<void>? initialization;
   var quotaReadCount = 0;
 
   @override
-  AgentProviderConfig get config => AgentProviderConfig.defaultCodex.copyWith(
-    environment: <String, String>{'CODEX_HOME': ?configuredCodexHome},
-  );
+  AgentProviderConfig get config => _config;
 
   @override
   Stream<AgentEvent> get events => const Stream<AgentEvent>.empty();
 
   @override
-  Future<void> initialize() async {}
+  Future<void> initialize() async {
+    await initialization;
+  }
 
   @override
   Future<AgentThreadPage> listThreads({required AgentThreadListQuery query}) =>
@@ -618,4 +642,18 @@ class _UsageProvider
     List<AgentUserInput>? inputs,
     String? clientUserMessageId,
   }) async {}
+}
+
+final class _CallbackUsageProviderFactory implements AgentProviderFactory {
+  _CallbackUsageProviderFactory(this.createProvider);
+
+  final AgentProvider Function(AgentProviderConfig config) createProvider;
+  final List<AgentProvider> providers = <AgentProvider>[];
+
+  @override
+  AgentProvider create(AgentProviderConfig config) {
+    final provider = createProvider(config);
+    providers.add(provider);
+    return provider;
+  }
 }

@@ -15,7 +15,10 @@ void main() {
       final leases = await Future.wait(
         List<Future<AgentProviderRuntimeLease>>.generate(
           12,
-          (_) => registry.acquire(AgentProviderConfig.defaultCodex),
+          (_) => registry.acquire(
+            AgentProviderConfig.defaultCodex,
+            scope: AgentProviderRuntimeScopeKey.global,
+          ),
         ),
       );
 
@@ -36,10 +39,22 @@ void main() {
       final factory = _CountingProviderFactory();
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
 
-      final codexA = await registry.acquire(AgentProviderConfig.defaultCodex);
-      final grokA = await registry.acquire(AgentProviderConfig.defaultGrok);
-      final codexB = await registry.acquire(AgentProviderConfig.defaultCodex);
-      final grokB = await registry.acquire(AgentProviderConfig.defaultGrok);
+      final codexA = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
+      final grokA = await registry.acquire(
+        AgentProviderConfig.defaultGrok,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
+      final codexB = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
+      final grokB = await registry.acquire(
+        AgentProviderConfig.defaultGrok,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
 
       expect(factory.createCount, 2);
       expect(identical(codexA.provider, codexB.provider), isTrue);
@@ -56,13 +71,19 @@ void main() {
     test('影响启动的配置变化会先关闭旧实例再创建新实例', () async {
       final factory = _CountingProviderFactory();
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
-      final first = await registry.acquire(AgentProviderConfig.defaultCodex);
+      final first = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
       final firstProvider = first.provider as _FakeProvider;
       final changed = AgentProviderConfig.defaultCodex.copyWith(
         command: 'codex-next',
       );
 
-      final second = await registry.acquire(changed);
+      final second = await registry.acquire(
+        changed,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
 
       expect(factory.createCount, 2);
       expect(first.isCurrent, isFalse);
@@ -78,11 +99,17 @@ void main() {
     test('重建 Provider 时递增 runtime generation', () async {
       final factory = _CountingProviderFactory();
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
-      final first = await registry.acquire(AgentProviderConfig.defaultGrok);
+      final first = await registry.acquire(
+        AgentProviderConfig.defaultGrok,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
       final firstIdentity = first.runtimeIdentity;
 
       await registry.invalidateProvider(AgentProviderConfig.defaultGrok.id);
-      final second = await registry.acquire(AgentProviderConfig.defaultGrok);
+      final second = await registry.acquire(
+        AgentProviderConfig.defaultGrok,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
 
       expect(first.isCurrent, isFalse);
       expect(second.runtimeIdentity.providerId, firstIdentity.providerId);
@@ -96,13 +123,19 @@ void main() {
     test('关闭后拒绝创建新运行时且 close 幂等', () async {
       final factory = _CountingProviderFactory();
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
-      await registry.acquire(AgentProviderConfig.defaultCodex);
+      await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
 
       await Future.wait(<Future<void>>[registry.close(), registry.close()]);
 
       expect(factory.providers.single.disposeCount, 1);
       expect(
-        () => registry.acquire(AgentProviderConfig.defaultCodex),
+        () => registry.acquire(
+          AgentProviderConfig.defaultCodex,
+          scope: AgentProviderRuntimeScopeKey.global,
+        ),
         throwsStateError,
       );
     });
@@ -112,10 +145,16 @@ void main() {
       final registry = AgentProviderRuntimeRegistry(
         providerFactory: _SingleProviderFactory(shared),
       );
-      final codex = await registry.acquire(AgentProviderConfig.defaultCodex);
+      final codex = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
 
       await expectLater(
-        registry.acquire(AgentProviderConfig.defaultGrok),
+        registry.acquire(
+          AgentProviderConfig.defaultGrok,
+          scope: AgentProviderRuntimeScopeKey.global,
+        ),
         throwsStateError,
       );
 
@@ -127,17 +166,20 @@ void main() {
     });
   });
 
-  // 会话级 Provider 实例改造的安全网。这些用例钉住的是**当前**语义：实例按
-  // providerId 共享、租约计数归零后继续保温、销毁只由 invalidate/close 触发。
-  // 改造后它们的断言会变，那正是行为变更的可见证据（见 01-动机与止损线.md）。
-  group('实例保温与销毁语义（会话级改造前的 characterization）', () {
+  group('global runtime 保温与销毁语义', () {
     test('同一 Provider 的多个消费者共享同一实例与同一 runtime identity', () async {
       final factory = _CountingProviderFactory();
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
       addTearDown(registry.close);
 
-      final sessionA = await registry.acquire(AgentProviderConfig.defaultGrok);
-      final sessionB = await registry.acquire(AgentProviderConfig.defaultGrok);
+      final sessionA = await registry.acquire(
+        AgentProviderConfig.defaultGrok,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
+      final sessionB = await registry.acquire(
+        AgentProviderConfig.defaultGrok,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
 
       expect(factory.createCount, 1);
       expect(identical(sessionA.provider, sessionB.provider), isTrue);
@@ -151,7 +193,10 @@ void main() {
       final factory = _CountingProviderFactory();
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
       addTearDown(registry.close);
-      final first = await registry.acquire(AgentProviderConfig.defaultCodex);
+      final first = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
       final firstIdentity = first.runtimeIdentity;
 
       await first.release();
@@ -160,7 +205,10 @@ void main() {
       expect(registry.debugProviderCount, 1);
       expect(factory.providers.single.disposeCount, 0);
 
-      final second = await registry.acquire(AgentProviderConfig.defaultCodex);
+      final second = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
 
       expect(factory.createCount, 1);
       expect(identical(second.provider, first.provider), isTrue);
@@ -172,7 +220,10 @@ void main() {
       final factory = _CountingProviderFactory();
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
       addTearDown(registry.close);
-      final lease = await registry.acquire(AgentProviderConfig.defaultCodex);
+      final lease = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
       expect(registry.debugLeaseCount, 1);
 
       await registry.invalidateProvider(AgentProviderConfig.defaultCodex.id);
@@ -186,8 +237,14 @@ void main() {
       final factory = _CountingProviderFactory();
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
       addTearDown(registry.close);
-      final first = await registry.acquire(AgentProviderConfig.defaultCodex);
-      final second = await registry.acquire(AgentProviderConfig.defaultCodex);
+      final first = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
+      final second = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
 
       await first.release();
       await first.release();
@@ -206,10 +263,16 @@ void main() {
       final factory = _CountingProviderFactory(disposeThrows: true);
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
       addTearDown(registry.close);
-      final first = await registry.acquire(AgentProviderConfig.defaultCodex);
+      final first = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
 
       await registry.invalidateProvider(AgentProviderConfig.defaultCodex.id);
-      final second = await registry.acquire(AgentProviderConfig.defaultCodex);
+      final second = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
 
       expect(factory.createCount, 2);
       expect(identical(second.provider, first.provider), isFalse);
@@ -221,28 +284,26 @@ void main() {
     });
   });
 
-  // 04 §S2：_entries 的 key 扩成 (providerId, scope)。这一步仍是行为中性的——
-  // acquire 不传 scope 时默认 AgentProviderRuntimeScopeKey.global，等价于改造前
-  // "每个 Provider ID 一个实例"。下面的用例钉住复合键之后的新增行为：不同 scope
-  // 互相独立、invalidateScope 只影响单个 scope、invalidateProvider 仍然清空全部
-  // scope（兼容旧调用方）。
   group('scope 复合键（S2）', () {
-    test('不传 scope 时默认走 global，与显式传入 global 是同一个实例', () async {
+    test('显式 global scope 的多个调用复用同一个实例', () async {
       final factory = _CountingProviderFactory();
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
       addTearDown(registry.close);
 
-      final implicit = await registry.acquire(AgentProviderConfig.defaultCodex);
-      final explicit = await registry.acquire(
+      final first = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
+      final second = await registry.acquire(
         AgentProviderConfig.defaultCodex,
         scope: AgentProviderRuntimeScopeKey.global,
       );
 
       expect(factory.createCount, 1);
-      expect(identical(implicit.provider, explicit.provider), isTrue);
+      expect(identical(first.provider, second.provider), isTrue);
 
-      await implicit.release();
-      await explicit.release();
+      await first.release();
+      await second.release();
     });
 
     test('两个不同 session scope 各自拿到独立实例', () async {
@@ -279,7 +340,10 @@ void main() {
       addTearDown(registry.close);
       const sessionScope = AgentProviderRuntimeScopeKey.session('entry-a');
 
-      final global = await registry.acquire(AgentProviderConfig.defaultCodex);
+      final global = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
       final session = await registry.acquire(
         AgentProviderConfig.defaultCodex,
         scope: sessionScope,
@@ -345,7 +409,10 @@ void main() {
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
       addTearDown(registry.close);
 
-      final global = await registry.acquire(AgentProviderConfig.defaultCodex);
+      final global = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
       final sessionA = await registry.acquire(
         AgentProviderConfig.defaultCodex,
         scope: const AgentProviderRuntimeScopeKey.session('entry-a'),
@@ -355,7 +422,10 @@ void main() {
         scope: const AgentProviderRuntimeScopeKey.session('entry-b'),
       );
       // 不同 Provider 的实例不应被误伤。
-      final grok = await registry.acquire(AgentProviderConfig.defaultGrok);
+      final grok = await registry.acquire(
+        AgentProviderConfig.defaultGrok,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
 
       await registry.invalidateProvider(AgentProviderConfig.defaultCodex.id);
 
@@ -373,7 +443,10 @@ void main() {
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
       addTearDown(registry.close);
 
-      final global = await registry.acquire(AgentProviderConfig.defaultCodex);
+      final global = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
       final session = await registry.acquire(
         AgentProviderConfig.defaultCodex,
         scope: const AgentProviderRuntimeScopeKey.session('entry-a'),
@@ -397,7 +470,10 @@ void main() {
       );
       addTearDown(registry.close);
 
-      final global = await registry.acquire(AgentProviderConfig.defaultCodex);
+      final global = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
       final session = await registry.acquire(
         AgentProviderConfig.defaultCodex,
         scope: const AgentProviderRuntimeScopeKey.session('binding-1'),

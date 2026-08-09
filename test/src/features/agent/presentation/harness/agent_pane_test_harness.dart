@@ -18,7 +18,7 @@ import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_motion.dart';
-import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 
 import '../../../../testing/agent_provider_stub_base.dart';
 import '../../../../testing/agent_conversation_binding_test_harness.dart';
@@ -174,6 +174,7 @@ const AgentModelList agentPaneSingleReasoningModelList = AgentModelList(
 
 AgentConversationViewModel createAgentPaneViewModel(
   AgentPaneFakeProvider provider, {
+  AgentThreadSummary? initialThread,
   AgentConversationModeController? conversationModeController,
   List<WorkspaceNode> Function()? workspaceFilesProvider,
   Listenable? workspaceFilesListenable,
@@ -182,6 +183,7 @@ AgentConversationViewModel createAgentPaneViewModel(
   return createAgentPaneViewModelWithStore(
     provider,
     MemoryAgentProviderConfigStore(),
+    initialThread: initialThread,
     conversationModeController: conversationModeController,
     workspaceFilesProvider: workspaceFilesProvider,
     workspaceFilesListenable: workspaceFilesListenable,
@@ -192,6 +194,7 @@ AgentConversationViewModel createAgentPaneViewModel(
 AgentConversationViewModel createAgentPaneViewModelWithStore(
   AgentPaneFakeProvider provider,
   AgentProviderConfigStore configStore, {
+  AgentThreadSummary? initialThread,
   AgentConversationModeController? conversationModeController,
   List<WorkspaceNode> Function()? workspaceFilesProvider,
   Listenable? workspaceFilesListenable,
@@ -201,7 +204,7 @@ AgentConversationViewModel createAgentPaneViewModelWithStore(
     providerFactory: AgentPaneFakeProviderFactory(provider),
   );
   addTearDown(registry.close);
-  final controller = ActiveAgentProviderController(
+  final controller = AgentProviderSettingsController(
     runtimeRegistry: registry,
     configStore: configStore,
   );
@@ -211,7 +214,12 @@ AgentConversationViewModel createAgentPaneViewModelWithStore(
     settings: controller,
   );
   addTearDown(bindingHarness.close);
-  final bindingLease = bindingHarness.acquireDraft(provider.config);
+  final bindingLease = initialThread == null
+      ? bindingHarness.acquireDraft(provider.config)
+      : bindingHarness.acquireThread(
+          config: provider.config,
+          threadId: initialThread.id,
+        );
   final viewModel = AgentConversationViewModel(
     providerController: controller,
     conversationBinding: bindingLease.binding,
@@ -220,8 +228,9 @@ AgentConversationViewModel createAgentPaneViewModelWithStore(
     workspaceFilesProvider: workspaceFilesProvider,
     workspaceFilesListenable: workspaceFilesListenable,
     workspaceFilesIndexReady: workspaceFilesIndexReady,
+    initialProjectPath: initialThread?.projectPath ?? '/repo',
+    initialThread: initialThread,
   );
-  viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
   return viewModel;
 }
 

@@ -91,6 +91,10 @@ main -> app -> presentation/application -> domain
 - `AgentConversationViewModel` 是命令入口和 typed listenable facade，不再继承
   `ChangeNotifier`。Widget 只能监听所需 state slice、稳定 live turn 或一次性 UI effect；
   Shell 只能监听 `AgentConversationThreadSnapshot`。
+- Workspace entry 构造时必须一次性注入匹配的 thread summary 与 Binding。一个
+  `AgentConversationViewModel` 只能承载该 Binding 的固定 thread；不得提供跨 thread
+  `switch`、带 restored session/provider 的通用 workspace 更新或 reset conversation 入口。
+  project/file context 更新不得清空会话状态，切换 thread 必须选择另一个 entry/ViewModel。
 - 跨模块共享的运行时指示（如侧栏 thread busy）若依赖独立 snapshot listenable，
   stream flush 与分区 publish 都必须同步该 snapshot，不得只 bump 面板 version。
 - 对会被新请求覆盖的异步加载使用 token/version guard，旧结果返回时必须被丢弃。
@@ -181,6 +185,9 @@ main -> app -> presentation/application -> domain
   唯一允许调用 `AgentProviderFactory.create` 的对象。`AgentProviderGlobalRuntime` 只借用
   每个 Provider ID 唯一且永不空闲回收的 global runtime；模型、Skill、用量、历史和
   thread 管理等会话前/全局操作不得创建 session runtime。
+- Registry `acquire` 必须显式传入 global/session scope，不得提供默认 global 兼容值。
+  使用统计面板只能通过 `AgentProviderGlobalRuntime` 读取 bundle 的 quota 端口；不得接受
+  raw Provider loader、lease loader 或 shared-provider predicate 等并行生命周期入口。
 - `AgentConversationBindingManager` 按 `draft(providerId, entryId)` 或
   `thread(providerId, threadId)` 唯一映射逻辑会话。草稿拿到真实 threadId 后必须原子晋升；
   目标 key 已存在时 fail-closed。Workspace 只持有 Binding lease，ViewModel 不得持有

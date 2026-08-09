@@ -6,19 +6,19 @@ import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dar
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
-import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 
-import '../../../../testing/ide_test_harness.dart';
+import '../../../testing/ide_test_harness.dart';
 
 void main() {
-  group('ActiveAgentProviderController', () {
+  group('AgentProviderSettingsController', () {
     test('persists only normalized V2 permission optionId', () async {
       final store = _RecordingConfigStore(const AgentProviderSettings());
       final registry = AgentProviderRuntimeRegistry(
         providerFactory: FakeAgentProviderFactory(_TrackingFakeAgentProvider()),
       );
       addTearDown(registry.close);
-      final controller = ActiveAgentProviderController(
+      final controller = AgentProviderSettingsController(
         runtimeRegistry: registry,
         configStore: store,
       );
@@ -45,7 +45,7 @@ void main() {
         providerFactory: FakeAgentProviderFactory(activeProvider),
       );
       addTearDown(registry.close);
-      final controller = ActiveAgentProviderController(
+      final controller = AgentProviderSettingsController(
         runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(
           const AgentProviderSettings(),
@@ -83,7 +83,7 @@ void main() {
         ),
       );
       addTearDown(registry.close);
-      final controller = ActiveAgentProviderController(
+      final controller = AgentProviderSettingsController(
         runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(
           AgentProviderSettings(providers: <AgentProviderConfig>[initial]),
@@ -118,7 +118,7 @@ void main() {
           providerFactory: FakeAgentProviderFactory(activeProvider),
         );
         addTearDown(registry.close);
-        final controller = ActiveAgentProviderController(
+        final controller = AgentProviderSettingsController(
           runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(
             const AgentProviderSettings(),
@@ -146,7 +146,7 @@ void main() {
       final factory = _RuntimePathSpyFactory();
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
       addTearDown(registry.close);
-      final controller = ActiveAgentProviderController(
+      final controller = AgentProviderSettingsController(
         runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(
           AgentProviderSettings(
@@ -178,7 +178,7 @@ void main() {
         providerFactory: FakeAgentProviderFactory(mismatchedProvider),
       );
       addTearDown(registry.close);
-      final controller = ActiveAgentProviderController(
+      final controller = AgentProviderSettingsController(
         runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(
           const AgentProviderSettings(),
@@ -212,7 +212,7 @@ void main() {
         final factory = _RuntimePathSpyFactory();
         final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
         addTearDown(registry.close);
-        final controller = ActiveAgentProviderController(
+        final controller = AgentProviderSettingsController(
           runtimeRegistry: registry,
           configStore: store,
         );
@@ -261,7 +261,7 @@ void main() {
         final factory = _RuntimePathSpyFactory();
         final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
         addTearDown(registry.close);
-        final controller = ActiveAgentProviderController(
+        final controller = AgentProviderSettingsController(
           runtimeRegistry: registry,
           configStore: store,
         );
@@ -289,7 +289,7 @@ void main() {
       final factory = _MultiInstanceFakeProviderFactory();
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
       addTearDown(registry.close);
-      final controller = ActiveAgentProviderController(
+      final controller = AgentProviderSettingsController(
         configStore: MemoryAgentProviderConfigStore(),
         runtimeRegistry: registry,
       );

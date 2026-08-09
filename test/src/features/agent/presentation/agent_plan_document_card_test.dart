@@ -107,14 +107,18 @@ void main() {
 
     testWidgets('审批卡的修改把意见随 rejected 决定回传 Provider', (tester) async {
       final provider = AgentPaneFakeProvider();
-      final viewModel = createAgentPaneViewModel(provider);
+      final viewModel = createAgentPaneViewModel(
+        provider,
+        initialThread: agentPaneThread(
+          id: 'thread-approval',
+          title: 'Approval thread',
+        ),
+      );
       addTearDown(provider.dispose);
       addTearDown(viewModel.dispose);
       await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
       await viewModel.loadModels();
-      await viewModel.switchThread(
-        agentPaneThread(id: 'thread-approval', title: 'Approval thread'),
-      );
+      await viewModel.initialization;
       await viewModel.sendMessage('plan this change');
       await pumpLiveAgentUi(tester);
 

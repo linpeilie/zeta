@@ -13,7 +13,7 @@ import 'package:zeta/src/features/agent/data/datasources/app_server/codex_app_se
 import 'package:zeta/src/features/agent/data/mappers/grok_permission_mode_codec.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
-import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 
 import '../../../testing/fixture_reader.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
@@ -98,13 +98,19 @@ void main() {
     );
 
     test('provider default and thread effective remain separate', () async {
-      final controller = AgentConversationPermissionSelectionController(
+      final first = AgentConversationPermissionSelectionController(
         persistOptionId: (_) async {
           fail('settings feedback must not persist the provider default');
         },
       );
-      addTearDown(controller.dispose);
-      controller.bind(
+      final second = AgentConversationPermissionSelectionController(
+        persistOptionId: (_) async {
+          fail('settings feedback must not persist the provider default');
+        },
+      );
+      addTearDown(first.dispose);
+      addTearDown(second.dispose);
+      first.bind(
         port: null,
         persistedOptionId: ':workspace',
         runtimeIdentity: const AgentProviderRuntimeIdentity(
@@ -112,21 +118,28 @@ void main() {
           generation: 1,
         ),
       );
-      controller.bindThread('thread-a');
+      second.bind(
+        port: null,
+        persistedOptionId: ':workspace',
+        runtimeIdentity: const AgentProviderRuntimeIdentity(
+          providerId: defaultAgentProviderId,
+          generation: 2,
+        ),
+      );
+      first.bindThread('thread-a');
+      second.bindThread('thread-b');
 
-      await controller.applyThreadSettings(
+      await first.applyThreadSettings(
         threadId: 'thread-a',
         permissionSelection: const AgentPermissionSelection(
           optionId: ':read-only',
         ),
       );
 
-      expect(controller.defaultOptionId, ':workspace');
-      expect(controller.selectedOptionId, ':read-only');
-      controller.bindThread('thread-b');
-      expect(controller.selectedOptionId, ':workspace');
-      controller.bindThread('thread-a');
-      expect(controller.selectedOptionId, ':workspace');
+      expect(first.defaultOptionId, ':workspace');
+      expect(first.selectedOptionId, ':read-only');
+      expect(second.defaultOptionId, ':workspace');
+      expect(second.selectedOptionId, ':workspace');
     });
 
     test('Grok runtime scope stays inside its owning Binding', () async {
@@ -210,7 +223,7 @@ void main() {
         final registry = AgentProviderRuntimeRegistry(
           providerFactory: FixedAgentProviderFactory(provider),
         );
-        final providerController = ActiveAgentProviderController(
+        final providerController = AgentProviderSettingsController(
           runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(),
         );
@@ -221,38 +234,38 @@ void main() {
           settings: providerController,
         );
         addTearDown(bindingHarness.close);
-        final firstBinding = bindingHarness.acquireDraft(provider.config);
-        final secondBinding = bindingHarness.acquireDraft(provider.config);
+        final firstThread = _threadSummary('thread-a');
+        final secondThread = _threadSummary('thread-b');
+        final firstBinding = bindingHarness.acquireThread(
+          config: provider.config,
+          threadId: firstThread.id,
+        );
+        final secondBinding = bindingHarness.acquireThread(
+          config: provider.config,
+          threadId: secondThread.id,
+        );
 
         final first = AgentConversationViewModel(
           providerController: providerController,
           conversationBinding: firstBinding.binding,
           globalRuntime: bindingHarness.globalRuntime,
+          initialProjectPath: '/repo',
+          initialThread: firstThread,
           uiFrameScheduler: FakeAgentFrameScheduler(),
         );
         final second = AgentConversationViewModel(
           providerController: providerController,
           conversationBinding: secondBinding.binding,
           globalRuntime: bindingHarness.globalRuntime,
+          initialProjectPath: '/repo',
+          initialThread: secondThread,
           uiFrameScheduler: FakeAgentFrameScheduler(),
         );
         addTearDown(first.dispose);
         addTearDown(second.dispose);
-        first.updateWorkspace(
-          projectPath: '/repo',
-          contextFilePath: null,
-          restoredSessionId: 'thread-a',
-          restoredProviderId: defaultAgentProviderId,
-          resetConversation: true,
-        );
-        second.updateWorkspace(
-          projectPath: '/repo',
-          contextFilePath: null,
-          restoredSessionId: 'thread-b',
-          restoredProviderId: defaultAgentProviderId,
-          resetConversation: true,
-        );
         await Future.wait(<Future<void>>[
+          first.initialization,
+          second.initialization,
           first.loadModels(),
           second.loadModels(),
         ]);
@@ -316,7 +329,7 @@ void main() {
         final registry = AgentProviderRuntimeRegistry(
           providerFactory: FixedAgentProviderFactory(provider),
         );
-        final providerController = ActiveAgentProviderController(
+        final providerController = AgentProviderSettingsController(
           runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(),
         );
@@ -327,38 +340,38 @@ void main() {
           settings: providerController,
         );
         addTearDown(bindingHarness.close);
-        final firstBinding = bindingHarness.acquireDraft(provider.config);
-        final secondBinding = bindingHarness.acquireDraft(provider.config);
+        final firstThread = _threadSummary('thread-a');
+        final secondThread = _threadSummary('thread-b');
+        final firstBinding = bindingHarness.acquireThread(
+          config: provider.config,
+          threadId: firstThread.id,
+        );
+        final secondBinding = bindingHarness.acquireThread(
+          config: provider.config,
+          threadId: secondThread.id,
+        );
 
         final first = AgentConversationViewModel(
           providerController: providerController,
           conversationBinding: firstBinding.binding,
           globalRuntime: bindingHarness.globalRuntime,
+          initialProjectPath: '/repo',
+          initialThread: firstThread,
           uiFrameScheduler: FakeAgentFrameScheduler(),
         );
         final second = AgentConversationViewModel(
           providerController: providerController,
           conversationBinding: secondBinding.binding,
           globalRuntime: bindingHarness.globalRuntime,
+          initialProjectPath: '/repo',
+          initialThread: secondThread,
           uiFrameScheduler: FakeAgentFrameScheduler(),
         );
         addTearDown(first.dispose);
         addTearDown(second.dispose);
-        first.updateWorkspace(
-          projectPath: '/repo',
-          contextFilePath: null,
-          restoredSessionId: 'thread-a',
-          restoredProviderId: defaultAgentProviderId,
-          resetConversation: true,
-        );
-        second.updateWorkspace(
-          projectPath: '/repo',
-          contextFilePath: null,
-          restoredSessionId: 'thread-b',
-          restoredProviderId: defaultAgentProviderId,
-          resetConversation: true,
-        );
         await Future.wait(<Future<void>>[
+          first.initialization,
+          second.initialization,
           first.loadModels(),
           second.loadModels(),
         ]);
@@ -416,7 +429,7 @@ void main() {
         final registry = AgentProviderRuntimeRegistry(
           providerFactory: FixedAgentProviderFactory(provider),
         );
-        final providerController = ActiveAgentProviderController(
+        final providerController = AgentProviderSettingsController(
           runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(
             AgentProviderSettings(
@@ -435,12 +448,18 @@ void main() {
           settings: providerController,
         );
         addTearDown(bindingHarness.close);
-        final bindingLease = bindingHarness.acquireDraft(config);
+        final thread = _threadSummary('source-thread');
+        final bindingLease = bindingHarness.acquireThread(
+          config: config,
+          threadId: thread.id,
+        );
         final permissions = bindingLease.binding.permissions;
         final viewModel = AgentConversationViewModel(
           providerController: providerController,
           conversationBinding: bindingLease.binding,
           globalRuntime: bindingHarness.globalRuntime,
+          initialProjectPath: '/repo',
+          initialThread: thread,
           onCreatedThread:
               ({
                 required session,
@@ -450,13 +469,7 @@ void main() {
           uiFrameScheduler: FakeAgentFrameScheduler(),
         );
         addTearDown(viewModel.dispose);
-        viewModel.updateWorkspace(
-          projectPath: '/repo',
-          contextFilePath: null,
-          restoredSessionId: 'source-thread',
-          restoredProviderId: defaultAgentProviderId,
-          resetConversation: true,
-        );
+        await viewModel.initialization;
         await permissions.applyThreadSettings(
           threadId: 'source-thread',
           permissionSelection: const AgentPermissionSelection(
@@ -709,6 +722,21 @@ void main() {
       }
     });
   });
+}
+
+AgentThreadSummary _threadSummary(String id) {
+  final timestamp = DateTime(2025);
+  return AgentThreadSummary(
+    id: id,
+    providerId: defaultAgentProviderId,
+    projectPath: '/repo',
+    title: id,
+    preview: id,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    recencyAt: timestamp,
+    status: AgentThreadRuntimeStatus.idle,
+  );
 }
 
 AgentProviderSettingsCodec _permissionConfigCodec() {

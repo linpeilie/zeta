@@ -10,7 +10,7 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
-import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 
 import '../../../testing/ide_test_harness.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
@@ -23,7 +23,7 @@ void main() {
     final registry = AgentProviderRuntimeRegistry(
       providerFactory: FakeAgentProviderFactory(provider),
     );
-    final providerController = ActiveAgentProviderController(
+    final providerController = AgentProviderSettingsController(
       runtimeRegistry: registry,
       configStore: MemoryAgentProviderConfigStore(
         AgentProviderSettings(
@@ -37,13 +37,24 @@ void main() {
       registry: registry,
       settings: providerController,
     );
-    final bindingLease = bindingHarness.acquireDraft(
-      AgentProviderConfig.defaultCodex.copyWith(enabled: false),
+    final thread = agentThread(
+      id: 'thread-disabled',
+      projectPath: 'C:/workspace',
+      title: 'Existing history',
+    );
+    final disabledConfig = AgentProviderConfig.defaultCodex.copyWith(
+      enabled: false,
+    );
+    final bindingLease = bindingHarness.acquireThread(
+      config: disabledConfig,
+      threadId: thread.id,
     );
     final viewModel = AgentConversationViewModel(
       providerController: providerController,
       conversationBinding: bindingLease.binding,
       globalRuntime: bindingHarness.globalRuntime,
+      initialProjectPath: thread.projectPath,
+      initialThread: thread,
     );
     addTearDown(() {
       viewModel.dispose();
@@ -53,17 +64,7 @@ void main() {
     });
 
     await viewModel.loadSettings();
-    viewModel.updateWorkspace(
-      projectPath: 'C:/workspace',
-      contextFilePath: null,
-    );
-    await viewModel.switchThread(
-      agentThread(
-        id: 'thread-disabled',
-        projectPath: 'C:/workspace',
-        title: 'Existing history',
-      ),
-    );
+    await viewModel.initialization;
     await _pumpAgentPane(tester, viewModel);
 
     expect(find.text('Existing history'), findsWidgets);
@@ -84,14 +85,14 @@ void main() {
     expect(find.byKey(const ValueKey('agent-message-input')), findsOneWidget);
   });
 
-  testWidgets('disabling active Agent selects the remaining enabled provider', (
+  testWidgets('disabling a Provider does not rebind an existing draft', (
     tester,
   ) async {
     // Arrange
     final registry = AgentProviderRuntimeRegistry(
       providerFactory: FakeAgentProviderFactory(FakeAgentProvider()),
     );
-    final providerController = ActiveAgentProviderController(
+    final providerController = AgentProviderSettingsController(
       runtimeRegistry: registry,
       configStore: MemoryAgentProviderConfigStore(
         const AgentProviderSettings(),
@@ -116,10 +117,7 @@ void main() {
       unawaited(registry.close());
     });
     await viewModel.loadSettings();
-    viewModel.updateWorkspace(
-      projectPath: 'C:/workspace',
-      contextFilePath: null,
-    );
+    viewModel.updateContext(projectPath: 'C:/workspace', contextFilePath: null);
     await _pumpAgentPane(tester, viewModel);
 
     // Act
@@ -127,10 +125,13 @@ void main() {
     await tester.pump();
 
     // Assert
-    expect(viewModel.activeProviderId, grokAgentProviderId);
-    expect(viewModel.activeProviderName, 'Grok');
-    expect(find.byKey(const ValueKey('agent-read-only-notice')), findsNothing);
-    expect(find.byKey(const ValueKey('agent-message-input')), findsOneWidget);
+    expect(viewModel.activeProviderId, defaultAgentProviderId);
+    expect(viewModel.activeProviderName, 'Codex');
+    expect(
+      find.byKey(const ValueKey('agent-read-only-notice')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('agent-message-input')), findsNothing);
   });
 }
 

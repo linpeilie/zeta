@@ -320,7 +320,10 @@ void main() {
     });
 
     test('global runtime 不参与 Binding 空闲回收', () async {
-      final global = await registry.acquire(AgentProviderConfig.defaultCodex);
+      final global = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
       await global.provider.initialize();
       await global.release();
       now = now.add(const Duration(days: 1));

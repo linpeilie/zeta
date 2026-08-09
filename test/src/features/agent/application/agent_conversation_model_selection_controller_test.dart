@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 import '../../../testing/agent_provider_stub_base.dart';
 
@@ -52,7 +53,7 @@ void main() {
       );
       addTearDown(controller.dispose);
 
-      controller.bindProvider(provider);
+      controller.bindRuntime(AgentProviderBundle.adapt(provider).runtime);
       controller.handleModelList(_modelList);
       await Future<void>.delayed(Duration.zero);
       persistedSelections.clear();

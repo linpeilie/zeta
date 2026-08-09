@@ -111,29 +111,22 @@ final class AgentConversationPermissionState {
     return runtimeIdentity == identity;
   }
 
-  /// draft 晋升为真实 thread 时保留逻辑状态；兼容入口意外改绑时丢弃旧会话状态。
-  /// Binding Manager 本身仍负责对真实 thread 改绑 fail-closed。
+  /// draft 晋升为真实 thread 时保留逻辑状态；真实 thread 不允许改绑或退回 draft。
   AgentConversationPermissionState bindThread(String? value) {
     final normalized = _normalizeThreadId(value);
     if (normalized == threadId) {
       return this;
     }
-    final promotesDraft = threadId == null && normalized != null;
-    return _copyWith(
-      runtimeIdentity: promotesDraft ? runtimeIdentity : null,
-      threadId: normalized,
-      sessionEffective: promotesDraft ? sessionEffective : null,
-      pendingTurn: promotesDraft ? pendingTurn : null,
-      runtimeSelection: promotesDraft ? runtimeSelection : null,
-      source: promotesDraft
-          ? source
-          : providerDefaultPreference == null
-          ? null
-          : AgentPermissionStateSource.providerDefault,
-      lastApplyScope: promotesDraft ? lastApplyScope : null,
-      warning: promotesDraft ? warning : null,
-      revision: revision + 1,
-    );
+    if (threadId != null) {
+      throw StateError(
+        'Permission state for $threadId cannot bind to '
+        '${normalized ?? 'a draft'}',
+      );
+    }
+    if (normalized == null) {
+      return this;
+    }
+    return _copyWith(threadId: normalized, revision: revision + 1);
   }
 
   AgentConversationPermissionState attachRuntime(

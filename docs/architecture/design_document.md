@@ -54,9 +54,9 @@ main()
 
 IdeShellController
   -> IdeSessionStore
-  -> ActiveAgentProviderController -> AgentProviderSettingsController
+  -> AgentProviderSettingsController
   -> AgentThreadWorkspaceController -> 每个 Pane 持有 ConversationBinding lease
-  -> AgentConversationViewModel -> Binding（不持有 Provider lease/scope/pin）
+  -> AgentConversationViewModel -> 固定 Binding（不持有 Provider lease/scope/pin）
   -> ProjectThreadsController
 
 AgentConversationViewModel
@@ -79,16 +79,18 @@ AgentConversationViewModel
   -> AgentConversationModelSelectionController
   -> AgentConversationModeController
   -> AgentPlanExecutionHandoffController
-  -> AgentProviderBundle
+  -> Binding / GlobalRuntime 提供的 AgentProviderBundle 端口
     -> AgentRuntimePort / AgentConversationPort
     -> AgentThreadCatalogPort? / AgentThreadMutationsPort? / AgentThreadBranchingPort?
     -> AgentTurnSteeringPort? / AgentInteractionPort? / AgentModelCatalogPort?
     -> AgentLocalThreadListPort? / AgentSessionConfigurationPort? / AgentPlanApprovalPort?
     -> AgentConversationModeCatalogPort?
-    -> AgentProvider
-      -> CodexAppServerAgentProvider | GrokAcpAgentProvider
-        -> JsonRpcPeer
-          -> codex app-server / grok agent stdio
+
+AgentProviderRuntimeRegistry
+  -> AgentProviderFactory
+    -> CodexAppServerAgentProvider | GrokAcpAgentProvider
+      -> JsonRpcPeer
+        -> codex app-server / grok agent stdio
 
 ProjectThreadsController
   -> AgentProviderBundle
@@ -308,6 +310,9 @@ Agent Canvas 支持多 thread 常驻 entry。`AgentProviderRuntimeRegistry` 是�
 所有者；`AgentProviderGlobalRuntime` 为每个 Provider ID 保留一个永不空闲回收的
 全局实例，承载用量、目录、历史和 thread 操作。`AgentConversationBindingManager`
 按草稿 key 或 thread key 唯一维护 Binding；Workspace entry 只持有 Binding lease。
+Workspace 是 thread 身份的组合边界：创建 entry 时一次性注入 thread summary 与匹配的
+Binding；ViewModel 没有 `switchThread` 或带恢复参数的通用 workspace 更新入口，只能更新
+project/file context。打开另一个 thread 必须选择或创建另一个 entry/ViewModel。
 打开草稿、打开已有 thread 和读取历史均不创建 session Provider，只有第一次提交输入
 调用 `Binding.beginTurn()` 后才启动，并在已有 thread 上 resume。草稿取得 threadId 后
 原子晋升，碰到已有 key 时 fail-closed。
@@ -318,6 +323,8 @@ Binding 持有该逻辑会话的可选 runtime、generation 过滤后的事件�
 ABA；registry 还保证旧进程 dispose 完成前同 scope 的 acquire 等待。回收后保留会话权限
 默认值与 session effective，清除 runtime-only 状态；下一次提交才重建。配置失效或窗口
 退出时统一关闭关联进程，global runtime 永不参与空闲回收。
+Registry 的 `acquire` 必须显式传入 global/session scope；使用统计面板只通过
+`AgentProviderGlobalRuntime` 获取配额，不保留 lease loader 或原始 Provider loader 兼容路径。
 Project Threads 侧栏对**已打开** thread 的执行中/等待指示，以 entry 的
 `AgentConversationThreadSnapshot` 为真源，经 shell 调用 `syncRuntimeSnapshot` 更新
 `runningThreadIds`、摘要 `status`/waiting 与内存态 `completedThreadIds`。分区 UI 信号

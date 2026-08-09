@@ -51,7 +51,7 @@ void main() {
     });
 
     test(
-      'session effective belongs to one Binding and is cleared on rebind',
+      'session effective belongs to one Binding and rebind fails closed',
       () {
         var state = const AgentConversationPermissionState(
           runtimeIdentity: runtime,
@@ -74,11 +74,11 @@ void main() {
           AgentPermissionStateSource.serverSettings,
         );
 
-        final rebound = state.bindThread('thread-b');
-        expect(rebound.threadId, 'thread-b');
-        expect(rebound.runtimeIdentity, isNull);
-        expect(rebound.sessionEffective, isNull);
-        expect(rebound.effectiveValue?.selection.optionId, 'ask');
+        expect(() => state.bindThread('thread-b'), throwsA(isA<StateError>()));
+        expect(() => state.bindThread(null), throwsA(isA<StateError>()));
+        expect(state.threadId, 'thread-a');
+        expect(state.runtimeIdentity, runtime);
+        expect(state.sessionEffective?.selection.optionId, 'auto');
       },
     );
 

@@ -20,7 +20,7 @@ import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_motion.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
-import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 
 import '../../../testing/ide_test_harness.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
@@ -1335,7 +1335,7 @@ void main() {
         providerFactory: FakeAgentProviderFactory(provider),
       );
       addTearDown(registry.close);
-      final controller = ActiveAgentProviderController(
+      final controller = AgentProviderSettingsController(
         runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(),
       );
@@ -1352,7 +1352,7 @@ void main() {
         globalRuntime: bindingHarness.globalRuntime,
       );
       addTearDown(viewModel.dispose);
-      viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
+      viewModel.updateContext(projectPath: '/repo', contextFilePath: null);
 
       final lightIdeTheme = buildIdeThemeData(
         brightness: Brightness.light,
@@ -1406,7 +1406,7 @@ void main() {
       providerFactory: FakeAgentProviderFactory(provider),
     );
     addTearDown(registry.close);
-    final controller = ActiveAgentProviderController(
+    final controller = AgentProviderSettingsController(
       runtimeRegistry: registry,
       configStore: MemoryAgentProviderConfigStore(),
     );
@@ -1416,21 +1416,24 @@ void main() {
       settings: controller,
     );
     addTearDown(bindingHarness.close);
-    final bindingLease = bindingHarness.acquireDraft(provider.config);
+    final thread = agentThread(
+      id: 'thread-a',
+      projectPath: '/repo',
+      title: 'Original title',
+    );
+    final bindingLease = bindingHarness.acquireThread(
+      config: provider.config,
+      threadId: thread.id,
+    );
     final viewModel = AgentConversationViewModel(
       providerController: controller,
       conversationBinding: bindingLease.binding,
       globalRuntime: bindingHarness.globalRuntime,
+      initialProjectPath: '/repo',
+      initialThread: thread,
     );
     addTearDown(viewModel.dispose);
-    viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
-    await viewModel.switchThread(
-      agentThread(
-        id: 'thread-a',
-        projectPath: '/repo',
-        title: 'Original title',
-      ),
-    );
+    await viewModel.initialization;
 
     final lightIdeTheme = buildIdeThemeData(
       brightness: Brightness.light,
@@ -1540,7 +1543,7 @@ void main() {
       providerFactory: FakeAgentProviderFactory(provider),
     );
     addTearDown(registry.close);
-    final controller = ActiveAgentProviderController(
+    final controller = AgentProviderSettingsController(
       runtimeRegistry: registry,
       configStore: MemoryAgentProviderConfigStore(),
     );
@@ -1550,28 +1553,31 @@ void main() {
       settings: controller,
     );
     addTearDown(bindingHarness.close);
-    final bindingLease = bindingHarness.acquireDraft(provider.config);
+    final thread = AgentThreadSummary(
+      id: 'thread-ctx',
+      providerId: defaultAgentProviderId,
+      projectPath: '/repo',
+      title: 'Context thread',
+      preview: 'Context thread',
+      sessionPath: '/repo/thread-ctx.jsonl',
+      createdAt: createdAt,
+      updatedAt: lastActiveAt,
+      recencyAt: lastActiveAt,
+      status: AgentThreadRuntimeStatus.idle,
+    );
+    final bindingLease = bindingHarness.acquireThread(
+      config: provider.config,
+      threadId: thread.id,
+    );
     final viewModel = AgentConversationViewModel(
       providerController: controller,
       conversationBinding: bindingLease.binding,
       globalRuntime: bindingHarness.globalRuntime,
+      initialProjectPath: '/repo',
+      initialThread: thread,
     );
     addTearDown(viewModel.dispose);
-    viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
-    await viewModel.switchThread(
-      AgentThreadSummary(
-        id: 'thread-ctx',
-        providerId: defaultAgentProviderId,
-        projectPath: '/repo',
-        title: 'Context thread',
-        preview: 'Context thread',
-        sessionPath: '/repo/thread-ctx.jsonl',
-        createdAt: createdAt,
-        updatedAt: lastActiveAt,
-        recencyAt: lastActiveAt,
-        status: AgentThreadRuntimeStatus.idle,
-      ),
-    );
+    await viewModel.initialization;
 
     final lightIdeTheme = buildIdeThemeData(
       brightness: Brightness.light,
@@ -1723,7 +1729,7 @@ void main() {
       providerFactory: FakeAgentProviderFactory(provider),
     );
     addTearDown(registry.close);
-    final controller = ActiveAgentProviderController(
+    final controller = AgentProviderSettingsController(
       runtimeRegistry: registry,
       configStore: MemoryAgentProviderConfigStore(),
     );
@@ -1733,32 +1739,35 @@ void main() {
       settings: controller,
     );
     addTearDown(bindingHarness.close);
-    final bindingLease = bindingHarness.acquireDraft(provider.config);
+    final thread = AgentThreadSummary(
+      id: 'thread-fork',
+      providerId: defaultAgentProviderId,
+      projectPath: '/repo',
+      title: 'Fork thread',
+      preview: 'Fork thread',
+      sessionPath: '/repo/thread-fork.jsonl',
+      createdAt: createdAt,
+      updatedAt: createdAt,
+      recencyAt: createdAt,
+      status: AgentThreadRuntimeStatus.idle,
+    );
+    final bindingLease = bindingHarness.acquireThread(
+      config: provider.config,
+      threadId: thread.id,
+    );
     final viewModel = AgentConversationViewModel(
       providerController: controller,
       conversationBinding: bindingLease.binding,
       globalRuntime: bindingHarness.globalRuntime,
+      initialProjectPath: '/repo',
+      initialThread: thread,
       onCreatedThread:
           ({required session, required context, String? initialMessage}) async {
             selectedFork = session;
           },
     );
     addTearDown(viewModel.dispose);
-    viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
-    await viewModel.switchThread(
-      AgentThreadSummary(
-        id: 'thread-fork',
-        providerId: defaultAgentProviderId,
-        projectPath: '/repo',
-        title: 'Fork thread',
-        preview: 'Fork thread',
-        sessionPath: '/repo/thread-fork.jsonl',
-        createdAt: createdAt,
-        updatedAt: createdAt,
-        recencyAt: createdAt,
-        status: AgentThreadRuntimeStatus.idle,
-      ),
-    );
+    await viewModel.initialization;
 
     final lightIdeTheme = buildIdeThemeData(
       brightness: Brightness.light,

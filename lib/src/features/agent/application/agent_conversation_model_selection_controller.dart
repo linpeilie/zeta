@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 typedef AgentModelSelectionPersistCallback =
@@ -122,10 +121,6 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
     return fastTier != null &&
         fastTier.id == _modelSelection.serviceTierId &&
         fastTier.enabled;
-  }
-
-  void bindProvider(AgentProvider provider) {
-    bindRuntime(provider.bundle.runtime);
   }
 
   void bindRuntime(AgentRuntimePort runtime) {

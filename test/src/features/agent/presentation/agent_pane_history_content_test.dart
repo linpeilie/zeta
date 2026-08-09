@@ -40,13 +40,15 @@ void main() {
               ),
             },
           ),
+          initialThread: agentPaneThread(
+            id: 'thread-markdown',
+            title: 'Heavy markdown',
+          ),
         );
         addTearDown(viewModel.dispose);
 
         await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
-        await viewModel.switchThread(
-          agentPaneThread(id: 'thread-markdown', title: 'Heavy markdown'),
-        );
+        await viewModel.initialization;
         await pumpAgentPaneUi(tester);
 
         // 历史长文不再折叠：无预览/展开按钮，正文完整可见。
@@ -100,13 +102,15 @@ void main() {
             ),
           },
         ),
+        initialThread: agentPaneThread(
+          id: 'thread-grok-failed',
+          title: 'Failed Grok turn',
+        ),
       );
       addTearDown(viewModel.dispose);
 
       await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
-      await viewModel.switchThread(
-        agentPaneThread(id: 'thread-grok-failed', title: 'Failed Grok turn'),
-      );
+      await viewModel.initialization;
       await pumpAgentPaneUi(tester);
 
       expect(find.textContaining(errorMessage), findsOneWidget);
@@ -157,13 +161,15 @@ void main() {
             ),
           },
         ),
+        initialThread: agentPaneThread(
+          id: 'thread-capacity',
+          title: 'Capacity failure',
+        ),
       );
       addTearDown(viewModel.dispose);
 
       await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
-      await viewModel.switchThread(
-        agentPaneThread(id: 'thread-capacity', title: 'Capacity failure'),
-      );
+      await viewModel.initialization;
       await pumpAgentPaneUi(tester);
 
       expect(find.textContaining(errorMessage), findsOneWidget);
@@ -221,13 +227,15 @@ void main() {
             ),
           },
         ),
+        initialThread: agentPaneThread(
+          id: 'thread-footer',
+          title: 'Footer turn',
+        ),
       );
       addTearDown(viewModel.dispose);
 
       await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
-      await viewModel.switchThread(
-        agentPaneThread(id: 'thread-footer', title: 'Footer turn'),
-      );
+      await viewModel.initialization;
       await pumpAgentPaneUi(tester);
 
       final footer = find.byKey(
@@ -324,13 +332,12 @@ void main() {
             ),
           },
         ),
+        initialThread: agentPaneThread(id: 'thread-plan', title: 'Plan card'),
       );
       addTearDown(viewModel.dispose);
 
       await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
-      await viewModel.switchThread(
-        agentPaneThread(id: 'thread-plan', title: 'Plan card'),
-      );
+      await viewModel.initialization;
       await pumpAgentPaneUi(tester);
 
       expect(viewModel.isPlanMessageExpanded('history-plan-1'), isFalse);
@@ -506,13 +513,15 @@ void main() {
               ),
             },
           ),
+          initialThread: agentPaneThread(
+            id: 'thread-diff',
+            title: 'Large diff',
+          ),
         );
         addTearDown(viewModel.dispose);
 
         await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
-        await viewModel.switchThread(
-          agentPaneThread(id: 'thread-diff', title: 'Large diff'),
-        );
+        await viewModel.initialization;
         await pumpAgentPaneUi(tester);
 
         final historyState = viewModel.historyState;
@@ -671,7 +680,13 @@ void main() {
           ),
         },
       );
-      final viewModel = createAgentPaneViewModel(provider);
+      final viewModel = createAgentPaneViewModel(
+        provider,
+        initialThread: agentPaneThread(
+          id: 'thread-fonts',
+          title: 'Font thread',
+        ),
+      );
       addTearDown(provider.dispose);
       addTearDown(viewModel.dispose);
 
@@ -682,9 +697,7 @@ void main() {
           codeFontFamily: 'CodeFont',
         ),
       );
-      await viewModel.switchThread(
-        agentPaneThread(id: 'thread-fonts', title: 'Font thread'),
-      );
+      await viewModel.initialization;
       await pumpLiveAgentUi(tester);
 
       final markdownParagraphFinder = find.textContaining(
@@ -711,6 +724,7 @@ void main() {
         'CodeFont',
       );
 
+      await viewModel.sendMessage('bind session runtime');
       provider.emitEvent(
         const AgentPermissionRequestedEvent(
           AgentPermissionRequest(
@@ -740,7 +754,7 @@ void main() {
       provider.emitEvent(
         const AgentTurnCompletedEvent(
           sessionId: 'thread-fonts',
-          turnId: 'turn-fonts-1',
+          turnId: 'turn-1',
         ),
       );
       await tester.pump();

@@ -10,7 +10,7 @@ import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
-import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 
@@ -47,10 +47,10 @@ void main() {
           ),
         },
       );
-      final viewModel = _createViewModel(provider);
+      final viewModel = _createViewModel(provider, initialThread: _thread());
       addTearDown(viewModel.dispose);
 
-      await viewModel.switchThread(_thread());
+      await viewModel.initialization;
 
       expect(provider.calls, <String>['read:thread-1']);
       expect(provider.readSessionPaths, <String>['/repo/thread-1.jsonl']);
@@ -85,7 +85,7 @@ void main() {
     });
 
     test(
-      'switchThread hydrates model list without a prior loadModels call',
+      'bound thread initialization hydrates models without loadModels',
       () async {
         final provider = _FakeAgentProvider(
           availableModels: const AgentModelList(
@@ -106,12 +106,12 @@ void main() {
             ),
           },
         );
-        final viewModel = _createViewModel(provider);
+        final viewModel = _createViewModel(provider, initialThread: _thread());
         addTearDown(viewModel.dispose);
 
         expect(viewModel.models, isEmpty);
 
-        await viewModel.switchThread(_thread());
+        await viewModel.initialization;
 
         expect(viewModel.models.map((model) => model.id), <String>['gpt-5.5']);
         expect(viewModel.modelConfigUiState.models, isNotEmpty);
@@ -120,7 +120,7 @@ void main() {
     );
 
     test(
-      'switchThread does not wait for stale event subscription cancellation',
+      'bound thread initialization does not wait for stale cancellation',
       () async {
         final cancellationGate = Completer<void>();
         final provider = _FakeAgentProvider(
@@ -132,7 +132,7 @@ void main() {
             ),
           },
         );
-        final viewModel = _createViewModel(provider);
+        final viewModel = _createViewModel(provider, initialThread: _thread());
         addTearDown(() {
           if (!cancellationGate.isCompleted) {
             cancellationGate.complete();
@@ -141,9 +141,7 @@ void main() {
         });
         await viewModel.loadModels();
 
-        await viewModel
-            .switchThread(_thread())
-            .timeout(const Duration(seconds: 1));
+        await viewModel.initialization.timeout(const Duration(seconds: 1));
 
         expect(viewModel.threadOpenPhase, AgentThreadOpenPhase.idle);
         expect(
@@ -162,10 +160,10 @@ void main() {
         final provider = _FakeAgentProvider(
           resumeSessionTitle: 'Resolved title',
         );
-        final viewModel = _createViewModel(provider);
+        final viewModel = _createViewModel(provider, initialThread: _thread());
         addTearDown(viewModel.dispose);
 
-        await viewModel.switchThread(_thread());
+        await viewModel.initialization;
         await viewModel.sendMessage('hello');
 
         expect(provider.calls, <String>[
@@ -387,7 +385,7 @@ void main() {
       },
     );
 
-    test('clears the local handoff when the workspace changes', () async {
+    test('keeps the local handoff when only context changes', () async {
       final provider = _ModeFakeAgentProvider(
         availableModels: _conversationModeModels,
       );
@@ -400,12 +398,12 @@ void main() {
       await _emitCompletedPlan(provider);
       expect(viewModel.planExecutionRequest, isNotNull);
 
-      viewModel.updateWorkspace(
+      viewModel.updateContext(
         projectPath: '/another-project',
         contextFilePath: null,
       );
 
-      expect(viewModel.planExecutionRequest, isNull);
+      expect(viewModel.planExecutionRequest, isNotNull);
     });
 
     test('does not offer execution for an interrupted Plan turn', () async {
@@ -491,30 +489,28 @@ void main() {
       expect(viewModel.currentThreadTitle, 'From list refresh');
     });
 
-    test('resets header title after project switch', () async {
+    test('keeps bound thread title after project context changes', () async {
       final provider = _FakeAgentProvider();
-      final viewModel = _createViewModel(provider);
+      final viewModel = _createViewModel(provider, initialThread: _thread());
       addTearDown(viewModel.dispose);
 
-      await viewModel.switchThread(_thread());
+      await viewModel.initialization;
       await Future<void>.delayed(Duration.zero);
-      viewModel.updateWorkspace(
+      viewModel.updateContext(
         projectPath: '/other-repo',
         contextFilePath: null,
       );
 
-      expect(
-        viewModel.currentThreadTitle,
-        AgentConversationViewModel.defaultThreadTitle,
-      );
+      expect(viewModel.currentThreadTitle, 'Thread one');
+      expect(viewModel.sessionId, 'thread-1');
     });
 
     test('does not resume when history loading fails', () async {
       final provider = _FakeAgentProvider(failHistory: true);
-      final viewModel = _createViewModel(provider);
+      final viewModel = _createViewModel(provider, initialThread: _thread());
       addTearDown(viewModel.dispose);
 
-      await viewModel.switchThread(_thread());
+      await viewModel.initialization;
 
       expect(provider.calls, <String>['read:thread-1']);
       expect(viewModel.status.state, AgentProviderConnectionState.error);
@@ -552,10 +548,10 @@ void main() {
           ),
         },
       );
-      final viewModel = _createViewModel(provider);
+      final viewModel = _createViewModel(provider, initialThread: _thread());
       addTearDown(viewModel.dispose);
 
-      await viewModel.switchThread(_thread());
+      await viewModel.initialization;
       await viewModel.sendMessage('Resume this thread');
 
       expect(provider.calls, <String>['read:thread-1', 'resume:thread-1']);
@@ -569,146 +565,6 @@ void main() {
           .toList();
       expect(texts, contains('Keep this history'));
       expect(texts, contains('Resume this thread'));
-    });
-
-    test('switchThread allows switching away from a running thread', () async {
-      final provider = _FakeAgentProvider(
-        historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
-          'thread-1': const AgentThreadHistorySnapshot(
-            threadId: 'thread-1',
-            turns: <AgentHistoryTurn>[
-              AgentHistoryTurn(
-                id: 'turn-running',
-                status: AgentHistoryTurnStatus.running,
-                entries: <AgentHistoryEntry>[
-                  AgentHistoryMessageEntry(
-                    id: 'history-a',
-                    role: AgentMessageRole.user,
-                    text: 'Thread one history',
-                  ),
-                ],
-              ),
-            ],
-          ),
-          'thread-2': _historySnapshot(
-            threadId: 'thread-2',
-            userText: 'Thread two history',
-          ),
-        },
-      );
-      final viewModel = _createViewModel(provider);
-      addTearDown(viewModel.dispose);
-
-      await viewModel.switchThread(_thread(id: 'thread-1'));
-      // 历史里的 running 不升为 Zeta live 执行中。
-      expect(viewModel.isTurnRunning, isFalse);
-
-      await viewModel.switchThread(
-        _thread(id: 'thread-2', title: 'Thread two'),
-      );
-
-      expect(viewModel.currentThreadTitle, 'Thread two');
-      expect(viewModel.threadOpenPhase, AgentThreadOpenPhase.idle);
-      expect(
-        viewModel.timelineEntries.whereType<AgentMessageTimelineEntry>().map(
-          (entry) => entry.message.text,
-        ),
-        contains('Thread two history'),
-      );
-      expect(
-        viewModel.timelineEntries.whereType<AgentMessageTimelineEntry>().map(
-          (entry) => entry.message.text,
-        ),
-        isNot(contains('Thread one history')),
-      );
-      expect(provider.calls, <String>[
-        'read:thread-1',
-        'unsubscribe:thread-1',
-        'read:thread-2',
-      ]);
-      expect(provider.unsubscribedThreads, <String>['thread-1']);
-    });
-
-    test(
-      'switchThread does not unsubscribe when selecting the same thread',
-      () async {
-        final provider = _FakeAgentProvider(
-          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
-            'thread-1': _historySnapshot(
-              threadId: 'thread-1',
-              userText: 'Same thread',
-            ),
-          },
-        );
-        final viewModel = _createViewModel(provider);
-        addTearDown(viewModel.dispose);
-
-        await viewModel.switchThread(_thread(id: 'thread-1'));
-        await viewModel.switchThread(_thread(id: 'thread-1'));
-
-        expect(provider.unsubscribedThreads, isEmpty);
-        expect(provider.calls, <String>['read:thread-1', 'read:thread-1']);
-      },
-    );
-
-    test(
-      'updateWorkspace unsubscribes previous thread on project change',
-      () async {
-        final provider = _FakeAgentProvider(
-          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
-            'thread-1': _historySnapshot(
-              threadId: 'thread-1',
-              userText: 'Leaving project',
-            ),
-          },
-        );
-        final viewModel = _createViewModel(provider);
-        addTearDown(viewModel.dispose);
-
-        viewModel.updateWorkspace(
-          projectPath: '/repo-a',
-          contextFilePath: null,
-        );
-        await viewModel.switchThread(_thread(id: 'thread-1'));
-        expect(provider.unsubscribedThreads, isEmpty);
-
-        viewModel.updateWorkspace(
-          projectPath: '/repo-b',
-          contextFilePath: null,
-        );
-        await Future<void>.delayed(Duration.zero);
-
-        expect(provider.unsubscribedThreads, <String>['thread-1']);
-      },
-    );
-
-    test('updateWorkspace rejects restored thread without provider', () {
-      final provider = _FakeAgentProvider();
-      final viewModel = _createViewModel(provider);
-      addTearDown(viewModel.dispose);
-
-      viewModel.updateWorkspace(
-        projectPath: '/repo',
-        contextFilePath: null,
-        restoredSessionId: 'orphan-thread',
-      );
-
-      expect(viewModel.sessionId, isNull);
-    });
-
-    test('updateWorkspace keeps restored thread with provider ownership', () {
-      final provider = _FakeAgentProvider();
-      final viewModel = _createViewModel(provider);
-      addTearDown(viewModel.dispose);
-
-      viewModel.updateWorkspace(
-        projectPath: '/repo',
-        contextFilePath: null,
-        restoredSessionId: 'thread-1',
-        restoredProviderId: defaultAgentProviderId,
-      );
-
-      expect(viewModel.sessionId, 'thread-1');
     });
 
     test(
@@ -734,10 +590,10 @@ void main() {
             ),
           },
         );
-        final viewModel = _createViewModel(provider);
+        final viewModel = _createViewModel(provider, initialThread: _thread());
         addTearDown(viewModel.dispose);
 
-        await viewModel.switchThread(_thread());
+        await viewModel.initialization;
         expect(viewModel.isTurnRunning, isFalse);
         expect(viewModel.canSubmitMessage, isTrue);
         expect(viewModel.showRunningIndicator, isFalse);
@@ -759,7 +615,7 @@ void main() {
     );
 
     test(
-      'switchThread ignores provider list active without live turn',
+      'bound thread ignores provider list active without live turn',
       () async {
         final provider = _FakeAgentProvider(
           historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
@@ -770,17 +626,19 @@ void main() {
             ),
           },
         );
-        final viewModel = _createViewModel(provider);
+        final activeThread = _thread(
+          id: 'thread-1',
+          status: AgentThreadRuntimeStatus.active,
+          waitingOnApproval: true,
+          waitingOnUserInput: true,
+        );
+        final viewModel = _createViewModel(
+          provider,
+          initialThread: activeThread,
+        );
         addTearDown(viewModel.dispose);
 
-        await viewModel.switchThread(
-          _thread(
-            id: 'thread-1',
-            status: AgentThreadRuntimeStatus.active,
-            waitingOnApproval: true,
-            waitingOnUserInput: true,
-          ),
-        );
+        await viewModel.initialization;
 
         expect(viewModel.isTurnRunning, isFalse);
         expect(viewModel.threadRuntimeStatus, AgentThreadRuntimeStatus.idle);
@@ -806,11 +664,11 @@ void main() {
           ),
         },
       );
-      final viewModel = _createViewModel(provider);
+      final viewModel = _createViewModel(provider, initialThread: _thread());
       addTearDown(viewModel.dispose);
 
       await viewModel.loadModels();
-      await viewModel.switchThread(_thread());
+      await viewModel.initialization;
       expect(viewModel.selectedConversationMode, AgentConversationModeId.plan);
 
       await viewModel.sendMessage('start plan work');
@@ -860,19 +718,15 @@ void main() {
             ),
           },
         );
-        final viewModel = _createViewModel(provider);
+        final currentThread = _thread(id: 'thread-2', title: 'Thread two');
+        final viewModel = _createViewModel(
+          provider,
+          initialThread: currentThread,
+        );
         addTearDown(viewModel.dispose);
 
         await viewModel.loadModels();
-        await viewModel.switchThread(_thread(id: 'thread-1'));
-        expect(
-          viewModel.selectedConversationMode,
-          AgentConversationModeId.plan,
-        );
-
-        await viewModel.switchThread(
-          _thread(id: 'thread-2', title: 'Thread two'),
-        );
+        await viewModel.initialization;
         expect(
           viewModel.selectedConversationMode,
           AgentConversationModeId.defaultMode,
@@ -917,13 +771,14 @@ void main() {
       'other-thread permission settings are ignored by this Binding',
       () async {
         final provider = _FakeAgentProvider();
-        final viewModel = _createViewModel(provider);
+        final viewModel = _createViewModel(
+          provider,
+          initialThread: _thread(id: 'thread-2', title: 'Thread two'),
+        );
         addTearDown(viewModel.dispose);
 
         await viewModel.loadModels();
-        await viewModel.switchThread(
-          _thread(id: 'thread-2', title: 'Thread two'),
-        );
+        await viewModel.initialization;
         await viewModel.sendMessage('bind thread two runtime');
         final currentBefore = viewModel.permissionSnapshotForThread('thread-2');
 
@@ -953,94 +808,63 @@ void main() {
       },
     );
 
-    test('rapid thread switch discards a late history mode', () async {
-      final threadAHistory = Completer<AgentThreadHistorySnapshot>();
-      final provider = _ModeFakeAgentProvider(
-        availableModels: _conversationModeModels,
-        historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
-          'thread-2': const AgentThreadHistorySnapshot(
-            threadId: 'thread-2',
+    test(
+      'bound thread accepts its history when loading completes late',
+      () async {
+        final threadAHistory = Completer<AgentThreadHistorySnapshot>();
+        final provider = _ModeFakeAgentProvider(
+          availableModels: _conversationModeModels,
+          historyCompleters: <String, Completer<AgentThreadHistorySnapshot>>{
+            'thread-1': threadAHistory,
+          },
+        );
+        final viewModel = _createViewModel(provider, initialThread: _thread());
+        addTearDown(viewModel.dispose);
+
+        await viewModel.loadModels();
+        while (!provider.calls.contains('read:thread-1')) {
+          await Future<void>.delayed(Duration.zero);
+        }
+
+        threadAHistory.complete(
+          const AgentThreadHistorySnapshot(
+            threadId: 'thread-1',
             turns: <AgentHistoryTurn>[
               AgentHistoryTurn(
-                id: 'turn-2',
-                collaborationMode: AgentConversationModeId.defaultMode,
+                id: 'turn-1',
+                collaborationMode: AgentConversationModeId.plan,
                 entries: <AgentHistoryEntry>[
                   AgentHistoryMessageEntry(
-                    id: 'thread-2-message',
+                    id: 'thread-1-message',
                     role: AgentMessageRole.agent,
-                    text: 'Current thread history',
+                    text: 'Late thread history',
                   ),
                 ],
               ),
             ],
           ),
-        },
-        historyCompleters: <String, Completer<AgentThreadHistorySnapshot>>{
-          'thread-1': threadAHistory,
-        },
-      );
-      final viewModel = _createViewModel(provider);
-      addTearDown(viewModel.dispose);
+        );
+        await viewModel.initialization;
 
-      await viewModel.loadModels();
-      final threadASwitch = viewModel.switchThread(_thread(id: 'thread-1'));
-      while (!provider.calls.contains('read:thread-1')) {
-        await Future<void>.delayed(Duration.zero);
-      }
+        expect(viewModel.currentThreadTitle, 'Thread one');
+        expect(
+          viewModel.selectedConversationMode,
+          AgentConversationModeId.plan,
+        );
+        final messages = viewModel.timelineEntries
+            .whereType<AgentMessageTimelineEntry>()
+            .map((entry) => entry.message.text);
+        expect(messages, contains('Late thread history'));
+      },
+    );
 
-      await viewModel.switchThread(
-        _thread(id: 'thread-2', title: 'Thread two'),
-      );
-      threadAHistory.complete(
-        const AgentThreadHistorySnapshot(
-          threadId: 'thread-1',
-          turns: <AgentHistoryTurn>[
-            AgentHistoryTurn(
-              id: 'turn-1',
-              collaborationMode: AgentConversationModeId.plan,
-              entries: <AgentHistoryEntry>[
-                AgentHistoryMessageEntry(
-                  id: 'thread-1-message',
-                  role: AgentMessageRole.agent,
-                  text: 'Stale thread history',
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
-      await threadASwitch;
-
-      expect(viewModel.currentThreadTitle, 'Thread two');
-      expect(
-        viewModel.selectedConversationMode,
-        AgentConversationModeId.defaultMode,
-      );
-      final messages = viewModel.timelineEntries
-          .whereType<AgentMessageTimelineEntry>()
-          .map((entry) => entry.message.text);
-      expect(messages, contains('Current thread history'));
-      expect(messages, isNot(contains('Stale thread history')));
-    });
-
-    test('thread switch rejects a late accepted mode snapshot', () async {
+    test('late accepted mode snapshot stays scoped to its turn', () async {
       final modeController = AgentConversationModeController();
       addTearDown(modeController.dispose);
       final sendResult = Completer<AgentTurn>();
       final provider = _ModeFakeAgentProvider(
         availableModels: _conversationModeModels,
         sendResult: sendResult,
-        historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
-          'thread-2': const AgentThreadHistorySnapshot(
-            threadId: 'thread-2',
-            turns: <AgentHistoryTurn>[
-              AgentHistoryTurn(
-                id: 'turn-2',
-                collaborationMode: AgentConversationModeId.defaultMode,
-              ),
-            ],
-          ),
-        },
       );
       final viewModel = _createViewModel(
         provider,
@@ -1055,10 +879,6 @@ void main() {
         await Future<void>.delayed(Duration.zero);
       }
 
-      await expectLater(
-        viewModel.switchThread(_thread(id: 'thread-2', title: 'Thread two')),
-        throwsStateError,
-      );
       sendResult.complete(const AgentTurn(id: 'turn-1', sessionId: 'thread-1'));
       await oldSend;
 
@@ -1074,7 +894,7 @@ void main() {
         final viewModel = _createViewModel(provider);
         addTearDown(viewModel.dispose);
 
-        viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
+        viewModel.updateContext(projectPath: '/repo', contextFilePath: null);
         await viewModel.sendMessage(
           'look at this',
           localImagePaths: const <String>[r'D:\tmp\a.png', r'D:\tmp\b.png'],
@@ -1100,7 +920,7 @@ void main() {
       final viewModel = _createViewModel(provider);
       addTearDown(viewModel.dispose);
 
-      viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
+      viewModel.updateContext(projectPath: '/repo', contextFilePath: null);
       await viewModel.sendMessage(
         '   ',
         localImagePaths: const <String>[r'D:\tmp\only.png'],
@@ -1138,10 +958,10 @@ void main() {
             ),
           },
         );
-        final viewModel = _createViewModel(provider);
+        final viewModel = _createViewModel(provider, initialThread: _thread());
         addTearDown(viewModel.dispose);
 
-        await viewModel.switchThread(_thread());
+        await viewModel.initialization;
         await viewModel.cancelActiveTurn();
 
         // 无 live turn 时不向 provider 发 cancel。
@@ -1150,7 +970,7 @@ void main() {
     );
 
     test(
-      'ignores realtime events from a non-selected thread after switching',
+      'ignores realtime events from a thread outside this Binding',
       () async {
         final provider = _FakeAgentProvider(
           historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
@@ -1164,13 +984,13 @@ void main() {
             ),
           },
         );
-        final viewModel = _createViewModel(provider);
+        final viewModel = _createViewModel(
+          provider,
+          initialThread: _thread(id: 'thread-2', title: 'Thread two'),
+        );
         addTearDown(viewModel.dispose);
 
-        await viewModel.switchThread(_thread(id: 'thread-1'));
-        await viewModel.switchThread(
-          _thread(id: 'thread-2', title: 'Thread two'),
-        );
+        await viewModel.initialization;
         provider.emit(
           const AgentMessageDeltaEvent(
             messageId: 'late-message',
@@ -1191,46 +1011,43 @@ void main() {
       },
     );
 
-    test(
-      'drops a queued event from the previous listener generation',
-      () async {
-        final provider = _FakeAgentProvider(
-          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
-            'thread-1': _historySnapshot(
-              threadId: 'thread-1',
-              userText: 'Thread one history',
-            ),
-            'thread-2': _historySnapshot(
-              threadId: 'thread-2',
-              userText: 'Thread two history',
-            ),
-          },
-        );
-        final viewModel = _createViewModel(provider);
-        addTearDown(viewModel.dispose);
-
-        await viewModel.switchThread(_thread(id: 'thread-1'));
-        // 不等待 broadcast stream 投递；switchThread 必须在首个 await 前废弃旧代次。
-        provider.emit(
-          const AgentMessageDeltaEvent(
-            messageId: 'queued-old-message',
-            delta: 'Queued update from old listener',
-            role: AgentMessageRole.agent,
+    test('drops an event without the bound thread identity', () async {
+      final provider = _FakeAgentProvider(
+        historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+          'thread-1': _historySnapshot(
+            threadId: 'thread-1',
+            userText: 'Thread one history',
           ),
-        );
-        await viewModel.switchThread(
-          _thread(id: 'thread-2', title: 'Thread two'),
-        );
-        await Future<void>.delayed(Duration.zero);
+          'thread-2': _historySnapshot(
+            threadId: 'thread-2',
+            userText: 'Thread two history',
+          ),
+        },
+      );
+      final viewModel = _createViewModel(
+        provider,
+        initialThread: _thread(id: 'thread-2', title: 'Thread two'),
+      );
+      addTearDown(viewModel.dispose);
 
-        final texts = viewModel.timelineEntries
-            .whereType<AgentMessageTimelineEntry>()
-            .map((entry) => entry.message.text)
-            .toList();
-        expect(texts, contains('Thread two history'));
-        expect(texts, isNot(contains('Queued update from old listener')));
-      },
-    );
+      await viewModel.initialization;
+      provider.emit(
+        const AgentMessageDeltaEvent(
+          messageId: 'queued-old-message',
+          delta: 'Queued update from old listener',
+          role: AgentMessageRole.agent,
+          sessionId: 'thread-1',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final texts = viewModel.timelineEntries
+          .whereType<AgentMessageTimelineEntry>()
+          .map((entry) => entry.message.text)
+          .toList();
+      expect(texts, contains('Thread two history'));
+      expect(texts, isNot(contains('Queued update from old listener')));
+    });
 
     test('rejects events after the provider runtime epoch changes', () async {
       final provider = _RuntimeScopedFakeAgentProvider(
@@ -1249,10 +1066,10 @@ void main() {
           ),
         },
       );
-      final viewModel = _createViewModel(provider);
+      final viewModel = _createViewModel(provider, initialThread: _thread());
       addTearDown(viewModel.dispose);
 
-      await viewModel.switchThread(_thread(id: 'thread-1'));
+      await viewModel.initialization;
       await viewModel.sendMessage('bind runtime one');
       provider.runtimeScope = const AgentRuntimeScope(
         runtimeId: 'runtime-2',
@@ -2186,10 +2003,10 @@ void main() {
           ),
         },
       );
-      final viewModel = _createViewModel(provider);
+      final viewModel = _createViewModel(provider, initialThread: _thread());
       addTearDown(viewModel.dispose);
 
-      await viewModel.switchThread(_thread());
+      await viewModel.initialization;
       await Future<void>.delayed(Duration.zero);
 
       final turns = viewModel.conversationTurns;
@@ -2249,10 +2066,10 @@ void main() {
           ),
         },
       );
-      final viewModel = _createViewModel(provider);
+      final viewModel = _createViewModel(provider, initialThread: _thread());
       addTearDown(viewModel.dispose);
 
-      await viewModel.switchThread(_thread());
+      await viewModel.initialization;
       await Future<void>.delayed(Duration.zero);
 
       expect(
@@ -2456,10 +2273,10 @@ void main() {
             ),
           },
         );
-        final viewModel = _createViewModel(provider);
+        final viewModel = _createViewModel(provider, initialThread: _thread());
         addTearDown(viewModel.dispose);
 
-        await viewModel.switchThread(_thread());
+        await viewModel.initialization;
         await Future<void>.delayed(Duration.zero);
         await viewModel.sendMessage('hello');
 
@@ -2761,7 +2578,17 @@ void main() {
       Logger.addLogListener(listener);
       addTearDown(() => Logger.removeLogListener(listener));
       final provider = _FakeAgentProvider();
-      final viewModel = _createViewModel(provider);
+      final thread = AgentThreadSummary(
+        id: 'thread-1',
+        providerId: defaultAgentProviderId,
+        projectPath: '/repo',
+        title: 'Original',
+        preview: 'hello',
+        createdAt: DateTime(2026),
+        updatedAt: DateTime(2026),
+        status: AgentThreadRuntimeStatus.idle,
+      );
+      final viewModel = _createViewModel(provider, initialThread: thread);
       addTearDown(viewModel.dispose);
 
       await viewModel.sendMessage('private user prompt');
@@ -2975,10 +2802,10 @@ void main() {
           ),
         },
       );
-      final viewModel = _createViewModel(provider);
+      final viewModel = _createViewModel(provider, initialThread: _thread());
       addTearDown(viewModel.dispose);
 
-      await viewModel.switchThread(_thread());
+      await viewModel.initialization;
       await Future<void>.delayed(Duration.zero);
       expect(viewModel.currentThreadTokenUsage!.totalTokens, 2250);
 
@@ -3040,21 +2867,20 @@ void main() {
           ),
         },
       );
-      final viewModel = _createViewModel(provider);
+      final thread = AgentThreadSummary(
+        id: 'thread-1',
+        providerId: defaultAgentProviderId,
+        projectPath: '/repo',
+        title: 'Original',
+        preview: 'hello',
+        createdAt: DateTime(2026),
+        updatedAt: DateTime(2026),
+        status: AgentThreadRuntimeStatus.idle,
+      );
+      final viewModel = _createViewModel(provider, initialThread: thread);
       addTearDown(viewModel.dispose);
 
-      await viewModel.switchThread(
-        AgentThreadSummary(
-          id: 'thread-1',
-          providerId: defaultAgentProviderId,
-          projectPath: '/repo',
-          title: 'Original',
-          preview: 'hello',
-          createdAt: DateTime(2026),
-          updatedAt: DateTime(2026),
-          status: AgentThreadRuntimeStatus.idle,
-        ),
-      );
+      await viewModel.initialization;
       expect(viewModel.currentThreadTitle, 'Original');
 
       await viewModel.renameCurrentThread('Renamed title');
@@ -3111,8 +2937,18 @@ void main() {
                 id: 'forked-thread-1',
                 providerId: defaultAgentProviderId,
               );
+        final thread = AgentThreadSummary(
+          id: 'thread-1',
+          providerId: defaultAgentProviderId,
+          projectPath: '/repo',
+          preview: 'old prompt',
+          createdAt: DateTime(2026),
+          updatedAt: DateTime(2026),
+          status: AgentThreadRuntimeStatus.idle,
+        );
         final viewModel = _createViewModel(
           provider,
+          initialThread: thread,
           onCreatedThread:
               ({
                 required session,
@@ -3126,17 +2962,7 @@ void main() {
         );
         addTearDown(viewModel.dispose);
 
-        await viewModel.switchThread(
-          AgentThreadSummary(
-            id: 'thread-1',
-            providerId: defaultAgentProviderId,
-            projectPath: '/repo',
-            preview: 'old prompt',
-            createdAt: DateTime(2026),
-            updatedAt: DateTime(2026),
-            status: AgentThreadRuntimeStatus.idle,
-          ),
-        );
+        await viewModel.initialization;
         await viewModel.editLastUserMessageAndRetry('new prompt');
 
         expect(provider.calls, contains('fork:thread-1:through:turn-1'));
@@ -3149,12 +2975,12 @@ void main() {
 
     test('handles model list event and reconciles default selection', () async {
       final provider = _FakeAgentProvider();
-      final viewModel = _createViewModel(provider);
+      final viewModel = _createViewModel(provider, initialThread: _thread());
       addTearDown(viewModel.dispose);
 
       // 打开 thread 只读取 global 历史，不创建 session runtime，也不订阅 live
       // 事件。首次发送建立 Binding runtime 后，再验证模型目录事件的处理。
-      await viewModel.switchThread(_thread());
+      await viewModel.initialization;
       await viewModel.sendMessage('bind session runtime');
       provider.emit(
         const AgentModelListEvent(
@@ -3254,7 +3080,7 @@ void main() {
     );
 
     test(
-      'switchThread prefers current session selection and falls back to the latest turn model',
+      'bound thread prefers current selection and falls back to latest model',
       () async {
         final provider = _FakeAgentProvider(
           availableModels: const AgentModelList(
@@ -3301,11 +3127,11 @@ void main() {
             ),
           },
         );
-        final viewModel = _createViewModel(provider);
+        final viewModel = _createViewModel(provider, initialThread: _thread());
         addTearDown(viewModel.dispose);
 
         // 不预先 loadModels：打开 thread 时应自行 hydrate 后再回填 history 选择。
-        await viewModel.switchThread(_thread());
+        await viewModel.initialization;
 
         expect(viewModel.models, isNotEmpty);
         expect(viewModel.selectedModelId, 'gpt-5.5');
@@ -3354,11 +3180,11 @@ void main() {
             ),
           },
         );
-        final viewModel = _createViewModel(provider);
+        final viewModel = _createViewModel(provider, initialThread: _thread());
         addTearDown(viewModel.dispose);
 
         await viewModel.loadModels();
-        await viewModel.switchThread(_thread());
+        await viewModel.initialization;
         await viewModel.sendMessage('bind session runtime');
         provider.emit(
           const AgentSessionConfigUpdatedEvent(
@@ -3410,7 +3236,7 @@ void main() {
         });
         final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
         addTearDown(registry.close);
-        final controller = ActiveAgentProviderController(
+        final controller = AgentProviderSettingsController(
           runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(
             AgentProviderSettings(
@@ -3435,7 +3261,7 @@ void main() {
           uiFrameScheduler: _createUiFrameScheduler(),
         );
         addTearDown(viewModel.dispose);
-        viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
+        viewModel.updateContext(projectPath: '/repo', contextFilePath: null);
 
         // Act
         await viewModel.loadModels();
@@ -3465,7 +3291,7 @@ void main() {
         });
         final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
         addTearDown(registry.close);
-        final controller = ActiveAgentProviderController(
+        final controller = AgentProviderSettingsController(
           runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(
             AgentProviderSettings(
@@ -3522,7 +3348,7 @@ void main() {
       });
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
       addTearDown(registry.close);
-      final controller = ActiveAgentProviderController(
+      final controller = AgentProviderSettingsController(
         runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(
           AgentProviderSettings(
@@ -3539,28 +3365,32 @@ void main() {
         settings: controller,
       );
       addTearDown(bindingHarness.close);
-      final bindingLease = bindingHarness.acquireDraft(codex.config);
+      final thread = AgentThreadSummary(
+        id: 'cursor-deep-link',
+        providerId: cursorAgentProviderId,
+        projectPath: '/repo',
+        title: 'Legacy Cursor thread',
+        preview: 'legacy',
+        createdAt: DateTime.utc(2026),
+        updatedAt: DateTime.utc(2026),
+        status: AgentThreadRuntimeStatus.idle,
+      );
+      final bindingLease = bindingHarness.acquireThread(
+        config: cursor.config,
+        threadId: thread.id,
+      );
       final viewModel = AgentConversationViewModel(
         providerController: controller,
         conversationBinding: bindingLease.binding,
         globalRuntime: bindingHarness.globalRuntime,
+        initialProjectPath: '/repo',
+        initialThread: thread,
         uiFrameScheduler: _createUiFrameScheduler(),
       );
       addTearDown(viewModel.dispose);
 
-      // Act：switchThread 是 deep link / 历史入口共享的语义入口。
-      await viewModel.switchThread(
-        AgentThreadSummary(
-          id: 'cursor-deep-link',
-          providerId: cursorAgentProviderId,
-          projectPath: '/repo',
-          title: 'Legacy Cursor thread',
-          preview: 'legacy',
-          createdAt: DateTime.utc(2026),
-          updatedAt: DateTime.utc(2026),
-          status: AgentThreadRuntimeStatus.idle,
-        ),
-      );
+      // Act：Workspace 在组合边界创建已绑定 Cursor thread 的只读视图。
+      await viewModel.initialization;
 
       // Assert
       expect(viewModel.status.state, AgentProviderConnectionState.unavailable);
@@ -3601,7 +3431,7 @@ void main() {
         providerFactory: _FakeAgentProviderFactory(provider),
       );
       addTearDown(registry.close);
-      final controller = ActiveAgentProviderController(
+      final controller = AgentProviderSettingsController(
         runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(),
       );
@@ -3619,7 +3449,7 @@ void main() {
         uiFrameScheduler: _createUiFrameScheduler(),
       );
       addTearDown(viewModel.dispose);
-      viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
+      viewModel.updateContext(projectPath: '/repo', contextFilePath: null);
 
       await viewModel.loadModels();
       expect(provider.initializeCalls, 1);
@@ -3683,7 +3513,7 @@ void main() {
           ),
         );
         addTearDown(registry.close);
-        final controller = ActiveAgentProviderController(
+        final controller = AgentProviderSettingsController(
           runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(
             AgentProviderSettings(
@@ -3709,7 +3539,7 @@ void main() {
           uiFrameScheduler: _createUiFrameScheduler(),
         );
         addTearDown(viewModel.dispose);
-        viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
+        viewModel.updateContext(projectPath: '/repo', contextFilePath: null);
         await viewModel.loadModels();
         expect(viewModel.selectedModelId, 'gpt-5.5');
 
@@ -3752,7 +3582,7 @@ void main() {
           ),
         );
         addTearDown(registry.close);
-        final controller = ActiveAgentProviderController(
+        final controller = AgentProviderSettingsController(
           runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(
             const AgentProviderSettings(
@@ -3769,36 +3599,37 @@ void main() {
           settings: controller,
         );
         addTearDown(bindingHarness.close);
-        final bindingLease = bindingHarness.acquireDraft(grok.config);
+        final thread = AgentThreadSummary(
+          id: 'grok-sess-1',
+          providerId: grokAgentProviderId,
+          projectPath: '/repo',
+          title: 'Grok history',
+          sessionPath: '/home/.grok/sessions/grok-sess-1',
+          preview: 'previous question',
+          createdAt: DateTime.fromMillisecondsSinceEpoch(1),
+          updatedAt: DateTime.fromMillisecondsSinceEpoch(2),
+          status: AgentThreadRuntimeStatus.idle,
+        );
+        final bindingLease = bindingHarness.acquireThread(
+          config: grok.config,
+          threadId: thread.id,
+        );
         final viewModel = AgentConversationViewModel(
           providerController: controller,
           conversationBinding: bindingLease.binding,
           globalRuntime: bindingHarness.globalRuntime,
+          initialProjectPath: '/repo',
+          initialThread: thread,
           uiFrameScheduler: _createUiFrameScheduler(),
         );
         addTearDown(viewModel.dispose);
-        viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
 
         // Act
-        await viewModel.switchThread(
-          AgentThreadSummary(
-            id: 'grok-sess-1',
-            providerId: grokAgentProviderId,
-            projectPath: '/repo',
-            title: 'Grok history',
-            sessionPath: '/home/.grok/sessions/grok-sess-1',
-            preview: 'previous question',
-            createdAt: DateTime.fromMillisecondsSinceEpoch(1),
-            updatedAt: DateTime.fromMillisecondsSinceEpoch(2),
-            status: AgentThreadRuntimeStatus.idle,
-          ),
-        );
+        await viewModel.initialization;
         // 选文件只更新上下文，不应清掉「必须 resume」约束。
-        viewModel.updateWorkspace(
+        viewModel.updateContext(
           projectPath: '/repo',
           contextFilePath: '/repo/lib/main.dart',
-          restoredSessionId: 'grok-sess-1',
-          restoredProviderId: grokAgentProviderId,
         );
         await viewModel.sendMessage('continue this Grok session');
 
@@ -3841,7 +3672,7 @@ void main() {
       });
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
       addTearDown(registry.close);
-      final controller = ActiveAgentProviderController(
+      final controller = AgentProviderSettingsController(
         runtimeRegistry: registry,
         configStore: configStore,
       );
@@ -3851,19 +3682,23 @@ void main() {
         settings: controller,
       );
       addTearDown(bindingHarness.close);
-      final bindingLease = bindingHarness.acquireDraft(codex.config);
+      final thread = _thread();
+      final bindingLease = bindingHarness.acquireThread(
+        config: codex.config,
+        threadId: thread.id,
+      );
       final viewModel = AgentConversationViewModel(
         providerController: controller,
         conversationBinding: bindingLease.binding,
         globalRuntime: bindingHarness.globalRuntime,
+        initialProjectPath: '/repo',
+        initialThread: thread,
         uiFrameScheduler: _createUiFrameScheduler(),
       );
       addTearDown(viewModel.dispose);
-      viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
 
-      // Act：workspace 创建会先异步加载配置，session restore 紧接着打开 thread。
+      // Act：Workspace 创建 Binding 后，配置加载与 thread 初始化并发发生。
       final settingsFuture = viewModel.loadSettings();
-      final switchFuture = viewModel.switchThread(_thread());
       settingsCompleter.complete(
         const AgentProviderSettings(
           providers: <AgentProviderConfig>[
@@ -3873,7 +3708,10 @@ void main() {
           activeProviderId: grokAgentProviderId,
         ),
       );
-      await Future.wait(<Future<void>>[settingsFuture, switchFuture]);
+      await Future.wait(<Future<void>>[
+        settingsFuture,
+        viewModel.initialization,
+      ]);
 
       // Assert：Codex thread 不得落到稍后加载完成的 Grok provider。
       expect(viewModel.activeProviderId, defaultAgentProviderId);
@@ -3899,17 +3737,15 @@ void main() {
             ),
           },
         );
-        final viewModel = _createViewModel(provider);
+        final viewModel = _createViewModel(provider, initialThread: _thread());
         addTearDown(viewModel.dispose);
 
-        await viewModel.switchThread(_thread());
+        await viewModel.initialization;
         expect(viewModel.requiresResumedSelectedThread, isTrue);
 
-        viewModel.updateWorkspace(
+        viewModel.updateContext(
           projectPath: '/repo',
           contextFilePath: '/repo/a.dart',
-          restoredSessionId: 'thread-1',
-          restoredProviderId: defaultAgentProviderId,
         );
 
         expect(viewModel.requiresResumedSelectedThread, isTrue);
@@ -3929,10 +3765,10 @@ void main() {
             ),
           },
         );
-        final viewModel = _createViewModel(provider);
+        final viewModel = _createViewModel(provider, initialThread: _thread());
         addTearDown(viewModel.dispose);
 
-        await viewModel.switchThread(_thread());
+        await viewModel.initialization;
         await viewModel.sendMessage('try continue');
 
         expect(viewModel.threadOpenPhase, AgentThreadOpenPhase.openFailed);
@@ -3946,18 +3782,6 @@ void main() {
         final provider = _FakeAgentProvider();
         final viewModel = _createViewModel(provider);
         addTearDown(viewModel.dispose);
-
-        _expectLastUiUpdate(
-          viewModel,
-          regions: const <AgentUiRegion>{
-            AgentUiRegion.history,
-            AgentUiRegion.liveTurnBinding,
-            AgentUiRegion.header,
-            AgentUiRegion.composer,
-            AgentUiRegion.pendingInteraction,
-          },
-          urgency: AgentUiUpdateUrgency.immediate,
-        );
 
         await viewModel.sendMessage('hello');
         provider.emit(
@@ -4324,6 +4148,7 @@ void _expectLastUiUpdate(
 
 AgentConversationViewModel _createViewModel(
   _FakeAgentProvider provider, {
+  AgentThreadSummary? initialThread,
   AgentModelCatalogRepository? modelCatalogRepository,
   AgentConversationModeController? conversationModeController,
   void Function()? onTurnCompleted,
@@ -4334,7 +4159,7 @@ AgentConversationViewModel _createViewModel(
     providerFactory: _FakeAgentProviderFactory(provider),
   );
   addTearDown(registry.close);
-  final controller = ActiveAgentProviderController(
+  final controller = AgentProviderSettingsController(
     runtimeRegistry: registry,
     configStore: MemoryAgentProviderConfigStore(),
     modelCatalogRepository: modelCatalogRepository,
@@ -4345,7 +4170,12 @@ AgentConversationViewModel _createViewModel(
     settings: controller,
   );
   addTearDown(bindingHarness.close);
-  final bindingLease = bindingHarness.acquireDraft(provider.config);
+  final bindingLease = initialThread == null
+      ? bindingHarness.acquireDraft(provider.config)
+      : bindingHarness.acquireThread(
+          config: provider.config,
+          threadId: initialThread.id,
+        );
   final viewModel = AgentConversationViewModel(
     providerController: controller,
     conversationBinding: bindingLease.binding,
@@ -4354,9 +4184,10 @@ AgentConversationViewModel _createViewModel(
     onTurnCompleted: onTurnCompleted,
     onAttention: onAttention,
     onCreatedThread: onCreatedThread,
+    initialProjectPath: initialThread?.projectPath ?? '/repo',
+    initialThread: initialThread,
     uiFrameScheduler: _createUiFrameScheduler(),
   );
-  viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
   return viewModel;
 }
 

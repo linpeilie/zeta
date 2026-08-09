@@ -13,14 +13,18 @@ void main() {
       tester,
     ) async {
       final provider = AgentPaneFakeProvider();
-      final viewModel = createAgentPaneViewModel(provider);
+      final viewModel = createAgentPaneViewModel(
+        provider,
+        initialThread: agentPaneThread(
+          id: 'thread-question',
+          title: 'Question thread',
+        ),
+      );
       addTearDown(provider.dispose);
       addTearDown(viewModel.dispose);
       await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
       await viewModel.loadModels();
-      await viewModel.switchThread(
-        agentPaneThread(id: 'thread-question', title: 'Question thread'),
-      );
+      await viewModel.initialization;
       await _startLiveTurn(tester, viewModel);
       await pumpAgentPaneUi(tester);
       final messageInput = find.byKey(const ValueKey('agent-message-input'));
@@ -121,14 +125,18 @@ void main() {
       'single-choice questions advance automatically and support review',
       (tester) async {
         final provider = AgentPaneFakeProvider();
-        final viewModel = createAgentPaneViewModel(provider);
+        final viewModel = createAgentPaneViewModel(
+          provider,
+          initialThread: agentPaneThread(
+            id: 'thread-wizard',
+            title: 'Question wizard',
+          ),
+        );
         addTearDown(provider.dispose);
         addTearDown(viewModel.dispose);
         await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
         await viewModel.loadModels();
-        await viewModel.switchThread(
-          agentPaneThread(id: 'thread-wizard', title: 'Question wizard'),
-        );
+        await viewModel.initialization;
         await _startLiveTurn(tester, viewModel);
 
         provider.emitEvent(
@@ -250,14 +258,18 @@ void main() {
       'custom answers expand inline while skip and close keep distinct semantics',
       (tester) async {
         final provider = AgentPaneFakeProvider();
-        final viewModel = createAgentPaneViewModel(provider);
+        final viewModel = createAgentPaneViewModel(
+          provider,
+          initialThread: agentPaneThread(
+            id: 'thread-other',
+            title: 'Other answer',
+          ),
+        );
         addTearDown(provider.dispose);
         addTearDown(viewModel.dispose);
         await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
         await viewModel.loadModels();
-        await viewModel.switchThread(
-          agentPaneThread(id: 'thread-other', title: 'Other answer'),
-        );
+        await viewModel.initialization;
         await _startLiveTurn(tester, viewModel);
 
         provider.emitEvent(
@@ -371,16 +383,20 @@ void main() {
 
     testWidgets('question transitions honor reduced motion', (tester) async {
       final provider = AgentPaneFakeProvider();
-      final viewModel = createAgentPaneViewModel(provider);
+      final viewModel = createAgentPaneViewModel(
+        provider,
+        initialThread: agentPaneThread(
+          id: 'thread-reduced-motion',
+          title: 'Reduced motion',
+        ),
+      );
       addTearDown(provider.dispose);
       addTearDown(viewModel.dispose);
       await tester.pumpWidget(
         AgentPaneTestApp(viewModel: viewModel, disableAnimations: true),
       );
       await viewModel.loadModels();
-      await viewModel.switchThread(
-        agentPaneThread(id: 'thread-reduced-motion', title: 'Reduced motion'),
-      );
+      await viewModel.initialization;
       await _startLiveTurn(tester, viewModel);
 
       provider.emitEvent(
@@ -431,14 +447,15 @@ void main() {
       tester,
     ) async {
       final provider = AgentPaneFakeProvider();
-      final viewModel = createAgentPaneViewModel(provider);
+      final viewModel = createAgentPaneViewModel(
+        provider,
+        initialThread: agentPaneThread(id: 'thread-plan', title: 'Plan thread'),
+      );
       addTearDown(provider.dispose);
       addTearDown(viewModel.dispose);
       await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
       await viewModel.loadModels();
-      await viewModel.switchThread(
-        agentPaneThread(id: 'thread-plan', title: 'Plan thread'),
-      );
+      await viewModel.initialization;
       await _startLiveTurn(tester, viewModel);
       provider.emitEvent(
         const AgentPlanApprovalRequestedEvent(
@@ -493,14 +510,18 @@ void main() {
         await tester.binding.setSurfaceSize(const Size(480, 400));
         addTearDown(() => tester.binding.setSurfaceSize(null));
         final provider = AgentPaneFakeProvider();
-        final viewModel = createAgentPaneViewModel(provider);
+        final viewModel = createAgentPaneViewModel(
+          provider,
+          initialThread: agentPaneThread(
+            id: 'thread-pending',
+            title: 'Pending thread',
+          ),
+        );
         addTearDown(provider.dispose);
         addTearDown(viewModel.dispose);
         await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
         await viewModel.loadModels();
-        await viewModel.switchThread(
-          agentPaneThread(id: 'thread-pending', title: 'Pending thread'),
-        );
+        await viewModel.initialization;
         await _startLiveTurn(tester, viewModel);
 
         provider.emitEvent(

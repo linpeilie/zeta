@@ -139,26 +139,10 @@ class AgentThreadWorkspaceEntry extends ChangeNotifier {
     }
   }
 
-  /// 供 shell 在列表摘要已知时预先绑定真实 thread key。
-  void bindThreadIdentity({
-    required String projectPath,
-    required String providerId,
-    required String threadId,
-  }) {
-    var changed = false;
+  /// 更新同一 thread 的项目归属展示，不改变已经冻结的 Provider/thread key。
+  void updateProjectPath(String projectPath) {
     if (this.projectPath != projectPath) {
       this.projectPath = projectPath;
-      changed = true;
-    }
-    final nextKey = AgentThreadWorkspaceKey.thread(
-      providerId: providerId,
-      threadId: threadId,
-    );
-    if (_key != nextKey) {
-      _key = nextKey;
-      changed = true;
-    }
-    if (changed) {
       _notify();
     }
   }
@@ -292,30 +276,26 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
 
   AgentThreadWorkspaceEntry ensureThreadEntry({
     required String projectPath,
-    required String providerId,
-    required String threadId,
+    required AgentThreadSummary thread,
   }) {
     for (final entry in _entries) {
       final key = entry.key;
       if (key is AgentThreadWorkspaceThreadKey &&
-          key.providerId == providerId &&
-          key.threadId == threadId) {
+          key.providerId == thread.providerId &&
+          key.threadId == thread.id) {
         if (entry.projectPath != projectPath) {
-          entry.bindThreadIdentity(
-            projectPath: projectPath,
-            providerId: providerId,
-            threadId: threadId,
-          );
+          entry.updateProjectPath(projectPath);
         }
         return entry;
       }
     }
     return _createEntry(
       key: AgentThreadWorkspaceKey.thread(
-        providerId: providerId,
-        threadId: threadId,
+        providerId: thread.providerId,
+        threadId: thread.id,
       ),
       projectPath: projectPath,
+      initialThread: thread,
     );
   }
 
@@ -430,6 +410,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
   AgentThreadWorkspaceEntry _createEntry({
     required AgentThreadWorkspaceKey key,
     required String projectPath,
+    AgentThreadSummary? initialThread,
   }) {
     // entryId 先生成，用作尚未取得 threadId 的稳定 Binding 身份；创建 entry 本身
     // 不会创建 session Provider。
@@ -474,6 +455,8 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
         selectEntry(draft.entryId);
       },
       onCreatedThread: onCreatedThread,
+      initialProjectPath: projectPath,
+      initialThread: initialThread,
       onAttention: (signal) {
         final threadId = signal.threadId ?? entry.threadId;
         if (threadId == null || threadId.trim().isEmpty) {

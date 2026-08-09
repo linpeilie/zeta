@@ -87,7 +87,7 @@ A provider's declaration of what it supports. **UI renders by capability, never 
 A releasable registry reference to a provider instance. It stays inside infrastructure and global-runtime/binding code; view models and panes do not own it directly.
 
 **Conversation binding**
-The application aggregate for one logical conversation, uniquely keyed as a draft or thread. It owns the optional session runtime, generation-filtered events, a single-binding immutable permission snapshot, and active operations. Only `beginTurn()` may create a runtime. The binding manager owns mapping, draft promotion, and ten-minute idle reclamation. A binding attached to a real thread is never rebound in place; a fork result is registered as a newly created thread and receives a separate binding.
+The application aggregate for one logical conversation, uniquely keyed as a draft or thread. It owns the optional session runtime, generation-filtered events, a single-binding immutable permission snapshot, and active operations. Only `beginTurn()` may create a runtime. The binding manager owns mapping, draft promotion, and ten-minute idle reclamation. A binding attached to a real thread is never rebound in place; the workspace gives it a fixed-identity view model, and switching threads selects another entry. A fork result is registered as a newly created thread and receives a separate binding.
 
 **Global runtime**
 The single non-reaped instance per provider ID, used for history, thread management, models, skills, usage, connection tests, and other pre-session/global information.

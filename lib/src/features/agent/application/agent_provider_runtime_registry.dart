@@ -13,10 +13,8 @@ typedef _RuntimeKey = ({String providerId, AgentProviderRuntimeScopeKey scope});
 /// 应用级 Provider 运行时注册表。
 ///
 /// 每个 Provider 在每个 [AgentProviderRuntimeScopeKey] 下各自维护一份运行实例；
-/// 同一 (providerId, scope) 只会有一个。未显式指定 `scope` 时默认为
-/// [AgentProviderRuntimeScopeKey.global]，行为等价于历史上"每个 Provider ID
-/// 一个实例"。页面、任务工作区、项目列表和诊断功能通过 [AgentProviderRuntimeLease]
-/// 共享同一 scope 下的实例，不再分别拉起 app-server 或 stdio 子进程。
+/// 同一 (providerId, scope) 只会有一个。调用方必须显式声明 global 或 session scope，
+/// 避免遗漏参数时意外借用永不空闲回收的 global runtime。
 class AgentProviderRuntimeRegistry extends ChangeNotifier {
   AgentProviderRuntimeRegistry({required this.providerFactory});
 
@@ -35,12 +33,11 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
 
   /// 获取指定 Provider 在指定 [scope] 下的共享运行时租约。
   ///
-  /// 未显式传入 `scope` 时默认为 [AgentProviderRuntimeScopeKey.global]。创建过程
-  /// 会在首次 `await` 前登记实例，因此同一事件循环中的并发调用也只会触发一次
-  /// factory 创建。影响进程启动的配置变化会先关闭旧实例再创建新实例。
+  /// 创建过程会在首次 `await` 前登记实例，因此同一事件循环中的并发调用也只会
+  /// 触发一次 factory 创建。影响进程启动的配置变化会先关闭旧实例再创建新实例。
   Future<AgentProviderRuntimeLease> acquire(
     AgentProviderConfig config, {
-    AgentProviderRuntimeScopeKey scope = AgentProviderRuntimeScopeKey.global,
+    required AgentProviderRuntimeScopeKey scope,
   }) async {
     final key = (providerId: config.id, scope: scope);
     while (true) {

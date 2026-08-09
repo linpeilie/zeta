@@ -87,7 +87,7 @@ Provider 声明自己支持什么。**UI 一律按 capability 渲染，不按 pr
 Registry 对 Provider 实例的可释放引用。它只在基础设施与 global runtime/Binding 内流转，ViewModel 和 Pane 不直接持有。
 
 **Conversation Binding（会话绑定）**
-一个逻辑会话的 application 聚合根，以 draft 或 thread key 唯一标识。它维护可选 session runtime、过滤旧 generation 的事件流、单 Binding 不可变权限快照和活跃操作；只有 `beginTurn()` 能创建 runtime。Binding Manager 负责映射、草稿晋升以及 10 分钟空闲回收。已绑定真实 thread 的 Binding 不原地改绑；fork 结果按新建 thread 登记并获得独立 Binding。
+一个逻辑会话的 application 聚合根，以 draft 或 thread key 唯一标识。它维护可选 session runtime、过滤旧 generation 的事件流、单 Binding 不可变权限快照和活跃操作；只有 `beginTurn()` 能创建 runtime。Binding Manager 负责映射、草稿晋升以及 10 分钟空闲回收。已绑定真实 thread 的 Binding 不原地改绑；Workspace 为它创建固定身份的 ViewModel，切换 thread 会选择另一 entry。fork 结果按新建 thread 登记并获得独立 Binding。
 
 **Global runtime（全局运行时）**
 每个 Provider ID 唯一且不参与空闲回收的实例，用于历史、thread 管理、模型、Skill、用量和连接探测等会话前/全局信息。

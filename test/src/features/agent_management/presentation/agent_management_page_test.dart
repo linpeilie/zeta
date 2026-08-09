@@ -19,7 +19,7 @@ import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/ui/core/workbench/ide_section.dart';
 import 'package:zeta/src/ui/core/workbench/ide_toolbar.dart';
-import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 
 import '../../../testing/ide_test_harness.dart';
 
@@ -189,7 +189,7 @@ class _ManagementHarness {
 
   final Directory root;
   final CodexAgentManagementRepository repository;
-  final ActiveAgentProviderController providerController;
+  final AgentProviderSettingsController providerController;
   final AgentManagementController managementController;
   final AgentProviderRuntimeRegistry _registry;
 
@@ -201,7 +201,7 @@ class _ManagementHarness {
     final registry = AgentProviderRuntimeRegistry(
       providerFactory: FakeAgentProviderFactory(provider),
     );
-    final providerController = ActiveAgentProviderController(
+    final providerController = AgentProviderSettingsController(
       runtimeRegistry: registry,
       configStore: MemoryAgentProviderConfigStore(
         AgentProviderSettings(
@@ -264,7 +264,7 @@ class _CursorManagementHarness {
   });
 
   final _FakeCursorManagementRepository repository;
-  final ActiveAgentProviderController providerController;
+  final AgentProviderSettingsController providerController;
   final AgentManagementController managementController;
   final AgentProviderRuntimeRegistry _registry;
 
@@ -274,7 +274,7 @@ class _CursorManagementHarness {
     final registry = AgentProviderRuntimeRegistry(
       providerFactory: FakeAgentProviderFactory(provider),
     );
-    final providerController = ActiveAgentProviderController(
+    final providerController = AgentProviderSettingsController(
       runtimeRegistry: registry,
       configStore: MemoryAgentProviderConfigStore(
         AgentProviderSettings(

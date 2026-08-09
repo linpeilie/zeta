@@ -8,7 +8,7 @@ import 'package:zeta/src/features/agent_management/application/agent_management_
 import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
-import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 
 import '../../../testing/ide_test_harness.dart';
 
@@ -62,7 +62,7 @@ void main() {
       providerFactory: providerFactory,
     );
     final cursorRepository = _FakeCursorManagementRepository();
-    final providerController = ActiveAgentProviderController(
+    final providerController = AgentProviderSettingsController(
       runtimeRegistry: registry,
       configStore: MemoryAgentProviderConfigStore(
         const AgentProviderSettings(
@@ -112,7 +112,7 @@ class _ManagementHarness {
   });
 
   final Directory root;
-  final ActiveAgentProviderController providerController;
+  final AgentProviderSettingsController providerController;
   final AgentManagementController controller;
   final AgentProviderRuntimeRegistry _registry;
 
@@ -125,7 +125,7 @@ class _ManagementHarness {
     final registry = AgentProviderRuntimeRegistry(
       providerFactory: providerFactory,
     );
-    final providerController = ActiveAgentProviderController(
+    final providerController = AgentProviderSettingsController(
       runtimeRegistry: registry,
       configStore: MemoryAgentProviderConfigStore(
         AgentProviderSettings(

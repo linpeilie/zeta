@@ -171,10 +171,15 @@ Provider 实例只由 app 组合层的 `AgentProviderRuntimeRegistry` 创建和�
 `thread(providerId, threadId)` 为稳定 key。Workspace 只持有 Binding lease；新建/打开
 和历史读取不创建 session runtime。只有用户第一次提交输入时调用 `beginTurn()`，随后
 start/resume/send；其他 session RPC 只能 `runCurrent()`，runtime 不存在时 fail-closed。
+Workspace 创建真实 thread entry 时必须同时注入匹配的 thread summary 与 Binding；一个
+ViewModel 的 thread 身份固定，不提供 `switchThread` 或带 restored session/provider 的通用
+workspace 更新入口。project/file context 更新不改变会话，选择另一 thread 就选择另一 entry。
 草稿拿到 threadId 后原子晋升，冲突必须拒绝。Binding Manager 每分钟 single-flight
 扫描，没有运行中 turn/RPC 且空闲满 10 分钟的 runtime 按精确 identity 条件回收；旧进程
 dispose 完成前同 scope acquire 必须等待。配置失效会同时清理 global 与全部 session，
 窗口退出等待 registry 完成清理。
+Registry acquire 必须显式选择 global/session scope；使用统计面板只通过 global runtime
+访问中立 quota 端口，不接受 raw Provider/lease loader 兼容路径。
 
 新增 provider 时：
 

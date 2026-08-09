@@ -42,7 +42,13 @@ void main() {
             ),
           },
         );
-        final viewModel = createAgentPaneViewModel(provider);
+        final viewModel = createAgentPaneViewModel(
+          provider,
+          initialThread: agentPaneThread(
+            id: 'thread-loading',
+            title: 'Loading thread',
+          ),
+        );
         addTearDown(provider.dispose);
         addTearDown(viewModel.dispose);
 
@@ -50,9 +56,7 @@ void main() {
         await pumpAgentPaneUi(tester);
 
         // 未 await：停在 loadingHistory，便于断言加载 UI。
-        final openFuture = viewModel.switchThread(
-          agentPaneThread(id: 'thread-loading', title: 'Loading thread'),
-        );
+        final openFuture = viewModel.initialization;
         // 加载态 pinFooter 应瞬时贴底（无需等动画）。
         await tester.pump();
         await tester.pump();
@@ -374,11 +378,19 @@ void main() {
             ),
           },
         );
-        final viewModel = createAgentPaneViewModel(provider);
+        final viewModel = createAgentPaneViewModel(
+          provider,
+          initialThread: agentPaneThread(
+            id: 'thread-design-system',
+            title: 'Design system',
+          ),
+        );
         addTearDown(provider.dispose);
         addTearDown(viewModel.dispose);
 
         await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
+        await viewModel.initialization;
+        await tester.pump();
         await tester.enterText(
           find.byKey(const ValueKey('agent-message-input')),
           'Preserve this draft',
@@ -393,10 +405,6 @@ void main() {
           isTrue,
         );
 
-        await viewModel.switchThread(
-          agentPaneThread(id: 'thread-design-system', title: 'Design system'),
-        );
-        await tester.pump();
         await tester.pump(IdeMotion.durationSlow);
 
         final activeLayoutRect = tester.getRect(

@@ -836,10 +836,9 @@ class IdeShellController extends ChangeNotifier {
     _expandedDirectoryPaths = <String>{};
     _workspaceTree = const <WorkspaceNode>[];
     agentWorkspaceController.selectEntry(_bootstrapAgentEntry.entryId);
-    _bootstrapAgentEntry.viewModel.updateWorkspace(
+    _bootstrapAgentEntry.viewModel.updateContext(
       projectPath: null,
       contextFilePath: null,
-      resetConversation: true,
     );
     _requestSessionSave();
     _notifyStateChanged();
@@ -901,7 +900,7 @@ class IdeShellController extends ChangeNotifier {
         projectPath: _bootstrapProjectPath,
         providerId: _bootstrapAgentEntry.providerId,
       );
-      _bootstrapAgentEntry.viewModel.updateWorkspace(
+      _bootstrapAgentEntry.viewModel.updateContext(
         projectPath: null,
         contextFilePath: null,
       );
@@ -972,10 +971,9 @@ class IdeShellController extends ChangeNotifier {
         rethrow;
       }
     }
-    entry.viewModel.updateWorkspace(
+    entry.viewModel.updateContext(
       projectPath: projectPath,
       contextFilePath: _currentFilePath,
-      resetConversation: false,
     );
     projectThreadsController.clearSelectedThread(projectPath);
     _agentThreadIdsByProject.remove(projectPath);
@@ -993,26 +991,29 @@ class IdeShellController extends ChangeNotifier {
     bool persistSelection = true,
   }) async {
     _projectHomeActive = false;
+    final existingEntry = agentWorkspaceController.entryForThread(
+      providerId: thread.providerId,
+      threadId: thread.id,
+    );
     final entry = agentWorkspaceController.ensureThreadEntry(
       projectPath: projectPath,
-      providerId: thread.providerId,
-      threadId: thread.id,
-    );
-    entry.bindThreadIdentity(
-      projectPath: projectPath,
-      providerId: thread.providerId,
-      threadId: thread.id,
+      thread: thread,
     );
     agentWorkspaceController.selectEntry(entry.entryId);
-    entry.viewModel.updateWorkspace(
+    entry.viewModel.updateContext(
       projectPath: projectPath,
       contextFilePath: _currentFilePath,
     );
     projectThreadsController.registerThreadMapping(projectPath, thread.id);
     projectThreadsController.selectThread(projectPath, thread);
     _agentThreadIdsByProject[projectPath] = thread.id;
-    if (_shouldLoadWorkspaceThreadEntry(entry, thread)) {
-      await entry.viewModel.switchThread(thread);
+    if (existingEntry == null ||
+        entry.viewModel.threadOpenPhase ==
+            AgentThreadOpenPhase.loadingHistory) {
+      await entry.viewModel.initialization;
+    } else if (entry.viewModel.threadOpenPhase ==
+        AgentThreadOpenPhase.openFailed) {
+      await entry.viewModel.retryOpenThread();
     } else {
       unawaited(entry.viewModel.loadModels());
     }
@@ -1024,26 +1025,6 @@ class IdeShellController extends ChangeNotifier {
     return entry;
   }
 
-  bool _shouldLoadWorkspaceThreadEntry(
-    AgentThreadWorkspaceEntry entry,
-    AgentThreadSummary thread,
-  ) {
-    if (entry.viewModel.sessionId != thread.id) {
-      return true;
-    }
-    if (entry.viewModel.threadOpenPhase == AgentThreadOpenPhase.openFailed) {
-      return true;
-    }
-    if (entry.viewModel.currentSession != null) {
-      return false;
-    }
-    if (entry.viewModel.visibleHistoryTurns.isNotEmpty ||
-        entry.viewModel.liveTurnState != null) {
-      return false;
-    }
-    return entry.viewModel.threadOpenPhase != AgentThreadOpenPhase.idle;
-  }
-
   void _syncProjectEntryContexts(String? projectPath) {
     if (projectPath == null) {
       return;
@@ -1051,7 +1032,7 @@ class IdeShellController extends ChangeNotifier {
     for (final entry in agentWorkspaceController.entriesForProject(
       projectPath,
     )) {
-      entry.viewModel.updateWorkspace(
+      entry.viewModel.updateContext(
         projectPath: projectPath,
         contextFilePath: _currentFilePath,
       );
@@ -1223,7 +1204,7 @@ class IdeShellController extends ChangeNotifier {
         entry?.viewModel.threadOpenPhase != AgentThreadOpenPhase.idle) {
       throw StateError('Could not open created thread ${session.id}');
     }
-    entry!.viewModel.updateWorkspace(
+    entry!.viewModel.updateContext(
       projectPath: projectPath,
       contextFilePath: context.filePath,
     );

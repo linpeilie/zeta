@@ -81,6 +81,9 @@ class AgentConversationViewModel {
     this.onAttention,
     this.onProviderSwitchRequested,
     this.onCreatedThread,
+    String? initialProjectPath,
+    String? initialContextFilePath,
+    AgentThreadSummary? initialThread,
     AgentFrameScheduler? uiFrameScheduler,
   }) : _timeline = timelineStore ?? AgentConversationTimelineStore(),
        _ownsModelSelectionController = modelSelectionController == null,
@@ -96,6 +99,18 @@ class AgentConversationViewModel {
        _skillsCatalogController =
            skillsCatalogController ?? AgentSkillsCatalogController(),
        _permissionSelectionController = conversationBinding.permissions {
+    final thread = initialThread;
+    if (thread != null &&
+        (thread.providerId != conversationBinding.providerId ||
+            thread.id != conversationBinding.threadId)) {
+      throw ArgumentError(
+        'Initial thread ${thread.providerId}/${thread.id} does not match '
+        'Binding ${conversationBinding.key}',
+      );
+    }
+    _projectPath = initialProjectPath ?? thread?.projectPath;
+    _contextFilePath = initialContextFilePath;
+    _boundThreadSummary = thread;
     _eventReducerContexts = AgentConversationReducerContexts(
       liveTimelineIds: _localTimelineIds,
     );
@@ -144,6 +159,9 @@ class AgentConversationViewModel {
     _threadSnapshotListenable = ValueNotifier<AgentConversationThreadSnapshot>(
       _buildThreadSnapshot(),
     );
+    _initialization = thread == null
+        ? Future<void>.value()
+        : _openBoundThread(thread);
   }
 
   static const String defaultThreadTitle = 'New thread';
@@ -224,6 +242,8 @@ class AgentConversationViewModel {
   AgentSession? _session;
   String? _projectPath;
   String? _contextFilePath;
+  AgentThreadSummary? _boundThreadSummary;
+  late final Future<void> _initialization;
 
   String? _restoredSessionId;
   String? _selectedProviderId;
@@ -269,6 +289,9 @@ class AgentConversationViewModel {
   AgentAutoApprovalReviewEvent? _latestDeniedAutoReview;
 
   List<AgentConversationMessage> get messages => _timeline.messages;
+
+  /// 等待 Entry 创建时绑定的 thread 完成首次历史加载；草稿立即完成。
+  Future<void> get initialization => _initialization;
 
   List<AgentToolCall> get toolCalls => _timeline.toolCalls;
 
@@ -1620,103 +1643,16 @@ class AgentConversationViewModel {
     return trimmed == null || trimmed.isEmpty ? null : trimmed;
   }
 
-  /// 更新当前项目和文件上下文。
-  ///
-  /// 项目变更时清空内存中的 session/turn；如果恢复状态里带了 thread id，则保留到
-  /// 第一次发送消息时再调用 provider resume。恢复 thread 时必须同时提供
-  /// [restoredProviderId]，禁止回退到当前 active provider 猜测归属。
-  ///
-  /// 仅更新当前文件路径时，不得清掉「已选中 thread 必须 resume」约束，
-  /// 否则 Grok 等会话在 `session/load` 失败时会误走 `startSession` 开新会话。
-  void updateWorkspace({
+  /// 更新当前 Entry 的项目/文件上下文，不改变其 draft/thread 身份或时间线。
+  void updateContext({
     required String? projectPath,
     required String? contextFilePath,
-    String? restoredSessionId,
-    String? restoredProviderId,
-    bool resetConversation = false,
   }) {
     final projectChanged = projectPath != _projectPath;
-    final normalizedProviderId = restoredProviderId?.trim();
-    final hasRestoredProvider =
-        normalizedProviderId != null && normalizedProviderId.isNotEmpty;
-    final canRestoreSession = restoredSessionId == null || hasRestoredProvider;
-    final effectiveRestoredSessionId = canRestoreSession
-        ? restoredSessionId
-        : null;
-    if (!canRestoreSession) {
-      _log.w(
-        'Ignoring restored Agent session $restoredSessionId without provider ownership',
-      );
-    }
     _projectPath = projectPath;
     _contextFilePath = contextFilePath;
     if (projectChanged && canUseSkills) {
       unawaited(ensureSkillsCatalog());
-    }
-    if (projectChanged || resetConversation) {
-      // 离开当前会话时取消订阅；恢复到另一 thread 时也退订旧 id。
-      final previousThreadId = _selectedThreadId;
-      _flushPendingStreamChangesNow();
-      _invalidateProviderEventListener();
-      _threadSwitchToken += 1;
-      _session = null;
-      _planExecutionHandoffController.clear();
-      _sessionConfigOptions = const <AgentSessionConfigOption>[];
-      _restoredSessionId = effectiveRestoredSessionId;
-      _selectedProviderId = effectiveRestoredSessionId == null
-          ? null
-          : normalizedProviderId;
-      _conversationModeController.bindThread(
-        threadId: effectiveRestoredSessionId,
-      );
-      _permissionSelectionController.bindThread(effectiveRestoredSessionId);
-      _threadOpenPhase = AgentThreadOpenPhase.idle;
-      _requiresResumedSelectedThread = false;
-      _currentThreadTitle = defaultThreadTitle;
-      _status = const AgentProviderStatus.idle();
-      _clearThreadRuntimeStatus();
-      _modelRerouteNotice = null;
-      _threadCreatedAt = null;
-      _threadLastActiveAt = null;
-      contextPanelVisible.value = false;
-      _timeline.clearConversation();
-      _consumeActivityDirty();
-      _syncElapsedTicker();
-      if (previousThreadId != null &&
-          previousThreadId != effectiveRestoredSessionId) {
-        unawaited(
-          _unsubscribeThreadBestEffort(
-            conversationBinding.providerId,
-            previousThreadId,
-          ),
-        );
-      }
-      _publishUiChanges(
-        AgentUiUpdateRequest(
-          regions: const <AgentUiRegion>{
-            AgentUiRegion.history,
-            AgentUiRegion.liveTurnBinding,
-            AgentUiRegion.header,
-            AgentUiRegion.composer,
-            AgentUiRegion.pendingInteraction,
-          },
-          urgency: AgentUiUpdateUrgency.immediate,
-        ),
-      );
-      return;
-    }
-    // 同项目下仅同步文件上下文：若 shell 带了 restoredSessionId，只在本地
-    // 尚无选中 thread 时写入，避免覆盖 switchThread 已锁定的 resume 目标。
-    if (effectiveRestoredSessionId != null && _selectedThreadId == null) {
-      _invalidateProviderEventListener();
-      _restoredSessionId = effectiveRestoredSessionId;
-      _selectedProviderId = normalizedProviderId;
-      _conversationModeController.bindThread(
-        threadId: effectiveRestoredSessionId,
-      );
-      _permissionSelectionController.bindThread(effectiveRestoredSessionId);
-      _threadOpenPhase = AgentThreadOpenPhase.idle;
-      _requiresResumedSelectedThread = false;
     }
     _publishUiChanges(
       AgentUiUpdateRequest(
@@ -2041,8 +1977,20 @@ class AgentConversationViewModel {
     );
   }
 
-  /// 切换到项目列表中选中的 thread。
-  Future<void> switchThread(AgentThreadSummary thread) async {
+  /// 重新加载当前 Entry 唯一绑定的 thread；只用于首次打开失败后的显式重试。
+  Future<void> retryOpenThread() {
+    final thread = _boundThreadSummary;
+    if (thread == null) {
+      throw StateError('Draft conversation has no thread to reopen');
+    }
+    if (_threadOpenPhase != AgentThreadOpenPhase.openFailed) {
+      return Future<void>.value();
+    }
+    return _openBoundThread(thread);
+  }
+
+  /// 加载 Entry 创建时已经冻结的 thread 身份。
+  Future<void> _openBoundThread(AgentThreadSummary thread) async {
     final switchToken = ++_threadSwitchToken;
     if (_planExecutionHandoffController.clear()) {
       _publishUiChanges(
@@ -2086,6 +2034,14 @@ class AgentConversationViewModel {
     // 否则会先看到内置 Codex、随后却从磁盘加载出 Grok，并用错误后端读取历史。
     await loadSettings();
     if (!_isCurrentSwitch(switchToken)) {
+      return;
+    }
+    final unavailable = providerController.unavailableReasonForProviderId(
+      thread.providerId,
+    );
+    if (unavailable != null) {
+      _threadOpenPhase = AgentThreadOpenPhase.openFailed;
+      _markUnavailable('Cursor Agent unavailable', details: unavailable);
       return;
     }
     // 离开旧会话时先记下 id，切走后取消服务端订阅，减少无关通知。

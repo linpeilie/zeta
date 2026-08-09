@@ -3,9 +3,7 @@ import 'dart:io';
 import 'package:zeta/src/features/agent/data/datasources/local_history/codex_usage_log_scanner.dart';
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_usage_log_scanner.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_global_runtime.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/usage_statistics/data/codex_usage_statistics_repository.dart';
 import 'package:zeta/src/features/usage_statistics/data/grok_usage_statistics_repository.dart';
@@ -15,41 +13,20 @@ import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_model
 
 typedef EnabledAgentProviderLoader =
     Future<List<AgentProviderConfig>> Function();
-typedef AgentProviderInstanceLoader =
-    Future<AgentProvider> Function(AgentProviderConfig config);
-typedef SharedAgentProviderPredicate = bool Function(AgentProvider provider);
-typedef AgentProviderRuntimeLeaseLoader =
-    Future<AgentProviderRuntimeLease> Function(AgentProviderConfig config);
 
 /// 按已启用 Provider 配置实例汇总套餐和全局今日 Token。
 class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
   ProviderAgentUsagePanelRepository({
     required this.enabledProviderLoader,
-    this.globalRuntime,
-    this.providerLeaseLoader,
-    this.providerLoader,
-    this.isSharedProvider,
+    required this.globalRuntime,
     required this.seedIndexStore,
     this.scanner = const FileSystemCodexUsageLogScanner(),
     this.grokScanner = const FileSystemGrokUsageLogScanner(),
     DateTime Function()? clock,
-  }) : assert(
-         globalRuntime != null ||
-             providerLeaseLoader != null ||
-             providerLoader != null,
-         'A global runtime, Provider lease, or instance loader is required',
-       ),
-       _clock = clock ?? DateTime.now;
+  }) : _clock = clock ?? DateTime.now;
 
   final EnabledAgentProviderLoader enabledProviderLoader;
-  final AgentProviderGlobalRuntime? globalRuntime;
-  final AgentProviderRuntimeLeaseLoader? providerLeaseLoader;
-
-  /// 旧测试/嵌入宿主兼容入口；生产代码应使用 [providerLeaseLoader]。
-  final AgentProviderInstanceLoader? providerLoader;
-
-  /// 与 [providerLoader] 配套的旧共享实例判断。
-  final SharedAgentProviderPredicate? isSharedProvider;
+  final AgentProviderGlobalRuntime globalRuntime;
   final UsageStatisticsIndexStore seedIndexStore;
   final CodexUsageLogScanner scanner;
   final GrokUsageLogScanner grokScanner;
@@ -93,72 +70,31 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
     required Future<UsageStatisticsIndexSnapshot> seedFuture,
     required bool forceRefresh,
   }) async {
-    final runtime = globalRuntime;
-    if (runtime != null) {
-      try {
-        return await runtime.run(
-          config,
-          (context) => _loadProviderInstance(
-            config,
-            bundle: context.bundle,
-            seedFuture: seedFuture,
-            forceRefresh: forceRefresh,
-          ),
-        );
-      } catch (_) {
-        return AgentUsagePanelProviderFailed(
-          provider: _providerSummary(config),
-          message: '当前 Agent 暂时无法连接',
-        );
-      }
-    }
-
-    AgentProviderRuntimeLease? lease;
-    AgentProvider? provider;
     try {
-      final loadLease = providerLeaseLoader;
-      if (loadLease != null) {
-        lease = await loadLease(config);
-        provider = lease.provider;
-      } else {
-        provider = await providerLoader!(config);
-      }
-      return _loadProviderInstance(
+      return await globalRuntime.run(
         config,
-        provider: provider,
-        seedFuture: seedFuture,
-        forceRefresh: forceRefresh,
+        (context) => _loadProviderInstance(
+          config,
+          bundle: context.bundle,
+          seedFuture: seedFuture,
+          forceRefresh: forceRefresh,
+        ),
       );
     } catch (_) {
       return AgentUsagePanelProviderFailed(
         provider: _providerSummary(config),
         message: '当前 Agent 暂时无法连接',
       );
-    } finally {
-      if (lease != null) {
-        await lease.release();
-      } else if (provider != null &&
-          !(isSharedProvider?.call(provider) ?? false)) {
-        try {
-          await provider.dispose();
-        } catch (_) {
-          // 临时 Provider 清理失败不应覆盖已读取的统计结果。
-        }
-      }
     }
   }
 
   Future<AgentUsagePanelLoadEvent> _loadProviderInstance(
     AgentProviderConfig config, {
-    AgentProvider? provider,
-    AgentProviderBundle? bundle,
+    required AgentProviderBundle bundle,
     required Future<UsageStatisticsIndexSnapshot> seedFuture,
     required bool forceRefresh,
   }) async {
-    assert(provider != null || bundle != null);
-    final quota = bundle == null
-        ? await _readProviderQuota(provider!)
-        : await _readQuotaPort(bundle.usageQuota);
+    final quota = await _readQuotaPort(bundle.usageQuota);
     if (config.kind != AgentProviderKind.codexAppServer &&
         config.kind != AgentProviderKind.acp) {
       return AgentUsagePanelProviderLoaded(
@@ -177,16 +113,14 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
       final earliest = DateTime(now.year, now.month, now.day);
       final source = switch (config.kind) {
         AgentProviderKind.codexAppServer => await _loadCodexUsage(
-          provider: provider,
           config: config,
           seedFuture: seedFuture,
           earliest: earliest,
           forceRefresh: forceRefresh,
         ),
         AgentProviderKind.acp => await GrokUsageStatisticsRepository(
-          providerLoader: provider == null ? null : () async => provider,
           scanner: grokScanner,
-          environment: provider == null ? _runtimeEnvironment(config) : null,
+          environment: _runtimeEnvironment(config),
           includeQuota: false,
           clock: _clock,
         ).load(earliest: earliest, forceRefresh: forceRefresh),
@@ -212,7 +146,6 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
   }
 
   Future<UsageStatisticsSourceSnapshot> _loadCodexUsage({
-    required AgentProvider? provider,
     required AgentProviderConfig config,
     required Future<UsageStatisticsIndexSnapshot> seedFuture,
     required DateTime earliest,
@@ -221,10 +154,9 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
     final seed = await seedFuture;
     final memoryIndex = MemoryUsageStatisticsIndexStore()..snapshot = seed;
     return CodexUsageStatisticsRepository(
-      providerLoader: provider == null ? null : () async => provider,
       indexStore: memoryIndex,
       scanner: scanner,
-      environment: provider == null ? _runtimeEnvironment(config) : null,
+      environment: _runtimeEnvironment(config),
       includeQuota: false,
       clock: _clock,
     ).load(earliest: earliest, forceRefresh: forceRefresh);
@@ -235,15 +167,6 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
       providerId: config.id,
       providerName: config.displayName,
     );
-  }
-
-  Future<AgentUsageQuotaSnapshot?> _readProviderQuota(
-    AgentProvider provider,
-  ) async {
-    if (provider case final AgentUsageQuotaProvider quotaProvider) {
-      return _readQuotaPort(quotaProvider);
-    }
-    return null;
   }
 
   Future<AgentUsageQuotaSnapshot?> _readQuotaPort(

@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zeta/src/features/agent/application/agent_provider_global_runtime.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/datasources/local_history/codex_usage_log_scanner.dart';
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_usage_log_scanner.dart';
@@ -9,12 +12,13 @@ import 'package:zeta/src/features/usage_statistics/data/provider_agent_usage_pan
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_index_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 
-/// 用量面板是「会话之前的全局信息」的典型消费者：它借用共享 Provider 读套餐，
-/// 用完必须还回租约且**不得**关闭共享实例。会话级实例改造会改变它拿到的是哪个
-/// 实例，但「借了要还、还了不关」这条不变量必须一直成立。
+import '../../../testing/agent_provider_stub_base.dart';
+
+/// 用量面板是「会话之前的全局信息」的典型消费者，只能通过 global runtime
+/// 读取套餐，不能自行选择租约或原始 Provider 生命周期。
 void main() {
-  group('ProviderAgentUsagePanelRepository 的租约借还', () {
-    test('成功路径：租约被释放，共享实例不被关闭', () async {
+  group('ProviderAgentUsagePanelRepository 的 global runtime 使用', () {
+    test('成功路径：调用结束释放租约且保留 global 实例', () async {
       final harness = _Harness(<AgentProviderConfig>[
         AgentProviderConfig.defaultCodex,
       ]);
@@ -70,7 +74,7 @@ final class _Harness {
     registry = AgentProviderRuntimeRegistry(providerFactory: factory);
     repository = ProviderAgentUsagePanelRepository(
       enabledProviderLoader: () async => configs,
-      providerLeaseLoader: registry.acquire,
+      globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
       seedIndexStore: MemoryUsageStatisticsIndexStore(),
       scanner: const _EmptyCodexUsageLogScanner(),
       grokScanner: const _EmptyGrokUsageLogScanner(),
@@ -101,6 +105,7 @@ final class _UsageProviderFactory implements AgentProviderFactory {
 }
 
 final class _UsageFakeProvider extends Fake
+    with AgentProviderThreadLifecycleStub
     implements AgentProvider, AgentUsageQuotaProvider {
   _UsageFakeProvider(this.config, {required this.quotaThrows});
 
@@ -111,6 +116,12 @@ final class _UsageFakeProvider extends Fake
 
   int disposeCount = 0;
   int quotaReads = 0;
+
+  @override
+  Stream<AgentEvent> get events => const Stream<AgentEvent>.empty();
+
+  @override
+  Future<void> initialize() async {}
 
   @override
   Future<AgentUsageQuotaSnapshot?> readUsageQuota() async {

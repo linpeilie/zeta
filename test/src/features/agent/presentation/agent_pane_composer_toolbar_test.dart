@@ -22,6 +22,10 @@ void main() {
         final modeController = AgentConversationModeController();
         final viewModel = createAgentPaneViewModel(
           provider,
+          initialThread: agentPaneThread(
+            id: 'thread-mode',
+            title: 'Mode thread',
+          ),
           conversationModeController: modeController,
         );
         addTearDown(provider.dispose);
@@ -29,9 +33,8 @@ void main() {
         addTearDown(viewModel.dispose);
         await viewModel.loadModels();
         await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
-        await viewModel.switchThread(
-          agentPaneThread(id: 'thread-mode', title: 'Mode thread'),
-        );
+        await viewModel.initialization;
+        await viewModel.sendMessage('bind session runtime');
         provider.emitEvent(
           const AgentSessionConfigUpdatedEvent(
             sessionId: 'thread-mode',
@@ -127,6 +130,13 @@ void main() {
         );
         expect(planBadge, findsNothing);
         expect(selectionNotifications, 2);
+        provider.emitEvent(
+          const AgentTurnCompletedEvent(
+            sessionId: 'thread-mode',
+            turnId: 'turn-1',
+          ),
+        );
+        await tester.pump();
       },
     );
 
@@ -136,17 +146,18 @@ void main() {
         final provider = AgentPaneModeFakeProvider(
           models: agentPaneModelConfigList,
         );
-        final viewModel = createAgentPaneViewModel(provider);
-        addTearDown(provider.dispose);
-        addTearDown(viewModel.dispose);
-        await viewModel.loadModels();
-        await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
-        await viewModel.switchThread(
-          agentPaneThread(
+        final viewModel = createAgentPaneViewModel(
+          provider,
+          initialThread: agentPaneThread(
             id: 'thread-more-actions',
             title: 'More actions thread',
           ),
         );
+        addTearDown(provider.dispose);
+        addTearDown(viewModel.dispose);
+        await viewModel.loadModels();
+        await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
+        await viewModel.initialization;
         await pumpUntilFinder(
           tester,
           find.byKey(const ValueKey('agent-more-actions-button')),
@@ -606,17 +617,19 @@ void main() {
         final provider = AgentPaneModeFakeProvider(
           models: agentPaneModelConfigList,
         );
-        final viewModel = createAgentPaneViewModel(provider);
-        addTearDown(provider.dispose);
-        addTearDown(viewModel.dispose);
-        await viewModel.loadModels();
-        await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
-        await viewModel.switchThread(
-          agentPaneThread(
+        final viewModel = createAgentPaneViewModel(
+          provider,
+          initialThread: agentPaneThread(
             id: 'thread-narrow-mode',
             title: 'Narrow mode thread',
           ),
         );
+        addTearDown(provider.dispose);
+        addTearDown(viewModel.dispose);
+        await viewModel.loadModels();
+        await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
+        await viewModel.initialization;
+        await viewModel.sendMessage('bind session runtime');
         provider.emitEvent(
           const AgentSessionConfigUpdatedEvent(
             sessionId: 'thread-narrow-mode',
@@ -632,6 +645,12 @@ void main() {
                 ],
               ),
             ],
+          ),
+        );
+        provider.emitEvent(
+          const AgentTurnCompletedEvent(
+            sessionId: 'thread-narrow-mode',
+            turnId: 'turn-1',
           ),
         );
         await pumpUntilFinder(
@@ -878,9 +897,11 @@ void main() {
         );
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
+        await tester.pump(const Duration(seconds: 3));
 
         expect(viewModel.permissionSelection?.optionId, ':read-only');
-        expect(provider.lastAppliedPermissionOptionId, ':read-only');
+        // Dormant Binding 只更新会话状态和默认值，不为权限变更启动 runtime。
+        expect(provider.lastAppliedPermissionOptionId, isNull);
         expect(popover, findsNothing);
         expect(find.text('Read only'), findsOneWidget);
         expect(viewModel.permissionPolicyLabel, 'Read only');
@@ -909,14 +930,19 @@ void main() {
       'renders dynamic session config options and sends stable values',
       (tester) async {
         final provider = AgentPaneFakeProvider();
-        final viewModel = createAgentPaneViewModel(provider);
+        final viewModel = createAgentPaneViewModel(
+          provider,
+          initialThread: agentPaneThread(
+            id: 'thread-config',
+            title: 'Config thread',
+          ),
+        );
         addTearDown(provider.dispose);
         addTearDown(viewModel.dispose);
         await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
         await viewModel.loadModels();
-        await viewModel.switchThread(
-          agentPaneThread(id: 'thread-config', title: 'Config thread'),
-        );
+        await viewModel.initialization;
+        await viewModel.sendMessage('bind session runtime');
         provider.emitEvent(
           const AgentSessionConfigUpdatedEvent(
             sessionId: 'thread-config',
@@ -933,6 +959,12 @@ void main() {
                 ],
               ),
             ],
+          ),
+        );
+        provider.emitEvent(
+          const AgentTurnCompletedEvent(
+            sessionId: 'thread-config',
+            turnId: 'turn-1',
           ),
         );
         await tester.pump();

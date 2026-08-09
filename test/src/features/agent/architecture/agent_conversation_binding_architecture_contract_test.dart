@@ -61,6 +61,63 @@ void main() {
       expect(source, isNot(matches(RegExp(r'\bAgentProvider[? ]'))));
     });
 
+    test('legacy controller and multi-thread ViewModel APIs stay deleted', () {
+      expect(
+        File(
+          'lib/src/ui/features/ide/view_models/'
+          'active_agent_provider_controller.dart',
+        ).existsSync(),
+        isFalse,
+      );
+      final viewModel = File(
+        'lib/src/features/agent/presentation/agent_conversation_view_model.dart',
+      ).readAsStringSync();
+      final workspace = File(
+        'lib/src/features/agent/application/'
+        'agent_thread_workspace_controller.dart',
+      ).readAsStringSync();
+
+      for (final legacy in const <String>[
+        'switchThread(',
+        'updateWorkspace(',
+        'restoredSessionId:',
+        'restoredProviderId:',
+        'resetConversation:',
+      ]) {
+        expect(viewModel, isNot(contains(legacy)), reason: legacy);
+      }
+      expect(workspace, isNot(contains('bindThreadIdentity(')));
+    });
+
+    test('runtime scope and neutral ports have no compatibility defaults', () {
+      final registry = File(
+        'lib/src/features/agent/application/agent_provider_runtime_registry.dart',
+      ).readAsStringSync();
+      final modelSelection = File(
+        'lib/src/features/agent/application/'
+        'agent_conversation_model_selection_controller.dart',
+      ).readAsStringSync();
+      final usage = File(
+        'lib/src/features/usage_statistics/data/'
+        'provider_agent_usage_panel_repository.dart',
+      ).readAsStringSync();
+
+      expect(registry, contains('required AgentProviderRuntimeScopeKey scope'));
+      expect(
+        registry,
+        isNot(contains('scope = AgentProviderRuntimeScopeKey.global')),
+      );
+      expect(modelSelection, isNot(contains('bindProvider(')));
+      for (final legacy in const <String>[
+        'providerLeaseLoader',
+        'providerLoader',
+        'isSharedProvider',
+        'AgentProviderInstanceLoader',
+      ]) {
+        expect(usage, isNot(contains(legacy)), reason: legacy);
+      }
+    });
+
     test('Binding and Bundle do not expose the raw provider', () {
       final binding = File(
         'lib/src/features/agent/application/agent_conversation_binding.dart',

@@ -154,15 +154,11 @@ void main() {
         // 服务端回写默认不同步 port。
         expect(port.applyCalls, 0);
 
-        controller.bindThread('thread-b');
-        expect(controller.selectedOptionId, ':workspace');
-
-        controller.bindThread('thread-a');
         expect(
-          controller.selectedOptionId,
-          ':workspace',
-          reason: 'single Binding state must not cache a detached thread',
+          () => controller.bindThread('thread-b'),
+          throwsA(isA<StateError>()),
         );
+        expect(controller.selectedOptionId, 'team-safe');
       },
     );
 

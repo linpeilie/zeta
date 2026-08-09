@@ -8,7 +8,7 @@ import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
-import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 
 import '../../../testing/fake_agent_frame_scheduler.dart';
 import '../presentation/harness/agent_pane_test_harness.dart';
@@ -21,8 +21,8 @@ void main() {
       final harness = _WorkspaceHarness();
       addTearDown(harness.dispose);
 
-      final entryA = harness.createEntry(threadId: 'thread-a');
-      final entryB = harness.createEntry(threadId: 'thread-b');
+      final entryA = await harness.createEntry(threadId: 'thread-a');
+      final entryB = await harness.createEntry(threadId: 'thread-b');
 
       await Future.wait(<Future<void>>[
         entryA.viewModel.sendMessage('hello from A'),
@@ -50,15 +50,12 @@ void main() {
       final harness = _WorkspaceHarness();
       addTearDown(harness.dispose);
 
-      final entry = harness.createEntry(threadId: 'thread-a');
+      final entry = await harness.createEntry(threadId: 'thread-a');
 
       // 创建 entry 会通过 global runtime 预载模型目录，但 Binding 必须保持 dormant。
       expect(harness.factory.created, hasLength(1));
       expect(harness.registry.debugProviderCount, 1);
       expect(entry.binding.hasRuntime, isFalse);
-
-      await entry.viewModel.switchThread(harness.thread(id: 'thread-a'));
-      harness.drainAll();
 
       // AC2：只读历史，只会命中 provider 的 global scope（跨所有 entry 共享）；
       // 不会为这个 entry 单独起一个 session scope 实例。
@@ -80,8 +77,8 @@ void main() {
       final harness = _WorkspaceHarness();
       addTearDown(harness.dispose);
 
-      final entryA = harness.createEntry(threadId: 'thread-a');
-      final entryB = harness.createEntry(threadId: 'thread-b');
+      final entryA = await harness.createEntry(threadId: 'thread-a');
+      final entryB = await harness.createEntry(threadId: 'thread-b');
 
       await entryA.viewModel.sendMessage('hello from A');
       await entryB.viewModel.sendMessage('hello from B');
@@ -118,7 +115,7 @@ void main() {
 final class _WorkspaceHarness {
   _WorkspaceHarness() {
     registry = AgentProviderRuntimeRegistry(providerFactory: factory);
-    providerController = ActiveAgentProviderController(
+    providerController = AgentProviderSettingsController(
       configStore: MemoryAgentProviderConfigStore(),
       modelCatalogRepository: AgentModelCatalogRepository(
         store: MemoryAgentModelCatalogCacheStore(),
@@ -140,19 +137,18 @@ final class _WorkspaceHarness {
   final _MultiInstanceProviderFactory factory = _MultiInstanceProviderFactory();
   final List<FakeAgentFrameScheduler> _schedulers = <FakeAgentFrameScheduler>[];
   late final AgentProviderRuntimeRegistry registry;
-  late final ActiveAgentProviderController providerController;
+  late final AgentProviderSettingsController providerController;
   late final AgentThreadWorkspaceController controller;
 
-  AgentThreadWorkspaceEntry createEntry({required String threadId}) {
+  Future<AgentThreadWorkspaceEntry> createEntry({
+    required String threadId,
+  }) async {
+    final summary = thread(id: threadId);
     final entry = controller.ensureThreadEntry(
       projectPath: '/repo',
-      providerId: AgentProviderConfig.defaultCodex.id,
-      threadId: threadId,
+      thread: summary,
     );
-    entry.viewModel.updateWorkspace(
-      projectPath: '/repo',
-      contextFilePath: null,
-    );
+    await entry.viewModel.initialization;
     return entry;
   }
 

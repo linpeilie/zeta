@@ -136,10 +136,12 @@ flowchart LR
 
 - Registry 是实例和子进程的唯一所有者；global runtime 每个 Provider ID 一个，永不空闲回收。
 - Binding 以 draft/thread key 唯一代表一个逻辑会话，并独占 session runtime、事件 generation、单会话权限快照和活跃操作；权限状态不再使用跨会话注册表。
+- Workspace 创建 entry 时一次性组合匹配的 thread summary、Binding 与 ViewModel；一个 ViewModel 的 thread 身份固定，只能更新 project/file context，切换 thread 必须选择另一个 entry。
 - 新建草稿、打开 thread、读取历史/模型/Skill 不启动 session runtime；只有首次提交调用 `beginTurn()`。
 - 已绑定真实 thread 的 Binding 不会原地改绑；fork 返回的新 session 按新建 thread 登记到列表，再由 Shell 复用标准选择流程创建独立 Entry/Binding，之后的历史、重命名、发送都基于新 thread。
 - cancel、steer、审批回写等迟到操作只能 `runCurrent()`，runtime 已回收时 fail-closed。
 - Manager 每分钟 single-flight 扫描；没有 turn/RPC 且空闲满 10 分钟才按精确 identity 回收。旧进程未 dispose 完前同会话不能启动新进程。
+- Registry 获取 runtime 时必须显式选择 global/session scope；模型选择与用量等共享功能只消费中立端口，其中用量面板固定走 global runtime。
 
 ## 三种审批，别搞混
 

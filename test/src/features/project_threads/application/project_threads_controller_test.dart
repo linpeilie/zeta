@@ -13,7 +13,7 @@ import 'package:zeta/src/features/project_threads/application/project_threads_se
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/project_threads/domain/project_threads_session_snapshot.dart';
 import 'package:zeta/src/features/project_threads/presentation/project_threads_view_model.dart';
-import 'package:zeta/src/ui/features/ide/view_models/active_agent_provider_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 
 import '../../../testing/agent_provider_stub_base.dart';
 
@@ -980,7 +980,7 @@ void main() {
       final registry = AgentProviderRuntimeRegistry(
         providerFactory: _FakeAgentProviderFactory(provider),
       );
-      final providerController = ActiveAgentProviderController(
+      final providerController = AgentProviderSettingsController(
         runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(
           AgentProviderSettings(
@@ -1032,7 +1032,7 @@ void main() {
       final registry = AgentProviderRuntimeRegistry(
         providerFactory: _FakeAgentProviderFactory(provider),
       );
-      final providerController = ActiveAgentProviderController(
+      final providerController = AgentProviderSettingsController(
         runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(
           AgentProviderSettings(
@@ -1100,7 +1100,7 @@ ProjectThreadsController _createController(
   final registry = AgentProviderRuntimeRegistry(
     providerFactory: _FakeAgentProviderFactory(provider),
   );
-  final providerController = ActiveAgentProviderController(
+  final providerController = AgentProviderSettingsController(
     runtimeRegistry: registry,
     configStore: MemoryAgentProviderConfigStore(
       AgentProviderSettings(
@@ -1137,7 +1137,7 @@ ProjectThreadsController _createMultiProviderController({
       createdProviderIds: createdProviderIds,
     ),
   );
-  final providerController = ActiveAgentProviderController(
+  final providerController = AgentProviderSettingsController(
     runtimeRegistry: registry,
     configStore: MemoryAgentProviderConfigStore(
       AgentProviderSettings(
