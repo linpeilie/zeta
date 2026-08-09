@@ -265,7 +265,7 @@ void main() {
     );
 
     await tester.tap(selectFinder);
-    await tester.pumpAndSettle();
+    await _pumpSelectOverlay(tester);
 
     final popupFinder = find.byKey(
       const ValueKey('settings-ui-font-select-popup'),
@@ -290,7 +290,7 @@ void main() {
     );
     expect(searchFinder, findsOneWidget);
     await tester.enterText(searchFinder, 'source');
-    await tester.pumpAndSettle();
+    await _pumpSelectOverlay(tester);
 
     expect(
       find.descendant(of: popupFinder, matching: find.text('系统默认')),
@@ -310,7 +310,7 @@ void main() {
         const ValueKey('settings-ui-font-option-system-Source Han Sans'),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpSelectOverlay(tester);
 
     expect(
       controller.settings.uiFontChoice,
@@ -393,7 +393,7 @@ void main() {
       );
 
       await tester.tap(selectFinder);
-      await tester.pumpAndSettle();
+      await _pumpSelectOverlay(tester);
 
       final popupFinder = find.byKey(
         const ValueKey('settings-code-font-select-popup'),
@@ -424,7 +424,7 @@ void main() {
       );
       expect(searchFinder, findsOneWidget);
       await tester.enterText(searchFinder, 'cascadia');
-      await tester.pumpAndSettle();
+      await _pumpSelectOverlay(tester);
 
       expect(
         find.descendant(
@@ -447,7 +447,7 @@ void main() {
           const ValueKey('settings-code-font-option-system-Cascadia Mono'),
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpSelectOverlay(tester);
 
       expect(
         controller.settings.codeFontChoice,
@@ -471,7 +471,7 @@ void main() {
     await _pumpSettingsPage(tester, controller: controller);
 
     await tester.tap(find.byKey(const ValueKey('settings-ui-font-select')));
-    await tester.pumpAndSettle();
+    await _pumpSelectOverlay(tester);
 
     await tester.tap(
       find.byKey(const ValueKey('settings-ui-font-option-system-Broken UI')),
@@ -489,6 +489,12 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
     await tester.pump(const Duration(milliseconds: 600));
   });
+}
+
+/// Select 弹层可能带持续动画；用有界 pump，避免 pumpAndSettle 超时。
+Future<void> _pumpSelectOverlay(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
 }
 
 Future<void> _pumpSettingsPage(

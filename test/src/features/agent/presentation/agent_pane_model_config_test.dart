@@ -67,7 +67,7 @@ void main() {
       );
       final modelPopoverPanel = tester.widget<PanelCard>(popoverPanel.first);
       final colors = IdeColors.of(tester.element(modelSelector));
-      expect(modelPopoverPanel.color, colors.panel);
+      expect(modelPopoverPanel.color, colors.surfaceElevated);
       expect(modelPopoverPanel.borderRadius, IdeRadius.allSmall);
       expect(modelPopoverPanel.boxShadow, isEmpty);
       final openSelectorSurface = tester.widget<PaneInteractiveSurface>(

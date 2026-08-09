@@ -3408,10 +3408,17 @@ class AgentConversationViewModel {
         : selectedThreadId == expectedThreadId;
   }
 
-  /// 优先使用 provider 返回的 thread 标题；空标题时保留当前标题。
+  /// 采用 provider 返回的 thread 标题；空标题或已有非默认标题时保留当前值。
+  ///
+  /// 从项目线程列表打开时标题已是正式 displayName；resume 返回的 session
+  /// title 常是临时值，不得覆盖。仅在仍是默认「New thread」时（例如新建会话）
+  /// 才采用 session title。
   void _applySessionTitle(AgentSession session) {
     final title = session.title?.trim();
     if (title == null || title.isEmpty) {
+      return;
+    }
+    if (_currentThreadTitle != defaultThreadTitle) {
       return;
     }
     _applyThreadTitle(title);

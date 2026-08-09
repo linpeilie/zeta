@@ -130,7 +130,7 @@ void main() {
         );
         expect(
           messages,
-          contains('Received JSON-RPC stderr line (12 characters)'),
+          anyElement(contains('Received JSON-RPC stderr line (12 characters)')),
         );
         expect(messages, isNot(anyElement(contains('stderr: ping'))));
         expect(messages, isNot(anyElement(contains(secretExecutable))));

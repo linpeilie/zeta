@@ -155,7 +155,7 @@ void main() {
     );
 
     test(
-      'uses provider session title after resuming a selected thread',
+      'keeps list thread title when resume returns a session title',
       () async {
         final provider = _FakeAgentProvider(
           resumeSessionTitle: 'Resolved title',
@@ -171,7 +171,8 @@ void main() {
           'resume:thread-1',
           'send:thread-1',
         ]);
-        expect(viewModel.currentThreadTitle, 'Resolved title');
+        // 列表 displayName 优先于 resume 返回的临时 session 标题。
+        expect(viewModel.currentThreadTitle, 'Thread one');
       },
     );
 

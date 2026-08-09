@@ -321,8 +321,13 @@ Future<void> _discardCatalog({
 
 Map<String, Object?> _structuredContext(LogEvent record) {
   const prefix = 'Agent provider error event: ';
-  final message = record.message;
-  expect(message, startsWith(prefix));
-  return (jsonDecode(message.substring(prefix.length)) as Map)
+  final message = record.message.toString();
+  final index = message.indexOf(prefix);
+  expect(
+    index,
+    isNonNegative,
+    reason: 'expected scoped log message to contain "$prefix", got: $message',
+  );
+  return (jsonDecode(message.substring(index + prefix.length)) as Map)
       .cast<String, Object?>();
 }

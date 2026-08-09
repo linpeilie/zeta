@@ -934,11 +934,11 @@ void main() {
         await tester.pump(const Duration(milliseconds: 300));
       }
 
-      final updatesBefore = provider.permissionApplyCount;
+      // 打开历史尚未 beginTurn：dormant 只持久化偏好，不立刻打 session port。
       await selectPermission('always-approve');
       expect(find.text('Always approve'), findsWidgets);
-      expect(provider.lastAppliedPermissionOptionId, 'always-approve');
-      expect(provider.permissionApplyCount, greaterThan(updatesBefore));
+      expect(provider.lastAppliedPermissionOptionId, isNull);
+      expect(provider.permissionApplyCount, 0);
 
       var settings = await configStore.load();
       var grok = settings.providers.singleWhere(
@@ -946,14 +946,24 @@ void main() {
       );
       expect(grok.selectedPermissionOptionId, 'always-approve');
 
+      await tester.enterText(
+        find.byKey(const ValueKey('agent-message-input')),
+        'attach runtime',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+      await tester.pumpAndSettle();
+
+      final updatesBefore = provider.permissionApplyCount;
       await selectPermission('auto');
       expect(find.text('Auto'), findsWidgets);
       expect(provider.lastAppliedPermissionOptionId, 'auto');
+      expect(provider.permissionApplyCount, greaterThan(updatesBefore));
       settings = await configStore.load();
       grok = settings.providers.singleWhere((p) => p.id == grokAgentProviderId);
       expect(grok.selectedPermissionOptionId, 'auto');
 
-      // 切回 Ask：触发器短标签，provider 同步 optionId=ask。
+      // 切回 Ask：触发器短标签，runtime 已附着时同步 optionId=ask。
       await selectPermission('ask');
       expect(find.text('Ask'), findsWidgets);
       expect(provider.lastAppliedPermissionOptionId, 'ask');
@@ -3455,11 +3465,13 @@ void main() {
         find.byKey(const ValueKey<String>('agent-composer-plan-badge')),
         findsOneWidget,
       );
-      provider.emit(
-        const AgentTurnStartedEvent(
-          AgentTurn(id: 'turn-1', sessionId: 'thread-1'),
-        ),
+      // Binding：先 send 附着 live Pipeline，再注入 plan 事件。
+      await tester.enterText(
+        find.byKey(const ValueKey('agent-message-input')),
+        'draft a plan',
       );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('agent-send-button')));
       await pumpLiveAgentUi(tester);
 
       provider
@@ -3834,11 +3846,38 @@ void main() {
   testWidgets('shows provider unavailable when the provider cannot start', (
     tester,
   ) async {
-    final session = activeProjectSessionStore(tempDirectories);
-    final provider = FakeAgentProvider(
-      unavailable: true,
-      includeConversationTestThread: true,
+    // globalRuntime 在 listThreads 前会 initialize；不可用时无法从远端拉列表。
+    // 用会话缓存露出 thread，打开历史时同样会 initialize 并展示错误。
+    final directory = Directory.systemTemp.createTempSync(
+      'zeta_agent_conversation_project_',
     );
+    tempDirectories.add(directory);
+    final now = DateTime.fromMillisecondsSinceEpoch(1, isUtc: true);
+    final session = MemorySessionStore(
+      IdeSessionState(
+        projectPaths: <String>[directory.path],
+        activeProjectPath: directory.path,
+        projectThreadExpansionByProject: <String, bool>{directory.path: false},
+        projectHomeActive: true,
+        cachedThreadsByProject: <String, List<AgentThreadSummary>>{
+          directory.path: <AgentThreadSummary>[
+            AgentThreadSummary(
+              id: conversationTestThreadId,
+              providerId: defaultAgentProviderId,
+              projectPath: directory.path,
+              title: 'Conversation test thread',
+              sessionPath: '$directory/$conversationTestThreadId.jsonl',
+              preview: 'Conversation test thread',
+              createdAt: now,
+              updatedAt: now,
+              recencyAt: now,
+              status: AgentThreadRuntimeStatus.idle,
+            ),
+          ],
+        },
+      ).encode(),
+    );
+    final provider = FakeAgentProvider(unavailable: true);
 
     await tester.pumpWidget(
       MainApp(

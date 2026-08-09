@@ -351,6 +351,7 @@ void main() {
       final now = DateTime.now();
 
       final provider = FakeAgentProvider(
+        completeTurns: false,
         threadPages: <AgentThreadPage>[
           AgentThreadPage(
             threads: <AgentThreadSummary>[
@@ -359,6 +360,12 @@ void main() {
                 projectPath: directory.path,
                 title: 'Running thread',
                 lastActiveAt: now.subtract(const Duration(minutes: 5)),
+              ),
+              agentThread(
+                id: 'thread-b',
+                projectPath: directory.path,
+                title: 'Idle thread',
+                lastActiveAt: now.subtract(const Duration(minutes: 8)),
               ),
             ],
             nextCursor: null,
@@ -397,13 +404,22 @@ void main() {
         findsNothing,
       );
 
-      provider.emit(
-        const AgentTurnStartedEvent(
-          AgentTurn(id: 'turn-1', sessionId: 'thread-a'),
+      // Binding：只有已打开并 beginTurn 的 thread 才会通过 snapshot 同步 running。
+      await tester.tap(
+        find.byKey(
+          ValueKey<String>('project-thread-${directory.path}-thread-a'),
         ),
       );
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.enterText(
+        find.byKey(const ValueKey('agent-message-input')),
+        'keep running',
+      );
       await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('5m'), findsNothing);
       final listRunning = find.byKey(
@@ -452,11 +468,14 @@ void main() {
       expect(projectRunning, findsNothing);
       expect(listRunning, findsOneWidget);
 
+      // 切到另一条 thread，使 thread-a 成为后台执行；完成后才展示绿色提示。
       await tester.tap(
-        find.byKey(ValueKey<String>('project-tile-${directory.path}')),
+        find.byKey(
+          ValueKey<String>('project-thread-${directory.path}-thread-b'),
+        ),
       );
       await tester.pump();
-      expect(projectRunning, findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 300));
 
       provider.emit(
         const AgentTurnCompletedEvent(sessionId: 'thread-a', turnId: 'turn-1'),
@@ -473,11 +492,6 @@ void main() {
         ),
         findsNothing,
       );
-
-      await tester.tap(
-        find.byKey(ValueKey<String>('project-tile-${directory.path}')),
-      );
-      await tester.pump();
 
       // 后台完成：执行中 icon 替换为绿色完成提示，而非立刻回到相对时间。
       final listCompleted = find.byKey(
@@ -527,8 +541,8 @@ void main() {
         activeProjectPath: firstDirectory.path,
         projectHomeActive: true,
         projectThreadExpansionByProject: <String, bool>{
-          firstDirectory.path: false,
-          secondDirectory.path: false,
+          firstDirectory.path: true,
+          secondDirectory.path: true,
         },
         cachedThreadsByProject: <String, List<AgentThreadSummary>>{
           firstDirectory.path: <AgentThreadSummary>[firstThread],
@@ -536,7 +550,9 @@ void main() {
         },
       ).encode(),
     );
-    final provider = FakeAgentProvider();
+    final provider = _ProjectScopedFakeAgentProvider(
+      threads: <AgentThreadSummary>[firstThread, secondThread],
+    );
 
     await tester.pumpWidget(
       MainApp(
@@ -557,18 +573,73 @@ void main() {
       ValueKey<String>('project-tile-running-icon-${secondDirectory.path}'),
     );
 
-    provider.emit(
-      const AgentTurnStartedEvent(
-        AgentTurn(id: 'turn-first', sessionId: 'thread-first'),
-      ),
+    Future<void> startTurnOnThread({
+      required String projectPath,
+      required String threadId,
+      required String threadTitle,
+      required String message,
+    }) async {
+      final threadFinder = find.byKey(
+        ValueKey<String>('project-thread-$projectPath-$threadId'),
+      );
+      if (threadFinder.evaluate().isEmpty) {
+        await tester.tap(
+          find.byKey(ValueKey<String>('project-tile-$projectPath')),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+      await tester.tap(threadFinder);
+      // 跨项目 selectProjectThread 会走真实 IO 的 _loadProject。
+      await tester.runAsync(waitForIo);
+      await pumpUntilCondition(
+        tester,
+        () {
+          final title = find
+              .byKey(const ValueKey('agent-header-title'))
+              .hitTestable();
+          if (title.evaluate().length != 1) {
+            return false;
+          }
+          return tester.widget<Text>(title).data == threadTitle;
+        },
+        maxPumps: 80,
+        failureMessage: 'Thread $threadId did not become selected',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('agent-message-input')),
+        message,
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+      final listRunning = find.byKey(
+        ValueKey<String>('project-thread-running-icon-$projectPath-$threadId'),
+      );
+      await pumpUntilCondition(
+        tester,
+        () => listRunning.evaluate().isNotEmpty,
+        failureMessage: 'Thread $threadId did not enter running state',
+      );
+      // 收起项目，验证折叠态 running 指示。
+      await tester.tap(
+        find.byKey(ValueKey<String>('project-tile-$projectPath')),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    await startTurnOnThread(
+      projectPath: firstDirectory.path,
+      threadId: 'thread-first',
+      threadTitle: 'First running thread',
+      message: 'run first',
     );
-    provider.emit(
-      const AgentTurnStartedEvent(
-        AgentTurn(id: 'turn-second', sessionId: 'thread-second'),
-      ),
+    await startTurnOnThread(
+      projectPath: secondDirectory.path,
+      threadId: 'thread-second',
+      threadTitle: 'Second running thread',
+      message: 'run second',
     );
-    await tester.pump();
-    await tester.pump();
 
     expect(firstProjectRunning, findsOneWidget);
     expect(secondProjectRunning, findsOneWidget);
@@ -576,7 +647,7 @@ void main() {
     provider.emit(
       const AgentTurnCompletedEvent(
         sessionId: 'thread-first',
-        turnId: 'turn-first',
+        turnId: 'turn-1',
       ),
     );
     await tester.pump();
@@ -1438,6 +1509,29 @@ MemoryAgentProviderConfigStore singleFakeProviderConfigStore() {
       activeProviderId: defaultAgentProviderId,
     ),
   );
+}
+
+/// 按 projectPath 稳定返回 thread 列表，避免多项目 refresh 抽干一次性 threadPages。
+final class _ProjectScopedFakeAgentProvider extends FakeAgentProvider {
+  _ProjectScopedFakeAgentProvider({required List<AgentThreadSummary> threads})
+    : _threads = List<AgentThreadSummary>.unmodifiable(threads),
+      super(completeTurns: false);
+
+  final List<AgentThreadSummary> _threads;
+
+  @override
+  Future<AgentThreadPage> listThreads({
+    required AgentThreadListQuery query,
+  }) async {
+    await initialize();
+    final projectPath = query.projectPath;
+    return AgentThreadPage(
+      threads: _threads
+          .where((thread) => thread.projectPath == projectPath)
+          .toList(growable: false),
+      nextCursor: null,
+    );
+  }
 }
 
 Future<TestGesture> hoverProjectTile(

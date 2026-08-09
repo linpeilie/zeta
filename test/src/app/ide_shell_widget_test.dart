@@ -439,6 +439,8 @@ void main() {
     });
     final provider = FakeAgentProvider(
       completeTurns: false,
+      // warmup 发送不能往 timeline 注入正文，否则污染 storm 字符基线。
+      responseText: '',
       threadPages: <AgentThreadPage>[
         AgentThreadPage(
           threads: <AgentThreadSummary>[
@@ -490,6 +492,13 @@ void main() {
     final viewModel = tester
         .widget<AgentPane>(find.byType(AgentPane))
         .viewModel;
+    // Binding 架构：打开历史 thread 不挂 live Pipeline；先发一条消息附着 runtime。
+    await _attachLiveEventPipelineForStorm(
+      tester,
+      provider: provider,
+      viewModel: viewModel,
+      sessionId: fixture.sessionId,
+    );
     final beforeBuffer = viewModel.eventCoalescingBufferDiagnostics;
     final beforeScheduler = viewModel.eventDispatcherDiagnostics;
     final beforeUi = viewModel.uiStateDiagnostics;
@@ -1662,6 +1671,8 @@ _prepareEventStormAgentPane(
   });
   final provider = FakeAgentProvider(
     completeTurns: false,
+    // warmup 发送不能往 timeline 注入正文，否则污染 storm 字符基线。
+    responseText: '',
     threadPages: <AgentThreadPage>[
       AgentThreadPage(
         threads: <AgentThreadSummary>[
@@ -1707,9 +1718,45 @@ _prepareEventStormAgentPane(
     failureMessage: 'Storm phase 1 AgentPane did not become ready',
   );
 
-  return (
+  final viewModel = tester.widget<AgentPane>(find.byType(AgentPane)).viewModel;
+  await _attachLiveEventPipelineForStorm(
+    tester,
     provider: provider,
-    viewModel: tester.widget<AgentPane>(find.byType(AgentPane)).viewModel,
+    viewModel: viewModel,
+    sessionId: fixture.sessionId,
+  );
+
+  return (provider: provider, viewModel: viewModel);
+}
+
+/// 打开历史 thread 后不会建立 live 订阅；storm 测试通过一次发送附着 session
+/// runtime，再收尾 warmup turn，避免干扰后续 fixture 事件。
+Future<void> _attachLiveEventPipelineForStorm(
+  WidgetTester tester, {
+  required FakeAgentProvider provider,
+  required AgentConversationViewModel viewModel,
+  required String sessionId,
+}) async {
+  final sentBefore = provider.sentMessages.length;
+  await tester.enterText(
+    find.byKey(const ValueKey('agent-message-input')),
+    '__storm_attach__',
+  );
+  await tester.pump();
+  await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+  await pumpUntilCondition(
+    tester,
+    () =>
+        viewModel.eventCoalescingBufferDiagnostics != null &&
+        provider.sentMessages.length > sentBefore,
+    failureMessage: 'Live event pipeline did not attach after send',
+  );
+  final turnId = 'turn-${provider.sentMessages.length}';
+  provider.emit(AgentTurnCompletedEvent(sessionId: sessionId, turnId: turnId));
+  await pumpUntilCondition(
+    tester,
+    () => !viewModel.isTurnRunning,
+    failureMessage: 'Warmup turn did not settle after explicit completion',
   );
 }
 
