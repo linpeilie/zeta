@@ -44,7 +44,7 @@ final class AgentPermissionPersistenceFailure {
 ///
 /// Binding 已经保证一个逻辑会话最多绑定一个 thread 和一个 session runtime，
 /// 因此这里不再维护 provider/runtime/thread 注册表。runtime identity 只用于拒绝
-/// 旧 generation 的迟到异步结果。
+/// 已失效 runtime 实例的迟到异步结果。
 @immutable
 final class AgentConversationPermissionState {
   const AgentConversationPermissionState({

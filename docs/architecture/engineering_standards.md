@@ -153,9 +153,15 @@ main -> app -> presentation/application -> domain
   seed 和持久化。Project Threads 必须优先从已存在 Binding 冻结 thread 请求；没有
   Binding 时才使用 provider default 与 catalog default，禁止从其他会话借用 runtime 状态。
   `AgentPermissionRequestResolver` 只能是无状态优先级函数，不得缓存 selection。
-- 所有异步 catalog/apply/request 路径必须同时验证 controller binding generation、provider
-  runtime generation 与 disposed/token 状态。快速切换 Provider 后的旧结果、已销毁 Canvas 的
-  迟到结果以及 retired runtime 回写均必须丢弃，且不得触发偏好持久化。
+- 所有异步 catalog/apply/request 路径必须验证足以判定新鲜度的语义状态，而不是引入额外的
+  自增计数器：runtime 相关路径（apply、apply 后的 persist）以精确
+  `AgentProviderRuntimeIdentity`（provider + generation）、apply port 实例与
+  disposed 状态判定；无 runtime 的 dormant persist 路径以「要保存的 selection 是否仍是
+  当前 provider default」判定，被更晚的选择顶掉即视为过期。catalog 刷新的乱序回写由
+  `AgentPermissionCatalogController` 自身的 refresh generation 单独守卫，不与 selection
+  controller 的 binding 生命周期耦合——绑定新的 catalog-only port（如 global runtime 目录
+  刷新）不得连带丢弃正在进行的 session apply 结果。快速切换 Provider 后的旧结果、已销毁
+  Canvas 的迟到结果以及 retired runtime 回写均必须丢弃，且不得触发偏好持久化。
 - `thread/settings/updated` 的 Codex profile/approval/sandbox 必须由 data codec 一次性解码
   为 `AgentPermissionSelection`；domain event 不得暴露协议字段。reducer 允许权限事实按事件
   threadId 路由到对应 Binding；Binding 只接受自己的 thread，其他 thread 的迟到通知必须丢弃。

@@ -495,7 +495,8 @@ void main() {
       expect(controller.defaultOptionId, 'team-safe');
     });
 
-    test('rapid runtime rebind drops an old generation apply result', () async {
+    test('rapid runtime rebind drops an apply result from a retired runtime '
+        'identity', () async {
       final delayedResult = Completer<AgentPermissionApplyResult>();
       final oldPort = _FakePermissionPort(
         options: const <AgentPermissionOption>[
@@ -551,6 +552,139 @@ void main() {
       );
       expect(controller.state.sessionEffective, isNull);
       expect(persisted, isEmpty);
+    });
+
+    test(
+      'bindCatalogOnly during an in-flight apply keeps the apply result',
+      () async {
+        final delayedResult = Completer<AgentPermissionApplyResult>();
+        final port = _FakePermissionPort(
+          options: const <AgentPermissionOption>[
+            AgentPermissionOption(id: 'auto', label: 'Auto'),
+          ],
+          applyCompleter: delayedResult,
+        );
+        final globalPort = _FakePermissionPort(
+          options: const <AgentPermissionOption>[
+            AgentPermissionOption(id: 'global-safe', label: 'Global safe'),
+          ],
+        );
+        final persisted = <String>[];
+        final controller = AgentConversationPermissionSelectionController(
+          persistOptionId: (id) async => persisted.add(id),
+        );
+        addTearDown(controller.dispose);
+        controller.bind(
+          port: port,
+          persistedOptionId: 'ask',
+          runtimeIdentity: _runtimeIdentity,
+        );
+        controller.bindThread('thread-a');
+
+        final pending = controller.selectOption(port.options.single);
+        expect(port.applyCalls, 1);
+
+        // 全局权限目录刷新（例如项目列表/诊断读取）与本次会话 apply 无关，
+        // 不应打断正在进行的 apply 结果提交。
+        controller.bindCatalogOnly(
+          port: globalPort,
+          persistedOptionId: 'global-safe',
+        );
+
+        delayedResult.complete(
+          const AgentPermissionApplyResult(
+            normalizedSelection: AgentPermissionSelection(optionId: 'auto'),
+            scope: AgentPermissionApplyScope.currentSession,
+          ),
+        );
+        await pending;
+
+        expect(controller.selectedOptionId, 'auto');
+        expect(persisted, <String>['auto']);
+      },
+    );
+
+    test('dormant persist failure is dropped after a newer selection '
+        'supersedes it', () async {
+      final firstPersistGate = Completer<void>();
+      final controller = AgentConversationPermissionSelectionController(
+        persistOptionId: (id) async {
+          if (id == 'option-a') {
+            await firstPersistGate.future;
+            throw StateError('disk unavailable');
+          }
+        },
+      );
+      addTearDown(controller.dispose);
+
+      // 两次都是 dormant 路径：runtime 尚未 bind。
+      final pendingA = controller.selectOption(
+        const AgentPermissionOption(id: 'option-a', label: 'Option A'),
+      );
+      await controller.selectOption(
+        const AgentPermissionOption(id: 'option-b', label: 'Option B'),
+      );
+      firstPersistGate.complete();
+      await pendingA;
+
+      expect(controller.selectedOptionId, 'option-b');
+      expect(
+        controller.canRetryPersistence,
+        isFalse,
+        reason: 'a superseded selection must not surface a stale retry banner',
+      );
+    });
+
+    test('dormant persist failure surfaces after the runtime attaches, and '
+        'retry only re-persists', () async {
+      final persistGate = Completer<void>();
+      var persistCalls = 0;
+      final port = _FakePermissionPort(
+        options: const <AgentPermissionOption>[
+          AgentPermissionOption(id: 'runtime-safe', label: 'Runtime safe'),
+        ],
+      );
+      final controller = AgentConversationPermissionSelectionController(
+        persistOptionId: (id) async {
+          persistCalls += 1;
+          if (persistCalls == 1) {
+            await persistGate.future;
+            throw StateError('disk unavailable');
+          }
+        },
+      );
+      addTearDown(controller.dispose);
+
+      final pending = controller.selectOption(
+        const AgentPermissionOption(id: 'dormant-safe', label: 'Dormant'),
+      );
+      controller.bind(
+        port: port,
+        persistedOptionId: 'dormant-safe',
+        runtimeIdentity: _runtimeIdentity,
+      );
+      persistGate.complete();
+      await pending;
+
+      expect(controller.canRetryPersistence, isTrue);
+      expect(
+        port.applyCalls,
+        0,
+        reason:
+            'a dormant selection never calls apply once the runtime '
+            'attaches',
+      );
+
+      final retried = await controller.retryPersistOptionId();
+
+      expect(retried, isTrue);
+      expect(controller.canRetryPersistence, isFalse);
+      expect(persistCalls, 2);
+      expect(
+        port.applyCalls,
+        0,
+        reason: 'retryPersistOptionId must only retry persistence',
+      );
     });
 
     test('dispose drops a delayed permission apply completion', () async {
