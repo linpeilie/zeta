@@ -802,7 +802,7 @@ Claude Code CLI 本身无 `model list` 端点（§2.4），因此 `Provider.list
    `AgentUsageQuotaSnapshot`：
      - `windows`：`five_hour` → `AgentUsageWindow(label: '五小时会话额度',
        usedPercent: five_hour.utilization.round(), resetsAt: five_hour.resets_at)`；
-       `seven_day` → `AgentUsageWindow(label: '周额度',
+       `seven_day` → `AgentUsageWindow(label: '1 周',
        usedPercent: seven_day.utilization.round(), resetsAt: seven_day.resets_at)`；
        `resets_at` 为 `null`（窗口未激活，对应 `limits[].is_active=false`）时省
        略该字段，不臆造重置时间；

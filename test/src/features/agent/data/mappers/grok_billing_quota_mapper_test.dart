@@ -20,9 +20,9 @@ void main() {
       expect(quota!.providerId, 'grok-personal');
       expect(quota.providerName, 'Grok');
       expect(quota.planType, 'SuperGrok');
-      expect(quota.limitName, '周额度');
+      expect(quota.limitName, 'SuperGrok');
       expect(quota.windows, hasLength(1));
-      expect(quota.windows.single.label, '周额度');
+      expect(quota.windows.single.label, '1 周');
       expect(quota.windows.single.usedPercent, 35);
       expect(
         quota.windows.single.resetsAt,
@@ -60,7 +60,8 @@ void main() {
 
       expect(quota, isNotNull);
       expect(quota!.windows, hasLength(2));
-      expect(quota.windows.first.label, '月额度');
+      // 月周期按 start/end 时长对齐 Codex：「31 天」类标签，而非「月额度」。
+      expect(quota.windows.first.label, '31 天');
       expect(quota.windows.first.usedPercent, 10);
       expect(quota.windows.last.label, '按需额度');
       expect(quota.windows.last.usedPercent, 25);
@@ -116,9 +117,9 @@ void main() {
         );
 
         expect(quota, isNotNull);
-        expect(quota!.limitName, '周额度');
+        expect(quota!.limitName, 'SuperGrok');
         expect(quota.windows, hasLength(1));
-        expect(quota.windows.single.label, '周额度');
+        expect(quota.windows.single.label, '1 周');
         expect(quota.windows.single.usedPercent, 0);
         expect(
           quota.windows.single.resetsAt,
@@ -142,7 +143,7 @@ void main() {
       );
 
       expect(quota, isNotNull);
-      expect(quota!.limitName, '周额度');
+      expect(quota!.limitName, 'SuperGrok');
       expect(quota.windows, isEmpty);
     });
   });

@@ -214,7 +214,7 @@ void main() {
       expect(quota!.planType, 'SuperGrok');
       expect(quota.windows, hasLength(1));
       expect(quota.windows.single.usedPercent, 35);
-      expect(quota.windows.single.label, '周额度');
+      expect(quota.windows.single.label, '1 周');
       expect(
         quota.windows.single.resetsAt,
         DateTime.parse('2026-08-01T08:38:01.643958+00:00').toLocal(),

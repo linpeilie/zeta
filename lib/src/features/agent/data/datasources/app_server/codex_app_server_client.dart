@@ -211,7 +211,9 @@ class _CodexAppServerClient {
     target.add(
       AgentUsageWindow(
         // 优先用 windowDurationMins 生成可读时长；缺失时回退 limitName / 默认文案。
-        label: _usageWindowLabelFromMinutes(durationMinutes) ?? fallbackLabel,
+        label:
+            formatAgentUsageWindowLabelFromMinutes(durationMinutes) ??
+            fallbackLabel,
         usedPercent: usedPercent.clamp(0, 100),
         resetsAt: resetsAtSeconds == null
             ? null
@@ -224,36 +226,6 @@ class _CodexAppServerClient {
             : Duration(minutes: durationMinutes),
       ),
     );
-  }
-
-  /// 将 Codex `windowDurationMins` 格式化为面板用的短中文时长标签。
-  ///
-  /// 常见套餐：300 →「5 小时」、10080 →「周」。无法识别时返回 null，由调用方回退。
-  String? _usageWindowLabelFromMinutes(int? minutes) {
-    if (minutes == null || minutes <= 0) {
-      return null;
-    }
-    const weekMinutes = 7 * 24 * 60;
-    const dayMinutes = 24 * 60;
-    const hourMinutes = 60;
-
-    if (minutes % weekMinutes == 0) {
-      final weeks = minutes ~/ weekMinutes;
-      return '$weeks 周';
-    }
-    if (minutes % dayMinutes == 0) {
-      final days = minutes ~/ dayMinutes;
-      return '$days 天';
-    }
-    if (minutes % hourMinutes == 0) {
-      return '${minutes ~/ hourMinutes} 小时';
-    }
-    if (minutes > hourMinutes) {
-      final hours = minutes ~/ hourMinutes;
-      final remaining = minutes % hourMinutes;
-      return '$hours 小时 $remaining 分钟';
-    }
-    return '$minutes 分钟';
   }
 
   Future<AgentThreadHistorySnapshot> readThreadHistory({

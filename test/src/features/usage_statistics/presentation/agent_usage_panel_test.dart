@@ -45,7 +45,7 @@ void main() {
     expect(find.text('ChatGPT Plus'), findsOneWidget);
     expect(find.text('5 小时'), findsOneWidget);
     expect(find.text('剩余 75%'), findsOneWidget);
-    expect(find.text('周'), findsOneWidget);
+    expect(find.text('1 周'), findsOneWidget);
     expect(
       tester
           .getTopLeft(find.byKey(const ValueKey('agent-usage-plan-section')))
@@ -305,7 +305,7 @@ void main() {
             providerId: 'grok',
             providerName: 'Grok',
             planType: 'SuperGrok',
-            limitName: '周额度',
+            limitName: '1 周',
             windows: <AgentUsageWindow>[],
           ),
         ),
@@ -321,7 +321,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('agent-usage-window-0')), findsOneWidget);
-    expect(find.text('周额度'), findsWidgets);
+    expect(find.text('1 周'), findsWidgets);
     expect(find.text('剩余 100%'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -348,7 +348,7 @@ final _usageEntries = <AgentUsagePanelEntry>[
           usedPercent: 25,
           resetsAt: DateTime(2026, 7, 21, 15),
         ),
-        const AgentUsageWindow(label: '周', usedPercent: 40),
+        const AgentUsageWindow(label: '1 周', usedPercent: 40),
       ],
     ),
   ),

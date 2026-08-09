@@ -1,8 +1,10 @@
 import 'package:zeta/src/features/agent/domain/agent_usage_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_usage_window_labels.dart';
 
 /// 将 Grok ACP `_x.ai/billing` 响应映射为中立套餐快照。
 ///
 /// 仅使用协议实际返回的字段；不推算绝对 Token 总额或未提供的窗口。
+/// 窗口标签与 Codex 共用时长文案（「1 周」/「5 小时」），不用「周额度」。
 AgentUsageQuotaSnapshot? mapGrokBillingQuota(
   Object? raw, {
   required String providerId,
@@ -37,7 +39,8 @@ AgentUsageQuotaSnapshot? mapGrokBillingQuota(
     providerId: providerId,
     providerName: providerName,
     planType: planType,
-    limitName: _limitName(config, planType),
+    // 与 Codex 一致：limitName 不承载周期别名；周期展示只在 window.label。
+    limitName: planType,
     windows: List<AgentUsageWindow>.unmodifiable(windows),
     credits: credits,
   );
@@ -53,11 +56,11 @@ AgentUsageWindow? _primaryWindow(Map<String, Object?> config) {
   final end =
       _parseDateTime(period['end']) ??
       _parseDateTime(config['billingPeriodEnd']);
+  final windowDuration = _durationBetween(start, end);
 
   final usedPercent = _percent(config['creditUsagePercent']);
   // proto3 在 0% 时常省略 creditUsagePercent。周/月额度刚重置时仍会带
-  // currentPeriod（含 end）；此时按 0% 建窗口，否则 UI 会用「周额度」合成
-  // 无 resetsAt 的占位条。
+  // currentPeriod（含 end）；此时按 0% 建窗口，否则 UI 会合成无 resetsAt 的占位条。
   final resolvedPercent =
       usedPercent ??
       (_isRecognizedUsagePeriod(periodType) && end != null ? 0 : null);
@@ -65,11 +68,16 @@ AgentUsageWindow? _primaryWindow(Map<String, Object?> config) {
     return null;
   }
 
+  final label =
+      formatAgentUsageWindowLabelFromMinutes(windowDuration?.inMinutes) ??
+      formatAgentUsageWindowLabelFromPeriodType(periodType) ??
+      '套餐额度';
+
   return AgentUsageWindow(
-    label: _periodLabel(periodType),
+    label: label,
     usedPercent: resolvedPercent,
     resetsAt: end?.toLocal(),
-    windowDuration: _durationBetween(start, end),
+    windowDuration: windowDuration,
   );
 }
 
@@ -101,27 +109,6 @@ AgentUsageCredits? _credits(Map<String, Object?> config) {
     balance: _formatBalance(prepaid),
   );
 }
-
-String? _limitName(Map<String, Object?> config, String? planType) {
-  final period = _asMap(config['currentPeriod']) ?? const <String, Object?>{};
-  final periodType = _nonEmptyString(period['type']);
-  final periodLabel = switch (periodType) {
-    'USAGE_PERIOD_TYPE_WEEKLY' => '周额度',
-    'USAGE_PERIOD_TYPE_MONTHLY' => '月额度',
-    _ => null,
-  };
-  if (periodLabel != null) {
-    return periodLabel;
-  }
-  return planType;
-}
-
-String _periodLabel(String? periodType) => switch (periodType) {
-  'USAGE_PERIOD_TYPE_WEEKLY' => '周额度',
-  'USAGE_PERIOD_TYPE_MONTHLY' => '月额度',
-  'USAGE_PERIOD_TYPE_DAILY' => '日额度',
-  _ => '套餐额度',
-};
 
 int? _percent(Object? value) {
   if (value is int) {

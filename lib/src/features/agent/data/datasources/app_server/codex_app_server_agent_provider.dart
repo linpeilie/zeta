@@ -13,6 +13,7 @@ import 'package:zeta/src/features/agent/data/datasources/transport/provider_runt
 import 'package:zeta/src/features/agent/data/mappers/codex_permission_policy_codec.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_usage_window_labels.dart';
 
 part 'codex_app_server_client.dart';
 part 'codex_collaboration_mode_catalog_failure.dart';
