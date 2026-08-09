@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zeta/src/features/agent/application/agent_conversation_binding.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_binding_manager.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -127,7 +128,7 @@ void main() {
       final draftLease = acquireDraft();
       final activity = await draftLease.binding.beginTurn();
       await activity.release();
-      await draftLease.binding.promoteToThread('thread-1');
+      draftLease.binding.promoteToThread('thread-1');
       await draftLease.release();
 
       final reopened = manager.acquireThread(
@@ -334,7 +335,7 @@ void main() {
       expect(factory.providers.single.disposeCount, 0);
     });
 
-    test('草稿晋升碰到已存在 thread Binding 时 fail-closed', () async {
+    test('草稿晋升碰到已存在 thread Binding 时 fail-closed', () {
       final draft = acquireDraft();
       final existing = manager.acquireThread(
         providerId: defaultAgentProviderId,
@@ -343,10 +344,7 @@ void main() {
         persistPermissionOptionId: (_) async {},
       );
 
-      await expectLater(
-        draft.binding.promoteToThread('thread-1'),
-        throwsStateError,
-      );
+      expect(() => draft.binding.promoteToThread('thread-1'), throwsStateError);
       expect(
         manager.bindingForThread(
           providerId: defaultAgentProviderId,
@@ -354,6 +352,41 @@ void main() {
         ),
         same(existing.binding),
       );
+      expect(draft.binding.key, isA<AgentConversationDraftBindingKey>());
+    });
+
+    test('草稿晋升在 Manager 通知时 key 与映射已同步提交', () {
+      final lease = acquireDraft();
+      final binding = lease.binding;
+      final draftKey = binding.key;
+      AgentConversationBindingKey? keySeenByManagerListener;
+      AgentConversationBinding? mappedSeenByManagerListener;
+      var draftKeyPresentDuringNotify = false;
+
+      manager.addListener(() {
+        keySeenByManagerListener = binding.key;
+        mappedSeenByManagerListener = manager.bindingForThread(
+          providerId: defaultAgentProviderId,
+          threadId: 'thread-1',
+        );
+        draftKeyPresentDuringNotify = manager.bindings.containsKey(draftKey);
+      });
+
+      binding.promoteToThread('thread-1');
+
+      expect(
+        keySeenByManagerListener,
+        isA<AgentConversationThreadBindingKey>(),
+      );
+      expect(
+        (keySeenByManagerListener! as AgentConversationThreadBindingKey)
+            .threadId,
+        'thread-1',
+      );
+      expect(mappedSeenByManagerListener, same(binding));
+      expect(draftKeyPresentDuringNotify, isFalse);
+      expect(manager.bindings.containsKey(draftKey), isFalse);
+      expect(binding.permissions.state.threadId, 'thread-1');
     });
   });
 }

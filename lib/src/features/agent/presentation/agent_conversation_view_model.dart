@@ -1794,7 +1794,7 @@ class AgentConversationViewModel {
       );
       requestSession = session;
       if (conversationBinding.threadId == null) {
-        await conversationBinding.promoteToThread(session.id);
+        conversationBinding.promoteToThread(session.id);
       }
       final conversation = bundle.conversation;
       // 模式 + 当前 thread 权限一并冻结进请求快照，避免共享 provider 可变状态串 thread。

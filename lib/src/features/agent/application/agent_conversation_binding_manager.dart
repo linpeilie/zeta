@@ -159,11 +159,12 @@ final class AgentConversationBindingManager extends ChangeNotifier {
     return AgentConversationBindingLease._(binding, this);
   }
 
-  Future<void> _promote(
+  /// 同步原子晋升：先写入 Binding 身份，再改映射，最后才通知监听者。
+  void _promote(
     AgentConversationBinding binding,
     AgentConversationBindingKey previousKey,
     AgentConversationThreadBindingKey nextKey,
-  ) async {
+  ) {
     if (!identical(_bindings[previousKey], binding)) {
       throw StateError('Conversation binding is no longer registered');
     }
@@ -173,6 +174,7 @@ final class AgentConversationBindingManager extends ChangeNotifier {
         'Thread ${nextKey.threadId} already has a conversation binding',
       );
     }
+    binding.acceptPromotedThreadKey(nextKey);
     _bindings.remove(previousKey);
     _bindings[nextKey] = binding;
     notifyListeners();

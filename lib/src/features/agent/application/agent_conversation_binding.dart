@@ -119,8 +119,9 @@ final class AgentConversationTurnActivity {
   }
 }
 
+/// Manager 同步提交 draft→thread 映射；不得做异步工作，以免出现半晋升窗口。
 typedef AgentConversationBindingPromotion =
-    Future<void> Function(
+    void Function(
       AgentConversationBinding binding,
       AgentConversationBindingKey previousKey,
       AgentConversationThreadBindingKey nextKey,
@@ -280,7 +281,9 @@ final class AgentConversationBinding extends ChangeNotifier {
   }
 
   /// 草稿拿到真实 threadId 后由 manager 原子重建索引。
-  Future<void> promoteToThread(String threadId) async {
+  ///
+  /// 映射、[_key] 与权限 threadId 在同一同步提交中完成，随后才通知监听者。
+  void promoteToThread(String threadId) {
     final normalized = threadId.trim();
     if (normalized.isEmpty) {
       throw ArgumentError.value(threadId, 'threadId', 'Must not be empty');
@@ -299,10 +302,23 @@ final class AgentConversationBinding extends ChangeNotifier {
         'acquire a separate Binding for the target thread',
       );
     }
-    await _promote(this, previous, next);
-    _key = next;
-    permissions.bindThread(normalized);
+    _promote(this, previous, next);
     notifyListeners();
+  }
+
+  /// 仅供 Manager 在同步晋升提交阶段写入 thread 身份；调用方负责之后统一通知。
+  void acceptPromotedThreadKey(AgentConversationThreadBindingKey nextKey) {
+    if (_disposed) {
+      throw StateError('Agent conversation binding is disposed');
+    }
+    if (_key is AgentConversationThreadBindingKey && _key != nextKey) {
+      throw StateError(
+        'Conversation $_key cannot be rebound to $nextKey; '
+        'acquire a separate Binding for the target thread',
+      );
+    }
+    _key = nextKey;
+    permissions.bindThread(nextKey.threadId);
   }
 
   /// 按精确 identity 回收空闲实例。返回 false 表示候选已经过期。
