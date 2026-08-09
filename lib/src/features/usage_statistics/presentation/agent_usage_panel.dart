@@ -419,15 +419,6 @@ class _PlanSection extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: textStyles.titleLarge,
         ),
-        if (quota.limitName case final limitName?) ...[
-          const SizedBox(height: IdeSpacing.space2),
-          Text(
-            limitName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: textStyles.caption.copyWith(color: colors.textSecondary),
-          ),
-        ],
         const SizedBox(height: IdeSpacing.space10),
         for (var index = 0; index < windows.length; index++) ...[
           _QuotaWindow(
