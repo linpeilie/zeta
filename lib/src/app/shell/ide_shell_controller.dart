@@ -122,6 +122,7 @@ class IdeShellController extends ChangeNotifier {
       globalRuntime: agentProviderGlobalRuntime,
       onTurnCompleted: onAgentTurnCompleted,
       onAttention: onAgentAttention,
+      onCreatedThread: _openCreatedThread,
       uiFrameSchedulerFactory: agentUiFrameSchedulerFactory,
     );
     _bootstrapAgentEntry = agentWorkspaceController.ensureDraftEntry(
@@ -443,26 +444,10 @@ class IdeShellController extends ChangeNotifier {
     if (session == null) {
       return;
     }
-
-    final state = projectThreadsController.stateFor(projectPath);
-    AgentThreadSummary? forkedThread;
-    for (final candidate in state.threads) {
-      if (candidate.id == session.id) {
-        forkedThread = candidate;
-        break;
-      }
-    }
-    forkedThread ??= AgentThreadSummary(
-      id: session.id,
-      providerId: session.providerId,
-      projectPath: projectPath,
-      title: session.title,
-      preview: session.title ?? '',
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-      status: AgentThreadRuntimeStatus.idle,
+    await _openCreatedThread(
+      session: session,
+      context: AgentContext(projectPath: projectPath),
     );
-    await selectProjectThread(projectPath, forkedThread);
   }
 
   Future<void> startNewThreadForProject(
@@ -1211,6 +1196,40 @@ class IdeShellController extends ChangeNotifier {
     _agentThreadIdsByProject[projectPath] = sessionId;
     projectThreadsController.selectThreadId(projectPath, sessionId);
     _syncSelectedThreadTitleFromList();
+  }
+
+  Future<void> _openCreatedThread({
+    required AgentSession session,
+    required AgentContext context,
+    String? initialMessage,
+  }) async {
+    final projectPath = context.projectPath?.trim();
+    if (projectPath == null || projectPath.isEmpty) {
+      throw StateError('Created thread ${session.id} has no project context');
+    }
+    final trimmedMessage = initialMessage?.trim();
+    final thread = projectThreadsController.registerSession(
+      projectPath,
+      session,
+      preview: trimmedMessage == null || trimmedMessage.isEmpty
+          ? session.title
+          : trimmedMessage,
+    );
+    await selectProjectThread(projectPath, thread);
+
+    final entry = agentWorkspaceController.selectedEntry;
+    if (entry?.providerId != session.providerId ||
+        entry?.threadId != session.id ||
+        entry?.viewModel.threadOpenPhase != AgentThreadOpenPhase.idle) {
+      throw StateError('Could not open created thread ${session.id}');
+    }
+    entry!.viewModel.updateWorkspace(
+      projectPath: projectPath,
+      contextFilePath: context.filePath,
+    );
+    if (trimmedMessage != null && trimmedMessage.isNotEmpty) {
+      await entry.viewModel.sendMessage(trimmedMessage);
+    }
   }
 
   void _handleSelectedWorkspaceThreadSnapshotChanged() {

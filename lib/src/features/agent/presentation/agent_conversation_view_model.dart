@@ -50,6 +50,17 @@ String _modelCatalogSource(AgentProviderConfig config) {
   };
 }
 
+/// Provider 创建 thread 后，由 Shell 使用通用新会话流程登记并选中。
+///
+/// [initialMessage] 只用于“编辑后重试”：Shell 必须在新 thread 成为当前会话后，
+/// 再由新 ViewModel 提交这条消息。
+typedef AgentCreatedThreadCallback =
+    Future<void> Function({
+      required AgentSession session,
+      required AgentContext context,
+      String? initialMessage,
+    });
+
 /// Agent 面板的状态协调器。
 ///
 /// 当前 ViewModel 只保留 provider/session 协调与事件路由；时间线聚合、
@@ -69,6 +80,7 @@ class AgentConversationViewModel {
     this.onTurnCompleted,
     this.onAttention,
     this.onProviderSwitchRequested,
+    this.onCreatedThread,
     AgentFrameScheduler? uiFrameScheduler,
   }) : _timeline = timelineStore ?? AgentConversationTimelineStore(),
        _ownsModelSelectionController = modelSelectionController == null,
@@ -158,6 +170,9 @@ class AgentConversationViewModel {
 
   /// Binding 已锁定 Provider 时，请求 Workspace 创建并选中另一 Provider 的草稿。
   final Future<void> Function(String providerId)? onProviderSwitchRequested;
+
+  /// Provider 创建 thread 后请求 Shell 登记并选中，禁止当前 Binding 原地改绑。
+  final AgentCreatedThreadCallback? onCreatedThread;
 
   /// 后台文件索引是否已就绪；无注入时恒为 true。
   bool get isWorkspaceFileIndexReady =>
@@ -691,6 +706,7 @@ class AgentConversationViewModel {
 
   bool get canForkCurrentThread =>
       sessionId != null &&
+      onCreatedThread != null &&
       canSubmitMessage &&
       !isTurnRunning &&
       activeCapabilities.canForkThread;
@@ -926,7 +942,8 @@ class AgentConversationViewModel {
 
   /// 空闲、版本支持指定 turn 分支，且存在稳定前置边界时可创建分支重试。
   bool get canEditLastUserMessage {
-    if (!activeCapabilities.canForkThreadAtTurn ||
+    if (onCreatedThread == null ||
+        !activeCapabilities.canForkThreadAtTurn ||
         !canSubmitMessage ||
         isTurnRunning) {
       return false;
@@ -2391,22 +2408,8 @@ class AgentConversationViewModel {
       if (!_isCurrentSwitch(switchToken)) {
         return;
       }
-      final summary = AgentThreadSummary(
-        id: session.id,
-        providerId: session.providerId,
-        projectPath: _projectPath ?? '',
-        title: session.title,
-        preview: session.title ?? '',
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-        status: AgentThreadRuntimeStatus.idle,
-      );
-      await switchThread(summary);
-      if (sessionId != session.id ||
-          _threadOpenPhase != AgentThreadOpenPhase.idle) {
-        return;
-      }
-      await sendMessage(trimmed);
+      await _openCreatedThread(session, initialMessage: trimmed);
+      _restoreSourceAfterBranchCreated();
     } catch (error) {
       if (!_isCurrentSwitch(switchToken)) {
         return;
@@ -2452,24 +2455,62 @@ class AgentConversationViewModel {
       if (!_isCurrentSwitch(switchToken)) {
         return session;
       }
-      await switchThread(
-        AgentThreadSummary(
-          id: session.id,
-          providerId: session.providerId,
-          projectPath: _projectPath ?? '',
-          title: session.title,
-          preview: session.title ?? '',
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
-          status: AgentThreadRuntimeStatus.idle,
-        ),
-      );
+      await _openCreatedThread(session);
       return session;
     } catch (error) {
       _log.w('Could not fork thread $threadId (${error.runtimeType})');
       _markError('Could not fork thread', details: error.toString());
       return null;
     }
+  }
+
+  Future<void> _openCreatedThread(
+    AgentSession session, {
+    String? initialMessage,
+  }) {
+    final sourceThreadId = sessionId;
+    if (session.providerId != conversationBinding.providerId) {
+      throw StateError(
+        'Fork from ${conversationBinding.providerId} returned '
+        '${session.providerId}',
+      );
+    }
+    if (sourceThreadId != null && session.id == sourceThreadId) {
+      throw StateError('Fork returned the source thread ${session.id}');
+    }
+    final callback = onCreatedThread;
+    if (callback == null) {
+      throw StateError(
+        'Created thread ${session.id} requires Shell activation',
+      );
+    }
+    return callback(
+      session: session,
+      context: AgentContext(
+        projectPath: _projectPath,
+        filePath: _contextFilePath,
+      ),
+      initialMessage: initialMessage,
+    );
+  }
+
+  void _restoreSourceAfterBranchCreated() {
+    if (_disposed) {
+      return;
+    }
+    _status = AgentProviderStatus(
+      state: AgentProviderConnectionState.ready,
+      message: '$activeProviderName ready',
+    );
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{
+          AgentUiRegion.header,
+          AgentUiRegion.composer,
+        },
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
   }
 
   /// 重命名当前 thread；先乐观更新标题，再以 `thread/name/updated` 为准。

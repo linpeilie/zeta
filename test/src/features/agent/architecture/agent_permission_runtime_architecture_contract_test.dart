@@ -441,6 +441,12 @@ void main() {
           providerController: providerController,
           conversationBinding: bindingLease.binding,
           globalRuntime: bindingHarness.globalRuntime,
+          onCreatedThread:
+              ({
+                required session,
+                required context,
+                String? initialMessage,
+              }) async {},
           uiFrameScheduler: FakeAgentFrameScheduler(),
         );
         addTearDown(viewModel.dispose);

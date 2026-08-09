@@ -136,6 +136,7 @@ flowchart LR
 - The registry is the sole owner of instances and child processes. There is one non-reaped global runtime per provider ID.
 - A binding uniquely represents one logical conversation by draft/thread key and owns its session runtime, event generation, single-conversation permission snapshot, and active operations; permission state is not kept in a cross-conversation registry.
 - Creating a draft, opening a thread, or reading history/models/skills does not start a session runtime. Only the first submitted turn calls `beginTurn()`.
+- A binding already attached to a real thread is never rebound in place. The session returned by fork is registered like any newly created thread, then the shell reuses the standard selection flow to create its separate entry/binding; subsequent history, rename, and send operations target that new thread.
 - Late cancel, steer, and interaction responses may only use `runCurrent()` and fail closed after runtime reclamation.
 - The manager runs a single-flight sweep every minute. A session is reaped only after ten idle minutes with no active turn/RPC, using an exact runtime identity; a replacement waits for the old process to finish disposing.
 

@@ -470,8 +470,10 @@ conversation mode 的 UI 回写仍受当前 thread gate 约束。
 - 18 种 ThreadItem 在实时路径与 `thread/read` / JSONL 历史中一致映射。
 - 输入区支持本地图片（选图 / 粘贴落盘）随 turn 发送，时间线气泡预览。
 - Thread 列表：搜索、活动/归档切换、右键重命名/归档/删除/分叉。
-- 编辑上一条用户消息时保留原 thread，并通过 `thread/fork.lastTurnId` 创建分支后
-  重发；工作区文件改动不会随会话分支而回滚。
+- 编辑上一条用户消息时保留原 thread，并通过 `thread/fork.lastTurnId` 创建分支；fork
+  返回的 session 按新建 thread 登记到列表，Shell 复用标准 thread 选择流程创建并选中独立
+  Entry/Binding，再由新 ViewModel 重发编辑后的内容。源 Binding 不改绑，工作区文件改动
+  也不会随会话分支而回滚。
 
 ### Conversation mode 配置
 

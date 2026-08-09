@@ -164,6 +164,11 @@ main -> app -> presentation/application -> domain
   隐藏不支持入口，application 和 data 层执行前仍要校验。禁止以静默 no-op 或语义不等价
   的降级伪造 thread/turn 能力。
 - bundle 端口为空时，对应 capability 必须不可用；不支持功能不得靠 no-op 伪装成“已实现”。
+- 已绑定真实 thread 的 `AgentConversationBinding` 不得原地改绑到另一个 thread。fork
+  返回 `AgentSession` 后必须走 Shell 的新 thread 通用流程：由
+  `ProjectThreadsController.registerSession` 登记列表，再通过 `selectProjectThread` 创建或
+  复用独立 Workspace Entry/Binding 并选中；“编辑后重试”最后才由新 ViewModel 发送。
+  源 ViewModel 只发起 fork，不得继续在源 Binding 上执行新 thread 的 rename/send。
 - 启动时机由 `AgentProviderBootstrapPolicy` 描述；需要项目目录的 provider 不得在获得
   workspace 前启动，也不得参与 eager model preload。
 - `AgentProviderRuntimeRegistry` 是应用进程内 Provider 实例和子进程的唯一所有者，也是

@@ -217,6 +217,9 @@ dispose 完成前同 scope acquire 必须等待。配置失效会同时清理 gl
     同一 Binding 最多一个实例，不同 thread 各自独立。覆盖 draft 晋升、TTL、运行中 turn/RPC、
     重叠 sweep、ABA identity、dispose/acquire 屏障、配置失效、旧 generation 丢弃与 global
     永不回收；任一 session 的恢复、发送或结束不得污染其他 session 的事件、权限或 reducer。
+    fork 必须覆盖真实 thread A → 新 thread B：返回的 session 通过 Shell 通用新 thread
+    登记/选择流程进入列表，B 使用独立 Entry/Binding 并成为当前选择，A 不改绑，随后
+    rename/send 只能作用于 B；普通 fork 不得提前创建 B 的 session runtime。
 
 交互响应按领域语义拆分：权限请求调用 `respondToPermission`；结构化用户提问仅由实现
 `AgentQuestionResponseProvider` 的 Provider 通过 `respondToQuestion` 回写，空 answers

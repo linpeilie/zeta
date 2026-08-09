@@ -144,6 +144,7 @@ Common types: `feat` / `fix` / `docs` / `refactor` / `test` / `chore` / `perf`.
 - Adding a provider should touch only its own data files, neutral domain contracts, factory wiring, and contract tests. If you find yourself needing to modify a shared layer, the abstraction is wrong — open an issue first.
 - UI renders strictly by **capability**, never hard-coded on provider kind or name. Unsupported capabilities must report `capability = false` and throw `UnsupportedError` — **never succeed silently**.
 - Provider processes are created only by `AgentProviderRuntimeRegistry`. Global work uses `AgentProviderGlobalRuntime`; session instances are created lazily only by `AgentConversationBinding.beginTurn()`. View models own no lease/scope/pin, and the binding manager owns idle reclamation.
+- A binding attached to a real thread must never be rebound in place. A forked session goes through the shell's standard new-thread registration and selection flow, and later operations target only the fork result.
 - `AgentProviderBundle` / `AgentRuntimePort` never expose the raw `AgentProvider`; each binding owns one immutable permission snapshot, with no cross-provider/runtime/thread permission registry.
 
 **Event pipeline**

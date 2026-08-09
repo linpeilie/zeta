@@ -144,6 +144,7 @@ chore: bump flutter action pin
 - 新增 Provider 的正常改动范围 = 自有 data 文件 + 中立 domain 契约 + factory 组合 + 契约测试。如果你发现必须改共享层，说明抽象没做对，先开 Issue 讨论。
 - UI 一律按 **capability** 渲染，不按 provider kind 或名称硬编码。未支持的能力必须 `capability = false` 并抛 `UnsupportedError`，**不得静默成功**。
 - Provider 进程只由 `AgentProviderRuntimeRegistry` 创建；全局操作走 `AgentProviderGlobalRuntime`，会话实例只由 `AgentConversationBinding.beginTurn()` 惰性创建。ViewModel 不持有 lease/scope/pin，空闲回收归 Binding Manager。
+- 真实 thread 的 Binding 不得原地改绑；fork 返回的 session 走 Shell 的新 thread 通用登记/选择流程，后续操作只作用于 fork 结果。
 - `AgentProviderBundle` / `AgentRuntimePort` 不暴露原始 `AgentProvider`；每个 Binding 独占一份不可变权限快照，不得恢复跨 provider/runtime/thread 的权限注册表。
 
 **事件管线**

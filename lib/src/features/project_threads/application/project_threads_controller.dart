@@ -217,7 +217,7 @@ class ProjectThreadsController {
   ///
   /// [markRunning] 为 true 时乐观写入执行中指示（新建 thread 首条消息场景），
   /// 避免 active provider 事件订阅尚未跟上时侧栏无转圈动画。
-  void registerSession(
+  AgentThreadSummary registerSession(
     String projectPath,
     AgentSession session, {
     String? preview,
@@ -227,20 +227,19 @@ class ProjectThreadsController {
     final resolvedPreview = (preview ?? session.title ?? '').trim();
     // title 只在 provider 已给出正式名时写入；首条用户消息只放 preview，
     // 避免把临时文案写进 title 后挡住后续 generated_title 覆盖观感。
-    viewModel.prependThread(
+    final now = DateTime.now();
+    final thread = AgentThreadSummary(
+      id: session.id,
+      providerId: session.providerId,
       projectPath: projectPath,
-      thread: AgentThreadSummary(
-        id: session.id,
-        providerId: session.providerId,
-        projectPath: projectPath,
-        title: session.title,
-        preview: resolvedPreview,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-        status: AgentThreadRuntimeStatus.idle,
-        raw: session.raw,
-      ),
+      title: session.title,
+      preview: resolvedPreview,
+      createdAt: now,
+      updatedAt: now,
+      status: AgentThreadRuntimeStatus.idle,
+      raw: session.raw,
     );
+    viewModel.prependThread(projectPath: projectPath, thread: thread);
     if (session.title != null && session.title!.trim().isNotEmpty) {
       viewModel.updateThreadTitle(
         projectPath: projectPath,
@@ -252,6 +251,7 @@ class ProjectThreadsController {
     if (markRunning) {
       _setThreadRunning(session.id, isRunning: true);
     }
+    return thread;
   }
 
   /// 由详情侧 turn 状态同步列表执行中指示（不依赖 provider 事件是否已送达）。
@@ -487,7 +487,7 @@ class ProjectThreadsController {
     );
   }
 
-  /// 分叉 thread，返回新会话；调用方负责切换 Agent 面板。
+  /// 分叉 thread，返回 Provider 创建的新会话；调用方负责登记并切换 Agent 面板。
   Future<AgentSession?> forkThread({
     required String projectPath,
     required String threadId,
@@ -521,24 +521,6 @@ class ProjectThreadsController {
         );
       },
     );
-    if (session == null) {
-      return null;
-    }
-    _registerThreadMapping(projectPath, session.id);
-    viewModel.prependThread(
-      projectPath: projectPath,
-      thread: AgentThreadSummary(
-        id: session.id,
-        providerId: session.providerId,
-        projectPath: projectPath,
-        title: session.title,
-        preview: session.title ?? '',
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-        status: AgentThreadRuntimeStatus.idle,
-      ),
-    );
-    selectThreadId(projectPath, session.id);
     return session;
   }
 

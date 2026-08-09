@@ -148,6 +148,125 @@ void main() {
     },
   );
 
+  test('fork 将 Provider 新建的 thread 登记并选中，后续操作只作用于新 thread', () async {
+    final directory = Directory.systemTemp.createTempSync('zeta_shell_');
+    tempDirectories.add(directory);
+    final harness = await _openShellWithSelectedThread(
+      directory: directory,
+      threadIds: const <String>['thread-a'],
+      selectedThreadId: 'thread-a',
+    );
+    final shell = harness.shell;
+    final backend = harness.backend;
+    addTearDown(shell.dispose);
+    final sourceEntry = shell.agentWorkspaceController.selectedEntry!;
+
+    final session = await sourceEntry.viewModel.forkCurrentThread();
+    await _flushAsync();
+
+    expect(session?.id, 'forked-thread-a');
+    expect(
+      shell.projectThreadStateFor(directory.path).selectedThreadId,
+      'forked-thread-a',
+    );
+    final selectedEntry = shell.agentWorkspaceController.selectedEntry!;
+    expect(selectedEntry, isNot(same(sourceEntry)));
+    expect(selectedEntry.binding.threadId, 'forked-thread-a');
+    expect(sourceEntry.binding.threadId, 'thread-a');
+    expect(backend.instances, hasLength(1));
+    expect(sourceEntry.binding.hasRuntime, isFalse);
+
+    await selectedEntry.viewModel.renameCurrentThread('Fork renamed');
+    expect(
+      backend.instances.single.renamedThreads,
+      contains((threadId: 'forked-thread-a', name: 'Fork renamed')),
+    );
+
+    await selectedEntry.viewModel.sendMessage('continue on fork');
+    await _flushAsync();
+    expect(backend.instances, hasLength(2));
+    expect(
+      backend.instances.last.sentMessages,
+      contains((sessionId: 'forked-thread-a', message: 'continue on fork')),
+    );
+    expect(sourceEntry.binding.hasRuntime, isFalse);
+  });
+
+  test('编辑后重试登记并选中 fork thread，再由新 Binding 发送', () async {
+    final directory = Directory.systemTemp.createTempSync('zeta_shell_');
+    tempDirectories.add(directory);
+    final harness = await _openShellWithSelectedThread(
+      directory: directory,
+      threadIds: const <String>['thread-a'],
+      selectedThreadId: 'thread-a',
+      completeTurns: true,
+      canForkThreadAtTurn: true,
+      threadHistories: const <String, AgentThreadHistorySnapshot>{
+        'thread-a': AgentThreadHistorySnapshot(
+          threadId: 'thread-a',
+          turns: <AgentHistoryTurn>[
+            AgentHistoryTurn(
+              id: 'turn-1',
+              status: AgentHistoryTurnStatus.completed,
+              entries: <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'user-1',
+                  role: AgentMessageRole.user,
+                  text: 'first prompt',
+                ),
+              ],
+            ),
+            AgentHistoryTurn(
+              id: 'turn-2',
+              status: AgentHistoryTurnStatus.completed,
+              entries: <AgentHistoryEntry>[
+                AgentHistoryMessageEntry(
+                  id: 'user-2',
+                  role: AgentMessageRole.user,
+                  text: 'old prompt',
+                ),
+              ],
+            ),
+          ],
+        ),
+        'forked-thread-a': AgentThreadHistorySnapshot(
+          threadId: 'forked-thread-a',
+          turns: <AgentHistoryTurn>[],
+        ),
+      },
+    );
+    final shell = harness.shell;
+    final backend = harness.backend;
+    addTearDown(shell.dispose);
+    final sourceEntry = shell.agentWorkspaceController.selectedEntry!;
+    expect(sourceEntry.viewModel.canEditLastUserMessage, isTrue);
+
+    await sourceEntry.viewModel.editLastUserMessageAndRetry('new prompt');
+    await _flushAsync();
+
+    final selectedEntry = shell.agentWorkspaceController.selectedEntry!;
+    expect(selectedEntry, isNot(same(sourceEntry)));
+    expect(selectedEntry.binding.threadId, 'forked-thread-a');
+    expect(sourceEntry.binding.threadId, 'thread-a');
+    expect(
+      (backend.instances.first.forkBoundaries.single as AgentForkThroughTurn)
+          .turnId,
+      'turn-1',
+    );
+    expect(backend.instances, hasLength(2));
+    expect(
+      backend.instances.last.sentMessages,
+      <({String sessionId, String? message})>[
+        (sessionId: 'forked-thread-a', message: 'new prompt'),
+      ],
+    );
+    final forkedThread = shell
+        .projectThreadStateFor(directory.path)
+        .threads
+        .firstWhere((thread) => thread.id == 'forked-thread-a');
+    expect(forkedThread.preview, 'new prompt');
+  });
+
   test('notifies when the selected Agent turn completes', () async {
     // Arrange
     var completedTurns = 0;
@@ -1177,11 +1296,16 @@ Future<_SelectedThreadShellHarness> _openShellWithSelectedThread({
   required List<String> threadIds,
   required String selectedThreadId,
   bool startSessionRuntime = false,
+  bool completeTurns = false,
+  bool canForkThreadAtTurn = false,
+  Map<String, AgentThreadHistorySnapshot> threadHistories =
+      const <String, AgentThreadHistorySnapshot>{},
 }) async {
   final backend = _ProviderBackend(
     config: AgentProviderConfig.defaultCodex,
-    threadHistories: const <String, AgentThreadHistorySnapshot>{},
-    completeTurns: startSessionRuntime,
+    threadHistories: threadHistories,
+    completeTurns: startSessionRuntime || completeTurns,
+    canForkThreadAtTurn: canForkThreadAtTurn,
     threadPages: <AgentThreadPage>[
       AgentThreadPage(
         threads: <AgentThreadSummary>[
@@ -1351,12 +1475,14 @@ class _ProviderBackend {
     required this.threadPages,
     this.threadHistories = const <String, AgentThreadHistorySnapshot>{},
     this.completeTurns = true,
+    this.canForkThreadAtTurn = false,
   });
 
   final AgentProviderConfig config;
   final List<AgentThreadPage> threadPages;
   final Map<String, AgentThreadHistorySnapshot> threadHistories;
   final bool completeTurns;
+  final bool canForkThreadAtTurn;
   final List<_ShellTestAgentProvider> instances = <_ShellTestAgentProvider>[];
   final List<String> readThreadIds = <String>[];
 
@@ -1376,13 +1502,16 @@ class _ShellTestAgentProvider
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
   final List<String> unsubscribedThreads = <String>[];
+  final List<({String sessionId, String? message})> sentMessages =
+      <({String sessionId, String? message})>[];
 
   @override
   AgentProviderConfig get config => backend.config;
 
   @override
-  AgentProviderCapabilities get capabilities =>
-      AgentProviderCapabilities.codexAppServer;
+  AgentProviderCapabilities get capabilities => AgentProviderCapabilities
+      .codexAppServer
+      .copyWith(canForkThreadAtTurn: backend.canForkThreadAtTurn);
 
   @override
   Stream<AgentEvent> get events => _events.stream;
@@ -1481,6 +1610,13 @@ class _ShellTestAgentProvider
     String? clientUserMessageId,
     AgentTurnConfiguration configuration = const AgentTurnConfiguration(),
   }) async {
+    final resolvedMessage =
+        message ??
+        inputs
+            ?.whereType<AgentTextUserInput>()
+            .map((input) => input.text)
+            .join('\n');
+    sentMessages.add((sessionId: session.id, message: resolvedMessage));
     final turn = AgentTurn(id: 'turn-${session.id}', sessionId: session.id);
     _events.add(AgentTurnStartedEvent(turn));
     if (backend.completeTurns) {

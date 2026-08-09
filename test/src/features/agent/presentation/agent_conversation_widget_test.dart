@@ -1698,6 +1698,7 @@ void main() {
     tester,
   ) async {
     final createdAt = DateTime(2024, 1, 15, 10, 30);
+    AgentSession? selectedFork;
     final provider = FakeAgentProvider(
       threadHistories: <String, AgentThreadHistorySnapshot>{
         'thread-fork': AgentThreadHistorySnapshot(
@@ -1737,6 +1738,10 @@ void main() {
       providerController: controller,
       conversationBinding: bindingLease.binding,
       globalRuntime: bindingHarness.globalRuntime,
+      onCreatedThread:
+          ({required session, required context, String? initialMessage}) async {
+            selectedFork = session;
+          },
     );
     addTearDown(viewModel.dispose);
     viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
@@ -1815,6 +1820,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(provider.forkedThreads, contains('thread-fork'));
+    expect(selectedFork?.id, 'forked-thread-fork');
   });
 
   testWidgets(

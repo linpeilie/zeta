@@ -218,6 +218,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     this._workspaceFilesIndexReady,
     this._onTurnCompleted,
     this._onAttention,
+    this.onCreatedThread,
     this.uiFrameSchedulerFactory,
   }) : bindingManager =
            bindingManager ??
@@ -239,6 +240,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
   final bool _ownsBindingManager;
   final VoidCallback? _onTurnCompleted;
   final ValueChanged<AgentWorkspaceAttention>? _onAttention;
+  final AgentCreatedThreadCallback? onCreatedThread;
 
   /// 为每个常驻 ViewModel 创建独立 frame 端口；生产环境为空时使用 Flutter 实现。
   final AgentFrameScheduler Function()? uiFrameSchedulerFactory;
@@ -471,6 +473,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
         );
         selectEntry(draft.entryId);
       },
+      onCreatedThread: onCreatedThread,
       onAttention: (signal) {
         final threadId = signal.threadId ?? entry.threadId;
         if (threadId == null || threadId.trim().isEmpty) {

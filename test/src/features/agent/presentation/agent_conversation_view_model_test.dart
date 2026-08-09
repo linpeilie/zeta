@@ -3065,66 +3065,87 @@ void main() {
       expect(viewModel.currentThreadTitle, 'Renamed title');
     });
 
-    test('edit last user message creates branch then resends', () async {
-      final provider =
-          _FakeAgentProvider(
-              historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
-                'thread-1': const AgentThreadHistorySnapshot(
-                  threadId: 'thread-1',
-                  turns: <AgentHistoryTurn>[
-                    AgentHistoryTurn(
-                      id: 'turn-1',
-                      status: AgentHistoryTurnStatus.completed,
-                      entries: <AgentHistoryEntry>[
-                        AgentHistoryMessageEntry(
-                          id: 'user-1',
-                          role: AgentMessageRole.user,
-                          text: 'first prompt',
-                        ),
-                      ],
-                    ),
-                    AgentHistoryTurn(
-                      id: 'turn-2',
-                      status: AgentHistoryTurnStatus.completed,
-                      entries: <AgentHistoryEntry>[
-                        AgentHistoryMessageEntry(
-                          id: 'user-2',
-                          role: AgentMessageRole.user,
-                          text: 'old prompt',
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                'forked-thread-1': const AgentThreadHistorySnapshot(
-                  threadId: 'forked-thread-1',
-                  turns: <AgentHistoryTurn>[],
-                ),
+    test(
+      'edit last user message delegates resend to forked workspace',
+      () async {
+        AgentSession? openedSession;
+        AgentContext? openedContext;
+        String? openedInitialMessage;
+        final provider =
+            _FakeAgentProvider(
+                historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+                  'thread-1': const AgentThreadHistorySnapshot(
+                    threadId: 'thread-1',
+                    turns: <AgentHistoryTurn>[
+                      AgentHistoryTurn(
+                        id: 'turn-1',
+                        status: AgentHistoryTurnStatus.completed,
+                        entries: <AgentHistoryEntry>[
+                          AgentHistoryMessageEntry(
+                            id: 'user-1',
+                            role: AgentMessageRole.user,
+                            text: 'first prompt',
+                          ),
+                        ],
+                      ),
+                      AgentHistoryTurn(
+                        id: 'turn-2',
+                        status: AgentHistoryTurnStatus.completed,
+                        entries: <AgentHistoryEntry>[
+                          AgentHistoryMessageEntry(
+                            id: 'user-2',
+                            role: AgentMessageRole.user,
+                            text: 'old prompt',
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  'forked-thread-1': const AgentThreadHistorySnapshot(
+                    threadId: 'forked-thread-1',
+                    turns: <AgentHistoryTurn>[],
+                  ),
+                },
+              )
+              ..forkResult = const AgentSession(
+                id: 'forked-thread-1',
+                providerId: defaultAgentProviderId,
+              );
+        final viewModel = _createViewModel(
+          provider,
+          onCreatedThread:
+              ({
+                required session,
+                required context,
+                String? initialMessage,
+              }) async {
+                openedSession = session;
+                openedContext = context;
+                openedInitialMessage = initialMessage;
               },
-            )
-            ..forkResult = const AgentSession(
-              id: 'forked-thread-1',
-              providerId: defaultAgentProviderId,
-            );
-      final viewModel = _createViewModel(provider);
-      addTearDown(viewModel.dispose);
+        );
+        addTearDown(viewModel.dispose);
 
-      await viewModel.switchThread(
-        AgentThreadSummary(
-          id: 'thread-1',
-          providerId: defaultAgentProviderId,
-          projectPath: '/repo',
-          preview: 'old prompt',
-          createdAt: DateTime(2026),
-          updatedAt: DateTime(2026),
-          status: AgentThreadRuntimeStatus.idle,
-        ),
-      );
-      await viewModel.editLastUserMessageAndRetry('new prompt');
+        await viewModel.switchThread(
+          AgentThreadSummary(
+            id: 'thread-1',
+            providerId: defaultAgentProviderId,
+            projectPath: '/repo',
+            preview: 'old prompt',
+            createdAt: DateTime(2026),
+            updatedAt: DateTime(2026),
+            status: AgentThreadRuntimeStatus.idle,
+          ),
+        );
+        await viewModel.editLastUserMessageAndRetry('new prompt');
 
-      expect(provider.calls, contains('fork:thread-1:through:turn-1'));
-      expect(provider.calls, contains('send:forked-thread-1'));
-    });
+        expect(provider.calls, contains('fork:thread-1:through:turn-1'));
+        expect(openedSession?.id, 'forked-thread-1');
+        expect(openedContext?.projectPath, '/repo');
+        expect(openedInitialMessage, 'new prompt');
+        expect(provider.calls, isNot(contains('send:forked-thread-1')));
+      },
+    );
 
     test('handles model list event and reconciles default selection', () async {
       final provider = _FakeAgentProvider();
@@ -4307,6 +4328,7 @@ AgentConversationViewModel _createViewModel(
   AgentConversationModeController? conversationModeController,
   void Function()? onTurnCompleted,
   void Function(AgentAttentionSignal signal)? onAttention,
+  AgentCreatedThreadCallback? onCreatedThread,
 }) {
   final registry = AgentProviderRuntimeRegistry(
     providerFactory: _FakeAgentProviderFactory(provider),
@@ -4331,6 +4353,7 @@ AgentConversationViewModel _createViewModel(
     conversationModeController: conversationModeController,
     onTurnCompleted: onTurnCompleted,
     onAttention: onAttention,
+    onCreatedThread: onCreatedThread,
     uiFrameScheduler: _createUiFrameScheduler(),
   );
   viewModel.updateWorkspace(projectPath: '/repo', contextFilePath: null);
