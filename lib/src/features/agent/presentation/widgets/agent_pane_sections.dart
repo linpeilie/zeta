@@ -307,6 +307,7 @@ class _AgentConversationTimeline extends StatelessWidget {
     required this.projectionCache,
     required this.descriptorFactory,
     required this.markdownCache,
+    required this.planRevisionDrafts,
     required this.virtualListController,
     required this.scrollCoordinator,
     required this.scrollChromeTick,
@@ -326,6 +327,9 @@ class _AgentConversationTimeline extends StatelessWidget {
   final AgentTimelineProjectionCache projectionCache;
   final AgentTimelineExtentDescriptorFactory descriptorFactory;
   final AgentMarkdownCache markdownCache;
+
+  /// 计划卡修改输入的草稿宿主；由 [AgentPane] 持有，跨虚拟列表回收存活。
+  final AgentPlanRevisionDraftStore planRevisionDrafts;
   final IdeVirtualListController virtualListController;
   final IdeVirtualScrollCoordinator scrollCoordinator;
   final ValueListenable<int> scrollChromeTick;
@@ -335,17 +339,20 @@ class _AgentConversationTimeline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 非前台：不挂 live 高频信号，后台 thread 流式输出不重建此 canvas。
+    // pending 状态进入时间线信号：计划卡在流内渲染，pending 变化必须重建。
     final timelineListenable = isActive
         ? Listenable.merge(<Listenable>[
             viewModel.historyStateListenable,
             viewModel.liveTurnListenable,
             viewModel.expansionStateListenable,
+            viewModel.pendingInteractionStateListenable,
             floatingPanelExtent,
             ?viewModel.liveTurnState,
           ])
         : Listenable.merge(<Listenable>[
             viewModel.historyStateListenable,
             viewModel.expansionStateListenable,
+            viewModel.pendingInteractionStateListenable,
             floatingPanelExtent,
           ]);
 
@@ -360,6 +367,7 @@ class _AgentConversationTimeline extends StatelessWidget {
             final liveTurnState = viewModel.liveTurnState;
             final liveSnapshot = liveTurnState?.snapshot();
             final expansionState = viewModel.expansionState;
+            final pendingState = viewModel.pendingInteractionState;
             final items = projectAgentTimelineViewportItems(
               standbyTurn: standbySnapshot,
               visibleHistoryTurns: historyTurns,
@@ -371,6 +379,12 @@ class _AgentConversationTimeline extends StatelessWidget {
               if (standbySnapshot != null) standbySnapshot.id,
               for (final turn in historyTurns) turn.id,
               if (liveSnapshot != null) liveSnapshot.id,
+            });
+            // 计划请求消失即释放草稿，避免长会话里控制器无限累积。
+            planRevisionDrafts.retainOnly(<String>{
+              for (final request in pendingState.planApprovals) request.id,
+              if (pendingState.planExecutionHandoff case final handoff?)
+                handoff.id,
             });
 
             onLastItemIdChanged(items.isEmpty ? null : items.last.id);
@@ -394,6 +408,8 @@ class _AgentConversationTimeline extends StatelessWidget {
                 expansion: (
                   isCommandGroupExpanded: expansionState.isCommandGroupExpanded,
                   isFileEditItemExpanded: expansionState.isFileEditItemExpanded,
+                  isPlanMessageInteractive: (messageId) =>
+                      pendingState.planExecutionHandoff?.messageId == messageId,
                 ),
                 layoutContext: layoutContext,
               ),
@@ -412,7 +428,9 @@ class _AgentConversationTimeline extends StatelessWidget {
                 );
                 final content = IndexedSemantics(
                   index: index,
-                  child: RepaintBoundary(child: _buildViewportItem(item)),
+                  child: RepaintBoundary(
+                    child: _buildViewportItem(item, pendingState),
+                  ),
                 );
                 final keepAliveListenable = _prepareMarkdownWarmEntry(item);
                 if (keepAliveListenable == null) {
@@ -516,7 +534,10 @@ class _AgentConversationTimeline extends StatelessWidget {
     );
   }
 
-  Widget _buildViewportItem(AgentTimelineViewportItem item) {
+  Widget _buildViewportItem(
+    AgentTimelineViewportItem item,
+    AgentPendingInteractionState pendingState,
+  ) {
     switch (item) {
       case AgentBlockViewportItem(:final turn, :final block):
         return _AgentTimelineBlockSection(
@@ -524,6 +545,8 @@ class _AgentConversationTimeline extends StatelessWidget {
           block: block,
           viewModel: viewModel,
           markdownCache: markdownCache,
+          planRevisionDrafts: planRevisionDrafts,
+          pendingState: pendingState,
         );
       case AgentLiveActivityViewportItem():
         return KeyedSubtree(
@@ -574,12 +597,18 @@ class _AgentTimelineBlockSection extends StatelessWidget {
     required this.block,
     required this.viewModel,
     required this.markdownCache,
+    required this.planRevisionDrafts,
+    required this.pendingState,
   });
 
   final AgentConversationTurnGroup turn;
   final AgentTimelineRenderBlock block;
   final AgentConversationViewModel viewModel;
   final AgentMarkdownCache markdownCache;
+  final AgentPlanRevisionDraftStore planRevisionDrafts;
+
+  /// 计划卡在流内渲染，需要知道当前是否有待处理的计划请求。
+  final AgentPendingInteractionState pendingState;
 
   @override
   Widget build(BuildContext context) {
@@ -610,15 +639,20 @@ class _AgentTimelineBlockSection extends StatelessWidget {
         useStreamingMarkdown: isLiveTurn,
         viewModel: viewModel,
         markdownCache: markdownCache,
+        planRevisionDrafts: planRevisionDrafts,
+        planExecutionHandoff: pendingState.planExecutionHandoff,
       ),
       AgentToolTimelineEntry(:final toolCall) => _AgentToolCallCard(
         toolCall: toolCall,
         viewModel: viewModel,
       ),
-      // pending 交互只在 Composer 上方的 dock 渲染，避免时间线出现重复卡片。
+      // 权限与提问仍在 Composer 上方的 dock 渲染，避免时间线出现重复卡片。
       AgentPermissionTimelineEntry() => const SizedBox.shrink(),
       AgentQuestionTimelineEntry() => const SizedBox.shrink(),
-      AgentPlanApprovalTimelineEntry() => const SizedBox.shrink(),
+      // 计划文档改在对话流内渲染：仍待审批时才是交互卡，决定后条目即被移除。
+      AgentPlanApprovalTimelineEntry(:final request) => _buildPlanApprovalCard(
+        request,
+      ),
       // 正常路径会在 grouping 中转成文件编辑组；此处仅作兜底。
       AgentTurnDiffTimelineEntry() => const SizedBox.shrink(),
       AgentHistoryEventTimelineEntry(:final event) => _AgentHistoryEventCard(
@@ -626,24 +660,60 @@ class _AgentTimelineBlockSection extends StatelessWidget {
       ),
     };
   }
+
+  /// Provider 计划审批卡。
+  ///
+  /// 审批是阻塞请求、回合仍在运行，「修改」只能把意见随 `rejected` 决定回传，
+  /// 不能走 `sendMessage`。「执行」仅代表接受方案，不预授权任何操作。
+  Widget _buildPlanApprovalCard(AgentPlanApprovalRequest request) {
+    return _AgentPlanDocumentCard(
+      key: ValueKey<String>('agent-plan-approval-card-${request.id}'),
+      requestId: request.id,
+      title: request.title,
+      subtitle: '接受计划仅确认方案；命令、文件与网络权限仍会单独请求。',
+      markdown: request.markdown,
+      todos: request.todos,
+      phases: request.phases,
+      revisionController: planRevisionDrafts.controllerFor(request.id),
+      revisionFocusNode: planRevisionDrafts.focusNodeFor(request.id),
+      viewModel: viewModel,
+      onRevise: (revision) => unawaited(
+        viewModel.respondToPlanApproval(
+          request,
+          AgentPlanApprovalDecisionKind.rejected,
+          reason: revision,
+        ),
+      ),
+      onExecute: () => unawaited(
+        viewModel.respondToPlanApproval(
+          request,
+          AgentPlanApprovalDecisionKind.accepted,
+        ),
+      ),
+      onAbandon: () => unawaited(
+        viewModel.respondToPlanApproval(
+          request,
+          AgentPlanApprovalDecisionKind.cancelled,
+        ),
+      ),
+    );
+  }
 }
 
 /// 固定在 Composer 上方的待处理交互区。
 ///
-/// 权限、用户提问、Provider 计划审批和本地执行交接都从独立 pending 状态读取。
+/// 权限与用户提问从独立 pending 状态读取；计划文档已改在对话流内渲染。
 /// [panelHeight] 由 AgentPane width-bucket 的约束旁路提供，不进入 bucket 身份。
 class _AgentPendingInteractionSection extends StatelessWidget {
   const _AgentPendingInteractionSection({
     required this.viewModel,
     required this.panelHeight,
     required this.pagePadding,
-    required this.onPlanRevisionRequested,
   });
 
   final AgentConversationViewModel viewModel;
   final double panelHeight;
   final EdgeInsets pagePadding;
-  final VoidCallback onPlanRevisionRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -656,31 +726,21 @@ class _AgentPendingInteractionSection extends StatelessWidget {
   Widget _buildDock(BuildContext context, AgentPendingInteractionState state) {
     final permissionRequests = state.permissions;
     final questionRequests = state.questions;
-    final planApprovalRequests = state.planApprovals;
-    final planExecutionRequest = state.planExecutionHandoff;
-    if (state.isReadOnly || state.isEmpty) {
+    // 计划审批与执行交接改在对话流内渲染，dock 只承载权限与提问。
+    if (state.isReadOnly ||
+        (permissionRequests.isEmpty && questionRequests.isEmpty)) {
       return const SizedBox.shrink();
     }
 
-    final hasPlanDock =
-        planApprovalRequests.isNotEmpty || planExecutionRequest != null;
-    final hasNonPlanDock =
-        permissionRequests.isNotEmpty || questionRequests.isNotEmpty;
-    // 计划卡自带固定底栏，需要更高 dock；普通 pending 保持紧凑。
     final maxHeight = panelHeight.isFinite
-        ? math.min<double>(
-            hasPlanDock ? 420.0 : 360.0,
-            panelHeight * (hasPlanDock ? 0.5 : 0.35),
-          )
-        : (hasPlanDock ? 420.0 : 360.0);
+        ? math.min<double>(360.0, panelHeight * 0.35)
+        : 360.0;
     final scrollIdentity = <String>[
       for (final request in permissionRequests) 'permission:${request.id}',
       for (final request in questionRequests) 'question:${request.id}',
-      for (final request in planApprovalRequests) 'plan:${request.id}',
-      if (planExecutionRequest != null) 'execution:${planExecutionRequest.id}',
     ].join('|');
 
-    final nonPlanCards = <Widget>[
+    final cards = <Widget>[
       for (var index = 0; index < permissionRequests.length; index++)
         Padding(
           key: ValueKey(
@@ -717,122 +777,15 @@ class _AgentPendingInteractionSection extends StatelessWidget {
         child: ConstrainedBox(
           key: const ValueKey('agent-pending-interaction-dock'),
           constraints: BoxConstraints(maxHeight: maxHeight),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final available = constraints.maxHeight;
-              // 非计划卡可滚动占用上方；计划卡不进外层滚动，保证底栏固定可见。
-              final nonPlanMaxHeight = hasNonPlanDock && hasPlanDock
-                  ? math.min(available * 0.32, 120.0)
-                  : available;
-              final planBudget = hasNonPlanDock && hasPlanDock
-                  ? math.max(
-                      0.0,
-                      available - nonPlanMaxHeight - IdeSpacing.space8,
-                    )
-                  : available;
-              // 顶栏 + 底栏（含单行输入）约占 132–156；正文吃掉剩余。
-              final planChrome = planExecutionRequest != null ? 156.0 : 128.0;
-              final planBodyMaxHeight = math.max(
-                56.0,
-                math.min(200.0, planBudget - planChrome),
-              );
-
-              final planCards = <Widget>[
-                for (
-                  var index = 0;
-                  index < planApprovalRequests.length;
-                  index++
-                )
-                  Padding(
-                    key: ValueKey(
-                      'agent-pending-plan-${planApprovalRequests[index].id}',
-                    ),
-                    padding: EdgeInsets.only(
-                      bottom:
-                          index < planApprovalRequests.length - 1 ||
-                              planExecutionRequest != null
-                          ? IdeSpacing.space8
-                          : 0,
-                    ),
-                    child: _AgentPlanApprovalCard(
-                      request: planApprovalRequests[index],
-                      maxBodyHeight: planBodyMaxHeight,
-                      onRespond: (kind) => viewModel.respondToPlanApproval(
-                        planApprovalRequests[index],
-                        kind,
-                      ),
-                    ),
-                  ),
-                if (planExecutionRequest case final request?)
-                  _AgentPlanExecutionCard(
-                    key: ValueKey<String>(
-                      'agent-pending-plan-execution-${request.id}',
-                    ),
-                    request: request,
-                    maxBodyHeight: planBodyMaxHeight,
-                    onDismiss: () => viewModel.dismissPlanExecution(request),
-                    onRevise: (revision) {
-                      unawaited(
-                        viewModel.revisePlanExecution(
-                          request,
-                          revisionMessage: revision,
-                        ),
-                      );
-                      if (revision == null || revision.trim().isEmpty) {
-                        onPlanRevisionRequested();
-                      }
-                    },
-                    onStart: () =>
-                        unawaited(viewModel.startPlanExecution(request)),
-                  ),
-              ];
-
-              if (!hasPlanDock) {
-                return SingleChildScrollView(
-                  key: ValueKey<String>(
-                    'agent-pending-interaction-scroll-$scrollIdentity',
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    mainAxisSize: MainAxisSize.min,
-                    children: nonPlanCards,
-                  ),
-                );
-              }
-
-              // 使用紧密高度，让计划卡在剩余空间内 Expanded 固定底栏。
-              return SizedBox(
-                height: available,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (hasNonPlanDock) ...[
-                      ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxHeight: nonPlanMaxHeight,
-                        ),
-                        child: SingleChildScrollView(
-                          key: ValueKey<String>(
-                            'agent-pending-interaction-scroll-$scrollIdentity',
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            mainAxisSize: MainAxisSize.min,
-                            children: nonPlanCards,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: IdeSpacing.space8),
-                    ],
-                    Expanded(
-                      child: planCards.length == 1
-                          ? planCards.single
-                          : ListView(children: planCards),
-                    ),
-                  ],
-                ),
-              );
-            },
+          child: SingleChildScrollView(
+            key: ValueKey<String>(
+              'agent-pending-interaction-scroll-$scrollIdentity',
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: cards,
+            ),
           ),
         ),
       ),

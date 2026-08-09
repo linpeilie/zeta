@@ -40,6 +40,7 @@ import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_ui_state.dart';
 import 'package:zeta/src/features/agent/presentation/agent_markdown_cache.dart';
+import 'package:zeta/src/features/agent/presentation/agent_plan_revision_drafts.dart';
 import 'package:zeta/src/features/agent/presentation/composer_document.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descriptor.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
@@ -203,6 +204,10 @@ class _AgentPaneState extends State<AgentPane> {
   final AgentTimelineExtentDescriptorFactory _descriptorFactory =
       AgentTimelineExtentDescriptorFactory();
   AgentMarkdownCache _markdownCache = AgentMarkdownCache();
+
+  /// 计划卡修改输入的草稿宿主；卡片在虚拟列表中被回收时草稿不丢。
+  AgentPlanRevisionDraftStore _planRevisionDrafts =
+      AgentPlanRevisionDraftStore();
   late Widget Function(BuildContext, _AgentPaneWidthClass)
   _responsiveBodyBuilder;
 
@@ -253,8 +258,12 @@ class _AgentPaneState extends State<AgentPane> {
     _descriptorFactory.clearCache();
     final previousMarkdownCache = _markdownCache;
     _markdownCache = AgentMarkdownCache();
+    // 换会话即换计划草稿：旧控制器仍被上一帧的卡片引用，延后一帧释放。
+    final previousPlanDrafts = _planRevisionDrafts;
+    _planRevisionDrafts = AgentPlanRevisionDraftStore();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       previousMarkdownCache.dispose();
+      previousPlanDrafts.dispose();
     });
     // 新会话清空高度缓存，回到 follow 末尾。
     _virtualListController.synchronizeNow(
@@ -296,6 +305,7 @@ class _AgentPaneState extends State<AgentPane> {
     _projectionCache.clear();
     _descriptorFactory.clearCache();
     _markdownCache.dispose();
+    _planRevisionDrafts.dispose();
     super.dispose();
   }
 
@@ -397,6 +407,7 @@ class _AgentPaneState extends State<AgentPane> {
                         projectionCache: _projectionCache,
                         descriptorFactory: _descriptorFactory,
                         markdownCache: _markdownCache,
+                        planRevisionDrafts: _planRevisionDrafts,
                         virtualListController: _virtualListController,
                         scrollCoordinator: _scrollCoordinator,
                         scrollChromeTick: _scrollChromeTick,
@@ -419,7 +430,6 @@ class _AgentPaneState extends State<AgentPane> {
                       viewModel: widget.viewModel,
                       panelHeight: _panelHeight,
                       pagePadding: pagePadding,
-                      onPlanRevisionRequested: _composerFocusNode.requestFocus,
                     ),
                     ListenableBuilder(
                       listenable: Listenable.merge(<Listenable>[

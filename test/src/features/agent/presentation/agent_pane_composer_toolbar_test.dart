@@ -509,25 +509,33 @@ void main() {
         );
 
         const startKey = ValueKey<String>(
-          'agent-plan-execution-start-plan-execution:session-1:turn-1',
+          'agent-plan-execute-plan-execution:session-1:turn-1',
         );
         await pumpUntilFinder(tester, find.byKey(startKey));
 
         expect(find.text('计划就绪'), findsOneWidget);
-        expect(find.text('关闭'), findsOneWidget);
-        expect(find.text('继续规划'), findsOneWidget);
-        expect(find.text('执行计划'), findsOneWidget);
+        expect(find.text('修改'), findsOneWidget);
+        expect(find.text('执行'), findsOneWidget);
+        expect(find.text('放弃'), findsOneWidget);
         expect(find.byKey(startKey), findsOneWidget);
         expect(
           find.byKey(
             const ValueKey(
-              'agent-plan-execution-input-'
+              'agent-plan-revision-input-'
               'plan-execution:session-1:turn-1',
             ),
           ),
           findsOneWidget,
         );
-        // 交接卡占用底部交互时隐藏主 Composer。
+        // 计划卡在对话流内渲染，而不是 Composer 上方的 pending dock。
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('agent-message-list')),
+            matching: find.byKey(startKey),
+          ),
+          findsOneWidget,
+        );
+        // 计划待处理时隐藏主 Composer。
         expect(find.byKey(const ValueKey('agent-message-input')), findsNothing);
 
         await tester.tap(find.byKey(startKey));

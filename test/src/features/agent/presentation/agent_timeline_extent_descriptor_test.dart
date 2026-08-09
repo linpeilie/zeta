@@ -17,6 +17,7 @@ void main() {
   const expansion = (
     isCommandGroupExpanded: _neverExpanded,
     isFileEditItemExpanded: _neverExpanded,
+    isPlanMessageInteractive: _neverExpanded,
   );
 
   test('footer / activity / user message kinds 与 estimate 合理', () {
@@ -162,6 +163,47 @@ void main() {
     );
 
     expect(descriptor.estimatedExtent, greaterThan(4000));
+  });
+
+  test('计划审批卡按正文长度估高，而非 tool card 固定高度', () {
+    double describeApproval(String markdown) {
+      final entry = AgentPlanApprovalTimelineEntry(
+        request: AgentPlanApprovalRequest(
+          id: 'plan-1',
+          title: 'Refactor',
+          markdown: markdown,
+          sessionId: 'session-1',
+        ),
+      );
+      final item = AgentBlockViewportItem(
+        turn: AgentConversationTurnGroup(
+          id: 'plan-turn',
+          isStandby: false,
+          entries: <AgentTimelineEntry>[entry],
+        ),
+        block: AgentTimelineEntryRenderBlock(entry: entry),
+        isLive: true,
+      );
+      final descriptor = factory.describe(
+        item,
+        expansion: expansion,
+        layoutContext: layout,
+      );
+      expect(descriptor.kind, AgentTimelineExtentKinds.planInteraction);
+      return descriptor.estimatedExtent;
+    }
+
+    final short = describeApproval('1. Inspect');
+    final long = describeApproval(
+      List<String>.generate(
+        40,
+        (index) => '${index + 1}. Update step',
+      ).join('\n'),
+    );
+
+    // 底部输入与动作栏占固定高度，正文再按行数累加。
+    expect(short, greaterThan(120));
+    expect(long, greaterThan(short * 2));
   });
 }
 

@@ -16,6 +16,7 @@ void main() {
   const expansion = (
     isCommandGroupExpanded: _never,
     isFileEditItemExpanded: _never,
+    isPlanMessageInteractive: _never,
   );
 
   test('history and live long markdown share full-height estimates', () {

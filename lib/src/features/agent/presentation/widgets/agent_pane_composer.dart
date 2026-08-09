@@ -486,18 +486,25 @@ class _AgentComposer extends StatelessWidget {
             ),
     );
   }
+}
 
-  double _textAreaHeight(
-    String text,
-    double lineHeight,
-    double minHeight,
-    double maxHeight,
-  ) {
-    final lineCount = text.trim().isEmpty ? 3 : LineSplitter.split(text).length;
-    final visibleLines = lineCount.clamp(3, 10);
-    final desiredHeight = (visibleLines * lineHeight) + 8;
-    return desiredHeight.clamp(minHeight, maxHeight).toDouble();
-  }
+/// 依据文本行数推导 `sf.TextArea` 的初始高度。
+///
+/// 主 Composer 与计划卡内的修改输入共用同一套增高节奏。
+double _textAreaHeight(
+  String text,
+  double lineHeight,
+  double minHeight,
+  double maxHeight, {
+  int minLines = 3,
+  int maxLines = 10,
+}) {
+  final lineCount = text.trim().isEmpty
+      ? minLines
+      : LineSplitter.split(text).length;
+  final visibleLines = lineCount.clamp(minLines, maxLines);
+  final desiredHeight = (visibleLines * lineHeight) + 8;
+  return desiredHeight.clamp(minHeight, maxHeight).toDouble();
 }
 
 /// Composer 工具栏上的 Plan draft 标识。

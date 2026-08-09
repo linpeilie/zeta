@@ -2278,10 +2278,15 @@ class AgentConversationViewModel {
     });
   }
 
+  /// 回写 Provider 计划审批结果。
+  ///
+  /// [reason] 承载用户对计划的修改意见：审批是阻塞请求、回合仍在运行，
+  /// 修改意见不能走 `sendMessage`，只能随决定一起回传给 Provider。
   Future<void> respondToPlanApproval(
     AgentPlanApprovalRequest request,
-    AgentPlanApprovalDecisionKind kind,
-  ) async {
+    AgentPlanApprovalDecisionKind kind, {
+    String? reason,
+  }) async {
     _timeline.removePlanApprovalRequest(request.id);
     _resolvePendingAttention(
       kind: AgentAttentionKind.planApprovalRequired,
@@ -2305,7 +2310,11 @@ class AgentConversationViewModel {
         return;
       }
       await planApproval.respondToPlanApproval(
-        AgentPlanApprovalDecision(requestId: request.id, kind: kind),
+        AgentPlanApprovalDecision(
+          requestId: request.id,
+          kind: kind,
+          reason: reason,
+        ),
       );
     });
     // provider 驱动的计划审批一旦作出决定，计划即被消费：接受 → grok 自行
@@ -3154,12 +3163,14 @@ class AgentConversationViewModel {
     }
 
     String? planMarkdown;
+    String? planMessageId;
     for (final entry in liveTurn.entries.reversed) {
       if (entry case AgentMessageTimelineEntry(:final message)
           when message.role == AgentMessageRole.agent &&
               message.isPlan &&
               message.text.trim().isNotEmpty) {
         planMarkdown = message.text;
+        planMessageId = message.id;
         break;
       }
     }
@@ -3172,6 +3183,7 @@ class AgentConversationViewModel {
       status: event.status,
       modeId: completedMode,
       planMarkdown: planMarkdown,
+      planMessageId: planMessageId,
       planEntries: List<AgentPlanEntry>.of(liveTurn.planEntries),
     );
     return previousId != request?.id;

@@ -9,6 +9,7 @@ final class AgentPlanExecutionRequest {
     required this.turnId,
     required this.title,
     required this.markdown,
+    this.messageId,
   });
 
   /// 本地交接请求的稳定标识。
@@ -25,4 +26,10 @@ final class AgentPlanExecutionRequest {
 
   /// 计划正文；优先使用 Provider 的 plan 消息，必要时由结构化步骤生成。
   final String markdown;
+
+  /// 提供 [markdown] 的 plan 消息 id；正文由结构化步骤合成时为 null。
+  ///
+  /// UI 据此在对话流中定位要升级为交互卡的那条 plan 消息，避免同一份计划
+  /// 正文既出现在折叠消息卡、又出现在交互卡里。
+  final String? messageId;
 }

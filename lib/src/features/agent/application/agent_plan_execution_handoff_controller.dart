@@ -19,8 +19,12 @@ final class AgentPlanExecutionHandoffController {
     required AgentHistoryTurnStatus status,
     required AgentConversationModeId? modeId,
     required String? planMarkdown,
+    String? planMessageId,
     Iterable<AgentPlanEntry> planEntries = const <AgentPlanEntry>[],
   }) {
+    final normalizedMarkdown = planMarkdown?.trim();
+    final hasProviderMarkdown =
+        normalizedMarkdown != null && normalizedMarkdown.isNotEmpty;
     final markdown = _resolvedPlanMarkdown(planMarkdown, planEntries);
     if (status != AgentHistoryTurnStatus.completed ||
         modeId?.kind != AgentConversationModeKind.plan ||
@@ -35,6 +39,8 @@ final class AgentPlanExecutionHandoffController {
       turnId: turnId,
       title: '计划就绪',
       markdown: markdown,
+      // 正文由结构化步骤合成时没有对应的 plan 消息，不能让 UI 误升级别的消息。
+      messageId: hasProviderMarkdown ? planMessageId : null,
     );
     _pendingRequest = request;
     return request;

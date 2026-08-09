@@ -13,11 +13,14 @@ void main() {
         status: AgentHistoryTurnStatus.completed,
         modeId: AgentConversationModeId.plan,
         planMarkdown: '  # Plan\n\n- Step one  ',
+        planMessageId: 'message-plan',
       );
 
       expect(request, isNotNull);
       expect(request!.id, 'plan-execution:thread-1:turn-1');
       expect(request.markdown, '# Plan\n\n- Step one');
+      // UI 据此在对话流中把这条 plan 消息升级为交互卡。
+      expect(request.messageId, 'message-plan');
       expect(controller.pendingRequest, same(request));
     });
 
@@ -30,6 +33,7 @@ void main() {
         status: AgentHistoryTurnStatus.completed,
         modeId: AgentConversationModeId.plan,
         planMarkdown: null,
+        planMessageId: 'message-plan',
         planEntries: const <AgentPlanEntry>[
           AgentPlanEntry(content: ' Inspect the code '),
           AgentPlanEntry(content: ''),
@@ -41,6 +45,8 @@ void main() {
         request?.markdown,
         '## Execution plan\n\n1. Inspect the code\n2. Run tests',
       );
+      // 正文是合成的，没有对应 plan 消息，不能让 UI 误升级别的消息。
+      expect(request?.messageId, isNull);
     });
 
     test('rejects non-Plan, unsuccessful, and empty completions', () {

@@ -7,16 +7,27 @@ class _AgentMessageEntry extends StatelessWidget {
     required this.useStreamingMarkdown,
     required this.viewModel,
     required this.markdownCache,
+    required this.planRevisionDrafts,
+    required this.planExecutionHandoff,
   });
 
   final AgentConversationMessage message;
   final bool useStreamingMarkdown;
   final AgentConversationViewModel viewModel;
   final AgentMarkdownCache markdownCache;
+  final AgentPlanRevisionDraftStore planRevisionDrafts;
+
+  /// 当前待处理的本地执行交接；命中本条消息时该消息升级为交互卡。
+  final AgentPlanExecutionRequest? planExecutionHandoff;
 
   @override
   Widget build(BuildContext context) {
     if (message.isPlan) {
+      // 待交接的那条计划消息直接升级为交互卡，正文不再重复出现两次。
+      if (planExecutionHandoff case final handoff?
+          when handoff.messageId == message.id) {
+        return _buildPlanExecutionCard(handoff);
+      }
       return _AgentPlanMessageCard(
         message: message,
         useStreamingMarkdown: useStreamingMarkdown,
@@ -47,6 +58,28 @@ class _AgentMessageEntry extends StatelessWidget {
       useStreamingMarkdown: useStreamingMarkdown,
       viewModel: viewModel,
       markdownCache: markdownCache,
+    );
+  }
+
+  /// Zeta 本地的 Plan → Default 执行交接卡。
+  ///
+  /// 不向 Provider 回写审批，也不预先授予任何权限：「执行」只是用 Default
+  /// 模式开启新回合，命令、文件与网络权限仍会逐个单独请求。
+  Widget _buildPlanExecutionCard(AgentPlanExecutionRequest request) {
+    return _AgentPlanDocumentCard(
+      key: ValueKey<String>('agent-plan-execution-card-${request.id}'),
+      requestId: request.id,
+      title: request.title,
+      subtitle: '执行将开启新的 Default 回合；命令、文件与网络权限仍会单独确认。',
+      markdown: request.markdown,
+      revisionController: planRevisionDrafts.controllerFor(request.id),
+      revisionFocusNode: planRevisionDrafts.focusNodeFor(request.id),
+      viewModel: viewModel,
+      onRevise: (revision) => unawaited(
+        viewModel.revisePlanExecution(request, revisionMessage: revision),
+      ),
+      onExecute: () => unawaited(viewModel.startPlanExecution(request)),
+      onAbandon: () => viewModel.dismissPlanExecution(request),
     );
   }
 }

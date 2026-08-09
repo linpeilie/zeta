@@ -16,6 +16,9 @@ import 'package:zeta/src/ui/core/virtualization/ide_virtual_item.dart';
 typedef AgentTimelineExpansionLookup = ({
   bool Function(String commandGroupId) isCommandGroupExpanded,
   bool Function(String fileEditItemId) isFileEditItemExpanded,
+
+  /// 该 plan 消息是否已升级为带底部输入的交互卡（形态与高度都不同）。
+  bool Function(String messageId) isPlanMessageInteractive,
 });
 
 /// Agent item kind 常量（仅用于估算，不参与业务分支）。
@@ -26,6 +29,7 @@ abstract final class AgentTimelineExtentKinds {
   static const toolCard = 'toolCard';
   static const commandGroup = 'commandGroup';
   static const fileEditGroup = 'fileEditGroup';
+  static const planInteraction = 'planInteraction';
   static const liveActivity = 'liveActivity';
   static const turnFooter = 'turnFooter';
   static const system = 'system';
@@ -161,8 +165,10 @@ final class AgentTimelineExtentDescriptorFactory {
           AgentMessageTimelineEntry(:final message) => _kindForMessage(message),
           AgentToolTimelineEntry() => AgentTimelineExtentKinds.toolCard,
           AgentPermissionTimelineEntry() ||
-          AgentQuestionTimelineEntry() ||
-          AgentPlanApprovalTimelineEntry() => AgentTimelineExtentKinds.toolCard,
+          AgentQuestionTimelineEntry() => AgentTimelineExtentKinds.toolCard,
+          // 审批卡在流内展示完整计划正文，不能按 tool card 的固定高度估算。
+          AgentPlanApprovalTimelineEntry() =>
+            AgentTimelineExtentKinds.planInteraction,
           AgentHistoryEventTimelineEntry() => AgentTimelineExtentKinds.system,
           AgentTurnDiffTimelineEntry() =>
             AgentTimelineExtentKinds.fileEditGroup,
@@ -312,7 +318,11 @@ final class AgentTimelineExtentDescriptorFactory {
         for (final item in group.items)
           Object.hash(item.id, expansion.isFileEditItemExpanded(item.id)),
       ]),
-      AgentTimelineEntryRenderBlock() => 0,
+      // plan 消息在折叠卡与交互卡之间切换时高度差异巨大，必须让缓存测量失效。
+      AgentTimelineEntryRenderBlock(:final entry) =>
+        entry is AgentMessageTimelineEntry && entry.message.isPlan
+            ? expansion.isPlanMessageInteractive(entry.message.id)
+            : 0,
     };
   }
 
@@ -343,6 +353,7 @@ final class AgentTimelineExtentDescriptorFactory {
           width: width,
           lineHeight: lineHeight,
           scale: scale,
+          expansion: expansion,
         ),
       },
     };
@@ -384,6 +395,7 @@ final class AgentTimelineExtentDescriptorFactory {
     required double width,
     required double lineHeight,
     required double scale,
+    required AgentTimelineExpansionLookup expansion,
   }) {
     if (entry is AgentMessageTimelineEntry) {
       return _estimateMessage(
@@ -392,6 +404,7 @@ final class AgentTimelineExtentDescriptorFactory {
         width: width,
         lineHeight: lineHeight,
         scale: scale,
+        expansion: expansion,
       );
     }
     if (entry is AgentToolTimelineEntry) {
@@ -399,6 +412,19 @@ final class AgentTimelineExtentDescriptorFactory {
     }
     if (entry is AgentTurnDiffTimelineEntry) {
       return 80 * scale;
+    }
+    if (entry is AgentPlanApprovalTimelineEntry) {
+      // 审批卡在流内始终是交互态：正文全文 + 底部输入与动作栏。
+      return math.max(
+        24.0,
+        _estimateMarkdownExtent(
+              entry.request.markdown,
+              width: width,
+              lineHeight: lineHeight,
+              scale: scale,
+            ) +
+            _planInteractionChromeExtent(scale),
+      );
     }
     return 48 * scale;
   }
@@ -409,12 +435,52 @@ final class AgentTimelineExtentDescriptorFactory {
     required double width,
     required double lineHeight,
     required double scale,
+    required AgentTimelineExpansionLookup expansion,
   }) {
     final text = message.text;
+    final isInteractivePlan =
+        message.isPlan && expansion.isPlanMessageInteractive(message.id);
     if (text.trim().isEmpty) {
-      return 32 * scale;
+      return isInteractivePlan
+          ? 32 * scale + _planInteractionChromeExtent(scale)
+          : 32 * scale;
     }
 
+    final padding = 24 * scale;
+    final base = kind == AgentTimelineExtentKinds.agentMarkdown
+        ? 200 * scale
+        : kind == AgentTimelineExtentKinds.plan
+        ? 120 * scale
+        : 48 * scale;
+
+    final content =
+        padding +
+        _estimateMarkdownExtent(
+          text,
+          width: width,
+          lineHeight: lineHeight,
+          scale: scale,
+        );
+    // 冷启动基线：取 content 与 kind 默认的较大者。不要截断长消息估算，
+    // 否则单项超过旧上限后会在滚动帧内产生巨大的同步 measurement delta。
+    final estimated = math.max(base * 0.5, content);
+    // 交互态计划卡额外挂着输入框与动作栏，不加上会严重低估。
+    final chrome = isInteractivePlan
+        ? _planInteractionChromeExtent(scale)
+        : 0.0;
+    return math.max(24.0, estimated + chrome);
+  }
+
+  /// 计划交互卡底部输入框 + 动作栏 + 分隔线的固定高度。
+  double _planInteractionChromeExtent(double scale) => 120 * scale;
+
+  /// 按源行逐行累加折行，估算一段 Markdown 的渲染高度。
+  double _estimateMarkdownExtent(
+    String text, {
+    required double width,
+    required double lineHeight,
+    required double scale,
+  }) {
     // 全文渲染：历史与 live 均按完整内容估算高度，禁止折叠预览截断。
     final charsPerLine = math.max(24, (width / (7.5 * scale)).floor());
     var visualLines = 0;
@@ -449,18 +515,7 @@ final class AgentTimelineExtentDescriptorFactory {
       }
     }
 
-    final padding = 24 * scale;
-    final base = kind == AgentTimelineExtentKinds.agentMarkdown
-        ? 200 * scale
-        : kind == AgentTimelineExtentKinds.plan
-        ? 120 * scale
-        : 48 * scale;
-
-    final content = padding + (visualLines + blockSpacingLines) * lineHeight;
-    // 冷启动基线：取 content 与 kind 默认的较大者。不要截断长消息估算，
-    // 否则单项超过旧上限后会在滚动帧内产生巨大的同步 measurement delta。
-    final estimated = math.max(base * 0.5, content);
-    return math.max(24.0, estimated);
+    return (visualLines + blockSpacingLines) * lineHeight;
   }
 
   static bool _descriptorFingerprintEquals(

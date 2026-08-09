@@ -16,6 +16,7 @@ void main() {
   const expansion = (
     isCommandGroupExpanded: _neverExpanded,
     isFileEditItemExpanded: _neverExpanded,
+    isPlanMessageInteractive: _neverExpanded,
   );
 
   test(
@@ -90,6 +91,51 @@ void main() {
       expect(msgDesc1.layoutRevision, isNot(msgDesc2.layoutRevision));
     },
   );
+
+  test('plan message toggling to interactive card changes layoutRevision', () {
+    const message = AgentConversationMessage(
+      id: 'plan-1',
+      role: AgentMessageRole.agent,
+      text: '# Plan\n\n1. Inspect\n2. Update',
+      kind: AgentMessageKind.plan,
+    );
+    final block = AgentTimelineEntryRenderBlock(
+      entry: AgentMessageTimelineEntry(message: message),
+    );
+    final turn = AgentConversationTurnGroup(
+      id: 'turn-1',
+      isStandby: false,
+      entries: <AgentTimelineEntry>[
+        AgentMessageTimelineEntry(message: message),
+      ],
+    );
+    final item = AgentBlockViewportItem(
+      turn: turn,
+      block: block,
+      isLive: false,
+    );
+
+    final collapsed = factory.describe(
+      item,
+      expansion: expansion,
+      layoutContext: layout,
+    );
+    final interactive = factory.describe(
+      item,
+      expansion: (
+        isCommandGroupExpanded: _neverExpanded,
+        isFileEditItemExpanded: _neverExpanded,
+        isPlanMessageInteractive: _alwaysExpanded,
+      ),
+      layoutContext: layout,
+    );
+
+    // 折叠卡与带底部输入的交互卡高度差异巨大，缓存测量必须失效。
+    expect(collapsed.layoutRevision, isNot(interactive.layoutRevision));
+    expect(interactive.estimatedExtent, greaterThan(collapsed.estimatedExtent));
+  });
 }
 
 bool _neverExpanded(String _) => false;
+
+bool _alwaysExpanded(String _) => true;

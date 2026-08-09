@@ -15,6 +15,7 @@ void main() {
   const expansion = (
     isCommandGroupExpanded: _neverExpanded,
     isFileEditItemExpanded: _neverExpanded,
+    isPlanMessageInteractive: _neverExpanded,
   );
 
   test('describeAll reuses unchanged prefix descriptors when tail grows', () {

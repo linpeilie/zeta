@@ -462,33 +462,33 @@ void main() {
 
       expect(find.text('Refactor tabs'), findsOneWidget);
       expect(find.text('Inspect current layout'), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('agent-plan-accept-plan-1')),
-        findsOneWidget,
-      );
+      final execute = find.byKey(const ValueKey('agent-plan-execute-plan-1'));
+      expect(execute, findsOneWidget);
+      // 计划卡在对话流内渲染，不再挂到 Composer 上方的 pending dock。
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('agent-message-list')),
-          matching: find.byKey(const ValueKey('agent-plan-accept-plan-1')),
+          matching: execute,
         ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('agent-pending-interaction-dock')),
         findsNothing,
       );
-      await tester.tap(find.byKey(const ValueKey('agent-plan-accept-plan-1')));
+      await tester.tap(execute);
       await tester.pump();
 
       expect(
         provider.planDecisions.single.kind,
         AgentPlanApprovalDecisionKind.accepted,
       );
-      expect(
-        find.byKey(const ValueKey('agent-plan-accept-plan-1')),
-        findsNothing,
-      );
+      expect(execute, findsNothing);
       await _finishLiveTurn(tester, provider, sessionId: 'thread-plan');
     });
 
     testWidgets(
-      'stacks permissions before plans and hides composer while pending',
+      'keeps plans out of the dock and hides composer while pending',
       (tester) async {
         await tester.binding.setSurfaceSize(const Size(480, 400));
         addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -535,27 +535,26 @@ void main() {
         final permission = find.byKey(
           const ValueKey('agent-pending-permission-permission-1'),
         );
-        final plan = find.byKey(const ValueKey('agent-pending-plan-plan-long'));
         final composer = find.byKey(const ValueKey('agent-message-input'));
         expect(dock, findsOneWidget);
         expect(permission, findsOneWidget);
-        expect(plan, findsOneWidget);
+        // dock 只承载权限与提问；计划卡已移入对话流。
         expect(
-          tester.getTopLeft(permission).dy,
-          lessThan(tester.getTopLeft(plan).dy),
+          find.byKey(const ValueKey('agent-pending-plan-plan-long')),
+          findsNothing,
         );
-        // 含计划卡时 dock 上限约 50% 面板高度（400 → 200），避免占满对话区。
-        expect(tester.getSize(dock).height, lessThanOrEqualTo(200));
-        // 计划卡底栏固定：Accept 按钮落在 dock 可见范围内。
-        final accept = find.byKey(
-          const ValueKey('agent-plan-accept-plan-long'),
-        );
-        expect(accept, findsOneWidget);
         expect(
-          tester.getRect(accept).bottom,
-          lessThanOrEqualTo(tester.getRect(dock).bottom + 0.5),
+          find.descendant(
+            of: find.byKey(const ValueKey('agent-message-list')),
+            matching: find.byKey(
+              const ValueKey('agent-plan-document-card-plan-long'),
+            ),
+          ),
+          findsOneWidget,
         );
-        // 权限 / 计划审批待处理时隐藏主 Composer。
+        // 无计划卡后 dock 回到紧凑上限（400 * 0.35 = 140）。
+        expect(tester.getSize(dock).height, lessThanOrEqualTo(140));
+        // 权限 / 计划审批待处理时仍隐藏主 Composer。
         expect(composer, findsNothing);
         await _finishLiveTurn(tester, provider, sessionId: 'thread-pending');
       },
