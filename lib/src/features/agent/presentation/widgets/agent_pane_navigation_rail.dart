@@ -414,7 +414,10 @@ class _AgentConversationNavigationTick extends StatelessWidget {
           '第 ${entry.ordinal} 个回合：${entry.label}'
           '${isActiveView ? '，当前查看' : ''}',
       borderRadius: IdeRadius.allSmall,
-      hoverBackgroundColor: trackColor.withValues(alpha: 0.18),
+      // 导航短线以线色/线宽表达 hover；不刷 surface 底，避免 bottomGap
+      // 区域出现整块异色 hover 条。
+      hoverBackgroundColor: Colors.transparent,
+      pressedBackgroundColor: Colors.transparent,
       width: _kNavTickWidthEmphasized + IdeSpacing.space4 * 2,
       padding: EdgeInsets.only(
         left: IdeSpacing.space4,
