@@ -2254,6 +2254,160 @@ void main() {
       },
     );
 
+    test(
+      'session_notification turn_completed emits absolute token usage for footer',
+      () async {
+        // Arrange：真实 Grok 常把带 usage 的 turn_completed 放在
+        // x.ai/session_notification，而不是 session/update。
+        final peer = _FakeJsonRpcPeer()..promptCompleter = Completer<Object?>();
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+        addTearDown(subscription.cancel);
+        addTearDown(provider.dispose);
+
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+        );
+        final promptFuture = provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+          message: 'ping',
+        );
+        await _waitUntil(() => peer.requestMethods.contains('session/prompt'));
+        peer.emitNotification('session/update', <String, Object?>{
+          'sessionId': 'sess-1',
+          'update': <String, Object?>{
+            'sessionUpdate': 'agent_message_chunk',
+            'content': <String, Object?>{'type': 'text', 'text': 'done'},
+            '_meta': <String, Object?>{'promptId': 'provider-prompt-1'},
+          },
+          '_meta': <String, Object?>{
+            'eventId': 'message-before-terminal',
+            'totalTokens': 900,
+          },
+        });
+        await Future<void>.delayed(Duration.zero);
+
+        // Act：经 session_notification 通道下发权威终态 + 计费用量。
+        peer.emitNotification('_x.ai/session_notification', <String, Object?>{
+          'sessionId': 'sess-1',
+          'update': <String, Object?>{
+            'sessionUpdate': 'turn_completed',
+            'prompt_id': 'provider-prompt-1',
+            'stop_reason': 'end_turn',
+            'usage': <String, Object?>{
+              'inputTokens': 1000,
+              'outputTokens': 300,
+              'totalTokens': 1300,
+              'cachedReadTokens': 200,
+              'reasoningTokens': 50,
+              'apiDurationMs': 4500,
+            },
+          },
+          '_meta': <String, Object?>{
+            'eventId': 'session-notification-terminal',
+          },
+        });
+        await Future<void>.delayed(Duration.zero);
+        peer.promptCompleter!.complete(<String, Object?>{
+          'stopReason': 'end_turn',
+        });
+        await promptFuture;
+
+        // Assert：turn footer 依赖的绝对用量事件必须出现，且只完成一次。
+        expect(events.whereType<AgentTurnCompletedEvent>(), hasLength(1));
+        final usage = events.whereType<AgentTokenUsageEvent>().single;
+        expect(usage.isSessionCumulative, isFalse);
+        expect(usage.tokenUsage.totalTokens, 1300);
+        expect(usage.tokenUsage.inputTokens, 1000);
+        expect(usage.tokenUsage.cachedInputTokens, 200);
+        expect(usage.tokenUsage.lastTotalTokens, 900);
+        final completed = events.whereType<AgentTurnCompletedEvent>().single;
+        expect(completed.duration, const Duration(milliseconds: 4500));
+      },
+    );
+
+    test(
+      'late session_notification turn_completed supplements usage after RPC',
+      () async {
+        // Arrange：prompt RPC 先结束生命周期；迟到的 session_notification 补 usage。
+        final peer = _FakeJsonRpcPeer()..promptCompleter = Completer<Object?>();
+        final mapper = GrokAcpNotificationMapper();
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+          notificationMapper: mapper,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+        addTearDown(subscription.cancel);
+        addTearDown(provider.dispose);
+
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+        );
+        final promptFuture = provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+          message: 'ping',
+        );
+        await _waitUntil(() => peer.requestMethods.contains('session/prompt'));
+        peer.emitNotification('session/update', <String, Object?>{
+          'sessionId': 'sess-1',
+          'update': <String, Object?>{
+            'sessionUpdate': 'agent_message_chunk',
+            'content': <String, Object?>{'type': 'text', 'text': 'done'},
+            '_meta': <String, Object?>{'promptId': 'provider-prompt-1'},
+          },
+          '_meta': <String, Object?>{
+            'eventId': 'message-before-rpc',
+            'totalTokens': 1200,
+          },
+        });
+        await Future<void>.delayed(Duration.zero);
+
+        peer.promptCompleter!.complete(<String, Object?>{
+          'stopReason': 'end_turn',
+        });
+        await promptFuture;
+        await Future<void>.delayed(Duration.zero);
+        expect(events.whereType<AgentTurnCompletedEvent>(), hasLength(1));
+        expect(events.whereType<AgentTokenUsageEvent>(), isEmpty);
+
+        // Act：running turn 已清空后，迟到的 session_notification 仍应补 token。
+        peer.emitNotification('x.ai/session_notification', <String, Object?>{
+          'sessionId': 'sess-1',
+          'update': <String, Object?>{
+            'sessionUpdate': 'turn_completed',
+            'prompt_id': 'provider-prompt-1',
+            'stop_reason': 'end_turn',
+            'usage': <String, Object?>{
+              'inputTokens': 1000,
+              'outputTokens': 300,
+              'totalTokens': 1300,
+              'cachedReadTokens': 200,
+              'reasoningTokens': 50,
+            },
+          },
+          '_meta': <String, Object?>{'eventId': 'late-session-notification'},
+        });
+        await Future<void>.delayed(Duration.zero);
+
+        // Assert
+        expect(events.whereType<AgentTurnCompletedEvent>(), hasLength(1));
+        final usage = events.whereType<AgentTokenUsageEvent>().single;
+        expect(usage.isSessionCumulative, isFalse);
+        expect(usage.tokenUsage.totalTokens, 1300);
+        expect(usage.tokenUsage.lastTotalTokens, 1200);
+        expect(mapper.diagnostics.terminalAccepted, 1);
+        expect(mapper.diagnostics.duplicateTerminalIgnored, 1);
+      },
+    );
+
     for (final scenario
         in <({String name, Object error, String message, bool connectionLost})>[
           (

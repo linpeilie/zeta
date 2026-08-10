@@ -1324,31 +1324,20 @@ class GrokAcpAgentProvider
 
     // x.ai/session_notification 携带 sessionUpdate 枚举（tag `sessionUpdate`）；
     // 插件/hooks 变更会增删 skill，需失效本地 skill 目录让 composer 重新拉取。
-    // turn_completed 亦可能经此通道到达，作为 running turn 终态兜底。
-    // retry_state 表示传输层自动重试进度，走与 session/update 相同的 Grok mapper。
+    // turn_completed 亦可能经此通道到达，且常携带 usage；必须走 mapXaiSessionUpdate
+    //（与 session/update 同源），否则 mapPromptTerminal 只会结束生命周期而丢掉
+    // turn footer 所需的 token 元数据。
+    // retry_state 表示传输层自动重试进度，同样共用 Grok mapper。
     if (method == 'x.ai/session_notification' ||
         method == '_x.ai/session_notification') {
       final update = _asStringKeyedMap(params['update']);
       final updateType = update?['sessionUpdate']?.toString();
-      if (updateType == 'turn_completed') {
-        final sessionId = params['sessionId']?.toString();
-        final merged = <String, Object?>{
-          ...params,
-          ...?update,
-          'sessionId': ?sessionId,
-        };
-        _handlePromptCompleteNotification(
-          method: method,
-          params: merged,
-          runtimeScope: notificationRuntimeScope,
-          rawPayload: notification.raw,
-        );
-        return;
-      }
-      if (updateType == 'retry_state' ||
+      if (updateType == 'turn_completed' ||
+          updateType == 'retry_state' ||
           updateType == 'session_summary_generated' ||
           updateType == 'session_info_update') {
-        // 与 session/update 共用 mapper：retry 终态、实时标题/摘要。
+        // 与 session/update 共用 mapper：终态 + usage、retry、实时标题/摘要。
+        // 保持 params.update 嵌套结构，避免把 usage 摊平后无法被 decoder 识别。
         final sessionId = params['sessionId']?.toString();
         final turnId = sessionId == null
             ? null
