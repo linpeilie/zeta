@@ -648,6 +648,52 @@ void main() {
       },
     );
 
+    test(
+      'maps session_info_update and session_summary_generated to thread rename',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+        addTearDown(subscription.cancel);
+        addTearDown(provider.dispose);
+
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+        );
+
+        peer.emitNotification('session/update', <String, Object?>{
+          'sessionId': session.id,
+          'update': <String, Object?>{
+            'sessionUpdate': 'session_info_update',
+            'title': 'Realtime Session Grok retry_state Event Adaptation',
+          },
+        });
+        await _waitUntil(
+          () => events.whereType<AgentThreadNameUpdatedEvent>().isNotEmpty,
+        );
+        expect(
+          events.whereType<AgentThreadNameUpdatedEvent>().last.threadName,
+          'Realtime Session Grok retry_state Event Adaptation',
+        );
+
+        peer.emitNotification('_x.ai/session_notification', <String, Object?>{
+          'sessionId': session.id,
+          'update': <String, Object?>{
+            'sessionUpdate': 'session_summary_generated',
+            'session_summary':
+                'Realtime Session Grok retry_state Event Adaptation',
+          },
+        });
+        await Future<void>.delayed(Duration.zero);
+        // 同文不重复推送（provider 侧已记 emitted title）。
+        expect(events.whereType<AgentThreadNameUpdatedEvent>(), hasLength(1));
+      },
+    );
+
     test('keeps unmatched response diagnostics out of the timeline', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(

@@ -506,6 +506,56 @@ void main() {
       expect(ids.toSet(), hasLength(ids.length));
     });
 
+    test('maps session_info_update title to thread name event', () {
+      final mapped = mapper.mapSessionUpdate(
+        params: _params(<String, Object?>{
+          'sessionUpdate': 'session_info_update',
+          'title': 'Realtime Session Grok retry_state Event Adaptation',
+        }, eventId: 'title-1'),
+        runningTurnId: turnId,
+        runtimeScope: runtimeScope,
+      );
+      expect(mapped.events.single, isA<AgentThreadNameUpdatedEvent>());
+      final name = mapped.events.single as AgentThreadNameUpdatedEvent;
+      expect(name.threadId, sessionId);
+      expect(
+        name.threadName,
+        'Realtime Session Grok retry_state Event Adaptation',
+      );
+    });
+
+    test('maps session_summary_generated to thread name event', () {
+      final mapped = mapper.mapSessionUpdate(
+        params: _params(<String, Object?>{
+          'sessionUpdate': 'session_summary_generated',
+          'session_summary':
+              'Realtime Session Grok retry_state Event Adaptation',
+        }, eventId: 'summary-1'),
+        runningTurnId: null,
+        runtimeScope: runtimeScope,
+      );
+      expect(mapped.events.single, isA<AgentThreadNameUpdatedEvent>());
+      final name = mapped.events.single as AgentThreadNameUpdatedEvent;
+      expect(name.threadId, sessionId);
+      expect(
+        name.threadName,
+        'Realtime Session Grok retry_state Event Adaptation',
+      );
+    });
+
+    test('ignores session_info_update without title', () {
+      final mapped = mapper.mapSessionUpdate(
+        params: _params(<String, Object?>{
+          'sessionUpdate': 'session_info_update',
+          'modelId': 'grok-4.5',
+        }, eventId: 'title-empty'),
+        runningTurnId: turnId,
+        runtimeScope: runtimeScope,
+      );
+      expect(mapped.events, isEmpty);
+      expect(mapped.ignoredReason, 'missing session title');
+    });
+
     test('maps current_mode_update to a conversation mode event', () {
       final mapped = mapper.mapSessionUpdate(
         params: _params(<String, Object?>{

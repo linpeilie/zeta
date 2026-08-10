@@ -1345,7 +1345,10 @@ class GrokAcpAgentProvider
         );
         return;
       }
-      if (updateType == 'retry_state') {
+      if (updateType == 'retry_state' ||
+          updateType == 'session_summary_generated' ||
+          updateType == 'session_info_update') {
+        // 与 session/update 共用 mapper：retry 终态、实时标题/摘要。
         final sessionId = params['sessionId']?.toString();
         final turnId = sessionId == null
             ? null
@@ -1486,6 +1489,17 @@ class GrokAcpAgentProvider
     Object? rawPayload,
   }) {
     for (final event in mapped.events) {
+      // live 标题到达后记录并去重，避免 summary/info 双通道与本地轮询重复推送。
+      if (event is AgentThreadNameUpdatedEvent) {
+        final name = event.threadName?.trim();
+        if (name == null || name.isEmpty) {
+          continue;
+        }
+        if (_emittedTitlesBySessionId[event.threadId] == name) {
+          continue;
+        }
+        _emittedTitlesBySessionId[event.threadId] = name;
+      }
       _addEvent(_enrichUsageEvent(event));
     }
     final unmatched = mapped.unmatchedKind;

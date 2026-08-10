@@ -118,6 +118,18 @@ final class GrokSessionUpdateMapper {
         runtimeScope: runtimeScope,
         terminalSource: terminalSource,
       ),
+      AcpSessionInfoUpdate() => _mapSessionTitle(
+        sessionId: decoded.sessionId!,
+        title: decoded.title,
+        kind: decoded.kind,
+        raw: decoded.raw,
+      ),
+      AcpSessionSummaryGenerated() => _mapSessionTitle(
+        sessionId: decoded.sessionId!,
+        title: decoded.sessionSummary,
+        kind: decoded.kind,
+        raw: decoded.raw,
+      ),
       AcpUnknownUpdate() => GrokAcpMappedUpdate(
         unmatchedKind: decoded.kind,
         ignoredReason: decoded.diagnostic ?? 'unsupported update kind',
@@ -489,6 +501,34 @@ final class GrokSessionUpdateMapper {
           sessionId: sessionId,
           modeId: modeId,
           raw: update.raw,
+        ),
+      ],
+    );
+  }
+
+  /// 将会话级标题/摘要投影为 [AgentThreadNameUpdatedEvent]。
+  ///
+  /// `session_info_update.title` 与 `session_summary_generated.session_summary`
+  /// 是 Grok 实时改名的权威 live 通道；空文案不投影，避免冲掉已有标题。
+  GrokAcpMappedUpdate _mapSessionTitle({
+    required String sessionId,
+    required String? title,
+    required String kind,
+    required Map<String, Object?> raw,
+  }) {
+    final trimmed = title?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return GrokAcpMappedUpdate(
+        unmatchedKind: kind,
+        ignoredReason: 'missing session title',
+      );
+    }
+    return GrokAcpMappedUpdate(
+      events: <AgentEvent>[
+        AgentThreadNameUpdatedEvent(
+          threadId: sessionId,
+          threadName: trimmed,
+          raw: raw,
         ),
       ],
     );

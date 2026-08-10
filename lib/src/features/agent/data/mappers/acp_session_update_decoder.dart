@@ -186,6 +186,29 @@ final class AcpSessionUpdateDecoder {
           eventId: eventId,
           raw: raw,
         );
+      case 'session_info_update':
+        // Grok 会话元数据更新；实时标题常随 `title` 下发（也可能只有 modelId）。
+        return AcpSessionInfoUpdate(
+          sessionId: sessionId,
+          title: _optionalString(update['title']),
+          modelId:
+              _optionalString(update['modelId']) ??
+              _optionalString(update['model_id']),
+          promptId: promptId,
+          eventId: eventId,
+          raw: raw,
+        );
+      case 'session_summary_generated':
+        // Grok 会话摘要生成完成；`session_summary` 与正式标题常同文。
+        return AcpSessionSummaryGenerated(
+          sessionId: sessionId,
+          sessionSummary:
+              _optionalString(update['session_summary']) ??
+              _optionalString(update['sessionSummary']),
+          promptId: promptId,
+          eventId: eventId,
+          raw: raw,
+        );
       default:
         return invalid(kind.isEmpty ? 'missing_update_kind' : 'unknown_kind');
     }
@@ -493,6 +516,42 @@ final class AcpRetryStateUpdate extends AcpSessionUpdate {
 
   /// 是否明确标记为限流。
   final bool isRateLimited;
+}
+
+/// Grok `session_info_update`：会话元数据（标题、模型等）。
+///
+/// 实时改名优先读 [title]；无 title 时 adapter 可忽略，不伪造标题。
+final class AcpSessionInfoUpdate extends AcpSessionUpdate {
+  const AcpSessionInfoUpdate({
+    required String sessionId,
+    this.title,
+    this.modelId,
+    super.promptId,
+    super.eventId,
+    super.raw,
+  }) : super(sessionId: sessionId, kind: 'session_info_update');
+
+  /// 服务端下发的会话标题。
+  final String? title;
+
+  /// 可选模型 id；本类不投影模型目录。
+  final String? modelId;
+}
+
+/// Grok `session_summary_generated`：会话摘要已生成。
+///
+/// 常与 `session_info_update.title` 同文，经 adapter 映射为 thread 标题。
+final class AcpSessionSummaryGenerated extends AcpSessionUpdate {
+  const AcpSessionSummaryGenerated({
+    required String sessionId,
+    this.sessionSummary,
+    super.promptId,
+    super.eventId,
+    super.raw,
+  }) : super(sessionId: sessionId, kind: 'session_summary_generated');
+
+  /// 生成的会话摘要文案。
+  final String? sessionSummary;
 }
 
 /// 未知、暂不投影或损坏的 ACP update。

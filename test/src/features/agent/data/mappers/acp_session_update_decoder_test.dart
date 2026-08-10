@@ -177,6 +177,42 @@ void main() {
       expect(mode.modeId, 'default');
     });
 
+    test('decodes session_info_update with title', () {
+      final decoded = decoder.decode(<String, Object?>{
+        'sessionId': 'session-1',
+        'update': <String, Object?>{
+          'sessionUpdate': 'session_info_update',
+          'title': 'Realtime Session Grok retry_state Event Adaptation',
+          'modelId': 'grok-4.5',
+        },
+      });
+
+      expect(decoded, isA<AcpSessionInfoUpdate>());
+      final info = decoded as AcpSessionInfoUpdate;
+      expect(info.sessionId, 'session-1');
+      expect(info.title, 'Realtime Session Grok retry_state Event Adaptation');
+      expect(info.modelId, 'grok-4.5');
+    });
+
+    test('decodes session_summary_generated with session_summary', () {
+      final decoded = decoder.decode(<String, Object?>{
+        'sessionId': 'session-1',
+        'update': <String, Object?>{
+          'sessionUpdate': 'session_summary_generated',
+          'session_summary':
+              'Realtime Session Grok retry_state Event Adaptation',
+        },
+      });
+
+      expect(decoded, isA<AcpSessionSummaryGenerated>());
+      final summary = decoded as AcpSessionSummaryGenerated;
+      expect(summary.sessionId, 'session-1');
+      expect(
+        summary.sessionSummary,
+        'Realtime Session Grok retry_state Event Adaptation',
+      );
+    });
+
     test('decodes retry_state transport diagnostics', () {
       final decoded = decoder.decode(<String, Object?>{
         'sessionId': 'session-1',
