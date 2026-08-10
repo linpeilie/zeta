@@ -211,12 +211,13 @@ void main() {
   });
 
   group('detached critical event allowlist', () {
-    test('contains exactly the eight compatibility-critical event types', () {
+    test('contains exactly the nine compatibility-critical event types', () {
       const criticalTypes = <Type>{
         AgentStatusEvent,
         AgentErrorEvent,
         AgentTurnCompletedEvent,
         AgentThreadClosedEvent,
+        AgentThreadNameUpdatedEvent,
         AgentPermissionRequestedEvent,
         AgentPermissionResolvedEvent,
         AgentPlanApprovalRequestedEvent,

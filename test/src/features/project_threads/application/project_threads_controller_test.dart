@@ -131,6 +131,54 @@ void main() {
       },
     );
 
+    test(
+      'keeps local provisional title when Grok list returns same id without title',
+      () async {
+        // Grok 新 session 乐观写入 title/preview 后，首屏 list 可能先返回无
+        // generated_title 的弱摘要；不得冲掉本地展示名。
+        final provider = _FakeAgentProvider(
+          pages: <AgentThreadPage>[
+            _page(<AgentThreadSummary>[
+              AgentThreadSummary(
+                id: 'grok-new',
+                providerId: grokAgentProviderId,
+                projectPath: '/repo',
+                title: null,
+                preview: 'grok-new',
+                createdAt: DateTime.utc(2026, 8, 1),
+                updatedAt: DateTime.utc(2026, 8, 1),
+                recencyAt: DateTime.utc(2026, 8, 1),
+                status: AgentThreadRuntimeStatus.idle,
+              ),
+            ], nextCursor: null),
+          ],
+        );
+        final controller = _createController(provider);
+
+        controller.registerSession(
+          '/repo',
+          const AgentSession(id: 'grok-new', providerId: grokAgentProviderId),
+          preview: '帮我解释这段代码',
+        );
+        controller.updateThreadTitle(
+          projectPath: '/repo',
+          threadId: 'grok-new',
+          title: '帮我解释这段代码',
+        );
+        expect(controller.stateFor('/repo').threads.single.title, '帮我解释这段代码');
+        expect(controller.stateFor('/repo').threads.single.preview, '帮我解释这段代码');
+
+        await controller.loadInitial('/repo');
+        await _flushAsync();
+
+        final thread = controller.stateFor('/repo').threads.single;
+        expect(thread.id, 'grok-new');
+        expect(thread.title, '帮我解释这段代码');
+        expect(thread.preview, '帮我解释这段代码');
+        expect(thread.displayName, '帮我解释这段代码');
+      },
+    );
+
     test('retired Cursor local removal path remains unreachable', () async {
       // Arrange
       final provider = _FakeAgentProvider(

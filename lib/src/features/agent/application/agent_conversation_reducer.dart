@@ -113,11 +113,15 @@ final class AgentConversationReducer {
   String? _lastShownErrorMessage;
 
   /// detached runtime 仍可交付的精确 critical allowlist。
+  ///
+  /// [AgentThreadNameUpdatedEvent] 纳入：Grok 在 turn 结束后异步轮询
+  /// `generated_title`，事件可能略晚于 runtime detach 边界，仍需更新标题。
   static bool isCriticalDetachedEvent(AgentEvent event) {
     return event is AgentStatusEvent ||
         event is AgentErrorEvent ||
         event is AgentTurnCompletedEvent ||
         event is AgentThreadClosedEvent ||
+        event is AgentThreadNameUpdatedEvent ||
         event is AgentPermissionRequestedEvent ||
         event is AgentPermissionResolvedEvent ||
         event is AgentPlanApprovalRequestedEvent ||

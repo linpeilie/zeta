@@ -638,9 +638,15 @@ class ProjectThreadsController {
               incoming: page.threads,
               preserveRuntimeThreads: !current.archived && searchTerm.isEmpty,
             );
+      // Grok 等异步写 generated_title：provider 列表页可能暂无 title，
+      // 不得冲掉 Zeta 本地乐观/已同步的展示标题与 preview。
+      final displayMerged = _preferLocalDisplayFields(
+        current: latest.threads,
+        next: merged,
+      );
       // provider list 的 active/waiting 可能来自外部客户端；仅 Zeta live 可 busy。
       final threads = _projectThreadsForZetaOwnedRuntime(
-        threads: merged,
+        threads: displayMerged,
         runningThreadIds: latest.runningThreadIds,
       );
       viewModel.setStateFor(
@@ -1001,6 +1007,63 @@ class ProjectThreadsController {
           thread,
       ...incoming,
     ];
+  }
+
+  /// 合并列表页时保留本地更丰富的 title/preview。
+  ///
+  /// Provider 本地索引（尤其 Grok `summary.json`）可能晚于 live 乐观标题；
+  /// 若页数据 title 为空或 preview 退化为 session id，沿用当前缓存展示字段。
+  List<AgentThreadSummary> _preferLocalDisplayFields({
+    required List<AgentThreadSummary> current,
+    required List<AgentThreadSummary> next,
+  }) {
+    if (current.isEmpty || next.isEmpty) {
+      return next;
+    }
+    final localById = <String, AgentThreadSummary>{
+      for (final thread in current) thread.id: thread,
+    };
+    return <AgentThreadSummary>[
+      for (final incoming in next)
+        _mergeThreadSummaryPreferLocalDisplay(
+          local: localById[incoming.id],
+          incoming: incoming,
+        ),
+    ];
+  }
+
+  /// 单条摘要：incoming 权威字段优先，空/弱展示字段回退 local。
+  static AgentThreadSummary _mergeThreadSummaryPreferLocalDisplay({
+    required AgentThreadSummary? local,
+    required AgentThreadSummary incoming,
+  }) {
+    if (local == null || local.id != incoming.id) {
+      return incoming;
+    }
+
+    final incomingTitle = incoming.title?.trim();
+    final localTitle = local.title?.trim();
+    final resolvedTitle = (incomingTitle != null && incomingTitle.isNotEmpty)
+        ? incoming.title
+        : (localTitle != null && localTitle.isNotEmpty
+              ? local.title
+              : incoming.title);
+
+    final incomingPreview = incoming.preview.trim();
+    final localPreview = local.preview.trim();
+    final incomingPreviewWeak =
+        incomingPreview.isEmpty || incomingPreview == incoming.id;
+    final localPreviewStrong =
+        localPreview.isNotEmpty && localPreview != local.id;
+    final resolvedPreview = incomingPreviewWeak && localPreviewStrong
+        ? local.preview
+        : incoming.preview;
+
+    if (resolvedTitle == incoming.title &&
+        resolvedPreview == incoming.preview) {
+      return incoming;
+    }
+    return incoming.copyWith(title: resolvedTitle, preview: resolvedPreview);
   }
 }
 
