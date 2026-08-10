@@ -47,9 +47,10 @@ void main() {
     expect(_foregroundDecorationOf(tester, 'canvas-surface'), isNull);
     expect(_decorationOf(tester, 'pane-surface').color, IdeColors.dark.surface);
     expect(_foregroundDecorationOf(tester, 'pane-surface')?.border, isNotNull);
+    // 面板与浮层同属圆角嵌套链路的最外层。
     expect(
       _foregroundDecorationOf(tester, 'pane-surface')?.borderRadius,
-      IdeRadius.allMedium,
+      IdeRadius.allLarge,
     );
     expect(_decorationOf(tester, 'row-surface').color, Colors.transparent);
     expect(_foregroundDecorationOf(tester, 'row-surface'), isNull);

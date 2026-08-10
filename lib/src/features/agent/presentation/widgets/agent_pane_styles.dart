@@ -292,8 +292,9 @@ MarkdownThemeData _agentUserBubbleMarkdownTheme(BuildContext context) {
   final colors = IdeColors.of(context);
   final textStyles = IdeTextStyles.of(context);
   final base = _agentMarkdownTheme(context);
-  // 气泡内收敛：标题统一降级为正文加粗，代码/引用/表格底色改用控制面，
-  // 避免在用户消息气泡底色上叠加过重的区块色。
+  // 用户消息日志行内收敛：标题统一降级为正文加粗，代码/引用/表格底色用控制面。
+  // 日志行本身没有底色（只有左侧竖线），所以这些区块直接取不透明的控制面档，
+  // 不再像旧气泡那样降透明度去和气泡底色调和。
   final bodyStyle = textStyles.bodyMedium.copyWith(
     height: 1.4,
     color: colors.textPrimary,
@@ -306,9 +307,9 @@ MarkdownThemeData _agentUserBubbleMarkdownTheme(BuildContext context) {
     heading4Style: bodyStyle.copyWith(fontWeight: FontWeight.w700),
     heading5Style: bodyStyle.copyWith(fontWeight: FontWeight.w700),
     heading6Style: bodyStyle.copyWith(fontWeight: FontWeight.w700),
-    codeBlockBackgroundColor: colors.controlSurface.withValues(alpha: 0.9),
-    quoteBackgroundColor: colors.controlSurface.withValues(alpha: 0.82),
-    tableHeaderBackgroundColor: colors.controlSurface.withValues(alpha: 0.9),
+    codeBlockBackgroundColor: colors.controlSurface,
+    quoteBackgroundColor: colors.controlSurface,
+    tableHeaderBackgroundColor: colors.controlSurface,
   );
 }
 

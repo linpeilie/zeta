@@ -1865,7 +1865,9 @@ class _AgentQuestionOptionRow extends StatelessWidget {
             height: 28,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: selected ? colors.selectedHoverSurface : colors.surface,
+              // 序号徽章是实心圆片，两态都取不透明表面档；选中态靠更亮一档
+              // 加 accent 描边区分，不能混用半透明的交互态 token。
+              color: selected ? colors.surfaceElevated : colors.surface,
               borderRadius: IdeRadius.pill,
               border: Border.all(
                 color: selected ? colors.accent : colors.border,

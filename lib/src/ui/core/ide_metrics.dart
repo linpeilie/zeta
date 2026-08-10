@@ -24,8 +24,11 @@ abstract final class IdeMetrics {
 
   /// 侧栏 / Pane 内部标题条高度。
   ///
+  /// 与 [titleBarHeight] 取齐：IDE 壳层里所有「条」保持同一节奏，
+  /// 高信息密度靠压缩 chrome 换取内容行数。
+  ///
   /// 生效位置：`Pane` 头部条。
-  static const double paneHeaderHeight = 38;
+  static const double paneHeaderHeight = 32;
 
   /// macOS 自绘标题栏左侧为原生交通灯按钮让出的宽度。
   ///
@@ -60,6 +63,12 @@ abstract final class IdeMetrics {
   ///
   /// 生效位置：项目列表操作按钮、文件树折叠按钮、侧栏图标按钮等。
   static const double iconButtonHitSize = 28;
+
+  /// 会话消息内联图片缩略图边长（正方形）。
+  ///
+  /// 生效位置：`agent_pane_messages` 的用户消息附图；Composer 草稿附件复用
+  /// 更小的自有尺寸，不走本 token。
+  static const double messageThumbnailSize = 120;
 
   /// Activity Rail（左右图标条）宽度。
   ///
@@ -150,23 +159,6 @@ abstract final class IdeMetrics {
   ///
   /// 生效位置：`CompactMetricBar` 中的 `VerticalDivider` 高度。
   static const double metricBarDividerHeight = 36;
-
-  // ---------------------------------------------------------------------------
-  // Composer
-  // ---------------------------------------------------------------------------
-
-  /// Agent Composer 输入区最小高度。
-  ///
-  /// 目标生效位置：Composer 输入面板高度夹紧。
-  /// 当前未引用：`agent_pane_composer` 尚未使用本 token（计划文档要求接入
-  /// 或删除死 token）。
-  static const double composerMinHeight = 88;
-
-  /// Agent Composer 输入区最大高度。
-  ///
-  /// 目标生效位置：多行输入自动增高上限。
-  /// 当前未引用：同上。
-  static const double composerMaxHeight = 240;
 
   // ---------------------------------------------------------------------------
   // 响应式断点

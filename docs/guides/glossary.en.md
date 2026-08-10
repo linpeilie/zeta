@@ -143,7 +143,7 @@ Three positions: Navigation (left), Canvas (center), Inspector (right). Feature 
 The cross-page retention container. Mounts lazily, preserves State and scroll position for visited pages, and pauses off-screen tickers. **Don't substitute `IndexedStack`** — it keeps paying layout cost for long timelines.
 
 **Graphite tokens**
-The dark Graphite Night / light Graphite Day semantic token sets, with `IdeThemeScope` as the source of truth. The `shadcn_flutter` theme is only a projection and must never be read back from. Business code must not hard-code colors, radii, or shadows.
+The dark Graphite Night / light Graphite Day semantic token sets, with `IdeThemeScope` as the source of truth. The `shadcn_flutter` theme is only a projection and must never be read back from. Business code must not hard-code colors, radii, or shadows. Surfaces follow a strictly monotonic luminance ladder (frame to canvas to pane to control to popover); depth comes from that ladder plus 1px translucent hairlines, with zero shadows anywhere except a deliberately faint fallback on floating layers.
 `lib/src/ui/core/`
 
 ## Data and diagnostics

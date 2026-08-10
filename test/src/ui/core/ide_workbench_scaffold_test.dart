@@ -223,7 +223,7 @@ void main() {
       ),
     );
     expect(canvasSurface.level, IdeSurfaceLevel.canvas);
-    expect(canvasSurface.borderRadius, IdeRadius.allMedium);
+    expect(canvasSurface.borderRadius, IdeRadius.allLarge);
     expect(canvasSurface.showBorder, isTrue);
 
     final canvasContainer = tester.widget<Container>(
@@ -234,13 +234,13 @@ void main() {
     );
     final decoration = canvasContainer.decoration! as BoxDecoration;
     final foreground = canvasContainer.foregroundDecoration! as BoxDecoration;
-    expect(decoration.borderRadius, IdeRadius.allMedium);
+    expect(decoration.borderRadius, IdeRadius.allLarge);
     expect(decoration.color, IdeColors.dark.canvasSurface);
     // 边框在 foreground，避免被 Agent 不透明内容盖住四角。
     expect(decoration.border, isNull);
     expect(foreground.border, isNotNull);
     expect(foreground.border!.top.color, IdeColors.dark.border);
-    expect(foreground.borderRadius, IdeRadius.allMedium);
+    expect(foreground.borderRadius, IdeRadius.allLarge);
     expect(tester.takeException(), isNull);
   });
 

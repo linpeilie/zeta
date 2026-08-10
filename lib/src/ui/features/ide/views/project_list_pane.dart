@@ -598,7 +598,13 @@ class _ProjectThreadList extends StatelessWidget {
     ];
 
     return Padding(
-      padding: const EdgeInsets.only(left: 22, right: 4, top: 2, bottom: 4),
+      // 左缩进对齐项目行的图标列（图标 16 + 间距 8 减去行自身的水平内边距）。
+      padding: const EdgeInsets.only(
+        left: IdeSpacing.space20 + IdeSpacing.space2,
+        right: IdeSpacing.space4,
+        top: IdeSpacing.space2,
+        bottom: IdeSpacing.space4,
+      ),
       child: Column(children: children),
     );
   }
@@ -983,13 +989,9 @@ class _ThreadTileState extends State<_ThreadTile> {
                 ),
               ] else if (lastActiveLabel != null) ...[
                 const SizedBox(width: IdeSpacing.space8),
-                Text(
-                  lastActiveLabel,
-                  maxLines: 1,
-                  style: textStyles.caption.copyWith(
-                    color: colors.textSecondary,
-                  ),
-                ),
+                // 时间戳走 meta：会话列表里它是最弱的一层信息，不该和
+                // 状态文字抢同一个前景色档位。
+                Text(lastActiveLabel, maxLines: 1, style: textStyles.meta),
               ],
               AnimatedSize(
                 duration: IdeMotion.durationNormal,

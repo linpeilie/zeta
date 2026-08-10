@@ -80,9 +80,11 @@ class _IdeSkeletonBoneState extends State<IdeSkeletonBone>
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
+    // 骨架条是实心占位块，必须用不透明的表面档：交互态 token 已改为
+    // 半透明叠加，直接拿来当填充会几乎看不见。
     final box = DecoratedBox(
       decoration: BoxDecoration(
-        color: colors.hoverSurface,
+        color: colors.surfaceElevated,
         borderRadius: widget.borderRadius,
       ),
       child: SizedBox(width: widget.width, height: widget.height),

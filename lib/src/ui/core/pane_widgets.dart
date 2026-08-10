@@ -113,7 +113,8 @@ class _IdeTooltipState extends State<IdeTooltip> {
     final textStyles = IdeTextStyles.of(context);
     return sf.TooltipContainer(
       backgroundColor: colors.surfaceOverlay,
-      borderRadius: IdeRadius.allSmall,
+      // 小提示块属于微元素档。
+      borderRadius: IdeRadius.allMicro,
       surfaceOpacity: 1,
       surfaceBlur: 0,
       child: Text(
@@ -501,7 +502,8 @@ class PanelCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = sf.Theme.of(context);
-    final resolvedRadius = borderRadius ?? IdeRadius.allMedium;
+    // 面板卡是侧栏/大容器档，取圆角链路的最外层。
+    final resolvedRadius = borderRadius ?? IdeRadius.allLarge;
     final surfaceColor = resolvePanelSurfaceColor(
       context,
       baseColor: color ?? theme.colorScheme.card,
@@ -550,7 +552,9 @@ class Pane extends StatelessWidget {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final trailingWidget = trailing;
-    const borderRadius = IdeRadius.allMedium;
+    // 与 `PanelCard` 同档：Pane 常常直接填满 PanelCard，两者是同一个视觉容器，
+    // 圆角不一致会在四角露出接缝。
+    const borderRadius = IdeRadius.allLarge;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: resolvePanelSurfaceColor(
@@ -652,7 +656,8 @@ class StateLabel extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space8),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.14),
-        borderRadius: IdeRadius.allSmall,
+        // 状态标签属于微元素档。
+        borderRadius: IdeRadius.allMicro,
         border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Text(

@@ -143,11 +143,14 @@ abstract final class IdeSpacing {
 
   /// 常规页面内容区内边距（宽屏）。
   ///
+  /// 桌面 IDE 走高信息密度：这里刻意比移动端/网页的页面留白紧一档，
+  /// 把省下的空间还给内容行数。
+  ///
   /// 生效位置：`IdePageBody`（宽度 ≥ medium）；`AgentPane` 主内容；
   /// Agent 管理页；用量统计中等及以上宽度布局。
   static const EdgeInsets pagePadding = EdgeInsets.symmetric(
-    horizontal: space20,
-    vertical: space16,
+    horizontal: space16,
+    vertical: space12,
   );
 
   /// 窄屏页面内容区内边距。

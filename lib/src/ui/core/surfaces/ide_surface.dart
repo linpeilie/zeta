@@ -90,8 +90,9 @@ class IdeSurface extends StatelessWidget {
         borderRadius ??
         switch (level) {
           IdeSurfaceLevel.canvas || IdeSurfaceLevel.row => BorderRadius.zero,
-          IdeSurfaceLevel.pane => IdeRadius.allMedium,
-          IdeSurfaceLevel.popover => IdeRadius.allLarge,
+          // 面板与浮层同属「大容器」档：它们是圆角嵌套链路的最外层，
+          // 里面的卡片走 medium、代码块走 small，逐层收小。
+          IdeSurfaceLevel.pane || IdeSurfaceLevel.popover => IdeRadius.allLarge,
         };
     final resolvedShowBorder =
         showBorder ??

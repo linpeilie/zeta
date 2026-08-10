@@ -424,8 +424,13 @@ void main() {
         final bubble = tester.widget<DecoratedBox>(bubbleFinder);
         final decoration = bubble.decoration as BoxDecoration;
         final colors = IdeColors.of(tester.element(bubbleFinder));
-        expect(decoration.color, colors.userMessageSurface);
-        expect(decoration.border!.top.color, colors.borderSubtle);
+        // 用户消息是左对齐日志行：没有底色、没有四边框，只有一条左侧竖线。
+        expect(decoration.color, isNull);
+        final border = decoration.border! as Border;
+        expect(border.left.color, colors.border);
+        expect(border.left.width, 2);
+        expect(border.top, BorderSide.none);
+        expect(border.right, BorderSide.none);
         final historyEvent = find.byKey(
           const ValueKey('agent-history-event-history-system-design-system'),
         );

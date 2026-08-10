@@ -390,8 +390,12 @@ String? _turnDurationLabel(AgentConversationTurnGroup group) {
   };
 }
 
-/// 用户或系统消息使用紧凑气泡，正文走与 Agent 相同的 Markdown 渲染管线，
-/// 但使用收敛的气泡主题（标题降级、代码块用控制面底色）。
+/// 用户或系统消息渲染为**左对齐日志行**：一条左侧竖线加等宽角色前缀，
+/// 正文走与 Agent 相同的 Markdown 渲染管线（收敛主题：标题降级、代码块用控制面底色）。
+///
+/// 这里刻意**不使用左右交错的聊天气泡**。会话区要读起来像终端日志：所有
+/// 问答同一条左基线，谁说的话由前缀标识，而不是由对齐方向暗示。右对齐气泡
+/// 还会在宽窗口下把用户消息推到视线之外，与 Agent 全宽正文割裂成两栏。
 class _AgentBubbleMessage extends StatelessWidget {
   const _AgentBubbleMessage({
     required this.message,
@@ -418,64 +422,59 @@ class _AgentBubbleMessage extends StatelessWidget {
         viewModel.canEditLastUserMessage &&
         viewModel.lastEditableUserMessageId == message.id;
 
+    // 角色前缀走等宽字体：它是机器标签而非人类文案，和模型 ID / Token 计数
+    // 属于同一类信息，排版上要能一眼与正文区分。
+    final roleStyle = textStyles.meta.copyWith(
+      fontFamily: textStyles.codeSmall.fontFamily,
+      fontFamilyFallback: textStyles.codeSmall.fontFamilyFallback,
+      fontWeight: FontWeight.w500,
+      color: colors.textTertiary,
+    );
+
     return Padding(
       padding: const EdgeInsets.only(bottom: IdeSpacing.space12),
-      child: Align(
-        alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
+      child: DecoratedBox(
+        key: ValueKey<String>('agent-message-bubble-${message.id}'),
+        // 竖线画在 Border.left：它天然撑满内容高度，不需要 IntrinsicHeight，
+        // 也就不会在时间线热路径上多一次布局测量。
+        decoration: BoxDecoration(
+          border: Border(left: BorderSide(color: colors.border, width: 2)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.only(left: IdeSpacing.space10),
           child: Column(
-            crossAxisAlignment: isUser
-                ? CrossAxisAlignment.end
-                : CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              DecoratedBox(
-                key: ValueKey<String>('agent-message-bubble-${message.id}'),
-                decoration: BoxDecoration(
-                  color: isUser
-                      ? colors.userMessageSurface
-                      : colors.controlSurface,
-                  borderRadius: IdeRadius.allMedium,
-                  border: Border.all(color: colors.borderSubtle),
+              Text(isUser ? 'user' : 'system', style: roleStyle),
+              const SizedBox(height: IdeSpacing.space4),
+              if (imagePaths.isNotEmpty) ...[
+                Wrap(
+                  spacing: IdeSpacing.space8,
+                  runSpacing: IdeSpacing.space8,
+                  children: [
+                    for (final path in imagePaths)
+                      IdeLocalImageThumbnail(
+                        path: path,
+                        size: IdeMetrics.messageThumbnailSize,
+                        imageKey: ValueKey<String>(
+                          'agent-message-image-${message.id}-$path',
+                        ),
+                      ),
+                  ],
                 ),
-                child: Padding(
-                  padding: IdeSpacing.inputContentPadding,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (imagePaths.isNotEmpty) ...[
-                        Wrap(
-                          spacing: IdeSpacing.space8,
-                          runSpacing: IdeSpacing.space8,
-                          children: [
-                            for (final path in imagePaths)
-                              IdeLocalImageThumbnail(
-                                path: path,
-                                size: 120,
-                                imageKey: ValueKey<String>(
-                                  'agent-message-image-${message.id}-$path',
-                                ),
-                              ),
-                          ],
-                        ),
-                        if (hasText) const SizedBox(height: IdeSpacing.space8),
-                      ],
-                      if (hasText)
-                        SizedBox(
-                          width: double.infinity,
-                          child: _AgentMarkdownBody(
-                            message: message,
-                            useStreamingMarkdown: useStreamingMarkdown,
-                            markdownCache: markdownCache,
-                            themeBuilder: _agentUserBubbleMarkdownTheme,
-                          ),
-                        ),
-                    ],
+                if (hasText) const SizedBox(height: IdeSpacing.space8),
+              ],
+              if (hasText)
+                SizedBox(
+                  width: double.infinity,
+                  child: _AgentMarkdownBody(
+                    message: message,
+                    useStreamingMarkdown: useStreamingMarkdown,
+                    markdownCache: markdownCache,
+                    themeBuilder: _agentUserBubbleMarkdownTheme,
                   ),
                 ),
-              ),
               if (canEdit) ...[
                 const SizedBox(height: IdeSpacing.space4),
                 sf.GhostButton(

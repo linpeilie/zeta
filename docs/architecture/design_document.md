@@ -196,16 +196,36 @@ projection 与 unified diff 以 turn render revision 缓存，代码高亮复用
 
 ### 主题与设计系统
 
-- 深色「Graphite Night」：中性石墨框架底 `#0A0A0B`，面板 `#18191B`，
-  强调色蔚蓝 `#1B84FF`，selected 行用 accent 半透明铺底。
-- 浅色「Graphite Day」：中性浅灰底 `#EEEFF1`，白色面板，
-  强调色蔚蓝 `#0B76D8`。
+- **表面阶梯是严格单调的**，深浅主题共用一条规则：`frame` 永远是离内容最远的
+  一档，往内依次 canvas → pane → control → popover。深色（Graphite Night）由外
+  向内逐档提亮，落在 `sf.Colors.neutral` 的 950 → 800 区间，是单色炭黑；浅色
+  （Graphite Day）方向相反，frame 最灰、canvas 纯白。**具体色值由
+  `IdeColors.fromShadcnColorScheme` 从 `sf.Colors` 程序化派生，本文不复制 hex**，
+  以免文档与代码漂移。
+- **零阴影法则**：层级只靠上面这条明度阶梯加 1px 极低透明度描边表达。业务代码
+  不允许手写 `BoxShadow`，也不允许 Material `elevation`。唯一豁免是脱离文档流的
+  浮层（菜单 / popover / toast / 窄屏浮层面板），它们用 `IdeEffects.overlayShadow`
+  的极淡投影做兜底，主分层手段仍是更亮的 popover 表面加描边。
+  守卫见 `test/src/ui/core/ide_visual_token_guard_test.dart`。
+- **描边与交互态是半透明叠加**而非不透明色：`white @ 8%` 叠在炭黑上是一条发丝线，
+  换成不透明灰就变成一条灰带。同理 hover 是「把背景提亮 5%」，因此它必须能叠在
+  任意表面上，元素自身颜色不变。
+- 点缀色克制：品牌蓝向中性灰回拉一档降饱和（HSL 饱和度 < 0.8），且只在发送按钮、
+  选中指示线这类核心行动点出现；列表与 Tab 的选中态一律用中性半透明叠加。
 - 语义色独立：success 绿 / error 红 / warning 琥珀 / info 蓝；
-  diff 增删行使用 success/error。
+  diff 增删行使用 success/error。`intelligenceAccent`（紫）是单色体系里唯一
+  存活的第二色相，它编码「最高推理档位」这个真实状态，属于有意的语义豁免。
+- 前景色守 WCAG AA：`textPrimary` / `textSecondary` / `textTertiary` 在四档表面上
+  都必须 ≥ 4.5:1。10px 的时间戳用的就是 `textTertiary`，最容易踩线——层级弱化靠
+  字号和字重，不靠压对比度。回归断言在 `test/src/ui/core/ide_colors_test.dart`。
 - 全部视觉取值集中在 `lib/src/ui/core/` 的 token 类：`IdeColors`（语义色）、
-  `IdeRadius`/`IdeEffects`（圆角四档 6/8/12/16、阴影预设与 scrim）、
+  `IdeRadius`/`IdeEffects`（圆角四档与浮层阴影、scrim）、
   `IdeSpacing`（4px 基准间距）、`IdeTextStyles`（语义字号）、
   `IdeMetrics`（组件尺寸与响应式断点）、`IdeMotion`（动效）。
+- 圆角四档 **4 / 6 / 8 / 12** + pill，按「元素有多大」分配：
+  micro 4（标签、hover 高亮、行内小块）、small 6（按钮、输入框、代码块、列表行）、
+  medium 8（卡片、状态卡、Composer 外卡）、large 12（侧栏面板、画布、浮层）。
+  **嵌套时内层必须严格小于外层**，典型链路是面板 12 → 卡片 8 → 代码块 6 → 行内高亮 4。
 - 字体分工：界面文本用内置 Geist（`bundledUiFontFamily`），
   **机器标识符与数值一律用内置 JetBrains Mono**（`bundledCodeFontFamily`）。
   对应 token 为 `identifier`（模型 ID、Provider 名、thread ID）、
@@ -224,8 +244,9 @@ projection 与 unified diff 以 turn render revision 缓存，代码高亮复用
   `IdeSelect` / `IdeContextMenu` / `showIdeToast` 等）。
 - 业务代码禁止硬编码颜色、圆角、阴影和字号；需要新字号时加 token，
   不要在调用点写 `fontSize:`（那会绕过用户的字号设置）。
-- 面板圆角 8、间距紧凑，适合桌面工具密度。
-- 极简边框：分隔一律是 1px `borderSubtle`，不叠额外透明度。横向用
+- 面板圆角 12、卡片 8、间距紧凑，适合桌面工具密度：页面内边距按 IDE 而不是
+  移动端取值，省下的空间还给内容行数。
+- 极简边框：分隔一律是 1px `borderSubtle`。横向用
   `IdeRowDivider`，纵向用 `IdeColumnDivider`；不要使用 Material
   `Divider` / `VerticalDivider`。进度指示统一走 `IdeBusySpinner`
   （支持不确定态与 `value` 确定态）和 `IdeLoadingIndicator`。

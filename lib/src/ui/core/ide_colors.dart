@@ -44,15 +44,27 @@ class IdeColors {
     required this.pressedSurface,
     required this.selectedSurface,
     required this.selectedHoverSurface,
-    required this.userMessageSurface,
     required this.focusRing,
   });
 
-  /// 从 Zinc 方案、neutral/Zinc 表面阶梯与 blue 品牌主色构建语义调色板。
+  /// 构建单色炭黑（深色）/ 单色浅灰（浅色）语义调色板。
   ///
-  /// 表面字段按组件用途分组，不承诺跨主题统一的明度递进：深色主题中
-  /// frame/pane 与 canvas/control 分别共享一档，浅色主题则由白色画布、
-  /// neutral frame/pane 和 Zinc control 构成。
+  /// **表面阶梯是严格单调的**，两套主题遵循同一条规则：`frame` 永远是离内容
+  /// 最远的一档（深色最黑、浅色最灰），往内依次是 canvas → pane → control →
+  /// popover。层级只靠这条明度阶梯加 1px 极低透明度描边表达，不靠投影。
+  ///
+  /// ```
+  /// dark :  frame #0a0a0a < canvas #101010 < pane #171717 < control #1e1e1e < popover #262626
+  /// light:  frame zinc.200 → canvas white  > pane neutral.50 > control zinc.100
+  /// ```
+  ///
+  /// 底色一律取自 [sf.Colors.neutral] 单一色系，不再混用 zinc，避免同一屏里
+  /// 出现两种灰的色温。状态色（warning / error / success / info）与
+  /// [intelligenceAccent] 仍取各自色板，它们编码语义而非表面层级。
+  ///
+  /// 描边与交互态改用**半透明叠加**而非不透明色：`white @ 8%` 叠在炭黑上是
+  /// 一条发丝线，换成不透明的 `#525252` 就会变成一条灰带。同理，hover 是
+  /// 「把背景提亮 5%」，因此它必须是能叠在任意表面上的半透明色。
   factory IdeColors.fromShadcnColorScheme(sf.ColorScheme scheme) {
     final isDark = scheme.brightness == Brightness.dark;
     final zinc = sf.Colors.zinc;
@@ -63,25 +75,34 @@ class IdeColors {
     final green = sf.Colors.green;
     final sky = sf.Colors.sky;
     final violet = sf.Colors.violet;
-    // shadcn `.blue` recolor 在深浅下都指向 Colors.blue（500）；
-    // IDE 按亮度拆阶梯，避免深浅主题 brand / ring 完全相同。
-    final brand = isDark ? blue[500] : blue[600];
+    // 品牌蓝按亮度拆阶梯，再向中性灰回拉一档降饱和：全局只在发送按钮、
+    // 选中指示线这类核心行动点出现，高饱和会破坏单色底的克制感。
+    final brand = Color.lerp(
+      isDark ? blue[500] : blue[600],
+      isDark ? neutral[300] : neutral[600],
+      0.30,
+    )!;
 
     if (isDark) {
+      // 半透明叠加的基准色：深色主题用白，叠上去即「提亮」。
+      const overlayBase = sf.Colors.white;
       return IdeColors(
-        frame: neutral[700],
-        // 中央画布与紧凑控件同档，均比 frame/pane 更深。
-        editor: neutral[800],
-        surface: neutral[700],
-        surfaceElevated: neutral[800],
-        surfaceOverlay: zinc[800],
-        panel: zinc[900],
-        border: neutral[600],
-        borderSubtle: zinc[900],
-        mutedText: scheme.mutedForeground,
-        textPrimary: scheme.foreground,
-        textSecondary: scheme.mutedForeground,
-        textTertiary: zinc[500],
+        frame: neutral[950],
+        // 中央画布比 frame 略亮一档，又比侧栏更深，保持 IDE 的视觉重心。
+        editor: Color.lerp(neutral[950], neutral[900], 0.45)!,
+        surface: neutral[900],
+        surfaceElevated: Color.lerp(neutral[900], neutral[800], 0.5)!,
+        surfaceOverlay: neutral[800],
+        panel: neutral[900],
+        border: overlayBase.withValues(alpha: 0.08),
+        borderSubtle: overlayBase.withValues(alpha: 0.05),
+        mutedText: neutral[400],
+        textPrimary: neutral[50],
+        textSecondary: neutral[400],
+        // 三级前景不能再压暗：10px 的时间戳落在最亮的 popover 档（#262626）上时，
+        // neutral.500 只有 3.3:1，达不到 WCAG AA。提到 ~#909090 才能在全部四档
+        // 表面上都拿到 4.5:1 以上。层级弱化交给字号和字重，不靠牺牲对比度。
+        textTertiary: Color.lerp(neutral[500], neutral[400], 0.6)!,
         accent: brand,
         intelligenceAccent: violet[400],
         primaryMuted: brand.withValues(alpha: 0.32),
@@ -92,32 +113,34 @@ class IdeColors {
         info: sky[400],
         accentForeground: sf.Colors.white,
         onAccent: sf.Colors.white,
-        windowHover: zinc[800],
-        windowIcon: zinc[400],
+        windowHover: overlayBase.withValues(alpha: 0.08),
+        windowIcon: neutral[400],
         closeHover: red[500],
-        hoverSurface: zinc[800],
-        pressedSurface: zinc[700],
-        selectedSurface: scheme.accent,
-        selectedHoverSurface: zinc[700],
-        userMessageSurface: zinc[800],
+        hoverSurface: overlayBase.withValues(alpha: 0.05),
+        pressedSurface: overlayBase.withValues(alpha: 0.08),
+        selectedSurface: overlayBase.withValues(alpha: 0.08),
+        selectedHoverSurface: overlayBase.withValues(alpha: 0.12),
         focusRing: brand,
       );
     }
 
+    // 浅色主题镜像同一套规则，只是叠加基准换成近黑，方向相反。
+    final overlayBase = zinc[950];
     return IdeColors(
-      frame: neutral[50],
-      // 浅色画布使用白色，frame/pane 共用 neutral.50，control 使用 zinc.100。
+      frame: zinc[200],
       editor: sf.Colors.white,
       surface: neutral[50],
       surfaceElevated: zinc[100],
-      surfaceOverlay: scheme.popover,
-      panel: scheme.card,
-      border: scheme.border,
-      borderSubtle: zinc[100],
-      mutedText: scheme.mutedForeground,
-      textPrimary: scheme.foreground,
-      textSecondary: scheme.mutedForeground,
-      textTertiary: zinc[400],
+      surfaceOverlay: sf.Colors.white,
+      panel: neutral[50],
+      border: overlayBase.withValues(alpha: 0.12),
+      borderSubtle: overlayBase.withValues(alpha: 0.07),
+      mutedText: zinc[600],
+      textPrimary: zinc[950],
+      textSecondary: zinc[600],
+      // 与深色同理：zinc.500 落在最暗的 control 档（zinc.100）上只有 4.4:1，
+      // 向 zinc.600 压一档才能在全部四档表面上守住 AA。
+      textTertiary: Color.lerp(zinc[500], zinc[600], 0.2)!,
       accent: brand,
       intelligenceAccent: violet[500],
       primaryMuted: brand.withValues(alpha: 0.24),
@@ -128,14 +151,13 @@ class IdeColors {
       // 浅色选中态落在浅灰底上，强调图标用品牌蓝而非白色。
       accentForeground: brand,
       onAccent: sf.Colors.white,
-      windowHover: zinc[200],
+      windowHover: overlayBase.withValues(alpha: 0.08),
       windowIcon: zinc[500],
       closeHover: red[500],
-      hoverSurface: zinc[100],
-      pressedSurface: zinc[200],
-      selectedSurface: scheme.accent,
-      selectedHoverSurface: zinc[200],
-      userMessageSurface: zinc[100],
+      hoverSurface: overlayBase.withValues(alpha: 0.05),
+      pressedSurface: overlayBase.withValues(alpha: 0.08),
+      selectedSurface: overlayBase.withValues(alpha: 0.08),
+      selectedHoverSurface: overlayBase.withValues(alpha: 0.12),
       focusRing: brand,
     );
   }
@@ -318,11 +340,6 @@ class IdeColors {
   /// 生效位置：`PaneInteractiveSurface` 选中+hover；设置页导航选中项 hover。
   final Color selectedHoverSurface;
 
-  /// 用户消息专用表面，不表达品牌或主操作。
-  ///
-  /// 生效位置：Agent 会话中用户气泡背景（`agent_pane_messages`）。
-  final Color userMessageSurface;
-
   /// 键盘焦点和输入焦点的统一描边色。
   ///
   /// 生效位置：Composer 外卡聚焦边与 [IdeEffects.focusRing]；模型配置/控件
@@ -396,7 +413,6 @@ class IdeColors {
     Color? pressedSurface,
     Color? selectedSurface,
     Color? selectedHoverSurface,
-    Color? userMessageSurface,
     Color? focusRing,
   }) {
     final resolvedTextSecondary =
@@ -431,7 +447,6 @@ class IdeColors {
       pressedSurface: pressedSurface ?? this.pressedSurface,
       selectedSurface: selectedSurface ?? this.selectedSurface,
       selectedHoverSurface: selectedHoverSurface ?? this.selectedHoverSurface,
-      userMessageSurface: userMessageSurface ?? this.userMessageSurface,
       focusRing: focusRing ?? this.focusRing,
     );
   }
@@ -477,11 +492,6 @@ class IdeColors {
       selectedHoverSurface: Color.lerp(
         selectedHoverSurface,
         other.selectedHoverSurface,
-        t,
-      )!,
-      userMessageSurface: Color.lerp(
-        userMessageSurface,
-        other.userMessageSurface,
         t,
       )!,
       focusRing: Color.lerp(focusRing, other.focusRing, t)!,

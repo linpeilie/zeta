@@ -147,7 +147,7 @@ class IdeWorkbenchScaffold extends StatelessWidget {
                 // 列级圆角 + 与侧栏一致的边框；内容区 IdeSurface.canvas 仍默认无描边。
                 child: IdeSurface(
                   level: IdeSurfaceLevel.canvas,
-                  borderRadius: IdeRadius.allMedium,
+                  borderRadius: IdeRadius.allLarge,
                   showBorder: true,
                   child: canvas,
                 ),
@@ -336,7 +336,7 @@ class _WorkbenchOverlaySurface extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        borderRadius: IdeRadius.allMedium,
+        borderRadius: IdeRadius.allLarge,
         boxShadow: IdeEffects.overlayShadow(brightness),
       ),
       child: child,
