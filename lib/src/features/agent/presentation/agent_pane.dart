@@ -105,6 +105,28 @@ class AgentPane extends StatefulWidget {
   /// 与 threadSnapshot 侧栏路径。
   final bool isActive;
 
+  /// 测试用：向已挂载的 [AgentPane] 注入草稿图片路径（不走系统文件选择器）。
+  @visibleForTesting
+  static void debugAddDraftImages(GlobalKey key, List<String> paths) {
+    final state = key.currentState;
+    if (state is! _AgentPaneState) {
+      throw StateError(
+        'AgentPane is not mounted for $key (state=${state.runtimeType})',
+      );
+    }
+    state._addDraftImages(paths);
+  }
+
+  /// 测试用：读取当前草稿图片路径。
+  @visibleForTesting
+  static List<String> debugDraftImagePaths(GlobalKey key) {
+    final state = key.currentState;
+    if (state is! _AgentPaneState) {
+      return const <String>[];
+    }
+    return state._draftImagePaths.value;
+  }
+
   @override
   State<AgentPane> createState() => _AgentPaneState();
 }
@@ -120,7 +142,11 @@ class _AgentPaneState extends State<AgentPane> {
   late final FocusNode _composerFocusNode;
   late final IdeSmoothScrollController _scrollController;
   final ValueNotifier<bool> _canSendNotifier = ValueNotifier<bool>(false);
-  final List<String> _draftImagePaths = <String>[];
+
+  /// 草稿图片路径。必须用 listenable 驱动：body 由 [IdeConstraintBucketBuilder]
+  /// 缓存，`setState` 不会重建 composer，仅改 list 会让缩略图「删不掉」。
+  final ValueNotifier<List<String>> _draftImagePaths =
+      ValueNotifier<List<String>>(const <String>[]);
   final GlobalKey _composerAnchorKey = GlobalKey(
     debugLabel: 'agent-composer-skill-anchor',
   );
@@ -301,6 +327,7 @@ class _AgentPaneState extends State<AgentPane> {
     _composerFocusNode.dispose();
     _scrollController.dispose();
     _canSendNotifier.dispose();
+    _draftImagePaths.dispose();
     _scrollChromeTick.dispose();
     _activePlanPanelExtent.dispose();
     _projectionCache.clear();
@@ -436,11 +463,13 @@ class _AgentPaneState extends State<AgentPane> {
                       listenable: Listenable.merge(<Listenable>[
                         widget.viewModel.composerStateListenable,
                         widget.viewModel.pendingInteractionStateListenable,
+                        _draftImagePaths,
                       ]),
                       builder: (context, _) {
                         final composerState = widget.viewModel.composerState;
                         final pendingState =
                             widget.viewModel.pendingInteractionState;
+                        final draftImagePaths = _draftImagePaths.value;
                         return Column(
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -464,9 +493,7 @@ class _AgentPaneState extends State<AgentPane> {
                                 inputController: _inputController,
                                 composerFocusNode: _composerFocusNode,
                                 canSendListenable: _canSendNotifier,
-                                draftImagePaths: List<String>.unmodifiable(
-                                  _draftImagePaths,
-                                ),
+                                draftImagePaths: draftImagePaths,
                                 pagePadding: pagePadding,
                                 onAttachImages: _pickImages,
                                 onRemoveImage: _removeDraftImage,
@@ -621,7 +648,8 @@ class _AgentPaneState extends State<AgentPane> {
   }
 
   void _syncCanSend() {
-    final canSend = _inputController.hasContent || _draftImagePaths.isNotEmpty;
+    final canSend =
+        _inputController.hasContent || _draftImagePaths.value.isNotEmpty;
     if (canSend == _canSendNotifier.value) {
       return;
     }
@@ -846,27 +874,32 @@ class _AgentPaneState extends State<AgentPane> {
   }
 
   void _addDraftImages(Iterable<String> paths) {
+    final next = List<String>.of(_draftImagePaths.value);
     var changed = false;
     for (final path in paths) {
       final trimmed = path.trim();
-      if (trimmed.isEmpty || _draftImagePaths.contains(trimmed)) {
+      if (trimmed.isEmpty || next.contains(trimmed)) {
         continue;
       }
-      _draftImagePaths.add(trimmed);
+      next.add(trimmed);
       changed = true;
     }
     if (!changed) {
       return;
     }
-    setState(() {});
+    // 赋新 list 以触发 ValueNotifier；勿依赖 setState（body 被 bucket 缓存）。
+    _draftImagePaths.value = List<String>.unmodifiable(next);
     _syncCanSend();
   }
 
   void _removeDraftImage(String path) {
-    if (!_draftImagePaths.remove(path)) {
+    final current = _draftImagePaths.value;
+    if (!current.contains(path)) {
       return;
     }
-    setState(() {});
+    _draftImagePaths.value = List<String>.unmodifiable(
+      current.where((item) => item != path),
+    );
     _syncCanSend();
   }
 
@@ -898,7 +931,7 @@ class _AgentPaneState extends State<AgentPane> {
       return;
     }
     final serialized = _inputController.serialize();
-    final images = List<String>.from(_draftImagePaths);
+    final images = List<String>.of(_draftImagePaths.value);
     final mentions = serialized.mentions;
     if (serialized.text.trim().isEmpty &&
         images.isEmpty &&
@@ -907,10 +940,8 @@ class _AgentPaneState extends State<AgentPane> {
       return;
     }
     _inputController.clear();
-    if (_draftImagePaths.isNotEmpty) {
-      setState(() {
-        _draftImagePaths.clear();
-      });
+    if (_draftImagePaths.value.isNotEmpty) {
+      _draftImagePaths.value = const <String>[];
     }
     _syncCanSend();
     widget.viewModel.sendMessage(

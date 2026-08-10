@@ -5,6 +5,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
@@ -1013,5 +1014,52 @@ void main() {
         );
       },
     );
+
+    testWidgets('draft image remove button clears the thumbnail strip', (
+      tester,
+    ) async {
+      final paneKey = GlobalKey();
+      final provider = AgentPaneFakeProvider();
+      final viewModel = createAgentPaneViewModel(
+        provider,
+        initialThread: agentPaneThread(id: 'thread-draft-image', title: 'Img'),
+      );
+      addTearDown(provider.dispose);
+      addTearDown(viewModel.dispose);
+
+      await tester.pumpWidget(
+        AgentPaneTestApp(viewModel: viewModel, agentPaneKey: paneKey),
+      );
+      await viewModel.initialization;
+      await pumpAgentPaneUi(tester);
+      expect(
+        find.byKey(const ValueKey('agent-composer-section')),
+        findsOneWidget,
+      );
+      expect(paneKey.currentState, isNotNull);
+
+      const draftPath = r'D:\tmp\zeta-draft-image.png';
+      AgentPane.debugAddDraftImages(paneKey, const <String>[draftPath]);
+      expect(AgentPane.debugDraftImagePaths(paneKey), <String>[draftPath]);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(AgentPane.debugDraftImagePaths(paneKey), <String>[draftPath]);
+
+      final draftStrip = find.byKey(
+        const ValueKey('agent-composer-image-drafts'),
+      );
+      final removeButton = find.byKey(
+        ValueKey<String>('agent-composer-remove-image-$draftPath'),
+      );
+      expect(draftStrip, findsOneWidget);
+      expect(removeButton, findsOneWidget);
+
+      await tester.ensureVisible(removeButton);
+      await tester.tap(removeButton, warnIfMissed: true);
+      await tester.pump();
+
+      expect(draftStrip, findsNothing);
+      expect(removeButton, findsNothing);
+    });
   });
 }

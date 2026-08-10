@@ -1002,11 +1002,23 @@ class _ComposerImageDraftStrip extends StatelessWidget {
   final List<String> paths;
   final ValueChanged<String> onRemove;
 
+  /// 缩略图边长。
+  static const double _thumbSize = 64;
+
+  /// 关闭按钮命中区边长（与桌面图标按钮对齐）。
+  static const double _removeHitSize = IdeMetrics.iconButtonHitSize;
+
+  /// 关闭按钮相对缩略图右上角的外伸量，保证按钮中心压在角上且整块仍在
+  /// ListView item 布局盒内（`clipBehavior: Clip.none` 只放行绘制，不放行命中）。
+  static const double _removeOutset = 8;
+
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
+    // item 需要为右上角关闭按钮预留 outset，否则命中落在 ListView 子项盒外。
+    const itemExtent = _thumbSize + _removeOutset;
     return SizedBox(
-      height: 64,
+      height: itemExtent,
       child: ListView.separated(
         key: const ValueKey('agent-composer-image-drafts'),
         scrollDirection: Axis.horizontal,
@@ -1014,51 +1026,78 @@ class _ComposerImageDraftStrip extends StatelessWidget {
         separatorBuilder: (_, _) => const SizedBox(width: IdeSpacing.space8),
         itemBuilder: (context, index) {
           final path = paths[index];
-          return Stack(
-            clipBehavior: Clip.none,
-            children: [
-              ClipRRect(
-                borderRadius: IdeRadius.allSmall,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: colors.surfaceElevated,
-                    border: Border.all(color: colors.borderSubtle),
+          return SizedBox(
+            width: itemExtent,
+            height: itemExtent,
+            child: Stack(
+              children: [
+                Positioned(
+                  left: 0,
+                  bottom: 0,
+                  width: _thumbSize,
+                  height: _thumbSize,
+                  child: ClipRRect(
                     borderRadius: IdeRadius.allSmall,
-                  ),
-                  child: Image.file(
-                    File(path),
-                    key: ValueKey<String>('agent-composer-image-$path'),
-                    width: 64,
-                    height: 64,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => SizedBox(
-                      width: 64,
-                      height: 64,
-                      child: Icon(
-                        Icons.broken_image_outlined,
-                        size: 18,
-                        color: colors.textTertiary,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: colors.surfaceElevated,
+                        border: Border.all(color: colors.borderSubtle),
+                        borderRadius: IdeRadius.allSmall,
+                      ),
+                      child: Image.file(
+                        File(path),
+                        key: ValueKey<String>('agent-composer-image-$path'),
+                        width: _thumbSize,
+                        height: _thumbSize,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => SizedBox(
+                          width: _thumbSize,
+                          height: _thumbSize,
+                          child: Icon(
+                            Icons.broken_image_outlined,
+                            size: 18,
+                            color: colors.textTertiary,
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              Positioned(
-                top: -4,
-                right: -4,
-                child: sf.IconButton.ghost(
-                  key: ValueKey<String>('agent-composer-remove-image-$path'),
-                  onPressed: () => onRemove(path),
-                  size: sf.ButtonSize.xSmall,
-                  density: sf.ButtonDensity.iconDense,
-                  icon: Icon(
-                    Icons.close_rounded,
-                    size: 12,
-                    color: colors.textSecondary,
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  width: _removeHitSize,
+                  height: _removeHitSize,
+                  child: IdeTooltip(
+                    message: 'Remove image',
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        key: ValueKey<String>(
+                          'agent-composer-remove-image-$path',
+                        ),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => onRemove(path),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: colors.surfaceElevated,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: colors.borderSubtle),
+                          ),
+                          child: Center(
+                            child: Icon(
+                              Icons.close_rounded,
+                              size: 12,
+                              color: colors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           );
         },
       ),

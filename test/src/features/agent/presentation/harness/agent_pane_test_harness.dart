@@ -27,6 +27,7 @@ class AgentPaneTestApp extends StatelessWidget {
   const AgentPaneTestApp({
     super.key,
     required this.viewModel,
+    this.agentPaneKey,
     this.uiFontFamily,
     this.codeFontFamily = 'CodeFont',
     this.themeMode = ThemeMode.dark,
@@ -36,6 +37,9 @@ class AgentPaneTestApp extends StatelessWidget {
   });
 
   final AgentConversationViewModel viewModel;
+
+  /// 挂到 [AgentPane] 上，供 `AgentPane.debugAddDraftImages` 等测试钩子使用。
+  final GlobalKey? agentPaneKey;
   final String? uiFontFamily;
   final String codeFontFamily;
   final ThemeMode themeMode;
@@ -76,6 +80,7 @@ class AgentPaneTestApp extends StatelessWidget {
             ).copyWith(disableAnimations: disableAnimations),
             child: sf.Scaffold(
               child: AgentPane(
+                key: agentPaneKey,
                 viewModel: viewModel,
                 messageSendShortcut: messageSendShortcut,
               ),
