@@ -43,11 +43,12 @@ void main() {
       expect(entries.single.turnId, 't1');
     });
 
-    test('工具调用不产生额外顶级导航项', () {
+    test('工具调用不产生额外顶级导航项，并透传 token 用量', () {
       final turn = AgentConversationTurnGroup(
         id: 't1',
         isStandby: false,
         status: AgentHistoryTurnStatus.completed,
+        tokenUsage: const AgentTokenUsage(totalTokens: 1280),
         entries: <AgentTimelineEntry>[
           AgentMessageTimelineEntry(
             message: AgentConversationMessage(
@@ -86,8 +87,11 @@ void main() {
         liveTurn: null,
       );
       expect(entries, hasLength(1));
-      expect(entries.single.hasTools, isTrue);
-      expect(entries.single.hasFileEdits, isTrue);
+      expect(entries.single.tokenUsage?.totalTokens, 1280);
+      expect(
+        agentConversationNavigationTokenLabel(entries.single.tokenUsage),
+        '1.3k tokens',
+      );
       expect(entries.single.anchorViewportItemId, contains('message-u1'));
     });
 
@@ -244,7 +248,7 @@ void main() {
   });
 
   group('buildAgentConversationNavigationTooltip', () {
-    test('包含序号、摘要与状态', () {
+    test('包含序号、摘要、状态与 token 用量', () {
       final entry = AgentConversationNavigationEntry(
         entryId: 't1',
         turnId: 't1',
@@ -252,13 +256,13 @@ void main() {
         label: '建立 Agent 权限架构契约测试',
         status: AgentConversationNavigationStatus.completed,
         anchorViewportItemId: 'turn-block-t1-message-u1',
-        hasTools: true,
+        tokenUsage: const AgentTokenUsage(totalTokens: 1280),
       );
       final text = buildAgentConversationNavigationTooltip(entry);
       expect(text, contains('第 6 个回合'));
       expect(text, contains('建立 Agent 权限架构契约测试'));
       expect(text, contains('已完成'));
-      expect(text, contains('含工具'));
+      expect(text, contains('1.3k tokens'));
     });
   });
 }

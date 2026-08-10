@@ -429,7 +429,7 @@ class _AgentConversationNavigationTick extends StatelessWidget {
   }
 }
 
-/// 导航轨右侧 hover 预览卡：回合序号、提问摘要、状态与标记。
+/// 导航轨右侧 hover 预览卡：回合序号、提问摘要、状态与 token / 时间。
 class _AgentConversationNavigationPreviewCard extends StatelessWidget {
   const _AgentConversationNavigationPreviewCard({
     required this.entry,
@@ -447,6 +447,7 @@ class _AgentConversationNavigationPreviewCard extends StatelessWidget {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final status = _navStatusPresentation(entry.status, colors);
+    final tokenLabel = agentConversationNavigationTokenLabel(entry.tokenUsage);
 
     return ConstrainedBox(
       constraints: const BoxConstraints(
@@ -508,9 +509,7 @@ class _AgentConversationNavigationPreviewCard extends StatelessWidget {
                     height: 1.35,
                   ),
                 ),
-                if (entry.hasTools ||
-                    entry.hasFileEdits ||
-                    entry.startedAt != null) ...[
+                if (tokenLabel != null || entry.startedAt != null) ...[
                   const SizedBox(height: IdeSpacing.space10),
                   Container(
                     height: 1,
@@ -522,16 +521,10 @@ class _AgentConversationNavigationPreviewCard extends StatelessWidget {
                     runSpacing: IdeSpacing.space4,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      if (entry.hasTools)
+                      if (tokenLabel != null)
                         _NavMetaChip(
-                          icon: Icons.build_outlined,
-                          label: '工具',
-                          color: colors.textSecondary,
-                        ),
-                      if (entry.hasFileEdits)
-                        _NavMetaChip(
-                          icon: Icons.edit_note_rounded,
-                          label: '文件编辑',
+                          icon: Icons.toll_outlined,
+                          label: tokenLabel,
                           color: colors.textSecondary,
                         ),
                       if (entry.startedAt != null)

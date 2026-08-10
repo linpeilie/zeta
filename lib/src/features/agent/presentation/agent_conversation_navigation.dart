@@ -48,8 +48,7 @@ final class AgentConversationNavigationEntry {
     required this.status,
     required this.anchorViewportItemId,
     this.startedAt,
-    this.hasTools = false,
-    this.hasFileEdits = false,
+    this.tokenUsage,
   });
 
   /// 稳定导航身份（与 [turnId] 一致，便于扩展）。
@@ -73,11 +72,8 @@ final class AgentConversationNavigationEntry {
   /// 回合开始时间（悬停预览可选）。
   final DateTime? startedAt;
 
-  /// 是否包含工具调用（悬停提示）。
-  final bool hasTools;
-
-  /// 是否包含文件编辑（悬停提示）。
-  final bool hasFileEdits;
+  /// 本回合 token 用量（悬停预览；与 turn footer 同源）。
+  final AgentTokenUsage? tokenUsage;
 }
 
 /// 从可见 history + live turn 派生导航项列表。
@@ -137,8 +133,7 @@ List<AgentConversationNavigationEntry> buildAgentConversationNavigationEntries({
         status: _mapTurnStatus(turn.status),
         anchorViewportItemId: anchorItem.id,
         startedAt: turn.startedAt,
-        hasTools: turn.entries.any((entry) => entry is AgentToolTimelineEntry),
-        hasFileEdits: turn.entries.any(_entryHasFileEdit),
+        tokenUsage: turn.tokenUsage,
       ),
     );
   }
@@ -243,14 +238,11 @@ String buildAgentConversationNavigationTooltip(
     ..writeln('第 ${entry.ordinal} 个回合')
     ..writeln(entry.label)
     ..write('状态：${_statusLabel(entry.status)}');
-  final flags = <String>[
-    if (entry.hasTools) '含工具',
-    if (entry.hasFileEdits) '含文件编辑',
-  ];
-  if (flags.isNotEmpty) {
+  final tokenLabel = agentConversationNavigationTokenLabel(entry.tokenUsage);
+  if (tokenLabel != null) {
     buffer
       ..writeln()
-      ..write(flags.join(' · '));
+      ..write(tokenLabel);
   }
   if (entry.startedAt != null) {
     final t = entry.startedAt!.toLocal();
@@ -263,20 +255,19 @@ String buildAgentConversationNavigationTooltip(
   return buffer.toString();
 }
 
+/// 导航预览用的 turn token 短标签；口径与 turn footer 一致。
+String? agentConversationNavigationTokenLabel(AgentTokenUsage? usage) {
+  final total = usage?.totalTokens;
+  if (total == null || total <= 0) {
+    return null;
+  }
+  return '${usage!.displayTotalTokens!} tokens';
+}
+
 List<AgentTimelineRenderBlock> _defaultResolveBlocks(
   AgentConversationTurnGroup turn,
 ) {
   return buildAgentTimelineRenderBlocks(turnId: turn.id, entries: turn.entries);
-}
-
-bool _entryHasFileEdit(AgentTimelineEntry entry) {
-  if (entry is AgentTurnDiffTimelineEntry) {
-    return true;
-  }
-  if (entry is AgentToolTimelineEntry) {
-    return entry.toolCall.kind == AgentToolKind.edit;
-  }
-  return false;
 }
 
 AgentConversationMessage? _firstUserMessage(AgentConversationTurnGroup turn) {
