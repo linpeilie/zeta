@@ -3112,6 +3112,167 @@ void main() {
     });
 
     test(
+      'maps local_images from session jsonl user_message into localImagePaths',
+      () async {
+        // 对齐真实 Codex rollout：event_msg.user_message.local_images 为绝对路径；
+        // 历史气泡依赖 localImagePaths 渲染缩略图，不能只拼文本占位。
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        const imagePath =
+            r'C:\Users\tester\AppData\Local\Temp\zeta-agent-images\paste-1.png';
+        final sessionFile = await _writeJsonlFile(<Object?>[
+          <String, Object?>{
+            'timestamp': '2026-08-10T08:28:11.000Z',
+            'type': 'event_msg',
+            'payload': <String, Object?>{
+              'type': 'task_started',
+              'turn_id': 'turn-image',
+              'started_at': 1786350491,
+            },
+          },
+          <String, Object?>{
+            'timestamp': '2026-08-10T08:28:11.448Z',
+            'type': 'event_msg',
+            'payload': <String, Object?>{
+              'type': 'user_message',
+              'client_id': 'msg-image-1',
+              'message': 'What does this screenshot show?',
+              'images': <Object?>[],
+              'local_images': <Object?>[imagePath],
+              'text_elements': <Object?>[],
+            },
+          },
+          <String, Object?>{
+            'timestamp': '2026-08-10T08:28:20.000Z',
+            'type': 'event_msg',
+            'payload': <String, Object?>{
+              'type': 'task_complete',
+              'turn_id': 'turn-image',
+              'completed_at': 1786350500,
+              'duration_ms': 9000,
+            },
+          },
+        ]);
+        addTearDown(() => sessionFile.parent.delete(recursive: true));
+
+        final history = await provider.readThreadHistory(
+          threadId: 'thread-1',
+          sessionPath: sessionFile.path,
+        );
+
+        final user = _historyEntries(history)
+            .whereType<AgentHistoryMessageEntry>()
+            .singleWhere((entry) => entry.role == AgentMessageRole.user);
+        expect(user.text, 'What does this screenshot show?');
+        expect(user.localImagePaths, <String>[imagePath]);
+        expect(user.text, isNot(contains('Local images')));
+        expect(user.text, isNot(contains(imagePath)));
+
+        await provider.dispose();
+      },
+    );
+
+    test(
+      'keeps image-only jsonl user_message when local_images is present',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        const imagePath = r'D:\tmp\zeta-only.png';
+        final sessionFile = await _writeJsonlFile(<Object?>[
+          <String, Object?>{
+            'type': 'event_msg',
+            'payload': <String, Object?>{
+              'type': 'user_message',
+              'client_id': 'msg-image-only',
+              'message': '',
+              'local_images': <Object?>[imagePath],
+            },
+          },
+        ]);
+        addTearDown(() => sessionFile.parent.delete(recursive: true));
+
+        final history = await provider.readThreadHistory(
+          threadId: 'thread-1',
+          sessionPath: sessionFile.path,
+        );
+
+        final user = _historyEntries(history)
+            .whereType<AgentHistoryMessageEntry>()
+            .singleWhere((entry) => entry.role == AgentMessageRole.user);
+        expect(user.text, isEmpty);
+        expect(user.localImagePaths, <String>[imagePath]);
+
+        await provider.dispose();
+      },
+    );
+
+    test('thread/read extracts path from input_text image markup', () async {
+      // thread/read 偶发把路径写在 <image path="…"> 标记里，而不是 localImage 字段。
+      final peer = _FakeJsonRpcPeer(
+        threadReadResponseProvider: (_) => <String, Object?>{
+          'thread': <String, Object?>{
+            'id': 'thread-markup',
+            'turns': <Object?>[
+              <String, Object?>{
+                'id': 'turn-1',
+                'status': 'completed',
+                'items': <Object?>[
+                  <String, Object?>{
+                    'type': 'userMessage',
+                    'id': 'user-1',
+                    'content': <Object?>[
+                      <String, Object?>{
+                        'type': 'input_text',
+                        'text': 'Describe the UI',
+                      },
+                      <String, Object?>{
+                        'type': 'input_text',
+                        'text':
+                            r'<image name=[Image #1] path="D:\tmp\shot.png">',
+                      },
+                      <String, Object?>{
+                        'type': 'input_image',
+                        'image_url': 'data:image/png;base64,AAAA',
+                        'detail': 'high',
+                      },
+                      <String, Object?>{
+                        'type': 'input_text',
+                        'text': '</image>',
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      );
+      final provider = CodexAppServerAgentProvider(
+        config: AgentProviderConfig.defaultCodex,
+        peer: peer,
+      );
+
+      final history = await provider.readThreadHistory(
+        threadId: 'thread-markup',
+      );
+
+      final user = _historyEntries(history).single as AgentHistoryMessageEntry;
+      expect(user.role, AgentMessageRole.user);
+      expect(user.text, 'Describe the UI');
+      expect(user.localImagePaths, <String>[r'D:\tmp\shot.png']);
+      expect(user.text, isNot(contains('<image')));
+      expect(user.text, isNot(contains('</image>')));
+
+      await provider.dispose();
+    });
+
+    test(
       'falls back to thread/read when local session path is missing',
       () async {
         final peer = _FakeJsonRpcPeer();

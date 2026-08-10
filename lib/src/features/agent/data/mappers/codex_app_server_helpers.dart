@@ -357,7 +357,7 @@ List<String> _locations(Map<String, Object?> item) {
 /// 将用户输入数组转成历史消息文本。
 ///
 /// 本地/远程图片不写入文本（由 [_userInputLocalImagePaths] 单独提取），
-/// 避免气泡里再叠一层 `[Image: path]` 占位。
+/// 避免气泡里再叠一层 `[Image: path]` 或 `<image path="…">` 标记。
 String? _userInputText(Object? value) {
   if (value is! List<Object?>) {
     return _string(value);
@@ -369,12 +369,15 @@ String? _userInputText(Object? value) {
     final type = _string(item['type']);
     switch (type) {
       case 'text':
+      case 'input_text':
         final text = _string(item['text']);
-        if (text != null) {
+        // 跳过纯图片标记行；路径由 [_userInputLocalImagePaths] 提取。
+        if (text != null && !_isImageMarkupText(text)) {
           parts.add(text);
         }
       case 'image':
       case 'localImage':
+      case 'input_image':
         // 图片走独立路径字段，不拼进文本。
         break;
       case 'skill':
@@ -389,7 +392,7 @@ String? _userInputText(Object? value) {
         }
       default:
         final text = _string(item['text']) ?? _string(item['content']);
-        if (text != null) {
+        if (text != null && !_isImageMarkupText(text)) {
           parts.add(text);
         }
     }
@@ -399,22 +402,102 @@ String? _userInputText(Object? value) {
 }
 
 /// 从用户输入数组提取本地图片路径。
+///
+/// 兼容：
+/// - app-server / thread/read：`{type: localImage, path}`
+/// - 会话 JSONL response_item：`<image … path="…">` 写在 `input_text` 中
 List<String> _userInputLocalImagePaths(Object? value) {
   if (value is! List<Object?>) {
     return const <String>[];
   }
   final paths = <String>[];
+  final seen = <String>{};
+  void addPath(String? path) {
+    final trimmed = path?.trim();
+    if (trimmed == null || trimmed.isEmpty || !seen.add(trimmed)) {
+      return;
+    }
+    // data: URL 体积大且 UI 当前只渲染本地文件路径。
+    if (trimmed.startsWith('data:')) {
+      return;
+    }
+    paths.add(trimmed);
+  }
+
   for (final itemValue in value) {
     final item = _map(itemValue);
-    if (_string(item['type']) != 'localImage') {
+    final type = _string(item['type']);
+    switch (type) {
+      case 'localImage':
+      case 'image':
+        addPath(_string(item['path']));
+      case 'text':
+      case 'input_text':
+        for (final path in _pathsFromImageMarkup(_string(item['text']))) {
+          addPath(path);
+        }
+      default:
+        break;
+    }
+  }
+  return List<String>.unmodifiable(paths);
+}
+
+/// Codex JSONL `event_msg.user_message.local_images` 路径列表。
+List<String> _jsonlUserMessageLocalImagePaths(Map<String, Object?> payload) {
+  final raw = payload['local_images'] ?? payload['localImages'];
+  if (raw is! List) {
+    return const <String>[];
+  }
+  final paths = <String>[];
+  final seen = <String>{};
+  for (final item in raw) {
+    final path = _string(item)?.trim();
+    if (path == null || path.isEmpty || path.startsWith('data:')) {
       continue;
     }
-    final path = _string(item['path']);
-    if (path != null && path.isNotEmpty) {
+    if (seen.add(path)) {
       paths.add(path);
     }
   }
   return List<String>.unmodifiable(paths);
+}
+
+/// 是否为 Codex 会话里包裹图片的 markup 行（非用户可见正文）。
+bool _isImageMarkupText(String text) {
+  final trimmed = text.trim();
+  if (trimmed.isEmpty) {
+    return false;
+  }
+  final lower = trimmed.toLowerCase();
+  return lower == '</image>' ||
+      lower.startsWith('<image') ||
+      // 与 Grok 历史标记对齐的宽松兜底。
+      lower.startsWith('[local image:');
+}
+
+/// 从 `<image … path="…">` / `[local image: …]` 中抽出路径。
+Iterable<String> _pathsFromImageMarkup(String? text) sync* {
+  if (text == null || text.trim().isEmpty) {
+    return;
+  }
+  final attribute = RegExp(
+    r'''path\s*=\s*["']([^"']+)["']''',
+    caseSensitive: false,
+  );
+  for (final match in attribute.allMatches(text)) {
+    final path = match.group(1)?.trim();
+    if (path != null && path.isNotEmpty) {
+      yield path;
+    }
+  }
+  final bracket = RegExp(r'\[local image:\s*(.+?)\]', caseSensitive: false);
+  for (final match in bracket.allMatches(text)) {
+    final path = match.group(1)?.trim();
+    if (path != null && path.isNotEmpty) {
+      yield path;
+    }
+  }
 }
 
 /// 宽容拼接字符串数组。
@@ -546,34 +629,28 @@ String? _responseCallId(Map<String, Object?> payload) {
   return _string(payload['call_id']);
 }
 
+/// 提取 JSONL `user_message` 的可见正文。
+///
+/// 本地图片路径由 [_jsonlUserMessageLocalImagePaths] 单独提取，**不得**再拼
+/// `[Local images: N]` 占位，否则气泡会在缩略图旁重复假文本。
 String? _jsonlUserMessageText(Map<String, Object?> payload) {
   final parts = <String>[];
   final message = _trimmedText(_string(payload['message']));
-  if (message != null) {
+  if (message != null && !_isImageMarkupText(message)) {
     parts.add(message);
   }
 
-  final textElements = payload['text_elements'];
+  final textElements = payload['text_elements'] ?? payload['textElements'];
   if (textElements is List<Object?>) {
     for (final itemValue in textElements) {
       final item = _map(itemValue);
       final text = _trimmedText(
         _string(item['text']) ?? _string(item['content']),
       );
-      if (text != null && !parts.contains(text)) {
+      if (text != null && !_isImageMarkupText(text) && !parts.contains(text)) {
         parts.add(text);
       }
     }
-  }
-
-  final images = payload['images'];
-  if (images is List<Object?> && images.isNotEmpty) {
-    parts.add('[Images: ${images.length}]');
-  }
-
-  final localImages = payload['local_images'];
-  if (localImages is List<Object?> && localImages.isNotEmpty) {
-    parts.add('[Local images: ${localImages.length}]');
   }
 
   return parts.isEmpty ? null : parts.join('\n');

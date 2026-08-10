@@ -143,8 +143,12 @@ class _JsonlHistoryParser {
         _consumeTurnAborted(payload, raw: raw);
         return;
       case 'user_message':
-        final text = _trimmedText(_jsonlUserMessageText(payload));
-        if (text == null) {
+        // 会话 JSONL 在 event_msg.user_message.local_images 携带本地绝对路径；
+        // 必须写入 localImagePaths，UI 才能渲染历史缩略图（与 live 一致）。
+        final localImagePaths = _jsonlUserMessageLocalImagePaths(payload);
+        final text = _trimmedText(_jsonlUserMessageText(payload)) ?? '';
+        // 允许纯图消息：无正文但有本地路径时仍保留条目。
+        if (text.isEmpty && localImagePaths.isEmpty) {
           return;
         }
         _appendEntry(
@@ -152,6 +156,7 @@ class _JsonlHistoryParser {
             id: _string(payload['client_id']) ?? _nextHistoryId('history-user'),
             role: AgentMessageRole.user,
             text: text,
+            localImagePaths: localImagePaths,
             raw: raw,
           ),
         );
