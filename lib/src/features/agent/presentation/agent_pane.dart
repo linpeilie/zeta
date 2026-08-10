@@ -43,6 +43,7 @@ import 'package:zeta/src/features/agent/presentation/agent_conversation_ui_state
 import 'package:zeta/src/features/agent/presentation/agent_markdown_cache.dart';
 import 'package:zeta/src/features/agent/presentation/agent_plan_revision_drafts.dart';
 import 'package:zeta/src/features/agent/presentation/composer_document.dart';
+import 'package:zeta/src/features/agent/presentation/agent_conversation_navigation.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descriptor.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
@@ -70,6 +71,7 @@ part 'widgets/agent_slash_command_picker.dart';
 part 'widgets/agent_mention_file_picker.dart';
 part 'widgets/agent_pane_sections.dart';
 part 'widgets/agent_pane_styles.dart';
+part 'widgets/agent_pane_navigation_rail.dart';
 
 const int _diffPreviewLineCount = 24;
 

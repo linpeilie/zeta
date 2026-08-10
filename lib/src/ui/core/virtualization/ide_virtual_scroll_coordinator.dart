@@ -308,6 +308,54 @@ final class IdeVirtualScrollCoordinator {
     await _revealEnd(animated: animated, explicit: animated);
   }
 
+  /// 用户显式离开底部浏览（如对话导航轨跳转）。
+  ///
+  /// 取消待执行的 follow reveal，并进入 [IdeVirtualScrollMode.free]，避免
+  /// 跳转后被流式贴底拉回。
+  void requestFreeScroll() {
+    cancelExplicitAnimation();
+    _pendingFollowEnd = false;
+    _settledFrameCount = 0;
+    _setMode(IdeVirtualScrollMode.free);
+  }
+
+  /// 程序化滚动到指定 offset（导航跳转等）。
+  ///
+  /// 默认先 [requestFreeScroll]；[animated] 为 true 时使用短动画。
+  Future<void> requestScrollToOffset({
+    required double offset,
+    bool animated = true,
+    bool exitFollowEnd = true,
+  }) async {
+    if (exitFollowEnd) {
+      requestFreeScroll();
+    }
+    final driver = _driver;
+    if (driver == null || !driver.hasClients) {
+      return;
+    }
+    beginProgrammaticScroll();
+    try {
+      final target = offset.clamp(0.0, driver.maxScrollExtent);
+      if (animated) {
+        _explicitAnimating = true;
+        try {
+          await driver.animateTo(
+            target,
+            duration: explicitAnimationDuration,
+            curve: explicitAnimationCurve,
+          );
+        } finally {
+          _explicitAnimating = false;
+        }
+      } else {
+        driver.jumpTo(target);
+      }
+    } finally {
+      endProgrammaticScroll();
+    }
+  }
+
   /// 取消用户触发的显式动画，并保持当前 mode。
   void cancelExplicitAnimation() {
     if (!_explicitAnimating) {

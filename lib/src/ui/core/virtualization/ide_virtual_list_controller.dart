@@ -155,6 +155,15 @@ final class IdeVirtualListController {
   /// 按稳定 ID 取下标。
   int? indexOfId(String id) => extentIndex.indexOfId(id);
 
+  /// 按稳定 ID 取内容起点 offset；未知 id 返回 null。
+  double? offsetOfId(String id) {
+    final index = extentIndex.indexOfId(id);
+    if (index == null) {
+      return null;
+    }
+    return extentIndex.offsetOf(index);
+  }
+
   /// 内容总高度。
   double get totalExtent => extentIndex.totalExtent;
 

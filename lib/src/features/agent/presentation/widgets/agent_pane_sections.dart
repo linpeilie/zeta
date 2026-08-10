@@ -475,6 +475,14 @@ class _AgentConversationTimeline extends StatelessWidget {
             final listPadding = pagePadding.copyWith(
               bottom: pagePadding.bottom + floatingPanelExtent.value,
             );
+            final navigationEntries = buildAgentConversationNavigationEntries(
+              visibleHistoryTurns: historyTurns,
+              liveTurn: liveSnapshot,
+              resolveBlocks: projectionCache.resolve,
+            );
+            final showNavigationRail = shouldShowAgentConversationNavigation(
+              navigationEntries,
+            );
             final scrollView = CustomScrollView(
               key: const ValueKey('agent-message-list'),
               controller: scrollController,
@@ -504,16 +512,60 @@ class _AgentConversationTimeline extends StatelessWidget {
                 listenable: scrollChromeTick,
                 builder: (context, _) {
                   final showButton = _shouldShowScrollToEndButton();
-                  return IdeVirtualScrollShell(
-                    controller: scrollController,
-                    semanticLabel: 'Agent 对话滚动条',
-                    showScrollToEndButton: showButton,
-                    hasNewContent:
-                        showButton && viewModel.liveTurnState != null,
-                    onScrollToEnd: () {
-                      unawaited(onScrollToEndPressed());
-                    },
-                    child: scrollView,
+                  final activeTurnId = showNavigationRail
+                      ? _resolveActiveNavigationTurnId(
+                          entries: navigationEntries,
+                          items: items,
+                          contentTopInset: listPadding.top,
+                        )
+                      : null;
+                  final compactRail =
+                      constraints.maxWidth < IdeMetrics.stackedRowBreakpoint;
+                  return Stack(
+                    children: [
+                      Positioned.fill(
+                        child: IdeVirtualScrollShell(
+                          controller: scrollController,
+                          semanticLabel: 'Agent 对话滚动条',
+                          showScrollToEndButton: showButton,
+                          hasNewContent:
+                              showButton && viewModel.liveTurnState != null,
+                          onScrollToEnd: () {
+                            unawaited(onScrollToEndPressed());
+                          },
+                          child: scrollView,
+                        ),
+                      ),
+                      if (showNavigationRail)
+                        Positioned(
+                          // 右侧贴齐内容轴内侧，并为滚动条预留间距，避免互挡。
+                          right: math.max(
+                            IdeSpacing.space4,
+                            listPadding.right - IdeSpacing.space4,
+                          ),
+                          top: 0,
+                          bottom: 0,
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: _AgentConversationNavigationRail(
+                              key: const ValueKey(
+                                'agent-conversation-navigation-rail',
+                              ),
+                              entries: navigationEntries,
+                              activeTurnId: activeTurnId,
+                              compact: compactRail,
+                              onSelectTurn: (entry) {
+                                unawaited(
+                                  _scrollToNavigationEntry(
+                                    entry: entry,
+                                    contentTopInset: listPadding.top,
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                    ],
                   );
                 },
               ),
@@ -535,6 +587,56 @@ class _AgentConversationTimeline extends StatelessWidget {
         maxScrollExtent: position.maxScrollExtent,
         viewportDimension: position.viewportDimension,
       ),
+    );
+  }
+
+  /// 由当前 scroll offset + extent index 解析导航高亮 turn（无测高）。
+  String? _resolveActiveNavigationTurnId({
+    required List<AgentConversationNavigationEntry> entries,
+    required List<AgentTimelineViewportItem> items,
+    required double contentTopInset,
+  }) {
+    if (!scrollController.hasClients) {
+      return entries.isEmpty ? null : entries.last.turnId;
+    }
+    final position = scrollController.position;
+    return resolveActiveNavigationTurnId(
+      entries: entries,
+      items: items,
+      controller: virtualListController,
+      scrollPixels: position.pixels,
+      contentTopInset: contentTopInset,
+      viewportDimension: position.viewportDimension,
+    );
+  }
+
+  /// 程序化跳转到导航锚点；退出 followEnd，避免被贴底拉回。
+  Future<void> _scrollToNavigationEntry({
+    required AgentConversationNavigationEntry entry,
+    required double contentTopInset,
+  }) async {
+    if (!scrollController.hasClients) {
+      return;
+    }
+    final maxExtent = scrollController.position.maxScrollExtent;
+    final target = resolveNavigationScrollOffset(
+      entry: entry,
+      controller: virtualListController,
+      contentTopInset: contentTopInset,
+      maxScrollExtent: maxExtent,
+    );
+    if (target == null) {
+      return;
+    }
+    // StatelessWidget 无 context：用 platform accessibility 等价判断减动效。
+    final reduceMotion = WidgetsBinding
+        .instance
+        .platformDispatcher
+        .accessibilityFeatures
+        .disableAnimations;
+    await scrollCoordinator.requestScrollToOffset(
+      offset: target,
+      animated: !reduceMotion,
     );
   }
 

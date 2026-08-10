@@ -43,6 +43,22 @@ void main() {
       expect(coordinator.mode, IdeVirtualScrollMode.followEnd);
     });
 
+    test('requestFreeScroll 退出 followEnd 并取消 pending reveal', () async {
+      coordinator.notifyContentChanged(lastItemId: 'tail');
+      expect(coordinator.pendingFollowEnd, isTrue);
+      coordinator.requestFreeScroll();
+      expect(coordinator.mode, IdeVirtualScrollMode.free);
+      expect(coordinator.pendingFollowEnd, isFalse);
+      flushFrames();
+      expect(coordinator.revealCount, 0);
+    });
+
+    test('requestScrollToOffset 进入 free 并跳转', () async {
+      await coordinator.requestScrollToOffset(offset: 120, animated: false);
+      expect(coordinator.mode, IdeVirtualScrollMode.free);
+      expect(driver.pixels, 120);
+    });
+
     test('用户上滚超过 48px 进入 free', () {
       coordinator.onUserScroll(metrics(pixels: 1000 - 49));
       expect(coordinator.mode, IdeVirtualScrollMode.free);
