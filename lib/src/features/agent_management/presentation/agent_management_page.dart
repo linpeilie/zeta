@@ -22,7 +22,6 @@ import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_status_card.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/ide_toast.dart';
-import 'package:zeta/src/ui/core/metrics/compact_metric_bar.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/rows/ide_list_row.dart';
 import 'package:zeta/src/ui/core/rows/ide_settings_row.dart';
@@ -53,7 +52,6 @@ class AgentManagementPageState extends State<AgentManagementPage> {
   late final TextEditingController _searchController;
   _ManagementView _view = _ManagementView.list;
   _AgentListTab _listTab = _AgentListTab.installed;
-  _AgentListFilter _filter = _AgentListFilter.all;
   _AgentDetailTab _detailTab = _AgentDetailTab.overview;
 
   @override
@@ -168,8 +166,6 @@ class AgentManagementPageState extends State<AgentManagementPage> {
                               ),
                               const SizedBox(height: IdeSpacing.space12),
                             ],
-                            _buildSummary(context, allAgents),
-                            const SizedBox(height: IdeSpacing.space12),
                             _buildListToolbar(context),
                             const SizedBox(height: IdeSpacing.space8),
                             Expanded(
@@ -216,65 +212,6 @@ class AgentManagementPageState extends State<AgentManagementPage> {
     );
   }
 
-  Widget _buildSummary(BuildContext context, List<ManagedAgent> agents) {
-    final colors = IdeColors.of(context);
-    final installed = agents.where((agent) => agent.installed).length;
-    final enabled = agents
-        .where((agent) => agent.enabled && agent.installed)
-        .length;
-    final running = agents
-        .where((agent) => agent.runtimeState == AgentRuntimeState.running)
-        .length;
-    final attention = agents.where((agent) => agent.needsAttention).length;
-    return CompactMetricBar(
-      items: [
-        CompactMetricItem(
-          label: '已安装',
-          value: '$installed',
-          icon: Icons.download_done_rounded,
-          onPressed: () {
-            setState(() {
-              _listTab = _AgentListTab.installed;
-              _filter = _AgentListFilter.all;
-            });
-          },
-        ),
-        CompactMetricItem(
-          label: '已启用',
-          value: '$enabled',
-          icon: Icons.toggle_on_outlined,
-          onPressed: () {
-            setState(() {
-              _listTab = _AgentListTab.supported;
-              _filter = _AgentListFilter.enabled;
-            });
-          },
-        ),
-        CompactMetricItem(
-          label: '运行中',
-          value: '$running',
-          icon: Icons.play_circle_outline_rounded,
-          onPressed: () {
-            setState(() {
-              _filter = _AgentListFilter.running;
-            });
-          },
-        ),
-        CompactMetricItem(
-          label: '需要处理',
-          value: '$attention',
-          icon: Icons.warning_amber_rounded,
-          tone: attention > 0 ? colors.warning : null,
-          onPressed: () {
-            setState(() {
-              _filter = _AgentListFilter.attention;
-            });
-          },
-        ),
-      ],
-    );
-  }
-
   Widget _buildListToolbar(BuildContext context) {
     return IdeToolbar(
       key: const ValueKey('agent-list-toolbar'),
@@ -309,42 +246,6 @@ class AgentManagementPageState extends State<AgentManagementPage> {
                   });
                 },
               ),
-              IdeTabs<_AgentListFilter>(
-                value: _filter,
-                semanticLabel: 'Agent 状态筛选',
-                items: const [
-                  IdeTabItem<_AgentListFilter>(
-                    key: ValueKey('agent-filter-all'),
-                    value: _AgentListFilter.all,
-                    label: '全部状态',
-                  ),
-                  IdeTabItem<_AgentListFilter>(
-                    key: ValueKey('agent-filter-enabled'),
-                    value: _AgentListFilter.enabled,
-                    label: '已启用',
-                  ),
-                  IdeTabItem<_AgentListFilter>(
-                    key: ValueKey('agent-filter-attention'),
-                    value: _AgentListFilter.attention,
-                    label: '需要处理',
-                  ),
-                  IdeTabItem<_AgentListFilter>(
-                    key: ValueKey('agent-filter-running'),
-                    value: _AgentListFilter.running,
-                    label: '运行中',
-                  ),
-                  IdeTabItem<_AgentListFilter>(
-                    key: ValueKey('agent-filter-update'),
-                    value: _AgentListFilter.updateAvailable,
-                    label: '可更新',
-                  ),
-                ],
-                onChanged: (value) {
-                  setState(() {
-                    _filter = value;
-                  });
-                },
-              ),
               SizedBox(
                 width: searchWidth,
                 child: sf.TextField(
@@ -367,9 +268,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
 
   Widget _buildListEmptyState(BuildContext context, List<ManagedAgent> agents) {
     final installedTab = _listTab == _AgentListTab.installed;
-    final noQuery =
-        _searchController.text.trim().isEmpty &&
-        _filter == _AgentListFilter.all;
+    final noQuery = _searchController.text.trim().isEmpty;
     final anyInstalled = agents.any((agent) => agent.installed);
     if (installedTab && !anyInstalled && noQuery) {
       return _ActionEmptyState(
@@ -389,14 +288,9 @@ class AgentManagementPageState extends State<AgentManagementPage> {
     return _ActionEmptyState(
       icon: Icons.search_off_rounded,
       title: '没有找到匹配的 Agent',
-      description: '请尝试修改搜索内容或清除筛选条件。',
-      primaryLabel: '清除筛选',
-      onPrimary: () {
-        _searchController.clear();
-        setState(() {
-          _filter = _AgentListFilter.all;
-        });
-      },
+      description: '请尝试修改搜索内容。',
+      primaryLabel: '清除搜索',
+      onPrimary: _searchController.clear,
     );
   }
 
@@ -576,20 +470,12 @@ class AgentManagementPageState extends State<AgentManagementPage> {
       return false;
     }
     final query = _searchController.text.trim().toLowerCase();
-    if (query.isNotEmpty &&
-        !agent.definition.displayName.toLowerCase().contains(query) &&
-        !agent.definition.vendor.toLowerCase().contains(query) &&
-        !agent.definition.commandName.toLowerCase().contains(query)) {
-      return false;
+    if (query.isEmpty) {
+      return true;
     }
-    return switch (_filter) {
-      _AgentListFilter.all => true,
-      _AgentListFilter.enabled => agent.enabled,
-      _AgentListFilter.attention => agent.needsAttention,
-      _AgentListFilter.running =>
-        agent.runtimeState == AgentRuntimeState.running,
-      _AgentListFilter.updateAvailable => agent.updateAvailable,
-    };
+    return agent.definition.displayName.toLowerCase().contains(query) ||
+        agent.definition.vendor.toLowerCase().contains(query) ||
+        agent.definition.commandName.toLowerCase().contains(query);
   }
 
   void _openDetail(String agentId) {
@@ -716,8 +602,6 @@ class AgentManagementPageState extends State<AgentManagementPage> {
 enum _ManagementView { list, detail, logs }
 
 enum _AgentListTab { installed, supported }
-
-enum _AgentListFilter { all, enabled, attention, running, updateAvailable }
 
 enum _AgentDetailTab { overview, models, configuration }
 

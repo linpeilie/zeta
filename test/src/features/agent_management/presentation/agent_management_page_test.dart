@@ -14,7 +14,6 @@ import 'package:zeta/src/features/agent_management/domain/agent_management_model
 import 'package:zeta/src/features/agent_management/presentation/agent_configuration_editor.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
-import 'package:zeta/src/ui/core/metrics/compact_metric_bar.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/ui/core/workbench/ide_section.dart';
@@ -41,7 +40,6 @@ void main() {
     expect(find.byKey(const ValueKey('agent-row-codex')), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-detect-button')), findsOneWidget);
     expect(find.text('Codex'), findsOneWidget);
-    expect(find.byType(CompactMetricBar), findsOneWidget);
     expect(find.byType(IdeToolbar), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-list-pane')), findsOneWidget);
     expect(
