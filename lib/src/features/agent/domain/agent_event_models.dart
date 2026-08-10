@@ -79,6 +79,27 @@ class AgentThreadNameUpdatedEvent extends AgentEvent {
   final Map<String, Object?> raw;
 }
 
+/// 线程列表旁文案（preview）已更新。
+///
+/// 与 [AgentThreadNameUpdatedEvent] 隔离：title 是正式会话名，preview 是
+/// 标题下方的次要摘要（例如 Grok `last_turn_summary`）。
+class AgentThreadPreviewUpdatedEvent extends AgentEvent {
+  const AgentThreadPreviewUpdatedEvent({
+    required this.threadId,
+    required this.preview,
+    this.raw = const <String, Object?>{},
+  });
+
+  /// 线程 id。
+  final String threadId;
+
+  /// 新的列表旁文案；空串表示清除。
+  final String preview;
+
+  /// 原始通知 payload。
+  final Map<String, Object?> raw;
+}
+
 /// 线程已归档（`thread/archived`）。
 class AgentThreadArchivedEvent extends AgentEvent {
   const AgentThreadArchivedEvent({

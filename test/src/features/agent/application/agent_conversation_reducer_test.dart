@@ -211,13 +211,14 @@ void main() {
   });
 
   group('detached critical event allowlist', () {
-    test('contains exactly the nine compatibility-critical event types', () {
+    test('contains exactly the ten compatibility-critical event types', () {
       const criticalTypes = <Type>{
         AgentStatusEvent,
         AgentErrorEvent,
         AgentTurnCompletedEvent,
         AgentThreadClosedEvent,
         AgentThreadNameUpdatedEvent,
+        AgentThreadPreviewUpdatedEvent,
         AgentPermissionRequestedEvent,
         AgentPermissionResolvedEvent,
         AgentPlanApprovalRequestedEvent,
@@ -778,6 +779,17 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
         ),
         afterStateTypes: <Type>[AgentApplyThreadNameChange],
         uiRegions: <AgentUiRegion>{AgentUiRegion.header},
+        uiUrgency: AgentUiUpdateUrgency.immediate,
+        snapshot: AgentThreadSnapshotMutation.refresh,
+      ),
+      const _ReductionCase(
+        name: 'thread preview',
+        event: AgentThreadPreviewUpdatedEvent(
+          threadId: _threadId,
+          preview: 'Last turn summary',
+        ),
+        afterStateTypes: <Type>[AgentApplyThreadPreviewChange],
+        uiRegions: <AgentUiRegion>{},
         uiUrgency: AgentUiUpdateUrgency.immediate,
         snapshot: AgentThreadSnapshotMutation.refresh,
       ),

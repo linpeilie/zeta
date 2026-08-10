@@ -112,6 +112,12 @@ final class GrokSessionUpdateMapper {
         decoded,
         runtimeScope: runtimeScope,
       ),
+      AcpRetryStateUpdate() => _mapRetryState(
+        decoded,
+        runningTurnId: runningTurnId,
+        runtimeScope: runtimeScope,
+        terminalSource: terminalSource,
+      ),
       AcpUnknownUpdate() => GrokAcpMappedUpdate(
         unmatchedKind: decoded.kind,
         ignoredReason: decoded.diagnostic ?? 'unsupported update kind',
@@ -504,6 +510,113 @@ final class GrokSessionUpdateMapper {
       return AgentConversationModeId.defaultMode;
     }
     return modeId;
+  }
+
+  /// 将传输层 `retry_state` 映射为错误提示；耗尽时再以 first-terminal-wins
+  /// 关闭当前 turn，避免 live 会话卡在 running。
+  ///
+  /// - `retrying`：`AgentErrorEvent(willRetry: true)`，不结束 turn；
+  /// - `exhausted` 或 `is_rate_limited`：错误 + `AgentTurnCompletedEvent(failed)`。
+  ///
+  /// 用户可见文案经 [grok_error_normalizer] 脱敏；原始 `reason` 只用于分类与
+  /// 事件 raw，不直接拼接进 timeline 正文。
+  GrokAcpMappedUpdate _mapRetryState(
+    AcpRetryStateUpdate update, {
+    required String? runningTurnId,
+    required AgentRuntimeScope runtimeScope,
+    required GrokTerminalSource terminalSource,
+  }) {
+    final sessionId = update.sessionId;
+    if (sessionId == null) {
+      return const GrokAcpMappedUpdate(ignoredReason: 'missing session id');
+    }
+
+    final type = update.type.toLowerCase();
+    // 与历史解析 noteRetryState 对齐：耗尽或明确限流都视为本回合失败兜底。
+    final terminalFailure = type == 'exhausted' || update.isRateLimited;
+    final rateLimited = isGrokRateLimitFailure(
+      reason: update.reason,
+      isRateLimited: update.isRateLimited,
+    );
+    final message = terminalFailure
+        ? grokRetryFailureMessage(
+            reason: update.reason,
+            isRateLimited: update.isRateLimited,
+          )
+        : grokTransportRetryingMessage(
+            reason: update.reason,
+            isRateLimited: update.isRateLimited,
+            attempt: update.attempt,
+            maxRetries: update.maxRetries,
+          );
+    final code = rateLimited
+        ? 'usageLimitExceeded'
+        : (terminalFailure
+              ? 'responseTooManyFailedAttempts'
+              : 'responseStreamDisconnected');
+
+    if (terminalFailure) {
+      final terminal = identity.completeTurn(
+        runtimeScope: runtimeScope,
+        sessionId: sessionId,
+        runningTurnId: runningTurnId,
+        promptId: update.promptId,
+        status: AgentHistoryTurnStatus.failed,
+        source: terminalSource,
+        eventId: update.eventId,
+        eventKind: update.kind,
+      );
+      if (!terminal.accepted) {
+        return const GrokAcpMappedUpdate(
+          ignoredReason: 'retry_state terminal rejected as duplicate or stale',
+        );
+      }
+      return GrokAcpMappedUpdate(
+        events: <AgentEvent>[
+          AgentErrorEvent(
+            message: message,
+            code: code,
+            willRetry: false,
+            sessionId: terminal.sessionId,
+            turnId: terminal.turnId,
+            raw: update.raw,
+          ),
+          AgentTurnCompletedEvent(
+            sessionId: terminal.sessionId,
+            turnId: terminal.turnId,
+            status: AgentHistoryTurnStatus.failed,
+            errorMessage: message,
+            raw: update.raw,
+          ),
+        ],
+      );
+    }
+
+    final resolved = identity.resolveMetadata(
+      runtimeScope: runtimeScope,
+      sessionId: sessionId,
+      runningTurnId: runningTurnId,
+      promptId: update.promptId,
+      eventId: update.eventId,
+      eventKind: update.kind,
+    );
+    if (resolved == null) {
+      return const GrokAcpMappedUpdate(
+        ignoredReason: 'unresolved retry_state turn scope or duplicate event',
+      );
+    }
+    return GrokAcpMappedUpdate(
+      events: <AgentEvent>[
+        AgentErrorEvent(
+          message: message,
+          code: code,
+          willRetry: true,
+          sessionId: resolved.sessionId,
+          turnId: resolved.turnId,
+          raw: update.raw,
+        ),
+      ],
+    );
   }
 
   GrokAcpMappedUpdate _mapUsage(

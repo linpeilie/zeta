@@ -320,6 +320,155 @@ void main() {
     });
 
     test(
+      'emits thread preview from last_turn_summary session notification',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+        await provider.initialize();
+
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+        addTearDown(subscription.cancel);
+
+        peer.emitNotification('_x.ai/session_notification', <String, Object?>{
+          'sessionId': 'sess-preview-1',
+          'update': <String, Object?>{
+            'sessionUpdate': 'last_turn_summary',
+            'summary': '排查图片生成是否被改坏',
+            'prompt_id': 'prompt-1',
+          },
+          '_meta': <String, Object?>{'agentTimestampMs': 1786327109733},
+        });
+
+        await _waitUntil(
+          () => events.whereType<AgentThreadPreviewUpdatedEvent>().isNotEmpty,
+        );
+        final previewEvent = events
+            .whereType<AgentThreadPreviewUpdatedEvent>()
+            .single;
+        expect(previewEvent.threadId, 'sess-preview-1');
+        expect(previewEvent.preview, '排查图片生成是否被改坏');
+      },
+    );
+
+    test(
+      'maps live retry_state session_notification to willRetry error',
+      () async {
+        final peer = _FakeJsonRpcPeer()..promptCompleter = Completer<Object?>();
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+        addTearDown(subscription.cancel);
+        addTearDown(provider.dispose);
+
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+        );
+        final turnFuture = provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+          message: 'trigger transport retry',
+        );
+        await _waitUntil(
+          () => events.whereType<AgentTurnStartedEvent>().isNotEmpty,
+        );
+
+        peer.emitNotification('_x.ai/session_notification', <String, Object?>{
+          'sessionId': session.id,
+          'update': <String, Object?>{
+            'sessionUpdate': 'retry_state',
+            'type': 'retrying',
+            'attempt': 1,
+            'max_retries': 15,
+            'reason':
+                'reqwest error stream: Transport error: error decoding response body',
+          },
+          '_meta': <String, Object?>{
+            'eventId': 'retry-live-1',
+            'agentTimestampMs': 1786328859243,
+          },
+        });
+        await _waitUntil(() => events.whereType<AgentErrorEvent>().isNotEmpty);
+
+        final error = events.whereType<AgentErrorEvent>().single;
+        expect(error.sessionId, session.id);
+        expect(error.willRetry, isTrue);
+        expect(error.code, 'responseStreamDisconnected');
+        expect(error.message, contains('retry 1/15'));
+        expect(error.message, isNot(contains('reqwest')));
+        expect(events.whereType<AgentTurnCompletedEvent>(), isEmpty);
+
+        peer.promptCompleter!.complete(<String, Object?>{
+          'stopReason': 'end_turn',
+        });
+        await turnFuture;
+      },
+    );
+
+    test(
+      'maps exhausted retry_state session_notification to failed turn',
+      () async {
+        final peer = _FakeJsonRpcPeer()..promptCompleter = Completer<Object?>();
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+        addTearDown(subscription.cancel);
+        addTearDown(provider.dispose);
+
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+        );
+        final turnFuture = provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+          message: 'trigger exhausted retry',
+        );
+        await _waitUntil(
+          () => events.whereType<AgentTurnStartedEvent>().isNotEmpty,
+        );
+
+        peer.emitNotification('x.ai/session_notification', <String, Object?>{
+          'sessionId': session.id,
+          'update': <String, Object?>{
+            'sessionUpdate': 'retry_state',
+            'type': 'exhausted',
+            'attempts': 15,
+            'reason': 'provider unavailable',
+            'is_rate_limited': false,
+          },
+          '_meta': <String, Object?>{'eventId': 'retry-live-exhausted'},
+        });
+        await _waitUntil(
+          () => events.whereType<AgentTurnCompletedEvent>().isNotEmpty,
+        );
+
+        final error = events.whereType<AgentErrorEvent>().single;
+        final terminal = events.whereType<AgentTurnCompletedEvent>().single;
+        expect(error.willRetry, isFalse);
+        expect(error.message, 'Grok request failed. Please try again.');
+        expect(terminal.status, AgentHistoryTurnStatus.failed);
+        expect(terminal.errorMessage, error.message);
+
+        // first-terminal-wins：后续 prompt RPC 终态不得再推进 timeline 终态。
+        peer.promptCompleter!.complete(<String, Object?>{
+          'stopReason': 'end_turn',
+        });
+        await turnFuture;
+        expect(events.whereType<AgentTurnCompletedEvent>(), hasLength(1));
+      },
+    );
+
+    test(
       'sends skills as \$name text and skips structured skill inputs',
       () async {
         final peer = _FakeJsonRpcPeer();

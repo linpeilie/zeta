@@ -39,6 +39,13 @@ final class AgentApplyThreadNameChange extends AgentConversationStateChange {
   final String? threadName;
 }
 
+/// 回写 thread 列表旁文案（preview），不改正式标题。
+final class AgentApplyThreadPreviewChange extends AgentConversationStateChange {
+  const AgentApplyThreadPreviewChange(this.preview);
+
+  final String preview;
+}
+
 final class AgentApplyThreadSettingsChange
     extends AgentConversationStateChange {
   const AgentApplyThreadSettingsChange(this.event);

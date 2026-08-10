@@ -16,11 +16,15 @@ class AgentConversationThreadSnapshot {
     required this.runtimeStatus,
     required this.waitingOnApproval,
     required this.waitingOnUserInput,
+    this.threadPreview = '',
   });
 
   final String? sessionId;
   final String providerId;
   final String threadTitle;
+
+  /// 列表标题旁文案；空串表示无旁文案或不覆盖现有 preview。
+  final String threadPreview;
   final bool isTurnRunning;
   final AgentThreadRuntimeStatus? runtimeStatus;
   final bool waitingOnApproval;
@@ -32,6 +36,7 @@ class AgentConversationThreadSnapshot {
         other.sessionId == sessionId &&
         other.providerId == providerId &&
         other.threadTitle == threadTitle &&
+        other.threadPreview == threadPreview &&
         other.isTurnRunning == isTurnRunning &&
         other.runtimeStatus == runtimeStatus &&
         other.waitingOnApproval == waitingOnApproval &&
@@ -43,6 +48,7 @@ class AgentConversationThreadSnapshot {
     sessionId,
     providerId,
     threadTitle,
+    threadPreview,
     isTurnRunning,
     runtimeStatus,
     waitingOnApproval,

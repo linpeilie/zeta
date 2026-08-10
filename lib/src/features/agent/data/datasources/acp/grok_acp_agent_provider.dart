@@ -1325,6 +1325,7 @@ class GrokAcpAgentProvider
     // x.ai/session_notification 携带 sessionUpdate 枚举（tag `sessionUpdate`）；
     // 插件/hooks 变更会增删 skill，需失效本地 skill 目录让 composer 重新拉取。
     // turn_completed 亦可能经此通道到达，作为 running turn 终态兜底。
+    // retry_state 表示传输层自动重试进度，走与 session/update 相同的 Grok mapper。
     if (method == 'x.ai/session_notification' ||
         method == '_x.ai/session_notification') {
       final update = _asStringKeyedMap(params['update']);
@@ -1342,6 +1343,26 @@ class GrokAcpAgentProvider
           runtimeScope: notificationRuntimeScope,
           rawPayload: notification.raw,
         );
+        return;
+      }
+      if (updateType == 'retry_state') {
+        final sessionId = params['sessionId']?.toString();
+        final turnId = sessionId == null
+            ? null
+            : _runningTurnIdsBySessionId[sessionId];
+        final mapped = _notificationMapper.mapXaiSessionUpdate(
+          params: params,
+          runningTurnId: turnId,
+          runtimeScope: notificationRuntimeScope,
+        );
+        _noteTurnCompletedFromMapped(sessionId: sessionId, mapped: mapped);
+        _emitMapped(
+          mapped,
+          method: method,
+          params: params,
+          rawPayload: notification.raw,
+        );
+        _emitReadyIfIdle();
         return;
       }
       _handleSessionNotificationInvalidation(
@@ -1373,11 +1394,11 @@ class GrokAcpAgentProvider
     );
   }
 
-  /// 处理 `x.ai/session_notification` 对 skill 目录的失效信号。
+  /// 处理 `x.ai/session_notification` 对 skill 目录的失效信号与列表旁文案。
   ///
   /// `update.sessionUpdate` 为 snake_case 变体名（如 `plugins_changed`）。
   /// 命中会影响 skill 集合的变体时广播 [skillsChanged]，供 application 层刷新；
-  /// 其余变体交给共享忽略消息诊断器记录。
+  /// `last_turn_summary` 映射为中立 preview 事件；其余变体交给共享忽略消息诊断器。
   void _handleSessionNotificationInvalidation({
     required String method,
     required Map<String, Object?> params,
@@ -1385,6 +1406,15 @@ class GrokAcpAgentProvider
   }) {
     final update = _asStringKeyedMap(params['update']);
     final updateType = update?['sessionUpdate']?.toString();
+    if (updateType == 'last_turn_summary') {
+      _handleLastTurnSummaryNotification(
+        method: method,
+        params: params,
+        update: update ?? const <String, Object?>{},
+        rawPayload: rawPayload,
+      );
+      return;
+    }
     final invalidatesSkills = switch (updateType) {
       'plugins_changed' || 'hooks_changed' || 'skills_changed' => true,
       _ => false,
@@ -1404,6 +1434,48 @@ class GrokAcpAgentProvider
       payload: params,
       rawPayload: rawPayload,
       details: <String, Object?>{'updateKind': updateType},
+    );
+  }
+
+  /// 将 `_x.ai/session_notification` 的 `last_turn_summary` 映射为列表旁文案。
+  void _handleLastTurnSummaryNotification({
+    required String method,
+    required Map<String, Object?> params,
+    required Map<String, Object?> update,
+    required Map<String, Object?> rawPayload,
+  }) {
+    final sessionId = params['sessionId']?.toString().trim();
+    final summary = update['summary']?.toString().trim();
+    if (sessionId == null || sessionId.isEmpty) {
+      _ignoredMessageLogger.record(
+        method: method,
+        reason: 'missing session id',
+        payload: params,
+        rawPayload: rawPayload,
+        details: const <String, Object?>{'updateKind': 'last_turn_summary'},
+      );
+      return;
+    }
+    if (summary == null || summary.isEmpty) {
+      _ignoredMessageLogger.record(
+        method: method,
+        reason: 'missing last turn summary',
+        payload: params,
+        rawPayload: rawPayload,
+        details: const <String, Object?>{'updateKind': 'last_turn_summary'},
+      );
+      return;
+    }
+    _log.t(
+      'Grok session $sessionId last_turn_summary '
+      '(${summary.length} characters)',
+    );
+    _addEvent(
+      AgentThreadPreviewUpdatedEvent(
+        threadId: sessionId,
+        preview: summary,
+        raw: params,
+      ),
     );
   }
 

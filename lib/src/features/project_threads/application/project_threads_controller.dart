@@ -295,6 +295,20 @@ class ProjectThreadsController {
         title: threadTitle,
       );
     }
+    final threadPreview = snapshot.threadPreview.trim();
+    if (threadPreview.isNotEmpty) {
+      final currentPreview = stateFor(projectPath).threads
+          .where((thread) => thread.id == sessionId)
+          .map((thread) => thread.preview)
+          .firstOrNull;
+      if (currentPreview != threadPreview) {
+        viewModel.updateThreadPreview(
+          projectPath: projectPath,
+          threadId: sessionId,
+          preview: threadPreview,
+        );
+      }
+    }
     final runtimeStatus = _effectiveListRuntimeStatus(snapshot);
     if (runtimeStatus != null) {
       viewModel.updateThreadRuntimeStatus(
@@ -341,6 +355,20 @@ class ProjectThreadsController {
       projectPath: projectPath,
       threadId: threadId,
       title: title,
+    );
+  }
+
+  /// 更新列表中某条 thread 的旁文案（供 shell 从详情侧回写）。
+  void updateThreadPreview({
+    required String projectPath,
+    required String threadId,
+    required String preview,
+  }) {
+    _registerThreadMapping(projectPath, threadId);
+    viewModel.updateThreadPreview(
+      projectPath: projectPath,
+      threadId: threadId,
+      preview: preview,
     );
   }
 

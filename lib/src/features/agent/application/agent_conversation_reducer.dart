@@ -114,14 +114,16 @@ final class AgentConversationReducer {
 
   /// detached runtime 仍可交付的精确 critical allowlist。
   ///
-  /// [AgentThreadNameUpdatedEvent] 纳入：Grok 在 turn 结束后异步轮询
-  /// `generated_title`，事件可能略晚于 runtime detach 边界，仍需更新标题。
+  /// [AgentThreadNameUpdatedEvent] / [AgentThreadPreviewUpdatedEvent] 纳入：
+  /// Grok 在 turn 结束后异步下发标题或 `last_turn_summary`，事件可能略晚于
+  /// runtime detach 边界，仍需更新列表展示。
   static bool isCriticalDetachedEvent(AgentEvent event) {
     return event is AgentStatusEvent ||
         event is AgentErrorEvent ||
         event is AgentTurnCompletedEvent ||
         event is AgentThreadClosedEvent ||
         event is AgentThreadNameUpdatedEvent ||
+        event is AgentThreadPreviewUpdatedEvent ||
         event is AgentPermissionRequestedEvent ||
         event is AgentPermissionResolvedEvent ||
         event is AgentPlanApprovalRequestedEvent ||
@@ -141,6 +143,7 @@ final class AgentConversationReducer {
       AgentSessionStartedEvent() => _sessionStarted(event, context),
       AgentThreadStatusChangedEvent() => _threadStatus(event, context),
       AgentThreadNameUpdatedEvent() => _threadName(event, context),
+      AgentThreadPreviewUpdatedEvent() => _threadPreview(event, context),
       AgentThreadArchivedEvent() => _noOp(),
       AgentThreadUnarchivedEvent() => _noOp(),
       AgentThreadDeletedEvent() => _noOp(),
@@ -287,6 +290,27 @@ final class AgentConversationReducer {
       ],
       uiUpdate: AgentUiUpdateRequest(
         regions: const <AgentUiRegion>{AgentUiRegion.header},
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+      threadSnapshot: AgentThreadSnapshotMutation.refresh,
+    );
+  }
+
+  AgentConversationMutation _threadPreview(
+    AgentThreadPreviewUpdatedEvent event,
+    AgentConversationReducerContext context,
+  ) {
+    if (!_shouldHandleCurrent(context, sessionId: event.threadId)) {
+      return AgentConversationMutation.rejected('currentThreadMismatch');
+    }
+    return AgentConversationMutation(
+      accepted: true,
+      stateChanges: <AgentConversationStateChange>[
+        AgentApplyThreadPreviewChange(event.preview),
+      ],
+      // 旁文案只影响列表 snapshot；仍发一次 UI publish，以便延帧刷新 snapshot。
+      uiUpdate: AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{},
         urgency: AgentUiUpdateUrgency.immediate,
       ),
       threadSnapshot: AgentThreadSnapshotMutation.refresh,

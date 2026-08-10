@@ -256,6 +256,50 @@ void main() {
       },
     );
 
+    test('syncRuntimeSnapshot updates thread preview beside title', () async {
+      final provider = _FakeAgentProvider(
+        pages: <AgentThreadPage>[
+          _page(<AgentThreadSummary>[
+            _thread(
+              id: 'thread-0',
+              providerId: defaultAgentProviderId,
+              title: 'Formal Title',
+              preview: 'first user message',
+              updatedAt: DateTime.utc(2026, 7, 14),
+            ),
+          ], nextCursor: null),
+        ],
+      );
+      final controller = _createController(provider);
+
+      controller.activateProject('/repo');
+      await _flushAsync();
+
+      expect(
+        controller.stateFor('/repo').threads.single.preview,
+        'first user message',
+      );
+
+      controller.syncRuntimeSnapshot(
+        projectPath: '/repo',
+        snapshot: const AgentConversationThreadSnapshot(
+          sessionId: 'thread-0',
+          providerId: defaultAgentProviderId,
+          threadTitle: 'Formal Title',
+          threadPreview: 'Last turn summary text',
+          isTurnRunning: false,
+          runtimeStatus: AgentThreadRuntimeStatus.idle,
+          waitingOnApproval: false,
+          waitingOnUserInput: false,
+        ),
+      );
+
+      final thread = controller.stateFor('/repo').threads.single;
+      expect(thread.title, 'Formal Title');
+      expect(thread.preview, 'Last turn summary text');
+      expect(thread.displayName, 'Formal Title');
+    });
+
     test('promotes an existing thread to the top when a turn starts', () async {
       // 列表按 recency 倒序：thread-2 最新在顶，thread-0 最旧在底。
       final provider = _FakeAgentProvider(

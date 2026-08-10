@@ -277,6 +277,30 @@ class ProjectThreadsViewModel extends ChangeNotifier {
     });
   }
 
+  /// 更新列表中某条 thread 的旁文案（preview）。
+  void updateThreadPreview({
+    required String projectPath,
+    required String threadId,
+    required String preview,
+  }) {
+    updateState(projectPath, (current) {
+      final index = current.threads.indexWhere(
+        (thread) => thread.id == threadId,
+      );
+      if (index == -1) {
+        return current;
+      }
+      if (current.threads[index].preview == preview) {
+        return current;
+      }
+      final threads = List<AgentThreadSummary>.of(current.threads);
+      threads[index] = threads[index].copyWith(preview: preview);
+      return current.copyWith(
+        threads: List<AgentThreadSummary>.unmodifiable(threads),
+      );
+    });
+  }
+
   /// 从列表移除 thread；若正被选中则清空选中。
   ///
   /// 返回是否清除了选中态。

@@ -258,6 +258,7 @@ class AgentConversationViewModel {
   AgentRuntimeScope? _conversationModeCatalogRuntimeScope;
 
   String _currentThreadTitle = defaultThreadTitle;
+  String _currentThreadPreview = '';
   AgentProviderStatus _status = const AgentProviderStatus.idle();
   AgentThreadRuntimeStatus? _threadRuntimeStatus;
   bool _threadWaitingOnApproval = false;
@@ -840,6 +841,9 @@ class AgentConversationViewModel {
   }
 
   String get currentThreadTitle => _currentThreadTitle;
+
+  /// 当前 thread 列表旁文案（不进入详情头栏）。
+  String get currentThreadPreview => _currentThreadPreview;
 
   /// 当前 thread 逻辑归属的 provider id。
   String get threadProviderId =>
@@ -2056,6 +2060,7 @@ class AgentConversationViewModel {
     _requiresResumedSelectedThread = true;
     _threadOpenPhase = AgentThreadOpenPhase.loadingHistory;
     _currentThreadTitle = thread.displayName;
+    _currentThreadPreview = thread.preview;
     _threadCreatedAt = thread.createdAt;
     _threadLastActiveAt = thread.lastActiveAt;
     // 列表/历史里的 active 可能来自外部客户端（如 Codex 应用），Zeta 未持有 live
@@ -3438,6 +3443,11 @@ class AgentConversationViewModel {
     }
   }
 
+  /// 更新当前 thread 的列表旁文案。
+  void _applyThreadPreview(String preview) {
+    _currentThreadPreview = preview;
+  }
+
   /// 首条用户输入的临时展示标题（单行、限长，避免头栏被长 prompt 撑爆）。
   static String _provisionalThreadTitle(String text) {
     final singleLine = text
@@ -3579,6 +3589,7 @@ class AgentConversationViewModel {
       sessionId: sessionId,
       providerId: threadProviderId,
       threadTitle: _currentThreadTitle,
+      threadPreview: _currentThreadPreview,
       isTurnRunning: isTurnRunning,
       runtimeStatus: _threadRuntimeStatus,
       waitingOnApproval: _threadWaitingOnApproval,
@@ -3667,6 +3678,8 @@ final class _AgentConversationEventStateTarget
         if (name != null && name.isNotEmpty) {
           _viewModel._applyThreadTitle(name);
         }
+      case AgentApplyThreadPreviewChange():
+        _viewModel._applyThreadPreview(change.preview);
       case AgentApplyThreadPermissionSettingsChange():
         // data mapper 已将 Codex 私有字段原子解码为中立 selection。settings
         // 只回写事件所属 thread effective，不二次 apply、不持久化 provider 默认。

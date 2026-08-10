@@ -864,6 +864,95 @@ void main() {
       expect(usage.tokenUsage.lastInputTokens, isNull);
     });
   });
+
+  group('GrokSessionUpdateMapper retry_state', () {
+    test('maps retrying transport state to willRetry error', () {
+      final mapped = mapper.mapXaiSessionUpdate(
+        params: <String, Object?>{
+          'sessionId': sessionId,
+          'update': <String, Object?>{
+            'sessionUpdate': 'retry_state',
+            'type': 'retrying',
+            'attempt': 1,
+            'max_retries': 15,
+            'reason':
+                'reqwest error stream: Transport error: error decoding response body',
+          },
+          '_meta': <String, Object?>{'eventId': 'retry-1'},
+        },
+        runningTurnId: turnId,
+        runtimeScope: runtimeScope,
+      );
+
+      expect(mapped.events, hasLength(1));
+      final error = mapped.events.single as AgentErrorEvent;
+      expect(error.sessionId, sessionId);
+      expect(error.turnId, turnId);
+      expect(error.willRetry, isTrue);
+      expect(error.code, 'responseStreamDisconnected');
+      expect(error.message, contains('retry 1/15'));
+      // 原始 reason 不得直接拼进用户可见正文。
+      expect(error.message, isNot(contains('reqwest')));
+      expect(mapped.events.whereType<AgentTurnCompletedEvent>(), isEmpty);
+    });
+
+    test('maps exhausted retry_state to failed terminal', () {
+      final mapped = mapper.mapXaiSessionUpdate(
+        params: <String, Object?>{
+          'sessionId': sessionId,
+          'update': <String, Object?>{
+            'sessionUpdate': 'retry_state',
+            'type': 'exhausted',
+            'attempts': 15,
+            'reason': 'provider unavailable',
+            'is_rate_limited': false,
+          },
+          '_meta': <String, Object?>{'eventId': 'retry-exhausted'},
+        },
+        runningTurnId: turnId,
+        runtimeScope: runtimeScope,
+      );
+
+      final error = mapped.events.whereType<AgentErrorEvent>().single;
+      final terminal = mapped.events
+          .whereType<AgentTurnCompletedEvent>()
+          .single;
+      expect(error.willRetry, isFalse);
+      expect(error.message, 'Grok request failed. Please try again.');
+      expect(error.code, 'responseTooManyFailedAttempts');
+      expect(terminal.status, AgentHistoryTurnStatus.failed);
+      expect(terminal.errorMessage, error.message);
+      expect(terminal.turnId, turnId);
+    });
+
+    test('maps rate-limited retry_state to usage limit failure', () {
+      final mapped = mapper.mapSessionUpdate(
+        params: <String, Object?>{
+          'sessionId': sessionId,
+          'update': <String, Object?>{
+            'sessionUpdate': 'retry_state',
+            'type': 'exhausted',
+            'attempts': 2,
+            'is_rate_limited': true,
+            'reason':
+                'API error (status 429 Too Many Requests): subscription:free-usage-exhausted',
+          },
+          '_meta': <String, Object?>{'eventId': 'retry-rate-limit'},
+        },
+        runningTurnId: turnId,
+        runtimeScope: runtimeScope,
+      );
+
+      final error = mapped.events.whereType<AgentErrorEvent>().single;
+      final terminal = mapped.events
+          .whereType<AgentTurnCompletedEvent>()
+          .single;
+      expect(error.willRetry, isFalse);
+      expect(error.code, 'usageLimitExceeded');
+      expect(error.message, 'Grok rate limit reached. Please try again later.');
+      expect(terminal.status, AgentHistoryTurnStatus.failed);
+    });
+  });
 }
 
 AgentMessageDeltaEvent _mapText(

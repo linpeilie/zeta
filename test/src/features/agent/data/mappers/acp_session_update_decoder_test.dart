@@ -177,6 +177,51 @@ void main() {
       expect(mode.modeId, 'default');
     });
 
+    test('decodes retry_state transport diagnostics', () {
+      final decoded = decoder.decode(<String, Object?>{
+        'sessionId': 'session-1',
+        'update': <String, Object?>{
+          'sessionUpdate': 'retry_state',
+          'type': 'retrying',
+          'attempt': 1,
+          'max_retries': 15,
+          'reason':
+              'reqwest error stream: Transport error: error decoding response body',
+          '_meta': <String, Object?>{'eventId': 'event-retry-1'},
+        },
+      });
+
+      expect(decoded, isA<AcpRetryStateUpdate>());
+      final retry = decoded as AcpRetryStateUpdate;
+      expect(retry.sessionId, 'session-1');
+      expect(retry.type, 'retrying');
+      expect(retry.attempt, 1);
+      expect(retry.maxRetries, 15);
+      expect(retry.attempts, isNull);
+      expect(retry.isRateLimited, isFalse);
+      expect(retry.reason, contains('Transport error'));
+      expect(retry.eventId, 'event-retry-1');
+    });
+
+    test('decodes exhausted retry_state with rate limit flag', () {
+      final decoded = decoder.decode(<String, Object?>{
+        'sessionId': 'session-1',
+        'update': <String, Object?>{
+          'sessionUpdate': 'retry_state',
+          'type': 'exhausted',
+          'attempts': 2,
+          'is_rate_limited': true,
+          'reason': 'API error (status 429 Too Many Requests)',
+        },
+      });
+
+      expect(decoded, isA<AcpRetryStateUpdate>());
+      final retry = decoded as AcpRetryStateUpdate;
+      expect(retry.type, 'exhausted');
+      expect(retry.attempts, 2);
+      expect(retry.isRateLimited, isTrue);
+    });
+
     test('rejects current_mode_update without a mode id', () {
       final decoded = decoder.decode(<String, Object?>{
         'sessionId': 'session-1',

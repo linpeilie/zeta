@@ -169,6 +169,23 @@ final class AcpSessionUpdateDecoder {
           eventId: eventId,
           raw: raw,
         );
+      case 'retry_state':
+        // 传输层重试诊断（Grok xAI 扩展常见于 session_notification）；
+        // type / attempt / reason 缺失时仍给出 typed update，由 adapter 决定是否投影。
+        return AcpRetryStateUpdate(
+          sessionId: sessionId,
+          type: _nonEmptyString(update['type']) ?? 'unknown',
+          attempt: _intValue(update['attempt']),
+          maxRetries: _intValue(update['max_retries'] ?? update['maxRetries']),
+          attempts: _intValue(update['attempts']),
+          reason: _optionalString(update['reason']),
+          isRateLimited:
+              update['is_rate_limited'] == true ||
+              update['isRateLimited'] == true,
+          promptId: promptId,
+          eventId: eventId,
+          raw: raw,
+        );
       default:
         return invalid(kind.isEmpty ? 'missing_update_kind' : 'unknown_kind');
     }
@@ -438,6 +455,44 @@ final class AcpCurrentModeUpdate extends AcpSessionUpdate {
 
   /// 服务端权威的会话模式标识（`default` / `plan` / `ask` 等）。
   final String modeId;
+}
+
+/// 传输层重试状态（`retry_state`）。
+///
+/// 描述请求在传输/上游失败后的自动重试进度；不是 turn 叙事内容。
+/// 常见字段：`type`（`retrying` / `exhausted`）、`attempt`、`max_retries`、
+/// `reason`、`is_rate_limited`。
+final class AcpRetryStateUpdate extends AcpSessionUpdate {
+  const AcpRetryStateUpdate({
+    required String sessionId,
+    required this.type,
+    this.attempt,
+    this.maxRetries,
+    this.attempts,
+    this.reason,
+    this.isRateLimited = false,
+    super.promptId,
+    super.eventId,
+    super.raw,
+  }) : super(sessionId: sessionId, kind: 'retry_state');
+
+  /// 重试状态类型（如 `retrying`、`exhausted`）。
+  final String type;
+
+  /// 当前尝试序号（`retrying` 常见）。
+  final int? attempt;
+
+  /// 最大重试次数（`retrying` 常见）。
+  final int? maxRetries;
+
+  /// 已尝试总次数（`exhausted` 常见）。
+  final int? attempts;
+
+  /// 触发重试的诊断原因；仅供分类与日志，adapter 不得原样落盘敏感细节。
+  final String? reason;
+
+  /// 是否明确标记为限流。
+  final bool isRateLimited;
 }
 
 /// 未知、暂不投影或损坏的 ACP update。
