@@ -2,6 +2,11 @@ part of '../agent_pane.dart';
 
 /// 会话内对话导航轨：短横线对应各用户回合，点击跳转、滚动同步当前项。
 ///
+/// 强调色策略：
+/// - 无 hover：当前查看回合更深色；
+/// - hover 某短线：更深色切到该线；
+/// - 短线之间切换用 [IdeMotion] 过渡尺寸与颜色，避免跳变。
+///
 /// 低对比度折叠态；悬停用 [IdeTooltip] 展示提问摘要。不持久化任何正文。
 class _AgentConversationNavigationRail extends StatefulWidget {
   const _AgentConversationNavigationRail({
@@ -29,6 +34,9 @@ class _AgentConversationNavigationRailState
   late final FocusNode _focusNode;
   int _focusedIndex = 0;
 
+  /// 指针悬停的短线下标；null 表示未悬停，强调回落到当前查看回合。
+  int? _hoveredIndex;
+
   @override
   void initState() {
     super.initState();
@@ -43,6 +51,16 @@ class _AgentConversationNavigationRailState
     if (oldWidget.activeTurnId != widget.activeTurnId ||
         oldWidget.entries.length != widget.entries.length) {
       _syncFocusedIndex();
+      // 条目数量变化时钳制 hover，避免越界强调。
+      final hovered = _hoveredIndex;
+      if (hovered != null && widget.entries.isNotEmpty) {
+        final next = hovered.clamp(0, widget.entries.length - 1);
+        if (next != hovered) {
+          _hoveredIndex = next;
+        }
+      } else if (widget.entries.isEmpty) {
+        _hoveredIndex = null;
+      }
     }
   }
 
@@ -71,9 +89,36 @@ class _AgentConversationNavigationRailState
     );
     if (index >= 0) {
       _focusedIndex = index;
-    } else {
+    } else if (widget.entries.isNotEmpty) {
       _focusedIndex = _focusedIndex.clamp(0, widget.entries.length - 1);
     }
+  }
+
+  /// 视觉强调下标：hover 优先，否则为当前查看回合。
+  int? get _emphasizedIndex {
+    final entries = widget.entries;
+    if (entries.isEmpty) {
+      return null;
+    }
+    final hovered = _hoveredIndex;
+    if (hovered != null) {
+      return hovered.clamp(0, entries.length - 1);
+    }
+    final activeId = widget.activeTurnId;
+    if (activeId == null) {
+      return null;
+    }
+    final activeIndex = entries.indexWhere((e) => e.turnId == activeId);
+    return activeIndex >= 0 ? activeIndex : null;
+  }
+
+  void _setHoveredIndex(int? index) {
+    if (_hoveredIndex == index) {
+      return;
+    }
+    setState(() {
+      _hoveredIndex = index;
+    });
   }
 
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
@@ -122,6 +167,15 @@ class _AgentConversationNavigationRailState
     final colors = IdeColors.of(context);
     final tickWidth = widget.compact ? 10.0 : 14.0;
     final gap = widget.compact ? IdeSpacing.space4 : IdeSpacing.space6;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final emphasizeDuration = reduceMotion
+        ? Duration.zero
+        : IdeMotion.durationNormal;
+    final emphasizedIndex = _emphasizedIndex;
+    final trackColor = colors.border.withValues(alpha: 0.42);
+    final deepColor = colors.textSecondary.withValues(alpha: 0.94);
+    final streamingColor = colors.accent.withValues(alpha: 0.85);
+    final failedColor = colors.error.withValues(alpha: 0.8);
 
     return Focus(
       focusNode: _focusNode,
@@ -131,43 +185,57 @@ class _AgentConversationNavigationRailState
         label: '对话导航',
         child: Material(
           type: MaterialType.transparency,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              vertical: IdeSpacing.space12,
-              horizontal: IdeSpacing.space2,
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 360),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (var index = 0; index < widget.entries.length; index++)
-                      Padding(
-                        padding: EdgeInsets.only(
-                          bottom: index == widget.entries.length - 1 ? 0 : gap,
-                        ),
-                        child: _AgentConversationNavigationTick(
+          // 整轨 onExit 清 hover，避免短线间隙短暂回落到 active 造成闪烁。
+          child: MouseRegion(
+            onExit: (_) => _setHoveredIndex(null),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                vertical: IdeSpacing.space12,
+                horizontal: IdeSpacing.space2,
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 360),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (
+                        var index = 0;
+                        index < widget.entries.length;
+                        index++
+                      )
+                        _AgentConversationNavigationTick(
                           entry: widget.entries[index],
-                          selected:
+                          emphasized: emphasizedIndex == index,
+                          isActiveView:
                               widget.entries[index].turnId ==
                               widget.activeTurnId,
                           focused:
                               _focusNode.hasFocus && _focusedIndex == index,
                           tickWidth: tickWidth,
+                          // 间隙并入 hit 区，hover 在相邻短线间连续滑动。
+                          bottomGap: index == widget.entries.length - 1
+                              ? 0
+                              : gap,
+                          animationDuration: emphasizeDuration,
                           onPressed: () {
                             setState(() => _focusedIndex = index);
                             widget.onSelectTurn(widget.entries[index]);
                           },
-                          trackColor: colors.border.withValues(alpha: 0.45),
-                          activeColor: colors.textSecondary.withValues(
-                            alpha: 0.92,
-                          ),
-                          streamingColor: colors.accent.withValues(alpha: 0.85),
-                          failedColor: colors.error.withValues(alpha: 0.8),
+                          onHoverChanged: (hovered) {
+                            // 只在 enter 时更新；leave 不立刻清空，避免短线间隙
+                            // 闪回 active。整轨 MouseRegion.onExit 负责复位。
+                            if (hovered) {
+                              _setHoveredIndex(index);
+                            }
+                          },
+                          trackColor: trackColor,
+                          deepColor: deepColor,
+                          streamingColor: streamingColor,
+                          failedColor: failedColor,
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -181,35 +249,54 @@ class _AgentConversationNavigationRailState
 class _AgentConversationNavigationTick extends StatelessWidget {
   const _AgentConversationNavigationTick({
     required this.entry,
-    required this.selected,
+    required this.emphasized,
+    required this.isActiveView,
     required this.focused,
     required this.tickWidth,
+    required this.bottomGap,
+    required this.animationDuration,
     required this.onPressed,
+    required this.onHoverChanged,
     required this.trackColor,
-    required this.activeColor,
+    required this.deepColor,
     required this.streamingColor,
     required this.failedColor,
   });
 
   final AgentConversationNavigationEntry entry;
-  final bool selected;
+
+  /// 当前视觉强调（hover 项或无 hover 时的查看中回合）。
+  final bool emphasized;
+
+  /// 是否为滚动同步的当前查看回合（无障碍 / 语义用）。
+  final bool isActiveView;
   final bool focused;
   final double tickWidth;
+  final double bottomGap;
+  final Duration animationDuration;
   final VoidCallback onPressed;
+  final ValueChanged<bool> onHoverChanged;
   final Color trackColor;
-  final Color activeColor;
+  final Color deepColor;
   final Color streamingColor;
   final Color failedColor;
 
-  @override
-  Widget build(BuildContext context) {
-    final color = switch (entry.status) {
+  Color get _baseStatusColor {
+    return switch (entry.status) {
       AgentConversationNavigationStatus.failed => failedColor,
       AgentConversationNavigationStatus.streaming => streamingColor,
-      _ => selected ? activeColor : trackColor,
+      _ => deepColor,
     };
-    final height = selected ? 3.0 : 2.0;
-    final width = selected ? tickWidth + 4 : tickWidth;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 强调：更深/状态色 + 略粗略宽；非强调：低对比轨。
+    final color = emphasized
+        ? _baseStatusColor
+        : trackColor.withValues(alpha: 0.45);
+    final height = emphasized ? 3.0 : 2.0;
+    final width = emphasized ? tickWidth + 4 : tickWidth;
     final tooltip = buildAgentConversationNavigationTooltip(entry);
 
     return IdeTooltip(
@@ -217,27 +304,29 @@ class _AgentConversationNavigationTick extends StatelessWidget {
       waitDuration: const Duration(milliseconds: 280),
       child: PaneInteractiveSurface(
         onPressed: onPressed,
+        onHoverChanged: onHoverChanged,
         button: true,
-        semanticLabel: '第 ${entry.ordinal} 个回合：${entry.label}',
+        semanticLabel:
+            '第 ${entry.ordinal} 个回合：${entry.label}'
+            '${isActiveView ? '，当前查看' : ''}',
         borderRadius: IdeRadius.allSmall,
-        hoverBackgroundColor: trackColor.withValues(alpha: 0.2),
-        padding: const EdgeInsets.symmetric(
-          horizontal: IdeSpacing.space4,
-          vertical: IdeSpacing.space4,
+        hoverBackgroundColor: trackColor.withValues(alpha: 0.18),
+        padding: EdgeInsets.only(
+          left: IdeSpacing.space4,
+          right: IdeSpacing.space4,
+          top: IdeSpacing.space4,
+          bottom: IdeSpacing.space4 + bottomGap,
         ),
         child: AnimatedContainer(
-          duration: IdeMotion.durationFast,
-          curve: IdeMotion.curveScroll,
+          duration: animationDuration,
+          curve: IdeMotion.curveDefault,
           width: width,
           height: height,
           decoration: BoxDecoration(
             color: color,
             borderRadius: IdeRadius.allSmall,
             border: focused
-                ? Border.all(
-                    color: activeColor.withValues(alpha: 0.55),
-                    width: 1,
-                  )
+                ? Border.all(color: deepColor.withValues(alpha: 0.55), width: 1)
                 : null,
           ),
         ),
