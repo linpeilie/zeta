@@ -1,6 +1,17 @@
 part of '../agent_pane.dart';
 
+/// 默认「长」短横线宽度（偶数下标）。
+const double _kNavTickWidthLong = 12;
+
+/// 默认「短」短横线宽度（奇数下标）。
+const double _kNavTickWidthShort = 6;
+
+/// 选中 / hover 强调态短横线宽度。
+const double _kNavTickWidthEmphasized = 16;
+
 /// 会话内对话导航轨：短横线对应各用户回合，点击跳转、滚动同步当前项。
+///
+/// 宽度节奏：默认长短长短（12 / 6）；选中或 hover 时该线拉到 16。
 ///
 /// 强调色策略：
 /// - 无 hover：当前查看回合更深色；
@@ -165,7 +176,6 @@ class _AgentConversationNavigationRailState
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final tickWidth = widget.compact ? 10.0 : 14.0;
     final gap = widget.compact ? IdeSpacing.space4 : IdeSpacing.space6;
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     final emphasizeDuration = reduceMotion
@@ -198,6 +208,8 @@ class _AgentConversationNavigationRailState
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
+                    // 左对齐：贴 AgentPanel 左侧，长短交替时左侧齐平、强调向右延伸。
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       for (
                         var index = 0;
@@ -212,7 +224,10 @@ class _AgentConversationNavigationRailState
                               widget.activeTurnId,
                           focused:
                               _focusNode.hasFocus && _focusedIndex == index,
-                          tickWidth: tickWidth,
+                          // 默认长短长短：偶数为长 12、奇数为短 6。
+                          restingWidth: index.isEven
+                              ? _kNavTickWidthLong
+                              : _kNavTickWidthShort,
                           // 间隙并入 hit 区，hover 在相邻短线间连续滑动。
                           bottomGap: index == widget.entries.length - 1
                               ? 0
@@ -252,7 +267,7 @@ class _AgentConversationNavigationTick extends StatelessWidget {
     required this.emphasized,
     required this.isActiveView,
     required this.focused,
-    required this.tickWidth,
+    required this.restingWidth,
     required this.bottomGap,
     required this.animationDuration,
     required this.onPressed,
@@ -271,7 +286,9 @@ class _AgentConversationNavigationTick extends StatelessWidget {
   /// 是否为滚动同步的当前查看回合（无障碍 / 语义用）。
   final bool isActiveView;
   final bool focused;
-  final double tickWidth;
+
+  /// 非强调态宽度（长短交替：12 或 6）。
+  final double restingWidth;
   final double bottomGap;
   final Duration animationDuration;
   final VoidCallback onPressed;
@@ -291,12 +308,12 @@ class _AgentConversationNavigationTick extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 强调：更深/状态色 + 略粗略宽；非强调：低对比轨。
+    // 强调：更深/状态色 + 宽度 16；非强调：低对比 + 长短交替 12/6。
     final color = emphasized
         ? _baseStatusColor
         : trackColor.withValues(alpha: 0.45);
     final height = emphasized ? 3.0 : 2.0;
-    final width = emphasized ? tickWidth + 4 : tickWidth;
+    final width = emphasized ? _kNavTickWidthEmphasized : restingWidth;
     final tooltip = buildAgentConversationNavigationTooltip(entry);
 
     return IdeTooltip(
@@ -306,11 +323,15 @@ class _AgentConversationNavigationTick extends StatelessWidget {
         onPressed: onPressed,
         onHoverChanged: onHoverChanged,
         button: true,
+        // 轨在左侧：短线左缘对齐，变宽时向右伸展。
+        alignment: Alignment.centerLeft,
         semanticLabel:
             '第 ${entry.ordinal} 个回合：${entry.label}'
             '${isActiveView ? '，当前查看' : ''}',
         borderRadius: IdeRadius.allSmall,
         hoverBackgroundColor: trackColor.withValues(alpha: 0.18),
+        // 点击区按强调态最大宽度预留，避免长短切换时 hit 框抖动。
+        width: _kNavTickWidthEmphasized + IdeSpacing.space4 * 2,
         padding: EdgeInsets.only(
           left: IdeSpacing.space4,
           right: IdeSpacing.space4,
