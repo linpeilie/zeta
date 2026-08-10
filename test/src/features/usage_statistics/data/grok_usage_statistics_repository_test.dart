@@ -4,6 +4,7 @@ import 'package:zeta/src/features/agent/data/datasources/local_history/grok_usag
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/usage_statistics/data/grok_usage_statistics_repository.dart';
+import 'package:zeta/src/features/usage_statistics/data/usage_statistics_index_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 
 void main() {
@@ -11,54 +12,51 @@ void main() {
     final today = DateTime.utc(2026, 7, 21);
     final scanner = _GrokUsageScanner(
       GrokUsageScanResult(
-        sessions: <GrokUsageSessionSnapshot>[
-          _session(
+        sessions: <String, GrokUsageIndexedSession>{
+          '/grok/thread-alpha/updates.jsonl': _session(
+            sourcePath: '/grok/thread-alpha/updates.jsonl',
             threadId: 'thread-alpha',
             projectPath: '/work/alpha',
-            turns: <AgentHistoryTurn>[
-              AgentHistoryTurn(
+            turns: <GrokUsageIndexedTurn>[
+              GrokUsageIndexedTurn(
                 id: 'turn-today',
                 status: AgentHistoryTurnStatus.completed,
                 startedAt: today.add(const Duration(hours: 2)),
                 completedAt: today.add(const Duration(hours: 2, seconds: 3)),
-                tokenUsage: const AgentTokenUsage(
-                  inputTokens: 100,
-                  cachedInputTokens: 40,
-                  outputTokens: 20,
-                  reasoningOutputTokens: 5,
-                  totalTokens: 120,
-                ),
-                tokenUsageIsSessionCumulative: false,
+                duration: const Duration(seconds: 3),
+                inputTokens: 60,
+                cachedInputTokens: 40,
+                outputTokens: 15,
+                reasoningTokens: 5,
+                totalTokens: 120,
               ),
-              AgentHistoryTurn(
+              GrokUsageIndexedTurn(
                 id: 'turn-old',
                 status: AgentHistoryTurnStatus.completed,
                 startedAt: today.subtract(const Duration(minutes: 1)),
-                tokenUsage: const AgentTokenUsage(totalTokens: 999),
-                tokenUsageIsSessionCumulative: false,
+                totalTokens: 999,
               ),
             ],
           ),
-          _session(
+          '/grok/thread-beta/updates.jsonl': _session(
+            sourcePath: '/grok/thread-beta/updates.jsonl',
             threadId: 'thread-beta',
             projectPath: '/work/beta',
-            turns: <AgentHistoryTurn>[
-              AgentHistoryTurn(
+            turns: <GrokUsageIndexedTurn>[
+              GrokUsageIndexedTurn(
                 id: 'turn-beta',
                 status: AgentHistoryTurnStatus.failed,
                 startedAt: today.add(const Duration(hours: 3)),
                 cwd: '/work/beta/nested',
-                tokenUsage: const AgentTokenUsage(
-                  inputTokens: 50,
-                  outputTokens: 10,
-                  totalTokens: 60,
-                ),
-                tokenUsageIsSessionCumulative: false,
+                inputTokens: 50,
+                outputTokens: 10,
+                totalTokens: 60,
+                errorCategoryHint: 'other',
                 errorMessage: 'network failed',
               ),
             ],
           ),
-        ],
+        },
         warnings: const <String>['partial history'],
       ),
     );
@@ -67,7 +65,9 @@ void main() {
         environment: const <String, String>{'GROK_HOME': '/configured/grok'},
       ),
     );
+    final store = MemoryUsageStatisticsIndexStore();
     final repository = GrokUsageStatisticsRepository(
+      indexStore: store,
       providerLoader: () async => provider,
       scanner: scanner,
       clock: () => today.add(const Duration(hours: 4)),
@@ -77,6 +77,7 @@ void main() {
 
     expect(scanner.grokHomes, <String>['/configured/grok']);
     expect(scanner.forceRefreshes, <bool>[true]);
+    expect(scanner.cachedSessionCounts, <int>[0]);
     expect(source.warnings, <String>['partial history']);
     expect(source.records, hasLength(2));
     final alpha = source.records.singleWhere(
@@ -96,20 +97,27 @@ void main() {
     expect(beta.projectPath, '/work/beta/nested');
     expect(beta.status, UsageTaskStatus.failed);
     expect(beta.errorCategory, UsageErrorCategory.other);
+    expect(store.snapshot.grokSessions, hasLength(2));
+
+    await repository.load(earliest: today);
+    expect(scanner.cachedSessionCounts, <int>[0, 2]);
   });
 }
 
-GrokUsageSessionSnapshot _session({
+GrokUsageIndexedSession _session({
+  required String sourcePath,
   required String threadId,
   required String projectPath,
-  required List<AgentHistoryTurn> turns,
+  required List<GrokUsageIndexedTurn> turns,
 }) {
-  return GrokUsageSessionSnapshot(
-    sourcePath: '/grok/$threadId/updates.jsonl',
+  return GrokUsageIndexedSession(
+    sourcePath: sourcePath,
+    fingerprint: '1:1',
     threadId: threadId,
     projectPath: projectPath,
+    sourceKind: 'grok_acp',
     modifiedAt: DateTime.utc(2026, 7, 21),
-    history: AgentThreadHistorySnapshot(threadId: threadId, turns: turns),
+    turns: turns,
   );
 }
 
@@ -119,14 +127,17 @@ class _GrokUsageScanner implements GrokUsageLogScanner {
   final GrokUsageScanResult result;
   final List<String> grokHomes = <String>[];
   final List<bool> forceRefreshes = <bool>[];
+  final List<int> cachedSessionCounts = <int>[];
 
   @override
   Future<GrokUsageScanResult> scan({
     required String grokHome,
+    required Map<String, GrokUsageIndexedSession> cachedSessions,
     bool forceRefresh = false,
   }) async {
     grokHomes.add(grokHome);
     forceRefreshes.add(forceRefresh);
+    cachedSessionCounts.add(cachedSessions.length);
     return result;
   }
 }

@@ -543,9 +543,14 @@ Fast 是产品语义，运行时仍必须传递 provider 的精确 `serviceTierI
 - Codex 使用统计扫描 `$CODEX_HOME/sessions/**/rollout-*.jsonl`：只要首行是合法
   `session_meta`（含可解析时间戳）即收录，**不得**按 `originator` 前缀白名单过滤；
   `zeta`、`Codex Desktop`、`codex_cli_rs` 等客户端会话均应计入 Token。
+- Grok 使用统计扫描 `$GROK_HOME/sessions/**/updates.jsonl`，解析后投影为
+  `GrokUsageIndexedSession` 白名单快照（不含 entries / raw / 原始错误正文）。
 - Codex `token_count` 是 thread 累计值，写入 turn 记录前必须相对上一 turn 做非负差分。
-- `UsageStatisticsIndexStore` 的 JSON 必须保持版本化和宽容读取；索引损坏时从 provider
-  历史重建，不得阻断页面或应用启动。
+- 派生索引 `usage_statistics_index.json`（version ≥ 3）按 `providers.codex` /
+  `providers.grok` 分区；扫描层共用 `usageSourceId` + `usageFileFingerprint` +
+  `forceRefresh` 命中语义。并行刷新必须走 `mergeSave`，禁止整表覆盖写丢另一分区。
+- `UsageStatisticsIndexStore` 的 JSON 必须保持版本化和宽容读取；v2 顶层 `sessions`
+  迁移进 `codex` 分区；索引损坏时从 provider 历史重建，不得阻断页面或应用启动。
 - 派生索引禁止保存 Prompt、回复、工具输出、session JSONL 路径和原始错误文本。
 - 历史 TTFT 缺失时保持 `null`；UI 显示“数据不足”和有效样本数，禁止用总耗时冒充。
 

@@ -203,7 +203,7 @@ class ZetaStorageMigrator {
     try {
       snapshot = UsageStatisticsIndexSnapshot.tryDecode(jsonDecode(value));
     } catch (_) {
-      // 派生索引损坏时迁移为空快照，后续统计加载会从 Codex 历史重建。
+      // 派生索引损坏时迁移为空快照，后续统计加载会从各 Provider 历史重建。
       snapshot = const UsageStatisticsIndexSnapshot();
     }
     await target.write(jsonEncode(snapshot.toJson()));

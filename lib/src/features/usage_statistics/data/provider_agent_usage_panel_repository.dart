@@ -118,12 +118,12 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
           earliest: earliest,
           forceRefresh: forceRefresh,
         ),
-        AgentProviderKind.acp => await GrokUsageStatisticsRepository(
-          scanner: grokScanner,
-          environment: _runtimeEnvironment(config),
-          includeQuota: false,
-          clock: _clock,
-        ).load(earliest: earliest, forceRefresh: forceRefresh),
+        AgentProviderKind.acp => await _loadGrokUsage(
+          config: config,
+          seedFuture: seedFuture,
+          earliest: earliest,
+          forceRefresh: forceRefresh,
+        ),
         _ => throw StateError('Unsupported usage provider: ${config.kind}'),
       };
       todayTokens = _sumTokens(
@@ -156,6 +156,23 @@ class ProviderAgentUsagePanelRepository implements AgentUsagePanelRepository {
     return CodexUsageStatisticsRepository(
       indexStore: memoryIndex,
       scanner: scanner,
+      environment: _runtimeEnvironment(config),
+      includeQuota: false,
+      clock: _clock,
+    ).load(earliest: earliest, forceRefresh: forceRefresh);
+  }
+
+  Future<UsageStatisticsSourceSnapshot> _loadGrokUsage({
+    required AgentProviderConfig config,
+    required Future<UsageStatisticsIndexSnapshot> seedFuture,
+    required DateTime earliest,
+    required bool forceRefresh,
+  }) async {
+    final seed = await seedFuture;
+    final memoryIndex = MemoryUsageStatisticsIndexStore()..snapshot = seed;
+    return GrokUsageStatisticsRepository(
+      indexStore: memoryIndex,
+      scanner: grokScanner,
       environment: _runtimeEnvironment(config),
       includeQuota: false,
       clock: _clock,

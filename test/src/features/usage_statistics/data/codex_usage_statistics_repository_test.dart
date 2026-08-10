@@ -51,9 +51,10 @@ void main() {
       expect(fork.tokens.totalTokens, 30);
       expect(first.quota?.planType, 'plus');
 
-      expect(store.snapshot.sessions, hasLength(2));
+      expect(store.snapshot.codexSessions, hasLength(2));
       final encodedIndex = jsonEncode(store.snapshot.toJson());
       expect(encodedIndex, contains('reasoningTokens'));
+      expect(encodedIndex, contains('"version":3'));
       expect(encodedIndex, isNot(contains('prompt')));
 
       await repository.load(earliest: DateTime(2026, 7, 1));
@@ -127,7 +128,7 @@ void main() {
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
       addTearDown(registry.close);
       final scanner = _UsageScanner(_sessions());
-      final grokScanner = _GrokUsageScanner(<GrokUsageSessionSnapshot>[
+      final grokScanner = _GrokUsageScanner(<GrokUsageIndexedSession>[
         _grokUsageSession(),
       ]);
       final repository = ProviderAgentUsagePanelRepository(
@@ -217,7 +218,7 @@ void main() {
         globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
         seedIndexStore: MemoryUsageStatisticsIndexStore(),
         scanner: _UsageScanner(const <String, CodexUsageSessionSnapshot>{}),
-        grokScanner: _GrokUsageScanner(const <GrokUsageSessionSnapshot>[]),
+        grokScanner: _GrokUsageScanner(const <GrokUsageIndexedSession>[]),
         clock: () => DateTime(2026, 7, 8, 12),
       );
 
@@ -270,8 +271,8 @@ void main() {
     );
     final encoded = jsonEncode(
       UsageStatisticsIndexSnapshot(
-        sessions: <String, CodexUsageSessionSnapshot>{
-          session.sourcePath: session,
+        codexSessions: <String, CodexUsageSessionSnapshot>{
+          session.sourceId: session,
         },
       ).toJson(),
     );
@@ -282,7 +283,7 @@ void main() {
     final repository = CodexUsageStatisticsRepository(
       providerLoader: () async => _UsageProvider(),
       indexStore: indexStore,
-      scanner: _UsageScanner(restored.sessions),
+      scanner: _UsageScanner(restored.codexSessions),
       clock: () => DateTime(2026, 7, 10),
     );
 
@@ -294,15 +295,18 @@ void main() {
     expect(source.records.single.errorMessage, isNull);
   });
 
-  test('damaged and V1 index content decode as an empty V2 snapshot', () {
+  test('damaged and V1 index content decode as an empty snapshot', () {
     expect(
       UsageStatisticsIndexSnapshot.tryDecode(<String, Object?>{
         'version': 1,
         'threads': <Object?>[],
-      }).sessions,
+      }).codexSessions,
       isEmpty,
     );
-    expect(UsageStatisticsIndexSnapshot.tryDecode('bad').sessions, isEmpty);
+    expect(
+      UsageStatisticsIndexSnapshot.tryDecode('bad').codexSessions,
+      isEmpty,
+    );
   });
 
   test('token breakdown persists reasoning and repairs old timestamps', () {
@@ -481,45 +485,47 @@ class _UsageScanner implements CodexUsageLogScanner {
   }
 }
 
-GrokUsageSessionSnapshot _grokUsageSession() {
+GrokUsageIndexedSession _grokUsageSession() {
   final startedAt = DateTime(2026, 7, 8, 10);
-  return GrokUsageSessionSnapshot(
+  return GrokUsageIndexedSession(
     sourcePath: '/grok/session/updates.jsonl',
+    fingerprint: '1:1',
     threadId: 'grok-thread',
     projectPath: '/work/grok',
+    sourceKind: 'grok_acp',
     modifiedAt: startedAt,
-    history: AgentThreadHistorySnapshot(
-      threadId: 'grok-thread',
-      turns: <AgentHistoryTurn>[
-        AgentHistoryTurn(
-          id: 'grok-turn',
-          status: AgentHistoryTurnStatus.completed,
-          startedAt: startedAt,
-          tokenUsage: const AgentTokenUsage(
-            inputTokens: 50,
-            cachedInputTokens: 10,
-            outputTokens: 10,
-            reasoningOutputTokens: 2,
-            totalTokens: 60,
-          ),
-          tokenUsageIsSessionCumulative: false,
-        ),
-      ],
-    ),
+    turns: <GrokUsageIndexedTurn>[
+      GrokUsageIndexedTurn(
+        id: 'grok-turn',
+        status: AgentHistoryTurnStatus.completed,
+        startedAt: startedAt,
+        inputTokens: 40,
+        cachedInputTokens: 10,
+        outputTokens: 8,
+        reasoningTokens: 2,
+        totalTokens: 60,
+      ),
+    ],
   );
 }
 
 class _GrokUsageScanner implements GrokUsageLogScanner {
   _GrokUsageScanner(this.sessions);
 
-  final List<GrokUsageSessionSnapshot> sessions;
+  final List<GrokUsageIndexedSession> sessions;
 
   @override
   Future<GrokUsageScanResult> scan({
     required String grokHome,
+    required Map<String, GrokUsageIndexedSession> cachedSessions,
     bool forceRefresh = false,
   }) async {
-    return GrokUsageScanResult(sessions: sessions, warnings: const <String>[]);
+    return GrokUsageScanResult(
+      sessions: <String, GrokUsageIndexedSession>{
+        for (final session in sessions) session.sourcePath: session,
+      },
+      warnings: const <String>[],
+    );
   }
 }
 

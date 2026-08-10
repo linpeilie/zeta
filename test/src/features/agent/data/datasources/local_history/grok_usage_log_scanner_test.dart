@@ -49,22 +49,31 @@ void main() {
 
     final result = await const FileSystemGrokUsageLogScanner().scan(
       grokHome: grokHome.path,
+      cachedSessions: const <String, GrokUsageIndexedSession>{},
       forceRefresh: true,
     );
 
     expect(result.warnings, isEmpty);
     expect(result.sessions, hasLength(2));
-    final firstSession = result.sessions.singleWhere(
-      (session) => session.sourcePath == first.path,
-    );
-    final secondSession = result.sessions.singleWhere(
-      (session) => session.sourcePath == second.path,
-    );
+    final firstSession = result.sessions[first.path]!;
+    final secondSession = result.sessions[second.path]!;
     expect(firstSession.projectPath, r'D:\canonical\alpha');
     expect(secondSession.projectPath, '/work/beta');
-    expect(firstSession.history.turns.single.tokenUsage?.totalTokens, 120);
-    expect(firstSession.history.turns.single.tokenUsage?.inputTokens, 100);
-    expect(secondSession.history.turns.single.tokenUsage?.totalTokens, 60);
+    expect(firstSession.turns.single.totalTokens, 120);
+    // 输入口径为扣掉 cached 后的独占部分。
+    expect(firstSession.turns.single.inputTokens, 60);
+    expect(firstSession.turns.single.cachedInputTokens, 40);
+    expect(secondSession.turns.single.totalTokens, 60);
+
+    // fingerprint 命中时跳过正文重解析。
+    final cached = await const FileSystemGrokUsageLogScanner().scan(
+      grokHome: grokHome.path,
+      cachedSessions: <String, GrokUsageIndexedSession>{
+        for (final session in result.sessions.values) session.sourceId: session,
+      },
+    );
+    expect(cached.sessions, hasLength(2));
+    expect(cached.sessions[first.path]!.fingerprint, firstSession.fingerprint);
   });
 }
 

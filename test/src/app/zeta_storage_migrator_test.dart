@@ -102,9 +102,10 @@ void main() {
           preferences.readKeys,
           isNot(contains(_legacyCursorSessionIndexStorageKey)),
         );
+        // 迁移时经 tryDecode 归一到当前索引 schema（v3 多 Provider 分区）。
         expect(
           await paths.usageStatisticsIndexFile.readAsString(),
-          values[usageStatisticsIndexStorageKey],
+          jsonEncode(const UsageStatisticsIndexSnapshot().toJson()),
         );
         final marker =
             jsonDecode(await paths.migrationMarkerFile.readAsString())

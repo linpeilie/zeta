@@ -104,14 +104,15 @@ AgentManagementController
 
 UsageStatisticsController
   -> UsageStatisticsRepository
-    -> CodexUsageStatisticsRepository
-      -> AgentProvider thread/list + thread/read
-      -> 本地 Codex JSONL 历史
-      -> account/rateLimits/read
-      -> 版本化派生统计索引
-    -> GrokUsageStatisticsRepository
-      -> 本地 Grok updates.jsonl 历史
-      -> AgentUsageQuotaProvider / `_x.ai/billing`
+    -> CompositeUsageStatisticsRepository
+      -> CodexUsageStatisticsRepository
+        -> 本地 Codex rollout JSONL 历史
+        -> 版本化派生索引（providers.codex 分区）
+        -> 可选 account/rateLimits/read（套餐）
+      -> GrokUsageStatisticsRepository
+        -> 本地 Grok updates.jsonl 历史
+        -> 版本化派生索引（providers.grok 分区）
+        -> 可选 AgentUsageQuotaProvider / `_x.ai/billing`
 
 DesktopAttentionController
   -> GeneralSettingsController
@@ -188,8 +189,10 @@ projection 与 unified diff 以 turn render revision 缓存，代码高亮复用
   总额度或未提供的到期日。
 - 宽屏使用双栏分析区，窄窗口切换为单栏；表格可横向滚动，任务详情使用自适应
   侧边/底部抽屉。
-- `UsageStatisticsIndexStore` 只持久化 thread/turn ID、时间、项目、模型、状态、
-  时延、Token 和错误分类，不保存 Prompt、回复正文、session 文件路径或原始错误文本。
+- `UsageStatisticsIndexStore`（v3）按 Provider 分区持久化派生会话快照：只含
+  sourceId / fingerprint / thread·turn ID、时间、项目、模型、状态、时延、Token
+  与错误分类；不保存 Prompt、回复正文、session 文件路径或原始错误文本。Codex 与
+  Grok 均走 fingerprint 增量扫描，并行写入经 `mergeSave` 合并。
 
 ### 主题与设计系统
 

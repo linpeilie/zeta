@@ -238,7 +238,10 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
             // 不启动 CLI：仅读本地 rollout；套餐额度由侧栏用量面板负责。
             includeQuota: false,
           ),
-          GrokUsageStatisticsRepository(includeQuota: false),
+          GrokUsageStatisticsRepository(
+            indexStore: widget.usageStatisticsIndexStore,
+            includeQuota: false,
+          ),
         ],
       ),
     );

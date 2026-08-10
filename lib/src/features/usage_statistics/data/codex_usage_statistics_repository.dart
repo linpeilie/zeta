@@ -63,14 +63,16 @@ class CodexUsageStatisticsRepository implements UsageStatisticsRepository {
     final index = await indexStore.load();
     final scan = await scanner.scan(
       codexHome: _resolveCodexHome(provider),
-      cachedSessions: index.sessions,
+      cachedSessions: index.codexSessions,
       forceRefresh: forceRefresh,
     );
     warnings.addAll(scan.warnings);
     try {
-      await indexStore.save(
-        UsageStatisticsIndexSnapshot(sessions: scan.sessions),
-      );
+      // 按 sourceId 写入分区，与 Grok 并行 mergeSave 互不覆盖。
+      final codexSessions = <String, CodexUsageSessionSnapshot>{
+        for (final session in scan.sessions.values) session.sourceId: session,
+      };
+      await indexStore.mergeSave(codexSessions: codexSessions);
     } catch (_) {
       warnings.add('统计索引暂时无法保存，本次结果仍可正常查看。');
     }

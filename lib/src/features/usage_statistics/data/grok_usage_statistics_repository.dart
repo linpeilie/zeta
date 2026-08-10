@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_usage_log_scanner.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/usage_statistics/data/usage_statistics_index_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_repository.dart';
 
@@ -12,8 +13,10 @@ typedef GrokUsageAgentProviderLoader = Future<AgentProvider> Function();
 ///
 /// 记录身份固定为 Grok（[grokAgentProviderId]），不依赖当前激活 Provider。
 /// [providerLoader] 仅用于解析 `GROK_HOME` 与可选套餐额度；可为空。
+/// 派生索引经 [indexStore] 与 Codex 分区共存，按文件 fingerprint 增量扫描。
 class GrokUsageStatisticsRepository implements UsageStatisticsRepository {
   GrokUsageStatisticsRepository({
+    required this.indexStore,
     this.providerLoader,
     this.scanner = const FileSystemGrokUsageLogScanner(),
     Map<String, String>? environment,
@@ -29,6 +32,7 @@ class GrokUsageStatisticsRepository implements UsageStatisticsRepository {
 
   /// 可选；仅用于配置环境中的 `GROK_HOME` 与 [AgentUsageQuotaProvider]。
   final GrokUsageAgentProviderLoader? providerLoader;
+  final UsageStatisticsIndexStore indexStore;
   final GrokUsageLogScanner scanner;
   final Map<String, String> _environment;
   final String? homeDirectory;
@@ -55,11 +59,21 @@ class GrokUsageStatisticsRepository implements UsageStatisticsRepository {
       }
     }
 
+    final index = await indexStore.load();
     final scan = await scanner.scan(
       grokHome: _resolveGrokHome(provider),
+      cachedSessions: index.grokSessions,
       forceRefresh: forceRefresh,
     );
     warnings.addAll(scan.warnings);
+    try {
+      final grokSessions = <String, GrokUsageIndexedSession>{
+        for (final session in scan.sessions.values) session.sourceId: session,
+      };
+      await indexStore.mergeSave(grokSessions: grokSessions);
+    } catch (_) {
+      warnings.add('统计索引暂时无法保存，本次结果仍可正常查看。');
+    }
 
     AgentUsageQuotaSnapshot? quota;
     if (includeQuota && provider is AgentUsageQuotaProvider) {
@@ -71,8 +85,8 @@ class GrokUsageStatisticsRepository implements UsageStatisticsRepository {
     }
 
     final records = <AgentUsageRecord>[];
-    for (final session in scan.sessions) {
-      for (final turn in session.history.turns) {
+    for (final session in scan.sessions.values) {
+      for (final turn in session.turns) {
         final startedAt =
             turn.startedAt ?? turn.completedAt ?? session.modifiedAt;
         if (startedAt.isBefore(earliest)) {
@@ -85,7 +99,7 @@ class GrokUsageStatisticsRepository implements UsageStatisticsRepository {
             providerId: providerId,
             providerName: providerName,
             projectPath: _nonEmpty(turn.cwd) ?? session.projectPath,
-            sourceKind: 'grok_acp',
+            sourceKind: session.sourceKind,
             startedAt: startedAt,
             completedAt: turn.completedAt,
             duration:
@@ -93,13 +107,17 @@ class GrokUsageStatisticsRepository implements UsageStatisticsRepository {
             timeToFirstToken: turn.timeToFirstToken,
             model: _nonEmpty(turn.model),
             status: _usageStatus(turn.status),
-            tokens: _tokenBreakdown(turn.tokenUsage),
-            errorCategory: switch (turn.status) {
-              AgentHistoryTurnStatus.interrupted =>
-                UsageErrorCategory.cancelled,
-              AgentHistoryTurnStatus.failed => UsageErrorCategory.other,
-              _ => null,
-            },
+            tokens: UsageTokenBreakdown(
+              inputTokens: turn.inputTokens,
+              cachedInputTokens: turn.cachedInputTokens,
+              outputTokens: turn.outputTokens,
+              reasoningTokens: turn.reasoningTokens,
+              totalTokens: turn.totalTokens,
+            ),
+            errorCategory: _errorCategory(
+              status: _usageStatus(turn.status),
+              hint: turn.errorCategoryHint,
+            ),
             errorMessage: _nonEmpty(turn.errorMessage),
             errorCode: _nonEmpty(turn.errorCode),
           ),
@@ -133,29 +151,6 @@ class GrokUsageStatisticsRepository implements UsageStatisticsRepository {
   }
 }
 
-UsageTokenBreakdown _tokenBreakdown(AgentTokenUsage? usage) {
-  if (usage == null) {
-    return const UsageTokenBreakdown();
-  }
-  final cached = usage.cachedInputTokens;
-  final reasoning = usage.reasoningOutputTokens;
-  return UsageTokenBreakdown(
-    inputTokens: _exclusiveTokens(usage.inputTokens, cached),
-    cachedInputTokens: cached,
-    outputTokens: _exclusiveTokens(usage.outputTokens, reasoning),
-    reasoningTokens: reasoning,
-    totalTokens: usage.totalTokens,
-  );
-}
-
-int? _exclusiveTokens(int? inclusive, int? nested) {
-  if (inclusive == null) {
-    return null;
-  }
-  final exclusive = inclusive - (nested ?? 0);
-  return exclusive < 0 ? 0 : exclusive;
-}
-
 UsageTaskStatus _usageStatus(AgentHistoryTurnStatus status) => switch (status) {
   AgentHistoryTurnStatus.running => UsageTaskStatus.running,
   AgentHistoryTurnStatus.completed => UsageTaskStatus.completed,
@@ -163,6 +158,23 @@ UsageTaskStatus _usageStatus(AgentHistoryTurnStatus status) => switch (status) {
   AgentHistoryTurnStatus.failed => UsageTaskStatus.failed,
   AgentHistoryTurnStatus.unknown => UsageTaskStatus.unknown,
 };
+
+UsageErrorCategory? _errorCategory({
+  required UsageTaskStatus status,
+  required String? hint,
+}) {
+  if (!status.isFailure) {
+    return null;
+  }
+  return switch (hint) {
+    'account' => UsageErrorCategory.account,
+    'cli' => UsageErrorCategory.cli,
+    'network' => UsageErrorCategory.network,
+    'timeout' => UsageErrorCategory.timeout,
+    'cancelled' => UsageErrorCategory.cancelled,
+    _ => UsageErrorCategory.other,
+  };
+}
 
 Duration? _durationBetween(DateTime startedAt, DateTime? completedAt) {
   if (completedAt == null) {

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:zeta/src/features/agent/data/datasources/local_history/usage_scan_cache.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 /// 一条 Codex 模型请求的精确 token 用量。
@@ -150,7 +151,7 @@ class CodexUsageSessionSnapshot {
     required this.sourceKind,
     required this.createdAt,
     required this.turns,
-  }) : sourceId = sourceId ?? codexUsageSourceId(sourcePath);
+  }) : sourceId = sourceId ?? usageSourceId(sourcePath);
 
   /// 当前进程发现的 rollout 文件路径，只用于只读扫描，不进入派生索引。
   final String sourcePath;
@@ -179,9 +180,7 @@ class CodexUsageSessionSnapshot {
     final legacySourcePath = _string(map['sourcePath']);
     final sourceId =
         _string(map['sourceId']) ??
-        (legacySourcePath == null
-            ? null
-            : codexUsageSourceId(legacySourcePath));
+        (legacySourcePath == null ? null : usageSourceId(legacySourcePath));
     final fingerprint = _string(map['fingerprint']);
     final threadId = _string(map['threadId']);
     final projectPath = _string(map['projectPath']);
@@ -233,15 +232,8 @@ class CodexUsageSessionSnapshot {
 
 /// 为 Codex rollout 路径生成稳定的 64-bit FNV-1a 标识。
 ///
-/// 该标识只用于派生缓存匹配，避免把 Agent CLI session 文件路径写入 `~/.zeta`。
-String codexUsageSourceId(String sourcePath) {
-  var hash = 0xcbf29ce484222325;
-  for (final byte in utf8.encode(sourcePath)) {
-    hash ^= byte;
-    hash = (hash * 0x100000001b3) & 0xffffffffffffffff;
-  }
-  return hash.toRadixString(16).padLeft(16, '0');
-}
+/// 兼容旧调用点；新代码请直接使用 [usageSourceId]。
+String codexUsageSourceId(String sourcePath) => usageSourceId(sourcePath);
 
 /// 将 Codex turn 错误归一为不含原始内容的稳定分类标识。
 String? codexUsageErrorCategoryHint({
@@ -363,12 +355,13 @@ class FileSystemCodexUsageLogScanner implements CodexUsageLogScanner {
     for (final file in files) {
       try {
         final stat = await file.stat();
-        final fingerprint =
-            '${stat.size}:${stat.modified.microsecondsSinceEpoch}';
-        final cached =
-            cachedSessions[codexUsageSourceId(file.path)] ??
-            cachedSessions[file.path];
-        if (!forceRefresh && cached?.fingerprint == fingerprint) {
+        final fingerprint = usageFileFingerprint(stat);
+        final cached = findUsageCachedSession(cachedSessions, file.path);
+        if (usageCacheHit(
+          cachedFingerprint: cached?.fingerprint,
+          currentFingerprint: fingerprint,
+          forceRefresh: forceRefresh,
+        )) {
           sessions[file.path] = cached!.sourcePath == file.path
               ? cached
               : cached.withSourcePath(file.path);

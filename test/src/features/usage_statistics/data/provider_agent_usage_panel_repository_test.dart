@@ -164,11 +164,12 @@ final class _EmptyGrokUsageLogScanner implements GrokUsageLogScanner {
   @override
   Future<GrokUsageScanResult> scan({
     required String grokHome,
+    required Map<String, GrokUsageIndexedSession> cachedSessions,
     bool forceRefresh = false,
   }) async {
-    return GrokUsageScanResult(
-      sessions: const <GrokUsageSessionSnapshot>[],
-      warnings: const <String>[],
+    return const GrokUsageScanResult(
+      sessions: <String, GrokUsageIndexedSession>{},
+      warnings: <String>[],
     );
   }
 }
