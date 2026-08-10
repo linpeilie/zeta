@@ -86,7 +86,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
         lastDetectedAt: _now(),
         errorStage: AgentDiagnosticStage.fileDetection,
         errorMessage: '未找到 Codex',
-        suggestion: '请先安装 Codex，或手动选择可执行文件。',
+        suggestion: '请先安装 Codex，并确认可执行文件已加入 PATH。',
       );
       publish(total, '未找到 Codex');
       return current;
@@ -115,7 +115,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
       errorDetails: version.details ?? current.errorDetails,
       suggestion: version.error == null
           ? current.suggestion
-          : '请确认所选文件可以正常执行，然后重新检测。',
+          : '请确认检测到的可执行文件可以正常执行，然后重新检测。',
     );
     publish(2, '已检测当前版本');
 
@@ -262,7 +262,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
   }) async {
     final resolved = await _locator.resolvePath(path);
     if (resolved == null) {
-      throw FileSystemException('所选文件不存在或不是普通文件', path);
+      throw FileSystemException('该路径不存在或不是普通文件', path);
     }
     return _providerConfig(current, resolved);
   }

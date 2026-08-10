@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
@@ -500,7 +499,6 @@ class AgentManagementPageState extends State<AgentManagementPage> {
         builder: (context, constraints) {
           final information = _AgentInformationCard(
             agent: agent,
-            onSelectExecutable: _selectExecutable,
             onDetect: widget.controller.detect,
             onOpenExecutableDirectory: _openExecutableDirectory,
             onCopyCommand: () =>
@@ -509,7 +507,6 @@ class AgentManagementPageState extends State<AgentManagementPage> {
           final diagnostics = _AgentDiagnosticsCard(
             agent: agent,
             onDetect: widget.controller.detect,
-            onSelectExecutable: _selectExecutable,
           );
           if (constraints.maxWidth < 780) {
             return Column(
@@ -682,34 +679,6 @@ class AgentManagementPageState extends State<AgentManagementPage> {
           : '连接测试失败：${result.message ?? '未知错误'}',
       tone: result.success ? IdeToastTone.success : IdeToastTone.error,
     );
-  }
-
-  Future<void> _selectExecutable() async {
-    final file = await openFile(
-      acceptedTypeGroups: <XTypeGroup>[
-        if (Platform.isWindows)
-          const XTypeGroup(
-            label: 'Codex executable',
-            extensions: <String>['exe', 'ps1', 'cmd', 'bat'],
-          )
-        else
-          const XTypeGroup(label: 'Codex executable'),
-      ],
-    );
-    if (file == null) {
-      return;
-    }
-    try {
-      await widget.controller.setExecutablePath(file.path);
-    } catch (error) {
-      if (mounted) {
-        showIdeToast(
-          context,
-          message: '无法使用所选可执行文件：$error',
-          tone: IdeToastTone.error,
-        );
-      }
-    }
   }
 
   Future<void> _openExecutableDirectory() async {
@@ -1170,14 +1139,12 @@ class _ActionEmptyState extends StatelessWidget {
 class _AgentInformationCard extends StatelessWidget {
   const _AgentInformationCard({
     required this.agent,
-    required this.onSelectExecutable,
     required this.onDetect,
     required this.onOpenExecutableDirectory,
     required this.onCopyCommand,
   });
 
   final ManagedAgent agent;
-  final VoidCallback onSelectExecutable;
   final VoidCallback onDetect;
   final VoidCallback onOpenExecutableDirectory;
   final VoidCallback onCopyCommand;
@@ -1214,7 +1181,9 @@ class _AgentInformationCard extends StatelessWidget {
             _InfoRow(label: '传输方式', value: agent.definition.transport),
             IdeSettingsRow(
               label: '可执行文件路径',
-              description: agent.executablePath == null ? '尚未检测到可执行文件' : null,
+              description: agent.executablePath == null
+                  ? '尚未检测到可执行文件，请先安装并确保已加入 PATH'
+                  : null,
               showDivider: false,
               control: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -1233,11 +1202,6 @@ class _AgentInformationCard extends StatelessWidget {
                     runSpacing: IdeSpacing.space6,
                     alignment: WrapAlignment.end,
                     children: [
-                      sf.OutlineButton(
-                        onPressed: onSelectExecutable,
-                        size: sf.ButtonSize.small,
-                        child: const Text('选择文件'),
-                      ),
                       sf.OutlineButton(
                         onPressed: onDetect,
                         size: sf.ButtonSize.small,
@@ -1303,15 +1267,10 @@ class _InfoRow extends StatelessWidget {
 }
 
 class _AgentDiagnosticsCard extends StatelessWidget {
-  const _AgentDiagnosticsCard({
-    required this.agent,
-    required this.onDetect,
-    required this.onSelectExecutable,
-  });
+  const _AgentDiagnosticsCard({required this.agent, required this.onDetect});
 
   final ManagedAgent agent;
   final VoidCallback onDetect;
-  final VoidCallback onSelectExecutable;
 
   @override
   Widget build(BuildContext context) {
@@ -1427,21 +1386,13 @@ class _AgentDiagnosticsCard extends StatelessWidget {
             if (!healthy)
               Padding(
                 padding: IdeSpacing.all12,
-                child: Wrap(
-                  spacing: IdeSpacing.space8,
-                  runSpacing: IdeSpacing.space8,
-                  children: [
-                    sf.OutlineButton(
-                      onPressed: onDetect,
-                      size: sf.ButtonSize.small,
-                      child: const Text('自动检测'),
-                    ),
-                    sf.OutlineButton(
-                      onPressed: onSelectExecutable,
-                      size: sf.ButtonSize.small,
-                      child: const Text('选择文件'),
-                    ),
-                  ],
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: sf.OutlineButton(
+                    onPressed: onDetect,
+                    size: sf.ButtonSize.small,
+                    child: const Text('自动检测'),
+                  ),
                 ),
               ),
           ],

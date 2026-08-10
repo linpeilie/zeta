@@ -249,24 +249,6 @@ class AgentManagementController extends ChangeNotifier {
     _notify();
   }
 
-  /// 保存用户选择的 CLI 文件，并立即重新检测全部。
-  Future<void> setExecutablePath(String path) async {
-    final id = _selectedAgentId;
-    final repo = repository;
-    final current = _configForAgent(id);
-    final updated = await repo.providerConfigForPath(
-      current: current,
-      path: path,
-    );
-    await providerController.updateProviderConfig(
-      updated,
-      restartProvider: true,
-    );
-    _agents[id] = agent.copyWith(executablePath: path);
-    _notify();
-    await detect();
-  }
-
   /// 执行 initialize + model list 的无计费连接测试。
   Future<AgentConnectionTestResult?> testConnection() async {
     if (_testing) {
