@@ -9,16 +9,19 @@ const double _kNavTickWidthShort = 6;
 /// 选中 / hover 强调态短横线宽度。
 const double _kNavTickWidthEmphasized = 16;
 
+/// hover 预览卡最大宽度。
+const double _kNavPreviewCardMaxWidth = 260;
+
 /// 会话内对话导航轨：短横线对应各用户回合，点击跳转、滚动同步当前项。
 ///
 /// 宽度节奏：默认长短长短（12 / 6）；选中或 hover 时该线拉到 16。
 ///
 /// 强调色策略：
 /// - 无 hover：当前查看回合更深色；
-/// - hover 某短线：更深色切到该线；
+/// - hover 某短线：更深色切到该线，并在轨**右侧**展示预览 Card；
 /// - 短线之间切换用 [IdeMotion] 过渡尺寸与颜色，避免跳变。
 ///
-/// 低对比度折叠态；悬停用 [IdeTooltip] 展示提问摘要。不持久化任何正文。
+/// 低对比度折叠态；不持久化任何正文。
 class _AgentConversationNavigationRail extends StatefulWidget {
   const _AgentConversationNavigationRail({
     required this.entries,
@@ -62,7 +65,6 @@ class _AgentConversationNavigationRailState
     if (oldWidget.activeTurnId != widget.activeTurnId ||
         oldWidget.entries.length != widget.entries.length) {
       _syncFocusedIndex();
-      // 条目数量变化时钳制 hover，避免越界强调。
       final hovered = _hoveredIndex;
       if (hovered != null && widget.entries.isNotEmpty) {
         final next = hovered.clamp(0, widget.entries.length - 1);
@@ -173,6 +175,20 @@ class _AgentConversationNavigationRailState
     return KeyEventResult.ignored;
   }
 
+  /// 估算第 [index] 条短线中心相对 ticks 列顶部的 y（含外层 vertical padding 前）。
+  double _tickCenterY({required int index, required double gap}) {
+    // 与 tick 布局一致：top pad + 线高(用 resting 2) + bottom pad(+gap)。
+    const topPad = IdeSpacing.space4;
+    const line = 2.0;
+    const bottomPad = IdeSpacing.space4;
+    final slotWithoutGap = topPad + line + bottomPad;
+    var y = 0.0;
+    for (var i = 0; i < index; i++) {
+      y += slotWithoutGap + gap;
+    }
+    return y + topPad + line / 2;
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
@@ -181,11 +197,22 @@ class _AgentConversationNavigationRailState
     final emphasizeDuration = reduceMotion
         ? Duration.zero
         : IdeMotion.durationNormal;
+    final cardDuration = reduceMotion
+        ? Duration.zero
+        : IdeMotion.durationNormal;
     final emphasizedIndex = _emphasizedIndex;
+    final hoveredIndex = _hoveredIndex;
     final trackColor = colors.border.withValues(alpha: 0.42);
     final deepColor = colors.textSecondary.withValues(alpha: 0.94);
     final streamingColor = colors.accent.withValues(alpha: 0.85);
     final failedColor = colors.error.withValues(alpha: 0.8);
+    final brightness = Theme.of(context).brightness;
+    AgentConversationNavigationEntry? hoveredEntry;
+    if (hoveredIndex != null &&
+        hoveredIndex >= 0 &&
+        hoveredIndex < widget.entries.length) {
+      hoveredEntry = widget.entries[hoveredIndex];
+    }
 
     return Focus(
       focusNode: _focusNode,
@@ -195,7 +222,7 @@ class _AgentConversationNavigationRailState
         label: '对话导航',
         child: Material(
           type: MaterialType.transparency,
-          // 整轨 onExit 清 hover，避免短线间隙短暂回落到 active 造成闪烁。
+          // 整轨 + 预览卡同一 MouseRegion，移入卡片不丢失 hover。
           child: MouseRegion(
             onExit: (_) => _setHoveredIndex(null),
             child: Padding(
@@ -206,49 +233,103 @@ class _AgentConversationNavigationRailState
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 360),
                 child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    // 左对齐：贴 AgentPanel 左侧，长短交替时左侧齐平、强调向右延伸。
+                  // Row：短线列 + 右侧预览卡，卡参与布局与命中。
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      for (
-                        var index = 0;
-                        index < widget.entries.length;
-                        index++
-                      )
-                        _AgentConversationNavigationTick(
-                          entry: widget.entries[index],
-                          emphasized: emphasizedIndex == index,
-                          isActiveView:
-                              widget.entries[index].turnId ==
-                              widget.activeTurnId,
-                          focused:
-                              _focusNode.hasFocus && _focusedIndex == index,
-                          // 默认长短长短：偶数为长 12、奇数为短 6。
-                          restingWidth: index.isEven
-                              ? _kNavTickWidthLong
-                              : _kNavTickWidthShort,
-                          // 间隙并入 hit 区，hover 在相邻短线间连续滑动。
-                          bottomGap: index == widget.entries.length - 1
-                              ? 0
-                              : gap,
-                          animationDuration: emphasizeDuration,
-                          onPressed: () {
-                            setState(() => _focusedIndex = index);
-                            widget.onSelectTurn(widget.entries[index]);
-                          },
-                          onHoverChanged: (hovered) {
-                            // 只在 enter 时更新；leave 不立刻清空，避免短线间隙
-                            // 闪回 active。整轨 MouseRegion.onExit 负责复位。
-                            if (hovered) {
-                              _setHoveredIndex(index);
-                            }
-                          },
-                          trackColor: trackColor,
-                          deepColor: deepColor,
-                          streamingColor: streamingColor,
-                          failedColor: failedColor,
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (
+                            var index = 0;
+                            index < widget.entries.length;
+                            index++
+                          )
+                            _AgentConversationNavigationTick(
+                              entry: widget.entries[index],
+                              emphasized: emphasizedIndex == index,
+                              isActiveView:
+                                  widget.entries[index].turnId ==
+                                  widget.activeTurnId,
+                              focused:
+                                  _focusNode.hasFocus && _focusedIndex == index,
+                              restingWidth: index.isEven
+                                  ? _kNavTickWidthLong
+                                  : _kNavTickWidthShort,
+                              bottomGap: index == widget.entries.length - 1
+                                  ? 0
+                                  : gap,
+                              animationDuration: emphasizeDuration,
+                              onPressed: () {
+                                setState(() => _focusedIndex = index);
+                                widget.onSelectTurn(widget.entries[index]);
+                              },
+                              onHoverChanged: (hovered) {
+                                if (hovered) {
+                                  _setHoveredIndex(index);
+                                }
+                              },
+                              trackColor: trackColor,
+                              deepColor: deepColor,
+                              streamingColor: streamingColor,
+                              failedColor: failedColor,
+                            ),
+                        ],
+                      ),
+                      if (hoveredEntry != null) ...[
+                        const SizedBox(width: IdeSpacing.space8),
+                        Padding(
+                          padding: EdgeInsets.only(
+                            top: math.max(
+                              0,
+                              _tickCenterY(index: hoveredIndex!, gap: gap) - 28,
+                            ),
+                          ),
+                          child: AnimatedSwitcher(
+                            duration: cardDuration,
+                            switchInCurve: IdeMotion.curvePopup,
+                            switchOutCurve: IdeMotion.curveDefault,
+                            transitionBuilder: (child, animation) {
+                              final fade = CurvedAnimation(
+                                parent: animation,
+                                curve: IdeMotion.curveDefault,
+                              );
+                              final slide =
+                                  Tween<Offset>(
+                                    begin: const Offset(-0.06, 0),
+                                    end: Offset.zero,
+                                  ).animate(
+                                    CurvedAnimation(
+                                      parent: animation,
+                                      curve: IdeMotion.curvePopup,
+                                    ),
+                                  );
+                              return FadeTransition(
+                                opacity: fade,
+                                child: SlideTransition(
+                                  position: slide,
+                                  child: child,
+                                ),
+                              );
+                            },
+                            child: _AgentConversationNavigationPreviewCard(
+                              key: ValueKey<String>(
+                                'nav-preview-${hoveredEntry.turnId}',
+                              ),
+                              entry: hoveredEntry,
+                              brightness: brightness,
+                              onTap: () {
+                                setState(() {
+                                  _focusedIndex = hoveredIndex;
+                                });
+                                widget.onSelectTurn(hoveredEntry!);
+                              },
+                            ),
+                          ),
                         ),
+                      ],
                     ],
                   ),
                 ),
@@ -308,50 +389,272 @@ class _AgentConversationNavigationTick extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 强调：更深/状态色 + 宽度 16；非强调：低对比 + 长短交替 12/6。
     final color = emphasized
         ? _baseStatusColor
         : trackColor.withValues(alpha: 0.45);
     final height = emphasized ? 3.0 : 2.0;
     final width = emphasized ? _kNavTickWidthEmphasized : restingWidth;
-    final tooltip = buildAgentConversationNavigationTooltip(entry);
 
-    return IdeTooltip(
-      message: tooltip,
-      waitDuration: const Duration(milliseconds: 280),
-      child: PaneInteractiveSurface(
-        onPressed: onPressed,
-        onHoverChanged: onHoverChanged,
-        button: true,
-        // 轨在左侧：短线左缘对齐，变宽时向右伸展。
-        alignment: Alignment.centerLeft,
-        semanticLabel:
-            '第 ${entry.ordinal} 个回合：${entry.label}'
-            '${isActiveView ? '，当前查看' : ''}',
-        borderRadius: IdeRadius.allSmall,
-        hoverBackgroundColor: trackColor.withValues(alpha: 0.18),
-        // 点击区按强调态最大宽度预留，避免长短切换时 hit 框抖动。
-        width: _kNavTickWidthEmphasized + IdeSpacing.space4 * 2,
-        padding: EdgeInsets.only(
-          left: IdeSpacing.space4,
-          right: IdeSpacing.space4,
-          top: IdeSpacing.space4,
-          bottom: IdeSpacing.space4 + bottomGap,
+    return PaneInteractiveSurface(
+      onPressed: onPressed,
+      onHoverChanged: onHoverChanged,
+      button: true,
+      alignment: Alignment.centerLeft,
+      semanticLabel:
+          '第 ${entry.ordinal} 个回合：${entry.label}'
+          '${isActiveView ? '，当前查看' : ''}',
+      borderRadius: IdeRadius.allSmall,
+      hoverBackgroundColor: trackColor.withValues(alpha: 0.18),
+      width: _kNavTickWidthEmphasized + IdeSpacing.space4 * 2,
+      padding: EdgeInsets.only(
+        left: IdeSpacing.space4,
+        right: IdeSpacing.space4,
+        top: IdeSpacing.space4,
+        bottom: IdeSpacing.space4 + bottomGap,
+      ),
+      child: AnimatedContainer(
+        duration: animationDuration,
+        curve: IdeMotion.curveDefault,
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: IdeRadius.allSmall,
+          border: focused
+              ? Border.all(color: deepColor.withValues(alpha: 0.55), width: 1)
+              : null,
         ),
-        child: AnimatedContainer(
-          duration: animationDuration,
-          curve: IdeMotion.curveDefault,
-          width: width,
-          height: height,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: IdeRadius.allSmall,
-            border: focused
-                ? Border.all(color: deepColor.withValues(alpha: 0.55), width: 1)
-                : null,
+      ),
+    );
+  }
+}
+
+/// 导航轨右侧 hover 预览卡：回合序号、提问摘要、状态与标记。
+class _AgentConversationNavigationPreviewCard extends StatelessWidget {
+  const _AgentConversationNavigationPreviewCard({
+    required this.entry,
+    required this.brightness,
+    required this.onTap,
+    super.key,
+  });
+
+  final AgentConversationNavigationEntry entry;
+  final Brightness brightness;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    final status = _navStatusPresentation(entry.status, colors);
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(
+        minWidth: 180,
+        maxWidth: _kNavPreviewCardMaxWidth,
+      ),
+      child: PaneInteractiveSurface(
+        onPressed: onTap,
+        button: true,
+        borderRadius: IdeRadius.allMedium,
+        semanticLabel: buildAgentConversationNavigationTooltip(entry),
+        child: PanelCard(
+          color: colors.surfaceElevated,
+          borderRadius: IdeRadius.allMedium,
+          boxShadow: IdeEffects.overlayShadow(brightness),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              IdeSpacing.space12,
+              IdeSpacing.space10,
+              IdeSpacing.space12,
+              IdeSpacing.space12,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 顶行：序号 + 状态徽章
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        '第 ${entry.ordinal} 个回合',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textStyles.meta.copyWith(
+                          color: colors.textTertiary,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: IdeSpacing.space8),
+                    _NavStatusBadge(
+                      label: status.label,
+                      foreground: status.foreground,
+                      background: status.background,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: IdeSpacing.space8),
+                // 提问摘要
+                Text(
+                  entry.label,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: textStyles.bodyMedium.copyWith(
+                    color: colors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    height: 1.35,
+                  ),
+                ),
+                if (entry.hasTools ||
+                    entry.hasFileEdits ||
+                    entry.startedAt != null) ...[
+                  const SizedBox(height: IdeSpacing.space10),
+                  Container(
+                    height: 1,
+                    color: colors.borderSubtle.withValues(alpha: 0.7),
+                  ),
+                  const SizedBox(height: IdeSpacing.space8),
+                  Wrap(
+                    spacing: IdeSpacing.space6,
+                    runSpacing: IdeSpacing.space4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      if (entry.hasTools)
+                        _NavMetaChip(
+                          icon: Icons.build_outlined,
+                          label: '工具',
+                          color: colors.textSecondary,
+                        ),
+                      if (entry.hasFileEdits)
+                        _NavMetaChip(
+                          icon: Icons.edit_note_rounded,
+                          label: '文件编辑',
+                          color: colors.textSecondary,
+                        ),
+                      if (entry.startedAt != null)
+                        _NavMetaChip(
+                          icon: Icons.schedule_rounded,
+                          label: _formatNavTime(entry.startedAt!),
+                          color: colors.textTertiary,
+                        ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
+}
+
+class _NavStatusBadge extends StatelessWidget {
+  const _NavStatusBadge({
+    required this.label,
+    required this.foreground,
+    required this.background,
+  });
+
+  final String label;
+  final Color foreground;
+  final Color background;
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyles = IdeTextStyles.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: IdeSpacing.space6,
+        vertical: IdeSpacing.space2,
+      ),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: IdeRadius.pill,
+      ),
+      child: Text(
+        label,
+        style: textStyles.meta.copyWith(
+          color: foreground,
+          fontWeight: FontWeight.w600,
+          height: 1.1,
+        ),
+      ),
+    );
+  }
+}
+
+class _NavMetaChip extends StatelessWidget {
+  const _NavMetaChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyles = IdeTextStyles.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 12, color: color.withValues(alpha: 0.9)),
+        const SizedBox(width: IdeSpacing.space2),
+        Text(
+          label,
+          style: textStyles.meta.copyWith(
+            color: color,
+            fontWeight: FontWeight.w500,
+            height: 1.1,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+({String label, Color foreground, Color background}) _navStatusPresentation(
+  AgentConversationNavigationStatus status,
+  IdeColors colors,
+) {
+  return switch (status) {
+    AgentConversationNavigationStatus.streaming => (
+      label: '生成中',
+      foreground: colors.accent,
+      background: colors.accent.withValues(alpha: 0.14),
+    ),
+    AgentConversationNavigationStatus.completed => (
+      label: '已完成',
+      foreground: colors.success,
+      background: colors.success.withValues(alpha: 0.14),
+    ),
+    AgentConversationNavigationStatus.failed => (
+      label: '失败',
+      foreground: colors.error,
+      background: colors.error.withValues(alpha: 0.14),
+    ),
+    AgentConversationNavigationStatus.interrupted => (
+      label: '已中断',
+      foreground: colors.warning,
+      background: colors.warning.withValues(alpha: 0.14),
+    ),
+    AgentConversationNavigationStatus.unknown => (
+      label: '未知',
+      foreground: colors.textSecondary,
+      background: colors.border.withValues(alpha: 0.2),
+    ),
+  };
+}
+
+String _formatNavTime(DateTime time) {
+  final local = time.toLocal();
+  final hh = local.hour.toString().padLeft(2, '0');
+  final mm = local.minute.toString().padLeft(2, '0');
+  return '$hh:$mm';
 }
