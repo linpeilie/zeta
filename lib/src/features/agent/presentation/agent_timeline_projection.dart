@@ -53,11 +53,15 @@ typedef AgentTimelineBlocksResolver =
 /// 将当前可见会话状态投影为稳定有序的 block 级视口 item 列表。
 ///
 /// 顺序：standby blocks → history blocks/footer → live blocks/activity/footer
+///
+/// [showLiveActivity] 为 false 时不生成 live 活动条（例如 Plan 浮层已展示当前
+/// 步骤进度，避免计划卡下方再叠一条「进行中」工具条）。
 List<AgentTimelineViewportItem> projectAgentTimelineViewportItems({
   required AgentConversationTurnGroup? standbyTurn,
   required List<AgentConversationTurnGroup> visibleHistoryTurns,
   required AgentConversationTurnGroup? liveTurn,
   required AgentTimelineBlocksResolver resolveBlocks,
+  bool showLiveActivity = true,
 }) {
   final items = <AgentTimelineViewportItem>[];
 
@@ -67,7 +71,9 @@ List<AgentTimelineViewportItem> projectAgentTimelineViewportItems({
         AgentBlockViewportItem(turn: turn, block: block, isLive: isLive),
       );
     }
-    if (isLive && turn.status == AgentHistoryTurnStatus.running) {
+    if (isLive &&
+        showLiveActivity &&
+        turn.status == AgentHistoryTurnStatus.running) {
       items.add(AgentLiveActivityViewportItem(turn: turn));
     }
     if (!turn.isStandby) {

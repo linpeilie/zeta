@@ -3216,6 +3216,11 @@ void main() {
       expect(card, findsOneWidget);
       expect(summary, findsOneWidget);
       expect(body, findsNothing);
+      // Plan 浮层已展示步骤进度时，时间线末尾不再叠 live 活动条。
+      expect(
+        find.byKey(const ValueKey('agent-live-activity-status')),
+        findsNothing,
+      );
       final planSurface = tester.widget<PanelCard>(
         find.descendant(of: card, matching: find.byType(PanelCard)),
       );

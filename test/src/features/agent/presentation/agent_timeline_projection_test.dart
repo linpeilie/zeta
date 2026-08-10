@@ -54,6 +54,23 @@ void main() {
       ]);
     });
 
+    test('showLiveActivity=false 时不生成 live 活动条', () {
+      final live = _turn(id: 'live', status: AgentHistoryTurnStatus.running);
+      final items = projectAgentTimelineViewportItems(
+        standbyTurn: null,
+        visibleHistoryTurns: const <AgentConversationTurnGroup>[],
+        liveTurn: live,
+        resolveBlocks: _blocks,
+        showLiveActivity: false,
+      );
+
+      expect(items.map((item) => item.id).toList(growable: false), <String>[
+        'turn-block-live-message-live-msg',
+        'turn-footer-live',
+      ]);
+      expect(items.whereType<AgentLiveActivityViewportItem>(), isEmpty);
+    });
+
     test('同一 turn 从 live 迁入 history 后保持 block 与 footer 身份', () {
       final turn = _turn(id: 't1', status: AgentHistoryTurnStatus.running);
       final liveItems = projectAgentTimelineViewportItems(
