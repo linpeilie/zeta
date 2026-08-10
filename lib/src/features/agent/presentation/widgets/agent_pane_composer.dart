@@ -1036,30 +1036,16 @@ class _ComposerImageDraftStrip extends StatelessWidget {
                   bottom: 0,
                   width: _thumbSize,
                   height: _thumbSize,
-                  child: ClipRRect(
-                    borderRadius: IdeRadius.allSmall,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: colors.surfaceElevated,
-                        border: Border.all(color: colors.borderSubtle),
-                        borderRadius: IdeRadius.allSmall,
-                      ),
-                      child: Image.file(
-                        File(path),
-                        key: ValueKey<String>('agent-composer-image-$path'),
-                        width: _thumbSize,
-                        height: _thumbSize,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => SizedBox(
-                          width: _thumbSize,
-                          height: _thumbSize,
-                          child: Icon(
-                            Icons.broken_image_outlined,
-                            size: 18,
-                            color: colors.textTertiary,
-                          ),
-                        ),
-                      ),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colors.surfaceElevated,
+                      border: Border.all(color: colors.borderSubtle),
+                      borderRadius: IdeRadius.allSmall,
+                    ),
+                    child: IdeLocalImageThumbnail(
+                      path: path,
+                      size: _thumbSize,
+                      imageKey: ValueKey<String>('agent-composer-image-$path'),
                     ),
                   ),
                 ),

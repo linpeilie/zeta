@@ -451,33 +451,11 @@ class _AgentBubbleMessage extends StatelessWidget {
                           runSpacing: IdeSpacing.space8,
                           children: [
                             for (final path in imagePaths)
-                              ClipRRect(
-                                borderRadius: IdeRadius.allSmall,
-                                child: Image.file(
-                                  File(path),
-                                  key: ValueKey<String>(
-                                    'agent-message-image-${message.id}-$path',
-                                  ),
-                                  width: 120,
-                                  height: 120,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) => DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      color: colors.surfaceElevated,
-                                      borderRadius: IdeRadius.allSmall,
-                                    ),
-                                    child: SizedBox(
-                                      width: 120,
-                                      height: 120,
-                                      child: Center(
-                                        child: Icon(
-                                          Icons.broken_image_outlined,
-                                          size: 20,
-                                          color: colors.textTertiary,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
+                              IdeLocalImageThumbnail(
+                                path: path,
+                                size: 120,
+                                imageKey: ValueKey<String>(
+                                  'agent-message-image-${message.id}-$path',
                                 ),
                               ),
                           ],
