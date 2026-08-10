@@ -3,15 +3,16 @@ part of '../agent_pane.dart';
 TextStyle _agentSummaryTextStyle(BuildContext context) {
   final colors = IdeColors.of(context);
   final textStyles = IdeTextStyles.of(context);
+  // 折叠摘要：中等字重 + 低对比，弱于正文但可辨认。
   return textStyles.bodyMedium.copyWith(
-    fontWeight: FontWeight.w600,
-    color: colors.textSecondary.withValues(alpha: 0.9),
+    fontWeight: FontWeight.w500,
+    color: colors.textSecondary.withValues(alpha: 0.68),
   );
 }
 
 TextStyle _agentItemTextStyle(
   BuildContext context, {
-  FontWeight fontWeight = FontWeight.w500,
+  FontWeight fontWeight = FontWeight.w400,
 }) {
   final colors = IdeColors.of(context);
   final textStyles = IdeTextStyles.of(context);
@@ -31,6 +32,18 @@ TextStyle _agentMetaTextStyle(
 
 Color _agentHoverBackground(BuildContext context) {
   return IdeColors.of(context).border.withValues(alpha: 0.12);
+}
+
+/// 操作组（命令集 / 文件编辑组）外间距：由列表层 [Padding] 包一层，卡片自身零 margin。
+///
+/// 上下均为 [IdeSpacing.space10]；紧挨上一操作组时省略 top，避免相邻双倍缝。
+EdgeInsets _operationGroupOuterPadding({
+  required bool precededByOperationGroup,
+}) {
+  return EdgeInsets.only(
+    top: precededByOperationGroup ? 0 : IdeSpacing.space10,
+    bottom: IdeSpacing.space10,
+  );
 }
 
 String _commandGroupSummary(AgentTimelineCommandGroup group) {

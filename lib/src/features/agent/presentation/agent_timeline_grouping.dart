@@ -39,6 +39,14 @@ class AgentTimelineFileEditGroupRenderBlock extends AgentTimelineRenderBlock {
   final AgentTimelineFileEditGroup group;
 }
 
+/// 命令集与文件编辑组在布局上同属「操作组」：相邻时折叠 top 外间距。
+///
+/// 领域模型仍是两类 block；此谓词只服务间距 / 高度估计。
+bool isAgentTimelineOperationGroupBlock(AgentTimelineRenderBlock block) {
+  return block is AgentTimelineCommandGroupRenderBlock ||
+      block is AgentTimelineFileEditGroupRenderBlock;
+}
+
 /// 命令集本身。
 class AgentTimelineCommandGroup {
   const AgentTimelineCommandGroup({required this.id, required this.items});

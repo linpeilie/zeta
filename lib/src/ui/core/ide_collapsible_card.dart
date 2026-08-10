@@ -86,8 +86,8 @@ class IdeCollapsibleCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: textStyles.bodyMedium.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: colors.textSecondary.withValues(alpha: 0.9),
+                    fontWeight: FontWeight.w500,
+                    color: colors.textSecondary.withValues(alpha: 0.68),
                   ),
                 ),
           ),

@@ -429,7 +429,11 @@ class _AgentConversationTimeline extends StatelessWidget {
                 final content = IndexedSemantics(
                   index: index,
                   child: RepaintBoundary(
-                    child: _buildViewportItem(item, pendingState),
+                    child: _buildViewportItem(
+                      item,
+                      pendingState,
+                      previousItem: index > 0 ? items[index - 1] : null,
+                    ),
                   ),
                 );
                 final keepAliveListenable = _prepareMarkdownWarmEntry(item);
@@ -536,8 +540,9 @@ class _AgentConversationTimeline extends StatelessWidget {
 
   Widget _buildViewportItem(
     AgentTimelineViewportItem item,
-    AgentPendingInteractionState pendingState,
-  ) {
+    AgentPendingInteractionState pendingState, {
+    AgentTimelineViewportItem? previousItem,
+  }) {
     switch (item) {
       case AgentBlockViewportItem(:final turn, :final block):
         return _AgentTimelineBlockSection(
@@ -547,6 +552,7 @@ class _AgentConversationTimeline extends StatelessWidget {
           markdownCache: markdownCache,
           planRevisionDrafts: planRevisionDrafts,
           pendingState: pendingState,
+          precededByOperationGroup: _isOperationGroupViewportItem(previousItem),
         );
       case AgentLiveActivityViewportItem():
         return KeyedSubtree(
@@ -587,6 +593,11 @@ class _AgentConversationTimeline extends StatelessWidget {
   }
 }
 
+bool _isOperationGroupViewportItem(AgentTimelineViewportItem? item) {
+  return item is AgentBlockViewportItem &&
+      isAgentTimelineOperationGroupBlock(item.block);
+}
+
 /// 单个 Sliver item 只渲染一个 projection block。
 ///
 /// resize 时 Sliver 只会重新布局视口和 cache extent 内的 block，不再为一个长
@@ -599,6 +610,7 @@ class _AgentTimelineBlockSection extends StatelessWidget {
     required this.markdownCache,
     required this.planRevisionDrafts,
     required this.pendingState,
+    this.precededByOperationGroup = false,
   });
 
   final AgentConversationTurnGroup turn;
@@ -610,20 +622,33 @@ class _AgentTimelineBlockSection extends StatelessWidget {
   /// 计划卡在流内渲染，需要知道当前是否有待处理的计划请求。
   final AgentPendingInteractionState pendingState;
 
+  /// 上一视口项是否为操作组；仅用于列表层外间距，不传给卡片。
+  final bool precededByOperationGroup;
+
   @override
   Widget build(BuildContext context) {
+    final content = switch (block) {
+      AgentTimelineEntryRenderBlock(:final entry) => _buildTimelineEntry(
+        entry,
+        markdownCache: markdownCache,
+      ),
+      AgentTimelineCommandGroupRenderBlock(:final group) =>
+        _AgentCommandGroupCard(group: group, viewModel: viewModel),
+      AgentTimelineFileEditGroupRenderBlock(:final group) =>
+        _AgentFileEditGroupCard(group: group, viewModel: viewModel),
+    };
+    // 操作组间距由列表层统一包 Padding；卡片自身零 margin。
+    final child = isAgentTimelineOperationGroupBlock(block)
+        ? Padding(
+            padding: _operationGroupOuterPadding(
+              precededByOperationGroup: precededByOperationGroup,
+            ),
+            child: content,
+          )
+        : content;
     return KeyedSubtree(
       key: ValueKey<String>('turn-block-${turn.id}-${block.id}'),
-      child: switch (block) {
-        AgentTimelineEntryRenderBlock(:final entry) => _buildTimelineEntry(
-          entry,
-          markdownCache: markdownCache,
-        ),
-        AgentTimelineCommandGroupRenderBlock(:final group) =>
-          _AgentCommandGroupCard(group: group, viewModel: viewModel),
-        AgentTimelineFileEditGroupRenderBlock(:final group) =>
-          _AgentFileEditGroupCard(group: group, viewModel: viewModel),
-      },
+      child: child,
     );
   }
 

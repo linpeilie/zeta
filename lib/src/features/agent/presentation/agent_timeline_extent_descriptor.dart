@@ -113,6 +113,7 @@ final class AgentTimelineExtentDescriptorFactory {
     final next = List<IdeVirtualItemDescriptor>.generate(items.length, (index) {
       final built = describe(
         items[index],
+        previousItem: index > 0 ? items[index - 1] : null,
         expansion: expansion,
         layoutContext: layoutContext,
       );
@@ -132,17 +133,24 @@ final class AgentTimelineExtentDescriptorFactory {
   /// 描述单个 viewport item。
   IdeVirtualItemDescriptor describe(
     AgentTimelineViewportItem item, {
+    AgentTimelineViewportItem? previousItem,
     required AgentTimelineExpansionLookup expansion,
     required AgentTimelineLayoutContext layoutContext,
   }) {
+    final precededByOperationGroup = _isPrecededByOperationGroup(previousItem);
     final kind = _kindOf(item);
-    final revision = _layoutRevision(item, expansion);
+    final revision = _layoutRevision(
+      item,
+      expansion,
+      precededByOperationGroup: precededByOperationGroup,
+    );
     final estimated = _estimateExtent(
       item,
       kind: kind,
       crossAxisExtent: layoutContext.crossAxisExtent,
       textScale: layoutContext.textScale,
       expansion: expansion,
+      precededByOperationGroup: precededByOperationGroup,
     );
     return IdeVirtualItemDescriptor(
       id: item.id,
@@ -195,8 +203,9 @@ final class AgentTimelineExtentDescriptorFactory {
   /// 否则 live turn 内每个字符都会把 sibling tool card 标成 measurement stale。
   Object _layoutRevision(
     AgentTimelineViewportItem item,
-    AgentTimelineExpansionLookup expansion,
-  ) {
+    AgentTimelineExpansionLookup expansion, {
+    bool precededByOperationGroup = false,
+  }) {
     return switch (item) {
       AgentLiveActivityViewportItem(:final turn) => Object.hash(
         'live-activity',
@@ -219,6 +228,10 @@ final class AgentTimelineExtentDescriptorFactory {
         block.id,
         _blockContentRevision(block),
         _blockExpansionFingerprint(block, expansion),
+        // 相邻操作组折叠 top 外间距会影响实测高度。
+        isAgentTimelineOperationGroupBlock(block)
+            ? precededByOperationGroup
+            : null,
       ),
     };
   }
@@ -332,6 +345,7 @@ final class AgentTimelineExtentDescriptorFactory {
     required double crossAxisExtent,
     required double textScale,
     required AgentTimelineExpansionLookup expansion,
+    bool precededByOperationGroup = false,
   }) {
     final width = crossAxisExtent.isFinite && crossAxisExtent > 0
         ? crossAxisExtent
@@ -344,9 +358,19 @@ final class AgentTimelineExtentDescriptorFactory {
       AgentTurnFooterViewportItem() => 28 * scale,
       AgentBlockViewportItem(:final block) => switch (block) {
         AgentTimelineCommandGroupRenderBlock(:final group) =>
-          _estimateCommandGroup(group, expansion, scale),
+          _estimateCommandGroup(
+            group,
+            expansion,
+            scale,
+            precededByOperationGroup: precededByOperationGroup,
+          ),
         AgentTimelineFileEditGroupRenderBlock(:final group) =>
-          _estimateFileEditGroup(group, expansion, scale),
+          _estimateFileEditGroup(
+            group,
+            expansion,
+            scale,
+            precededByOperationGroup: precededByOperationGroup,
+          ),
         AgentTimelineEntryRenderBlock(:final entry) => _estimateEntry(
           entry,
           kind: kind,
@@ -362,31 +386,36 @@ final class AgentTimelineExtentDescriptorFactory {
   double _estimateCommandGroup(
     AgentTimelineCommandGroup group,
     AgentTimelineExpansionLookup expansion,
-    double scale,
-  ) {
-    final expanded = expansion.isCommandGroupExpanded(group.id);
-    final header = 40 * scale;
-    if (!expanded) {
-      return header;
-    }
-    return header + group.items.length * 28 * scale;
+    double scale, {
+    bool precededByOperationGroup = false,
+  }) {
+    // 内容区约 30；外间距上下各 10，紧挨上一操作组时省略 top。
+    final content = expansion.isCommandGroupExpanded(group.id)
+        ? 30 + group.items.length * 28
+        : 30;
+    final top = precededByOperationGroup ? 0.0 : 10.0;
+    const bottom = 10.0;
+    return (content + top + bottom) * scale;
   }
 
   double _estimateFileEditGroup(
     AgentTimelineFileEditGroup group,
     AgentTimelineExpansionLookup expansion,
-    double scale,
-  ) {
-    final header = 40 * scale;
-    var body = 0.0;
+    double scale, {
+    bool precededByOperationGroup = false,
+  }) {
+    // 内容区：折叠头约 30 + 各文件行；外间距与命令集相同规则。
+    var content = 30.0;
     for (final item in group.items) {
       if (expansion.isFileEditItemExpanded(item.id)) {
-        body += 120 * scale;
+        content += 120;
       } else {
-        body += 28 * scale;
+        content += 28;
       }
     }
-    return header + body;
+    final top = precededByOperationGroup ? 0.0 : 10.0;
+    const bottom = 10.0;
+    return (content + top + bottom) * scale;
   }
 
   double _estimateEntry(
@@ -527,4 +556,10 @@ final class AgentTimelineExtentDescriptorFactory {
         a.layoutRevision == b.layoutRevision &&
         a.estimatedExtent == b.estimatedExtent;
   }
+}
+
+/// 上一视口项是否为操作组（命令集 / 文件编辑组）。
+bool _isPrecededByOperationGroup(AgentTimelineViewportItem? item) {
+  return item is AgentBlockViewportItem &&
+      isAgentTimelineOperationGroupBlock(item.block);
 }

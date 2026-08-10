@@ -23,13 +23,17 @@ class _AgentCommandGroupCard extends StatelessWidget {
           bodyKey: ValueKey<String>('agent-command-group-body-${group.id}'),
           expanded: expanded,
           onToggle: () => viewModel.toggleCommandGroup(group.id),
-          title: _commandGroupSummary(group),
+          titleWidget: Text(
+            _commandGroupSummary(group),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _agentSummaryTextStyle(context),
+          ),
           leading: Icon(
             Icons.segment_rounded,
             size: 14,
-            color: colors.textTertiary,
+            color: colors.textTertiary.withValues(alpha: 0.65),
           ),
-          margin: const EdgeInsets.only(bottom: IdeSpacing.space10),
           bodyPadding: const EdgeInsets.only(
             top: IdeSpacing.space8,
             left: IdeSpacing.space20,
@@ -115,7 +119,7 @@ class _AgentFileEditGroupCardState extends State<_AgentFileEditGroupCard> {
       leading: Icon(
         Icons.edit_note_rounded,
         size: 14,
-        color: colors.textTertiary,
+        color: colors.textTertiary.withValues(alpha: 0.65),
       ),
       titleWidget: Text.rich(
         key: ValueKey<String>(
@@ -126,7 +130,6 @@ class _AgentFileEditGroupCardState extends State<_AgentFileEditGroupCard> {
         overflow: TextOverflow.ellipsis,
         style: _agentSummaryTextStyle(context),
       ),
-      margin: const EdgeInsets.only(bottom: IdeSpacing.space10),
       bodyPadding: const EdgeInsets.only(
         top: IdeSpacing.space8,
         left: IdeSpacing.space20,
