@@ -257,7 +257,6 @@ class AgentManagementController extends ChangeNotifier {
     final updated = await repo.providerConfigForPath(
       current: current,
       path: path,
-      timeoutSeconds: agent.timeoutSeconds,
     );
     await providerController.updateProviderConfig(
       updated,
@@ -266,28 +265,6 @@ class AgentManagementController extends ChangeNotifier {
     _agents[id] = agent.copyWith(executablePath: path);
     _notify();
     await detect();
-  }
-
-  /// 保存 5～600 秒范围内的 Agent 超时设置。
-  Future<bool> setTimeoutSeconds(int seconds) async {
-    if (seconds < 5 || seconds > 600) {
-      _operationError = '超时时间必须介于 5 到 600 秒。';
-      _notify();
-      return false;
-    }
-    final id = _selectedAgentId;
-    final updated = repository.providerConfigWithTimeout(
-      _configForAgent(id),
-      seconds,
-    );
-    await providerController.updateProviderConfig(
-      updated,
-      restartProvider: true,
-    );
-    _agents[id] = agent.copyWith(timeoutSeconds: seconds);
-    _operationError = null;
-    _notify();
-    return true;
   }
 
   /// 执行 initialize + model list 的无计费连接测试。
@@ -440,11 +417,7 @@ class AgentManagementController extends ChangeNotifier {
     var updated = _sanitizeProviderConfig(agentId, previous);
     final path = detected.executablePath;
     if (path != null && _pathBelongsToAgent(agentId, path)) {
-      updated = await repo.providerConfigForPath(
-        current: updated,
-        path: path,
-        timeoutSeconds: detected.timeoutSeconds,
-      );
+      updated = await repo.providerConfigForPath(current: updated, path: path);
     }
     // 强制 id，防止 copyWith 路径把配置写到错误 provider 槽位。
     updated = updated.copyWith(
@@ -482,7 +455,6 @@ class AgentManagementController extends ChangeNotifier {
       (state) => state.name == accountName,
       orElse: () => AgentAccountState.unknown,
     );
-    final timeout = extra['timeoutSeconds'];
     final rawPath = extra['cliPath'] is String
         ? extra['cliPath'] as String
         : null;
@@ -528,7 +500,6 @@ class AgentManagementController extends ChangeNotifier {
       accountState: accountState,
       configPath: repository.configPath,
       lastDetectedAt: DateTime.tryParse('${extra['lastDetectedAt'] ?? ''}'),
-      timeoutSeconds: timeout is int ? timeout : 60,
     );
   }
 
@@ -559,7 +530,8 @@ class AgentManagementController extends ChangeNotifier {
   }
 
   AgentProviderConfig _sanitizeGrokConfig(AgentProviderConfig config) {
-    final extra = Map<String, Object?>.from(config.extra);
+    final extra = Map<String, Object?>.from(config.extra)
+      ..remove('timeoutSeconds');
     final cliPath = extra['cliPath'] is String
         ? extra['cliPath'] as String
         : null;
@@ -595,7 +567,8 @@ class AgentManagementController extends ChangeNotifier {
   }
 
   AgentProviderConfig _sanitizeCodexConfig(AgentProviderConfig config) {
-    final extra = Map<String, Object?>.from(config.extra);
+    final extra = Map<String, Object?>.from(config.extra)
+      ..remove('timeoutSeconds');
     final cliPath = extra['cliPath'] is String
         ? extra['cliPath'] as String
         : null;
@@ -685,15 +658,11 @@ class AgentManagementController extends ChangeNotifier {
       if (current == null) {
         continue;
       }
-      final timeout = config.extra['timeoutSeconds'];
-      final timeoutSeconds = timeout is int ? timeout : 60;
-      if (current.enabled == config.enabled &&
-          current.timeoutSeconds == timeoutSeconds) {
+      if (current.enabled == config.enabled) {
         continue;
       }
       _agents[id] = current.copyWith(
         enabled: config.enabled,
-        timeoutSeconds: timeoutSeconds,
         runtimeState: config.enabled
             ? AgentRuntimeState.notRunning
             : AgentRuntimeState.disabled,

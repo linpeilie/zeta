@@ -208,14 +208,7 @@ class _FakeCursorManagementRepository implements AgentCliManagementRepository {
   Future<AgentProviderConfig> providerConfigForPath({
     required AgentProviderConfig current,
     required String path,
-    required int timeoutSeconds,
   }) async => current;
-
-  @override
-  AgentProviderConfig providerConfigWithTimeout(
-    AgentProviderConfig current,
-    int timeoutSeconds,
-  ) => current;
 
   @override
   Future<AgentConfigurationDocument> readConfiguration() async {

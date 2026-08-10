@@ -31,6 +31,9 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
        _now = now ?? DateTime.now,
        _codexHomeProvider = codexHomeProvider ?? _defaultCodexHome;
 
+  /// 检测 / 连接测试中 initialize 与模型目录加载的固定上限。
+  static const Duration _probeTimeout = Duration(seconds: 60);
+
   final CliProcessRunner _processRunner;
   final CodexCliLocator _locator;
   final HttpClient Function() _httpClientFactory;
@@ -55,7 +58,6 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
       accountState: AgentAccountState.checking,
       versionState: AgentVersionState.checking,
       configPath: configPath,
-      timeoutSeconds: _timeoutSeconds(providerConfig),
     );
 
     void publish(int completed, String message) {
@@ -167,11 +169,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
     );
     publish(6, '已检查最新版本');
 
-    final effectiveConfig = _providerConfig(
-      providerConfig,
-      resolved,
-      timeoutSeconds: current.timeoutSeconds,
-    );
+    final effectiveConfig = _providerConfig(providerConfig, resolved);
     final probe = await _probeProvider(
       effectiveConfig,
       accountState: current.accountState,
@@ -226,11 +224,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
     }
 
     final account = await _readAccountStatus(resolved);
-    final effectiveConfig = _providerConfig(
-      providerConfig,
-      resolved,
-      timeoutSeconds: _timeoutSeconds(providerConfig),
-    );
+    final effectiveConfig = _providerConfig(providerConfig, resolved);
     final probe = await _probeProvider(
       effectiveConfig,
       accountState: account.state,
@@ -265,27 +259,12 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
   Future<AgentProviderConfig> providerConfigForPath({
     required AgentProviderConfig current,
     required String path,
-    required int timeoutSeconds,
   }) async {
     final resolved = await _locator.resolvePath(path);
     if (resolved == null) {
       throw FileSystemException('所选文件不存在或不是普通文件', path);
     }
-    return _providerConfig(current, resolved, timeoutSeconds: timeoutSeconds);
-  }
-
-  /// 更新只影响管理层的超时配置。
-  @override
-  AgentProviderConfig providerConfigWithTimeout(
-    AgentProviderConfig current,
-    int timeoutSeconds,
-  ) {
-    return current.copyWith(
-      extra: <String, Object?>{
-        ...current.extra,
-        'timeoutSeconds': timeoutSeconds,
-      },
-    );
+    return _providerConfig(current, resolved);
   }
 
   @override
@@ -479,29 +458,19 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
 
   AgentProviderConfig _providerConfig(
     AgentProviderConfig current,
-    ResolvedCliCommand command, {
-    required int timeoutSeconds,
-  }) {
+    ResolvedCliCommand command,
+  ) {
+    final extra = Map<String, Object?>.of(current.extra)
+      ..remove('timeoutSeconds')
+      ..['cliPath'] = command.displayPath;
     return current.copyWith(
       id: AgentDefinition.codex.id,
       displayName: AgentDefinition.codex.displayName,
       kind: AgentProviderKind.codexAppServer,
       command: command.executable,
       arguments: command.argumentsFor(const <String>['app-server']),
-      extra: <String, Object?>{
-        ...current.extra,
-        'cliPath': command.displayPath,
-        'timeoutSeconds': timeoutSeconds,
-      },
+      extra: extra,
     );
-  }
-
-  int _timeoutSeconds(AgentProviderConfig config) {
-    final value = config.extra['timeoutSeconds'];
-    if (value is int && value >= 5 && value <= 600) {
-      return value;
-    }
-    return 60;
   }
 
   Future<_VersionRead> _readVersion(ResolvedCliCommand command) async {
@@ -587,16 +556,14 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
         scope: AgentProviderRuntimeScopeKey.global,
       );
       final provider = lease.provider;
-      await provider.initialize().timeout(
-        Duration(seconds: _timeoutSeconds(config)),
-      );
+      await provider.initialize().timeout(_probeTimeout);
       final modelCatalog = provider.bundle.modelCatalog;
       final models = await _loadModels(
         config: config,
         provider: provider,
         hasModelCatalog: modelCatalog != null,
         forceRefresh: forceModelRefresh,
-      ).timeout(Duration(seconds: _timeoutSeconds(config)));
+      ).timeout(_probeTimeout);
       return _ProviderProbe(
         success: true,
         models: models.models,

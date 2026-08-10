@@ -52,7 +52,6 @@ class AgentManagementPageState extends State<AgentManagementPage> {
   final GlobalKey<AgentConfigurationEditorState> _configurationKey =
       GlobalKey<AgentConfigurationEditorState>();
   late final TextEditingController _searchController;
-  late final TextEditingController _timeoutController;
   _ManagementView _view = _ManagementView.list;
   _AgentListTab _listTab = _AgentListTab.installed;
   _AgentListFilter _filter = _AgentListFilter.all;
@@ -62,7 +61,6 @@ class AgentManagementPageState extends State<AgentManagementPage> {
   void initState() {
     super.initState();
     _searchController = TextEditingController()..addListener(_refreshView);
-    _timeoutController = TextEditingController(text: '60');
     unawaited(widget.controller.initialize(autoDetect: widget.autoDetect));
   }
 
@@ -71,7 +69,6 @@ class AgentManagementPageState extends State<AgentManagementPage> {
     _searchController
       ..removeListener(_refreshView)
       ..dispose();
-    _timeoutController.dispose();
     super.dispose();
   }
 
@@ -503,11 +500,9 @@ class AgentManagementPageState extends State<AgentManagementPage> {
         builder: (context, constraints) {
           final information = _AgentInformationCard(
             agent: agent,
-            timeoutController: _timeoutController,
             onSelectExecutable: _selectExecutable,
             onDetect: widget.controller.detect,
             onOpenExecutableDirectory: _openExecutableDirectory,
-            onSaveTimeout: _saveTimeout,
             onCopyCommand: () =>
                 _copyText(agent.definition.commandName, '已复制启动命令。'),
           );
@@ -602,7 +597,6 @@ class AgentManagementPageState extends State<AgentManagementPage> {
 
   void _openDetail(String agentId) {
     widget.controller.selectAgent(agentId);
-    _timeoutController.text = '${widget.controller.agent.timeoutSeconds}';
     setState(() {
       _view = _ManagementView.detail;
       _detailTab = _AgentDetailTab.overview;
@@ -733,23 +727,6 @@ class AgentManagementPageState extends State<AgentManagementPage> {
           tone: IdeToastTone.error,
         );
       }
-    }
-  }
-
-  Future<void> _saveTimeout() async {
-    final value = int.tryParse(_timeoutController.text.trim());
-    if (value == null || !await widget.controller.setTimeoutSeconds(value)) {
-      if (mounted) {
-        showIdeToast(
-          context,
-          message: '超时时间必须是 5 到 600 之间的整数。',
-          tone: IdeToastTone.error,
-        );
-      }
-      return;
-    }
-    if (mounted) {
-      showIdeToast(context, message: 'Agent 超时时间已保存。');
     }
   }
 
@@ -1193,20 +1170,16 @@ class _ActionEmptyState extends StatelessWidget {
 class _AgentInformationCard extends StatelessWidget {
   const _AgentInformationCard({
     required this.agent,
-    required this.timeoutController,
     required this.onSelectExecutable,
     required this.onDetect,
     required this.onOpenExecutableDirectory,
-    required this.onSaveTimeout,
     required this.onCopyCommand,
   });
 
   final ManagedAgent agent;
-  final TextEditingController timeoutController;
   final VoidCallback onSelectExecutable;
   final VoidCallback onDetect;
   final VoidCallback onOpenExecutableDirectory;
-  final VoidCallback onSaveTimeout;
   final VoidCallback onCopyCommand;
 
   @override
@@ -1242,6 +1215,7 @@ class _AgentInformationCard extends StatelessWidget {
             IdeSettingsRow(
               label: '可执行文件路径',
               description: agent.executablePath == null ? '尚未检测到可执行文件' : null,
+              showDivider: false,
               control: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -1277,33 +1251,6 @@ class _AgentInformationCard extends StatelessWidget {
                         child: const Text('打开目录'),
                       ),
                     ],
-                  ),
-                ],
-              ),
-            ),
-            IdeSettingsRow(
-              label: '超时时间',
-              description: 'Agent 启动、握手或单次无响应等待的最大时长。',
-              showDivider: false,
-              control: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    width: 120,
-                    child: sf.TextField(
-                      key: const ValueKey('agent-timeout-field'),
-                      controller: timeoutController,
-                      keyboardType: TextInputType.number,
-                      features: const <sf.InputFeature>[
-                        sf.InputFeature.trailing(Text('秒')),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: IdeSpacing.space8),
-                  sf.OutlineButton(
-                    onPressed: onSaveTimeout,
-                    size: sf.ButtonSize.small,
-                    child: const Text('保存'),
                   ),
                 ],
               ),

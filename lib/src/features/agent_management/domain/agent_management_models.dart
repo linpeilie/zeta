@@ -242,7 +242,6 @@ class ManagedAgent {
     required this.enabled,
     required this.models,
     required this.logPaths,
-    required this.timeoutSeconds,
     this.executablePath,
     this.currentVersion,
     this.latestVersion,
@@ -291,7 +290,6 @@ class ManagedAgent {
       enabled: enabled,
       models: const <AgentModelInfo>[],
       logPaths: const <String>[],
-      timeoutSeconds: 60,
     );
   }
 
@@ -318,7 +316,6 @@ class ManagedAgent {
   final bool configExists;
   final DateTime? configModifiedAt;
   final List<String> logPaths;
-  final int timeoutSeconds;
 
   bool get installed => installationState == AgentInstallationState.installed;
 
@@ -358,7 +355,6 @@ class ManagedAgent {
     bool? configExists,
     Object? configModifiedAt = _agentManagementUnset,
     List<String>? logPaths,
-    int? timeoutSeconds,
   }) {
     return ManagedAgent(
       definition: definition,
@@ -412,7 +408,6 @@ class ManagedAgent {
           ? this.configModifiedAt
           : configModifiedAt as DateTime?,
       logPaths: List<String>.unmodifiable(logPaths ?? this.logPaths),
-      timeoutSeconds: timeoutSeconds ?? this.timeoutSeconds,
     );
   }
 }

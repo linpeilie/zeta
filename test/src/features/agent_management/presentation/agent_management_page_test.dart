@@ -215,7 +215,6 @@ class _ManagementHarness {
                 'detectedLatestVersion': '0.131.0',
                 'detectedAccountState': 'loggedIn',
                 'lastDetectedAt': DateTime.now().toIso8601String(),
-                'timeoutSeconds': 60,
               },
             ),
           ],
@@ -368,14 +367,7 @@ class _FakeCursorManagementRepository implements AgentCliManagementRepository {
   Future<AgentProviderConfig> providerConfigForPath({
     required AgentProviderConfig current,
     required String path,
-    required int timeoutSeconds,
   }) async => current.copyWith(command: path);
-
-  @override
-  AgentProviderConfig providerConfigWithTimeout(
-    AgentProviderConfig current,
-    int timeoutSeconds,
-  ) => current;
 
   @override
   Future<AgentConfigurationDocument> readConfiguration() async {

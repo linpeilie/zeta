@@ -54,6 +54,9 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
        _now = now ?? DateTime.now,
        _grokHomeProvider = grokHomeProvider ?? _defaultGrokHome;
 
+  /// 检测 / 连接测试中 initialize 与模型目录加载的固定上限。
+  static const Duration _probeTimeout = Duration(seconds: 60);
+
   final GrokCliProcessRun _processRunner;
   final GrokCliLocator _locator;
   final DateTime Function() _now;
@@ -76,7 +79,6 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
       accountState: AgentAccountState.checking,
       versionState: AgentVersionState.checking,
       configPath: configPath,
-      timeoutSeconds: _timeoutSeconds(providerConfig),
     );
 
     void publish(int completed, String message) {
@@ -187,11 +189,7 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
     current = current.copyWith(logPaths: logs);
     publish(6, '已定位 Grok 日志');
 
-    final effectiveConfig = _providerConfig(
-      providerConfig,
-      resolved,
-      timeoutSeconds: current.timeoutSeconds,
-    );
+    final effectiveConfig = _providerConfig(providerConfig, resolved);
     final probe = await _probeProvider(
       effectiveConfig,
       accountState: current.accountState,
@@ -244,11 +242,7 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
     }
 
     final account = await _readAccountStatus();
-    final effective = _providerConfig(
-      providerConfig,
-      resolved,
-      timeoutSeconds: _timeoutSeconds(providerConfig),
-    );
+    final effective = _providerConfig(providerConfig, resolved);
     final probe = await _probeProvider(
       effective,
       accountState: account.state,
@@ -275,26 +269,12 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
   Future<AgentProviderConfig> providerConfigForPath({
     required AgentProviderConfig current,
     required String path,
-    required int timeoutSeconds,
   }) async {
     final resolved = await _locator.resolvePath(path);
     if (resolved == null) {
       throw FileSystemException('所选文件不存在或不是普通文件', path);
     }
-    return _providerConfig(current, resolved, timeoutSeconds: timeoutSeconds);
-  }
-
-  @override
-  AgentProviderConfig providerConfigWithTimeout(
-    AgentProviderConfig current,
-    int timeoutSeconds,
-  ) {
-    return current.copyWith(
-      extra: <String, Object?>{
-        ...current.extra,
-        'timeoutSeconds': timeoutSeconds,
-      },
-    );
+    return _providerConfig(current, resolved);
   }
 
   @override
@@ -486,9 +466,11 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
 
   AgentProviderConfig _providerConfig(
     AgentProviderConfig current,
-    ResolvedCliCommand resolved, {
-    required int timeoutSeconds,
-  }) {
+    ResolvedCliCommand resolved,
+  ) {
+    final extra = Map<String, Object?>.of(current.extra)
+      ..remove('timeoutSeconds')
+      ..['cliPath'] = resolved.displayPath;
     return current.copyWith(
       id: AgentDefinition.grok.id,
       displayName: AgentDefinition.grok.displayName,
@@ -496,20 +478,8 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
       // 保留真实 CLI 路径与纯协议参数；进程启动器会按平台包装 cmd/PowerShell。
       command: resolved.displayPath,
       arguments: const <String>['agent', 'stdio'],
-      extra: <String, Object?>{
-        ...current.extra,
-        'cliPath': resolved.displayPath,
-        'timeoutSeconds': timeoutSeconds,
-      },
+      extra: extra,
     );
-  }
-
-  int _timeoutSeconds(AgentProviderConfig config) {
-    final value = config.extra['timeoutSeconds'];
-    if (value is int && value >= 5 && value <= 600) {
-      return value;
-    }
-    return 60;
   }
 
   Future<_VersionRead> _readVersion(ResolvedCliCommand command) async {
@@ -659,16 +629,14 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
         scope: AgentProviderRuntimeScopeKey.global,
       );
       final provider = lease.provider;
-      await provider.initialize().timeout(
-        Duration(seconds: _timeoutSeconds(config)),
-      );
+      await provider.initialize().timeout(_probeTimeout);
       final modelCatalog = provider.bundle.modelCatalog;
       final models = await _loadModels(
         config: config,
         provider: provider,
         hasModelCatalog: modelCatalog != null,
         forceRefresh: forceModelRefresh,
-      ).timeout(Duration(seconds: _timeoutSeconds(config)));
+      ).timeout(_probeTimeout);
       return _ProviderProbe(success: true, models: models.models);
     } catch (error) {
       return _ProviderProbe(

@@ -292,7 +292,6 @@ done
       final config = await repository.providerConfigForPath(
         current: AgentProviderConfig.defaultGrok,
         path: grokScript.path,
-        timeoutSeconds: 60,
       );
 
       // Assert

@@ -24,14 +24,7 @@ abstract class AgentCliManagementRepository {
   Future<AgentProviderConfig> providerConfigForPath({
     required AgentProviderConfig current,
     required String path,
-    required int timeoutSeconds,
   });
-
-  /// 仅更新超时等管理字段。
-  AgentProviderConfig providerConfigWithTimeout(
-    AgentProviderConfig current,
-    int timeoutSeconds,
-  );
 
   /// 本地配置文件绝对路径。
   String get configPath;

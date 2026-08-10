@@ -154,7 +154,7 @@ extension UsageErrorCategoryLabel on UsageErrorCategory {
     UsageErrorCategory.account => '检查 Codex 登录状态与当前套餐额度。',
     UsageErrorCategory.cli => '检查 Codex 版本、配置和运行日志。',
     UsageErrorCategory.network => '检查网络、代理设置后重试。',
-    UsageErrorCategory.timeout => '缩小任务范围或提高 Agent 超时时间。',
+    UsageErrorCategory.timeout => '缩小任务范围后重试。',
     UsageErrorCategory.cancelled => '如需继续，请重新发起该任务。',
     UsageErrorCategory.other => '打开任务详情或 Agent 日志查看原始原因。',
   };
