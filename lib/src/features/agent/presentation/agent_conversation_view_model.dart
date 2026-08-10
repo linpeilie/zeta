@@ -164,7 +164,8 @@ class AgentConversationViewModel {
         : _openBoundThread(thread);
   }
 
-  static const String defaultThreadTitle = 'New thread';
+  /// 与 domain [agentDefaultThreadTitle] 同源；头栏占位，不得当正式列表 title。
+  static const String defaultThreadTitle = agentDefaultThreadTitle;
 
   /// 用户确认执行计划后，用于启动 Default 回合的本地交接提示。
   static const String planExecutionPrompt =
@@ -2544,6 +2545,7 @@ class AgentConversationViewModel {
   /// 从列表侧同步当前 thread 标题（刷新列表 / 服务端改名后保持详情头栏一致）。
   ///
   /// 仅当 [threadId] 仍是当前会话时生效；标题未变化时不触发刷新。
+  /// 占位标题（空 / New thread）不得回写，避免冲掉首条消息临时标题。
   void syncThreadTitleIfCurrent(String threadId, String title) {
     if (_disposed) {
       return;
@@ -2552,7 +2554,8 @@ class AgentConversationViewModel {
       return;
     }
     final trimmed = title.trim();
-    if (trimmed.isEmpty || trimmed == _currentThreadTitle) {
+    if (isAgentThreadTitlePlaceholder(trimmed) ||
+        trimmed == _currentThreadTitle) {
       return;
     }
     _applyThreadTitle(trimmed);
@@ -3413,20 +3416,20 @@ class AgentConversationViewModel {
         : selectedThreadId == expectedThreadId;
   }
 
-  /// 采用 provider 返回的 thread 标题；空标题或已有非默认标题时保留当前值。
+  /// 采用 provider 返回的 thread 标题；空/占位标题或已有非默认标题时保留当前值。
   ///
   /// 从项目线程列表打开时标题已是正式 displayName；resume 返回的 session
   /// title 常是临时值，不得覆盖。仅在仍是默认「New thread」时（例如新建会话）
-  /// 才采用 session title。
+  /// 才采用**非占位** session title。
   void _applySessionTitle(AgentSession session) {
     final title = session.title?.trim();
-    if (title == null || title.isEmpty) {
+    if (isAgentThreadTitlePlaceholder(title)) {
       return;
     }
     if (_currentThreadTitle != defaultThreadTitle) {
       return;
     }
-    _applyThreadTitle(title);
+    _applyThreadTitle(title!);
   }
 
   /// 更新当前详情标题，并在已绑定 session 时写回其 title 字段。

@@ -1250,9 +1250,9 @@ class IdeShellController extends ChangeNotifier {
 
   /// 将当前会话在列表中的**正式**标题同步到 Agent 详情头栏。
   ///
-  /// 仅使用 summary.title（generated_title / 手动重命名），不用 preview。
-  /// 这样刷新列表拿到正式标题后，停留在详情也能更新；又不会把首条
-  /// 用户消息 preview 误当成最终标题。
+  /// 仅使用 summary.title（generated_title / 手动重命名），不用 preview，
+  /// 也不用占位「New thread」。这样刷新列表拿到正式标题后，停留在详情也能
+  /// 更新；又不会把首条用户消息临时标题冲回占位文案。
   void _syncSelectedThreadTitleFromList() {
     final projectPath = _projectPath;
     final viewModel = selectedAgentViewModel;
@@ -1265,10 +1265,10 @@ class IdeShellController extends ChangeNotifier {
       return;
     }
     final title = summary.title?.trim();
-    if (title == null || title.isEmpty) {
+    if (isAgentThreadTitlePlaceholder(title)) {
       return;
     }
-    viewModel.syncThreadTitleIfCurrent(sessionId, title);
+    viewModel.syncThreadTitleIfCurrent(sessionId, title!);
   }
 
   void _handleActiveThreadCleared(String projectPath, String threadId) {

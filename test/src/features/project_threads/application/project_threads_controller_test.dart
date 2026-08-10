@@ -300,6 +300,85 @@ void main() {
       expect(thread.displayName, 'Formal Title');
     });
 
+    test(
+      'syncRuntimeSnapshot ignores placeholder New thread title for all providers',
+      () {
+        // Codex/Grok 新建会话 snapshot 常带「New thread」占位；写进列表 title 后
+        // 会被当成正式名，挡住首条消息临时标题与 generated_title。
+        final provider = _FakeAgentProvider(pages: const <AgentThreadPage>[]);
+        final controller = _createController(provider);
+
+        controller.registerSession(
+          '/repo',
+          const AgentSession(
+            id: 'new-thread',
+            providerId: defaultAgentProviderId,
+          ),
+          preview: 'help me fix this',
+        );
+        expect(controller.stateFor('/repo').threads.single.title, isNull);
+
+        controller.syncRuntimeSnapshot(
+          projectPath: '/repo',
+          snapshot: const AgentConversationThreadSnapshot(
+            sessionId: 'new-thread',
+            providerId: defaultAgentProviderId,
+            threadTitle: agentDefaultThreadTitle,
+            isTurnRunning: true,
+            runtimeStatus: AgentThreadRuntimeStatus.active,
+            waitingOnApproval: false,
+            waitingOnUserInput: false,
+          ),
+        );
+
+        final afterPlaceholder = controller.stateFor('/repo').threads.single;
+        expect(afterPlaceholder.title, isNull);
+        expect(afterPlaceholder.preview, 'help me fix this');
+        expect(afterPlaceholder.displayName, 'help me fix this');
+
+        // 正式标题仍可写回。
+        controller.syncRuntimeSnapshot(
+          projectPath: '/repo',
+          snapshot: const AgentConversationThreadSnapshot(
+            sessionId: 'new-thread',
+            providerId: defaultAgentProviderId,
+            threadTitle: 'Help me fix this bug',
+            isTurnRunning: false,
+            runtimeStatus: AgentThreadRuntimeStatus.idle,
+            waitingOnApproval: false,
+            waitingOnUserInput: false,
+          ),
+        );
+        expect(
+          controller.stateFor('/repo').threads.single.title,
+          'Help me fix this bug',
+        );
+      },
+    );
+
+    test(
+      'registerSession drops session placeholder title so list title stays empty',
+      () {
+        final provider = _FakeAgentProvider(pages: const <AgentThreadPage>[]);
+        final controller = _createController(provider);
+
+        controller.registerSession(
+          '/repo',
+          const AgentSession(
+            id: 'new-thread',
+            providerId: defaultAgentProviderId,
+            title: agentDefaultThreadTitle,
+          ),
+          preview: 'first prompt',
+        );
+
+        final thread = controller.stateFor('/repo').threads.single;
+        expect(thread.title, isNull);
+        expect(thread.preview, 'first prompt');
+        expect(thread.displayName, 'first prompt');
+      },
+    );
+
     test('promotes an existing thread to the top when a turn starts', () async {
       // 列表按 recency 倒序：thread-2 最新在顶，thread-0 最旧在底。
       final provider = _FakeAgentProvider(

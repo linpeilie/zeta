@@ -224,15 +224,18 @@ class ProjectThreadsController {
     bool markRunning = false,
   }) {
     _registerThreadMapping(projectPath, session.id);
-    final resolvedPreview = (preview ?? session.title ?? '').trim();
     // title 只在 provider 已给出正式名时写入；首条用户消息只放 preview，
-    // 避免把临时文案写进 title 后挡住后续 generated_title 覆盖观感。
+    // 避免把临时文案/「New thread」占位写进 title 后挡住后续 generated_title。
+    final formalTitle = isAgentThreadTitlePlaceholder(session.title)
+        ? null
+        : session.title?.trim();
+    final resolvedPreview = (preview ?? session.title ?? '').trim();
     final now = DateTime.now();
     final thread = AgentThreadSummary(
       id: session.id,
       providerId: session.providerId,
       projectPath: projectPath,
-      title: session.title,
+      title: formalTitle,
       preview: resolvedPreview,
       createdAt: now,
       updatedAt: now,
@@ -240,11 +243,11 @@ class ProjectThreadsController {
       raw: session.raw,
     );
     viewModel.prependThread(projectPath: projectPath, thread: thread);
-    if (session.title != null && session.title!.trim().isNotEmpty) {
+    if (formalTitle != null) {
       viewModel.updateThreadTitle(
         projectPath: projectPath,
         threadId: session.id,
-        title: session.title,
+        title: formalTitle,
       );
     }
     selectThreadId(projectPath, session.id);
@@ -274,6 +277,10 @@ class ProjectThreadsController {
   ///
   /// 这里不依赖当前 active provider 的单路事件流；已打开 thread 的后台执行、
   /// 等待审批与等待输入都应由各自 runtime 常驻同步。
+  ///
+  /// 标题同步对 **全部 Provider** 生效：仅当 snapshot 携带非占位正式标题时
+  /// 才 `updateThreadTitle`。新建会话的「New thread」/空串若写进列表 title，
+  /// 会被当成正式名，后续首条消息临时标题与 generated_title 都可能被挡住。
   void syncRuntimeSnapshot({
     required String projectPath,
     required AgentConversationThreadSnapshot snapshot,
@@ -288,7 +295,8 @@ class ProjectThreadsController {
         .where((thread) => thread.id == sessionId)
         .map((thread) => thread.title?.trim())
         .firstOrNull;
-    if (threadTitle.isNotEmpty && currentTitle != threadTitle) {
+    if (!isAgentThreadTitlePlaceholder(threadTitle) &&
+        currentTitle != threadTitle) {
       viewModel.updateThreadTitle(
         projectPath: projectPath,
         threadId: sessionId,
@@ -1061,6 +1069,9 @@ class ProjectThreadsController {
   }
 
   /// 单条摘要：incoming 权威字段优先，空/弱展示字段回退 local。
+  ///
+  /// 标题的「弱」判定含 Zeta 占位 [agentDefaultThreadTitle]：provider 列表若
+  /// 仍回传「New thread」，不得冲掉本地首条消息临时标题或已同步正式名。
   static AgentThreadSummary _mergeThreadSummaryPreferLocalDisplay({
     required AgentThreadSummary? local,
     required AgentThreadSummary incoming,
@@ -1069,13 +1080,11 @@ class ProjectThreadsController {
       return incoming;
     }
 
-    final incomingTitle = incoming.title?.trim();
-    final localTitle = local.title?.trim();
-    final resolvedTitle = (incomingTitle != null && incomingTitle.isNotEmpty)
+    final incomingTitleStrong = !isAgentThreadTitlePlaceholder(incoming.title);
+    final localTitleStrong = !isAgentThreadTitlePlaceholder(local.title);
+    final resolvedTitle = incomingTitleStrong
         ? incoming.title
-        : (localTitle != null && localTitle.isNotEmpty
-              ? local.title
-              : incoming.title);
+        : (localTitleStrong ? local.title : incoming.title);
 
     final incomingPreview = incoming.preview.trim();
     final localPreview = local.preview.trim();

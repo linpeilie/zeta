@@ -490,6 +490,21 @@ void main() {
       expect(viewModel.currentThreadTitle, 'From list refresh');
     });
 
+    test('syncThreadTitleIfCurrent ignores New thread placeholder', () async {
+      final viewModel = _createViewModel(_FakeAgentProvider());
+      addTearDown(viewModel.dispose);
+
+      await viewModel.sendMessage('hello from provisional title');
+      expect(viewModel.currentThreadTitle, 'hello from provisional title');
+
+      // 列表误写占位 title 时，不得把详情头栏冲回 New thread。
+      viewModel.syncThreadTitleIfCurrent(
+        'thread-1',
+        AgentConversationViewModel.defaultThreadTitle,
+      );
+      expect(viewModel.currentThreadTitle, 'hello from provisional title');
+    });
+
     test('keeps bound thread title after project context changes', () async {
       final provider = _FakeAgentProvider();
       final viewModel = _createViewModel(provider, initialThread: _thread());
