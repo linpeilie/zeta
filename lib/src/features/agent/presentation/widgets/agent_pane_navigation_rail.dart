@@ -18,7 +18,8 @@ const double _kNavPreviewCardMaxWidth = 260;
 ///
 /// 强调色策略：
 /// - 无 hover：当前查看回合更深色；
-/// - hover 某短线：更深色切到该线，并在轨**右侧**展示预览 Card；
+/// - hover 某短线：更深色切到该线，并在轨**右侧**以叠层展示预览 Card；
+/// - 预览卡用 [Stack]/[Positioned] 脱离纵向布局，**不改变轨自身高度**；
 /// - 短线之间切换用 [IdeMotion] 过渡尺寸与颜色，避免跳变。
 ///
 /// 低对比度折叠态；不持久化任何正文。
@@ -207,6 +208,8 @@ class _AgentConversationNavigationRailState
     final streamingColor = colors.accent.withValues(alpha: 0.85);
     final failedColor = colors.error.withValues(alpha: 0.8);
     final brightness = Theme.of(context).brightness;
+    // 与 tick 固定 hit 宽一致，供卡片横向定位（不撑高）。
+    const tickColumnWidth = _kNavTickWidthEmphasized + IdeSpacing.space4 * 2;
     AgentConversationNavigationEntry? hoveredEntry;
     if (hoveredIndex != null &&
         hoveredIndex >= 0 &&
@@ -233,11 +236,21 @@ class _AgentConversationNavigationRailState
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 360),
                 child: SingleChildScrollView(
-                  // Row：短线列 + 右侧预览卡，卡参与布局与命中。
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
+                  // Stack：高度只由短线列决定；预览卡 Positioned 叠在右侧，
+                  // 不进入纵向 flex，避免 hover 改变轨高导致整轨上移。
+                  child: Stack(
+                    clipBehavior: Clip.none,
                     children: [
+                      // hover 时仅横向扩宽命中区，便于指针移入右侧卡片；
+                      // 高度必须为 0，避免 SizedBox 在无 height 时吃满纵向约束。
+                      if (hoveredEntry != null)
+                        const SizedBox(
+                          width:
+                              tickColumnWidth +
+                              IdeSpacing.space8 +
+                              _kNavPreviewCardMaxWidth,
+                          height: 0,
+                        ),
                       Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -278,14 +291,12 @@ class _AgentConversationNavigationRailState
                             ),
                         ],
                       ),
-                      if (hoveredEntry != null) ...[
-                        const SizedBox(width: IdeSpacing.space8),
-                        Padding(
-                          padding: EdgeInsets.only(
-                            top: math.max(
-                              0,
-                              _tickCenterY(index: hoveredIndex!, gap: gap) - 28,
-                            ),
+                      if (hoveredEntry != null)
+                        Positioned(
+                          left: tickColumnWidth + IdeSpacing.space8,
+                          top: math.max(
+                            0,
+                            _tickCenterY(index: hoveredIndex!, gap: gap) - 28,
                           ),
                           child: AnimatedSwitcher(
                             duration: cardDuration,
@@ -329,7 +340,6 @@ class _AgentConversationNavigationRailState
                             ),
                           ),
                         ),
-                      ],
                     ],
                   ),
                 ),
@@ -392,7 +402,7 @@ class _AgentConversationNavigationTick extends StatelessWidget {
     final color = emphasized
         ? _baseStatusColor
         : trackColor.withValues(alpha: 0.45);
-    final height = emphasized ? 3.0 : 2.0;
+    const height = 2.0;
     final width = emphasized ? _kNavTickWidthEmphasized : restingWidth;
 
     return PaneInteractiveSurface(
