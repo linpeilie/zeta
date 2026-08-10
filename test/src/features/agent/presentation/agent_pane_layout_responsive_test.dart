@@ -427,7 +427,7 @@ void main() {
         // 用户消息是左对齐日志行：没有底色、没有四边框，只有一条左侧竖线。
         expect(decoration.color, isNull);
         final border = decoration.border! as Border;
-        expect(border.left.color, colors.border);
+        expect(border.left.color, colors.textTertiary);
         expect(border.left.width, 2);
         expect(border.top, BorderSide.none);
         expect(border.right, BorderSide.none);

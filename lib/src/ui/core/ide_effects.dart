@@ -63,6 +63,54 @@ abstract final class IdeRadius {
   static const BorderRadius pill = BorderRadius.all(Radius.circular(999));
 }
 
+/// IDE 容器形状 token。
+///
+/// 只有**面板级容器**（[IdeRadius.large]，12px）使用平滑圆角
+/// （rounded superellipse，即俗称的 squircle）；控件级一律保持圆形圆角。
+///
+/// **为什么按档位分而不是全局统一**：superellipse 与圆形圆角的路径差异随
+/// 半径线性放大。在 4~8px 上肉眼不可辨，只有 12px 以上才读得出那种「苹果味」
+/// 的连续曲率。给小控件上 squircle 是纯成本无收益——`BoxDecoration` 不支持
+/// superellipse（Flutter 框架层面就没有），每个调用点都得改成 `ShapeDecoration`，
+/// 而其中不少位于虚拟化时间线的重建热路径上。
+///
+/// 另外注意 `shadcn_flutter` 的组件参数只接受 `BorderRadius`、不接受
+/// `ShapeBorder`，所以 sf 渲染的表面必然保持圆形圆角。把平滑圆角限制在
+/// 面板档，正好也避开了这层无法统一的混合状态。
+abstract final class IdeShapes {
+  /// 面板 / 侧栏 / 画布 / 浮层的平滑圆角形状。
+  ///
+  /// 生效位置：`IdeSurface` 的 pane / popover / canvas 级、`PanelCard`
+  /// 取到 [IdeRadius.allLarge] 时。
+  ///
+  /// 描边通过 [side] 传入。注意 `IdeSurface` 与 `PanelCard` 把填充放在
+  /// `decoration`、把描边放在 `foregroundDecoration`（不透明子树会盖住画在
+  /// 下层的四角描边），所以那两处需要各构造一次：填充用默认的
+  /// `BorderSide.none`，描边再传一次 [side]。
+  static ShapeBorder panel({BorderSide side = BorderSide.none}) {
+    return RoundedSuperellipseBorder(
+      borderRadius: IdeRadius.allLarge,
+      side: side,
+    );
+  }
+
+  /// 控件级形状：圆形圆角，与 `BoxDecoration(borderRadius:)` 视觉等价。
+  ///
+  /// 供需要 `ShapeBorder` 的 API 使用；普通调用点继续直接写
+  /// `BoxDecoration(borderRadius: IdeRadius.allSmall)` 即可，不必绕这里。
+  static ShapeBorder control(
+    BorderRadiusGeometry radius, {
+    BorderSide side = BorderSide.none,
+  }) {
+    return RoundedRectangleBorder(borderRadius: radius, side: side);
+  }
+
+  /// 判断某个半径是否属于面板档，决定走 [panel] 还是 [control]。
+  static bool isPanelTier(BorderRadiusGeometry radius) {
+    return radius == IdeRadius.allLarge;
+  }
+}
+
 /// IDE 阴影与遮罩 token。
 ///
 /// **零阴影法则**：层级一律靠表面明暗（`IdeColors` 的 frame → surface →

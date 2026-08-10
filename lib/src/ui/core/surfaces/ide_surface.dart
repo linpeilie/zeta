@@ -98,24 +98,42 @@ class IdeSurface extends StatelessWidget {
         showBorder ??
         (level == IdeSurfaceLevel.pane || level == IdeSurfaceLevel.popover);
 
+    // 面板档走平滑圆角（superellipse），控件档保持圆形圆角。
+    final isPanelTier = IdeShapes.isPanelTier(resolvedRadius);
+
     // 边框必须放在 foregroundDecoration：decoration 边框画在 child 之下，
     // Agent 等不透明子树（如内层 IdeSurface.canvas）会盖住圆角四角描边。
     // 与 PanelCard 一致，保证描边始终浮在内容之上。
+    // clipBehavior 会自动跟随 decoration 的形状，不需要额外处理。
     return Container(
       clipBehavior: clipBehavior,
       padding: padding,
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: resolvedRadius,
-        boxShadow: level == IdeSurfaceLevel.popover
-            ? IdeEffects.overlayShadow(brightness)
-            : const <BoxShadow>[],
-      ),
-      foregroundDecoration: resolvedShowBorder
-          ? BoxDecoration(
-              border: Border.all(color: colors.border),
-              borderRadius: resolvedRadius,
+      decoration: isPanelTier
+          ? ShapeDecoration(
+              color: background,
+              shape: IdeShapes.panel(),
+              shadows: level == IdeSurfaceLevel.popover
+                  ? IdeEffects.overlayShadow(brightness)
+                  : const <BoxShadow>[],
             )
+          : BoxDecoration(
+              color: background,
+              borderRadius: resolvedRadius,
+              boxShadow: level == IdeSurfaceLevel.popover
+                  ? IdeEffects.overlayShadow(brightness)
+                  : const <BoxShadow>[],
+            ),
+      foregroundDecoration: resolvedShowBorder
+          ? (isPanelTier
+                ? ShapeDecoration(
+                    shape: IdeShapes.panel(
+                      side: BorderSide(color: colors.border),
+                    ),
+                  )
+                : BoxDecoration(
+                    border: Border.all(color: colors.border),
+                    borderRadius: resolvedRadius,
+                  ))
           : null,
       child: child,
     );

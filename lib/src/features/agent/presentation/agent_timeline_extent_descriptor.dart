@@ -114,6 +114,7 @@ final class AgentTimelineExtentDescriptorFactory {
       final built = describe(
         items[index],
         previousItem: index > 0 ? items[index - 1] : null,
+        nextItem: index + 1 < items.length ? items[index + 1] : null,
         expansion: expansion,
         layoutContext: layoutContext,
       );
@@ -134,15 +135,18 @@ final class AgentTimelineExtentDescriptorFactory {
   IdeVirtualItemDescriptor describe(
     AgentTimelineViewportItem item, {
     AgentTimelineViewportItem? previousItem,
+    AgentTimelineViewportItem? nextItem,
     required AgentTimelineExpansionLookup expansion,
     required AgentTimelineLayoutContext layoutContext,
   }) {
     final precededByOperationGroup = _isPrecededByOperationGroup(previousItem);
+    final followedByOperationGroup = _isPrecededByOperationGroup(nextItem);
     final kind = _kindOf(item);
     final revision = _layoutRevision(
       item,
       expansion,
       precededByOperationGroup: precededByOperationGroup,
+      followedByOperationGroup: followedByOperationGroup,
     );
     final estimated = _estimateExtent(
       item,
@@ -151,6 +155,7 @@ final class AgentTimelineExtentDescriptorFactory {
       textScale: layoutContext.textScale,
       expansion: expansion,
       precededByOperationGroup: precededByOperationGroup,
+      followedByOperationGroup: followedByOperationGroup,
     );
     return IdeVirtualItemDescriptor(
       id: item.id,
@@ -205,6 +210,7 @@ final class AgentTimelineExtentDescriptorFactory {
     AgentTimelineViewportItem item,
     AgentTimelineExpansionLookup expansion, {
     bool precededByOperationGroup = false,
+    bool followedByOperationGroup = false,
   }) {
     return switch (item) {
       AgentLiveActivityViewportItem(:final turn) => Object.hash(
@@ -228,9 +234,13 @@ final class AgentTimelineExtentDescriptorFactory {
         block.id,
         _blockContentRevision(block),
         _blockExpansionFingerprint(block, expansion),
-        // 相邻操作组折叠 top 外间距会影响实测高度。
+        // 相邻操作组会改变上下外间距（块内 2 / 块外 10），进而影响实测高度，
+        // 所以前后两侧都要进指纹，否则邻居变化后旧估算会被复用。
         isAgentTimelineOperationGroupBlock(block)
             ? precededByOperationGroup
+            : null,
+        isAgentTimelineOperationGroupBlock(block)
+            ? followedByOperationGroup
             : null,
       ),
     };
@@ -346,6 +356,7 @@ final class AgentTimelineExtentDescriptorFactory {
     required double textScale,
     required AgentTimelineExpansionLookup expansion,
     bool precededByOperationGroup = false,
+    bool followedByOperationGroup = false,
   }) {
     final width = crossAxisExtent.isFinite && crossAxisExtent > 0
         ? crossAxisExtent
@@ -363,6 +374,7 @@ final class AgentTimelineExtentDescriptorFactory {
             expansion,
             scale,
             precededByOperationGroup: precededByOperationGroup,
+            followedByOperationGroup: followedByOperationGroup,
           ),
         AgentTimelineFileEditGroupRenderBlock(:final group) =>
           _estimateFileEditGroup(
@@ -370,6 +382,7 @@ final class AgentTimelineExtentDescriptorFactory {
             expansion,
             scale,
             precededByOperationGroup: precededByOperationGroup,
+            followedByOperationGroup: followedByOperationGroup,
           ),
         AgentTimelineEntryRenderBlock(:final entry) => _estimateEntry(
           entry,
@@ -388,13 +401,15 @@ final class AgentTimelineExtentDescriptorFactory {
     AgentTimelineExpansionLookup expansion,
     double scale, {
     bool precededByOperationGroup = false,
+    bool followedByOperationGroup = false,
   }) {
-    // 内容区约 30；外间距上下各 10，紧挨上一操作组时省略 top。
+    // 内容区约 30；外间距与 `_operationGroupOuterPadding` 保持一致：
+    // 块内 2、块外 10。估算与真实间距脱节会让长会话滚动出现跳动。
     final content = expansion.isCommandGroupExpanded(group.id)
         ? 30 + group.items.length * 28
         : 30;
     final top = precededByOperationGroup ? 0.0 : 10.0;
-    const bottom = 10.0;
+    final bottom = followedByOperationGroup ? 2.0 : 10.0;
     return (content + top + bottom) * scale;
   }
 
@@ -403,6 +418,7 @@ final class AgentTimelineExtentDescriptorFactory {
     AgentTimelineExpansionLookup expansion,
     double scale, {
     bool precededByOperationGroup = false,
+    bool followedByOperationGroup = false,
   }) {
     // 内容区：折叠头约 30 + 各文件行；外间距与命令集相同规则。
     var content = 30.0;
@@ -414,7 +430,7 @@ final class AgentTimelineExtentDescriptorFactory {
       }
     }
     final top = precededByOperationGroup ? 0.0 : 10.0;
-    const bottom = 10.0;
+    final bottom = followedByOperationGroup ? 2.0 : 10.0;
     return (content + top + bottom) * scale;
   }
 

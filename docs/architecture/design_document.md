@@ -219,13 +219,26 @@ projection 与 unified diff 以 turn render revision 缓存，代码高亮复用
   都必须 ≥ 4.5:1。10px 的时间戳用的就是 `textTertiary`，最容易踩线——层级弱化靠
   字号和字重，不靠压对比度。回归断言在 `test/src/ui/core/ide_colors_test.dart`。
 - 全部视觉取值集中在 `lib/src/ui/core/` 的 token 类：`IdeColors`（语义色）、
-  `IdeRadius`/`IdeEffects`（圆角四档与浮层阴影、scrim）、
+  `IdeRadius`/`IdeShapes`/`IdeEffects`（圆角四档、容器形状与浮层阴影、scrim）、
   `IdeSpacing`（4px 基准间距）、`IdeTextStyles`（语义字号）、
   `IdeMetrics`（组件尺寸与响应式断点）、`IdeMotion`（动效）。
 - 圆角四档 **4 / 6 / 8 / 12** + pill，按「元素有多大」分配：
   micro 4（标签、hover 高亮、行内小块）、small 6（按钮、输入框、代码块、列表行）、
   medium 8（卡片、状态卡、Composer 外卡）、large 12（侧栏面板、画布、浮层）。
   **嵌套时内层必须严格小于外层**，典型链路是面板 12 → 卡片 8 → 代码块 6 → 行内高亮 4。
+- **`shadcn_flutter` 的 `ThemeData.radius` 必须保持 `0.5`**。shadcn 把这个乘数
+  展开成固定阶梯 `radius × 4/8/12/16/20/24`，取 0.5 才能让它精确落在 `IdeRadius`
+  上（sm→4 / md→6 / lg→8 / xxl→12）。改成别的值会立刻产生两套相差 1~2px 的平行
+  圆角体系——差距不够大到像有意为之，只够大到让并排的 sf 控件和 Ide 控件
+  看起来「圆角没对齐」。
+- **只有面板档（12px）使用平滑圆角**（`RoundedSuperellipseBorder`，Flutter 3.32+
+  内置的 rounded superellipse），通过 `IdeShapes.panel()` 消费，生效于 `IdeSurface`
+  的 pane/popover/canvas 与 `PanelCard`。控件档一律保持圆形圆角：superellipse 的
+  路径差异随半径线性放大，4~8px 上肉眼不可辨，而 `BoxDecoration` 无法表达
+  superellipse，全量迁移要把大量热路径组件改成 `ShapeDecoration`，纯成本无收益。
+  注意 `shadcn_flutter` 的组件参数只接受 `BorderRadius`、不接受 `ShapeBorder`，
+  所以 sf 渲染的表面必然是圆形圆角——把平滑圆角限制在面板档也避开了这层
+  无法统一的混合状态。
 - 字体分工：界面文本用内置 Geist（`bundledUiFontFamily`），
   **机器标识符与数值一律用内置 JetBrains Mono**（`bundledCodeFontFamily`）。
   对应 token 为 `identifier`（模型 ID、Provider 名、thread ID）、
@@ -246,6 +259,18 @@ projection 与 unified diff 以 turn render revision 缓存，代码高亮复用
   不要在调用点写 `fontSize:`（那会绕过用户的字号设置）。
 - 面板圆角 12、卡片 8、间距紧凑，适合桌面工具密度：页面内边距按 IDE 而不是
   移动端取值，省下的空间还给内容行数。
+- **会话区是文档流，不是卡片流**：Agent 正文、最终答复、工具调用、命令组、
+  文件编辑一律无边框无底色，文字直接落在画布上。回合之间只用「大留白 + 一条
+  全宽 1px `borderSubtle` 发丝线」分隔，元信息作为落款贴在线下右侧。
+  仍保留容器的只有**待用户操作的交互面**（Plan 交接卡、权限卡、提问卡）和
+  **需要显眼的错误/警告**（`IdeStatusCard`）；代码块底色属于可扫描性，不算容器。
+- **身份锚点靠对比度和字重，不靠颜色**：用户消息用 `textTertiary` 的 2px 左竖线
+  + 等宽 w600 角色前缀 + w500 正文，与 Agent 长文的 w400 拉开一档。单色体系里
+  染色不是可用手段。
+- **操作记录块内紧、块外松**：连续操作组之间只留 2px，与正文交界处留 10px，
+  折叠箭头放在行首而不是行尾——右对齐的箭头会被标题推到画布最右，中间的空白
+  在视觉上读成一条横规。改这些间距时必须同步
+  `agent_timeline_extent_descriptor.dart` 的高度估算，否则长会话滚动会跳动。
 - 极简边框：分隔一律是 1px `borderSubtle`。横向用
   `IdeRowDivider`，纵向用 `IdeColumnDivider`；不要使用 Material
   `Divider` / `VerticalDivider`。进度指示统一走 `IdeBusySpinner`

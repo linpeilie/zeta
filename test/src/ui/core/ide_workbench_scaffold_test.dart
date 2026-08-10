@@ -232,15 +232,17 @@ void main() {
         matching: find.byType(Container),
       ),
     );
-    final decoration = canvasContainer.decoration! as BoxDecoration;
-    final foreground = canvasContainer.foregroundDecoration! as BoxDecoration;
-    expect(decoration.borderRadius, IdeRadius.allLarge);
+    // 面板档走平滑圆角，因此填充与描边都是 ShapeDecoration。
+    final decoration = canvasContainer.decoration! as ShapeDecoration;
+    final foreground = canvasContainer.foregroundDecoration! as ShapeDecoration;
+    final shape = decoration.shape as RoundedSuperellipseBorder;
+    expect(shape.borderRadius, IdeRadius.allLarge);
     expect(decoration.color, IdeColors.dark.canvasSurface);
-    // 边框在 foreground，避免被 Agent 不透明内容盖住四角。
-    expect(decoration.border, isNull);
-    expect(foreground.border, isNotNull);
-    expect(foreground.border!.top.color, IdeColors.dark.border);
-    expect(foreground.borderRadius, IdeRadius.allLarge);
+    // 描边在 foreground，避免被 Agent 不透明内容盖住四角。
+    expect(shape.side, BorderSide.none);
+    final foregroundShape = foreground.shape as RoundedSuperellipseBorder;
+    expect(foregroundShape.side.color, IdeColors.dark.border);
+    expect(foregroundShape.borderRadius, IdeRadius.allLarge);
     expect(tester.takeException(), isNull);
   });
 

@@ -40,29 +40,39 @@ void main() {
       ),
     );
 
+    // canvas 是 row 之外唯一的非面板档，仍走 BoxDecoration。
     expect(
       _decorationOf(tester, 'canvas-surface').color,
       IdeColors.dark.editor,
     );
     expect(_foregroundDecorationOf(tester, 'canvas-surface'), isNull);
-    expect(_decorationOf(tester, 'pane-surface').color, IdeColors.dark.surface);
-    expect(_foregroundDecorationOf(tester, 'pane-surface')?.border, isNotNull);
-    // 面板与浮层同属圆角嵌套链路的最外层。
+
+    // 面板与浮层同属圆角嵌套链路的最外层，且用平滑圆角（superellipse）。
     expect(
-      _foregroundDecorationOf(tester, 'pane-surface')?.borderRadius,
+      _shapeDecorationOf(tester, 'pane-surface').color,
+      IdeColors.dark.surface,
+    );
+    expect(_panelShapeOf(tester, 'pane-surface').side, BorderSide.none);
+    expect(
+      _panelShapeOf(tester, 'pane-surface').borderRadius,
       IdeRadius.allLarge,
     );
+    final paneBorder = _foregroundShapeOf(tester, 'pane-surface');
+    expect(paneBorder, isA<RoundedSuperellipseBorder>());
+    expect(
+      (paneBorder! as RoundedSuperellipseBorder).side.style,
+      BorderStyle.solid,
+    );
+
     expect(_decorationOf(tester, 'row-surface').color, Colors.transparent);
     expect(_foregroundDecorationOf(tester, 'row-surface'), isNull);
+
     expect(
-      _decorationOf(tester, 'popover-surface').borderRadius,
+      _panelShapeOf(tester, 'popover-surface').borderRadius,
       IdeRadius.allLarge,
     );
-    expect(
-      _foregroundDecorationOf(tester, 'popover-surface')?.border,
-      isNotNull,
-    );
-    expect(_decorationOf(tester, 'popover-surface').boxShadow, isNotEmpty);
+    expect(_foregroundShapeOf(tester, 'popover-surface'), isNotNull);
+    expect(_shapeDecorationOf(tester, 'popover-surface').shadows, isNotEmpty);
   });
 }
 
@@ -73,6 +83,19 @@ BoxDecoration _decorationOf(WidgetTester tester, String key) {
 BoxDecoration? _foregroundDecorationOf(WidgetTester tester, String key) {
   final decoration = _containerOf(tester, key).foregroundDecoration;
   return decoration as BoxDecoration?;
+}
+
+ShapeDecoration _shapeDecorationOf(WidgetTester tester, String key) {
+  return _containerOf(tester, key).decoration! as ShapeDecoration;
+}
+
+RoundedSuperellipseBorder _panelShapeOf(WidgetTester tester, String key) {
+  return _shapeDecorationOf(tester, key).shape as RoundedSuperellipseBorder;
+}
+
+ShapeBorder? _foregroundShapeOf(WidgetTester tester, String key) {
+  final decoration = _containerOf(tester, key).foregroundDecoration;
+  return (decoration as ShapeDecoration?)?.shape;
 }
 
 Container _containerOf(WidgetTester tester, String key) {

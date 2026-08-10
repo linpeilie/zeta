@@ -220,8 +220,14 @@ sf.ThemeData buildShadcnTheme(IdeThemeData ideTheme) {
   return sf.ThemeData(
     colorScheme: _buildShadcnColorScheme(ideTheme),
     typography: _buildShadcnTypography(ideTheme),
-    // IDE 精确圆角继续由 IdeRadius 驱动，这里只给第三方组件一个中性基准。
-    radius: 2 / 3,
+    // shadcn 把 radius 展开成固定阶梯 `radius × 4/8/12/16/20/24`，
+    // `defaultDensity` 让缩放系数为 1。取 0.5 是为了让这条阶梯精确落在
+    // [IdeRadius] 上：sm→4(micro) / md→6(small) / lg→8(medium) / xxl→12(large)。
+    //
+    // 这个数字不能随手改。之前的 2/3 会渲染出 5.33 / 8 / 10.67，和 IdeRadius
+    // 的 4 / 6 / 8 / 12 形成两套差 0.7~2px 的平行体系——差距不够大到像有意
+    // 为之，只够大到让并排的 sf 控件和 Ide 控件看起来「圆角没对齐」。
+    radius: 0.5,
     density: sf.Density.defaultDensity,
     scaling: 1,
     // Desktop IDE：固定桌面 platform，避免测试默认 android 时 popover 走 sheet。

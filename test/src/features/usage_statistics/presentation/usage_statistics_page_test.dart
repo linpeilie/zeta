@@ -222,8 +222,11 @@ void main() {
       data.maxY,
       greaterThan(bar.spots.map((spot) => spot.y).reduce(math.max)),
     );
-    expect(bar.belowBarData.applyCutOffY, isTrue);
-    expect(bar.belowBarData.cutOffY, 0);
+    // 发丝单色线：无面积填充、无常态数据点，网格走点阵。
+    expect(bar.belowBarData.show, isFalse);
+    expect(bar.barWidth, 1);
+    expect(bar.dotData.show, isFalse);
+    expect(data.gridData.getDrawingHorizontalLine(0).dashArray, isNotEmpty);
 
     final chartRect = tester.getRect(chartFinder);
     final bottomTitles = tester

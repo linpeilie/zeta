@@ -71,12 +71,34 @@ class IdeCollapsibleCard extends StatelessWidget {
       hoverBackgroundColor:
           hoverBackgroundColor ?? colors.border.withValues(alpha: 0.12),
       borderRadius: radius,
+      // 箭头放在**行首**而不是行尾。右对齐的箭头会被 Expanded 的标题推到
+      // 画布最右侧，标题和箭头之间几百像素的空白在视觉上读成一条横规——
+      // 这正是「每一行都带 > 箭头和长长的横线」的来源。把箭头、图标、标题
+      // 挤成一个紧凑簇，一串操作才会读成「过程记录」而不是平铺列表。
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          SizedBox(
+            key: toggleKey,
+            width: 16,
+            height: 20,
+            child: AnimatedRotation(
+              turns: expanded ? 0.25 : 0.0,
+              duration: IdeMotion.durationNormal,
+              curve: IdeMotion.curveDefault,
+              child: Icon(
+                Icons.chevron_right_rounded,
+                size: 14,
+                color: canExpand
+                    ? colors.textSecondary.withValues(alpha: 0.55)
+                    : colors.textSecondary.withValues(alpha: 0.25),
+              ),
+            ),
+          ),
+          const SizedBox(width: IdeSpacing.space4),
           if (leading != null) ...[
             leading!,
-            const SizedBox(width: IdeSpacing.space8),
+            const SizedBox(width: IdeSpacing.space6),
           ],
           Expanded(
             child:
@@ -90,24 +112,6 @@ class IdeCollapsibleCard extends StatelessWidget {
                     color: colors.textSecondary.withValues(alpha: 0.68),
                   ),
                 ),
-          ),
-          const SizedBox(width: IdeSpacing.space8),
-          SizedBox(
-            key: toggleKey,
-            width: 20,
-            height: 20,
-            child: AnimatedRotation(
-              turns: expanded ? 0.25 : 0.0,
-              duration: IdeMotion.durationNormal,
-              curve: IdeMotion.curveDefault,
-              child: Icon(
-                Icons.chevron_right_rounded,
-                size: 16,
-                color: canExpand
-                    ? colors.textSecondary.withValues(alpha: 0.55)
-                    : colors.textSecondary.withValues(alpha: 0.25),
-              ),
-            ),
           ),
         ],
       ),

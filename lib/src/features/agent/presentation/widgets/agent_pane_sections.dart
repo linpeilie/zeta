@@ -418,6 +418,7 @@ class _AgentConversationTimeline extends StatelessWidget {
                   item,
                   pendingState,
                   previousItem: index > 0 ? items[index - 1] : null,
+                  nextItem: index + 1 < items.length ? items[index + 1] : null,
                 ),
               ),
             );
@@ -659,6 +660,7 @@ class _AgentConversationTimeline extends StatelessWidget {
     AgentTimelineViewportItem item,
     AgentPendingInteractionState pendingState, {
     AgentTimelineViewportItem? previousItem,
+    AgentTimelineViewportItem? nextItem,
   }) {
     switch (item) {
       case AgentBlockViewportItem(:final turn, :final block):
@@ -670,6 +672,7 @@ class _AgentConversationTimeline extends StatelessWidget {
           planRevisionDrafts: planRevisionDrafts,
           pendingState: pendingState,
           precededByOperationGroup: _isOperationGroupViewportItem(previousItem),
+          followedByOperationGroup: _isOperationGroupViewportItem(nextItem),
         );
       case AgentLiveActivityViewportItem():
         return KeyedSubtree(
@@ -728,6 +731,7 @@ class _AgentTimelineBlockSection extends StatelessWidget {
     required this.planRevisionDrafts,
     required this.pendingState,
     this.precededByOperationGroup = false,
+    this.followedByOperationGroup = false,
   });
 
   final AgentConversationTurnGroup turn;
@@ -741,6 +745,9 @@ class _AgentTimelineBlockSection extends StatelessWidget {
 
   /// 上一视口项是否为操作组；仅用于列表层外间距，不传给卡片。
   final bool precededByOperationGroup;
+
+  /// 下一个 viewport item 是否也是操作组，决定块内/块外的下边距。
+  final bool followedByOperationGroup;
 
   @override
   Widget build(BuildContext context) {
@@ -759,6 +766,7 @@ class _AgentTimelineBlockSection extends StatelessWidget {
         ? Padding(
             padding: _operationGroupOuterPadding(
               precededByOperationGroup: precededByOperationGroup,
+              followedByOperationGroup: followedByOperationGroup,
             ),
             child: content,
           )

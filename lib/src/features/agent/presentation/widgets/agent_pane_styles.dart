@@ -36,13 +36,18 @@ Color _agentHoverBackground(BuildContext context) {
 
 /// 操作组（命令集 / 文件编辑组）外间距：由列表层 [Padding] 包一层，卡片自身零 margin。
 ///
-/// 上下均为 [IdeSpacing.space10]；紧挨上一操作组时省略 top，避免相邻双倍缝。
+/// **块内紧、块外松**：连续操作之间只留 [IdeSpacing.space2]，让一串操作读成
+/// 一块「过程记录」；只有操作块与正文的交界处才留 [IdeSpacing.space10]。
+///
+/// 折叠行本身只有 20px 高，之前每行固定 10px 外边距意味着三分之一的垂直空间
+/// 是缝隙——这才是「操作日志占地过多」的真正来源，不是行本身胖。
 EdgeInsets _operationGroupOuterPadding({
   required bool precededByOperationGroup,
+  required bool followedByOperationGroup,
 }) {
   return EdgeInsets.only(
     top: precededByOperationGroup ? 0 : IdeSpacing.space10,
-    bottom: IdeSpacing.space10,
+    bottom: followedByOperationGroup ? IdeSpacing.space2 : IdeSpacing.space10,
   );
 }
 
@@ -295,9 +300,13 @@ MarkdownThemeData _agentUserBubbleMarkdownTheme(BuildContext context) {
   // 用户消息日志行内收敛：标题统一降级为正文加粗，代码/引用/表格底色用控制面。
   // 日志行本身没有底色（只有左侧竖线），所以这些区块直接取不透明的控制面档，
   // 不再像旧气泡那样降透明度去和气泡底色调和。
+  // 用户正文比 Agent 长文重一档字重：Agent 走 proseBody（w400 / 行高 1.55）
+  // 追求长段可读，用户提问通常只有一两句，加重后在回溯时更容易被扫到，
+  // 和左侧竖线、等宽角色前缀共同构成身份锚点。
   final bodyStyle = textStyles.bodyMedium.copyWith(
     height: 1.4,
     color: colors.textPrimary,
+    fontWeight: FontWeight.w500,
   );
   return base.copyWith(
     bodyStyle: bodyStyle,

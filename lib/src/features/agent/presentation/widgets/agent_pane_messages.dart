@@ -219,17 +219,23 @@ class _AgentTurnFooter extends StatelessWidget {
     if (!hasMeta) {
       return const SizedBox.shrink();
     }
+    // 回合之间用「大留白 + 一条全宽发丝线」分隔。
+    // 旧版把分隔线拆成两段夹住元信息（居中题注式），那是装饰而不是分隔：
+    // 它把视线吸引到回合边界上，而边界恰恰是最不需要被注意的东西。
     return Padding(
       key: ValueKey<String>('agent-turn-footer-${turn.id}'),
       padding: const EdgeInsets.only(
-        top: IdeSpacing.space12,
-        bottom: IdeSpacing.space16,
+        top: IdeSpacing.space24,
+        bottom: IdeSpacing.space32,
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
+          final stacked =
+              constraints.maxWidth < IdeMetrics.stackedRowBreakpoint;
           final meta = Wrap(
             key: ValueKey<String>('agent-turn-footer-meta-${turn.id}'),
-            alignment: WrapAlignment.center,
+            // 元信息右对齐贴在线下：它是回合的落款，不是标题。
+            alignment: stacked ? WrapAlignment.start : WrapAlignment.end,
             runSpacing: IdeSpacing.space6,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: _turnFooterMetaItems(
@@ -244,42 +250,23 @@ class _AgentTurnFooter extends StatelessWidget {
               tokenTooltip: tokenTooltip,
             ),
           );
-          final divider = sf.Divider(
-            padding: EdgeInsets.zero,
-            thickness: 1,
-            color: colors.borderSubtle,
-          );
 
-          if (constraints.maxWidth < IdeMetrics.stackedRowBreakpoint) {
-            return Column(
-              key: ValueKey<String>('agent-turn-footer-stacked-${turn.id}'),
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(width: double.infinity, child: divider),
-                const SizedBox(height: IdeSpacing.space8),
-                meta,
-              ],
-            );
-          }
-          return Row(
-            key: ValueKey<String>('agent-turn-footer-inline-${turn.id}'),
+          return Column(
+            key: ValueKey<String>(
+              stacked
+                  ? 'agent-turn-footer-stacked-${turn.id}'
+                  : 'agent-turn-footer-inline-${turn.id}',
+            ),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Expanded(child: divider),
-              const SizedBox(width: IdeSpacing.space12),
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: constraints.maxWidth * 2 / 3,
-                ),
-                child: meta,
+              sf.Divider(
+                padding: EdgeInsets.zero,
+                thickness: 1,
+                color: colors.borderSubtle,
               ),
-              const SizedBox(width: IdeSpacing.space12),
-              Expanded(
-                child: sf.Divider(
-                  padding: EdgeInsets.zero,
-                  thickness: 1,
-                  color: colors.borderSubtle,
-                ),
-              ),
+              const SizedBox(height: IdeSpacing.space8),
+              meta,
             ],
           );
         },
@@ -424,11 +411,15 @@ class _AgentBubbleMessage extends StatelessWidget {
 
     // 角色前缀走等宽字体：它是机器标签而非人类文案，和模型 ID / Token 计数
     // 属于同一类信息，排版上要能一眼与正文区分。
+    //
+    // 用 textSecondary + w600 而不是最弱的 textTertiary：这是长会话里回溯
+    // 「我刚才问了什么」的锚点，锚点必须比它标注的内容更容易被扫到。单色体系
+    // 不能靠染色解决，只能靠对比度和字重。
     final roleStyle = textStyles.meta.copyWith(
       fontFamily: textStyles.codeSmall.fontFamily,
       fontFamilyFallback: textStyles.codeSmall.fontFamilyFallback,
-      fontWeight: FontWeight.w500,
-      color: colors.textTertiary,
+      fontWeight: FontWeight.w600,
+      color: colors.textSecondary,
     );
 
     return Padding(
@@ -437,8 +428,13 @@ class _AgentBubbleMessage extends StatelessWidget {
         key: ValueKey<String>('agent-message-bubble-${message.id}'),
         // 竖线画在 Border.left：它天然撑满内容高度，不需要 IntrinsicHeight，
         // 也就不会在时间线热路径上多一次布局测量。
+        //
+        // 用 textTertiary（不透明中灰）而不是 border（白 8%）：后者在炭黑底上
+        // 几乎不可见，等于没有锚点。同样是 2px，对比度差着一个数量级。
         decoration: BoxDecoration(
-          border: Border(left: BorderSide(color: colors.border, width: 2)),
+          border: Border(
+            left: BorderSide(color: colors.textTertiary, width: 2),
+          ),
         ),
         child: Padding(
           padding: const EdgeInsets.only(left: IdeSpacing.space10),
@@ -699,9 +695,14 @@ Widget _suppressMarkdownContextMenu(
   return const SizedBox.shrink();
 }
 
-/// Agent 完成汇总卡片：对应 Codex `agent_message` + `phase=final_answer`。
+/// Agent 完成汇总：对应 Codex `agent_message` + `phase=final_answer`。
 ///
-/// 以固定卡片壳展示全文 Markdown（不做历史折叠），流式回合内仍可增量渲染。
+/// 展示全文 Markdown（不做历史折叠），流式回合内仍可增量渲染。
+///
+/// **刻意不套卡片**：它和普通 Agent 正文走的是同一个 [_AgentMarkdownBody]，
+/// 同样的内容只因为处于不同阶段就长得不一样，会让阅读流被反复打断。会话区
+/// 是文档流，回合的结束由回合底栏的分隔线交代，不需要再给最后一段话加边框。
+/// 保留 key 供测试与滚动定位使用。
 class _AgentFinalAnswerCard extends StatelessWidget {
   const _AgentFinalAnswerCard({
     required this.message,
@@ -715,26 +716,12 @@ class _AgentFinalAnswerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
     return RepaintBoundary(
-      child: PanelCard(
-        key: ValueKey<String>('agent-final-answer-card-${message.id}'),
-        borderColor: colors.border,
-        borderRadius: IdeRadius.allMedium,
-        child: Padding(
-          padding: IdeSpacing.sectionPadding,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _AgentMarkdownBody(
-                message: message,
-                useStreamingMarkdown: useStreamingMarkdown,
-                markdownCache: markdownCache,
-              ),
-            ],
-          ),
-        ),
+      key: ValueKey<String>('agent-final-answer-card-${message.id}'),
+      child: _AgentMarkdownBody(
+        message: message,
+        useStreamingMarkdown: useStreamingMarkdown,
+        markdownCache: markdownCache,
       ),
     );
   }
@@ -802,12 +789,10 @@ class _AgentPlanMessageCard extends StatelessWidget {
                         ),
                       ),
                     ),
-              padding: IdeSpacing.sectionPadding,
-              summaryPadding: const EdgeInsets.only(top: IdeSpacing.space10),
-              bodyPadding: const EdgeInsets.only(top: IdeSpacing.space10),
-              backgroundColor: colors.surfaceElevated,
-              borderColor: colors.border,
-              borderRadius: IdeRadius.allMedium,
+              // 与工具调用 / 命令组同构的无壳折叠行：会话区是文档流，
+              // 计划只是「一段可展开的内容」，不需要独立卡片壳把它抬起来。
+              summaryPadding: const EdgeInsets.only(top: IdeSpacing.space6),
+              bodyPadding: const EdgeInsets.only(top: IdeSpacing.space8),
               hoverBackgroundColor: colors.hoverSurface,
               semanticLabel: expanded ? '收起计划' : '展开计划',
               body: Padding(

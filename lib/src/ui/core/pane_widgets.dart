@@ -510,20 +510,33 @@ class PanelCard extends StatelessWidget {
     );
     // 同一平面的常规面板只靠表面色与边界建立分组；投影仅由浮层显式传入。
     final defaultBoxShadow = boxShadow ?? const <BoxShadow>[];
+    // 面板档走平滑圆角（superellipse）；调用点显式传入更小档位时保持圆形圆角。
+    final isPanelTier = IdeShapes.isPanelTier(resolvedRadius);
+    final resolvedBorderColor = borderColor ?? resolvePanelBorderColor(context);
     return Container(
       clipBehavior: clipBehavior,
-      decoration: BoxDecoration(
-        color: surfaceColor,
-        borderRadius: resolvedRadius,
-        boxShadow: defaultBoxShadow,
-      ),
-      foregroundDecoration: showBorder
-          ? BoxDecoration(
-              border: Border.all(
-                color: borderColor ?? resolvePanelBorderColor(context),
-              ),
-              borderRadius: resolvedRadius,
+      decoration: isPanelTier
+          ? ShapeDecoration(
+              color: surfaceColor,
+              shape: IdeShapes.panel(),
+              shadows: defaultBoxShadow,
             )
+          : BoxDecoration(
+              color: surfaceColor,
+              borderRadius: resolvedRadius,
+              boxShadow: defaultBoxShadow,
+            ),
+      foregroundDecoration: showBorder
+          ? (isPanelTier
+                ? ShapeDecoration(
+                    shape: IdeShapes.panel(
+                      side: BorderSide(color: resolvedBorderColor),
+                    ),
+                  )
+                : BoxDecoration(
+                    border: Border.all(color: resolvedBorderColor),
+                    borderRadius: resolvedRadius,
+                  ))
           : null,
       child: child,
     );

@@ -350,7 +350,6 @@ class _UsageOverviewBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
     final tokenCard = _OverviewMetricCard(
       key: const ValueKey('usage-overview-tokens'),
       label: 'Token 使用量',
@@ -363,7 +362,6 @@ class _UsageOverviewBar extends StatelessWidget {
                 '推理 ${formatUsageCount(overview.tokens.reasoningTokens ?? 0)}'
           : '当前筛选下暂无 Token 统计',
       icon: Icons.data_usage_rounded,
-      accent: colors.intelligenceAccent,
       semanticLabel:
           'Token 使用量 ${overview.tokens.hasData ? formatUsageCount(overview.tokens.effectiveTotal ?? 0) : '暂无数据'}',
     );
@@ -372,7 +370,6 @@ class _UsageOverviewBar extends StatelessWidget {
       label: '调用次数',
       value: formatUsageCount(overview.totalCalls),
       icon: Icons.bolt_rounded,
-      accent: colors.accent,
       semanticLabel: '调用次数 ${formatUsageCount(overview.totalCalls)}',
     );
 
@@ -406,13 +403,12 @@ class _UsageOverviewBar extends StatelessWidget {
   }
 }
 
-/// 概况区双指标卡片：大号数值 + 图标徽章 + 可选次级说明。
+/// 概况区双指标卡片：中性小图标 + 大号数值 + 可选次级说明。
 class _OverviewMetricCard extends StatelessWidget {
   const _OverviewMetricCard({
     required this.label,
     required this.value,
     required this.icon,
-    required this.accent,
     required this.semanticLabel,
     this.detail,
     super.key,
@@ -422,7 +418,6 @@ class _OverviewMetricCard extends StatelessWidget {
   final String value;
   final String? detail;
   final IconData icon;
-  final Color accent;
   final String semanticLabel;
 
   @override
@@ -442,17 +437,10 @@ class _OverviewMetricCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 36,
-              height: 36,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: accent.withValues(alpha: 0.12),
-                borderRadius: IdeRadius.allMedium,
-              ),
-              child: Icon(icon, size: 18, color: accent),
-            ),
-            const SizedBox(width: IdeSpacing.space12),
+            // 图标不带彩色底：36×36 的着色方块在两张卡上重复出现，是仪表盘
+            // 观感最强的来源。降为中性小图标，让大号数字自己承担层级。
+            Icon(icon, size: 16, color: colors.textTertiary),
+            const SizedBox(width: IdeSpacing.space8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -471,7 +459,9 @@ class _OverviewMetricCard extends StatelessWidget {
                     value,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: textStyles.metricValue.copyWith(color: accent),
+                    // 数值用主前景色而不是品牌色：这是要读的数据，不是要点击的
+                    // 行动点。着色的大数字会让整页读起来像营销仪表盘。
+                    style: textStyles.metricValue,
                   ),
                   const SizedBox(height: IdeSpacing.space6),
                   SizedBox(
@@ -1032,14 +1022,10 @@ class _UsageLineChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final brightness = sf.Theme.of(context).brightness;
-    final fillColor = colors.accent.withValues(
-      alpha: brightness == Brightness.dark ? 0.10 : 0.07,
-    );
     final maximum = safeUsageChartMaximum(points);
     final yInterval = maximum / 3;
-    // 折线与圆点有实际宽度，数据点不能贴在裁剪边界上，否则首尾、零值和最大值
-    // 只能绘制一部分。单点数据居中，多点数据按横轴跨度保留稳定比例的安全区。
+    // 折线与 hover 圆点有实际宽度，数据点不能贴在裁剪边界上，否则首尾、零值和
+    // 最大值只能绘制一部分。单点数据居中，多点数据按横轴跨度保留稳定比例的安全区。
     final lastPointX = points.isEmpty ? 0.0 : (points.length - 1).toDouble();
     final horizontalPadding = switch (points.length) {
       0 => 0.0,
@@ -1079,8 +1065,13 @@ class _UsageLineChart extends StatelessWidget {
                 show: true,
                 drawVerticalLine: false,
                 horizontalInterval: yInterval,
-                getDrawingHorizontalLine: (_) =>
-                    FlLine(color: colors.borderSubtle, strokeWidth: 1),
+                // 点阵而不是实线：网格只需要提供刻度参照，不该在视觉上
+                // 和数据曲线竞争。1 实 3 虚渲染出来接近点阵底。
+                getDrawingHorizontalLine: (_) => FlLine(
+                  color: colors.borderSubtle,
+                  strokeWidth: 1,
+                  dashArray: const <int>[1, 3],
+                ),
               ),
               borderData: FlBorderData(show: false),
               titlesData: FlTitlesData(
@@ -1191,26 +1182,20 @@ class _UsageLineChart extends StatelessWidget {
                 if (hasValues)
                   LineChartBarData(
                     spots: spots,
-                    color: colors.accent,
-                    barWidth: 2,
+                    // 单色发丝线：桌面开发者工具的监控图靠精确度取胜，不靠
+                    // 粗折线和渐变面积。品牌色只留给 hover 指示，避免一条
+                    // 常驻的彩色曲线在单色界面里变成最抢眼的东西。
+                    color: colors.textSecondary,
+                    barWidth: 1,
                     isStrokeCapRound: true,
                     isStrokeJoinRound: true,
                     preventCurveOverShooting: true,
-                    dotData: FlDotData(
-                      getDotPainter: (spot, percent, barData, index) {
-                        return FlDotCirclePainter(
-                          radius: 2.5,
-                          color: colors.accent,
-                          strokeWidth: 0,
-                        );
-                      },
-                    ),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: fillColor,
-                      cutOffY: 0,
-                      applyCutOffY: true,
-                    ),
+                    // 常态不画数据点：点密时会连成一条粗带，反而看不清趋势。
+                    // 精确读数由 hover 指示器和 tooltip 提供。
+                    dotData: const FlDotData(show: false),
+                    // 不要面积填充。它是 SaaS 仪表盘的默认观感，且在炭黑底上
+                    // 只会糊成一块噪点，对读数没有任何帮助。
+                    belowBarData: BarAreaData(show: false),
                   ),
               ],
             ),
