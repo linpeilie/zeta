@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/main.dart';
-import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 
@@ -54,7 +53,7 @@ void main() {
     await tester.pumpAndSettle();
     await _openFilesPanel(tester);
 
-    expect(find.byKey(fileNodeKey(fileName(directory.path))), findsNothing);
+    expect(find.byKey(fileNodePathKey(directory.path)), findsNothing);
     expect(find.text('sample.txt'), findsOneWidget);
 
     await tester.tap(find.byKey(fileNodeKey('sample.txt')));
@@ -89,10 +88,7 @@ void main() {
     await tester.pumpAndSettle();
     await _openFilesPanel(tester);
 
-    expect(
-      find.byKey(fileNodeKey(fileName(repositoryDirectory.path))),
-      findsNothing,
-    );
+    expect(find.byKey(fileNodePathKey(repositoryDirectory.path)), findsNothing);
     expect(find.text('lib'), findsOneWidget);
     expect(find.text('pubspec.yaml', skipOffstage: false), findsOneWidget);
   });
@@ -125,7 +121,7 @@ void main() {
     await tester.pumpAndSettle();
     await _openFilesPanel(tester);
 
-    expect(find.byKey(fileNodeKey(fileName(directory.path))), findsNothing);
+    expect(find.byKey(fileNodePathKey(directory.path)), findsNothing);
     expect(find.text('lib'), findsOneWidget);
     expect(find.text('main.dart'), findsNothing);
 
@@ -151,4 +147,8 @@ void _useWideWindow(WidgetTester tester) {
       ..resetPhysicalSize()
       ..resetDevicePixelRatio();
   });
+}
+
+ValueKey<String> fileNodePathKey(String path) {
+  return ValueKey<String>('file-node-path-$path');
 }

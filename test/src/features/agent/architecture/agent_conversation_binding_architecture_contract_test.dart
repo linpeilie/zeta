@@ -13,7 +13,7 @@ void main() {
             (file) =>
                 file.readAsStringSync().contains('providerFactory.create('),
           )
-          .map((file) => file.path)
+          .map((file) => file.path.replaceAll(Platform.pathSeparator, '/'))
           .toList(growable: false);
 
       expect(callers, <String>[
