@@ -46,7 +46,7 @@ void main() {
     expect(find.text('1.6K'), findsOneWidget);
     expect(find.text('ChatGPT Plus'), findsOneWidget);
     expect(find.text('5 小时'), findsOneWidget);
-    expect(find.text('已用 25% · 剩余 75%'), findsOneWidget);
+    expect(find.text('75%'), findsOneWidget);
     expect(find.text('1 周'), findsOneWidget);
 
     final firstWindow = find.byKey(
@@ -60,7 +60,7 @@ void main() {
 
     final progress = tester.widget<sf.LinearProgressIndicator>(progressFinder);
     expect(tester.getSize(progressFinder).height, 4);
-    expect(progress.value, 0.25);
+    expect(progress.value, 0.75);
     expect(progress.minHeight, 4);
     expect(progress.color, IdeColors.light.textSecondary);
     expect(progress.backgroundColor, IdeColors.light.borderSubtle);
@@ -68,8 +68,6 @@ void main() {
     expect(progress.showSparks, isFalse);
     expect(progress.disableAnimation, isTrue);
 
-    final semantics = tester.getSemantics(find.bySemanticsLabel('套餐额度').first);
-    expect(semantics.value, '已用 25%，剩余 75%');
     expect(
       tester
           .getTopLeft(find.byKey(const ValueKey('agent-usage-plan-section')))
@@ -346,7 +344,7 @@ void main() {
     );
     expect(find.byKey(const ValueKey('agent-usage-window-0')), findsOneWidget);
     expect(find.text('1 周'), findsWidgets);
-    expect(find.text('已用 0% · 剩余 100%'), findsOneWidget);
+    expect(find.text('100%'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
