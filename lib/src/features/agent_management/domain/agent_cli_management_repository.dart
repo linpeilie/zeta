@@ -15,7 +15,7 @@ abstract class AgentCliManagementRepository {
     AgentDetectionProgressCallback? onProgress,
   });
 
-  /// 无计费连接测试（initialize + model list）。
+  /// 用户显式发起的连接测试；实现可按 Provider 协议执行最小握手。
   Future<(AgentConnectionTestResult, List<AgentModelInfo>)> testConnection({
     required AgentProviderConfig providerConfig,
   });

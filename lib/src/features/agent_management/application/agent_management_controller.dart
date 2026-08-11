@@ -251,7 +251,7 @@ class AgentManagementController extends ChangeNotifier {
     _notify();
   }
 
-  /// 执行 initialize + model list 的无计费连接测试。
+  /// 执行当前 Provider 的显式连接测试。
   Future<AgentConnectionTestResult?> testConnection() async {
     if (_testing) {
       return null;

@@ -97,6 +97,8 @@
 - Codex CLI app-server 接入（默认 Provider），支持会话列表、历史读取、恢复、分支、模型切换、Skills 与 Plan 模式
 - Grok ACP 接入，能力按握手结果自动降级
 - Claude Code Provider 支持只读展示本地历史、从 Zeta 列表隐藏记录，并按原 session 恢复对话
+- Claude Code 自动检测只检查本地 CLI 版本、登录元数据和日志路径，不连接模型服务；
+  手动“测试连接”前会明示提醒可能产生少量用量
 - 会话级 Provider Binding：打开草稿或历史不启动 CLI；首次提交时按会话创建实例，空闲 10 分钟自动回收并在下次提交时恢复
 - 会话权限状态收敛到各自 Binding，runtime 权限变化不再影响其他会话
 - 能力协商机制：Provider 不支持的功能在界面上不出现，而非点了无反应

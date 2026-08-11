@@ -88,6 +88,44 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Claude connection test requires explicit usage confirmation', (
+    tester,
+  ) async {
+    final harness = _ClaudeManagementHarness.create();
+    addTearDown(harness.dispose);
+    await tester.runAsync(harness.managementController.initialize);
+
+    await _pumpManagementPage(tester, controller: harness.managementController);
+    await tester.tap(find.byKey(const ValueKey('agent-row-claude_code')));
+    await tester.pump();
+
+    final testButton = find.byKey(
+      const ValueKey('agent-test-connection-button'),
+    );
+    await tester.tap(testButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('测试 Claude Code 连接'), findsOneWidget);
+    expect(find.textContaining('可能产生少量模型用量'), findsOneWidget);
+    expect(harness.repository.testConnectionCalls, 0);
+
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(harness.repository.testConnectionCalls, 0);
+
+    await tester.tap(testButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('继续测试'));
+    await tester.pumpAndSettle();
+
+    expect(harness.repository.testConnectionCalls, 1);
+    expect(tester.takeException(), isNull);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
   testWidgets('edits, validates, and safely saves Codex TOML configuration', (
     tester,
   ) async {
@@ -303,6 +341,66 @@ class _CursorManagementHarness {
   }
 }
 
+class _ClaudeManagementHarness {
+  _ClaudeManagementHarness({
+    required this.repository,
+    required this.providerController,
+    required this.managementController,
+    required this._registry,
+  });
+
+  final _FakeClaudeManagementRepository repository;
+  final AgentProviderSettingsController providerController;
+  final AgentManagementController managementController;
+  final AgentProviderRuntimeRegistry _registry;
+
+  static _ClaudeManagementHarness create() {
+    final provider = FakeAgentProvider();
+    final repository = _FakeClaudeManagementRepository();
+    final registry = AgentProviderRuntimeRegistry(
+      providerFactory: FakeAgentProviderFactory(provider),
+    );
+    final providerController = AgentProviderSettingsController(
+      runtimeRegistry: registry,
+      configStore: MemoryAgentProviderConfigStore(
+        AgentProviderSettings(
+          providers: <AgentProviderConfig>[
+            AgentProviderConfig.defaultClaudeCode.copyWith(
+              extra: <String, Object?>{
+                'cliPath': Platform.isWindows
+                    ? r'C:\tools\claude.exe'
+                    : '/usr/local/bin/claude',
+                'detectedCurrentVersion': '2.1.224',
+                'detectedAccountState': 'loggedIn',
+                'lastDetectedAt': DateTime.utc(2026, 8, 11).toIso8601String(),
+              },
+            ),
+          ],
+          activeProviderId: defaultClaudeCodeProviderId,
+        ),
+      ),
+    );
+    final managementController = AgentManagementController(
+      repositories: <String, AgentCliManagementRepository>{
+        defaultClaudeCodeProviderId: repository,
+      },
+      providerController: providerController,
+    );
+    return _ClaudeManagementHarness(
+      repository: repository,
+      providerController: providerController,
+      managementController: managementController,
+      registry: registry,
+    );
+  }
+
+  Future<void> dispose() async {
+    managementController.dispose();
+    providerController.dispose();
+    await _registry.close();
+  }
+}
+
 class _FakeCursorManagementRepository implements AgentCliManagementRepository {
   int detectCalls = 0;
 
@@ -377,6 +475,85 @@ class _FakeCursorManagementRepository implements AgentCliManagementRepository {
       exists: true,
       loadedAt: DateTime.utc(2026, 7, 14),
       signature: 'test',
+    );
+  }
+
+  @override
+  String? validateConfiguration(String content) => null;
+
+  @override
+  Future<AgentConfigurationSaveResult> saveConfiguration({
+    required AgentConfigurationDocument original,
+    required String content,
+    bool overwriteExternalChanges = false,
+  }) async => AgentConfigurationSaveResult(document: original);
+
+  @override
+  Future<List<String>> discoverLogPaths() async => const <String>[];
+
+  @override
+  Future<List<AgentLogEntry>> readLogs(
+    List<String> paths, {
+    int maxLines = 1000,
+  }) async => const <AgentLogEntry>[];
+}
+
+class _FakeClaudeManagementRepository implements AgentCliManagementRepository {
+  int testConnectionCalls = 0;
+
+  @override
+  String get agentId => defaultClaudeCodeProviderId;
+
+  @override
+  String get configPath => '/test-user/.claude/settings.json';
+
+  @override
+  Future<ManagedAgent> detect({
+    required AgentProviderConfig providerConfig,
+    required bool enabled,
+    AgentDetectionProgressCallback? onProgress,
+  }) async {
+    return ManagedAgent.claudeCode(enabled: enabled).copyWith(
+      installationState: AgentInstallationState.installed,
+      accountState: AgentAccountState.loggedIn,
+      currentVersion: '2.1.224',
+    );
+  }
+
+  @override
+  Future<(AgentConnectionTestResult, List<AgentModelInfo>)> testConnection({
+    required AgentProviderConfig providerConfig,
+  }) async {
+    testConnectionCalls += 1;
+    return (
+      AgentConnectionTestResult(
+        success: true,
+        testedAt: DateTime.utc(2026, 8, 11),
+        elapsed: const Duration(milliseconds: 5),
+        cliCallable: true,
+        accountValid: true,
+        protocolReady: true,
+      ),
+      const <AgentModelInfo>[],
+    );
+  }
+
+  @override
+  Future<AgentProviderConfig> providerConfigForPath({
+    required AgentProviderConfig current,
+    required String path,
+  }) async => current.copyWith(command: path);
+
+  @override
+  Future<AgentConfigurationDocument> readConfiguration() async {
+    return AgentConfigurationDocument(
+      path: configPath,
+      format: 'JSON',
+      content: '',
+      maskedContent: '',
+      exists: false,
+      loadedAt: DateTime.utc(2026, 8, 11),
+      signature: 'missing',
     );
   }
 

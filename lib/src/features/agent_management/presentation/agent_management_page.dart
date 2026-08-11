@@ -570,6 +570,31 @@ class AgentManagementPageState extends State<AgentManagementPage> {
   }
 
   Future<void> _testConnection() async {
+    if (widget.controller.selectedAgentId == defaultClaudeCodeProviderId) {
+      final confirmed = await showIdeDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => IdeDialog(
+          title: const Text('测试 Claude Code 连接'),
+          content: const Text(
+            '这会连接 Claude 服务并发送一条最小测试消息，'
+            '可能产生少量模型用量。',
+          ),
+          actions: <IdeDialogAction>[
+            IdeDialogAction.cancel(
+              onPressed: () => Navigator.of(context).pop(false),
+            ),
+            IdeDialogAction.confirm(
+              label: '继续测试',
+              onPressed: () => Navigator.of(context).pop(true),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) {
+        return;
+      }
+    }
     final result = await widget.controller.testConnection();
     if (!mounted || result == null) {
       return;

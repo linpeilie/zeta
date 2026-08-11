@@ -142,7 +142,7 @@ class AgentDefinition {
   }
 }
 
-/// 最近一次无计费连接测试结果。
+/// 最近一次用户显式连接测试结果。
 class AgentConnectionTestResult {
   const AgentConnectionTestResult({
     required this.success,
