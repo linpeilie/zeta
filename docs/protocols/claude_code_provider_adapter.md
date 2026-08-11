@@ -728,8 +728,8 @@ Claude Code CLI 本身无 `model list` 端点（§2.4），因此 `Provider.list
 - 读取契约：与 `codex_thread_history_reader.dart` 对齐：
     - **只读**，绝不改写；
     - 宽容 `tryDecode`：损坏行跳过并计数上报诊断；
-    - 输出 `AgentThreadDescriptor` 列表（title 用首条 user message 前 60 字符
-      生成，与 Codex/Grok 一致）。
+    - 输出 `AgentThreadPage`，条目使用现有中立 `AgentThreadSummary`（title 用首条
+      user message 前 60 字符生成，与 Codex/Grok 一致）。
 - 与 `AgentLocalThreadListProvider.removeThreadFromList` 的配合：
     - Zeta 只维护自己的隐藏 list（`~/.zeta/state/claude_code/hidden_threads.json`），
       hide 时把 `<encoded-cwd>/<session-id>` 加进去；

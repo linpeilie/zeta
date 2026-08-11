@@ -843,7 +843,8 @@ class _ThreadTileState extends State<_ThreadTile> {
           content: Text(
             deletesProviderHistory
                 ? '此操作不可撤销，将永久删除该会话。'
-                : '只会移除 Zeta 的本地索引记录，Cursor 端历史仍会保留。',
+                : '只会移除 Zeta 的本地索引记录，Provider 端历史文件仍会保留。'
+                      '如需彻底删除，请在对应 Agent 工具中处理。',
           ),
           actions: [
             IdeDialogAction.cancel(

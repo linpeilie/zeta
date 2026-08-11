@@ -4,9 +4,11 @@ import 'dart:math';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_control_request_handler.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_event_mapper.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_hidden_thread_store.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_permission_policy_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_plan_approval_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_process_starter.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_session_history_reader.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/stream_json_peer.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart'
     show ProcessStarter;
@@ -27,7 +29,8 @@ class ClaudeCodeAgentProvider
     implements
         AgentProvider,
         AgentPermissionPolicyProvider,
-        AgentPlanApprovalProvider {
+        AgentPlanApprovalProvider,
+        AgentLocalThreadListProvider {
   ClaudeCodeAgentProvider({
     required this.config,
     ProcessStarter? processStarter,
@@ -35,11 +38,16 @@ class ClaudeCodeAgentProvider
     ClaudeCodeEventMapper? mapper,
     ClaudeCodeControlRequestHandler? controlRequestHandler,
     ClaudeCodeSessionDecisionStoreFactory? sessionDecisionStoreFactory,
+    ClaudeCodeSessionHistoryReader? sessionHistoryReader,
+    ClaudeCodeHiddenThreadStore? hiddenThreadStore,
     String Function()? idFactory,
   }) : _processStarterDelegate = processStarter,
        _mapper = mapper ?? ClaudeCodeEventMapper(providerId: config.id),
        _controlHandler =
            controlRequestHandler ?? ClaudeCodeControlRequestHandler(),
+       _sessionHistoryReader =
+           sessionHistoryReader ??
+           ClaudeCodeSessionHistoryReader(hiddenThreadStore: hiddenThreadStore),
        _idFactory = idFactory ?? _defaultIdFactory {
     _planApprovalAdapter = _mapper.planApprovalAdapter;
     _permissionMode = ClaudeCodePermissionModeCodec.parseOptionId(
@@ -58,6 +66,7 @@ class ClaudeCodeAgentProvider
   final Future<String?> Function(String command)? _whichLookup;
   final ClaudeCodeEventMapper _mapper;
   final ClaudeCodeControlRequestHandler _controlHandler;
+  final ClaudeCodeSessionHistoryReader _sessionHistoryReader;
   final String Function() _idFactory;
   late final ClaudeCodePlanApprovalAdapter _planApprovalAdapter;
   late final ClaudeCodePermissionPolicyAdapter _permissionPolicy;
@@ -76,6 +85,7 @@ class ClaudeCodeAgentProvider
 
   AgentRuntimeScope? _runtimeScope;
   int _connectionEpoch = 0;
+  String? _expectedPeerSessionId;
   String? _sessionId;
   String? _workingDirectory;
   final Map<String, String> _runningTurnIdsBySessionId = <String, String>{};
@@ -185,16 +195,50 @@ class ClaudeCodeAgentProvider
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
   }) async {
-    throw UnsupportedError('${config.displayName} does not support resume yet');
+    await initialize();
+    final normalizedSessionId = sessionId.trim();
+    if (normalizedSessionId.isEmpty) {
+      throw ArgumentError.value(sessionId, 'sessionId', 'must not be empty');
+    }
+    final cwd = context.projectPath?.trim();
+    if (cwd == null || cwd.isEmpty) {
+      throw StateError('Claude Code requires projectPath as working directory');
+    }
+
+    final requestedPermission = permissionSnapshot.selection?.optionId;
+    if (requestedPermission != null) {
+      _permissionMode = ClaudeCodePermissionModeCodec.parseOptionId(
+        requestedPermission,
+      );
+    }
+    await _permissionPolicy.bindSession(normalizedSessionId);
+    await _ensurePeer(
+      sessionId: normalizedSessionId,
+      workingDirectory: cwd,
+      resumeSessionId: normalizedSessionId,
+    );
+    _sessionId = normalizedSessionId;
+    _workingDirectory = cwd;
+
+    return AgentSession(
+      id: normalizedSessionId,
+      providerId: config.id,
+      raw: <String, Object?>{'cwd': cwd},
+    );
   }
 
   @override
-  Future<AgentThreadPage> listThreads({
-    required AgentThreadListQuery query,
-  }) async {
-    throw UnsupportedError(
-      '${config.displayName} does not support listing threads yet',
+  Future<AgentThreadPage> listThreads({required AgentThreadListQuery query}) {
+    return _sessionHistoryReader.listThreads(
+      query: query,
+      providerId: config.id,
+      environment: config.environment,
     );
+  }
+
+  @override
+  Future<void> removeThreadFromList(String threadId) {
+    return _sessionHistoryReader.removeThreadFromList(threadId);
   }
 
   @override
@@ -227,9 +271,21 @@ class ClaudeCodeAgentProvider
     required String threadId,
     String? sessionPath,
     String? projectPath,
-  }) async {
-    throw UnsupportedError(
-      '${config.displayName} does not support history yet',
+  }) {
+    final normalizedProjectPath = projectPath?.trim();
+    if (normalizedProjectPath == null || normalizedProjectPath.isEmpty) {
+      throw ArgumentError.value(
+        projectPath,
+        'projectPath',
+        'Claude Code history requires a project path',
+      );
+    }
+    return _sessionHistoryReader.readThreadHistory(
+      threadId: threadId,
+      providerId: config.id,
+      projectPath: normalizedProjectPath,
+      sessionPath: sessionPath,
+      environment: config.environment,
     );
   }
 
@@ -582,6 +638,7 @@ class ClaudeCodeAgentProvider
     _protocolErrorSubscription = null;
     final peer = _peer;
     _peer = null;
+    _expectedPeerSessionId = null;
     if (peer != null) {
       try {
         await peer.close();
@@ -632,6 +689,7 @@ class ClaudeCodeAgentProvider
       environment: config.environment,
       processStarter: _processStarterDelegate,
     );
+    _expectedPeerSessionId = sessionId;
     _peer = peer;
     _listenToPeer(peer);
 
@@ -657,6 +715,7 @@ class ClaudeCodeAgentProvider
     _protocolErrorSubscription = null;
     final peer = _peer;
     _peer = null;
+    _expectedPeerSessionId = null;
     _controlHandler.clearPending();
     _planApprovalAdapter.clear();
     if (peer != null) {
@@ -763,6 +822,7 @@ class ClaudeCodeAgentProvider
       raw: event.raw,
       runtimeScope: runtimeScope,
       runningTurnId: runningTurnId,
+      expectedSessionId: _expectedPeerSessionId,
     );
     for (final domainEvent in mapped.events) {
       _addEvent(domainEvent);

@@ -68,6 +68,60 @@ void main() {
       );
     });
 
+    test('session mismatch emits error without starting a session', () {
+      final mapper = ClaudeCodeEventMapper(providerId: 'claude_code');
+      addTearDown(mapper.dispose);
+      final raw = <String, Object?>{
+        'type': 'system',
+        'subtype': 'init',
+        'session_id': 'unexpected-session',
+      };
+
+      final rejected = mapper.mapFrame(
+        raw: raw,
+        runtimeScope: scope,
+        expectedSessionId: 'requested-session',
+      );
+
+      expect(rejected.events.whereType<AgentSessionStartedEvent>(), isEmpty);
+      final error = rejected.events.whereType<AgentErrorEvent>().single;
+      expect(error.code, 'claudeCodeSessionMismatch');
+      expect(error.sessionId, 'requested-session');
+      expect(error.message, isNot(contains('unexpected-session')));
+
+      final lateMatchingInit = mapper.mapFrame(
+        raw: <String, Object?>{...raw, 'session_id': 'requested-session'},
+        runtimeScope: scope,
+        expectedSessionId: 'requested-session',
+      );
+      expect(lateMatchingInit.events, isEmpty);
+    });
+
+    test('repeated init for one peer is idempotent', () {
+      final mapper = ClaudeCodeEventMapper(providerId: 'claude_code');
+      addTearDown(mapper.dispose);
+      final raw = <String, Object?>{
+        'type': 'system',
+        'subtype': 'init',
+        'session_id': 'stable-session',
+      };
+
+      final first = mapper.mapFrame(
+        raw: raw,
+        runtimeScope: scope,
+        expectedSessionId: 'stable-session',
+      );
+      final repeated = mapper.mapFrame(
+        raw: raw,
+        runtimeScope: scope,
+        expectedSessionId: 'stable-session',
+      );
+
+      expect(first.events.whereType<AgentSessionStartedEvent>(), hasLength(1));
+      expect(repeated.events, isEmpty);
+      expect(repeated.ignoredReason, 'duplicate init');
+    });
+
     test(
       'thinking_interleaved yields two reasoning entryIds and independent message',
       () {

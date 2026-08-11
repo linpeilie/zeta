@@ -83,11 +83,11 @@ void main() {
       expect(capabilities.canPrompt, isTrue);
       expect(capabilities.canCancelTurn, isTrue);
       expect(capabilities.supportsUsage, isTrue);
-      expect(capabilities.canResumeSession, isFalse);
-      expect(capabilities.canListThreads, isFalse);
-      expect(capabilities.canReadHistory, isFalse);
+      expect(capabilities.canResumeSession, isTrue);
+      expect(capabilities.canListThreads, isTrue);
+      expect(capabilities.canReadHistory, isTrue);
       expect(capabilities.canDeleteThread, isFalse);
-      expect(capabilities.canRemoveThreadFromList, isFalse);
+      expect(capabilities.canRemoveThreadFromList, isTrue);
       expect(capabilities.canSteerTurn, isFalse);
       expect(capabilities.canRenameThread, isFalse);
       expect(capabilities.canArchiveThread, isFalse);

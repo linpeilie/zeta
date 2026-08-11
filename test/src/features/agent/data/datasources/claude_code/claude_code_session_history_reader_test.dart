@@ -1,0 +1,296 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_hidden_thread_store.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_session_history_reader.dart';
+import 'package:zeta/src/features/agent/domain/agent_models.dart';
+
+void main() {
+  group('ClaudeCodeSessionHistoryReader', () {
+    late Directory tempRoot;
+
+    setUp(() async {
+      tempRoot = await Directory.systemTemp.createTemp('zeta-claude-history-');
+    });
+
+    tearDown(() async {
+      if (await tempRoot.exists()) {
+        await tempRoot.delete(recursive: true);
+      }
+    });
+
+    test('freezes project path encoding including Windows drive letters', () {
+      expect(
+        ClaudeCodeSessionHistoryReader.encodeProjectPath(
+          r'D:\Development\Workspace\zeta',
+        ),
+        'D--Development-Workspace-zeta',
+      );
+      expect(
+        ClaudeCodeSessionHistoryReader.encodeProjectPath(r'C:\Users\linpl'),
+        'C--Users-linpl',
+      );
+      expect(
+        ClaudeCodeSessionHistoryReader.encodeProjectPath(
+          '/Users/example/Workspace/zeta',
+        ),
+        '-Users-example-Workspace-zeta',
+      );
+    });
+
+    test('lists summaries, skips malformed lines, and stays read-only', () async {
+      const projectPath = r'D:\Development\Workspace\zeta';
+      const sessionId = 'session-redacted-1';
+      final projectDirectory = await _projectDirectory(
+        tempRoot,
+        projectPath,
+      ).create(recursive: true);
+      final sessionFile = File(
+        '${projectDirectory.path}${Platform.pathSeparator}$sessionId.jsonl',
+      );
+      await sessionFile.writeAsString(
+        '${jsonEncode(<String, Object?>{
+          'type': 'user',
+          'sessionId': sessionId,
+          'timestamp': '2026-08-10T02:00:00.000Z',
+          'message': <String, Object?>{'role': 'user', 'content': '  Review   the history reader contract  '},
+        })}\n'
+        '{malformed-json}\n'
+        '${jsonEncode(<String, Object?>{
+          'type': 'assistant',
+          'sessionId': sessionId,
+          'timestamp': '2026-08-10T02:01:00.000Z',
+          'message': <String, Object?>{
+            'role': 'assistant',
+            'model': 'claude-test-model',
+            'content': <Object?>[
+              <String, Object?>{'type': 'text', 'text': '[RESPONSE_REDACTED]'},
+            ],
+          },
+        })}\n',
+      );
+      final beforeDirectoryMtime = (await projectDirectory.stat()).modified;
+
+      final reader = ClaudeCodeSessionHistoryReader(claudeHome: tempRoot.path);
+      final page = await reader.listThreads(
+        query: const AgentThreadListQuery(projectPath: projectPath, limit: 20),
+        providerId: 'claude-code',
+      );
+
+      expect(page.threads, hasLength(1));
+      final summary = page.threads.single;
+      expect(summary.id, sessionId);
+      expect(summary.providerId, 'claude-code');
+      expect(summary.projectPath, projectPath);
+      expect(summary.title, 'Review the history reader contract');
+      expect(summary.preview, 'Review the history reader contract');
+      expect(summary.sessionPath, sessionFile.path);
+      expect(summary.createdAt, DateTime.utc(2026, 8, 10, 2));
+      expect(summary.updatedAt, DateTime.utc(2026, 8, 10, 2, 1));
+      expect(summary.status, AgentThreadRuntimeStatus.idle);
+      expect(summary.raw, <String, Object?>{
+        'source': 'claude_code_history',
+        'model': 'claude-test-model',
+        'sampledMessageCount': 2,
+      });
+      expect(reader.malformedLineCount, 1);
+      expect((await projectDirectory.stat()).modified, beforeDirectoryMtime);
+    });
+
+    test(
+      'sorts by recency and paginates without scanning other projects',
+      () async {
+        const projectPath = '/workspace/zeta';
+        final projectDirectory = await _projectDirectory(
+          tempRoot,
+          projectPath,
+        ).create(recursive: true);
+        await _writeSession(
+          projectDirectory,
+          sessionId: 'older-session',
+          prompt: 'Older task',
+          timestamp: '2026-08-10T01:00:00.000Z',
+        );
+        await _writeSession(
+          projectDirectory,
+          sessionId: 'newer-session',
+          prompt: 'Newer task',
+          timestamp: '2026-08-10T03:00:00.000Z',
+        );
+        await _writeSession(
+          await _projectDirectory(
+            tempRoot,
+            '/workspace/other',
+          ).create(recursive: true),
+          sessionId: 'other-project-session',
+          prompt: 'Must stay hidden',
+          timestamp: '2026-08-10T04:00:00.000Z',
+        );
+
+        final reader = ClaudeCodeSessionHistoryReader(
+          claudeHome: tempRoot.path,
+        );
+        final firstPage = await reader.listThreads(
+          query: const AgentThreadListQuery(projectPath: projectPath, limit: 1),
+          providerId: 'claude-code',
+        );
+        final secondPage = await reader.listThreads(
+          query: AgentThreadListQuery(
+            projectPath: projectPath,
+            limit: 1,
+            cursor: firstPage.nextCursor,
+          ),
+          providerId: 'claude-code',
+        );
+
+        expect(firstPage.threads.single.id, 'newer-session');
+        expect(firstPage.nextCursor, '1');
+        expect(secondPage.threads.single.id, 'older-session');
+        expect(secondPage.nextCursor, isNull);
+      },
+    );
+
+    test('reads bounded head and tail windows for large history files', () async {
+      const projectPath = '/workspace/large';
+      const sessionId = 'large-session';
+      final projectDirectory = await _projectDirectory(
+        tempRoot,
+        projectPath,
+      ).create(recursive: true);
+      final sessionFile = File(
+        '${projectDirectory.path}${Platform.pathSeparator}$sessionId.jsonl',
+      );
+      final middle = List<String>.filled(
+        200,
+        jsonEncode(<String, Object?>{
+          'type': 'progress',
+          'payload': '[MIDDLE_REDACTED]'.padRight(256, '-'),
+        }),
+      ).join('\n');
+      await sessionFile.writeAsString(
+        '${jsonEncode(<String, Object?>{
+          'type': 'user',
+          'sessionId': sessionId,
+          'timestamp': '2026-08-10T01:00:00.000Z',
+          'message': <String, Object?>{'role': 'user', 'content': 'Large history task'},
+        })}\n'
+        '$middle\n'
+        '${jsonEncode(<String, Object?>{
+          'type': 'assistant',
+          'sessionId': sessionId,
+          'timestamp': '2026-08-10T02:00:00.000Z',
+          'message': <String, Object?>{'role': 'assistant', 'model': 'tail-model', 'content': '[RESPONSE_REDACTED]'},
+        })}\n',
+      );
+
+      final reader = ClaudeCodeSessionHistoryReader(
+        claudeHome: tempRoot.path,
+        sampleWindowBytes: 2048,
+        sampleLineLimit: 8,
+      );
+      final page = await reader.listThreads(
+        query: const AgentThreadListQuery(projectPath: projectPath, limit: 20),
+        providerId: 'claude-code',
+      );
+
+      expect(page.threads.single.title, 'Large history task');
+      expect(page.threads.single.updatedAt, DateTime.utc(2026, 8, 10, 2));
+      expect(page.threads.single.raw['model'], 'tail-model');
+    });
+
+    test('hides a listed thread without modifying Claude history', () async {
+      const projectPath = '/workspace/hidden';
+      const sessionId = 'hidden-session';
+      final projectDirectory = await _projectDirectory(
+        tempRoot,
+        projectPath,
+      ).create(recursive: true);
+      await _writeSession(
+        projectDirectory,
+        sessionId: sessionId,
+        prompt: 'Hide this session locally',
+        timestamp: '2026-08-10T04:00:00.000Z',
+      );
+      final sessionFile = File(
+        '${projectDirectory.path}${Platform.pathSeparator}$sessionId.jsonl',
+      );
+      final beforeBytes = await sessionFile.readAsBytes();
+      final beforeModified = (await sessionFile.stat()).modified;
+      final beforeDirectoryModified = (await projectDirectory.stat()).modified;
+      final zetaState = await Directory.systemTemp.createTemp(
+        'zeta-claude-hidden-state-',
+      );
+      addTearDown(() async {
+        if (await zetaState.exists()) {
+          await zetaState.delete(recursive: true);
+        }
+      });
+      final hiddenFile = File(
+        '${zetaState.path}${Platform.pathSeparator}hidden_threads.json',
+      );
+      final reader = ClaudeCodeSessionHistoryReader(
+        claudeHome: tempRoot.path,
+        hiddenThreadStore: FileClaudeCodeHiddenThreadStore(file: hiddenFile),
+      );
+
+      final visible = await reader.listThreads(
+        query: const AgentThreadListQuery(projectPath: projectPath, limit: 20),
+        providerId: 'claude-code',
+      );
+      expect(visible.threads.single.id, sessionId);
+
+      await reader.removeThreadFromList(sessionId);
+      final hidden = await reader.listThreads(
+        query: const AgentThreadListQuery(projectPath: projectPath, limit: 20),
+        providerId: 'claude-code',
+      );
+
+      expect(hidden.threads, isEmpty);
+      expect(await sessionFile.readAsBytes(), beforeBytes);
+      expect((await sessionFile.stat()).modified, beforeModified);
+      expect((await projectDirectory.stat()).modified, beforeDirectoryModified);
+      expect(
+        await projectDirectory.list(followLinks: false).toList(),
+        hasLength(1),
+      );
+      final encodedHidden = await hiddenFile.readAsString();
+      expect(
+        encodedHidden,
+        contains(
+          ClaudeCodeSessionHistoryReader.hiddenThreadKey(
+            projectPath,
+            sessionId,
+          ),
+        ),
+      );
+    });
+  });
+}
+
+Directory _projectDirectory(Directory claudeHome, String projectPath) {
+  final encoded = ClaudeCodeSessionHistoryReader.encodeProjectPath(projectPath);
+  return Directory(
+    '${claudeHome.path}${Platform.pathSeparator}projects'
+    '${Platform.pathSeparator}$encoded',
+  );
+}
+
+Future<void> _writeSession(
+  Directory projectDirectory, {
+  required String sessionId,
+  required String prompt,
+  required String timestamp,
+}) {
+  final file = File(
+    '${projectDirectory.path}${Platform.pathSeparator}$sessionId.jsonl',
+  );
+  return file.writeAsString(
+    '${jsonEncode(<String, Object?>{
+      'type': 'user',
+      'sessionId': sessionId,
+      'timestamp': timestamp,
+      'message': <String, Object?>{'role': 'user', 'content': prompt},
+    })}\n',
+  );
+}

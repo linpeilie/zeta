@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_agent_provider.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_permission_policy_adapter.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_session_history_reader.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart'
     show ProcessStarter;
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -325,6 +326,78 @@ void main() {
     );
 
     test(
+      'resume starts with requested session and rejects mismatched init',
+      () async {
+        final process = _FakeClaudeProcess();
+        final starts = <_RecordedProcessStart>[];
+        final provider = ClaudeCodeAgentProvider(
+          config: AgentProviderConfig.defaultClaudeCode,
+          processStarter: _queueStarter(<_FakeClaudeProcess>[process], starts),
+          whichLookup: (command) async => command,
+        );
+        addTearDown(provider.dispose);
+        final events = <AgentEvent>[];
+        provider.events.listen(events.add);
+
+        final session = await provider.resumeSession(
+          'resume-session-1',
+          context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+          permissionSnapshot: const AgentPermissionRequestSnapshot.resolved(
+            selection: AgentPermissionSelection(optionId: ':plan'),
+            source: AgentPermissionRequestSource.threadEffective,
+          ),
+        );
+
+        expect(session.id, 'resume-session-1');
+        expect(starts, hasLength(1));
+        expect(
+          starts.single.arguments,
+          containsAllInOrder(<String>[
+            '--resume',
+            'resume-session-1',
+            '--permission-mode',
+            'plan',
+          ]),
+        );
+
+        process.emitInit(sessionId: 'different-session');
+        await pumpEventQueue(times: 3);
+
+        expect(events.whereType<AgentSessionStartedEvent>(), isEmpty);
+        final error = events.whereType<AgentErrorEvent>().single;
+        expect(error.code, 'claudeCodeSessionMismatch');
+        expect(error.sessionId, 'resume-session-1');
+      },
+    );
+
+    test('thread catalog delegates to the Claude history reader', () async {
+      final reader = _RecordingClaudeCodeSessionHistoryReader();
+      final provider = ClaudeCodeAgentProvider(
+        config: AgentProviderConfig.defaultClaudeCode,
+        sessionHistoryReader: reader,
+      );
+      addTearDown(provider.dispose);
+      const query = AgentThreadListQuery(
+        projectPath: '/workspace/project',
+        limit: 7,
+      );
+
+      final page = await provider.listThreads(query: query);
+      final history = await provider.readThreadHistory(
+        threadId: 'history-thread-1',
+        sessionPath: '/claude/history-thread-1.jsonl',
+        projectPath: '/workspace/project',
+      );
+
+      expect(reader.listQuery, same(query));
+      expect(page.threads.single.id, 'history-thread-1');
+      expect(reader.readThreadId, 'history-thread-1');
+      expect(reader.readProjectPath, '/workspace/project');
+      expect(reader.readSessionPath, '/claude/history-thread-1.jsonl');
+      expect(history.threadId, 'history-thread-1');
+    });
+
+    test(
       'turn permission snapshot resumes same session before sending user frame',
       () async {
         final planProcess = _FakeClaudeProcess();
@@ -545,6 +618,54 @@ void main() {
       expect(source, isNot(contains('尚未接入')));
     });
   });
+}
+
+final class _RecordingClaudeCodeSessionHistoryReader
+    extends ClaudeCodeSessionHistoryReader {
+  AgentThreadListQuery? listQuery;
+  String? readThreadId;
+  String? readProjectPath;
+  String? readSessionPath;
+
+  @override
+  Future<AgentThreadPage> listThreads({
+    required AgentThreadListQuery query,
+    required String providerId,
+    Map<String, String>? environment,
+  }) async {
+    listQuery = query;
+    return AgentThreadPage(
+      threads: <AgentThreadSummary>[
+        AgentThreadSummary(
+          id: 'history-thread-1',
+          providerId: providerId,
+          projectPath: query.projectPath!,
+          preview: 'History thread',
+          createdAt: DateTime.fromMillisecondsSinceEpoch(1),
+          updatedAt: DateTime.fromMillisecondsSinceEpoch(2),
+          status: AgentThreadRuntimeStatus.idle,
+        ),
+      ],
+      nextCursor: null,
+    );
+  }
+
+  @override
+  Future<AgentThreadHistorySnapshot> readThreadHistory({
+    required String threadId,
+    required String providerId,
+    required String projectPath,
+    String? sessionPath,
+    Map<String, String>? environment,
+  }) async {
+    readThreadId = threadId;
+    readProjectPath = projectPath;
+    readSessionPath = sessionPath;
+    return AgentThreadHistorySnapshot(
+      threadId: threadId,
+      turns: const <AgentHistoryTurn>[],
+    );
+  }
 }
 
 ProcessStarter _starter(_FakeClaudeProcess process) {

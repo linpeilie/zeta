@@ -43,6 +43,8 @@ final class ClaudeCodeEventMapper {
   int _unknownTypeDropped = 0;
   int _lateOrMissingTurnDropped = 0;
   int _malformedDropped = 0;
+  final Map<AgentRuntimeScope, _ClaudeCodeInitHandshake> _initByRuntimeScope =
+      <AgentRuntimeScope, _ClaudeCodeInitHandshake>{};
 
   /// 未识别 type 丢弃计数（诊断）。
   int get unknownTypeDropped => _unknownTypeDropped;
@@ -73,10 +75,13 @@ final class ClaudeCodeEventMapper {
   /// 映射一行 stream-json 对象。
   ///
   /// [runningTurnId] 为当前 active turn 的 mint id；`system.init` 不依赖它。
+  /// [expectedSessionId] 是本次 peer 启动时请求的新建/恢复 session；首个 init
+  /// 不匹配时 fail-closed 为错误事件，且该 runtime 不再接受后续 init。
   ClaudeCodeMappedFrame mapFrame({
     required Map<String, Object?> raw,
     required AgentRuntimeScope runtimeScope,
     String? runningTurnId,
+    String? expectedSessionId,
   }) {
     final type = raw['type'];
     if (type is! String || type.isEmpty) {
@@ -93,6 +98,7 @@ final class ClaudeCodeEventMapper {
           raw,
           runtimeScope: runtimeScope,
           runningTurnId: runningTurnId,
+          expectedSessionId: expectedSessionId,
         ),
         'assistant' => _mapAssistant(
           raw,
@@ -129,6 +135,7 @@ final class ClaudeCodeEventMapper {
   }
 
   void dispose() {
+    _initByRuntimeScope.clear();
     planApprovalAdapter.clear();
     identity.dispose();
   }
@@ -137,22 +144,75 @@ final class ClaudeCodeEventMapper {
     Map<String, Object?> raw, {
     required AgentRuntimeScope runtimeScope,
     required String? runningTurnId,
+    required String? expectedSessionId,
   }) {
     final subtype = raw['subtype'];
     if (subtype == 'init') {
-      return _mapSystemInit(raw);
+      return _mapSystemInit(
+        raw,
+        runtimeScope: runtimeScope,
+        expectedSessionId: expectedSessionId,
+      );
     }
     // thinking_tokens 等：丢弃
     return _dropUnknown('system/${subtype ?? '<none>'}');
   }
 
-  ClaudeCodeMappedFrame _mapSystemInit(Map<String, Object?> raw) {
+  ClaudeCodeMappedFrame _mapSystemInit(
+    Map<String, Object?> raw, {
+    required AgentRuntimeScope runtimeScope,
+    required String? expectedSessionId,
+  }) {
     final sessionId = _string(raw['session_id']);
     if (sessionId == null) {
       _malformedDropped += 1;
       return const ClaudeCodeMappedFrame(
         ignoredType: 'system/init',
         ignoredReason: 'missing session_id',
+      );
+    }
+    final previous = _initByRuntimeScope[runtimeScope];
+    if (previous != null) {
+      if (!previous.accepted) {
+        return const ClaudeCodeMappedFrame(
+          ignoredType: 'system/init',
+          ignoredReason: 'init handshake already rejected',
+        );
+      }
+      if (previous.sessionId == sessionId) {
+        return const ClaudeCodeMappedFrame(
+          ignoredType: 'system/init',
+          ignoredReason: 'duplicate init',
+        );
+      }
+      _malformedDropped += 1;
+      return ClaudeCodeMappedFrame(
+        events: <AgentEvent>[
+          AgentErrorEvent(
+            message: 'Claude Code changed session identity unexpectedly',
+            code: 'claudeCodeSessionMismatch',
+            sessionId: expectedSessionId,
+          ),
+        ],
+      );
+    }
+
+    final expected = _string(expectedSessionId);
+    final matchesExpected = expected == null || sessionId == expected;
+    _initByRuntimeScope[runtimeScope] = _ClaudeCodeInitHandshake(
+      sessionId: sessionId,
+      accepted: matchesExpected,
+    );
+    if (!matchesExpected) {
+      _malformedDropped += 1;
+      return ClaudeCodeMappedFrame(
+        events: <AgentEvent>[
+          AgentErrorEvent(
+            message: 'Claude Code could not restore the requested session',
+            code: 'claudeCodeSessionMismatch',
+            sessionId: expected,
+          ),
+        ],
       );
     }
     final model = _string(raw['model']);
@@ -647,4 +707,14 @@ final class ClaudeCodeEventMapper {
     }
     return null;
   }
+}
+
+final class _ClaudeCodeInitHandshake {
+  const _ClaudeCodeInitHandshake({
+    required this.sessionId,
+    required this.accepted,
+  });
+
+  final String sessionId;
+  final bool accepted;
 }

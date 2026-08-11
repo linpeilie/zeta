@@ -10,11 +10,14 @@ import 'package:zeta/main.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
+import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
+import 'package:zeta/src/ui/features/ide/views/project_list_pane.dart';
 
 import '../../../testing/ide_test_harness.dart';
+import '../../../ui/core/ide_component_test_harness.dart';
 
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
@@ -1499,6 +1502,82 @@ void main() {
       ),
       findsNothing,
     );
+  });
+
+  testWidgets('local removal dialog says Provider history is retained', (
+    tester,
+  ) async {
+    final directory = Directory.systemTemp.createTempSync('zeta_test_');
+    tempDirectories.add(directory);
+    final thread = agentThread(
+      id: 'claude-thread',
+      projectPath: directory.path,
+      title: 'Claude thread',
+    ).copyWith(providerId: defaultClaudeCodeProviderId);
+
+    await pumpIdeComponent(
+      tester,
+      child: ProjectListPane(
+        projects: <String>[directory.path],
+        activeProject: directory.path,
+        threadStateFor: (_) => ProjectThreadListState(
+          isExpanded: true,
+          hasLoaded: true,
+          threads: <AgentThreadSummary>[thread],
+        ),
+        onOpenProject: () {},
+        onSelectProject: (_) {},
+        onSelectThread: (_, _) {},
+        onLoadMoreThreads: (_) {},
+        onRetryThreads: (_) {},
+        loadAvailableProviders: () async => const <AgentProviderConfig>[],
+        capabilitiesForProvider: (_) =>
+            const AgentProviderCapabilities(canRemoveThreadFromList: true),
+        onNewThread: (_, _) {},
+        onOpenProjectLocation: (_) {},
+        onRemoveProject: (_) {},
+        onRenameThread: (_, _, _) {},
+        onArchiveThread: (_, _) {},
+        onUnarchiveThread: (_, _) {},
+        onDeleteThread: (_, _) {},
+        onForkThread: (_, _) {},
+        onDismissCompletedThread: (_, _) {},
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final mouse = await hoverThreadTile(
+      tester,
+      directory.path,
+      'claude-thread',
+    );
+    addTearDown(mouse.removePointer);
+    await tester.tap(
+      find.byKey(
+        ValueKey<String>(
+          'project-thread-more-menu-${directory.path}-claude-thread',
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(
+      find.byKey(
+        ValueKey<String>(
+          'project-thread-delete-${directory.path}-claude-thread',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('从列表移除会话'), findsOneWidget);
+    expect(
+      find.text(
+        '只会移除 Zeta 的本地索引记录，Provider 端历史文件仍会保留。'
+        '如需彻底删除，请在对应 Agent 工具中处理。',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Cursor'), findsNothing);
   });
 }
 

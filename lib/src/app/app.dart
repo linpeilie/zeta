@@ -17,6 +17,7 @@ import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_permission_migration.dart';
 import 'package:zeta/src/features/agent/data/default_agent_provider_factory.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_hidden_thread_store.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_permission_policy_adapter.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -146,6 +147,11 @@ class MainAppState extends State<MainApp>
       claudeCodeSessionDecisionStoreFactory: useFilePersistence
           ? (sessionId) => FileClaudeCodeSessionDecisionStore(
               file: _claudeCodeSessionDecisionFile(dataPaths!, sessionId),
+            )
+          : null,
+      claudeCodeHiddenThreadStore: useFilePersistence
+          ? FileClaudeCodeHiddenThreadStore(
+              file: _claudeCodeHiddenThreadsFile(dataPaths!),
             )
           : null,
     );
@@ -435,5 +441,12 @@ File _claudeCodeSessionDecisionFile(ZetaDataPaths dataPaths, String sessionId) {
   return File(
     '${dataPaths.stateDirectory.path}${Platform.pathSeparator}'
     'claude_code${Platform.pathSeparator}session_$encodedSessionId.json',
+  );
+}
+
+File _claudeCodeHiddenThreadsFile(ZetaDataPaths dataPaths) {
+  return File(
+    '${dataPaths.stateDirectory.path}${Platform.pathSeparator}'
+    'claude_code${Platform.pathSeparator}hidden_threads.json',
   );
 }
