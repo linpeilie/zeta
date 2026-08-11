@@ -76,7 +76,7 @@ class IdeCollapsibleCard extends StatelessWidget {
       // 这正是「每一行都带 > 箭头和长长的横线」的来源。把箭头、图标、标题
       // 挤成一个紧凑簇，一串操作才会读成「过程记录」而不是平铺列表。
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           SizedBox(
             key: toggleKey,
