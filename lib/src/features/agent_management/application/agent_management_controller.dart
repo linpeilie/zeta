@@ -8,6 +8,8 @@ import 'package:zeta/src/features/agent/data/grok_cli_locator.dart'
     show looksLikeGrokCliPath;
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent_management/data/claude_code_agent_management_repository.dart'
+    show looksLikeClaudeCodeCliPath;
 import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart'
     show isNewerVersion;
 import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
@@ -264,6 +266,7 @@ class AgentManagementController extends ChangeNotifier {
       );
       final sourceLabel = switch (id) {
         grokAgentProviderId => 'Grok ACP',
+        defaultClaudeCodeProviderId => 'Claude Code',
         _ => 'Codex app-server',
       };
       _agents[id] = agent.copyWith(
@@ -494,6 +497,9 @@ class AgentManagementController extends ChangeNotifier {
     if (agentId == grokAgentProviderId) {
       return AgentProviderConfig.defaultGrok;
     }
+    if (agentId == defaultClaudeCodeProviderId) {
+      return AgentProviderConfig.defaultClaudeCode;
+    }
     return AgentProviderConfig.defaultCodex;
   }
 
@@ -507,6 +513,9 @@ class AgentManagementController extends ChangeNotifier {
     }
     if (agentId == defaultAgentProviderId) {
       return _sanitizeCodexConfig(config);
+    }
+    if (agentId == defaultClaudeCodeProviderId) {
+      return _sanitizeClaudeCodeConfig(config);
     }
     return config.copyWith(id: agentId);
   }
@@ -586,12 +595,54 @@ class AgentManagementController extends ChangeNotifier {
     );
   }
 
+  AgentProviderConfig _sanitizeClaudeCodeConfig(AgentProviderConfig config) {
+    final extra = Map<String, Object?>.from(config.extra)
+      ..remove('timeoutSeconds');
+    final cliPath = extra['cliPath'] is String
+        ? extra['cliPath'] as String
+        : null;
+    final commandIsPath = _looksLikeFilePath(config.command);
+    final commandWrong =
+        commandIsPath && !looksLikeClaudeCodeCliPath(config.command);
+    final cliPathWrong =
+        cliPath != null && !looksLikeClaudeCodeCliPath(cliPath);
+    final kindWrong = config.kind != AgentProviderKind.claudeCode;
+
+    if (cliPathWrong) {
+      extra.remove('cliPath');
+      extra.remove('detectedCurrentVersion');
+      extra.remove('detectedLatestVersion');
+    }
+
+    final needsDefaultCommand =
+        kindWrong ||
+        commandWrong ||
+        config.command.trim().isEmpty ||
+        (cliPathWrong && config.command == cliPath);
+
+    return config.copyWith(
+      id: defaultClaudeCodeProviderId,
+      displayName: AgentProviderConfig.defaultClaudeCode.displayName,
+      kind: AgentProviderKind.claudeCode,
+      command: needsDefaultCommand
+          ? AgentProviderConfig.defaultClaudeCode.command
+          : config.command,
+      arguments: kindWrong || needsDefaultCommand
+          ? AgentProviderConfig.defaultClaudeCode.arguments
+          : config.arguments,
+      extra: extra,
+    );
+  }
+
   bool _pathBelongsToAgent(String agentId, String path) {
     if (agentId == grokAgentProviderId) {
       return looksLikeGrokCliPath(path);
     }
     if (agentId == defaultAgentProviderId) {
       return looksLikeCodexCliPath(path);
+    }
+    if (agentId == defaultClaudeCodeProviderId) {
+      return looksLikeClaudeCodeCliPath(path);
     }
     return true;
   }

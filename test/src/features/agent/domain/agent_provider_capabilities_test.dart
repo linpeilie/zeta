@@ -73,5 +73,38 @@ void main() {
       expect(capabilities.supportsResourceInput, isFalse);
       expect(capabilities.bootstrapPolicy.allowsEagerModelPreload, isTrue);
     });
+
+    test('exposes M1 create/prompt/cancel/usage for Claude Code', () {
+      final capabilities = AgentProviderCapabilities.defaultsFor(
+        AgentProviderKind.claudeCode,
+      );
+
+      expect(capabilities.canCreateSession, isTrue);
+      expect(capabilities.canPrompt, isTrue);
+      expect(capabilities.canCancelTurn, isTrue);
+      expect(capabilities.supportsUsage, isTrue);
+      expect(capabilities.canResumeSession, isFalse);
+      expect(capabilities.canListThreads, isFalse);
+      expect(capabilities.canReadHistory, isFalse);
+      expect(capabilities.canDeleteThread, isFalse);
+      expect(capabilities.canRemoveThreadFromList, isFalse);
+      expect(capabilities.canSteerTurn, isFalse);
+      expect(capabilities.canRenameThread, isFalse);
+      expect(capabilities.canArchiveThread, isFalse);
+      expect(capabilities.canUnarchiveThread, isFalse);
+      expect(capabilities.canForkThread, isFalse);
+      expect(capabilities.canForkThreadAtTurn, isFalse);
+      expect(capabilities.canCompactThread, isFalse);
+      expect(capabilities.supportsPermissionRequests, isFalse);
+      expect(capabilities.supportsUserQuestions, isFalse);
+      expect(capabilities.supportsPlanApproval, isFalse);
+      expect(capabilities.supportsModelSelection, isFalse);
+      expect(capabilities.supportsModeSelection, isFalse);
+      expect(capabilities.supportsReasoningOptions, isFalse);
+      expect(capabilities.supportsServiceTierSelection, isFalse);
+      expect(capabilities.supportsSkillInput, isFalse);
+      expect(capabilities.supportsLocalImageInput, isFalse);
+      expect(capabilities.supportsResourceInput, isFalse);
+    });
   });
 }

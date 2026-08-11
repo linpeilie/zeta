@@ -1,0 +1,688 @@
+import 'dart:async';
+import 'dart:math';
+
+import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_control_request_handler.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_event_mapper.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_process_starter.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/stream_json_peer.dart';
+import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart'
+    show ProcessStarter;
+import 'package:zeta/src/features/agent/data/mappers/claude_code_stream_identity.dart';
+import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+
+final _log = loggerFor('zeta.agent.claude_code.provider');
+
+/// Claude Code stream-json Provider。
+///
+/// 进程常驻 + 串行 turn；`--permission-mode default` 下高风险工具走
+/// [ClaudeCodeControlRequestHandler] 的 UI 审批（T20），未知 control 类型
+/// 仍 fail-closed deny。
+class ClaudeCodeAgentProvider implements AgentProvider {
+  ClaudeCodeAgentProvider({
+    required this.config,
+    ProcessStarter? processStarter,
+    this._whichLookup,
+    ClaudeCodeEventMapper? mapper,
+    ClaudeCodeControlRequestHandler? controlRequestHandler,
+    String Function()? idFactory,
+  }) : _processStarterDelegate = processStarter,
+       _mapper = mapper ?? ClaudeCodeEventMapper(providerId: config.id),
+       _controlHandler =
+           controlRequestHandler ?? ClaudeCodeControlRequestHandler(),
+       _idFactory = idFactory ?? _defaultIdFactory;
+
+  @override
+  final AgentProviderConfig config;
+
+  final ProcessStarter? _processStarterDelegate;
+  final Future<String?> Function(String command)? _whichLookup;
+  final ClaudeCodeEventMapper _mapper;
+  final ClaudeCodeControlRequestHandler _controlHandler;
+  final String Function() _idFactory;
+
+  final StreamController<AgentEvent> _events =
+      StreamController<AgentEvent>.broadcast();
+
+  StreamJsonPeer? _peer;
+  StreamSubscription<StreamJsonEvent>? _peerEventsSubscription;
+  StreamSubscription<StreamJsonProtocolException>? _protocolErrorSubscription;
+  Future<void>? _initializationOperation;
+  Future<void>? _disposeOperation;
+
+  AgentRuntimeScope? _runtimeScope;
+  int _connectionEpoch = 0;
+  String? _sessionId;
+  String? _workingDirectory;
+  final Map<String, String> _runningTurnIdsBySessionId = <String, String>{};
+
+  bool _initialized = false;
+  bool _disposed = false;
+
+  @override
+  AgentProviderCapabilities get capabilities =>
+      AgentProviderCapabilities.defaultsFor(AgentProviderKind.claudeCode);
+
+  @override
+  Stream<AgentEvent> get events => _events.stream;
+
+  /// 测试/诊断：立即 deny 的 control_request 计数（malformed / 未知 type）。
+  int get controlDeniedCount => _controlHandler.deniedCount;
+
+  /// 测试/诊断：等待用户决策的 can_use_tool 数。
+  int get controlPendingCount => _controlHandler.pendingCount;
+
+  @override
+  Future<void> initialize() async {
+    _ensureNotDisposed();
+    if (_initialized) {
+      return;
+    }
+    final inFlight = _initializationOperation;
+    if (inFlight != null) {
+      await inFlight;
+      return;
+    }
+    final operation = _initializeOnce();
+    _initializationOperation = operation;
+    try {
+      await operation;
+    } finally {
+      if (identical(_initializationOperation, operation)) {
+        _initializationOperation = null;
+      }
+    }
+  }
+
+  Future<void> _initializeOnce() async {
+    _log.i('Initializing Claude Code provider ${config.id}');
+    _emitStatus(
+      const AgentProviderStatus(
+        state: AgentProviderConnectionState.connecting,
+        message: 'Preparing Claude Code',
+      ),
+    );
+    // 进程在 startSession 时按 cwd 拉起；initialize 只完成 provider 就绪标记。
+    _initialized = true;
+    _emitStatus(
+      AgentProviderStatus(
+        state: AgentProviderConnectionState.ready,
+        message: '${config.displayName} ready',
+      ),
+    );
+    _log.i('Claude Code provider ${config.id} initialized');
+  }
+
+  @override
+  Future<AgentSession> startSession({
+    required AgentContext context,
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
+  }) async {
+    await initialize();
+    final cwd = context.projectPath?.trim();
+    if (cwd == null || cwd.isEmpty) {
+      throw StateError('Claude Code requires projectPath as working directory');
+    }
+
+    final sessionId = _idFactory();
+    await _ensurePeer(
+      sessionId: sessionId,
+      workingDirectory: cwd,
+      resumeSessionId: null,
+    );
+    _sessionId = sessionId;
+    _workingDirectory = cwd;
+
+    return AgentSession(
+      id: sessionId,
+      providerId: config.id,
+      raw: <String, Object?>{'cwd': cwd},
+    );
+  }
+
+  @override
+  Future<AgentSession> resumeSession(
+    String sessionId, {
+    required AgentContext context,
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
+  }) async {
+    throw UnsupportedError('${config.displayName} does not support resume yet');
+  }
+
+  @override
+  Future<AgentThreadPage> listThreads({
+    required AgentThreadListQuery query,
+  }) async {
+    throw UnsupportedError(
+      '${config.displayName} does not support listing threads yet',
+    );
+  }
+
+  @override
+  Future<AgentModelList> listModels({
+    int limit = 20,
+    bool includeHidden = false,
+  }) async {
+    throw UnsupportedError(
+      '${config.displayName} does not support model catalog yet',
+    );
+  }
+
+  @override
+  void updateModelSelection(AgentModelSelection selection) {
+    // 模型在进程启动参数中生效；运行时切换需重启（后续任务）。
+  }
+
+  @override
+  Future<void> approveGuardianDeniedAction({
+    required String threadId,
+    required Object event,
+  }) async {
+    throw UnsupportedError(
+      '${config.displayName} does not support guardian approvals',
+    );
+  }
+
+  @override
+  Future<AgentThreadHistorySnapshot> readThreadHistory({
+    required String threadId,
+    String? sessionPath,
+    String? projectPath,
+  }) async {
+    throw UnsupportedError(
+      '${config.displayName} does not support history yet',
+    );
+  }
+
+  @override
+  Future<void> unsubscribeThread(String threadId) async {}
+
+  @override
+  Future<void> renameThread({
+    required String threadId,
+    required String name,
+  }) async {
+    throw UnsupportedError(
+      '${config.displayName} does not support renaming threads yet',
+    );
+  }
+
+  @override
+  Future<void> archiveThread(String threadId) async {
+    throw UnsupportedError(
+      '${config.displayName} does not support archiving threads',
+    );
+  }
+
+  @override
+  Future<void> unarchiveThread(String threadId) async {
+    throw UnsupportedError(
+      '${config.displayName} does not support unarchiving threads',
+    );
+  }
+
+  @override
+  Future<void> deleteThread(String threadId) async {
+    throw UnsupportedError(
+      '${config.displayName} does not support deleting threads yet',
+    );
+  }
+
+  @override
+  Future<AgentSession> forkThread({
+    required String threadId,
+    required AgentContext context,
+    AgentForkBoundary boundary = const AgentForkCurrentHead(),
+    AgentPermissionRequestSnapshot permissionSnapshot =
+        const AgentPermissionRequestSnapshot.providerFallback(),
+  }) async {
+    throw UnsupportedError(
+      '${config.displayName} does not support forking threads',
+    );
+  }
+
+  @override
+  Future<void> compactThread(String threadId) async {
+    throw UnsupportedError(
+      '${config.displayName} does not support compact yet',
+    );
+  }
+
+  @override
+  Future<AgentTurn> sendMessage({
+    required AgentSession session,
+    required AgentContext context,
+    String? message,
+    List<AgentUserInput>? inputs,
+    String? clientUserMessageId,
+    AgentTurnConfiguration configuration = const AgentTurnConfiguration(),
+  }) async {
+    await initialize();
+    final peer = _peer;
+    final runtimeScope = _runtimeScope;
+    if (peer == null || runtimeScope == null || _sessionId == null) {
+      throw StateError(
+        'Claude Code session is not started; call startSession first',
+      );
+    }
+    if (session.id != _sessionId) {
+      throw StateError(
+        'Claude Code provider is bound to session $_sessionId, '
+        'not ${session.id}',
+      );
+    }
+
+    final existingTurnId = _runningTurnIdsBySessionId[session.id];
+    if (existingTurnId != null) {
+      throw StateError(
+        'Claude Code session ${session.id} already has an active turn '
+        '($existingTurnId)',
+      );
+    }
+
+    final text = _resolvePromptText(message: message, inputs: inputs);
+    if (text.trim().isEmpty) {
+      throw ArgumentError('Claude Code prompt text must not be empty');
+    }
+
+    final turnId = _idFactory();
+    _runningTurnIdsBySessionId[session.id] = turnId;
+    _mapper.beginTurn(
+      runtimeScope: runtimeScope,
+      sessionId: session.id,
+      turnId: turnId,
+    );
+    final turn = AgentTurn(id: turnId, sessionId: session.id);
+    _addEvent(AgentTurnStartedEvent(turn));
+    _emitStatus(
+      const AgentProviderStatus(
+        state: AgentProviderConnectionState.running,
+        message: 'Agent is working',
+      ),
+    );
+
+    final userFrame = <String, Object?>{
+      'type': 'user',
+      'message': <String, Object?>{
+        'role': 'user',
+        'content': <Object?>[
+          <String, Object?>{'type': 'text', 'text': text},
+        ],
+      },
+    };
+
+    try {
+      await peer.send(userFrame);
+    } catch (error, stackTrace) {
+      _runningTurnIdsBySessionId.remove(session.id);
+      _log.w(
+        'Failed to send Claude Code user frame (${error.runtimeType})',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      _addEvent(
+        AgentTurnCompletedEvent(
+          sessionId: session.id,
+          turnId: turnId,
+          status: AgentHistoryTurnStatus.failed,
+          errorMessage: 'Failed to send prompt',
+        ),
+      );
+      _emitReadyIfIdle();
+      rethrow;
+    }
+
+    return turn;
+  }
+
+  @override
+  Future<void> steerTurn({
+    required AgentSession session,
+    required String expectedTurnId,
+    required AgentContext context,
+    String? message,
+    List<AgentUserInput>? inputs,
+    String? clientUserMessageId,
+  }) async {
+    throw UnsupportedError(
+      '${config.displayName} does not support steering active turns',
+    );
+  }
+
+  @override
+  Future<void> cancelTurn(AgentTurn turn) async {
+    final peer = _peer;
+    if (peer == null) {
+      return;
+    }
+    _log.i('Cancelling Claude Code turn ${turn.id}');
+    try {
+      await peer.send(<String, Object?>{
+        'type': 'control',
+        'subtype': 'interrupt',
+      });
+    } catch (error) {
+      _log.w('Claude Code interrupt failed (${error.runtimeType})');
+    }
+    final runtimeScope = _runtimeScope;
+    if (runtimeScope != null) {
+      final terminal = _mapper.identity.completeTurn(
+        runtimeScope: runtimeScope,
+        sessionId: turn.sessionId,
+        runningTurnId: turn.id,
+        status: AgentHistoryTurnStatus.interrupted,
+        source: ClaudeCodeTerminalSource.interrupt,
+        eventId: 'interrupt-${turn.id}',
+        eventKind: 'control.interrupt',
+      );
+      if (terminal.accepted) {
+        _addEvent(
+          AgentTurnCompletedEvent(
+            sessionId: terminal.sessionId,
+            turnId: terminal.turnId,
+            status: AgentHistoryTurnStatus.interrupted,
+          ),
+        );
+      }
+    }
+    if (_runningTurnIdsBySessionId[turn.sessionId] == turn.id) {
+      _runningTurnIdsBySessionId.remove(turn.sessionId);
+    }
+    _emitReadyIfIdle();
+  }
+
+  @override
+  Future<void> respondToPermission(AgentPermissionDecision decision) async {
+    _ensureNotDisposed();
+    final resolved = _controlHandler.resolveDecision(decision);
+    if (resolved == null) {
+      return;
+    }
+    final peer = _peer;
+    if (peer == null) {
+      _log.w('Cannot send control_response: Claude Code peer is not running');
+      return;
+    }
+    try {
+      await peer.send(resolved.responseFrame);
+    } catch (error, stackTrace) {
+      _log.w(
+        'Failed to send control_response (${error.runtimeType})',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+    // cancel / denyAlways 时额外 interrupt，避免回合继续挂起等待工具结果。
+    if (decision.cancelTurn ||
+        resolved.outcome == ClaudeCodeToolPermissionOutcome.denyAlways) {
+      try {
+        await peer.send(<String, Object?>{
+          'type': 'control',
+          'subtype': 'interrupt',
+        });
+      } catch (error) {
+        _log.w(
+          'Claude Code interrupt after permission deny failed '
+          '(${error.runtimeType})',
+        );
+      }
+    }
+  }
+
+  @override
+  Future<void> dispose() {
+    final existing = _disposeOperation;
+    if (existing != null) {
+      return existing;
+    }
+    final operation = _disposeOnce();
+    _disposeOperation = operation;
+    return operation;
+  }
+
+  Future<void> _disposeOnce() async {
+    if (_disposed) {
+      return;
+    }
+    _disposed = true;
+    _log.t('Disposing Claude Code provider ${config.id}');
+    await _peerEventsSubscription?.cancel();
+    await _protocolErrorSubscription?.cancel();
+    _peerEventsSubscription = null;
+    _protocolErrorSubscription = null;
+    final peer = _peer;
+    _peer = null;
+    if (peer != null) {
+      try {
+        await peer.close();
+      } catch (_) {}
+    }
+    _controlHandler.clearPending();
+    _mapper.dispose();
+    _runningTurnIdsBySessionId.clear();
+    await _events.close();
+  }
+
+  Future<void> _ensurePeer({
+    required String sessionId,
+    required String workingDirectory,
+    required String? resumeSessionId,
+  }) async {
+    final existing = _peer;
+    if (existing != null &&
+        _sessionId == sessionId &&
+        _workingDirectory == workingDirectory) {
+      return;
+    }
+    if (existing != null) {
+      await _tearDownPeer();
+    }
+
+    final resolved = await resolveClaudeCodeProcessCommand(
+      config,
+      sessionId: resumeSessionId == null ? sessionId : null,
+      resumeSessionId: resumeSessionId,
+      model: config.selectedModel ?? config.defaultModel,
+      permissionMode: 'default',
+      whichLookup: _whichLookup,
+    );
+
+    _connectionEpoch += 1;
+    _runtimeScope = AgentRuntimeScope(
+      runtimeId: 'claude-code-${config.id}',
+      connectionEpoch: _connectionEpoch,
+    );
+
+    final peer = StreamJsonPeer(
+      command: resolved.executable,
+      arguments: resolved.arguments,
+      workingDirectory: workingDirectory,
+      environment: config.environment,
+      processStarter: _processStarterDelegate,
+    );
+    _peer = peer;
+    _listenToPeer(peer);
+
+    _emitStatus(
+      const AgentProviderStatus(
+        state: AgentProviderConnectionState.connecting,
+        message: 'Starting Claude Code',
+      ),
+    );
+    await peer.start();
+    _emitStatus(
+      AgentProviderStatus(
+        state: AgentProviderConnectionState.ready,
+        message: '${config.displayName} ready',
+      ),
+    );
+  }
+
+  Future<void> _tearDownPeer() async {
+    await _peerEventsSubscription?.cancel();
+    await _protocolErrorSubscription?.cancel();
+    _peerEventsSubscription = null;
+    _protocolErrorSubscription = null;
+    final peer = _peer;
+    _peer = null;
+    _controlHandler.clearPending();
+    if (peer != null) {
+      try {
+        await peer.close();
+      } catch (_) {}
+    }
+    final scope = _runtimeScope;
+    if (scope != null) {
+      _mapper.identity.invalidateRuntime(
+        runtimeScope: scope,
+        reason: ClaudeCodeIdentityInvalidationReason.peerClosed,
+      );
+    }
+    _runningTurnIdsBySessionId.clear();
+  }
+
+  void _listenToPeer(StreamJsonPeer peer) {
+    _peerEventsSubscription = peer.events.listen(
+      _handlePeerEvent,
+      onError: (Object error, StackTrace stackTrace) {
+        _log.w(
+          'Claude Code peer event stream error (${error.runtimeType})',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      },
+      onDone: () {
+        _log.i('Claude Code peer event stream closed');
+        if (!_disposed) {
+          _emitStatus(
+            const AgentProviderStatus(
+              state: AgentProviderConnectionState.unavailable,
+              message: 'Claude Code process exited',
+            ),
+          );
+        }
+      },
+    );
+    _protocolErrorSubscription = peer.protocolErrors.listen((error) {
+      _log.w('Claude Code protocol error: $error');
+    });
+  }
+
+  void _handlePeerEvent(StreamJsonEvent event) {
+    if (_disposed) {
+      return;
+    }
+    final runtimeScope = _runtimeScope;
+    if (runtimeScope == null) {
+      return;
+    }
+
+    final sessionId = _sessionId;
+    final runningTurnId = sessionId == null
+        ? null
+        : _runningTurnIdsBySessionId[sessionId];
+
+    if (event.type == 'control_request') {
+      final result = _controlHandler.handle(
+        event.raw,
+        sessionId: sessionId,
+        turnId: runningTurnId,
+        cwd: _workingDirectory,
+      );
+      for (final domainEvent in result.events) {
+        _addEvent(domainEvent);
+      }
+      final responseFrame = result.responseFrame;
+      final peer = _peer;
+      if (responseFrame != null && peer != null) {
+        unawaited(
+          peer.send(responseFrame).catchError((Object error) {
+            _log.w('Failed to send control_response (${error.runtimeType})');
+          }),
+        );
+      }
+      return;
+    }
+
+    final mapped = _mapper.mapFrame(
+      raw: event.raw,
+      runtimeScope: runtimeScope,
+      runningTurnId: runningTurnId,
+    );
+    for (final domainEvent in mapped.events) {
+      _addEvent(domainEvent);
+      if (domainEvent is AgentTurnCompletedEvent) {
+        if (_runningTurnIdsBySessionId[domainEvent.sessionId] ==
+            domainEvent.turnId) {
+          _runningTurnIdsBySessionId.remove(domainEvent.sessionId);
+        }
+        _emitReadyIfIdle();
+      }
+    }
+  }
+
+  String _resolvePromptText({
+    required String? message,
+    required List<AgentUserInput>? inputs,
+  }) {
+    final parts = <String>[];
+    final trimmed = message?.trim();
+    if (trimmed != null && trimmed.isNotEmpty) {
+      parts.add(trimmed);
+    }
+    if (inputs != null) {
+      for (final input in inputs) {
+        if (input is AgentTextUserInput) {
+          final text = input.text.trim();
+          if (text.isNotEmpty) {
+            parts.add(text);
+          }
+        }
+      }
+    }
+    return parts.join('\n');
+  }
+
+  void _emitReadyIfIdle() {
+    if (_runningTurnIdsBySessionId.isEmpty && !_disposed) {
+      _emitStatus(
+        AgentProviderStatus(
+          state: AgentProviderConnectionState.ready,
+          message: '${config.displayName} ready',
+        ),
+      );
+    }
+  }
+
+  void _emitStatus(AgentProviderStatus status) {
+    _addEvent(AgentStatusEvent(status));
+  }
+
+  void _addEvent(AgentEvent event) {
+    if (_disposed || _events.isClosed) {
+      return;
+    }
+    _events.add(event);
+  }
+
+  void _ensureNotDisposed() {
+    if (_disposed) {
+      throw StateError('ClaudeCodeAgentProvider has been disposed');
+    }
+  }
+
+  static String _defaultIdFactory() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    String hex(int value) => value.toRadixString(16).padLeft(2, '0');
+    final b = bytes.map(hex).join();
+    return '${b.substring(0, 8)}-${b.substring(8, 12)}-'
+        '${b.substring(12, 16)}-${b.substring(16, 20)}-${b.substring(20)}';
+  }
+}

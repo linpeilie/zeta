@@ -402,22 +402,38 @@ class AgentManagementPageState extends State<AgentManagementPage> {
             agent: agent,
             onDetect: widget.controller.detect,
           );
+          final setupGuide = agent.definition.id == defaultClaudeCodeProviderId
+              ? const _ClaudeCodeSetupGuideCard()
+              : null;
           if (constraints.maxWidth < 780) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 information,
+                if (setupGuide != null) ...[
+                  const SizedBox(height: IdeSpacing.space12),
+                  setupGuide,
+                ],
                 const SizedBox(height: IdeSpacing.space12),
                 diagnostics,
               ],
             );
           }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(flex: 3, child: information),
-              const SizedBox(width: IdeSpacing.space12),
-              Expanded(flex: 2, child: diagnostics),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 3, child: information),
+                  const SizedBox(width: IdeSpacing.space12),
+                  Expanded(flex: 2, child: diagnostics),
+                ],
+              ),
+              if (setupGuide != null) ...[
+                const SizedBox(height: IdeSpacing.space12),
+                setupGuide,
+              ],
             ],
           );
         },
@@ -617,7 +633,11 @@ class _AgentDetailStatusSummary extends StatelessWidget {
       key: const ValueKey('agent-detail-status-summary'),
       mainAxisSize: MainAxisSize.min,
       children: [
-        _AgentLogo(providerId: agent.definition.id, installed: agent.installed),
+        _AgentLogo(
+          providerId: agent.definition.id,
+          kind: _kindForAgentId(agent.definition.id),
+          installed: agent.installed,
+        ),
         const SizedBox(width: IdeSpacing.space8),
         _AgentStatusText(status: _priorityAgentStatus(colors, agent)),
       ],
@@ -699,6 +719,7 @@ class _AgentListRow extends StatelessWidget {
           subtitle: agent.definition.commandName,
           leading: _AgentLogo(
             providerId: agent.definition.id,
+            kind: _kindForAgentId(agent.definition.id),
             installed: agent.installed,
           ),
           trailing: _AgentRowStatus(
@@ -921,9 +942,14 @@ _AgentStatus _priorityAgentStatus(IdeColors colors, ManagedAgent agent) {
 }
 
 class _AgentLogo extends StatelessWidget {
-  const _AgentLogo({required this.providerId, required this.installed});
+  const _AgentLogo({
+    required this.providerId,
+    required this.installed,
+    this.kind,
+  });
 
   final String providerId;
+  final AgentProviderKind? kind;
   final bool installed;
 
   @override
@@ -940,6 +966,7 @@ class _AgentLogo extends StatelessWidget {
       alignment: Alignment.center,
       child: AgentProviderIcon(
         providerId: providerId,
+        kind: kind,
         size: 17,
         color: installed ? colors.textSecondary : colors.textTertiary,
       ),
@@ -1394,6 +1421,105 @@ class _ModelCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Claude Code 详情页安装 / 登录 / 文档三段指引（M0）。
+class _ClaudeCodeSetupGuideCard extends StatelessWidget {
+  const _ClaudeCodeSetupGuideCard();
+
+  static const String _docsUrl =
+      'https://docs.anthropic.com/en/docs/claude-code';
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    return IdeSection(
+      title: '接入指引',
+      subtitle: '安装 · 登录 · 文档',
+      child: IdeSurface.pane(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _SetupGuideStep(
+              title: '1. 安装 Claude Code CLI',
+              body:
+                  '在终端执行 npm install -g @anthropic-ai/claude-code，'
+                  '并确认 claude 已加入 PATH。',
+              textStyles: textStyles,
+              colors: colors,
+              showDivider: true,
+            ),
+            _SetupGuideStep(
+              title: '2. 登录账号',
+              body:
+                  '运行 claude login 完成 Anthropic 账号登录。'
+                  'Zeta 不会读取或改写 ~/.claude 凭证文件内容。',
+              textStyles: textStyles,
+              colors: colors,
+              showDivider: true,
+            ),
+            _SetupGuideStep(
+              title: '3. 官方文档',
+              body: '完整能力与协议说明见 Anthropic Claude Code 文档：$_docsUrl',
+              textStyles: textStyles,
+              colors: colors,
+              showDivider: false,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SetupGuideStep extends StatelessWidget {
+  const _SetupGuideStep({
+    required this.title,
+    required this.body,
+    required this.textStyles,
+    required this.colors,
+    required this.showDivider,
+  });
+
+  final String title;
+  final String body;
+  final IdeTextStyles textStyles;
+  final IdeColors colors;
+  final bool showDivider;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: IdeSpacing.all12,
+      decoration: BoxDecoration(
+        border: showDivider
+            ? Border(bottom: BorderSide(color: colors.borderSubtle))
+            : null,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: textStyles.identifier),
+          const SizedBox(height: IdeSpacing.space6),
+          Text(
+            body,
+            style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+AgentProviderKind? _kindForAgentId(String agentId) {
+  return switch (agentId) {
+    defaultAgentProviderId => AgentProviderKind.codexAppServer,
+    grokAgentProviderId => AgentProviderKind.acp,
+    defaultClaudeCodeProviderId => AgentProviderKind.claudeCode,
+    cursorAgentProviderId => AgentProviderKind.cursorAcp,
+    _ => null,
+  };
 }
 
 String _accountLabel(AgentAccountState state) {

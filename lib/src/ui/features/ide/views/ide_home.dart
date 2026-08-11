@@ -18,6 +18,7 @@ import 'package:zeta/src/features/desktop_notifications/data/flutter_desktop_not
 import 'package:zeta/src/features/desktop_notifications/data/method_channel_desktop_attention_indicator.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
+import 'package:zeta/src/features/agent_management/data/claude_code_agent_management_repository.dart';
 import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart';
 import 'package:zeta/src/features/agent_management/data/grok_agent_management_repository.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
@@ -223,6 +224,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
           modelCatalogRepository: widget.agentModelCatalogRepository,
           runtimeRegistry: widget.agentProviderRuntimeRegistry,
         ),
+        AgentDefinition.claudeCode.id: ClaudeCodeAgentManagementRepository(),
       },
       providerController: _shellController.agentProviderController,
       runtimeStateProvider: _managementRuntimeState,

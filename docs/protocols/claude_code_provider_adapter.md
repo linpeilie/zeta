@@ -268,11 +268,16 @@ claude \
 | type | subtype | 语义 | 映射到 AgentEvent |
 | --- | --- | --- | --- |
 | `system` | `init` | 会话就绪，携带 session_id / cwd / model | `AgentSessionStartedEvent` + `AgentThreadStatusChangedEvent(running=false)` |
-| `assistant` |  | 一段模型输出（文本 / thinking / tool_use） | `AgentMessageAppendedEvent` / `AgentReasoningStreamedEvent` / `AgentToolCallStartedEvent` |
-| `user` |  | 模型回读的 tool_result 或用户消息回显 | `AgentToolCallCompletedEvent`（tool_result 分支）；用户回显通常静默丢弃 |
-| `result` | `success` / `error_max_turns` / `error_during_execution` | 一次 turn 结束 | `AgentTurnCompletedEvent`（映射 status）+ `AgentTokenUsageEvent`（读 `usage`） |
+| `assistant` |  | 一段模型输出（文本 / thinking / tool_use） | `AgentMessageUpdatedEvent`（整帧）/ `AgentMessageDeltaEvent`（若启用 partial）/ `AgentReasoningDeltaEvent` / `AgentToolCallEvent(status: inProgress)` |
+| `user` |  | 模型回读的 tool_result 或用户消息回显 | `AgentToolCallEvent`（按 `tool_use_id` upsert，`status: completed`/`failed`）；用户回显通常静默丢弃 |
+| `result` | `success` / `error_max_turns` / `error_during_execution` | 一次 turn 结束 | `AgentTurnCompletedEvent`（必填本 Provider 自 mint 的 `turnId`）+ `AgentTokenUsageEvent(isSessionCumulative: false)` |
 | `control_request` |  | permission 询问、plan 审批等反向请求（携带 `request_id`） | 交给对应 adapter（§5、§6），最终产出 `AgentPermissionRequest` / `AgentPlanApprovalRequest` |
 | `control_response` |  | 我们回写 control 的确认（我们不消费，只做诊断） | 忽略 |
+
+> **MVP 不新增任何 `AgentEvent` 类型**。上表全部使用既有中立事件；工具生命周期靠
+> `AgentToolCall.status`（`inProgress` / `completed` / `failed`）表达，不发明
+> Started/Completed 独立事件类。`entryId` / segment / phase / turn 终态由
+> `claude_code_stream_identity.dart` 决定，不在共享层猜测。
 
 > stream-json schema 会随 CLI 版本演进。参照
 > `docs/protocols/codex_app_server_protocol.md` 的版本锁定流程，为 Claude Code 建立
@@ -337,7 +342,7 @@ Anthropic 官方 API 上，唯一的新变量是请求头带上了本机 OAuth a
     + stream_json_peer.dart                    # 行分隔 JSON transport（新 peer，不复用 JsonRpcPeer）
     + claude_code_process_starter.dart         # PATH 探测 / bootstrap 参数拼装
     + claude_code_agent_provider.dart          # AgentProvider 实现（组合 AgentPlanApprovalProvider / ...）
-    + claude_code_event_mapper.dart            # stream-json → AgentEvent
+    + claude_code_event_mapper.dart            # stream-json → AgentEvent（纯翻译；身份交给 stream_identity）
     + claude_code_control_request_handler.dart # can_use_tool / ExitPlanMode 反向请求分发
     + claude_code_permission_policy_adapter.dart
     + claude_code_plan_approval_adapter.dart
@@ -347,6 +352,7 @@ Anthropic 官方 API 上，唯一的新变量是请求头带上了本机 OAuth a
     + claude_code_anthropic_api_client.dart    # /v1/models·/api/oauth/usage 共享 HTTP 客户端（§4.10）
     + claude_code_oauth_credentials_reader.dart # 只读 accessToken 到内存；不刷新、不落盘（§4.10）
 + src/features/agent/data/mappers/
+    + claude_code_stream_identity.dart         # G2 identity reducer：entryId / segment / phase / turn 终态（对齐 grok_stream_identity）
     + claude_code_permission_mode_codec.dart   # 中立 optionId ↔ CLI --permission-mode
     + claude_code_message_content_codec.dart   # content block ↔ AgentMessage segment
     + claude_code_model_catalog_mapper.dart    # GET /v1/models 响应 → AgentModelList（§4.7）
@@ -411,6 +417,7 @@ Anthropic 官方 API 上，唯一的新变量是请求头带上了本机 OAuth a
     + claude_code_oauth_credentials_reader_test.dart  # 缺失/损坏/过期文件降级；toString 不含 token
     + claude_code_usage_quota_adapter_test.dart        # 节流、API Key 模式短路、增强开关关闭
 + test/src/features/agent/data/mappers/
+    + claude_code_stream_identity_test.dart            # G2：segment 边界 / first-terminal-wins / 去重
     + claude_code_model_catalog_mapper_test.dart
     + claude_code_usage_quota_mapper_test.dart
 + test/src/features/agent_management/data/
@@ -518,29 +525,80 @@ class ClaudeCodeAgentProvider extends AgentProvider
 - provider 原始事件永不透出到共享层；`AgentEvent` 是唯一契约。
 - reducer 纯同步；副作用（thread rename 落盘、模型缓存写入等）走
   `AgentConversationEffectRunner` 已有通道，不新造。
-- `sourceItemId/sourceMessageId` 只作 metadata；`entryId`、reasoning phase、
-  turn 状态归一化都在 `claude_code_event_mapper.dart` 里做。
+- `sourceItemId/sourceMessageId` **只是协议 metadata**，不是 UI 合并键。
+  `entryId`、message segment、reasoning phase、narrative boundary、去重、
+  turn 终态判定全部由 `claude_code_stream_identity.dart` 决定；mapper 只做
+  纯翻译。`AgentConversationTimelineStore` 只 dumb merge。
 
-### 4.4 `ClaudeCodeEventMapper`
+### 4.4 Identity 与 EventMapper
+
+职责拆分对齐 Grok：`grok_stream_identity.dart` + `grok_session_update_mapper.dart`。
+**MVP 不新增任何 `AgentEvent` 类型**——developer_guide §7 的 16 条清单在 PR
+描述中声明「未新增 AgentEvent」即可。
+
+#### `ClaudeCodeStreamIdentity`（G2 identity reducer）
+
+路径：`src/features/agent/data/mappers/claude_code_stream_identity.dart`。
+
+Claude Code 的 stream-json **不提供**宿主侧 turn id：`result` 帧无 turn 作用域
+字段，但 `AgentTurnCompletedEvent.turnId` 为必填，且
+`AgentEventCoalescingPolicy` 的 messageDelta / reasoningDelta / tokenSnapshot
+合并桶以 `turnId` 为键——跨回合串味会直接违反 G2。因此：
+
+1. **Provider 在写 stdin user 行之前自行 mint `turnId`**（稳定 UUID 或等价），
+   调用 `beginTurn(runtimeScope, sessionId, turnId)`；整个回合内该 id 不变。
+2. 后续所有出站 `AgentEvent`（含 `AgentTurnCompletedEvent`、
+   `AgentTokenUsageEvent`、message / reasoning / tool 事件）携带同一 `turnId`。
+3. live / history / replay **必须使用各自独立的 identity 实例**（G3），不共享
+   current segment、seen event/tool、terminal 或 generation 状态。
+
+公开 API（与 `GrokStreamIdentity` 对齐，名字可映射）：
+
+| 方法 | 职责 |
+| --- | --- |
+| `beginTurn` | 开启新 turn generation；同 session 旧 active state 失效 |
+| `resolveMessage` | 同 message source id 连续 text → 同一 entryId；tool/thinking 打断后新 segment |
+| `resolveReasoning` | thinking phase 分段；text/tool_use 关闭当前 phase |
+| `resolveTool` | 首见 tool id 时关闭可见 phase；终态后仍允许已知 tool 收尾 |
+| `resolveMetadata` | usage 等非叙事更新；terminal 后仍可幂等接受 |
+| `completeTurn` | first-terminal-wins；duplicate / conflicting 只记诊断 |
+| `invalidateTurn` / `invalidateRuntime` / `invalidateSession` | 丢弃旧 generation |
+| `snapshot` / `diagnostics` / `dispose` | 只读计数与状态；**不得**含正文、token、raw payload、source id 原文（G8） |
+
+#### `ClaudeCodeEventMapper`（纯翻译层）
+
+路径：`src/features/agent/data/datasources/claude_code/claude_code_event_mapper.dart`。
 
 映射目标：**永远输出中立 `AgentEvent`；共享层禁止再解析 CC 私有字段**。
+所有 `entryId` / `turnId` / phase 边界先问 identity，mapper 不自己猜。
 
 - `system.init` → `AgentSessionStartedEvent(AgentSession(id: session_id,
   workingDirectory: cwd, model: model))` + `AgentThreadStatusChangedEvent`。
-- `assistant.message.content[]`：按 block type 分派
-    - `text` → `AgentMessageAppendedEvent`（增量拼接由 mapper 维护 offset）
-    - `thinking` → `AgentReasoningStreamedEvent`（对齐 Codex reasoning phase）
-    - `tool_use` → `AgentToolCallStartedEvent`（`toolCallId = tool_use.id`）
+- `assistant.message.content[]`：按 block type 分派（均带 identity 解析出的
+  entryId / turnId）
+    - `text` → 默认整帧下发时用 `AgentMessageUpdatedEvent`（`messageId` =
+      entryId，`text` = 完整可见文本）；若后续启用
+      `--include-partial-messages` 的字符级增量，改发
+      `AgentMessageDeltaEvent`（**同一 entryId**，由 identity 保证）
+    - `thinking` → `AgentReasoningDeltaEvent(kind: text)`（phase entryId 由
+      identity 分段）
+    - `tool_use` → `AgentToolCallEvent`（`AgentToolCall(id: tool_use.id,
+      status: inProgress, …)`）
 - `user.message.content[]`
-    - `tool_result` → `AgentToolCallCompletedEvent`（关联 `tool_use_id`）
+    - `tool_result` → `AgentToolCallEvent` 按 `tool_use_id` 原地 upsert：
+      `is_error == true` → `status: failed`，否则 `status: completed`
     - 其他 role=user 消息（回显）：静默丢弃，避免 timeline 重复
-- `result` → `AgentTurnCompletedEvent`
+- `result` → `AgentTurnCompletedEvent` + 可选 `AgentTokenUsageEvent`
     - `subtype=success` → `AgentHistoryTurnStatus.completed`
     - `subtype=error_max_turns` → `interrupted`
     - `subtype=error_during_execution` → `failed`（`errorCode` 用 subtype，
       `errorMessage` 从 payload 提取）
-    - `usage` → 另发 `AgentTokenUsageEvent`（`input_tokens` + `output_tokens`
-        + `cache_creation_input_tokens` + `cache_read_input_tokens`）
+    - **`turnId`**：使用当前 active turn 上 identity 持有的 mint id（`result`
+      帧自身不带 turn id；缺失 active turn 时丢弃并记诊断，不 silent 编造）
+    - **`usage`** → `AgentTokenUsageEvent(isSessionCumulative: false)`：
+      `result.usage` 是**本回合绝对用量**（Grok 姿态），不得再相对上一 turn
+      做差分。字段：`input_tokens` + `output_tokens` +
+      `cache_creation_input_tokens` + `cache_read_input_tokens`
 - `control_request` → 交给 `ClaudeCodeControlRequestHandler`
   （不产生 AgentEvent；handler 内部产生 permission/plan 请求事件）
 
@@ -942,7 +1000,7 @@ UI 展示 plan Markdown → 用户 approve
 | --- | --- | --- |
 | **M0 · 骨架** | `AgentDefinition.claudeCode` + `defaultsFor` 真实能力 + `DefaultAgentProviderFactory` 分支替换为**空 provider**（返回错误的 initialize） | `default_agent_provider_factory_test.dart` claude_code 分支不再 throw；`AgentProviderIcon` 出图；设置页出现 Claude Code 条目 |
 | **M1 · 联通** | StreamJsonPeer + ProcessStarter + Provider.initialize + mapper 覆盖 `system.init`/`assistant.text`/`user.tool_result`/`result` | 手工新建一条 thread，能发一句话拿到回复；`flutter analyze` + 新 mapper 单测通过 |
-| **M2 · 工具时间线** | mapper 覆盖 `thinking`/`tool_use` 完整生命周期 + `AgentTokenUsageEvent` + turn 状态归一化 | 工具卡片、reasoning phase、usage 全部出；`agent_event_storm_fixture_test.dart` 追加 CC fixture |
+| **M2 · 工具时间线** | mapper 覆盖 `thinking`/`tool_use` 完整生命周期 + `AgentTokenUsageEvent` + turn 状态归一化（identity 完整） | 工具卡片、reasoning phase、usage 全部出；CC fixture **只放** `test/.../claude_code/fixtures/` 与 Provider 自有测试，**不得**向 `agent_event_storm_fixture_test.dart` 或其他共享层测试追加 CC fixture（共享层 `git diff` 为空） |
 | **M3 · 权限 + Plan** | ControlRequestHandler + PermissionPolicyAdapter + PlanApprovalAdapter + 4 选项 catalog + 显式 Default 执行回合 | 权限模式条可切；plan → 审批 → 执行链路手工通；单测覆盖所有 4 个 optionId |
 | **M4 · 历史 / resume** | SessionHistoryReader + `--resume` 参数拼装 + hidden list | 重启 Zeta 后能看到历史 thread、点开恢复；损坏 jsonl 不阻断启动 |
 | **M5 · 打磨** | CLI 检测四阶段 + 日志页 + 详情页文案 + 图标 + 账号数据增强（动态模型列表 §4.7 + 套餐用量 §4.11，含详情页开关）+ 文档 | detect 完整跑通；`GET /v1/models`/`GET /api/oauth/usage` 手工冒烟通过（含未登录/401/429 降级、增强开关关闭三条路径）；`docs/claude_code_stream_json_protocol.md` 归档 schema；`docs/architecture/design_document.md` 更新 |
@@ -955,20 +1013,23 @@ CLAUDE.md「每次代码修改后」章节）。
 
 对齐 `docs/architecture/engineering_standards.md` 与 CLAUDE.md：
 
-1. **共享层守卫**：新增 fixture-based 架构测试，断言
+1. **共享层守卫**：新增架构测试，断言
    `agent_event_coalescing_policy.dart`、`agent_event_pipeline.dart`、
-   `agent_conversation_timeline_store.dart` 不 import 任何
-   `datasources/claude_code/` 路径。
-2. **契约测试（provider 无关）**：mapper 用 golden fixtures
+   `agent_conversation_timeline_store.dart` 等 G1 范围内文件不 import 任何
+   `datasources/claude_code/` 路径、不含 `claudeCode` 标识符（注释除外）。
+   **`agent_event_storm_fixture_test.dart` 等共享层测试一行不改**——CC fixture
+   不得进入共享层（否则违反「共享层测试必须用 Provider 无关 fixture」门禁）。
+2. **契约测试（Provider 自有）**：mapper / identity 用 golden fixtures
    （`test/src/features/agent/data/datasources/claude_code/fixtures/*.jsonl`）
-   驱动，断言 → `AgentEvent` 序列匹配预期。fixture 从真实 CLI 生成一次
-   后冻结，schema 演进时同步 `docs/claude_code_stream_json_protocol.md`。
-3. **单元测试**：permission adapter / plan adapter / session history reader
-   各自 A/A/A，用 fake `StreamJsonPeer`；不 mock。`ClaudeCodeAnthropicApiClient`
-   / `ClaudeCodeOAuthCredentialsReader` / `ClaudeCodeUsageQuotaAdapter` 走同一
-   姿态但注入 fake `HttpClient`/fake 文件系统（对齐
-   `CodexAgentManagementRepository` 的 `httpClientFactory` 测试模式），断言
-   401/429/超时/凭证过期/增强开关关闭都落到 `null` 而非异常。
+   驱动，断言 → `AgentEvent` 序列的 canonical signature 逐位置匹配。fixture
+   从真实 CLI 生成一次后冻结，schema 演进时同步
+   `docs/claude_code_stream_json_protocol.md`。
+3. **单元测试**：`claude_code_stream_identity`、permission adapter / plan
+   adapter / session history reader 各自 A/A/A，用 fake `StreamJsonPeer`；不
+   mock。`ClaudeCodeAnthropicApiClient` / `ClaudeCodeOAuthCredentialsReader` /
+   `ClaudeCodeUsageQuotaAdapter` 走同一姿态但注入 fake `HttpClient`/fake
+   文件系统（对齐 `CodexAgentManagementRepository` 的 `httpClientFactory`
+   测试模式），断言 401/429/超时/凭证过期/增强开关关闭都落到 `null` 而非异常。
 4. **AgentEvent 16 条清单**：新增/改动 event 时逐项回答
    `docs/guides/developer_guide.md §7`；MVP 若不新增 event，只需在 PR
    描述中明示「未新增 AgentEvent」。

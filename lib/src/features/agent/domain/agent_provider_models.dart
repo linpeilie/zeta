@@ -29,6 +29,9 @@ const String grokAgentProviderId = 'grok';
 /// 内置 Cursor ACP provider 的稳定配置 id。
 const String cursorAgentProviderId = 'cursor';
 
+/// 内置 Claude Code provider 的稳定配置 id。
+const String defaultClaudeCodeProviderId = 'claude_code';
+
 /// 一个可启动的 Agent provider 定义。
 ///
 /// 该对象保存全局配置，例如 `codex app-server` 的命令、参数、环境变量和
@@ -130,6 +133,7 @@ class AgentProviderConfig {
     return switch (id) {
       defaultAgentProviderId => defaultCodex.displayName,
       grokAgentProviderId => defaultGrok.displayName,
+      defaultClaudeCodeProviderId => defaultClaudeCode.displayName,
       _ => displayName,
     };
   }
@@ -144,6 +148,17 @@ class AgentProviderConfig {
     command: 'agent',
     arguments: <String>['acp'],
     enabled: false,
+  );
+
+  /// 默认 Claude Code CLI stream-json 配置。
+  ///
+  /// 启动参数（`--print` / stream-json 等）由 data 层 process starter 按会话
+  /// 动态拼装；此处只固定命令与 kind。
+  static const AgentProviderConfig defaultClaudeCode = AgentProviderConfig(
+    id: defaultClaudeCodeProviderId,
+    displayName: 'Claude Code',
+    kind: AgentProviderKind.claudeCode,
+    command: 'claude',
   );
 
   /// 复制配置并覆盖部分字段。

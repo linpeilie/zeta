@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_agent_provider.dart';
 import 'package:zeta/src/features/agent/data/default_agent_provider_factory.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
@@ -27,4 +28,18 @@ void main() {
 
     expect(() => factory.create(config), throwsUnsupportedError);
   });
+
+  test(
+    'creates Claude Code provider that initializes without process',
+    () async {
+      const factory = DefaultAgentProviderFactory();
+
+      final provider = factory.create(AgentProviderConfig.defaultClaudeCode);
+      expect(provider, isA<ClaudeCodeAgentProvider>());
+      expect(provider.config.kind, AgentProviderKind.claudeCode);
+
+      await provider.initialize();
+      await provider.dispose();
+    },
+  );
 }

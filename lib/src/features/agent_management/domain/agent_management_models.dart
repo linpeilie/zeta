@@ -111,8 +111,25 @@ class AgentDefinition {
     npmPackage: '',
   );
 
+  /// 内置 Claude Code CLI（stream-json）定义。
+  static const AgentDefinition claudeCode = AgentDefinition(
+    id: defaultClaudeCodeProviderId,
+    displayName: 'Claude Code',
+    vendor: 'Anthropic',
+    commandName: 'claude',
+    protocol: 'stream-json',
+    transport: 'stdin / stdout',
+    configFormat: 'JSON',
+    defaultConfigRelativePath: '.claude/settings.json',
+    npmPackage: '@anthropic-ai/claude-code',
+  );
+
   /// 应用当前支持的全部 Agent 定义。
-  static const List<AgentDefinition> all = <AgentDefinition>[codex, grok];
+  static const List<AgentDefinition> all = <AgentDefinition>[
+    codex,
+    grok,
+    claudeCode,
+  ];
 
   /// 按 id 查找定义；未知 id 返回 null。
   static AgentDefinition? byId(String id) {
@@ -270,6 +287,14 @@ class ManagedAgent {
   factory ManagedAgent.grok({required bool enabled}) {
     return ManagedAgent.forDefinition(
       definition: AgentDefinition.grok,
+      enabled: enabled,
+    );
+  }
+
+  /// Claude Code CLI 的初始空快照。
+  factory ManagedAgent.claudeCode({required bool enabled}) {
+    return ManagedAgent.forDefinition(
+      definition: AgentDefinition.claudeCode,
       enabled: enabled,
     );
   }
