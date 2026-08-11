@@ -10,6 +10,7 @@ import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_mode
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_formatters.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_skeleton.dart';
 import 'package:zeta/src/ui/core/rows/ide_row_divider.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
@@ -459,15 +460,13 @@ class _QuotaWindow extends StatelessWidget {
             ),
             const SizedBox(width: IdeSpacing.space8),
             Text(
-              '剩余 $remaining%',
+              '已用 $used% · 剩余 $remaining%',
               style: textStyles.caption.copyWith(color: colors.textSecondary),
             ),
           ],
         ),
         const SizedBox(height: IdeSpacing.space6),
-        // 无底槽的 2px 发丝进度线：填充段表示剩余额度，与「剩余 n%」文案一致。
-        // 带实心底槽的进度条是仪表盘控件，在这种密度的侧栏里只会变成色带。
-        _QuotaHairline(remainingPercent: remaining.toDouble()),
+        _QuotaProgressBar(usedPercent: used.toDouble()),
         if (window.resetsAt case final resetsAt?) ...[
           const SizedBox(height: IdeSpacing.space2),
           Text(
@@ -482,34 +481,37 @@ class _QuotaWindow extends StatelessWidget {
   }
 }
 
-/// 额度剩余量的发丝指示线。
-///
-/// 只画一条 2px 高的线：已填充段用 `textSecondary`，未填充段留空只保留
-/// `borderSubtle` 的极淡底。相比带实心底槽的进度条，它在窄侧栏里不会形成色带，
-/// 也不会把注意力从旁边的 Token 数字上抢走。
-class _QuotaHairline extends StatelessWidget {
-  const _QuotaHairline({required this.remainingPercent});
+/// 当前额度窗口的已用进度。
+class _QuotaProgressBar extends StatelessWidget {
+  const _QuotaProgressBar({required this.usedPercent});
 
-  /// 剩余百分比，0~100。
-  final double remainingPercent;
+  /// 已用百分比，0~100。
+  final double usedPercent;
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final fraction = (remainingPercent / 100).clamp(0.0, 1.0);
+    final used = usedPercent.clamp(0, 100);
+    final remaining = 100 - used;
+    final fraction = used / 100;
     return Semantics(
-      label: '剩余额度 ${remainingPercent.round()}%',
-      child: SizedBox(
-        height: 2,
-        child: Stack(
-          children: [
-            Positioned.fill(child: ColoredBox(color: colors.borderSubtle)),
-            FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: fraction,
-              child: ColoredBox(color: colors.textSecondary),
-            ),
-          ],
+      label: '套餐额度',
+      value: '已用 ${used.round()}%，剩余 ${remaining.round()}%',
+      child: ClipRRect(
+        borderRadius: IdeRadius.allMicro,
+        child: SizedBox(
+          height: 4,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              ColoredBox(color: colors.borderSubtle),
+              FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: fraction,
+                child: ColoredBox(color: colors.textSecondary),
+              ),
+            ],
+          ),
         ),
       ),
     );

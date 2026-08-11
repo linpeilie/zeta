@@ -10,6 +10,7 @@ import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_mode
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_panel.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/ui/core/ide_colors.dart';
 
 void main() {
   testWidgets('默认 Provider Tab 仅展示 Codex 和 Grok', (tester) async {
@@ -44,8 +45,34 @@ void main() {
     expect(find.text('1.6K'), findsOneWidget);
     expect(find.text('ChatGPT Plus'), findsOneWidget);
     expect(find.text('5 小时'), findsOneWidget);
-    expect(find.text('剩余 75%'), findsOneWidget);
+    expect(find.text('已用 25% · 剩余 75%'), findsOneWidget);
     expect(find.text('1 周'), findsOneWidget);
+
+    final firstWindow = find.byKey(
+      const ValueKey<String>('agent-usage-window-0'),
+    );
+    final progressSegments = find.descendant(
+      of: firstWindow,
+      matching: find.byType(ColoredBox),
+    );
+    expect(progressSegments, findsNWidgets(2));
+
+    final trackSize = tester.getSize(progressSegments.at(0));
+    final fillSize = tester.getSize(progressSegments.at(1));
+    expect(trackSize.height, 4);
+    expect(fillSize.height, 4);
+    expect(fillSize.width / trackSize.width, closeTo(0.25, 0.001));
+    expect(
+      tester.widget<ColoredBox>(progressSegments.at(0)).color,
+      IdeColors.light.borderSubtle,
+    );
+    expect(
+      tester.widget<ColoredBox>(progressSegments.at(1)).color,
+      IdeColors.light.textSecondary,
+    );
+
+    final semantics = tester.getSemantics(find.bySemanticsLabel('套餐额度').first);
+    expect(semantics.value, '已用 25%，剩余 75%');
     expect(
       tester
           .getTopLeft(find.byKey(const ValueKey('agent-usage-plan-section')))
@@ -322,7 +349,7 @@ void main() {
     );
     expect(find.byKey(const ValueKey('agent-usage-window-0')), findsOneWidget);
     expect(find.text('1 周'), findsWidgets);
-    expect(find.text('剩余 100%'), findsOneWidget);
+    expect(find.text('已用 0% · 剩余 100%'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
