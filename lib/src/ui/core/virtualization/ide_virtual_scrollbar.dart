@@ -54,8 +54,8 @@ class IdeVirtualScrollbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final thumbColor = colors.border.withValues(alpha: 0.85);
-    final trackColor = colors.borderSubtle.withValues(alpha: 0.35);
+    final thumbColor = colors.textTertiary.withValues(alpha: 0.38);
+    final trackColor = colors.borderSubtle;
 
     return Semantics(
       container: true,
