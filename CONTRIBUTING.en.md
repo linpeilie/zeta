@@ -158,7 +158,7 @@ Common types: `feat` / `fix` / `docs` / `refactor` / `test` / `chore` / `perf`.
 
 - Permission approval, user questions, and plan approval are **three independent domain semantics** and do not share request/decision models.
 - The post-plan "execution confirmation" is a local Zeta workflow, not provider plan approval: it must start an explicit new Default turn and must not pre-authorize commands, files, or network access.
-- The default approval policy stays conservative. **Changes that auto-authorize anything will not be accepted.**
+- Execution permission restores only a still-valid pre-Plan user selection from the same binding/thread/runtime; otherwise it uses the provider catalog's conservative default. A card override is turn-only and must not apply or persist. **Changes that auto-upgrade authorization will not be accepted.**
 
 **Theming and UI**
 

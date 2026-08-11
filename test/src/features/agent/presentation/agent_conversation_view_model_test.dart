@@ -296,8 +296,103 @@ void main() {
           viewModel.messages.map((message) => message.text),
           contains(AgentConversationViewModel.planExecutionPrompt),
         );
+        expect(
+          provider.calls.where((call) => call.startsWith('steer:')),
+          isEmpty,
+        );
         expect(attentions.last.kind, AgentAttentionKind.planExecutionRequired);
         expect(attentions.last.phase, AgentAttentionPhase.resolved);
+      },
+    );
+
+    test(
+      'Provider-approved local handoff waits for successful turn terminal',
+      () async {
+        final provider = _PlanApprovalFakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.sendMessage('create a plan');
+        provider.emit(
+          const AgentPlanApprovalRequestedEvent(
+            AgentPlanApprovalRequest(
+              id: 'approval-1',
+              title: 'Review plan',
+              markdown: '# Provider plan',
+              sessionId: 'thread-1',
+              turnId: 'turn-1',
+              continuation: AgentPlanApprovalContinuation.localExecutionHandoff,
+            ),
+          ),
+        );
+        await _drainTypedUiUpdate();
+
+        await viewModel.respondToPlanApproval(
+          viewModel.planApprovalRequests.single,
+          AgentPlanApprovalDecisionKind.accepted,
+        );
+
+        expect(provider.planApprovalDecisions, hasLength(1));
+        expect(
+          provider.planApprovalDecisions.single.kind,
+          AgentPlanApprovalDecisionKind.accepted,
+        );
+        expect(viewModel.planExecutionRequest, isNull);
+        expect(provider.turnConfigurations, hasLength(1));
+        expect(
+          provider.calls.where((call) => call.startsWith('steer:')),
+          isEmpty,
+        );
+
+        provider.emit(
+          const AgentTurnCompletedEvent(
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+            status: AgentHistoryTurnStatus.completed,
+          ),
+        );
+        await _drainTypedUiUpdate();
+
+        expect(viewModel.planExecutionRequest?.markdown, '# Provider plan');
+        expect(provider.turnConfigurations, hasLength(1));
+      },
+    );
+
+    test(
+      'provider-managed Plan approval does not create local handoff',
+      () async {
+        final provider = _PlanApprovalFakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.sendMessage('create a provider-managed plan');
+        provider.emit(
+          const AgentPlanApprovalRequestedEvent(
+            AgentPlanApprovalRequest(
+              id: 'approval-provider-managed',
+              title: 'Review plan',
+              markdown: '# Provider-managed plan',
+              sessionId: 'thread-1',
+              turnId: 'turn-1',
+            ),
+          ),
+        );
+        await _drainTypedUiUpdate();
+        await viewModel.respondToPlanApproval(
+          viewModel.planApprovalRequests.single,
+          AgentPlanApprovalDecisionKind.accepted,
+        );
+        provider.emit(
+          const AgentTurnCompletedEvent(
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+            status: AgentHistoryTurnStatus.completed,
+          ),
+        );
+        await _drainTypedUiUpdate();
+
+        expect(viewModel.planExecutionRequest, isNull);
+        expect(provider.planApprovalDecisions, hasLength(1));
       },
     );
 
@@ -4654,6 +4749,17 @@ class _ModeFakeAgentProvider extends _FakeAgentProvider
         ),
       ],
     );
+  }
+}
+
+class _PlanApprovalFakeAgentProvider extends _FakeAgentProvider
+    implements AgentPlanApprovalProvider {
+  final List<AgentPlanApprovalDecision> planApprovalDecisions =
+      <AgentPlanApprovalDecision>[];
+
+  @override
+  Future<void> respondToPlanApproval(AgentPlanApprovalDecision decision) async {
+    planApprovalDecisions.add(decision);
   }
 }
 

@@ -1289,6 +1289,7 @@ class _PermissionOptionButton extends StatefulWidget {
     required this.enabled,
     required this.onSelect,
     this.scopeHint,
+    this.surfaceKey = const ValueKey('agent-permission-option-selector'),
   });
 
   final String label;
@@ -1297,6 +1298,7 @@ class _PermissionOptionButton extends StatefulWidget {
   final bool enabled;
   final String? scopeHint;
   final ValueChanged<AgentPermissionOption> onSelect;
+  final Key surfaceKey;
 
   @override
   State<_PermissionOptionButton> createState() =>
@@ -1386,7 +1388,7 @@ class _PermissionOptionButtonState extends State<_PermissionOptionButton> {
     final scopeHint = widget.scopeHint?.trim();
     final hasHint = scopeHint != null && scopeHint.isNotEmpty;
     return _ComposerSelectorTrigger(
-      surfaceKey: const ValueKey('agent-permission-option-selector'),
+      surfaceKey: widget.surfaceKey,
       tooltip: hasHint ? 'Permission mode · $scopeHint' : 'Permission mode',
       semanticLabel: hasHint
           ? '$displayLabel，权限模式，$scopeHint'

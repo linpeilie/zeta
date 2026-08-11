@@ -113,7 +113,7 @@ The provider asks for approval of a plan.
 > These three are **independent domain semantics** and do not share request/decision models. They may reuse the same pending-interaction surface, but the models must stay separate.
 
 **Plan execution handoff**
-A local Zeta workflow, **not** provider plan approval. It appears after a Plan turn succeeds with a non-empty plan; choosing to run **starts an explicit new Default turn** and pre-authorizes nothing. Non-persistent — it disappears on restart.
+A local Zeta workflow, **not** provider plan approval. It appears after a Plan turn succeeds with a non-empty plan; choosing to run **starts an explicit new Default turn** and pre-authorizes nothing. Its default permission restores the user's still-valid pre-Plan selection, otherwise falls back to the provider catalog default; a card override affects only that new turn. Non-persistent — it disappears on restart.
 `agent_plan_execution_models.dart`
 
 **AgentAttentionSignal**

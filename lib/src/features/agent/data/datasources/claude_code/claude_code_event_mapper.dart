@@ -1,4 +1,5 @@
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_plan_approval_adapter.dart';
 import 'package:zeta/src/features/agent/data/mappers/claude_code_stream_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
@@ -24,16 +25,20 @@ final class ClaudeCodeMappedFrame {
 /// 身份一律问 [ClaudeCodeStreamIdentity]；未识别 type 只计数并丢弃，绝不 throw。
 ///
 /// 覆盖：`system.init` / `assistant` text+thinking+tool_use /
-/// `user.tool_result` / `result`（+ usage）。
-/// Plan 审批接管（ExitPlanMode）留给 T22；此阶段按普通工具卡展示。
+/// `user.tool_result` / `result`（+ usage）。`ExitPlanMode` 交给
+/// [planApprovalAdapter]，不会泄漏成普通工具卡。
 final class ClaudeCodeEventMapper {
   ClaudeCodeEventMapper({
     required this.providerId,
     ClaudeCodeStreamIdentity? identity,
-  }) : identity = identity ?? ClaudeCodeStreamIdentity();
+    ClaudeCodePlanApprovalAdapter? planApprovalAdapter,
+  }) : identity = identity ?? ClaudeCodeStreamIdentity(),
+       planApprovalAdapter =
+           planApprovalAdapter ?? ClaudeCodePlanApprovalAdapter();
 
   final String providerId;
   final ClaudeCodeStreamIdentity identity;
+  final ClaudeCodePlanApprovalAdapter planApprovalAdapter;
 
   int _unknownTypeDropped = 0;
   int _lateOrMissingTurnDropped = 0;
@@ -56,11 +61,13 @@ final class ClaudeCodeEventMapper {
     required String sessionId,
     required String turnId,
   }) {
-    return identity.beginTurn(
+    final generation = identity.beginTurn(
       runtimeScope: runtimeScope,
       sessionId: sessionId,
       turnId: turnId,
     );
+    planApprovalAdapter.beginTurn(sessionId: sessionId, turnId: turnId);
+    return generation;
   }
 
   /// 映射一行 stream-json 对象。
@@ -122,6 +129,7 @@ final class ClaudeCodeEventMapper {
   }
 
   void dispose() {
+    planApprovalAdapter.clear();
     identity.dispose();
   }
 
@@ -234,6 +242,11 @@ final class ClaudeCodeEventMapper {
           _lateOrMissingTurnDropped += 1;
           continue;
         }
+        planApprovalAdapter.recordAssistantText(
+          sessionId: resolved.sessionId,
+          turnId: resolved.turnId,
+          text: text,
+        );
         events.add(
           AgentMessageUpdatedEvent(
             messageId: resolved.entryId,
@@ -304,6 +317,15 @@ final class ClaudeCodeEventMapper {
           continue;
         }
         final input = _map(block['input']) ?? const <String, Object?>{};
+        if (toolName == 'ExitPlanMode') {
+          planApprovalAdapter.recordExitPlanToolUse(
+            toolUseId: toolId,
+            input: input,
+            sessionId: resolved.sessionId,
+            turnId: resolved.turnId,
+          );
+          continue;
+        }
         final locations = _locationsFromToolInput(input);
         final kind = _kindForClaudeToolName(toolName);
         events.add(
@@ -371,6 +393,9 @@ final class ClaudeCodeEventMapper {
       final toolUseId = _string(block['tool_use_id']);
       if (toolUseId == null) {
         _malformedDropped += 1;
+        continue;
+      }
+      if (planApprovalAdapter.shouldSuppressToolResult(toolUseId)) {
         continue;
       }
       final eventId = frameEventId == null
@@ -446,6 +471,10 @@ final class ClaudeCodeEventMapper {
         ignoredReason: 'terminal ${terminal.disposition.name}',
       );
     }
+    planApprovalAdapter.completeTurn(
+      sessionId: terminal.sessionId,
+      turnId: terminal.turnId,
+    );
 
     // usage 走 metadata 通道（允许 terminal 后幂等）；用独立 eventId 避免与 result 去重冲突。
     final usageRaw = _map(raw['usage']);
@@ -560,7 +589,7 @@ final class ClaudeCodeEventMapper {
     return null;
   }
 
-  /// Claude Code 工具名 → 中立 [AgentToolKind]（ExitPlanMode 等归 other）。
+  /// Claude Code 工具名 → 中立 [AgentToolKind]。
   static AgentToolKind _kindForClaudeToolName(String name) {
     final normalized = name.trim().toLowerCase();
     return switch (normalized) {
@@ -571,7 +600,6 @@ final class ClaudeCodeEventMapper {
       'webfetch' || 'websearch' || 'fetch' => AgentToolKind.fetch,
       'delete' || 'rm' => AgentToolKind.delete,
       'move' || 'rename' => AgentToolKind.move,
-      // ExitPlanMode 本阶段按普通工具展示，不授予权限（T22 再接管）。
       _ => parseAgentToolKind(normalized),
     };
   }

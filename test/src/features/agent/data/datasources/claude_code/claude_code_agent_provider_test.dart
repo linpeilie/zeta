@@ -50,6 +50,10 @@ void main() {
 
       await pumpEventQueue();
       expect(process.receivedUserTexts, <String>['ping']);
+      final userFrame = process.receivedUserFrames.single;
+      expect(userFrame['session_id'], session.id);
+      expect(userFrame.containsKey('parent_tool_use_id'), isTrue);
+      expect(userFrame['parent_tool_use_id'], isNull);
 
       process.emitAssistantText(
         sessionId: session.id,
@@ -118,6 +122,18 @@ void main() {
         expect(permission.request.sessionId, 'session-perm-1');
         expect(permission.request.turnId, 'turn-perm-1');
 
+        // Plan decision 端口不得看见或消费普通权限 pending。
+        await provider.respondToPlanApproval(
+          const AgentPlanApprovalDecision(
+            requestId: 'req_1',
+            kind: AgentPlanApprovalDecisionKind.accepted,
+          ),
+        );
+        await pumpEventQueue();
+        expect(provider.controlPendingCount, 1);
+        expect(provider.planApprovalPendingCount, 0);
+        expect(process.receivedControlResponses, isEmpty);
+
         await provider.respondToPermission(
           const AgentPermissionDecision(
             requestId: 'req_1',
@@ -131,10 +147,97 @@ void main() {
         expect(process.receivedControlResponses, hasLength(1));
         final response = process.receivedControlResponses.single;
         expect(response['type'], 'control_response');
-        expect(response['request_id'], 'req_1');
-        final body = response['response'] as Map<String, Object?>;
+        final envelope = response['response'] as Map<String, Object?>;
+        expect(envelope['subtype'], 'success');
+        expect(envelope['request_id'], 'req_1');
+        final body = envelope['response'] as Map<String, Object?>;
         expect(body['behavior'], 'allow');
         expect(body['updatedInput'], isA<Map>());
+      },
+    );
+
+    test(
+      'ExitPlanMode uses the isolated plan approval route and response id',
+      () async {
+        final process = _FakeClaudeProcess();
+        final provider = ClaudeCodeAgentProvider(
+          config: AgentProviderConfig.defaultClaudeCode,
+          processStarter: _starter(process),
+          whichLookup: (command) async => command,
+          idFactory: _sequenceIds(<String>['session-plan-1', 'turn-plan-1']),
+        );
+        addTearDown(provider.dispose);
+        final events = <AgentEvent>[];
+        provider.events.listen(events.add);
+
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+        );
+        await provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+          message: 'create a plan',
+        );
+        process.emitAssistantText(
+          sessionId: session.id,
+          messageId: 'msg-plan-1',
+          text: 'Fallback plan',
+        );
+        process.emitExitPlanToolUse(
+          sessionId: session.id,
+          toolUseId: 'toolu-plan-1',
+          input: <String, Object?>{'plan': 'Verified plan'},
+        );
+        process.emitControlRequest(
+          requestId: 'req-plan-1',
+          toolUseId: 'toolu-plan-1',
+          toolName: 'ExitPlanMode',
+          input: <String, Object?>{'plan': 'Verified plan'},
+        );
+        await pumpEventQueue(times: 5);
+
+        expect(events.whereType<AgentToolCallEvent>(), isEmpty);
+        expect(events.whereType<AgentPermissionRequestedEvent>(), isEmpty);
+        final approval = events
+            .whereType<AgentPlanApprovalRequestedEvent>()
+            .single
+            .request;
+        expect(approval.id, 'toolu-plan-1');
+        expect(approval.markdown, 'Verified plan');
+        expect(approval.sessionId, 'session-plan-1');
+        expect(approval.turnId, 'turn-plan-1');
+        expect(provider.controlPendingCount, 0);
+        expect(provider.planApprovalPendingCount, 1);
+
+        // Permission decision 端口不得看见或消费 Plan pending。
+        await provider.respondToPermission(
+          const AgentPermissionDecision(
+            requestId: 'toolu-plan-1',
+            approved: true,
+          ),
+        );
+        await pumpEventQueue();
+        expect(provider.controlPendingCount, 0);
+        expect(provider.planApprovalPendingCount, 1);
+        expect(process.receivedControlResponses, isEmpty);
+
+        await provider.respondToPlanApproval(
+          const AgentPlanApprovalDecision(
+            requestId: 'toolu-plan-1',
+            kind: AgentPlanApprovalDecisionKind.accepted,
+          ),
+        );
+        await pumpEventQueue(times: 3);
+
+        expect(provider.planApprovalPendingCount, 0);
+        final response = process.receivedControlResponses.single;
+        final envelope = response['response'] as Map<String, Object?>;
+        expect(envelope['request_id'], 'req-plan-1');
+        final body = envelope['response'] as Map<String, Object?>;
+        expect(body['behavior'], 'allow');
+        expect(body['updatedInput'], <String, Object?>{
+          'plan': 'Verified plan',
+        });
       },
     );
 
@@ -169,10 +272,11 @@ void main() {
       expect(provider.controlDeniedCount, 1);
       expect(events.whereType<AgentPermissionRequestedEvent>(), isEmpty);
       expect(process.receivedControlResponses, hasLength(1));
-      final body =
+      final envelope =
           process.receivedControlResponses.single['response']
               as Map<String, Object?>;
-      expect(body['behavior'], 'deny');
+      expect(envelope['subtype'], 'error');
+      expect(envelope['request_id'], 'req_x');
     });
 
     test(
@@ -219,6 +323,129 @@ void main() {
         );
       },
     );
+
+    test(
+      'turn permission snapshot resumes same session before sending user frame',
+      () async {
+        final planProcess = _FakeClaudeProcess();
+        final executionProcess = _FakeClaudeProcess();
+        final starts = <_RecordedProcessStart>[];
+        final provider = ClaudeCodeAgentProvider(
+          config: AgentProviderConfig.defaultClaudeCode,
+          processStarter: _queueStarter(<_FakeClaudeProcess>[
+            planProcess,
+            executionProcess,
+          ], starts),
+          whichLookup: (command) async => command,
+          idFactory: _sequenceIds(<String>[
+            'session-turn-permission-1',
+            'turn-execution-1',
+          ]),
+        );
+        addTearDown(provider.dispose);
+
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+          permissionSnapshot: const AgentPermissionRequestSnapshot.resolved(
+            selection: AgentPermissionSelection(optionId: ':plan'),
+            source: AgentPermissionRequestSource.threadEffective,
+          ),
+        );
+        await provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+          message: 'execute approved plan',
+          configuration: const AgentTurnConfiguration(
+            permissionSnapshot: AgentPermissionRequestSnapshot.resolved(
+              selection: AgentPermissionSelection(optionId: ':ask'),
+              source: AgentPermissionRequestSource.localWorkflowOverride,
+            ),
+          ),
+        );
+
+        expect(starts, hasLength(2));
+        expect(
+          starts.first.arguments,
+          containsAllInOrder(<String>[
+            '--session-id',
+            session.id,
+            '--permission-mode',
+            'plan',
+          ]),
+        );
+        expect(
+          starts.last.arguments,
+          containsAllInOrder(<String>[
+            '--resume',
+            session.id,
+            '--permission-mode',
+            'default',
+          ]),
+        );
+        expect(planProcess.receivedUserTexts, isEmpty);
+        expect(executionProcess.receivedUserTexts, <String>[
+          'execute approved plan',
+        ]);
+      },
+    );
+
+    test('turn permission switch rejects running and stale sessions', () async {
+      final process = _FakeClaudeProcess();
+      final starts = <_RecordedProcessStart>[];
+      final provider = ClaudeCodeAgentProvider(
+        config: AgentProviderConfig.defaultClaudeCode,
+        processStarter: _queueStarter(<_FakeClaudeProcess>[process], starts),
+        whichLookup: (command) async => command,
+        idFactory: _sequenceIds(<String>[
+          'session-turn-guard-1',
+          'turn-running-1',
+        ]),
+      );
+      addTearDown(provider.dispose);
+      final session = await provider.startSession(
+        context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+        permissionSnapshot: const AgentPermissionRequestSnapshot.resolved(
+          selection: AgentPermissionSelection(optionId: ':plan'),
+          source: AgentPermissionRequestSource.threadEffective,
+        ),
+      );
+      await provider.sendMessage(
+        session: session,
+        context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+        message: 'plan is still running',
+      );
+      const executionConfiguration = AgentTurnConfiguration(
+        permissionSnapshot: AgentPermissionRequestSnapshot.resolved(
+          selection: AgentPermissionSelection(optionId: ':ask'),
+          source: AgentPermissionRequestSource.localWorkflowOverride,
+        ),
+      );
+
+      await expectLater(
+        provider.sendMessage(
+          session: const AgentSession(
+            id: 'stale-session',
+            providerId: defaultClaudeCodeProviderId,
+          ),
+          context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+          message: 'must not switch stale session',
+          configuration: executionConfiguration,
+        ),
+        throwsA(isA<StateError>()),
+      );
+      await expectLater(
+        provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+          message: 'must not switch running turn',
+          configuration: executionConfiguration,
+        ),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(starts, hasLength(1));
+      expect(process.receivedUserTexts, <String>['plan is still running']);
+    });
 
     test('permission switch is rejected while a turn is running', () async {
       final process = _FakeClaudeProcess();
@@ -298,10 +525,10 @@ void main() {
         expect(events.whereType<AgentPermissionRequestedEvent>(), hasLength(1));
         expect(provider.controlPendingCount, 0);
         expect(process.receivedControlResponses, hasLength(2));
-        expect(
-          process.receivedControlResponses.last['request_id'],
-          'req_second',
-        );
+        final lastEnvelope =
+            process.receivedControlResponses.last['response']
+                as Map<String, Object?>;
+        expect(lastEnvelope['request_id'], 'req_second');
         final source = await cacheFile.readAsString();
         expect(source, contains('"toolName":"Bash"'));
         expect(source, contains('"decision":"allow"'));
@@ -390,6 +617,8 @@ class _FakeClaudeProcess implements Process {
   final Completer<int> _exitCode = Completer<int>();
 
   final List<String> receivedUserTexts = <String>[];
+  final List<Map<String, Object?>> receivedUserFrames =
+      <Map<String, Object?>>[];
   final List<Map<String, Object?>> receivedControlResponses =
       <Map<String, Object?>>[];
 
@@ -455,6 +684,30 @@ class _FakeClaudeProcess implements Process {
     });
   }
 
+  void emitExitPlanToolUse({
+    required String sessionId,
+    required String toolUseId,
+    Map<String, Object?> input = const <String, Object?>{},
+  }) {
+    _writeStdout(<String, Object?>{
+      'type': 'assistant',
+      'session_id': sessionId,
+      'uuid': 'uuid-exit-plan',
+      'message': <String, Object?>{
+        'id': 'msg-exit-plan',
+        'role': 'assistant',
+        'content': <Object?>[
+          <String, Object?>{
+            'type': 'tool_use',
+            'id': toolUseId,
+            'name': 'ExitPlanMode',
+            'input': input,
+          },
+        ],
+      },
+    });
+  }
+
   void emitResultSuccess({required String sessionId}) {
     _writeStdout(<String, Object?>{
       'type': 'result',
@@ -478,14 +731,17 @@ class _FakeClaudeProcess implements Process {
   void emitControlRequest({
     required String requestId,
     required String toolName,
+    String? toolUseId,
+    Map<String, Object?>? input,
   }) {
     emitJson(<String, Object?>{
       'type': 'control_request',
       'request_id': requestId,
       'request': <String, Object?>{
-        'type': 'can_use_tool',
+        'subtype': 'can_use_tool',
+        'tool_use_id': toolUseId ?? 'toolu_$requestId',
         'tool_name': toolName,
-        'input': <String, Object?>{'command': 'echo hi'},
+        'input': input ?? <String, Object?>{'command': 'echo hi'},
       },
     });
   }
@@ -510,6 +766,7 @@ class _FakeClaudeProcess implements Process {
         if (entry.key is String) entry.key as String: entry.value,
     };
     if (map['type'] == 'user') {
+      receivedUserFrames.add(map);
       final message = map['message'];
       if (message is Map) {
         final content = message['content'];

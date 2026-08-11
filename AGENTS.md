@@ -118,7 +118,7 @@ UI 一律按 `AgentProviderCapabilities` 和 `AgentProviderBundle` 端口是否�
 | Plan 审批 | Provider | `AgentPlanApprovalPort` |
 | **Plan 执行交接** | **Zeta 本地** | 不调用上面任何端口 |
 
-Plan 执行交接是 Zeta 自己的 application 工作流，不持久化。执行动作必须**新建一个显式的 Default `turn/start`**——不是 steer 当前 turn，不是调 `AgentPlanApprovalPort`。**任何动作都不得预授权计划里提到的命令、文件或网络操作。** 默认审批策略保持保守；自动授权的改动一律不接受。
+Plan 执行交接是 Zeta 自己的 application 工作流，不持久化。执行动作必须**新建一个显式的 Default `turn/start`**——不是 steer 当前 turn，不是调 `AgentPlanApprovalPort`。**任何动作都不得预授权计划里提到的命令、文件或网络操作。** 执行权限只可恢复进入 Plan 前由用户明确选择且仍在同 Binding/thread/runtime generation 有效的策略；失效时回落到 Provider catalog 声明的保守默认，目录不可用则要求用户显式选择。不得自动升级权限或持久化本次覆盖。
 
 > 正文：[架构总览「三种审批」](docs/architecture/overview.md) · [开发者文档 §7「Plan conversation mode」](docs/guides/developer_guide.md)
 

@@ -46,6 +46,14 @@ void main() {
         find.byKey(const ValueKey('agent-model-selector')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(
+          const ValueKey('agent-plan-execution-permission-$_handoffId'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Workspace write'), findsOneWidget);
+      expect(find.text('Plan 前'), findsOneWidget);
 
       // 空输入时「修改」不可点。
       expect(tester.widget<IdeButton>(revise).onPressed, isNull);
@@ -66,6 +74,81 @@ void main() {
         const AgentTurnCompletedEvent(sessionId: 'session-1', turnId: 'turn-2'),
       );
       await pumpLiveAgentUi(tester);
+    });
+
+    testWidgets('执行权限可为本次覆盖且不会提前 apply 或持久化', (tester) async {
+      final provider = AgentPaneModeFakeProvider(
+        models: agentPaneModelConfigList,
+      );
+      final viewModel = createAgentPaneViewModel(provider);
+      addTearDown(provider.dispose);
+      addTearDown(viewModel.dispose);
+      await viewModel.loadModels();
+      await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
+      await pumpAgentPaneUi(tester);
+      await _completePlanTurn(tester, viewModel, provider);
+
+      final permissionSelector = find.byKey(
+        const ValueKey('agent-plan-execution-permission-$_handoffId'),
+      );
+      await pumpUntilFinder(tester, permissionSelector);
+      await tester.tap(permissionSelector);
+      await pumpAgentPaneUi(tester);
+      await tester.tap(find.text('Read only').last);
+      await pumpAgentPaneUi(tester);
+
+      expect(
+        viewModel.planExecutionRequest?.executionPermission?.label,
+        'Read only',
+      );
+      expect(
+        viewModel.planExecutionRequest?.executionPermission?.origin,
+        AgentPlanExecutionPermissionOrigin.userOverride,
+      );
+      expect(provider.permissionApplyCount, 0);
+
+      await tester.tap(
+        find.byKey(const ValueKey('agent-plan-execute-$_handoffId')),
+      );
+      await pumpLiveAgentUi(tester);
+
+      final snapshot = provider.turnConfigurations.last.permissionSnapshot;
+      expect(snapshot.selection?.optionId, ':read-only');
+      expect(
+        snapshot.source,
+        AgentPermissionRequestSource.localWorkflowOverride,
+      );
+      expect(provider.permissionApplyCount, 0);
+      expect(provider.permissionDecisions, isEmpty);
+      expect(provider.planDecisions, isEmpty);
+
+      provider.emitEvent(
+        const AgentTurnCompletedEvent(sessionId: 'session-1', turnId: 'turn-2'),
+      );
+      await pumpLiveAgentUi(tester);
+    });
+
+    testWidgets('权限目录没有可用项时禁用执行', (tester) async {
+      final provider = AgentPaneModeFakeProvider(
+        models: agentPaneModelConfigList,
+        permissionOptions: const <AgentPermissionOption>[],
+      );
+      final viewModel = createAgentPaneViewModel(provider);
+      addTearDown(provider.dispose);
+      addTearDown(viewModel.dispose);
+      await viewModel.loadModels();
+      await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
+      await pumpAgentPaneUi(tester);
+      await _completePlanTurn(tester, viewModel, provider);
+
+      final execute = find.byKey(
+        const ValueKey('agent-plan-execute-$_handoffId'),
+      );
+      await pumpUntilFinder(tester, execute);
+
+      expect(viewModel.planExecutionRequest?.executionPermission, isNull);
+      expect(tester.widget<IdeButton>(execute).onPressed, isNull);
+      expect(find.text('请选择执行权限'), findsOneWidget);
     });
 
     testWidgets('放弃关闭交互卡，计划消息退回折叠卡并恢复 Composer', (tester) async {

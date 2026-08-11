@@ -281,7 +281,10 @@ main -> app -> presentation/application -> domain
   `exclusive` 并保持 FIFO，list/read 使用 Project/Thread `sharedRead`；禁止同键重入，
   dispose 必须拒绝未入场任务并等待已入场任务释放资源键。
 - JSON-RPC transport 日志不得记录 prompt、文件内容、认证参数或 stderr 原文。
-- 默认审批策略保持保守，不自动授权命令执行或文件写入。
+- 默认审批策略保持保守，不自动授权命令执行或文件写入。Plan 执行交接只可恢复进入
+  Plan 前由用户明确选择、且同 Binding/thread/runtime generation 仍有效的策略；否则回落
+  到 Provider catalog 默认。卡片上的本次覆盖不调用 Provider apply、不持久化，也不携带
+  命令、文件或网络白名单。
 - Codex app-server 协议以 `third_party/codex_app_server_schema` 的 pinned
   快照为准；升级 CLI 时先用 `tool/gen_codex_schema.*` 导出并 diff，再改
   适配层。流程见 `docs/protocols/codex_app_server_protocol.md`。

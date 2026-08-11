@@ -531,7 +531,10 @@ conversation mode 的 UI 回写仍受当前 thread gate 约束。
   `AgentPlanExecutionHandoffController` 创建一次性的本地执行交接。Pending Dock
   提供 Run plan、Keep planning 与 Dismiss：Run plan 显式把下一回合切到 Default 并发送
   本地执行提示；Keep planning 保持 Plan 并把焦点交回 Composer；Dismiss 只关闭卡片。
-  该状态不持久化、不回写 Provider，也不代表任何命令、文件或网络权限已获批准。
+  Provider Plan 审批只有显式声明 `localExecutionHandoff` 才进入该流程，默认仍由 Provider
+  自行续接。执行权限恢复进入 Plan 前同 Binding/thread/runtime generation 仍有效的选择；
+  失效时回落到 catalog 默认，卡内改选仅冻结进新 turn 快照。该状态不持久化、不调用
+  permission apply，也不代表任何命令、文件或网络权限已获批准。
 - 模型改道、弃用通知等系统提示；token 用量含 `modelContextWindow` 占用比例。
 - Composer 使用单一模型配置入口：Popover 以模型列表为一级信息，选中后在该行下
   内嵌 Reasoning effort 与 Fast，运行中更改明确标记为下一回合生效。

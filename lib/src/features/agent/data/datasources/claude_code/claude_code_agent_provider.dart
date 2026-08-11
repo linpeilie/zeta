@@ -5,6 +5,7 @@ import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_control_request_handler.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_event_mapper.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_permission_policy_adapter.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_plan_approval_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_process_starter.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/stream_json_peer.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart'
@@ -20,9 +21,13 @@ final _log = loggerFor('zeta.agent.claude_code.provider');
 ///
 /// 进程常驻 + 串行 turn；`--permission-mode default` 下高风险工具走
 /// [ClaudeCodeControlRequestHandler] 的 UI 审批（T20），未知 control 类型
-/// 仍 fail-closed deny。
+/// 仍 fail-closed deny。`ExitPlanMode` 由独立的
+/// [ClaudeCodePlanApprovalAdapter] 接管，不进入普通权限 registry。
 class ClaudeCodeAgentProvider
-    implements AgentProvider, AgentPermissionPolicyProvider {
+    implements
+        AgentProvider,
+        AgentPermissionPolicyProvider,
+        AgentPlanApprovalProvider {
   ClaudeCodeAgentProvider({
     required this.config,
     ProcessStarter? processStarter,
@@ -36,6 +41,7 @@ class ClaudeCodeAgentProvider
        _controlHandler =
            controlRequestHandler ?? ClaudeCodeControlRequestHandler(),
        _idFactory = idFactory ?? _defaultIdFactory {
+    _planApprovalAdapter = _mapper.planApprovalAdapter;
     _permissionMode = ClaudeCodePermissionModeCodec.parseOptionId(
       config.resolvedPermissionOptionId,
     );
@@ -53,6 +59,7 @@ class ClaudeCodeAgentProvider
   final ClaudeCodeEventMapper _mapper;
   final ClaudeCodeControlRequestHandler _controlHandler;
   final String Function() _idFactory;
+  late final ClaudeCodePlanApprovalAdapter _planApprovalAdapter;
   late final ClaudeCodePermissionPolicyAdapter _permissionPolicy;
   late ClaudeCodePermissionMode _permissionMode;
 
@@ -91,6 +98,9 @@ class ClaudeCodeAgentProvider
 
   /// 测试/诊断：等待用户决策的 can_use_tool 数。
   int get controlPendingCount => _controlHandler.pendingCount;
+
+  /// 测试/诊断：等待用户决定的 Plan 审批数（与普通工具权限完全隔离）。
+  int get planApprovalPendingCount => _planApprovalAdapter.pendingCount;
 
   @override
   Future<void> initialize() async {
@@ -299,9 +309,7 @@ class ClaudeCodeAgentProvider
     late final String text;
     try {
       await initialize();
-      final activePeer = _peer;
-      final runtimeScope = _runtimeScope;
-      if (activePeer == null || runtimeScope == null || _sessionId == null) {
+      if (_peer == null || _runtimeScope == null || _sessionId == null) {
         throw StateError(
           'Claude Code session is not started; call startSession first',
         );
@@ -324,6 +332,16 @@ class ClaudeCodeAgentProvider
       text = _resolvePromptText(message: message, inputs: inputs);
       if (text.trim().isEmpty) {
         throw ArgumentError('Claude Code prompt text must not be empty');
+      }
+
+      await _applyTurnPermissionSnapshot(
+        session: session,
+        snapshot: configuration.permissionSnapshot,
+      );
+      final activePeer = _peer;
+      final runtimeScope = _runtimeScope;
+      if (activePeer == null || runtimeScope == null) {
+        throw StateError('Claude Code peer is unavailable after mode switch');
       }
 
       turnId = _idFactory();
@@ -354,12 +372,15 @@ class ClaudeCodeAgentProvider
           <String, Object?>{'type': 'text', 'text': text},
         ],
       },
+      'parent_tool_use_id': null,
+      'session_id': session.id,
     };
 
     try {
       await peer.send(userFrame);
     } catch (error, stackTrace) {
       _runningTurnIdsBySessionId.remove(session.id);
+      _planApprovalAdapter.completeTurn(sessionId: session.id, turnId: turnId);
       _log.w(
         'Failed to send Claude Code user frame (${error.runtimeType})',
         error: error,
@@ -421,6 +442,10 @@ class ClaudeCodeAgentProvider
         eventKind: 'control.interrupt',
       );
       if (terminal.accepted) {
+        _planApprovalAdapter.completeTurn(
+          sessionId: terminal.sessionId,
+          turnId: terminal.turnId,
+        );
         _addEvent(
           AgentTurnCompletedEvent(
             sessionId: terminal.sessionId,
@@ -489,6 +514,45 @@ class ClaudeCodeAgentProvider
       } catch (error) {
         _log.w(
           'Claude Code interrupt after permission deny failed '
+          '(${error.runtimeType})',
+        );
+      }
+    }
+  }
+
+  @override
+  Future<void> respondToPlanApproval(AgentPlanApprovalDecision decision) async {
+    _ensureNotDisposed();
+    final resolved = _planApprovalAdapter.resolveDecision(decision);
+    if (resolved == null) {
+      return;
+    }
+    final peer = _peer;
+    if (peer == null) {
+      _log.w(
+        'Cannot send plan control_response: Claude Code peer is not running',
+      );
+      return;
+    }
+    try {
+      await peer.send(resolved.responseFrame);
+    } catch (error, stackTrace) {
+      _log.w(
+        'Failed to send plan control_response (${error.runtimeType})',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+    if (resolved.interruptTurn) {
+      try {
+        await peer.send(<String, Object?>{
+          'type': 'control',
+          'subtype': 'interrupt',
+        });
+      } catch (error) {
+        _log.w(
+          'Claude Code interrupt after plan cancellation failed '
           '(${error.runtimeType})',
         );
       }
@@ -594,6 +658,7 @@ class ClaudeCodeAgentProvider
     final peer = _peer;
     _peer = null;
     _controlHandler.clearPending();
+    _planApprovalAdapter.clear();
     if (peer != null) {
       try {
         await peer.close();
@@ -651,6 +716,25 @@ class ClaudeCodeAgentProvider
         : _runningTurnIdsBySessionId[sessionId];
 
     if (event.type == 'control_request') {
+      final planResult = _planApprovalAdapter.handleControlRequest(event.raw);
+      if (planResult.handled) {
+        for (final domainEvent in planResult.events) {
+          _addEvent(domainEvent);
+        }
+        final responseFrame = planResult.responseFrame;
+        final peer = _peer;
+        if (responseFrame != null && peer != null) {
+          unawaited(
+            peer.send(responseFrame).catchError((Object error) {
+              _log.w(
+                'Failed to send plan control_response '
+                '(${error.runtimeType})',
+              );
+            }),
+          );
+        }
+        return;
+      }
       if (_tryHandleRememberedToolDecision(event.raw)) {
         return;
       }
@@ -697,7 +781,7 @@ class ClaudeCodeAgentProvider
     final request = _stringKeyedMap(raw['request']);
     if (requestId is! String ||
         requestId.trim().isEmpty ||
-        request?['type'] != 'can_use_tool') {
+        request?['subtype'] != 'can_use_tool') {
       return false;
     }
     final toolName = request?['tool_name'];
@@ -736,13 +820,42 @@ class ClaudeCodeAgentProvider
   Future<AgentPermissionApplyScope> _applyPermissionMode(
     ClaudeCodePermissionMode nextMode,
   ) async {
+    return _switchPermissionMode(nextMode, allowTurnAdmission: false);
+  }
+
+  Future<void> _applyTurnPermissionSnapshot({
+    required AgentSession session,
+    required AgentPermissionRequestSnapshot snapshot,
+  }) async {
+    final optionId = snapshot.selection?.optionId;
+    if (optionId == null) {
+      return;
+    }
+    if (session.id != _sessionId) {
+      throw StateError(
+        'Claude Code provider is bound to session $_sessionId, '
+        'not ${session.id}',
+      );
+    }
+    final nextMode = ClaudeCodePermissionModeCodec.parseOptionId(optionId);
+    if (nextMode == _permissionMode) {
+      return;
+    }
+    await _switchPermissionMode(nextMode, allowTurnAdmission: true);
+  }
+
+  Future<AgentPermissionApplyScope> _switchPermissionMode(
+    ClaudeCodePermissionMode nextMode, {
+    required bool allowTurnAdmission,
+  }) async {
     _ensureNotDisposed();
     if (_permissionModeSwitchOperation != null) {
       throw StateError('Claude Code permission mode is already switching');
     }
-    if (_turnAdmissionInProgress ||
+    if ((!allowTurnAdmission && _turnAdmissionInProgress) ||
         _runningTurnIdsBySessionId.isNotEmpty ||
-        _controlHandler.pendingCount > 0) {
+        _controlHandler.pendingCount > 0 ||
+        _planApprovalAdapter.pendingCount > 0) {
       throw StateError(
         'Claude Code permission mode cannot change while a turn is running',
       );

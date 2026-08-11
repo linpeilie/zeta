@@ -233,7 +233,7 @@ void main() {
       expect(doneFail.content, isNotNull);
     });
 
-    test('ExitPlanMode is treated as a normal tool card in T17', () {
+    test('ExitPlanMode and its tool_result never become tool cards', () {
       final mapper = ClaudeCodeEventMapper(providerId: 'claude_code');
       addTearDown(mapper.dispose);
       const sessionId = 'session-plan';
@@ -243,7 +243,7 @@ void main() {
         turnId: 'turn-plan',
       );
 
-      final mapped = mapper.mapFrame(
+      final toolUse = mapper.mapFrame(
         raw: <String, Object?>{
           'type': 'assistant',
           'session_id': sessionId,
@@ -256,7 +256,27 @@ void main() {
                 'type': 'tool_use',
                 'id': 'toolu_exit_plan',
                 'name': 'ExitPlanMode',
-                'input': <String, Object?>{},
+                'input': <String, Object?>{'plan': 'Plan body'},
+              },
+            ],
+          },
+        },
+        runtimeScope: scope,
+        runningTurnId: 'turn-plan',
+      );
+      final toolResult = mapper.mapFrame(
+        raw: <String, Object?>{
+          'type': 'user',
+          'session_id': sessionId,
+          'uuid': 'uuid-exit-plan-result',
+          'message': <String, Object?>{
+            'role': 'user',
+            'content': <Object?>[
+              <String, Object?>{
+                'type': 'tool_result',
+                'tool_use_id': 'toolu_exit_plan',
+                'is_error': true,
+                'content': 'Plan approval denied',
               },
             ],
           },
@@ -265,14 +285,12 @@ void main() {
         runningTurnId: 'turn-plan',
       );
 
-      final tool = mapped.events
-          .whereType<AgentToolCallEvent>()
-          .single
-          .toolCall;
-      expect(tool.id, 'toolu_exit_plan');
-      expect(tool.title, 'ExitPlanMode');
-      expect(tool.kind, AgentToolKind.other);
-      expect(tool.status, AgentToolStatus.inProgress);
+      expect(toolUse.events, isEmpty);
+      expect(toolResult.events, isEmpty);
+      expect(
+        mapper.planApprovalAdapter.shouldSuppressToolResult('toolu_exit_plan'),
+        isTrue,
+      );
     });
 
     test('user non-tool_result content is dropped silently', () {

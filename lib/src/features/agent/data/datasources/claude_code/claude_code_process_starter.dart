@@ -27,6 +27,7 @@ List<String> buildClaudeCodeProcessArguments({
   String? sessionId,
   String? resumeSessionId,
   String? model,
+  String? permissionPromptTool = 'stdio',
   String? permissionMode,
   bool includePartialMessages = false,
   bool noSessionPersistence = false,
@@ -62,6 +63,13 @@ List<String> buildClaudeCodeProcessArguments({
       ..add(modelId);
   }
 
+  final promptTool = permissionPromptTool?.trim();
+  if (promptTool != null && promptTool.isNotEmpty) {
+    args
+      ..add('--permission-prompt-tool')
+      ..add(promptTool);
+  }
+
   final mode = permissionMode?.trim();
   if (mode != null && mode.isNotEmpty) {
     args
@@ -89,6 +97,7 @@ Future<ResolvedClaudeCodeProcessCommand> resolveClaudeCodeProcessCommand(
   String? sessionId,
   String? resumeSessionId,
   String? model,
+  String? permissionPromptTool = 'stdio',
   String? permissionMode,
   bool includePartialMessages = false,
   bool noSessionPersistence = false,
@@ -109,6 +118,7 @@ Future<ResolvedClaudeCodeProcessCommand> resolveClaudeCodeProcessCommand(
     sessionId: sessionId,
     resumeSessionId: resumeSessionId,
     model: model ?? config.selectedModel ?? config.defaultModel,
+    permissionPromptTool: permissionPromptTool,
     permissionMode: permissionMode,
     includePartialMessages: includePartialMessages,
     noSessionPersistence: noSessionPersistence,
@@ -128,6 +138,7 @@ ProcessStarter claudeCodeProcessStarter(
   String? sessionId,
   String? resumeSessionId,
   String? model,
+  String? permissionPromptTool = 'stdio',
   String? permissionMode,
   bool includePartialMessages = false,
   bool noSessionPersistence = false,
@@ -145,6 +156,7 @@ ProcessStarter claudeCodeProcessStarter(
       sessionId: sessionId,
       resumeSessionId: resumeSessionId,
       model: model,
+      permissionPromptTool: permissionPromptTool,
       permissionMode: permissionMode,
       includePartialMessages: includePartialMessages,
       noSessionPersistence: noSessionPersistence,

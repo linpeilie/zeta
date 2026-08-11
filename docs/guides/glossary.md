@@ -113,7 +113,7 @@ Provider 请求批准一份计划。
 > 上面三种是**独立的领域语义**，不共享 request/decision 模型。它们可以复用同一个 Pending Interaction 展示区，但模型不能混。
 
 **Plan execution handoff（计划执行交接）**
-Zeta 自己的本地工作流，**不是** Provider 计划审批。Plan 回合成功并产出非空计划后出现，点"执行计划"会**新建一个显式 Default 回合**，且不预授权计划里的任何操作。非持久化状态，重启即消失。
+Zeta 自己的本地工作流，**不是** Provider 计划审批。Plan 回合成功并产出非空计划后出现，点"执行计划"会**新建一个显式 Default 回合**，且不预授权计划里的任何操作。执行权限默认恢复进入 Plan 前仍有效的用户选择，失效时回落到 Provider catalog 默认；卡内改选只影响这一个新回合。非持久化状态，重启即消失。
 `agent_plan_execution_models.dart`
 
 **AgentAttentionSignal（注意力信号）**

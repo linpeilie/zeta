@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_plan_execution_handoff_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_runtime_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 void main() {
@@ -106,6 +107,211 @@ void main() {
       expect(controller.pendingRequest, same(second));
       expect(controller.resolve(second), isTrue);
       expect(controller.pendingRequest, isNull);
+    });
+
+    test(
+      'waits for successful terminal after Provider approval and freezes permission',
+      () {
+        final controller = AgentPlanExecutionHandoffController();
+        const runtimeIdentity = AgentProviderRuntimeIdentity(
+          providerId: 'provider-1',
+          generation: 3,
+        );
+        const approval = AgentPlanApprovalRequest(
+          id: 'approval-1',
+          title: 'Review plan',
+          markdown: '# Approved plan',
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          continuation: AgentPlanApprovalContinuation.localExecutionHandoff,
+        );
+
+        expect(
+          controller.stageProviderApprovedPlan(
+            request: approval,
+            executionPermission: const AgentPermissionSelection(
+              optionId: 'ask',
+            ),
+            permissionRuntimeIdentity: runtimeIdentity,
+          ),
+          isTrue,
+        );
+        expect(controller.pendingRequest, isNull);
+
+        final request = controller.offerCompletedPlan(
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          status: AgentHistoryTurnStatus.completed,
+          modeId: AgentConversationModeId.defaultMode,
+          planMarkdown: null,
+        );
+
+        expect(request, isNotNull);
+        expect(request!.markdown, '# Approved plan');
+        expect(request.title, 'Review plan');
+        final seed = controller.permissionSeedFor(request);
+        expect(seed?.selection?.optionId, 'ask');
+        expect(seed?.runtimeIdentity, runtimeIdentity);
+        expect(seed?.threadId, 'thread-1');
+      },
+    );
+
+    test('drops a Provider-approved candidate on unsuccessful terminal', () {
+      final controller = AgentPlanExecutionHandoffController();
+      controller.stageProviderApprovedPlan(
+        request: const AgentPlanApprovalRequest(
+          id: 'approval-1',
+          title: 'Review plan',
+          markdown: '# Approved plan',
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          continuation: AgentPlanApprovalContinuation.localExecutionHandoff,
+        ),
+        executionPermission: null,
+        permissionRuntimeIdentity: null,
+      );
+
+      expect(
+        controller.offerCompletedPlan(
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          status: AgentHistoryTurnStatus.failed,
+          modeId: AgentConversationModeId.defaultMode,
+          planMarkdown: null,
+        ),
+        isNull,
+      );
+      expect(controller.pendingRequest, isNull);
+    });
+
+    test(
+      'reconciles Plan permission, falls back conservatively, and allows local override',
+      () {
+        final controller = AgentPlanExecutionHandoffController();
+        const runtimeIdentity = AgentProviderRuntimeIdentity(
+          providerId: 'provider-1',
+          generation: 3,
+        );
+        final offered = controller.offerCompletedPlan(
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          status: AgentHistoryTurnStatus.completed,
+          modeId: AgentConversationModeId.plan,
+          planMarkdown: '# Plan',
+          executionPermission: const AgentPermissionSelection(
+            optionId: 'custom-safe',
+          ),
+          permissionRuntimeIdentity: runtimeIdentity,
+        )!;
+        const options = <AgentPermissionOption>[
+          AgentPermissionOption(id: 'ask', label: 'Ask'),
+          AgentPermissionOption(id: 'custom-safe', label: 'Custom safe'),
+          AgentPermissionOption(
+            id: 'blocked',
+            label: 'Blocked',
+            allowed: false,
+          ),
+        ];
+
+        final restored = controller.reconcileExecutionPermission(
+          request: offered,
+          supportsPermissionSelection: true,
+          options: options,
+          catalogDefault: const AgentPermissionSelection(optionId: 'ask'),
+          currentRuntimeIdentity: runtimeIdentity,
+        )!;
+        expect(restored.executionPermission?.label, 'Custom safe');
+        expect(
+          restored.executionPermission?.origin,
+          AgentPlanExecutionPermissionOrigin.beforePlan,
+        );
+
+        final fallback = controller.reconcileExecutionPermission(
+          request: restored,
+          supportsPermissionSelection: true,
+          options: options,
+          catalogDefault: const AgentPermissionSelection(optionId: 'ask'),
+          currentRuntimeIdentity: const AgentProviderRuntimeIdentity(
+            providerId: 'provider-1',
+            generation: 4,
+          ),
+        )!;
+        expect(fallback.executionPermission?.label, 'Ask');
+        expect(
+          fallback.executionPermission?.origin,
+          AgentPlanExecutionPermissionOrigin.catalogDefault,
+        );
+
+        final overridden = controller.selectExecutionPermission(
+          request: fallback,
+          option: options[1],
+          currentRuntimeIdentity: const AgentProviderRuntimeIdentity(
+            providerId: 'provider-1',
+            generation: 4,
+          ),
+        )!;
+        expect(
+          overridden.executionPermission?.origin,
+          AgentPlanExecutionPermissionOrigin.userOverride,
+        );
+        expect(
+          overridden.executionPermission?.toRequestSnapshot().source,
+          AgentPermissionRequestSource.localWorkflowOverride,
+        );
+      },
+    );
+
+    test(
+      'blocks selectable permission when catalog has no allowed default',
+      () {
+        final controller = AgentPlanExecutionHandoffController();
+        final offered = controller.offerCompletedPlan(
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          status: AgentHistoryTurnStatus.completed,
+          modeId: AgentConversationModeId.plan,
+          planMarkdown: '# Plan',
+        )!;
+
+        final blocked = controller.reconcileExecutionPermission(
+          request: offered,
+          supportsPermissionSelection: true,
+          options: const <AgentPermissionOption>[],
+          catalogDefault: null,
+          currentRuntimeIdentity: null,
+        );
+
+        expect(blocked?.executionPermission, isNull);
+        expect(controller.pendingRequest, isNotNull);
+      },
+    );
+
+    test('uses provider fallback when permission selection is unsupported', () {
+      final controller = AgentPlanExecutionHandoffController();
+      final offered = controller.offerCompletedPlan(
+        sessionId: 'thread-1',
+        turnId: 'turn-1',
+        status: AgentHistoryTurnStatus.completed,
+        modeId: AgentConversationModeId.plan,
+        planMarkdown: '# Plan',
+      )!;
+
+      final reconciled = controller.reconcileExecutionPermission(
+        request: offered,
+        supportsPermissionSelection: false,
+        options: const <AgentPermissionOption>[],
+        catalogDefault: null,
+        currentRuntimeIdentity: null,
+      );
+
+      expect(
+        reconciled?.executionPermission?.origin,
+        AgentPlanExecutionPermissionOrigin.providerFallback,
+      );
+      expect(
+        reconciled?.executionPermission?.toRequestSnapshot().source,
+        AgentPermissionRequestSource.providerFallback,
+      );
     });
   });
 }

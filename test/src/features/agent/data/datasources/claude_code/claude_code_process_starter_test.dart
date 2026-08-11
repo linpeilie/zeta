@@ -4,7 +4,7 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 void main() {
   group('buildClaudeCodeProcessArguments', () {
-    test('stable prefix without optional flags', () {
+    test('default enables the stdio permission callback', () {
       expect(buildClaudeCodeProcessArguments(), <String>[
         '--print',
         '--input-format',
@@ -12,6 +12,8 @@ void main() {
         '--output-format',
         'stream-json',
         '--verbose',
+        '--permission-prompt-tool',
+        'stdio',
       ]);
     });
 
@@ -33,6 +35,8 @@ void main() {
           'sid-1',
           '--model',
           'haiku',
+          '--permission-prompt-tool',
+          'stdio',
           '--permission-mode',
           'default',
         ],
@@ -58,6 +62,8 @@ void main() {
           'sid-old',
           '--model',
           'sonnet',
+          '--permission-prompt-tool',
+          'stdio',
           '--permission-mode',
           'plan',
         ],
@@ -81,10 +87,26 @@ void main() {
           '--verbose',
           '--session-id',
           's',
+          '--permission-prompt-tool',
+          'stdio',
           '--permission-mode',
           'acceptEdits',
           '--include-partial-messages',
           '--no-session-persistence',
+        ],
+      );
+    });
+
+    test('permission prompt tool can be explicitly disabled', () {
+      expect(
+        buildClaudeCodeProcessArguments(permissionPromptTool: null),
+        <String>[
+          '--print',
+          '--input-format',
+          'stream-json',
+          '--output-format',
+          'stream-json',
+          '--verbose',
         ],
       );
     });

@@ -240,13 +240,13 @@ claude \
   [--resume <session-id>]               # 恢复
   [--fork-session]                      # 二期：resume 时分叉出新 session
   [--model <id>]                        # opus / sonnet / haiku / 明确 id
+  --permission-prompt-tool stdio        # 开启宿主 stdin control 审批通道
   [--permission-mode default|acceptEdits|plan|bypassPermissions]
   [--allowed-tools <csv>] [--disallowed-tools <csv>]
   [--append-system-prompt <text>]
   [--mcp-config <path>]                 # 二期：透传 Zeta 组装的 MCP 配置
   [--add-dir <path>]                    # 追加允许访问的路径（thread cwd 之外）
   [--dangerously-skip-permissions]      # 仅当权限模式选 bypass 时使用
-  [--permission-prompt-tool <tool>]     # 转发权限询问到我们自己的 tool
 ```
 
 - 工作目录：`AgentSession.workingDirectory`（Zeta 侧 thread 的 cwd）。
@@ -258,8 +258,8 @@ claude \
 **发送（stdin，每行一个 JSON）**：
 
 ```json
-{"type":"user","message":{"role":"user","content":[{"type":"text","text":"..."}]}}
-{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"...","content":"..."}]}}
+{"type":"user","session_id":"<session-id>","parent_tool_use_id":null,"message":{"role":"user","content":[{"type":"text","text":"..."}]}}
+{"type":"user","session_id":"<session-id>","parent_tool_use_id":null,"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"...","content":"..."}]}}
 {"type":"control","subtype":"interrupt"}
 ```
 
@@ -289,15 +289,18 @@ claude \
 CLI 端通过 `control_request` 让宿主决策：
 
 ```json
-{"type":"control_request","request_id":"req_1","request":{"type":"can_use_tool","tool_name":"Bash","input":{...}}}
+{"type":"control_request","request_id":"req_1","request":{"subtype":"can_use_tool","tool_use_id":"toolu_1","tool_name":"Bash","input":{...}}}
 ```
 
 宿主回写：
 
 ```json
-{"type":"control_response","request_id":"req_1","response":{"behavior":"allow","updatedInput":{...}}}
-{"type":"control_response","request_id":"req_1","response":{"behavior":"deny","message":"..."}}
+{"type":"control_response","response":{"subtype":"success","request_id":"req_1","response":{"behavior":"allow","updatedInput":{...}}}}
+{"type":"control_response","response":{"subtype":"success","request_id":"req_1","response":{"behavior":"deny","message":"..."}}}
 ```
+
+`request_id` 只关联这次 control request/response；`tool_use_id` 关联 assistant
+`tool_use` 与后续 `tool_result`。两者语义不同，adapter 必须按字段配对，不能互相猜测。
 
 Plan 审批走 `ExitPlanMode` 工具（assistant tool_use）+ Zeta 侧独立
 Application 工作流（§6），不复用 permission 决策模型。
@@ -441,9 +444,10 @@ Anthropic 官方 API 上，唯一的新变量是请求头带上了本机 OAuth a
 ### 4.1 `StreamJsonPeer`（新增）
 
 **为什么不能复用 `JsonRpcPeer`**：JsonRpc peer 用 `id/method/params` 与
-`id/result|error` 的严格帧匹配；Claude Code stream-json 每行都是一个
-`type` 事件，没有请求—响应 id 相关性，`control_response` 是我们主动
-写的独立行。强行复用会污染共享 transport 的语义并产生大量假 pending。
+`id/result|error` 的统一 pending 匹配；Claude Code stream-json 每行都是一个
+`type` 事件，普通事件没有这套请求—响应语义。只有 control 帧内嵌
+`request_id`，由对应 Provider adapter 定点关联。强行复用会污染共享 transport
+的语义并产生大量假 pending。
 
 **接口草案（放在 `stream_json_peer.dart`）**：
 
@@ -472,8 +476,9 @@ class StreamJsonEvent {
 - Dart `Process.start`，UTF-8 with `allowMalformed`（沿用 Codex 已验证选择）。
 - 严格串行化 stdin 写队列，`writeln` + `flush`；关闭时 kill + `SIGKILL`
   兜底（沿用 `json_rpc_stdio_transport.dart:404-418`）。
-- 每次 `sendControl` 生成 `request_id`，但**不等待响应**——事件流里出现
-  同 `request_id` 的 `control_response` 才落诊断 log。
+- `sendControl` 只串行写入调用方构造好的完整帧，不生成或改写
+  `request_id`，也不建立 transport 级 pending；相关 adapter 负责保留 CLI
+  请求里的 id 并构造响应。
 - 单行 payload 大小超阈值（比如 4 MB）拒收并触发 `protocolErrors`，避免
   被极端 tool_result 撑爆内存。
 
@@ -636,8 +641,10 @@ throw；这样 CLI 引入新事件类型时不会阻断整个 pipeline。
 - 反向 `can_use_tool` 询问：
     - 生成中立 `AgentPermissionRequest`（`decisionOptions=[allow_once,
     allow_always, deny_once, deny_always]`）；
-    - 用户决策 → `sendControl({type:"control_response",request_id,
-    response:{behavior:"allow"|"deny", updatedInput?, message?}})`；
+    - 用户决策 → `sendControl({type:"control_response",response:{subtype:"success",
+      request_id,response:{behavior:"allow"|"deny",updatedInput?,message?}}})`；
+    - `request.subtype` 必须为 `can_use_tool`，并同时校验 `tool_use_id`、
+      `tool_name` 和 `input`；缺字段或未知 subtype 一律回嵌套 error 响应；
     - `allow_always` / `deny_always` 由 adapter 缓存到当前 session 的
       tool allow-list，并落 `~/.zeta/state/claude_code/session_<id>.json`（
       版本化 JSON；每项仅规范化字段 `toolName` + `decision`；**不存
@@ -648,19 +655,32 @@ throw；这样 CLI 引入新事件类型时不会阻断整个 pipeline。
 
 ### 4.6 `ClaudeCodePlanApprovalAdapter`
 
-- 触发路径：assistant 输出 `tool_use.name = "ExitPlanMode"`（`input.plan`
-  是 Markdown 文本）。
-- Mapper 不把它当普通工具，而是转成 `AgentPlanApprovalRequest`（domain
-  已有类型）——**必须**与权限模型完全隔离（`CLAUDE.md#Provider 运行时`
-  硬性规则）。
-- 用户批准 → adapter 通过 `control_response`（behavior=allow）放行，同时
-  在 Zeta application 层 **新建显式 Default 回合**（对齐 CLAUDE.md）：
+- 触发路径：assistant 输出 `tool_use.name = "ExitPlanMode"`。`input.plan`
+  可能是 Markdown，也可能缺省；缺省时只在当前 turn 内回退到最近一段 assistant
+  文本，再没有则使用空正文。
+- 后续 `control_request.request.subtype = "can_use_tool"` 时，必须用其中的
+  `tool_use_id` 与该 `ExitPlanMode` 的 tool id 配对；回写仍使用独立的
+  `control_request.request_id`。
+- Mapper 先登记 tool_use 并抑制其普通工具卡；只有 control request 精确配对后，
+  adapter 才生成 `AgentPlanApprovalRequest`（domain 已有类型）。对应的
+  `tool_result` 也必须抑制，避免时间线出现无头完成卡。Plan pending registry
+  **必须**与权限模型完全隔离（`CLAUDE.md#Provider 运行时` 硬性规则）。
+- 用户批准 → adapter 通过嵌套 `control_response`（behavior=allow，原样回填
+  `updatedInput`）放行；当前 Plan turn 成功终态后，Zeta application 层再展示一次
+  本地执行确认；用户第二次确认时才 **新建显式 Default
+  回合**（对齐 CLAUDE.md）：
     1. 保持当前 session；
-    2. 新回合的 permission snapshot 强制为 `:accept-edits`（或用户可选
-       `:ask`），不预授权具体命令；
-    3. UI 明示这是「执行确认」，与协议层 approval 分离。
+    2. 默认恢复进入 Plan 前同 Binding/thread/runtime generation 仍有效且 catalog
+       中 allowed 的权限；失效时回落到 catalog 的 `:ask` 默认；
+    3. 用户可在卡内为该 turn 显式改选；该覆盖不调用 permission apply、不持久化，
+       也不预授权具体命令、文件或网络；
+    4. Provider planApproval、权限审批和本地执行交接使用互相不可见的 pending 状态。
 - 拒绝 → `control_response(deny, message)`；Claude 会在下一 assistant turn
   收到 reason。
+- 取消 → `control_response(deny, message)` 后 interrupt 当前 turn；不会把取消
+  伪装成普通权限拒绝。
+- plan / planFilePath / control raw payload 仅保留在当前 peer 的内存状态中，
+  不写入日志或持久化 metadata。
 
 ### 4.7 `ClaudeCodeModelCatalog`
 
@@ -934,10 +954,14 @@ UI 展示 plan Markdown → 用户 approve
       │
       ├── adapter.respondToPlanApproval(approved=true)
       │       → sendControl(control_response{allow})   # 让 CLI 退出 plan mode
-      │       → 【关键】新建 Default 回合（Zeta application 工作流）
-      │            • 权限 = :accept-edits（用户可选覆盖为 :ask）
-      │            • 不预授权具体命令/文件/网络
-      │       → CLI 下个 turn 开始执行
+      │       → 当前 Plan turn 成功终态
+      │       → Zeta 展示本地执行交接（第二次确认）
+      │            • 默认权限 = 仍有效的 Plan 前选择
+      │            • 失效则回落 catalog 默认 :ask
+      │            • 用户可只为本 turn 改选
+      │            • 不 apply / 不持久化 / 不预授权具体操作
+      │       → 新建 Default turn
+      │       → 同 session 按权限快照 --resume 后开始执行
       │
       └── 拒绝 → sendControl(deny, message=用户理由)
 ```

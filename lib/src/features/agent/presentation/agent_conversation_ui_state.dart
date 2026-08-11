@@ -831,6 +831,7 @@ AgentPlanApprovalRequest _snapshotPlanApprovalRequest(
     isProject: request.isProject,
     sessionId: request.sessionId,
     turnId: request.turnId,
+    continuation: request.continuation,
     raw: Map<String, Object?>.unmodifiable(request.raw),
   );
 }
@@ -939,6 +940,7 @@ Object _pendingInteractionSignature({
             request.isProject,
             request.sessionId,
             request.turnId,
+            request.continuation,
           ];
         })
         .toList(growable: false),
@@ -949,6 +951,9 @@ Object _pendingInteractionSignature({
         request.turnId,
         request.title,
         request.markdown,
+        request.executionPermission?.selection?.optionId,
+        request.executionPermission?.label,
+        request.executionPermission?.origin,
       ],
     isReadOnly,
     reviews

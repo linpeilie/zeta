@@ -524,6 +524,9 @@ class _AgentPlanDocumentCard extends StatelessWidget {
     required this.onAbandon,
     this.todos = const <AgentPlanEntry>[],
     this.phases = const <AgentPlanApprovalPhase>[],
+    this.executionPermission,
+    this.executionPermissionOptions = const <AgentPermissionOption>[],
+    this.onSelectExecutionPermission,
     super.key,
   });
 
@@ -537,10 +540,13 @@ class _AgentPlanDocumentCard extends StatelessWidget {
   final TextEditingController revisionController;
   final FocusNode revisionFocusNode;
   final AgentConversationViewModel viewModel;
+  final AgentPlanExecutionPermissionChoice? executionPermission;
+  final List<AgentPermissionOption> executionPermissionOptions;
+  final ValueChanged<AgentPermissionOption>? onSelectExecutionPermission;
 
   /// 提交修改意见；仅在输入非空时被调用。
   final ValueChanged<String> onRevise;
-  final VoidCallback onExecute;
+  final VoidCallback? onExecute;
   final VoidCallback onAbandon;
   final List<AgentPlanEntry> todos;
   final List<AgentPlanApprovalPhase> phases;
@@ -720,6 +726,10 @@ class _AgentPlanDocumentCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: IdeSpacing.space8),
+              if (onSelectExecutionPermission != null) ...[
+                _buildExecutionPermissionRow(textStyles),
+                const SizedBox(height: IdeSpacing.space8),
+              ],
               Row(
                 children: [
                   IdeButton(
@@ -766,6 +776,36 @@ class _AgentPlanDocumentCard extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+
+  Widget _buildExecutionPermissionRow(IdeTextStyles textStyles) {
+    final permission = executionPermission;
+    final scopeHint = switch (permission?.origin) {
+      AgentPlanExecutionPermissionOrigin.beforePlan => 'Plan 前',
+      AgentPlanExecutionPermissionOrigin.catalogDefault => '保守默认',
+      AgentPlanExecutionPermissionOrigin.userOverride => '仅本次',
+      AgentPlanExecutionPermissionOrigin.providerFallback => 'Provider 默认',
+      null => '需要选择',
+    };
+    return Row(
+      children: [
+        Text('执行权限', style: textStyles.bodySmall),
+        const SizedBox(width: IdeSpacing.space8),
+        Flexible(
+          child: _PermissionOptionButton(
+            label: permission?.label ?? '请选择执行权限',
+            options: executionPermissionOptions,
+            selectedOptionId: permission?.selection?.optionId,
+            scopeHint: scopeHint,
+            enabled: executionPermissionOptions.any((option) => option.allowed),
+            onSelect: onSelectExecutionPermission!,
+            surfaceKey: ValueKey<String>(
+              'agent-plan-execution-permission-$requestId',
+            ),
+          ),
+        ),
+      ],
     );
   }
 

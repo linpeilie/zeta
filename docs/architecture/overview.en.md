@@ -154,7 +154,7 @@ This is the most common newcomer trap. They all look like "show a card and wait 
 
 There's a fourth thing, and it belongs to **none** of the above:
 
-- **Plan execution handoff** — a local Zeta workflow. After a Plan turn succeeds, Zeta asks whether to execute. Choosing to run **starts an explicit new Default turn** and **pre-authorizes nothing** the plan mentioned.
+- **Plan execution handoff** — a local Zeta workflow. After a Plan turn succeeds, Zeta asks whether to execute. Choosing to run **starts an explicit new Default turn** and **pre-authorizes nothing** the plan mentioned. The card restores the still-valid permission selected before Plan; if its scope or option is stale, it falls back to the provider catalog's conservative default and allows a one-turn override.
 
 That last one is frequently misimplemented as "steer the current turn" or "call the planApproval port". Both are wrong.
 

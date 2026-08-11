@@ -530,10 +530,25 @@ class AgentConversationViewModel {
         !canSubmitMessage) {
       return;
     }
-    if (!_planExecutionHandoffController.resolve(request)) {
+    final currentRequest = planExecutionRequest;
+    if (currentRequest == null || currentRequest.id != request.id) {
       return;
     }
-    _resolvePlanExecutionAttention(request);
+    final validatedRequest = _reconcilePlanExecutionPermission(currentRequest);
+    final executionPermission = validatedRequest?.executionPermission;
+    if (validatedRequest == null || executionPermission == null) {
+      _publishUiChanges(
+        AgentUiUpdateRequest(
+          regions: const <AgentUiRegion>{AgentUiRegion.pendingInteraction},
+          urgency: AgentUiUpdateUrgency.immediate,
+        ),
+      );
+      return;
+    }
+    if (!_planExecutionHandoffController.resolve(validatedRequest)) {
+      return;
+    }
+    _resolvePlanExecutionAttention(validatedRequest);
     _conversationModeController.selectMode(AgentConversationModeId.defaultMode);
     _publishUiChanges(
       AgentUiUpdateRequest(
@@ -544,7 +559,43 @@ class AgentConversationViewModel {
         urgency: AgentUiUpdateUrgency.immediate,
       ),
     );
-    await sendMessage(planExecutionPrompt);
+    await sendMessage(
+      planExecutionPrompt,
+      permissionSnapshotOverride: executionPermission.toRequestSnapshot(),
+    );
+  }
+
+  /// 仅修改本地执行卡的一次性权限，不 apply Provider，也不持久化默认偏好。
+  void selectPlanExecutionPermissionOption(
+    AgentPlanExecutionRequest request,
+    AgentPermissionOption option,
+  ) {
+    if (!_canResolvePlanExecution(request)) {
+      return;
+    }
+    AgentPermissionOption? availableOption;
+    for (final candidate in _permissionSelectionController.options) {
+      if (candidate.id == option.id && candidate.allowed) {
+        availableOption = candidate;
+        break;
+      }
+    }
+    if (availableOption == null ||
+        _planExecutionHandoffController.selectExecutionPermission(
+              request: request,
+              option: availableOption,
+              currentRuntimeIdentity:
+                  _permissionSelectionController.runtimeIdentity,
+            ) ==
+            null) {
+      return;
+    }
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{AgentUiRegion.pendingInteraction},
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
   }
 
   /// 继续修改计划，并确保下一回合仍使用 Plan 模式。
@@ -1684,6 +1735,7 @@ class AgentConversationViewModel {
     List<({String name, String path})> mentions =
         const <({String name, String path})>[],
     List<AgentSkillRef> skills = const <AgentSkillRef>[],
+    AgentPermissionRequestSnapshot? permissionSnapshotOverride,
   }) async {
     final trimmed = text.trim();
     final imagePaths = List<String>.unmodifiable(
@@ -1790,8 +1842,10 @@ class AgentConversationViewModel {
         projectPath: _projectPath,
         filePath: _contextFilePath,
       );
-      final permissionSnapshot = _permissionSelectionController
+      final resolvedPermissionSnapshot = _permissionSelectionController
           .snapshotForRequest(threadId: selectedThreadId);
+      final permissionSnapshot =
+          permissionSnapshotOverride ?? resolvedPermissionSnapshot;
       providerOperation = 'session/ensure';
       final session = await _ensureSession(
         bundle,
@@ -2269,6 +2323,23 @@ class AgentConversationViewModel {
     AgentPlanApprovalDecisionKind kind, {
     String? reason,
   }) async {
+    final requiresLocalExecutionHandoff =
+        request.continuation ==
+        AgentPlanApprovalContinuation.localExecutionHandoff;
+    final stagedLocalExecution =
+        requiresLocalExecutionHandoff &&
+        kind == AgentPlanApprovalDecisionKind.accepted &&
+        _planExecutionHandoffController.stageProviderApprovedPlan(
+          request: request,
+          executionPermission: _permissionSelectionController
+              .selectionBeforeCurrentUserSelection(threadId: request.sessionId),
+          permissionRuntimeIdentity:
+              _permissionSelectionController.runtimeIdentity,
+        );
+    if (requiresLocalExecutionHandoff &&
+        kind != AgentPlanApprovalDecisionKind.accepted) {
+      _planExecutionHandoffController.discardStagedProviderPlan(request.id);
+    }
     _timeline.removePlanApprovalRequest(request.id);
     _resolvePendingAttention(
       kind: AgentAttentionKind.planApprovalRequired,
@@ -2286,24 +2357,35 @@ class AgentConversationViewModel {
         urgency: AgentUiUpdateUrgency.immediate,
       ),
     );
-    await _runCurrentBundle<void>((bundle) async {
-      final planApproval = bundle.planApproval;
-      if (planApproval == null) {
-        return;
+    var responded = false;
+    try {
+      await _runCurrentBundle<void>((bundle) async {
+        final planApproval = bundle.planApproval;
+        if (planApproval == null) {
+          return;
+        }
+        await planApproval.respondToPlanApproval(
+          AgentPlanApprovalDecision(
+            requestId: request.id,
+            kind: kind,
+            reason: reason,
+          ),
+        );
+        responded = true;
+      });
+    } catch (_) {
+      if (stagedLocalExecution) {
+        _planExecutionHandoffController.discardStagedProviderPlan(request.id);
       }
-      await planApproval.respondToPlanApproval(
-        AgentPlanApprovalDecision(
-          requestId: request.id,
-          kind: kind,
-          reason: reason,
-        ),
-      );
-    });
-    // provider 驱动的计划审批一旦作出决定，计划即被消费：接受 → grok 自行
-    // 进入实施回合；放弃 → grok 退出 plan 模式。必须强制清空 pending turn
-    // 模式：Grok 的 markTurnAccepted 在阻塞 session/prompt 返回后才执行，
-    // 若不 clear，迟到确认会把 confirmed 写回 plan 并重复触发本地执行交接。
-    // 拒绝则留在 plan 模式继续修订。
+      rethrow;
+    }
+    if (stagedLocalExecution && !responded) {
+      _planExecutionHandoffController.discardStagedProviderPlan(request.id);
+    }
+    // Provider 驱动的计划审批一旦作出非拒绝决定，计划即被消费：
+    // providerManaged 由 Provider 自行继续；localExecutionHandoff 只等待当前
+    // turn 成功收尾，随后再显示 Zeta 本地执行确认。两者都必须清空 pending
+    // mode，避免迟到确认重复触发交接；拒绝则留在 Plan 继续修订。
     if (kind != AgentPlanApprovalDecisionKind.rejected) {
       _conversationModeController.applyServerMode(
         AgentConversationModeId.defaultMode,
@@ -2729,9 +2811,16 @@ class AgentConversationViewModel {
     if (_disposed) {
       return;
     }
+    final handoff = planExecutionRequest;
+    if (handoff != null) {
+      _reconcilePlanExecutionPermission(handoff);
+    }
     _publishUiChanges(
       AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{AgentUiRegion.composer},
+        regions: <AgentUiRegion>{
+          AgentUiRegion.composer,
+          if (handoff != null) AgentUiRegion.pendingInteraction,
+        },
         urgency: AgentUiUpdateUrgency.immediate,
       ),
     );
@@ -3105,6 +3194,18 @@ class AgentConversationViewModel {
         sessionId == request.sessionId;
   }
 
+  AgentPlanExecutionRequest? _reconcilePlanExecutionPermission(
+    AgentPlanExecutionRequest request,
+  ) {
+    return _planExecutionHandoffController.reconcileExecutionPermission(
+      request: request,
+      supportsPermissionSelection: _permissionSelectionController.hasPort,
+      options: _permissionSelectionController.options,
+      catalogDefault: _permissionSelectionController.catalogDefault,
+      currentRuntimeIdentity: _permissionSelectionController.runtimeIdentity,
+    );
+  }
+
   void _handleAttentionSignal(AgentAttentionSignal signal) {
     final resolvedThreadId = signal.threadId ?? sessionId;
     if (resolvedThreadId == null || resolvedThreadId.trim().isEmpty) {
@@ -3185,7 +3286,7 @@ class AgentConversationViewModel {
     final modeState = _conversationModeController.state;
     final completedMode =
         modeState.pendingTurnMode?.modeId ?? modeState.confirmedMode;
-    final request = _planExecutionHandoffController.offerCompletedPlan(
+    final offeredRequest = _planExecutionHandoffController.offerCompletedPlan(
       sessionId: event.sessionId,
       turnId: event.turnId,
       status: event.status,
@@ -3193,7 +3294,12 @@ class AgentConversationViewModel {
       planMarkdown: planMarkdown,
       planMessageId: planMessageId,
       planEntries: List<AgentPlanEntry>.of(liveTurn.planEntries),
+      executionPermission: _permissionSelectionController.effectiveSelection,
+      permissionRuntimeIdentity: _permissionSelectionController.runtimeIdentity,
     );
+    final request = offeredRequest == null
+        ? null
+        : _reconcilePlanExecutionPermission(offeredRequest);
     return previousId != request?.id;
   }
 

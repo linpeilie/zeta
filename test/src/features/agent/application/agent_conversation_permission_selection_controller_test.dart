@@ -60,6 +60,55 @@ void main() {
       expect(port.lastApplied?.optionId, 'always-approve');
     });
 
+    test(
+      'exposes the previous user selection only in the same thread and runtime',
+      () async {
+        final port = _FakePermissionPort(
+          options: const <AgentPermissionOption>[
+            AgentPermissionOption(id: 'ask', label: 'Ask'),
+            AgentPermissionOption(id: 'plan', label: 'Plan'),
+          ],
+        );
+        final controller = AgentConversationPermissionSelectionController(
+          persistOptionId: (_) async {},
+        );
+        controller.bind(
+          port: port,
+          persistedOptionId: 'ask',
+          runtimeIdentity: _runtimeIdentity,
+        );
+        controller.bindThread('thread-1');
+        await controller.refreshOptions();
+
+        await controller.selectOption(port.options.last);
+
+        expect(
+          controller
+              .selectionBeforeCurrentUserSelection(threadId: 'thread-1')
+              ?.optionId,
+          'ask',
+        );
+        expect(
+          controller.selectionBeforeCurrentUserSelection(threadId: 'thread-2'),
+          isNull,
+        );
+
+        controller.bind(
+          port: port,
+          persistedOptionId: 'plan',
+          runtimeIdentity: const AgentProviderRuntimeIdentity(
+            providerId: 'test-provider',
+            generation: 2,
+          ),
+        );
+
+        expect(
+          controller.selectionBeforeCurrentUserSelection(threadId: 'thread-1'),
+          isNull,
+        );
+      },
+    );
+
     test('refreshOptions ignores stale catalog after rebinding port', () async {
       final slow = _FakePermissionPort(
         options: const <AgentPermissionOption>[

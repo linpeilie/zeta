@@ -70,15 +70,24 @@ class _AgentMessageEntry extends StatelessWidget {
       key: ValueKey<String>('agent-plan-execution-card-${request.id}'),
       requestId: request.id,
       title: request.title,
-      subtitle: '执行将开启新的 Default 回合；命令、文件与网络权限仍会单独确认。',
+      subtitle: request.executionPermission == null
+          ? '当前没有可用的执行权限，请先选择；执行不会预授权命令、文件或网络。'
+          : '默认使用“${request.executionPermission!.label}”；执行将开启新的 Default '
+                '回合，命令、文件与网络权限仍按该模式处理。',
       markdown: request.markdown,
       revisionController: planRevisionDrafts.controllerFor(request.id),
       revisionFocusNode: planRevisionDrafts.focusNodeFor(request.id),
       viewModel: viewModel,
+      executionPermission: request.executionPermission,
+      executionPermissionOptions: viewModel.composerState.permissionOptions,
+      onSelectExecutionPermission: (option) =>
+          viewModel.selectPlanExecutionPermissionOption(request, option),
       onRevise: (revision) => unawaited(
         viewModel.revisePlanExecution(request, revisionMessage: revision),
       ),
-      onExecute: () => unawaited(viewModel.startPlanExecution(request)),
+      onExecute: request.executionPermission == null
+          ? null
+          : () => unawaited(viewModel.startPlanExecution(request)),
       onAbandon: () => viewModel.dismissPlanExecution(request),
     );
   }

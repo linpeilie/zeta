@@ -11,6 +11,17 @@ class AgentPlanApprovalPhase {
   final List<AgentPlanEntry> todos;
 }
 
+/// Provider 接受计划后由谁承接后续执行。
+///
+/// application 只读取这个中立语义，不按 Provider id、kind 或实现类型分支。
+enum AgentPlanApprovalContinuation {
+  /// Provider 会在审批响应后自行继续，不创建 Zeta 本地执行交接。
+  providerManaged,
+
+  /// Provider 只负责结束 Plan 回合；成功终态后由 Zeta 再向用户确认执行。
+  localExecutionHandoff,
+}
+
 /// Provider 发起的独立计划审批请求。
 ///
 /// 该模型刻意与命令权限审批分离，避免把“接受计划”误解为“允许执行命令”。
@@ -25,6 +36,7 @@ class AgentPlanApprovalRequest {
     this.isProject = false,
     this.sessionId,
     this.turnId,
+    this.continuation = AgentPlanApprovalContinuation.providerManaged,
     this.raw = const <String, Object?>{},
   });
 
@@ -37,6 +49,10 @@ class AgentPlanApprovalRequest {
   final bool isProject;
   final String? sessionId;
   final String? turnId;
+
+  /// 接受审批后的中立续接语义。
+  final AgentPlanApprovalContinuation continuation;
+
   final Map<String, Object?> raw;
 }
 

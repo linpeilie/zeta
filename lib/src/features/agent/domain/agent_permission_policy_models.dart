@@ -140,6 +140,9 @@ enum AgentPermissionRequestSource {
   /// Provider 权限目录声明的默认项。
   catalogDefault,
 
+  /// Zeta 本地工作流为单次请求显式冻结的覆盖，不改变 thread/default 状态。
+  localWorkflowOverride,
+
   /// application 没有可解析的选择，允许 adapter 沿用兼容 fallback。
   providerFallback,
 }

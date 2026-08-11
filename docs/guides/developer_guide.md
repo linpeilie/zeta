@@ -343,9 +343,13 @@ create/resume/fork/send --> Binding.permissions.snapshotForRequest()
   「执行计划」：执行始终新建 Default 回合；「继续规划 / 发送修改」保持 Plan，可选
   发送修订文本。对话流中的 `AgentMessageKind.plan` 折叠消息卡保持独立，不承载执行动作。
 - Run plan 必须先选择 Default，再创建一个新的 turn；不得把它实现成当前 turn steer，
-  也不得调用 `AgentPlanApprovalPort`。继续规划显式保留 Plan，关闭不改变权限状态。
+  也不得调用 `AgentPlanApprovalPort`。执行权限默认恢复进入 Plan 前同 Binding/thread/runtime
+  generation 仍有效且 catalog 中 allowed 的选择；失效时回落到 catalog default，无可用项时
+  禁止执行并要求显式选择。卡内改选只写本地一次性快照，不调用 permission apply、不持久化。
+  继续规划显式保留 Plan，关闭不改变权限状态。
 - 新增或修改该流程时至少覆盖：成功 Plan 展示、失败/中断不展示、结构化步骤回退、
-  Default 执行快照、继续规划模式、陈旧请求与 thread/provider/workspace 切换清理。
+  Default 执行快照、Plan 前权限恢复、catalog fallback、一次性覆盖零 apply、继续规划模式、
+  陈旧请求与 thread/provider/workspace 切换清理。
 - 模式来自 `bundle.conversationModes` 的运行时目录。端口为空、method-not-found、目录损坏
   或缺少 Default/Plan 时隐藏选择器，继续使用原有普通对话，不用 Prompt 伪造 Plan。
 - 模式选择是“下一回合”配置。活动 turn 使用 `turn/steer` 时不修改 mode；切回 Default

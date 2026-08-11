@@ -5,6 +5,21 @@ import 'package:zeta/src/features/agent/application/agent_permission_catalog_con
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
+@immutable
+final class _AgentPermissionSelectionTransition {
+  const _AgentPermissionSelectionTransition({
+    required this.previous,
+    required this.current,
+    required this.runtimeIdentity,
+    required this.threadId,
+  });
+
+  final AgentPermissionSelection previous;
+  final AgentPermissionSelection current;
+  final AgentProviderRuntimeIdentity? runtimeIdentity;
+  final String? threadId;
+}
+
 /// 单个 Conversation Binding 的权限协调器。
 ///
 /// catalog、Provider apply 和偏好持久化在此编排；所有权限事实收敛到一个
@@ -25,6 +40,7 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
   AgentConversationPermissionState _state =
       const AgentConversationPermissionState();
   AgentPermissionPolicyPort? _runtimePort;
+  _AgentPermissionSelectionTransition? _lastUserSelectionTransition;
   bool _disposed = false;
   String? _lastError;
 
@@ -50,6 +66,27 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
 
   AgentPermissionSelection? get catalogDefault =>
       _catalogController.catalogDefault;
+
+  /// 返回当前用户选择生效前的权限，仅供同一 Binding/thread/runtime 使用。
+  ///
+  /// 该方法不解析不透明 optionId；当前选择、thread 或 runtime generation 任一
+  /// 发生变化都会 fail-closed 返回 null。
+  AgentPermissionSelection? selectionBeforeCurrentUserSelection({
+    String? threadId,
+  }) {
+    final transition = _lastUserSelectionTransition;
+    if (transition == null ||
+        transition.current != effectiveSelection ||
+        transition.runtimeIdentity != _state.runtimeIdentity ||
+        transition.threadId != _state.threadId) {
+      return null;
+    }
+    final requestedThreadId = _normalizeThreadId(threadId ?? _state.threadId);
+    if (requestedThreadId != _state.threadId) {
+      return null;
+    }
+    return transition.previous;
+  }
 
   AgentPermissionStateSource? get stateSource => _state.effectiveValue?.source;
 
@@ -150,6 +187,7 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
       return;
     }
     _runtimePort = null;
+    _lastUserSelectionTransition = null;
     _catalogController.bind(port);
     _lastError = null;
     _setState(
@@ -191,8 +229,17 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
     if (_disposed || !option.allowed) {
       return;
     }
+    final previous = effectiveSelection;
+    final expectedIdentity = _state.runtimeIdentity;
+    final expectedThreadId = _state.threadId;
     if (!isRuntimeAttached) {
       await _selectDormantOption(option);
+      _recordUserSelectionTransition(
+        previous: previous,
+        current: effectiveSelection,
+        expectedIdentity: expectedIdentity,
+        expectedThreadId: expectedThreadId,
+      );
       return;
     }
     final port = _runtimePort;
@@ -201,12 +248,18 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
       _notify();
       return;
     }
-    await _applyThroughPort(
+    final appliedSelection = await _applyThroughPort(
       port: port,
       selection: AgentPermissionSelection(optionId: option.id),
       source: AgentPermissionStateSource.userSelection,
       updateDefault: true,
       persistDefault: true,
+    );
+    _recordUserSelectionTransition(
+      previous: previous,
+      current: appliedSelection,
+      expectedIdentity: expectedIdentity,
+      expectedThreadId: expectedThreadId,
     );
   }
 
@@ -345,7 +398,7 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
 
   String? takeApplyHint() => applyScopeHint;
 
-  Future<void> _applyThroughPort({
+  Future<AgentPermissionSelection?> _applyThroughPort({
     required AgentPermissionPolicyPort port,
     required AgentPermissionSelection selection,
     required AgentPermissionStateSource source,
@@ -356,30 +409,56 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
     if (identity == null || !_state.isCurrent(identity)) {
       _lastError = 'Provider 运行实例已失效，请重试';
       _notify();
-      return;
+      return null;
     }
     _lastError = null;
     try {
       final result = await port.applyPermissionSelection(selection);
       if (!_isRuntimeCurrent(identity, port)) {
-        return;
+        return null;
       }
       _commitApplyResult(result, source: source, updateDefault: updateDefault);
       if (!persistDefault ||
           result.scope == AgentPermissionApplyScope.currentTurn) {
-        return;
+        return result.normalizedSelection;
       }
       await _persistSelection(
         result.normalizedSelection,
         expectedIdentity: identity,
         successFailureMessage: '权限偏好已应用，但保存失败；可重试',
       );
+      return result.normalizedSelection;
     } catch (_) {
       if (_isRuntimeCurrent(identity, port)) {
         _lastError = '权限模式切换失败';
         _notify();
       }
+      return null;
     }
+  }
+
+  void _recordUserSelectionTransition({
+    required AgentPermissionSelection? previous,
+    required AgentPermissionSelection? current,
+    required AgentProviderRuntimeIdentity? expectedIdentity,
+    required String? expectedThreadId,
+  }) {
+    if (_disposed ||
+        previous == null ||
+        current == null ||
+        previous == current ||
+        _state.runtimeIdentity != expectedIdentity ||
+        _state.threadId != expectedThreadId ||
+        effectiveSelection != current) {
+      _lastUserSelectionTransition = null;
+      return;
+    }
+    _lastUserSelectionTransition = _AgentPermissionSelectionTransition(
+      previous: previous,
+      current: current,
+      runtimeIdentity: expectedIdentity,
+      threadId: expectedThreadId,
+    );
   }
 
   Future<void> _persistSelection(

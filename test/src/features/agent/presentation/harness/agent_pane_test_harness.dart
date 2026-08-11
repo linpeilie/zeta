@@ -636,6 +636,7 @@ class AgentPaneModeFakeProvider extends AgentPaneFakeProvider
     implements AgentConversationModeCatalogProvider {
   AgentPaneModeFakeProvider({
     super.models = const AgentModelList(models: <AgentModelInfo>[]),
+    super.permissionOptions,
   });
 
   @override

@@ -52,6 +52,7 @@ final class ClaudeCodeControlDecisionResult {
 final class ClaudeCodePendingToolPermission {
   const ClaudeCodePendingToolPermission({
     required this.requestId,
+    required this.toolUseId,
     required this.toolName,
     required this.toolInput,
     this.sessionId,
@@ -59,6 +60,7 @@ final class ClaudeCodePendingToolPermission {
   });
 
   final String requestId;
+  final String toolUseId;
   final String toolName;
 
   /// 原始 tool input，allow 时原样回填 `updatedInput`（CLI 契约）。
@@ -72,7 +74,7 @@ final class ClaudeCodePendingToolPermission {
 /// - `can_use_tool` → 登记 pending + [AgentPermissionRequestedEvent]
 ///   （sessionId/turnId 由调用方从 identity / running turn 注入，帧自身无作用域）。
 /// - 用户决策 → [resolveDecision] 产出 `control_response`。
-/// - 未知 request type / 缺 request_id → 仍 fail-closed 立即 deny，避免 hang。
+/// - 未知 request subtype / 缺关键字段 → 仍 fail-closed 立即回 error，避免 hang。
 ///
 /// 无 I/O 副作用；`StreamJsonPeer.send` 由 Provider 负责。
 final class ClaudeCodeControlRequestHandler {
@@ -87,7 +89,7 @@ final class ClaudeCodeControlRequestHandler {
   int _resolvedCount = 0;
   int _unknownDecisionCount = 0;
 
-  /// 立即 deny 的 control_request 次数（malformed / 未知 type）。
+  /// 立即拒绝的 control_request 次数（malformed / 未知 subtype）。
   int get deniedCount => _deniedCount;
 
   /// 缺 request_id 等坏形状计数。
@@ -125,37 +127,50 @@ final class ClaudeCodeControlRequestHandler {
       _deniedCount += 1;
       _log.w('control_request missing request_id; synthesized deny frame');
       return ClaudeCodeControlRequestResult(
-        responseFrame: _denyFrame(
+        responseFrame: _errorFrame(
           requestId: 'missing-request-id',
-          message: 'Zeta denied control_request without request_id',
+          error: 'Zeta denied control_request without request_id',
         ),
       );
     }
 
     final request = _map(raw['request']);
-    final requestType = _string(request?['type']) ?? 'unknown';
+    final requestSubtype = _string(request?['subtype']) ?? 'unknown';
 
-    if (requestType != 'can_use_tool') {
+    if (requestSubtype != 'can_use_tool') {
       // 未知 control 类型：fail-closed，不 hang。
       _deniedCount += 1;
       _log.t(
         'Fail-closed deny control_request '
-        '(type=$requestType, deniedCount=$_deniedCount)',
+        '(subtype=$requestSubtype, deniedCount=$_deniedCount)',
       );
       return ClaudeCodeControlRequestResult(
-        responseFrame: _denyFrame(
+        responseFrame: _errorFrame(
           requestId: requestId,
-          message: 'Zeta denied unsupported control_request type',
+          error: 'Zeta denied unsupported control_request subtype',
         ),
       );
     }
 
-    final toolName = _string(request?['tool_name']) ?? 'tool';
-    final toolInput = _map(request?['input']) ?? const <String, Object?>{};
+    final toolUseId = _string(request?['tool_use_id']);
+    final toolName = _string(request?['tool_name']);
+    final toolInput = _map(request?['input']);
+    if (toolUseId == null || toolName == null || toolInput == null) {
+      _malformedCount += 1;
+      _deniedCount += 1;
+      _log.w('Malformed can_use_tool control_request; fail-closed');
+      return ClaudeCodeControlRequestResult(
+        responseFrame: _errorFrame(
+          requestId: requestId,
+          error: 'Zeta denied malformed can_use_tool request',
+        ),
+      );
+    }
 
-    // 同 request_id 重复到达：覆盖 pending，避免双卡；诊断只记 type。
+    // 同 request_id 重复到达：覆盖 pending，避免双卡；诊断只记 subtype。
     final pending = ClaudeCodePendingToolPermission(
       requestId: requestId,
+      toolUseId: toolUseId,
       toolName: toolName,
       toolInput: Map<String, Object?>.unmodifiable(toolInput),
       sessionId: sessionId,
@@ -257,29 +272,26 @@ final class ClaudeCodeControlRequestHandler {
     return ClaudeCodeToolPermissionOutcome.denyOnce;
   }
 
-  /// 四种 outcome → wire `control_response`（设计文档 §2.3 字段形状）。
+  /// 四种 outcome → SDK control protocol 的嵌套 `control_response`。
   static Map<String, Object?> buildControlResponse({
     required String requestId,
     required ClaudeCodeToolPermissionOutcome outcome,
     Map<String, Object?> toolInput = const <String, Object?>{},
     String? message,
   }) {
-    return switch (outcome) {
+    final response = switch (outcome) {
       ClaudeCodeToolPermissionOutcome.allowOnce ||
       ClaudeCodeToolPermissionOutcome.allowAlways => <String, Object?>{
-        'type': 'control_response',
-        'request_id': requestId,
-        'response': <String, Object?>{
-          'behavior': 'allow',
-          'updatedInput': Map<String, Object?>.of(toolInput),
-        },
+        'behavior': 'allow',
+        'updatedInput': Map<String, Object?>.of(toolInput),
       },
       ClaudeCodeToolPermissionOutcome.denyOnce ||
-      ClaudeCodeToolPermissionOutcome.denyAlways => _denyFrame(
-        requestId: requestId,
-        message: _denyMessage(message, outcome),
-      ),
+      ClaudeCodeToolPermissionOutcome.denyAlways => <String, Object?>{
+        'behavior': 'deny',
+        'message': _denyMessage(message, outcome),
+      },
     };
+    return _successFrame(requestId: requestId, response: response);
   }
 
   static String _denyMessage(
@@ -348,14 +360,31 @@ final class ClaudeCodeControlRequestHandler {
     return 'Use $toolName';
   }
 
-  static Map<String, Object?> _denyFrame({
+  static Map<String, Object?> _successFrame({
     required String requestId,
-    required String message,
+    required Map<String, Object?> response,
   }) {
     return <String, Object?>{
       'type': 'control_response',
-      'request_id': requestId,
-      'response': <String, Object?>{'behavior': 'deny', 'message': message},
+      'response': <String, Object?>{
+        'subtype': 'success',
+        'request_id': requestId,
+        'response': response,
+      },
+    };
+  }
+
+  static Map<String, Object?> _errorFrame({
+    required String requestId,
+    required String error,
+  }) {
+    return <String, Object?>{
+      'type': 'control_response',
+      'response': <String, Object?>{
+        'subtype': 'error',
+        'request_id': requestId,
+        'error': error,
+      },
     };
   }
 

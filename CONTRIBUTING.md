@@ -158,7 +158,7 @@ chore: bump flutter action pin
 
 - 权限审批、用户提问、Plan 审批是**三种独立的领域语义**，不共享 request/decision 模型。
 - Plan 终态后的「执行确认」是 Zeta 本地工作流，不是 Provider 计划审批：必须新建显式 Default 回合，不得预授权命令、文件或网络操作。
-- 默认审批策略保持保守。**任何自动授权的改动都不会被接受。**
+- 执行权限只恢复同 Binding/thread/runtime 中仍有效的 Plan 前用户选择；否则使用 Provider catalog 的保守默认。卡内覆盖仅限该 turn，不能 apply 或持久化。**任何自动升级授权的改动都不会被接受。**
 
 **主题与 UI**
 

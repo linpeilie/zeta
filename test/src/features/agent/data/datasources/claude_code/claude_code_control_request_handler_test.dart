@@ -12,6 +12,7 @@ void main() {
 
     Map<String, Object?> canUseToolFrame({
       required String requestId,
+      String? toolUseId,
       String toolName = 'Bash',
       Map<String, Object?>? input,
     }) {
@@ -19,7 +20,8 @@ void main() {
         'type': 'control_request',
         'request_id': requestId,
         'request': <String, Object?>{
-          'type': 'can_use_tool',
+          'subtype': 'can_use_tool',
+          'tool_use_id': toolUseId ?? 'toolu_$requestId',
           'tool_name': toolName,
           'input': input ?? <String, Object?>{'command': 'echo hi'},
         },
@@ -49,6 +51,7 @@ void main() {
         // G8: raw 不含 input 正文。
         expect(event.request.raw.containsKey('input'), isFalse);
         expect(handler.pendingCount, 1);
+        expect(handler.pending['req_42']!.toolUseId, 'toolu_req_42');
         expect(handler.permissionRequestedCount, 1);
         expect(handler.deniedCount, 0);
       },
@@ -67,8 +70,14 @@ void main() {
     group('four decision wire shapes', () {
       const toolInput = <String, Object?>{'command': 'ls'};
 
-      Map<String, Object?> responseBody(Map<String, Object?> frame) {
+      Map<String, Object?> responseEnvelope(Map<String, Object?> frame) {
         return frame['response']! as Map<String, Object?>;
+      }
+
+      Map<String, Object?> responseBody(Map<String, Object?> frame) {
+        final envelope = responseEnvelope(frame);
+        expect(envelope['subtype'], 'success');
+        return envelope['response']! as Map<String, Object?>;
       }
 
       test('allow_once → behavior allow + updatedInput', () {
@@ -89,7 +98,7 @@ void main() {
         expect(resolved.toolName, 'Bash');
         final frame = resolved.responseFrame;
         expect(frame['type'], 'control_response');
-        expect(frame['request_id'], 'req_allow_once');
+        expect(responseEnvelope(frame)['request_id'], 'req_allow_once');
         final body = responseBody(frame);
         expect(body['behavior'], 'allow');
         expect(body['updatedInput'], toolInput);
@@ -130,7 +139,7 @@ void main() {
         expect(resolved!.outcome, ClaudeCodeToolPermissionOutcome.denyOnce);
         final frame = resolved.responseFrame;
         expect(frame['type'], 'control_response');
-        expect(frame['request_id'], 'req_deny_once');
+        expect(responseEnvelope(frame)['request_id'], 'req_deny_once');
         final body = responseBody(frame);
         expect(body['behavior'], 'deny');
         expect(body['message'], 'Not this time');
@@ -190,8 +199,10 @@ void main() {
           toolInput: input,
         );
         expect(frame['type'], 'control_response');
-        expect(frame['request_id'], 'req_${outcome.name}');
-        final body = frame['response']! as Map<String, Object?>;
+        final envelope = frame['response']! as Map<String, Object?>;
+        expect(envelope['subtype'], 'success');
+        expect(envelope['request_id'], 'req_${outcome.name}');
+        final body = envelope['response']! as Map<String, Object?>;
         switch (outcome) {
           case ClaudeCodeToolPermissionOutcome.allowOnce:
           case ClaudeCodeToolPermissionOutcome.allowAlways:
@@ -205,18 +216,20 @@ void main() {
       }
     });
 
-    test('unknown request type is still fail-closed denied', () {
+    test('unknown request subtype is still fail-closed rejected', () {
       final result = handler.handle(<String, Object?>{
         'type': 'control_request',
         'request_id': 'req_other',
-        'request': <String, Object?>{'type': 'unknown_control'},
+        'request': <String, Object?>{'subtype': 'unknown_control'},
       });
 
       expect(result.events, isEmpty);
       expect(result.responseFrame, isNotNull);
-      expect(result.responseFrame!['request_id'], 'req_other');
-      final body = result.responseFrame!['response']! as Map<String, Object?>;
-      expect(body['behavior'], 'deny');
+      final envelope =
+          result.responseFrame!['response']! as Map<String, Object?>;
+      expect(envelope['subtype'], 'error');
+      expect(envelope['request_id'], 'req_other');
+      expect(envelope['error'], isA<String>());
       expect(handler.deniedCount, 1);
       expect(handler.pendingCount, 0);
     });
@@ -225,16 +238,40 @@ void main() {
       final result = handler.handle(<String, Object?>{
         'type': 'control_request',
         'request': <String, Object?>{
-          'type': 'can_use_tool',
+          'subtype': 'can_use_tool',
+          'tool_use_id': 'toolu_missing_request_id',
           'tool_name': 'Bash',
+          'input': <String, Object?>{},
         },
       });
 
       expect(result.responseFrame!['type'], 'control_response');
-      final body = result.responseFrame!['response']! as Map<String, Object?>;
-      expect(body['behavior'], 'deny');
+      final envelope =
+          result.responseFrame!['response']! as Map<String, Object?>;
+      expect(envelope['subtype'], 'error');
+      expect(envelope['request_id'], 'missing-request-id');
       expect(handler.malformedCount, 1);
       expect(result.events, isEmpty);
+    });
+
+    test('missing tool_use_id is malformed and fail-closed', () {
+      final result = handler.handle(<String, Object?>{
+        'type': 'control_request',
+        'request_id': 'req_missing_tool',
+        'request': <String, Object?>{
+          'subtype': 'can_use_tool',
+          'tool_name': 'Bash',
+          'input': <String, Object?>{},
+        },
+      });
+
+      expect(result.events, isEmpty);
+      final envelope =
+          result.responseFrame!['response']! as Map<String, Object?>;
+      expect(envelope['subtype'], 'error');
+      expect(envelope['request_id'], 'req_missing_tool');
+      expect(handler.malformedCount, 1);
+      expect(handler.deniedCount, 1);
     });
 
     test('resolveDecision on unknown id returns null', () {
