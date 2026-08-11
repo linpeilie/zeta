@@ -315,11 +315,12 @@ phase；被正文、tool、plan 或交互打断后的 reasoning 必须使用新 
 
 身份决策与状态隔离遵循以下边界：
 
-- 当前活跃 Provider 只有 Codex 与 Grok。共享 ACP decoder 只能解析协议语法和 typed
-  字段，必须无状态；Grok data adapter/reducer 负责解释 source id、segment/phase、去重
-  和 lifecycle，Codex mapper 按 app-server item 生命周期确定 entryId。共享层不得提供带
-  eventId/turn scope 叙事假设的 identity mapper；Store/ViewModel/UI 不得读取 raw payload
-  推断 identity 或 plan。
+- 当前活跃 Provider 是 Codex、Grok 与 Claude Code。共享 ACP decoder 只能解析协议语法和
+  typed 字段，必须无状态；Grok data adapter/reducer 负责解释 ACP source id、segment/phase、
+  去重和 lifecycle，Codex mapper 按 app-server item 生命周期确定 entryId，Claude Code
+  data identity/mapper 按 stream-json message/tool 与 Zeta 自行 mint 的 turnId 确定边界。
+  共享层不得提供带 eventId/turn scope 叙事假设的 identity mapper；Store/ViewModel/UI
+  不得读取 raw payload 推断 identity 或 plan。
 - live、replay、history 可以复用同一 reducer 算法和 entry-id builder，但必须使用不同
   实例，不得共享 current segment、seen event/tool、terminal 或 generation 状态。
 - live 状态至少按 `(runtimeId, connectionEpoch, providerId, sessionId, turnId)` 隔离；

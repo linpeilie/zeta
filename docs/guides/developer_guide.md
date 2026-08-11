@@ -1,6 +1,6 @@
 # 开发者文档
 
-最后更新：2026-08-09
+最后更新：2026-08-11
 
 ## 1. 项目简介
 
@@ -17,8 +17,11 @@ Zeta 是一个 Flutter Desktop 项目，当前支持 macOS、Linux 和 Windows �
 - 如需使用 Grok ACP，建议安装 Grok CLI（grok-build）`0.2.119` 或更高版本。
   `0.2.119` 是 Zeta 的 Grok 多会话兼容基线；此前版本不支持多会话，在同时打开或执行
   多个 Grok 会话时可能出现会话状态、流式通知或回合终态无法正确隔离的问题。
-- 当前活跃 Provider 为 Codex 与 Grok。Cursor 已退役，不参与 catalog、UI、运行时组合、
-  进程启动或会话恢复；旧配置仅用于 unavailable/fallback 兼容。
+- 如需使用 Claude Code，需本机可执行并已登录 `claude`；当前 stream-json 取样基线为
+  CLI `2.1.224`（不是最低版本承诺），详见
+  [Claude Code stream-json 协议基线](../protocols/claude_code_stream_json_protocol.md)。
+- 当前活跃 Provider 为 Codex、Grok 与 Claude Code。Cursor 已退役，不参与 catalog、UI、
+  运行时组合、进程启动或会话恢复；旧配置仅用于 unavailable/fallback 兼容。
 
 ## 3. 常用命令
 
@@ -112,12 +115,14 @@ windows/
 
 - `lib/src/app`：应用装配、窗口启动、菜单桥接、shell controller 和常量。
 - `lib/src/core`：日志、`~/.zeta` 路径布局、原子文本写入等跨功能基础设施。
-- `lib/src/features/agent`：Agent provider 抽象、Codex app-server、Grok ACP、
+- `lib/src/features/agent`：Agent provider 抽象、Codex app-server、Grok ACP、Claude Code
+  stream-json、
   共享事件映射、纯同步 conversation reducer、事件 processor、scope-aware effect runner、
   类型化 UI 更新端口、presentation frame scheduler、对话状态和 Agent pane。无 pump 的
   调度单测使用 `FakeAgentFrameScheduler` 手动推进 frame。
-- `lib/src/features/agent_management`：Codex/Grok CLI 检测、身份/版本/账号诊断、
-  无计费连接测试、配置安全编辑和 Agent 管理页面。
+- `lib/src/features/agent_management`：Codex/Grok/Claude Code CLI 检测、身份/版本/账号
+  诊断、显式连接测试、配置安全编辑和 Agent 管理页面。自动检测不调用模型；Claude Code
+  的连接测试会先提示可能产生少量用量。
 - `lib/src/features/desktop_notifications`：Agent attention 去重、可见性抑制、
   系统通知插件适配和三端任务栏/Dock/urgency MethodChannel。
 - `lib/src/features/ide_session`：IDE 会话模型、状态构建、恢复协调和持久化。
@@ -293,7 +298,7 @@ user selection --> policy port --> AgentPermissionApplyResult --> owning Binding
 
 create/resume/fork/send --> Binding.permissions.snapshotForRequest()
   --> immutable snapshot
-  --> bundle port --> Codex/Grok provider --> provider data codec --> wire request
+  --> bundle port --> Codex/Grok/Claude Code provider --> provider data codec --> wire request
 ```
 
 验收时必须覆盖：两个 thread/两个 Canvas 的真实 wire 参数、runtime scope 只影响所属 Binding、
@@ -303,7 +308,7 @@ create/resume/fork/send --> Binding.permissions.snapshotForRequest()
 ### Skill 输入与 Composer token
 
 - Domain 使用 `AgentUserInput.skill`、`AgentSkillMetadata` / `AgentSkillsCatalog`；
-  capability 位为 `supportsSkillInput`（Codex 开、Grok 关）。
+  capability 位为 `supportsSkillInput`（Codex 开，Grok 与 Claude Code 关）。
 - Codex 通过可选端口 `bundle.skills`（`AgentSkillsPort`）暴露 `skills/list` 与
   `skills/changed`；application 层由 `AgentSkillsCatalogController` 做
   stale-while-revalidate / single-flight。
@@ -411,7 +416,7 @@ stale-while-revalidate：先发布可用旧目录，再以 single-flight 刷新�
 配置更新通过 generation 使旧任务失效。Provider 主动推送的完整 `AgentModelListEvent`
 只在非目录刷新阶段记录到同一仓储，且内容未变化时跳过持久化。
 
-当前活跃 Provider 只有 Codex 与 Grok。Cursor 退役兼容必须遵守以下约束：旧 `cursor` id
+当前活跃 Provider 是 Codex、Grok 与 Claude Code。Cursor 退役兼容必须遵守以下约束：旧 `cursor` id
 与 `cursorAcp` kind 可宽容解码，但
 `CursorRetirementPolicy` 必须在 catalog、选择、恢复和 factory 边界 fail-closed；fallback
 只存在内存，不得保存覆盖旧设置。Cursor 不参与 live/replay/load、ACP 扩展、进程启动或
@@ -461,7 +466,7 @@ stale-while-revalidate：先发布可用旧目录，再以 single-flight 刷新�
 12. 是否产生 scope-aware `AgentConversationEffect`？
 13. 是否改变 `AgentConversationThreadSnapshot`？
 14. live/history/replay 是否需要独立 reducer/context 行为？
-15. Codex/Grok 或其他 Provider 是否都有相应契约测试？
+15. Codex/Grok/Claude Code 或其他 Provider 是否都有相应契约测试？
 16. 是否把 raw payload、source id 推断或 Provider 分支泄漏到 presentation/Store？
 
 以上问题未全部明确前，不得把事件接入主链路。
@@ -600,8 +605,11 @@ Zeta 自有数据统一写入用户主目录下的以下结构：
 `AgentModelInfo` 白名单字段和不含密钥的配置指纹。损坏、版本不兼容、配置指纹变化或
 超过最长离线期限时视为空缓存；不得持久化 provider raw payload、环境变量值或凭证。
 
-Agent CLI 的数据不属于这套目录：Codex/Grok/Cursor 配置与 session 历史继续保留在
-`~/.codex`、`~/.grok`、`~/.cursor` 或项目 `.cursor/*`，迁移器不会扫描、复制或改写。
+Agent CLI 的数据不属于这套目录：Codex/Grok/Claude Code/Cursor 配置与 session 历史
+继续保留在各 CLI 自有目录（包括 `~/.codex`、`~/.grok`、`~/.claude`、`~/.cursor`
+与项目 `.cursor/*`），迁移器不会复制或改写。运行时只允许 Provider 已登记的只读入口：
+Codex 使用统计、Grok/Claude Code 本地历史和 Claude Code 登录 metadata；派生索引与
+隐藏列表仍只写 `~/.zeta`。
 退役遗留的 `cursor_sessions.json` 不再参与恢复或运行时组合，仅作为受保护用户数据原样
 保留；Codex 使用统计仍只读原 rollout JSONL，并把可重建的派生索引写入
 `~/.zeta/state`。
@@ -686,8 +694,8 @@ codex app-server
 
 ### 旧 Cursor 配置显示 unavailable
 
-这是退役后的预期行为。应用只在内存中回退到已启用的 Codex/Grok，不会自动保存覆盖旧
-配置，也不会读取或修改 Cursor 会话数据。历史背景见
+这是退役后的预期行为。应用只在内存中回退到任一已启用且未退役的 Provider（Codex、
+Grok 或 Claude Code），不会自动保存覆盖旧配置，也不会读取或修改 Cursor 会话数据。历史背景见
 [Cursor Agent 退役历史说明](../history/cursor_agent_guide.md)。
 
 ### 会话恢复后项目消失

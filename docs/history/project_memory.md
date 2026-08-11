@@ -1,6 +1,6 @@
 # 项目记忆
 
-最后更新：2026-07-17
+最后更新：2026-08-11
 
 本文记录跨任务应长期保留的项目事实、决策和约束。后续开发中，如果事实变化，应同步更新本文。
 
@@ -10,7 +10,7 @@
 - 类型：Flutter Desktop 本地应用。
 - 当前产品定位：本地 AI IDE 壳层，核心是项目上下文、Agent thread 和可审计对话时间线。
 - 入口文件：`lib/main.dart`。
-- 当前活跃 Provider 为 Codex 与 Grok；Cursor 已退役，Codex 保持默认 active provider。
+- 当前活跃 Provider 为 Codex、Grok 与 Claude Code；Cursor 已退役，Codex 保持默认 active provider。
 
 ## 2. 当前技术栈
 

@@ -3,7 +3,8 @@
 最后更新：2026-07-17
 
 Cursor 已从 Zeta 的 provider catalog、设置、Agent 管理、运行时组合、进程启动、deep link、
-workspace 恢复和历史加载路径中退役。当前活跃 Provider 只有 Codex 与 Grok。
+workspace 恢复和历史加载路径中退役。退役完成时的活跃 Provider 是 Codex 与 Grok；
+这是历史快照，不代表今天的 Provider 清单。
 
 ## 当前兼容行为
 

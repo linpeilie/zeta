@@ -81,7 +81,9 @@ Grok CLI 请升级到 **0.2.119 或更高**。这是 Zeta 的多会话兼容基�
 
 ### 旧的 Cursor 配置显示 unavailable
 
-预期行为。Cursor 已退役，Zeta 会在内存中回退到已启用的 Codex / Grok，**不会**自动覆盖你的旧配置，也不会读取或修改任何 Cursor 会话数据。
+预期行为。Cursor 已退役，Zeta 会在内存中回退到任一已启用且未退役的 Provider
+（Codex、Grok 或 Claude Code），**不会**自动覆盖你的旧配置，也不会读取或修改任何
+Cursor 会话数据。
 
 ---
 

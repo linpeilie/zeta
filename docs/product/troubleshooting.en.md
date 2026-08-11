@@ -81,7 +81,9 @@ That thread is read-only. This usually happens after disabling Codex in settings
 
 ### An old Cursor config shows as unavailable
 
-Expected. Cursor is retired. Zeta falls back in memory to whichever of Codex / Grok is enabled. It does **not** overwrite your old config and does not read or modify any Cursor session data.
+Expected. Cursor is retired. Zeta falls back in memory to any enabled, non-retired provider
+(Codex, Grok, or Claude Code). It does **not** overwrite your old config and does not read or
+modify any Cursor session data.
 
 ---
 
