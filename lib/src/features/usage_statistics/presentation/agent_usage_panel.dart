@@ -460,7 +460,7 @@ class _QuotaWindow extends StatelessWidget {
             ),
             const SizedBox(width: IdeSpacing.space8),
             Text(
-              '已用 $used% · 剩余 $remaining%',
+              '$remaining%',
               style: textStyles.caption.copyWith(color: colors.textSecondary),
             ),
           ],
@@ -494,18 +494,14 @@ class _QuotaProgressBar extends StatelessWidget {
     final used = usedPercent.clamp(0, 100);
     final remaining = 100 - used;
     final fraction = remaining / 100;
-    return Semantics(
-      label: '套餐额度',
-      value: '剩余 ${remaining.round()}%',
-      child: sf.LinearProgressIndicator(
-        value: fraction,
-        minHeight: 4,
-        color: colors.textSecondary,
-        backgroundColor: colors.borderSubtle,
-        borderRadius: IdeRadius.allMicro,
-        showSparks: false,
-        disableAnimation: true,
-      ),
+    return sf.LinearProgressIndicator(
+      value: fraction,
+      minHeight: 4,
+      color: colors.textSecondary,
+      backgroundColor: colors.borderSubtle,
+      borderRadius: IdeRadius.allMicro,
+      showSparks: false,
+      disableAnimation: true,
     );
   }
 }
