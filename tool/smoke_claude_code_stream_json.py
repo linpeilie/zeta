@@ -28,6 +28,23 @@ from typing import Any
 
 _VERSION_PATTERN = re.compile(r"\b(\d+\.\d+\.\d+)\b")
 _INVALID_FRAME = object()
+_RESULT_SUBTYPES = {
+    "success",
+    "error_during_execution",
+    "error_max_turns",
+    "error_max_budget_usd",
+    "error_max_structured_output_retries",
+    "interrupted",
+}
+_STOP_REASONS = {
+    "end_turn",
+    "max_tokens",
+    "stop_sequence",
+    "tool_use",
+    "pause_turn",
+    "refusal",
+    "model_context_window_exceeded",
+}
 _SMOKE_PROMPT = (
     "Run a non-destructive protocol smoke. Do not inspect files, use tools, "
     "run commands, or modify anything. Return one short acknowledgement."
@@ -43,6 +60,9 @@ class SmokeState:
     session_mismatch: bool = False
     invalid_frame_count: int = 0
     denied_control_count: int = 0
+    result_subtype: str = "missing"
+    result_is_error: bool | None = None
+    stop_reason: str = "missing"
 
 
 def _command(executable: Path, arguments: list[str]) -> list[str]:
@@ -161,6 +181,12 @@ def _has_text_block(frame: dict[str, Any]) -> bool:
     )
 
 
+def _safe_enum(value: object, allowed: set[str]) -> str:
+    if not isinstance(value, str):
+        return "missing"
+    return value if value in allowed else "other"
+
+
 def _observe(
     state: SmokeState,
     frame: object,
@@ -190,6 +216,10 @@ def _observe(
         state.assistant_text_seen = True
     elif frame_type == "result":
         state.result_seen = True
+        state.result_subtype = _safe_enum(frame.get("subtype"), _RESULT_SUBTYPES)
+        is_error = frame.get("is_error")
+        state.result_is_error = is_error if isinstance(is_error, bool) else None
+        state.stop_reason = _safe_enum(frame.get("stop_reason"), _STOP_REASONS)
         state.result_succeeded = (
             session_id == expected_session_id
             and frame.get("subtype") == "success"
@@ -244,7 +274,7 @@ def _close_process(process: subprocess.Popen[str] | None) -> None:
 def _run_smoke(
     executable: Path,
     *,
-    model: str,
+    model: str | None,
     timeout: float,
 ) -> tuple[bool, str]:
     state = SmokeState()
@@ -264,14 +294,18 @@ def _run_smoke(
                 "--verbose",
                 "--session-id",
                 session_id,
-                "--model",
-                model,
+            ]
+            if model is not None:
+                arguments.extend(["--model", model])
+            arguments.extend(
+                [
                 "--permission-prompt-tool",
                 "stdio",
                 "--permission-mode",
                 "default",
                 "--no-session-persistence",
-            ]
+                ]
+            )
             try:
                 process = subprocess.Popen(
                     _command(executable, arguments),
@@ -340,7 +374,20 @@ def _run_smoke(
             if not state.result_seen:
                 return False, "timeout-or-early-exit"
             if not state.result_succeeded:
-                return False, "result-failed"
+                is_error = (
+                    "missing"
+                    if state.result_is_error is None
+                    else str(state.result_is_error).lower()
+                )
+                return (
+                    False,
+                    "result-failed"
+                    f";subtype={state.result_subtype}"
+                    f";is_error={is_error}"
+                    f";stop_reason={state.stop_reason}"
+                    f";assistant_text={str(state.assistant_text_seen).lower()}"
+                    f";denied_controls={state.denied_control_count}",
+                )
             if not state.assistant_text_seen:
                 return False, "missing-assistant-text"
             return True, "init+assistant+result"
@@ -360,7 +407,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--claude-bin", default="")
     parser.add_argument("--timeout", type=float, default=90.0)
-    parser.add_argument("--model", default="haiku")
+    parser.add_argument(
+        "--model",
+        default="",
+        help="Optional model id or alias; omit to use the CLI default.",
+    )
     parser.add_argument(
         "--expected-version",
         default="",
@@ -399,10 +450,7 @@ def main() -> int:
         _print_summary(os_name, architecture, version, "FAIL (invalid-timeout)")
         return 1
 
-    model = args.model.strip()
-    if not model:
-        _print_summary(os_name, architecture, version, "FAIL (invalid-model)")
-        return 1
+    model = args.model.strip() or None
 
     succeeded, detail = _run_smoke(executable, model=model, timeout=args.timeout)
     result = f"PASS ({detail})" if succeeded else f"FAIL ({detail})"
