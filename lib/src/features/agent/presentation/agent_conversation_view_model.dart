@@ -1212,6 +1212,9 @@ class AgentConversationViewModel {
 
   /// 用户选择权限选项；返回错误文案（供 UI toast），成功时返回 null。
   Future<String?> selectPermissionOption(AgentPermissionOption option) async {
+    if (isTurnRunning) {
+      return '当前回合执行中，请等待结束后再切换权限模式。';
+    }
     await _permissionSelectionController.selectOption(option);
     _publishUiChanges(
       AgentUiUpdateRequest(

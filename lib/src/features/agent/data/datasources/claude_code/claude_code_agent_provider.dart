@@ -4,10 +4,12 @@ import 'dart:math';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_control_request_handler.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_event_mapper.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_permission_policy_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_process_starter.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/stream_json_peer.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart'
     show ProcessStarter;
+import 'package:zeta/src/features/agent/data/mappers/claude_code_permission_mode_codec.dart';
 import 'package:zeta/src/features/agent/data/mappers/claude_code_stream_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
@@ -19,19 +21,29 @@ final _log = loggerFor('zeta.agent.claude_code.provider');
 /// 进程常驻 + 串行 turn；`--permission-mode default` 下高风险工具走
 /// [ClaudeCodeControlRequestHandler] 的 UI 审批（T20），未知 control 类型
 /// 仍 fail-closed deny。
-class ClaudeCodeAgentProvider implements AgentProvider {
+class ClaudeCodeAgentProvider
+    implements AgentProvider, AgentPermissionPolicyProvider {
   ClaudeCodeAgentProvider({
     required this.config,
     ProcessStarter? processStarter,
     this._whichLookup,
     ClaudeCodeEventMapper? mapper,
     ClaudeCodeControlRequestHandler? controlRequestHandler,
+    ClaudeCodeSessionDecisionStoreFactory? sessionDecisionStoreFactory,
     String Function()? idFactory,
   }) : _processStarterDelegate = processStarter,
        _mapper = mapper ?? ClaudeCodeEventMapper(providerId: config.id),
        _controlHandler =
            controlRequestHandler ?? ClaudeCodeControlRequestHandler(),
-       _idFactory = idFactory ?? _defaultIdFactory;
+       _idFactory = idFactory ?? _defaultIdFactory {
+    _permissionMode = ClaudeCodePermissionModeCodec.parseOptionId(
+      config.resolvedPermissionOptionId,
+    );
+    _permissionPolicy = ClaudeCodePermissionPolicyAdapter(
+      applyPermissionMode: _applyPermissionMode,
+      sessionDecisionStoreFactory: sessionDecisionStoreFactory,
+    );
+  }
 
   @override
   final AgentProviderConfig config;
@@ -41,6 +53,8 @@ class ClaudeCodeAgentProvider implements AgentProvider {
   final ClaudeCodeEventMapper _mapper;
   final ClaudeCodeControlRequestHandler _controlHandler;
   final String Function() _idFactory;
+  late final ClaudeCodePermissionPolicyAdapter _permissionPolicy;
+  late ClaudeCodePermissionMode _permissionMode;
 
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
@@ -50,6 +64,8 @@ class ClaudeCodeAgentProvider implements AgentProvider {
   StreamSubscription<StreamJsonProtocolException>? _protocolErrorSubscription;
   Future<void>? _initializationOperation;
   Future<void>? _disposeOperation;
+  Future<void>? _permissionModeSwitchOperation;
+  bool _turnAdmissionInProgress = false;
 
   AgentRuntimeScope? _runtimeScope;
   int _connectionEpoch = 0;
@@ -66,6 +82,9 @@ class ClaudeCodeAgentProvider implements AgentProvider {
 
   @override
   Stream<AgentEvent> get events => _events.stream;
+
+  @override
+  AgentPermissionPolicyPort get permissionPolicy => _permissionPolicy;
 
   /// 测试/诊断：立即 deny 的 control_request 计数（malformed / 未知 type）。
   int get controlDeniedCount => _controlHandler.deniedCount;
@@ -127,6 +146,13 @@ class ClaudeCodeAgentProvider implements AgentProvider {
     }
 
     final sessionId = _idFactory();
+    final requestedPermission = permissionSnapshot.selection?.optionId;
+    if (requestedPermission != null) {
+      _permissionMode = ClaudeCodePermissionModeCodec.parseOptionId(
+        requestedPermission,
+      );
+    }
+    await _permissionPolicy.bindSession(sessionId);
     await _ensurePeer(
       sessionId: sessionId,
       workingDirectory: cwd,
@@ -260,41 +286,57 @@ class ClaudeCodeAgentProvider implements AgentProvider {
     String? clientUserMessageId,
     AgentTurnConfiguration configuration = const AgentTurnConfiguration(),
   }) async {
-    await initialize();
-    final peer = _peer;
-    final runtimeScope = _runtimeScope;
-    if (peer == null || runtimeScope == null || _sessionId == null) {
-      throw StateError(
-        'Claude Code session is not started; call startSession first',
-      );
+    final switchOperation = _permissionModeSwitchOperation;
+    if (switchOperation != null) {
+      await switchOperation;
     }
-    if (session.id != _sessionId) {
-      throw StateError(
-        'Claude Code provider is bound to session $_sessionId, '
-        'not ${session.id}',
-      );
+    if (_turnAdmissionInProgress) {
+      throw StateError('Claude Code is already starting another turn');
     }
+    _turnAdmissionInProgress = true;
+    late final StreamJsonPeer peer;
+    late final String turnId;
+    late final String text;
+    try {
+      await initialize();
+      final activePeer = _peer;
+      final runtimeScope = _runtimeScope;
+      if (activePeer == null || runtimeScope == null || _sessionId == null) {
+        throw StateError(
+          'Claude Code session is not started; call startSession first',
+        );
+      }
+      if (session.id != _sessionId) {
+        throw StateError(
+          'Claude Code provider is bound to session $_sessionId, '
+          'not ${session.id}',
+        );
+      }
 
-    final existingTurnId = _runningTurnIdsBySessionId[session.id];
-    if (existingTurnId != null) {
-      throw StateError(
-        'Claude Code session ${session.id} already has an active turn '
-        '($existingTurnId)',
+      final existingTurnId = _runningTurnIdsBySessionId[session.id];
+      if (existingTurnId != null) {
+        throw StateError(
+          'Claude Code session ${session.id} already has an active turn '
+          '($existingTurnId)',
+        );
+      }
+
+      text = _resolvePromptText(message: message, inputs: inputs);
+      if (text.trim().isEmpty) {
+        throw ArgumentError('Claude Code prompt text must not be empty');
+      }
+
+      turnId = _idFactory();
+      _runningTurnIdsBySessionId[session.id] = turnId;
+      _mapper.beginTurn(
+        runtimeScope: runtimeScope,
+        sessionId: session.id,
+        turnId: turnId,
       );
+      peer = activePeer;
+    } finally {
+      _turnAdmissionInProgress = false;
     }
-
-    final text = _resolvePromptText(message: message, inputs: inputs);
-    if (text.trim().isEmpty) {
-      throw ArgumentError('Claude Code prompt text must not be empty');
-    }
-
-    final turnId = _idFactory();
-    _runningTurnIdsBySessionId[session.id] = turnId;
-    _mapper.beginTurn(
-      runtimeScope: runtimeScope,
-      sessionId: session.id,
-      turnId: turnId,
-    );
     final turn = AgentTurn(id: turnId, sessionId: session.id);
     _addEvent(AgentTurnStartedEvent(turn));
     _emitStatus(
@@ -416,6 +458,26 @@ class ClaudeCodeAgentProvider implements AgentProvider {
       );
       rethrow;
     }
+    final rememberedDecision = switch (resolved.outcome) {
+      ClaudeCodeToolPermissionOutcome.allowAlways =>
+        ClaudeCodeSessionToolDecision.allow,
+      ClaudeCodeToolPermissionOutcome.denyAlways =>
+        ClaudeCodeSessionToolDecision.deny,
+      _ => null,
+    };
+    if (rememberedDecision != null) {
+      try {
+        await _permissionPolicy.rememberToolDecision(
+          resolved.toolName,
+          rememberedDecision,
+        );
+      } catch (error) {
+        _log.w(
+          'Could not persist Claude Code session decision '
+          '(${error.runtimeType})',
+        );
+      }
+    }
     // cancel / denyAlways 时额外 interrupt，避免回合继续挂起等待工具结果。
     if (decision.cancelTurn ||
         resolved.outcome == ClaudeCodeToolPermissionOutcome.denyAlways) {
@@ -487,7 +549,9 @@ class ClaudeCodeAgentProvider implements AgentProvider {
       sessionId: resumeSessionId == null ? sessionId : null,
       resumeSessionId: resumeSessionId,
       model: config.selectedModel ?? config.defaultModel,
-      permissionMode: 'default',
+      permissionMode: ClaudeCodePermissionModeCodec.toCliPermissionMode(
+        _permissionMode,
+      ),
       whichLookup: _whichLookup,
     );
 
@@ -587,6 +651,9 @@ class ClaudeCodeAgentProvider implements AgentProvider {
         : _runningTurnIdsBySessionId[sessionId];
 
     if (event.type == 'control_request') {
+      if (_tryHandleRememberedToolDecision(event.raw)) {
+        return;
+      }
       final result = _controlHandler.handle(
         event.raw,
         sessionId: sessionId,
@@ -625,6 +692,113 @@ class ClaudeCodeAgentProvider implements AgentProvider {
     }
   }
 
+  bool _tryHandleRememberedToolDecision(Map<String, Object?> raw) {
+    final requestId = raw['request_id'];
+    final request = _stringKeyedMap(raw['request']);
+    if (requestId is! String ||
+        requestId.trim().isEmpty ||
+        request?['type'] != 'can_use_tool') {
+      return false;
+    }
+    final toolName = request?['tool_name'];
+    if (toolName is! String) {
+      return false;
+    }
+    final decision = _permissionPolicy.decisionForTool(toolName);
+    if (decision == null) {
+      return false;
+    }
+    final input = _stringKeyedMap(request?['input']);
+    final outcome = switch (decision) {
+      ClaudeCodeSessionToolDecision.allow =>
+        ClaudeCodeToolPermissionOutcome.allowAlways,
+      ClaudeCodeSessionToolDecision.deny =>
+        ClaudeCodeToolPermissionOutcome.denyAlways,
+    };
+    final responseFrame = ClaudeCodeControlRequestHandler.buildControlResponse(
+      requestId: requestId,
+      outcome: outcome,
+      toolInput: input ?? const <String, Object?>{},
+    );
+    final peer = _peer;
+    if (peer != null) {
+      unawaited(
+        peer.send(responseFrame).catchError((Object error) {
+          _log.w(
+            'Failed to send cached control_response (${error.runtimeType})',
+          );
+        }),
+      );
+    }
+    return true;
+  }
+
+  Future<AgentPermissionApplyScope> _applyPermissionMode(
+    ClaudeCodePermissionMode nextMode,
+  ) async {
+    _ensureNotDisposed();
+    if (_permissionModeSwitchOperation != null) {
+      throw StateError('Claude Code permission mode is already switching');
+    }
+    if (_turnAdmissionInProgress ||
+        _runningTurnIdsBySessionId.isNotEmpty ||
+        _controlHandler.pendingCount > 0) {
+      throw StateError(
+        'Claude Code permission mode cannot change while a turn is running',
+      );
+    }
+
+    final completion = Completer<void>();
+    _permissionModeSwitchOperation = completion.future;
+    try {
+      if (_peer == null) {
+        _permissionMode = nextMode;
+        return AgentPermissionApplyScope.nextSession;
+      }
+      if (nextMode == _permissionMode) {
+        return AgentPermissionApplyScope.currentSession;
+      }
+
+      final sessionId = _sessionId;
+      final workingDirectory = _workingDirectory;
+      if (sessionId == null || workingDirectory == null) {
+        throw StateError('Claude Code peer has no active session identity');
+      }
+      final previousMode = _permissionMode;
+      await _tearDownPeer();
+      _permissionMode = nextMode;
+      try {
+        await _ensurePeer(
+          sessionId: sessionId,
+          workingDirectory: workingDirectory,
+          resumeSessionId: sessionId,
+        );
+      } catch (error, stackTrace) {
+        await _tearDownPeer();
+        _permissionMode = previousMode;
+        try {
+          await _ensurePeer(
+            sessionId: sessionId,
+            workingDirectory: workingDirectory,
+            resumeSessionId: sessionId,
+          );
+        } catch (restoreError) {
+          _log.w(
+            'Could not restore Claude Code peer after permission switch '
+            '(${restoreError.runtimeType})',
+          );
+        }
+        Error.throwWithStackTrace(error, stackTrace);
+      }
+      return AgentPermissionApplyScope.currentSession;
+    } finally {
+      completion.complete();
+      if (identical(_permissionModeSwitchOperation, completion.future)) {
+        _permissionModeSwitchOperation = null;
+      }
+    }
+  }
+
   String _resolvePromptText({
     required String? message,
     required List<AgentUserInput>? inputs,
@@ -645,6 +819,16 @@ class ClaudeCodeAgentProvider implements AgentProvider {
       }
     }
     return parts.join('\n');
+  }
+
+  static Map<String, Object?>? _stringKeyedMap(Object? value) {
+    if (value is! Map) {
+      return null;
+    }
+    return <String, Object?>{
+      for (final entry in value.entries)
+        if (entry.key is String) entry.key as String: entry.value,
+    };
   }
 
   void _emitReadyIfIdle() {

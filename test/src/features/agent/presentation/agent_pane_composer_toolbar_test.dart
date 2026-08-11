@@ -927,6 +927,43 @@ void main() {
       },
     );
 
+    testWidgets('permission policy is disabled while a turn is running', (
+      tester,
+    ) async {
+      final provider = AgentPaneFakeProvider(models: agentPaneModelConfigList);
+      final viewModel = createAgentPaneViewModel(provider);
+      addTearDown(provider.dispose);
+      addTearDown(viewModel.dispose);
+      await viewModel.loadModels();
+      await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
+      await pumpAgentPaneUi(tester);
+
+      await viewModel.sendMessage('keep the turn running');
+      await tester.pump();
+      expect(viewModel.isTurnRunning, isTrue);
+
+      final permissionSelector = find.byKey(
+        const ValueKey('agent-permission-option-selector'),
+      );
+      await tester.tap(permissionSelector);
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        find.byKey(const ValueKey('agent-permission-option-popover')),
+        findsNothing,
+      );
+
+      final error = await viewModel.selectPermissionOption(
+        agentPaneDefaultPermissionOptions.last,
+      );
+      expect(error, contains('当前回合执行中'));
+      expect(provider.permissionApplyCount, 0);
+
+      provider.emitEvent(
+        const AgentTurnCompletedEvent(sessionId: 'session-1', turnId: 'turn-1'),
+      );
+      await tester.pump();
+    });
+
     testWidgets(
       'renders dynamic session config options and sends stable values',
       (tester) async {

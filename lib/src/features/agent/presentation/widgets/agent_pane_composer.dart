@@ -179,6 +179,7 @@ class _AgentComposer extends StatelessWidget {
           options: permissionOptions,
           selectedOptionId: selectedPermissionOptionId,
           scopeHint: permissionApplyScopeHint,
+          enabled: !isTurnRunning,
           onSelect: onSelectPermissionOption,
         ),
       );
@@ -1285,6 +1286,7 @@ class _PermissionOptionButton extends StatefulWidget {
     required this.label,
     required this.options,
     required this.selectedOptionId,
+    required this.enabled,
     required this.onSelect,
     this.scopeHint,
   });
@@ -1292,6 +1294,7 @@ class _PermissionOptionButton extends StatefulWidget {
   final String label;
   final List<AgentPermissionOption> options;
   final String? selectedOptionId;
+  final bool enabled;
   final String? scopeHint;
   final ValueChanged<AgentPermissionOption> onSelect;
 
@@ -1324,7 +1327,8 @@ class _PermissionOptionButtonState extends State<_PermissionOptionButton> {
     super.didUpdateWidget(oldWidget);
     if (_popoverController.isOpen &&
         (oldWidget.selectedOptionId != widget.selectedOptionId ||
-            widget.options.isEmpty)) {
+            widget.options.isEmpty ||
+            !widget.enabled)) {
       final entry = _popoverController.handle;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -1342,7 +1346,8 @@ class _PermissionOptionButtonState extends State<_PermissionOptionButton> {
   }
 
   void _togglePopover() {
-    if (!_popoverController.isOpen && widget.options.isEmpty) {
+    if (!widget.enabled ||
+        (!_popoverController.isOpen && widget.options.isEmpty)) {
       return;
     }
     _popoverController.toggle(
@@ -1388,7 +1393,9 @@ class _PermissionOptionButtonState extends State<_PermissionOptionButton> {
           : '$displayLabel，权限模式',
       open: open,
       focusNode: _triggerFocusNode,
-      onPressed: widget.options.isEmpty ? null : _togglePopover,
+      onPressed: widget.enabled && widget.options.isNotEmpty
+          ? _togglePopover
+          : null,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

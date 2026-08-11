@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/widgets.dart';
@@ -16,6 +17,7 @@ import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_permission_migration.dart';
 import 'package:zeta/src/features/agent/data/default_agent_provider_factory.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_permission_policy_adapter.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
@@ -140,7 +142,13 @@ class MainAppState extends State<MainApp>
     }
     final useFilePersistence = _useFilePersistence;
     final dataPaths = widget.dataPaths;
-    _defaultAgentProviderFactory = const DefaultAgentProviderFactory();
+    _defaultAgentProviderFactory = DefaultAgentProviderFactory(
+      claudeCodeSessionDecisionStoreFactory: useFilePersistence
+          ? (sessionId) => FileClaudeCodeSessionDecisionStore(
+              file: _claudeCodeSessionDecisionFile(dataPaths!, sessionId),
+            )
+          : null,
+    );
     _agentProviderSettingsCodec = AgentProviderSettingsCodec(
       migrationRegistry: AgentProviderPermissionMigrationRegistry(
         <AgentProviderKind, AgentProviderPermissionPreferenceMigrator>{
@@ -421,3 +429,11 @@ Future<void> _ignoreSessionSave(String _) async {}
 
 Future<List<ManagedAgent>> _loadNoInstalledHomeProviders() async =>
     const <ManagedAgent>[];
+
+File _claudeCodeSessionDecisionFile(ZetaDataPaths dataPaths, String sessionId) {
+  final encodedSessionId = Uri.encodeComponent(sessionId);
+  return File(
+    '${dataPaths.stateDirectory.path}${Platform.pathSeparator}'
+    'claude_code${Platform.pathSeparator}session_$encodedSessionId.json',
+  );
+}

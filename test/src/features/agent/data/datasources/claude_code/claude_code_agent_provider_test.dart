@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_agent_provider.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_permission_policy_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart'
     show ProcessStarter;
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -174,6 +175,141 @@ void main() {
       expect(body['behavior'], 'deny');
     });
 
+    test(
+      'idle permission switch restarts peer by resuming same session',
+      () async {
+        final firstProcess = _FakeClaudeProcess();
+        final secondProcess = _FakeClaudeProcess();
+        final starts = <_RecordedProcessStart>[];
+        final processes = <_FakeClaudeProcess>[firstProcess, secondProcess];
+        final provider = ClaudeCodeAgentProvider(
+          config: AgentProviderConfig.defaultClaudeCode,
+          processStarter: _queueStarter(processes, starts),
+          whichLookup: (command) async => command,
+          idFactory: () => 'session-switch-1',
+        );
+        addTearDown(provider.dispose);
+
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+        );
+        final result = await provider.permissionPolicy.applyPermissionSelection(
+          const AgentPermissionSelection(optionId: ':plan'),
+        );
+
+        expect(result.scope, AgentPermissionApplyScope.currentSession);
+        expect(starts, hasLength(2));
+        expect(
+          starts.first.arguments,
+          containsAllInOrder(<String>[
+            '--session-id',
+            session.id,
+            '--permission-mode',
+            'default',
+          ]),
+        );
+        expect(
+          starts.last.arguments,
+          containsAllInOrder(<String>[
+            '--resume',
+            session.id,
+            '--permission-mode',
+            'plan',
+          ]),
+        );
+      },
+    );
+
+    test('permission switch is rejected while a turn is running', () async {
+      final process = _FakeClaudeProcess();
+      final starts = <_RecordedProcessStart>[];
+      final provider = ClaudeCodeAgentProvider(
+        config: AgentProviderConfig.defaultClaudeCode,
+        processStarter: _queueStarter(<_FakeClaudeProcess>[process], starts),
+        whichLookup: (command) async => command,
+        idFactory: _sequenceIds(<String>[
+          'session-running-1',
+          'turn-running-1',
+        ]),
+      );
+      addTearDown(provider.dispose);
+
+      final session = await provider.startSession(
+        context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+      );
+      await provider.sendMessage(
+        session: session,
+        context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+        message: 'still running',
+      );
+
+      await expectLater(
+        provider.permissionPolicy.applyPermissionSelection(
+          const AgentPermissionSelection(optionId: ':plan'),
+        ),
+        throwsA(isA<StateError>()),
+      );
+      expect(starts, hasLength(1));
+    });
+
+    test(
+      'allow always is persisted and auto-applied without another event',
+      () async {
+        final directory = await Directory.systemTemp.createTemp(
+          'zeta-claude-provider-permission-',
+        );
+        addTearDown(() => directory.delete(recursive: true));
+        final cacheFile = File(
+          '${directory.path}${Platform.pathSeparator}session.json',
+        );
+        final process = _FakeClaudeProcess();
+        final provider = ClaudeCodeAgentProvider(
+          config: AgentProviderConfig.defaultClaudeCode,
+          processStarter: _starter(process),
+          whichLookup: (command) async => command,
+          sessionDecisionStoreFactory: (_) =>
+              FileClaudeCodeSessionDecisionStore(file: cacheFile),
+          idFactory: _sequenceIds(<String>['session-cache-1', 'turn-cache-1']),
+        );
+        addTearDown(provider.dispose);
+        final events = <AgentEvent>[];
+        provider.events.listen(events.add);
+
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+        );
+        await provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+          message: 'run tools',
+        );
+        process.emitControlRequest(requestId: 'req_first', toolName: 'Bash');
+        await pumpEventQueue(times: 3);
+        await provider.respondToPermission(
+          const AgentPermissionDecision(
+            requestId: 'req_first',
+            approved: true,
+            commandDecision: AgentCommandApprovalDecisionKind.acceptForSession,
+          ),
+        );
+        process.emitControlRequest(requestId: 'req_second', toolName: 'Bash');
+        await pumpEventQueue(times: 5);
+
+        expect(events.whereType<AgentPermissionRequestedEvent>(), hasLength(1));
+        expect(provider.controlPendingCount, 0);
+        expect(process.receivedControlResponses, hasLength(2));
+        expect(
+          process.receivedControlResponses.last['request_id'],
+          'req_second',
+        );
+        final source = await cacheFile.readAsString();
+        expect(source, contains('"toolName":"Bash"'));
+        expect(source, contains('"decision":"allow"'));
+        expect(source, isNot(contains('echo hi')));
+        expect(source, isNot(contains('input')));
+      },
+    );
+
     test('source has no 尚未接入 failure branch', () {
       final source = File(
         'lib/src/features/agent/data/datasources/claude_code/'
@@ -194,6 +330,55 @@ ProcessStarter _starter(_FakeClaudeProcess process) {
     process.start();
     return process;
   };
+}
+
+ProcessStarter _queueStarter(
+  List<_FakeClaudeProcess> processes,
+  List<_RecordedProcessStart> starts,
+) {
+  var index = 0;
+  return (
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+  }) async {
+    if (index >= processes.length) {
+      throw StateError('No fake Claude process left');
+    }
+    starts.add(
+      _RecordedProcessStart(
+        executable: executable,
+        arguments: List<String>.of(arguments),
+        workingDirectory: workingDirectory,
+      ),
+    );
+    final process = processes[index++];
+    process.start();
+    return process;
+  };
+}
+
+String Function() _sequenceIds(List<String> ids) {
+  var index = 0;
+  return () {
+    if (index >= ids.length) {
+      throw StateError('No fake id left');
+    }
+    return ids[index++];
+  };
+}
+
+final class _RecordedProcessStart {
+  const _RecordedProcessStart({
+    required this.executable,
+    required this.arguments,
+    required this.workingDirectory,
+  });
+
+  final String executable;
+  final List<String> arguments;
+  final String? workingDirectory;
 }
 
 class _FakeClaudeProcess implements Process {

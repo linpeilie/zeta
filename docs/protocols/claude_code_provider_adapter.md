@@ -618,10 +618,17 @@ throw；这样 CLI 引入新事件类型时不会阻断整个 pipeline。
 
 - `listPermissionOptions` 返回静态 4 项 catalog，`defaultOptionId=':ask'`。
 - `applyPermissionSelection`：
-    - 需要重启子进程（`--permission-mode` 是启动参数）→ 返回
-      `AgentPermissionApplyScope.nextSession`；由 registry 触发 provider
-      重连（沿用 `_persistDetectionSummary` 里 `commandChanged` 的
-      `restartProvider` 通路，`agent_management_controller.dart:463-470`）。
+    - `--permission-mode` 是启动参数，不能对既有 CLI peer 做 live 修改；
+    - **当前 session 没有执行中 turn、没有正在准入的新 turn、也没有待处理的
+      `control_request` 时**，Provider 关闭旧 peer，再用同一 session id 的
+      `--resume <sessionId>` 与新 `--permission-mode` 启动 peer；Binding、Provider
+      实例和 Zeta thread 不重建，返回 `AgentPermissionApplyScope.currentSession`；
+    - 当前 session 有执行中 turn 时 fail-closed 拒绝切换。Composer 同时禁用入口，
+      Provider 仍做权威校验，防止点击与 `sendMessage` 的竞态；
+    - 尚未创建 peer/session 时只更新 Provider 内存模式，下一次 `startSession`
+      使用新启动参数，返回 `AgentPermissionApplyScope.nextSession`；
+    - 重启失败时先恢复旧 mode，并 best-effort 以同一 session 恢复旧 peer；原始
+      切换错误继续向上抛出，不提交新的权限选择；
     - 如果未来 CLI 暴露 live `permission_mode` control，可切到
       `AgentPermissionApplyScope.runtime`；MVP 不做。
 - **不做** legacy 迁移（CC 新入，`AgentProviderPermissionMigrationRegistry`
@@ -633,7 +640,11 @@ throw；这样 CLI 引入新事件类型时不会阻断整个 pipeline。
     response:{behavior:"allow"|"deny", updatedInput?, message?}})`；
     - `allow_always` / `deny_always` 由 adapter 缓存到当前 session 的
       tool allow-list，并落 `~/.zeta/state/claude_code/session_<id>.json`（
-      仅规范化字段：tool_name + 决策；**不存 input/prompt**）。
+      版本化 JSON；每项仅规范化字段 `toolName` + `decision`；**不存
+      input/prompt/cwd/raw payload**）；损坏、未知版本或未知条目宽容回退为空缓存；
+    - 同 session 后续相同 `toolName` 的 `can_use_tool` 由 Provider 直接按缓存
+      回写 control response，不再产生新的权限卡；当前请求的 input 只在内存中
+      原样回填 `updatedInput`，不会进入缓存文件。
 
 ### 4.6 `ClaudeCodePlanApprovalAdapter`
 
