@@ -188,7 +188,7 @@ class _AgentPaneState extends State<AgentPane> {
 
   bool get _mentionPickerOpen => _mentionPopoverController.isOpen;
 
-  /// 是否具备可展示的斜线命令（当前仅 Plan）。
+  /// 是否具备可展示的 Plan 斜线命令。
   bool get _hasSlashPlanCommand {
     if (!widget.viewModel.canSelectConversationMode) {
       return false;
@@ -201,7 +201,9 @@ class _AgentPaneState extends State<AgentPane> {
 
   /// 斜线菜单是否至少有一个分区（命令或 Skills）可展示。
   bool get _canOpenSlashMenu =>
-      _hasSlashPlanCommand || widget.viewModel.canUseSkills;
+      _hasSlashPlanCommand ||
+      widget.viewModel.canCompactCurrentThread ||
+      widget.viewModel.canUseSkills;
 
   late StreamSubscription<AgentUiEffect> _uiEffectSubscription;
 
@@ -988,6 +990,8 @@ class _AgentPaneState extends State<AgentPane> {
             AgentConversationModeId.plan) {
           widget.viewModel.selectConversationMode(AgentConversationModeId.plan);
         }
+      case _SlashCommandId.compact:
+        unawaited(widget.viewModel.compactCurrentThread());
     }
     _composerFocusNode.requestFocus();
   }
@@ -1123,6 +1127,7 @@ class _AgentPaneState extends State<AgentPane> {
           documentController: _inputController,
           listController: _slashMenuListController,
           showPlanCommand: _hasSlashPlanCommand,
+          showCompactCommand: widget.viewModel.canCompactCurrentThread,
           planSelected:
               widget.viewModel.selectedConversationMode ==
               AgentConversationModeId.plan,

@@ -1,4 +1,10 @@
-# Claude Code Provider 接入适配文档
+# Claude Code Provider 接入适配文档（历史提案）
+
+> [!IMPORTANT]
+> 本文保留接入前的设计取舍、备选方案与后续增强设想，不再作为当前实现的事实源。
+> 已落地的 stream-json wire、能力边界与升级门禁以
+> [Claude Code stream-json 协议基线](./claude_code_stream_json_protocol.md) 为准。
+> 文中的 OAuth REST 动态模型与套餐用量仍未实现。
 
 > 目的：将 Anthropic 的 Claude Code CLI 作为 **第三个** Agent Provider 接入
 > Zeta（与 Codex app-server、Grok ACP 并列），复用 `~/.claude` 已登录态，覆盖

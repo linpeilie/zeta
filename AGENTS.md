@@ -1,6 +1,6 @@
 # 项目 AI 规则
 
-Zeta 是 Flutter Desktop 的本地 Agent IDE 壳层（macOS / Windows / Linux）。它不含模型、不实现编辑器：把本机已有的 Agent CLI 拉起来，把对方的私有协议翻译成一套中立领域事件，再渲染成可审计的时间线。当前活跃 Provider 只有 **Codex**（默认，app-server JSON-RPC）与 **Grok**（ACP）；Cursor 已退役，所有边界 fail-closed。
+Zeta 是 Flutter Desktop 的本地 Agent IDE 壳层（macOS / Windows / Linux）。它不含模型、不实现编辑器：把本机已有的 Agent CLI 拉起来，把对方的私有协议翻译成一套中立领域事件，再渲染成可审计的时间线。当前活跃 Provider 是 **Codex**（默认，app-server JSON-RPC）、**Grok**（ACP）与 **Claude Code**（stream-json）；Cursor 已退役，所有边界 fail-closed。
 
 > **本文件是约束规则的权威源。** 它只写「必须遵守什么」和「怎么自查」。
 > 「为什么这样约束」和完整正文在 `docs/`，每条门禁都给了出处，不要在本文件里复制正文。
@@ -289,7 +289,7 @@ flutter test test/src/features/agent/presentation/agent_conversation_widget_test
 
 ## 5. 事实清单（容易记错的）
 
-- **活跃 Provider 只有 Codex 和 Grok。** `docs/protocols/claude_code_provider_adapter.md` 是**提案，尚未实现**——不要假设 Claude Code provider 存在。
+- **活跃 Provider 是 Codex、Grok 和 Claude Code。** Claude Code 的当前协议事实以 `docs/protocols/claude_code_stream_json_protocol.md` 为准；`claude_code_provider_adapter.md` 是历史设计提案，其中账号数据增强仍未实现。
 - **Cursor 已退役。** 只允许保留旧配置 decode/fallback、明确 unavailable 和用户数据未改写回归；`CursorRetirementPolicy` 在 catalog、选择、恢复和 factory 边界 fail-closed。不参与 catalog、UI、运行时组合、live/replay/load、ACP 扩展或进程启动。相关代码不接受回流。
 - **Grok CLI 基线是 `0.2.119`**（grok-build）。更早版本不支持多会话，同时打开多个 Grok 会话时无法正确隔离会话状态和回合终态。
 - `desktop_notifications` 和 `ide_session` 两个 feature 只有 `domain/application/data`，没有 `presentation/`——这是有意的。

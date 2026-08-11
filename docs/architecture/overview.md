@@ -10,6 +10,8 @@
 
 Zeta 是一个**桌面壳层**：它不含模型，也不实现编辑器。它把本机已有的 Agent CLI 拉起来，把对方的私有协议翻译成一套中立的领域事件，再把这些事件渲染成可审计的时间线。
 
+当前活跃 Provider 是 Codex app-server（默认）、Grok ACP 和 Claude Code stream-json；Cursor 已退役。Claude Code 的协议基线见[这里](../protocols/claude_code_stream_json_protocol.md)。
+
 所以整个架构的中心问题只有一个：**怎么让不同 Provider 的协议差异不污染共享代码。** 你在文档里看到的大部分约束，都是从这个问题推导出来的。
 
 ## 分层

@@ -367,7 +367,7 @@ class ClaudeCodeAgentProvider
 
     // Claude 没有独立 compact 控制帧；斜杠命令仍是普通用户回合，必须复用
     // sendMessage 的并发、权限、模型与 session 绑定检查。
-    await sendMessage(
+    final turn = await sendMessage(
       session: AgentSession(
         id: normalizedThreadId,
         providerId: config.id,
@@ -376,6 +376,40 @@ class ClaudeCodeAgentProvider
       context: AgentContext(projectPath: workingDirectory),
       message: '/compact',
     );
+    if (_runningTurnIdsBySessionId[normalizedThreadId] != turn.id) {
+      // 极短回合可能在 stdin 写入完成前已经收到终态。
+      return;
+    }
+
+    final terminal = Completer<void>();
+    late final StreamSubscription<AgentEvent> subscription;
+    subscription = events.listen(
+      (event) {
+        if (event is AgentTurnCompletedEvent &&
+            event.sessionId == normalizedThreadId &&
+            event.turnId == turn.id &&
+            !terminal.isCompleted) {
+          terminal.complete();
+        }
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        if (!terminal.isCompleted) {
+          terminal.completeError(error, stackTrace);
+        }
+      },
+      onDone: () {
+        if (!terminal.isCompleted) {
+          terminal.completeError(
+            StateError('Claude Code compact ended before turn completion'),
+          );
+        }
+      },
+    );
+    try {
+      await terminal.future;
+    } finally {
+      await subscription.cancel();
+    }
   }
 
   @override

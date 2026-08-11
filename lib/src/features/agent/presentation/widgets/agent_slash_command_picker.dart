@@ -4,7 +4,7 @@ const double _agentSlashCommandPickerPreferredWidth = 320;
 const double _agentSlashCommandPickerPreferredMaxHeight = 320;
 
 /// 斜线菜单中的固定命令。
-enum _SlashCommandId { plan }
+enum _SlashCommandId { plan, compact }
 
 /// 斜线菜单可选项（命令或 Skill），用于跨分组键盘导航。
 @immutable
@@ -100,6 +100,7 @@ final class _SlashMenuListController extends ChangeNotifier {
 List<_SlashMenuItem> _buildSlashMenuItems({
   required String query,
   required bool showPlanCommand,
+  required bool showCompactCommand,
   required bool planSelected,
   required List<AgentSkillMetadata> skills,
 }) {
@@ -119,6 +120,15 @@ List<_SlashMenuItem> _buildSlashMenuItems({
     }
   }
 
+  if (showCompactCommand) {
+    const label = 'Compact context';
+    if (normalized.isEmpty || label.toLowerCase().contains(normalized)) {
+      items.add(
+        const _SlashCommandMenuItem(id: _SlashCommandId.compact, label: label),
+      );
+    }
+  }
+
   for (final skill in skills) {
     items.add(_SlashSkillMenuItem(skill));
   }
@@ -133,6 +143,7 @@ class _AgentSlashCommandPickerPopover extends StatefulWidget {
     required this.documentController,
     required this.listController,
     required this.showPlanCommand,
+    required this.showCompactCommand,
     required this.planSelected,
     required this.skillCandidatesFor,
     required this.onSelectCommand,
@@ -145,6 +156,7 @@ class _AgentSlashCommandPickerPopover extends StatefulWidget {
   final ComposerDocumentController documentController;
   final _SlashMenuListController listController;
   final bool showPlanCommand;
+  final bool showCompactCommand;
   final bool planSelected;
   final List<AgentSkillMetadata> Function(String query) skillCandidatesFor;
   final ValueChanged<_SlashCommandId> onSelectCommand;
@@ -170,6 +182,7 @@ class _AgentSlashCommandPickerPopoverState
   void didUpdateWidget(covariant _AgentSlashCommandPickerPopover oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.showPlanCommand != widget.showPlanCommand ||
+        oldWidget.showCompactCommand != widget.showCompactCommand ||
         oldWidget.planSelected != widget.planSelected) {
       _refreshItems();
     }
@@ -204,6 +217,7 @@ class _AgentSlashCommandPickerPopoverState
       _buildSlashMenuItems(
         query: query,
         showPlanCommand: widget.showPlanCommand,
+        showCompactCommand: widget.showCompactCommand,
         planSelected: widget.planSelected,
         skills: skills,
       ),

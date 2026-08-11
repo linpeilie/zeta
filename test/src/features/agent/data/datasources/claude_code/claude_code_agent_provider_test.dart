@@ -75,45 +75,65 @@ void main() {
       expect(completed.turnId, 'turn-hello-1');
     });
 
-    test('compactThread sends /compact as a normal user text turn', () async {
-      final process = _FakeClaudeProcess();
-      final provider = ClaudeCodeAgentProvider(
-        config: AgentProviderConfig.defaultClaudeCode,
-        processStarter: _starter(process),
-        whichLookup: (command) async => command,
-        idFactory: _sequenceIds(<String>[
-          '00000000-0000-4000-8000-000000000031',
-          'turn-compact-1',
-        ]),
-      );
-      addTearDown(provider.dispose);
+    test(
+      'compactThread sends /compact and allows the following turn',
+      () async {
+        final process = _FakeClaudeProcess();
+        final provider = ClaudeCodeAgentProvider(
+          config: AgentProviderConfig.defaultClaudeCode,
+          processStarter: _starter(process),
+          whichLookup: (command) async => command,
+          idFactory: _sequenceIds(<String>[
+            '00000000-0000-4000-8000-000000000031',
+            'turn-compact-1',
+            'turn-after-compact-1',
+          ]),
+        );
+        addTearDown(provider.dispose);
 
-      final events = <AgentEvent>[];
-      provider.events.listen(events.add);
-      final session = await provider.startSession(
-        context: const AgentContext(projectPath: '/tmp/zeta-cc-compact'),
-      );
+        final events = <AgentEvent>[];
+        provider.events.listen(events.add);
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: '/tmp/zeta-cc-compact'),
+        );
 
-      await expectLater(
-        provider.compactThread('another-session'),
-        throwsStateError,
-      );
-      expect(process.receivedUserFrames, isEmpty);
+        await expectLater(
+          provider.compactThread('another-session'),
+          throwsStateError,
+        );
+        expect(process.receivedUserFrames, isEmpty);
 
-      await provider.compactThread(session.id);
-      await pumpEventQueue();
+        final compactOperation = provider.compactThread(session.id);
+        await pumpEventQueue(times: 3);
 
-      expect(process.receivedUserTexts, <String>['/compact']);
-      final userFrame = process.receivedUserFrames.single;
-      expect(userFrame['session_id'], session.id);
-      expect(userFrame['message'], <String, Object?>{
-        'role': 'user',
-        'content': <Object?>[
-          <String, Object?>{'type': 'text', 'text': '/compact'},
-        ],
-      });
-      expect(events.whereType<AgentTurnStartedEvent>(), hasLength(1));
-    });
+        expect(process.receivedUserTexts, <String>['/compact']);
+        final userFrame = process.receivedUserFrames.single;
+        expect(userFrame['session_id'], session.id);
+        expect(userFrame['message'], <String, Object?>{
+          'role': 'user',
+          'content': <Object?>[
+            <String, Object?>{'type': 'text', 'text': '/compact'},
+          ],
+        });
+        expect(events.whereType<AgentTurnStartedEvent>(), hasLength(1));
+
+        process.emitResultSuccess(sessionId: session.id);
+        await compactOperation;
+
+        await provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: '/tmp/zeta-cc-compact'),
+          message: 'after compact',
+        );
+        await pumpEventQueue();
+        expect(process.receivedUserTexts, <String>[
+          '/compact',
+          'after compact',
+        ]);
+        process.emitResultSuccess(sessionId: session.id);
+        await pumpEventQueue();
+      },
+    );
 
     test(
       'can_use_tool emits permission event then control_response on decide',

@@ -45,6 +45,7 @@ sudo apt-get update && sudo apt-get install --yes \
 
 - **Codex**（默认 Provider）：本机能执行 `codex app-server`。未指定 `--listen` 时走 stdio。协议按 pinned schema 开发，见 [Codex app-server 协议版本锁定](docs/protocols/codex_app_server_protocol.md)。
 - **Grok**（可选）：Grok CLI（grok-build）**0.2.119 或更高**。这是多会话兼容基线，更早的版本在同时打开多个 Grok 会话时无法正确隔离会话状态和回合终态。
+- **Claude Code**（可选）：本机能执行并已登录 `claude`。当前 stream-json 取样基线是 CLI **2.1.224**（不是最低版本承诺），协议边界与升级检查见 [Claude Code stream-json 协议基线](docs/protocols/claude_code_stream_json_protocol.md)。
 
 只改 UI 或文档的话，不装这些 CLI 也能跑起来，只是 Agent 面板会显示未检测到。
 

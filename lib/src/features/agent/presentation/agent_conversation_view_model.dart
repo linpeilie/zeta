@@ -250,6 +250,7 @@ class AgentConversationViewModel {
   String? _selectedProviderId;
   AgentThreadOpenPhase _threadOpenPhase = AgentThreadOpenPhase.idle;
   bool _requiresResumedSelectedThread = false;
+  bool _compactRequestInProgress = false;
   Future<void>? _settingsLoadFuture;
   bool _disposed = false;
   int _threadSwitchToken = 0;
@@ -779,6 +780,15 @@ class AgentConversationViewModel {
 
   bool get canArchiveCurrentThread =>
       sessionId != null && !isReadOnly && activeCapabilities.canArchiveThread;
+
+  /// 当前 thread 可通过中立 mutation 端口压缩上下文。
+  bool get canCompactCurrentThread =>
+      sessionId != null &&
+      _threadOpenPhase == AgentThreadOpenPhase.idle &&
+      !isReadOnly &&
+      !isTurnRunning &&
+      !_compactRequestInProgress &&
+      activeCapabilities.canCompactThread;
 
   bool get canForkCurrentThread =>
       sessionId != null &&
@@ -2627,6 +2637,134 @@ class AgentConversationViewModel {
     }
   }
 
+  /// 压缩当前 thread；仅通过当前 Binding 的 session runtime 执行。
+  ///
+  /// Claude 的 compact 是一个真实 `/compact` 回合，因此不能走 global runtime；
+  /// Codex 等 Provider 也继续消费同一个中立 [AgentThreadMutationsPort]。
+  Future<void> compactCurrentThread() async {
+    final threadId = sessionId;
+    if (threadId == null || !canCompactCurrentThread) {
+      return;
+    }
+
+    final switchToken = _threadSwitchToken;
+    _compactRequestInProgress = true;
+    _publishUiChanges(
+      AgentUiUpdateRequest(
+        regions: const <AgentUiRegion>{AgentUiRegion.composer},
+        urgency: AgentUiUpdateUrgency.immediate,
+      ),
+    );
+
+    AgentConversationTurnActivity? activity;
+    AgentRuntimePort? requestRuntime;
+    AgentSession? requestSession;
+    var providerOperation = 'provider/settings';
+    try {
+      await loadSettings();
+      providerOperation = 'provider/ensure';
+      activity = await conversationBinding.beginTurn();
+      final bundle = activity.runtime.bundle;
+      requestRuntime = bundle.runtime;
+      await _bindLiveRuntime(
+        bundle,
+        runtimeIdentity: activity.runtime.runtimeIdentity,
+        threadId: threadId,
+      );
+
+      final context = AgentContext(
+        projectPath: _projectPath,
+        filePath: _contextFilePath,
+      );
+      final permissionSnapshot = _permissionSelectionController
+          .snapshotForRequest(threadId: threadId);
+      providerOperation = 'session/ensure';
+      final session = await _ensureSession(
+        bundle,
+        context,
+        switchToken: switchToken,
+        expectedThreadId: threadId,
+        permissionSnapshot: permissionSnapshot,
+      );
+      requestSession = session;
+      if (!_isStillSelectedThread(switchToken, threadId)) {
+        return;
+      }
+      if (session.id != threadId) {
+        throw StateError(
+          'Compact expected thread $threadId but resumed ${session.id}',
+        );
+      }
+
+      final threadMutations = bundle.threadMutations;
+      if (threadMutations == null) {
+        throw UnsupportedError(
+          '${bundle.runtime.config.displayName} '
+          'does not support compacting threads',
+        );
+      }
+      providerOperation = 'thread/compact';
+      await threadMutations.compactThread(threadId);
+    } on ProcessException catch (error, stackTrace) {
+      _logProviderOperationFailure(
+        error: error,
+        stackTrace: stackTrace,
+        operation: providerOperation,
+        runtime: requestRuntime,
+        session: requestSession,
+        selectedThreadId: threadId,
+        runningTurnId: null,
+        extra: <String, Object?>{
+          'category': 'process',
+          'errorCode': error.errorCode,
+          'executable': error.executable,
+        },
+      );
+      if (_isStillSelectedThread(switchToken, threadId)) {
+        _markUnavailable(error.message, details: error.toString());
+      }
+    } on UnsupportedError catch (error, stackTrace) {
+      _logProviderOperationFailure(
+        error: error,
+        stackTrace: stackTrace,
+        operation: providerOperation,
+        runtime: requestRuntime,
+        session: requestSession,
+        selectedThreadId: threadId,
+        runningTurnId: null,
+        extra: const <String, Object?>{'category': 'unsupported'},
+      );
+      if (_isStillSelectedThread(switchToken, threadId)) {
+        _markError(error.message ?? 'Provider is not supported');
+      }
+    } catch (error, stackTrace) {
+      _logProviderOperationFailure(
+        error: error,
+        stackTrace: stackTrace,
+        operation: providerOperation,
+        runtime: requestRuntime,
+        session: requestSession,
+        selectedThreadId: threadId,
+        runningTurnId: null,
+        extra: const <String, Object?>{'category': 'request'},
+      );
+      if (_isStillSelectedThread(switchToken, threadId)) {
+        _markError('Could not compact thread', details: error.toString());
+      }
+    } finally {
+      await activity?.release();
+      _compactRequestInProgress = false;
+      if (!_disposed) {
+        _publishUiChanges(
+          AgentUiUpdateRequest(
+            regions: const <AgentUiRegion>{AgentUiRegion.composer},
+            urgency: AgentUiUpdateUrgency.immediate,
+          ),
+        );
+      }
+    }
+  }
+
   /// 从列表侧同步当前 thread 标题（刷新列表 / 服务端改名后保持详情头栏一致）。
   ///
   /// 仅当 [threadId] 仍是当前会话时生效；标题未变化时不触发刷新。
@@ -2827,7 +2965,8 @@ class AgentConversationViewModel {
   }
 
   // 全局信息与会话运行时严格分流：catalog 只借用 global runtime；session
-  // 操作只读取 Binding 当前 runtime。只有 sendMessage 的 beginTurn 可以创建后者。
+  // 短操作只读取 Binding 当前 runtime；只有真正发起回合的发送/压缩
+  // 路径可以通过 beginTurn 惰性创建它。
 
   /// 在 global runtime 租约作用域内执行会话前操作。
   ///

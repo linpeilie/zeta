@@ -348,6 +348,107 @@ void main() {
       );
     });
 
+    testWidgets('slash Compact invokes the current thread mutation port', (
+      tester,
+    ) async {
+      final provider = AgentPaneFakeProvider();
+      final viewModel = createAgentPaneViewModel(
+        provider,
+        initialThread: agentPaneThread(
+          id: 'thread-compact',
+          title: 'Compact thread',
+        ),
+      );
+      addTearDown(provider.dispose);
+      addTearDown(viewModel.dispose);
+      await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
+      await viewModel.initialization;
+
+      final input = find.byKey(const ValueKey('agent-message-input'));
+      await tester.enterText(input, '/compact');
+      await pumpUntilFinder(
+        tester,
+        find.byKey(const ValueKey('command:compact')),
+      );
+
+      expect(find.text('Compact context'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('command:compact')));
+      await pumpUntilCondition(
+        tester,
+        () => provider.compactedThreads.isNotEmpty,
+      );
+      await pumpUntilFinderAbsent(
+        tester,
+        find.byKey(const ValueKey('agent-slash-command-picker-overlay')),
+      );
+
+      expect(provider.compactedThreads, <String>['thread-compact']);
+      expect(
+        find.byKey(const ValueKey('agent-slash-command-picker-overlay')),
+        findsNothing,
+      );
+      final editable = tester.widget<EditableText>(
+        find.descendant(of: input, matching: find.byType(EditableText)),
+      );
+      expect(editable.controller.text, isEmpty);
+    });
+
+    testWidgets(
+      'slash Compact is hidden without capability and during an active turn',
+      (tester) async {
+        final unsupportedProvider = AgentPaneFakeProvider(
+          canCompactThread: false,
+        );
+        final unsupportedViewModel = createAgentPaneViewModel(
+          unsupportedProvider,
+          initialThread: agentPaneThread(
+            id: 'thread-no-compact',
+            title: 'No compact',
+          ),
+        );
+        addTearDown(unsupportedProvider.dispose);
+        addTearDown(unsupportedViewModel.dispose);
+        await tester.pumpWidget(
+          AgentPaneTestApp(viewModel: unsupportedViewModel),
+        );
+        await unsupportedViewModel.initialization;
+
+        var input = find.byKey(const ValueKey('agent-message-input'));
+        await tester.enterText(input, '/compact');
+        await pumpAgentPaneUi(tester);
+        expect(find.byKey(const ValueKey('command:compact')), findsNothing);
+
+        final runningProvider = AgentPaneFakeProvider();
+        final runningViewModel = createAgentPaneViewModel(
+          runningProvider,
+          initialThread: agentPaneThread(
+            id: 'thread-running-compact',
+            title: 'Running compact',
+          ),
+        );
+        addTearDown(runningProvider.dispose);
+        addTearDown(runningViewModel.dispose);
+        await tester.pumpWidget(AgentPaneTestApp(viewModel: runningViewModel));
+        await runningViewModel.initialization;
+        await runningViewModel.sendMessage('keep running');
+        await pumpLiveAgentUi(tester);
+
+        input = find.byKey(const ValueKey('agent-message-input'));
+        await tester.enterText(input, '/compact');
+        await pumpAgentPaneUi(tester);
+        expect(runningViewModel.isTurnRunning, isTrue);
+        expect(find.byKey(const ValueKey('command:compact')), findsNothing);
+
+        runningProvider.emitEvent(
+          const AgentTurnCompletedEvent(
+            sessionId: 'thread-running-compact',
+            turnId: 'turn-1',
+          ),
+        );
+        await pumpLiveAgentUi(tester);
+      },
+    );
+
     testWidgets('mention picker accepts highlighted file via arrow + enter', (
       tester,
     ) async {

@@ -398,6 +398,7 @@ class AgentPaneFakeProvider
         const <String, AgentThreadHistorySnapshot>{},
     this.models = const AgentModelList(models: <AgentModelInfo>[]),
     this.canSteerTurn = true,
+    this.canCompactThread = true,
     this.historyLoadGate,
     this.permissionOptions = agentPaneDefaultPermissionOptions,
   }) : _historySnapshotsByThread = Map<String, AgentThreadHistorySnapshot>.from(
@@ -409,6 +410,7 @@ class AgentPaneFakeProvider
   final Map<String, AgentThreadHistorySnapshot> _historySnapshotsByThread;
   final AgentModelList models;
   final bool canSteerTurn;
+  final bool canCompactThread;
 
   /// 权限 port catalog 测试数据。
   final List<AgentPermissionOption> permissionOptions;
@@ -448,9 +450,12 @@ class AgentPaneFakeProvider
       AgentProviderConfig.defaultCodex.withPermissionPreference(':workspace');
 
   @override
-  AgentProviderCapabilities get capabilities => AgentProviderCapabilities
-      .codexAppServer
-      .copyWith(canForkThreadAtTurn: true, canSteerTurn: canSteerTurn);
+  AgentProviderCapabilities get capabilities =>
+      AgentProviderCapabilities.codexAppServer.copyWith(
+        canForkThreadAtTurn: true,
+        canSteerTurn: canSteerTurn,
+        canCompactThread: canCompactThread,
+      );
 
   @override
   Stream<AgentEvent> get events => _events.stream;

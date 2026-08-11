@@ -3002,6 +3002,67 @@ void main() {
       expect(viewModel.currentThreadTitle, 'Renamed title');
     });
 
+    test('compacts the current thread through its session runtime', () async {
+      final provider = _FakeAgentProvider();
+      final viewModel = _createViewModel(provider, initialThread: _thread());
+      addTearDown(viewModel.dispose);
+
+      await viewModel.initialization;
+      expect(viewModel.canCompactCurrentThread, isTrue);
+
+      await viewModel.compactCurrentThread();
+
+      expect(
+        provider.calls.where(
+          (call) => call.startsWith('resume:') || call.startsWith('compact:'),
+        ),
+        <String>['resume:thread-1', 'compact:thread-1'],
+      );
+      expect(provider.compactedThreads, <String>['thread-1']);
+    });
+
+    test(
+      'compact stays unavailable without capability or while running',
+      () async {
+        final unsupportedProvider = _FakeAgentProvider(
+          declaredCapabilities: AgentProviderCapabilities.codexAppServer
+              .copyWith(canCompactThread: false),
+        );
+        final unsupportedViewModel = _createViewModel(
+          unsupportedProvider,
+          initialThread: _thread(),
+        );
+        addTearDown(unsupportedViewModel.dispose);
+
+        await unsupportedViewModel.initialization;
+        expect(unsupportedViewModel.canCompactCurrentThread, isFalse);
+        await unsupportedViewModel.compactCurrentThread();
+        expect(unsupportedProvider.compactedThreads, isEmpty);
+
+        final runningProvider = _FakeAgentProvider();
+        final runningViewModel = _createViewModel(
+          runningProvider,
+          initialThread: _thread(),
+        );
+        addTearDown(runningViewModel.dispose);
+        await runningViewModel.initialization;
+        await runningViewModel.sendMessage('keep running');
+
+        expect(runningViewModel.isTurnRunning, isTrue);
+        expect(runningViewModel.canCompactCurrentThread, isFalse);
+        await runningViewModel.compactCurrentThread();
+        expect(runningProvider.compactedThreads, isEmpty);
+
+        runningProvider.emit(
+          const AgentTurnCompletedEvent(
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+      },
+    );
+
     test(
       'edit last user message delegates resend to forked workspace',
       () async {

@@ -10,6 +10,8 @@ For definitions of specific terms, see the [glossary](../guides/glossary.en.md).
 
 Zeta is a **desktop shell**. It ships no model and implements no editor. It launches the agent CLIs already on your machine, translates their proprietary protocols into a set of neutral domain events, and renders those events as an auditable timeline.
 
+The active providers are Codex app-server (default), Grok ACP, and Claude Code stream-json; Cursor is retired. See the [Claude Code protocol baseline](../protocols/claude_code_stream_json_protocol.md) for its current wire contract.
+
 So the architecture revolves around exactly one question: **how do we keep provider-specific protocol differences from contaminating shared code?** Most constraints you'll read about are derived from that question.
 
 ## Layering

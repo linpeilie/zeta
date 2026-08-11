@@ -56,7 +56,8 @@ docs/
 ## protocols — 协议
 
 - [Codex app-server 协议版本锁定](./protocols/codex_app_server_protocol.md) — 协议 pin 与升级流程
-- [Claude Code Provider 适配方案](./protocols/claude_code_provider_adapter.md) — ⚠️ **提案，尚未实现**，当前版本不支持 Claude Code
+- [Claude Code stream-json 协议基线](./protocols/claude_code_stream_json_protocol.md) — 当前实现、取样版本、wire 边界与升级门禁
+- [Claude Code Provider 适配方案](./protocols/claude_code_provider_adapter.md) — 历史设计提案；账号数据增强等未落地部分不代表当前能力
 
 ## release — 发布
 

@@ -1,10 +1,10 @@
 # 设计文档
 
-最后更新：2026-08-09
+最后更新：2026-08-11
 
 ## 1. 设计目标
 
-Zeta 的设计目标是让 Flutter UI、Agent provider、会话持久化和本地文件系统访问保持清晰分层。当前实现采用轻量 feature-sliced 结构，不引入大型架构框架，但在 Agent 相关能力上预留 provider 抽象，方便未来接入 ACP、Claude Code 或其他 CLI。
+Zeta 的设计目标是让 Flutter UI、Agent provider、会话持久化和本地文件系统访问保持清晰分层。当前实现采用轻量 feature-sliced 结构，不引入大型架构框架；活跃 Provider 为 Codex app-server、Grok ACP 与 Claude Code stream-json，统一收敛到中立 provider 抽象。
 
 ## 2. 总体架构
 
@@ -12,7 +12,7 @@ Zeta 的设计目标是让 Flutter UI、Agent provider、会话持久化和本�
 
 - app：应用根组件、窗口启动、应用常量。
 - core：日志、Zeta 数据路径与原子文本写入等跨层基础能力。
-- features/agent：Agent provider 抽象、Codex app-server、Grok ACP stdio、JSON-RPC stdio、历史解析、事件映射、对话 view model 和 Agent pane。
+- features/agent：Agent provider 抽象、Codex app-server、Grok ACP stdio、Claude Code stream-json、传输、历史解析、事件映射、对话 view model 和 Agent pane。
 - features/agent_management：Agent CLI 检测、版本与账号诊断、模型读取、配置安全编辑、
   CLI 磁盘日志读取和管理页面。
 - features/ide_session：会话状态、版本化持久化、恢复计划和恢复协调。
@@ -88,9 +88,9 @@ AgentConversationViewModel
 
 AgentProviderRuntimeRegistry
   -> AgentProviderFactory
-    -> CodexAppServerAgentProvider | GrokAcpAgentProvider
-      -> JsonRpcPeer
-        -> codex app-server / grok agent stdio
+    -> CodexAppServerAgentProvider -> JsonRpcPeer -> codex app-server stdio
+    -> GrokAcpAgentProvider -> JsonRpcPeer -> grok agent stdio
+    -> ClaudeCodeAgentProvider -> StreamJsonPeer -> claude stream-json stdio
 
 ProjectThreadsController
   -> AgentProviderBundle
@@ -98,8 +98,10 @@ ProjectThreadsController
 
 AgentManagementController
   -> CodexAgentManagementRepository | GrokAgentManagementRepository
+     | ClaudeCodeAgentManagementRepository
     -> CLI 身份、版本与登录态检查
-    -> 通过共享 runtime lease 执行无计费 initialize / authenticate 握手
+    -> Codex/Grok 通过共享 runtime lease 执行无模型 turn 的协议握手
+    -> Claude 自动检测保持零网络；仅用户显式连接测试执行最小模型回合
     -> provider 对应配置与脱敏诊断
 
 UsageStatisticsController
@@ -169,9 +171,10 @@ projection 与 unified diff 以 turn render revision 缓存，代码高亮复用
 ### Agent 管理
 
 - 设置页提供 Agent 列表和独立详情，列表状态、搜索与筛选在返回时保留。
-- 当前支持 Codex 与 Grok。Cursor 已退役，不出现在“全部支持”、配置、检测或安装入口中。
+- 当前支持 Codex、Grok 与 Claude Code。Cursor 已退役，不出现在“全部支持”、配置、检测或安装入口中。
 - 详情包含基础诊断、模型和 provider 对应配置；桌面端双栏，窄窗口上下排列。
-- 连接测试只执行版本、账号与协议握手，不发送真实模型 turn。
+- 自动检测只做本地版本、账号 metadata 与日志路径检查。Claude Code 的显式连接测试
+  会执行 20 秒上限的最小模型回合，触发前必须提示可能产生少量用量。
 - 禁用 Codex 后不再允许创建可写会话；既有会话仍可读取历史，输入区隐藏并显示
   只读提示。
 
@@ -405,7 +408,8 @@ Provider 的 Thread 访问统一经过 `ProviderOperationScheduler`。列表使�
 
 ### 默认 provider
 
-当前活跃 provider 为 Codex CLI 与 Grok ACP，默认 active provider 为 Codex CLI：
+当前活跃 provider 为 Codex CLI、Grok ACP 与 Claude Code stream-json，默认 active
+provider 为 Codex CLI：
 
 ```text
 codex app-server
@@ -423,6 +427,14 @@ Grok provider 使用 ACP stdio、本地历史和 xAI 扩展。标准 ACP
 source metadata，正文按 boundary 分段，reasoning 按连续 phase 聚合，tool update 按 id 在
 原位置更新。History 与 live 不共享 epoch 或 mutable state，只以 canonical signature 对齐。
 
+Claude Code provider 使用常驻 stream-json stdio；Provider 在写 user 帧前自行 mint
+turnId，并在自有 identity/reducer 内完成消息分段、reasoning phase、tool upsert、去重和
+终态。历史只读扫描 `~/.claude/projects/<encoded-cwd>/*.jsonl`，使用独立 history
+identity/reducer；隐藏记录只写 Zeta 自有版本化列表，不改 Claude 文件。权限和 Plan
+审批分别使用独立 registry；模型切换与 `/compact` 都在当前 Binding 的空闲边界执行。
+实际 wire 与升级门禁见
+[Claude Code stream-json 协议基线](../protocols/claude_code_stream_json_protocol.md)。
+
 Cursor 不再参与运行时组合。旧 `cursor` id 与 `cursorAcp` kind 只用于配置 decode、
 unavailable 展示和安全 fallback；`DefaultAgentProviderFactory` 对二者 fail-closed。
 catalog、设置、Agent 管理、deep link、workspace 恢复和历史入口都不能创建 Cursor
@@ -433,6 +445,10 @@ provider 或启动进程。退役不会迁移或改写任何 Cursor 用户数据
 `AgentManagementController` 负责管理页异步编排，并复用
 `AgentProviderSettingsController` 的全局 provider 配置。各活跃 CLI 使用独立 management
 repository；协议 transport 不记录 prompt、文件内容或 stderr 原文。
+
+Claude Code 自动检测只执行 `--version`、登录文件 stat/mtime 与日志路径枚举，不读取
+凭证正文、不启动模型。显式连接测试才创建临时、无会话持久化的 stream-json peer，
+等待同 session 的 init + result，并在 UI 中先提示潜在用量。
 
 检测摘要和真实 CLI 路径保存在 provider `extra` 中；项目 thread 仍只保存稳定的
 `providerId`。管理 feature 不解析 thread/turn 原始协议，也不替代现有 provider。
@@ -450,12 +466,12 @@ repository；协议 transport 不记录 prompt、文件内容或 stderr 原文�
 - `AgentConversationViewModel` 的会话、历史、steer、权限响应、独立用户提问响应、
   Guardian 放行、模型目录与计划审批路由。
 - `ProjectThreadsController` 的列表、重命名、归档、删除与分叉。
-- Codex / Grok 的 bundle 端口一致性契约测试，以及 Cursor 退役不可达性测试。
+- Codex / Grok / Claude Code 的 bundle 端口一致性契约测试，以及 Cursor 退役不可达性测试。
 - Codex Default / Plan 运行时目录、逐 turn mode 快照、settings/history 回写与
   Composer 紧凑选择器；不支持 mode 的 Provider 保持原布局和普通发送路径。
 
 权限选项选择已收口到中立 `AgentPermissionPolicyPort`：application/presentation 只消费
-option 目录与 optionId；Codex/Grok 协议映射留在 data adapter/codec。Provider 配置 V2
+option 目录与 optionId；Codex/Grok/Claude Code 协议映射留在 data adapter/codec。Provider 配置 V2
 仅持久化 `selectedPermissionOptionId`。V1 多字段由 data/config 的
 `AgentProviderPermissionMigrationRegistry` 按 provider kind 路由到 Codex/Grok 专属实现；
 组合层负责注册，V2 key 存在时短路迁移。Domain config 只保存归一化 optionId。旧
@@ -682,6 +698,8 @@ IDE 会话状态目前版本为 2，持久化内容包括：
 - Codex provider 事件映射。
 - Grok decoder/adapter/reducer、live/history 状态隔离、canonical ordering regression、history
   reader 只读性，以及 TimelineStore 的 dumb merge/history 应用顺序。
+- Claude Code stream-json peer、process argv、Provider-local identity/mapper、权限与 Plan
+  wire、live/history canonical parity、模型切换、`/compact` 与只读历史边界。
 - 共享层架构守卫：decoder/CoalescingPolicy/Buffer/TimelineStore 不 import 具体 Provider，不按
   providerId/kind/type 分支，也不从 raw/source/eventId 推断 identity 或 narrative boundary。
 - Provider-local 序列契约：每个 Provider 在进入共享层前完成 source→entry、segment/phase、
