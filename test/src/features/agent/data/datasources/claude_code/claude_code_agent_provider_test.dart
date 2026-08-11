@@ -75,6 +75,46 @@ void main() {
       expect(completed.turnId, 'turn-hello-1');
     });
 
+    test('compactThread sends /compact as a normal user text turn', () async {
+      final process = _FakeClaudeProcess();
+      final provider = ClaudeCodeAgentProvider(
+        config: AgentProviderConfig.defaultClaudeCode,
+        processStarter: _starter(process),
+        whichLookup: (command) async => command,
+        idFactory: _sequenceIds(<String>[
+          '00000000-0000-4000-8000-000000000031',
+          'turn-compact-1',
+        ]),
+      );
+      addTearDown(provider.dispose);
+
+      final events = <AgentEvent>[];
+      provider.events.listen(events.add);
+      final session = await provider.startSession(
+        context: const AgentContext(projectPath: '/tmp/zeta-cc-compact'),
+      );
+
+      await expectLater(
+        provider.compactThread('another-session'),
+        throwsStateError,
+      );
+      expect(process.receivedUserFrames, isEmpty);
+
+      await provider.compactThread(session.id);
+      await pumpEventQueue();
+
+      expect(process.receivedUserTexts, <String>['/compact']);
+      final userFrame = process.receivedUserFrames.single;
+      expect(userFrame['session_id'], session.id);
+      expect(userFrame['message'], <String, Object?>{
+        'role': 'user',
+        'content': <Object?>[
+          <String, Object?>{'type': 'text', 'text': '/compact'},
+        ],
+      });
+      expect(events.whereType<AgentTurnStartedEvent>(), hasLength(1));
+    });
+
     test(
       'can_use_tool emits permission event then control_response on decide',
       () async {
@@ -396,6 +436,152 @@ void main() {
       expect(reader.readSessionPath, '/claude/history-thread-1.jsonl');
       expect(history.threadId, 'history-thread-1');
     });
+
+    test('listModels returns the complete static Claude catalog', () async {
+      final provider = ClaudeCodeAgentProvider(
+        config: AgentProviderConfig.defaultClaudeCode,
+      );
+      addTearDown(provider.dispose);
+
+      final models = await provider.listModels(limit: 1);
+
+      expect(models.models, hasLength(6));
+      expect(
+        models.models.where((model) => model.isDefault).single.id,
+        'sonnet',
+      );
+    });
+
+    test('persisted model selection is used for the first peer', () async {
+      final process = _FakeClaudeProcess();
+      final starts = <_RecordedProcessStart>[];
+      final provider = ClaudeCodeAgentProvider(
+        config: AgentProviderConfig.defaultClaudeCode.copyWith(
+          selectedModel: 'haiku',
+        ),
+        processStarter: _queueStarter(<_FakeClaudeProcess>[process], starts),
+        whichLookup: (command) async => command,
+        idFactory: () => 'session-initial-model-1',
+      );
+      addTearDown(provider.dispose);
+
+      await provider.startSession(
+        context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+      );
+
+      expect(starts, hasLength(1));
+      expect(
+        starts.single.arguments,
+        containsAllInOrder(<String>['--model', 'haiku']),
+      );
+    });
+
+    test(
+      'idle model switch resumes the same session before next turn',
+      () async {
+        final firstProcess = _FakeClaudeProcess();
+        final secondProcess = _FakeClaudeProcess();
+        final starts = <_RecordedProcessStart>[];
+        final provider = ClaudeCodeAgentProvider(
+          config: AgentProviderConfig.defaultClaudeCode,
+          processStarter: _queueStarter(<_FakeClaudeProcess>[
+            firstProcess,
+            secondProcess,
+          ], starts),
+          whichLookup: (command) async => command,
+          idFactory: _sequenceIds(<String>[
+            'session-model-switch-1',
+            'turn-model-switch-1',
+          ]),
+        );
+        addTearDown(provider.dispose);
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+        );
+
+        provider.updateModelSelection(
+          const AgentModelSelection(modelId: 'sonnet'),
+        );
+        await provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+          message: 'use selected model',
+        );
+
+        expect(starts, hasLength(2));
+        expect(starts.first.arguments, isNot(contains('--model')));
+        expect(
+          starts.last.arguments,
+          containsAllInOrder(<String>[
+            '--resume',
+            session.id,
+            '--model',
+            'sonnet',
+          ]),
+        );
+        expect(firstProcess.receivedUserTexts, isEmpty);
+        expect(secondProcess.receivedUserTexts, <String>['use selected model']);
+      },
+    );
+
+    test(
+      'model update during a turn only affects the following turn',
+      () async {
+        final firstProcess = _FakeClaudeProcess();
+        final secondProcess = _FakeClaudeProcess();
+        final starts = <_RecordedProcessStart>[];
+        final provider = ClaudeCodeAgentProvider(
+          config: AgentProviderConfig.defaultClaudeCode,
+          processStarter: _queueStarter(<_FakeClaudeProcess>[
+            firstProcess,
+            secondProcess,
+          ], starts),
+          whichLookup: (command) async => command,
+          idFactory: _sequenceIds(<String>[
+            'session-running-model-1',
+            'turn-running-model-1',
+            'turn-running-model-2',
+          ]),
+        );
+        addTearDown(provider.dispose);
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+        );
+        firstProcess.emitInit(sessionId: session.id);
+        await pumpEventQueue(times: 3);
+        await provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+          message: 'first turn',
+        );
+
+        provider.updateModelSelection(
+          const AgentModelSelection(modelId: 'haiku'),
+        );
+        expect(starts, hasLength(1));
+        expect(firstProcess.receivedUserTexts, <String>['first turn']);
+
+        firstProcess.emitResultSuccess(sessionId: session.id);
+        await pumpEventQueue(times: 5);
+        await provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+          message: 'second turn',
+        );
+
+        expect(starts, hasLength(2));
+        expect(
+          starts.last.arguments,
+          containsAllInOrder(<String>[
+            '--resume',
+            session.id,
+            '--model',
+            'haiku',
+          ]),
+        );
+        expect(secondProcess.receivedUserTexts, <String>['second turn']);
+      },
+    );
 
     test(
       'turn permission snapshot resumes same session before sending user frame',

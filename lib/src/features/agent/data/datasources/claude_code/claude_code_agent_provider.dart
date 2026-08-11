@@ -5,6 +5,7 @@ import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_control_request_handler.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_event_mapper.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_hidden_thread_store.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_model_catalog.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_permission_policy_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_plan_approval_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_process_starter.dart';
@@ -36,6 +37,7 @@ class ClaudeCodeAgentProvider
     ProcessStarter? processStarter,
     this._whichLookup,
     ClaudeCodeEventMapper? mapper,
+    ClaudeCodeModelCatalog? modelCatalog,
     ClaudeCodeControlRequestHandler? controlRequestHandler,
     ClaudeCodeSessionDecisionStoreFactory? sessionDecisionStoreFactory,
     ClaudeCodeSessionHistoryReader? sessionHistoryReader,
@@ -43,11 +45,17 @@ class ClaudeCodeAgentProvider
     String Function()? idFactory,
   }) : _processStarterDelegate = processStarter,
        _mapper = mapper ?? ClaudeCodeEventMapper(providerId: config.id),
+       _modelCatalog = modelCatalog ?? const ClaudeCodeModelCatalog(),
        _controlHandler =
            controlRequestHandler ?? ClaudeCodeControlRequestHandler(),
        _sessionHistoryReader =
            sessionHistoryReader ??
            ClaudeCodeSessionHistoryReader(hiddenThreadStore: hiddenThreadStore),
+       _modelSelection = AgentModelSelection(
+         modelId: config.selectedModel,
+         reasoningEffort: config.selectedReasoningEffort,
+         serviceTierId: config.selectedServiceTier,
+       ),
        _idFactory = idFactory ?? _defaultIdFactory {
     _planApprovalAdapter = _mapper.planApprovalAdapter;
     _permissionMode = ClaudeCodePermissionModeCodec.parseOptionId(
@@ -65,9 +73,11 @@ class ClaudeCodeAgentProvider
   final ProcessStarter? _processStarterDelegate;
   final Future<String?> Function(String command)? _whichLookup;
   final ClaudeCodeEventMapper _mapper;
+  final ClaudeCodeModelCatalog _modelCatalog;
   final ClaudeCodeControlRequestHandler _controlHandler;
   final ClaudeCodeSessionHistoryReader _sessionHistoryReader;
   final String Function() _idFactory;
+  AgentModelSelection _modelSelection;
   late final ClaudeCodePlanApprovalAdapter _planApprovalAdapter;
   late final ClaudeCodePermissionPolicyAdapter _permissionPolicy;
   late ClaudeCodePermissionMode _permissionMode;
@@ -88,6 +98,7 @@ class ClaudeCodeAgentProvider
   String? _expectedPeerSessionId;
   String? _sessionId;
   String? _workingDirectory;
+  String? _activePeerModel;
   final Map<String, String> _runningTurnIdsBySessionId = <String, String>{};
 
   bool _initialized = false;
@@ -177,6 +188,7 @@ class ClaudeCodeAgentProvider
       sessionId: sessionId,
       workingDirectory: cwd,
       resumeSessionId: null,
+      model: _effectiveModel,
     );
     _sessionId = sessionId;
     _workingDirectory = cwd;
@@ -216,6 +228,7 @@ class ClaudeCodeAgentProvider
       sessionId: normalizedSessionId,
       workingDirectory: cwd,
       resumeSessionId: normalizedSessionId,
+      model: _effectiveModel,
     );
     _sessionId = normalizedSessionId;
     _workingDirectory = cwd;
@@ -246,14 +259,13 @@ class ClaudeCodeAgentProvider
     int limit = 20,
     bool includeHidden = false,
   }) async {
-    throw UnsupportedError(
-      '${config.displayName} does not support model catalog yet',
-    );
+    return _modelCatalog.listModels(limit: limit, includeHidden: includeHidden);
   }
 
   @override
   void updateModelSelection(AgentModelSelection selection) {
-    // 模型在进程启动参数中生效；运行时切换需重启（后续任务）。
+    _modelSelection = selection;
+    _log.t('Updated Claude Code model selection');
   }
 
   @override
@@ -338,8 +350,31 @@ class ClaudeCodeAgentProvider
 
   @override
   Future<void> compactThread(String threadId) async {
-    throw UnsupportedError(
-      '${config.displayName} does not support compact yet',
+    final normalizedThreadId = threadId.trim();
+    if (normalizedThreadId.isEmpty) {
+      throw ArgumentError.value(threadId, 'threadId', 'must not be empty');
+    }
+    if (normalizedThreadId != _sessionId) {
+      throw StateError(
+        'Claude Code provider is bound to session $_sessionId, '
+        'not $normalizedThreadId',
+      );
+    }
+    final workingDirectory = _workingDirectory;
+    if (workingDirectory == null || workingDirectory.isEmpty) {
+      throw StateError('Claude Code compact requires an active session');
+    }
+
+    // Claude 没有独立 compact 控制帧；斜杠命令仍是普通用户回合，必须复用
+    // sendMessage 的并发、权限、模型与 session 绑定检查。
+    await sendMessage(
+      session: AgentSession(
+        id: normalizedThreadId,
+        providerId: config.id,
+        raw: <String, Object?>{'cwd': workingDirectory},
+      ),
+      context: AgentContext(projectPath: workingDirectory),
+      message: '/compact',
     );
   }
 
@@ -384,6 +419,7 @@ class ClaudeCodeAgentProvider
           '($existingTurnId)',
         );
       }
+      final requestedModel = _effectiveModel;
 
       text = _resolvePromptText(message: message, inputs: inputs);
       if (text.trim().isEmpty) {
@@ -393,6 +429,10 @@ class ClaudeCodeAgentProvider
       await _applyTurnPermissionSnapshot(
         session: session,
         snapshot: configuration.permissionSnapshot,
+      );
+      await _applyTurnModelSelection(
+        session: session,
+        requestedModel: requestedModel,
       );
       final activePeer = _peer;
       final runtimeScope = _runtimeScope;
@@ -639,6 +679,7 @@ class ClaudeCodeAgentProvider
     final peer = _peer;
     _peer = null;
     _expectedPeerSessionId = null;
+    _activePeerModel = null;
     if (peer != null) {
       try {
         await peer.close();
@@ -654,11 +695,14 @@ class ClaudeCodeAgentProvider
     required String sessionId,
     required String workingDirectory,
     required String? resumeSessionId,
+    required String? model,
   }) async {
+    final normalizedModel = _normalizeModel(model);
     final existing = _peer;
     if (existing != null &&
         _sessionId == sessionId &&
-        _workingDirectory == workingDirectory) {
+        _workingDirectory == workingDirectory &&
+        _activePeerModel == normalizedModel) {
       return;
     }
     if (existing != null) {
@@ -669,7 +713,7 @@ class ClaudeCodeAgentProvider
       config,
       sessionId: resumeSessionId == null ? sessionId : null,
       resumeSessionId: resumeSessionId,
-      model: config.selectedModel ?? config.defaultModel,
+      model: normalizedModel,
       permissionMode: ClaudeCodePermissionModeCodec.toCliPermissionMode(
         _permissionMode,
       ),
@@ -700,6 +744,7 @@ class ClaudeCodeAgentProvider
       ),
     );
     await peer.start();
+    _activePeerModel = normalizedModel;
     _emitStatus(
       AgentProviderStatus(
         state: AgentProviderConnectionState.ready,
@@ -716,6 +761,7 @@ class ClaudeCodeAgentProvider
     final peer = _peer;
     _peer = null;
     _expectedPeerSessionId = null;
+    _activePeerModel = null;
     _controlHandler.clearPending();
     _planApprovalAdapter.clear();
     if (peer != null) {
@@ -904,6 +950,60 @@ class ClaudeCodeAgentProvider
     await _switchPermissionMode(nextMode, allowTurnAdmission: true);
   }
 
+  Future<void> _applyTurnModelSelection({
+    required AgentSession session,
+    required String? requestedModel,
+  }) async {
+    final normalizedModel = _normalizeModel(requestedModel);
+    if (_activePeerModel == normalizedModel) {
+      return;
+    }
+    if (_runningTurnIdsBySessionId.isNotEmpty ||
+        _controlHandler.pendingCount > 0 ||
+        _planApprovalAdapter.pendingCount > 0) {
+      throw StateError(
+        'Claude Code model cannot change while a turn is running',
+      );
+    }
+    if (session.id != _sessionId) {
+      throw StateError(
+        'Claude Code provider is bound to session $_sessionId, '
+        'not ${session.id}',
+      );
+    }
+    final workingDirectory = _workingDirectory;
+    if (_peer == null || workingDirectory == null) {
+      throw StateError('Claude Code peer has no active session identity');
+    }
+
+    final previousModel = _activePeerModel;
+    await _tearDownPeer();
+    try {
+      await _ensurePeer(
+        sessionId: session.id,
+        workingDirectory: workingDirectory,
+        resumeSessionId: session.id,
+        model: normalizedModel,
+      );
+    } catch (error, stackTrace) {
+      await _tearDownPeer();
+      try {
+        await _ensurePeer(
+          sessionId: session.id,
+          workingDirectory: workingDirectory,
+          resumeSessionId: session.id,
+          model: previousModel,
+        );
+      } catch (restoreError) {
+        _log.w(
+          'Could not restore Claude Code peer after model switch '
+          '(${restoreError.runtimeType})',
+        );
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  }
+
   Future<AgentPermissionApplyScope> _switchPermissionMode(
     ClaudeCodePermissionMode nextMode, {
     required bool allowTurnAdmission,
@@ -938,6 +1038,8 @@ class ClaudeCodeAgentProvider
         throw StateError('Claude Code peer has no active session identity');
       }
       final previousMode = _permissionMode;
+      final previousModel = _activePeerModel;
+      final requestedModel = _effectiveModel;
       await _tearDownPeer();
       _permissionMode = nextMode;
       try {
@@ -945,6 +1047,7 @@ class ClaudeCodeAgentProvider
           sessionId: sessionId,
           workingDirectory: workingDirectory,
           resumeSessionId: sessionId,
+          model: requestedModel,
         );
       } catch (error, stackTrace) {
         await _tearDownPeer();
@@ -954,6 +1057,7 @@ class ClaudeCodeAgentProvider
             sessionId: sessionId,
             workingDirectory: workingDirectory,
             resumeSessionId: sessionId,
+            model: previousModel,
           );
         } catch (restoreError) {
           _log.w(
@@ -970,6 +1074,11 @@ class ClaudeCodeAgentProvider
         _permissionModeSwitchOperation = null;
       }
     }
+  }
+
+  String? get _effectiveModel {
+    return _normalizeModel(_modelSelection.modelId) ??
+        _normalizeModel(config.defaultModel);
   }
 
   String _resolvePromptText({
@@ -992,6 +1101,11 @@ class ClaudeCodeAgentProvider
       }
     }
     return parts.join('\n');
+  }
+
+  static String? _normalizeModel(String? value) {
+    final normalized = value?.trim();
+    return normalized == null || normalized.isEmpty ? null : normalized;
   }
 
   static Map<String, Object?>? _stringKeyedMap(Object? value) {

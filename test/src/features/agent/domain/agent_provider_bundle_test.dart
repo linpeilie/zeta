@@ -324,6 +324,8 @@ void main() {
         expect(bundle.capabilities.supportsPermissionRequests, isTrue);
         expect(bundle.capabilities.supportsPlanApproval, isTrue);
         expect(bundle.interactions, isNotNull);
+        expect(bundle.threadMutations, isNotNull);
+        expect(bundle.modelCatalog, isNotNull);
         expect(bundle.permissionPolicy, isNotNull);
         expect(bundle.planApproval, isNotNull);
 

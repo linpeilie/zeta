@@ -236,8 +236,8 @@ class AgentProviderCapabilities {
   /// Claude Code 当前已落地能力集。
   ///
   /// 开放创建/恢复会话、本地历史列表与读取、prompt / cancel / usage、权限审批、
-  /// Plan 审批，以及 Zeta 本地隐藏记录；模型选择等随后续任务逐步打开，避免
-  /// 「入口在但点了报错」的窗口期（G4）。
+  /// Plan 审批、Zeta 本地隐藏记录、静态模型选择与 `/compact`；其他能力随后续任务
+  /// 逐步打开，避免「入口在但点了报错」的窗口期（G4）。
   static const claudeCode = AgentProviderCapabilities(
     canCreateSession: true,
     canResumeSession: true,
@@ -246,8 +246,10 @@ class AgentProviderCapabilities {
     canRemoveThreadFromList: true,
     canPrompt: true,
     canCancelTurn: true,
+    canCompactThread: true,
     supportsPermissionRequests: true,
     supportsPlanApproval: true,
+    supportsModelSelection: true,
     supportsUsage: true,
   );
 

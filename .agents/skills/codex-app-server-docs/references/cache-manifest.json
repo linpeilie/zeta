@@ -15,22 +15,22 @@
     }
   },
   "documentation": {
-    "etag": "\"1e50537f896019942deffb3e0d3cd67ac1af98e6568acc2fee8f6ec5a6da82e7\"",
+    "etag": "\"031252d04bceaef572ec36f797a8e72276b88e7f76431056351858a2fc703a18\"",
     "last_modified": null,
     "path": "references/cached-app-server.md",
     "published_url": "https://developers.openai.com/codex/app-server",
-    "sha256": "f4b8bbc4ebd3d965ab51b18b87dc928bf108fcfaba2da34d0d4cd3e52069c99c",
+    "sha256": "12d71ff1ffdf6b225d65dc2e1c63b7f0d9eb2e61212ffe40d6822d20b9a7692a",
     "source": "https://raw.githubusercontent.com/openai/codex/main/codex-rs/app-server/README.md",
-    "updated_at": "2026-08-04T03:50:29.282988Z"
+    "updated_at": "2026-08-11T14:12:55.399147Z"
   },
   "format_version": 1,
   "latest_release": {
-    "etag": "W/\"d04cd1bb76c3281c3402f1466fb653173d9bc7a697f85f28b6b16189d059002d\"",
-    "html_url": "https://github.com/openai/codex/releases/tag/rust-v0.146.0",
-    "published_at": "2026-07-29T01:42:51Z",
+    "etag": "W/\"fe269b1a4cd531b6f0fc9e5556e87bb044b7ec3ab3dd85a922f111dc7fb33475\"",
+    "html_url": "https://github.com/openai/codex/releases/tag/rust-v0.147.0",
+    "published_at": "2026-08-07T01:41:49Z",
     "source": "https://api.github.com/repos/openai/codex/releases/latest",
-    "tag_name": "rust-v0.146.0",
-    "updated_at": "2026-07-30T08:15:15.057221Z",
-    "version": "0.146.0"
+    "tag_name": "rust-v0.147.0",
+    "updated_at": "2026-08-11T14:12:55.399147Z",
+    "version": "0.147.0"
   }
 }
