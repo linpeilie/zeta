@@ -36,17 +36,8 @@ class _AgentActivePlanSection extends StatelessWidget {
           return ListenableBuilder(
             listenable: turnState,
             builder: (context, _) {
-              final headerState = viewModel.headerState;
-              final pendingState = viewModel.pendingInteractionState;
               final entries = turnState.planEntries;
-              final shouldShow =
-                  headerState.isTurnRunning &&
-                  !headerState.isReadOnly &&
-                  entries.length >= 2 &&
-                  pendingState.isEmpty &&
-                  !headerState.waitingOnApproval &&
-                  !headerState.waitingOnUserInput;
-              if (!shouldShow) {
+              if (!viewModel.shouldShowActivePlan) {
                 return const SizedBox.shrink();
               }
               return _AgentContentAlign(

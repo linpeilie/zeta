@@ -364,14 +364,14 @@ class _AgentConversationTimeline extends StatelessWidget {
         final liveSnapshot = liveTurnState?.snapshot();
         final expansionState = viewModel.expansionState;
         final pendingState = viewModel.pendingInteractionState;
-        // Plan 浮层已展示多步骤进度时，隐藏时间线末尾的 live 活动条，
-        // 避免计划卡下方再叠「进行中 / 工具运行」状态行。
+        // 阻塞式计划文档自身已承载等待决策的反馈；仅在它展示时隐藏 live
+        // 活动条。实时步骤进度浮层不等价于活动状态，两者应同时保留。
         final items = projectAgentTimelineViewportItems(
           standbyTurn: standbySnapshot,
           visibleHistoryTurns: historyTurns,
           liveTurn: liveSnapshot,
           resolveBlocks: projectionCache.resolve,
-          showLiveActivity: !viewModel.shouldShowActivePlan,
+          showLiveActivity: !pendingState.hasBlockingPlanDocument,
         );
         // 仅保留当前可见 turn 的投影缓存，避免历史窗口滑动后无限增长。
         projectionCache.retainOnly(<String>{

@@ -318,6 +318,13 @@ final class AgentPendingInteractionState {
       planApprovals.isNotEmpty ||
       planExecutionHandoff != null;
 
+  /// 是否正在对话流内展示阻塞式计划文档。
+  ///
+  /// 该状态与实时步骤进度浮层不同；计划文档自身已承载等待用户决策的反馈，
+  /// 展示期间不再叠加 live 活动条。
+  bool get hasBlockingPlanDocument =>
+      planApprovals.isNotEmpty || planExecutionHandoff != null;
+
   AgentAutoApprovalReviewEvent? autoReviewForTurn(String? turnId) =>
       turnId == null ? null : autoReviewsByTurnId[turnId];
 

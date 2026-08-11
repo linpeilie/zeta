@@ -84,6 +84,11 @@ void main() {
       expect(composerSurface, findsNothing);
       expect(messageInput, findsNothing);
       expect(tester.getSize(conversationFooter).height, greaterThan(0));
+      // 用户提问仍由 live 活动条反馈等待状态；不能复用计划文档的隐藏条件。
+      expect(
+        find.byKey(const ValueKey('agent-live-activity-status')),
+        findsOneWidget,
+      );
 
       await tester.tap(
         find.byKey(const ValueKey('agent-question-question-1-scope-source')),

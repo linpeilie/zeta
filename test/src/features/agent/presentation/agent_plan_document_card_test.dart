@@ -121,6 +121,10 @@ void main() {
       await viewModel.initialization;
       await viewModel.sendMessage('plan this change');
       await pumpLiveAgentUi(tester);
+      expect(
+        find.byKey(const ValueKey('agent-live-activity-status')),
+        findsOneWidget,
+      );
 
       provider.emitEvent(
         const AgentPlanApprovalRequestedEvent(
@@ -135,6 +139,15 @@ void main() {
       await pumpAgentPaneUi(tester);
 
       final revise = find.byKey(const ValueKey('agent-plan-revise-plan-1'));
+      expect(
+        find.byKey(const ValueKey('agent-plan-approval-card-plan-1')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('agent-message-input')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('agent-live-activity-status')),
+        findsNothing,
+      );
       expect(tester.widget<IdeButton>(revise).onPressed, isNull);
 
       await tester.enterText(
@@ -150,6 +163,10 @@ void main() {
       expect(decision.kind, AgentPlanApprovalDecisionKind.rejected);
       expect(decision.reason, '先补一个回归测试');
       expect(provider.sentMessages, hasLength(1));
+      expect(
+        find.byKey(const ValueKey('agent-live-activity-status')),
+        findsOneWidget,
+      );
 
       provider.emitEvent(
         const AgentTurnCompletedEvent(
