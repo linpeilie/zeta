@@ -220,5 +220,17 @@ Claude Code stream-json 没有仓库内可生成的官方 schema pin。升级 CL
 6. 执行 `tool/smoke_claude_code_stream_json.py` 的真实平台冒烟；若设备或凭据不可用，
    明确标记“待执行/阻塞”，不得推断通过。
 
-冒烟脚本属于 T33，在脚本加入并实际执行前，本基线只声明脱敏取样和自动化 fake
-Process 测试结果，不声明发布前真实平台冒烟已经通过。
+### 12.1 真实兼容性冒烟记录
+
+2026-08-11 使用 `tool/smoke_claude_code_stream_json.py` 完成一次脱敏真机运行：
+
+| 项目 | 结果 |
+| --- | --- |
+| OS / 架构 | Darwin / x86_64 |
+| Claude Code CLI | `2.1.227` |
+| Schema / 包装器 | stream-json 行协议 |
+| 结果 | `PASS (init+assistant+result)` |
+
+该记录验证 2.1.227 对本基线核心 init / assistant / result 链路的兼容性，不把取样基线
+2.1.224 静默改写成新的最低支持版本，也不替代其他声明平台的真实验收。输出未包含
+prompt、回复、文件内容、路径、session/turn id、stderr 或原始 payload。
