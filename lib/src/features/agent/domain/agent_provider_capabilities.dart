@@ -233,14 +233,16 @@ class AgentProviderCapabilities {
   /// 尚未接入的 provider 使用全关闭能力，避免误显示可操作入口。
   static const unsupported = AgentProviderCapabilities();
 
-  /// Claude Code 的 M1 能力集。
+  /// Claude Code 的 M3 能力集。
   ///
-  /// 开放创建会话 / prompt / cancel / usage；列表、历史、权限、Plan、模型选择等
-  /// 随后续任务逐步打开，避免「入口在但点了报错」的窗口期（G4）。
+  /// 开放创建会话 / prompt / cancel / usage / 权限审批 / Plan 审批；列表、历史、
+  /// 模型选择等随后续任务逐步打开，避免「入口在但点了报错」的窗口期（G4）。
   static const claudeCode = AgentProviderCapabilities(
     canCreateSession: true,
     canPrompt: true,
     canCancelTurn: true,
+    supportsPermissionRequests: true,
+    supportsPlanApproval: true,
     supportsUsage: true,
   );
 

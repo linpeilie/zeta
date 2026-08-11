@@ -314,6 +314,37 @@ void main() {
       },
     );
 
+    test(
+      'adapts Claude Code permission and plan ports automatically',
+      () async {
+        final provider = _ClaudeCodeBundleFakeProvider();
+        final bundle = provider.bundle;
+
+        expect(provider.config.kind, AgentProviderKind.claudeCode);
+        expect(bundle.capabilities.supportsPermissionRequests, isTrue);
+        expect(bundle.capabilities.supportsPlanApproval, isTrue);
+        expect(bundle.interactions, isNotNull);
+        expect(bundle.permissionPolicy, isNotNull);
+        expect(bundle.planApproval, isNotNull);
+
+        final catalog = await bundle.permissionPolicy!.listPermissionOptions();
+        expect(catalog.defaultOptionId, ':ask');
+        await bundle.planApproval!.respondToPlanApproval(
+          const AgentPlanApprovalDecision(
+            requestId: 'claude-plan-1',
+            kind: AgentPlanApprovalDecisionKind.accepted,
+          ),
+        );
+
+        expect(provider.planDecisions, const <AgentPlanApprovalDecision>[
+          AgentPlanApprovalDecision(
+            requestId: 'claude-plan-1',
+            kind: AgentPlanApprovalDecisionKind.accepted,
+          ),
+        ]);
+      },
+    );
+
     test('keeps concurrent turn configurations isolated by call', () async {
       final provider = _MinimalBundleFakeProvider();
       final bundle = provider.bundle;
@@ -758,6 +789,35 @@ class _PermissionBundleFakeProvider extends _MinimalBundleFakeProvider
   @override
   AgentPermissionPolicyPort get permissionPolicy =>
       _BundleFakePermissionPort(this);
+}
+
+class _ClaudeCodeBundleFakeProvider extends _MinimalBundleFakeProvider
+    implements AgentPermissionPolicyProvider, AgentPlanApprovalProvider {
+  _ClaudeCodeBundleFakeProvider()
+    : super(
+        config: AgentProviderConfig.defaultClaudeCode,
+        capabilities: AgentProviderCapabilities.claudeCode,
+        permissionOptions: const <AgentPermissionOption>[
+          AgentPermissionOption(
+            id: ':ask',
+            label: 'Ask',
+            description: 'Ask before using tools',
+            allowed: true,
+          ),
+        ],
+      );
+
+  final List<AgentPlanApprovalDecision> planDecisions =
+      <AgentPlanApprovalDecision>[];
+
+  @override
+  AgentPermissionPolicyPort get permissionPolicy =>
+      _BundleFakePermissionPort(this);
+
+  @override
+  Future<void> respondToPlanApproval(AgentPlanApprovalDecision decision) async {
+    planDecisions.add(decision);
+  }
 }
 
 final class _BundleFakePermissionPort implements AgentPermissionPolicyPort {

@@ -22,10 +22,11 @@ void main() {
     'lib/src/features/agent/domain/agent_provider_bundle.dart',
   ];
 
-  /// T18：G1 五文件内容基线（lineCount + byteLength + FNV-1a 指纹）。
+  /// T18：G1 五文件内容基线（lineCount + 规范化 byteLength + FNV-1a 指纹）。
   ///
   /// 接入 Claude Code 期间这些文件必须 `git diff` 为空；若实现不得不改共享层，
-  /// 先停下来开 Issue，不要默默更新本基线。
+  /// 先停下来开 Issue，不要默默更新本基线。长度与指纹统一按 LF 计算，避免不同
+  /// 平台的 checkout 行尾让守卫误报。
   const g1ContentBaselines = <String, _FileBaseline>{
     'lib/src/features/agent/application/agent_event_pipeline.dart':
         _FileBaseline(
@@ -54,8 +55,8 @@ void main() {
     'lib/src/features/agent/application/agent_conversation_timeline_store.dart':
         _FileBaseline(
           lineCount: 2010,
-          byteLength: 68946,
-          fingerprint: 'f713da4cb0fe2f62',
+          byteLength: 66936,
+          fingerprint: '9f7eb7de225cb500',
         ),
   };
 
@@ -127,11 +128,20 @@ void main() {
       );
     });
 
+    test('content baseline normalizes platform line endings', () {
+      final lf = utf8.encode('first\nsecond\n');
+      final crlf = utf8.encode('first\r\nsecond\r\n');
+      final cr = utf8.encode('first\rsecond\r');
+
+      expect(_normalizedUtf8Bytes(crlf), lf);
+      expect(_normalizedUtf8Bytes(cr), lf);
+    });
+
     test('G1 five application files keep frozen content baseline (T18)', () {
       for (final entry in g1ContentBaselines.entries) {
         final path = entry.key;
         final expected = entry.value;
-        final bytes = File(path).readAsBytesSync();
+        final bytes = _normalizedUtf8Bytes(File(path).readAsBytesSync());
         final source = utf8.decode(bytes);
         final lineCount = const LineSplitter().convert(source).length;
         final fingerprint = _fingerprintHex(bytes);
@@ -155,6 +165,11 @@ void main() {
       }
     });
   });
+}
+
+List<int> _normalizedUtf8Bytes(List<int> bytes) {
+  final source = utf8.decode(bytes);
+  return utf8.encode(source.replaceAll('\r\n', '\n').replaceAll('\r', '\n'));
 }
 
 final class _FileBaseline {

@@ -74,7 +74,7 @@ void main() {
       expect(capabilities.bootstrapPolicy.allowsEagerModelPreload, isTrue);
     });
 
-    test('exposes M1 create/prompt/cancel/usage for Claude Code', () {
+    test('exposes M3 permission and plan capabilities for Claude Code', () {
       final capabilities = AgentProviderCapabilities.defaultsFor(
         AgentProviderKind.claudeCode,
       );
@@ -95,9 +95,9 @@ void main() {
       expect(capabilities.canForkThread, isFalse);
       expect(capabilities.canForkThreadAtTurn, isFalse);
       expect(capabilities.canCompactThread, isFalse);
-      expect(capabilities.supportsPermissionRequests, isFalse);
+      expect(capabilities.supportsPermissionRequests, isTrue);
       expect(capabilities.supportsUserQuestions, isFalse);
-      expect(capabilities.supportsPlanApproval, isFalse);
+      expect(capabilities.supportsPlanApproval, isTrue);
       expect(capabilities.supportsModelSelection, isFalse);
       expect(capabilities.supportsModeSelection, isFalse);
       expect(capabilities.supportsReasoningOptions, isFalse);
