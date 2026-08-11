@@ -493,26 +493,18 @@ class _QuotaProgressBar extends StatelessWidget {
     final colors = IdeColors.of(context);
     final used = usedPercent.clamp(0, 100);
     final remaining = 100 - used;
-    final fraction = used / 100;
+    final fraction = remaining / 100;
     return Semantics(
       label: '套餐额度',
-      value: '已用 ${used.round()}%，剩余 ${remaining.round()}%',
-      child: ClipRRect(
+      value: '剩余 ${remaining.round()}%',
+      child: sf.LinearProgressIndicator(
+        value: fraction,
+        minHeight: 4,
+        color: colors.textSecondary,
+        backgroundColor: colors.borderSubtle,
         borderRadius: IdeRadius.allMicro,
-        child: SizedBox(
-          height: 4,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              ColoredBox(color: colors.borderSubtle),
-              FractionallySizedBox(
-                alignment: Alignment.centerLeft,
-                widthFactor: fraction,
-                child: ColoredBox(color: colors.textSecondary),
-              ),
-            ],
-          ),
-        ),
+        showSparks: false,
+        disableAnimation: true,
       ),
     );
   }

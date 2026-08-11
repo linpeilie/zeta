@@ -11,6 +11,7 @@ import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_model
 import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_panel.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_effects.dart';
 
 void main() {
   testWidgets('默认 Provider Tab 仅展示 Codex 和 Grok', (tester) async {
@@ -51,25 +52,21 @@ void main() {
     final firstWindow = find.byKey(
       const ValueKey<String>('agent-usage-window-0'),
     );
-    final progressSegments = find.descendant(
+    final progressFinder = find.descendant(
       of: firstWindow,
-      matching: find.byType(ColoredBox),
+      matching: find.byType(sf.LinearProgressIndicator),
     );
-    expect(progressSegments, findsNWidgets(2));
+    expect(progressFinder, findsOneWidget);
 
-    final trackSize = tester.getSize(progressSegments.at(0));
-    final fillSize = tester.getSize(progressSegments.at(1));
-    expect(trackSize.height, 4);
-    expect(fillSize.height, 4);
-    expect(fillSize.width / trackSize.width, closeTo(0.25, 0.001));
-    expect(
-      tester.widget<ColoredBox>(progressSegments.at(0)).color,
-      IdeColors.light.borderSubtle,
-    );
-    expect(
-      tester.widget<ColoredBox>(progressSegments.at(1)).color,
-      IdeColors.light.textSecondary,
-    );
+    final progress = tester.widget<sf.LinearProgressIndicator>(progressFinder);
+    expect(tester.getSize(progressFinder).height, 4);
+    expect(progress.value, 0.25);
+    expect(progress.minHeight, 4);
+    expect(progress.color, IdeColors.light.textSecondary);
+    expect(progress.backgroundColor, IdeColors.light.borderSubtle);
+    expect(progress.borderRadius, IdeRadius.allMicro);
+    expect(progress.showSparks, isFalse);
+    expect(progress.disableAnimation, isTrue);
 
     final semantics = tester.getSemantics(find.bySemanticsLabel('套餐额度').first);
     expect(semantics.value, '已用 25%，剩余 75%');
