@@ -215,6 +215,173 @@ void main() {
     expect(controller.providers.single.provider.providerId, 'grok');
     expect(controller.providers.single.entry?.providerName, 'Grok');
   });
+
+  test('有效恢复值选中对应 Provider 且不触发回写', () async {
+    final repository = _ControlledPanelRepository();
+    final selectionChanges = <String?>[];
+    final controller = AgentUsagePanelController(
+      repository: repository,
+      initialPreferredProviderId: ' grok ',
+      onSelectionChanged: selectionChanges.add,
+    );
+    addTearDown(controller.dispose);
+
+    final refresh = controller.refresh();
+    repository.controllers.single
+      ..add(_directory)
+      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21)))
+      ..close();
+    await refresh;
+
+    expect(controller.preferredProviderId, 'grok');
+    expect(controller.selectedProviderId, 'grok');
+    expect(selectionChanges, isEmpty);
+  });
+
+  test('失效恢复值按目录首项回退并回写一次', () async {
+    final repository = _ControlledPanelRepository();
+    final selectionChanges = <String?>[];
+    final controller = AgentUsagePanelController(
+      repository: repository,
+      initialPreferredProviderId: 'missing',
+      onSelectionChanged: selectionChanges.add,
+    );
+    addTearDown(controller.dispose);
+
+    final refresh = controller.refresh();
+    repository.controllers.single
+      ..add(_directory)
+      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21)))
+      ..close();
+    await refresh;
+
+    expect(controller.preferredProviderId, 'codex');
+    expect(controller.selectedProviderId, 'codex');
+    expect(selectionChanges, <String?>['codex']);
+  });
+
+  test('目录到达前保留最后一个 Turn 终态偏好', () async {
+    final repository = _ControlledPanelRepository();
+    final selectionChanges = <String?>[];
+    final controller = AgentUsagePanelController(
+      repository: repository,
+      onSelectionChanged: selectionChanges.add,
+    );
+    addTearDown(controller.dispose);
+
+    controller
+      ..selectProviderFromTurn('codex')
+      ..selectProviderFromTurn('grok');
+
+    expect(controller.preferredProviderId, 'grok');
+    expect(controller.selectedProviderId, isNull);
+    expect(selectionChanges, <String?>['codex', 'grok']);
+
+    final refresh = controller.refresh();
+    repository.controllers.single
+      ..add(_directory)
+      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21)))
+      ..close();
+    await refresh;
+
+    expect(controller.preferredProviderId, 'grok');
+    expect(controller.selectedProviderId, 'grok');
+    expect(selectionChanges, <String?>['codex', 'grok']);
+  });
+
+  test('Turn 终态自动选择覆盖手动选择', () async {
+    final repository = _ControlledPanelRepository();
+    final selectionChanges = <String?>[];
+    final controller = AgentUsagePanelController(
+      repository: repository,
+      onSelectionChanged: selectionChanges.add,
+    );
+    addTearDown(controller.dispose);
+    final refresh = controller.refresh();
+    repository.controllers.single
+      ..add(_directory)
+      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21)))
+      ..close();
+    await refresh;
+    selectionChanges.clear();
+
+    controller
+      ..selectProvider('grok')
+      ..selectProviderFromTurn('codex');
+
+    expect(controller.preferredProviderId, 'codex');
+    expect(controller.selectedProviderId, 'codex');
+    expect(selectionChanges, <String?>['grok', 'codex']);
+  });
+
+  test('空目录清空恢复偏好和当前选择', () async {
+    final repository = _ControlledPanelRepository();
+    final selectionChanges = <String?>[];
+    final controller = AgentUsagePanelController(
+      repository: repository,
+      initialPreferredProviderId: 'grok',
+      onSelectionChanged: selectionChanges.add,
+    );
+    addTearDown(controller.dispose);
+
+    final refresh = controller.refresh();
+    repository.controllers.single
+      ..add(AgentUsagePanelProvidersDiscovered(providers: const []))
+      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21)))
+      ..close();
+    await refresh;
+
+    expect(controller.providers, isEmpty);
+    expect(controller.preferredProviderId, isNull);
+    expect(controller.selectedProviderId, isNull);
+    expect(selectionChanges, <String?>[null]);
+  });
+
+  test(
+    'restore API applies without callback and stale refresh cannot replace it',
+    () async {
+      final repository = _ControlledPanelRepository();
+      final selectionChanges = <String?>[];
+      final controller = AgentUsagePanelController(
+        repository: repository,
+        onSelectionChanged: selectionChanges.add,
+      );
+      addTearDown(controller.dispose);
+
+      controller.restorePreferredProviderId('grok');
+      final staleRefresh = controller.refresh();
+      final staleEvents = repository.controllers.single;
+      staleEvents.add(_directory);
+      await _flushEvents();
+
+      final currentRefresh = controller.refresh();
+      final currentEvents = repository.controllers.last;
+      currentEvents
+        ..add(_directory)
+        ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 22)))
+        ..close();
+      await currentRefresh;
+
+      staleEvents
+        ..add(
+          AgentUsagePanelProvidersDiscovered(
+            providers: const <AgentUsagePanelProvider>[
+              AgentUsagePanelProvider(
+                providerId: 'codex',
+                providerName: 'Codex',
+              ),
+            ],
+          ),
+        )
+        ..close();
+      await staleRefresh;
+
+      expect(controller.providers.map(_providerId), <String>['codex', 'grok']);
+      expect(controller.preferredProviderId, 'grok');
+      expect(controller.selectedProviderId, 'grok');
+      expect(selectionChanges, isEmpty);
+    },
+  );
 }
 
 final _directory = AgentUsagePanelProvidersDiscovered(

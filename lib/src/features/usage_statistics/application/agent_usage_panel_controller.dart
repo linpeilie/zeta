@@ -25,22 +25,35 @@ class AgentUsagePanelProviderState {
 
 /// 编排 Provider Tab、渐进式刷新状态与局部错误的轻量控制器。
 class AgentUsagePanelController extends ChangeNotifier {
-  AgentUsagePanelController({required this.repository});
+  AgentUsagePanelController({
+    required this.repository,
+    String? initialPreferredProviderId,
+    this.onSelectionChanged,
+  }) : _preferredProviderId = _normalizeProviderId(initialPreferredProviderId);
 
   final AgentUsagePanelRepository repository;
 
+  /// 可持久化选择偏好发生变化时回调；恢复 seed 本身不会触发。
+  final ValueChanged<String?>? onSelectionChanged;
+
   List<AgentUsagePanelProviderState> _providers =
       const <AgentUsagePanelProviderState>[];
+  String? _preferredProviderId;
   String? _selectedProviderId;
   DateTime? _lastUpdated;
   String? _errorMessage;
   bool _discovering = false;
+  bool _directoryDiscovered = false;
   int _loadToken = 0;
   bool _disposed = false;
 
   /// 按 Provider 配置目录顺序排列的状态快照。
   List<AgentUsagePanelProviderState> get providers => _providers;
 
+  /// 最近的恢复、手动或 Turn 终态选择意图；目录到达前也会保留。
+  String? get preferredProviderId => _preferredProviderId;
+
+  /// 当前 Provider 目录中真实有效的选择。
   String? get selectedProviderId => _selectedProviderId;
   DateTime? get lastUpdated => _lastUpdated;
 
@@ -152,11 +165,51 @@ class AgentUsagePanelController extends ChangeNotifier {
   }
 
   void selectProvider(String providerId) {
-    if (_selectedProviderId == providerId ||
-        !_providers.any((state) => state.provider.providerId == providerId)) {
+    final normalized = _normalizeProviderId(providerId);
+    if (normalized == null ||
+        !_providers.any((state) => state.provider.providerId == normalized) ||
+        (_preferredProviderId == normalized &&
+            _selectedProviderId == normalized)) {
       return;
     }
-    _selectedProviderId = providerId;
+    _preferredProviderId = normalized;
+    _selectedProviderId = normalized;
+    onSelectionChanged?.call(normalized);
+    _notify();
+  }
+
+  /// 应用恢复偏好但不回调，避免恢复值再次触发持久化循环。
+  void restorePreferredProviderId(String? providerId) {
+    final normalized = _normalizeProviderId(providerId);
+    if (_preferredProviderId == normalized &&
+        (!_directoryDiscovered || _selectionMatchesPreference())) {
+      return;
+    }
+    _preferredProviderId = normalized;
+    if (_directoryDiscovered) {
+      _resolveSelectionFromDirectory();
+    }
+    _notify();
+  }
+
+  /// 记录 Turn 终态所属 Provider；自动选择覆盖此前手动偏好。
+  void selectProviderFromTurn(String providerId) {
+    final normalized = _normalizeProviderId(providerId);
+    if (normalized == null || _preferredProviderId == normalized) {
+      return;
+    }
+    _preferredProviderId = normalized;
+    if (!_directoryDiscovered) {
+      onSelectionChanged?.call(normalized);
+      _notify();
+      return;
+    }
+    if (_providers.any((state) => state.provider.providerId == normalized)) {
+      _selectedProviderId = normalized;
+      onSelectionChanged?.call(normalized);
+    } else {
+      _resolveSelectionFromDirectory();
+    }
     _notify();
   }
 
@@ -180,13 +233,33 @@ class AgentUsagePanelController extends ChangeNotifier {
       }),
     );
     _discovering = false;
-    final previousSelection = _selectedProviderId;
-    _selectedProviderId =
-        _providers.any(
-          (state) => state.provider.providerId == previousSelection,
-        )
-        ? previousSelection
-        : _providers.firstOrNull?.provider.providerId;
+    _directoryDiscovered = true;
+    _resolveSelectionFromDirectory();
+  }
+
+  bool _selectionMatchesPreference() {
+    final preferred = _preferredProviderId;
+    return preferred == null
+        ? _selectedProviderId == null
+        : _selectedProviderId == preferred &&
+              _providers.any((state) => state.provider.providerId == preferred);
+  }
+
+  void _resolveSelectionFromDirectory() {
+    final preferred = _preferredProviderId;
+    if (preferred != null &&
+        _providers.any((state) => state.provider.providerId == preferred)) {
+      _selectedProviderId = preferred;
+      return;
+    }
+
+    final fallback = _providers.firstOrNull?.provider.providerId;
+    final preferenceChanged = fallback != preferred;
+    _preferredProviderId = fallback;
+    _selectedProviderId = fallback;
+    if (preferenceChanged) {
+      onSelectionChanged?.call(fallback);
+    }
   }
 
   void _replaceProvider(
@@ -241,4 +314,9 @@ class AgentUsagePanelController extends ChangeNotifier {
 
 extension<T> on List<T> {
   T? get firstOrNull => isEmpty ? null : first;
+}
+
+String? _normalizeProviderId(String? providerId) {
+  final normalized = providerId?.trim();
+  return normalized == null || normalized.isEmpty ? null : normalized;
 }
