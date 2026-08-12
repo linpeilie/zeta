@@ -260,15 +260,56 @@ class IdeWorkbenchScaffold extends StatelessWidget {
               ),
           ],
         );
-        return CallbackShortcuts(
-          bindings: <ShortcutActivator, VoidCallback>{
-            const SingleActivator(LogicalKeyboardKey.escape): dismissOverlay,
-          },
+        return _WorkbenchOverlayKeyboardScope(
+          onDismiss: dismissOverlay,
           child: overlayStack,
         );
       },
     );
   }
+}
+
+/// Overlay 是模态层；即使触发按钮位于 Workbench 外（例如窗口标题栏），
+/// Esc 也必须能关闭当前浮层。全局监听仅在 Overlay 挂载期间存在。
+class _WorkbenchOverlayKeyboardScope extends StatefulWidget {
+  const _WorkbenchOverlayKeyboardScope({
+    required this.onDismiss,
+    required this.child,
+  });
+
+  final VoidCallback onDismiss;
+  final Widget child;
+
+  @override
+  State<_WorkbenchOverlayKeyboardScope> createState() =>
+      _WorkbenchOverlayKeyboardScopeState();
+}
+
+class _WorkbenchOverlayKeyboardScopeState
+    extends State<_WorkbenchOverlayKeyboardScope> {
+  @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_handleKeyEvent);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
+    super.dispose();
+  }
+
+  bool _handleKeyEvent(KeyEvent event) {
+    if (event is! KeyDownEvent ||
+        event.logicalKey != LogicalKeyboardKey.escape) {
+      return false;
+    }
+    widget.onDismiss();
+    return true;
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 IdeWorkbenchLayoutMode _resolveEffectiveLayoutMode({

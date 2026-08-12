@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
@@ -45,6 +45,7 @@ class WindowTitleBarAction {
     required this.semanticLabel,
     required this.onPressed,
     this.key,
+    this.focusNode,
     this.active = false,
   });
 
@@ -53,6 +54,7 @@ class WindowTitleBarAction {
   final String semanticLabel;
   final VoidCallback onPressed;
   final Key? key;
+  final FocusNode? focusNode;
   final bool active;
 }
 
@@ -61,6 +63,7 @@ class WindowFrame extends StatelessWidget {
     required this.child,
     required this.enableNativeWindowFrame,
     this.menus = const <WindowMenu>[],
+    this.titleBarLeadingActions = const <WindowTitleBarAction>[],
     this.titleBarActions = const <WindowTitleBarAction>[],
     this.showWindowControls = true,
     super.key,
@@ -71,6 +74,9 @@ class WindowFrame extends StatelessWidget {
 
   /// 标题栏顶部菜单；菜单内容由上层 feature 决定。
   final List<WindowMenu> menus;
+
+  /// 标题栏左侧动作按钮；位于 macOS 交通灯 gutter 之后、其他平台最左侧。
+  final List<WindowTitleBarAction> titleBarLeadingActions;
 
   /// 标题栏右侧动作按钮；由上层 feature 注入具体行为。
   final List<WindowTitleBarAction> titleBarActions;
@@ -87,6 +93,7 @@ class WindowFrame extends StatelessWidget {
         if (showCustomTitleBar)
           _TitleBar(
             menus: menus,
+            titleBarLeadingActions: titleBarLeadingActions,
             titleBarActions: titleBarActions,
             showWindowControls: showWindowControls,
           ),
@@ -102,7 +109,7 @@ class WindowFrame extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.frame,
         // macOS 下交通灯与圆角由系统负责；其他平台补一条细边框。
-        border: Platform.isMacOS
+        border: defaultTargetPlatform == TargetPlatform.macOS
             ? null
             : Border.all(color: colors.border, width: 1),
       ),
@@ -114,19 +121,22 @@ class WindowFrame extends StatelessWidget {
 class _TitleBar extends StatelessWidget {
   const _TitleBar({
     required this.menus,
+    required this.titleBarLeadingActions,
     required this.titleBarActions,
     required this.showWindowControls,
   });
 
   final List<WindowMenu> menus;
+  final List<WindowTitleBarAction> titleBarLeadingActions;
   final List<WindowTitleBarAction> titleBarActions;
   final bool showWindowControls;
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final isMac = Platform.isMacOS;
-    final isWindows = Platform.isWindows;
+    final platform = defaultTargetPlatform;
+    final isMac = platform == TargetPlatform.macOS;
+    final isWindows = platform == TargetPlatform.windows;
     // 最小高度保证无菜单时仍可拖拽；有 Menubar 时由内容撑开，不再锁死固定像素。
     // Column 给非 flex 子项无限高约束，不能用 CrossAxisAlignment.stretch。
     return DecoratedBox(
@@ -147,6 +157,13 @@ class _TitleBar extends StatelessWidget {
               // macOS 下左侧让出交通灯按钮的空间，且不拦截点击。
               if (isMac)
                 const SizedBox(width: IdeMetrics.macOSTrafficLightGutter),
+              if (titleBarLeadingActions.isNotEmpty)
+                _TitleBarActionGroup(
+                  actions: titleBarLeadingActions,
+                  trailing: false,
+                  showWindowControls: showWindowControls,
+                  isMac: isMac,
+                ),
               if (isWindows) const _WindowsTitleBarLogo(),
               if (menus.isNotEmpty) _WindowMenuBar(menus: menus),
               Expanded(
@@ -166,33 +183,54 @@ class _TitleBar extends StatelessWidget {
                 ),
               ),
               if (titleBarActions.isNotEmpty)
-                Padding(
-                  padding: EdgeInsets.only(
-                    left: IdeSpacing.space4,
-                    right: !isMac && showWindowControls
-                        ? IdeSpacing.space2
-                        : IdeSpacing.space6,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (final action in titleBarActions)
-                        Padding(
-                          padding: const EdgeInsets.only(
-                            left: IdeSpacing.space4,
-                          ),
-                          child: _TitleBarActionButton(
-                            key: action.key,
-                            action: action,
-                          ),
-                        ),
-                    ],
-                  ),
+                _TitleBarActionGroup(
+                  actions: titleBarActions,
+                  trailing: true,
+                  showWindowControls: showWindowControls,
+                  isMac: isMac,
                 ),
               if (!isMac && showWindowControls) const _WindowButtons(),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _TitleBarActionGroup extends StatelessWidget {
+  const _TitleBarActionGroup({
+    required this.actions,
+    required this.trailing,
+    required this.showWindowControls,
+    required this.isMac,
+  });
+
+  final List<WindowTitleBarAction> actions;
+  final bool trailing;
+  final bool showWindowControls;
+  final bool isMac;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: trailing ? IdeSpacing.space4 : 0,
+        right: trailing
+            ? (!isMac && showWindowControls
+                  ? IdeSpacing.space2
+                  : IdeSpacing.space6)
+            : IdeSpacing.space2,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final action in actions)
+            Padding(
+              padding: const EdgeInsets.only(left: IdeSpacing.space4),
+              child: _TitleBarActionButton(key: action.key, action: action),
+            ),
+        ],
       ),
     );
   }
@@ -408,6 +446,7 @@ class _TitleBarActionButton extends StatelessWidget {
     return IdeTooltip(
       message: action.tooltip,
       child: PaneInteractiveSurface(
+        focusNode: action.focusNode,
         onPressed: action.onPressed,
         selected: action.active,
         button: true,

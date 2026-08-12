@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
+import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 
 void main() {
   group('FileIdeSessionStore', () {
@@ -39,6 +40,13 @@ void main() {
         activeProjectPath: '/repo',
         activeAgentProviderId: defaultAgentProviderId,
         agentThreadIdsByProject: <String, String>{'/repo': 'thread-1'},
+        workbenchLayout: IdeWorkbenchLayoutState(
+          leftSidebarVisible: false,
+          agentUsageExpanded: true,
+          leftSidebarWidth: 310,
+          agentUsageHeightFraction: 0.45,
+          selectedAgentUsageProviderId: 'grok',
+        ),
       );
 
       await store.save(snapshot);
@@ -47,12 +55,20 @@ void main() {
           jsonDecode(await sessionFile.readAsString()) as Map<String, Object?>;
 
       expect(raw['version'], sessionStateVersion);
+      expect((raw['workbench'] as Map<String, Object?>).keys, <String>[
+        'leftSidebarVisible',
+        'agentUsageExpanded',
+        'leftSidebarWidth',
+        'agentUsageHeightFraction',
+        'selectedAgentUsageProviderId',
+      ]);
       expect(restored?.projectPaths, <String>['/repo']);
       expect(restored?.activeProjectPath, '/repo');
       expect(restored?.activeAgentProviderId, defaultAgentProviderId);
       expect(restored?.agentThreadIdsByProject, <String, String>{
         '/repo': 'thread-1',
       });
+      expect(restored?.workbenchLayout, snapshot.workbenchLayout);
     });
 
     test('returns an empty snapshot when the JSON file is damaged', () async {

@@ -5,12 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/features/agent/domain/agent_usage_models.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_controller.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_formatters.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
+import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_skeleton.dart';
 import 'package:zeta/src/ui/core/rows/ide_row_divider.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
@@ -18,37 +20,388 @@ import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 
-/// 左侧 Context 槽位中的轻量 Agent 用量面板。
-class AgentUsagePanel extends StatelessWidget {
-  const AgentUsagePanel({required this.controller, super.key});
+/// Agent 统计在合并左栏中的显示模式。
+enum AgentUsagePanelMode { collapsed, expanded }
+
+/// 不包含 [PanelCard] 外框的 Agent 统计内容。
+///
+/// 折叠态提供最多三行摘要；展开态复用既有 Pane、Provider Tabs 与完整统计内容。
+class AgentUsagePanelContent extends StatelessWidget {
+  const AgentUsagePanelContent({
+    required this.controller,
+    required this.mode,
+    super.key,
+    this.onModeChanged,
+  });
 
   final AgentUsagePanelController controller;
+  final AgentUsagePanelMode mode;
+  final ValueChanged<AgentUsagePanelMode>? onModeChanged;
 
   @override
   Widget build(BuildContext context) {
-    return PanelCard(
-      key: const ValueKey('context-panel-card'),
-      child: Pane(
+    return switch (mode) {
+      AgentUsagePanelMode.collapsed => ListenableBuilder(
+        listenable: controller,
+        builder: (context, _) => _CompactAgentUsage(
+          controller: controller,
+          onExpand: onModeChanged == null
+              ? null
+              : () => onModeChanged!(AgentUsagePanelMode.expanded),
+        ),
+      ),
+      AgentUsagePanelMode.expanded => Pane(
         title: 'Agent 统计',
-        trailing: ListenableBuilder(
-          listenable: controller,
-          builder: (context, _) => IdeTooltip(
-            message: '刷新用量',
-            child: sf.IconButton.ghost(
-              key: const ValueKey('agent-usage-refresh-button'),
-              onPressed: controller.isLoading
-                  ? null
-                  : () => unawaited(controller.refresh()),
-              size: sf.ButtonSize.small,
-              density: sf.ButtonDensity.iconDense,
-              icon: const Icon(Icons.refresh_rounded, size: 16),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (onModeChanged != null) ...[
+              _AgentUsageModeButton(
+                key: const ValueKey('agent-usage-collapse-button'),
+                icon: Icons.keyboard_arrow_down_rounded,
+                tooltip: '折叠 Agent 统计',
+                onPressed: () => onModeChanged!(AgentUsagePanelMode.collapsed),
+              ),
+              const SizedBox(width: IdeSpacing.space2),
+            ],
+            ListenableBuilder(
+              listenable: controller,
+              builder: (context, _) =>
+                  _AgentUsageRefreshButton(controller: controller),
             ),
-          ),
+          ],
         ),
         child: ListenableBuilder(
           listenable: controller,
           builder: (context, _) => _AgentUsagePanelBody(controller: controller),
         ),
+      ),
+    };
+  }
+}
+
+class _AgentUsageRefreshButton extends StatelessWidget {
+  const _AgentUsageRefreshButton({required this.controller});
+
+  final AgentUsagePanelController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return IdeTooltip(
+      message: '刷新用量',
+      child: sf.IconButton.ghost(
+        key: const ValueKey('agent-usage-refresh-button'),
+        onPressed: controller.isLoading
+            ? null
+            : () => unawaited(controller.refresh()),
+        size: sf.ButtonSize.small,
+        density: sf.ButtonDensity.iconDense,
+        icon: const Icon(Icons.refresh_rounded, size: 16),
+      ),
+    );
+  }
+}
+
+class _AgentUsageModeButton extends StatelessWidget {
+  const _AgentUsageModeButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+    super.key,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IdeTooltip(
+      message: tooltip,
+      child: PaneInteractiveSurface(
+        onPressed: onPressed,
+        enabled: onPressed != null,
+        button: true,
+        semanticLabel: tooltip,
+        width: IdeMetrics.iconButtonHitSize,
+        height: IdeMetrics.iconButtonHitSize,
+        padding: EdgeInsets.zero,
+        borderRadius: IdeRadius.allSmall,
+        child: Icon(icon, size: 16, color: IdeColors.of(context).textSecondary),
+      ),
+    );
+  }
+}
+
+class _CompactAgentUsage extends StatelessWidget {
+  const _CompactAgentUsage({required this.controller, required this.onExpand});
+
+  final AgentUsagePanelController controller;
+  final VoidCallback? onExpand;
+
+  @override
+  Widget build(BuildContext context) {
+    if (controller.providers.isEmpty) {
+      if (controller.isLoading) {
+        return const _CompactAgentUsageSkeleton();
+      }
+      if (controller.errorMessage case final error?) {
+        return _CompactAgentUsageMessage(
+          message: error,
+          warning: true,
+          onRetry: () => unawaited(controller.refresh()),
+          onExpand: onExpand,
+        );
+      }
+      return _CompactAgentUsageMessage(
+        message: '暂无已启用的 Agent',
+        onExpand: onExpand,
+      );
+    }
+
+    final selected = controller.selectedProvider!;
+    final entry = selected.entry;
+    if (entry == null) {
+      if (selected.isLoading) {
+        return const _CompactAgentUsageSkeleton();
+      }
+      if (selected.loadError case final error?) {
+        return _CompactAgentUsageMessage(
+          message: error,
+          warning: true,
+          onRetry: () => unawaited(controller.refresh()),
+          onExpand: onExpand,
+        );
+      }
+      return _CompactAgentUsageMessage(message: '暂无统计', onExpand: onExpand);
+    }
+
+    return _CompactAgentUsageSummary(
+      entry: entry,
+      providerName: selected.provider.providerName,
+      onExpand: onExpand,
+    );
+  }
+}
+
+class _CompactAgentUsageSummary extends StatelessWidget {
+  const _CompactAgentUsageSummary({
+    required this.entry,
+    required this.providerName,
+    required this.onExpand,
+  });
+
+  final AgentUsagePanelEntry entry;
+  final String providerName;
+  final VoidCallback? onExpand;
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyles = IdeTextStyles.of(context);
+    final colors = IdeColors.of(context);
+    final quotaWindow = entry.compactQuotaWindow;
+    final title = entry.hasSubscriptionPlan
+        ? formatUsagePlanType(entry.quota?.planType)
+        : providerName;
+    final tokenTotal = entry.todayTokens == null
+        ? '-'
+        : formatUsageCount(entry.todayTokens!.effectiveTotal ?? 0);
+
+    return Semantics(
+      container: true,
+      label: 'Agent 统计摘要',
+      child: Padding(
+        key: const ValueKey('agent-usage-compact'),
+        padding: const EdgeInsets.symmetric(
+          horizontal: IdeSpacing.space12,
+          vertical: IdeSpacing.space8,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              key: const ValueKey('agent-usage-compact-header'),
+              children: [
+                AgentProviderIcon(providerId: entry.providerId, size: 18),
+                const SizedBox(width: IdeSpacing.space8),
+                Expanded(
+                  child: Text(
+                    title,
+                    key: const ValueKey('agent-usage-compact-title'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textStyles.titleSmall.copyWith(
+                      color: colors.textPrimary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: IdeSpacing.space4),
+                _AgentUsageModeButton(
+                  key: const ValueKey('agent-usage-expand-button'),
+                  icon: Icons.keyboard_arrow_up_rounded,
+                  tooltip: '展开 Agent 统计',
+                  onPressed: onExpand,
+                ),
+              ],
+            ),
+            if (quotaWindow != null) ...[
+              const SizedBox(height: IdeSpacing.space4),
+              _CompactQuotaWindow(window: quotaWindow),
+            ],
+            const SizedBox(height: IdeSpacing.space4),
+            Row(
+              key: const ValueKey('agent-usage-compact-tokens'),
+              children: [
+                Expanded(
+                  child: Text(
+                    '今日 Token',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textStyles.bodySmall.copyWith(
+                      color: colors.textSecondary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: IdeSpacing.space8),
+                Text(
+                  tokenTotal,
+                  key: const ValueKey('agent-usage-compact-token-value'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textStyles.numeric.copyWith(color: colors.textPrimary),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactQuotaWindow extends StatelessWidget {
+  const _CompactQuotaWindow({required this.window});
+
+  final AgentUsageWindow window;
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyles = IdeTextStyles.of(context);
+    final colors = IdeColors.of(context);
+    final used = window.usedPercent.clamp(0, 100);
+    final remaining = math.max(0, 100 - used);
+    return Row(
+      key: const ValueKey('agent-usage-compact-quota'),
+      children: [
+        Expanded(
+          child: Text(
+            window.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
+          ),
+        ),
+        const SizedBox(width: IdeSpacing.space8),
+        SizedBox(
+          width: 64,
+          child: _QuotaProgressBar(usedPercent: used.toDouble()),
+        ),
+        const SizedBox(width: IdeSpacing.space6),
+        Text(
+          '$remaining%',
+          key: const ValueKey('agent-usage-compact-quota-remaining'),
+          style: textStyles.caption.copyWith(color: colors.textSecondary),
+        ),
+      ],
+    );
+  }
+}
+
+class _CompactAgentUsageSkeleton extends StatelessWidget {
+  const _CompactAgentUsageSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '正在读取 Agent 用量',
+      container: true,
+      child: const Padding(
+        key: ValueKey('agent-usage-compact-loading'),
+        padding: EdgeInsets.symmetric(
+          horizontal: IdeSpacing.space12,
+          vertical: IdeSpacing.space8,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            IdeSkeletonLine(width: 136, height: 16),
+            SizedBox(height: IdeSpacing.space4),
+            IdeSkeletonLine(height: 10),
+            SizedBox(height: IdeSpacing.space4),
+            IdeSkeletonLine(width: 96, height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactAgentUsageMessage extends StatelessWidget {
+  const _CompactAgentUsageMessage({
+    required this.message,
+    required this.onExpand,
+    this.warning = false,
+    this.onRetry,
+  });
+
+  final String message;
+  final bool warning;
+  final VoidCallback? onRetry;
+  final VoidCallback? onExpand;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    return Padding(
+      key: ValueKey(
+        warning ? 'agent-usage-compact-error' : 'agent-usage-compact',
+      ),
+      padding: const EdgeInsets.symmetric(
+        horizontal: IdeSpacing.space12,
+        vertical: IdeSpacing.space8,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              message,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textStyles.bodySmall.copyWith(
+                color: warning ? colors.warning : colors.textSecondary,
+              ),
+            ),
+          ),
+          if (onRetry != null) ...[
+            const SizedBox(width: IdeSpacing.space4),
+            _AgentUsageModeButton(
+              key: const ValueKey('agent-usage-retry-button'),
+              icon: Icons.refresh_rounded,
+              tooltip: '重试读取 Agent 用量',
+              onPressed: onRetry,
+            ),
+          ],
+          const SizedBox(width: IdeSpacing.space4),
+          _AgentUsageModeButton(
+            key: const ValueKey('agent-usage-expand-button'),
+            icon: Icons.keyboard_arrow_up_rounded,
+            tooltip: '展开 Agent 统计',
+            onPressed: onExpand,
+          ),
+        ],
       ),
     );
   }

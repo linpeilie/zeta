@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/features/agent/domain/agent_usage_models.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_controller.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
@@ -12,6 +13,8 @@ import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_pane
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
+import 'package:zeta/src/ui/core/ide_skeleton.dart';
+import 'package:zeta/src/ui/core/pane_widgets.dart';
 
 void main() {
   testWidgets('默认 Provider Tab 仅展示 Codex 和 Grok', (tester) async {
@@ -162,9 +165,7 @@ void main() {
     addTearDown(controller.dispose);
     await _pumpPanel(tester, controller, width: 420);
 
-    final panelCenter = tester.getCenter(
-      find.byKey(const ValueKey('context-panel-card')),
-    );
+    final panelCenter = tester.getCenter(find.byType(sf.Scaffold));
     final tabsCenter = tester.getCenter(find.byType(sf.Tabs));
 
     expect(tabsCenter.dx, closeTo(panelCenter.dx, 1));
@@ -347,6 +348,252 @@ void main() {
     expect(find.text('100%'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('折叠态有套餐时显示图标、套餐、最短窗口与今日 Token 三行', (tester) async {
+    const entry = AgentUsagePanelEntry(
+      providerId: 'provider-paid',
+      providerName: 'Provider Paid',
+      todayTokens: UsageTokenBreakdown(totalTokens: 1600),
+      quota: AgentUsageQuotaSnapshot(
+        providerId: 'provider-paid',
+        providerName: 'Provider Paid',
+        planType: 'plus',
+        windows: <AgentUsageWindow>[
+          AgentUsageWindow(
+            label: '1 周',
+            usedPercent: 40,
+            windowDuration: Duration(days: 7),
+          ),
+          AgentUsageWindow(
+            label: '5 小时',
+            usedPercent: 25,
+            windowDuration: Duration(hours: 5),
+          ),
+        ],
+      ),
+    );
+    final controller = AgentUsagePanelController(
+      repository: const _ImmediatePanelRepository(<AgentUsagePanelEntry>[
+        entry,
+      ]),
+    );
+    addTearDown(controller.dispose);
+    AgentUsagePanelMode? requestedMode;
+
+    await _pumpPanelContent(
+      tester,
+      controller,
+      mode: AgentUsagePanelMode.collapsed,
+      height: 104,
+      onModeChanged: (mode) => requestedMode = mode,
+    );
+
+    expect(find.byType(PanelCard), findsNothing);
+    expect(find.byType(AgentProviderIcon), findsOneWidget);
+    expect(find.text('ChatGPT Plus'), findsOneWidget);
+    expect(find.text('Provider Paid'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('agent-usage-compact-quota')),
+      findsOneWidget,
+    );
+    expect(find.text('5 小时'), findsOneWidget);
+    expect(find.text('75%'), findsOneWidget);
+    expect(find.text('1 周'), findsNothing);
+    expect(find.text('今日 Token'), findsOneWidget);
+    expect(find.text('1.6K'), findsOneWidget);
+
+    final header = find.byKey(const ValueKey('agent-usage-compact-header'));
+    final quota = find.byKey(const ValueKey('agent-usage-compact-quota'));
+    final tokens = find.byKey(const ValueKey('agent-usage-compact-tokens'));
+    expect(tester.getTopLeft(header).dy, lessThan(tester.getTopLeft(quota).dy));
+    expect(tester.getTopLeft(quota).dy, lessThan(tester.getTopLeft(tokens).dy));
+
+    await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
+    expect(requestedMode, AgentUsagePanelMode.expanded);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('折叠态无套餐时显示 Provider 与 Token 横线两行', (tester) async {
+    final controller = AgentUsagePanelController(
+      repository: const _ImmediatePanelRepository(<AgentUsagePanelEntry>[
+        AgentUsagePanelEntry(
+          providerId: 'provider-free',
+          providerName: 'Provider Free',
+        ),
+      ]),
+    );
+    addTearDown(controller.dispose);
+
+    await _pumpPanelContent(
+      tester,
+      controller,
+      mode: AgentUsagePanelMode.collapsed,
+      height: 80,
+      onModeChanged: (_) {},
+    );
+
+    expect(find.byType(AgentProviderIcon), findsOneWidget);
+    expect(find.text('Provider Free'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('agent-usage-compact-quota')),
+      findsNothing,
+    );
+    expect(find.text('今日 Token'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('agent-usage-compact-token-value')),
+      findsOneWidget,
+    );
+    expect(find.text('-'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('折叠态冷加载使用三行呼吸 Skeleton', (tester) async {
+    final repository = _ControlledPanelRepository();
+    final controller = AgentUsagePanelController(repository: repository);
+    addTearDown(controller.dispose);
+
+    await _pumpPanelContent(
+      tester,
+      controller,
+      mode: AgentUsagePanelMode.collapsed,
+      height: 88,
+      onModeChanged: (_) {},
+    );
+
+    expect(
+      find.byKey(const ValueKey('agent-usage-compact-loading')),
+      findsOneWidget,
+    );
+    expect(find.byType(IdeSkeletonLine), findsNWidgets(3));
+    expect(find.bySemanticsLabel('正在读取 Agent 用量'), findsOneWidget);
+    expect(find.byType(sf.Progress), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('折叠态 Provider 读取失败保持单行错误和重试入口', (tester) async {
+    final repository = _ControlledPanelRepository();
+    final controller = AgentUsagePanelController(repository: repository);
+    addTearDown(controller.dispose);
+    addTearDown(() async {
+      for (final events in repository.controllers) {
+        if (!events.isClosed) {
+          await events.close();
+        }
+      }
+    });
+
+    await _pumpPanelContent(
+      tester,
+      controller,
+      mode: AgentUsagePanelMode.collapsed,
+      height: 64,
+      onModeChanged: (_) {},
+    );
+
+    repository.controllers.single
+      ..add(
+        AgentUsagePanelProvidersDiscovered(
+          providers: const <AgentUsagePanelProvider>[
+            AgentUsagePanelProvider(
+              providerId: 'provider-error',
+              providerName: 'Provider Error',
+            ),
+          ],
+        ),
+      )
+      ..add(
+        const AgentUsagePanelProviderFailed(
+          provider: AgentUsagePanelProvider(
+            providerId: 'provider-error',
+            providerName: 'Provider Error',
+          ),
+          message: 'Provider 暂时不可用',
+        ),
+      )
+      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 8, 12)));
+    await tester.pump();
+
+    final errorText = find.text('Provider 暂时不可用');
+    expect(errorText, findsOneWidget);
+    expect(tester.widget<Text>(errorText).maxLines, 1);
+    expect(tester.widget<Text>(errorText).overflow, TextOverflow.ellipsis);
+    expect(
+      find.byKey(const ValueKey('agent-usage-retry-button')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('agent-usage-retry-button')));
+    await tester.pump();
+
+    expect(repository.controllers, hasLength(2));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('折叠态长文本在紧凑高度内省略且不溢出', (tester) async {
+    const longName =
+        'A very long provider display name that must stay inside the sidebar';
+    final controller = AgentUsagePanelController(
+      repository: const _ImmediatePanelRepository(<AgentUsagePanelEntry>[
+        AgentUsagePanelEntry(
+          providerId: 'provider-long',
+          providerName: longName,
+        ),
+      ]),
+    );
+    addTearDown(controller.dispose);
+
+    await _pumpPanelContent(
+      tester,
+      controller,
+      mode: AgentUsagePanelMode.collapsed,
+      width: 180,
+      height: 80,
+      onModeChanged: (_) {},
+    );
+
+    final title = tester.widget<Text>(
+      find.byKey(const ValueKey('agent-usage-compact-title')),
+    );
+    expect(title.data, longName);
+    expect(title.maxLines, 1);
+    expect(title.overflow, TextOverflow.ellipsis);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('cardless 展开态复用 Tabs、完整套餐和 Token 内容', (tester) async {
+    final controller = AgentUsagePanelController(
+      repository: _ImmediatePanelRepository(_usageEntries),
+    );
+    addTearDown(controller.dispose);
+    AgentUsagePanelMode? requestedMode;
+
+    await _pumpPanelContent(
+      tester,
+      controller,
+      mode: AgentUsagePanelMode.expanded,
+      height: 520,
+      onModeChanged: (mode) => requestedMode = mode,
+    );
+
+    expect(find.byType(PanelCard), findsNothing);
+    expect(find.byType(Pane), findsOneWidget);
+    expect(find.text('Agent 统计'), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-usage-tabs')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('agent-usage-plan-section')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('agent-usage-token-section')),
+      findsOneWidget,
+    );
+    expect(find.text('5 小时'), findsOneWidget);
+    expect(find.text('1.6K'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('agent-usage-collapse-button')));
+    expect(requestedMode, AgentUsagePanelMode.collapsed);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 final _usageEntries = <AgentUsagePanelEntry>[
@@ -423,7 +670,58 @@ Future<void> _pumpPanel(
       child: sf.ShadcnApp(
         theme: buildShadcnTheme(ideTheme),
         materialTheme: buildMaterialTheme(ideTheme),
-        home: sf.Scaffold(child: AgentUsagePanel(controller: controller)),
+        home: sf.Scaffold(
+          child: AgentUsagePanelContent(
+            controller: controller,
+            mode: AgentUsagePanelMode.expanded,
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pump();
+  await tester.pump();
+}
+
+Future<void> _pumpPanelContent(
+  WidgetTester tester,
+  AgentUsagePanelController controller, {
+  required AgentUsagePanelMode mode,
+  required ValueChanged<AgentUsagePanelMode> onModeChanged,
+  double width = 320,
+  double height = 104,
+}) async {
+  unawaited(controller.refresh());
+  tester.view
+    ..physicalSize = Size(width, height)
+    ..devicePixelRatio = 1;
+  addTearDown(() {
+    tester.view
+      ..resetPhysicalSize()
+      ..resetDevicePixelRatio();
+  });
+  final ideTheme = buildIdeThemeData(
+    brightness: Brightness.light,
+    codeFontFamily: 'JetBrainsMono',
+  );
+  await tester.pumpWidget(
+    IdeThemeScope(
+      themeMode: ThemeMode.light,
+      lightTheme: ideTheme,
+      darkTheme: buildIdeThemeData(
+        brightness: Brightness.dark,
+        codeFontFamily: 'JetBrainsMono',
+      ),
+      child: sf.ShadcnApp(
+        theme: buildShadcnTheme(ideTheme),
+        materialTheme: buildMaterialTheme(ideTheme),
+        home: sf.Scaffold(
+          child: AgentUsagePanelContent(
+            controller: controller,
+            mode: mode,
+            onModeChanged: onModeChanged,
+          ),
+        ),
       ),
     ),
   );

@@ -140,15 +140,25 @@ Agent 管理与使用统计只切换 Navigation、Canvas、Inspector slot 内容
 
 | 页面 | Navigation slot | Canvas slot | Inspector slot | 响应式策略 |
 |---|---|---|---|---|
-| Agent 首页 | Projects / Context | 常驻 `AgentPane` | Files / Tools | Wide 可内联左右 Pane；Medium 内联 Navigation、Inspector 按需 Overlay；Compact 左右 Pane 均按需 Overlay |
-| 设置 / Agent 管理 | `SettingsNavigationPane` | `SettingsPageCanvas`，Agent 分区内承载 `AgentManagementPage` | 无 | Wide/Medium 内联设置导航；Compact 由 Rail 打开统一 Navigation Overlay |
-| 使用统计 | 无 | `UsageStatisticsPage` | 无 | 所有模式只占用 Canvas，左右 Rail 与 Workbench 骨架继续保留 |
+| Agent 首页 | `ProjectAgentSidebar`：Projects / Threads + Agent 统计 | 常驻 `AgentPane` | Files / Tools | Wide/Medium 内联合并 Navigation；Compact 复用 Navigation Overlay；首页不挂载 Activity Rail |
+| 设置 / Agent 管理 | `SettingsNavigationPane` | `SettingsPageCanvas`，Agent 分区内承载 `AgentManagementPage` | 无 | 所有模式内联设置 Navigation，不挂载 Activity Rail |
+| 使用统计 | 无 | `UsageStatisticsPage` | 无 | 所有模式只占用 Canvas，`WindowFrame` 与 Workbench 骨架继续保留，不挂载 Activity Rail |
+
+Agent 首页的标题栏左侧 action 是合并栏唯一的显隐入口：macOS 位于三色灯 gutter
+之后，Windows/Linux 位于 Logo 与菜单之前；左栏隐藏后入口仍可操作。Navigation slot
+内只有一个 `ProjectAgentSidebar` / `PanelCard`，Projects / Threads 占剩余空间，
+cardless Agent 统计固定在底部并默认折叠。折叠态最多展示 Provider 图标、套餐名（无
+套餐时显示 Provider 名）、最短周期额度进度和今日 Token；展开态复用 Provider Tabs、
+刷新和完整明细，并允许在约束范围内调整高度。Compact 模式不挤压 Canvas，而是使用
+Navigation Overlay；scrim 与 Esc 均关闭浮层并把焦点还给标题栏入口。
 
 Canvas 与 Agent 会话都使用 `IdeRetainedPageView` 延迟挂载并保活已访问页面；任一时刻
 只布局活动页面和活动 `AgentPane`，离屏页保留 State、输入/滚动控制器并暂停 ticker。
 Workbench 的 Canvas Flex slot 自身也使用稳定 Key，保证 Navigation/Inspector slot
-增删或 Wide/Medium 断点切换时仍复用原 Element。Pane 宽度和用户控制的可见状态由
-`IdeHome` 持有，离开其他页面再返回时保持不变。
+增删或 Wide/Medium 断点切换时仍复用原 Element。左栏显隐、统计展开态、左栏宽度、
+统计展开高度比例和统计 Provider 选择投影进应用级 `IdeWorkbenchLayoutState`，随
+`ide_session.json` 宽容恢复；拖动期间只做本地预览，结束时才提交偏好。离开其他页面
+再返回时，这些偏好与 AgentPane / Thread / 草稿 / 滚动位置都保持不变。
 
 `AgentPane` 以 compact / regular 离散宽度档位缓存结构，父级每像素 resize 只有在回调
 身份或档位变化时才使缓存失效。对话时间线使用 `CustomScrollView` +
@@ -181,6 +191,9 @@ projection 与 unified diff 以 turn render revision 缓存，代码高亮复用
 ### 使用统计
 
 - 标题栏提供与设置同级的全局入口；页面支持时间、项目、Agent 和模型筛选。
+- Agent 首页底部仅展示同一中立统计模型的只读摘要；前台或后台 thread 终态携带的
+  Provider 会更新统计选择并触发静默刷新，但不得改写会话 active Provider、Provider
+  配置或运行时绑定。
 - 一次 Codex turn 计为一次调用；`completed` 为成功，`failed` 与 `interrupted`
   为失败，运行中和未知状态不进入成功率分母。
 - 默认统计 CLI、VS Code、`codex exec` 和 Zeta app-server 发起的根 thread，包含
@@ -189,7 +202,7 @@ projection 与 unified diff 以 turn render revision 缓存，代码高亮复用
   近似，并在页面标明有效样本数。
 - 套餐仅展示 Provider 实际返回的套餐类型、百分比窗口、重置时间与可选余额：Codex
   走 `account/rateLimits/read`，Grok 走 ACP 扩展 `_x.ai/billing`；不推算绝对 Token
-  总额度或未提供的到期日。
+  总额度或未提供的到期日，也不提供登录、购买、续费或支付动作。
 - 宽屏使用双栏分析区，窄窗口切换为单栏；表格可横向滚动，任务详情使用自适应
   侧边/底部抽屉。
 - `UsageStatisticsIndexStore`（v3）按 Provider 分区持久化派生会话快照：只含

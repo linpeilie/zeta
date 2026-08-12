@@ -15,12 +15,14 @@ import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_persistence_coordinator.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_restore_result.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_state_builder.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
+import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/features/ide_session/domain/recent_project_summary.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_controller.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_session_snapshot_codec.dart';
@@ -91,7 +93,7 @@ class IdeShellController extends ChangeNotifier {
     WorkspaceFileIndexController? workspaceFileIndexController,
     AgentProviderRuntimeRegistry? agentProviderRuntimeRegistry,
     AgentFrameScheduler Function()? agentUiFrameSchedulerFactory,
-    VoidCallback? onAgentTurnCompleted,
+    ValueChanged<AgentTurnTerminalSignal>? onAgentTurnTerminal,
     ValueChanged<AgentWorkspaceAttention>? onAgentAttention,
     IdeShellUsageStatisticsDependencies? usageStatistics,
     DateTime Function()? now,
@@ -138,6 +140,7 @@ class IdeShellController extends ChangeNotifier {
       repository:
           usageStatistics?.agentUsagePanelRepository ??
           QueryAgentUsagePanelRepository(usageQueryService, clock: _now),
+      onSelectionChanged: setSelectedAgentUsageProviderId,
     );
     agentWorkspaceController = AgentThreadWorkspaceController(
       providerController: agentProviderController,
@@ -162,7 +165,7 @@ class IdeShellController extends ChangeNotifier {
       },
       runtimeRegistry: this.agentProviderRuntimeRegistry,
       globalRuntime: agentProviderGlobalRuntime,
-      onTurnCompleted: onAgentTurnCompleted,
+      onTurnTerminal: onAgentTurnTerminal,
       onAttention: onAgentAttention,
       onCreatedThread: _openCreatedThread,
       uiFrameSchedulerFactory: agentUiFrameSchedulerFactory,
@@ -237,6 +240,7 @@ class IdeShellController extends ChangeNotifier {
   String? _selectedTreePath;
   bool _isLoadingProject = false;
   bool _projectHomeActive = false;
+  IdeWorkbenchLayoutState _workbenchLayout = const IdeWorkbenchLayoutState();
   bool _initialRestoreCompleted = false;
   final Completer<void> _initialRestoreCompleter = Completer<void>();
   int _homeRefreshToken = 0;
@@ -264,6 +268,40 @@ class IdeShellController extends ChangeNotifier {
   AgentConversationViewModel get agentViewModel => selectedAgentViewModel;
 
   List<String> get projects => List<String>.unmodifiable(_projects);
+
+  /// 当前应用级 Workbench 布局偏好。
+  IdeWorkbenchLayoutState get workbenchLayout => _workbenchLayout;
+
+  /// 提交整个合并左栏的显隐偏好。
+  void setLeftSidebarVisible(bool visible) {
+    _setWorkbenchLayout(_workbenchLayout.copyWith(leftSidebarVisible: visible));
+  }
+
+  /// 提交 Agent 统计区的展开偏好。
+  void setAgentUsageExpanded(bool expanded) {
+    _setWorkbenchLayout(
+      _workbenchLayout.copyWith(agentUsageExpanded: expanded),
+    );
+  }
+
+  /// 提交左栏逻辑像素宽度；传空恢复 UI 默认宽度。
+  void setLeftSidebarWidth(double? width) {
+    _setWorkbenchLayout(_workbenchLayout.copyWith(leftSidebarWidth: width));
+  }
+
+  /// 提交 Agent 统计展开高度比例；传空恢复 UI 默认比例。
+  void setAgentUsageHeightFraction(double? fraction) {
+    _setWorkbenchLayout(
+      _workbenchLayout.copyWith(agentUsageHeightFraction: fraction),
+    );
+  }
+
+  /// 提交统计面板关注的 Provider id；传空清除偏好。
+  void setSelectedAgentUsageProviderId(String? providerId) {
+    _setWorkbenchLayout(
+      _workbenchLayout.copyWith(selectedAgentUsageProviderId: providerId),
+    );
+  }
 
   /// 初始会话恢复已完成；此后无活动项目时可以稳定展示全局首页。
   bool get initialRestoreCompleted => _initialRestoreCompleted;
@@ -798,6 +836,10 @@ class IdeShellController extends ChangeNotifier {
       _projectLastOpenedAtByPath
         ..clear()
         ..addAll(session.projectLastOpenedAtByPath);
+      _workbenchLayout = session.workbenchLayout;
+      agentUsagePanelController.restorePreferredProviderId(
+        session.workbenchLayout.selectedAgentUsageProviderId,
+      );
 
       projectThreadsController.restoreSession(
         projectPaths: session.projectPaths,
@@ -910,7 +952,17 @@ class IdeShellController extends ChangeNotifier {
           ? null
           : selectedAgentViewModel.sessionId,
       projectHomeActive: isProjectHomeActive,
+      workbenchLayout: _workbenchLayout,
     );
+  }
+
+  void _setWorkbenchLayout(IdeWorkbenchLayoutState next) {
+    if (next == _workbenchLayout) {
+      return;
+    }
+    _workbenchLayout = next;
+    _notifyStateChanged();
+    _requestSessionSave();
   }
 
   Set<String> _currentExpandedDirectoryPaths() {

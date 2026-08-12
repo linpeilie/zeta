@@ -8,6 +8,7 @@ import 'package:zeta/src/features/ide_session/application/ide_session_restore_re
 import 'package:zeta/src/features/ide_session/application/ide_session_state_builder.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
+import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/features/project_threads/domain/project_threads_session_snapshot.dart';
 
 void main() {
@@ -42,10 +43,18 @@ void main() {
         currentProjectPath: '/repo',
         currentSessionId: 'thread-1',
         projectHomeActive: false,
+        workbenchLayout: const IdeWorkbenchLayoutState(
+          leftSidebarVisible: false,
+          agentUsageExpanded: true,
+          leftSidebarWidth: 300,
+          agentUsageHeightFraction: 0.4,
+          selectedAgentUsageProviderId: 'grok',
+        ),
       );
 
       expect(snapshot.agentThreadIdsByProject['/repo'], 'thread-1');
       expect(snapshot.selectedThreadIdsByProject['/repo'], 'thread-1');
+      expect(snapshot.workbenchLayout.selectedAgentUsageProviderId, 'grok');
     },
   );
 
@@ -112,6 +121,13 @@ void main() {
           projectDirectory.path: DateTime.utc(2026, 7, 21),
           missingProjectPath: DateTime.utc(2026, 7, 20),
         },
+        workbenchLayout: const IdeWorkbenchLayoutState(
+          leftSidebarVisible: false,
+          agentUsageExpanded: true,
+          leftSidebarWidth: 320,
+          agentUsageHeightFraction: 0.5,
+          selectedAgentUsageProviderId: 'grok',
+        ),
       ),
     );
     final coordinator = IdeSessionPersistenceCoordinator(
@@ -142,6 +158,16 @@ void main() {
     expect(result.snapshot?.projectLastOpenedAtByPath.keys, <String>[
       projectDirectory.path,
     ]);
+    expect(
+      result.snapshot?.workbenchLayout,
+      const IdeWorkbenchLayoutState(
+        leftSidebarVisible: false,
+        agentUsageExpanded: true,
+        leftSidebarWidth: 320,
+        agentUsageHeightFraction: 0.5,
+        selectedAgentUsageProviderId: 'grok',
+      ),
+    );
   });
 
   test(
@@ -157,10 +183,20 @@ void main() {
 
       final restoreFuture = coordinator.restore();
       coordinator.requestSave(
-        const IdeSessionState(projectPaths: <String>['/older']),
+        const IdeSessionState(
+          projectPaths: <String>['/older'],
+          workbenchLayout: IdeWorkbenchLayoutState(
+            selectedAgentUsageProviderId: 'older',
+          ),
+        ),
       );
       coordinator.requestSave(
-        const IdeSessionState(projectPaths: <String>['/newer']),
+        const IdeSessionState(
+          projectPaths: <String>['/newer'],
+          workbenchLayout: IdeWorkbenchLayoutState(
+            selectedAgentUsageProviderId: 'newer',
+          ),
+        ),
       );
 
       expect(store.savedSnapshots, isEmpty);
@@ -171,6 +207,52 @@ void main() {
 
       expect(store.savedSnapshots, hasLength(1));
       expect(store.savedSnapshots.single.projectPaths, <String>['/newer']);
+      expect(
+        store
+            .savedSnapshots
+            .single
+            .workbenchLayout
+            .selectedAgentUsageProviderId,
+        'newer',
+      );
+    },
+  );
+
+  test(
+    'saveNow replaces a delayed snapshot with the latest workbench',
+    () async {
+      final store = _FakeIdeSessionStore();
+      final coordinator = IdeSessionPersistenceCoordinator(
+        store: store,
+        saveDelay: const Duration(milliseconds: 10),
+      );
+      coordinators.add(coordinator);
+      coordinator.requestSave(
+        const IdeSessionState(
+          workbenchLayout: IdeWorkbenchLayoutState(
+            selectedAgentUsageProviderId: 'delayed',
+          ),
+        ),
+      );
+
+      await coordinator.saveNow(
+        const IdeSessionState(
+          workbenchLayout: IdeWorkbenchLayoutState(
+            selectedAgentUsageProviderId: 'latest',
+          ),
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+
+      expect(store.savedSnapshots, hasLength(1));
+      expect(
+        store
+            .savedSnapshots
+            .single
+            .workbenchLayout
+            .selectedAgentUsageProviderId,
+        'latest',
+      );
     },
   );
 

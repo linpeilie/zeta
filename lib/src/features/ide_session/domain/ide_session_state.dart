@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 
 const int sessionStateVersion = 4;
 
@@ -22,6 +23,7 @@ class IdeSessionState {
     this.selectedThreadIdsByProject = const <String, String>{},
     this.projectLastOpenedAtByPath = const <String, DateTime>{},
     this.projectHomeActive = false,
+    this.workbenchLayout = const IdeWorkbenchLayoutState(),
   });
 
   final List<String> projectPaths;
@@ -58,6 +60,9 @@ class IdeSessionState {
   /// 它用于区分同样没有真实 thread id 的项目首页与新建 Thread 草稿。
   final bool projectHomeActive;
 
+  /// 应用级 Workbench 布局与统计选择偏好。
+  final IdeWorkbenchLayoutState workbenchLayout;
+
   /// 编码成持久化 JSON。
   String encode() => jsonEncode(toJson());
 
@@ -84,6 +89,7 @@ class IdeSessionState {
           entry.key: entry.value.toIso8601String(),
       },
       'projectHomeActive': projectHomeActive,
+      'workbench': workbenchLayout.toJson(),
     };
   }
 
@@ -136,6 +142,9 @@ class IdeSessionState {
         projectHomeActive:
             (version == 3 || version == sessionStateVersion) &&
             decoded['projectHomeActive'] == true,
+        workbenchLayout: IdeWorkbenchLayoutState.tryDecode(
+          decoded['workbench'],
+        ),
       );
     } catch (_) {
       return const IdeSessionState();
