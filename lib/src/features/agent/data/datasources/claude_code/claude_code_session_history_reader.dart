@@ -93,16 +93,21 @@ class ClaudeCodeSessionHistoryReader {
   }
 
   /// 解析 Claude Code 家目录：注入路径优先，否则使用用户 home 下的 `.claude`。
+  ///
+  /// [environment] 是 Provider 级环境变量覆盖，不是一份完整的进程环境；未覆盖
+  /// HOME/USERPROFILE 时必须继续继承系统环境，避免空配置把历史目录降级为相对路径。
   String resolveClaudeHome({Map<String, String>? environment}) {
     final injected = claudeHome?.trim();
     if (injected != null && injected.isNotEmpty) {
       return injected;
     }
-    final env = environment ?? Platform.environment;
-    final home =
-        homeResolver?.call() ??
-        env[Platform.isWindows ? 'USERPROFILE' : 'HOME'];
-    if (home == null || home.trim().isEmpty) {
+    final homeKey = Platform.isWindows ? 'USERPROFILE' : 'HOME';
+    final home = _firstNonEmpty(<String?>[
+      homeResolver?.call(),
+      environment?[homeKey],
+      Platform.environment[homeKey],
+    ]);
+    if (home == null) {
       return '.claude';
     }
     return '$home${Platform.pathSeparator}.claude';

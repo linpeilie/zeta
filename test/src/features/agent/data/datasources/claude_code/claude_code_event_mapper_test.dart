@@ -2,6 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_effect.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_effect_runner.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_event_processor.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_mutation.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_reducer.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
+import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
+import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_event_mapper.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
@@ -26,6 +34,7 @@ void main() {
         turnId: 'turn-hello',
       );
 
+      final events = <AgentEvent>[];
       final signatures = <String>[];
       for (final frame in frames) {
         final mapped = mapper.mapFrame(
@@ -34,11 +43,12 @@ void main() {
           runningTurnId: 'turn-hello',
         );
         for (final event in mapped.events) {
+          events.add(event);
           signatures.add(_canonicalSignature(event));
         }
       }
 
-      expect(signatures, hasLength(6));
+      expect(signatures, hasLength(7));
       expect(signatures[0], 'AgentSessionStartedEvent|session=$sessionId');
       expect(
         signatures[1],
@@ -52,21 +62,78 @@ void main() {
         signatures[3],
         matches(
           RegExp(
+            r'^AgentMessageDeltaEvent\|entry=.+\|status=completed\|role=agent$',
+          ),
+        ),
+      );
+      expect(
+        signatures[4],
+        matches(
+          RegExp(
             r'^AgentMessageUpdatedEvent\|entry=.+\|status=completed\|role=agent$',
           ),
         ),
       );
       expect(signatures[2], isNot(contains('msg_fixture_hello_1')));
       expect(signatures[3], isNot(contains('msg_fixture_hello_1')));
+      expect(signatures[4], isNot(contains('msg_fixture_hello_1')));
       expect(
-        signatures[4],
-        'AgentTokenUsageEvent|turn=turn-hello|cumulative=false',
+        (events[3] as AgentMessageDeltaEvent).messageId,
+        (events[4] as AgentMessageUpdatedEvent).messageId,
       );
       expect(
         signatures[5],
+        'AgentTokenUsageEvent|turn=turn-hello|cumulative=false',
+      );
+      expect(
+        signatures[6],
         'AgentTurnCompletedEvent|turn=turn-hello|status=completed',
       );
     });
+
+    test(
+      'final-only assistant snapshot creates a visible timeline message',
+      () {
+        // Arrange
+        final frames = _loadFixture('$fixturesRoot/hello_turn.jsonl');
+        final sessionId = frames.first['session_id']! as String;
+        const turnId = 'turn-final-snapshot';
+        final mapper = ClaudeCodeEventMapper(providerId: 'claude_code');
+        addTearDown(mapper.dispose);
+        mapper.beginTurn(
+          runtimeScope: scope,
+          sessionId: sessionId,
+          turnId: turnId,
+        );
+        final assistantFrame = frames.lastWhere(
+          (frame) => frame['type'] == 'assistant',
+        );
+        final mapped = mapper.mapFrame(
+          raw: assistantFrame,
+          runtimeScope: scope,
+          runningTurnId: turnId,
+        );
+        final timeline = AgentConversationTimelineStore();
+        addTearDown(timeline.dispose);
+        timeline.startPendingLiveTurn();
+        final processor = _processor(timeline: timeline, sessionId: sessionId);
+        processor.process(
+          AgentTurnStartedEvent(AgentTurn(id: turnId, sessionId: sessionId)),
+        );
+
+        // Act
+        for (final event in mapped.events) {
+          processor.process(event);
+        }
+
+        // Assert
+        final message = timeline.messages.single;
+        expect(message.text, '[redacted assistant text]');
+        expect(message.role, AgentMessageRole.agent);
+        expect(message.phase, AgentMessagePhase.response);
+        expect(message.status, AgentMessageStatus.completed);
+      },
+    );
 
     test('session mismatch emits error without starting a session', () {
       final mapper = ClaudeCodeEventMapper(providerId: 'claude_code');
@@ -458,6 +525,8 @@ String _canonicalSignature(AgentEvent event) {
       'AgentSessionStartedEvent|session=${session.id}',
     AgentThreadStatusChangedEvent(:final threadId, :final status) =>
       'AgentThreadStatusChangedEvent|thread=$threadId|status=${status.name}',
+    AgentMessageDeltaEvent(:final messageId, :final status, :final role) =>
+      'AgentMessageDeltaEvent|entry=$messageId|status=${status?.name ?? '-'}|role=${role.name}',
     AgentMessageUpdatedEvent(:final messageId, :final status, :final role) =>
       'AgentMessageUpdatedEvent|entry=$messageId|status=${status?.name ?? '-'}|role=${role?.name ?? '-'}',
     AgentReasoningDeltaEvent(:final itemId, :final kind) =>
@@ -470,4 +539,66 @@ String _canonicalSignature(AgentEvent event) {
       'AgentTurnCompletedEvent|turn=$turnId|status=${status.name}',
     _ => 'UnknownEvent|${event.runtimeType}',
   };
+}
+
+AgentConversationEventProcessor _processor({
+  required AgentConversationTimelineStore timeline,
+  required String sessionId,
+}) {
+  return AgentConversationEventProcessor(
+    reducer: AgentConversationReducer.live(),
+    context: () => AgentConversationReducerContext(
+      scope: AgentConversationReductionScope.live,
+      selectedThreadId: sessionId,
+      requiresResumedSelectedThread: false,
+      pendingTurnGroupId: timeline.pendingTurnGroupId,
+      hasTurn: timeline.hasTurn,
+      isHistoryTurnId: timeline.isHistoryTurnId,
+      modelsRefreshing: false,
+      activeProviderName: 'Claude Code',
+      activeProviderConfig: AgentProviderConfig.defaultClaudeCode,
+      effectScope: AgentConversationEffectScope(
+        reductionScope: AgentConversationReductionScope.live,
+        providerId: defaultClaudeCodeProviderId,
+        listenerGeneration: 1,
+        runtimeId: 'claude-code-mapper-test',
+        connectionEpoch: 1,
+        threadId: sessionId,
+      ),
+    ),
+    timeline: timeline,
+    stateTarget: const _NoOpStateMutationTarget(),
+    uiUpdates: const _NoOpUiUpdatePort(),
+    effectRunner: const _NoOpEffectRunner(),
+  );
+}
+
+final class _NoOpStateMutationTarget
+    implements AgentConversationStateMutationTarget {
+  const _NoOpStateMutationTarget();
+
+  @override
+  AgentConversationStateMutationOutcome apply(
+    AgentConversationStateChange change,
+  ) => AgentConversationStateMutationOutcome.none;
+
+  @override
+  void requestThreadSnapshotRefresh() {}
+}
+
+final class _NoOpUiUpdatePort implements AgentUiUpdatePort {
+  const _NoOpUiUpdatePort();
+
+  @override
+  void publish(AgentUiUpdateRequest request) {}
+}
+
+final class _NoOpEffectRunner implements AgentConversationEffectRunner {
+  const _NoOpEffectRunner();
+
+  @override
+  void dispose() {}
+
+  @override
+  void run(AgentConversationEffect effect) {}
 }

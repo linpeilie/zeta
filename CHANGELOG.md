@@ -65,6 +65,9 @@
 
 ### 修复
 
+- Claude Code 历史读取会在 Provider 未覆盖用户目录时继承系统 HOME/USERPROFILE；
+  重启后可凭项目路径与会话 ID 恢复历史，不再只显示居中的输入框
+- Claude Code 仅返回最终完整文本时，回复会正确创建并显示，不再只显示耗时与 Token
 - Windows 启动 Agent CLI 时统一解析 `.exe`、`.cmd`、`.bat` 与 `.ps1`；
   Claude Code 会跳过 npm 生成的无扩展名 POSIX shim，不再报 Win32 错误 193
 - Plan 计划文档展示时同步隐藏 live 活动条，实时步骤进度卡不再误隐藏该状态

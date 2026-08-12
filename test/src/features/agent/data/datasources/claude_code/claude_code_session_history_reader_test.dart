@@ -39,6 +39,95 @@ void main() {
       );
     });
 
+    test(
+      'inherits process home when provider overrides omit the home variable',
+      () {
+        final homeKey = Platform.isWindows ? 'USERPROFILE' : 'HOME';
+        final processHome = Platform.environment[homeKey];
+        if (processHome == null || processHome.trim().isEmpty) {
+          fail('The test process must expose $homeKey');
+        }
+        final expected =
+            '${processHome.trim()}${Platform.pathSeparator}.claude';
+        final reader = ClaudeCodeSessionHistoryReader();
+
+        expect(
+          reader.resolveClaudeHome(environment: const <String, String>{}),
+          expected,
+        );
+        expect(
+          reader.resolveClaudeHome(
+            environment: const <String, String>{
+              'CLAUDE_CODE_TEST_OVERRIDE': 'enabled',
+            },
+          ),
+          expected,
+        );
+      },
+    );
+
+    test('restores cached history without a persisted session path', () async {
+      const projectPath = r'D:\Development\Workspace\zeta';
+      const sessionId = 'restored-session';
+      final homeKey = Platform.isWindows ? 'USERPROFILE' : 'HOME';
+      final userHome = await Directory(
+        '${tempRoot.path}${Platform.pathSeparator}user-home',
+      ).create(recursive: true);
+      final claudeHome = await Directory(
+        '${userHome.path}${Platform.pathSeparator}.claude',
+      ).create(recursive: true);
+      final projectDirectory = await _projectDirectory(
+        claudeHome,
+        projectPath,
+      ).create(recursive: true);
+      final sessionFile = File(
+        '${projectDirectory.path}${Platform.pathSeparator}$sessionId.jsonl',
+      );
+      await sessionFile.writeAsString(
+        '${jsonEncode(<String, Object?>{
+          'type': 'user',
+          'sessionId': sessionId,
+          'uuid': 'restored-user',
+          'timestamp': '2026-08-12T02:00:00.000Z',
+          'cwd': projectPath,
+          'message': <String, Object?>{'role': 'user', 'content': 'Restore this history'},
+        })}\n'
+        '${jsonEncode(<String, Object?>{
+          'type': 'assistant',
+          'sessionId': sessionId,
+          'uuid': 'restored-assistant',
+          'parentUuid': 'restored-user',
+          'timestamp': '2026-08-12T02:00:01.000Z',
+          'cwd': projectPath,
+          'message': <String, Object?>{
+            'role': 'assistant',
+            'model': 'claude-test-model',
+            'stop_reason': 'end_turn',
+            'content': <Object?>[
+              <String, Object?>{'type': 'text', 'text': 'History restored'},
+            ],
+          },
+        })}\n',
+      );
+      final reader = ClaudeCodeSessionHistoryReader();
+
+      final snapshot = await reader.readThreadHistory(
+        threadId: sessionId,
+        providerId: 'claude-code',
+        projectPath: projectPath,
+        sessionPath: null,
+        environment: <String, String>{homeKey: userHome.path},
+      );
+
+      expect(snapshot.turns, hasLength(1));
+      expect(
+        snapshot.turns.single.entries.whereType<AgentHistoryMessageEntry>().map(
+          (entry) => entry.text,
+        ),
+        <String>['Restore this history', 'History restored'],
+      );
+    });
+
     test('lists summaries, skips malformed lines, and stays read-only', () async {
       const projectPath = r'D:\Development\Workspace\zeta';
       const sessionId = 'session-redacted-1';

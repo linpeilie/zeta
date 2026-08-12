@@ -325,6 +325,8 @@ String _canonicalSignature(AgentEvent event) {
       'AgentThreadStatusChangedEvent|thread=$threadId|status=${status.name}',
     AgentTurnStartedEvent(:final turn) =>
       'AgentTurnStartedEvent|turn=${turn.id}',
+    AgentMessageDeltaEvent(:final messageId, :final status, :final role) =>
+      'AgentMessageDeltaEvent|entry=$messageId|status=${status?.name ?? '-'}|role=${role.name}',
     AgentMessageUpdatedEvent(:final messageId, :final status, :final role) =>
       'AgentMessageUpdatedEvent|entry=$messageId|status=${status?.name ?? '-'}|role=${role?.name ?? '-'}',
     AgentReasoningDeltaEvent(:final itemId, :final kind) =>

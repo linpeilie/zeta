@@ -307,6 +307,24 @@ final class ClaudeCodeEventMapper {
           turnId: resolved.turnId,
           text: text,
         );
+        // stream-json 的 assistant text 是完整快照，且不保证此前出现过正文 delta。
+        // 先用同一 entryId 物化消息，再用权威快照完成它；共享 Store 仍保持
+        // update-only 语义，不需要为 Claude Code 增加 Provider 分支。
+        if (text.isNotEmpty) {
+          events.add(
+            AgentMessageDeltaEvent(
+              messageId: resolved.entryId,
+              sourceMessageId: sourceMessageId,
+              delta: text,
+              role: AgentMessageRole.agent,
+              phase: AgentMessagePhase.response,
+              status: AgentMessageStatus.completed,
+              sessionId: resolved.sessionId,
+              turnId: resolved.turnId,
+              raw: const <String, Object?>{},
+            ),
+          );
+        }
         events.add(
           AgentMessageUpdatedEvent(
             messageId: resolved.entryId,
