@@ -405,11 +405,29 @@ class AgentManagementPageState extends State<AgentManagementPage> {
           final setupGuide = agent.definition.id == defaultClaudeCodeProviderId
               ? const _ClaudeCodeSetupGuideCard()
               : null;
+          final accountDataEnrichment =
+              agent.definition.id == defaultClaudeCodeProviderId
+              ? _ClaudeCodeAccountDataEnrichmentCard(
+                  enabled:
+                      widget.controller.claudeCodeAccountDataEnrichmentEnabled,
+                  updating: widget.controller.updatingAccountDataEnrichment,
+                  onChanged: (value) {
+                    unawaited(
+                      widget.controller
+                          .setClaudeCodeAccountDataEnrichmentEnabled(value),
+                    );
+                  },
+                )
+              : null;
           if (constraints.maxWidth < 780) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 information,
+                if (accountDataEnrichment != null) ...[
+                  const SizedBox(height: IdeSpacing.space12),
+                  accountDataEnrichment,
+                ],
                 if (setupGuide != null) ...[
                   const SizedBox(height: IdeSpacing.space12),
                   setupGuide,
@@ -430,6 +448,10 @@ class AgentManagementPageState extends State<AgentManagementPage> {
                   Expanded(flex: 2, child: diagnostics),
                 ],
               ),
+              if (accountDataEnrichment != null) ...[
+                const SizedBox(height: IdeSpacing.space12),
+                accountDataEnrichment,
+              ],
               if (setupGuide != null) ...[
                 const SizedBox(height: IdeSpacing.space12),
                 setupGuide,
@@ -1448,6 +1470,42 @@ class _ModelCard extends StatelessWidget {
   }
 }
 
+class _ClaudeCodeAccountDataEnrichmentCard extends StatelessWidget {
+  const _ClaudeCodeAccountDataEnrichmentCard({
+    required this.enabled,
+    required this.updating,
+    required this.onChanged,
+  });
+
+  final bool enabled;
+  final bool updating;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return IdeSection(
+      title: '账号数据增强',
+      subtitle: '模型目录 · 套餐用量',
+      child: IdeSurface.pane(
+        child: IdeSettingsRow(
+          key: const ValueKey('claude-account-data-enrichment-row'),
+          label: '使用 Claude Code 登录态',
+          description:
+              '开启后会瞬时读取本机 claude login 的 OAuth 凭据，'
+              '仅发起模型目录和套餐用量的只读查询；不会刷新、写回或持久化凭据。',
+          showDivider: false,
+          control: sf.Switch(
+            key: const ValueKey('claude-account-data-enrichment-switch'),
+            value: enabled,
+            enabled: !updating,
+            onChanged: updating ? null : onChanged,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Claude Code 详情页安装 / 登录 / 文档三段指引（M0）。
 class _ClaudeCodeSetupGuideCard extends StatelessWidget {
   const _ClaudeCodeSetupGuideCard();
@@ -1479,7 +1537,8 @@ class _ClaudeCodeSetupGuideCard extends StatelessWidget {
               title: '2. 登录账号',
               body:
                   '运行 claude login 完成 Anthropic 账号登录。'
-                  'Zeta 不会读取或改写 ~/.claude 凭证文件内容。',
+                  '自动检测不会读取凭据内容；账号数据增强只做上方说明的瞬时只读查询，'
+                  '且绝不写回凭据文件。',
               textStyles: textStyles,
               colors: colors,
               showDivider: true,

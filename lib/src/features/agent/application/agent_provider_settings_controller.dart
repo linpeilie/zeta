@@ -150,16 +150,25 @@ class AgentProviderSettingsController extends ChangeNotifier
 
     final shouldRestartProvider = restartProvider;
     // Repository 会在首个 await 前推进 provider generation；立即发起失效，并让
-    // 缓存 I/O 与可能较慢的运行实例关闭、配置落盘并行执行。
+    // 缓存 I/O、global runtime 关闭与配置落盘并行执行。仅影响模型目录的配置
+    // 不应终止 session runtime；global 实例会按新配置重建。
     final Future<void> modelCatalogInvalidation = invalidatesModelCatalog
         ? modelCatalogRepository.invalidateProvider(updated.id)
         : Future<void>.value();
-    if (shouldRestartProvider) {
-      await runtimeRegistry.invalidateProvider(updated.id);
-    }
+    final Future<void> runtimeInvalidation = shouldRestartProvider
+        ? runtimeRegistry.invalidateProvider(updated.id)
+        : invalidatesModelCatalog
+        ? runtimeRegistry.invalidateScope(
+            updated.id,
+            AgentProviderRuntimeScopeKey.global,
+          )
+        : Future<void>.value();
 
-    await configStore.save(_settings);
-    await modelCatalogInvalidation;
+    await Future.wait<void>(<Future<void>>[
+      configStore.save(_settings),
+      modelCatalogInvalidation,
+      runtimeInvalidation,
+    ]);
     _notify();
   }
 

@@ -32,6 +32,12 @@ const String cursorAgentProviderId = 'cursor';
 /// 内置 Claude Code provider 的稳定配置 id。
 const String defaultClaudeCodeProviderId = 'claude_code';
 
+/// Claude Code 账号数据增强开关在 Provider 配置中的稳定 key。
+///
+/// 这是 Zeta 自有配置，不是 Claude Code wire 字段；缺省值视为开启。
+const String claudeCodeAccountDataEnrichmentKey =
+    'claudeCode.accountDataEnrichment';
+
 /// 一个可启动的 Agent provider 定义。
 ///
 /// 该对象保存全局配置，例如 `codex app-server` 的命令、参数、环境变量和

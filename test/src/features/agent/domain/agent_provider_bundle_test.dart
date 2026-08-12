@@ -328,6 +328,7 @@ void main() {
         expect(bundle.modelCatalog, isNotNull);
         expect(bundle.permissionPolicy, isNotNull);
         expect(bundle.planApproval, isNotNull);
+        expect(bundle.usageQuota, isNotNull);
 
         final catalog = await bundle.permissionPolicy!.listPermissionOptions();
         expect(catalog.defaultOptionId, ':ask');
@@ -337,6 +338,7 @@ void main() {
             kind: AgentPlanApprovalDecisionKind.accepted,
           ),
         );
+        final quota = await bundle.usageQuota!.readUsageQuota();
 
         expect(provider.planDecisions, const <AgentPlanApprovalDecision>[
           AgentPlanApprovalDecision(
@@ -344,6 +346,8 @@ void main() {
             kind: AgentPlanApprovalDecisionKind.accepted,
           ),
         ]);
+        expect(quota?.providerId, defaultClaudeCodeProviderId);
+        expect(quota?.planType, 'pro');
       },
     );
 
@@ -794,7 +798,10 @@ class _PermissionBundleFakeProvider extends _MinimalBundleFakeProvider
 }
 
 class _ClaudeCodeBundleFakeProvider extends _MinimalBundleFakeProvider
-    implements AgentPermissionPolicyProvider, AgentPlanApprovalProvider {
+    implements
+        AgentPermissionPolicyProvider,
+        AgentPlanApprovalProvider,
+        AgentUsageQuotaProvider {
   _ClaudeCodeBundleFakeProvider()
     : super(
         config: AgentProviderConfig.defaultClaudeCode,
@@ -819,6 +826,19 @@ class _ClaudeCodeBundleFakeProvider extends _MinimalBundleFakeProvider
   @override
   Future<void> respondToPlanApproval(AgentPlanApprovalDecision decision) async {
     planDecisions.add(decision);
+  }
+
+  @override
+  Future<AgentUsageQuotaSnapshot?> readUsageQuota() async {
+    return const AgentUsageQuotaSnapshot(
+      providerId: defaultClaudeCodeProviderId,
+      providerName: 'Claude Code',
+      planType: 'pro',
+      limitName: 'Claude Code 订阅额度',
+      windows: <AgentUsageWindow>[
+        AgentUsageWindow(label: '五小时会话额度', usedPercent: 20),
+      ],
+    );
   }
 }
 

@@ -88,6 +88,48 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'Claude account data enrichment defaults on and can be disabled',
+    (tester) async {
+      final harness = _ClaudeManagementHarness.create();
+      addTearDown(harness.dispose);
+      await tester.runAsync(harness.managementController.initialize);
+
+      await _pumpManagementPage(
+        tester,
+        controller: harness.managementController,
+      );
+      await tester.tap(find.byKey(const ValueKey('agent-row-claude_code')));
+      await tester.pump();
+
+      final switchFinder = find.byKey(
+        const ValueKey('claude-account-data-enrichment-switch'),
+      );
+      await tester.ensureVisible(switchFinder);
+      await tester.pump();
+      expect(find.text('账号数据增强'), findsOneWidget);
+      expect(find.textContaining('模型目录和套餐用量的只读查询'), findsOneWidget);
+      expect(tester.widget<sf.Switch>(switchFinder).value, isTrue);
+      expect(tester.widget<sf.Switch>(switchFinder).onChanged, isNotNull);
+
+      await tester.runAsync(
+        () => harness.managementController
+            .setClaudeCodeAccountDataEnrichmentEnabled(false),
+      );
+      await tester.pump();
+
+      final disabledConfig = harness.providerController.providerConfigById(
+        defaultClaudeCodeProviderId,
+      );
+      expect(
+        disabledConfig?.extra[claudeCodeAccountDataEnrichmentKey],
+        isFalse,
+      );
+      expect(tester.widget<sf.Switch>(switchFinder).value, isFalse);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('Claude connection test requires explicit usage confirmation', (
     tester,
   ) async {

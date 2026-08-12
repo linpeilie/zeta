@@ -67,6 +67,7 @@ class AgentManagementController extends ChangeNotifier {
   bool _loadingConfiguration = false;
   bool _savingConfiguration = false;
   bool _loadingLogs = false;
+  bool _updatingAccountDataEnrichment = false;
   bool _disposed = false;
   String? _operationError;
 
@@ -114,7 +115,19 @@ class AgentManagementController extends ChangeNotifier {
   bool get loadingConfiguration => _loadingConfiguration;
   bool get savingConfiguration => _savingConfiguration;
   bool get loadingLogs => _loadingLogs;
+  bool get updatingAccountDataEnrichment => _updatingAccountDataEnrichment;
   String? get operationError => _operationError;
+
+  /// Claude Code 账号数据增强是否开启；缺省配置按开启处理。
+  bool get claudeCodeAccountDataEnrichmentEnabled {
+    if (_selectedAgentId != defaultClaudeCodeProviderId) {
+      return false;
+    }
+    return _configForAgent(
+          defaultClaudeCodeProviderId,
+        ).extra[claudeCodeAccountDataEnrichmentKey] !=
+        false;
+  }
 
   /// 配置中已启用、且 Zeta 已实现 CLI 适配的 provider。
   ///
@@ -249,6 +262,43 @@ class AgentManagementController extends ChangeNotifier {
           '无法${enabled ? '启用' : '禁用'} ${current.definition.displayName}：$error';
     }
     _notify();
+  }
+
+  /// 更新 Claude Code 账号数据增强开关。
+  ///
+  /// 开启沿用缺省值，不额外落一个 `true`；关闭只保存布尔值，不保存凭据。
+  Future<void> setClaudeCodeAccountDataEnrichmentEnabled(bool enabled) async {
+    if (_selectedAgentId != defaultClaudeCodeProviderId ||
+        _updatingAccountDataEnrichment) {
+      return;
+    }
+    await initialize();
+    final current = _configForAgent(defaultClaudeCodeProviderId);
+    final currentEnabled =
+        current.extra[claudeCodeAccountDataEnrichmentKey] != false;
+    if (currentEnabled == enabled) {
+      return;
+    }
+
+    _updatingAccountDataEnrichment = true;
+    _operationError = null;
+    _notify();
+    try {
+      final extra = Map<String, Object?>.from(current.extra);
+      if (enabled) {
+        extra.remove(claudeCodeAccountDataEnrichmentKey);
+      } else {
+        extra[claudeCodeAccountDataEnrichmentKey] = false;
+      }
+      await providerController.updateProviderConfig(
+        current.copyWith(extra: extra),
+      );
+    } catch (error) {
+      _operationError = '账号数据增强设置保存失败：$error';
+    } finally {
+      _updatingAccountDataEnrichment = false;
+      _notify();
+    }
   }
 
   /// 执行当前 Provider 的显式连接测试。

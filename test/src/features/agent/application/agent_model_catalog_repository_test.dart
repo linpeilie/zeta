@@ -155,6 +155,20 @@ void main() {
       expect(result.models.models.single.id, 'remote');
     });
 
+    test('account data enrichment participates in the safe fingerprint', () {
+      final enabled = AgentProviderConfig.defaultClaudeCode;
+      final disabled = enabled.copyWith(
+        extra: const <String, Object?>{
+          claudeCodeAccountDataEnrichmentKey: false,
+        },
+      );
+
+      expect(
+        repository.configFingerprint(disabled),
+        isNot(repository.configFingerprint(enabled)),
+      );
+    });
+
     test(
       'does not let an older config refresh overwrite a newer one',
       () async {

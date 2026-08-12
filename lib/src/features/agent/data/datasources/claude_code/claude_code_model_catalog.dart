@@ -3,10 +3,6 @@ import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code
 import 'package:zeta/src/features/agent/data/mappers/claude_code_model_catalog_mapper.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
-/// Claude Code 账号数据增强开关在 Provider 配置中的稳定 key。
-const String claudeCodeAccountDataEnrichmentKey =
-    'claudeCode.accountDataEnrichment';
-
 typedef ClaudeCodeCredentialsLoader =
     Future<ClaudeCodeOAuthCredentials?> Function();
 

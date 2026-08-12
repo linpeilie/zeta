@@ -109,6 +109,58 @@ void main() {
       expect(result.models.models.single.id, 'remote');
     });
 
+    test('model-related settings rebuild only the global runtime', () async {
+      // Arrange
+      final initial = AgentProviderConfig.defaultClaudeCode;
+      final updated = initial.copyWith(
+        extra: const <String, Object?>{
+          claudeCodeAccountDataEnrichmentKey: false,
+        },
+      );
+      final factory = _MultiInstanceFakeProviderFactory();
+      final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+      addTearDown(registry.close);
+      final controller = AgentProviderSettingsController(
+        runtimeRegistry: registry,
+        configStore: MemoryAgentProviderConfigStore(
+          AgentProviderSettings(providers: <AgentProviderConfig>[initial]),
+        ),
+      );
+      addTearDown(controller.dispose);
+      const sessionScope = AgentProviderRuntimeScopeKey.session(
+        'claude-session-1',
+      );
+      final globalLease = await registry.acquire(
+        initial,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
+      final sessionLease = await registry.acquire(initial, scope: sessionScope);
+      final oldGlobal = globalLease.provider as _TrackingFakeAgentProvider;
+      final oldSession = sessionLease.provider as _TrackingFakeAgentProvider;
+      await globalLease.release();
+      await sessionLease.release();
+
+      // Act
+      await controller.updateProviderConfig(updated);
+
+      // Assert
+      expect(oldGlobal.disposeCount, 1);
+      expect(oldSession.disposeCount, 0);
+      expect(registry.debugProviderCount, 1);
+      final replacementGlobal = await registry.acquire(
+        updated,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
+      final retainedSession = await registry.acquire(
+        updated,
+        scope: sessionScope,
+      );
+      expect(replacementGlobal.provider, isNot(same(oldGlobal)));
+      expect(retainedSession.provider, same(oldSession));
+      await replacementGlobal.release();
+      await retainedSession.release();
+    });
+
     test(
       'moves active provider to an enabled fallback when disabled',
       () async {

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
@@ -10,6 +11,7 @@ import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_plan_approval_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_process_starter.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_session_history_reader.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_usage_quota_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/stream_json_peer.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart'
     show ProcessStarter;
@@ -32,13 +34,15 @@ class ClaudeCodeAgentProvider
         AgentPermissionPolicyProvider,
         AgentPlanApprovalProvider,
         AgentLocalThreadListProvider,
-        AgentRefreshableModelCatalogProvider {
+        AgentRefreshableModelCatalogProvider,
+        AgentUsageQuotaProvider {
   ClaudeCodeAgentProvider({
     required this.config,
     ProcessStarter? processStarter,
     this._whichLookup,
     ClaudeCodeEventMapper? mapper,
     ClaudeCodeModelCatalog? modelCatalog,
+    ClaudeCodeUsageQuotaAdapter? usageQuotaAdapter,
     ClaudeCodeControlRequestHandler? controlRequestHandler,
     ClaudeCodeSessionDecisionStoreFactory? sessionDecisionStoreFactory,
     ClaudeCodeSessionHistoryReader? sessionHistoryReader,
@@ -51,6 +55,18 @@ class ClaudeCodeAgentProvider
            ClaudeCodeModelCatalog(
              accountDataEnrichmentEnabled:
                  config.extra[claudeCodeAccountDataEnrichmentKey] != false,
+           ),
+       _usageQuotaAdapter =
+           usageQuotaAdapter ??
+           ClaudeCodeUsageQuotaAdapter(
+             providerId: config.id,
+             providerName: config.displayName,
+             accountDataEnrichmentEnabled:
+                 config.extra[claudeCodeAccountDataEnrichmentKey] != false,
+             usesApiKey: _usesClaudeCodeApiKey(config),
+             claudeCodeVersion: _nonEmptyConfigValue(
+               config.extra['detectedCurrentVersion'],
+             ),
            ),
        _controlHandler =
            controlRequestHandler ?? ClaudeCodeControlRequestHandler(),
@@ -80,6 +96,7 @@ class ClaudeCodeAgentProvider
   final Future<String?> Function(String command)? _whichLookup;
   final ClaudeCodeEventMapper _mapper;
   final ClaudeCodeModelCatalog _modelCatalog;
+  final ClaudeCodeUsageQuotaAdapter _usageQuotaAdapter;
   final ClaudeCodeControlRequestHandler _controlHandler;
   final ClaudeCodeSessionHistoryReader _sessionHistoryReader;
   final String Function() _idFactory;
@@ -258,6 +275,12 @@ class ClaudeCodeAgentProvider
   @override
   Future<void> removeThreadFromList(String threadId) {
     return _sessionHistoryReader.removeThreadFromList(threadId);
+  }
+
+  @override
+  Future<AgentUsageQuotaSnapshot?> readUsageQuota() {
+    _ensureNotDisposed();
+    return _usageQuotaAdapter.readUsageQuota();
   }
 
   @override
@@ -1207,4 +1230,18 @@ class ClaudeCodeAgentProvider
     return '${b.substring(0, 8)}-${b.substring(8, 12)}-'
         '${b.substring(12, 16)}-${b.substring(16, 20)}-${b.substring(20)}';
   }
+}
+
+bool _usesClaudeCodeApiKey(AgentProviderConfig config) {
+  if (config.extra['hasApiKey'] == true) {
+    return true;
+  }
+  return _nonEmptyConfigValue(config.environment['ANTHROPIC_API_KEY']) !=
+          null ||
+      _nonEmptyConfigValue(Platform.environment['ANTHROPIC_API_KEY']) != null;
+}
+
+String? _nonEmptyConfigValue(Object? value) {
+  final normalized = value?.toString().trim();
+  return normalized == null || normalized.isEmpty ? null : normalized;
 }

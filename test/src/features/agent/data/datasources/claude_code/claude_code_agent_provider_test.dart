@@ -8,10 +8,12 @@ import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_oauth_credentials_reader.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_permission_policy_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_session_history_reader.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_usage_quota_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart'
     show ProcessStarter;
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 void main() {
   group('ClaudeCodeAgentProvider', () {
@@ -523,6 +525,38 @@ void main() {
         expect(remoteCalls, 2);
       },
     );
+
+    test('exposes usage quota through the neutral bundle port', () async {
+      final adapter = ClaudeCodeUsageQuotaAdapter(
+        providerId: defaultClaudeCodeProviderId,
+        providerName: 'Claude Code',
+        credentialsLoader: () async => ClaudeCodeOAuthCredentials(
+          accessToken: 'sensitive-test-token',
+          expiresAt: DateTime.utc(2099),
+          subscriptionType: 'max',
+        ),
+        remoteUsageLoader:
+            ({
+              required String accessToken,
+              required String? claudeCodeVersion,
+            }) async => <String, Object?>{
+              'five_hour': <String, Object?>{'utilization': 20},
+            },
+      );
+      final provider = ClaudeCodeAgentProvider(
+        config: AgentProviderConfig.defaultClaudeCode,
+        usageQuotaAdapter: adapter,
+      );
+      addTearDown(provider.dispose);
+
+      final quotaPort = provider.bundle.usageQuota;
+      final quota = await quotaPort?.readUsageQuota();
+
+      expect(quotaPort, same(provider));
+      expect(quota?.providerId, defaultClaudeCodeProviderId);
+      expect(quota?.planType, 'max');
+      expect(quota?.windows.single.usedPercent, 20);
+    });
 
     test('persisted model selection is used for the first peer', () async {
       final process = _FakeClaudeProcess();

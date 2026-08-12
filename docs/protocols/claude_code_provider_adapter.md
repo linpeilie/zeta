@@ -4,7 +4,7 @@
 > 本文保留接入前的设计取舍、备选方案与后续增强设想，不再作为当前实现的事实源。
 > 已落地的 stream-json wire、能力边界与升级门禁以
 > [Claude Code stream-json 协议基线](./claude_code_stream_json_protocol.md) 为准。
-> 文中的 OAuth REST 动态模型目录已经落地；套餐用量仍未实现。
+> 文中的 OAuth REST 动态模型目录、套餐用量与账号数据增强开关已经落地。
 
 > 目的：将 Anthropic 的 Claude Code CLI 作为 **第三个** Agent Provider 接入
 > Zeta（与 Codex app-server、Grok ACP 并列），复用 `~/.claude` 已登录态，覆盖
@@ -527,9 +527,9 @@ class ClaudeCodeAgentProvider extends AgentProvider
 - 通过 `capabilities.supportsModelSelection=true` → bundle 自动挂载
   `modelCatalog`，Provider 需要实现 `listModels`（走 §4.7）；额外实现
   `AgentRefreshableModelCatalogProvider.refreshModels` 支持强制刷新。
-- **实现 `AgentUsageQuotaProvider`** 不经过 bundle——UI 用量面板直接对
-  `AgentProvider` 实例做 `is` 判断（对齐 Codex/Grok 现有实现，见 §1.1 脚注），
-  实现该接口即可自动出现在 `AgentUsagePanel`，无需碰 bundle/switch。
+- **实现 `AgentUsageQuotaProvider`** → bundle 自动挂载中立 `usageQuota` 端口；
+  用量仓储只消费该端口，不直接持有 Provider 或做 `is` 判断。Claude Code 只需实现
+  现有接口，无需修改 bundle/switch 或新增 Provider 端口。
 
 **运行时纪律**（与 Codex/Grok 对齐，`CLAUDE.md#Agent 事件管线`）：
 

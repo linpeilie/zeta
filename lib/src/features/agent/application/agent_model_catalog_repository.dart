@@ -164,6 +164,7 @@ class AgentModelCatalogRepository {
   String configFingerprint(AgentProviderConfig config) {
     final environmentKeys = config.environment.keys.toList()..sort();
     const extraKeys = <String>[
+      claudeCodeAccountDataEnrichmentKey,
       'cliPath',
       'detectedCurrentVersion',
       'modelProvider',
