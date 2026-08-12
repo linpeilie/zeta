@@ -1,6 +1,6 @@
 # 产品需求文档
 
-最后更新：2026-07-17
+最后更新：2026-08-12
 
 ## 1. 产品概述
 
@@ -24,8 +24,9 @@ Zeta 是一个基于 Flutter Desktop 的本地 AI IDE 壳层。它面向需要�
 - 提供一个稳定的三栏 IDE 工作台：Projects、Agent、Files。
 - 支持选择本地项目目录，并在右侧浏览项目文件树。
 - 支持将当前项目路径和选中文件路径作为 Agent 上下文传递给 provider。
-- 支持通过 Codex CLI app-server 与 Grok ACP 创建、恢复和继续 Agent thread，并按握手
-  能力降级 UI；Cursor 已退役，旧配置只用于 unavailable/fallback 兼容。
+- 支持通过 Codex CLI app-server、Grok ACP 与 Claude Code stream-json 创建、恢复和继续
+  Agent thread，并按握手能力降级 UI；Cursor 已退役，旧配置只用于
+  unavailable/fallback 兼容。
 - 支持展示 Agent 消息与工具调用状态，并把权限、提问和计划审批固定在输入框上方。
 - 支持持久化 IDE 会话状态，减少重启后的上下文丢失。
 
@@ -35,6 +36,9 @@ Zeta 是一个基于 Flutter Desktop 的本地 AI IDE 壳层。它面向需要�
 
 - 桌面端 Flutter 应用入口和自定义窗口启动流程。
 - 三栏布局：左侧项目与 thread，中间 Agent 时间线，右侧文件树。
+- Agent 首页将 Projects / Threads 与只读 Agent 统计摘要合并在一个左侧卡片；统计默认
+  折叠，标题栏左侧按钮控制整个左栏，窄窗口以浮层展示。应用重启后恢复左栏显隐、
+  统计展开态、栏宽、统计高度和统计 Provider 选择。
 - 本地目录选择和文件树懒加载。
 - 忽略常见大目录：`.git`、`.dart_tool`、`build`、`node_modules` 等。
 - 使用 `~/.zeta` 下的版本化 JSON 文件保存 Zeta 自有 IDE 会话、Agent provider、外观设置与
@@ -42,8 +46,8 @@ Zeta 是一个基于 Flutter Desktop 的本地 AI IDE 壳层。它面向需要�
   `cursor_sessions.json` 仅作为受保护用户数据原样保留，不参与运行时。
 - 应用日志按日期写入 `~/.zeta/logs`；Agent CLI 自有配置和 session 历史保持原位，
   不迁入 `~/.zeta`。
-- 内置活跃 Provider 为 Codex CLI 与 Grok ACP；Codex 仍为默认 active provider。Cursor
-  不出现在 catalog、设置、Agent 管理、会话恢复或运行时组合中。
+- 内置活跃 Provider 为 Codex CLI、Grok ACP 与 Claude Code stream-json；Codex 仍为默认
+  active provider。Cursor 不出现在 catalog、设置、Agent 管理、会话恢复或运行时组合中。
 - Agent 管理页支持活跃 CLI 的身份、版本、账号、连接、配置和脱敏诊断。
 - Agent 事件统一映射为领域模型，UI 不直接绑定 Codex 或 xAI 原始协议细节。
 - 支持 capability 驱动的 thread 列表、历史、恢复、发送、取消、权限和动态 session 配置；
@@ -55,7 +59,9 @@ Zeta 是一个基于 Flutter Desktop 的本地 AI IDE 壳层。它面向需要�
 
 - 内置代码编辑器。
 - 文件内容读取、编辑器内 diff 或保存流程。
-- 远程仓库、云同步或账号体系。
+- 远程仓库或云同步。
+- Zeta 自建的登录/账号体系，以及套餐购买、续费或支付流程；Provider 的账号 metadata
+  与套餐额度只做只读展示。
 - 完整插件系统。
 - 移动端适配。
 - Cursor Cloud Agent、Automations、自动安装/更新和私有本地数据解析。
@@ -91,7 +97,8 @@ Zeta 是一个基于 Flutter Desktop 的本地 AI IDE 壳层。它面向需要�
 
 1. 应用启动时读取持久化 IDE 会话。
 2. 系统过滤已经不存在的项目或文件。
-3. 系统恢复项目列表、当前项目、文件树展开状态、选中文件和 thread 缓存。
+3. 系统恢复项目列表、当前项目、文件树展开状态、选中文件、thread 缓存，以及左栏显隐、
+   统计展开态、栏宽、统计高度和统计 Provider 选择。
 4. 用户再次发送消息或切换 thread 时，系统尝试恢复对应 Agent session。
 
 ## 7. 非功能需求

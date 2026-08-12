@@ -485,8 +485,18 @@ Fast 是产品语义，运行时仍必须传递 provider 的精确 `serviceTierI
 
 - `IdeHome` 持有主要页面唯一的 `WindowFrame` 和 `IdeWorkbenchScaffold`。新增主要页面时
   只提供 Navigation、Canvas、Inspector slot 内容，不得用页面组件替换整个 Workbench。
-- Agent 首页、设置/Agent 管理和使用统计分别按设计文档中的 slot 矩阵组合：设置 Feature
-  使用 `SettingsNavigationPane` + `SettingsPageCanvas`，使用统计只占用 Canvas。
+- Agent 首页、设置/Agent 管理和使用统计分别按设计文档中的 slot 矩阵组合：Agent 首页
+  的 Navigation slot 使用一个 `ProjectAgentSidebar` 组合 Projects / Threads 与底部统计；
+  设置 Feature 使用 `SettingsNavigationPane` + `SettingsPageCanvas`，使用统计只占用 Canvas。
+- Agent 首页不得重新挂载 Activity Rail 或 Projects / 统计两个局部显隐入口。合并左栏只由
+  `WindowFrame.titleBarLeadingActions` 中的标题栏按钮控制；隐藏后该入口仍可操作。
+- `ProjectAgentSidebar` 只编排两个业务 Widget 的约束、展开高度和拖动预览。它不得读取
+  Provider 数据；Projects 与 cardless `AgentUsagePanelContent` 共用一个 `PanelCard`，统计
+  首次默认折叠。Compact 下复用 Workbench Navigation Overlay，scrim / Esc 关闭后必须
+  恢复标题栏入口焦点，不能通过压缩 Canvas 模拟窄屏侧栏。
+- 左栏显隐、统计展开态、左栏宽度、统计展开高度比例和统计 Provider 选择统一写入应用级
+  `IdeWorkbenchLayoutState`。JSON 按字段宽容读取；resize 逐像素只更新本地预览，drag end
+  才提交持久化值，折叠不得清空保存的展开高度。
 - 需要跨页面保持的 Canvas 应使用稳定位置、稳定 Key 和保活容器。Key 必须放在可能因
   slot 增删而换位的 Flex 子节点上，不能只放在其内部后代；保活容器必须只布局活动页，
   非活动页面同时退出布局并暂停 ticker。
@@ -545,6 +555,11 @@ Fast 是产品语义，运行时仍必须传递 provider 的精确 `serviceTierI
 
 ### 使用统计开发约束
 
+- 合并左栏的折叠/展开内容只消费中立 `AgentUsagePanelController` / `AgentUsagePanelEntry`；
+  不得按 Provider id、kind 或显示名分支，也不得把原始配额 payload 带入 presentation。
+- 统计 Provider 选择与会话 active Provider 是两套状态。前台或后台 thread 终态必须通过
+  typed signal 携带实际 Provider；Shell 只更新统计选择、Workbench 快照并请求静默刷新，
+  不得写 `AgentProviderController`、Provider 配置或会话 Binding。一次终态只刷新一次。
 - 新 provider 的套餐读取实现 `AgentUsageQuotaProvider` 可选能力；不要为不支持套餐的
   provider 在通用 `AgentProvider` 上制造强制实现。Grok 通过 `_x.ai/billing` 映射
   到 `AgentUsageQuotaSnapshot`，原始 billing JSON 不得泄漏到 presentation。
@@ -562,6 +577,8 @@ Fast 是产品语义，运行时仍必须传递 provider 的精确 `serviceTierI
   迁移进 `codex` 分区；索引损坏时从 provider 历史重建，不得阻断页面或应用启动。
 - 派生索引禁止保存 Prompt、回复、工具输出、session JSONL 路径和原始错误文本。
 - 历史 TTFT 缺失时保持 `null`；UI 显示“数据不足”和有效样本数，禁止用总耗时冒充。
+- 套餐类型、额度窗口、重置时间和余额都是 Provider 返回数据的只读投影；不得据此添加
+  Zeta 登录/账号体系、购买、续费、支付入口或任何写回 Provider 账号的动作。
 
 ## 9. 会话和持久化
 

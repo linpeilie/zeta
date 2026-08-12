@@ -166,12 +166,16 @@ That last one is frequently misimplemented as "steer the current turn" or "call 
 flowchart TD
     home["IdeHome<br/><i>single composition boundary</i>"] --> frame["WindowFrame<br/><i>persistent</i>"]
     frame --> scaffold["IdeWorkbenchScaffold<br/><i>persistent</i>"]
-    scaffold --> nav["Navigation slot<br/>Projects / settings nav"]
+    scaffold --> nav["Navigation slot<br/>Projects + agent usage / settings nav"]
     scaffold --> canvas["Canvas slot<br/>Agent / settings / usage"]
     scaffold --> insp["Inspector slot<br/>Files / Tools"]
 ```
 
 Page switching only swaps slot content; `WindowFrame` and `IdeWorkbenchScaffold` stay the same Element throughout. **Feature pages must not replace the top-level workbench.**
+
+The Agent home page mounts no Activity Rail. A leading title-bar action on `WindowFrame` is the sole visibility control for the merged sidebar; inside the Navigation slot, one `ProjectAgentSidebar` card contains Projects / Threads and the read-only agent-usage summary at the bottom. Usage starts collapsed. In Compact mode the entire sidebar reuses the Navigation Overlay, and dismissing it with the scrim or Escape restores focus to the title-bar action.
+
+Sidebar visibility, usage expansion, sidebar width, usage height fraction, and the selected usage provider are application-level Workbench preferences restored tolerantly from `ide_session.json`. A terminal signal from either a foreground or background thread only makes usage follow that signal's provider and refresh silently; it never switches the conversation's active provider.
 
 Cross-page retention uses `IdeRetainedPageView`, not `IndexedStack` (the latter keeps paying layout cost for long timelines). The timeline is virtualized with `SliverList.builder`, and streaming turns, syntax highlighting, and diff regions each get a `RepaintBoundary`.
 
