@@ -95,14 +95,14 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('目录到达即展示 Tabs，单项完成后独立停止呼吸动画', (tester) async {
+  testWidgets('目录到达即展示 Tabs，只有选中项按需显示加载动画', (tester) async {
     final repository = _ControlledPanelRepository();
     final controller = AgentUsagePanelController(repository: repository);
     addTearDown(controller.dispose);
     await _pumpPanel(tester, controller);
 
-    final events = repository.controllers.single;
-    events.add(_directoryFor(_usageEntries));
+    repository.directory.complete(_directoryFor(_usageEntries));
+    await tester.pump();
     await tester.pump();
 
     final codexTab = find.byKey(const ValueKey('agent-usage-tab-codex-work'));
@@ -120,11 +120,11 @@ void main() {
         of: grokTab,
         matching: find.byKey(const ValueKey('ide-tab-loading-label')),
       ),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.bySemanticsLabel('Codex Work，正在加载'), findsOneWidget);
 
-    events.add(AgentUsagePanelProviderLoaded(_usageEntries.first));
+    repository.requests.single.complete(_usageEntries.first);
     await tester.pump();
     expect(
       find.descendant(
@@ -138,7 +138,7 @@ void main() {
         of: grokTab,
         matching: find.byKey(const ValueKey('ide-tab-loading-label')),
       ),
-      findsOneWidget,
+      findsNothing,
     );
 
     await tester.tap(grokTab);
@@ -151,10 +151,7 @@ void main() {
     expect(find.bySemanticsLabel('正在读取 Agent 用量'), findsOneWidget);
     expect(find.textContaining('正在读取'), findsNothing);
 
-    events
-      ..add(AgentUsagePanelProviderLoaded(_usageEntries.last))
-      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21, 12)))
-      ..close();
+    repository.requests.last.complete(_usageEntries.last);
     await tester.pump();
   });
 
@@ -221,25 +218,12 @@ void main() {
       findsNothing,
     );
 
-    final events = repository.refreshEvents;
-    events
-      ..add(_directoryFor(<AgentUsagePanelEntry>[_usageEntries.first]))
-      ..add(
-        const AgentUsagePanelProviderFailed(
-          provider: AgentUsagePanelProvider(
-            providerId: 'codex-work',
-            providerName: 'Codex Work',
-          ),
-          message: 'Codex 暂时不可用',
-        ),
-      )
-      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21, 13)))
-      ..close();
+    repository.refreshResult.completeError(StateError('sensitive failure'));
     await refresh;
     await tester.pump();
 
     expect(find.text('1.6K'), findsOneWidget);
-    expect(find.text('Codex 暂时不可用'), findsOneWidget);
+    expect(find.text('Agent 用量暂时无法读取'), findsOneWidget);
   });
 
   testWidgets('静默刷新保留旧内容且不展示加载 Skeleton', (tester) async {
@@ -261,12 +245,9 @@ void main() {
       findsNothing,
     );
 
-    final events = repository.refreshEvents;
-    events
-      ..add(_directoryFor(<AgentUsagePanelEntry>[_usageEntries.first]))
-      ..add(AgentUsagePanelProviderLoaded(_usageEntries.first))
-      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21, 14)))
-      ..close();
+    repository.refreshResult.complete(
+      _panelResult(_usageEntries.first, DateTime(2026, 7, 21, 14)),
+    );
     await refresh;
     await tester.pump();
 
@@ -315,7 +296,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('暂无已启用的 Agent'), findsOneWidget);
-    expect(repository.loadCount, 2);
+    expect(repository.discoverCount, 2);
   });
 
   testWidgets('有套餐但无窗口百分比时默认剩余 100%', (tester) async {
@@ -474,13 +455,6 @@ void main() {
     final repository = _ControlledPanelRepository();
     final controller = AgentUsagePanelController(repository: repository);
     addTearDown(controller.dispose);
-    addTearDown(() async {
-      for (final events in repository.controllers) {
-        if (!events.isClosed) {
-          await events.close();
-        }
-      }
-    });
 
     await _pumpPanelContent(
       tester,
@@ -490,30 +464,18 @@ void main() {
       onModeChanged: (_) {},
     );
 
-    repository.controllers.single
-      ..add(
-        AgentUsagePanelProvidersDiscovered(
-          providers: const <AgentUsagePanelProvider>[
-            AgentUsagePanelProvider(
-              providerId: 'provider-error',
-              providerName: 'Provider Error',
-            ),
-          ],
-        ),
-      )
-      ..add(
-        const AgentUsagePanelProviderFailed(
-          provider: AgentUsagePanelProvider(
-            providerId: 'provider-error',
-            providerName: 'Provider Error',
-          ),
-          message: 'Provider 暂时不可用',
-        ),
-      )
-      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 8, 12)));
+    repository.directory.complete(const <AgentUsagePanelProvider>[
+      AgentUsagePanelProvider(
+        providerId: 'provider-error',
+        providerName: 'Provider Error',
+      ),
+    ]);
+    await tester.pump();
+    await tester.pump();
+    repository.requests.single.fail();
     await tester.pump();
 
-    final errorText = find.text('Provider 暂时不可用');
+    final errorText = find.text('Agent 用量暂时无法读取');
     expect(errorText, findsOneWidget);
     expect(tester.widget<Text>(errorText).maxLines, 1);
     expect(tester.widget<Text>(errorText).overflow, TextOverflow.ellipsis);
@@ -525,7 +487,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('agent-usage-retry-button')));
     await tester.pump();
 
-    expect(repository.controllers, hasLength(2));
+    expect(repository.requests, hasLength(2));
     expect(tester.takeException(), isNull);
   });
 
@@ -627,19 +589,22 @@ final _usageEntries = <AgentUsagePanelEntry>[
   ),
 ];
 
-AgentUsagePanelProvidersDiscovered _directoryFor(
+List<AgentUsagePanelProvider> _directoryFor(
   List<AgentUsagePanelEntry> entries,
 ) {
-  return AgentUsagePanelProvidersDiscovered(
-    providers: <AgentUsagePanelProvider>[
-      for (final entry in entries)
-        AgentUsagePanelProvider(
-          providerId: entry.providerId,
-          providerName: entry.providerName,
-        ),
-    ],
-  );
+  return <AgentUsagePanelProvider>[
+    for (final entry in entries)
+      AgentUsagePanelProvider(
+        providerId: entry.providerId,
+        providerName: entry.providerName,
+      ),
+  ];
 }
+
+AgentUsagePanelProviderResult _panelResult(
+  AgentUsagePanelEntry entry,
+  DateTime refreshedAt,
+) => AgentUsagePanelProviderResult(entry: entry, refreshedAt: refreshedAt);
 
 Future<void> _pumpPanel(
   WidgetTester tester,
@@ -735,24 +700,37 @@ class _ImmediatePanelRepository implements AgentUsagePanelRepository {
   final List<AgentUsagePanelEntry> entries;
 
   @override
-  Stream<AgentUsagePanelLoadEvent> load({bool forceRefresh = false}) async* {
-    yield _directoryFor(entries);
-    for (final entry in entries) {
-      yield AgentUsagePanelProviderLoaded(entry);
-    }
-    yield AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21, 12));
+  Future<List<AgentUsagePanelProvider>> discoverProviders() async =>
+      _directoryFor(entries);
+
+  @override
+  Future<AgentUsagePanelProviderResult?> loadProvider(
+    String providerId, {
+    bool forceRefresh = false,
+  }) async {
+    final entry = entries
+        .where((entry) => entry.providerId == providerId)
+        .first;
+    return _panelResult(entry, DateTime(2026, 7, 21, 12));
   }
 }
 
 class _ControlledPanelRepository implements AgentUsagePanelRepository {
-  final List<StreamController<AgentUsagePanelLoadEvent>> controllers =
-      <StreamController<AgentUsagePanelLoadEvent>>[];
+  final Completer<List<AgentUsagePanelProvider>> directory =
+      Completer<List<AgentUsagePanelProvider>>();
+  final List<_PanelProviderRequest> requests = <_PanelProviderRequest>[];
 
   @override
-  Stream<AgentUsagePanelLoadEvent> load({bool forceRefresh = false}) {
-    final controller = StreamController<AgentUsagePanelLoadEvent>();
-    controllers.add(controller);
-    return controller.stream;
+  Future<List<AgentUsagePanelProvider>> discoverProviders() => directory.future;
+
+  @override
+  Future<AgentUsagePanelProviderResult?> loadProvider(
+    String providerId, {
+    bool forceRefresh = false,
+  }) {
+    final request = _PanelProviderRequest();
+    requests.add(request);
+    return request.result.future;
   }
 }
 
@@ -761,31 +739,58 @@ class _RefreshPanelRepository implements AgentUsagePanelRepository {
 
   final AgentUsagePanelEntry entry;
   var _loadCount = 0;
-  late final StreamController<AgentUsagePanelLoadEvent> refreshEvents;
+  late final Completer<AgentUsagePanelProviderResult?> refreshResult;
 
   @override
-  Stream<AgentUsagePanelLoadEvent> load({bool forceRefresh = false}) {
+  Future<List<AgentUsagePanelProvider>> discoverProviders() async =>
+      _directoryFor(<AgentUsagePanelEntry>[entry]);
+
+  @override
+  Future<AgentUsagePanelProviderResult?> loadProvider(
+    String providerId, {
+    bool forceRefresh = false,
+  }) {
     _loadCount += 1;
     if (_loadCount == 1) {
-      return _ImmediatePanelRepository(<AgentUsagePanelEntry>[entry]).load();
+      return Future<AgentUsagePanelProviderResult?>.value(
+        _panelResult(entry, DateTime(2026, 7, 21, 12)),
+      );
     }
-    refreshEvents = StreamController<AgentUsagePanelLoadEvent>();
-    return refreshEvents.stream;
+    refreshResult = Completer<AgentUsagePanelProviderResult?>();
+    return refreshResult.future;
   }
 }
 
 class _RetryRepository implements AgentUsagePanelRepository {
-  var loadCount = 0;
+  var discoverCount = 0;
 
   @override
-  Stream<AgentUsagePanelLoadEvent> load({bool forceRefresh = false}) async* {
-    loadCount += 1;
-    if (loadCount == 1) {
+  Future<List<AgentUsagePanelProvider>> discoverProviders() async {
+    discoverCount += 1;
+    if (discoverCount == 1) {
       throw StateError('offline');
     }
-    yield AgentUsagePanelProvidersDiscovered(
-      providers: const <AgentUsagePanelProvider>[],
-    );
-    yield AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21));
+    return const <AgentUsagePanelProvider>[];
+  }
+
+  @override
+  Future<AgentUsagePanelProviderResult?> loadProvider(
+    String providerId, {
+    bool forceRefresh = false,
+  }) async {
+    fail('empty directory must not load a provider');
+  }
+}
+
+final class _PanelProviderRequest {
+  final Completer<AgentUsagePanelProviderResult?> result =
+      Completer<AgentUsagePanelProviderResult?>();
+
+  void complete(AgentUsagePanelEntry entry) {
+    result.complete(_panelResult(entry, DateTime(2026, 8, 12)));
+  }
+
+  void fail() {
+    result.completeError(StateError('sensitive provider failure'));
   }
 }

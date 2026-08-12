@@ -16,31 +16,36 @@ final class QueryAgentUsagePanelRepository
   final DateTime Function() _clock;
 
   @override
-  Stream<AgentUsagePanelLoadEvent> load({bool forceRefresh = false}) async* {
+  Future<List<AgentUsagePanelProvider>> discoverProviders() async {
+    final providers = await _queryService.discoverProviders();
+    return List<AgentUsagePanelProvider>.unmodifiable(
+      providers.map(
+        (provider) => AgentUsagePanelProvider(
+          providerId: provider.providerId,
+          providerName: provider.providerName,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Future<AgentUsagePanelProviderResult?> loadProvider(
+    String providerId, {
+    bool forceRefresh = false,
+  }) async {
     final now = _clock();
     final earliest = DateTime(now.year, now.month, now.day);
-    await for (final event in _queryService.load(
+    final snapshot = await _queryService.loadProvider(
+      providerId,
       AgentUsageQuery(earliest: earliest, forceRefresh: forceRefresh),
-    )) {
-      switch (event) {
-        case AgentUsageProvidersDiscovered():
-          yield AgentUsagePanelProvidersDiscovered(
-            providers: <AgentUsagePanelProvider>[
-              for (final provider in event.providers)
-                AgentUsagePanelProvider(
-                  providerId: provider.providerId,
-                  providerName: provider.providerName,
-                ),
-            ],
-          );
-        case AgentUsageProviderResolved():
-          yield AgentUsagePanelProviderLoaded(
-            _panelEntry(event.snapshot, now: now),
-          );
-        case AgentUsageQueryCompleted():
-          yield AgentUsagePanelLoadCompleted(event.refreshedAt);
-      }
+    );
+    if (snapshot == null) {
+      return null;
     }
+    return AgentUsagePanelProviderResult(
+      entry: _panelEntry(snapshot, now: now),
+      refreshedAt: _clock(),
+    );
   }
 
   AgentUsagePanelEntry _panelEntry(

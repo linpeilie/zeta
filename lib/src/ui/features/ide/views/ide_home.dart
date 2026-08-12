@@ -704,8 +704,14 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   void _scheduleInitialAgentUsageRefresh() {
     // 先交付首帧，再提交统一的低优先级刷新请求，避免抢占启动渲染。
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _requestAgentUsageRefresh();
+      unawaited(_refreshInitialAgentUsageAfterRestore());
     });
+  }
+
+  Future<void> _refreshInitialAgentUsageAfterRestore() async {
+    // 会话恢复会写入上次选中的统计 Tab；等待它收敛，避免先误载默认 Provider。
+    await _shellController.initialRestoreDone;
+    _requestAgentUsageRefresh();
   }
 
   void _handleAgentTurnTerminal(AgentTurnTerminalSignal signal) {

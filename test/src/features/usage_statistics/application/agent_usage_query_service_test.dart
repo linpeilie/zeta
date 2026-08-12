@@ -10,6 +10,58 @@ import 'package:zeta/src/features/usage_statistics/domain/agent_usage_quota_sour
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 
 void main() {
+  test('directory discovery does not start quota or token loading', () async {
+    final config = _config('codex', 'Codex');
+    final source = _FakeTokenSource(
+      providerId: config.id,
+      loader: (query) async => _tokenSnapshot(config),
+    );
+    final quota = _FakeQuotaSource((config) async => _availableQuota(config));
+    final service = AgentUsageQueryService(
+      () async => <AgentProviderConfig>[config],
+      quota,
+      _FakeTokenRegistry(<String, AgentTokenUsageSource>{config.id: source}),
+    );
+
+    final providers = await service.discoverProviders();
+
+    expect(providers.single.providerId, config.id);
+    expect(quota.loadCount, 0);
+    expect(source.loadCount, 0);
+  });
+
+  test('single-provider query does not load sibling providers', () async {
+    final first = _config('first', 'First');
+    final second = _config('second', 'Second');
+    final firstSource = _FakeTokenSource(
+      providerId: first.id,
+      loader: (query) async => _tokenSnapshot(first),
+    );
+    final secondSource = _FakeTokenSource(
+      providerId: second.id,
+      loader: (query) async => _tokenSnapshot(second),
+    );
+    final quota = _FakeQuotaSource((config) async => _availableQuota(config));
+    final service = AgentUsageQueryService(
+      () async => <AgentProviderConfig>[first, second],
+      quota,
+      _FakeTokenRegistry(<String, AgentTokenUsageSource>{
+        first.id: firstSource,
+        second.id: secondSource,
+      }),
+    );
+
+    final snapshot = await service.loadProvider(
+      second.id,
+      AgentUsageQuery(earliest: DateTime.utc(2026, 8, 1)),
+    );
+
+    expect(snapshot?.provider.providerId, second.id);
+    expect(firstSource.loadCount, 0);
+    expect(secondSource.loadCount, 1);
+    expect(quota.loadCount, 1);
+  });
+
   test('quota failure does not hide available token history', () async {
     final config = _config('codex', 'Codex');
     final source = _FakeTokenSource(
@@ -103,7 +155,7 @@ void main() {
       );
       final events = <AgentUsageQueryEvent>[];
       final done = service
-          .load(AgentUsageQuery(earliest: DateTime.utc(2026, 8, 1)))
+          .loadAll(AgentUsageQuery(earliest: DateTime.utc(2026, 8, 1)))
           .listen(events.add)
           .asFuture<void>();
       await _waitUntil(
@@ -165,8 +217,8 @@ void main() {
     );
     final query = AgentUsageQuery(earliest: DateTime.utc(2026, 8, 1));
 
-    final first = service.load(query).toList();
-    final second = service.load(query).toList();
+    final first = service.loadAll(query).toList();
+    final second = service.loadAll(query).toList();
     await _waitUntil(() => source.loadCount == 1);
 
     expect(quota.loadCount, 1);
@@ -196,10 +248,12 @@ void main() {
     );
     final earliest = DateTime.utc(2026, 8, 1);
 
-    final normal = service.load(AgentUsageQuery(earliest: earliest)).toList();
+    final normal = service
+        .loadAll(AgentUsageQuery(earliest: earliest))
+        .toList();
     await _waitUntil(() => source.loadCount == 1);
     final forced = service
-        .load(AgentUsageQuery(earliest: earliest, forceRefresh: true))
+        .loadAll(AgentUsageQuery(earliest: earliest, forceRefresh: true))
         .toList();
     await _waitUntil(() => source.loadCount == 2);
 
@@ -233,7 +287,7 @@ Future<AgentUsageProviderSnapshot> _singleResolved(
   AgentUsageQueryService service,
 ) async {
   final events = await service
-      .load(AgentUsageQuery(earliest: DateTime.utc(2026, 8, 1)))
+      .loadAll(AgentUsageQuery(earliest: DateTime.utc(2026, 8, 1)))
       .toList();
   return events.whereType<AgentUsageProviderResolved>().single.snapshot;
 }

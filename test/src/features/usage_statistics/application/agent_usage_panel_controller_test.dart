@@ -6,217 +6,228 @@ import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 
 void main() {
-  test('目录到达即发布状态，Provider 可乱序完成且保持目录顺序', () async {
+  test('首次只加载默认选中的 Provider', () async {
     final repository = _ControlledPanelRepository();
     final controller = AgentUsagePanelController(repository: repository);
     addTearDown(controller.dispose);
 
     final refresh = controller.refresh(forceRefresh: false);
-    final events = repository.controllers.single;
-    events.add(_directory);
     await _flushEvents();
 
     expect(controller.providers.map(_providerId), <String>['codex', 'grok']);
-    expect(
-      controller.providers,
-      everyElement(isA<AgentUsagePanelProviderState>()),
-    );
-    expect(controller.providers, everyElement(_isLoading));
     expect(controller.selectedProviderId, 'codex');
-    expect(repository.forceRefreshValues, <bool>[false]);
-
-    controller.selectProvider('grok');
-    events.add(
-      const AgentUsagePanelProviderLoaded(
-        AgentUsagePanelEntry(providerId: 'grok', providerName: 'Grok'),
-      ),
-    );
-    await _flushEvents();
-
-    expect(controller.providers.map(_providerId), <String>['codex', 'grok']);
+    expect(repository.requests.map((request) => request.providerId), <String>[
+      'codex',
+    ]);
+    expect(repository.requests.single.forceRefresh, isFalse);
     expect(controller.providers.first.isLoading, isTrue);
-    expect(controller.providers.last.isLoading, isFalse);
-    expect(controller.selectedProviderId, 'grok');
+    expect(
+      controller.providers.last.status,
+      AgentUsagePanelProviderLoadStatus.notLoaded,
+    );
 
-    events
-      ..add(
-        const AgentUsagePanelProviderLoaded(
-          AgentUsagePanelEntry(providerId: 'codex', providerName: 'Codex'),
-        ),
-      )
-      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21)))
-      ..close();
+    repository.requests.single.complete(_entry('codex', 'Codex'));
     await refresh;
 
-    expect(controller.isLoading, isFalse);
-    expect(controller.lastUpdated, DateTime(2026, 7, 21));
+    expect(controller.providers.first.entry?.providerName, 'Codex');
+    expect(
+      controller.providers.last.status,
+      AgentUsagePanelProviderLoadStatus.notLoaded,
+    );
   });
 
-  test('刷新按 ID 保留旧数据，并将失败限制在对应 Provider', () async {
+  test('切换到未加载 Tab 时按需加载，快速切换保留各自结果', () async {
     final repository = _ControlledPanelRepository();
     final controller = AgentUsagePanelController(repository: repository);
     addTearDown(controller.dispose);
 
     final initialRefresh = controller.refresh();
-    final initialEvents = repository.controllers.single;
-    initialEvents
-      ..add(_directory)
-      ..add(
-        const AgentUsagePanelProviderLoaded(
-          AgentUsagePanelEntry(providerId: 'codex', providerName: 'Codex'),
-        ),
-      )
-      ..add(
-        const AgentUsagePanelProviderLoaded(
-          AgentUsagePanelEntry(providerId: 'grok', providerName: 'Grok'),
-        ),
-      )
-      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21)))
-      ..close();
+    await _flushEvents();
+    final codexRequest = repository.requests.single;
+
+    controller
+      ..selectProvider('grok')
+      ..selectProvider('codex')
+      ..selectProvider('grok');
+    await _flushEvents();
+
+    expect(repository.requests.map((request) => request.providerId), <String>[
+      'codex',
+      'grok',
+    ]);
+    final grokRequest = repository.requests.last;
+    grokRequest.complete(_entry('grok', 'Grok'));
+    await _flushEvents();
+
+    expect(controller.selectedProviderId, 'grok');
+    expect(controller.selectedProvider?.entry?.providerName, 'Grok');
+    expect(controller.providers.first.isLoading, isTrue);
+
+    codexRequest.complete(_entry('codex', 'Codex'));
     await initialRefresh;
-    controller.selectProvider('grok');
+
+    expect(
+      controller.providers.map((state) => state.entry?.providerId),
+      <String?>['codex', 'grok'],
+    );
+  });
+
+  test('已加载 Tab 再次选中不会重复查询', () async {
+    final repository = _ControlledPanelRepository();
+    final controller = AgentUsagePanelController(repository: repository);
+    addTearDown(controller.dispose);
 
     final refresh = controller.refresh();
-    final refreshEvents = repository.controllers.last;
-    expect(controller.providers, everyElement(_hasStaleLoadingData));
-
-    refreshEvents.add(
-      AgentUsagePanelProvidersDiscovered(
-        providers: const <AgentUsagePanelProvider>[
-          AgentUsagePanelProvider(providerId: 'grok', providerName: 'Grok'),
-          AgentUsagePanelProvider(providerId: 'codex', providerName: 'Codex'),
-        ],
-      ),
-    );
     await _flushEvents();
-    expect(controller.providers.map(_providerId), <String>['grok', 'codex']);
-    expect(controller.selectedProviderId, 'grok');
-    expect(controller.selectedProvider?.entry, isNotNull);
-
-    refreshEvents
-      ..add(
-        const AgentUsagePanelProviderFailed(
-          provider: AgentUsagePanelProvider(
-            providerId: 'grok',
-            providerName: 'Grok',
-          ),
-          message: 'Grok 暂时不可用',
-        ),
-      )
-      ..add(
-        const AgentUsagePanelProviderLoaded(
-          AgentUsagePanelEntry(providerId: 'codex', providerName: 'Codex'),
-        ),
-      )
-      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 22)))
-      ..close();
+    repository.requests.single.complete(_entry('codex', 'Codex'));
     await refresh;
 
-    expect(controller.selectedProvider?.entry, isNotNull);
-    expect(controller.selectedProvider?.loadError, 'Grok 暂时不可用');
-    expect(controller.errorMessage, isNull);
+    controller.selectProvider('codex');
+    await _flushEvents();
+
+    expect(repository.requests, hasLength(1));
   });
 
-  test('静默刷新保留旧数据且不进入 isLoading', () async {
+  test('手动刷新只强制刷新当前 Provider，并保留旧数据', () async {
     final repository = _ControlledPanelRepository();
     final controller = AgentUsagePanelController(repository: repository);
     addTearDown(controller.dispose);
 
     final initialRefresh = controller.refresh();
-    final initialEvents = repository.controllers.single;
-    initialEvents
-      ..add(_directory)
-      ..add(
-        const AgentUsagePanelProviderLoaded(
-          AgentUsagePanelEntry(providerId: 'codex', providerName: 'Codex'),
-        ),
-      )
-      ..add(
-        const AgentUsagePanelProviderLoaded(
-          AgentUsagePanelEntry(providerId: 'grok', providerName: 'Grok'),
-        ),
-      )
-      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21)))
-      ..close();
+    await _flushEvents();
+    repository.requests.single.complete(_entry('codex', 'Codex'));
     await initialRefresh;
-    expect(controller.isLoading, isFalse);
 
-    final silentRefresh = controller.refresh(showLoading: false);
-    expect(controller.isLoading, isFalse);
-    expect(controller.providers.every((state) => !state.isLoading), isTrue);
-    expect(controller.providers.every((state) => state.entry != null), isTrue);
+    controller.selectProvider('grok');
+    await _flushEvents();
+    repository.requests.last.complete(_entry('grok', 'Grok'));
+    await _flushEvents();
 
-    final silentEvents = repository.controllers.last;
-    silentEvents
-      ..add(_directory)
-      ..add(
-        const AgentUsagePanelProviderLoaded(
-          AgentUsagePanelEntry(
-            providerId: 'codex',
-            providerName: 'Codex Updated',
-          ),
-        ),
-      )
-      ..add(
-        const AgentUsagePanelProviderLoaded(
-          AgentUsagePanelEntry(providerId: 'grok', providerName: 'Grok'),
-        ),
-      )
-      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 22)))
-      ..close();
-    await silentRefresh;
+    final refresh = controller.refresh();
+    await _flushEvents();
+    final request = repository.requests.last;
 
-    expect(controller.isLoading, isFalse);
-    expect(controller.providers.first.entry?.providerName, 'Codex Updated');
-    expect(controller.lastUpdated, DateTime(2026, 7, 22));
+    expect(request.providerId, 'grok');
+    expect(request.forceRefresh, isTrue);
+    expect(controller.selectedProvider?.entry?.providerName, 'Grok');
+    expect(controller.selectedProvider?.isLoading, isTrue);
+
+    request.complete(_entry('grok', 'Grok Updated'));
+    await refresh;
+
+    expect(controller.selectedProvider?.entry?.providerName, 'Grok Updated');
+    expect(controller.providers.first.entry?.providerName, 'Codex');
   });
 
-  test('新刷新覆盖旧流，过期事件不会回写状态', () async {
+  test('静默刷新保留旧数据且不进入当前 Tab 加载态', () async {
+    final repository = _ControlledPanelRepository();
+    final controller = AgentUsagePanelController(repository: repository);
+    addTearDown(controller.dispose);
+
+    final initialRefresh = controller.refresh();
+    await _flushEvents();
+    repository.requests.single.complete(_entry('codex', 'Codex'));
+    await initialRefresh;
+
+    final refresh = controller.refresh(showLoading: false);
+    await _flushEvents();
+
+    expect(controller.isLoading, isFalse);
+    expect(controller.selectedProvider?.entry?.providerName, 'Codex');
+
+    repository.requests.last.complete(_entry('codex', 'Codex Updated'));
+    await refresh;
+    expect(controller.selectedProvider?.entry?.providerName, 'Codex Updated');
+  });
+
+  test('目录同步只增加未加载 Tab，切换后才读取新增 Provider', () async {
+    final repository = _ControlledPanelRepository();
+    final controller = AgentUsagePanelController(repository: repository);
+    addTearDown(controller.dispose);
+
+    final initialRefresh = controller.refresh();
+    await _flushEvents();
+    repository.requests.single.complete(_entry('codex', 'Codex'));
+    await initialRefresh;
+
+    repository.directory = const <AgentUsagePanelProvider>[
+      AgentUsagePanelProvider(providerId: 'codex', providerName: 'Codex'),
+      AgentUsagePanelProvider(providerId: 'grok', providerName: 'Grok'),
+      AgentUsagePanelProvider(providerId: 'claude', providerName: 'Claude'),
+    ];
+    await controller.synchronizeProviders();
+
+    expect(controller.providers.map(_providerId), <String>[
+      'codex',
+      'grok',
+      'claude',
+    ]);
+    expect(repository.requests, hasLength(1));
+
+    controller.selectProvider('claude');
+    await _flushEvents();
+    expect(repository.requests.last.providerId, 'claude');
+    repository.requests.last.complete(_entry('claude', 'Claude'));
+    await _flushEvents();
+    expect(controller.selectedProvider?.entry?.providerName, 'Claude');
+  });
+
+  test('目录移除 Provider 后丢弃它的迟到结果', () async {
     final repository = _ControlledPanelRepository();
     final controller = AgentUsagePanelController(repository: repository);
     addTearDown(controller.dispose);
 
     final staleRefresh = controller.refresh();
-    final staleEvents = repository.controllers.single;
-    staleEvents.add(_directory);
+    await _flushEvents();
+    final staleCodex = repository.requests.single;
+
+    repository.directory = const <AgentUsagePanelProvider>[
+      AgentUsagePanelProvider(providerId: 'grok', providerName: 'Grok'),
+    ];
+    final synchronize = controller.synchronizeProviders();
     await _flushEvents();
 
-    final currentRefresh = controller.refresh();
-    final currentEvents = repository.controllers.last;
-    currentEvents.add(
-      AgentUsagePanelProvidersDiscovered(
-        providers: const <AgentUsagePanelProvider>[
-          AgentUsagePanelProvider(providerId: 'grok', providerName: 'Grok'),
-        ],
-      ),
-    );
-    await _flushEvents();
-
-    staleEvents.add(
-      const AgentUsagePanelProviderLoaded(
-        AgentUsagePanelEntry(providerId: 'codex', providerName: '旧 Codex'),
-      ),
-    );
-    await _flushEvents();
     expect(controller.providers.map(_providerId), <String>['grok']);
+    expect(repository.requests.last.providerId, 'grok');
 
-    currentEvents
-      ..add(
-        const AgentUsagePanelProviderLoaded(
-          AgentUsagePanelEntry(providerId: 'grok', providerName: 'Grok'),
-        ),
-      )
-      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 22)))
-      ..close();
-    await currentRefresh;
-    await staleEvents.close();
-    await staleRefresh;
+    staleCodex.complete(_entry('codex', 'Stale Codex'));
+    repository.requests.last.complete(_entry('grok', 'Grok'));
+    await Future.wait(<Future<void>>[staleRefresh, synchronize]);
 
-    expect(controller.providers.single.provider.providerId, 'grok');
     expect(controller.providers.single.entry?.providerName, 'Grok');
   });
 
-  test('有效恢复值选中对应 Provider 且不触发回写', () async {
+  test('单 Provider 失败局部展示错误，并可独立重试', () async {
+    final repository = _ControlledPanelRepository();
+    final controller = AgentUsagePanelController(repository: repository);
+    addTearDown(controller.dispose);
+
+    final initialRefresh = controller.refresh();
+    await _flushEvents();
+    repository.requests.single.fail();
+    await initialRefresh;
+
+    expect(
+      controller.selectedProvider?.status,
+      AgentUsagePanelProviderLoadStatus.failed,
+    );
+    expect(controller.selectedProvider?.loadError, 'Agent 用量暂时无法读取');
+    expect(controller.errorMessage, isNull);
+
+    final retry = controller.refresh();
+    await _flushEvents();
+    expect(repository.requests, hasLength(2));
+    repository.requests.last.complete(_entry('codex', 'Codex'));
+    await retry;
+
+    expect(
+      controller.selectedProvider?.status,
+      AgentUsagePanelProviderLoadStatus.loaded,
+    );
+    expect(controller.selectedProvider?.loadError, isNull);
+  });
+
+  test('恢复偏好后首次只加载恢复的 Provider 且不回写', () async {
     final repository = _ControlledPanelRepository();
     final selectionChanges = <String?>[];
     final controller = AgentUsagePanelController(
@@ -227,40 +238,17 @@ void main() {
     addTearDown(controller.dispose);
 
     final refresh = controller.refresh();
-    repository.controllers.single
-      ..add(_directory)
-      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21)))
-      ..close();
-    await refresh;
+    await _flushEvents();
 
-    expect(controller.preferredProviderId, 'grok');
     expect(controller.selectedProviderId, 'grok');
+    expect(repository.requests.single.providerId, 'grok');
     expect(selectionChanges, isEmpty);
-  });
 
-  test('失效恢复值按目录首项回退并回写一次', () async {
-    final repository = _ControlledPanelRepository();
-    final selectionChanges = <String?>[];
-    final controller = AgentUsagePanelController(
-      repository: repository,
-      initialPreferredProviderId: 'missing',
-      onSelectionChanged: selectionChanges.add,
-    );
-    addTearDown(controller.dispose);
-
-    final refresh = controller.refresh();
-    repository.controllers.single
-      ..add(_directory)
-      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21)))
-      ..close();
+    repository.requests.single.complete(_entry('grok', 'Grok'));
     await refresh;
-
-    expect(controller.preferredProviderId, 'codex');
-    expect(controller.selectedProviderId, 'codex');
-    expect(selectionChanges, <String?>['codex']);
   });
 
-  test('目录到达前保留最后一个 Turn 终态偏好', () async {
+  test('目录到达前保留最后一个 Turn 终态偏好并按需加载', () async {
     final repository = _ControlledPanelRepository();
     final selectionChanges = <String?>[];
     final controller = AgentUsagePanelController(
@@ -273,144 +261,97 @@ void main() {
       ..selectProviderFromTurn('codex')
       ..selectProviderFromTurn('grok');
 
-    expect(controller.preferredProviderId, 'grok');
-    expect(controller.selectedProviderId, isNull);
-    expect(selectionChanges, <String?>['codex', 'grok']);
-
     final refresh = controller.refresh();
-    repository.controllers.single
-      ..add(_directory)
-      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21)))
-      ..close();
-    await refresh;
+    await _flushEvents();
 
-    expect(controller.preferredProviderId, 'grok');
     expect(controller.selectedProviderId, 'grok');
+    expect(repository.requests.single.providerId, 'grok');
     expect(selectionChanges, <String?>['codex', 'grok']);
+
+    repository.requests.single.complete(_entry('grok', 'Grok'));
+    await refresh;
   });
 
-  test('Turn 终态自动选择覆盖手动选择', () async {
-    final repository = _ControlledPanelRepository();
-    final selectionChanges = <String?>[];
-    final controller = AgentUsagePanelController(
-      repository: repository,
-      onSelectionChanged: selectionChanges.add,
-    );
-    addTearDown(controller.dispose);
-    final refresh = controller.refresh();
-    repository.controllers.single
-      ..add(_directory)
-      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21)))
-      ..close();
-    await refresh;
-    selectionChanges.clear();
-
-    controller
-      ..selectProvider('grok')
-      ..selectProviderFromTurn('codex');
-
-    expect(controller.preferredProviderId, 'codex');
-    expect(controller.selectedProviderId, 'codex');
-    expect(selectionChanges, <String?>['grok', 'codex']);
-  });
-
-  test('空目录清空恢复偏好和当前选择', () async {
-    final repository = _ControlledPanelRepository();
-    final selectionChanges = <String?>[];
-    final controller = AgentUsagePanelController(
-      repository: repository,
-      initialPreferredProviderId: 'grok',
-      onSelectionChanged: selectionChanges.add,
-    );
+  test('目录读取失败时提供目录级错误并允许重试', () async {
+    final repository = _ControlledPanelRepository()..failNextDiscovery = true;
+    final controller = AgentUsagePanelController(repository: repository);
     addTearDown(controller.dispose);
 
-    final refresh = controller.refresh();
-    repository.controllers.single
-      ..add(AgentUsagePanelProvidersDiscovered(providers: const []))
-      ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21)))
-      ..close();
-    await refresh;
-
+    await controller.refresh();
+    expect(controller.errorMessage, 'Agent 用量暂时无法读取');
     expect(controller.providers, isEmpty);
-    expect(controller.preferredProviderId, isNull);
-    expect(controller.selectedProviderId, isNull);
-    expect(selectionChanges, <String?>[null]);
+
+    final retry = controller.refresh();
+    await _flushEvents();
+    repository.requests.single.complete(_entry('codex', 'Codex'));
+    await retry;
+
+    expect(controller.errorMessage, isNull);
+    expect(controller.selectedEntry?.providerId, 'codex');
   });
-
-  test(
-    'restore API applies without callback and stale refresh cannot replace it',
-    () async {
-      final repository = _ControlledPanelRepository();
-      final selectionChanges = <String?>[];
-      final controller = AgentUsagePanelController(
-        repository: repository,
-        onSelectionChanged: selectionChanges.add,
-      );
-      addTearDown(controller.dispose);
-
-      controller.restorePreferredProviderId('grok');
-      final staleRefresh = controller.refresh();
-      final staleEvents = repository.controllers.single;
-      staleEvents.add(_directory);
-      await _flushEvents();
-
-      final currentRefresh = controller.refresh();
-      final currentEvents = repository.controllers.last;
-      currentEvents
-        ..add(_directory)
-        ..add(AgentUsagePanelLoadCompleted(DateTime(2026, 7, 22)))
-        ..close();
-      await currentRefresh;
-
-      staleEvents
-        ..add(
-          AgentUsagePanelProvidersDiscovered(
-            providers: const <AgentUsagePanelProvider>[
-              AgentUsagePanelProvider(
-                providerId: 'codex',
-                providerName: 'Codex',
-              ),
-            ],
-          ),
-        )
-        ..close();
-      await staleRefresh;
-
-      expect(controller.providers.map(_providerId), <String>['codex', 'grok']);
-      expect(controller.preferredProviderId, 'grok');
-      expect(controller.selectedProviderId, 'grok');
-      expect(selectionChanges, isEmpty);
-    },
-  );
 }
 
-final _directory = AgentUsagePanelProvidersDiscovered(
-  providers: <AgentUsagePanelProvider>[
-    AgentUsagePanelProvider(providerId: 'codex', providerName: 'Codex'),
-    AgentUsagePanelProvider(providerId: 'grok', providerName: 'Grok'),
-  ],
-);
+const _directory = <AgentUsagePanelProvider>[
+  AgentUsagePanelProvider(providerId: 'codex', providerName: 'Codex'),
+  AgentUsagePanelProvider(providerId: 'grok', providerName: 'Grok'),
+];
 
 String _providerId(AgentUsagePanelProviderState state) =>
     state.provider.providerId;
 
-bool _isLoading(AgentUsagePanelProviderState state) => state.isLoading;
-
-bool _hasStaleLoadingData(AgentUsagePanelProviderState state) =>
-    state.isLoading && state.entry != null;
+AgentUsagePanelEntry _entry(String providerId, String providerName) =>
+    AgentUsagePanelEntry(providerId: providerId, providerName: providerName);
 
 Future<void> _flushEvents() => Future<void>.delayed(Duration.zero);
 
-class _ControlledPanelRepository implements AgentUsagePanelRepository {
-  final List<StreamController<AgentUsagePanelLoadEvent>> controllers =
-      <StreamController<AgentUsagePanelLoadEvent>>[];
-  final List<bool> forceRefreshValues = <bool>[];
+final class _ControlledPanelRepository implements AgentUsagePanelRepository {
+  List<AgentUsagePanelProvider> directory = _directory;
+  bool failNextDiscovery = false;
+  int discoverCount = 0;
+  final List<_ProviderRequest> requests = <_ProviderRequest>[];
 
   @override
-  Stream<AgentUsagePanelLoadEvent> load({bool forceRefresh = false}) {
-    forceRefreshValues.add(forceRefresh);
-    final controller = StreamController<AgentUsagePanelLoadEvent>();
-    controllers.add(controller);
-    return controller.stream;
+  Future<List<AgentUsagePanelProvider>> discoverProviders() async {
+    discoverCount += 1;
+    if (failNextDiscovery) {
+      failNextDiscovery = false;
+      throw StateError('sensitive directory failure');
+    }
+    return List<AgentUsagePanelProvider>.unmodifiable(directory);
+  }
+
+  @override
+  Future<AgentUsagePanelProviderResult?> loadProvider(
+    String providerId, {
+    bool forceRefresh = false,
+  }) {
+    final request = _ProviderRequest(
+      providerId: providerId,
+      forceRefresh: forceRefresh,
+    );
+    requests.add(request);
+    return request.result.future;
+  }
+}
+
+final class _ProviderRequest {
+  _ProviderRequest({required this.providerId, required this.forceRefresh});
+
+  final String providerId;
+  final bool forceRefresh;
+  final Completer<AgentUsagePanelProviderResult?> result =
+      Completer<AgentUsagePanelProviderResult?>();
+
+  void complete(AgentUsagePanelEntry entry) {
+    result.complete(
+      AgentUsagePanelProviderResult(
+        entry: entry,
+        refreshedAt: DateTime(2026, 8, 12, 12),
+      ),
+    );
+  }
+
+  void fail() {
+    result.completeError(StateError('sensitive provider failure'));
   }
 }

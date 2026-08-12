@@ -420,14 +420,24 @@ class _WorkbenchUsageRepository implements AgentUsagePanelRepository {
   const _WorkbenchUsageRepository();
 
   @override
-  Stream<AgentUsagePanelLoadEvent> load({bool forceRefresh = false}) async* {
-    yield AgentUsagePanelProvidersDiscovered(
-      providers: const <AgentUsagePanelProvider>[
+  Future<List<AgentUsagePanelProvider>> discoverProviders() async =>
+      const <AgentUsagePanelProvider>[
         AgentUsagePanelProvider(providerId: 'codex', providerName: 'Codex'),
         AgentUsagePanelProvider(providerId: 'grok', providerName: 'Grok'),
-      ],
+      ];
+
+  @override
+  Future<AgentUsagePanelProviderResult?> loadProvider(
+    String providerId, {
+    bool forceRefresh = false,
+  }) async {
+    return AgentUsagePanelProviderResult(
+      entry: AgentUsagePanelEntry(
+        providerId: providerId,
+        providerName: providerId == 'grok' ? 'Grok' : 'Codex',
+      ),
+      refreshedAt: DateTime(2026, 8, 12),
     );
-    yield AgentUsagePanelLoadCompleted(DateTime(2026, 8, 12));
   }
 }
 

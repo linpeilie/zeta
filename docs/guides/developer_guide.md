@@ -596,6 +596,8 @@ Fast 是产品语义，运行时仍必须传递 provider 的精确 `serviceTierI
 
 - 合并左栏的折叠/展开内容只消费中立 `AgentUsagePanelController` / `AgentUsagePanelEntry`；
   不得按 Provider id、kind 或显示名分支，也不得把原始配额 payload 带入 presentation。
+- 左栏只发现完整 Provider 目录，并按需读取当前选中项；首次启动、Tab 切换与配置目录
+  更新不得顺带加载未选中的套餐或 Token。完整使用统计页仍通过全量查询聚合所有 Provider。
 - 统计 Provider 选择与会话 active Provider 是两套状态。前台或后台 thread 终态必须通过
   typed signal 携带实际 Provider；Shell 只更新统计选择、Workbench 快照并请求静默刷新，
   不得写 `AgentProviderController`、Provider 配置或会话 Binding。一次终态只刷新一次。

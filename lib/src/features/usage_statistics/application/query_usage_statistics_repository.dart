@@ -24,7 +24,7 @@ final class QueryUsageStatisticsRepository
     final snapshots = <String, AgentUsageProviderSnapshot>{};
     DateTime? completedAt;
 
-    await for (final event in _queryService.load(
+    await for (final event in _queryService.loadAll(
       AgentUsageQuery(earliest: earliest, forceRefresh: forceRefresh),
     )) {
       switch (event) {

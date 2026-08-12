@@ -15,6 +15,8 @@ import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_agent_usage_panel_repository.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_usage_statistics_repository.dart';
+import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
+import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 
 import '../testing/agent_event_storm_fixture.dart';
 import '../testing/agent_provider_stub_base.dart';
@@ -71,6 +73,59 @@ void main() {
       isA<QueryAgentUsagePanelRepository>(),
     );
   });
+
+  test(
+    'provider settings changes resync usage directory without loading siblings',
+    () async {
+      final usageRepository = _DirectoryTrackingUsageRepository();
+      final shell = IdeShellController(
+        agentUiFrameSchedulerFactory: _createUiFrameScheduler,
+        directoryPicker: () async => null,
+        sessionStore: const CallbackIdeSessionStore(
+          loadJson: _loadEmptySession,
+          saveJson: _saveDiscardedSession,
+        ),
+        agentProviderFactory:
+            _RecordingAgentProviderFactory(<String, _ProviderBackend>{
+              defaultAgentProviderId: _ProviderBackend(
+                config: AgentProviderConfig.defaultCodex,
+                threadHistories: const <String, AgentThreadHistorySnapshot>{},
+                threadPages: const <AgentThreadPage>[],
+              ),
+            }),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        usageStatistics: IdeShellUsageStatisticsDependencies(
+          partitionStore: MemoryUsageStatisticsPartitionStore(),
+          agentUsagePanelRepository: usageRepository,
+        ),
+      );
+      addTearDown(shell.dispose);
+
+      await shell.agentUsagePanelController.refresh(forceRefresh: false);
+      expect(usageRepository.loadedProviderIds, <String>['codex']);
+
+      usageRepository.directory = const <AgentUsagePanelProvider>[
+        AgentUsagePanelProvider(providerId: 'codex', providerName: 'Codex'),
+        AgentUsagePanelProvider(providerId: 'grok', providerName: 'Grok'),
+        AgentUsagePanelProvider(
+          providerId: 'claude_code',
+          providerName: 'Claude',
+        ),
+      ];
+      await shell.agentProviderController.updateProviderConfig(
+        AgentProviderConfig.defaultClaudeCode,
+      );
+      await _flushAsync();
+
+      expect(
+        shell.agentUsagePanelController.providers.map(
+          (state) => state.provider.providerId,
+        ),
+        <String>['codex', 'grok', 'claude_code'],
+      );
+      expect(usageRepository.loadedProviderIds, <String>['codex']);
+    },
+  );
 
   test(
     'keeps a running thread alive when switching to another thread',
@@ -1516,6 +1571,36 @@ class _SessionSaveRecorder {
 
   void reset() {
     saveCount = 0;
+  }
+}
+
+final class _DirectoryTrackingUsageRepository
+    implements AgentUsagePanelRepository {
+  List<AgentUsagePanelProvider> directory = const <AgentUsagePanelProvider>[
+    AgentUsagePanelProvider(providerId: 'codex', providerName: 'Codex'),
+    AgentUsagePanelProvider(providerId: 'grok', providerName: 'Grok'),
+  ];
+  final List<String> loadedProviderIds = <String>[];
+
+  @override
+  Future<List<AgentUsagePanelProvider>> discoverProviders() async => directory;
+
+  @override
+  Future<AgentUsagePanelProviderResult?> loadProvider(
+    String providerId, {
+    bool forceRefresh = false,
+  }) async {
+    loadedProviderIds.add(providerId);
+    final provider = directory.firstWhere(
+      (candidate) => candidate.providerId == providerId,
+    );
+    return AgentUsagePanelProviderResult(
+      entry: AgentUsagePanelEntry(
+        providerId: provider.providerId,
+        providerName: provider.providerName,
+      ),
+      refreshedAt: DateTime(2026, 8, 12),
+    );
   }
 }
 

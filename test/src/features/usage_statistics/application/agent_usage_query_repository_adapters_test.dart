@@ -5,7 +5,6 @@ import 'package:zeta/src/features/usage_statistics/application/agent_usage_query
 import 'package:zeta/src/features/usage_statistics/application/query_agent_usage_panel_repository.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_usage_statistics_repository.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_token_usage_source.dart';
-import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_query_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_quota_source.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
@@ -50,7 +49,7 @@ void main() {
   );
 
   test(
-    'same query snapshot projects to the current panel event sequence',
+    'same query snapshot projects to directory and one panel result',
     () async {
       final service = _service(
         config: config,
@@ -63,17 +62,15 @@ void main() {
         clock: () => now,
       );
 
-      final events = await repository.load(forceRefresh: true).toList();
+      final directory = await repository.discoverProviders();
+      final result = await repository.loadProvider(
+        config.id,
+        forceRefresh: true,
+      );
 
-      expect(events, <Matcher>[
-        isA<AgentUsagePanelProvidersDiscovered>(),
-        isA<AgentUsagePanelProviderLoaded>(),
-        isA<AgentUsagePanelLoadCompleted>(),
-      ]);
-      final directory = events.first as AgentUsagePanelProvidersDiscovered;
-      expect(directory.providers.single.providerId, config.id);
-      expect(directory.providers.single.providerName, config.displayName);
-      final entry = (events[1] as AgentUsagePanelProviderLoaded).entry;
+      expect(directory.single.providerId, config.id);
+      expect(directory.single.providerName, config.displayName);
+      final entry = result!.entry;
       expect(entry.providerId, config.id);
       expect(entry.providerName, config.displayName);
       expect(entry.quota, same(quota));
@@ -83,7 +80,7 @@ void main() {
       expect(entry.todayTokens?.outputTokens, 3);
       expect(entry.todayTokens?.reasoningTokens, 4);
       expect(entry.todayTokens?.totalTokens, 19);
-      expect((events.last as AgentUsagePanelLoadCompleted).refreshedAt, now);
+      expect(result.refreshedAt, now);
     },
   );
 
@@ -120,12 +117,11 @@ void main() {
       sourceSnapshot: null,
       clock: now,
     );
-    final unsupportedEvents = await QueryAgentUsagePanelRepository(
+    final unsupportedResult = await QueryAgentUsagePanelRepository(
       unsupported,
       clock: () => now,
-    ).load().toList();
-    final unsupportedEntry =
-        (unsupportedEvents[1] as AgentUsagePanelProviderLoaded).entry;
+    ).loadProvider(config.id);
+    final unsupportedEntry = unsupportedResult!.entry;
     expect(unsupportedEntry.todayTokens, isNull);
     expect(unsupportedEntry.message, isNull);
 
@@ -137,12 +133,11 @@ void main() {
       _FakeTokenRegistry(_ThrowingTokenSource(config.id)),
       clock: () => now,
     );
-    final unavailableEvents = await QueryAgentUsagePanelRepository(
+    final unavailableResult = await QueryAgentUsagePanelRepository(
       unavailable,
       clock: () => now,
-    ).load().toList();
-    final unavailableEntry =
-        (unavailableEvents[1] as AgentUsagePanelProviderLoaded).entry;
+    ).loadProvider(config.id);
+    final unavailableEntry = unavailableResult!.entry;
     expect(unavailableEntry.todayTokens, isNull);
     expect(unavailableEntry.message, '今日 Token 暂时无法读取');
   });

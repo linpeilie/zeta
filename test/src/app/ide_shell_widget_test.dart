@@ -167,7 +167,9 @@ void main() {
         sessionStore: session,
       );
       expect(repository.forceRefreshValues, <bool>[true]);
+      expect(repository.providerIds, <String>['grok']);
       repository.forceRefreshValues.clear();
+      repository.providerIds.clear();
 
       await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
       await tester.runAsync(waitForIo);
@@ -214,6 +216,7 @@ void main() {
       await tester.pump();
 
       expect(repository.forceRefreshValues, <bool>[true]);
+      expect(repository.providerIds, <String>[defaultAgentProviderId]);
       expect(viewModel.activeProviderId, activeProviderBefore);
 
       await tester.pump(const Duration(seconds: 1));
@@ -2051,11 +2054,15 @@ class _EmptyAgentUsageRepository implements AgentUsagePanelRepository {
   const _EmptyAgentUsageRepository();
 
   @override
-  Stream<AgentUsagePanelLoadEvent> load({bool forceRefresh = false}) async* {
-    yield AgentUsagePanelProvidersDiscovered(
-      providers: const <AgentUsagePanelProvider>[],
-    );
-    yield AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21));
+  Future<List<AgentUsagePanelProvider>> discoverProviders() async =>
+      const <AgentUsagePanelProvider>[];
+
+  @override
+  Future<AgentUsagePanelProviderResult?> loadProvider(
+    String providerId, {
+    bool forceRefresh = false,
+  }) async {
+    fail('empty directory must not load a provider');
   }
 }
 
@@ -2063,29 +2070,53 @@ class _TrackedAgentUsageRepository implements AgentUsagePanelRepository {
   final List<bool> forceRefreshValues = <bool>[];
 
   @override
-  Stream<AgentUsagePanelLoadEvent> load({bool forceRefresh = false}) async* {
+  Future<List<AgentUsagePanelProvider>> discoverProviders() async =>
+      const <AgentUsagePanelProvider>[
+        AgentUsagePanelProvider(providerId: 'codex', providerName: 'Codex'),
+      ];
+
+  @override
+  Future<AgentUsagePanelProviderResult?> loadProvider(
+    String providerId, {
+    bool forceRefresh = false,
+  }) async {
     forceRefreshValues.add(forceRefresh);
-    yield AgentUsagePanelProvidersDiscovered(
-      providers: const <AgentUsagePanelProvider>[],
+    return AgentUsagePanelProviderResult(
+      entry: AgentUsagePanelEntry(
+        providerId: providerId,
+        providerName: 'Codex',
+      ),
+      refreshedAt: DateTime(2026, 7, 21),
     );
-    yield AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21));
   }
 }
 
 class _TrackedDirectoryAgentUsageRepository
     implements AgentUsagePanelRepository {
   final List<bool> forceRefreshValues = <bool>[];
+  final List<String> providerIds = <String>[];
 
   @override
-  Stream<AgentUsagePanelLoadEvent> load({bool forceRefresh = false}) async* {
-    forceRefreshValues.add(forceRefresh);
-    yield AgentUsagePanelProvidersDiscovered(
-      providers: const <AgentUsagePanelProvider>[
+  Future<List<AgentUsagePanelProvider>> discoverProviders() async =>
+      const <AgentUsagePanelProvider>[
         AgentUsagePanelProvider(providerId: 'codex', providerName: 'Codex'),
         AgentUsagePanelProvider(providerId: 'grok', providerName: 'Grok'),
-      ],
+      ];
+
+  @override
+  Future<AgentUsagePanelProviderResult?> loadProvider(
+    String providerId, {
+    bool forceRefresh = false,
+  }) async {
+    providerIds.add(providerId);
+    forceRefreshValues.add(forceRefresh);
+    return AgentUsagePanelProviderResult(
+      entry: AgentUsagePanelEntry(
+        providerId: providerId,
+        providerName: providerId == 'grok' ? 'Grok' : 'Codex',
+      ),
+      refreshedAt: DateTime(2026, 7, 21),
     );
-    yield AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21));
   }
 }
 

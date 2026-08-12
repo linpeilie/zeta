@@ -68,46 +68,25 @@ class AgentUsagePanelProvider {
   final String providerName;
 }
 
-/// Agent 统计面板渐进式加载事件。
-sealed class AgentUsagePanelLoadEvent {
-  const AgentUsagePanelLoadEvent();
-}
-
-/// 已发现本轮所有可展示的 Provider。
-class AgentUsagePanelProvidersDiscovered extends AgentUsagePanelLoadEvent {
-  AgentUsagePanelProvidersDiscovered({
-    required List<AgentUsagePanelProvider> providers,
-  }) : providers = List<AgentUsagePanelProvider>.unmodifiable(providers);
-
-  final List<AgentUsagePanelProvider> providers;
-}
-
-/// 单个 Provider 已成功完成加载。
-class AgentUsagePanelProviderLoaded extends AgentUsagePanelLoadEvent {
-  const AgentUsagePanelProviderLoaded(this.entry);
-
-  final AgentUsagePanelEntry entry;
-}
-
-/// 单个 Provider 加载失败，不阻断其他 Provider。
-class AgentUsagePanelProviderFailed extends AgentUsagePanelLoadEvent {
-  const AgentUsagePanelProviderFailed({
-    required this.provider,
-    required this.message,
+/// 单个 Provider 的侧栏读取结果。
+class AgentUsagePanelProviderResult {
+  const AgentUsagePanelProviderResult({
+    required this.entry,
+    required this.refreshedAt,
   });
 
-  final AgentUsagePanelProvider provider;
-  final String message;
-}
-
-/// 本轮所有 Provider 均已结束加载。
-class AgentUsagePanelLoadCompleted extends AgentUsagePanelLoadEvent {
-  const AgentUsagePanelLoadCompleted(this.refreshedAt);
-
+  final AgentUsagePanelEntry entry;
   final DateTime refreshedAt;
 }
 
 /// Agent 统计面板的数据契约。
 abstract interface class AgentUsagePanelRepository {
-  Stream<AgentUsagePanelLoadEvent> load({bool forceRefresh = false});
+  /// 只发现可展示目录，不读取任何 Provider 的套餐或 Token 数据。
+  Future<List<AgentUsagePanelProvider>> discoverProviders();
+
+  /// 只读取指定 Provider；返回 null 表示它已不在启用目录中。
+  Future<AgentUsagePanelProviderResult?> loadProvider(
+    String providerId, {
+    bool forceRefresh = false,
+  });
 }

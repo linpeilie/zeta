@@ -1,29 +1,36 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
+
+/// 单个 Provider 的侧栏加载阶段。
+enum AgentUsagePanelProviderLoadStatus { notLoaded, loading, loaded, failed }
 
 /// 单个 Provider 在 Agent 用量面板中的不可变加载状态。
 @immutable
 class AgentUsagePanelProviderState {
   const AgentUsagePanelProviderState({
     required this.provider,
-    required this.isLoading,
+    required this.status,
     this.entry,
     this.loadError,
   });
 
   final AgentUsagePanelProvider provider;
 
-  /// 最近一次成功数据；刷新期间继续保留。
+  /// 最近一次成功数据；刷新失败或刷新期间继续保留。
   final AgentUsagePanelEntry? entry;
 
-  final bool isLoading;
+  final AgentUsagePanelProviderLoadStatus status;
 
   /// 仅影响当前 Provider 的加载错误。
   final String? loadError;
+
+  bool get isLoading => status == AgentUsagePanelProviderLoadStatus.loading;
 }
 
-/// 编排 Provider Tab、渐进式刷新状态与局部错误的轻量控制器。
+/// 编排 Provider Tab、按需加载状态与局部错误的轻量控制器。
 class AgentUsagePanelController extends ChangeNotifier {
   AgentUsagePanelController({
     required this.repository,
@@ -44,7 +51,11 @@ class AgentUsagePanelController extends ChangeNotifier {
   String? _errorMessage;
   bool _discovering = false;
   bool _directoryDiscovered = false;
-  int _loadToken = 0;
+  bool _directoryRefreshPending = false;
+  bool _directoryLoadingRequested = false;
+  Future<void>? _directoryDrain;
+  final Map<String, int> _providerGenerations = <String, int>{};
+  final Map<String, Future<void>> _providerLoads = <String, Future<void>>{};
   bool _disposed = false;
 
   /// 按 Provider 配置目录顺序排列的状态快照。
@@ -60,8 +71,11 @@ class AgentUsagePanelController extends ChangeNotifier {
   /// Provider 目录级错误；单 Provider 错误保存在对应状态中。
   String? get errorMessage => _errorMessage;
 
-  bool get isLoading =>
-      _discovering || _providers.any((provider) => provider.isLoading);
+  /// 首次显式刷新是否已经建立过目录；宿主用它过滤设置加载自身的启动通知。
+  bool get hasDiscoveredProviders => _directoryDiscovered;
+
+  /// 顶部刷新状态只跟随目录或当前 Tab，不被后台 Tab 阻塞。
+  bool get isLoading => _discovering || (selectedProvider?.isLoading ?? false);
 
   AgentUsagePanelProviderState? get selectedProvider {
     if (_providers.isEmpty) {
@@ -83,99 +97,57 @@ class AgentUsagePanelController extends ChangeNotifier {
 
   AgentUsagePanelEntry? get selectedEntry => selectedProvider?.entry;
 
-  /// 刷新全部已启用 Provider；旧数据在刷新期间继续展示。
+  /// 刷新当前选中 Provider；首次调用会先发现完整目录。
   ///
-  /// [showLoading] 为 false 时做静默刷新（如 turn 完成后的后台更新）：保留当前
-  /// 展示内容且不切换 [isLoading]，避免面板顶部反复出现加载横条。无任何
-  /// Provider 数据时仍展示首屏加载态，避免空白闪烁。
+  /// [showLoading] 为 false 时做静默刷新：已有内容继续展示且不点亮当前
+  /// Tab；尚无数据时仍展示首屏加载态，避免空白闪烁。
   Future<void> refresh({
     bool forceRefresh = true,
     bool showLoading = true,
   }) async {
-    final token = ++_loadToken;
-    // 已有目录时静默刷新不亮加载态；空面板首次加载仍需要指示。
-    final indicateLoading = showLoading || _providers.isEmpty;
-    _discovering = indicateLoading && _providers.isEmpty;
-    _errorMessage = null;
-    if (indicateLoading) {
-      _providers = List<AgentUsagePanelProviderState>.unmodifiable(
-        _providers.map(
-          (state) => AgentUsagePanelProviderState(
-            provider: state.provider,
-            entry: state.entry,
-            isLoading: true,
-          ),
-        ),
-      );
+    if (!_directoryDiscovered || _providers.isEmpty) {
+      await _reloadProviderDirectory(showLoading: showLoading);
     }
-    _notify();
+    final providerId = _selectedProviderId;
+    if (providerId == null || _disposed) {
+      return;
+    }
+    await _ensureProviderLoaded(
+      providerId,
+      forceRefresh: forceRefresh,
+      showLoading: showLoading,
+    );
+  }
 
-    try {
-      await for (final event in repository.load(forceRefresh: forceRefresh)) {
-        if (!_isCurrent(token)) {
-          return;
-        }
-        switch (event) {
-          case AgentUsagePanelProvidersDiscovered():
-            _applyProviderDirectory(
-              event.providers,
-              markLoading: indicateLoading,
-            );
-          case AgentUsagePanelProviderLoaded():
-            _replaceProvider(
-              event.entry.providerId,
-              (state) => AgentUsagePanelProviderState(
-                provider: state.provider,
-                entry: event.entry,
-                isLoading: false,
-              ),
-            );
-          case AgentUsagePanelProviderFailed():
-            _replaceProvider(
-              event.provider.providerId,
-              (state) => AgentUsagePanelProviderState(
-                provider: state.provider,
-                entry: state.entry,
-                isLoading: false,
-                loadError: event.message,
-              ),
-            );
-          case AgentUsagePanelLoadCompleted():
-            _lastUpdated = event.refreshedAt;
-            _discovering = false;
-            _finishPendingProviders();
-        }
-        _notify();
-      }
-    } catch (_) {
-      if (!_isCurrent(token)) {
-        return;
-      }
-      _errorMessage = 'Agent 用量暂时无法读取';
-      _discovering = false;
-      _finishPendingProviders();
-      _notify();
-    } finally {
-      if (_isCurrent(token)) {
-        _discovering = false;
-        _finishPendingProviders();
-        _notify();
-      }
+  /// Provider 配置变化后同步目录，并只补载当前尚未读取的 Tab。
+  Future<void> synchronizeProviders({bool showLoading = false}) async {
+    await _reloadProviderDirectory(showLoading: showLoading);
+    final providerId = _selectedProviderId;
+    if (providerId == null || _disposed) {
+      return;
     }
+    await _ensureProviderLoaded(
+      providerId,
+      forceRefresh: false,
+      showLoading: showLoading,
+    );
   }
 
   void selectProvider(String providerId) {
     final normalized = _normalizeProviderId(providerId);
     if (normalized == null ||
-        !_providers.any((state) => state.provider.providerId == normalized) ||
-        (_preferredProviderId == normalized &&
-            _selectedProviderId == normalized)) {
+        !_providers.any((state) => state.provider.providerId == normalized)) {
       return;
     }
+    final changed =
+        _preferredProviderId != normalized || _selectedProviderId != normalized;
     _preferredProviderId = normalized;
     _selectedProviderId = normalized;
-    onSelectionChanged?.call(normalized);
-    _notify();
+    if (changed) {
+      onSelectionChanged?.call(normalized);
+      _notify();
+    }
+    unawaited(_ensureProviderLoaded(normalized));
   }
 
   /// 应用恢复偏好但不回调，避免恢复值再次触发持久化循环。
@@ -183,6 +155,10 @@ class AgentUsagePanelController extends ChangeNotifier {
     final normalized = _normalizeProviderId(providerId);
     if (_preferredProviderId == normalized &&
         (!_directoryDiscovered || _selectionMatchesPreference())) {
+      final selected = _selectedProviderId;
+      if (selected != null) {
+        unawaited(_ensureProviderLoaded(selected));
+      }
       return;
     }
     _preferredProviderId = normalized;
@@ -190,12 +166,19 @@ class AgentUsagePanelController extends ChangeNotifier {
       _resolveSelectionFromDirectory();
     }
     _notify();
+    final selected = _selectedProviderId;
+    if (selected != null) {
+      unawaited(_ensureProviderLoaded(selected));
+    }
   }
 
   /// 记录 Turn 终态所属 Provider；自动选择覆盖此前手动偏好。
   void selectProviderFromTurn(String providerId) {
     final normalized = _normalizeProviderId(providerId);
-    if (normalized == null || _preferredProviderId == normalized) {
+    if (normalized == null) {
+      return;
+    }
+    if (_preferredProviderId == normalized) {
       return;
     }
     _preferredProviderId = normalized;
@@ -213,26 +196,184 @@ class AgentUsagePanelController extends ChangeNotifier {
     _notify();
   }
 
-  void _applyProviderDirectory(
-    List<AgentUsagePanelProvider> providers, {
-    required bool markLoading,
+  Future<void> _reloadProviderDirectory({required bool showLoading}) {
+    _directoryRefreshPending = true;
+    _directoryLoadingRequested =
+        _directoryLoadingRequested || showLoading || _providers.isEmpty;
+    final existing = _directoryDrain;
+    if (existing != null) {
+      return existing;
+    }
+
+    late final Future<void> drain;
+    drain = _drainProviderDirectory().whenComplete(() {
+      if (identical(_directoryDrain, drain)) {
+        _directoryDrain = null;
+      }
+    });
+    _directoryDrain = drain;
+    return drain;
+  }
+
+  Future<void> _drainProviderDirectory() async {
+    while (_directoryRefreshPending && !_disposed) {
+      _directoryRefreshPending = false;
+      final showLoading = _directoryLoadingRequested;
+      _directoryLoadingRequested = false;
+      await _loadProviderDirectoryOnce(showLoading: showLoading);
+    }
+  }
+
+  Future<void> _loadProviderDirectoryOnce({required bool showLoading}) async {
+    _discovering = showLoading;
+    _errorMessage = null;
+    _notify();
+    try {
+      final providers = await repository.discoverProviders();
+      if (_disposed) {
+        return;
+      }
+      _applyProviderDirectory(providers);
+    } catch (_) {
+      if (_disposed) {
+        return;
+      }
+      _errorMessage = 'Agent 用量暂时无法读取';
+    } finally {
+      if (!_disposed) {
+        _discovering = false;
+        _notify();
+      }
+    }
+  }
+
+  Future<void> _ensureProviderLoaded(
+    String providerId, {
+    bool forceRefresh = false,
+    bool showLoading = true,
   }) {
+    final state = _stateFor(providerId);
+    if (state == null ||
+        (!forceRefresh &&
+            state.status == AgentUsagePanelProviderLoadStatus.loaded)) {
+      return Future<void>.value();
+    }
+    final existing = _providerLoads[providerId];
+    if (existing != null) {
+      return existing;
+    }
+
+    final generation = (_providerGenerations[providerId] ?? 0) + 1;
+    _providerGenerations[providerId] = generation;
+    final indicateLoading = showLoading || state.entry == null;
+    _replaceProvider(
+      providerId,
+      (current) => AgentUsagePanelProviderState(
+        provider: current.provider,
+        entry: current.entry,
+        status: indicateLoading
+            ? AgentUsagePanelProviderLoadStatus.loading
+            : current.entry == null
+            ? AgentUsagePanelProviderLoadStatus.loading
+            : AgentUsagePanelProviderLoadStatus.loaded,
+      ),
+    );
+    _notify();
+
+    late final Future<void> tracked;
+    tracked =
+        _loadProvider(
+          providerId,
+          generation: generation,
+          forceRefresh: forceRefresh,
+        ).whenComplete(() {
+          if (identical(_providerLoads[providerId], tracked)) {
+            _providerLoads.remove(providerId);
+          }
+        });
+    _providerLoads[providerId] = tracked;
+    return tracked;
+  }
+
+  Future<void> _loadProvider(
+    String providerId, {
+    required int generation,
+    required bool forceRefresh,
+  }) async {
+    try {
+      final result = await repository.loadProvider(
+        providerId,
+        forceRefresh: forceRefresh,
+      );
+      if (!_isProviderCurrent(providerId, generation)) {
+        return;
+      }
+      if (result == null) {
+        _replaceProvider(
+          providerId,
+          (state) => AgentUsagePanelProviderState(
+            provider: state.provider,
+            entry: state.entry,
+            status: AgentUsagePanelProviderLoadStatus.failed,
+            loadError: '该 Agent 已禁用或不可用',
+          ),
+        );
+        _notify();
+        unawaited(synchronizeProviders());
+        return;
+      }
+      _replaceProvider(
+        providerId,
+        (state) => AgentUsagePanelProviderState(
+          provider: state.provider,
+          entry: result.entry,
+          status: AgentUsagePanelProviderLoadStatus.loaded,
+        ),
+      );
+      _lastUpdated = result.refreshedAt;
+      _notify();
+    } catch (_) {
+      if (!_isProviderCurrent(providerId, generation)) {
+        return;
+      }
+      _replaceProvider(
+        providerId,
+        (state) => AgentUsagePanelProviderState(
+          provider: state.provider,
+          entry: state.entry,
+          status: AgentUsagePanelProviderLoadStatus.failed,
+          loadError: 'Agent 用量暂时无法读取',
+        ),
+      );
+      _notify();
+    }
+  }
+
+  void _applyProviderDirectory(List<AgentUsagePanelProvider> providers) {
     final previousById = <String, AgentUsagePanelProviderState>{
       for (final state in _providers) state.provider.providerId: state,
     };
+    final nextIds = providers.map((provider) => provider.providerId).toSet();
+    for (final previousId in previousById.keys) {
+      if (nextIds.contains(previousId)) {
+        continue;
+      }
+      _providerGenerations[previousId] =
+          (_providerGenerations[previousId] ?? 0) + 1;
+      _providerLoads.remove(previousId);
+    }
     _providers = List<AgentUsagePanelProviderState>.unmodifiable(
       providers.map((provider) {
         final previous = previousById[provider.providerId];
         return AgentUsagePanelProviderState(
           provider: provider,
           entry: previous?.entry,
-          // 静默刷新时保留原加载标记，避免已有数据时闪加载横条。
-          isLoading: markLoading,
-          loadError: markLoading ? null : previous?.loadError,
+          status:
+              previous?.status ?? AgentUsagePanelProviderLoadStatus.notLoaded,
+          loadError: previous?.loadError,
         );
       }),
     );
-    _discovering = false;
     _directoryDiscovered = true;
     _resolveSelectionFromDirectory();
   }
@@ -262,6 +403,15 @@ class AgentUsagePanelController extends ChangeNotifier {
     }
   }
 
+  AgentUsagePanelProviderState? _stateFor(String providerId) {
+    for (final state in _providers) {
+      if (state.provider.providerId == providerId) {
+        return state;
+      }
+    }
+    return null;
+  }
+
   void _replaceProvider(
     String providerId,
     AgentUsagePanelProviderState Function(AgentUsagePanelProviderState state)
@@ -278,25 +428,10 @@ class AgentUsagePanelController extends ChangeNotifier {
     _providers = List<AgentUsagePanelProviderState>.unmodifiable(updated);
   }
 
-  void _finishPendingProviders() {
-    if (!_providers.any((state) => state.isLoading)) {
-      return;
-    }
-    _providers = List<AgentUsagePanelProviderState>.unmodifiable(
-      _providers.map(
-        (state) => state.isLoading
-            ? AgentUsagePanelProviderState(
-                provider: state.provider,
-                entry: state.entry,
-                isLoading: false,
-                loadError: state.loadError,
-              )
-            : state,
-      ),
-    );
-  }
-
-  bool _isCurrent(int token) => !_disposed && token == _loadToken;
+  bool _isProviderCurrent(String providerId, int generation) =>
+      !_disposed &&
+      _providerGenerations[providerId] == generation &&
+      _stateFor(providerId) != null;
 
   void _notify() {
     if (!_disposed) {
@@ -307,7 +442,12 @@ class AgentUsagePanelController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    _loadToken += 1;
+    _directoryRefreshPending = false;
+    for (final providerId in _providerGenerations.keys.toList()) {
+      _providerGenerations[providerId] =
+          (_providerGenerations[providerId] ?? 0) + 1;
+    }
+    _providerLoads.clear();
     super.dispose();
   }
 }

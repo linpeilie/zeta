@@ -142,6 +142,7 @@ class IdeShellController extends ChangeNotifier {
           QueryAgentUsagePanelRepository(usageQueryService, clock: _now),
       onSelectionChanged: setSelectedAgentUsageProviderId,
     );
+    agentProviderController.addListener(_handleAgentProviderSettingsChanged);
     agentWorkspaceController = AgentThreadWorkspaceController(
       providerController: agentProviderController,
       workspaceFilesProvider: () {
@@ -873,6 +874,9 @@ class IdeShellController extends ChangeNotifier {
       }
       _notifyStateChanged();
     } finally {
+      if (!_initialRestoreCompleter.isCompleted) {
+        _initialRestoreCompleter.complete();
+      }
       if (!_isDisposed) {
         _initialRestoreCompleted = true;
         _notifyStateChanged();
@@ -1421,6 +1425,14 @@ class IdeShellController extends ChangeNotifier {
     _notifyStateChanged();
   }
 
+  /// 检测或配置更新可能增删 Provider；只同步侧栏目录并补载当前未加载项。
+  void _handleAgentProviderSettingsChanged() {
+    if (_isDisposed || !agentUsagePanelController.hasDiscoveredProviders) {
+      return;
+    }
+    unawaited(agentUsagePanelController.synchronizeProviders());
+  }
+
   @override
   void dispose() {
     if (_isDisposed) {
@@ -1443,6 +1455,7 @@ class IdeShellController extends ChangeNotifier {
     projectThreadsViewModel.dispose();
     agentWorkspaceController.dispose();
     usageStatisticsController.dispose();
+    agentProviderController.removeListener(_handleAgentProviderSettingsChanged);
     agentUsagePanelController.dispose();
     agentProviderController.dispose();
     // 在 workspace 条目释放后再拆索引监听，避免 popover 仍挂在 listenable 上。

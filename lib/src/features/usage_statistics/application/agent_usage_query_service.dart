@@ -58,11 +58,38 @@ final class AgentUsageQueryService {
   final Map<_ProviderQueryKey, Future<AgentUsageProviderSnapshot>> _inFlight =
       <_ProviderQueryKey, Future<AgentUsageProviderSnapshot>>{};
 
-  /// 按配置目录顺序发布目录，并按实际完成顺序渐进发布 Provider 快照。
-  Stream<AgentUsageQueryEvent> load(AgentUsageQuery query) async* {
-    final configs = List<AgentProviderConfig>.unmodifiable(
-      (await _enabledProviderLoader()).where((config) => config.enabled),
+  /// 只返回当前已启用的稳定目录，不启动套餐或 Token 历史查询。
+  Future<List<AgentUsageProviderDescriptor>> discoverProviders() async {
+    final configs = await _loadEnabledConfigs();
+    return List<AgentUsageProviderDescriptor>.unmodifiable(
+      configs.map(AgentUsageProviderDescriptor.fromConfig),
     );
+  }
+
+  /// 只查询一个 Provider；目录变化导致目标失效时返回 null。
+  Future<AgentUsageProviderSnapshot?> loadProvider(
+    String providerId,
+    AgentUsageQuery query,
+  ) async {
+    final configs = await _loadEnabledConfigs();
+    AgentProviderConfig? target;
+    for (final config in configs) {
+      if (config.id == providerId) {
+        target = config;
+        break;
+      }
+    }
+    if (target == null) {
+      return null;
+    }
+    return _loadProviderInFlight(target, query);
+  }
+
+  /// 按配置目录顺序发布目录，并按实际完成顺序渐进发布 Provider 快照。
+  ///
+  /// 完整统计页需要跨 Provider 聚合，因此保留显式全量入口；侧栏不得调用它。
+  Stream<AgentUsageQueryEvent> loadAll(AgentUsageQuery query) async* {
+    final configs = await _loadEnabledConfigs();
     yield AgentUsageProvidersDiscovered(
       providers: <AgentUsageProviderDescriptor>[
         for (final config in configs)
@@ -99,7 +126,7 @@ final class AgentUsageQueryService {
     AgentUsageQuery query,
   ) {
     final key = _ProviderQueryKey(
-      providerId: config.id,
+      config: config,
       earliest: query.earliest,
       forceRefresh: query.forceRefresh,
     );
@@ -180,16 +207,23 @@ final class AgentUsageQueryService {
       );
     }
   }
+
+  Future<List<AgentProviderConfig>> _loadEnabledConfigs() async {
+    return List<AgentProviderConfig>.unmodifiable(
+      (await _enabledProviderLoader()).where((config) => config.enabled),
+    );
+  }
 }
 
 final class _ProviderQueryKey {
   const _ProviderQueryKey({
-    required this.providerId,
+    required this.config,
     required this.earliest,
     required this.forceRefresh,
   });
 
-  final String providerId;
+  /// 配置对象变化时不得复用旧进程/凭据对应的进行中结果。
+  final AgentProviderConfig config;
   final DateTime earliest;
   final bool forceRefresh;
 
@@ -197,10 +231,11 @@ final class _ProviderQueryKey {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is _ProviderQueryKey &&
-          providerId == other.providerId &&
+          identical(config, other.config) &&
           earliest == other.earliest &&
           forceRefresh == other.forceRefresh;
 
   @override
-  int get hashCode => Object.hash(providerId, earliest, forceRefresh);
+  int get hashCode =>
+      Object.hash(identityHashCode(config), earliest, forceRefresh);
 }
