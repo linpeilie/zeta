@@ -46,8 +46,9 @@ void main() {
     expect(find.byKey(const ValueKey('files-panel-card')), findsNothing);
     expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
     expect(find.byKey(const ValueKey('tools-panel-card')), findsNothing);
-    expect(find.byKey(const ValueKey('left-projects-action')), findsOneWidget);
-    expect(find.byKey(const ValueKey('left-context-action')), findsOneWidget);
+    expect(find.byKey(const ValueKey('left-projects-action')), findsNothing);
+    expect(find.byKey(const ValueKey('left-context-action')), findsNothing);
+    expect(find.byKey(const ValueKey('workbench-leading-rail')), findsNothing);
     expect(find.byKey(const ValueKey('right-files-action')), findsNothing);
     expect(find.byKey(const ValueKey('right-tools-action')), findsNothing);
     expect(find.byKey(const ValueKey('workbench-trailing-rail')), findsNothing);
@@ -227,15 +228,15 @@ void main() {
     },
   );
 
-  testWidgets('titlebar and legacy rail share one left sidebar state', (
-    tester,
-  ) async {
-    _enableTrailingRailForTest();
+  testWidgets('titlebar is the only left sidebar entry', (tester) async {
     await _pumpIde(tester, enableNativeWindowFrame: true);
 
     expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
     expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
     expect(find.byKey(const ValueKey('agent-usage-compact')), findsOneWidget);
+    expect(find.byKey(const ValueKey('workbench-leading-rail')), findsNothing);
+    expect(find.byKey(const ValueKey('left-projects-action')), findsNothing);
+    expect(find.byKey(const ValueKey('left-context-action')), findsNothing);
 
     await tester.tap(
       find.byKey(const ValueKey('titlebar-left-sidebar-action')),
@@ -248,11 +249,18 @@ void main() {
       findsNothing,
     );
 
-    await tester.tap(find.byKey(const ValueKey('left-context-action')));
+    await tester.tap(
+      find.byKey(const ValueKey('titlebar-left-sidebar-action')),
+    );
     await tester.pump();
 
     expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
     expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
+    expect(find.byKey(const ValueKey('agent-usage-compact')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
+    await tester.pump();
+
     expect(find.text('Agent 统计'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('agent-usage-resize-handle')),
@@ -278,7 +286,9 @@ void main() {
       findsNothing,
     );
 
-    await tester.tap(find.byKey(const ValueKey('left-projects-action')));
+    await tester.tap(
+      find.byKey(const ValueKey('titlebar-left-sidebar-action')),
+    );
     await tester.pump();
 
     expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
@@ -288,7 +298,7 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.byKey(const ValueKey('left-context-action')));
+    await tester.tap(find.byKey(const ValueKey('agent-usage-collapse-button')));
     await tester.pump();
 
     expect(find.byKey(const ValueKey('agent-usage-compact')), findsOneWidget);
@@ -299,11 +309,11 @@ void main() {
   });
 
   testWidgets(
-    'switching existing left regions retains the active Agent pane state',
+    'switching sidebar and usage modes retains the active Agent pane state',
     (tester) async {
       final retained = await _prepareRetainedAgentState(tester);
 
-      await tester.tap(find.byKey(const ValueKey('left-context-action')));
+      await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
       await tester.pump();
 
       expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
@@ -319,7 +329,9 @@ void main() {
       expect(find.byKey(const ValueKey('projects-panel-card')), findsNothing);
       _expectRetainedAgentContentState(tester, retained);
 
-      await tester.tap(find.byKey(const ValueKey('left-projects-action')));
+      await tester.tap(
+        find.byKey(const ValueKey('titlebar-left-sidebar-action')),
+      );
       await tester.pump();
 
       expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
@@ -329,7 +341,9 @@ void main() {
       );
       _expectRetainedAgentContentState(tester, retained);
 
-      await tester.tap(find.byKey(const ValueKey('left-context-action')));
+      await tester.tap(
+        find.byKey(const ValueKey('agent-usage-collapse-button')),
+      );
       await tester.pump();
 
       _expectRetainedAgentState(tester, retained);
@@ -341,7 +355,6 @@ void main() {
   ) async {
     _enableTrailingRailForTest();
     await _pumpIde(tester);
-    await tester.tap(find.byKey(const ValueKey('left-context-action')));
     await tester.tap(find.byKey(const ValueKey('right-files-action')));
     await tester.tap(find.byKey(const ValueKey('right-tools-action')));
     await tester.pump();

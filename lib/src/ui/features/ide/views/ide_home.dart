@@ -58,7 +58,7 @@ typedef HomeProviderDetectionLoader = Future<List<ManagedAgent>> Function();
 
 /// IDE 主界面。
 ///
-/// 首页布局是左右图标栏、左右活动面板与中间 Agent 主编辑区组成的五列结构；
+/// 首页由标题栏入口控制 Projects / Agent 统计合并栏，中央保留 Agent 主编辑区；
 /// 具体项目、会话和 Agent thread 编排由 [IdeShellController] 承接。
 ///
 /// Trailing Rail（Files/Tools）暂时关闭；加回时将 [_trailingRailEnabled]
@@ -151,12 +151,6 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   sf.ToastOverlay? _statusToast;
   _IdeHomePage _page = _IdeHomePage.home;
   SettingsSection _settingsSection = SettingsSection.general;
-  final FocusNode _leftProjectsFocusNode = FocusNode(
-    debugLabel: 'LeftProjectsRailAction',
-  );
-  final FocusNode _leftContextFocusNode = FocusNode(
-    debugLabel: 'LeftContextRailAction',
-  );
   final FocusNode _leftSidebarFocusNode = FocusNode(
     debugLabel: 'TitleBarLeftSidebarAction',
   );
@@ -252,8 +246,6 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     _agentManagementController.dispose();
     _shellController.dispose();
     _desktopAttentionController.dispose();
-    _leftProjectsFocusNode.dispose();
-    _leftContextFocusNode.dispose();
     _leftSidebarFocusNode.dispose();
     _rightFilesFocusNode.dispose();
     _rightToolsFocusNode.dispose();
@@ -359,7 +351,6 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
         : null;
     return IdeWorkbenchScaffold(
       key: const ValueKey('ide-workbench'),
-      leadingRailBuilder: homePage ? _buildLeadingRail : null,
       navigationPane: settingsPage
           ? SettingsNavigationPane(
               activeSection: _settingsSection,
@@ -546,52 +537,6 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       key: const ValueKey<String>('global-home-restoring'),
       color: colors.canvasSurface,
       child: Center(child: IdeBusySpinner(size: 20, color: colors.accent)),
-    );
-  }
-
-  Widget _buildLeadingRail(BuildContext context, IdeWorkbenchLayoutMode mode) {
-    final useOverlay = mode == IdeWorkbenchLayoutMode.compact;
-    final workbenchLayout = _shellController.workbenchLayout;
-    final navigationOverlayActive =
-        !useOverlay || _activeOverlay != IdeWorkbenchOverlay.inspector;
-    return IdeActivityRail(
-      leadingActions: [
-        IdeRailAction(
-          key: const ValueKey('left-projects-action'),
-          icon: sf.BootstrapIcons.appIndicator,
-          tooltip: 'Projects',
-          semanticLabel: 'Toggle projects panel',
-          active: workbenchLayout.leftSidebarVisible && navigationOverlayActive,
-          focusNode: _leftProjectsFocusNode,
-          onPressed: () {
-            _toggleLeftPanel(
-              showAgentUsage: false,
-              useOverlay: useOverlay,
-              triggerFocusNode: _leftProjectsFocusNode,
-            );
-          },
-        ),
-      ],
-      trailingActions: [
-        IdeRailAction(
-          key: const ValueKey('left-context-action'),
-          icon: sf.LucideIcons.chartPie,
-          tooltip: 'Context',
-          semanticLabel: 'Toggle context panel',
-          active:
-              workbenchLayout.leftSidebarVisible &&
-              workbenchLayout.agentUsageExpanded &&
-              navigationOverlayActive,
-          focusNode: _leftContextFocusNode,
-          onPressed: () {
-            _toggleLeftPanel(
-              showAgentUsage: true,
-              useOverlay: useOverlay,
-              triggerFocusNode: _leftContextFocusNode,
-            );
-          },
-        ),
-      ],
     );
   }
 
@@ -851,31 +796,6 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       return;
     }
     _agentUsageRefreshCoordinator.requestRefresh();
-  }
-
-  void _toggleLeftPanel({
-    required bool showAgentUsage,
-    required bool useOverlay,
-    required FocusNode triggerFocusNode,
-  }) {
-    if (!showAgentUsage) {
-      _toggleLeftSidebar(triggerFocusNode);
-      return;
-    }
-
-    final workbenchLayout = _shellController.workbenchLayout;
-    if (useOverlay) {
-      setState(() {
-        _activeOverlay = null;
-        _overlayTriggerFocusNode = triggerFocusNode;
-      });
-    }
-    if (!workbenchLayout.leftSidebarVisible) {
-      _shellController.setAgentUsageExpanded(true);
-      _shellController.setLeftSidebarVisible(true);
-      return;
-    }
-    _shellController.setAgentUsageExpanded(!workbenchLayout.agentUsageExpanded);
   }
 
   void _toggleLeftSidebar(FocusNode triggerFocusNode) {

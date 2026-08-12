@@ -20,24 +20,6 @@ import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 
-/// 左侧 Context 槽位中的轻量 Agent 用量面板。
-class AgentUsagePanel extends StatelessWidget {
-  const AgentUsagePanel({required this.controller, super.key});
-
-  final AgentUsagePanelController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return PanelCard(
-      key: const ValueKey('context-panel-card'),
-      child: AgentUsagePanelContent(
-        controller: controller,
-        mode: AgentUsagePanelMode.expanded,
-      ),
-    );
-  }
-}
-
 /// Agent 统计在合并左栏中的显示模式。
 enum AgentUsagePanelMode { collapsed, expanded }
 

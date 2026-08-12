@@ -165,9 +165,7 @@ void main() {
     addTearDown(controller.dispose);
     await _pumpPanel(tester, controller, width: 420);
 
-    final panelCenter = tester.getCenter(
-      find.byKey(const ValueKey('context-panel-card')),
-    );
+    final panelCenter = tester.getCenter(find.byType(sf.Scaffold));
     final tabsCenter = tester.getCenter(find.byType(sf.Tabs));
 
     expect(tabsCenter.dx, closeTo(panelCenter.dx, 1));
@@ -672,7 +670,12 @@ Future<void> _pumpPanel(
       child: sf.ShadcnApp(
         theme: buildShadcnTheme(ideTheme),
         materialTheme: buildMaterialTheme(ideTheme),
-        home: sf.Scaffold(child: AgentUsagePanel(controller: controller)),
+        home: sf.Scaffold(
+          child: AgentUsagePanelContent(
+            controller: controller,
+            mode: AgentUsagePanelMode.expanded,
+          ),
+        ),
       ),
     ),
   );
