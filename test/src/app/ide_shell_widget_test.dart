@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/main.dart';
 import 'package:zeta/src/app/app.dart' show MainAppState;
@@ -17,6 +18,7 @@ import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_mode
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
+import 'package:zeta/src/ui/core/window_frame.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 
 import '../testing/agent_event_storm_fixture.dart';
@@ -29,11 +31,16 @@ void main() {
   });
 
   testWidgets('starts with the compact IDE panes', (tester) async {
-    await _pumpIde(tester);
+    await _pumpIde(tester, enableNativeWindowFrame: true);
     await tester.pump();
 
     expect(find.text('Zeta'), findsNothing);
     expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-usage-compact')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('titlebar-left-sidebar-action')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('agent-pane-host')), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-panel-card')), findsNothing);
     expect(find.byKey(const ValueKey('files-panel-card')), findsNothing);
@@ -220,15 +227,22 @@ void main() {
     },
   );
 
-  testWidgets('activity icons toggle side panel columns', (tester) async {
+  testWidgets('titlebar and legacy rail share one left sidebar state', (
+    tester,
+  ) async {
     _enableTrailingRailForTest();
-    await _pumpIde(tester);
+    await _pumpIde(tester, enableNativeWindowFrame: true);
 
-    await tester.tap(find.byKey(const ValueKey('left-projects-action')));
+    expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
+    expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
+    expect(find.byKey(const ValueKey('agent-usage-compact')), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('titlebar-left-sidebar-action')),
+    );
     await tester.pump();
 
     expect(find.byKey(const ValueKey('projects-panel-card')), findsNothing);
-    expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
     expect(
       find.byKey(const ValueKey('workbench-navigation-inline')),
       findsNothing,
@@ -237,8 +251,13 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('left-context-action')));
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('context-panel-card')), findsOneWidget);
+    expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
+    expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
     expect(find.text('Agent 统计'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('agent-usage-resize-handle')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey('workbench-navigation-inline')),
       findsOneWidget,
@@ -246,51 +265,36 @@ void main() {
     expect(
       find.byKey(const ValueKey('left-width-resize-handle')),
       findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('titlebar-left-sidebar-action')),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('projects-panel-card')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('workbench-navigation-inline')),
+      findsNothing,
     );
 
     await tester.tap(find.byKey(const ValueKey('left-projects-action')));
     await tester.pump();
 
     expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('workbench-navigation-inline')),
-      findsOneWidget,
-    );
+    expect(find.text('Agent 统计'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('left-width-resize-handle')),
       findsOneWidget,
     );
 
-    await tester.tap(find.byKey(const ValueKey('right-files-action')));
+    await tester.tap(find.byKey(const ValueKey('left-context-action')));
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('files-panel-card')), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-usage-compact')), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('workbench-inspector-inline')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('right-width-resize-handle')),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.byKey(const ValueKey('right-tools-action')));
-    await tester.pump();
-
-    expect(find.byKey(const ValueKey('tools-panel-card')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('workbench-inspector-inline')),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.byKey(const ValueKey('right-tools-action')));
-    await tester.pump();
-
-    expect(find.byKey(const ValueKey('files-panel-card')), findsOneWidget);
-    expect(find.byKey(const ValueKey('tools-panel-card')), findsNothing);
-    expect(
-      find.byKey(const ValueKey('workbench-inspector-inline')),
-      findsOneWidget,
+      find.byKey(const ValueKey('agent-usage-resize-handle')),
+      findsNothing,
     );
   });
 
@@ -303,28 +307,29 @@ void main() {
       await tester.pump();
 
       expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
-      expect(find.byKey(const ValueKey('context-panel-card')), findsOneWidget);
+      expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
+      expect(find.text('Agent 统计'), findsOneWidget);
+      _expectRetainedAgentContentState(tester, retained);
+
+      await tester.tap(
+        find.byKey(const ValueKey('titlebar-left-sidebar-action')),
+      );
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('projects-panel-card')), findsNothing);
       _expectRetainedAgentContentState(tester, retained);
 
       await tester.tap(find.byKey(const ValueKey('left-projects-action')));
       await tester.pump();
 
-      expect(find.byKey(const ValueKey('projects-panel-card')), findsNothing);
-      expect(find.byKey(const ValueKey('context-panel-card')), findsOneWidget);
-      _expectRetainedAgentContentState(tester, retained);
-
-      await tester.tap(find.byKey(const ValueKey('left-context-action')));
-      await tester.pump();
-
-      expect(find.byKey(const ValueKey('projects-panel-card')), findsNothing);
-      expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
+      expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
       expect(
         find.byKey(const ValueKey('workbench-navigation-inline')),
-        findsNothing,
+        findsOneWidget,
       );
       _expectRetainedAgentContentState(tester, retained);
 
-      await tester.tap(find.byKey(const ValueKey('left-projects-action')));
+      await tester.tap(find.byKey(const ValueKey('left-context-action')));
       await tester.pump();
 
       _expectRetainedAgentState(tester, retained);
@@ -341,9 +346,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('right-tools-action')));
     await tester.pump();
 
+    expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
     for (final panelKey in <String>[
       'projects-panel-card',
-      'context-panel-card',
       'files-panel-card',
       'tools-panel-card',
     ]) {
@@ -356,139 +361,148 @@ void main() {
     }
   });
 
-  testWidgets('horizontal resize handles clamp side widths', (tester) async {
-    _enableTrailingRailForTest();
-    await _pumpIde(tester);
-
-    expect(
-      _widthOf(tester, 'workbench-navigation-inline'),
-      IdeMetrics.sidePaneDefaultWidth,
-    );
-
-    await tester.tap(find.byKey(const ValueKey('right-files-action')));
-    await tester.pump();
-
-    expect(
-      _widthOf(tester, 'workbench-inspector-inline'),
-      IdeMetrics.sidePaneDefaultWidth,
-    );
-
-    await tester.drag(
-      find.byKey(const ValueKey('left-width-resize-handle')),
-      const Offset(500, 0),
-    );
-    await tester.pump();
-    expect(
-      _widthOf(tester, 'workbench-navigation-inline'),
-      IdeMetrics.sidePaneMaxWidth,
-    );
-
-    await tester.drag(
-      find.byKey(const ValueKey('left-width-resize-handle')),
-      const Offset(-500, 0),
-    );
-    await tester.pump();
-    expect(
-      _widthOf(tester, 'workbench-navigation-inline'),
-      IdeMetrics.sidePaneMinWidth,
-    );
-
-    await tester.drag(
-      find.byKey(const ValueKey('right-width-resize-handle')),
-      const Offset(-500, 0),
-    );
-    await tester.pump();
-    expect(
-      _widthOf(tester, 'workbench-inspector-inline'),
-      IdeMetrics.sidePaneMaxWidth,
-    );
-
-    await tester.drag(
-      find.byKey(const ValueKey('right-width-resize-handle')),
-      const Offset(500, 0),
-    );
-    await tester.pump();
-    expect(
-      _widthOf(tester, 'workbench-inspector-inline'),
-      IdeMetrics.sidePaneMinWidth,
-    );
-  });
-
-  testWidgets('vertical resize handles clamp panel ratio', (tester) async {
-    await _pumpIde(tester);
-    final expandedPanelHeight = _heightOf(tester, 'projects-panel-card');
-    await tester.tap(find.byKey(const ValueKey('left-context-action')));
-    await tester.pump();
-
-    final minimumPanelHeight = (expandedPanelHeight - 8) * 0.1;
-
-    await tester.drag(
-      find.byKey(const ValueKey('left-height-resize-handle')),
-      const Offset(0, -2000),
-    );
-    await tester.pump();
-
-    expect(
-      _heightOf(tester, 'projects-panel-card'),
-      moreOrLessEquals(minimumPanelHeight, epsilon: 1),
-    );
-
-    await tester.tap(find.byKey(const ValueKey('left-context-action')));
-    await tester.pump();
-
-    expect(
-      _heightOf(tester, 'projects-panel-card'),
-      moreOrLessEquals(expandedPanelHeight, epsilon: 1),
-    );
-  });
-
-  testWidgets('vertical resize handles preserve accumulated drag distance', (
+  testWidgets('left width previews locally and persists only after drag end', (
     tester,
   ) async {
     _enableTrailingRailForTest();
-    await _pumpIde(tester);
-    await tester.tap(find.byKey(const ValueKey('left-context-action')));
-    await tester.tap(find.byKey(const ValueKey('right-files-action')));
-    await tester.tap(find.byKey(const ValueKey('right-tools-action')));
+    final session = MemorySessionStore(
+      const IdeSessionState(
+        workbenchLayout: IdeWorkbenchLayoutState(leftSidebarWidth: 280),
+      ).encode(),
+    );
+    await _pumpIde(tester, sessionStore: session);
+
+    expect(_widthOf(tester, 'workbench-navigation-inline'), 280);
+
+    final handle = find.byKey(const ValueKey('left-width-resize-handle'));
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await gesture.moveBy(const Offset(36, 0));
     await tester.pump();
 
-    Future<void> expectBurstDrag({
-      required String handleKey,
-      required String topPanelKey,
-    }) async {
-      final handle = find.byKey(ValueKey(handleKey));
-      final gesture = await tester.startGesture(tester.getCenter(handle));
-      await gesture.moveBy(const Offset(0, 30));
-      await tester.pump();
-      final heightAfterDragStart = _heightOf(tester, topPanelKey);
-
-      for (var index = 0; index < 4; index += 1) {
-        await gesture.moveBy(const Offset(0, 12));
-      }
-      await gesture.up();
-      await tester.pump();
-
-      expect(
-        _heightOf(tester, topPanelKey),
-        moreOrLessEquals(heightAfterDragStart + 48, epsilon: 1),
-      );
-    }
-
-    await expectBurstDrag(
-      handleKey: 'left-height-resize-handle',
-      topPanelKey: 'projects-panel-card',
+    expect(_widthOf(tester, 'workbench-navigation-inline'), 316);
+    await pumpSessionSave(tester);
+    expect(
+      IdeSessionState.tryDecode(
+        session.value,
+      )?.workbenchLayout.leftSidebarWidth,
+      280,
     );
-    await expectBurstDrag(
-      handleKey: 'right-height-resize-handle',
-      topPanelKey: 'files-panel-card',
+
+    await gesture.up();
+    await pumpSessionSave(tester);
+    expect(
+      IdeSessionState.tryDecode(
+        session.value,
+      )?.workbenchLayout.leftSidebarWidth,
+      316,
+    );
+
+    await tester.drag(handle, const Offset(500, 0));
+    await tester.pump();
+    expect(
+      _widthOf(tester, 'workbench-navigation-inline'),
+      IdeMetrics.sidePaneMaxWidth,
+    );
+
+    await tester.drag(handle, const Offset(-500, 0));
+    await tester.pump();
+    expect(
+      _widthOf(tester, 'workbench-navigation-inline'),
+      IdeMetrics.sidePaneMinWidth,
     );
   });
+
+  testWidgets('right resize handles still clamp side widths', (tester) async {
+    _enableTrailingRailForTest();
+    await _pumpIde(tester);
+
+    await tester.tap(find.byKey(const ValueKey('right-files-action')));
+    await tester.pump();
+    await tester.drag(
+      find.byKey(const ValueKey('right-width-resize-handle')),
+      const Offset(-500, 0),
+    );
+    await tester.pump();
+    expect(
+      _widthOf(tester, 'workbench-inspector-inline'),
+      IdeMetrics.sidePaneMaxWidth,
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('right-width-resize-handle')),
+      const Offset(500, 0),
+    );
+    await tester.pump();
+    expect(
+      _widthOf(tester, 'workbench-inspector-inline'),
+      IdeMetrics.sidePaneMinWidth,
+    );
+  });
+
+  testWidgets(
+    'usage height previews locally and persists only after drag end',
+    (tester) async {
+      final session = MemorySessionStore(
+        const IdeSessionState(
+          workbenchLayout: IdeWorkbenchLayoutState(
+            agentUsageExpanded: true,
+            agentUsageHeightFraction: 0.4,
+          ),
+        ).encode(),
+      );
+      await _pumpIde(tester, sessionStore: session);
+
+      final usage = find.byKey(const ValueKey('project-agent-sidebar-usage'));
+      final initialHeight = tester.getSize(usage).height;
+      final handle = find.byKey(const ValueKey('agent-usage-resize-handle'));
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await gesture.moveBy(const Offset(0, -40));
+      await tester.pump();
+
+      expect(tester.getSize(usage).height, greaterThan(initialHeight));
+      await pumpSessionSave(tester);
+      expect(
+        IdeSessionState.tryDecode(
+          session.value,
+        )?.workbenchLayout.agentUsageHeightFraction,
+        0.4,
+      );
+
+      await gesture.up();
+      await pumpSessionSave(tester);
+      final savedLayout = IdeSessionState.tryDecode(
+        session.value,
+      )!.workbenchLayout;
+      expect(savedLayout.agentUsageHeightFraction, greaterThan(0.4));
+
+      await tester.tap(
+        find.byKey(const ValueKey('agent-usage-collapse-button')),
+      );
+      await pumpSessionSave(tester);
+      expect(
+        find.byKey(const ValueKey('agent-usage-resize-handle')),
+        findsNothing,
+      );
+      expect(
+        IdeSessionState.tryDecode(
+          session.value,
+        )?.workbenchLayout.agentUsageHeightFraction,
+        savedLayout.agentUsageHeightFraction,
+      );
+    },
+  );
 
   testWidgets('right panels use overlay in medium and compact modes', (
     tester,
   ) async {
     _enableTrailingRailForTest();
-    await _pumpIde(tester, size: const Size(832, 900));
+    await _pumpIde(
+      tester,
+      size: const Size(832, 900),
+      initialSessionJson: const IdeSessionState(
+        workbenchLayout: IdeWorkbenchLayoutState(leftSidebarVisible: false),
+      ).encode(),
+    );
 
     expect(
       find.byKey(const ValueKey('workbench-inspector-inline')),
@@ -532,10 +546,17 @@ void main() {
     expect(find.byKey(const ValueKey('files-panel-card')), findsNothing);
   });
 
-  testWidgets('left panels use an overlay when the window is narrow', (
+  testWidgets('compact titlebar overlay closes with scrim and Esc with focus', (
     tester,
   ) async {
-    await _pumpIde(tester, size: const Size(640, 900));
+    await _pumpIde(
+      tester,
+      size: const Size(640, 900),
+      enableNativeWindowFrame: true,
+      initialSessionJson: const IdeSessionState(
+        workbenchLayout: IdeWorkbenchLayoutState(leftSidebarVisible: false),
+      ).encode(),
+    );
 
     expect(
       find.byKey(const ValueKey('workbench-navigation-inline')),
@@ -547,7 +568,15 @@ void main() {
     );
     expect(find.byKey(const ValueKey('projects-panel-card')), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('left-projects-action')));
+    final titlebarAction = find.byKey(
+      const ValueKey('titlebar-left-sidebar-action'),
+    );
+    final focusNode = tester
+        .widget<WindowFrame>(find.byKey(const ValueKey('ide-window-frame')))
+        .titleBarLeadingActions
+        .single
+        .focusNode!;
+    await tester.tap(titlebarAction);
     await tester.pump();
 
     expect(
@@ -563,6 +592,23 @@ void main() {
       find.byKey(const ValueKey('workbench-navigation-overlay')),
       findsNothing,
     );
+    expect(focusNode.hasFocus, isTrue);
+
+    await tester.tap(titlebarAction);
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('workbench-navigation-overlay')),
+      findsOneWidget,
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('workbench-navigation-overlay')),
+      findsNothing,
+    );
+    expect(focusNode.hasFocus, isTrue);
     expect(find.byKey(const ValueKey('agent-pane-host')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -2301,8 +2347,4 @@ class _ModeCapableFakeAgentProvider extends FakeAgentProvider
 
 double _widthOf(WidgetTester tester, String key) {
   return tester.getSize(find.byKey(ValueKey<String>(key))).width;
-}
-
-double _heightOf(WidgetTester tester, String key) {
-  return tester.getSize(find.byKey(ValueKey<String>(key))).height;
 }

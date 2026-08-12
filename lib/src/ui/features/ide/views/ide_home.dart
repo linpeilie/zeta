@@ -48,6 +48,7 @@ import 'package:zeta/src/ui/core/workbench/ide_retained_page_view.dart';
 import 'package:zeta/src/ui/core/workbench/ide_workbench_scaffold.dart';
 import 'package:zeta/src/ui/features/ide/views/global_home_page.dart';
 import 'package:zeta/src/ui/features/ide/views/project_home_page.dart';
+import 'package:zeta/src/ui/features/ide/views/project_agent_sidebar.dart';
 import 'package:zeta/src/ui/features/ide/views/project_list_pane.dart';
 
 typedef AgentProviderAvailabilityLoader =
@@ -131,8 +132,6 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   late final DesktopAttentionController _desktopAttentionController;
   bool _windowFocused = true;
 
-  bool _leftTopVisible = true;
-  bool _leftBottomVisible = false;
   bool _rightTopVisible = false;
   bool _rightBottomVisible = false;
   bool _settingsPageMounted = false;
@@ -146,8 +145,8 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   IdeWorkbenchOverlay? _activeOverlay;
   FocusNode? _overlayTriggerFocusNode;
   double _leftPanelWidth = _initialPanelWidth;
+  bool _leftPanelWidthDragging = false;
   double _rightPanelWidth = _initialPanelWidth;
-  double _leftTopRatio = _initialPanelRatio;
   double _rightTopRatio = _initialPanelRatio;
   sf.ToastOverlay? _statusToast;
   _IdeHomePage _page = _IdeHomePage.home;
@@ -157,6 +156,9 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   );
   final FocusNode _leftContextFocusNode = FocusNode(
     debugLabel: 'LeftContextRailAction',
+  );
+  final FocusNode _leftSidebarFocusNode = FocusNode(
+    debugLabel: 'TitleBarLeftSidebarAction',
   );
   final FocusNode _rightFilesFocusNode = FocusNode(
     debugLabel: 'RightFilesRailAction',
@@ -252,6 +254,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     _desktopAttentionController.dispose();
     _leftProjectsFocusNode.dispose();
     _leftContextFocusNode.dispose();
+    _leftSidebarFocusNode.dispose();
     _rightFilesFocusNode.dispose();
     _rightToolsFocusNode.dispose();
     super.dispose();
@@ -259,10 +262,26 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
+    final leftSidebarVisible =
+        _page == _IdeHomePage.home &&
+        _shellController.workbenchLayout.leftSidebarVisible;
     final body = WindowFrame(
       key: const ValueKey('ide-window-frame'),
       enableNativeWindowFrame: widget.enableNativeWindowFrame,
       menus: _windowMenus,
+      titleBarLeadingActions: _page == _IdeHomePage.home
+          ? <WindowTitleBarAction>[
+              WindowTitleBarAction(
+                key: const ValueKey('titlebar-left-sidebar-action'),
+                icon: Icons.view_sidebar_outlined,
+                tooltip: leftSidebarVisible ? '隐藏左侧栏' : '显示左侧栏',
+                semanticLabel: leftSidebarVisible ? '隐藏左侧栏' : '显示左侧栏',
+                active: leftSidebarVisible,
+                focusNode: _leftSidebarFocusNode,
+                onPressed: () => _toggleLeftSidebar(_leftSidebarFocusNode),
+              ),
+            ]
+          : const <WindowTitleBarAction>[],
       titleBarActions: <WindowTitleBarAction>[
         WindowTitleBarAction(
           key: const ValueKey('titlebar-usage-statistics-action'),
@@ -327,11 +346,17 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   Widget _buildWorkbench() {
     final homePage = _page == _IdeHomePage.home;
     final settingsPage = _page == _IdeHomePage.settings;
+    final workbenchLayout = _shellController.workbenchLayout;
     final navigationVisible = settingsPage
         ? true
-        : homePage && (_leftTopVisible || _leftBottomVisible);
+        : homePage && workbenchLayout.leftSidebarVisible;
     final inspectorVisible =
         homePage && (_rightTopVisible || _rightBottomVisible);
+    final activeOverlay = _activeOverlay == IdeWorkbenchOverlay.inspector
+        ? IdeWorkbenchOverlay.inspector
+        : homePage && workbenchLayout.leftSidebarVisible
+        ? IdeWorkbenchOverlay.navigation
+        : null;
     return IdeWorkbenchScaffold(
       key: const ValueKey('ide-workbench'),
       leadingRailBuilder: homePage ? _buildLeadingRail : null,
@@ -366,7 +391,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
           (IdeHome._trailingRailEnabled || IdeHome.debugShowTrailingRail)
           ? _buildTrailingRail
           : null,
-      activeOverlay: _activeOverlay,
+      activeOverlay: activeOverlay,
       onDismissOverlay: _closeActiveOverlay,
       overlayTriggerFocusNode: _overlayTriggerFocusNode,
     );
@@ -526,6 +551,9 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
 
   Widget _buildLeadingRail(BuildContext context, IdeWorkbenchLayoutMode mode) {
     final useOverlay = mode == IdeWorkbenchLayoutMode.compact;
+    final workbenchLayout = _shellController.workbenchLayout;
+    final navigationOverlayActive =
+        !useOverlay || _activeOverlay != IdeWorkbenchOverlay.inspector;
     return IdeActivityRail(
       leadingActions: [
         IdeRailAction(
@@ -533,13 +561,11 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
           icon: sf.BootstrapIcons.appIndicator,
           tooltip: 'Projects',
           semanticLabel: 'Toggle projects panel',
-          active:
-              _leftTopVisible &&
-              (!useOverlay || _activeOverlay == IdeWorkbenchOverlay.navigation),
+          active: workbenchLayout.leftSidebarVisible && navigationOverlayActive,
           focusNode: _leftProjectsFocusNode,
           onPressed: () {
             _toggleLeftPanel(
-              isTop: true,
+              showAgentUsage: false,
               useOverlay: useOverlay,
               triggerFocusNode: _leftProjectsFocusNode,
             );
@@ -553,12 +579,13 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
           tooltip: 'Context',
           semanticLabel: 'Toggle context panel',
           active:
-              _leftBottomVisible &&
-              (!useOverlay || _activeOverlay == IdeWorkbenchOverlay.navigation),
+              workbenchLayout.leftSidebarVisible &&
+              workbenchLayout.agentUsageExpanded &&
+              navigationOverlayActive,
           focusNode: _leftContextFocusNode,
           onPressed: () {
             _toggleLeftPanel(
-              isTop: false,
+              showAgentUsage: true,
               useOverlay: useOverlay,
               triggerFocusNode: _leftContextFocusNode,
             );
@@ -622,12 +649,25 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       key: const ValueKey('left-width-resize-handle'),
       axis: IdeResizeHandleAxis.horizontal,
       semanticLabel: 'Resize left panel width',
+      onDragStart: (_) {
+        _leftPanelWidthDragging = true;
+      },
       onDragUpdate: (details) {
         setState(() {
           _leftPanelWidth = (_leftPanelWidth + details.delta.dx).clamp(
             _minPanelWidth,
             _maxPanelWidth,
           );
+        });
+      },
+      onDragEnd: (_) {
+        _leftPanelWidthDragging = false;
+        _shellController.setLeftSidebarWidth(_leftPanelWidth);
+      },
+      onDragCancel: () {
+        setState(() {
+          _leftPanelWidthDragging = false;
+          _leftPanelWidth = _effectiveLeftPanelWidth;
         });
       },
     );
@@ -649,84 +689,83 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     );
   }
 
-  Widget _buildProjectsPanel() {
-    return PanelCard(
-      key: const ValueKey('projects-panel-card'),
-      child: ProjectListPane(
-        projects: _shellController.projects,
-        activeProject: _shellController.activeProjectPath,
-        threadStateFor: _shellController.projectThreadStateFor,
-        onOpenProject: _openProject,
-        onSelectProject: (path) {
-          unawaited(_shellController.selectKnownProject(path));
-        },
-        onSelectThread: (projectPath, thread) {
-          unawaited(_shellController.selectProjectThread(projectPath, thread));
-        },
-        onLoadMoreThreads: (projectPath) {
-          unawaited(_shellController.loadMoreThreads(projectPath));
-        },
-        onRetryThreads: (projectPath) {
-          unawaited(_shellController.retryThreads(projectPath));
-        },
-        loadAvailableProviders: _loadAvailableAgentProviders,
-        capabilitiesForProvider:
-            _shellController.agentProviderController.capabilitiesForProviderId,
-        onNewThread: (projectPath, providerId) {
-          unawaited(
-            _shellController.startNewThreadForProject(
-              projectPath,
-              providerId: providerId,
-            ),
-          );
-        },
-        onOpenProjectLocation: (projectPath) {
-          unawaited(
-            _shellController.openProjectInSystemFileManager(projectPath),
-          );
-        },
-        onRemoveProject: (projectPath) {
-          unawaited(_shellController.removeProject(projectPath));
-        },
-        onRenameThread: (projectPath, threadId, name) {
-          unawaited(
-            _shellController.renameProjectThread(projectPath, threadId, name),
-          );
-        },
-        onArchiveThread: (projectPath, thread) {
-          unawaited(_shellController.archiveProjectThread(projectPath, thread));
-        },
-        onUnarchiveThread: (projectPath, thread) {
-          unawaited(
-            _shellController.unarchiveProjectThread(projectPath, thread),
-          );
-        },
-        onDeleteThread: (projectPath, thread) {
-          unawaited(_shellController.deleteProjectThread(projectPath, thread));
-        },
-        onForkThread: (projectPath, thread) {
-          unawaited(_shellController.forkProjectThread(projectPath, thread));
-        },
-        onDismissCompletedThread: (projectPath, threadId) {
-          _shellController.dismissCompletedProjectThread(projectPath, threadId);
-        },
-      ),
+  Widget _buildProjectsContent() {
+    return ProjectListPane(
+      projects: _shellController.projects,
+      activeProject: _shellController.activeProjectPath,
+      threadStateFor: _shellController.projectThreadStateFor,
+      onOpenProject: _openProject,
+      onSelectProject: (path) {
+        unawaited(_shellController.selectKnownProject(path));
+      },
+      onSelectThread: (projectPath, thread) {
+        unawaited(_shellController.selectProjectThread(projectPath, thread));
+      },
+      onLoadMoreThreads: (projectPath) {
+        unawaited(_shellController.loadMoreThreads(projectPath));
+      },
+      onRetryThreads: (projectPath) {
+        unawaited(_shellController.retryThreads(projectPath));
+      },
+      loadAvailableProviders: _loadAvailableAgentProviders,
+      capabilitiesForProvider:
+          _shellController.agentProviderController.capabilitiesForProviderId,
+      onNewThread: (projectPath, providerId) {
+        unawaited(
+          _shellController.startNewThreadForProject(
+            projectPath,
+            providerId: providerId,
+          ),
+        );
+      },
+      onOpenProjectLocation: (projectPath) {
+        unawaited(_shellController.openProjectInSystemFileManager(projectPath));
+      },
+      onRemoveProject: (projectPath) {
+        unawaited(_shellController.removeProject(projectPath));
+      },
+      onRenameThread: (projectPath, threadId, name) {
+        unawaited(
+          _shellController.renameProjectThread(projectPath, threadId, name),
+        );
+      },
+      onArchiveThread: (projectPath, thread) {
+        unawaited(_shellController.archiveProjectThread(projectPath, thread));
+      },
+      onUnarchiveThread: (projectPath, thread) {
+        unawaited(_shellController.unarchiveProjectThread(projectPath, thread));
+      },
+      onDeleteThread: (projectPath, thread) {
+        unawaited(_shellController.deleteProjectThread(projectPath, thread));
+      },
+      onForkThread: (projectPath, thread) {
+        unawaited(_shellController.forkProjectThread(projectPath, thread));
+      },
+      onDismissCompletedThread: (projectPath, threadId) {
+        _shellController.dismissCompletedProjectThread(projectPath, threadId);
+      },
     );
   }
 
   Widget _buildLeftPanel() {
-    return _ResizableColumn(
-      topVisible: _leftTopVisible,
-      bottomVisible: _leftBottomVisible,
-      topRatio: _leftTopRatio,
-      onTopRatioChanged: (ratio) {
-        setState(() {
-          _leftTopRatio = ratio.clamp(_minPanelRatio, _maxPanelRatio);
-        });
-      },
-      heightHandleKey: const ValueKey('left-height-resize-handle'),
-      top: _buildProjectsPanel(),
-      bottom: AgentUsagePanel(controller: _agentUsagePanelController),
+    final workbenchLayout = _shellController.workbenchLayout;
+    return ProjectAgentSidebar(
+      projects: _buildProjectsContent(),
+      agentUsage: AgentUsagePanelContent(
+        controller: _agentUsagePanelController,
+        mode: workbenchLayout.agentUsageExpanded
+            ? AgentUsagePanelMode.expanded
+            : AgentUsagePanelMode.collapsed,
+        onModeChanged: (mode) {
+          _shellController.setAgentUsageExpanded(
+            mode == AgentUsagePanelMode.expanded,
+          );
+        },
+      ),
+      agentUsageExpanded: workbenchLayout.agentUsageExpanded,
+      agentUsageHeightFraction: workbenchLayout.agentUsageHeightFraction,
+      onAgentUsageHeightFractionChanged:
+          _shellController.setAgentUsageHeightFraction,
     );
   }
 
@@ -815,69 +854,59 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   }
 
   void _toggleLeftPanel({
-    required bool isTop,
+    required bool showAgentUsage,
     required bool useOverlay,
     required FocusNode triggerFocusNode,
   }) {
-    setState(() {
-      if (!useOverlay) {
-        if (_activeOverlay == IdeWorkbenchOverlay.navigation) {
-          _activeOverlay = null;
-          _overlayTriggerFocusNode = null;
-        }
-        if (isTop) {
-          _leftTopVisible = !_leftTopVisible;
-        } else {
-          _leftBottomVisible = !_leftBottomVisible;
-        }
-        return;
-      }
+    if (!showAgentUsage) {
+      _toggleLeftSidebar(triggerFocusNode);
+      return;
+    }
 
-      final currentlyVisible = isTop ? _leftTopVisible : _leftBottomVisible;
-      final otherVisible = isTop ? _leftBottomVisible : _leftTopVisible;
-      final overlayOpen = _activeOverlay == IdeWorkbenchOverlay.navigation;
-      if (overlayOpen && currentlyVisible && !otherVisible) {
-        if (isTop) {
-          _leftTopVisible = false;
-        } else {
-          _leftBottomVisible = false;
-        }
+    final workbenchLayout = _shellController.workbenchLayout;
+    if (useOverlay) {
+      setState(() {
         _activeOverlay = null;
-        _overlayTriggerFocusNode = null;
-        return;
-      }
+        _overlayTriggerFocusNode = triggerFocusNode;
+      });
+    }
+    if (!workbenchLayout.leftSidebarVisible) {
+      _shellController.setAgentUsageExpanded(true);
+      _shellController.setLeftSidebarVisible(true);
+      return;
+    }
+    _shellController.setAgentUsageExpanded(!workbenchLayout.agentUsageExpanded);
+  }
 
-      if (overlayOpen && currentlyVisible) {
-        if (isTop) {
-          _leftTopVisible = false;
-        } else {
-          _leftBottomVisible = false;
-        }
-        if (!_leftTopVisible && !_leftBottomVisible) {
-          _activeOverlay = null;
-          _overlayTriggerFocusNode = null;
-        }
-        return;
-      }
-
-      if (isTop) {
-        _leftTopVisible = true;
-      } else {
-        _leftBottomVisible = true;
-      }
-      _activeOverlay = IdeWorkbenchOverlay.navigation;
-      _overlayTriggerFocusNode = triggerFocusNode;
-    });
+  void _toggleLeftSidebar(FocusNode triggerFocusNode) {
+    final visible = _shellController.workbenchLayout.leftSidebarVisible;
+    if (!visible) {
+      // 标题栏位于 Workbench 快捷键作用域之外；打开浮层时先释放按钮焦点，
+      // 让 Overlay 的 Esc 作用域接管，关闭后再由 Scaffold 恢复到该按钮。
+      triggerFocusNode.unfocus();
+      setState(() {
+        _activeOverlay = null;
+        _overlayTriggerFocusNode = triggerFocusNode;
+      });
+    } else {
+      _overlayTriggerFocusNode = null;
+    }
+    _shellController.setLeftSidebarVisible(!visible);
   }
 
   void _closeActiveOverlay() {
-    if (_activeOverlay == null) {
+    if (_activeOverlay == IdeWorkbenchOverlay.inspector) {
+      setState(() {
+        _activeOverlay = null;
+        _overlayTriggerFocusNode = null;
+      });
       return;
     }
-    setState(() {
-      _activeOverlay = null;
+    if (_page == _IdeHomePage.home &&
+        _shellController.workbenchLayout.leftSidebarVisible) {
       _overlayTriggerFocusNode = null;
-    });
+      _shellController.setLeftSidebarVisible(false);
+    }
   }
 
   void _toggleRightPanel({
@@ -948,10 +977,17 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   void _handleShellChanged() {
     _maybeStartGlobalHomeLoad();
     _updateDesktopAttentionVisibility();
+    if (!_leftPanelWidthDragging) {
+      _leftPanelWidth = _effectiveLeftPanelWidth;
+    }
     if (mounted) {
       setState(() {});
     }
   }
+
+  double get _effectiveLeftPanelWidth =>
+      (_shellController.workbenchLayout.leftSidebarWidth ?? _initialPanelWidth)
+          .clamp(_minPanelWidth, _maxPanelWidth);
 
   @override
   void onWindowFocus() {

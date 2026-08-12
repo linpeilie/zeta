@@ -16,6 +16,7 @@ import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
+import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_motion.dart';
@@ -3431,7 +3432,10 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
       tester.platformDispatcher.textScaleFactorTestValue = 1.4;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-      final session = activeProjectSessionStore(tempDirectories);
+      final session = activeProjectSessionStore(
+        tempDirectories,
+        leftSidebarVisible: false,
+      );
       final provider = _ModeCapableFakeAgentProvider(completeTurns: false);
 
       await tester.pumpWidget(
@@ -3901,7 +3905,10 @@ void main() {
   });
 }
 
-MemorySessionStore activeProjectSessionStore(List<Directory> tempDirectories) {
+MemorySessionStore activeProjectSessionStore(
+  List<Directory> tempDirectories, {
+  bool leftSidebarVisible = true,
+}) {
   final directory = Directory.systemTemp.createTempSync(
     'zeta_agent_conversation_project_',
   );
@@ -3912,6 +3919,9 @@ MemorySessionStore activeProjectSessionStore(List<Directory> tempDirectories) {
       activeProjectPath: directory.path,
       projectThreadExpansionByProject: <String, bool>{directory.path: false},
       projectHomeActive: true,
+      workbenchLayout: IdeWorkbenchLayoutState(
+        leftSidebarVisible: leftSidebarVisible,
+      ),
     ).encode(),
   );
 }

@@ -9,6 +9,8 @@ import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
+import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
+import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 
 import '../../../testing/ide_test_harness.dart';
@@ -242,6 +244,119 @@ void main() {
     );
   });
 
+  testWidgets('restores five workbench preferences after user interactions', (
+    tester,
+  ) async {
+    _useWideWindow(tester);
+    final session = MemorySessionStore();
+
+    Future<void> pumpApp({bool waitForUsage = true}) async {
+      await tester.pumpWidget(
+        MainApp(
+          enableNativeWindowFrame: true,
+          showWindowControls: false,
+          sessionLoader: session.load,
+          sessionSaver: session.save,
+          agentProviderFactory: FakeAgentProviderFactory(FakeAgentProvider()),
+          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+          agentUsagePanelRepository: const _WorkbenchUsageRepository(),
+        ),
+      );
+      await pumpUntilCondition(tester, () {
+        final key = waitForUsage
+            ? 'agent-usage-expand-button'
+            : 'titlebar-left-sidebar-action';
+        return find.byKey(ValueKey<String>(key)).evaluate().isNotEmpty;
+      }, failureMessage: 'Workbench did not become ready');
+    }
+
+    await pumpApp();
+    await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
+    await tester.pump();
+
+    await tester.drag(
+      find.byKey(const ValueKey('left-width-resize-handle')),
+      const Offset(44, 0),
+    );
+    await tester.pump();
+    await tester.drag(
+      find.byKey(const ValueKey('agent-usage-resize-handle')),
+      const Offset(0, -32),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('agent-usage-tab-grok')));
+    await tester.pump();
+
+    final expectedUsageHeight = tester
+        .getSize(find.byKey(const ValueKey('project-agent-sidebar-usage')))
+        .height;
+    expect(
+      tester
+          .widget<IdeTabs<String>>(
+            find.byKey(const ValueKey('agent-usage-tabs')),
+          )
+          .value,
+      'grok',
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('titlebar-left-sidebar-action')),
+    );
+    await pumpSessionSave(tester);
+
+    final persisted = IdeSessionState.tryDecode(session.value)!.workbenchLayout;
+    expect(persisted.leftSidebarVisible, isFalse);
+    expect(persisted.agentUsageExpanded, isTrue);
+    expect(persisted.leftSidebarWidth, 324);
+    expect(persisted.agentUsageHeightFraction, isNotNull);
+    expect(persisted.selectedAgentUsageProviderId, 'grok');
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await pumpApp(waitForUsage: false);
+
+    expect(
+      find.byKey(const ValueKey('workbench-navigation-inline')),
+      findsNothing,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('titlebar-left-sidebar-action')),
+    );
+    await pumpUntilCondition(
+      tester,
+      () =>
+          find.byKey(const ValueKey('agent-usage-tabs')).evaluate().isNotEmpty,
+      failureMessage: 'Restored expanded Agent usage did not become ready',
+    );
+
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('workbench-navigation-inline')))
+          .width,
+      324,
+    );
+    expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
+    expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('agent-usage-resize-handle')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('project-agent-sidebar-usage')))
+          .height,
+      moreOrLessEquals(expectedUsageHeight, epsilon: 1),
+    );
+    expect(
+      tester
+          .widget<IdeTabs<String>>(
+            find.byKey(const ValueKey('agent-usage-tabs')),
+          )
+          .value,
+      'grok',
+    );
+  });
+
   testWidgets(
     'does not let a slow session restore replace a user-opened folder',
     (tester) async {
@@ -298,6 +413,21 @@ void main() {
       expect(find.text('restored.txt'), findsNothing);
     },
   );
+}
+
+class _WorkbenchUsageRepository implements AgentUsagePanelRepository {
+  const _WorkbenchUsageRepository();
+
+  @override
+  Stream<AgentUsagePanelLoadEvent> load({bool forceRefresh = false}) async* {
+    yield AgentUsagePanelProvidersDiscovered(
+      providers: const <AgentUsagePanelProvider>[
+        AgentUsagePanelProvider(providerId: 'codex', providerName: 'Codex'),
+        AgentUsagePanelProvider(providerId: 'grok', providerName: 'Grok'),
+      ],
+    );
+    yield AgentUsagePanelLoadCompleted(DateTime(2026, 8, 12));
+  }
 }
 
 Future<void> _openFilesPanel(WidgetTester tester) async {

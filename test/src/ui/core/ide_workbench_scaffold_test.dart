@@ -392,6 +392,52 @@ void main() {
     );
     expect(triggerFocusNode.hasFocus, isTrue);
   });
+
+  testWidgets('焦点在 Workbench 外部时 Esc 仍关闭 Overlay', (tester) async {
+    final externalFocusNode = FocusNode();
+    addTearDown(externalFocusNode.dispose);
+    var overlayVisible = true;
+
+    await pumpIdeComponent(
+      tester,
+      size: const Size(700, 500),
+      child: StatefulBuilder(
+        builder: (context, setState) {
+          return Column(
+            children: [
+              Focus(
+                focusNode: externalFocusNode,
+                child: const SizedBox(height: 24),
+              ),
+              Expanded(
+                child: _buildWorkbench(
+                  activeOverlay: overlayVisible
+                      ? IdeWorkbenchOverlay.navigation
+                      : null,
+                  onDismissOverlay: () {
+                    setState(() {
+                      overlayVisible = false;
+                    });
+                  },
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    externalFocusNode.requestFocus();
+    await tester.pump();
+
+    expect(externalFocusNode.hasFocus, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('workbench-navigation-overlay')),
+      findsNothing,
+    );
+  });
 }
 
 Widget _buildWorkbench({
