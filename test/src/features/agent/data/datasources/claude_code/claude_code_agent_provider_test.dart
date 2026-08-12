@@ -4,11 +4,14 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_agent_provider.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_model_catalog.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_oauth_credentials_reader.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_permission_policy_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_session_history_reader.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart'
     show ProcessStarter;
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 
 void main() {
   group('ClaudeCodeAgentProvider', () {
@@ -457,20 +460,69 @@ void main() {
       expect(history.threadId, 'history-thread-1');
     });
 
-    test('listModels returns the complete static Claude catalog', () async {
-      final provider = ClaudeCodeAgentProvider(
-        config: AgentProviderConfig.defaultClaudeCode,
-      );
-      addTearDown(provider.dispose);
+    test(
+      'listModels returns static catalog when enrichment is disabled',
+      () async {
+        final provider = ClaudeCodeAgentProvider(
+          config: AgentProviderConfig.defaultClaudeCode.copyWith(
+            extra: const <String, Object?>{
+              claudeCodeAccountDataEnrichmentKey: false,
+            },
+          ),
+        );
+        addTearDown(provider.dispose);
 
-      final models = await provider.listModels(limit: 1);
+        final models = await provider.listModels(limit: 1);
 
-      expect(models.models, hasLength(6));
-      expect(
-        models.models.where((model) => model.isDefault).single.id,
-        'sonnet',
-      );
-    });
+        expect(models.models, hasLength(6));
+        expect(
+          models.models.where((model) => model.isDefault).single.id,
+          'sonnet',
+        );
+      },
+    );
+
+    test(
+      'implements refreshable catalog and forwards forced refresh',
+      () async {
+        var remoteCalls = 0;
+        final catalog = ClaudeCodeModelCatalog(
+          credentialsLoader: () async => ClaudeCodeOAuthCredentials(
+            accessToken: 'sensitive-test-token',
+            expiresAt: DateTime.utc(2099),
+            subscriptionType: 'pro',
+          ),
+          remoteModelsLoader:
+              ({
+                required String accessToken,
+                required bool isSubscriptionOAuth,
+              }) async {
+                remoteCalls += 1;
+                return <String, Object?>{
+                  'data': <Object?>[
+                    <String, Object?>{
+                      'id': 'claude-sonnet-refresh-$remoteCalls',
+                      'display_name': 'Claude Sonnet refresh $remoteCalls',
+                    },
+                  ],
+                };
+              },
+        );
+        final provider = ClaudeCodeAgentProvider(
+          config: AgentProviderConfig.defaultClaudeCode,
+          modelCatalog: catalog,
+        );
+        addTearDown(provider.dispose);
+
+        final first = await provider.listModels();
+        final refreshable = provider as AgentRefreshableModelCatalogProvider;
+        final refreshed = await refreshable.refreshModels();
+
+        expect(first.models.single.id, 'claude-sonnet-refresh-1');
+        expect(refreshed.models.single.id, 'claude-sonnet-refresh-2');
+        expect(remoteCalls, 2);
+      },
+    );
 
     test('persisted model selection is used for the first peer', () async {
       final process = _FakeClaudeProcess();

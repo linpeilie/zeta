@@ -1,4 +1,20 @@
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_anthropic_api_client.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_oauth_credentials_reader.dart';
+import 'package:zeta/src/features/agent/data/mappers/claude_code_model_catalog_mapper.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+
+/// Claude Code 账号数据增强开关在 Provider 配置中的稳定 key。
+const String claudeCodeAccountDataEnrichmentKey =
+    'claudeCode.accountDataEnrichment';
+
+typedef ClaudeCodeCredentialsLoader =
+    Future<ClaudeCodeOAuthCredentials?> Function();
+
+typedef ClaudeCodeRemoteModelsLoader =
+    Future<Map<String, Object?>?> Function({
+      required String accessToken,
+      required bool isSubscriptionOAuth,
+    });
 
 /// Claude Code CLI 无模型目录端点时使用的静态兜底目录。
 ///
@@ -45,12 +61,70 @@ const AgentModelList claudeCodeStaticModelCatalog = AgentModelList(
   ],
 );
 
-/// Claude Code 模型目录入口；T30 只提供无网络的静态目录。
+/// Claude Code 模型目录：动态优先，任何失败都回退静态目录。
+///
+/// 动态结果只在当前 Provider 实例内缓存；[refreshModels] 绕过该缓存。
+/// 账号数据增强关闭时不会读取凭据，也不会调用远端 loader。
 final class ClaudeCodeModelCatalog {
-  const ClaudeCodeModelCatalog();
+  ClaudeCodeModelCatalog({
+    this.accountDataEnrichmentEnabled = true,
+    ClaudeCodeCredentialsLoader? credentialsLoader,
+    ClaudeCodeRemoteModelsLoader? remoteModelsLoader,
+  }) : _credentialsLoader =
+           credentialsLoader ?? ClaudeCodeOAuthCredentialsReader().read,
+       _remoteModelsLoader =
+           remoteModelsLoader ?? ClaudeCodeAnthropicApiClient().listModels;
 
-  AgentModelList listModels({int limit = 20, bool includeHidden = false}) {
-    // 目录仅 6 项且无隐藏项，始终整体返回，避免静态条目被伪分页丢失。
-    return claudeCodeStaticModelCatalog;
+  final bool accountDataEnrichmentEnabled;
+  final ClaudeCodeCredentialsLoader _credentialsLoader;
+  final ClaudeCodeRemoteModelsLoader _remoteModelsLoader;
+
+  AgentModelList? _cachedModels;
+
+  Future<AgentModelList> listModels({
+    int limit = 20,
+    bool includeHidden = false,
+  }) async {
+    final cached = _cachedModels;
+    if (cached != null) {
+      return cached;
+    }
+    return _loadAndCache();
+  }
+
+  Future<AgentModelList> refreshModels({
+    int limit = 20,
+    bool includeHidden = false,
+  }) {
+    return _loadAndCache();
+  }
+
+  Future<AgentModelList> _loadAndCache() async {
+    if (!accountDataEnrichmentEnabled) {
+      return _cache(claudeCodeStaticModelCatalog);
+    }
+
+    try {
+      final credentials = await _credentialsLoader();
+      if (credentials == null) {
+        return _cache(claudeCodeStaticModelCatalog);
+      }
+      final response = await _remoteModelsLoader(
+        accessToken: credentials.accessToken,
+        isSubscriptionOAuth: true,
+      );
+      final dynamicModels = mapClaudeCodeModelCatalog(response);
+      if (dynamicModels.models.isNotEmpty) {
+        return _cache(dynamicModels);
+      }
+    } catch (_) {
+      // 凭据或动态目录是 best-effort 增强，异常不得阻断静态模型选择。
+    }
+    return _cache(claudeCodeStaticModelCatalog);
+  }
+
+  AgentModelList _cache(AgentModelList models) {
+    _cachedModels = models;
+    return models;
   }
 }

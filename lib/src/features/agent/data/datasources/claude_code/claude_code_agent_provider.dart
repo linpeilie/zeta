@@ -31,7 +31,8 @@ class ClaudeCodeAgentProvider
         AgentProvider,
         AgentPermissionPolicyProvider,
         AgentPlanApprovalProvider,
-        AgentLocalThreadListProvider {
+        AgentLocalThreadListProvider,
+        AgentRefreshableModelCatalogProvider {
   ClaudeCodeAgentProvider({
     required this.config,
     ProcessStarter? processStarter,
@@ -45,7 +46,12 @@ class ClaudeCodeAgentProvider
     String Function()? idFactory,
   }) : _processStarterDelegate = processStarter,
        _mapper = mapper ?? ClaudeCodeEventMapper(providerId: config.id),
-       _modelCatalog = modelCatalog ?? const ClaudeCodeModelCatalog(),
+       _modelCatalog =
+           modelCatalog ??
+           ClaudeCodeModelCatalog(
+             accountDataEnrichmentEnabled:
+                 config.extra[claudeCodeAccountDataEnrichmentKey] != false,
+           ),
        _controlHandler =
            controlRequestHandler ?? ClaudeCodeControlRequestHandler(),
        _sessionHistoryReader =
@@ -260,6 +266,17 @@ class ClaudeCodeAgentProvider
     bool includeHidden = false,
   }) async {
     return _modelCatalog.listModels(limit: limit, includeHidden: includeHidden);
+  }
+
+  @override
+  Future<AgentModelList> refreshModels({
+    int limit = 20,
+    bool includeHidden = false,
+  }) {
+    return _modelCatalog.refreshModels(
+      limit: limit,
+      includeHidden: includeHidden,
+    );
   }
 
   @override
