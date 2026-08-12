@@ -27,6 +27,34 @@ class AgentUsagePanelEntry {
     final planType = quota?.planType?.trim().toLowerCase();
     return planType != null && planType.isNotEmpty && planType != 'free';
   }
+
+  /// 折叠摘要使用的额度窗口。
+  ///
+  /// 仅付费套餐参与；优先正周期最短的窗口，等周期保持 Provider 原始顺序。
+  /// 所有周期均未知或无效时回退第一项。
+  AgentUsageWindow? get compactQuotaWindow {
+    if (!hasSubscriptionPlan) {
+      return null;
+    }
+    final windows = quota?.windows ?? const <AgentUsageWindow>[];
+    if (windows.isEmpty) {
+      return null;
+    }
+
+    AgentUsageWindow? shortest;
+    Duration? shortestDuration;
+    for (final window in windows) {
+      final duration = window.windowDuration;
+      if (duration == null || duration <= Duration.zero) {
+        continue;
+      }
+      if (shortestDuration == null || duration < shortestDuration) {
+        shortest = window;
+        shortestDuration = duration;
+      }
+    }
+    return shortest ?? windows.first;
+  }
 }
 
 /// Agent 统计面板中可选择的 Provider 摘要。
