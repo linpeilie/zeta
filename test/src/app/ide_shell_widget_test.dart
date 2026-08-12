@@ -11,6 +11,7 @@ import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
+import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
@@ -112,6 +113,110 @@ void main() {
 
       expect(repository.forceRefreshValues, <bool>[true]);
       expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'turn terminal selects and persists usage Provider before one silent refresh',
+    (tester) async {
+      final directory = Directory.systemTemp.createTempSync(
+        'zeta_usage_terminal_',
+      );
+      addTearDown(() {
+        if (directory.existsSync()) {
+          directory.deleteSync(recursive: true);
+        }
+      });
+      final provider = FakeAgentProvider(
+        completeTurns: false,
+        threadPages: <AgentThreadPage>[
+          AgentThreadPage(
+            threads: <AgentThreadSummary>[
+              agentThread(
+                id: 'usage-terminal-thread',
+                projectPath: directory.path,
+                title: 'Usage terminal thread',
+              ),
+            ],
+            nextCursor: null,
+          ),
+        ],
+      );
+      final repository = _TrackedDirectoryAgentUsageRepository();
+      final session = MemorySessionStore(
+        const IdeSessionState(
+          workbenchLayout: IdeWorkbenchLayoutState(
+            selectedAgentUsageProviderId: 'grok',
+          ),
+        ).encode(),
+      );
+
+      await _pumpIde(
+        tester,
+        directoryPicker: () async => directory.path,
+        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        agentUsagePanelRepository: repository,
+        sessionStore: session,
+      );
+      expect(repository.forceRefreshValues, <bool>[true]);
+      repository.forceRefreshValues.clear();
+
+      await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+      await tester.runAsync(waitForIo);
+      final threadRow = find.byKey(
+        ValueKey<String>(
+          'project-thread-${directory.path}-usage-terminal-thread',
+        ),
+      );
+      await pumpUntilCondition(
+        tester,
+        () => threadRow.evaluate().isNotEmpty,
+        failureMessage: 'Usage terminal thread did not become ready',
+      );
+      await tester.tap(threadRow);
+      await pumpUntilCondition(
+        tester,
+        () => _agentMessageInput().hitTestable().evaluate().isNotEmpty,
+        failureMessage: 'Usage terminal Agent canvas did not become ready',
+      );
+      final viewModel = tester
+          .widget<AgentPane>(find.byType(AgentPane))
+          .viewModel;
+      final activeProviderBefore = viewModel.activeProviderId;
+
+      await viewModel.sendMessage('finish and refresh usage');
+      await pumpUntilCondition(
+        tester,
+        () => viewModel.isTurnRunning,
+        failureMessage: 'Usage terminal turn did not start',
+      );
+      provider.emit(
+        const AgentTurnCompletedEvent(
+          sessionId: 'usage-terminal-thread',
+          turnId: 'turn-1',
+        ),
+      );
+      await pumpUntilCondition(
+        tester,
+        () => !viewModel.isTurnRunning,
+        failureMessage: 'Usage terminal turn did not settle',
+      );
+      await tester.pump(const Duration(milliseconds: 1));
+      await tester.idle();
+      await tester.pump();
+
+      expect(repository.forceRefreshValues, <bool>[true]);
+      expect(viewModel.activeProviderId, activeProviderBefore);
+
+      await tester.pump(const Duration(seconds: 1));
+      await tester.idle();
+      expect(
+        IdeSessionState.tryDecode(
+          session.value,
+        )?.workbenchLayout.selectedAgentUsageProviderId,
+        defaultAgentProviderId,
+      );
     },
   );
 
@@ -1654,6 +1759,7 @@ Future<void> _pumpIde(
   Future<List<AgentProviderConfig>> Function()? agentProviderAvailabilityLoader,
   AgentUsagePanelRepository? agentUsagePanelRepository,
   String? initialSessionJson,
+  MemorySessionStore? sessionStore,
   Future<List<ManagedAgent>> Function()? homeProviderDetectionLoader,
   bool flushInitialUsageRefresh = true,
 }) async {
@@ -1666,7 +1772,7 @@ Future<void> _pumpIde(
       ..resetDevicePixelRatio();
   });
 
-  final session = MemorySessionStore(initialSessionJson);
+  final session = sessionStore ?? MemorySessionStore(initialSessionJson);
 
   await tester.pumpWidget(
     MainApp(
@@ -1853,6 +1959,23 @@ class _TrackedAgentUsageRepository implements AgentUsagePanelRepository {
     forceRefreshValues.add(forceRefresh);
     yield AgentUsagePanelProvidersDiscovered(
       providers: const <AgentUsagePanelProvider>[],
+    );
+    yield AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21));
+  }
+}
+
+class _TrackedDirectoryAgentUsageRepository
+    implements AgentUsagePanelRepository {
+  final List<bool> forceRefreshValues = <bool>[];
+
+  @override
+  Stream<AgentUsagePanelLoadEvent> load({bool forceRefresh = false}) async* {
+    forceRefreshValues.add(forceRefresh);
+    yield AgentUsagePanelProvidersDiscovered(
+      providers: const <AgentUsagePanelProvider>[
+        AgentUsagePanelProvider(providerId: 'codex', providerName: 'Codex'),
+        AgentUsagePanelProvider(providerId: 'grok', providerName: 'Grok'),
+      ],
     );
     yield AgentUsagePanelLoadCompleted(DateTime(2026, 7, 21));
   }

@@ -9,6 +9,7 @@ import 'package:zeta/src/features/agent/application/agent_conversation_timeline_
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
@@ -306,52 +307,56 @@ void main() {
     expect(forkedThread.preview, 'new prompt');
   });
 
-  test('notifies when the selected Agent turn completes', () async {
-    // Arrange
-    var completedTurns = 0;
-    final attentions = <AgentWorkspaceAttention>[];
-    final backend = _ProviderBackend(
-      config: AgentProviderConfig.defaultCodex,
-      threadHistories: const <String, AgentThreadHistorySnapshot>{},
-      completeTurns: true,
-      threadPages: <AgentThreadPage>[],
-    );
-    final shell = IdeShellController(
-      agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-      directoryPicker: () async => null,
-      sessionStore: const CallbackIdeSessionStore(
-        loadJson: _loadEmptySession,
-        saveJson: _saveDiscardedSession,
-      ),
-      agentProviderFactory: _RecordingAgentProviderFactory(
-        <String, _ProviderBackend>{defaultAgentProviderId: backend},
-      ),
-      agentProviderConfigStore: MemoryAgentProviderConfigStore(
-        const AgentProviderSettings(
-          providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
-          activeProviderId: defaultAgentProviderId,
+  test(
+    'forwards typed terminal identity from the selected Agent turn',
+    () async {
+      // Arrange
+      final terminalSignals = <AgentTurnTerminalSignal>[];
+      final attentions = <AgentWorkspaceAttention>[];
+      final backend = _ProviderBackend(
+        config: AgentProviderConfig.defaultCodex,
+        threadHistories: const <String, AgentThreadHistorySnapshot>{},
+        completeTurns: true,
+        threadPages: <AgentThreadPage>[],
+      );
+      final shell = IdeShellController(
+        agentUiFrameSchedulerFactory: _createUiFrameScheduler,
+        directoryPicker: () async => null,
+        sessionStore: const CallbackIdeSessionStore(
+          loadJson: _loadEmptySession,
+          saveJson: _saveDiscardedSession,
         ),
-      ),
-      onAgentTurnCompleted: () {
-        completedTurns += 1;
-      },
-      onAgentAttention: attentions.add,
-    );
-    addTearDown(shell.dispose);
-    await _flushAsync();
+        agentProviderFactory: _RecordingAgentProviderFactory(
+          <String, _ProviderBackend>{defaultAgentProviderId: backend},
+        ),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(
+          const AgentProviderSettings(
+            providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
+            activeProviderId: defaultAgentProviderId,
+          ),
+        ),
+        onAgentTurnTerminal: terminalSignals.add,
+        onAgentAttention: attentions.add,
+      );
+      addTearDown(shell.dispose);
+      await _flushAsync();
 
-    // Act
-    await shell.selectedAgentViewModel.sendMessage('run once');
-    await _flushAsync();
+      // Act
+      await shell.selectedAgentViewModel.sendMessage('run once');
+      await _flushAsync();
 
-    // Assert
-    expect(completedTurns, 1);
-    expect(attentions, hasLength(1));
-    expect(attentions.single.signal.kind, AgentAttentionKind.turnCompleted);
-    expect(attentions.single.signal.phase, AgentAttentionPhase.raised);
-    expect(attentions.single.providerId, defaultAgentProviderId);
-    expect(attentions.single.threadId, isNotEmpty);
-  });
+      // Assert
+      expect(terminalSignals, hasLength(1));
+      expect(terminalSignals.single.providerId, defaultAgentProviderId);
+      expect(terminalSignals.single.threadId, isNotEmpty);
+      expect(terminalSignals.single.turnId, isNotEmpty);
+      expect(attentions, hasLength(1));
+      expect(attentions.single.signal.kind, AgentAttentionKind.turnCompleted);
+      expect(attentions.single.signal.phase, AgentAttentionPhase.raised);
+      expect(attentions.single.providerId, defaultAgentProviderId);
+      expect(attentions.single.threadId, isNotEmpty);
+    },
+  );
 
   test(
     'streaming content updates locally without notifying or saving Shell',

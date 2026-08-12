@@ -77,7 +77,7 @@ class AgentConversationViewModel {
     this.workspaceFilesProvider,
     this.workspaceFilesListenable,
     this.workspaceFilesIndexReady,
-    this.onTurnCompleted,
+    this.onTurnTerminal,
     this.onAttention,
     this.onProviderSwitchRequested,
     this.onCreatedThread,
@@ -139,7 +139,7 @@ class AgentConversationViewModel {
                 models: models,
                 source: source,
               ),
-      onTurnCompleted: onTurnCompleted,
+      onTurnTerminal: onTurnTerminal,
       onAttention: _handleAttentionSignal,
     );
     _eventProcessor = AgentConversationEventProcessor(
@@ -181,8 +181,8 @@ class AgentConversationViewModel {
   /// 可选：后台完整语料是否已就绪；未注入时视为就绪（直接使用 provider 结果）。
   final bool Function()? workspaceFilesIndexReady;
 
-  /// 当前会话的回合进入终态后通知应用组合层。
-  final VoidCallback? onTurnCompleted;
+  /// 当前会话的回合进入终态后，将已校验的白名单身份通知应用组合层。
+  final AgentTurnTerminalCallback? onTurnTerminal;
 
   /// 当前会话产生或解决待用户注意事项后通知应用组合层。
   final AgentAttentionCallback? onAttention;

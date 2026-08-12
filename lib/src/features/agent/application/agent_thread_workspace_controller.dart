@@ -11,6 +11,7 @@ import 'package:zeta/src/features/agent/application/agent_provider_global_runtim
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 
@@ -200,7 +201,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     AgentProviderGlobalRuntime? globalRuntime,
     this._workspaceFilesListenable,
     this._workspaceFilesIndexReady,
-    this._onTurnCompleted,
+    this._onTurnTerminal,
     this._onAttention,
     this.onCreatedThread,
     this.uiFrameSchedulerFactory,
@@ -222,7 +223,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
   final AgentConversationBindingManager bindingManager;
   final AgentProviderGlobalRuntime globalRuntime;
   final bool _ownsBindingManager;
-  final VoidCallback? _onTurnCompleted;
+  final ValueChanged<AgentTurnTerminalSignal>? _onTurnTerminal;
   final ValueChanged<AgentWorkspaceAttention>? _onAttention;
   final AgentCreatedThreadCallback? onCreatedThread;
 
@@ -446,7 +447,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
       workspaceFilesProvider: _workspaceFilesProvider,
       workspaceFilesListenable: _workspaceFilesListenable,
       workspaceFilesIndexReady: _workspaceFilesIndexReady,
-      onTurnCompleted: _onTurnCompleted,
+      onTurnTerminal: _onTurnTerminal,
       onProviderSwitchRequested: (providerId) async {
         final draft = ensureDraftEntry(
           projectPath: entry.projectPath,

@@ -15,6 +15,7 @@ import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_persistence_coordinator.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_restore_result.dart';
@@ -92,7 +93,7 @@ class IdeShellController extends ChangeNotifier {
     WorkspaceFileIndexController? workspaceFileIndexController,
     AgentProviderRuntimeRegistry? agentProviderRuntimeRegistry,
     AgentFrameScheduler Function()? agentUiFrameSchedulerFactory,
-    VoidCallback? onAgentTurnCompleted,
+    ValueChanged<AgentTurnTerminalSignal>? onAgentTurnTerminal,
     ValueChanged<AgentWorkspaceAttention>? onAgentAttention,
     IdeShellUsageStatisticsDependencies? usageStatistics,
     DateTime Function()? now,
@@ -139,6 +140,7 @@ class IdeShellController extends ChangeNotifier {
       repository:
           usageStatistics?.agentUsagePanelRepository ??
           QueryAgentUsagePanelRepository(usageQueryService, clock: _now),
+      onSelectionChanged: setSelectedAgentUsageProviderId,
     );
     agentWorkspaceController = AgentThreadWorkspaceController(
       providerController: agentProviderController,
@@ -163,7 +165,7 @@ class IdeShellController extends ChangeNotifier {
       },
       runtimeRegistry: this.agentProviderRuntimeRegistry,
       globalRuntime: agentProviderGlobalRuntime,
-      onTurnCompleted: onAgentTurnCompleted,
+      onTurnTerminal: onAgentTurnTerminal,
       onAttention: onAgentAttention,
       onCreatedThread: _openCreatedThread,
       uiFrameSchedulerFactory: agentUiFrameSchedulerFactory,
@@ -835,6 +837,9 @@ class IdeShellController extends ChangeNotifier {
         ..clear()
         ..addAll(session.projectLastOpenedAtByPath);
       _workbenchLayout = session.workbenchLayout;
+      agentUsagePanelController.restorePreferredProviderId(
+        session.workbenchLayout.selectedAgentUsageProviderId,
+      );
 
       projectThreadsController.restoreSession(
         projectPaths: session.projectPaths,

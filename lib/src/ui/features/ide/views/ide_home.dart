@@ -13,6 +13,7 @@ import 'package:zeta/src/features/agent/application/agent_provider_runtime_regis
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
 import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_controller.dart';
 import 'package:zeta/src/features/desktop_notifications/data/flutter_desktop_notification_service.dart';
 import 'package:zeta/src/features/desktop_notifications/data/method_channel_desktop_attention_indicator.dart';
@@ -196,7 +197,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       statusReporter: _showStatus,
       agentModelCatalogRepository: widget.agentModelCatalogRepository,
       agentProviderRuntimeRegistry: widget.agentProviderRuntimeRegistry,
-      onAgentTurnCompleted: _handleAgentTurnCompleted,
+      onAgentTurnTerminal: _handleAgentTurnTerminal,
       onAgentAttention: (attention) {
         unawaited(_desktopAttentionController.handleAttention(attention));
       },
@@ -801,7 +802,8 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     });
   }
 
-  void _handleAgentTurnCompleted() {
+  void _handleAgentTurnTerminal(AgentTurnTerminalSignal signal) {
+    _agentUsagePanelController.selectProviderFromTurn(signal.providerId);
     _requestAgentUsageRefresh();
   }
 

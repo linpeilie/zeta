@@ -7,10 +7,12 @@ import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dar
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 
 import '../../../testing/fake_agent_frame_scheduler.dart';
+import '../../../testing/ide_test_harness.dart' show FakeAgentProvider;
 import '../presentation/harness/agent_pane_test_harness.dart';
 
 /// Workspace 只维护 Binding 租约：两个 thread 运行时隔离，历史读取严格惰性，
@@ -109,6 +111,79 @@ void main() {
       );
       expect(harness.factory.created, hasLength(4));
     });
+
+    test('前后台 entry 终态保留各自固定 Binding 的 Provider', () async {
+      final factory = _TerminalProviderFactory();
+      final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+      final providerController = AgentProviderSettingsController(
+        configStore: MemoryAgentProviderConfigStore(
+          const AgentProviderSettings(
+            providers: <AgentProviderConfig>[
+              AgentProviderConfig.defaultCodex,
+              AgentProviderConfig.defaultGrok,
+            ],
+            activeProviderId: defaultAgentProviderId,
+          ),
+        ),
+        modelCatalogRepository: AgentModelCatalogRepository(
+          store: MemoryAgentModelCatalogCacheStore(),
+        ),
+        runtimeRegistry: registry,
+      );
+      await providerController.loadSettings();
+      final signals = <AgentTurnTerminalSignal>[];
+      final schedulers = <FakeAgentFrameScheduler>[];
+      final controller = AgentThreadWorkspaceController(
+        providerController: providerController,
+        workspaceFilesProvider: () => const <WorkspaceNode>[],
+        runtimeRegistry: registry,
+        onTurnTerminal: signals.add,
+        uiFrameSchedulerFactory: () {
+          final scheduler = FakeAgentFrameScheduler();
+          schedulers.add(scheduler);
+          return scheduler;
+        },
+      );
+      addTearDown(() async {
+        controller.dispose();
+        providerController.dispose();
+        await registry.close();
+      });
+
+      final foreground = controller.ensureDraftEntry(
+        projectPath: '/repo',
+        providerId: AgentProviderConfig.defaultCodex.id,
+      );
+      final background = controller.ensureDraftEntry(
+        projectPath: '/repo',
+        providerId: AgentProviderConfig.defaultGrok.id,
+      );
+      controller.selectEntry(foreground.entryId);
+
+      await background.viewModel.sendMessage('background');
+      await pumpEventQueue(times: 5);
+      for (final scheduler in schedulers) {
+        scheduler.drainFrames();
+      }
+
+      expect(controller.selectedEntry, same(foreground));
+      expect(signals.map((signal) => signal.providerId), <String>['grok']);
+
+      await foreground.viewModel.sendMessage('foreground');
+      await pumpEventQueue(times: 5);
+      for (final scheduler in schedulers) {
+        scheduler.drainFrames();
+      }
+
+      expect(signals.map((signal) => signal.providerId), <String>[
+        'grok',
+        'codex',
+      ]);
+      expect(signals.map((signal) => signal.threadId), <String?>[
+        'thread-1',
+        'thread-1',
+      ]);
+    });
   });
 }
 
@@ -189,5 +264,12 @@ final class _MultiInstanceProviderFactory implements AgentProviderFactory {
     final provider = AgentPaneFakeProvider();
     created.add(provider);
     return provider;
+  }
+}
+
+final class _TerminalProviderFactory implements AgentProviderFactory {
+  @override
+  AgentProvider create(AgentProviderConfig config) {
+    return FakeAgentProvider(config: config);
   }
 }

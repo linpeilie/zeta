@@ -10,6 +10,7 @@ import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
@@ -254,11 +255,13 @@ void main() {
       'offers a local handoff after Plan completion and starts Default execution',
       () async {
         final attentions = <AgentAttentionSignal>[];
+        final terminalSignals = <AgentTurnTerminalSignal>[];
         final provider = _ModeFakeAgentProvider(
           availableModels: _conversationModeModels,
         );
         final viewModel = _createViewModel(
           provider,
+          onTurnTerminal: terminalSignals.add,
           onAttention: attentions.add,
         );
         addTearDown(viewModel.dispose);
@@ -274,6 +277,8 @@ void main() {
         expect(request.turnId, 'turn-1');
         expect(request.markdown, '# Final plan\n\n- Implement the change');
         expect(attentions, hasLength(1));
+        expect(terminalSignals, hasLength(1));
+        expect(terminalSignals.single.turnId, 'turn-1');
         expect(
           attentions.single.kind,
           AgentAttentionKind.planExecutionRequired,
@@ -1636,10 +1641,10 @@ void main() {
       'turn completed clears sticky active runtime status for list snapshot',
       () async {
         final provider = _FakeAgentProvider();
-        var turnCompletedCount = 0;
+        final terminalSignals = <AgentTurnTerminalSignal>[];
         final viewModel = _createViewModel(
           provider,
-          onTurnCompleted: () => turnCompletedCount += 1,
+          onTurnTerminal: terminalSignals.add,
         );
         addTearDown(viewModel.dispose);
 
@@ -1674,9 +1679,47 @@ void main() {
           viewModel.threadSnapshot.runtimeStatus,
           AgentThreadRuntimeStatus.idle,
         );
-        expect(turnCompletedCount, 1);
+        expect(terminalSignals, hasLength(1));
+        expect(terminalSignals.single.providerId, defaultAgentProviderId);
+        expect(terminalSignals.single.threadId, 'thread-1');
+        expect(terminalSignals.single.turnId, 'turn-1');
       },
     );
+
+    for (final terminalStatus in <AgentHistoryTurnStatus>[
+      AgentHistoryTurnStatus.completed,
+      AgentHistoryTurnStatus.failed,
+      // Provider 对用户取消的规范化终态也是 interrupted。
+      AgentHistoryTurnStatus.interrupted,
+    ]) {
+      test(
+        'delivers typed signal for $terminalStatus terminal event',
+        () async {
+          final provider = _FakeAgentProvider();
+          final terminalSignals = <AgentTurnTerminalSignal>[];
+          final viewModel = _createViewModel(
+            provider,
+            onTurnTerminal: terminalSignals.add,
+          );
+          addTearDown(viewModel.dispose);
+
+          await viewModel.sendMessage('hello');
+          provider.emit(
+            AgentTurnCompletedEvent(
+              sessionId: 'thread-1',
+              turnId: 'turn-1',
+              status: terminalStatus,
+            ),
+          );
+          await _drainTypedUiUpdate();
+
+          expect(terminalSignals, hasLength(1));
+          expect(terminalSignals.single.providerId, defaultAgentProviderId);
+          expect(terminalSignals.single.threadId, 'thread-1');
+          expect(terminalSignals.single.turnId, 'turn-1');
+        },
+      );
+    }
 
     test(
       'defers event thread snapshot notifications received during build phase',
@@ -4323,7 +4366,7 @@ AgentConversationViewModel _createViewModel(
   AgentThreadSummary? initialThread,
   AgentModelCatalogRepository? modelCatalogRepository,
   AgentConversationModeController? conversationModeController,
-  void Function()? onTurnCompleted,
+  void Function(AgentTurnTerminalSignal signal)? onTurnTerminal,
   void Function(AgentAttentionSignal signal)? onAttention,
   AgentCreatedThreadCallback? onCreatedThread,
 }) {
@@ -4353,7 +4396,7 @@ AgentConversationViewModel _createViewModel(
     conversationBinding: bindingLease.binding,
     globalRuntime: bindingHarness.globalRuntime,
     conversationModeController: conversationModeController,
-    onTurnCompleted: onTurnCompleted,
+    onTurnTerminal: onTurnTerminal,
     onAttention: onAttention,
     onCreatedThread: onCreatedThread,
     initialProjectPath: initialThread?.projectPath ?? '/repo',
