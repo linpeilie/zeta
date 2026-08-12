@@ -4,6 +4,7 @@ import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/core/logging/structured_error_logging.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_effect.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
 
 typedef AgentConversationEffectScopeReader =
     AgentConversationEffectScope? Function();
@@ -14,6 +15,8 @@ typedef AgentModelCatalogRecorder =
       required String source,
     });
 typedef AgentAttentionCallback = void Function(AgentAttentionSignal signal);
+typedef AgentTurnTerminalCallback =
+    void Function(AgentTurnTerminalSignal signal);
 
 /// application effect 的执行端口。
 abstract interface class AgentConversationEffectRunner {
@@ -31,11 +34,13 @@ final class DefaultAgentConversationEffectRunner
   factory DefaultAgentConversationEffectRunner({
     required AgentConversationEffectScopeReader currentScope,
     required AgentModelCatalogRecorder recordModelCatalog,
+    AgentTurnTerminalCallback? onTurnTerminal,
     void Function()? onTurnCompleted,
     AgentAttentionCallback? onAttention,
   }) => DefaultAgentConversationEffectRunner._(
     currentScope,
     recordModelCatalog,
+    onTurnTerminal,
     onTurnCompleted,
     onAttention,
   );
@@ -43,6 +48,7 @@ final class DefaultAgentConversationEffectRunner
   DefaultAgentConversationEffectRunner._(
     this._currentScope,
     this._recordModelCatalog,
+    this._onTurnTerminal,
     this._onTurnCompleted,
     this._onAttention,
   );
@@ -51,6 +57,7 @@ final class DefaultAgentConversationEffectRunner
 
   final AgentConversationEffectScopeReader _currentScope;
   final AgentModelCatalogRecorder _recordModelCatalog;
+  final AgentTurnTerminalCallback? _onTurnTerminal;
   final void Function()? _onTurnCompleted;
   final AgentAttentionCallback? _onAttention;
   Expando<bool> _executed = Expando<bool>(
@@ -73,6 +80,16 @@ final class DefaultAgentConversationEffectRunner
 
     switch (effect) {
       case AgentTurnCompletedEffect():
+        final terminalSignal = AgentTurnTerminalSignal(
+          providerId: effect.scope.providerId,
+          threadId: effect.scope.threadId,
+          turnId: effect.turnId,
+        );
+        _runSynchronous(
+          effect,
+          operation: 'turn/terminal-callback',
+          callback: () => _onTurnTerminal?.call(terminalSignal),
+        );
         _runSynchronous(
           effect,
           operation: 'turn/completed-callback',

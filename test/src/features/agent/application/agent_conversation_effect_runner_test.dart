@@ -7,9 +7,43 @@ import 'package:logger/logger.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_effect.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_effect_runner.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
 
 void main() {
   group('DefaultAgentConversationEffectRunner', () {
+    test('delivers typed terminal identity from the validated scope once', () {
+      // Arrange
+      final signals = <AgentTurnTerminalSignal>[];
+      var legacyCallbackCount = 0;
+      final runner = DefaultAgentConversationEffectRunner(
+        currentScope: () => _scope(providerId: 'grok', threadId: null),
+        recordModelCatalog: _discardCatalog,
+        onTurnTerminal: signals.add,
+        onTurnCompleted: () => legacyCallbackCount += 1,
+      );
+      addTearDown(runner.dispose);
+      final effect = AgentTurnCompletedEffect(
+        scope: _scope(
+          providerId: 'grok',
+          threadId: null,
+          turnId: 'scope-diagnostic-turn',
+        ),
+        turnId: 'turn-terminal',
+        attention: _turnCompletedAttention,
+      );
+
+      // Act
+      runner.run(effect);
+      runner.run(effect);
+
+      // Assert
+      expect(signals, hasLength(1));
+      expect(signals.single.providerId, 'grok');
+      expect(signals.single.threadId, isNull);
+      expect(signals.single.turnId, 'turn-terminal');
+      expect(legacyCallbackCount, 1);
+    });
+
     test('runs a turn-completed callback once for matching full scope', () {
       // Arrange
       var currentScope = _scope(
@@ -76,9 +110,11 @@ void main() {
       // Arrange
       AgentConversationEffectScope? currentScope = _scope();
       var callbackCount = 0;
+      final signals = <AgentTurnTerminalSignal>[];
       final runner = DefaultAgentConversationEffectRunner(
         currentScope: () => currentScope,
         recordModelCatalog: _discardCatalog,
+        onTurnTerminal: signals.add,
         onTurnCompleted: () => callbackCount += 1,
       );
       addTearDown(runner.dispose);
@@ -101,6 +137,7 @@ void main() {
 
       // Assert
       expect(callbackCount, 0);
+      expect(signals, isEmpty);
     });
 
     test(
