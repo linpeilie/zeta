@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -89,6 +91,27 @@ void main() {
         restored?.projectLastOpenedAtByPath['/other'],
         DateTime.fromMillisecondsSinceEpoch(42),
       );
+    });
+
+    test('tolerantly reads supported v1 through v4 snapshots', () {
+      for (final version in <int>[1, 2, 3, 4]) {
+        final restored = IdeSessionState.tryDecode(
+          jsonEncode(<String, Object?>{
+            'version': version,
+            'projectPaths': <Object?>['/repo', 42, '/repo'],
+            'activeProjectPath': '/repo',
+            'expandedDirectoryPaths': <Object?>['/repo/lib', false],
+            'selectedTreeKey': 42,
+            'unknownFutureField': <String, Object?>{'enabled': true},
+          }),
+        );
+
+        expect(restored, isNotNull, reason: 'version $version');
+        expect(restored?.projectPaths, <String>['/repo']);
+        expect(restored?.activeProjectPath, '/repo');
+        expect(restored?.expandedDirectoryPaths, <String>{'/repo/lib'});
+        expect(restored?.selectedTreeKey, isNull);
+      }
     });
   });
 }

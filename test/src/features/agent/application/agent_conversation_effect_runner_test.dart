@@ -72,6 +72,37 @@ void main() {
       expect(callbackCount, 2);
     });
 
+    test('ignores late and old-generation turn-completed effects', () {
+      // Arrange
+      AgentConversationEffectScope? currentScope = _scope();
+      var callbackCount = 0;
+      final runner = DefaultAgentConversationEffectRunner(
+        currentScope: () => currentScope,
+        recordModelCatalog: _discardCatalog,
+        onTurnCompleted: () => callbackCount += 1,
+      );
+      addTearDown(runner.dispose);
+      final lateEffect = AgentTurnCompletedEffect(
+        scope: _scope(turnId: 'turn-late'),
+        turnId: 'turn-late',
+        attention: _turnCompletedAttention,
+      );
+      final oldGenerationEffect = AgentTurnCompletedEffect(
+        scope: _scope(turnId: 'turn-old-generation'),
+        turnId: 'turn-old-generation',
+        attention: _turnCompletedAttention,
+      );
+
+      // Act
+      currentScope = null;
+      runner.run(lateEffect);
+      currentScope = _scope(listenerGeneration: 8);
+      runner.run(oldGenerationEffect);
+
+      // Assert
+      expect(callbackCount, 0);
+    });
+
     test(
       'records model catalog asynchronously once and ignores thread mismatch',
       () async {

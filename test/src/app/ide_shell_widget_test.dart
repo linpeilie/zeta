@@ -189,6 +189,43 @@ void main() {
     );
   });
 
+  testWidgets(
+    'switching existing left regions retains the active Agent pane state',
+    (tester) async {
+      final retained = await _prepareRetainedAgentState(tester);
+
+      await tester.tap(find.byKey(const ValueKey('left-context-action')));
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
+      expect(find.byKey(const ValueKey('context-panel-card')), findsOneWidget);
+      _expectRetainedAgentContentState(tester, retained);
+
+      await tester.tap(find.byKey(const ValueKey('left-projects-action')));
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('projects-panel-card')), findsNothing);
+      expect(find.byKey(const ValueKey('context-panel-card')), findsOneWidget);
+      _expectRetainedAgentContentState(tester, retained);
+
+      await tester.tap(find.byKey(const ValueKey('left-context-action')));
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('projects-panel-card')), findsNothing);
+      expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('workbench-navigation-inline')),
+        findsNothing,
+      );
+      _expectRetainedAgentContentState(tester, retained);
+
+      await tester.tap(find.byKey(const ValueKey('left-projects-action')));
+      await tester.pump();
+
+      _expectRetainedAgentState(tester, retained);
+    },
+  );
+
   testWidgets('side panel cards own borders without workbench pane wrappers', (
     tester,
   ) async {
@@ -1968,6 +2005,23 @@ void _expectRetainedAgentState(
   WidgetTester tester,
   _RetainedAgentState retained,
 ) {
+  _expectRetainedAgentContentState(tester, retained);
+  expect(
+    _widthOf(tester, 'workbench-navigation-inline'),
+    retained.navigationWidth,
+  );
+  expect(
+    _widthOf(tester, 'workbench-inspector-inline'),
+    retained.inspectorWidth,
+  );
+  expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
+  expect(find.byKey(const ValueKey('files-panel-card')), findsOneWidget);
+}
+
+void _expectRetainedAgentContentState(
+  WidgetTester tester,
+  _RetainedAgentState retained,
+) {
   expect(
     tester.element(find.byKey(const ValueKey('ide-window-frame'))),
     same(retained.windowFrameElement),
@@ -1990,16 +2044,6 @@ void _expectRetainedAgentState(
       .controller!;
   expect(currentScrollController, same(retained.scrollController));
   expect(currentScrollController.offset, closeTo(retained.scrollOffset, 0.1));
-  expect(
-    _widthOf(tester, 'workbench-navigation-inline'),
-    retained.navigationWidth,
-  );
-  expect(
-    _widthOf(tester, 'workbench-inspector-inline'),
-    retained.inspectorWidth,
-  );
-  expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
-  expect(find.byKey(const ValueKey('files-panel-card')), findsOneWidget);
   expect(headerTitleText(tester), 'Retained thread');
   expect(
     (retained.agentPaneElement.widget as AgentPane)
