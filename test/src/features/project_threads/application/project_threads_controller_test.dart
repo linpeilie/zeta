@@ -690,6 +690,27 @@ void main() {
       expect(plan.projectsToLoad, <String>['/repo', '/other']);
     });
 
+    test('restore plan only keeps the first five cached threads', () {
+      final plan = buildProjectThreadsRestorePlan(
+        projectPaths: const <String>['/repo'],
+        activeProjectPath: '/repo',
+        snapshot: ProjectThreadsSessionSnapshot(
+          cachedThreadsByProject: <String, List<AgentThreadSummary>>{
+            '/repo': _threads(8),
+          },
+        ),
+      );
+
+      expect(plan.states['/repo']?.threads.map((thread) => thread.id), <String>[
+        'thread-0',
+        'thread-1',
+        'thread-2',
+        'thread-3',
+        'thread-4',
+      ]);
+      expect(plan.states['/repo']?.hasLoaded, isTrue);
+    });
+
     test('restore plan keeps only one selected thread across projects', () {
       final plan = buildProjectThreadsRestorePlan(
         projectPaths: const <String>['/repo', '/other', '/third'],

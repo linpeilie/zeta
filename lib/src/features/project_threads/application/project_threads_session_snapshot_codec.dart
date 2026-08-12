@@ -58,12 +58,17 @@ ProjectThreadsRestorePlan buildProjectThreadsRestorePlan({
   for (final path in projectPaths) {
     final cachedThreads =
         snapshot.cachedThreadsByProject[path] ?? const <AgentThreadSummary>[];
+    // 持久化快照可能包含用户此前追加加载的完整窗口；启动只恢复首屏，
+    // 避免先渲染大量旧缓存、随后又被后台首屏刷新收缩为五条。
+    final restoredThreads = List<AgentThreadSummary>.unmodifiable(
+      cachedThreads.take(projectThreadInitialLimit),
+    );
     final isExpanded =
         snapshot.expansionByProject[path] ?? path == activeProjectPath;
     states[path] = ProjectThreadListState(
       isExpanded: isExpanded,
-      hasLoaded: cachedThreads.isNotEmpty,
-      threads: List<AgentThreadSummary>.unmodifiable(cachedThreads),
+      hasLoaded: restoredThreads.isNotEmpty,
+      threads: restoredThreads,
       selectedThreadId: snapshot.selectedThreadIdsByProject[path],
     );
     if (isExpanded) {
