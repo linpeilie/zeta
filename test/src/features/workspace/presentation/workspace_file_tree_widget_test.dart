@@ -4,20 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/main.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 
 import '../../../testing/ide_test_harness.dart';
 
 void main() {
   final tempDirectories = <Directory>[];
 
-  setUp(() {
-    // 本文件用例依赖 Files 面板，需在 pump 前临时恢复 Trailing Rail。
-    IdeHome.debugShowTrailingRail = true;
-  });
-
   tearDown(() {
-    IdeHome.debugShowTrailingRail = false;
     for (final directory in tempDirectories) {
       if (directory.existsSync()) {
         directory.deleteSync(recursive: true);
@@ -39,7 +32,8 @@ void main() {
 
     await tester.pumpWidget(
       MainApp(
-        enableNativeWindowFrame: false,
+        enableNativeWindowFrame: true,
+        showWindowControls: false,
         directoryPicker: () async => directory.path,
         sessionLoader: session.load,
         sessionSaver: session.save,
@@ -74,7 +68,8 @@ void main() {
 
     await tester.pumpWidget(
       MainApp(
-        enableNativeWindowFrame: false,
+        enableNativeWindowFrame: true,
+        showWindowControls: false,
         directoryPicker: () async => repositoryDirectory.path,
         sessionLoader: session.load,
         sessionSaver: session.save,
@@ -107,7 +102,8 @@ void main() {
 
     await tester.pumpWidget(
       MainApp(
-        enableNativeWindowFrame: false,
+        enableNativeWindowFrame: true,
+        showWindowControls: false,
         directoryPicker: () async => directory.path,
         sessionLoader: session.load,
         sessionSaver: session.save,
@@ -134,7 +130,7 @@ void main() {
 
 Future<void> _openFilesPanel(WidgetTester tester) async {
   // 右侧 Files 面板默认关闭，测试需先打开才能断言文件树内容。
-  await tester.tap(find.byKey(const ValueKey('right-files-action')));
+  await tester.tap(find.byKey(const ValueKey('titlebar-right-sidebar-action')));
   await tester.pumpAndSettle();
 }
 

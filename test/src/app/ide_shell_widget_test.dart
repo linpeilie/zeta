@@ -19,17 +19,12 @@ import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/ui/core/window_frame.dart';
-import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 
 import '../testing/agent_event_storm_fixture.dart';
 import '../testing/ide_test_harness.dart';
 import '../testing/widget_build_counter.dart';
 
 void main() {
-  tearDown(() {
-    IdeHome.debugShowTrailingRail = false;
-  });
-
   testWidgets('starts with the compact IDE panes', (tester) async {
     await _pumpIde(tester, enableNativeWindowFrame: true);
     await tester.pump();
@@ -39,6 +34,10 @@ void main() {
     expect(find.byKey(const ValueKey('agent-usage-compact')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('titlebar-left-sidebar-action')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('titlebar-right-sidebar-action')),
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('agent-pane-host')), findsOneWidget);
@@ -308,6 +307,43 @@ void main() {
     );
   });
 
+  testWidgets('titlebar is the only right sidebar entry', (tester) async {
+    await _pumpIde(tester, enableNativeWindowFrame: true);
+
+    final titlebarAction = find.byKey(
+      const ValueKey('titlebar-right-sidebar-action'),
+    );
+    expect(titlebarAction, findsOneWidget);
+    expect(find.byKey(const ValueKey('workbench-trailing-rail')), findsNothing);
+    expect(find.byKey(const ValueKey('right-files-action')), findsNothing);
+    expect(find.byKey(const ValueKey('right-tools-action')), findsNothing);
+    expect(find.byKey(const ValueKey('files-panel-card')), findsNothing);
+    expect(find.byKey(const ValueKey('tools-panel-card')), findsNothing);
+
+    await tester.tap(titlebarAction);
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('files-panel-card')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('workbench-inspector-inline')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('right-width-resize-handle')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('tools-panel-card')), findsNothing);
+
+    await tester.tap(titlebarAction);
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('files-panel-card')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('workbench-inspector-inline')),
+      findsNothing,
+    );
+  });
+
   testWidgets(
     'switching sidebar and usage modes retains the active Agent pane state',
     (tester) async {
@@ -353,17 +389,17 @@ void main() {
   testWidgets('side panel cards own borders without workbench pane wrappers', (
     tester,
   ) async {
-    _enableTrailingRailForTest();
-    await _pumpIde(tester);
-    await tester.tap(find.byKey(const ValueKey('right-files-action')));
-    await tester.tap(find.byKey(const ValueKey('right-tools-action')));
+    await _pumpIde(tester, enableNativeWindowFrame: true);
+    await tester.tap(
+      find.byKey(const ValueKey('titlebar-right-sidebar-action')),
+    );
     await tester.pump();
 
     expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
+    expect(find.byKey(const ValueKey('tools-panel-card')), findsNothing);
     for (final panelKey in <String>[
       'projects-panel-card',
       'files-panel-card',
-      'tools-panel-card',
     ]) {
       final panel = find.byKey(ValueKey<String>(panelKey));
       expect(tester.widget<PanelCard>(panel).showBorder, isTrue);
@@ -377,7 +413,6 @@ void main() {
   testWidgets('left width previews locally and persists only after drag end', (
     tester,
   ) async {
-    _enableTrailingRailForTest();
     final session = MemorySessionStore(
       const IdeSessionState(
         workbenchLayout: IdeWorkbenchLayoutState(leftSidebarWidth: 280),
@@ -426,10 +461,11 @@ void main() {
   });
 
   testWidgets('right resize handles still clamp side widths', (tester) async {
-    _enableTrailingRailForTest();
-    await _pumpIde(tester);
+    await _pumpIde(tester, enableNativeWindowFrame: true);
 
-    await tester.tap(find.byKey(const ValueKey('right-files-action')));
+    await tester.tap(
+      find.byKey(const ValueKey('titlebar-right-sidebar-action')),
+    );
     await tester.pump();
     await tester.drag(
       find.byKey(const ValueKey('right-width-resize-handle')),
@@ -505,13 +541,13 @@ void main() {
     },
   );
 
-  testWidgets('right panels use overlay in medium and compact modes', (
+  testWidgets('right panel uses overlay in medium and compact modes', (
     tester,
   ) async {
-    _enableTrailingRailForTest();
     await _pumpIde(
       tester,
       size: const Size(832, 900),
+      enableNativeWindowFrame: true,
       initialSessionJson: const IdeSessionState(
         workbenchLayout: IdeWorkbenchLayoutState(leftSidebarVisible: false),
       ).encode(),
@@ -531,7 +567,19 @@ void main() {
     );
     expect(find.byKey(const ValueKey('files-panel-card')), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('right-files-action')));
+    final titlebarAction = find.byKey(
+      const ValueKey('titlebar-right-sidebar-action'),
+    );
+    final focusNode = tester
+        .widget<WindowFrame>(find.byKey(const ValueKey('ide-window-frame')))
+        .titleBarActions
+        .singleWhere(
+          (action) =>
+              action.key ==
+              const ValueKey<String>('titlebar-right-sidebar-action'),
+        )
+        .focusNode!;
+    await tester.tap(titlebarAction);
     await tester.pump();
 
     expect(
@@ -557,6 +605,7 @@ void main() {
       findsNothing,
     );
     expect(find.byKey(const ValueKey('files-panel-card')), findsNothing);
+    expect(focusNode.hasFocus, isTrue);
   });
 
   testWidgets('compact titlebar overlay closes with scrim and Esc with focus', (
@@ -2040,14 +2089,9 @@ class _TrackedDirectoryAgentUsageRepository
   }
 }
 
-void _enableTrailingRailForTest() {
-  IdeHome.debugShowTrailingRail = true;
-}
-
 Future<_RetainedAgentState> _prepareRetainedAgentState(
   WidgetTester tester,
 ) async {
-  _enableTrailingRailForTest();
   final directory = Directory.systemTemp.createTempSync('zeta_workbench_test_');
   addTearDown(() {
     if (directory.existsSync()) {
@@ -2105,7 +2149,7 @@ Future<_RetainedAgentState> _prepareRetainedAgentState(
 
   await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
   await tester.runAsync(waitForIo);
-  await tester.tap(find.byKey(const ValueKey('right-files-action')));
+  await tester.tap(find.byKey(const ValueKey('titlebar-right-sidebar-action')));
   await tester.pump();
   final retainedThreadRow = find.byKey(
     ValueKey<String>('project-thread-${directory.path}-retained-thread'),

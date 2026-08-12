@@ -524,8 +524,11 @@ Fast 是产品语义，运行时仍必须传递 provider 的精确 `serviceTierI
 - Agent 首页、设置/Agent 管理和使用统计分别按设计文档中的 slot 矩阵组合：Agent 首页
   的 Navigation slot 使用一个 `ProjectAgentSidebar` 组合 Projects / Threads 与底部统计；
   设置 Feature 使用 `SettingsNavigationPane` + `SettingsPageCanvas`，使用统计只占用 Canvas。
-- Agent 首页不得重新挂载 Activity Rail 或 Projects / 统计两个局部显隐入口。合并左栏只由
-  `WindowFrame.titleBarLeadingActions` 中的标题栏按钮控制；隐藏后该入口仍可操作。
+- Agent 首页不得重新挂载 Activity Rail，也不得恢复 Projects / 统计 / Files 的局部显隐
+  入口。合并左栏只由 `WindowFrame.titleBarLeadingActions` 中的标题栏按钮控制，Files
+  Inspector 只由 `WindowFrame.titleBarActions` 中的右侧栏按钮控制；隐藏后入口仍可操作。
+- Inspector 只承载 Files，不再编排右下 Tools 占位面板或纵向分隔拖拽。Compact 下复用
+  Workbench Inspector Overlay，scrim / Esc 关闭后必须恢复标题栏右侧入口焦点。
 - `ProjectAgentSidebar` 只编排两个业务 Widget 的约束、展开高度和拖动预览。它不得读取
   Provider 数据；Projects 与 cardless `AgentUsagePanelContent` 共用一个 `PanelCard`，统计
   首次默认折叠。Compact 下复用 Workbench Navigation Overlay，scrim / Esc 关闭后必须

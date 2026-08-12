@@ -36,7 +36,6 @@ import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_pane
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_page.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/workspace/presentation/file_tree_pane.dart';
-import 'package:zeta/src/ui/core/ide_activity_rail.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_resize_handle.dart';
@@ -60,9 +59,6 @@ typedef HomeProviderDetectionLoader = Future<List<ManagedAgent>> Function();
 ///
 /// 首页由标题栏入口控制 Projects / Agent 统计合并栏，中央保留 Agent 主编辑区；
 /// 具体项目、会话和 Agent thread 编排由 [IdeShellController] 承接。
-///
-/// Trailing Rail（Files/Tools）暂时关闭；加回时将 [_trailingRailEnabled]
-/// 设为 `true` 并移除 [debugShowTrailingRail]。
 class IdeHome extends StatefulWidget {
   const IdeHome({
     required this.directoryPicker,
@@ -84,13 +80,6 @@ class IdeHome extends StatefulWidget {
     this.desktopAttentionIndicator,
     super.key,
   });
-
-  /// 生产路径是否装配 Trailing Rail；暂时关闭以便后续一次性加回。
-  static const bool _trailingRailEnabled = false;
-
-  /// 测试专用：为仍覆盖 Inspector 行为的用例临时显示 Trailing Rail。
-  @visibleForTesting
-  static bool debugShowTrailingRail = false;
 
   final Future<String?> Function() directoryPicker;
   final bool enableNativeWindowFrame;
@@ -120,9 +109,6 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   static const double _initialPanelWidth = IdeMetrics.sidePaneDefaultWidth;
   static const double _minPanelWidth = IdeMetrics.sidePaneMinWidth;
   static const double _maxPanelWidth = IdeMetrics.sidePaneMaxWidth;
-  static const double _initialPanelRatio = 0.5;
-  static const double _minPanelRatio = 0.1;
-  static const double _maxPanelRatio = 0.9;
 
   late final IdeShellController _shellController;
   late final AgentManagementController _agentManagementController;
@@ -132,8 +118,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   late final DesktopAttentionController _desktopAttentionController;
   bool _windowFocused = true;
 
-  bool _rightTopVisible = false;
-  bool _rightBottomVisible = false;
+  bool _rightSidebarVisible = false;
   bool _settingsPageMounted = false;
   bool _usageStatisticsPageMounted = false;
   bool _globalHomeLoadRequested = false;
@@ -147,18 +132,14 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   double _leftPanelWidth = _initialPanelWidth;
   bool _leftPanelWidthDragging = false;
   double _rightPanelWidth = _initialPanelWidth;
-  double _rightTopRatio = _initialPanelRatio;
   sf.ToastOverlay? _statusToast;
   _IdeHomePage _page = _IdeHomePage.home;
   SettingsSection _settingsSection = SettingsSection.general;
   final FocusNode _leftSidebarFocusNode = FocusNode(
     debugLabel: 'TitleBarLeftSidebarAction',
   );
-  final FocusNode _rightFilesFocusNode = FocusNode(
-    debugLabel: 'RightFilesRailAction',
-  );
-  final FocusNode _rightToolsFocusNode = FocusNode(
-    debugLabel: 'RightToolsRailAction',
+  final FocusNode _rightSidebarFocusNode = FocusNode(
+    debugLabel: 'TitleBarRightSidebarAction',
   );
   final GlobalKey<SettingsPageCanvasState> _settingsCanvasKey =
       GlobalKey<SettingsPageCanvasState>();
@@ -247,16 +228,36 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     _shellController.dispose();
     _desktopAttentionController.dispose();
     _leftSidebarFocusNode.dispose();
-    _rightFilesFocusNode.dispose();
-    _rightToolsFocusNode.dispose();
+    _rightSidebarFocusNode.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final homePage = _page == _IdeHomePage.home;
     final leftSidebarVisible =
-        _page == _IdeHomePage.home &&
-        _shellController.workbenchLayout.leftSidebarVisible;
+        homePage && _shellController.workbenchLayout.leftSidebarVisible;
+    final workbenchWidth =
+        (MediaQuery.sizeOf(context).width - IdeSpacing.space8)
+            .clamp(0.0, double.infinity)
+            .toDouble();
+    final rightSidebarUsesOverlay =
+        homePage &&
+        resolveEffectiveWorkbenchLayoutMode(
+              width: workbenchWidth,
+              navigationAvailable: leftSidebarVisible,
+              inspectorAvailable: true,
+              leadingRailAvailable: false,
+              trailingRailAvailable: false,
+              navigationWidth: _leftPanelWidth,
+              inspectorWidth: _rightPanelWidth,
+            ) !=
+            IdeWorkbenchLayoutMode.wide;
+    final rightSidebarExpanded =
+        homePage &&
+        _rightSidebarVisible &&
+        (!rightSidebarUsesOverlay ||
+            _activeOverlay == IdeWorkbenchOverlay.inspector);
     final body = WindowFrame(
       key: const ValueKey('ide-window-frame'),
       enableNativeWindowFrame: widget.enableNativeWindowFrame,
@@ -291,9 +292,22 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
           active: _page == _IdeHomePage.settings,
           onPressed: _openSettingsPage,
         ),
+        if (homePage)
+          WindowTitleBarAction(
+            key: const ValueKey('titlebar-right-sidebar-action'),
+            icon: sf.LucideIcons.panelRight,
+            tooltip: rightSidebarExpanded ? '隐藏右侧栏' : '显示右侧栏',
+            semanticLabel: rightSidebarExpanded ? '隐藏右侧栏' : '显示右侧栏',
+            active: rightSidebarExpanded,
+            focusNode: _rightSidebarFocusNode,
+            onPressed: () => _toggleRightSidebar(
+              useOverlay: rightSidebarUsesOverlay,
+              triggerFocusNode: _rightSidebarFocusNode,
+            ),
+          ),
       ],
       showWindowControls: widget.showWindowControls,
-      // 工作台外圈 space4：与 rail 内侧 gap（space4）对称，图标条视觉居中。
+      // 工作台外圈统一保留 space4，让左右 Pane 与窗口边缘保持稳定呼吸感。
       child: Padding(
         padding: const EdgeInsets.all(IdeSpacing.space4),
         child: _buildWorkbench(),
@@ -342,8 +356,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     final navigationVisible = settingsPage
         ? true
         : homePage && workbenchLayout.leftSidebarVisible;
-    final inspectorVisible =
-        homePage && (_rightTopVisible || _rightBottomVisible);
+    final inspectorVisible = homePage && _rightSidebarVisible;
     final activeOverlay = _activeOverlay == IdeWorkbenchOverlay.inspector
         ? IdeWorkbenchOverlay.inspector
         : homePage && workbenchLayout.leftSidebarVisible
@@ -372,16 +385,12 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       navigationInlineInCompact: settingsPage,
       navigationWidth: _leftPanelWidth,
       canvas: _buildRetainedCanvasStack(),
-      inspectorPane: homePage ? _buildRightPanel() : null,
+      inspectorPane: homePage ? _buildFilesPanel() : null,
       inspectorResizeHandle: inspectorVisible
           ? _buildInspectorResizeHandle()
           : null,
       inspectorVisible: inspectorVisible,
       inspectorWidth: _rightPanelWidth,
-      trailingRailBuilder:
-          (IdeHome._trailingRailEnabled || IdeHome.debugShowTrailingRail)
-          ? _buildTrailingRail
-          : null,
       activeOverlay: activeOverlay,
       onDismissOverlay: _closeActiveOverlay,
       overlayTriggerFocusNode: _overlayTriggerFocusNode,
@@ -540,55 +549,6 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     );
   }
 
-  /// Files/Tools 右侧活动栏；由 [_trailingRailEnabled] / [IdeHome.debugShowTrailingRail]
-  /// 控制是否装配，实现保留以便加回。
-  Widget _buildTrailingRail(BuildContext context, IdeWorkbenchLayoutMode mode) {
-    if (_page != _IdeHomePage.home) {
-      return const IdeActivityRail(leadingActions: <IdeRailAction>[]);
-    }
-    final useOverlay = mode != IdeWorkbenchLayoutMode.wide;
-    return IdeActivityRail(
-      leadingActions: [
-        IdeRailAction(
-          key: const ValueKey('right-files-action'),
-          icon: Icons.folder_rounded,
-          tooltip: 'Files',
-          semanticLabel: 'Toggle files panel',
-          active:
-              _rightTopVisible &&
-              (!useOverlay || _activeOverlay == IdeWorkbenchOverlay.inspector),
-          focusNode: _rightFilesFocusNode,
-          onPressed: () {
-            _toggleRightPanel(
-              isTop: true,
-              useOverlay: useOverlay,
-              triggerFocusNode: _rightFilesFocusNode,
-            );
-          },
-        ),
-      ],
-      trailingActions: [
-        IdeRailAction(
-          key: const ValueKey('right-tools-action'),
-          icon: Icons.build_circle_rounded,
-          tooltip: 'Tools',
-          semanticLabel: 'Toggle tools panel',
-          active:
-              _rightBottomVisible &&
-              (!useOverlay || _activeOverlay == IdeWorkbenchOverlay.inspector),
-          focusNode: _rightToolsFocusNode,
-          onPressed: () {
-            _toggleRightPanel(
-              isTop: false,
-              useOverlay: useOverlay,
-              triggerFocusNode: _rightToolsFocusNode,
-            );
-          },
-        ),
-      ],
-    );
-  }
-
   Widget _buildNavigationResizeHandle() {
     return IdeResizeHandle(
       key: const ValueKey('left-width-resize-handle'),
@@ -729,44 +689,6 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     );
   }
 
-  Widget _buildRightPanel() {
-    return _ResizableColumn(
-      topVisible: _rightTopVisible,
-      bottomVisible: _rightBottomVisible,
-      topRatio: _rightTopRatio,
-      onTopRatioChanged: (ratio) {
-        setState(() {
-          _rightTopRatio = ratio.clamp(_minPanelRatio, _maxPanelRatio);
-        });
-      },
-      heightHandleKey: const ValueKey('right-height-resize-handle'),
-      top: _buildFilesPanel(),
-      bottom: _buildPlaceholderPanel(
-        key: const ValueKey('tools-panel-card'),
-        title: 'Tools',
-        icon: Icons.terminal_rounded,
-        message: 'No tools running',
-      ),
-    );
-  }
-
-  Widget _buildPlaceholderPanel({
-    required Key key,
-    required String title,
-    required IconData icon,
-    required String message,
-  }) {
-    final colors = IdeColors.of(context);
-    return PanelCard(
-      key: key,
-      child: Pane(
-        title: title,
-        trailing: Icon(icon, size: 16, color: colors.mutedText),
-        child: EmptyState(text: message),
-      ),
-    );
-  }
-
   void _openProject() {
     unawaited(_shellController.openProject());
   }
@@ -829,8 +751,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     }
   }
 
-  void _toggleRightPanel({
-    required bool isTop,
+  void _toggleRightSidebar({
     required bool useOverlay,
     required FocusNode triggerFocusNode,
   }) {
@@ -840,46 +761,20 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
           _activeOverlay = null;
           _overlayTriggerFocusNode = null;
         }
-        if (isTop) {
-          _rightTopVisible = !_rightTopVisible;
-        } else {
-          _rightBottomVisible = !_rightBottomVisible;
-        }
+        _rightSidebarVisible = !_rightSidebarVisible;
         return;
       }
 
-      final currentlyVisible = isTop ? _rightTopVisible : _rightBottomVisible;
-      final otherVisible = isTop ? _rightBottomVisible : _rightTopVisible;
       final overlayOpen = _activeOverlay == IdeWorkbenchOverlay.inspector;
-      if (overlayOpen && currentlyVisible && !otherVisible) {
-        if (isTop) {
-          _rightTopVisible = false;
-        } else {
-          _rightBottomVisible = false;
-        }
+      if (overlayOpen && _rightSidebarVisible) {
+        _rightSidebarVisible = false;
         _activeOverlay = null;
         _overlayTriggerFocusNode = null;
         return;
       }
 
-      if (overlayOpen && currentlyVisible) {
-        if (isTop) {
-          _rightTopVisible = false;
-        } else {
-          _rightBottomVisible = false;
-        }
-        if (!_rightTopVisible && !_rightBottomVisible) {
-          _activeOverlay = null;
-          _overlayTriggerFocusNode = null;
-        }
-        return;
-      }
-
-      if (isTop) {
-        _rightTopVisible = true;
-      } else {
-        _rightBottomVisible = true;
-      }
+      triggerFocusNode.unfocus();
+      _rightSidebarVisible = true;
       _activeOverlay = IdeWorkbenchOverlay.inspector;
       _overlayTriggerFocusNode = triggerFocusNode;
     });
@@ -1190,86 +1085,3 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
 }
 
 enum _IdeHomePage { home, settings, usageStatistics }
-
-class _ResizableColumn extends StatefulWidget {
-  const _ResizableColumn({
-    required this.topVisible,
-    required this.bottomVisible,
-    required this.topRatio,
-    required this.onTopRatioChanged,
-    required this.top,
-    required this.bottom,
-    required this.heightHandleKey,
-  });
-
-  final bool topVisible;
-  final bool bottomVisible;
-  final double topRatio;
-  final ValueChanged<double> onTopRatioChanged;
-  final Widget top;
-  final Widget bottom;
-  final Key heightHandleKey;
-
-  @override
-  State<_ResizableColumn> createState() => _ResizableColumnState();
-}
-
-class _ResizableColumnState extends State<_ResizableColumn> {
-  double? _dragStartTopHeight;
-  double? _dragStartGlobalY;
-
-  void _startDrag(DragStartDetails details, double resizableHeight) {
-    _dragStartTopHeight = resizableHeight * widget.topRatio.clamp(0.1, 0.9);
-    _dragStartGlobalY = details.globalPosition.dy;
-  }
-
-  void _updateDrag(DragUpdateDetails details, double resizableHeight) {
-    // 固定一次拖拽的起点，避免同一帧内的多次 update 都从旧布局高度计算。
-    _dragStartTopHeight ??= resizableHeight * widget.topRatio.clamp(0.1, 0.9);
-    _dragStartGlobalY ??= details.globalPosition.dy - details.delta.dy;
-    final topHeight =
-        _dragStartTopHeight! + details.globalPosition.dy - _dragStartGlobalY!;
-    widget.onTopRatioChanged(topHeight / resizableHeight);
-  }
-
-  void _finishDrag() {
-    _dragStartTopHeight = null;
-    _dragStartGlobalY = null;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.topVisible && !widget.bottomVisible) {
-      return SizedBox.expand(child: widget.top);
-    }
-    if (!widget.topVisible && widget.bottomVisible) {
-      return SizedBox.expand(child: widget.bottom);
-    }
-    if (!widget.topVisible && !widget.bottomVisible) {
-      return const SizedBox.shrink();
-    }
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final resizableHeight = constraints.maxHeight - IdeSpacing.space8;
-        final topHeight = resizableHeight * widget.topRatio.clamp(0.1, 0.9);
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(height: topHeight, child: widget.top),
-            IdeResizeHandle(
-              key: widget.heightHandleKey,
-              axis: IdeResizeHandleAxis.vertical,
-              semanticLabel: 'Resize panel height',
-              onDragStart: (details) => _startDrag(details, resizableHeight),
-              onDragUpdate: (details) => _updateDrag(details, resizableHeight),
-              onDragEnd: (_) => _finishDrag(),
-              onDragCancel: _finishDrag,
-            ),
-            Expanded(child: widget.bottom),
-          ],
-        );
-      },
-    );
-  }
-}

@@ -89,7 +89,7 @@ class IdeWorkbenchScaffold extends StatelessWidget {
         final resolvedInspectorWidth = inspectorWidth
             .clamp(IdeMetrics.sidePaneMinWidth, IdeMetrics.sidePaneMaxWidth)
             .toDouble();
-        final mode = _resolveEffectiveLayoutMode(
+        final mode = resolveEffectiveWorkbenchLayoutMode(
           width: constraints.maxWidth,
           navigationAvailable: navigation != null && navigationVisible,
           inspectorAvailable: inspector != null && inspectorVisible,
@@ -312,7 +312,11 @@ class _WorkbenchOverlayKeyboardScopeState
   Widget build(BuildContext context) => widget.child;
 }
 
-IdeWorkbenchLayoutMode _resolveEffectiveLayoutMode({
+/// 在为可见 Rail / Pane 预留空间后，解析工作台实际使用的布局模式。
+///
+/// 标题栏等 Workbench 外部入口可用同一规则判断 Pane 应内联还是走 Overlay，
+/// 避免在不同交互入口重复一套响应式断点。
+IdeWorkbenchLayoutMode resolveEffectiveWorkbenchLayoutMode({
   required double width,
   required bool navigationAvailable,
   required bool inspectorAvailable,
