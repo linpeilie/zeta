@@ -1,8 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
+import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 
 void main() {
   group('IdeSessionState', () {
@@ -93,6 +94,64 @@ void main() {
       );
     });
 
+    test('round-trips every workbench layout field in v4', () {
+      const workbench = IdeWorkbenchLayoutState(
+        leftSidebarVisible: false,
+        agentUsageExpanded: true,
+        leftSidebarWidth: 318,
+        agentUsageHeightFraction: 0.46,
+        selectedAgentUsageProviderId: 'grok',
+      );
+
+      final restored = IdeSessionState.tryDecode(
+        const IdeSessionState(workbenchLayout: workbench).encode(),
+      );
+
+      expect(restored?.workbenchLayout, workbench);
+    });
+
+    test('isolates malformed workbench fields from projects and threads', () {
+      final state = IdeSessionState(
+        projectPaths: const <String>['/repo'],
+        cachedThreadsByProject: <String, List<AgentThreadSummary>>{
+          '/repo': <AgentThreadSummary>[
+            AgentThreadSummary(
+              id: 'thread-1',
+              providerId: defaultAgentProviderId,
+              projectPath: '/repo',
+              preview: 'Preview',
+              createdAt: DateTime.fromMillisecondsSinceEpoch(1),
+              updatedAt: DateTime.fromMillisecondsSinceEpoch(2),
+              status: AgentThreadRuntimeStatus.idle,
+            ),
+          ],
+        },
+      );
+      final raw = state.toJson()
+        ..['workbench'] = <String, Object?>{
+          'leftSidebarVisible': false,
+          'agentUsageExpanded': true,
+          'leftSidebarWidth': 'broken',
+          'agentUsageHeightFraction': 0.4,
+          'selectedAgentUsageProviderId': ' codex ',
+          'unknownFutureField': true,
+        };
+
+      final restored = IdeSessionState.tryDecode(jsonEncode(raw));
+
+      expect(restored?.projectPaths, <String>['/repo']);
+      expect(restored?.cachedThreadsByProject['/repo']?.single.id, 'thread-1');
+      expect(
+        restored?.workbenchLayout,
+        const IdeWorkbenchLayoutState(
+          leftSidebarVisible: false,
+          agentUsageExpanded: true,
+          agentUsageHeightFraction: 0.4,
+          selectedAgentUsageProviderId: 'codex',
+        ),
+      );
+    });
+
     test('tolerantly reads supported v1 through v4 snapshots', () {
       for (final version in <int>[1, 2, 3, 4]) {
         final restored = IdeSessionState.tryDecode(
@@ -111,6 +170,7 @@ void main() {
         expect(restored?.activeProjectPath, '/repo');
         expect(restored?.expandedDirectoryPaths, <String>{'/repo/lib'});
         expect(restored?.selectedTreeKey, isNull);
+        expect(restored?.workbenchLayout, const IdeWorkbenchLayoutState());
       }
     });
   });

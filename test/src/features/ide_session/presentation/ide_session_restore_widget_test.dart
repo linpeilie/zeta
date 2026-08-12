@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/main.dart';
 import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
+import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 
 import '../../../testing/ide_test_harness.dart';
@@ -205,6 +207,39 @@ void main() {
     expect(find.text('No folder opened'), findsOneWidget);
     expect(find.text('No file tree'), findsOneWidget);
     expect(find.text('No file context'), findsNothing);
+  });
+
+  testWidgets('keeps restored workbench fields during startup resave', (
+    tester,
+  ) async {
+    const workbench = IdeWorkbenchLayoutState(
+      leftSidebarVisible: false,
+      agentUsageExpanded: true,
+      leftSidebarWidth: 315,
+      agentUsageHeightFraction: 0.48,
+      selectedAgentUsageProviderId: 'grok',
+    );
+    final session = MemorySessionStore(
+      const IdeSessionState(workbenchLayout: workbench).encode(),
+    );
+
+    await tester.pumpWidget(
+      MainApp(
+        enableNativeWindowFrame: false,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderFactory(FakeAgentProvider()),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      ),
+    );
+    await tester.runAsync(waitForIo);
+    await tester.pumpAndSettle();
+    await pumpSessionSave(tester);
+
+    expect(
+      IdeSessionState.tryDecode(session.value)?.workbenchLayout,
+      workbench,
+    );
   });
 
   testWidgets(

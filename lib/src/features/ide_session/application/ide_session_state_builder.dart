@@ -1,8 +1,9 @@
 import 'dart:io';
 
 import 'package:zeta/src/core/utils/path_utils.dart';
-import 'package:zeta/src/features/project_threads/domain/project_threads_session_snapshot.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
+import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
+import 'package:zeta/src/features/project_threads/domain/project_threads_session_snapshot.dart';
 
 /// 从当前页面持有的运行时状态构建可持久化的 IDE 会话快照。
 IdeSessionState buildIdeSessionState({
@@ -18,6 +19,7 @@ IdeSessionState buildIdeSessionState({
   required String? currentSessionId,
   required bool projectHomeActive,
   Map<String, DateTime> projectLastOpenedAtByPath = const <String, DateTime>{},
+  IdeWorkbenchLayoutState workbenchLayout = const IdeWorkbenchLayoutState(),
 }) {
   final mergedAgentThreadIds = Map<String, String>.from(
     agentThreadIdsByProject,
@@ -53,6 +55,7 @@ IdeSessionState buildIdeSessionState({
       projectLastOpenedAtByPath,
     ),
     projectHomeActive: projectHomeActive && activeProjectPath != null,
+    workbenchLayout: workbenchLayout,
   );
 }
 
@@ -115,6 +118,7 @@ IdeSessionState sanitizeIdeSessionState(IdeSessionState state) {
       existingProjectSet,
     ),
     projectHomeActive: activeProjectPath != null && state.projectHomeActive,
+    workbenchLayout: state.workbenchLayout,
   );
 }
 

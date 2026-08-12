@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
@@ -10,6 +11,7 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
+import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_agent_usage_panel_repository.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_usage_statistics_repository.dart';
 
@@ -1203,6 +1205,75 @@ void main() {
     final saved = IdeSessionState.tryDecode(savedJson);
     expect(saved?.projectHomeActive, isTrue);
     expect(saved?.selectedThreadIdsByProject, isEmpty);
+  });
+
+  test('restores, updates, and persists every workbench field', () async {
+    const restoredWorkbench = IdeWorkbenchLayoutState(
+      leftSidebarVisible: false,
+      agentUsageExpanded: true,
+      leftSidebarWidth: 305,
+      agentUsageHeightFraction: 0.41,
+      selectedAgentUsageProviderId: 'grok',
+    );
+    String? savedJson;
+    final shell = IdeShellController(
+      agentUiFrameSchedulerFactory: _createUiFrameScheduler,
+      directoryPicker: () async => null,
+      sessionStore: CallbackIdeSessionStore(
+        loadJson: () async =>
+            const IdeSessionState(workbenchLayout: restoredWorkbench).encode(),
+        saveJson: (value) async {
+          savedJson = value;
+        },
+      ),
+      agentProviderFactory:
+          _RecordingAgentProviderFactory(<String, _ProviderBackend>{
+            defaultAgentProviderId: _ProviderBackend(
+              config: AgentProviderConfig.defaultCodex,
+              threadPages: const <AgentThreadPage>[],
+            ),
+          }),
+      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+    );
+    addTearDown(shell.dispose);
+
+    await _flushAsync();
+    await _flushAsync();
+
+    expect(shell.initialRestoreCompleted, isTrue);
+    expect(shell.workbenchLayout, restoredWorkbench);
+
+    shell
+      ..setLeftSidebarVisible(true)
+      ..setAgentUsageExpanded(false)
+      ..setLeftSidebarWidth(340)
+      ..setAgentUsageHeightFraction(0.56)
+      ..setSelectedAgentUsageProviderId('claude_code');
+    expect(savedJson, isNull);
+
+    await Future<void>.delayed(
+      sessionSaveDelay + const Duration(milliseconds: 50),
+    );
+
+    const updatedWorkbench = IdeWorkbenchLayoutState(
+      leftSidebarWidth: 340,
+      agentUsageHeightFraction: 0.56,
+      selectedAgentUsageProviderId: 'claude_code',
+    );
+    expect(shell.workbenchLayout, updatedWorkbench);
+    expect(
+      IdeSessionState.tryDecode(savedJson)?.workbenchLayout,
+      updatedWorkbench,
+    );
+
+    savedJson = null;
+    shell.setSelectedAgentUsageProviderId('codex');
+    await shell.saveNow();
+
+    expect(
+      IdeSessionState.tryDecode(savedJson)?.workbenchLayout,
+      updatedWorkbench.copyWith(selectedAgentUsageProviderId: 'codex'),
+    );
   });
 
   test(
