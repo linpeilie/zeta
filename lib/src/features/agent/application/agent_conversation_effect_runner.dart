@@ -35,13 +35,11 @@ final class DefaultAgentConversationEffectRunner
     required AgentConversationEffectScopeReader currentScope,
     required AgentModelCatalogRecorder recordModelCatalog,
     AgentTurnTerminalCallback? onTurnTerminal,
-    void Function()? onTurnCompleted,
     AgentAttentionCallback? onAttention,
   }) => DefaultAgentConversationEffectRunner._(
     currentScope,
     recordModelCatalog,
     onTurnTerminal,
-    onTurnCompleted,
     onAttention,
   );
 
@@ -49,7 +47,6 @@ final class DefaultAgentConversationEffectRunner
     this._currentScope,
     this._recordModelCatalog,
     this._onTurnTerminal,
-    this._onTurnCompleted,
     this._onAttention,
   );
 
@@ -58,7 +55,6 @@ final class DefaultAgentConversationEffectRunner
   final AgentConversationEffectScopeReader _currentScope;
   final AgentModelCatalogRecorder _recordModelCatalog;
   final AgentTurnTerminalCallback? _onTurnTerminal;
-  final void Function()? _onTurnCompleted;
   final AgentAttentionCallback? _onAttention;
   Expando<bool> _executed = Expando<bool>(
     'AgentConversationEffectRunner.executed',
@@ -89,11 +85,6 @@ final class DefaultAgentConversationEffectRunner
           effect,
           operation: 'turn/terminal-callback',
           callback: () => _onTurnTerminal?.call(terminalSignal),
-        );
-        _runSynchronous(
-          effect,
-          operation: 'turn/completed-callback',
-          callback: () => _onTurnCompleted?.call(),
         );
         _runSynchronous(
           effect,

@@ -14,12 +14,10 @@ void main() {
     test('delivers typed terminal identity from the validated scope once', () {
       // Arrange
       final signals = <AgentTurnTerminalSignal>[];
-      var legacyCallbackCount = 0;
       final runner = DefaultAgentConversationEffectRunner(
         currentScope: () => _scope(providerId: 'grok', threadId: null),
         recordModelCatalog: _discardCatalog,
         onTurnTerminal: signals.add,
-        onTurnCompleted: () => legacyCallbackCount += 1,
       );
       addTearDown(runner.dispose);
       final effect = AgentTurnCompletedEffect(
@@ -41,20 +39,19 @@ void main() {
       expect(signals.single.providerId, 'grok');
       expect(signals.single.threadId, isNull);
       expect(signals.single.turnId, 'turn-terminal');
-      expect(legacyCallbackCount, 1);
     });
 
-    test('runs a turn-completed callback once for matching full scope', () {
+    test('runs a turn-terminal callback once for matching full scope', () {
       // Arrange
       var currentScope = _scope(
         providerLifecycleState: 'ready',
         turnId: 'turn-current',
       );
-      var callbackCount = 0;
+      final signals = <AgentTurnTerminalSignal>[];
       final runner = DefaultAgentConversationEffectRunner(
         currentScope: () => currentScope,
         recordModelCatalog: _discardCatalog,
-        onTurnCompleted: () => callbackCount += 1,
+        onTurnTerminal: signals.add,
       );
       addTearDown(runner.dispose);
       final effect = AgentTurnCompletedEffect(
@@ -68,7 +65,7 @@ void main() {
       runner.run(effect);
 
       // Assert
-      expect(callbackCount, 1);
+      expect(signals, hasLength(1));
 
       // Provider、generation、runtime/epoch 与 thread 均属于强校验范围。
       for (final mismatchedScope in <AgentConversationEffectScope>[
@@ -90,7 +87,7 @@ void main() {
           ),
         );
       }
-      expect(callbackCount, 1);
+      expect(signals, hasLength(1));
 
       // lifecycle 仅用于诊断；completed turn 已归档，所以也不能要求 current
       // scope 的 turnId 仍等于 effect turnId。
@@ -103,19 +100,17 @@ void main() {
           attention: _turnCompletedAttention,
         ),
       );
-      expect(callbackCount, 2);
+      expect(signals, hasLength(2));
     });
 
     test('ignores late and old-generation turn-completed effects', () {
       // Arrange
       AgentConversationEffectScope? currentScope = _scope();
-      var callbackCount = 0;
       final signals = <AgentTurnTerminalSignal>[];
       final runner = DefaultAgentConversationEffectRunner(
         currentScope: () => currentScope,
         recordModelCatalog: _discardCatalog,
         onTurnTerminal: signals.add,
-        onTurnCompleted: () => callbackCount += 1,
       );
       addTearDown(runner.dispose);
       final lateEffect = AgentTurnCompletedEffect(
@@ -136,7 +131,6 @@ void main() {
       runner.run(oldGenerationEffect);
 
       // Assert
-      expect(callbackCount, 0);
       expect(signals, isEmpty);
     });
 
@@ -282,7 +276,7 @@ void main() {
 
     test('does not execute any new effect after dispose', () async {
       // Arrange
-      var callbackCount = 0;
+      final terminalSignals = <AgentTurnTerminalSignal>[];
       var recordCount = 0;
       final records = <LogEvent>[];
       final listener = records.add;
@@ -298,7 +292,7 @@ void main() {
             }) async {
               recordCount += 1;
             },
-        onTurnCompleted: () => callbackCount += 1,
+        onTurnTerminal: terminalSignals.add,
       );
       runner.dispose();
 
@@ -338,7 +332,7 @@ void main() {
       await pumpEventQueue();
 
       // Assert
-      expect(callbackCount, 0);
+      expect(terminalSignals, isEmpty);
       expect(recordCount, 0);
       expect(
         records.where(
