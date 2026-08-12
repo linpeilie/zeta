@@ -10,10 +10,10 @@
 
 | 项目 | 基线 |
 | --- | --- |
-| 取样系统 | Windows 10 / x64 |
-| `claude --version` | `2.1.224 (Claude Code)` |
-| `system.init.claude_code_version` | `2.1.220` |
-| 取样日期 | 2026-08-11 |
+| 对话取样 | Windows 10 / x64，CLI `2.1.224`，`system.init` 自报 `2.1.220` |
+| metadata 实测取样 | macOS / arm64，CLI `2.1.228` |
+| 核心链路冒烟 | macOS / x86_64，CLI `2.1.227` |
+| 取样日期 | 2026-08-11—2026-08-12 |
 | 传输 | stdin/stdout 行分隔 JSON（stream-json） |
 | fixture | `test/src/features/agent/data/datasources/claude_code/fixtures/` |
 
@@ -21,8 +21,8 @@ CLI 自报版本与 `system.init` 版本可能不同。Zeta 分别保留二者�
 一个改写成另一个，也不据此推断协议兼容。
 
 当前基线覆盖：新建与恢复会话、连续多回合、文本/思考/工具时间线、Edit/Write 文件变更证据、取消、权限审批、
-Plan 审批与本地执行交接、只读历史、从 Zeta 列表隐藏记录、静态模型目录、下一回合
-模型切换和 `/compact`。动态模型与套餐用量的账号数据增强不在本基线内，见 §11。
+Plan 审批与本地执行交接、只读历史、从 Zeta 列表隐藏记录、CLI 有效模型选项、套餐名称、
+可选额度详情、下一回合模型切换和 `/compact`。模型与套餐 metadata 边界见 §7 和 §11。
 
 ## 2. 进程启动
 
@@ -44,6 +44,17 @@ Zeta 按以下稳定顺序追加参数：
 
 默认实时路径不启用 partial messages。进程以当前项目为 working directory；Zeta 不把
 prompt、文件内容或凭证写入启动日志。
+
+模型、套餐名称和显式连接测试使用独立的短生命周期 metadata 进程，不复用会话 peer：
+
+```text
+claude --print --input-format stream-json --output-format stream-json --verbose \
+  --no-session-persistence --setting-sources user
+```
+
+该进程只接收 `control_request.initialize`，不发送 `type:user` 或 Prompt。Zeta 不创建
+Claude session 文件；但 Claude CLI 仍可能维护自己的认证、bootstrap 或缓存状态，因此这里
+不承诺 CLI 进程对其自有目录绝对零写入。
 
 ## 3. transport 约束
 
@@ -151,15 +162,29 @@ id、顺序、动作、evidence 与终态做逐位置回归。
 presentation 只消费 typed snapshot，不读取 `file_path`、`old_string`、`new_string`、`content`
 等 wire key；这些正文也不得进入日志、缓存、通知、thread summary 或 Zeta 持久化 JSON。
 
-## 7. Session init、恢复与模型切换
+## 7. Session init、恢复、模型目录与切换
 
 首个 `system.init.session_id` 必须匹配请求的新建/恢复 session。若不匹配，Provider 产出
 错误并拒绝把该 runtime 绑定到意外会话；同 runtime 后续 init 也不会重新放行。
 
-模型目录当前为无网络静态目录，含 Opus、Sonnet、Haiku 的固定版本和 CLI 短别名，
-Sonnet 别名为默认。模型切换不打断运行中的 turn：选择只影响下一回合；下一回合前，
-Provider 在空闲边界关闭 peer，以原 session `--resume` 并携带新 `--model` 恢复。若新
-peer 启动失败，会尝试恢复上一模型，且不会静默吞掉原失败。
+`ClaudeCodeCliMetadataProbe` 向独立进程发送带随机 request id 的
+`control_request.initialize`，只接受同 id 的成功 `control_response`。模型目录来自
+`response.models`，保留 CLI 顺序，以 `value` 作为稳定 id 和 `--model` 参数；旧形状缺少
+`value` 时才读取 `name`。`value=default` 标记默认项。`resolvedModel`、账号身份字段、未知
+字段，以及尚未接入中立契约的 effort/Fast/auto 能力均不会上浮或落盘。
+
+这份目录表示**当前 CLI 在当前配置下给出的有效选项快照**。initialize 可能受 Claude CLI
+自身 bootstrap、账号权限与缓存影响；它不是 Zeta 直接同步调用的实时远端 API，也不保证
+列出 Anthropic 的全部模型。Zeta 不再调用 `/v1/models`，也不维护内置静态 Claude 目录。
+
+应用级 `AgentModelCatalogRepository` 是唯一 TTL 真源：新鲜缓存保留 1 小时，失败时最多
+保留 7 天 stale snapshot；刷新成功才覆盖 `agent_models_v1.json`。首次读取失败或 CLI 返回
+空目录时不写空缓存，Composer 显示模型加载失败。Provider-local coordinator 只合并并发中的
+metadata 探测，不用已完成快照挡住显式刷新。
+
+模型切换不打断运行中的 turn：选择只影响下一回合；下一回合前，Provider 在空闲边界关闭
+peer，以原 session `--resume` 并携带新 `--model` 恢复。若新 peer 启动失败，会尝试恢复
+上一模型，且不会静默吞掉原失败。
 
 ## 8. 权限与 Plan
 
@@ -207,40 +232,59 @@ Claude Code 没有独立 compact 控制帧。Zeta 把 `/compact` 作为普通 us
 等待该回合终态后才释放当前 Binding 活动租约。Composer 入口仅在 capability 开启且
 当前会话可写、空闲时显示；后续普通回合继续使用原 session。
 
-Agent 管理的自动 detect 全程零网络，只做：
+Agent 管理的自动 detect 不发送 Prompt，也不做连接握手，只做：
 
 - `claude --version`；
-- 登录文件的 stat/mtime，不读取凭证内容；
+- `claude auth status --json` 的白名单投影；
 - 日志路径枚举，不读取日志正文。
 
-只有用户显式点击“测试连接”才启动 20 秒短生命周期 peer，使用临时目录、
-`--no-session-persistence` 和最小模型回合等待同 session 的 init + result。UI 必须在执行前
-提示这可能连接模型服务并产生少量用量。
+合法 `loggedIn=false` 是明确的未登录证据；命令缺失、输出损坏或探测失败是“认证证据不可用”，
+不能通过 `.credentials.json`、`oauth.json` 等文件名猜成 loggedOut。认证证据与 CLI 可用性
+相互独立：即使 `loggedIn=false`，用户仍可显式测试当前自定义 Provider/API key 路径。
 
-## 11. 未实现的账号数据增强
+只有用户显式点击“测试连接”才启动短生命周期 metadata peer，使用临时目录和
+`--no-session-persistence`，只等待匹配 id 的 initialize response。它不创建 session、不发送
+Prompt、不等待模型 result；但 Claude CLI 可能访问网络并维护自己的认证/bootstrap 缓存，
+UI 必须如实说明这一边界。登录指引使用 `claude auth login`。
 
-当前实现不读取 OAuth access token，不直接请求 Anthropic REST API，也不提供动态模型
-目录或套餐额度。历史提案中的以下能力属于独立后续阶段，不得当作当前能力：
+## 11. 套餐名称与可选额度详情
 
-- `ClaudeCodeOAuthCredentialsReader`；
-- `GET /v1/models` 动态模型目录；
-- `GET /api/oauth/usage` 套餐用量；
-- 账号数据增强开关与网络节流。
+套餐展示名来自同一 initialize payload 的 `account.subscriptionType`，由 Claude-local mapper
+归一化为 `Claude Pro`、`Claude Max`、`Claude Team` 或 `Claude Enterprise`。它不依赖
+`claudeCode.accountDataEnrichment`；关闭额度详情增强时，模型目录和套餐名称仍可读取。
 
-这些能力若落地，必须维持可关闭、只读、不刷新、不落盘凭证、失败回退静态目录的边界。
+额度窗口是独立、可关闭的只读增强：
+
+- 仅在 `claudeCode.accountDataEnrichment=true`、非 API key 模式、OAuth token 未过期，且
+  scopes 同时含 `user:inference` 与 `user:profile` 时请求 `GET /api/oauth/usage`。
+- HTTP 超时为 5 秒，不重试；Provider 实例内并发 single-flight，并对成功或失败尝试节流
+  60 秒。401、429、超时、损坏响应或网络失败都降级为 plan-only snapshot。
+- 映射 `five_hour`、`seven_day`、可选 `seven_day_sonnet` / `seven_day_opus` 和
+  `extra_usage`。`monthly_limit=null` 只表示 unlimited；不得猜币种、余额或绝对 Token 总额。
+- macOS 优先通过参数化 `security find-generic-password` 读取 Claude Code Keychain 条目，
+  miss、拒绝、损坏或超时后才回退 Claude 自有 credentials 文件；Windows 使用 Claude 自有
+  credentials 文件。凭据只在一次请求期间存在于内存，不进入 Zeta 配置、缓存或日志。
+
+配置 key 为兼容旧数据继续保留，但 UI 名称是“额度详情增强”。它只控制上述凭据读取和
+usage REST，不控制 initialize 模型或套餐名称。Zeta 不刷新、迁移、改写或删除 Claude
+凭据；与此同时，也不能把“Zeta 不持久化 token”扩大解释为 Claude CLI 自己绝对不写状态。
 
 ## 12. 升级与验证
 
 Claude Code stream-json 没有仓库内可生成的官方 schema pin。升级 CLI 时：
 
 1. 在临时、最小权限、只读 workspace 复采脱敏帧。
-2. 比较固定参数、user/control wire、init、assistant、tool、result/usage 和未知 type。
+2. 比较固定参数、user/control wire、init、assistant、tool、result/usage、
+   `control_response.initialize`、`auth status --json` 与 usage schema。
 3. 更新 Provider 自有 fixture；不得把 Claude fixture 放进共享层测试。
-4. 跑 Provider mapper/identity/peer、live-history parity、权限、Plan、模型与 compact 测试。
+4. 跑 Provider mapper/identity/peer、live-history parity、权限、Plan、metadata、auth、额度、
+   模型缓存与 compact 测试。
 5. 跑共享层 purity guard，确认 Pipeline、Coalescing、TimelineStore 与 Provider 端口无
    Claude 专属改动。
-6. 执行 `tool/smoke_claude_code_stream_json.py` 的真实平台冒烟；若设备或凭据不可用，
-   明确标记“待执行/阻塞”，不得推断通过。
+6. 分别执行 `tool/smoke_claude_code_metadata.py` 与
+   `tool/smoke_claude_code_stream_json.py` 的真实平台冒烟；若设备或凭据不可用，明确标记
+   “待执行/阻塞”，不得推断通过。fixture 与 smoke 只输出版本、OS/架构、模型计数、套餐
+   展示名和成败，不输出模型原始 payload、账号身份、路径、凭据、正文或 stderr。
 
 ### 12.1 真实兼容性冒烟记录
 
@@ -256,3 +300,7 @@ Claude Code stream-json 没有仓库内可生成的官方 schema pin。升级 CL
 该记录验证 2.1.227 对本基线核心 init / assistant / result 链路的兼容性，不把取样基线
 2.1.224 静默改写成新的最低支持版本，也不替代其他声明平台的真实验收。输出未包含
 prompt、回复、文件内容、路径、session/turn id、stderr 或原始 payload。
+
+2026-08-12 的 metadata 契约另以 macOS / arm64、CLI 2.1.228 的脱敏真实形状，以及
+Claude Code 2.8.4 逆向源码构造形状固定。它们共同覆盖 `value`、可选 `resolvedModel`、
+未知字段和 `subscriptionType`，但 fixture 不能替代 Windows 与 macOS 的双平台真机冒烟。

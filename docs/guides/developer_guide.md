@@ -1,6 +1,6 @@
 # 开发者文档
 
-最后更新：2026-08-11
+最后更新：2026-08-12
 
 ## 1. 项目简介
 
@@ -17,7 +17,8 @@ Zeta 是一个 Flutter Desktop 项目，当前支持 macOS、Linux 和 Windows �
 - 如需使用 Grok ACP，建议安装 Grok CLI（grok-build）`0.2.119` 或更高版本。
   `0.2.119` 是 Zeta 的 Grok 多会话兼容基线；此前版本不支持多会话，在同时打开或执行
   多个 Grok 会话时可能出现会话状态、流式通知或回合终态无法正确隔离的问题。
-- 如需使用 Claude Code，需本机可执行并已登录 `claude`；当前 stream-json 取样基线为
+- 如需使用 Claude Code，需本机可执行 `claude`；Claude.ai 交互式登录命令是
+  `claude auth login`。当前 stream-json 取样基线为
   CLI `2.1.224`（不是最低版本承诺），详见
   [Claude Code stream-json 协议基线](../protocols/claude_code_stream_json_protocol.md)。
 - 当前活跃 Provider 为 Codex、Grok 与 Claude Code。Cursor 已退役，不参与 catalog、UI、
@@ -122,7 +123,7 @@ windows/
   调度单测使用 `FakeAgentFrameScheduler` 手动推进 frame。
 - `lib/src/features/agent_management`：Codex/Grok/Claude Code CLI 检测、身份/版本/账号
   诊断、显式连接测试、配置安全编辑和 Agent 管理页面。自动检测不调用模型；Claude Code
-  的连接测试会先提示可能产生少量用量。
+  的连接测试只发无 Prompt initialize，但 CLI 仍可能维护自身认证/bootstrap 缓存。
 - `lib/src/features/desktop_notifications`：Agent attention 去重、可见性抑制、
   系统通知插件适配和三端任务栏/Dock/urgency MethodChannel。
 - `lib/src/features/ide_session`：IDE 会话模型、状态构建、恢复协调和持久化。
@@ -452,6 +453,20 @@ stale-while-revalidate：先发布可用旧目录，再以 single-flight 刷新�
 配置更新通过 generation 使旧任务失效。Provider 主动推送的完整 `AgentModelListEvent`
 只在非目录刷新阶段记录到同一仓储，且内容未变化时跳过持久化。
 
+Claude Code 模型目录是 Provider-local 的特殊协议来源，但不改变上述中立仓储契约：
+
+- 独立 metadata peer 固定使用 `--no-session-persistence --setting-sources user`，只发送带
+  随机 id 的 `control_request.initialize`，不发送 Prompt 或模型 turn。
+- mapper 只消费 `response.models` 与 `account.subscriptionType` 白名单；模型以 `value`
+  作为稳定 id/CLI 参数，旧形状才 fallback 到 `name`。raw、账号身份、`resolvedModel` 与
+  未兑现的 effort/Fast/auto 字段不得上浮。
+- initialize 表示当前 CLI 有效选项快照，不是实时远端全量保证。不得用 `/v1/models`、
+  内置静态目录或 CLI 私有缓存补项。
+- probe 失败或模型为空必须抛错；app 仓储保留 stale cache，无缓存时 UI 显示中立错误，
+  不得以空目录覆盖缓存。Provider coordinator 只能合并 in-flight，不能持有第二套长期 TTL。
+- `claudeCode.accountDataEnrichment` 只控制额度凭据与 usage REST；关闭时模型和套餐名称仍
+  来自 initialize。
+
 当前活跃 Provider 是 Codex、Grok 与 Claude Code。Cursor 退役兼容必须遵守以下约束：旧 `cursor` id
 与 `cursorAcp` kind 可宽容解码，但
 `CursorRetirementPolicy` 必须在 catalog、选择、恢复和 factory 边界 fail-closed；fallback
@@ -592,6 +607,8 @@ Fast 是产品语义，运行时仍必须传递 provider 的精确 `serviceTierI
   快照整体回滚，不得只回滚某个字段。
 - 交互变更至少覆盖：鼠标选择、重新打开收起、键盘 roving focus、Fast / `xhigh`
   冲突确认、保存回滚/重试与运行中的下一回合 Banner。
+- 目录首次加载失败时必须渲染 `AgentModelConfigUiState.refreshError` 的中立状态；tooltip、
+  semantics 和日志不得展示 Provider 原始异常。已有 stale 列表时保留列表并显示刷新警示。
 
 ### 使用统计开发约束
 
@@ -605,6 +622,10 @@ Fast 是产品语义，运行时仍必须传递 provider 的精确 `serviceTierI
 - 新 provider 的套餐读取实现 `AgentUsageQuotaProvider` 可选能力；不要为不支持套餐的
   provider 在通用 `AgentProvider` 上制造强制实现。Grok 通过 `_x.ai/billing` 映射
   到 `AgentUsageQuotaSnapshot`，原始 billing JSON 不得泄漏到 presentation。
+- Claude 的 `planType` 只来自 initialize metadata；可选 `/api/oauth/usage` 仅补额度窗口
+  与 extra usage。只有增强开启、非 API key、token 有效且 scopes 同时含
+  `user:inference` / `user:profile` 时才能读凭据并发请求；5 秒超时、60 秒节流且不重试。
+  REST 失败或增强关闭返回 plan-only，UI 不得伪造 0% 窗口、100% 剩余、币种或余额。
 - 调用统计依赖中立 `AgentUsageRecord`，provider 原始 JSON key 只允许出现在 data 层。
 - Codex 使用统计扫描 `$CODEX_HOME/sessions/**/rollout-*.jsonl`：只要首行是合法
   `session_meta`（含可解析时间戳）即收录，**不得**按 `originator` 前缀白名单过滤；
@@ -619,8 +640,9 @@ Fast 是产品语义，运行时仍必须传递 provider 的精确 `serviceTierI
   迁移进 `codex` 分区；索引损坏时从 provider 历史重建，不得阻断页面或应用启动。
 - 派生索引禁止保存 Prompt、回复、工具输出、session JSONL 路径和原始错误文本。
 - 历史 TTFT 缺失时保持 `null`；UI 显示“数据不足”和有效样本数，禁止用总耗时冒充。
-- 套餐类型、额度窗口、重置时间和余额都是 Provider 返回数据的只读投影；不得据此添加
-  Zeta 登录/账号体系、购买、续费、支付入口或任何写回 Provider 账号的动作。
+- 套餐类型、额度窗口、重置时间、余额和可用重置卡数量都是 Provider 返回数据的只读投影；
+  重置卡数量必须采用 Provider 明示的权威总数，不得用可能被截断的明细条数推算。不得据此
+  添加 Zeta 登录/账号体系、购买、续费、支付入口或任何写回 Provider 账号的动作。
 
 ## 9. 会话和持久化
 

@@ -5,9 +5,12 @@ import 'dart:math';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/data/claude_code_cli_locator.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_control_request_handler.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_cli_metadata_coordinator.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_cli_metadata_probe.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_event_mapper.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_hidden_thread_store.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_model_catalog.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_oauth_credentials_reader.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_permission_policy_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_plan_approval_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_process_starter.dart';
@@ -43,6 +46,8 @@ class ClaudeCodeAgentProvider
     ClaudeCodeCliLocator? locator,
     ClaudeCodeEventMapper? mapper,
     ClaudeCodeModelCatalog? modelCatalog,
+    ClaudeCodeCliMetadataLoader? metadataLoader,
+    ClaudeCodeCliMetadataCoordinator? metadataCoordinator,
     ClaudeCodeUsageQuotaAdapter? usageQuotaAdapter,
     ClaudeCodeControlRequestHandler? controlRequestHandler,
     ClaudeCodeSessionDecisionStoreFactory? sessionDecisionStoreFactory,
@@ -52,24 +57,6 @@ class ClaudeCodeAgentProvider
   }) : _processStarterDelegate = processStarter,
        _cliLocator = locator,
        _mapper = mapper ?? ClaudeCodeEventMapper(providerId: config.id),
-       _modelCatalog =
-           modelCatalog ??
-           ClaudeCodeModelCatalog(
-             accountDataEnrichmentEnabled:
-                 config.extra[claudeCodeAccountDataEnrichmentKey] != false,
-           ),
-       _usageQuotaAdapter =
-           usageQuotaAdapter ??
-           ClaudeCodeUsageQuotaAdapter(
-             providerId: config.id,
-             providerName: config.displayName,
-             accountDataEnrichmentEnabled:
-                 config.extra[claudeCodeAccountDataEnrichmentKey] != false,
-             usesApiKey: _usesClaudeCodeApiKey(config),
-             claudeCodeVersion: _nonEmptyConfigValue(
-               config.extra['detectedCurrentVersion'],
-             ),
-           ),
        _controlHandler =
            controlRequestHandler ?? ClaudeCodeControlRequestHandler(),
        _sessionHistoryReader =
@@ -81,6 +68,40 @@ class ClaudeCodeAgentProvider
          serviceTierId: config.selectedServiceTier,
        ),
        _idFactory = idFactory ?? _defaultIdFactory {
+    final sharedMetadata =
+        metadataCoordinator ??
+        ClaudeCodeCliMetadataCoordinator(
+          metadataLoader:
+              metadataLoader ??
+              ClaudeCodeCliMetadataProbe(
+                config: config,
+                locator: locator,
+                processStarter: processStarter,
+              ).probe,
+        );
+    final credentialsReader = ClaudeCodeOAuthCredentialsReader(
+      environment: <String, String>{
+        ...Platform.environment,
+        ...config.environment,
+      },
+    );
+    _modelCatalog =
+        modelCatalog ??
+        ClaudeCodeModelCatalog(metadataLoader: sharedMetadata.refreshForModels);
+    _usageQuotaAdapter =
+        usageQuotaAdapter ??
+        ClaudeCodeUsageQuotaAdapter(
+          providerId: config.id,
+          providerName: config.displayName,
+          metadataLoader: sharedMetadata.readForQuota,
+          accountDataEnrichmentEnabled:
+              config.extra[claudeCodeAccountDataEnrichmentKey] != false,
+          usesApiKey: _usesClaudeCodeApiKey(config),
+          claudeCodeVersion: _nonEmptyConfigValue(
+            config.extra['detectedCurrentVersion'],
+          ),
+          credentialsLoader: credentialsReader.read,
+        );
     _planApprovalAdapter = _mapper.planApprovalAdapter;
     _permissionMode = ClaudeCodePermissionModeCodec.parseOptionId(
       config.resolvedPermissionOptionId,
@@ -97,8 +118,8 @@ class ClaudeCodeAgentProvider
   final ProcessStarter? _processStarterDelegate;
   final ClaudeCodeCliLocator? _cliLocator;
   final ClaudeCodeEventMapper _mapper;
-  final ClaudeCodeModelCatalog _modelCatalog;
-  final ClaudeCodeUsageQuotaAdapter _usageQuotaAdapter;
+  late final ClaudeCodeModelCatalog _modelCatalog;
+  late final ClaudeCodeUsageQuotaAdapter _usageQuotaAdapter;
   final ClaudeCodeControlRequestHandler _controlHandler;
   final ClaudeCodeSessionHistoryReader _sessionHistoryReader;
   final String Function() _idFactory;

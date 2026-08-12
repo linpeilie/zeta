@@ -188,7 +188,8 @@ class _AgentComposer extends StatelessWidget {
     final Widget? modelSelector =
         showModelSelection &&
             (modelConfigState.models.isNotEmpty ||
-                modelConfigState.isRefreshing)
+                modelConfigState.isRefreshing ||
+                modelConfigState.refreshError != null)
         ? _AgentModelConfig(
             state: modelConfigState,
             onSelectModel: onSelectModel,

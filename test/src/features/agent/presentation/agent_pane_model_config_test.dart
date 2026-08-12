@@ -14,6 +14,40 @@ import 'harness/agent_pane_test_harness.dart';
 
 void main() {
   group('AgentPane model config', () {
+    testWidgets('first catalog failure shows an explicit model error', (
+      tester,
+    ) async {
+      final provider = AgentPaneFakeProvider(
+        modelListError: StateError('sensitive provider failure'),
+      );
+      final viewModel = createAgentPaneViewModel(provider);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.loadModels();
+      await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
+      await pumpAgentPaneUi(tester);
+
+      expect(viewModel.models, isEmpty);
+      expect(viewModel.modelConfigUiState.refreshError, '模型列表刷新失败，已保留现有配置。');
+      expect(find.text('模型加载失败'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('agent-model-refresh-error')),
+        findsOneWidget,
+      );
+      final selector = find.byKey(const ValueKey('agent-model-selector'));
+      expect(selector, findsOneWidget);
+      final tooltip = find.ancestor(
+        of: selector,
+        matching: find.byType(IdeTooltip),
+      );
+      expect(tester.widget<IdeTooltip>(tooltip).message, contains('模型列表刷新失败'));
+      expect(
+        tester.widget<IdeTooltip>(tooltip).message,
+        isNot(contains('sensitive provider failure')),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('model config expands inline and keeps popover open', (
       tester,
     ) async {

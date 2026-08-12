@@ -322,7 +322,9 @@ class _ModelConfigTrigger extends StatelessWidget {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final selectedModel = state.selectedModel;
-    final modelLabel = selectedModel?.displayName ?? '模型';
+    final refreshError = state.refreshError;
+    final modelLabel =
+        selectedModel?.displayName ?? (refreshError == null ? '模型' : '模型加载失败');
     final effortRaw = state.selectedReasoningEffort?.trim();
     final effortLabel = (effortRaw == null || effortRaw.isEmpty)
         ? null
@@ -341,11 +343,16 @@ class _ModelConfigTrigger extends StatelessWidget {
     if (state.appliesNextTurn) {
       tooltip.write('\n配置将在下一回合生效');
     }
+    if (refreshError != null) {
+      tooltip.write('\n$refreshError');
+    }
 
     return _ComposerSelectorTrigger(
       surfaceKey: const ValueKey('agent-model-selector'),
       tooltip: tooltip.toString(),
-      semanticLabel: '$modelLabel，模型配置',
+      semanticLabel: refreshError == null
+          ? '$modelLabel，模型配置'
+          : '$modelLabel，$refreshError',
       open: open,
       focusNode: focusNode,
       onPressed: onPressed,
@@ -381,6 +388,15 @@ class _ModelConfigTrigger extends StatelessWidget {
               key: const ValueKey('agent-model-fast-enabled'),
               size: 13,
               color: colors.warning,
+            ),
+          ],
+          if (refreshError != null) ...[
+            const SizedBox(width: IdeSpacing.space4),
+            Icon(
+              Icons.error_outline_rounded,
+              key: const ValueKey('agent-model-refresh-error'),
+              size: 13,
+              color: colors.error,
             ),
           ],
           const SizedBox(width: IdeSpacing.space4),

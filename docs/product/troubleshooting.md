@@ -55,6 +55,7 @@
 ```sh
 codex app-server     # Codex
 grok --version       # Grok
+claude --version     # Claude Code
 ```
 
 - **命令不存在**：CLI 没装，或者没在 `PATH` 里。注意 Zeta 是图形应用，它读到的 `PATH` 可能和你终端里的不一样——如果你的 CLI 装在 `~/.local/bin` 或通过 nvm/asdf 这类版本管理器安装，图形应用往往看不到。
@@ -70,6 +71,37 @@ grok --version       # Grok
 | 版本检测失败 | CLI 版本过旧或输出格式变了 |
 | 账号未登录 | 在终端里先完成 CLI 的登录流程 |
 | 协议握手失败 | CLI 版本与 Zeta 适配的协议不兼容 |
+
+Claude Code 的连接测试只发送无 Prompt 的 initialize control frame，不会创建会话或请求
+模型回复。它可能让 Claude CLI 访问网络或维护自身认证/bootstrap 缓存，因此“Zeta 不发送
+Prompt”不等于 CLI 对其自有目录绝对零写入。
+
+### 终端里 Claude 能对话，Zeta 却显示未登录
+
+先在与 Zeta 尽量相同的环境中执行：
+
+```sh
+claude auth status --json
+```
+
+- `loggedIn: false` 是 Claude CLI 给出的明确认证证据；如需 Claude.ai 交互式登录，使用
+  `claude auth login`，不要省略中间的 `auth`。
+- 命令不存在、JSON 损坏或探测失败时，Zeta 显示“认证证据不可用”，不会再根据
+  `.credentials.json` 等文件名猜测已登录/未登录。
+- 终端会话可用与 Claude.ai 登录证据并不总是同一件事：API key、第三方 Provider 或不同
+  `CLAUDE_CONFIG_DIR` 都可能造成差异。此时点“测试连接”；initialize 成功表示 Zeta 当前
+  启动的 CLI/认证路径可用，即使 auth status 仍显示 logged out。
+- macOS 图形应用的 `PATH`、环境变量和 Keychain 访问上下文可能与终端不同；Windows 也可能
+  因 GUI 环境或安装 shim 不同而出现差异。这不是 macOS 专属登录流程，先核对管理页显示的
+  CLI 路径和配置环境。
+
+### Claude 模型列表为空或刷新失败
+
+Zeta 从独立、无 Prompt 的 Claude CLI initialize 响应读取当前有效模型选项。这是 CLI
+当前配置下的快照，可能受其 bootstrap/cache 影响，不是 Anthropic 实时远端全量目录。
+Zeta 不再调用 `/v1/models`，也没有内置静态 Claude 目录：刷新失败时保留最多 7 天的旧
+缓存；首次失败会显示“模型加载失败”。确认 CLI 路径后重试刷新，仍失败时检查
+`claude auth status --json` 和“测试连接”。
 
 ### Grok 多开会话时状态错乱
 
@@ -196,6 +228,12 @@ Cursor 会话数据。
 
 只展示 Provider 实际返回的字段：套餐类型、百分比窗口、重置时间和可选余额。Zeta **不推算**绝对 Token 总额度或 Provider 没提供的到期日。
 
+Claude 的套餐名称来自上述 initialize metadata，和“额度详情增强”开关无关。五小时、周
+窗口与 extra usage 才来自可选 usage API；增强关闭、API key 模式、OAuth scope 不足、token
+过期、401/429、超时或断网时，页面会保留套餐名称并显示“额度详情暂不可用”。macOS 优先
+读取 Claude Code Keychain 条目、失败后回退 Claude credentials 文件；Windows 使用 Claude
+credentials 文件。凭据只在一次只读请求期间留在内存，不写入 Zeta 配置或缓存。
+
 ---
 
 ## Zeta 在你电脑上存了什么
@@ -220,6 +258,9 @@ Cursor 会话数据。
 ```
 
 **Zeta 会按功能读取活跃 Agent CLI 的私有数据。** 对应 Provider 的 data adapter 可能读取配置、会话历史、日志和账号 metadata，用于连接、历史恢复、诊断与使用统计；原始正文、凭据和私有路径不会复制进 Zeta 的派生索引。读取权限不代表自动迁移、改写或删除；配置写入只发生在用户明确使用配置编辑功能时。Cursor 已退役，其会话数据仍不参与运行时读取或修改。
+
+Claude 的模型探测和连接测试使用 `--no-session-persistence`，Zeta 也不保存 OAuth token；
+但 Claude CLI 可能维护其自有认证、bootstrap 或缓存文件，这些不属于 Zeta 的持久化目录。
 
 ### 统计索引里有什么
 

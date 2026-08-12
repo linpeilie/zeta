@@ -116,6 +116,34 @@ void main() {
     });
   });
 
+  group('buildClaudeCodeMetadataProbeArguments', () {
+    test('uses the fixed no-session user-settings argument list', () {
+      expect(buildClaudeCodeMetadataProbeArguments(), <String>[
+        '--print',
+        '--input-format',
+        'stream-json',
+        '--output-format',
+        'stream-json',
+        '--verbose',
+        '--no-session-persistence',
+        '--setting-sources',
+        'user',
+      ]);
+      expect(
+        buildClaudeCodeMetadataProbeArguments(),
+        isNot(contains('--permission-prompt-tool')),
+      );
+      expect(
+        buildClaudeCodeMetadataProbeArguments(),
+        isNot(contains('--session-id')),
+      );
+      expect(
+        buildClaudeCodeMetadataProbeArguments(),
+        isNot(contains('--model')),
+      );
+    });
+  });
+
   group('resolveClaudeCodeProcessCommand', () {
     test('uses locator result and config model', () async {
       final resolved = await resolveClaudeCodeProcessCommand(
@@ -183,6 +211,62 @@ void main() {
         expect(resolved.arguments.skip(5), buildClaudeCodeProcessArguments());
       },
     );
+  });
+
+  group('resolveClaudeCodeMetadataProbeCommand', () {
+    test(
+      'keeps wrapper prefix but excludes conversation config args',
+      () async {
+        final resolved = await resolveClaudeCodeMetadataProbeCommand(
+          AgentProviderConfig.defaultClaudeCode.copyWith(
+            arguments: const <String>[
+              '--model',
+              'must-not-leak',
+              '--session-id',
+              'must-not-leak',
+            ],
+            defaultModel: 'must-not-leak',
+          ),
+          locator: const _StaticClaudeCodeCliLocator(
+            ResolvedCliCommand(
+              displayPath: r'D:\bin\claude.cmd',
+              executable: r'C:\Windows\System32\cmd.exe',
+              prefixArguments: <String>[
+                '/d',
+                '/s',
+                '/c',
+                'call',
+                r'D:\bin\claude.cmd',
+              ],
+            ),
+          ),
+        );
+
+        expect(resolved.executable, r'C:\Windows\System32\cmd.exe');
+        expect(resolved.arguments.take(5), <String>[
+          '/d',
+          '/s',
+          '/c',
+          'call',
+          r'D:\bin\claude.cmd',
+        ]);
+        expect(
+          resolved.arguments.skip(5),
+          buildClaudeCodeMetadataProbeArguments(),
+        );
+        expect(resolved.arguments, isNot(contains('must-not-leak')));
+      },
+    );
+
+    test('fails closed when metadata CLI cannot be located', () async {
+      await expectLater(
+        resolveClaudeCodeMetadataProbeCommand(
+          AgentProviderConfig.defaultClaudeCode,
+          locator: const _StaticClaudeCodeCliLocator(null),
+        ),
+        throwsA(isA<ProcessException>()),
+      );
+    });
   });
 }
 

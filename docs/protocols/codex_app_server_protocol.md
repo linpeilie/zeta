@@ -112,6 +112,9 @@ Windows 上若 PATH 里的 npm 全局 `codex` 偏旧，脚本会优先尝试
 - Permission Profile 的稳定能力仅声明发现，不承诺实验性的运行时选择。
 - `initialize` 返回值被映射为运行时版本、兼容状态与动态能力，未知或旧版本
   采用保守降级。
+- `account/rateLimits/read.rateLimitResetCredits.availableCount` 映射为中立配额快照中的
+  可用重置卡数量。该总数可能大于 `credits` 明细长度，统计 UI 不得用明细条数推算；
+  当前仅作只读展示，不接入 `account/rateLimitResetCredit/consume`。
 
 ## 7. 与适配层的关系
 

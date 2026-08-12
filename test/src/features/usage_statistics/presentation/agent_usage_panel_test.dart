@@ -52,6 +52,8 @@ void main() {
     expect(find.text('5 小时'), findsOneWidget);
     expect(find.text('75%'), findsOneWidget);
     expect(find.text('1 周'), findsOneWidget);
+    expect(find.text('可用重置卡'), findsOneWidget);
+    expect(find.text('2 张'), findsOneWidget);
 
     final firstWindow = find.byKey(
       const ValueKey<String>('agent-usage-window-0'),
@@ -91,6 +93,10 @@ void main() {
     expect(find.text('暂无统计'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('agent-usage-plan-section')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('agent-usage-reset-credit-count')),
       findsNothing,
     );
     expect(tester.takeException(), isNull);
@@ -303,17 +309,16 @@ void main() {
     expect(repository.discoverCount, 2);
   });
 
-  testWidgets('有套餐但无窗口百分比时默认剩余 100%', (tester) async {
+  testWidgets('plan-only 展示套餐和额度不可用提示且不伪造窗口', (tester) async {
     final controller = AgentUsagePanelController(
       repository: _ImmediatePanelRepository(const <AgentUsagePanelEntry>[
         AgentUsagePanelEntry(
-          providerId: 'grok',
-          providerName: 'Grok',
+          providerId: 'claude-code',
+          providerName: 'Claude Code',
           quota: AgentUsageQuotaSnapshot(
-            providerId: 'grok',
-            providerName: 'Grok',
-            planType: 'SuperGrok',
-            limitName: '1 周',
+            providerId: 'claude-code',
+            providerName: 'Claude Code',
+            planType: 'Claude Pro',
             windows: <AgentUsageWindow>[],
           ),
         ),
@@ -323,14 +328,98 @@ void main() {
 
     await _pumpPanel(tester, controller);
 
-    expect(find.text('SuperGrok'), findsOneWidget);
+    expect(find.text('Claude Pro'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('agent-usage-plan-section')),
       findsOneWidget,
     );
-    expect(find.byKey(const ValueKey('agent-usage-window-0')), findsOneWidget);
-    expect(find.text('1 周'), findsWidgets);
-    expect(find.text('100%'), findsOneWidget);
+    expect(find.text('额度详情暂不可用'), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-usage-window-0')), findsNothing);
+    expect(find.byType(sf.LinearProgressIndicator), findsNothing);
+    expect(find.text('0%'), findsNothing);
+    expect(find.text('100%'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Claude 套餐按 API 顺序展示通用及模型周窗口', (tester) async {
+    final controller = AgentUsagePanelController(
+      repository: const _ImmediatePanelRepository(<AgentUsagePanelEntry>[
+        AgentUsagePanelEntry(
+          providerId: 'claude-code',
+          providerName: 'Claude Code',
+          quota: AgentUsageQuotaSnapshot(
+            providerId: 'claude-code',
+            providerName: 'Claude Code',
+            planType: 'Claude Max',
+            windows: <AgentUsageWindow>[
+              AgentUsageWindow(label: '五小时会话额度', usedPercent: 10),
+              AgentUsageWindow(label: '1 周', usedPercent: 20),
+              AgentUsageWindow(label: 'Sonnet 1 周', usedPercent: 30),
+              AgentUsageWindow(label: 'Opus 1 周', usedPercent: 40),
+            ],
+            credits: AgentUsageCredits(hasCredits: true, unlimited: true),
+          ),
+        ),
+      ]),
+    );
+    addTearDown(controller.dispose);
+
+    await _pumpPanel(tester, controller);
+
+    expect(find.text('Claude Max'), findsOneWidget);
+    expect(find.text('五小时会话额度'), findsOneWidget);
+    expect(find.text('1 周'), findsOneWidget);
+    expect(find.text('Sonnet 1 周'), findsOneWidget);
+    expect(find.text('Opus 1 周'), findsOneWidget);
+    expect(find.byType(sf.LinearProgressIndicator), findsNWidgets(4));
+    expect(find.text('额度详情暂不可用'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('展开态不展示零张或缺失的重置卡数量', (tester) async {
+    final controller = AgentUsagePanelController(
+      repository: const _ImmediatePanelRepository(<AgentUsagePanelEntry>[
+        AgentUsagePanelEntry(
+          providerId: 'provider-zero',
+          providerName: 'Provider Zero',
+          quota: AgentUsageQuotaSnapshot(
+            providerId: 'provider-zero',
+            providerName: 'Provider Zero',
+            planType: 'plus',
+            windows: <AgentUsageWindow>[],
+            availableResetCreditCount: 0,
+          ),
+        ),
+        AgentUsagePanelEntry(
+          providerId: 'provider-missing',
+          providerName: 'Provider Missing',
+          quota: AgentUsageQuotaSnapshot(
+            providerId: 'provider-missing',
+            providerName: 'Provider Missing',
+            planType: 'plus',
+            windows: <AgentUsageWindow>[],
+          ),
+        ),
+      ]),
+    );
+    addTearDown(controller.dispose);
+
+    await _pumpPanel(tester, controller);
+
+    expect(
+      find.byKey(const ValueKey('agent-usage-reset-credit-count')),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('agent-usage-tab-provider-missing')),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('agent-usage-reset-credit-count')),
+      findsNothing,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -343,6 +432,7 @@ void main() {
         providerId: 'provider-paid',
         providerName: 'Provider Paid',
         planType: 'plus',
+        availableResetCreditCount: 2,
         windows: <AgentUsageWindow>[
           AgentUsageWindow(
             label: '1 周',
@@ -386,6 +476,10 @@ void main() {
     expect(find.text('1 周'), findsNothing);
     expect(find.text('今日 Token'), findsOneWidget);
     expect(find.text('1.6K'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('agent-usage-reset-credit-count')),
+      findsNothing,
+    );
 
     final header = find.byKey(const ValueKey('agent-usage-compact-header'));
     final quota = find.byKey(const ValueKey('agent-usage-compact-quota'));
@@ -395,6 +489,44 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
     expect(requestedMode, AgentUsagePanelMode.expanded);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('折叠态 plan-only 显示额度不可用且不伪造进度', (tester) async {
+    final controller = AgentUsagePanelController(
+      repository: const _ImmediatePanelRepository(<AgentUsagePanelEntry>[
+        AgentUsagePanelEntry(
+          providerId: 'claude-code',
+          providerName: 'Claude Code',
+          todayTokens: UsageTokenBreakdown(totalTokens: 1600),
+          quota: AgentUsageQuotaSnapshot(
+            providerId: 'claude-code',
+            providerName: 'Claude Code',
+            planType: 'Claude Max',
+            windows: <AgentUsageWindow>[],
+          ),
+        ),
+      ]),
+    );
+    addTearDown(controller.dispose);
+
+    await _pumpPanelContent(
+      tester,
+      controller,
+      mode: AgentUsagePanelMode.collapsed,
+      height: 104,
+      onModeChanged: (_) {},
+    );
+
+    expect(find.text('Claude Max'), findsOneWidget);
+    expect(find.text('额度详情暂不可用'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('agent-usage-compact-quota')),
+      findsNothing,
+    );
+    expect(find.byType(sf.LinearProgressIndicator), findsNothing);
+    expect(find.text('0%'), findsNothing);
+    expect(find.text('100%'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -601,6 +733,7 @@ final _usageEntries = <AgentUsagePanelEntry>[
       providerId: 'codex-work',
       providerName: 'Codex Work',
       planType: 'plus',
+      availableResetCreditCount: 2,
       windows: <AgentUsageWindow>[
         AgentUsageWindow(
           label: '5 小时',

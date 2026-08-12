@@ -150,6 +150,13 @@ flowchart LR
 - The manager runs a single-flight sweep every minute. A session is reaped only after ten idle minutes with no active turn/RPC, using an exact runtime identity; a replacement waits for the old process to finish disposing.
 - Runtime acquisition must explicitly choose a global or session scope. Shared model/usage features consume neutral ports, and the usage panel always uses the global runtime.
 
+Claude Code models and the plan name come from a separate, no-prompt CLI initialize call and are
+mapped to neutral models inside the Claude-local adapter. This is a snapshot of options effective for
+the current CLI, not a guaranteed real-time exhaustive remote catalog. Quota details use a separate,
+optional OAuth usage path and degrade to the plan name on failure. Zeta persists only the normalized
+model cache, never credentials or raw payloads; the Claude CLI may still maintain its own auth,
+bootstrap, and cache state.
+
 ## Three kinds of approval — don't conflate them
 
 This is the most common newcomer trap. They all look like "show a card and wait for a click", but they are **three independent domain semantics** that do not share request/decision models:

@@ -45,7 +45,7 @@ sudo apt-get update && sudo apt-get install --yes \
 
 - **Codex** (default provider): `codex app-server` must be runnable locally. Without `--listen` it communicates over stdio. The adapter is developed against a pinned schema — see [Codex app-server protocol pinning](docs/protocols/codex_app_server_protocol.md).
 - **Grok** (optional): Grok CLI (grok-build) **0.2.119 or newer**. That's the multi-session compatibility baseline; earlier versions can't correctly isolate session state or turn terminal states when several Grok sessions are open at once.
-- **Claude Code** (optional): `claude` must be runnable and already authenticated. The current stream-json sampling baseline is CLI **2.1.224** (not a minimum-version promise); see the [Claude Code stream-json protocol baseline](docs/protocols/claude_code_stream_json_protocol.md) for boundaries and upgrade checks.
+- **Claude Code** (optional): `claude` must be runnable; interactive Claude.ai sign-in uses `claude auth login`. The current conversational stream-json sampling baseline is CLI **2.1.224** (not a minimum-version promise); see the [Claude Code stream-json protocol baseline](docs/protocols/claude_code_stream_json_protocol.md) for boundaries and upgrade checks. Models and the plan name come from no-prompt initialize; only optional quota details read Provider-local OAuth credentials.
 
 For UI-only or docs-only changes you can skip all of these CLIs — the agent panel will simply report nothing detected.
 

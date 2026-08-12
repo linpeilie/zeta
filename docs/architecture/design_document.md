@@ -101,7 +101,7 @@ AgentManagementController
      | ClaudeCodeAgentManagementRepository
     -> CLI 身份、版本与登录态检查
     -> Codex/Grok 通过共享 runtime lease 执行无模型 turn 的协议握手
-    -> Claude 自动检测保持零网络；仅用户显式连接测试执行最小模型回合
+    -> Claude 认证证据走 auth status；显式连接测试只发无 Prompt initialize
     -> provider 对应配置与脱敏诊断
 
 UsageStatisticsController
@@ -115,6 +115,9 @@ UsageStatisticsController
         -> 本地 Grok updates.jsonl 历史
         -> 版本化派生索引（providers.grok 分区）
         -> 可选 AgentUsageQuotaProvider / `_x.ai/billing`
+      -> ClaudeCode AgentUsageQuotaProvider
+        -> initialize account metadata（套餐名称）
+        -> 可关闭的 OAuth usage REST（额度窗口）
 
 DesktopAttentionController
   -> GeneralSettingsController
@@ -184,7 +187,8 @@ projection 与 unified diff 以 turn render revision 缓存，代码高亮复用
 - 当前支持 Codex、Grok 与 Claude Code。Cursor 已退役，不出现在“全部支持”、配置、检测或安装入口中。
 - 详情包含基础诊断、模型和 provider 对应配置；桌面端双栏，窄窗口上下排列。
 - 自动检测只做本地版本、账号 metadata 与日志路径检查。Claude Code 的显式连接测试
-  会执行 20 秒上限的最小模型回合，触发前必须提示可能产生少量用量。
+  只发送无 Prompt 的 initialize control frame；它不调用模型，但 Claude CLI 仍可能维护
+  自身认证/bootstrap 缓存。
 - 禁用 Codex 后不再允许创建可写会话；既有会话仍可读取历史，输入区隐藏并显示
   只读提示。
 
@@ -201,8 +205,9 @@ projection 与 unified diff 以 turn render revision 缓存，代码高亮复用
 - 历史 TTFT 只使用 Codex 明确返回的 `time_to_first_token_ms`；缺失样本不做
   近似，并在页面标明有效样本数。
 - 套餐仅展示 Provider 实际返回的套餐类型、百分比窗口、重置时间与可选余额：Codex
-  走 `account/rateLimits/read`，Grok 走 ACP 扩展 `_x.ai/billing`；不推算绝对 Token
-  总额度或未提供的到期日，也不提供登录、购买、续费或支付动作。
+  走 `account/rateLimits/read`，Grok 走 ACP 扩展 `_x.ai/billing`；Claude 套餐名称来自
+  CLI initialize，额度详情可选走 `/api/oauth/usage`。不推算绝对 Token 总额度、币种或
+  未提供的到期日，也不提供登录、购买、续费或支付动作。
 - 宽屏使用双栏分析区，窄窗口切换为单栏；表格可横向滚动，任务详情使用自适应
   侧边/底部抽屉。
 - `UsageStatisticsIndexStore`（v3）按 Provider 分区持久化派生会话快照：只含
@@ -468,6 +473,8 @@ turnId，并在自有 identity/reducer 内完成消息分段、reasoning phase�
 终态。历史只读扫描 `~/.claude/projects/<encoded-cwd>/*.jsonl`，使用独立 history
 identity/reducer；隐藏记录只写 Zeta 自有版本化列表，不改 Claude 文件。权限和 Plan
 审批分别使用独立 registry；模型切换与 `/compact` 都在当前 Binding 的空闲边界执行。
+模型目录和套餐名称由独立无 Prompt initialize 投影，额度详情才按可关闭配置读取 OAuth
+凭据并请求 usage API；两条路径都留在 Claude-local data 层。
 实际 wire 与升级门禁见
 [Claude Code stream-json 协议基线](../protocols/claude_code_stream_json_protocol.md)。
 
@@ -482,9 +489,10 @@ provider 或启动进程。退役不会迁移或改写任何 Cursor 用户数据
 `AgentProviderSettingsController` 的全局 provider 配置。各活跃 CLI 使用独立 management
 repository；协议 transport 不记录 prompt、文件内容或 stderr 原文。
 
-Claude Code 自动检测只执行 `--version`、登录文件 stat/mtime 与日志路径枚举，不读取
-凭证正文、不启动模型。显式连接测试才创建临时、无会话持久化的 stream-json peer，
-等待同 session 的 init + result，并在 UI 中先提示潜在用量。
+Claude Code 自动检测执行 `--version`、`claude auth status --json` 与日志路径枚举，不按
+凭据文件名猜登录态。显式连接测试创建临时、`--no-session-persistence` 的 metadata peer，
+只等待匹配 request id 的 initialize response；不发送 Prompt、不创建 session、不等待模型
+result。认证证据与 initialize 可用性独立，CLI 仍可能维护自身认证/bootstrap/cache。
 
 检测摘要和真实 CLI 路径保存在 provider `extra` 中；项目 thread 仍只保存稳定的
 `providerId`。管理 feature 不解析 thread/turn 原始协议，也不替代现有 provider。
@@ -646,10 +654,13 @@ data 精确编码”的单向流：
 直接使用，超过 1 小时的缓存先发布给 Composer，再通过 single-flight 刷新，最长保留
 7 天作为离线降级。显式“测试连接/刷新”会绕过内存缓存强制请求 provider。Codex 的
 `initialize` 只完成协议握手，`model/list` 在目录真正需要时按 cursor 拉完所有分页；失败
-不会写入空目录，后续请求仍可重试。共享仓储是 TTL 的唯一真源：一旦决定刷新，loader
-必须绕过 provider 实例缓存。刷新任务按配置指纹和 provider generation 隔离，旧配置完成
-后不得覆盖新配置；Provider 运行时主动推送的完整目录只在内容变化时回写，目录请求自身
-产生的事件不重复落盘。
+不会写入空目录，后续请求仍可重试。Claude 则由独立、无 Prompt 的
+`control_request.initialize` 返回当前 CLI 有效选项快照；它不是实时远端全量 catalog，
+也没有 REST/静态 fallback。Claude probe 失败或返回空目录时，同样只保留 stale cache；
+首次失败由 Composer 显式报错。共享仓储是 TTL 的唯一真源：一旦决定刷新，loader 必须
+绕过 provider 实例缓存。刷新任务按配置指纹和 provider generation 隔离，旧配置完成后
+不得覆盖新配置；Provider 运行时主动推送的完整目录只在内容变化时回写，目录请求自身产生
+的事件不重复落盘。
 
 ### 上下文策略
 

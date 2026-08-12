@@ -715,7 +715,9 @@ class _AgentPlanDocumentCard extends StatelessWidget {
       return null;
     }
     final modelConfigState = state.modelConfigState;
-    if (modelConfigState.models.isEmpty && !modelConfigState.isRefreshing) {
+    if (modelConfigState.models.isEmpty &&
+        !modelConfigState.isRefreshing &&
+        modelConfigState.refreshError == null) {
       return null;
     }
     return _AgentModelConfig(

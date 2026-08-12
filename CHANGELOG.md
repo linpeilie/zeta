@@ -54,6 +54,7 @@
 
 ### 新增
 
+- Agent 统计展开态在 Provider 返回可用重置卡时展示权威数量；零张或未提供时保持隐藏
 - Agent 时间线新增中立文件变更证据：Grok 与 Claude Edit 展示替换片段，Claude Write
   展示写入内容，Codex 结构化 fileChange 展示 unified patch；仅有命令时继续显示命令卡，
   不猜测文件 diff，实时 turn fallback 也会明确标注不可从历史恢复
@@ -121,18 +122,21 @@
 - Grok ACP 接入，能力按握手结果自动降级
 - Claude Code stream-json 接入，支持连续对话、思考与工具时间线、权限审批、Plan 审批和取消回合
 - Claude Code Provider 支持只读展示本地历史、从 Zeta 列表隐藏记录，并按原 session 恢复对话
-- Claude Code 自动检测只检查本地 CLI 版本、登录元数据和日志路径，不连接模型服务；
-  手动“测试连接”前会明示提醒可能产生少量用量
-- Claude Code 对话可在 Composer 中选择 Opus、Sonnet 或 Haiku；模型目录优先读取
-  当前账号的动态列表，失败时回退内置目录；对话进行中的切换从下一回合开始生效
-- Claude Code 支持展示五小时与周套餐用量；详情页可关闭「账号数据增强」，关闭后
-  不再读取登录凭据或发起模型目录/套餐用量 REST 查询，并回退内置模型目录
+- Claude Code 自动检测使用 `claude auth status --json` 展示认证证据，不再按凭据文件名
+  猜登录态；手动“测试连接”只发送无 Prompt initialize，不创建会话或调用模型
+- Claude Code Composer 从 CLI initialize 读取当前有效模型选项；不再调用 `/v1/models`
+  或回退内置静态目录。刷新失败会保留旧缓存，首次失败明确显示加载错误；对话进行中的
+  模型切换仍从下一回合开始生效
+- Claude Code 套餐名称来自 initialize metadata；五小时、周窗口和 extra usage 由可关闭的
+  「额度详情增强」只读补充。关闭后不读取 OAuth 凭据或请求 usage API，但模型与套餐名称
+  仍可用；macOS 支持 Claude Code Keychain，Windows 保持 credentials 文件路径
 - Claude Code 对话可从 Composer 的 `/` 菜单选择 `Compact context` 压缩上下文；
   仅在当前会话空闲且可写时显示
 - 会话级 Provider Binding：打开草稿或历史不启动 CLI；首次提交时按会话创建实例，空闲 10 分钟自动回收并在下次提交时恢复
 - 会话权限状态收敛到各自 Binding，runtime 权限变化不再影响其他会话
 - 能力协商机制：Provider 不支持的功能在界面上不出现，而非点了无反应
-- Agent 管理页：CLI 身份、版本、账号与连接诊断；自动检测不调用模型，Claude Code 的手动连接测试会先提示可能产生少量用量
+- Agent 管理页：CLI 身份、版本、账号与连接诊断；自动检测不调用模型，Claude Code 的
+  手动连接测试同样只做无 Prompt initialize，并说明 CLI 可能维护自身 bootstrap 缓存
 
 **会话与持久化**
 

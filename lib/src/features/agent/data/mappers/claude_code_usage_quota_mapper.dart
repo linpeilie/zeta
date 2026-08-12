@@ -9,10 +9,7 @@ AgentUsageQuotaSnapshot? mapClaudeCodeUsageQuota(
   required String providerName,
   String? subscriptionType,
 }) {
-  final response = _asMap(raw);
-  if (response == null) {
-    return null;
-  }
+  final response = _asMap(raw) ?? const <String, Object?>{};
 
   final windows = <AgentUsageWindow>[
     ?_window(
@@ -25,8 +22,18 @@ AgentUsageQuotaSnapshot? mapClaudeCodeUsageQuota(
       label: '1 周',
       duration: const Duration(days: 7),
     ),
+    ?_window(
+      response['seven_day_sonnet'],
+      label: 'Sonnet 1 周',
+      duration: const Duration(days: 7),
+    ),
+    ?_window(
+      response['seven_day_opus'],
+      label: 'Opus 1 周',
+      duration: const Duration(days: 7),
+    ),
   ];
-  final planType = _nonEmptyString(subscriptionType);
+  final planType = _subscriptionDisplayName(subscriptionType);
   final credits = _credits(response['extra_usage']);
   if (windows.isEmpty && planType == null && credits == null) {
     return null;
@@ -40,6 +47,17 @@ AgentUsageQuotaSnapshot? mapClaudeCodeUsageQuota(
     windows: List<AgentUsageWindow>.unmodifiable(windows),
     credits: credits,
   );
+}
+
+String? _subscriptionDisplayName(Object? value) {
+  final normalized = _nonEmptyString(value);
+  return switch (normalized?.toLowerCase()) {
+    'pro' || 'claude pro' => 'Claude Pro',
+    'max' || 'claude max' => 'Claude Max',
+    'team' || 'claude team' => 'Claude Team',
+    'enterprise' || 'claude enterprise' => 'Claude Enterprise',
+    _ => normalized,
+  };
 }
 
 AgentUsageWindow? _window(
@@ -66,28 +84,28 @@ AgentUsageCredits? _credits(Object? raw) {
     return null;
   }
 
-  final balance = _balanceText(value['balance']);
-  final explicitHasCredits = value['has_credits'];
+  if (value.containsKey('monthly_limit') && value['monthly_limit'] == null) {
+    // Claude Code 明确定义 null 为无限额；不据此推算币种或余额文本。
+    return const AgentUsageCredits(hasCredits: true, unlimited: true);
+  }
+
   final monthlyLimit = _finiteNumber(value['monthly_limit']);
   final usedCredits = _finiteNumber(value['used_credits']);
   final utilization = _percent(value['utilization']);
-  final bool hasCredits;
-  if (explicitHasCredits is bool) {
-    hasCredits = explicitHasCredits;
-  } else if (monthlyLimit != null && usedCredits != null) {
+  final bool? hasCredits;
+  if (monthlyLimit != null && usedCredits != null) {
     // 两个字段使用 Provider 自己的同一单位，只比较大小，不展示或猜测单位。
     hasCredits = usedCredits < monthlyLimit;
   } else if (utilization != null) {
     hasCredits = utilization < 100;
   } else {
-    hasCredits = true;
+    hasCredits = null;
+  }
+  if (hasCredits == null) {
+    return null;
   }
 
-  return AgentUsageCredits(
-    hasCredits: hasCredits,
-    unlimited: false,
-    balance: balance,
-  );
+  return AgentUsageCredits(hasCredits: hasCredits, unlimited: false);
 }
 
 int? _percent(Object? value) {
@@ -102,19 +120,6 @@ num? _finiteNumber(Object? value) {
     _ => null,
   };
   return parsed?.isFinite == true ? parsed : null;
-}
-
-String? _balanceText(Object? value) {
-  if (value is String) {
-    return _nonEmptyString(value);
-  }
-  final number = _finiteNumber(value);
-  if (number == null) {
-    return null;
-  }
-  return number == number.roundToDouble()
-      ? number.toInt().toString()
-      : number.toString();
 }
 
 DateTime? _dateTime(Object? value) {

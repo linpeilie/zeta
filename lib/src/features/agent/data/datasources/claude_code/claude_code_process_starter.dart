@@ -77,6 +77,24 @@ List<String> buildClaudeCodeProcessArguments({
   return List<String>.unmodifiable(args);
 }
 
+/// 组装无 Prompt 的 Claude Code metadata 探测参数。
+///
+/// 该进程只接受 `control_request.initialize`，不创建会话、不选择模型，也不加载
+/// project/local settings。参数保持封闭，避免用户会话参数改变探测语义。
+List<String> buildClaudeCodeMetadataProbeArguments() {
+  return const <String>[
+    '--print',
+    '--input-format',
+    'stream-json',
+    '--output-format',
+    'stream-json',
+    '--verbose',
+    '--no-session-persistence',
+    '--setting-sources',
+    'user',
+  ];
+}
+
 /// 在每次启动前重新校验 CLI，并统一解析 Windows 脚本包装器。
 Future<ResolvedCliProcessCommand> resolveClaudeCodeProcessCommand(
   AgentProviderConfig config, {
@@ -112,6 +130,24 @@ Future<ResolvedCliProcessCommand> resolveClaudeCodeProcessCommand(
   );
 
   return resolved.processCommandFor(args);
+}
+
+/// 定位 Claude Code CLI，并生成 metadata 专用启动命令。
+Future<ResolvedCliProcessCommand> resolveClaudeCodeMetadataProbeCommand(
+  AgentProviderConfig config, {
+  ClaudeCodeCliLocator? locator,
+}) async {
+  final resolved = await (locator ?? const ClaudeCodeCliLocator()).locate(
+    config,
+  );
+  if (resolved == null) {
+    throw ProcessException(
+      config.command,
+      const <String>[],
+      'Claude Code executable was not found',
+    );
+  }
+  return resolved.processCommandFor(buildClaudeCodeMetadataProbeArguments());
 }
 
 /// 创建 [StreamJsonPeer] / [Process.start] 使用的启动器。

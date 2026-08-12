@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/data/claude_code_cli_locator.dart';
 import 'package:zeta/src/features/agent/data/cli_command_locator.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_agent_provider.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_cli_metadata.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_model_catalog.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_oauth_credentials_reader.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_permission_policy_adapter.dart';
@@ -465,52 +466,40 @@ void main() {
     });
 
     test(
-      'listModels returns static catalog when enrichment is disabled',
+      'listModels uses CLI metadata even when enrichment is disabled',
       () async {
+        var metadataCalls = 0;
         final provider = ClaudeCodeAgentProvider(
           config: AgentProviderConfig.defaultClaudeCode.copyWith(
             extra: const <String, Object?>{
               claudeCodeAccountDataEnrichmentKey: false,
             },
           ),
+          metadataLoader: () async {
+            metadataCalls += 1;
+            return _metadataSnapshot('cli-default-$metadataCalls');
+          },
         );
         addTearDown(provider.dispose);
 
-        final models = await provider.listModels(limit: 1);
+        final first = await provider.listModels(limit: 1);
+        final cached = await provider.listModels(limit: 1);
 
-        expect(models.models, hasLength(6));
-        expect(
-          models.models.where((model) => model.isDefault).single.id,
-          'sonnet',
-        );
+        expect(first.models.single.id, 'cli-default-1');
+        expect(cached, same(first));
+        expect(metadataCalls, 1);
       },
     );
 
     test(
       'implements refreshable catalog and forwards forced refresh',
       () async {
-        var remoteCalls = 0;
+        var metadataCalls = 0;
         final catalog = ClaudeCodeModelCatalog(
-          credentialsLoader: () async => ClaudeCodeOAuthCredentials(
-            accessToken: 'sensitive-test-token',
-            expiresAt: DateTime.utc(2099),
-            subscriptionType: 'pro',
-          ),
-          remoteModelsLoader:
-              ({
-                required String accessToken,
-                required bool isSubscriptionOAuth,
-              }) async {
-                remoteCalls += 1;
-                return <String, Object?>{
-                  'data': <Object?>[
-                    <String, Object?>{
-                      'id': 'claude-sonnet-refresh-$remoteCalls',
-                      'display_name': 'Claude Sonnet refresh $remoteCalls',
-                    },
-                  ],
-                };
-              },
+          metadataLoader: () async {
+            metadataCalls += 1;
+            return _metadataSnapshot('cli-refresh-$metadataCalls');
+          },
         );
         final provider = ClaudeCodeAgentProvider(
           config: AgentProviderConfig.defaultClaudeCode,
@@ -522,20 +511,54 @@ void main() {
         final refreshable = provider as AgentRefreshableModelCatalogProvider;
         final refreshed = await refreshable.refreshModels();
 
-        expect(first.models.single.id, 'claude-sonnet-refresh-1');
-        expect(refreshed.models.single.id, 'claude-sonnet-refresh-2');
-        expect(remoteCalls, 2);
+        expect(first.models.single.id, 'cli-refresh-1');
+        expect(refreshed.models.single.id, 'cli-refresh-2');
+        expect(metadataCalls, 2);
       },
     );
+
+    test('model and quota reads share one metadata probe', () async {
+      final gate = Completer<ClaudeCodeCliMetadataSnapshot>();
+      var metadataCalls = 0;
+      final provider = ClaudeCodeAgentProvider(
+        config: AgentProviderConfig.defaultClaudeCode.copyWith(
+          extra: const <String, Object?>{
+            claudeCodeAccountDataEnrichmentKey: false,
+          },
+        ),
+        metadataLoader: () {
+          metadataCalls += 1;
+          return gate.future;
+        },
+      );
+      addTearDown(provider.dispose);
+
+      final modelsFuture = provider.listModels();
+      final quotaFuture = provider.readUsageQuota();
+      await Future<void>.delayed(Duration.zero);
+      expect(metadataCalls, 1);
+
+      gate.complete(_metadataSnapshot('shared-model', subscriptionType: 'pro'));
+      final models = await modelsFuture;
+      final quota = await quotaFuture;
+
+      expect(models.models.single.id, 'shared-model');
+      expect(quota?.planType, 'Claude Pro');
+      expect(quota?.windows, isEmpty);
+      expect(metadataCalls, 1);
+    });
 
     test('exposes usage quota through the neutral bundle port', () async {
       final adapter = ClaudeCodeUsageQuotaAdapter(
         providerId: defaultClaudeCodeProviderId,
         providerName: 'Claude Code',
+        metadataLoader: () async =>
+            _metadataSnapshot('quota-model', subscriptionType: 'max'),
         credentialsLoader: () async => ClaudeCodeOAuthCredentials(
           accessToken: 'sensitive-test-token',
           expiresAt: DateTime.utc(2099),
           subscriptionType: 'max',
+          scopes: const <String>['user:inference', 'user:profile'],
         ),
         remoteUsageLoader:
             ({
@@ -556,7 +579,7 @@ void main() {
 
       expect(quotaPort, same(provider));
       expect(quota?.providerId, defaultClaudeCodeProviderId);
-      expect(quota?.planType, 'max');
+      expect(quota?.planType, 'Claude Max');
       expect(quota?.windows.single.usedPercent, 20);
     });
 
@@ -1025,6 +1048,20 @@ String Function() _sequenceIds(List<String> ids) {
     }
     return ids[index++];
   };
+}
+
+ClaudeCodeCliMetadataSnapshot _metadataSnapshot(
+  String id, {
+  String? subscriptionType = 'Claude Pro',
+}) {
+  return ClaudeCodeCliMetadataSnapshot(
+    models: AgentModelList(
+      models: <AgentModelInfo>[
+        AgentModelInfo(id: id, model: id, displayName: id, isDefault: true),
+      ],
+    ),
+    subscriptionType: subscriptionType,
+  );
 }
 
 final class _RecordedProcessStart {

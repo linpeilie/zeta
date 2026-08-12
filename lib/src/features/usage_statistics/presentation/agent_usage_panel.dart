@@ -231,6 +231,17 @@ class _CompactAgentUsageSummary extends StatelessWidget {
             if (quotaWindow != null) ...[
               const SizedBox(height: IdeSpacing.space4),
               _CompactQuotaWindow(window: quotaWindow),
+            ] else if (entry.hasSubscriptionPlan) ...[
+              const SizedBox(height: IdeSpacing.space4),
+              Text(
+                '额度详情暂不可用',
+                key: const ValueKey('agent-usage-compact-quota-unavailable'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textStyles.bodySmall.copyWith(
+                  color: colors.textSecondary,
+                ),
+              ),
             ],
             const SizedBox(height: IdeSpacing.space4),
             Row(
@@ -682,6 +693,8 @@ class _ProviderUsage extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
+    final resetCreditCount = entry.quota?.availableResetCreditCount;
+    final hasResetCredits = resetCreditCount != null && resetCreditCount > 0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -694,8 +707,11 @@ class _ProviderUsage extends StatelessWidget {
           ),
           const SizedBox(height: IdeSpacing.space12),
         ],
-        if (entry.hasSubscriptionPlan) ...[
-          _PlanSection(quota: entry.quota!),
+        if (entry.hasSubscriptionPlan || hasResetCredits) ...[
+          if (entry.hasSubscriptionPlan) _PlanSection(quota: entry.quota!),
+          if (entry.hasSubscriptionPlan && hasResetCredits)
+            const SizedBox(height: IdeSpacing.space10),
+          if (hasResetCredits) _ResetCreditCountRow(count: resetCreditCount),
           const SizedBox(height: IdeSpacing.space12),
           const IdeRowDivider(),
           const SizedBox(height: IdeSpacing.space12),
@@ -708,6 +724,35 @@ class _ProviderUsage extends StatelessWidget {
             style: textStyles.caption.copyWith(color: colors.textTertiary),
           ),
         ],
+      ],
+    );
+  }
+}
+
+class _ResetCreditCountRow extends StatelessWidget {
+  const _ResetCreditCountRow({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    return Row(
+      key: const ValueKey('agent-usage-reset-credit-count'),
+      children: [
+        Expanded(
+          child: Text(
+            '可用重置卡',
+            style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
+          ),
+        ),
+        const SizedBox(width: IdeSpacing.space8),
+        Text(
+          '$count 张',
+          key: const ValueKey('agent-usage-reset-credit-count-value'),
+          style: textStyles.numeric,
+        ),
       ],
     );
   }
@@ -784,18 +829,8 @@ class _PlanSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    // 有套餐但缺少窗口百分比时，按未使用处理，进度条默认剩余 100%。
-    final windows = quota.windows.isNotEmpty
-        ? quota.windows
-        : <AgentUsageWindow>[
-            AgentUsageWindow(
-              label: quota.limitName?.trim().isNotEmpty == true
-                  ? quota.limitName!.trim()
-                  : '套餐额度',
-              usedPercent: 0,
-            ),
-          ];
     return Column(
       key: const ValueKey('agent-usage-plan-section'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -810,12 +845,18 @@ class _PlanSection extends StatelessWidget {
           style: textStyles.titleLarge,
         ),
         const SizedBox(height: IdeSpacing.space10),
-        for (var index = 0; index < windows.length; index++) ...[
+        if (quota.windows.isEmpty)
+          Text(
+            '额度详情暂不可用',
+            key: const ValueKey('agent-usage-quota-unavailable'),
+            style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
+          ),
+        for (var index = 0; index < quota.windows.length; index++) ...[
           _QuotaWindow(
             key: ValueKey<String>('agent-usage-window-$index'),
-            window: windows[index],
+            window: quota.windows[index],
           ),
-          if (index != windows.length - 1)
+          if (index != quota.windows.length - 1)
             const SizedBox(height: IdeSpacing.space8),
         ],
       ],

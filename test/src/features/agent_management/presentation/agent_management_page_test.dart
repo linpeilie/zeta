@@ -89,7 +89,7 @@ void main() {
   });
 
   testWidgets(
-    'Claude account data enrichment defaults on and can be disabled',
+    'Claude quota details enhancement defaults on and can be disabled',
     (tester) async {
       final harness = _ClaudeManagementHarness.create();
       addTearDown(harness.dispose);
@@ -114,8 +114,11 @@ void main() {
       );
       await tester.ensureVisible(switchFinder);
       await tester.pump();
-      expect(find.text('账号数据增强'), findsOneWidget);
-      expect(find.textContaining('模型目录和套餐用量的只读查询'), findsOneWidget);
+      expect(find.text('额度详情增强'), findsOneWidget);
+      expect(find.text('OAuth 凭据 · Usage REST'), findsOneWidget);
+      expect(find.textContaining('模型列表与套餐名称始终来自 Claude CLI'), findsOneWidget);
+      expect(find.textContaining('claude auth login'), findsOneWidget);
+      expect(find.textContaining('claude login'), findsNothing);
       expect(tester.widget<sf.Switch>(switchFinder).value, isTrue);
       expect(tester.widget<sf.Switch>(switchFinder).onChanged, isNotNull);
 
@@ -137,7 +140,37 @@ void main() {
     },
   );
 
-  testWidgets('Claude connection test requires explicit usage confirmation', (
+  testWidgets('Claude legacy false keeps quota details enhancement disabled', (
+    tester,
+  ) async {
+    final harness = _ClaudeManagementHarness.create(
+      accountDataEnrichmentEnabled: false,
+    );
+    addTearDown(harness.dispose);
+    await tester.runAsync(harness.managementController.initialize);
+
+    await _pumpManagementPage(tester, controller: harness.managementController);
+    await tester.tap(find.byKey(const ValueKey('agent-row-claude_code')));
+    await tester.pump();
+
+    final switchFinder = find.byKey(
+      const ValueKey('claude-account-data-enrichment-switch'),
+    );
+    await tester.ensureVisible(switchFinder);
+    await tester.pump();
+
+    expect(tester.widget<sf.Switch>(switchFinder).value, isFalse);
+    expect(
+      harness.providerController
+          .providerConfigById(defaultClaudeCodeProviderId)
+          ?.extra[claudeCodeAccountDataEnrichmentKey],
+      isFalse,
+    );
+    expect(find.textContaining('模型列表与套餐名称始终来自 Claude CLI'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Claude connection test confirms no-Prompt initialize effects', (
     tester,
   ) async {
     final harness = _ClaudeManagementHarness.create();
@@ -155,7 +188,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('测试 Claude Code 连接'), findsOneWidget);
-    expect(find.textContaining('可能产生少量模型用量'), findsOneWidget);
+    expect(find.textContaining('无 Prompt'), findsOneWidget);
+    expect(find.textContaining('不调用模型'), findsOneWidget);
+    expect(find.textContaining('bootstrap 缓存'), findsOneWidget);
+    expect(find.textContaining('可能产生少量模型用量'), findsNothing);
     expect(harness.repository.testConnectionCalls, 0);
 
     await tester.tap(find.text('取消'));
@@ -174,6 +210,52 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
   });
+
+  testWidgets(
+    'Claude logged-out evidence remains visible after initialize succeeds',
+    (tester) async {
+      final harness = _ClaudeManagementHarness.create(
+        accountState: AgentAccountState.loggedOut,
+        accountLabel: '未检测到 Claude.ai OAuth 或 API key 登录证据',
+      );
+      addTearDown(harness.dispose);
+      await tester.runAsync(harness.managementController.initialize);
+      await tester.runAsync(harness.managementController.detect);
+
+      await _pumpManagementPage(
+        tester,
+        controller: harness.managementController,
+      );
+      await tester.tap(find.byKey(const ValueKey('agent-row-claude_code')));
+      await tester.pump();
+
+      expect(
+        find.text('未检测到 Claude.ai OAuth 或 API key 登录证据'),
+        findsNWidgets(2),
+      );
+      final testButton = find.byKey(
+        const ValueKey('agent-test-connection-button'),
+      );
+      await tester.tap(testButton);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('继续测试'));
+      await tester.pumpAndSettle();
+
+      expect(harness.repository.testConnectionCalls, 1);
+      expect(find.text('未检测到 Claude.ai OAuth 或 API key 登录证据'), findsOneWidget);
+      expect(
+        find.text('Claude Code initialize 成功，CLI 与当前认证路径可用。'),
+        findsOneWidget,
+      );
+      expect(find.text('连接可用'), findsOneWidget);
+      expect(find.text('连接正常'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
 
   testWidgets('edits, validates, and safely saves Codex TOML configuration', (
     tester,
@@ -403,9 +485,16 @@ class _ClaudeManagementHarness {
   final AgentManagementController managementController;
   final AgentProviderRuntimeRegistry _registry;
 
-  static _ClaudeManagementHarness create() {
+  static _ClaudeManagementHarness create({
+    bool? accountDataEnrichmentEnabled,
+    AgentAccountState accountState = AgentAccountState.loggedIn,
+    String? accountLabel,
+  }) {
     final provider = FakeAgentProvider();
-    final repository = _FakeClaudeManagementRepository();
+    final repository = _FakeClaudeManagementRepository(
+      accountState: accountState,
+      accountLabel: accountLabel,
+    );
     final registry = AgentProviderRuntimeRegistry(
       providerFactory: FakeAgentProviderFactory(provider),
     );
@@ -420,8 +509,10 @@ class _ClaudeManagementHarness {
                     ? r'C:\tools\claude.exe'
                     : '/usr/local/bin/claude',
                 'detectedCurrentVersion': '2.1.224',
-                'detectedAccountState': 'loggedIn',
+                'detectedAccountState': accountState.name,
                 'lastDetectedAt': DateTime.utc(2026, 8, 11).toIso8601String(),
+                claudeCodeAccountDataEnrichmentKey:
+                    ?accountDataEnrichmentEnabled,
               },
             ),
           ],
@@ -548,6 +639,13 @@ class _FakeCursorManagementRepository implements AgentCliManagementRepository {
 }
 
 class _FakeClaudeManagementRepository implements AgentCliManagementRepository {
+  _FakeClaudeManagementRepository({
+    this.accountState = AgentAccountState.loggedIn,
+    this.accountLabel,
+  });
+
+  final AgentAccountState accountState;
+  final String? accountLabel;
   int testConnectionCalls = 0;
 
   @override
@@ -564,7 +662,8 @@ class _FakeClaudeManagementRepository implements AgentCliManagementRepository {
   }) async {
     return ManagedAgent.claudeCode(enabled: enabled).copyWith(
       installationState: AgentInstallationState.installed,
-      accountState: AgentAccountState.loggedIn,
+      accountState: accountState,
+      accountLabel: accountLabel,
       currentVersion: '2.1.224',
     );
   }
@@ -582,6 +681,10 @@ class _FakeClaudeManagementRepository implements AgentCliManagementRepository {
         cliCallable: true,
         accountValid: true,
         protocolReady: true,
+        message: 'Claude Code initialize 成功，CLI 与当前认证路径可用。',
+        protocolVersion: 'stream-json',
+        agentName: 'Claude Code',
+        agentVersion: '2.1.224',
       ),
       const <AgentModelInfo>[],
     );

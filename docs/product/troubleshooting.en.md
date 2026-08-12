@@ -55,6 +55,7 @@ Verify in a terminal first:
 ```sh
 codex app-server     # Codex
 grok --version       # Grok
+claude --version     # Claude Code
 ```
 
 - **Command not found**: the CLI isn't installed, or isn't on `PATH`. Note that Zeta is a GUI app and may see a different `PATH` than your terminal — CLIs installed under `~/.local/bin` or through version managers like nvm/asdf are often invisible to GUI apps.
@@ -70,6 +71,38 @@ The test does three things only: check the version, check the account, perform a
 | Version detection failed | CLI too old, or its output format changed |
 | Not signed in | Complete the CLI's own login flow in a terminal first |
 | Handshake failed | CLI version incompatible with the protocol Zeta targets |
+
+For Claude Code, the connection test sends only a no-prompt initialize control frame. It does not
+create a session or request a model response. The Claude CLI may still access the network or maintain
+its own auth/bootstrap cache, so “Zeta sends no prompt” is not a promise that the CLI writes no state.
+
+### Claude works in my terminal, but Zeta says I'm signed out
+
+Run this in an environment as close as possible to the one Zeta launches:
+
+```sh
+claude auth status --json
+```
+
+- `loggedIn: false` is explicit evidence from the Claude CLI. For interactive Claude.ai sign-in, use
+  `claude auth login`; do not omit the `auth` segment.
+- If the command is unavailable, its JSON is damaged, or the probe fails, Zeta reports authentication
+  evidence as unavailable. It no longer guesses from credential filenames.
+- A working terminal session and Claude.ai login evidence are not always equivalent: an API key, a
+  third-party provider, or a different `CLAUDE_CONFIG_DIR` can explain the difference. Use **Test
+  connection**; initialize success means the CLI/auth path launched by Zeta is usable even if auth
+  status says logged out.
+- A macOS GUI process can see a different `PATH`, environment, or Keychain context from your terminal;
+  Windows can likewise resolve a different GUI environment or install shim. There is no separate macOS
+  login flow—compare the CLI path and configuration shown in Agent management first.
+
+### Claude's model list is empty or refresh fails
+
+Zeta reads the currently effective model options from a separate, no-prompt Claude CLI initialize
+response. It can reflect the CLI's bootstrap/cache state and is not a guaranteed real-time exhaustive
+Anthropic catalog. Zeta no longer calls `/v1/models` and has no built-in static Claude catalog. A failed
+refresh keeps a cache up to seven days old; the first failure shows **Model loading failed**. Confirm the
+CLI path, then retry and compare `claude auth status --json` with **Test connection**.
 
 ### Grok sessions get tangled when several are open
 
@@ -196,6 +229,14 @@ Only samples where Codex explicitly returned `time_to_first_token_ms` are used; 
 
 Only fields the provider actually returned are shown: plan type, percentage windows, reset time, and optional balance. Zeta does **not** infer absolute token allowances or expiry dates the provider didn't supply.
 
+For Claude, the plan name comes from initialize metadata and does not depend on **Quota detail
+enhancement**. Five-hour/weekly windows and extra usage come from the optional usage API. When the
+enhancement is off, API-key mode is active, OAuth scopes are insufficient, the token is expired, or a
+401/429/timeout/network failure occurs, Zeta keeps the plan name and shows quota details as unavailable.
+macOS tries the Claude Code Keychain entry before the Claude credentials file; Windows uses the Claude
+credentials file. Credentials live only for the read-only request and are never stored in Zeta config or
+cache.
+
 ---
 
 ## What Zeta stores on your machine
@@ -220,6 +261,10 @@ Everything lives under `~/.zeta/` (`%USERPROFILE%\.zeta\` on Windows) as plain J
 ```
 
 **Zeta reads private data owned by active agent CLIs when a feature requires it.** The corresponding Provider data adapter may read configuration, session history, logs, and account metadata for connection setup, history recovery, diagnostics, and usage statistics. Raw bodies, credentials, and private paths are not copied into Zeta's derived indexes. Read access does not imply automatic migration, rewriting, or deletion; configuration is written only when you explicitly use the configuration editor. Cursor is retired, so its session data remains outside runtime reads and writes.
+
+Claude model probes and connection tests use `--no-session-persistence`, and Zeta does not store OAuth
+tokens. The Claude CLI may nevertheless maintain its own authentication, bootstrap, or cache files;
+those are outside Zeta's persistence directory.
 
 ### What's in the usage index
 

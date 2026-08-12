@@ -383,6 +383,7 @@ class AgentPaneFakeProvider
     Map<String, AgentThreadHistorySnapshot> historySnapshotsByThread =
         const <String, AgentThreadHistorySnapshot>{},
     this.models = const AgentModelList(models: <AgentModelInfo>[]),
+    this.modelListError,
     this.canSteerTurn = true,
     this.canCompactThread = true,
     this.historyLoadGate,
@@ -395,6 +396,7 @@ class AgentPaneFakeProvider
 
   final Map<String, AgentThreadHistorySnapshot> _historySnapshotsByThread;
   final AgentModelList models;
+  final Object? modelListError;
   final bool canSteerTurn;
   final bool canCompactThread;
 
@@ -489,6 +491,10 @@ class AgentPaneFakeProvider
     int limit = 20,
     bool includeHidden = false,
   }) async {
+    final error = modelListError;
+    if (error != null) {
+      throw error;
+    }
     return models;
   }
 

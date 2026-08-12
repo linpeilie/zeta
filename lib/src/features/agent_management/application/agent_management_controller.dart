@@ -118,7 +118,7 @@ class AgentManagementController extends ChangeNotifier {
   bool get updatingAccountDataEnrichment => _updatingAccountDataEnrichment;
   String? get operationError => _operationError;
 
-  /// Claude Code 账号数据增强是否开启；缺省配置按开启处理。
+  /// Claude Code 额度详情增强是否开启；沿用旧配置 key，缺省按开启处理。
   bool get claudeCodeAccountDataEnrichmentEnabled {
     if (_selectedAgentId != defaultClaudeCodeProviderId) {
       return false;
@@ -264,7 +264,7 @@ class AgentManagementController extends ChangeNotifier {
     _notify();
   }
 
-  /// 更新 Claude Code 账号数据增强开关。
+  /// 更新 Claude Code 额度详情增强开关。
   ///
   /// 开启沿用缺省值，不额外落一个 `true`；关闭只保存布尔值，不保存凭据。
   Future<void> setClaudeCodeAccountDataEnrichmentEnabled(bool enabled) async {
@@ -294,7 +294,7 @@ class AgentManagementController extends ChangeNotifier {
         current.copyWith(extra: extra),
       );
     } catch (error) {
-      _operationError = '账号数据增强设置保存失败：$error';
+      _operationError = '额度详情增强设置保存失败：$error';
     } finally {
       _updatingAccountDataEnrichment = false;
       _notify();

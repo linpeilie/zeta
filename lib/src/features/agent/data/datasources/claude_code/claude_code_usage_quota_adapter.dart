@@ -1,4 +1,5 @@
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_anthropic_api_client.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_cli_metadata_coordinator.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_oauth_credentials_reader.dart';
 import 'package:zeta/src/features/agent/data/mappers/claude_code_usage_quota_mapper.dart';
 import 'package:zeta/src/features/agent/domain/agent_usage_models.dart';
@@ -23,10 +24,12 @@ final class ClaudeCodeUsageQuotaAdapter {
     this.accountDataEnrichmentEnabled = true,
     this.usesApiKey = false,
     this.claudeCodeVersion,
+    required ClaudeCodeCliMetadataLoader metadataLoader,
     ClaudeCodeUsageCredentialsLoader? credentialsLoader,
     ClaudeCodeRemoteUsageLoader? remoteUsageLoader,
     DateTime Function()? clock,
-  }) : _credentialsLoader =
+  }) : _loadMetadata = metadataLoader,
+       _credentialsLoader =
            credentialsLoader ?? ClaudeCodeOAuthCredentialsReader().read,
        _remoteUsageLoader =
            remoteUsageLoader ?? ClaudeCodeAnthropicApiClient().readUsageQuota,
@@ -39,6 +42,7 @@ final class ClaudeCodeUsageQuotaAdapter {
   final bool accountDataEnrichmentEnabled;
   final bool usesApiKey;
   final String? claudeCodeVersion;
+  final ClaudeCodeCliMetadataLoader _loadMetadata;
   final ClaudeCodeUsageCredentialsLoader _credentialsLoader;
   final ClaudeCodeRemoteUsageLoader _remoteUsageLoader;
   final DateTime Function() _clock;
@@ -48,10 +52,6 @@ final class ClaudeCodeUsageQuotaAdapter {
   Future<AgentUsageQuotaSnapshot?>? _inFlight;
 
   Future<AgentUsageQuotaSnapshot?> readUsageQuota() async {
-    if (!accountDataEnrichmentEnabled || usesApiKey) {
-      return null;
-    }
-
     final inFlight = _inFlight;
     if (inFlight != null) {
       return inFlight;
@@ -67,7 +67,7 @@ final class ClaudeCodeUsageQuotaAdapter {
     }
 
     _lastAttemptAt = now;
-    final operation = _load();
+    final operation = _load(now);
     _inFlight = operation;
     try {
       return await operation;
@@ -78,26 +78,50 @@ final class ClaudeCodeUsageQuotaAdapter {
     }
   }
 
-  Future<AgentUsageQuotaSnapshot?> _load() async {
-    AgentUsageQuotaSnapshot? result;
+  Future<AgentUsageQuotaSnapshot?> _load(DateTime attemptedAt) async {
+    String? subscriptionType;
     try {
-      final credentials = await _credentialsLoader();
-      if (credentials != null) {
-        final response = await _remoteUsageLoader(
-          accessToken: credentials.accessToken,
-          claudeCodeVersion: claudeCodeVersion,
-        );
-        result = mapClaudeCodeUsageQuota(
-          response,
-          providerId: providerId,
-          providerName: providerName,
-          subscriptionType: credentials.subscriptionType,
-        );
-      }
+      subscriptionType = (await _loadMetadata()).subscriptionType;
     } catch (_) {
-      // 凭据、网络与映射都是 best-effort 增强，失败不得穿透到用量面板。
+      // 套餐名称是 best-effort CLI metadata；失败时仍允许旧额度 REST 返回窗口。
     }
+
+    Map<String, Object?>? response;
+    if (accountDataEnrichmentEnabled && !usesApiKey) {
+      try {
+        final credentials = await _credentialsLoader();
+        if (credentials != null &&
+            _canReadSubscriptionUsage(credentials, attemptedAt)) {
+          response = await _remoteUsageLoader(
+            accessToken: credentials.accessToken,
+            claudeCodeVersion: claudeCodeVersion,
+          );
+        }
+      } catch (_) {
+        // 凭据和网络是可选额度增强；失败时仍返回 metadata 提供的 plan-only 快照。
+      }
+    }
+    final result = mapClaudeCodeUsageQuota(
+      response,
+      providerId: providerId,
+      providerName: providerName,
+      subscriptionType: subscriptionType,
+    );
     _lastResult = result;
     return result;
   }
+}
+
+bool _canReadSubscriptionUsage(
+  ClaudeCodeOAuthCredentials credentials,
+  DateTime attemptedAt,
+) {
+  if (credentials.accessToken.trim().isEmpty ||
+      !credentials.expiresAt.isAfter(attemptedAt)) {
+    return false;
+  }
+  // Claude Code 用 user:inference 区分 Claude.ai 订阅 OAuth，并额外要求
+  // user:profile 才访问 usage/profile 端点；service-key OAuth 因而 fail-closed。
+  return credentials.scopes.contains('user:inference') &&
+      credentials.scopes.contains('user:profile');
 }

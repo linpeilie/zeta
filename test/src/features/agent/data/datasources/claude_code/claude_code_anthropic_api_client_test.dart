@@ -7,25 +7,25 @@ import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code
 
 void main() {
   group('ClaudeCodeAnthropicApiClient', () {
-    test('subscription OAuth uses Bearer and the oauth beta header', () async {
+    test('usage quota uses Bearer and the oauth beta header', () async {
       final transport = _RecordingHttpClient(
         response: _FakeHttpClientResponse(
           statusCode: HttpStatus.ok,
-          body: '{"data":[]}',
+          body: '{"five_hour":null}',
         ),
       );
       final client = ClaudeCodeAnthropicApiClient(
         httpClientFactory: () => transport,
       );
 
-      final result = await client.listModels(
+      final result = await client.readUsageQuota(
         accessToken: 'oauth-sensitive-token',
-        isSubscriptionOAuth: true,
+        claudeCodeVersion: null,
       );
 
-      expect(result, <String, Object?>{'data': <Object?>[]});
+      expect(result, <String, Object?>{'five_hour': null});
       expect(transport.requestedUris, <Uri>[
-        ClaudeCodeAnthropicApiClient.modelsUri,
+        ClaudeCodeAnthropicApiClient.usageQuotaUri,
       ]);
       expect(
         transport.request.headers.value(HttpHeaders.authorizationHeader),
@@ -40,34 +40,6 @@ void main() {
         transport.request.headers.value('anthropic-version'),
         '2023-06-01',
       );
-      expect(transport.closedForcefully, isTrue);
-    });
-
-    test('API key mode uses x-api-key without any oauth header', () async {
-      final transport = _RecordingHttpClient(
-        response: _FakeHttpClientResponse(
-          statusCode: HttpStatus.ok,
-          body: '{"data":[]}',
-        ),
-      );
-      final client = ClaudeCodeAnthropicApiClient(
-        httpClientFactory: () => transport,
-      );
-
-      await client.listModels(
-        accessToken: 'api-key-sensitive-value',
-        isSubscriptionOAuth: false,
-      );
-
-      expect(
-        transport.request.headers.value('x-api-key'),
-        'api-key-sensitive-value',
-      );
-      expect(
-        transport.request.headers.value(HttpHeaders.authorizationHeader),
-        isNull,
-      );
-      expect(transport.request.headers.value('anthropic-beta'), isNull);
       expect(transport.closedForcefully, isTrue);
     });
 
@@ -109,37 +81,43 @@ void main() {
       },
     );
 
-    test('401, 429, and other non-200 responses return null safely', () async {
-      for (final statusCode in <int>[
-        HttpStatus.unauthorized,
-        HttpStatus.tooManyRequests,
-        HttpStatus.internalServerError,
-      ]) {
-        final loggedStatusCodes = <int>[];
-        final transport = _RecordingHttpClient(
-          response: _FakeHttpClientResponse(
-            statusCode: statusCode,
-            body: 'sensitive-response-body',
-          ),
-        );
-        final client = ClaudeCodeAnthropicApiClient(
-          httpClientFactory: () => transport,
-          statusLogger: loggedStatusCodes.add,
-        );
+    test(
+      'usage 401, 429, and other non-200 responses return null safely',
+      () async {
+        for (final statusCode in <int>[
+          HttpStatus.unauthorized,
+          HttpStatus.tooManyRequests,
+          HttpStatus.internalServerError,
+        ]) {
+          final loggedStatusCodes = <int>[];
+          final transport = _RecordingHttpClient(
+            response: _FakeHttpClientResponse(
+              statusCode: statusCode,
+              body: 'sensitive-response-body',
+            ),
+          );
+          final client = ClaudeCodeAnthropicApiClient(
+            httpClientFactory: () => transport,
+            statusLogger: loggedStatusCodes.add,
+          );
 
-        await expectLater(
-          client.listModels(
-            accessToken: 'sensitive-token',
-            isSubscriptionOAuth: true,
-          ),
-          completion(isNull),
-        );
+          await expectLater(
+            client.readUsageQuota(
+              accessToken: 'sensitive-token',
+              claudeCodeVersion: '2.1.228',
+            ),
+            completion(isNull),
+          );
 
-        expect(loggedStatusCodes, <int>[statusCode]);
-        expect(transport.response!.listened, isFalse);
-        expect(transport.closedForcefully, isTrue);
-      }
-    });
+          expect(transport.requestedUris, <Uri>[
+            ClaudeCodeAnthropicApiClient.usageQuotaUri,
+          ]);
+          expect(loggedStatusCodes, <int>[statusCode]);
+          expect(transport.response!.listened, isFalse);
+          expect(transport.closedForcefully, isTrue);
+        }
+      },
+    );
 
     test(
       'timeout and network failures return null and close the client',
@@ -154,9 +132,9 @@ void main() {
           );
 
           await expectLater(
-            client.listModels(
+            client.readUsageQuota(
               accessToken: 'sensitive-token',
-              isSubscriptionOAuth: true,
+              claudeCodeVersion: null,
             ),
             completion(isNull),
           );
@@ -165,6 +143,13 @@ void main() {
         }
       },
     );
+
+    test('usage timeout matches the Claude Code five-second boundary', () {
+      expect(
+        ClaudeCodeAnthropicApiClient.requestTimeout,
+        const Duration(seconds: 5),
+      );
+    });
 
     test('invalid JSON and non-object JSON return null', () async {
       for (final body in <String>['{invalid-json}', '[1,2,3]']) {
@@ -179,9 +164,9 @@ void main() {
         );
 
         await expectLater(
-          client.listModels(
+          client.readUsageQuota(
             accessToken: 'sensitive-token',
-            isSubscriptionOAuth: true,
+            claudeCodeVersion: null,
           ),
           completion(isNull),
         );

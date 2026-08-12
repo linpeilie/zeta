@@ -1,17 +1,16 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:zeta/src/features/agent/data/claude_code_cli_locator.dart';
 import 'package:zeta/src/features/agent/data/cli_command_locator.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_process_starter.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/stream_json_peer.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_cli_metadata_probe.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent_management/data/claude_code_auth_status_probe.dart';
 import 'package:zeta/src/features/agent_management/data/cli_process_runner.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 
-/// Claude Code CLI 命令执行入口；测试可记录 detect 是否只调用 `--version`。
+/// Claude Code 版本命令执行入口；认证证据由独立 probe 负责。
 typedef ClaudeCodeCliProcessRun =
     Future<CliProcessResult> Function(
       ResolvedCliCommand command,
@@ -20,9 +19,9 @@ typedef ClaudeCodeCliProcessRun =
       Map<String, String>? environment,
     });
 
-/// 用户显式点击“测试连接”后才允许调用的 stream-json 握手入口。
+/// 用户显式点击“测试连接”后才允许调用的无 Prompt initialize 入口。
 typedef ClaudeCodeConnectionProbe =
-    Future<ClaudeCodeConnectionProbeResult> Function(
+    Future<void> Function(
       AgentProviderConfig providerConfig, {
       required Duration timeout,
     });
@@ -89,68 +88,16 @@ final class IoClaudeCodeMetadataFileSystem
   }
 }
 
-/// 一次显式连接测试的白名单握手摘要。
-final class ClaudeCodeConnectionProbeResult {
-  const ClaudeCodeConnectionProbeResult({
-    required this.success,
-    this.message,
-    this.cliVersion,
-    this.model,
-  });
-
-  final bool success;
-  final String? message;
-  final String? cliVersion;
-  final String? model;
-}
-
-/// 短连接测试的握手收敛器：只有同一 session 的 init 与 result 才成功。
-final class ClaudeCodeConnectionHandshake {
-  ClaudeCodeConnectionHandshake({required this.expectedSessionId});
-
-  final String expectedSessionId;
-  bool _initialized = false;
-  String? _cliVersion;
-  String? _model;
-
-  /// 吸收一帧；握手尚未完成时返回 null。
-  ClaudeCodeConnectionProbeResult? accept(StreamJsonEvent event) {
-    if (event.type == 'system' && event.subtype == 'init') {
-      final observedSessionId = _nonEmptyString(event.raw['session_id']);
-      if (observedSessionId != expectedSessionId) {
-        return const ClaudeCodeConnectionProbeResult(
-          success: false,
-          message: 'Claude Code 返回了不同的会话标识。',
-        );
-      }
-      _initialized = true;
-      _cliVersion = _nonEmptyString(event.raw['claude_code_version']);
-      _model = _nonEmptyString(event.raw['model']);
-      return null;
-    }
-    if (event.type != 'result') {
-      return null;
-    }
-    final succeeded = _initialized && event.subtype == 'success';
-    return ClaudeCodeConnectionProbeResult(
-      success: succeeded,
-      message: succeeded
-          ? 'Claude Code 连接正常'
-          : 'Claude Code 未完成有效的 stream-json 握手。',
-      cliVersion: _cliVersion,
-      model: _model,
-    );
-  }
-}
-
 /// Claude Code CLI 的检测、连接测试与日志路径仓库。
 ///
-/// 自动 [detect] 只执行 `--version`、stat/mtime 与日志路径枚举，不启动
-/// stream-json peer；只有用户显式调用 [testConnection] 才进行最小模型握手。
+/// 自动 [detect] 只执行 `--version`、`auth status --json` 与日志路径枚举，不启动
+/// stream-json peer；只有用户显式调用 [testConnection] 才验证 CLI 实际可用性。
+/// 认证证据与 CLI 可用性是两个独立结果。
 class ClaudeCodeAgentManagementRepository
     implements AgentCliManagementRepository {
   ClaudeCodeAgentManagementRepository({
     ClaudeCodeCliProcessRun? processRunner,
+    ClaudeCodeAuthStatusLoader? authStatusLoader,
     ClaudeCodeConnectionProbe? connectionProbe,
     ClaudeCodeCliLocator? locator,
     ClaudeCodeMetadataFileSystem? fileSystem,
@@ -168,13 +115,16 @@ class ClaudeCodeAgentManagementRepository
            }),
        _connectionProbe =
            connectionProbe ??
-           ((providerConfig, {required timeout}) {
-             return _probeClaudeCodeConnection(
-               providerConfig,
+           ((providerConfig, {required timeout}) async {
+             await ClaudeCodeCliMetadataProbe(
+               config: providerConfig,
                timeout: timeout,
                locator: locator,
-             );
+             ).probe();
            }),
+       _authStatusLoader =
+           authStatusLoader ??
+           ClaudeCodeAuthStatusProbe(locator: locator).probe,
        _locator = locator ?? const ClaudeCodeCliLocator(),
        _fileSystem = fileSystem ?? const IoClaudeCodeMetadataFileSystem(),
        _now = now ?? DateTime.now,
@@ -185,6 +135,7 @@ class ClaudeCodeAgentManagementRepository
 
   final ClaudeCodeCliProcessRun _processRunner;
   final ClaudeCodeConnectionProbe _connectionProbe;
+  final ClaudeCodeAuthStatusLoader _authStatusLoader;
   final ClaudeCodeCliLocator _locator;
   final ClaudeCodeMetadataFileSystem _fileSystem;
   final DateTime Function() _now;
@@ -258,7 +209,7 @@ class ClaudeCodeAgentManagementRepository
     );
     publish(1, '已检测 Claude Code 版本');
 
-    final account = await _readAccountStatus();
+    final account = await _readAccountStatus(providerConfig);
     current = current.copyWith(
       accountState: account.state,
       accountLabel: account.label,
@@ -267,10 +218,11 @@ class ClaudeCodeAgentManagementRepository
           : AgentDiagnosticStage.accountAuthentication,
       errorMessage: account.error ?? current.errorMessage,
       suggestion: account.state == AgentAccountState.loggedOut
-          ? '请在终端运行 `claude login` 后重新检测。'
+          ? '未检测到 Claude.ai 登录证据；如需登录可运行 `claude auth login`，'
+                '也可直接执行连接测试确认当前 CLI 认证路径。'
           : account.error == null
           ? current.suggestion
-          : '请检查 Claude Code 登录状态文件是否可访问。',
+          : '请确认 `claude auth status --json` 可执行；也可运行连接测试确认当前 CLI 认证路径。',
     );
     publish(2, '已检测 Claude Code 登录状态');
 
@@ -310,8 +262,26 @@ class ClaudeCodeAgentManagementRepository
       );
     }
 
-    final account = await _readAccountStatus();
-    if (account.state != AgentAccountState.loggedIn) {
+    try {
+      await _connectionProbe(providerConfig, timeout: _connectionTimeout);
+      stopwatch.stop();
+      return (
+        AgentConnectionTestResult(
+          success: true,
+          testedAt: testedAt,
+          elapsed: stopwatch.elapsed,
+          cliCallable: true,
+          accountValid: true,
+          protocolReady: true,
+          message: 'Claude Code initialize 成功，CLI 与当前认证路径可用。',
+          protocolVersion: 'stream-json',
+          agentName: 'Claude Code',
+          agentVersion: version.version,
+          capabilitySummary: const <String>['stream-json initialize'],
+        ),
+        const <AgentModelInfo>[],
+      );
+    } on ClaudeCodeCliMetadataProbeException catch (error) {
       stopwatch.stop();
       return (
         AgentConnectionTestResult(
@@ -321,38 +291,9 @@ class ClaudeCodeAgentManagementRepository
           cliCallable: true,
           accountValid: false,
           protocolReady: false,
-          failureStage: AgentDiagnosticStage.accountAuthentication,
-          message: '未检测到 Claude Code 登录状态，请先运行 `claude login`。',
+          failureStage: AgentDiagnosticStage.protocolHandshake,
+          message: _metadataProbeFailureMessage(error.failure),
           agentVersion: version.version,
-        ),
-        const <AgentModelInfo>[],
-      );
-    }
-
-    try {
-      final probe = await _connectionProbe(
-        providerConfig,
-        timeout: _connectionTimeout,
-      );
-      stopwatch.stop();
-      return (
-        AgentConnectionTestResult(
-          success: probe.success,
-          testedAt: testedAt,
-          elapsed: stopwatch.elapsed,
-          cliCallable: true,
-          accountValid: true,
-          protocolReady: probe.success,
-          failureStage: probe.success
-              ? null
-              : AgentDiagnosticStage.protocolHandshake,
-          message:
-              probe.message ??
-              (probe.success ? 'Claude Code 连接正常' : 'Claude Code 握手失败'),
-          protocolVersion: 'stream-json',
-          agentName: 'Claude Code',
-          agentVersion: probe.cliVersion ?? version.version,
-          capabilitySummary: const <String>['stream-json', 'session-resume'],
         ),
         const <AgentModelInfo>[],
       );
@@ -364,10 +305,10 @@ class ClaudeCodeAgentManagementRepository
           testedAt: testedAt,
           elapsed: stopwatch.elapsed,
           cliCallable: true,
-          accountValid: true,
+          accountValid: false,
           protocolReady: false,
           failureStage: AgentDiagnosticStage.protocolHandshake,
-          message: 'Claude Code 连接测试在 20 秒内未完成。',
+          message: 'Claude Code initialize 在 20 秒内未完成。',
           agentVersion: version.version,
         ),
         const <AgentModelInfo>[],
@@ -380,10 +321,10 @@ class ClaudeCodeAgentManagementRepository
           testedAt: testedAt,
           elapsed: stopwatch.elapsed,
           cliCallable: true,
-          accountValid: true,
+          accountValid: false,
           protocolReady: false,
           failureStage: AgentDiagnosticStage.protocolHandshake,
-          message: 'Claude Code 连接测试失败。',
+          message: 'Claude Code initialize 探测失败。',
           agentVersion: version.version,
         ),
         const <AgentModelInfo>[],
@@ -518,30 +459,89 @@ class ClaudeCodeAgentManagementRepository
     }
   }
 
-  Future<_ClaudeCodeAccountRead> _readAccountStatus() async {
+  Future<_ClaudeCodeAccountRead> _readAccountStatus(
+    AgentProviderConfig providerConfig,
+  ) async {
     try {
-      for (final name in const <String>['.credentials.json', 'oauth.json']) {
-        final metadata = await _fileSystem.stat(
-          _join(_claudeHomeProvider(), name),
-        );
-        if (metadata.exists && metadata.isFile) {
-          return const _ClaudeCodeAccountRead(
-            state: AgentAccountState.loggedIn,
-            label: '已检测到 Claude Code 登录状态',
-          );
-        }
+      final status = await _authStatusLoader(providerConfig);
+      if (status != null) {
+        return _mapAuthStatus(status);
       }
-      return const _ClaudeCodeAccountRead(
-        state: AgentAccountState.loggedOut,
-        label: '未检测到 Claude Code 登录状态',
-      );
     } catch (_) {
-      return const _ClaudeCodeAccountRead(
-        state: AgentAccountState.unavailable,
-        error: '无法检查 Claude Code 登录状态。',
-      );
+      // 统一折叠为不可用，不依据凭据文件名猜测账号状态。
     }
+    return const _ClaudeCodeAccountRead(
+      state: AgentAccountState.unavailable,
+      label: 'Claude Code 登录证据不可用',
+      error: '无法通过 Claude CLI 检查登录状态。',
+    );
   }
+}
+
+String _metadataProbeFailureMessage(ClaudeCodeCliMetadataProbeFailure failure) {
+  return switch (failure) {
+    ClaudeCodeCliMetadataProbeFailure.processUnavailable =>
+      '无法启动 Claude Code initialize 探测。',
+    ClaudeCodeCliMetadataProbeFailure.timeout =>
+      'Claude Code initialize 在 20 秒内未完成。',
+    ClaudeCodeCliMetadataProbeFailure.processExited =>
+      'Claude Code 进程在 initialize 完成前退出。',
+    ClaudeCodeCliMetadataProbeFailure.errorResponse =>
+      'Claude Code 拒绝了 initialize 请求。',
+    ClaudeCodeCliMetadataProbeFailure.invalidResponse =>
+      'Claude Code 返回的 initialize 响应无效。',
+    ClaudeCodeCliMetadataProbeFailure.invalidStream =>
+      'Claude Code 返回了无效的 stream-json 数据。',
+    ClaudeCodeCliMetadataProbeFailure.transportFailure =>
+      'Claude Code initialize 通信失败。',
+  };
+}
+
+_ClaudeCodeAccountRead _mapAuthStatus(ClaudeCodeAuthStatusSnapshot status) {
+  if (!status.loggedIn) {
+    return const _ClaudeCodeAccountRead(
+      state: AgentAccountState.loggedOut,
+      label: '未检测到 Claude.ai OAuth 或 API key 登录证据',
+    );
+  }
+
+  final authMethod = status.authMethod?.trim().toLowerCase();
+  final label = switch (authMethod) {
+    'claude.ai' => _claudeAiAccountLabel(status.subscriptionType),
+    'api_key' => '已通过 Anthropic API key 配置认证',
+    'api_key_helper' => '已通过 API key helper 配置认证',
+    'oauth_token' => '已通过 OAuth token 配置认证',
+    'third_party' => _thirdPartyAccountLabel(status.apiProvider),
+    _ => '已检测到 Claude Code 认证路径',
+  };
+  return _ClaudeCodeAccountRead(
+    state: AgentAccountState.loggedIn,
+    label: label,
+  );
+}
+
+String _claudeAiAccountLabel(String? subscriptionType) {
+  final plan = switch (subscriptionType?.trim().toLowerCase()) {
+    'pro' || 'claude pro' => 'Claude Pro',
+    'max' || 'claude max' => 'Claude Max',
+    'team' || 'claude team' => 'Claude Team',
+    'enterprise' || 'claude enterprise' => 'Claude Enterprise',
+    _ => null,
+  };
+  return plan == null ? 'Claude.ai 已登录' : 'Claude.ai 已登录 · $plan';
+}
+
+String _thirdPartyAccountLabel(String? apiProvider) {
+  final provider = switch (apiProvider?.trim().toLowerCase()) {
+    'bedrock' => 'Amazon Bedrock',
+    'vertex' => 'Google Vertex AI',
+    'foundry' => 'Microsoft Foundry',
+    'gemini' => 'Gemini',
+    'grok' => 'Grok',
+    'openai' => 'OpenAI',
+    _ => null,
+  };
+  return provider == null ? '已配置第三方 API Provider' : '已配置 $provider';
 }
 
 String _preferredClaudeCodePath(AgentProviderConfig config) {
@@ -551,112 +551,6 @@ String _preferredClaudeCodePath(AgentProviderConfig config) {
       : config.command.trim().isEmpty
       ? AgentProviderConfig.defaultClaudeCode.command
       : config.command.trim();
-}
-
-Future<ClaudeCodeConnectionProbeResult> _probeClaudeCodeConnection(
-  AgentProviderConfig providerConfig, {
-  required Duration timeout,
-  ClaudeCodeCliLocator? locator,
-}) async {
-  final sessionId = _randomSessionId();
-  final directory = await Directory.systemTemp.createTemp(
-    'zeta-claude-connection-',
-  );
-  StreamJsonPeer? peer;
-  StreamSubscription<StreamJsonEvent>? eventSubscription;
-  StreamSubscription<StreamJsonProtocolException>? errorSubscription;
-  try {
-    final command = await resolveClaudeCodeProcessCommand(
-      providerConfig,
-      sessionId: sessionId,
-      permissionPromptTool: null,
-      noSessionPersistence: true,
-      locator: locator,
-    );
-    peer = StreamJsonPeer(
-      command: command.executable,
-      arguments: command.arguments,
-      workingDirectory: directory.path,
-      environment: providerConfig.environment,
-    );
-    final completion = Completer<ClaudeCodeConnectionProbeResult>();
-    final handshake = ClaudeCodeConnectionHandshake(
-      expectedSessionId: sessionId,
-    );
-    eventSubscription = peer.events.listen(
-      (event) {
-        if (completion.isCompleted) {
-          return;
-        }
-        final result = handshake.accept(event);
-        if (result != null) {
-          completion.complete(result);
-        }
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        if (!completion.isCompleted) {
-          completion.completeError(error, stackTrace);
-        }
-      },
-      onDone: () {
-        if (!completion.isCompleted) {
-          completion.complete(
-            const ClaudeCodeConnectionProbeResult(
-              success: false,
-              message: 'Claude Code 进程在握手完成前退出。',
-            ),
-          );
-        }
-      },
-    );
-    errorSubscription = peer.protocolErrors.listen((_) {
-      if (!completion.isCompleted) {
-        completion.complete(
-          const ClaudeCodeConnectionProbeResult(
-            success: false,
-            message: 'Claude Code 返回了无效的 stream-json 数据。',
-          ),
-        );
-      }
-    });
-    await peer.start();
-    await peer.send(<String, Object?>{
-      'type': 'user',
-      'session_id': sessionId,
-      'parent_tool_use_id': null,
-      'message': <String, Object?>{
-        'role': 'user',
-        'content': <Object?>[
-          <String, Object?>{'type': 'text', 'text': 'Reply with OK only.'},
-        ],
-      },
-    });
-    return await completion.future.timeout(timeout);
-  } finally {
-    await eventSubscription?.cancel();
-    await errorSubscription?.cancel();
-    await peer?.close();
-    try {
-      if (await directory.exists()) {
-        await directory.delete(recursive: true);
-      }
-    } on FileSystemException {
-      // 临时探测目录由系统后续清理；不影响连接结果。
-    }
-  }
-}
-
-String _randomSessionId() {
-  final random = Random.secure();
-  final bytes = List<int>.generate(16, (_) => random.nextInt(256));
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  final hex = bytes
-      .map((value) => value.toRadixString(16).padLeft(2, '0'))
-      .join();
-  return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
-      '${hex.substring(12, 16)}-${hex.substring(16, 20)}-'
-      '${hex.substring(20)}';
 }
 
 String _defaultClaudeHome() {
@@ -673,14 +567,6 @@ String _join(String parent, String child) {
     return '$parent$child';
   }
   return '$parent${Platform.pathSeparator}$child';
-}
-
-String? _nonEmptyString(Object? value) {
-  if (value is! String) {
-    return null;
-  }
-  final trimmed = value.trim();
-  return trimmed.isEmpty ? null : trimmed;
 }
 
 final class _ClaudeCodeVersionRead {

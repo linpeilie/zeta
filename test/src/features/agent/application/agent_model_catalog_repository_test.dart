@@ -102,6 +102,29 @@ void main() {
       expect(result.refreshError, isA<StateError>());
     });
 
+    test(
+      'propagates a first refresh failure without persisting emptiness',
+      () async {
+        final countingStore = _CountingModelCatalogStore();
+        final emptyRepository = AgentModelCatalogRepository(
+          store: countingStore,
+          clock: () => now,
+        );
+
+        await expectLater(
+          emptyRepository.load(
+            config: AgentProviderConfig.defaultClaudeCode,
+            source: 'Claude Code CLI',
+            refreshLoader: () async => throw StateError('metadata unavailable'),
+          ),
+          throwsA(isA<StateError>()),
+        );
+
+        expect(countingStore.saveCalls, 0);
+        expect(countingStore.snapshots, isEmpty);
+      },
+    );
+
     test('deduplicates concurrent refreshes with single-flight', () async {
       final gate = Completer<AgentModelList>();
       var loaderCalls = 0;

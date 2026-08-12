@@ -44,6 +44,7 @@ class AgentUsageQuotaSnapshot {
     this.planType,
     this.limitName,
     this.credits,
+    this.availableResetCreditCount,
     this.reachedReason,
   });
 
@@ -53,6 +54,10 @@ class AgentUsageQuotaSnapshot {
   final String? limitName;
   final List<AgentUsageWindow> windows;
   final AgentUsageCredits? credits;
+
+  /// 当前可用的限额重置卡数量；null 表示 Provider 未提供该信息。
+  final int? availableResetCreditCount;
+
   final String? reachedReason;
 }
 

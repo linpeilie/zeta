@@ -1,11 +1,13 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/data/claude_code_cli_locator.dart';
 import 'package:zeta/src/features/agent/data/cli_command_locator.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/stream_json_peer.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_cli_metadata_probe.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent_management/data/claude_code_agent_management_repository.dart';
+import 'package:zeta/src/features/agent_management/data/claude_code_auth_status_probe.dart';
 import 'package:zeta/src/features/agent_management/data/cli_process_runner.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 
@@ -21,9 +23,11 @@ void main() {
       );
       final fileSystem = _FakeMetadataFileSystem();
       final probe = _FakeConnectionProbe();
+      final authStatus = _FakeAuthStatusLoader();
       final repository = ClaudeCodeAgentManagementRepository(
         locator: const _FakeClaudeCodeCliLocator(),
         processRunner: processRunner.call,
+        authStatusLoader: authStatus.call,
         connectionProbe: probe.call,
         fileSystem: fileSystem,
         now: () => detectedAt,
@@ -43,6 +47,7 @@ void main() {
       expect(agent.lastDetectedAt, detectedAt);
       expect(processRunner.calls, hasLength(1));
       expect(processRunner.calls.single.arguments, const <String>['--version']);
+      expect(authStatus.calls, 0);
       expect(probe.calls, 0);
       expect(fileSystem.operations, <String>[
         'list:${_join(claudeHome, 'logs')}',
@@ -50,16 +55,18 @@ void main() {
     });
 
     test(
-      'reports installed but logged out using metadata access only',
+      'reports auth evidence unavailable without guessing credential files',
       () async {
         // Arrange
         final processRunner = _FakeProcessRunner.success();
         final fileSystem = _FakeMetadataFileSystem();
         final probe = _FakeConnectionProbe();
+        final authStatus = _FakeAuthStatusLoader();
         final progress = <AgentDetectionProgress>[];
         final repository = ClaudeCodeAgentManagementRepository(
           locator: const _FakeClaudeCodeCliLocator(),
           processRunner: processRunner.call,
+          authStatusLoader: authStatus.call,
           connectionProbe: probe.call,
           fileSystem: fileSystem,
           now: () => detectedAt,
@@ -75,17 +82,17 @@ void main() {
 
         // Assert
         expect(agent.installationState, AgentInstallationState.installed);
-        expect(agent.accountState, AgentAccountState.loggedOut);
+        expect(agent.accountState, AgentAccountState.unavailable);
+        expect(agent.accountLabel, 'Claude Code 登录证据不可用');
         expect(agent.currentVersion, '2.1.224');
         expect(agent.versionState, AgentVersionState.current);
         expect(agent.runtimeState, AgentRuntimeState.notRunning);
         expect(agent.configExists, isFalse);
         expect(probe.calls, 0);
+        expect(authStatus.calls, 1);
         expect(progress.last.completed, 3);
         expect(progress.last.total, 3);
         expect(fileSystem.operations, <String>[
-          'stat:${_join(claudeHome, '.credentials.json')}',
-          'stat:${_join(claudeHome, 'oauth.json')}',
           'stat:${_join(claudeHome, 'settings.json')}',
           'list:${_join(claudeHome, 'logs')}',
         ]);
@@ -98,7 +105,7 @@ void main() {
       },
     );
 
-    test('reports logged in without reading credential contents', () async {
+    test('does not infer login from a credential-shaped filename', () async {
       // Arrange
       final credentialsPath = _join(claudeHome, '.credentials.json');
       final configPath = _join(claudeHome, 'settings.json');
@@ -121,9 +128,11 @@ void main() {
         logPaths: <String>[logPath],
       );
       final probe = _FakeConnectionProbe();
+      final authStatus = _FakeAuthStatusLoader();
       final repository = ClaudeCodeAgentManagementRepository(
         locator: const _FakeClaudeCodeCliLocator(),
         processRunner: _FakeProcessRunner.success().call,
+        authStatusLoader: authStatus.call,
         connectionProbe: probe.call,
         fileSystem: fileSystem,
         now: () => detectedAt,
@@ -137,16 +146,18 @@ void main() {
       );
 
       // Assert
-      expect(agent.accountState, AgentAccountState.loggedIn);
+      expect(agent.accountState, AgentAccountState.unavailable);
+      expect(agent.accountLabel, 'Claude Code 登录证据不可用');
       expect(agent.configExists, isTrue);
       expect(agent.configModifiedAt, configModifiedAt);
       expect(agent.logPaths, <String>[logPath]);
       expect(probe.calls, 0);
+      expect(authStatus.calls, 1);
       expect(fileSystem.operations, <String>[
-        'stat:$credentialsPath',
         'stat:$configPath',
         'list:${_join(claudeHome, 'logs')}',
       ]);
+      expect(fileSystem.operations, isNot(contains('stat:$credentialsPath')));
       expect(
         fileSystem.operations.where(
           (operation) => operation.startsWith('read:'),
@@ -154,12 +165,215 @@ void main() {
         isEmpty,
       );
     });
+
+    for (final authCase
+        in <
+          ({
+            String name,
+            ClaudeCodeAuthStatusSnapshot snapshot,
+            String expectedLabel,
+          })
+        >[
+          (
+            name: 'Claude.ai OAuth',
+            snapshot: ClaudeCodeAuthStatusSnapshot(
+              loggedIn: true,
+              authMethod: 'claude.ai',
+              apiProvider: 'firstParty',
+              subscriptionType: 'pro',
+            ),
+            expectedLabel: 'Claude.ai 已登录 · Claude Pro',
+          ),
+          (
+            name: 'API key',
+            snapshot: ClaudeCodeAuthStatusSnapshot(
+              loggedIn: true,
+              authMethod: 'api_key',
+              apiProvider: 'firstParty',
+            ),
+            expectedLabel: '已通过 Anthropic API key 配置认证',
+          ),
+          (
+            name: 'third-party Provider',
+            snapshot: ClaudeCodeAuthStatusSnapshot(
+              loggedIn: true,
+              authMethod: 'third_party',
+              apiProvider: 'bedrock',
+            ),
+            expectedLabel: '已配置 Amazon Bedrock',
+          ),
+        ]) {
+      test(
+        'prefers ${authCase.name} evidence without credential stat',
+        () async {
+          final fileSystem = _FakeMetadataFileSystem();
+          final authStatus = _FakeAuthStatusLoader(result: authCase.snapshot);
+          final repository = ClaudeCodeAgentManagementRepository(
+            locator: const _FakeClaudeCodeCliLocator(),
+            processRunner: _FakeProcessRunner.success().call,
+            authStatusLoader: authStatus.call,
+            connectionProbe: _FakeConnectionProbe().call,
+            fileSystem: fileSystem,
+            now: () => detectedAt,
+            claudeHomeProvider: () => claudeHome,
+          );
+
+          final agent = await repository.detect(
+            providerConfig: AgentProviderConfig.defaultClaudeCode,
+            enabled: true,
+          );
+
+          expect(agent.accountState, AgentAccountState.loggedIn);
+          expect(agent.accountLabel, authCase.expectedLabel);
+          expect(authStatus.calls, 1);
+          expect(fileSystem.operations, <String>[
+            'stat:${_join(claudeHome, 'settings.json')}',
+            'list:${_join(claudeHome, 'logs')}',
+          ]);
+        },
+      );
+    }
+
+    test(
+      'valid logged-out evidence skips stat and keeps the runtime available',
+      () async {
+        final fileSystem = _FakeMetadataFileSystem(
+          metadata: <String, ClaudeCodeFileMetadata>{
+            _join(claudeHome, '.credentials.json'):
+                const ClaudeCodeFileMetadata(exists: true, isFile: true),
+          },
+        );
+        final authStatus = _FakeAuthStatusLoader(
+          result: const ClaudeCodeAuthStatusSnapshot(
+            loggedIn: false,
+            authMethod: 'none',
+            apiProvider: 'firstParty',
+          ),
+        );
+        final repository = ClaudeCodeAgentManagementRepository(
+          locator: const _FakeClaudeCodeCliLocator(),
+          processRunner: _FakeProcessRunner.success().call,
+          authStatusLoader: authStatus.call,
+          connectionProbe: _FakeConnectionProbe().call,
+          fileSystem: fileSystem,
+          now: () => detectedAt,
+          claudeHomeProvider: () => claudeHome,
+        );
+
+        final agent = await repository.detect(
+          providerConfig: AgentProviderConfig.defaultClaudeCode,
+          enabled: true,
+        );
+
+        expect(agent.accountState, AgentAccountState.loggedOut);
+        expect(agent.accountLabel, '未检测到 Claude.ai OAuth 或 API key 登录证据');
+        expect(agent.runtimeState, AgentRuntimeState.notRunning);
+        expect(agent.suggestion, contains('连接测试确认当前 CLI 认证路径'));
+        expect(fileSystem.operations, <String>[
+          'stat:${_join(claudeHome, 'settings.json')}',
+          'list:${_join(claudeHome, 'logs')}',
+        ]);
+      },
+    );
+
+    test(
+      'probe failure is unavailable and ignores credential filenames',
+      () async {
+        final credentialsPath = _join(claudeHome, '.credentials.json');
+        final fileSystem = _FakeMetadataFileSystem(
+          metadata: <String, ClaudeCodeFileMetadata>{
+            credentialsPath: const ClaudeCodeFileMetadata(
+              exists: true,
+              isFile: true,
+            ),
+          },
+        );
+        final repository = ClaudeCodeAgentManagementRepository(
+          locator: const _FakeClaudeCodeCliLocator(),
+          processRunner: _FakeProcessRunner.success().call,
+          authStatusLoader: _FakeAuthStatusLoader(
+            error: StateError('redacted damaged auth status'),
+          ).call,
+          connectionProbe: _FakeConnectionProbe().call,
+          fileSystem: fileSystem,
+          now: () => detectedAt,
+          claudeHomeProvider: () => claudeHome,
+        );
+
+        final agent = await repository.detect(
+          providerConfig: AgentProviderConfig.defaultClaudeCode,
+          enabled: true,
+        );
+
+        expect(agent.accountState, AgentAccountState.unavailable);
+        expect(agent.accountLabel, 'Claude Code 登录证据不可用');
+        expect(agent.errorMessage, '无法通过 Claude CLI 检查登录状态。');
+        expect(agent.suggestion, contains('claude auth status --json'));
+        expect(fileSystem.operations, isNot(contains('stat:$credentialsPath')));
+      },
+    );
   });
 
   test(
-    'explicit connection test performs one bounded stream-json probe',
+    'logged-out evidence does not block the no-Prompt initialize probe',
     () async {
       // Arrange
+      final fileSystem = _FakeMetadataFileSystem();
+      final authStatus = _FakeAuthStatusLoader(
+        result: const ClaudeCodeAuthStatusSnapshot(
+          loggedIn: false,
+          authMethod: 'none',
+          apiProvider: 'firstParty',
+        ),
+      );
+      final processRunner = _FakeProcessRunner.success();
+      final probe = _FakeConnectionProbe();
+      final repository = ClaudeCodeAgentManagementRepository(
+        locator: const _FakeClaudeCodeCliLocator(),
+        processRunner: processRunner.call,
+        authStatusLoader: authStatus.call,
+        connectionProbe: probe.call,
+        fileSystem: fileSystem,
+        now: () => detectedAt,
+        claudeHomeProvider: () => claudeHome,
+      );
+
+      // Act
+      final detected = await repository.detect(
+        providerConfig: AgentProviderConfig.defaultClaudeCode,
+        enabled: true,
+      );
+      final (result, models) = await repository.testConnection(
+        providerConfig: AgentProviderConfig.defaultClaudeCode,
+      );
+
+      // Assert
+      expect(detected.accountState, AgentAccountState.loggedOut);
+      expect(result.success, isTrue);
+      expect(result.cliCallable, isTrue);
+      expect(result.accountValid, isTrue);
+      expect(result.protocolReady, isTrue);
+      expect(result.protocolVersion, 'stream-json');
+      expect(result.agentVersion, '2.1.224');
+      expect(result.message, contains('initialize 成功'));
+      expect(result.capabilitySummary, const <String>[
+        'stream-json initialize',
+      ]);
+      expect(models, isEmpty);
+      expect(probe.calls, 1);
+      expect(probe.lastTimeout, const Duration(seconds: 20));
+      expect(authStatus.calls, 1);
+      expect(
+        processRunner.calls.map((call) => call.arguments),
+        everyElement(const <String>['--version']),
+      );
+      expect(processRunner.calls, hasLength(2));
+    },
+  );
+
+  test(
+    'unavailable auth and initialize evidence never guesses logged-out',
+    () async {
       final credentialsPath = _join(claudeHome, '.credentials.json');
       final fileSystem = _FakeMetadataFileSystem(
         metadata: <String, ClaudeCodeFileMetadata>{
@@ -169,74 +383,115 @@ void main() {
           ),
         },
       );
-      final processRunner = _FakeProcessRunner.success();
-      final probe = _FakeConnectionProbe(
-        result: const ClaudeCodeConnectionProbeResult(
-          success: true,
-          message: 'Claude Code 连接正常',
-          cliVersion: '2.1.224',
-          model: 'claude-sonnet-4-5',
-        ),
-      );
       final repository = ClaudeCodeAgentManagementRepository(
         locator: const _FakeClaudeCodeCliLocator(),
-        processRunner: processRunner.call,
-        connectionProbe: probe.call,
+        processRunner: _FakeProcessRunner.success().call,
+        authStatusLoader: _FakeAuthStatusLoader().call,
+        connectionProbe: _FakeConnectionProbe(
+          error: const ClaudeCodeCliMetadataProbeException(
+            ClaudeCodeCliMetadataProbeFailure.processUnavailable,
+          ),
+        ).call,
         fileSystem: fileSystem,
         now: () => detectedAt,
         claudeHomeProvider: () => claudeHome,
       );
 
-      // Act
+      final detected = await repository.detect(
+        providerConfig: AgentProviderConfig.defaultClaudeCode,
+        enabled: true,
+      );
+      final (connection, _) = await repository.testConnection(
+        providerConfig: AgentProviderConfig.defaultClaudeCode,
+      );
+
+      expect(detected.accountState, AgentAccountState.unavailable);
+      expect(detected.accountState, isNot(AgentAccountState.loggedOut));
+      expect(connection.success, isFalse);
+      expect(connection.protocolReady, isFalse);
+      expect(connection.message, '无法启动 Claude Code initialize 探测。');
+      expect(fileSystem.operations, isNot(contains('stat:$credentialsPath')));
+    },
+  );
+
+  for (final failureCase
+      in <({ClaudeCodeCliMetadataProbeFailure failure, String message})>[
+        (
+          failure: ClaudeCodeCliMetadataProbeFailure.processUnavailable,
+          message: '无法启动 Claude Code initialize 探测。',
+        ),
+        (
+          failure: ClaudeCodeCliMetadataProbeFailure.timeout,
+          message: 'Claude Code initialize 在 20 秒内未完成。',
+        ),
+        (
+          failure: ClaudeCodeCliMetadataProbeFailure.processExited,
+          message: 'Claude Code 进程在 initialize 完成前退出。',
+        ),
+        (
+          failure: ClaudeCodeCliMetadataProbeFailure.errorResponse,
+          message: 'Claude Code 拒绝了 initialize 请求。',
+        ),
+        (
+          failure: ClaudeCodeCliMetadataProbeFailure.invalidResponse,
+          message: 'Claude Code 返回的 initialize 响应无效。',
+        ),
+        (
+          failure: ClaudeCodeCliMetadataProbeFailure.invalidStream,
+          message: 'Claude Code 返回了无效的 stream-json 数据。',
+        ),
+        (
+          failure: ClaudeCodeCliMetadataProbeFailure.transportFailure,
+          message: 'Claude Code initialize 通信失败。',
+        ),
+      ]) {
+    test('maps ${failureCase.failure.name} to a redacted diagnostic', () async {
+      final repository = ClaudeCodeAgentManagementRepository(
+        locator: const _FakeClaudeCodeCliLocator(),
+        processRunner: _FakeProcessRunner.success().call,
+        authStatusLoader: _FakeAuthStatusLoader().call,
+        connectionProbe: _FakeConnectionProbe(
+          error: ClaudeCodeCliMetadataProbeException(failureCase.failure),
+        ).call,
+        fileSystem: _FakeMetadataFileSystem(),
+        now: () => detectedAt,
+        claudeHomeProvider: () => claudeHome,
+      );
+
       final (result, models) = await repository.testConnection(
         providerConfig: AgentProviderConfig.defaultClaudeCode,
       );
 
-      // Assert
-      expect(result.success, isTrue);
+      expect(result.success, isFalse);
       expect(result.cliCallable, isTrue);
-      expect(result.accountValid, isTrue);
-      expect(result.protocolReady, isTrue);
-      expect(result.protocolVersion, 'stream-json');
-      expect(result.agentVersion, '2.1.224');
+      expect(result.accountValid, isFalse);
+      expect(result.protocolReady, isFalse);
+      expect(result.failureStage, AgentDiagnosticStage.protocolHandshake);
+      expect(result.message, failureCase.message);
       expect(models, isEmpty);
-      expect(probe.calls, 1);
-      expect(probe.lastTimeout, const Duration(seconds: 20));
-      expect(processRunner.calls.single.arguments, const <String>['--version']);
-    },
-  );
+    });
+  }
 
-  test('connection handshake waits for matching init and result', () {
-    // Arrange
-    final handshake = ClaudeCodeConnectionHandshake(
-      expectedSessionId: 'session-1',
+  test('maps an injected timeout without exposing exception details', () async {
+    final repository = ClaudeCodeAgentManagementRepository(
+      locator: const _FakeClaudeCodeCliLocator(),
+      processRunner: _FakeProcessRunner.success().call,
+      authStatusLoader: _FakeAuthStatusLoader().call,
+      connectionProbe: _FakeConnectionProbe(
+        error: TimeoutException('sensitive timeout detail'),
+      ).call,
+      fileSystem: _FakeMetadataFileSystem(),
+      now: () => detectedAt,
+      claudeHomeProvider: () => claudeHome,
     );
 
-    // Act
-    final afterInit = handshake.accept(
-      const StreamJsonEvent(
-        type: 'system',
-        subtype: 'init',
-        raw: <String, Object?>{
-          'session_id': 'session-1',
-          'claude_code_version': '2.1.224',
-          'model': 'claude-sonnet-4-5',
-        },
-      ),
-    );
-    final afterResult = handshake.accept(
-      const StreamJsonEvent(
-        type: 'result',
-        subtype: 'success',
-        raw: <String, Object?>{},
-      ),
+    final (result, _) = await repository.testConnection(
+      providerConfig: AgentProviderConfig.defaultClaudeCode,
     );
 
-    // Assert
-    expect(afterInit, isNull);
-    expect(afterResult?.success, isTrue);
-    expect(afterResult?.cliVersion, '2.1.224');
-    expect(afterResult?.model, 'claude-sonnet-4-5');
+    expect(result.success, isFalse);
+    expect(result.message, 'Claude Code initialize 在 20 秒内未完成。');
+    expect(result.message, isNot(contains('sensitive')));
   });
 }
 
@@ -329,22 +584,42 @@ final class _FakeMetadataFileSystem implements ClaudeCodeMetadataFileSystem {
   }
 }
 
-final class _FakeConnectionProbe {
-  _FakeConnectionProbe({
-    this.result = const ClaudeCodeConnectionProbeResult(success: true),
-  });
+final class _FakeAuthStatusLoader {
+  _FakeAuthStatusLoader({this.result, this.error});
 
-  final ClaudeCodeConnectionProbeResult result;
+  final ClaudeCodeAuthStatusSnapshot? result;
+  final Object? error;
+  int calls = 0;
+
+  Future<ClaudeCodeAuthStatusSnapshot?> call(
+    AgentProviderConfig providerConfig,
+  ) async {
+    calls += 1;
+    final failure = error;
+    if (failure != null) {
+      throw failure;
+    }
+    return result;
+  }
+}
+
+final class _FakeConnectionProbe {
+  _FakeConnectionProbe({this.error});
+
+  final Object? error;
   int calls = 0;
   Duration? lastTimeout;
 
-  Future<ClaudeCodeConnectionProbeResult> call(
+  Future<void> call(
     AgentProviderConfig providerConfig, {
     required Duration timeout,
   }) async {
     calls += 1;
     lastTimeout = timeout;
-    return result;
+    final failure = error;
+    if (failure != null) {
+      throw failure;
+    }
   }
 }
 

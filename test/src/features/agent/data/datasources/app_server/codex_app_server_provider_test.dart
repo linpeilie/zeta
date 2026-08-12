@@ -2276,7 +2276,61 @@ void main() {
       expect(quota.windows.last.windowDuration, const Duration(minutes: 10080));
       expect(quota.credits?.unlimited, isFalse);
       expect(quota.credits?.balance, '12.50');
+      // 明细可能被服务端截断，数量必须采用 availableCount。
+      expect(quota.availableResetCreditCount, 2);
       await provider.dispose();
+    });
+
+    test(
+      'keeps an explicit zero reset-card count without quota windows',
+      () async {
+        final peer = _FakeJsonRpcPeer(
+          accountRateLimitsResponse: const <String, Object?>{
+            'rateLimits': <String, Object?>{},
+            'rateLimitResetCredits': <String, Object?>{'availableCount': 0},
+          },
+        );
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+
+        final quota = await provider.readUsageQuota();
+
+        expect(quota, isNotNull);
+        expect(quota!.windows, isEmpty);
+        expect(quota.availableResetCreditCount, 0);
+        await provider.dispose();
+      },
+    );
+
+    test('ignores malformed or negative reset-card counts', () async {
+      for (final invalidCount in <Object?>[-1, '2']) {
+        final peer = _FakeJsonRpcPeer(
+          accountRateLimitsResponse: <String, Object?>{
+            'rateLimits': const <String, Object?>{
+              'primary': <String, Object?>{'usedPercent': 10},
+            },
+            'rateLimitResetCredits': <String, Object?>{
+              'availableCount': invalidCount,
+            },
+          },
+        );
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+
+        final quota = await provider.readUsageQuota();
+
+        expect(quota, isNotNull, reason: '$invalidCount');
+        expect(
+          quota!.availableResetCreditCount,
+          isNull,
+          reason: '$invalidCount',
+        );
+        await provider.dispose();
+      }
     });
 
     test('thread lifecycle RPCs and notifications', () async {
@@ -5501,6 +5555,7 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
     this.modelListResponseProvider,
     this.collaborationModeListResponseProvider,
     this.threadReadResponseProvider,
+    this.accountRateLimitsResponse,
     this.initializeResponse = const <String, Object?>{
       'codexHome': '/home/test/.codex',
       'platformFamily': 'unix',
@@ -5531,6 +5586,7 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
   final FutureOr<Object?> Function(Object? params)?
   collaborationModeListResponseProvider;
   final FutureOr<Object?> Function(Object? params)? threadReadResponseProvider;
+  final Map<String, Object?>? accountRateLimitsResponse;
   int startCalls = 0;
   int _threadStartCount = 0;
   bool _closed = false;
@@ -5718,27 +5774,35 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
           ],
         },
       },
-      'account/rateLimits/read' => <String, Object?>{
-        'rateLimits': <String, Object?>{
-          'planType': 'plus',
-          'limitName': 'Codex',
-          'primary': <String, Object?>{
-            'usedPercent': 36,
-            'resetsAt': 1783785600,
-            'windowDurationMins': 300,
-          },
-          'secondary': <String, Object?>{
-            'usedPercent': 72,
-            'resetsAt': 1784246400,
-            'windowDurationMins': 10080,
-          },
-          'credits': <String, Object?>{
-            'hasCredits': true,
-            'unlimited': false,
-            'balance': '12.50',
-          },
-        },
-      },
+      'account/rateLimits/read' =>
+        accountRateLimitsResponse ??
+            <String, Object?>{
+              'rateLimits': <String, Object?>{
+                'planType': 'plus',
+                'limitName': 'Codex',
+                'primary': <String, Object?>{
+                  'usedPercent': 36,
+                  'resetsAt': 1783785600,
+                  'windowDurationMins': 300,
+                },
+                'secondary': <String, Object?>{
+                  'usedPercent': 72,
+                  'resetsAt': 1784246400,
+                  'windowDurationMins': 10080,
+                },
+                'credits': <String, Object?>{
+                  'hasCredits': true,
+                  'unlimited': false,
+                  'balance': '12.50',
+                },
+              },
+              'rateLimitResetCredits': <String, Object?>{
+                'availableCount': 2,
+                'credits': <Object?>[
+                  <String, Object?>{'id': 'reset-credit-1'},
+                ],
+              },
+            },
       'turn/start' => <String, Object?>{
         'turn': <String, Object?>{'id': 'turn-1'},
       },

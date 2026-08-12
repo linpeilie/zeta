@@ -599,8 +599,8 @@ class AgentManagementPageState extends State<AgentManagementPage> {
         builder: (context) => IdeDialog(
           title: const Text('测试 Claude Code 连接'),
           content: const Text(
-            '这会连接 Claude 服务并发送一条最小测试消息，'
-            '可能产生少量模型用量。',
+            '只发送无 Prompt 的 initialize 控制请求，不调用模型；'
+            'Claude CLI 仍可能维护自身认证或 bootstrap 缓存。',
           ),
           actions: <IdeDialogAction>[
             IdeDialogAction.cancel(
@@ -815,7 +815,8 @@ class _AgentRowStatus extends StatelessWidget {
     }
 
     final accountNeedsAttention = switch (agent.accountState) {
-      AgentAccountState.loggedOut || AgentAccountState.expired => true,
+      AgentAccountState.loggedOut ||
+      AgentAccountState.expired => !_hasSuccessfulConnectionTest(agent),
       _ => false,
     };
     final runtimeNeedsAttention = switch (agent.runtimeState) {
@@ -834,7 +835,7 @@ class _AgentRowStatus extends StatelessWidget {
           width: 92,
           child: _AgentStatusText(
             status: _AgentStatus(
-              label: agent.installed ? _accountLabel(agent.accountState) : '—',
+              label: agent.installed ? _accountEvidenceLabel(agent) : '—',
               icon: accountNeedsAttention
                   ? Icons.account_circle_outlined
                   : Icons.person_outline_rounded,
@@ -942,8 +943,15 @@ _AgentStatus _priorityAgentStatus(IdeColors colors, ManagedAgent agent) {
   }
   if (agent.accountState == AgentAccountState.loggedOut ||
       agent.accountState == AgentAccountState.expired) {
+    if (_hasSuccessfulConnectionTest(agent)) {
+      return _AgentStatus(
+        label: '连接可用',
+        icon: Icons.check_circle_outline_rounded,
+        color: colors.textSecondary,
+      );
+    }
     return _AgentStatus(
-      label: _accountLabel(agent.accountState),
+      label: _accountEvidenceLabel(agent),
       icon: Icons.account_circle_outlined,
       color: colors.warning,
     );
@@ -1234,20 +1242,25 @@ class _AgentDiagnosticsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
+    final connectionReady = _hasSuccessfulConnectionTest(agent);
+    final accountOrConnectionReady = switch (agent.accountState) {
+      AgentAccountState.loggedIn || AgentAccountState.notRequired => true,
+      _ => connectionReady,
+    };
     final healthy =
         agent.installed &&
         agent.errorMessage == null &&
-        agent.accountState == AgentAccountState.loggedIn;
+        accountOrConnectionReady;
     final diagnostics = <_DiagnosticEntry>[
       _DiagnosticEntry(
         label: '程序',
         value: agent.installed ? '可执行文件存在且可调用' : '未找到可执行文件',
       ),
-      _DiagnosticEntry(label: '账号', value: _accountLabel(agent.accountState)),
+      _DiagnosticEntry(label: '认证证据', value: _accountEvidenceLabel(agent)),
       _DiagnosticEntry(
         label: '通信',
-        value: agent.connectionTest?.protocolReady == true
-            ? '握手成功'
+        value: connectionReady
+            ? agent.connectionTest?.message ?? '连接探测成功'
             : agent.runtimeState == AgentRuntimeState.idle
             ? '基础握手正常'
             : '尚未确认',
@@ -1484,15 +1497,15 @@ class _ClaudeCodeAccountDataEnrichmentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IdeSection(
-      title: '账号数据增强',
-      subtitle: '模型目录 · 套餐用量',
+      title: '额度详情增强',
+      subtitle: 'OAuth 凭据 · Usage REST',
       child: IdeSurface.pane(
         child: IdeSettingsRow(
           key: const ValueKey('claude-account-data-enrichment-row'),
-          label: '使用 Claude Code 登录态',
+          label: '读取 Claude Code 额度详情',
           description:
-              '开启后会瞬时读取本机 claude login 的 OAuth 凭据，'
-              '仅发起模型目录和套餐用量的只读查询；不会刷新、写回或持久化凭据。',
+              '此开关只控制 Zeta 是否瞬时读取 Claude Code OAuth 凭据并调用 usage REST。'
+              '模型列表与套餐名称始终来自 Claude CLI；Zeta 不会刷新、写回或持久化凭据。',
           showDivider: false,
           control: sf.Switch(
             key: const ValueKey('claude-account-data-enrichment-switch'),
@@ -1536,8 +1549,8 @@ class _ClaudeCodeSetupGuideCard extends StatelessWidget {
             _SetupGuideStep(
               title: '2. 登录账号',
               body:
-                  '运行 claude login 完成 Anthropic 账号登录。'
-                  '自动检测不会读取凭据内容；账号数据增强只做上方说明的瞬时只读查询，'
+                  '运行 claude auth login 完成 Anthropic 账号登录。'
+                  '自动检测不会读取凭据内容；额度详情增强只做上方说明的瞬时只读查询，'
                   '且绝不写回凭据文件。',
               textStyles: textStyles,
               colors: colors,
@@ -1616,6 +1629,17 @@ String _accountLabel(AgentAccountState state) {
     AgentAccountState.notRequired => '无需登录',
     AgentAccountState.unavailable => '无法检测',
   };
+}
+
+String _accountEvidenceLabel(ManagedAgent agent) {
+  final label = agent.accountLabel?.trim();
+  return label == null || label.isEmpty
+      ? _accountLabel(agent.accountState)
+      : label;
+}
+
+bool _hasSuccessfulConnectionTest(ManagedAgent agent) {
+  return agent.connectionTest?.protocolReady == true;
 }
 
 String _runtimeLabel(AgentRuntimeState state) {

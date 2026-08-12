@@ -158,9 +158,12 @@ class _CodexAppServerClient {
     );
     final response = _map(result);
     final rateLimits = _map(response['rateLimits']);
-    if (rateLimits.isEmpty) {
-      return null;
-    }
+    final resetCredits = _map(response['rateLimitResetCredits']);
+    final rawResetCreditCount = _numberToInt(resetCredits['availableCount']);
+    final availableResetCreditCount =
+        rawResetCreditCount != null && rawResetCreditCount >= 0
+        ? rawResetCreditCount
+        : null;
 
     final limitName = _string(rateLimits['limitName']);
     final windows = <AgentUsageWindow>[];
@@ -182,7 +185,9 @@ class _CodexAppServerClient {
             unlimited: creditsMap['unlimited'] == true,
             balance: _string(creditsMap['balance']),
           );
-    if (windows.isEmpty && credits == null) {
+    if (windows.isEmpty &&
+        credits == null &&
+        availableResetCreditCount == null) {
       return null;
     }
     return AgentUsageQuotaSnapshot(
@@ -192,6 +197,7 @@ class _CodexAppServerClient {
       limitName: limitName,
       windows: List<AgentUsageWindow>.unmodifiable(windows),
       credits: credits,
+      availableResetCreditCount: availableResetCreditCount,
       reachedReason: _string(rateLimits['rateLimitReachedType']),
     );
   }
