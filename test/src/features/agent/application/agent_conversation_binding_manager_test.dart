@@ -124,6 +124,36 @@ void main() {
       await second.release();
     });
 
+    test('首次 beginTurn 切换到 session Provider 后保留并刷新权限目录', () async {
+      final config = AgentProviderConfig.defaultCodex.withPermissionPreference(
+        ':danger-full-access',
+      );
+      final lease = manager.acquireDraft(
+        providerId: defaultAgentProviderId,
+        entryId: 'permission-catalog-rebind',
+        resolveConfig: (_) => config,
+        persistPermissionOptionId: (_) async {},
+      );
+      final globalProvider = AgentPaneFakeProvider();
+      await lease.binding.bindPermissionCatalog(
+        port: globalProvider.permissionPolicy,
+        persistedOptionId: config.resolvedPermissionOptionId,
+      );
+
+      expect(globalProvider.permissionCatalogListCount, 1);
+      expect(lease.binding.permissions.displayLabel, 'Full access');
+
+      final activity = await lease.binding.beginTurn();
+
+      expect(factory.providers.single.permissionCatalogListCount, 1);
+      expect(
+        lease.binding.permissions.options.map((option) => option.id),
+        contains(':danger-full-access'),
+      );
+      expect(lease.binding.permissions.displayLabel, 'Full access');
+      await activity.release();
+    });
+
     test('草稿晋升后关闭再打开按 thread key 复用 Binding', () async {
       final draftLease = acquireDraft();
       final activity = await draftLease.binding.beginTurn();

@@ -74,6 +74,8 @@
 
 ### 修复
 
+- 新建 Agent 会话首次发送后会保留并重新校验权限选项目录，Codex、Grok 与 Claude
+  不再因 global/session Provider 切换显示原始权限 ID 或丢失权限选项
 - Codex 本地历史中的 `Apply patch` 现在会从结构化 `patch_apply_end` 恢复文件路径、
   动作与可用的差异/写入内容，不再只显示工具名称
 - Claude Code 历史读取会在 Provider 未覆盖用户目录时继承系统 HOME/USERPROFILE；

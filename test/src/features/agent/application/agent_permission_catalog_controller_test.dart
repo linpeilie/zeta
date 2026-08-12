@@ -107,6 +107,51 @@ void main() {
         expect(controller.lastError, isNull);
       },
     );
+
+    test(
+      'same provider rebind keeps stale catalog until the new port refreshes',
+      () async {
+        final controller = AgentPermissionCatalogController();
+        addTearDown(controller.dispose);
+        controller.bind(_FakePermissionPort(() async => _catalog('global')));
+        await controller.refresh();
+
+        controller.bind(
+          _FakePermissionPort(() async => _catalog('session')),
+          preserveLastKnownGood: true,
+        );
+
+        expect(controller.options.single.id, 'global');
+        expect(controller.catalogDefault?.optionId, 'global');
+
+        await controller.refresh();
+
+        expect(controller.options.single.id, 'session');
+        expect(controller.catalogDefault?.optionId, 'session');
+      },
+    );
+
+    test(
+      'same provider rebind retains stale catalog when the new port fails',
+      () async {
+        final controller = AgentPermissionCatalogController();
+        addTearDown(controller.dispose);
+        controller.bind(_FakePermissionPort(() async => _catalog('global')));
+        await controller.refresh();
+
+        controller.bind(
+          _FakePermissionPort(
+            () async => throw TimeoutException('session catalog timed out'),
+          ),
+          preserveLastKnownGood: true,
+        );
+        await controller.refresh();
+
+        expect(controller.options.single.id, 'global');
+        expect(controller.catalogDefault?.optionId, 'global');
+        expect(controller.lastError, isA<TimeoutException>());
+      },
+    );
   });
 }
 

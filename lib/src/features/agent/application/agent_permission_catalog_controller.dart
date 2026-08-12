@@ -24,13 +24,23 @@ final class AgentPermissionCatalogController {
     return AgentPermissionSelection(optionId: optionId);
   }
 
-  void bind(AgentPermissionPolicyPort? port) {
+  /// 绑定目录端口，并使旧端口上的异步刷新立即失效。
+  ///
+  /// 同一逻辑 Provider 从 global runtime 切换到 session runtime 时，调用方可用
+  /// [preserveLastKnownGood] 保留已经完整加载的目录，随后再通过 [refresh] 以新端口
+  /// 重新校验。真正切换 Provider 或解绑端口时必须清空，避免跨 Provider 泄漏目录。
+  void bind(
+    AgentPermissionPolicyPort? port, {
+    bool preserveLastKnownGood = false,
+  }) {
     if (_disposed || identical(_port, port)) {
       return;
     }
     _generation += 1;
     _port = port;
-    _lastKnownGoodCatalog = null;
+    if (!preserveLastKnownGood || port == null) {
+      _lastKnownGoodCatalog = null;
+    }
     _lastError = null;
     _isLoading = false;
   }

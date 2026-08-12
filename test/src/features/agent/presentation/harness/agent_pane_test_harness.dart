@@ -424,6 +424,9 @@ class AgentPaneFakeProvider
   /// 权限 port apply 次数。
   int permissionApplyCount = 0;
 
+  /// 权限目录读取次数。
+  int permissionCatalogListCount = 0;
+
   /// 每次 sendMessage 递增，避免复用 turn id 导致 history/live 双挂。
   int _nextTurnSequence = 0;
 
@@ -602,6 +605,7 @@ final class _AgentPanePermissionPolicyPort
 
   @override
   Future<AgentPermissionCatalog> listPermissionOptions() async {
+    _host.permissionCatalogListCount += 1;
     final options = _host.permissionOptions;
     final defaultId = options.any((option) => option.id == ':workspace')
         ? ':workspace'

@@ -146,7 +146,7 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
       return;
     }
     _runtimePort = port;
-    _catalogController.bind(port);
+    _catalogController.bind(port, preserveLastKnownGood: true);
     _lastError = null;
     _setState(
       _state.attachRuntime(
@@ -164,7 +164,7 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
     if (_disposed) {
       return;
     }
-    _catalogController.bind(port);
+    _catalogController.bind(port, preserveLastKnownGood: true);
     _setState(_state.seedProviderDefault(_selectionFromId(persistedOptionId)));
   }
 

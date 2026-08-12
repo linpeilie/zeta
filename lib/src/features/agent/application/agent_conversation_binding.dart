@@ -397,6 +397,12 @@ final class AgentConversationBinding extends ChangeNotifier {
         persistedOptionId: config.resolvedPermissionOptionId,
         runtimeIdentity: runtime.runtimeIdentity,
       );
+      // global runtime 预热出的完整目录在端口切换期间继续可见；session 端口随后
+      // 重新校验目录，确保本次请求使用当前 runtime 的 allowed/default 事实。
+      await permissions.refreshOptions();
+      if (_disposed || !lease.isCurrent) {
+        throw StateError('Agent conversation runtime was invalidated');
+      }
       await _replaceProviderEvents(runtime);
       _touch();
       notifyListeners();
