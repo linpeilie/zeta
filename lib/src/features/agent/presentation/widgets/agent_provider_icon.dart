@@ -7,6 +7,7 @@ import 'package:zeta/src/ui/core/ide_colors.dart';
 const Map<String, String> _agentProviderIconAssets = <String, String>{
   defaultAgentProviderId: 'assets/icons/agents/codex.svg',
   grokAgentProviderId: 'assets/icons/agents/grok.svg',
+  defaultClaudeCodeProviderId: 'assets/icons/agents/claude.svg',
 };
 
 /// 使用稳定 Provider id 渲染对应的 Agent 品牌图标。

@@ -114,7 +114,7 @@ class AgentDefinition {
   /// 内置 Claude Code CLI（stream-json）定义。
   static const AgentDefinition claudeCode = AgentDefinition(
     id: defaultClaudeCodeProviderId,
-    displayName: 'Claude Code',
+    displayName: 'Claude',
     vendor: 'Anthropic',
     commandName: 'claude',
     protocol: 'stream-json',

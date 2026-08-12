@@ -162,7 +162,7 @@ class AgentProviderConfig {
   /// 动态拼装；此处只固定命令与 kind。
   static const AgentProviderConfig defaultClaudeCode = AgentProviderConfig(
     id: defaultClaudeCodeProviderId,
-    displayName: 'Claude Code',
+    displayName: 'Claude',
     kind: AgentProviderKind.claudeCode,
     command: 'claude',
   );

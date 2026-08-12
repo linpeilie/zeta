@@ -99,6 +99,13 @@ void main() {
         tester,
         controller: harness.managementController,
       );
+      expect(find.text('Claude'), findsOneWidget);
+      expect(
+        find.byKey(
+          const ValueKey<String>('agent-provider-icon-svg-claude_code'),
+        ),
+        findsOneWidget,
+      );
       await tester.tap(find.byKey(const ValueKey('agent-row-claude_code')));
       await tester.pump();
 

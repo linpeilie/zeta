@@ -8,7 +8,9 @@ import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon
 import '../../../../ui/core/ide_component_test_harness.dart';
 
 void main() {
-  testWidgets('renders bundled Codex and Grok SVG assets', (tester) async {
+  testWidgets('renders bundled Codex, Grok, and Claude SVG assets', (
+    tester,
+  ) async {
     await pumpIdeComponent(
       tester,
       child: const Row(
@@ -25,6 +27,12 @@ void main() {
             color: Colors.blue,
             semanticLabel: 'Grok Agent',
           ),
+          AgentProviderIcon(
+            providerId: defaultClaudeCodeProviderId,
+            size: 22,
+            color: Colors.green,
+            semanticLabel: 'Claude Agent',
+          ),
         ],
       ),
     );
@@ -39,10 +47,11 @@ void main() {
         .map((loader) => loader.assetName)
         .toList(growable: false);
 
-    expect(pictures, hasLength(2));
+    expect(pictures, hasLength(3));
     expect(assetNames, <String>[
       'assets/icons/agents/codex.svg',
       'assets/icons/agents/grok.svg',
+      'assets/icons/agents/claude.svg',
     ]);
     expect(pictures[0].width, 20);
     expect(pictures[0].height, 20);
@@ -50,8 +59,11 @@ void main() {
     expect(pictures[0].colorFilter, isNotNull);
     expect(pictures[1].width, 24);
     expect(pictures[1].height, 24);
+    expect(pictures[2].width, 22);
+    expect(pictures[2].height, 22);
     expect(find.bySemanticsLabel('Codex Agent'), findsOneWidget);
     expect(find.bySemanticsLabel('Grok Agent'), findsOneWidget);
+    expect(find.bySemanticsLabel('Claude Agent'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -61,7 +73,7 @@ void main() {
     await pumpIdeComponent(
       tester,
       child: const AgentProviderIcon(
-        providerId: 'claude',
+        providerId: 'custom-claude-provider',
         kind: AgentProviderKind.claudeCode,
         size: 22,
         color: Colors.green,
@@ -70,7 +82,9 @@ void main() {
     );
 
     final fallback = find.byKey(
-      const ValueKey<String>('agent-provider-icon-fallback-claude'),
+      const ValueKey<String>(
+        'agent-provider-icon-fallback-custom-claude-provider',
+      ),
     );
     final icon = tester.widget<Icon>(fallback);
 

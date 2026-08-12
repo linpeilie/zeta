@@ -2,6 +2,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 void main() {
+  group('AgentProviderConfig', () {
+    test('normalizes the built-in Claude provider display name', () {
+      expect(AgentProviderConfig.defaultClaudeCode.displayName, 'Claude');
+      expect(
+        AgentProviderConfig.normalizeDisplayName(
+          defaultClaudeCodeProviderId,
+          'Claude Code',
+        ),
+        'Claude',
+      );
+    });
+  });
+
   group('Agent message identity contract', () {
     test('message events keep backward-compatible defaults', () {
       const delta = AgentMessageDeltaEvent(
