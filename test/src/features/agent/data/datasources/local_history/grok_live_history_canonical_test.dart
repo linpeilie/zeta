@@ -6,6 +6,7 @@ import 'package:zeta/src/features/agent/data/mappers/grok_session_update_mapper.
 import 'package:zeta/src/features/agent/data/mappers/grok_stream_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
+import '../../../../../testing/agent_file_change_canonical.dart';
 import '../../../../../testing/fixture_reader.dart';
 import 'grok_canonical_signature.dart';
 
@@ -69,6 +70,79 @@ void main() {
       historySignature,
     );
   });
+
+  test(
+    'Grok Edit file evidence is identical in isolated live/history maps',
+    () {
+      // Arrange
+      final fixture = readFixtureJsonMap(
+        'agent_file_change_evidence/grok_edit_1_0_0.json',
+      );
+      final records = _maps(fixture['events']);
+      const runtimeScope = AgentRuntimeScope(
+        runtimeId: 'grok-live-file-evidence',
+        connectionEpoch: 74,
+      );
+      final liveMapper = GrokSessionUpdateMapper();
+      addTearDown(liveMapper.dispose);
+      liveMapper.beginTurn(
+        runtimeScope: runtimeScope,
+        sessionId: 'grok-session-redacted',
+        turnId: 'grok-live-file-turn',
+      );
+
+      // Act
+      final liveEvents = <AgentEvent>[];
+      for (final record in records) {
+        final method = record['method']! as String;
+        liveEvents.addAll(
+          liveMapper
+              .mapSessionUpdate(
+                params: _map(record['params']),
+                runningTurnId: 'grok-live-file-turn',
+                runtimeScope: runtimeScope,
+                terminalSource: method.startsWith('_x.ai/')
+                    ? GrokTerminalSource.xaiNotification
+                    : GrokTerminalSource.standardNotification,
+              )
+              .events,
+        );
+      }
+      const historyParser = GrokUpdatesHistoryParser();
+      final history = historyParser.parse(
+        threadId: 'grok-session-redacted',
+        content: records.map(jsonEncode).join('\n'),
+      );
+      final replay = historyParser.parse(
+        threadId: 'grok-session-redacted',
+        content: records.map(jsonEncode).join('\n'),
+      );
+
+      // Assert
+      final liveTool = liveEvents.whereType<AgentToolCallEvent>().last.toolCall;
+      final historyTool = history.turns.single.entries
+          .whereType<AgentHistoryToolEntry>()
+          .single
+          .toolCall;
+      final replayTool = replay.turns.single.entries
+          .whereType<AgentHistoryToolEntry>()
+          .single
+          .toolCall;
+      expect(liveTool.status, AgentToolStatus.completed);
+      expect(historyTool.status, AgentToolStatus.completed);
+      expect(replayTool.status, AgentToolStatus.completed);
+      final liveEnvelope = canonicalFileChangeToolCall(liveTool);
+      final historyEnvelope = canonicalFileChangeToolCall(historyTool);
+      final replayEnvelope = canonicalFileChangeToolCall(replayTool);
+      expect(historyEnvelope.signature, liveEnvelope.signature);
+      expect(replayEnvelope.signature, liveEnvelope.signature);
+      expect(identical(liveTool.fileChanges, historyTool.fileChanges), isFalse);
+      expect(
+        identical(historyTool.fileChanges, replayTool.fileChanges),
+        isFalse,
+      );
+    },
+  );
 }
 
 List<List<AgentEvent>> _mapLiveTurns(List<Map<String, Object?>> fixtureTurns) {

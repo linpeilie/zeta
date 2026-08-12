@@ -1,0 +1,50 @@
+{
+  "formatVersion": 1,
+  "createdAt": "2026-08-12",
+  "purpose": "Freeze privacy-safe file-change evidence shapes before introducing the Provider-neutral domain contract.",
+  "versionPolicy": "Versions identify evidence provenance only. They are not runtime gates.",
+  "privacyContract": [
+    "No prompt or model response body",
+    "No credential, token, environment value, or stderr",
+    "No real filesystem path, command, or user file content",
+    "All session, turn, item, tool, event, and request identifiers are placeholders",
+    "Schema-constructed evidence is never labelled as a real runtime capture"
+  ],
+  "fixtures": [
+    {
+      "path": "grok_edit_1_0_0.json",
+      "provider": "grok",
+      "sourceKind": "sanitizedRealShape",
+      "sourceVersion": "1.0.0",
+      "scenario": "Successful ACP Edit with repeated diff content at completion"
+    },
+    {
+      "path": "claude_code_edit_write_2_1_227.json",
+      "provider": "claude_code",
+      "sourceKind": "sanitizedRealShape",
+      "sourceVersion": "2.1.227",
+      "scenario": "Successful stream-json Edit and Write tool lifecycles"
+    },
+    {
+      "path": "codex_command_edit_0_144_1.json",
+      "provider": "codex",
+      "sourceKind": "sanitizedRealShape",
+      "sourceVersion": "0.144.1",
+      "scenario": "A successful filesystem mutation represented only by commandExecution"
+    },
+    {
+      "path": "codex_patch_apply_end_history_0_144_1.json",
+      "provider": "codex",
+      "sourceKind": "sanitizedRealShape",
+      "sourceVersion": "0.144.1",
+      "scenario": "Local session JSONL patch_apply_end records for update, add, and delete"
+    },
+    {
+      "path": "codex_structured_file_change_schema_0_144_5.json",
+      "provider": "codex",
+      "sourceKind": "schemaConstructed",
+      "sourceVersion": "0.144.5",
+      "scenario": "Schema-valid fileChange lifecycle and turn-level aggregate fallback"
+    }
+  ]
+}

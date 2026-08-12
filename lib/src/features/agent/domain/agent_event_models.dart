@@ -561,15 +561,15 @@ class AgentPlanApprovalResolvedEvent extends AgentEvent {
   final String? sessionId;
 }
 
-/// 回合级聚合 diff 更新。
+/// 回合级中立文件变更快照。
 ///
-/// 对应 Codex `turn/diff/updated`：携带本回合全部文件改动的最新 unified diff。
-class AgentTurnDiffEvent extends AgentEvent {
-  const AgentTurnDiffEvent({
+/// Provider adapter 在事件进入共享 pipeline 前完成 identity、动作、顺序和累计语义；
+/// 空 [snapshot] 表示权威清空当前回合 fallback。
+class AgentTurnFileChangesEvent extends AgentEvent {
+  const AgentTurnFileChangesEvent({
     required this.sessionId,
     required this.turnId,
-    required this.diff,
-    this.raw = const <String, Object?>{},
+    required this.snapshot,
   });
 
   /// 所属会话 id。
@@ -578,11 +578,8 @@ class AgentTurnDiffEvent extends AgentEvent {
   /// 所属回合 id。
   final String turnId;
 
-  /// 最新聚合 unified diff；空字符串表示本回合暂无改动。
-  final String diff;
-
-  /// 原始通知 payload。
-  final Map<String, Object?> raw;
+  /// Provider adapter 产出的完整、累计文件变更快照。
+  final AgentFileChangeSnapshot snapshot;
 }
 
 /// 工具调用新增或更新。

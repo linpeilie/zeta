@@ -263,7 +263,7 @@ main -> app -> presentation/application -> domain
 - Transport 与 Provider mapper 不得丢弃协议事件。`AgentEventCoalescingPolicy` 只定义
   Agent key、merge 与 barrier；通用 `CoalescingEventBuffer` 只实现有界 keyed 合并。
   Application 投影层只允许合并同一
-  thread/turn/item/kind 的连续文本或 reasoning delta、token/diff 最新快照和工具 progress；
+  thread/turn/item/kind 的连续文本或 reasoning delta、token/文件变更最新完整快照和工具 progress；
   item/工具/turn 终态、审批、错误和连接状态必须先 flush 缓冲后立即发布。背压诊断不得包含正文。
 - `BoundedEventDispatcher` 保持 FIFO，默认每个 Dart event-loop turn 最多处理 64 个事件，
   continuation 使用 `Timer.run` 让步；名称和职责不得与 Flutter frame 调度混淆。
@@ -280,7 +280,8 @@ main -> app -> presentation/application -> domain
 - Provider Thread 操作必须复用 `ProviderOperationScheduler`。同一 Thread 的变更使用
   `exclusive` 并保持 FIFO，list/read 使用 Project/Thread `sharedRead`；禁止同键重入，
   dispose 必须拒绝未入场任务并等待已入场任务释放资源键。
-- JSON-RPC transport 日志不得记录 prompt、文件内容、认证参数或 stderr 原文。
+- JSON-RPC transport 与 ignored-message 日志不得记录 prompt、文件内容、文件变更 evidence、
+  raw payload、认证参数或 stderr 原文；只允许 method/type/reason/count 等白名单诊断。
 - 默认审批策略保持保守，不自动授权命令执行或文件写入。Plan 执行交接只可恢复进入
   Plan 前由用户明确选择、且同 Binding/thread/runtime generation 仍有效的策略；否则回落
   到 Provider catalog 默认。卡片上的本次覆盖不调用 Provider apply、不持久化，也不携带
@@ -337,6 +338,22 @@ phase；被正文、tool、plan 或交互打断后的 reasoning 必须使用新 
 - History parser 只能只读来源文件；Grok 每次解析必须创建 fresh reducer，缺少稳定 turn id
   时使用确定性的 history turn ordinal。live/history canonical regression 必须逐位置比较 turn/entry
   ordinal、entry type、message/reasoning phase、source id、规范化文本和 tool kind/status。
+
+文件变更证据遵循同一身份与状态边界：
+
+- `AgentFileChangeSnapshot` 是单个 tool 或 turn owner 的有序、不可变、完整累计快照。
+  owner/change id、动作、顺序、`revision`、`replayability` 与 partial 更新的 last-valid 规则
+  全部由 Provider-local mapper/tracker 决定；`null` 表示没有 snapshot，空 `changes` 表示权威清空。
+- evidence 只表达 Provider 明确给出的事实：替换前后片段、写入内容或 unified patch；
+  `null` evidence 只表示路径/动作摘要。空字符串是合法显式值，不能用来猜新建、删除或缺字段。
+- 同一 file-change tool 的后续 status/terminal 事件必须继续携带完整 snapshot。Codex 等协议若同时
+  提供 tool-scoped 证据与 turn aggregate，优先级、抑制和 empty clear 必须在对应 Provider
+  tracker 中完成；共享 Store/UI 不跨 owner 按路径去重。
+- 只有命令执行、审批参数或工作区结果时不得生成文件变更 snapshot；禁止解析命令、读取当前
+  文件或运行额外 diff 来补证据。presentation 可以解析 typed unified patch 做高亮与行数统计，
+  但不得从 patch header 反推路径、动作、owner 或 identity。
+- `replayable` 证据必须由 live/history/replay 的独立 tracker/reducer 重建并做 canonical 回归；
+  `liveOnly` 只能明确展示为当前实时降级，不得冒充历史可恢复事实。
 - Cursor 已退役，不参与 catalog、UI、Provider 组合、live/replay/load、ACP 扩展或进程启动。
   仅允许保留旧配置 decode/fallback、明确 unavailable、退役证据和用户数据未改写回归；
   `~/.cursor`、项目 `.cursor` 与 `cursor_sessions.json` 不得读取、迁移、改写或删除。
@@ -354,7 +371,7 @@ reducer 和 history parser 不属于共享适配层。
 
 - 按公开的通用协议契约做无状态语法解码，并输出 typed protocol update；
 - 按中立 domain 字段执行可由类型直接证明的通用行为，例如同 entryId 合并、
-  同 tool id upsert、按事件 kind 维持 flush barrier；
+  同 tool id upsert、机械替换完整文件变更 snapshot、按事件 kind 维持 flush barrier；
 - 执行与 Provider 无关的生命周期、缓冲、存储和 UI 投影，不补充任何协议语义。
 
 以下行为一律禁止：
@@ -363,6 +380,8 @@ reducer 和 history parser 不属于共享适配层。
 - 根据 `providerId`、Provider kind、实现类型、显示名称或 CLI 名称分支；
 - 从 raw/extra payload、厂商字段、eventId 或 source id 猜测 entryId、message segment、
   reasoning phase、plan、叙事边界、去重、终态或错误恢复策略；
+- 从 rawInput/rawOutput、命令、路径或 patch header 猜测文件变更 identity、动作、证据类型，
+  或替某个 Provider 保存 partial update 的 last-valid snapshot；
 - 在 CoalescingPolicy/Buffer、TimelineStore、ViewModel 或 UI 中为某个 Provider
   修复乱序、缺 id、
   delta/snapshot 差异或终态竞态；
@@ -420,6 +439,8 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
   排空待写队列。
 - 使用统计派生索引只保存聚合所需元数据；禁止写入 Prompt、回复正文、工具输出、
   session 文件路径和原始错误文本。索引必须版本化并支持损坏后重建。
+- 文件变更 snapshot 只存在于内存时间线；替换片段、写入内容和 unified patch 不得进入
+  Zeta 配置、状态、缓存、日志、系统通知、thread summary 或使用统计索引。
 - Provider 自有 data adapter 可以读取对应 CLI 的配置、会话、日志和账号 metadata；
   application/presentation 不得自行遍历 Provider 私有目录，也不得接收原始文件路径或
   payload。读取权限不自动授权迁移、复制、改写或删除；这些写操作必须有独立产品契约、

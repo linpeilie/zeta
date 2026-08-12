@@ -13,6 +13,8 @@ import 'package:zeta/src/features/agent/data/datasources/transport/provider_oper
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 
+import '../../../../../testing/agent_file_change_canonical.dart';
+
 void main() {
   group('CodexAppServerAgentProvider', () {
     test('starts Codex app-server threads and turns', () async {
@@ -1023,9 +1025,11 @@ void main() {
           ),
         );
         final renderedLogs = records.map((record) => record.message).join('\n');
-        expect(renderedLogs, contains('"method":"thread/started"'));
-        expect(renderedLogs, contains('"title":"private thread title"'));
-        expect(renderedLogs, contains('"text":"private user content"'));
+        expect(renderedLogs, contains('thread/started'));
+        expect(renderedLogs, contains('count=1'));
+        expect(renderedLogs, isNot(contains('raw=')));
+        expect(renderedLogs, isNot(contains('private thread title')));
+        expect(renderedLogs, isNot(contains('private user content')));
       },
     );
 
@@ -1225,7 +1229,7 @@ void main() {
       },
     );
 
-    test('maps turn/diff/updated into AgentTurnDiffEvent', () async {
+    test('maps turn/diff/updated into typed live-only snapshot', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
         config: AgentProviderConfig.defaultCodex,
@@ -1248,15 +1252,235 @@ void main() {
       });
       await Future<void>.delayed(Duration.zero);
 
-      final event = events.whereType<AgentTurnDiffEvent>().single;
+      final event = events.whereType<AgentTurnFileChangesEvent>().single;
       expect(event.sessionId, 'thread-1');
       expect(event.turnId, 'turn-1');
-      expect(event.diff, contains('lib/a.dart'));
-      expect(event.diff, contains('+new'));
+      expect(
+        event.snapshot.replayability,
+        AgentFileChangeReplayability.liveOnly,
+      );
+      expect(event.snapshot.changes, hasLength(1));
+      expect(event.snapshot.changes.single.path, 'lib/a.dart');
+      expect(event.snapshot.changes.single.kind, AgentFileChangeKind.modified);
+      expect(
+        (event.snapshot.changes.single.evidence as AgentUnifiedPatchEvidence)
+            .patch,
+        contains('+new'),
+      );
 
       await subscription.cancel();
       await provider.dispose();
     });
+
+    test(
+      'maps pinned structured lifecycle and suppresses later aggregate',
+      () async {
+        final fixture = await _loadFileChangeFixture(
+          'codex_structured_file_change_schema_0_144_5.json',
+        );
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+
+        await provider.initialize();
+        for (final value in fixture['events']! as List<Object?>) {
+          final event = (value! as Map).cast<String, Object?>();
+          peer.emitNotification(
+            event['method']! as String,
+            (event['params']! as Map).cast<String, Object?>(),
+          );
+        }
+        await Future<void>.delayed(Duration.zero);
+
+        final tools = events.whereType<AgentToolCallEvent>().toList();
+        expect(tools, hasLength(3));
+        expect(tools.map((event) => event.toolCall.status), <AgentToolStatus>[
+          AgentToolStatus.inProgress,
+          AgentToolStatus.inProgress,
+          AgentToolStatus.completed,
+        ]);
+        final envelopes = canonicalFileChangeEnvelopes(events);
+        expect(envelopes.map((event) => event.status), <String>[
+          'inProgress',
+          'inProgress',
+          'completed',
+        ]);
+        expect(envelopes.map((event) => event.ownerId).toSet(), hasLength(1));
+        expect(
+          envelopes.map((event) => event.snapshotSignature).toSet(),
+          hasLength(1),
+        );
+        for (final event in tools) {
+          final snapshot = event.toolCall.fileChanges;
+          expect(snapshot?.revision, 1);
+          expect(
+            snapshot?.replayability,
+            AgentFileChangeReplayability.replayable,
+          );
+          expect(snapshot?.changes, hasLength(1));
+          expect(
+            snapshot?.changes.single.path,
+            '<WORKSPACE_REDACTED>/sample.txt',
+          );
+          expect(snapshot?.changes.single.kind, AgentFileChangeKind.modified);
+          expect(
+            snapshot?.changes.single.evidence,
+            isA<AgentUnifiedPatchEvidence>(),
+          );
+        }
+        expect(events.whereType<AgentTurnFileChangesEvent>(), isEmpty);
+
+        await subscription.cancel();
+        await provider.dispose();
+      },
+    );
+
+    test(
+      'clears an earlier turn fallback before emitting tool evidence',
+      () async {
+        final fixture = await _loadFileChangeFixture(
+          'codex_structured_file_change_schema_0_144_5.json',
+        );
+        final fixtureEvents = fixture['events']! as List<Object?>;
+        final turnDiff = (fixtureEvents[3]! as Map).cast<String, Object?>();
+        final toolStarted = (fixtureEvents[0]! as Map).cast<String, Object?>();
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+
+        await provider.initialize();
+        peer.emitNotification(
+          turnDiff['method']! as String,
+          (turnDiff['params']! as Map).cast<String, Object?>(),
+        );
+        peer.emitNotification(
+          toolStarted['method']! as String,
+          (toolStarted['params']! as Map).cast<String, Object?>(),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        final fileEvents = events
+            .where(
+              (event) =>
+                  event is AgentTurnFileChangesEvent ||
+                  event is AgentToolCallEvent,
+            )
+            .toList();
+        expect(fileEvents, hasLength(3));
+        final fallback = fileEvents[0] as AgentTurnFileChangesEvent;
+        final clear = fileEvents[1] as AgentTurnFileChangesEvent;
+        final tool = fileEvents[2] as AgentToolCallEvent;
+        expect(fallback.snapshot.changes, isNotEmpty);
+        expect(
+          fallback.snapshot.replayability,
+          AgentFileChangeReplayability.liveOnly,
+        );
+        expect(clear.snapshot.changes, isEmpty);
+        expect(clear.snapshot.revision, 2);
+        expect(tool.toolCall.fileChanges?.changes, isNotEmpty);
+
+        await subscription.cancel();
+        await provider.dispose();
+      },
+    );
+
+    test(
+      'keeps command-only live, history, and replay free of file snapshots',
+      () async {
+        final fixture = await _loadFileChangeFixture(
+          'codex_command_edit_0_144_1.json',
+        );
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        final events = <AgentEvent>[];
+        final subscription = provider.events.listen(events.add);
+
+        await provider.initialize();
+        for (final value in fixture['events']! as List<Object?>) {
+          final event = (value! as Map).cast<String, Object?>();
+          if (event['direction'] != 'notification') {
+            continue;
+          }
+          peer.emitNotification(
+            event['method']! as String,
+            (event['params']! as Map).cast<String, Object?>(),
+          );
+        }
+        await Future<void>.delayed(Duration.zero);
+
+        final tools = events.whereType<AgentToolCallEvent>().toList();
+        expect(tools, hasLength(2));
+        expect(
+          tools.map((event) => event.toolCall.kind),
+          everyElement(AgentToolKind.execute),
+        );
+        expect(
+          tools.map((event) => event.toolCall.fileChanges),
+          everyElement(isNull),
+        );
+        expect(events.whereType<AgentTurnFileChangesEvent>(), isEmpty);
+
+        final completedNotification = (fixture['events']! as List<Object?>)
+            .map((value) => (value! as Map).cast<String, Object?>())
+            .singleWhere((event) => event['method'] == 'item/completed');
+        final completedItem =
+            ((completedNotification['params']! as Map)['item']! as Map)
+                .cast<String, Object?>();
+        final historyPeer = _FakeJsonRpcPeer(
+          threadReadResponseProvider: (_) => <String, Object?>{
+            'thread': <String, Object?>{
+              'id': 'codex-thread-redacted',
+              'turns': <Object?>[
+                <String, Object?>{
+                  'id': 'codex-turn-redacted',
+                  'status': 'completed',
+                  'items': <Object?>[completedItem],
+                },
+              ],
+            },
+          },
+        );
+        final historyProvider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: historyPeer,
+        );
+        final history = await historyProvider.readThreadHistory(
+          threadId: 'codex-thread-redacted',
+        );
+        final replay = await historyProvider.readThreadHistory(
+          threadId: 'codex-thread-redacted',
+        );
+        final rebuiltTools = <AgentToolCall>[
+          (history.turns.single.entries.single as AgentHistoryToolEntry)
+              .toolCall,
+          (replay.turns.single.entries.single as AgentHistoryToolEntry)
+              .toolCall,
+        ];
+        expect(
+          rebuiltTools.map((tool) => tool.kind),
+          everyElement(AgentToolKind.execute),
+        );
+        expect(
+          rebuiltTools.map((tool) => tool.fileChanges),
+          everyElement(isNull),
+        );
+
+        await subscription.cancel();
+        await provider.dispose();
+        await historyProvider.dispose();
+      },
+    );
 
     test('maps thread/status/changed with active waiting flags', () async {
       final peer = _FakeJsonRpcPeer();
@@ -2486,6 +2710,108 @@ void main() {
       await provider.dispose();
     });
 
+    test(
+      'rebuilds structured fileChange identically for live/history/replay',
+      () async {
+        final fixture = await _loadFileChangeFixture(
+          'codex_structured_file_change_schema_0_144_5.json',
+        );
+        final item = (fixture['threadReadItem']! as Map)
+            .cast<String, Object?>();
+        final livePeer = _FakeJsonRpcPeer();
+        final liveProvider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: livePeer,
+        );
+        final liveEvents = <AgentEvent>[];
+        final liveSubscription = liveProvider.events.listen(liveEvents.add);
+        await liveProvider.initialize();
+        for (final value in fixture['events']! as List<Object?>) {
+          final event = (value! as Map).cast<String, Object?>();
+          livePeer.emitNotification(
+            event['method']! as String,
+            (event['params']! as Map).cast<String, Object?>(),
+          );
+        }
+        await Future<void>.delayed(Duration.zero);
+        final liveTool = liveEvents
+            .whereType<AgentToolCallEvent>()
+            .last
+            .toolCall;
+
+        final historyPeer = _FakeJsonRpcPeer(
+          threadReadResponseProvider: (_) => <String, Object?>{
+            'thread': <String, Object?>{
+              'id': 'codex-thread-redacted',
+              'turns': <Object?>[
+                <String, Object?>{
+                  'id': 'codex-turn-redacted',
+                  'status': 'completed',
+                  'items': <Object?>[item],
+                },
+              ],
+            },
+          },
+        );
+        final historyProvider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: historyPeer,
+        );
+
+        final history = await historyProvider.readThreadHistory(
+          threadId: 'codex-thread-redacted',
+        );
+        final replay = await historyProvider.readThreadHistory(
+          threadId: 'codex-thread-redacted',
+        );
+        final historyTool =
+            (history.turns.single.entries.single as AgentHistoryToolEntry)
+                .toolCall;
+        final replayTool =
+            (replay.turns.single.entries.single as AgentHistoryToolEntry)
+                .toolCall;
+
+        final liveEnvelope = canonicalFileChangeToolCall(liveTool);
+        expect(
+          canonicalFileChangeToolCall(historyTool).signature,
+          liveEnvelope.signature,
+        );
+        expect(
+          canonicalFileChangeToolCall(replayTool).signature,
+          liveEnvelope.signature,
+        );
+        expect(historyTool.sessionId, 'codex-thread-redacted');
+        expect(historyTool.turnId, 'codex-turn-redacted');
+        expect(historyTool.kind, AgentToolKind.edit);
+        expect(historyTool.status, AgentToolStatus.completed);
+        expect(historyTool.fileChanges?.revision, 1);
+        expect(
+          historyTool.fileChanges?.replayability,
+          AgentFileChangeReplayability.replayable,
+        );
+        expect(
+          historyTool.fileChanges?.changes.single.kind,
+          AgentFileChangeKind.modified,
+        );
+        expect(
+          historyTool.fileChanges?.changes.single.evidence,
+          isA<AgentUnifiedPatchEvidence>(),
+        );
+        expect(
+          identical(liveTool.fileChanges, historyTool.fileChanges),
+          isFalse,
+        );
+        expect(
+          identical(historyTool.fileChanges, replayTool.fileChanges),
+          isFalse,
+        );
+
+        await liveSubscription.cancel();
+        await liveProvider.dispose();
+        await historyProvider.dispose();
+      },
+    );
+
     test('prefers local session jsonl history when available', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
@@ -2655,6 +2981,70 @@ void main() {
 
       await provider.dispose();
     });
+
+    test(
+      'rebuilds typed file evidence from local patch_apply_end history',
+      () async {
+        final fixture = await _loadFileChangeFixture(
+          'codex_patch_apply_end_history_0_144_1.json',
+        );
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: _FakeJsonRpcPeer(),
+        );
+        addTearDown(provider.dispose);
+        final sessionFile = await _writeJsonlFile(
+          fixture['records']! as List<Object?>,
+        );
+        addTearDown(() => sessionFile.parent.delete(recursive: true));
+
+        final history = await provider.readThreadHistory(
+          threadId: 'codex-thread-redacted',
+          sessionPath: sessionFile.path,
+        );
+        final tools = _historyEntries(history)
+            .whereType<AgentHistoryToolEntry>()
+            .map((entry) => entry.toolCall)
+            .toList(growable: false);
+
+        expect(tools, hasLength(4));
+        expect(tools.first.title, 'Exec');
+        expect(tools.first.kind, AgentToolKind.other);
+        expect(tools.first.fileChanges, isNull);
+
+        final patches = tools.skip(1).toList(growable: false);
+        expect(patches.map((tool) => tool.title), everyElement('Apply patch'));
+        expect(
+          patches.map((tool) => tool.status),
+          everyElement(AgentToolStatus.completed),
+        );
+        expect(
+          patches.map((tool) => tool.fileChanges?.replayability),
+          everyElement(AgentFileChangeReplayability.replayable),
+        );
+
+        final update = patches[0].fileChanges!.changes.single;
+        expect(update.path, 'lib/example.dart');
+        expect(update.kind, AgentFileChangeKind.modified);
+        expect(
+          (update.evidence as AgentUnifiedPatchEvidence).patch,
+          contains('+[AFTER_REDACTED]'),
+        );
+
+        final created = patches[1].fileChanges!.changes.single;
+        expect(created.path, 'lib/created.dart');
+        expect(created.kind, AgentFileChangeKind.created);
+        expect(
+          (created.evidence as AgentWrittenContentEvidence).content,
+          '[CREATED_CONTENT_REDACTED]\n',
+        );
+
+        final deleted = patches[2].fileChanges!.changes.single;
+        expect(deleted.path, 'lib/deleted.dart');
+        expect(deleted.kind, AgentFileChangeKind.deleted);
+        expect(deleted.evidence, isNull);
+      },
+    );
 
     test(
       'normalizes online history modes and keeps the latest valid value',
@@ -5085,6 +5475,13 @@ void main() {
       expect(params.containsKey('serviceTier'), isFalse);
     });
   });
+}
+
+Future<Map<String, Object?>> _loadFileChangeFixture(String name) async {
+  final value = jsonDecode(
+    await File('test/fixtures/agent_file_change_evidence/$name').readAsString(),
+  );
+  return (value as Map).cast<String, Object?>();
 }
 
 Future<File> _writeJsonlFile(List<Object?> records) async {

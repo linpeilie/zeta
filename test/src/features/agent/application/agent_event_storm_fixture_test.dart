@@ -148,10 +148,17 @@ void main() {
       );
       expect(
         timeline.timelineEntries
-            .whereType<AgentTurnDiffTimelineEntry>()
+            .whereType<AgentTurnFileChangesTimelineEntry>()
             .single
-            .diff,
-        first.delivery.lastDiff,
+            .snapshot
+            .changes
+            .single
+            .evidence,
+        isA<AgentUnifiedPatchEvidence>().having(
+          (evidence) => evidence.patch,
+          'patch',
+          first.delivery.lastDiff,
+        ),
       );
       expect(
         historyTurn.tokenUsage?.totalTokens,
@@ -304,7 +311,16 @@ Future<_StormBaselineSnapshot> _runStorm({
         .whereType<AgentContextWindowUsageEvent>()
         .last
         .usedTokens,
-    lastDiff: delivered.whereType<AgentTurnDiffEvent>().last.diff,
+    lastDiff:
+        (delivered
+                    .whereType<AgentTurnFileChangesEvent>()
+                    .last
+                    .snapshot
+                    .changes
+                    .single
+                    .evidence
+                as AgentUnifiedPatchEvidence)
+            .patch,
     lastEventType: delivered.last.runtimeType.toString(),
   );
 

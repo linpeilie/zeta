@@ -723,7 +723,7 @@ void main() {
     });
 
     test(
-      'logs original payload in shared ignored-message diagnostics across Grok notification paths',
+      'logs only safe summaries across Grok ignored notification paths',
       () async {
         final records = <LogEvent>[];
         void listener(OutputEvent event) {
@@ -795,7 +795,7 @@ void main() {
           hasLength(2),
         );
         expect(fineMessages, everyElement(contains('Ignoring')));
-        expect(fineMessages, everyElement(contains('raw=')));
+        expect(fineMessages, everyElement(isNot(contains('raw='))));
         expect(provider.ignoredNotificationCountsForTesting, <String, int>{
           'future/method|unsupported notification method': 2,
           'session/update|unknown_kind': 2,
@@ -805,13 +805,15 @@ void main() {
           'session/update': 2,
         });
         final renderedLogs = records.map((record) => record.message).join('\n');
-        expect(renderedLogs, contains('"method":"future/method"'));
-        expect(renderedLogs, contains('"method":"session/update"'));
-        expect(
-          renderedLogs,
-          contains('"secret":"private notification content"'),
-        );
-        expect(renderedLogs, contains('"content":"private update content"'));
+        expect(renderedLogs, contains('future/method'));
+        expect(renderedLogs, contains('session/update'));
+        expect(renderedLogs, contains('count=1'));
+        expect(renderedLogs, contains('count=2'));
+        expect(renderedLogs, contains('itemType=future_update'));
+        expect(renderedLogs, isNot(contains('private notification content')));
+        expect(renderedLogs, isNot(contains('private update content')));
+        expect(renderedLogs, isNot(contains('secret')));
+        expect(renderedLogs, isNot(contains('content')));
       },
     );
 

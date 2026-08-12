@@ -183,7 +183,7 @@ final class AgentTimelineExtentDescriptorFactory {
           AgentPlanApprovalTimelineEntry() =>
             AgentTimelineExtentKinds.planInteraction,
           AgentHistoryEventTimelineEntry() => AgentTimelineExtentKinds.system,
-          AgentTurnDiffTimelineEntry() =>
+          AgentTurnFileChangesTimelineEntry() =>
             AgentTimelineExtentKinds.fileEditGroup,
         },
       },
@@ -262,11 +262,14 @@ final class AgentTimelineExtentDescriptorFactory {
         for (final item in group.items)
           Object.hash(
             item.id,
-            item.filePath,
             item.title,
-            item.addedLines,
-            item.removedLines,
-            item.details,
+            item.status,
+            item.projection.snapshotRevision,
+            item.projection.replayability,
+            item.projection.changeId,
+            item.projection.kind,
+            item.projection.path,
+            item.projection.destinationPath,
           ),
       ]),
       AgentTimelineEntryRenderBlock(:final entry) => _entryContentRevision(
@@ -322,11 +325,13 @@ final class AgentTimelineExtentDescriptorFactory {
         event.description,
         event.content?.length,
       ),
-      AgentTurnDiffTimelineEntry(:final turnId, :final diff) => Object.hash(
-        turnId,
-        diff.length,
-        diff.hashCode,
-      ),
+      AgentTurnFileChangesTimelineEntry(:final turnId, :final snapshot) =>
+        Object.hash(
+          turnId,
+          snapshot.revision,
+          snapshot.replayability,
+          snapshot.changes.length,
+        ),
     };
   }
 
@@ -455,7 +460,7 @@ final class AgentTimelineExtentDescriptorFactory {
     if (entry is AgentToolTimelineEntry) {
       return 56 * scale;
     }
-    if (entry is AgentTurnDiffTimelineEntry) {
+    if (entry is AgentTurnFileChangesTimelineEntry) {
       return 80 * scale;
     }
     if (entry is AgentPlanApprovalTimelineEntry) {

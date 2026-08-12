@@ -22,6 +22,7 @@ part '../../mappers/codex_app_server_helpers.dart';
 part '../../mappers/codex_approval_mapper.dart';
 part '../../mappers/codex_collaboration_mode_mapper.dart';
 part '../../mappers/codex_conversation_mode_codec.dart';
+part '../../mappers/codex_file_change_tracker.dart';
 part '../../mappers/codex_model_list_mapper.dart';
 part '../../mappers/codex_notification_mapper.dart';
 part '../../mappers/codex_question_mapper.dart';
@@ -878,6 +879,7 @@ class CodexAppServerAgentProvider
     await _serverRequestSubscription?.cancel();
     await _stderrSubscription?.cancel();
     await _protocolErrorSubscription?.cancel();
+    _notificationMapper.dispose();
     await _peer.close();
     await _operationScheduler.close();
     await _events.close();
@@ -1055,6 +1057,10 @@ class CodexAppServerAgentProvider
             ? event.threadId
             : (event as AgentThreadClosedEvent).threadId;
         _runningTurnIdsBySessionId.remove(threadId);
+        _notificationMapper.invalidateSession(
+          runtimeScope: notification.runtimeScope,
+          sessionId: threadId,
+        );
         unawaited(_unsubscribeThreadBestEffort(threadId));
       }
       _events.add(event);
@@ -1097,6 +1103,7 @@ class CodexAppServerAgentProvider
         _peer.lifecycleState == AgentProviderLifecycleState.closed) {
       return;
     }
+    _notificationMapper.invalidateRuntime(_peer.runtimeScope);
     _initialized = false;
     _runningTurnIdsBySessionId.clear();
     _resolvePendingInteractionsOnConnectionClosed();

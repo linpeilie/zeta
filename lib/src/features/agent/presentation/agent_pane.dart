@@ -50,6 +50,7 @@ import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dar
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection_cache.dart';
 import 'package:zeta/src/features/agent/presentation/model_config_ui_state.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_file_change_evidence_card.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 import 'package:zeta/src/ui/core/virtualization/ide_dynamic_sliver_list.dart';
 import 'package:zeta/src/ui/core/virtualization/ide_smooth_scroll_controller.dart';
@@ -73,8 +74,6 @@ part 'widgets/agent_mention_file_picker.dart';
 part 'widgets/agent_pane_sections.dart';
 part 'widgets/agent_pane_styles.dart';
 part 'widgets/agent_pane_navigation_rail.dart';
-
-const int _diffPreviewLineCount = 24;
 
 /// Agent 主列宽度档位：只影响 page padding 等布局语义，不随每像素宽度重建。
 enum _AgentPaneWidthClass { compact, regular }

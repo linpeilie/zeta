@@ -423,12 +423,22 @@ void main() {
                       title: 'Baseline edit',
                       kind: AgentToolKind.edit,
                       status: AgentToolStatus.completed,
-                      locations: <String>['lib/example.dart'],
-                      rawOutput: patchApplyChanges(<String, String?>{
-                        'lib/example.dart':
-                            '@@ -1 +1,18 @@\n-old\n'
-                            '${List<String>.generate(18, (i) => '+new-$i').join('\n')}\n',
-                      }),
+                      fileChanges: AgentFileChangeSnapshot(
+                        revision: 1,
+                        replayability: AgentFileChangeReplayability.replayable,
+                        changes: <AgentFileChange>[
+                          AgentFileChange(
+                            id: 'baseline-change',
+                            path: 'lib/example.dart',
+                            kind: AgentFileChangeKind.modified,
+                            evidence: AgentUnifiedPatchEvidence(
+                              patch:
+                                  '@@ -1 +1,18 @@\n-old\n'
+                                  '${List<String>.generate(18, (i) => '+new-$i').join('\n')}\n',
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   for (var index = 0; index < 20; index += 1)

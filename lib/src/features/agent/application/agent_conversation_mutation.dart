@@ -250,10 +250,12 @@ final class AgentReplaceActivePlanTimelineMutation
   final AgentPlanUpdatedEvent event;
 }
 
-final class AgentUpsertTurnDiffTimelineMutation extends AgentTimelineMutation {
-  const AgentUpsertTurnDiffTimelineMutation(this.event);
+/// 原位写入或清除回合级中立文件变更快照。
+final class AgentUpsertTurnFileChangesTimelineMutation
+    extends AgentTimelineMutation {
+  const AgentUpsertTurnFileChangesTimelineMutation(this.event);
 
-  final AgentTurnDiffEvent event;
+  final AgentTurnFileChangesEvent event;
 }
 
 final class AgentUpsertToolCallTimelineMutation extends AgentTimelineMutation {

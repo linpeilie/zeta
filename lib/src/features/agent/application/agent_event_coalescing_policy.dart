@@ -50,7 +50,7 @@ final class AgentEventCoalescingPolicy
         itemId: '<turn>',
         detail: null,
       ),
-      AgentTurnDiffEvent() => (
+      AgentTurnFileChangesEvent() => (
         kind: 'diffSnapshot',
         sessionId: event.sessionId,
         turnId: event.turnId,

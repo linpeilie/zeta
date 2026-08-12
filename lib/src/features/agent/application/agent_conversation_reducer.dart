@@ -169,7 +169,7 @@ final class AgentConversationReducer {
         context,
       ),
       AgentPlanApprovalResolvedEvent() => _planApprovalResolved(event, context),
-      AgentTurnDiffEvent() => _turnDiff(event, context),
+      AgentTurnFileChangesEvent() => _turnFileChanges(event, context),
       AgentToolCallEvent() => _toolCall(event, context),
       AgentPermissionRequestedEvent() => _permissionRequested(event, context),
       AgentPermissionResolvedEvent() => _permissionResolved(event, context),
@@ -716,8 +716,8 @@ final class AgentConversationReducer {
     );
   }
 
-  AgentConversationMutation _turnDiff(
-    AgentTurnDiffEvent event,
+  AgentConversationMutation _turnFileChanges(
+    AgentTurnFileChangesEvent event,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(
@@ -730,7 +730,7 @@ final class AgentConversationReducer {
     return AgentConversationMutation(
       accepted: true,
       timelineMutations: <AgentTimelineMutation>[
-        AgentUpsertTurnDiffTimelineMutation(event),
+        AgentUpsertTurnFileChangesTimelineMutation(event),
       ],
       uiUpdate: AgentUiUpdateRequest(
         regions: const <AgentUiRegion>{AgentUiRegion.liveTurn},

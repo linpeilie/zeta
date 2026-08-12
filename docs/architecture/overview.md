@@ -76,7 +76,7 @@ flowchart LR
 | 环节 | 负责 | 明确不负责 |
 | --- | --- | --- |
 | decoder | 协议语法、传输生命周期 | 任何 Provider 分支 |
-| **Provider adapter / reducer** | 厂商字段兼容、entryId 归属、分段、去重、终态判定 | 把没想清楚的语义丢给下游猜 |
+| **Provider adapter / reducer** | 厂商字段兼容、entryId 归属、分段、去重、终态判定、完整文件变更快照 | 把没想清楚的语义丢给下游猜 |
 | Pipeline | 订阅作用域、事件合并、有界派发 | 业务语义 |
 | Processor / reducer | 状态迁移、时间线变更描述 | 异步、Flutter 调度 |
 | TimelineStore | 同 entryId 更新、异 entryId 新建 | 推断、改写 id |
@@ -87,6 +87,11 @@ flowchart LR
 1. **Provider 的 `sourceItemId` / `sourceMessageId` 只是 metadata。** entryId、消息分段、推理阶段、去重、终态，全部由该 Provider 自己的 adapter/reducer 决定。TimelineStore 只做无脑合并，它不猜。
 2. **reducer 必须纯同步。** 不许出现 `Timer`、`Future`、Flutter scheduler 或外部回调。所有副作用走 EffectRunner，由它做作用域校验。
 3. **live / history / replay 用各自独立的 reducer 实例。** 共用会串味。
+4. **文件变更只展示 Provider 给出的 typed 证据。** 替换片段、写入内容和 unified patch 保持各自语义；只有命令时继续显示命令卡，不解析命令或当前工作区去编造 diff。
+
+`AgentFileChangeSnapshot` 是 Provider 在进入共享管线前完成的完整累计快照。Store 只机械替换，
+UI 只按 evidence 类型渲染；Codex 的 turn aggregate 是显式 `liveOnly` fallback，不能冒充可恢复
+历史，也不能与后到的 tool-scoped 证据双显。
 
 新增或修改 `AgentEvent` 之前，要逐项走完[开发者文档 §7](../guides/developer_guide.md) 的 16 条接入清单。
 
@@ -174,7 +179,7 @@ flowchart TD
 
 页面切换只换 slot 内容，`WindowFrame` 和 `IdeWorkbenchScaffold` 始终是同一个 Element。**feature 页面不得替换顶层 workbench。**
 
-跨页面保活用 `IdeRetainedPageView`，不用 `IndexedStack`（后者会一直保留长时间线的布局开销）。时间线用 `SliverList.builder` 虚拟化，流式回合、代码高亮和 diff 区域各自加 `RepaintBoundary`。
+跨页面保活用 `IdeRetainedPageView`，不用 `IndexedStack`（后者会一直保留长时间线的布局开销）。时间线用 `SliverList.builder` 虚拟化，流式回合、代码高亮和文件变更证据区域各自加 `RepaintBoundary`。
 
 禁止 post-frame 测量、`GlobalKey` 查高、layout 后 `setState` 反馈环——这些都会在长时间线上产生可见的抖动。
 
@@ -195,7 +200,7 @@ cache/    agent_models_v1.json
 
 - **JSON 必须版本化 + 宽容解码。** 缺字段、损坏、旧版本都不能阻断启动。
 - **Provider 私有数据只在自有 data adapter 中读取。** 协议字段、原始正文和私有路径不进入上层；读取权限不自动授权迁移、改写或删除。
-- **派生索引只存白名单字段。** 禁止落盘 prompt、回复正文、工具输出、原始错误文本、环境变量、凭证或 Provider raw payload。
+- **派生索引只存白名单字段。** 禁止落盘 prompt、回复正文、工具输出、文件变更 evidence 正文、原始错误文本、环境变量、凭证或 Provider raw payload。
 
 feature store 也不得在 presentation / application 里自己拼 `File('~/.zeta/...')`——具体文件由 `lib/src/app` 注入。
 
@@ -207,6 +212,7 @@ feature store 也不得在 presentation / application 里自己拼 `File('~/.zet
 | --- | --- |
 | 调整时间线某种卡片的外观 | `features/agent/presentation` + `ui/core` token |
 | 修某个 Provider 的流式显示异常 | 该 Provider 的 `data/` adapter / reducer |
+| 接入或修复 Provider 文件变更证据 | 该 Provider 的 `data/` tracker + 中立 domain/presentation；共享 Store 只机械透传 |
 | 加一个 Provider 已支持但 UI 没露出的能力 | domain 端口与 capability → application → presentation |
 | 接入一个全新的 Agent CLI | 新建 `data/` 实现 + factory 组合 + 契约测试 |
 | 改文件树忽略规则 | `features/workspace/domain/workspace_directory_rules.dart` |

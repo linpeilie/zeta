@@ -287,25 +287,11 @@ AgentThreadSummary agentPaneThread({
 }
 
 String agentPaneFileEditGroupId(String turnId, String toolCallId) {
-  return 'file-edit-group-$turnId-$toolCallId';
+  return 'file-edit-group-$turnId-tool-$toolCallId';
 }
 
-String agentPaneFileEditItemId(String toolCallId, String filePath) {
-  return 'file-edit-$toolCallId-$filePath';
-}
-
-Map<String, Object?> agentPanePatchApplyChanges(
-  Map<String, String?> diffsByPath,
-) {
-  return <String, Object?>{
-    'changes': <String, Object?>{
-      for (final entry in diffsByPath.entries)
-        entry.key: <String, Object?>{
-          'type': 'update',
-          if (entry.value != null) 'unified_diff': entry.value,
-        },
-    },
-  };
+String agentPaneFileEditItemId(String toolCallId, String changeId) {
+  return 'file-edit-tool-$toolCallId-$changeId';
 }
 
 String agentPaneLargeUnifiedDiff() {

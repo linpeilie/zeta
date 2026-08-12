@@ -174,116 +174,15 @@ class _AgentFileEditItemRow extends StatelessWidget {
         final expanded = viewModel.expansionState.isFileEditItemExpanded(
           item.id,
         );
-        final canExpand = item.hasDetails;
-        return IdeCollapsibleCard(
-          headerKey: ValueKey<String>('agent-file-edit-item-row-${item.id}'),
-          toggleKey: ValueKey<String>('agent-file-edit-item-toggle-${item.id}'),
-          bodyKey: ValueKey<String>('agent-file-edit-item-details-${item.id}'),
+        return AgentFileChangeEvidenceCard(
+          item: item.projection,
+          status: item.status,
           expanded: expanded,
-          canExpand: canExpand,
-          onToggle: canExpand
+          onToggle: item.hasDetails
               ? () => viewModel.toggleFileEditItem(item.id)
               : () {},
-          hoverBackgroundColor: _agentHoverBackground(context),
-          padding: const EdgeInsets.symmetric(vertical: IdeSpacing.space2),
-          bodyPadding: const EdgeInsets.only(
-            top: IdeSpacing.space6,
-            right: IdeSpacing.space20,
-          ),
-          semanticLabel: canExpand ? '查看文件编辑详情' : '文件编辑详情',
-          titleWidget: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  item.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _agentItemTextStyle(context),
-                ),
-              ),
-              if (item.addedLines != null || item.removedLines != null) ...[
-                const SizedBox(width: IdeSpacing.space12),
-                Text.rich(
-                  key: ValueKey<String>(
-                    'agent-file-edit-item-line-stats-${item.id}',
-                  ),
-                  _fileEditLineStatsSpan(context, item),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ],
-          ),
-          body: item.details == null ? null : _AgentDiffDetails(item: item),
         );
       },
-    );
-  }
-}
-
-class _AgentDiffDetails extends StatefulWidget {
-  const _AgentDiffDetails({required this.item});
-
-  final AgentTimelineFileEditItem item;
-
-  @override
-  State<_AgentDiffDetails> createState() => _AgentDiffDetailsState();
-}
-
-class _AgentDiffDetailsState extends State<_AgentDiffDetails> {
-  bool _showAll = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final textStyles = IdeTextStyles.of(context);
-    final details = widget.item.details!;
-    final shouldCollapse = _shouldPreviewCodeBlock(
-      details,
-      maxLines: _diffPreviewLineCount,
-    );
-    final code = !_showAll && shouldCollapse
-        ? _previewCodeBlock(details, maxLines: _diffPreviewLineCount)
-        : details;
-    final hiddenLines = shouldCollapse
-        ? _codeBlockLineCount(details) - _diffPreviewLineCount
-        : 0;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _AgentHighlightedCodeBlock(code: code, language: 'diff'),
-        if (shouldCollapse)
-          Padding(
-            padding: const EdgeInsets.only(top: IdeSpacing.space6),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  _showAll ? '已显示完整差异' : '已省略 $hiddenLines 行',
-                  style: _agentMetaTextStyle(context),
-                ),
-                const SizedBox(width: IdeSpacing.space8),
-                sf.GhostButton(
-                  key: ValueKey<String>(
-                    'agent-file-edit-item-expand-all-${widget.item.id}',
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _showAll = !_showAll;
-                    });
-                  },
-                  size: sf.ButtonSize.small,
-                  child: Text(
-                    _showAll ? '收起差异' : '展开全部',
-                    style: textStyles.bodySmall,
-                  ),
-                ),
-              ],
-            ),
-          ),
-      ],
     );
   }
 }

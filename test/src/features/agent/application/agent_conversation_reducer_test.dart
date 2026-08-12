@@ -1004,17 +1004,30 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
         uiEffectTypes: <Type>[AgentRequestAutoScroll],
         includeHeaderWhenActivityChanges: true,
       ),
-      const _ReductionCase(
-        name: 'turn diff',
-        event: AgentTurnDiffEvent(
+      _ReductionCase(
+        name: 'turn file changes',
+        event: AgentTurnFileChangesEvent(
           sessionId: _threadId,
           turnId: _turnId,
-          diff: 'diff --git a/a b/a',
+          snapshot: AgentFileChangeSnapshot(
+            revision: 1,
+            replayability: AgentFileChangeReplayability.liveOnly,
+            changes: const <AgentFileChange>[
+              AgentFileChange(
+                id: 'change-1',
+                path: 'lib/a.dart',
+                kind: AgentFileChangeKind.modified,
+                evidence: AgentUnifiedPatchEvidence(
+                  patch: 'diff --git a/a b/a',
+                ),
+              ),
+            ],
+          ),
         ),
-        timelineTypes: <Type>[AgentUpsertTurnDiffTimelineMutation],
-        uiRegions: <AgentUiRegion>{AgentUiRegion.liveTurn},
+        timelineTypes: const <Type>[AgentUpsertTurnFileChangesTimelineMutation],
+        uiRegions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
         uiUrgency: AgentUiUpdateUrgency.immediate,
-        uiEffectTypes: <Type>[AgentRequestAutoScroll],
+        uiEffectTypes: const <Type>[AgentRequestAutoScroll],
       ),
     ],
     'batch F pending interaction': <_ReductionCase>[

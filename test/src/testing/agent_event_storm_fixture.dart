@@ -133,10 +133,23 @@ final class AgentEventStormFixture {
             ),
           )
           ..add(
-            AgentTurnDiffEvent(
+            AgentTurnFileChangesEvent(
               sessionId: sessionId,
               turnId: turnId,
-              diff: 'fixture-diff-$snapshotIndex',
+              snapshot: AgentFileChangeSnapshot(
+                revision: snapshotIndex + 1,
+                replayability: AgentFileChangeReplayability.liveOnly,
+                changes: <AgentFileChange>[
+                  AgentFileChange(
+                    id: 'fixture-change',
+                    path: 'fixture.txt',
+                    kind: AgentFileChangeKind.modified,
+                    evidence: AgentUnifiedPatchEvidence(
+                      patch: 'fixture-diff-$snapshotIndex',
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         snapshotIndex += 1;

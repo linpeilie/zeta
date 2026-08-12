@@ -1,3 +1,7 @@
+import 'package:zeta/src/features/agent/domain/agent_file_change_models.dart';
+
+export 'package:zeta/src/features/agent/domain/agent_file_change_models.dart';
+
 /// Agent 工具调用的中立分类。
 ///
 /// Codex、ACP 或其他 CLI 的原始 item/tool 类型会先映射到这里，再交给 UI 渲染。
@@ -76,6 +80,7 @@ class AgentToolCall {
     this.rawInput = const <String, Object?>{},
     this.rawOutput = const <String, Object?>{},
     this.raw = const <String, Object?>{},
+    this.fileChanges,
   });
 
   /// 工具调用 id。
@@ -131,6 +136,11 @@ class AgentToolCall {
   /// 完整原始事件 payload。
   final Map<String, Object?> raw;
 
+  /// Provider adapter 产出的完整、累计文件变更快照。
+  ///
+  /// `null` 表示本次工具事件没有结构化文件变更证据；空快照表示权威清空。
+  final AgentFileChangeSnapshot? fileChanges;
+
   bool get isTerminalStatus =>
       status == AgentToolStatus.completed ||
       status == AgentToolStatus.failed ||
@@ -154,7 +164,9 @@ class AgentToolCall {
     Map<String, Object?>? rawInput,
     Map<String, Object?>? rawOutput,
     Map<String, Object?>? raw,
+    AgentFileChangeSnapshot? fileChanges,
     bool clearContent = false,
+    bool clearFileChanges = false,
   }) {
     return AgentToolCall(
       id: id ?? this.id,
@@ -171,6 +183,7 @@ class AgentToolCall {
       rawInput: rawInput ?? this.rawInput,
       rawOutput: rawOutput ?? this.rawOutput,
       raw: raw ?? this.raw,
+      fileChanges: clearFileChanges ? null : (fileChanges ?? this.fileChanges),
     );
   }
 }

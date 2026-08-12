@@ -5,6 +5,7 @@ import 'package:zeta/src/features/agent/application/agent_conversation_reducer.d
 import 'package:zeta/src/features/agent/application/agent_event_pipeline.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
+import '../../../testing/agent_file_change_canonical.dart';
 import '../../../testing/agent_event_storm_fixture.dart';
 
 void main() {
@@ -40,6 +41,38 @@ void main() {
       expect(pipeline.diagnostics.acceptedEvents, 2);
       expect(pipeline.diagnostics.buffer.coalescedEvents, 1);
       expect(pipeline.diagnostics.buffer.barrierEvents, 1);
+
+      await pipeline.close();
+      await source.close();
+    });
+
+    test('turn 文件快照经 Pipeline latest-wins 且先于完成屏障', () async {
+      final source = StreamController<AgentEvent>(sync: true);
+      final processed = <AgentEvent>[];
+      final pipeline = _pipeline(
+        source: source,
+        currentRuntimeScope: () => runtime1,
+        processed: processed,
+      );
+
+      source
+        ..add(_turnFileChanges(revision: 1, patch: 'old diff'))
+        ..add(_turnFileChanges(revision: 2, patch: 'latest diff'))
+        ..add(
+          const AgentTurnCompletedEvent(
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+        );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(processed, hasLength(2));
+      expect(processed.first, isA<AgentTurnFileChangesEvent>());
+      expect(processed.last, isA<AgentTurnCompletedEvent>());
+      final envelopes = canonicalFileChangeEnvelopes(processed);
+      expect(envelopes, hasLength(1));
+      expect(envelopes.single.snapshot.revision, 2);
+      expect(envelopes.single.snapshotSignature, contains('latest diff'));
 
       await pipeline.close();
       await source.close();
@@ -290,7 +323,7 @@ AgentEventPipeline _pipeline({
 }) {
   return AgentEventPipeline(
     source: source.stream,
-    providerId: 'codex',
+    providerId: 'provider-neutral',
     threadId: threadId,
     runtimeScope: currentRuntimeScope(),
     currentRuntimeScope: currentRuntimeScope,
@@ -324,5 +357,27 @@ AgentMessageUpdatedEvent _updated(
     text: text,
     sessionId: 'thread-1',
     turnId: 'turn-1',
+  );
+}
+
+AgentTurnFileChangesEvent _turnFileChanges({
+  required int revision,
+  required String patch,
+}) {
+  return AgentTurnFileChangesEvent(
+    sessionId: 'thread-1',
+    turnId: 'turn-1',
+    snapshot: AgentFileChangeSnapshot(
+      revision: revision,
+      replayability: AgentFileChangeReplayability.liveOnly,
+      changes: <AgentFileChange>[
+        AgentFileChange(
+          id: 'change-1',
+          path: 'lib/a.dart',
+          kind: AgentFileChangeKind.modified,
+          evidence: AgentUnifiedPatchEvidence(patch: patch),
+        ),
+      ],
+    ),
   );
 }

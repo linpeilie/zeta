@@ -472,6 +472,7 @@ class ClaudeCodeAgentProvider
     }
     _turnAdmissionInProgress = true;
     late final StreamJsonPeer peer;
+    late final AgentRuntimeScope runtimeScope;
     late final String turnId;
     late final String text;
     try {
@@ -511,10 +512,11 @@ class ClaudeCodeAgentProvider
         requestedModel: requestedModel,
       );
       final activePeer = _peer;
-      final runtimeScope = _runtimeScope;
-      if (activePeer == null || runtimeScope == null) {
+      final activeRuntimeScope = _runtimeScope;
+      if (activePeer == null || activeRuntimeScope == null) {
         throw StateError('Claude Code peer is unavailable after mode switch');
       }
+      runtimeScope = activeRuntimeScope;
 
       turnId = _idFactory();
       _runningTurnIdsBySessionId[session.id] = turnId;
@@ -552,6 +554,15 @@ class ClaudeCodeAgentProvider
       await peer.send(userFrame);
     } catch (error, stackTrace) {
       _runningTurnIdsBySessionId.remove(session.id);
+      _mapper.completeTurn(
+        runtimeScope: runtimeScope,
+        sessionId: session.id,
+        runningTurnId: turnId,
+        status: AgentHistoryTurnStatus.failed,
+        source: ClaudeCodeTerminalSource.providerError,
+        eventId: 'provider-send-failed',
+        eventKind: 'provider.send.failed',
+      );
       _planApprovalAdapter.completeTurn(sessionId: session.id, turnId: turnId);
       _log.w(
         'Failed to send Claude Code user frame (${error.runtimeType})',
@@ -604,7 +615,7 @@ class ClaudeCodeAgentProvider
     }
     final runtimeScope = _runtimeScope;
     if (runtimeScope != null) {
-      final terminal = _mapper.identity.completeTurn(
+      final terminal = _mapper.completeTurn(
         runtimeScope: runtimeScope,
         sessionId: turn.sessionId,
         runningTurnId: turn.id,
@@ -847,7 +858,7 @@ class ClaudeCodeAgentProvider
     }
     final scope = _runtimeScope;
     if (scope != null) {
-      _mapper.identity.invalidateRuntime(
+      _mapper.invalidateRuntime(
         runtimeScope: scope,
         reason: ClaudeCodeIdentityInvalidationReason.peerClosed,
       );

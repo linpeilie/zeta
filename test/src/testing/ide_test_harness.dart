@@ -64,19 +64,7 @@ String commandGroupId(String turnId, String firstEntryId) {
 }
 
 String fileEditGroupId(String turnId, String toolCallId) {
-  return 'file-edit-group-$turnId-$toolCallId';
-}
-
-Map<String, Object?> patchApplyChanges(Map<String, String?> diffsByPath) {
-  return <String, Object?>{
-    'changes': <String, Object?>{
-      for (final entry in diffsByPath.entries)
-        entry.key: <String, Object?>{
-          'type': 'update',
-          if (entry.value != null) 'unified_diff': entry.value,
-        },
-    },
-  };
+  return 'file-edit-group-$turnId-tool-$toolCallId';
 }
 
 AgentThreadSummary agentThread({

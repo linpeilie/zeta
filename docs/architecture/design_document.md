@@ -165,7 +165,7 @@ projection 与 unified diff 以 turn render revision 缓存，代码高亮复用
 
 - Projects：展示已打开项目、当前项目状态和项目下的 Agent threads；项目项与
   thread 项仅保留水平 padding，不设置垂直 padding，以维持紧凑的桌面列表密度。
-- Agent：展示上下文栏、状态胶囊、流式消息/思考/计划时间线、回合 diff、工具与审批卡片、本地图片输入区。
+- Agent：展示上下文栏、状态胶囊、流式消息/思考/计划时间线、typed 文件变更证据、工具与审批卡片、本地图片输入区。
 - Files：展示当前项目文件树，目录按需展开，文件选择只更新 Agent 上下文。
 
 ### Agent 管理
@@ -303,7 +303,7 @@ Bundle、RuntimePort 或 Binding 暴露给 ViewModel。
 - 列出项目 threads、读取 thread 历史。
 - 发送、追加和取消 turn（`sendMessage` / `steerTurn` 支持多输入项）。
 - 响应权限请求；他端已解决的审批通过事件撤销本地卡片。
-- 推送状态、消息、推理/计划流、工具调用、回合 diff、审批与系统提示事件。
+- 推送状态、消息、推理/计划流、工具调用、文件变更快照、审批与系统提示事件。
 
 当前 `AgentConversationViewModel` 与 `ProjectThreadsController` 已改为通过 bundle
 消费上述端口；Agent 管理页中的模型探测也统一走 `bundle.modelCatalog`。应用层不再
@@ -331,7 +331,7 @@ Thread 切换、替换与 dispose 清除旧缓存和 dispatcher 队列，只有�
 allowlist 接收。subscription、gate、buffer 与 dispatcher 不再由 ViewModel 分散持有。
 
 高频事件在 Application 投影边界由 `AgentEventCoalescingPolicy` 与
-`CoalescingEventBuffer` 合并：同 item 文本/reasoning delta 追加，同 turn token/diff 快照取
+`CoalescingEventBuffer` 合并：同 item 文本/reasoning delta 追加，同 turn token/文件变更完整快照取
 最新，同工具 progress 按协议语义追加或替换。算法只维护 keyed FIFO、pending 上限和 barrier
 flush，Agent key/merge/barrier 规则留在 policy。Transport
 和 Provider mapper 仍无损消费；完整 item、工具/turn 终态、审批、错误和连接状态会先 flush
@@ -372,6 +372,29 @@ Provider 的业务策略。只有经过建模、命名与测试证明为协议�
 因此，“新增一个 Provider 是否需要修改 CoalescingPolicy/Buffer 或 TimelineStore”也是架构健康度指标：正常
 答案应为否。若答案为是，设计评审必须先证明是共享 domain contract 缺失，而不是 Provider
 quirk、协议证据不足或 mapper/reducer 未完成归一化。
+
+#### 文件变更证据契约与三 Provider 映射
+
+文件变更统一为 `AgentFileChangeSnapshot`，但不强迫 Provider 伪造相同内容。snapshot 由
+Provider-local tracker 按 tool 或 turn owner 维护稳定 change id、顺序、动作、单调 revision
+与 replayability；同一 owner 的每次更新都是完整替换。`null` 表示没有结构化文件证据，空
+`changes` 是权威清空。共享 Store 只按既有 tool/turn identity 机械携带，presentation 只按
+`AgentTextReplacementEvidence`、`AgentWrittenContentEvidence`、
+`AgentUnifiedPatchEvidence` 或无正文摘要渲染。
+
+| Provider 输入 | 中立证据与降级 |
+| --- | --- |
+| Grok ACP `content[type=diff]` | `path + oldText + newText` → replacement；重复、status-only 与终态由 Grok tracker 带回完整快照 |
+| Claude Code `Edit` | `file_path + old_string + new_string + replace_all` → replacement；`tool_result` 复用 `tool_use` 快照 |
+| Claude Code `Write` | `file_path + content` → written content；动作无协议保证时保持 unknown |
+| Claude Code `NotebookEdit` / `MultiEdit` | 只有已确认的路径/unknown 摘要，不解析未知正文 |
+| Codex `fileChange` / `patchUpdated` / history ThreadItem | 结构化 changes → replayable tool-scoped unified patch |
+| Codex `turn/diff/updated` | 仅在没有 tool 证据时产生 typed `liveOnly` turn fallback；后到 tool 证据由 Codex tracker 清除 fallback |
+| Codex `commandExecution` | 保持命令工具，不解析命令、审批参数或工作区结果，不生成文件变更快照 |
+
+unified patch 只用于展示高亮和统计，不能从 header 反推路径、动作或 identity。可回放证据的
+live/history/replay 各自使用独立 tracker/reducer；替换片段、写入内容与 patch 只存在于内存
+时间线，不进入日志、缓存、通知、thread summary 或持久化 JSON。
 
 Agent Canvas 支持多 thread 常驻 entry。`AgentProviderRuntimeRegistry` 是进程唯一
 所有者；`AgentProviderGlobalRuntime` 为每个 Provider ID 保留一个永不空闲回收的
@@ -535,7 +558,8 @@ conversation mode 的 UI 回写仍受当前 thread gate 约束。
 ### 当前已落地的对话体验
 
 - 流式推理（思考卡，摘要优先）与流式 plan 卡。
-- 回合级聚合 diff（「本回合改动」）。
+- 中立文件变更证据：替换片段、写入内容、unified patch 与仅摘要四种诚实展示；
+  Codex turn aggregate 只作为明确标注的实时 fallback。
 - 线程状态胶囊：等待审批 / 等待输入；列表侧同步 waiting 标志。
 - 权限、用户提问与计划审批统一显示在 Composer 上方的 Pending Interaction Dock；
   `AgentPermissionRequest`、`AgentQuestionRequest` 与 `AgentPlanApprovalRequest` 分属三条
@@ -635,7 +659,8 @@ store。配置位于 `config/providers.json` 与 `config/appearance.json`；IDE 
 `logs/zeta-YYYY-MM-DD.log`；规范化模型目录缓存位于
 `cache/agent_models_v1.json`。JSON store 使用同目录临时文件、flush 与 rename 替换，
 并在读取损坏或 I/O 失败时按 feature 语义降级。模型缓存只保存中立白名单字段，不保存
-provider 原始 payload、环境变量值或凭证。
+provider 原始 payload、环境变量值或凭证；文件变更的替换片段、写入内容与 patch 也只留在
+当前内存时间线，不进入任何 Zeta store 或日志。
 
 启动迁移只读取 Zeta 旧版 SharedPreferences key，目标文件存在时不覆盖，全部处理成功
 后才写 `migration_marker.json`。迁移不会删除旧值，以便旧版应用临时降级；新版本运行时

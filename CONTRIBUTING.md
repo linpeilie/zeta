@@ -142,6 +142,7 @@ chore: bump flutter action pin
 
 - Provider 的原始协议**只能存在于 data 层**。UI 和 application 消费中立的 domain 事件与契约。
 - 共享层（decoder、CoalescingPolicy/Buffer、Pipeline、TimelineStore）**禁止出现任何 Provider 的 import、kind 分支、id 分支或 raw 字段读取**。
+- 文件变更必须由 Provider-local tracker 先形成完整 typed snapshot；Store 只机械透传，UI 不读 raw，只有命令时不得猜路径或 diff。
 - 新增 Provider 的正常改动范围 = 自有 data 文件 + 中立 domain 契约 + factory 组合 + 契约测试。如果你发现必须改共享层，说明抽象没做对，先开 Issue 讨论。
 - UI 一律按 **capability** 渲染，不按 provider kind 或名称硬编码。未支持的能力必须 `capability = false` 并抛 `UnsupportedError`，**不得静默成功**。
 - Provider 进程只由 `AgentProviderRuntimeRegistry` 创建；全局操作走 `AgentProviderGlobalRuntime`，会话实例只由 `AgentConversationBinding.beginTurn()` 惰性创建。ViewModel 不持有 lease/scope/pin，空闲回收归 Binding Manager。
@@ -172,7 +173,7 @@ chore: bump flutter action pin
 
 - Zeta 自有数据全部在 `~/.zeta/`，JSON 必须版本化 + 宽容 `tryDecode`（缺字段或损坏不能阻断启动）。
 - Provider 自有 data adapter 可以按明确功能读取对应 CLI 的私有数据；协议字段、原始内容和路径不得泄漏到上层。读取权限不等于迁移、改写或删除授权。
-- 派生索引与缓存只保存规范化白名单字段。**禁止持久化 prompt、回复、工具输出、原始错误文本、环境变量、凭证或 Provider raw payload。**
+- 派生索引与缓存只保存规范化白名单字段。**禁止持久化 prompt、回复、工具输出、文件变更 evidence 正文、原始错误文本、环境变量、凭证或 Provider raw payload。**
 
 **其他**
 

@@ -1,6 +1,6 @@
 # Claude Code stream-json 协议基线
 
-最后更新：2026-08-11
+最后更新：2026-08-12
 
 本文记录 Zeta 当前 Claude Code Provider 的实际协议边界、已验证帧形状和升级门禁。
 它是实现与维护时的事实基线；早期取舍和未落地设想见
@@ -20,7 +20,7 @@
 CLI 自报版本与 `system.init` 版本可能不同。Zeta 分别保留二者的诊断语义，不把其中
 一个改写成另一个，也不据此推断协议兼容。
 
-当前基线覆盖：新建与恢复会话、连续多回合、文本/思考/工具时间线、取消、权限审批、
+当前基线覆盖：新建与恢复会话、连续多回合、文本/思考/工具时间线、Edit/Write 文件变更证据、取消、权限审批、
 Plan 审批与本地执行交接、只读历史、从 Zeta 列表隐藏记录、静态模型目录、下一回合
 模型切换和 `/compact`。动态模型与套餐用量的账号数据增强不在本基线内，见 §11。
 
@@ -103,8 +103,8 @@ pending registry 保持隔离。
 | `system.init` | 校验 session，产出 session started + idle；同 session 重复 init 幂等 |
 | `assistant` text | 映射为 message update；同 message 的连续块由 Provider identity 分段 |
 | `assistant` thinking | 映射为 reasoning delta；text/tool 边界关闭当前 phase |
-| `assistant` tool_use | 按 tool id 原位创建/更新工具卡；`ExitPlanMode` 交给 Plan adapter |
-| `user` tool_result | 按 `tool_use_id` 更新为 completed/failed；缺 `is_error` 视为成功 |
+| `assistant` tool_use | 按 tool id 原位创建/更新工具卡；Edit/Write 等由 Claude-local tracker 产生文件变更快照，`ExitPlanMode` 交给 Plan adapter |
+| `user` tool_result | 按 `tool_use_id` 更新为 completed/failed；缺 `is_error` 视为成功，并携带对应 tool_use 已记录的完整快照 |
 | `control_request` / `can_use_tool` | Provider 路由到权限或 Plan pending registry |
 | `result` | first-terminal-wins；映射回合终态及本回合 usage |
 | 未识别 type | 只增加诊断计数并丢弃，不抛异常、不阻断后续帧 |
@@ -127,7 +127,29 @@ reasoning phase、去重、迟到事件和终态竞态全部由
 - terminal first-wins；终态后的新正文丢弃，已知工具的迟到 terminal update 仍可收口。
 - runtime/session/turn 不匹配的事件 fail-closed。
 - live 与 history 使用独立 identity/reducer 实例，只用 canonical signature 做逐位置回归。
-- diagnostics 与 snapshot 只含计数和白名单状态，不含 source id、正文或原始 payload。
+- diagnostics 与 runtime 诊断快照只含计数和白名单状态，不含 source id、正文或原始 payload；
+  本节不指内存中的 typed 文件变更 snapshot。
+
+### 6.1 文件变更证据
+
+Claude Code 的结构化文件证据来自 `assistant.tool_use.input`，不是普通字符串
+`user.tool_result`。`ClaudeCodeFileChangeTracker` 按 runtime/session/turn/toolUseId 隔离，
+在 tool_use 记录 typed snapshot，在 tool_result 原位更新终态时重新携带同一 snapshot：
+
+| Claude Code tool | Zeta evidence |
+| --- | --- |
+| `Edit` | `file_path + old_string + new_string + replace_all` → modified replacement snippets；片段不代表完整文件 |
+| `Write` | `file_path + content` → written content；没有协议保证时动作保持 unknown，不按文件是否存在猜 created/modified |
+| `NotebookEdit` / `MultiEdit` | 只映射已确认路径与 unknown 摘要；未取得真实结构化 fixture 前不解析未知正文 |
+| 其他 tool | 不生成 file-change snapshot |
+
+成功、失败工具都保留“尝试执行时 Provider 给出的证据”，实际结果由 tool status 表达；不能把
+tool_use 的写入请求直接描述成已经落盘。turn 完成、session/runtime 失效和 dispose 都清理
+tracker。live 与 history 使用独立 mapper/tracker，并对 replayable snapshot 的 owner、change
+id、顺序、动作、evidence 与终态做逐位置回归。
+
+presentation 只消费 typed snapshot，不读取 `file_path`、`old_string`、`new_string`、`content`
+等 wire key；这些正文也不得进入日志、缓存、通知、thread summary 或 Zeta 持久化 JSON。
 
 ## 7. Session init、恢复与模型切换
 

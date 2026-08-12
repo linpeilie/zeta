@@ -204,7 +204,8 @@ Registry acquire 必须显式选择 global/session scope；使用统计面板只
    `AgentPermissionRequest`、`AgentQuestionRequest`、`AgentThreadSummary`、
    `AgentSessionConfigOption` 等中立模型。
    Provider 原始 `sourceItemId` / `sourceMessageId` 只作为 source metadata；进入 application
-   前必须由 adapter/reducer 生成最终 entryId。
+   前必须由 adapter/reducer 生成最终 entryId。文件变更同样要在 Provider-local tracker 中
+   形成完整 `AgentFileChangeSnapshot`，不得把 partial/raw 留给 Store 或 UI 补齐。
 5. 如果出现新的可选能力域，优先新增 bundle 可选端口及其测试，再决定是否保留
    兼容门面；不要把非通用能力直接做成所有 provider 的必选方法。
 6. ACP provider 复用无状态 `AcpSessionUpdateDecoder`、`AcpPermissionMapper`、
@@ -230,6 +231,39 @@ Registry acquire 必须显式选择 global/session scope；使用统计面板只
     fork 必须覆盖真实 thread A → 新 thread B：返回的 session 通过 Shell 通用新 thread
     登记/选择流程进入列表，B 使用独立 Entry/Binding 并成为当前选择，A 不改绑，随后
     rename/send 只能作用于 B；普通 fork 不得提前创建 B 的 session runtime。
+
+### 文件变更证据接入
+
+文件变更不是独立 Provider capability，也不新增端口；它是现有 tool/turn 事件中的中立 typed
+payload。Provider 在事件进入共享 pipeline 前负责把协议事实投影为完整
+`AgentFileChangeSnapshot`：
+
+- owner/change id、顺序、动作、`revision`、`replayability` 和 partial 更新的 last-valid
+  规则都属于 Provider-local mapper/tracker；同一 owner 的每次更新必须是完整替换。
+- `fileChanges == null` 表示没有结构化文件证据；空 `changes` 是权威清空。evidence 为 `null`
+  只表示路径/动作摘要，不是隐藏的第四种正文格式。
+- replacement 只表示替换片段，written content 只表示请求写入的内容，unified patch 只表示
+  Provider 给出的补丁。空字符串是合法显式值，不得据此猜新建、删除或字段缺失。
+- 同一 tool 的 status/terminal 更新必须继续携带完整 snapshot；Store 不负责“新值为空时保留旧值”。
+- 只有命令、审批参数或工作区结果时不生成 snapshot；禁止解析命令、读取当前文件或运行 Git
+  diff 补证据。presentation 可以高亮 typed patch，但不能从 header 反推路径、动作或 identity。
+- live/history/replay 分别创建 tracker/reducer。`replayable` 做逐位置 canonical 回归；
+  `liveOnly` 在 UI 明确标为实时降级，不计作历史恢复。
+
+当前 Provider 映射：
+
+| Provider 输入 | 输出 |
+| --- | --- |
+| Grok ACP `content[type=diff]` | 路径 + replacement；Grok tracker 在重复、status-only 和终态更新中携带完整快照 |
+| Claude Code `Edit` | `file_path/old_string/new_string/replace_all` → replacement；`tool_result` 复用 `tool_use` 快照 |
+| Claude Code `Write` | `file_path/content` → written content；没有协议动作时保持 unknown |
+| Claude Code `NotebookEdit` / `MultiEdit` | 仅已确认路径 + unknown 摘要，不解析未知结构 |
+| Codex `fileChange` / `patchUpdated` / history ThreadItem | replayable tool-scoped unified patch |
+| Codex `turn/diff/updated` | 没有 tool 证据时的 typed `liveOnly` fallback；后到 tool 证据由 Codex tracker empty-clear |
+| Codex `commandExecution` | 普通 execute tool；不产生文件变更 snapshot |
+
+fixture 必须标明真实采样或 schema provenance，并用合成 sentinel 替换正文、路径和 id。文件
+evidence 只在内存时间线存在，不得进入日志、缓存、通知、thread summary 或持久化 JSON。
 
 交互响应按领域语义拆分：权限请求调用 `respondToPermission`；结构化用户提问仅由实现
 `AgentQuestionResponseProvider` 的 Provider 通过 `respondToQuestion` 回写，空 answers
@@ -374,6 +408,7 @@ create/resume/fork/send --> Binding.permissions.snapshotForRequest()
 | 通用 ACP/JSON-RPC 字段的语法解析 | 无状态 decoder/codec/transport | 只输出 typed 值，不保存 turn/segment 状态，不按 Provider 分支 |
 | 厂商扩展字段、source id 稳定性、eventId/messageId 复用 | 对应 Provider mapper/adapter | 在进入 application 前完成兼容和证据校验 |
 | entryId、message segment、reasoning phase、boundary、去重、first-terminal-wins | 对应 Provider reducer | 输出语义完整的 `AgentEvent`，不得要求 Store 二次猜测 |
+| 文件变更 identity、动作、累计 snapshot、tool/turn fallback | 对应 Provider file-change mapper/tracker | 输出完整 typed snapshot；command-only 不猜文件，Store/UI 不读 raw |
 | live/history/replay 对齐 | 对应 Provider history/replay adapter | 复用算法但创建独立 reducer 实例 |
 | 连续事件批内合并与 barrier 顺序 | `AgentEventCoalescingPolicy` + `CoalescingEventBuffer` | policy 定义 typed key/merge/barrier；buffer 只实现有界通用算法，不读 Provider raw 字段 |
 | 事件订阅、旧 scope 隔离和有界交付 | `AgentEventPipeline` + `BoundedEventDispatcher` | Pipeline 唯一拥有 subscription/gate/buffer/dispatcher；dispatcher 每 turn 有界并让步 event queue |
@@ -389,7 +424,8 @@ factory/catalog 组合以及 Provider 契约测试。`AgentEventCoalescingPolicy
 提交评审前逐项确认：
 
 1. 搜索共享层是否新增具体 Provider import、名称、kind、id 或实现类型判断。
-2. 搜索 Store/ViewModel/UI 是否新增 raw/extra key、eventId、source id 或“最后开放条目”推断。
+2. 搜索 Store/ViewModel/UI 是否新增 raw/extra key、文件变更 wire key、命令/patch header 推断、
+   eventId、source id 或“最后开放条目”推断。
 3. 使用 Provider-local 序列测试证明 `raw update → AgentEvent` 已完成身份、边界和终态决策。
 4. 使用 Provider 无关 fixture 回归 CoalescingPolicy/Buffer、Pipeline 与 TimelineStore；新增 Provider 时这些测试不应依赖
    新 Provider 的类或 fixture。
@@ -615,6 +651,10 @@ Agent CLI 的数据不属于这套目录：Codex/Grok/Claude Code/Cursor 配置�
 保留；Codex 使用统计仍只读原 rollout JSONL，并把可重建的派生索引写入
 `~/.zeta/state`。
 
+`AgentFileChangeSnapshot` 及其替换片段、写入内容、unified patch 只属于当前内存时间线。
+不得把它们加入 IDE session、thread summary、模型缓存、使用统计索引、日志或系统通知；ignored
+诊断只允许 method/type/reason/count 等白名单字段，损坏 evidence 只计数，不串行化原文。
+
 ## 10. 文件系统注意事项
 
 - 文件树不应递归扫描整个项目。
@@ -631,6 +671,8 @@ Agent CLI 的数据不属于这套目录：Codex/Grok/Claude Code/Cursor 配置�
   防止具体 Provider import、kind/id 分支或 raw identity 推断回流。
 - Provider adapter/reducer 使用带 Provider/CLI 版本的脱敏 fixture 覆盖 source id 复用、
   message/tool/reasoning 交错、重复事件、终态竞态和迟到事件。
+- 文件变更 producer 使用标明 provenance 的合成 fixture，覆盖完整 snapshot、status/terminal
+  保留、command-only 负向路径、live/history/replay 隔离和 presentation raw-key purity guard。
 - 对乐观配置增加“运行态更新→持久化失败→确认态回滚→重试”测试，
   并用可控 Completer 覆盖快速连续修改的最终快照语义。
 - 只有端到端用户流程稳定后再添加 integration test。

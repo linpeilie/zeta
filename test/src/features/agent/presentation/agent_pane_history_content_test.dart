@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_file_change_evidence_views.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 
 import 'harness/agent_pane_test_harness.dart';
@@ -477,7 +476,7 @@ void main() {
     );
 
     testWidgets(
-      'caches diff highlight identity and keeps expanding independent from history',
+      'renders typed history unified patch lazily without replacing history',
       (tester) async {
         final viewModel = createAgentPaneViewModel(
           AgentPaneFakeProvider(
@@ -499,11 +498,20 @@ void main() {
                           title: 'Apply patch',
                           kind: AgentToolKind.edit,
                           status: AgentToolStatus.completed,
-                          locations: const <String>['lib/main.dart'],
-                          rawOutput: agentPanePatchApplyChanges(
-                            <String, String?>{
-                              'lib/main.dart': agentPaneLargeUnifiedDiff(),
-                            },
+                          fileChanges: AgentFileChangeSnapshot(
+                            revision: 1,
+                            replayability:
+                                AgentFileChangeReplayability.replayable,
+                            changes: <AgentFileChange>[
+                              AgentFileChange(
+                                id: 'main-change',
+                                path: 'lib/main.dart',
+                                kind: AgentFileChangeKind.modified,
+                                evidence: AgentUnifiedPatchEvidence(
+                                  patch: agentPaneLargeUnifiedDiff(),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -538,8 +546,10 @@ void main() {
 
         await tester.tap(
           find.byKey(
-            const ValueKey<String>(
-              'agent-file-edit-item-row-file-edit-history-edit-large-lib/main.dart',
+            agentFileChangeEvidenceKey(
+              'tool-history-edit-large',
+              'main-change',
+              'header',
             ),
           ),
         );
@@ -548,99 +558,38 @@ void main() {
         expect(viewModel.historyState, historyState);
         expect(
           viewModel.isFileEditItemExpanded(
-            agentPaneFileEditItemId('history-edit-large', 'lib/main.dart'),
+            agentPaneFileEditItemId('history-edit-large', 'main-change'),
           ),
           isTrue,
         );
-        expect(
-          find.byKey(
-            const ValueKey<String>(
-              'agent-file-edit-item-expand-all-file-edit-history-edit-large-lib/main.dart',
-            ),
+        final viewportFinder = find.byKey(
+          agentFileChangeEvidenceKey(
+            'tool-history-edit-large',
+            'main-change',
+            'viewport-patch',
           ),
-          findsOneWidget,
         );
+        expect(viewportFinder, findsOneWidget);
         expect(
           find.textContaining('+line 30', findRichText: true),
           findsNothing,
         );
 
-        final highlightFinder = find.byType(HighlightView);
-        expect(highlightFinder, findsOneWidget);
-        final initialHighlight = tester.widget<HighlightView>(highlightFinder);
-
-        // 即使父级重建，同一高亮输入也必须复用 HighlightView identity。
+        final initialViewportElement = tester.element(viewportFinder);
         await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
         await pumpAgentPaneUi(tester);
-        final parentRebuildHighlight = tester.widget<HighlightView>(
-          highlightFinder,
-        );
-        expect(identical(parentRebuildHighlight, initialHighlight), isTrue);
-
-        addTearDown(() {
-          tester.view.resetPhysicalSize();
-          tester.platformDispatcher.clearTextScaleFactorTestValue();
-        });
-        final physicalSize = tester.view.physicalSize;
-        tester.view.physicalSize = Size(
-          physicalSize.width + 120,
-          physicalSize.height,
-        );
-        await tester.pump();
-        final resizedHighlight = tester.widget<HighlightView>(highlightFinder);
-        expect(identical(resizedHighlight, initialHighlight), isTrue);
-
-        tester.platformDispatcher.textScaleFactorTestValue = 1.25;
-        await tester.pump();
-        final scaledHighlight = tester.widget<HighlightView>(highlightFinder);
-        expect(identical(scaledHighlight, resizedHighlight), isFalse);
-
-        await tester.pumpWidget(
-          AgentPaneTestApp(viewModel: viewModel, themeMode: ThemeMode.light),
-        );
-        await pumpAgentPaneUi(tester);
-        final lightThemeHighlight = tester.widget<HighlightView>(
-          highlightFinder,
-        );
-        expect(identical(lightThemeHighlight, scaledHighlight), isFalse);
-
-        await tester.pumpWidget(
-          AgentPaneTestApp(
-            viewModel: viewModel,
-            themeMode: ThemeMode.light,
-            codeFontFamily: 'AlternateCodeFont',
-          ),
-        );
-        await pumpAgentPaneUi(tester);
-        final alternateStyleHighlight = tester.widget<HighlightView>(
-          highlightFinder,
-        );
         expect(
-          identical(alternateStyleHighlight, lightThemeHighlight),
-          isFalse,
+          identical(tester.element(viewportFinder), initialViewportElement),
+          isTrue,
         );
 
-        final expandAllFinder = find.byKey(
-          const ValueKey<String>(
-            'agent-file-edit-item-expand-all-file-edit-history-edit-large-lib/main.dart',
-          ),
-        );
-        await tester.ensureVisible(expandAllFinder);
-        final expandAllButton = tester.widget<sf.GhostButton>(expandAllFinder);
-        expandAllButton.onPressed?.call();
+        await tester.drag(viewportFinder, const Offset(0, -800));
         await pumpAgentPaneUi(tester);
 
         expect(viewModel.historyState, historyState);
         expect(
           find.textContaining('+line 30', findRichText: true),
           findsOneWidget,
-        );
-        expect(
-          identical(
-            tester.widget<HighlightView>(highlightFinder),
-            alternateStyleHighlight,
-          ),
-          isFalse,
         );
       },
     );

@@ -15,6 +15,7 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_file_change_evidence_views.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
@@ -1034,7 +1035,7 @@ void main() {
   });
 
   testWidgets(
-    'renders file edits in a separate file edit group with file-level details',
+    'renders Grok Claude Code and Codex typed file evidence in one group',
     (tester) async {
       // 该测试断言深色主题下的具体颜色；固定系统亮度为 dark，使「跟随系统」
       // 的默认主题解析为深色，与历史断言一致。
@@ -1063,15 +1064,69 @@ void main() {
                   ),
                   AgentHistoryToolEntry(
                     toolCall: AgentToolCall(
-                      id: 'history-edit-1',
+                      id: 'history-grok-edit',
+                      title: 'Replace text',
+                      kind: AgentToolKind.edit,
+                      status: AgentToolStatus.completed,
+                      fileChanges: AgentFileChangeSnapshot(
+                        revision: 1,
+                        replayability: AgentFileChangeReplayability.replayable,
+                        changes: const <AgentFileChange>[
+                          AgentFileChange(
+                            id: 'grok-replace',
+                            path: 'lib/main.dart',
+                            kind: AgentFileChangeKind.modified,
+                            evidence: AgentTextReplacementEvidence(
+                              oldText: 'old line',
+                              newText: 'new line',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  AgentHistoryToolEntry(
+                    toolCall: AgentToolCall(
+                      id: 'history-claude-write',
+                      title: 'Write file',
+                      kind: AgentToolKind.edit,
+                      status: AgentToolStatus.completed,
+                      fileChanges: AgentFileChangeSnapshot(
+                        revision: 1,
+                        replayability: AgentFileChangeReplayability.replayable,
+                        changes: const <AgentFileChange>[
+                          AgentFileChange(
+                            id: 'claude-write',
+                            path: 'README.md',
+                            kind: AgentFileChangeKind.modified,
+                            evidence: AgentWrittenContentEvidence(
+                              content: 'docs line',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  AgentHistoryToolEntry(
+                    toolCall: AgentToolCall(
+                      id: 'history-codex-patch',
                       title: 'Apply patch',
                       kind: AgentToolKind.edit,
                       status: AgentToolStatus.completed,
-                      locations: <String>['lib/main.dart', 'README.md'],
-                      rawOutput: patchApplyChanges(<String, String?>{
-                        'lib/main.dart': '@@ -1 +1 @@\n-old line\n+new line\n',
-                        'README.md': '@@ -0,0 +1 @@\n+docs line\n',
-                      }),
+                      fileChanges: AgentFileChangeSnapshot(
+                        revision: 1,
+                        replayability: AgentFileChangeReplayability.replayable,
+                        changes: const <AgentFileChange>[
+                          AgentFileChange(
+                            id: 'codex-patch',
+                            path: 'CHANGELOG.md',
+                            kind: AgentFileChangeKind.modified,
+                            evidence: AgentUnifiedPatchEvidence(
+                              patch: '@@ -0,0 +1 @@\n+release note\n',
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   AgentHistoryToolEntry(
@@ -1123,35 +1178,34 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('2 个文件 · +2 / -1', findRichText: true), findsOneWidget);
+      expect(find.text('3 个文件 · +2 / -1', findRichText: true), findsOneWidget);
       expect(find.text('1 次执行'), findsOneWidget);
       expect(find.text('Run tests'), findsNothing);
 
       await tester.tap(
         find.byKey(
           ValueKey<String>(
-            'agent-file-edit-group-header-${fileEditGroupId('turn-a-1', 'history-edit-1')}',
+            'agent-file-edit-group-header-${fileEditGroupId('turn-a-1', 'history-grok-edit')}',
           ),
         ),
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('main.dart'), findsOneWidget);
+      expect(find.text('lib/main.dart'), findsOneWidget);
       expect(find.text('README.md'), findsOneWidget);
-      expect(find.text('+1 / -1', findRichText: true), findsOneWidget);
-      expect(find.text('+1 / -0', findRichText: true), findsOneWidget);
+      expect(find.text('CHANGELOG.md'), findsOneWidget);
       expect(find.text('Run tests'), findsNothing);
 
       final historyGroupSummaryFinder = find.byKey(
         ValueKey<String>(
-          'agent-file-edit-group-summary-${fileEditGroupId('turn-a-1', 'history-edit-1')}',
+          'agent-file-edit-group-summary-${fileEditGroupId('turn-a-1', 'history-grok-edit')}',
         ),
       );
       final historyGroupSummary = tester.widget<Text>(
         historyGroupSummaryFinder,
       );
       final historyGroupSpan = historyGroupSummary.textSpan! as TextSpan;
-      expect(historyGroupSpan.toPlainText(), '2 个文件 · +2 / -1');
+      expect(historyGroupSpan.toPlainText(), '3 个文件 · +2 / -1');
       final historyGroupChildren = historyGroupSpan.children!;
       expect(
         (historyGroupChildren[2] as TextSpan).style?.color,
@@ -1162,73 +1216,57 @@ void main() {
         IdeColors.dark.error.withValues(alpha: 0.98),
       );
 
-      final historyLineStatsFinder = find.byKey(
-        const ValueKey<String>(
-          'agent-file-edit-item-line-stats-file-edit-history-edit-1-lib/main.dart',
+      final grokHeader = find.byKey(
+        agentFileChangeEvidenceKey(
+          'tool-history-grok-edit',
+          'grok-replace',
+          'header',
         ),
       );
-      final historyLineStats = tester.widget<Text>(historyLineStatsFinder);
-      final historyLineSpan = historyLineStats.textSpan! as TextSpan;
-      expect(historyLineSpan.toPlainText(), '+1 / -1');
-      final historyLineChildren = historyLineSpan.children!;
+      await tester.ensureVisible(grokHeader);
+      await tester.tap(grokHeader);
+      await tester.pumpAndSettle();
+      expect(find.text('替换前'), findsOneWidget);
+      expect(find.text('替换后'), findsOneWidget);
       expect(
-        (historyLineChildren[0] as TextSpan).style?.color,
-        IdeColors.dark.success.withValues(alpha: 0.98),
+        find.textContaining('old line', findRichText: true),
+        findsOneWidget,
       );
-      expect(
-        (historyLineChildren[2] as TextSpan).style?.color,
-        IdeColors.dark.error.withValues(alpha: 0.98),
-      );
-
-      await tester.tap(
-        find.byKey(
-          const ValueKey<String>(
-            'agent-file-edit-item-row-file-edit-history-edit-1-lib/main.dart',
-          ),
-        ),
-      );
+      await tester.tap(grokHeader);
       await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(
-          const ValueKey<String>(
-            'agent-file-edit-item-details-file-edit-history-edit-1-lib/main.dart',
-          ),
+      final claudeHeader = find.byKey(
+        agentFileChangeEvidenceKey(
+          'tool-history-claude-write',
+          'claude-write',
+          'header',
         ),
+      );
+      await tester.ensureVisible(claudeHeader);
+      await tester.tap(claudeHeader);
+      await tester.pumpAndSettle();
+      expect(find.text('写入内容 · 已完成'), findsOneWidget);
+      expect(
+        find.textContaining('docs line', findRichText: true),
         findsOneWidget,
       );
-      final historyDetailsFinder = find.byKey(
-        const ValueKey<String>(
-          'agent-file-edit-item-details-file-edit-history-edit-1-lib/main.dart',
+      await tester.tap(claudeHeader);
+      await tester.pumpAndSettle();
+
+      final codexHeader = find.byKey(
+        agentFileChangeEvidenceKey(
+          'tool-history-codex-patch',
+          'codex-patch',
+          'header',
         ),
       );
+      await tester.ensureVisible(codexHeader);
+      await tester.tap(codexHeader);
+      await tester.pumpAndSettle();
+      expect(find.text('统一差异'), findsWidgets);
       expect(
-        find.descendant(
-          of: historyDetailsFinder,
-          matching: find.textContaining('@@ -1 +1 @@', findRichText: true),
-        ),
+        find.textContaining('+release note', findRichText: true),
         findsOneWidget,
-      );
-      expect(
-        find.descendant(
-          of: historyDetailsFinder,
-          matching: find.textContaining('+new line', findRichText: true),
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(
-          of: historyDetailsFinder,
-          matching: find.textContaining('+docs line', findRichText: true),
-        ),
-        findsNothing,
-      );
-      expect(
-        find.descendant(
-          of: historyDetailsFinder,
-          matching: find.textContaining('*** Begin Patch', findRichText: true),
-        ),
-        findsNothing,
       );
     },
   );
@@ -1257,9 +1295,17 @@ void main() {
                     title: 'File change',
                     kind: AgentToolKind.edit,
                     status: AgentToolStatus.completed,
-                    rawOutput: patchApplyChanges(<String, String?>{
-                      'lib/main.dart': null,
-                    }),
+                    fileChanges: AgentFileChangeSnapshot(
+                      revision: 1,
+                      replayability: AgentFileChangeReplayability.replayable,
+                      changes: const <AgentFileChange>[
+                        AgentFileChange(
+                          id: 'main-change',
+                          path: 'lib/main.dart',
+                          kind: AgentFileChangeKind.modified,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -1311,16 +1357,20 @@ void main() {
     await tester.pumpAndSettle();
 
     final toggleFinder = find.byKey(
-      const ValueKey<String>(
-        'agent-file-edit-item-toggle-file-edit-history-edit-nodetail-lib/main.dart',
+      agentFileChangeEvidenceKey(
+        'tool-history-edit-nodetail',
+        'main-change',
+        'toggle',
       ),
     );
     expect(toggleFinder, findsOneWidget);
 
     await tester.tap(
       find.byKey(
-        const ValueKey<String>(
-          'agent-file-edit-item-row-file-edit-history-edit-nodetail-lib/main.dart',
+        agentFileChangeEvidenceKey(
+          'tool-history-edit-nodetail',
+          'main-change',
+          'header',
         ),
       ),
       warnIfMissed: false,
@@ -1329,8 +1379,10 @@ void main() {
 
     expect(
       find.byKey(
-        const ValueKey<String>(
-          'agent-file-edit-item-details-file-edit-history-edit-nodetail-lib/main.dart',
+        agentFileChangeEvidenceKey(
+          'tool-history-edit-nodetail',
+          'main-change',
+          'body',
         ),
       ),
       findsNothing,
@@ -1543,6 +1595,38 @@ void main() {
                     'marker': 'ctx-agent-raw',
                   },
                 ),
+                AgentHistoryToolEntry(
+                  toolCall: AgentToolCall(
+                    id: 'ctx-edit-1',
+                    title: 'Replace context file',
+                    kind: AgentToolKind.edit,
+                    status: AgentToolStatus.completed,
+                    raw: const <String, Object?>{
+                      'sentinel': 'FILE_RAW_SENTINEL',
+                    },
+                    rawInput: const <String, Object?>{
+                      'oldText': 'WIRE_OLD_SENTINEL',
+                    },
+                    rawOutput: const <String, Object?>{
+                      'newText': 'WIRE_NEW_SENTINEL',
+                    },
+                    fileChanges: AgentFileChangeSnapshot(
+                      revision: 4,
+                      replayability: AgentFileChangeReplayability.replayable,
+                      changes: const <AgentFileChange>[
+                        AgentFileChange(
+                          id: 'ctx-replacement',
+                          path: 'lib/context.dart',
+                          kind: AgentFileChangeKind.modified,
+                          evidence: AgentTextReplacementEvidence(
+                            oldText: 'typed before',
+                            newText: 'typed after',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ],
@@ -1701,6 +1785,47 @@ void main() {
     expect(
       find.byKey(const ValueKey('agent-context-raw-body-msg-user-1')),
       findsOneWidget,
+    );
+
+    // 文件编辑上下文只展示 typed snapshot；raw/wire sentinel 不得回流。
+    await tester.tap(find.byKey(const ValueKey('agent-context-raw-filter')));
+    await tester.pumpAndSettle();
+    expect(find.text('ctx-edit-1'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('agent-context-raw-ctx-edit-1')),
+    );
+    await tester.pumpAndSettle();
+    final editContextBody = find.byKey(
+      const ValueKey('agent-context-raw-body-ctx-edit-1'),
+    );
+    expect(editContextBody, findsOneWidget);
+    expect(
+      find.descendant(
+        of: editContextBody,
+        matching: find.textContaining('lib/context.dart', findRichText: true),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: editContextBody,
+        matching: find.textContaining('typed before', findRichText: true),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: editContextBody,
+        matching: find.textContaining('FILE_RAW_SENTINEL', findRichText: true),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: editContextBody,
+        matching: find.textContaining('WIRE_OLD_SENTINEL', findRichText: true),
+      ),
+      findsNothing,
     );
 
     // 关闭按钮收起面板。
@@ -2885,13 +3010,28 @@ void main() {
     await pumpLiveAgentUi(tester);
 
     provider.emit(
-      const AgentToolCallEvent(
+      AgentToolCallEvent(
         AgentToolCall(
           id: 'live-edit-1',
           title: 'Apply patch',
           kind: AgentToolKind.edit,
           status: AgentToolStatus.inProgress,
-          locations: <String>['lib/main.dart', 'README.md'],
+          fileChanges: AgentFileChangeSnapshot(
+            revision: 1,
+            replayability: AgentFileChangeReplayability.replayable,
+            changes: const <AgentFileChange>[
+              AgentFileChange(
+                id: 'main-change',
+                path: 'lib/main.dart',
+                kind: AgentFileChangeKind.modified,
+              ),
+              AgentFileChange(
+                id: 'readme-change',
+                path: 'README.md',
+                kind: AgentFileChangeKind.modified,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -2906,11 +3046,28 @@ void main() {
           title: 'Apply patch',
           kind: AgentToolKind.edit,
           status: AgentToolStatus.completed,
-          locations: const <String>['lib/main.dart', 'README.md'],
-          rawOutput: patchApplyChanges(<String, String?>{
-            'lib/main.dart': '@@ -1 +1 @@\n-old line\n+new line\n',
-            'README.md': '@@ -0,0 +1 @@\n+docs line\n',
-          }),
+          fileChanges: AgentFileChangeSnapshot(
+            revision: 2,
+            replayability: AgentFileChangeReplayability.replayable,
+            changes: const <AgentFileChange>[
+              AgentFileChange(
+                id: 'main-change',
+                path: 'lib/main.dart',
+                kind: AgentFileChangeKind.modified,
+                evidence: AgentUnifiedPatchEvidence(
+                  patch: '@@ -1 +1 @@\n-old line\n+new line\n',
+                ),
+              ),
+              AgentFileChange(
+                id: 'readme-change',
+                path: 'README.md',
+                kind: AgentFileChangeKind.modified,
+                evidence: AgentUnifiedPatchEvidence(
+                  patch: '@@ -0,0 +1 @@\n+docs line\n',
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -2949,32 +3106,24 @@ void main() {
     );
     await pumpLiveAgentUi(tester);
 
-    expect(find.text('main.dart'), findsOneWidget);
+    expect(find.text('lib/main.dart'), findsOneWidget);
     expect(find.text('README.md'), findsOneWidget);
-    expect(find.text('+1 / -1', findRichText: true), findsOneWidget);
-    expect(find.text('+1 / -0', findRichText: true), findsOneWidget);
 
     await tester.tap(
       find.byKey(
-        const ValueKey<String>(
-          'agent-file-edit-item-row-file-edit-live-edit-1-lib/main.dart',
-        ),
+        agentFileChangeEvidenceKey('tool-live-edit-1', 'main-change', 'header'),
       ),
     );
     await pumpLiveAgentUi(tester);
 
     expect(
       find.byKey(
-        const ValueKey<String>(
-          'agent-file-edit-item-details-file-edit-live-edit-1-lib/main.dart',
-        ),
+        agentFileChangeEvidenceKey('tool-live-edit-1', 'main-change', 'body'),
       ),
       findsOneWidget,
     );
     final liveDetailsFinder = find.byKey(
-      const ValueKey<String>(
-        'agent-file-edit-item-details-file-edit-live-edit-1-lib/main.dart',
-      ),
+      agentFileChangeEvidenceKey('tool-live-edit-1', 'main-change', 'body'),
     );
     expect(
       find.descendant(

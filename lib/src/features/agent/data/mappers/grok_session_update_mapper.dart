@@ -1,6 +1,7 @@
 import 'package:zeta/src/features/agent/data/mappers/acp_content_codec.dart';
 import 'package:zeta/src/features/agent/data/mappers/acp_session_update_decoder.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_error_normalizer.dart';
+import 'package:zeta/src/features/agent/data/mappers/grok_file_change_tracker.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_stream_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
@@ -36,10 +37,13 @@ final class GrokSessionUpdateMapper {
   GrokSessionUpdateMapper({
     this.decoder = const AcpSessionUpdateDecoder(),
     GrokStreamIdentity? identity,
-  }) : identity = identity ?? GrokStreamIdentity();
+    GrokFileChangeTracker? fileChangeTracker,
+  }) : identity = identity ?? GrokStreamIdentity(),
+       fileChangeTracker = fileChangeTracker ?? GrokFileChangeTracker();
 
   final AcpSessionUpdateDecoder decoder;
   final GrokStreamIdentity identity;
+  final GrokFileChangeTracker fileChangeTracker;
 
   /// 当前 turn 内最新的上下文窗口占用（来自 `_meta.totalTokens`）。
   int? _latestContextTokens;
@@ -53,6 +57,10 @@ final class GrokSessionUpdateMapper {
   }) {
     // 新回合开始时清空占用跟踪，避免串到上一 turn。
     _latestContextTokens = null;
+    fileChangeTracker.beginTurn(
+      runtimeScope: runtimeScope,
+      sessionId: sessionId,
+    );
     return identity.beginTurn(
       runtimeScope: runtimeScope,
       sessionId: sessionId,
@@ -189,6 +197,13 @@ final class GrokSessionUpdateMapper {
         ignoredReason: 'prompt terminal rejected as duplicate or stale',
       );
     }
+    if (status != AgentHistoryTurnStatus.completed) {
+      fileChangeTracker.invalidateTurn(
+        runtimeScope: runtimeScope,
+        sessionId: terminal.sessionId,
+        turnId: terminal.turnId,
+      );
+    }
     return GrokAcpMappedUpdate(
       events: <AgentEvent>[
         AgentTurnCompletedEvent(
@@ -223,28 +238,53 @@ final class GrokSessionUpdateMapper {
     required String? runningTurnId,
     required String? promptId,
     required GrokIdentityInvalidationReason reason,
-  }) => identity.invalidateTurn(
-    runtimeScope: runtimeScope,
-    sessionId: sessionId,
-    runningTurnId: runningTurnId,
-    promptId: promptId,
-    reason: reason,
-  );
+  }) {
+    if (runningTurnId == null) {
+      // Tracker 不猜 promptId 与 Zeta turnId 的对应关系；缺少权威 turnId 时
+      // 清理同 session，避免取消/断连后的证据串入后续回合。
+      fileChangeTracker.invalidateSession(
+        runtimeScope: runtimeScope,
+        sessionId: sessionId,
+      );
+    } else {
+      fileChangeTracker.invalidateTurn(
+        runtimeScope: runtimeScope,
+        sessionId: sessionId,
+        turnId: runningTurnId,
+      );
+    }
+    identity.invalidateTurn(
+      runtimeScope: runtimeScope,
+      sessionId: sessionId,
+      runningTurnId: runningTurnId,
+      promptId: promptId,
+      reason: reason,
+    );
+  }
 
   void invalidateRuntime({
     required AgentRuntimeScope runtimeScope,
     required GrokIdentityInvalidationReason reason,
-  }) => identity.invalidateRuntime(runtimeScope: runtimeScope, reason: reason);
+  }) {
+    fileChangeTracker.invalidateRuntime(runtimeScope);
+    identity.invalidateRuntime(runtimeScope: runtimeScope, reason: reason);
+  }
 
   void invalidateSession({
     required AgentRuntimeScope runtimeScope,
     required String sessionId,
     required GrokIdentityInvalidationReason reason,
-  }) => identity.invalidateSession(
-    runtimeScope: runtimeScope,
-    sessionId: sessionId,
-    reason: reason,
-  );
+  }) {
+    fileChangeTracker.invalidateSession(
+      runtimeScope: runtimeScope,
+      sessionId: sessionId,
+    );
+    identity.invalidateSession(
+      runtimeScope: runtimeScope,
+      sessionId: sessionId,
+      reason: reason,
+    );
+  }
 
   GrokTurnIdentitySnapshot? snapshot({
     required AgentRuntimeScope runtimeScope,
@@ -258,6 +298,7 @@ final class GrokSessionUpdateMapper {
 
   void dispose() {
     _latestContextTokens = null;
+    fileChangeTracker.dispose();
     identity.dispose();
   }
 
@@ -426,6 +467,7 @@ final class GrokSessionUpdateMapper {
     }
     final toolCall = _mapToolCall(
       update: update,
+      runtimeScope: runtimeScope,
       sessionId: resolved.sessionId,
       turnId: resolved.turnId,
     );
@@ -611,6 +653,11 @@ final class GrokSessionUpdateMapper {
           ignoredReason: 'retry_state terminal rejected as duplicate or stale',
         );
       }
+      fileChangeTracker.invalidateTurn(
+        runtimeScope: runtimeScope,
+        sessionId: terminal.sessionId,
+        turnId: terminal.turnId,
+      );
       return GrokAcpMappedUpdate(
         events: <AgentEvent>[
           AgentErrorEvent(
@@ -759,6 +806,14 @@ final class GrokSessionUpdateMapper {
       );
     }
 
+    if (terminal.status != AgentHistoryTurnStatus.completed) {
+      fileChangeTracker.invalidateTurn(
+        runtimeScope: runtimeScope,
+        sessionId: terminal.sessionId,
+        turnId: terminal.turnId,
+      );
+    }
+
     return GrokAcpMappedUpdate(
       events: <AgentEvent>[
         if (tokenUsage != null)
@@ -789,6 +844,7 @@ final class GrokSessionUpdateMapper {
 
   AgentToolCall _mapToolCall({
     required AcpToolCallUpdate update,
+    required AgentRuntimeScope runtimeScope,
     required String sessionId,
     required String turnId,
   }) {
@@ -802,18 +858,26 @@ final class GrokSessionUpdateMapper {
       locations: update.locations,
       rawInput: update.rawInput,
     );
+    final projection = fileChangeTracker.project(
+      update: update,
+      toolKind: kind,
+      runtimeScope: runtimeScope,
+      sessionId: sessionId,
+      turnId: turnId,
+    );
     return AgentToolCall(
       id: update.toolCallId,
       title: title,
       kind: kind,
       status: status,
-      content: AcpContentCodec.toolContentText(update.content),
+      content: projection.content,
       locations: update.locations,
       sessionId: sessionId,
       turnId: turnId,
       rawInput: update.rawInput,
       rawOutput: update.rawOutput,
       raw: update.raw,
+      fileChanges: projection.fileChanges,
     );
   }
 

@@ -804,7 +804,7 @@ class _AgentTimelineBlockSection extends StatelessWidget {
         request,
       ),
       // 正常路径会在 grouping 中转成文件编辑组；此处仅作兜底。
-      AgentTurnDiffTimelineEntry() => const SizedBox.shrink(),
+      AgentTurnFileChangesTimelineEntry() => const SizedBox.shrink(),
       AgentHistoryEventTimelineEntry(:final event) => _AgentHistoryEventCard(
         event: event,
       ),

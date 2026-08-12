@@ -62,12 +62,12 @@ lib/src/features/agent/application/agent_conversation_timeline_store.dart
 lib/src/features/agent/data/mappers/acp_*.dart      # 共享 ACP decoder/codec/mapper
 ```
 
-这些文件里**禁止**出现：具体 Provider 的 import、按 `providerId`/kind/实现类型/显示名分支、从 raw 或 extra payload 猜身份、为某个 Provider 修乱序或补 id。厂商差异一律退回该 Provider 自己的 adapter/reducer 消化后输出语义完整的 `AgentEvent`。
+这些文件里**禁止**出现：具体 Provider 的 import、按 `providerId`/kind/实现类型/显示名分支、从 raw 或 extra payload 猜身份、为某个 Provider 修乱序或补 id。文件变更的 owner/change id、动作、累计快照、可回放性与 tool/turn fallback 取舍同样属于 Provider 语义。厂商差异一律退回该 Provider 自己的 adapter/reducer 消化后输出语义完整的 `AgentEvent`。
 
 **自查**（应无输出；注释里出现 Provider 名做说明是允许的）：
 
 ```sh
-grep -rnE "(codex|grok|cursor)" \
+grep -rnE "(codex|grok|claude|cursor)" \
   lib/src/features/agent/application/agent_event_pipeline.dart \
   lib/src/features/agent/application/agent_event_coalescing_policy.dart \
   lib/src/features/agent/application/coalescing_event_buffer.dart \
@@ -82,6 +82,8 @@ grep -rnE "(codex|grok|cursor)" \
 ### G2 · 身份由 Provider 决定，Store 不猜
 
 `sourceItemId` / `sourceMessageId` **只是协议 metadata**，不是 UI 合并键。`entryId`、message segment、reasoning phase、narrative boundary、去重、终态判定，全部由该 Provider 的 adapter/reducer 决定。`AgentConversationTimelineStore` 只做 dumb merge：同 entryId 更新、异 entryId 新建、同 tool id 原地 upsert——不读最后一条猜边界、不改写 id、不分配 segment。
+
+文件变更也遵守同一边界：Provider-local tracker 必须在进入共享 pipeline 前产出完整的 `AgentFileChangeSnapshot`。Store 只机械替换 typed snapshot；presentation 只按中立 evidence 变体渲染，不得读取 raw/wire key、解析命令或访问工作区补算 diff。
 
 **新增 Provider 不应该需要改 TimelineStore 或 CoalescingPolicy。** 如果你发现非改不可，先停下来开 Issue：那通常意味着抽象没做对。
 
@@ -144,7 +146,7 @@ Zeta 自有数据全部在 `~/.zeta/`：`config/` · `state/` · `logs/` · `cac
 
 - 持久化 JSON 必须**版本化 + 宽容解码**：缺字段、损坏、旧版本、未知字段都不能阻断应用启动。
 - 派生索引、缓存、日志、系统通知 payload **只保存规范化白名单字段**。
-- **禁止落盘**：prompt、回复正文、工具输出、原始错误文本、session 文件路径、环境变量值、凭证、Provider raw payload。
+- **禁止落盘**：prompt、回复正文、工具输出、文件变更 evidence 正文（替换片段、写入内容、patch）、原始错误文本、session 文件路径、环境变量值、凭证、Provider raw payload。
 - JSON-RPC transport 日志不得记录 prompt、文件内容、认证参数或 stderr 原文；Agent 日志进 UI 前必须在 data 层完成脱敏。
 
 > 正文：[工程规范 §5](docs/architecture/engineering_standards.md) · [开发者文档 §9](docs/guides/developer_guide.md)
@@ -179,6 +181,7 @@ grep -rn "import 'package:shadcn_flutter" lib | grep -v "as sf"
 | 新增或修改 `AgentEvent` | G1 G2 G3 | [开发者文档 §7「新增 AgentEvent 接入清单」](docs/guides/developer_guide.md) 的 **16 条**，逐项回答 | 每条答案用测试固定 |
 | 接入新 Provider | G1 G2 G4 G6 | [工程规范 §4.2](docs/architecture/engineering_standards.md#42-共享适配层纯度门禁) + [开发者文档 §7](docs/guides/developer_guide.md) 十二步 | 改动范围应 = 自有 data 文件 + 中立 domain 契约 + factory 组合 + 契约测试 |
 | Provider adapter / reducer / 流式显示 | G1 G2 G3 | [工程规范 §4.1](docs/architecture/engineering_standards.md) | 带 Provider/CLI 版本的脱敏 fixture 序列测试；有 history/replay 就补 canonical signature 逐位置回归 |
+| Provider 文件变更证据 | G1 G2 G3 G6 G7 | [开发者文档 §7「文件变更证据接入」](docs/guides/developer_guide.md) | Provider-local tracker 输出完整 typed snapshot；command-only 不猜文件；live/history/replay 独立；正文不进日志或持久化 |
 | 权限选项 / 审批 / Plan 模式 | G4 G5 | [开发者文档 §7「权限选项选择」+「Plan conversation mode」](docs/guides/developer_guide.md) | 覆盖两 thread 两 Canvas 的真实 wire 参数、runtime 状态仅限所属 Binding、迟到 apply、旧 generation 丢弃 |
 | Provider 生命周期 / 进程 / Binding | G4 G6 | [工程规范 §4](docs/architecture/engineering_standards.md) | factory 只由 registry 调用且 acquire 显式传 scope；全局操作走 `AgentProviderGlobalRuntime`；session 只由 `AgentConversationBinding.beginTurn()` 惰性创建，回收由 Binding Manager 负责；Workspace entry 一次性绑定 thread/Binding/ViewModel，真实 thread 不得原地改绑，fork 结果走 Shell 的新 thread 通用登记/选择流程；Thread 操作走 `ProviderOperationScheduler` |
 | 主题、UI 原语、工作台 slot | G6 G8 | [架构总览「工作台 UI」](docs/architecture/overview.md) + [开发者文档 §8](docs/guides/developer_guide.md) | `IdeHome` 是唯一 Workbench 组合边界，feature 页只填 Navigation / Canvas / Inspector 三个 slot |

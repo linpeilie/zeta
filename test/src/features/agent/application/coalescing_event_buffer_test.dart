@@ -3,6 +3,8 @@ import 'package:zeta/src/features/agent/application/agent_event_coalescing_polic
 import 'package:zeta/src/features/agent/application/coalescing_event_buffer.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
+import '../../../testing/agent_file_change_canonical.dart';
+
 void main() {
   group('CoalescingEventBuffer with AgentEventCoalescingPolicy', () {
     test('合并同 item 连续文本 delta', () async {
@@ -113,7 +115,7 @@ void main() {
       expect(event.summaryIndex, 2);
     });
 
-    test('同 turn 的 token、上下文与 diff 快照只发布最新值', () async {
+    test('同 turn 的 token、上下文与文件快照只发布最新值', () async {
       final events = <AgentEvent>[];
       final buffer = _agentBuffer(onEvent: events.add);
 
@@ -147,17 +149,17 @@ void main() {
           ),
         )
         ..add(
-          const AgentTurnDiffEvent(
+          AgentTurnFileChangesEvent(
             sessionId: 'thread-1',
             turnId: 'turn-1',
-            diff: 'old diff',
+            snapshot: _fileChangeSnapshot(revision: 1, patch: 'old diff'),
           ),
         )
         ..add(
-          const AgentTurnDiffEvent(
+          AgentTurnFileChangesEvent(
             sessionId: 'thread-1',
             turnId: 'turn-1',
-            diff: 'latest diff',
+            snapshot: _fileChangeSnapshot(revision: 2, patch: 'latest diff'),
           ),
         );
       await Future<void>.delayed(Duration.zero);
@@ -165,25 +167,122 @@ void main() {
       expect(events, hasLength(3));
       expect((events[0] as AgentTokenUsageEvent).tokenUsage.totalTokens, 20);
       expect((events[1] as AgentContextWindowUsageEvent).usedTokens, 150);
-      expect((events[2] as AgentTurnDiffEvent).diff, 'latest diff');
+      final fileChanges = events[2] as AgentTurnFileChangesEvent;
+      expect(fileChanges.snapshot.revision, 2);
+      expect(
+        (fileChanges.snapshot.changes.single.evidence
+                as AgentUnifiedPatchEvidence)
+            .patch,
+        'latest diff',
+      );
     });
 
-    test('工具进度可追加合并，终态会先 flush 进度且自身不丢失', () {
+    test('turn 文件快照 latest-wins 且在完成屏障前发布', () {
       final events = <AgentEvent>[];
       final buffer = _agentBuffer(onEvent: events.add);
 
       buffer
-        ..add(_toolEvent(status: AgentToolStatus.inProgress, content: 'line 1'))
-        ..add(_toolEvent(status: AgentToolStatus.inProgress, content: 'line 2'))
-        ..add(_toolEvent(status: AgentToolStatus.completed, content: 'done'));
+        ..add(
+          AgentTurnFileChangesEvent(
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+            snapshot: _fileChangeSnapshot(revision: 1, patch: 'old diff'),
+          ),
+        )
+        ..add(
+          AgentTurnFileChangesEvent(
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+            snapshot: _fileChangeSnapshot(revision: 2, patch: 'latest diff'),
+          ),
+        )
+        ..add(
+          const AgentTurnCompletedEvent(
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+        );
+
+      expect(events, hasLength(2));
+      expect(events.first, isA<AgentTurnFileChangesEvent>());
+      expect(events.last, isA<AgentTurnCompletedEvent>());
+      final envelopes = canonicalFileChangeEnvelopes(events);
+      expect(envelopes, hasLength(1));
+      expect(envelopes.single.ownerType, 'turn');
+      expect(envelopes.single.snapshot.revision, 2);
+      expect(envelopes.single.snapshotSignature, contains('latest diff'));
+    });
+
+    test('工具进度 latest-wins 时携带 next 的完整文件快照', () async {
+      final events = <AgentEvent>[];
+      final buffer = _agentBuffer(onEvent: events.add);
+
+      buffer
+        ..add(
+          _toolEvent(
+            status: AgentToolStatus.inProgress,
+            content: 'editing',
+            fileChanges: _fileChangeSnapshot(revision: 1, patch: 'old'),
+          ),
+        )
+        ..add(
+          _toolEvent(
+            status: AgentToolStatus.inProgress,
+            content: 'still editing',
+            fileChanges: _fileChangeSnapshot(revision: 2, patch: 'latest'),
+          ),
+        );
+      await Future<void>.delayed(Duration.zero);
+
+      final toolCall = (events.single as AgentToolCallEvent).toolCall;
+      expect(toolCall.content, 'editing\nstill editing');
+      expect(toolCall.fileChanges?.revision, 2);
+      expect(
+        (toolCall.fileChanges!.changes.single.evidence
+                as AgentUnifiedPatchEvidence)
+            .patch,
+        'latest',
+      );
+    });
+
+    test('tool_use/detail latest-wins，终态屏障前后都保留完整证据', () {
+      final events = <AgentEvent>[];
+      final buffer = _agentBuffer(onEvent: events.add);
+      final snapshot = _fileChangeSnapshot(revision: 2, patch: 'latest diff');
+
+      buffer
+        ..add(_toolEvent(status: AgentToolStatus.pending, content: 'tool_use'))
+        ..add(
+          _toolEvent(
+            status: AgentToolStatus.inProgress,
+            content: 'detail',
+            fileChanges: snapshot,
+          ),
+        )
+        ..add(
+          _toolEvent(
+            status: AgentToolStatus.completed,
+            content: 'done',
+            fileChanges: snapshot,
+          ),
+        );
 
       expect(events, hasLength(2));
       final progress = (events[0] as AgentToolCallEvent).toolCall;
       final completed = (events[1] as AgentToolCallEvent).toolCall;
-      expect(progress.content, 'line 1\nline 2');
+      expect(progress.content, 'tool_use\ndetail');
       expect(progress.status, AgentToolStatus.inProgress);
       expect(completed.status, AgentToolStatus.completed);
       expect(completed.content, 'done');
+      final envelopes = canonicalFileChangeEnvelopes(events);
+      expect(envelopes.map((event) => event.status), <String>[
+        'inProgress',
+        'completed',
+      ]);
+      expect(
+        envelopes.map((event) => event.snapshotSignature).toSet(),
+        hasLength(1),
+      );
     });
 
     test('item 完整快照前先 flush delta', () {
@@ -365,6 +464,7 @@ AgentToolCallEvent _toolEvent({
   String id = 'tool-1',
   required AgentToolStatus status,
   required String content,
+  AgentFileChangeSnapshot? fileChanges,
 }) {
   return AgentToolCallEvent(
     AgentToolCall(
@@ -375,6 +475,25 @@ AgentToolCallEvent _toolEvent({
       sessionId: 'thread-1',
       turnId: 'turn-1',
       raw: const <String, Object?>{'_progressAppend': true},
+      fileChanges: fileChanges,
     ),
+  );
+}
+
+AgentFileChangeSnapshot _fileChangeSnapshot({
+  required int revision,
+  required String patch,
+}) {
+  return AgentFileChangeSnapshot(
+    revision: revision,
+    replayability: AgentFileChangeReplayability.replayable,
+    changes: <AgentFileChange>[
+      AgentFileChange(
+        id: 'change-1',
+        path: 'lib/a.dart',
+        kind: AgentFileChangeKind.modified,
+        evidence: AgentUnifiedPatchEvidence(patch: patch),
+      ),
+    ],
   );
 }

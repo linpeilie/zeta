@@ -34,8 +34,11 @@ Provider 协议里的原始 id（`sourceItemId`、`sourceMessageId` 等）。它
 **Reasoning phase（推理阶段）**
 Agent 思考过程的阶段划分，在时间线上折叠展示。
 
-**Turn diff（回合 diff）**
-一个回合累计的文件改动，带语法高亮渲染在回合尾部。
+**File-change snapshot（文件变更快照）**
+某个 tool 或 turn owner 在一次更新时的完整、有序文件变更集合。Provider-local tracker 在进入共享管线前决定 change id、动作、顺序、revision 与可回放性；Store 只机械替换。`null` 表示没有 snapshot，空 changes 表示权威清空。
+
+**File-change evidence（文件变更证据）**
+Provider 明确给出的内容证据：替换前后片段、写入内容或 unified patch；也可以只有路径/动作摘要。三种正文不能互相伪造，只有命令时不生成文件变更证据。`replayable` 可由历史/重放重建，`liveOnly` 只表示当前实时 fallback。
 
 **Live / history / replay**
 时间线的三种数据来源：正在流式接收的、从 Provider 读回的历史、本地重放。**三者必须使用各自独立的 reducer 实例**，共用会导致状态串味。
@@ -53,7 +56,7 @@ Agent 思考过程的阶段划分，在时间线上折叠展示。
 控制事件流的准入。切换 thread、重启 Provider、dispose 交叉发生时，靠它保证旧的事件流不会投影到新会话上。
 
 **Coalescing（事件合并）**
-高频事件的合并策略：同一 item 的文本/推理增量追加、同一 turn 的 token/diff 快照取最新、同一工具的进度按协议语义追加或替换。目的是降低 UI 更新频率，不改变语义。完整事件、终态、审批、错误会先 flush 缓冲再立即发布。
+高频事件的合并策略：同一 item 的文本/推理增量追加、同一 turn 的 token/文件变更完整快照取最新、同一工具的进度按协议语义追加或替换。目的是降低 UI 更新频率，不改变语义。完整事件、终态、审批、错误会先 flush 缓冲再立即发布。
 
 **Bounded dispatcher（有界派发器）**
 FIFO 派发事件，每个 Dart event-loop turn 默认最多 64 个，续批用 `Timer.run`。它和 Flutter 的 frame 调度相互独立。

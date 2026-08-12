@@ -574,6 +574,7 @@ AgentToolCall _mergeTool(AgentToolCall previous, AgentToolCall next) {
     rawInput: next.rawInput.isNotEmpty ? next.rawInput : previous.rawInput,
     rawOutput: next.rawOutput.isNotEmpty ? next.rawOutput : previous.rawOutput,
     raw: next.raw.isNotEmpty ? next.raw : previous.raw,
+    fileChanges: next.fileChanges,
   );
 }
 

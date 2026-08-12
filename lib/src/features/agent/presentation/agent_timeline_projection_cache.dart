@@ -1,4 +1,5 @@
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
+import 'package:zeta/src/features/agent/presentation/agent_file_change_projection_cache.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 
 /// 单个 turn 的可缓存投影结果。
@@ -34,10 +35,15 @@ typedef AgentTimelineRenderBlocksBuilder =
 /// token / meta 变化不推进 contentRevision，故不重算 blocks。
 /// 每个 turn 独立失效；live turn 更新不会重算历史 turn。
 final class AgentTimelineProjectionCache {
-  AgentTimelineProjectionCache({AgentTimelineRenderBlocksBuilder? buildBlocks})
-    : _buildBlocks = buildBlocks ?? buildAgentTimelineRenderBlocks;
+  AgentTimelineProjectionCache({
+    AgentTimelineRenderBlocksBuilder? buildBlocks,
+    AgentFileChangeProjectionCache? fileChangeProjectionCache,
+  }) : _blockBuilder = buildBlocks,
+       _fileChangeProjectionCache =
+           fileChangeProjectionCache ?? AgentFileChangeProjectionCache();
 
-  final AgentTimelineRenderBlocksBuilder _buildBlocks;
+  final AgentTimelineRenderBlocksBuilder? _blockBuilder;
+  final AgentFileChangeProjectionCache _fileChangeProjectionCache;
   final Map<String, AgentTurnProjection> _turns =
       <String, AgentTurnProjection>{};
 
@@ -56,7 +62,13 @@ final class AgentTimelineProjectionCache {
       return cached.blocks;
     }
     computeCount += 1;
-    final blocks = _buildBlocks(turnId: turn.id, entries: turn.entries);
+    final blocks =
+        _blockBuilder?.call(turnId: turn.id, entries: turn.entries) ??
+        buildAgentTimelineRenderBlocks(
+          turnId: turn.id,
+          entries: turn.entries,
+          fileChangeProjectionCache: _fileChangeProjectionCache,
+        );
     final projection = AgentTurnProjection(
       turnId: turn.id,
       contentRevision: contentRevision,
@@ -75,10 +87,17 @@ final class AgentTimelineProjectionCache {
   /// 只保留当前仍可见的 turn，避免关闭会话后缓存无限增长。
   void retainOnly(Set<String> visibleTurnIds) {
     _turns.removeWhere((turnId, _) => !visibleTurnIds.contains(turnId));
+    _fileChangeProjectionCache.retainOnly(<String>{
+      for (final turn in _turns.values)
+        for (final block in turn.blocks)
+          if (block case AgentTimelineFileEditGroupRenderBlock(:final group))
+            for (final item in group.items) item.ownerEntryId,
+    });
   }
 
   void clear() {
     _turns.clear();
+    _fileChangeProjectionCache.clear();
     computeCount = 0;
   }
 
@@ -87,4 +106,7 @@ final class AgentTimelineProjectionCache {
 
   /// 指定 turn 是否有缓存条目；测试用。
   bool containsTurn(String turnId) => _turns.containsKey(turnId);
+
+  /// 长正文实际投影次数，用于 resize/revision 性能回归。
+  int get fileChangeComputeCount => _fileChangeProjectionCache.computeCount;
 }

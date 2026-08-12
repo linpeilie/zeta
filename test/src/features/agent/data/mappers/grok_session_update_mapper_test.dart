@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_acp_notification_mapper.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
+import '../../../../testing/agent_file_change_canonical.dart';
 import '../../../../testing/fixture_reader.dart';
 
 void main() {
@@ -685,6 +686,73 @@ void main() {
       }
       expect(reasoning, hasLength(2));
       expect(reasoning.first.itemId, reasoning.last.itemId);
+    });
+
+    test('real-shape Grok Edit emits one cumulative typed snapshot', () {
+      // Arrange
+      mapper.dispose();
+      mapper = GrokAcpNotificationMapper();
+      mapper.beginTurn(
+        runtimeScope: runtimeScope,
+        sessionId: 'grok-session-redacted',
+        turnId: 'grok-edit-turn',
+      );
+      final fixture = readFixtureJsonMap(
+        'agent_file_change_evidence/grok_edit_1_0_0.json',
+      );
+      final events = <AgentEvent>[];
+
+      // Act
+      for (final rawEvent in fixture['events']! as List<Object?>) {
+        final event = (rawEvent! as Map).map(
+          (key, value) => MapEntry(key.toString(), value as Object?),
+        );
+        final params = (event['params']! as Map).map(
+          (key, value) => MapEntry(key.toString(), value as Object?),
+        );
+        final mapped = (event['method']! as String).startsWith('_x.ai/')
+            ? mapper.mapXaiSessionUpdate(
+                params: params,
+                runningTurnId: 'grok-edit-turn',
+                runtimeScope: runtimeScope,
+              )
+            : mapper.mapSessionUpdate(
+                params: params,
+                runningTurnId: 'grok-edit-turn',
+                runtimeScope: runtimeScope,
+              );
+        events.addAll(mapped.events);
+      }
+
+      // Assert
+      final tools = events.whereType<AgentToolCallEvent>().toList();
+      expect(tools, hasLength(3));
+      expect(tools.first.toolCall.fileChanges, isNull);
+      final inProgress = tools[1].toolCall;
+      final completed = tools[2].toolCall;
+      expect(inProgress.content, isNull);
+      expect(completed.content, isNull);
+      expect(inProgress.fileChanges, isNotNull);
+      expect(completed.fileChanges, same(inProgress.fileChanges));
+      expect(inProgress.fileChanges!.revision, 1);
+      final change = inProgress.fileChanges!.changes.single;
+      expect(change.path, '<WORKSPACE_REDACTED>/sample.txt');
+      expect(change.kind, AgentFileChangeKind.modified);
+      final evidence = change.evidence as AgentTextReplacementEvidence;
+      expect(evidence.oldText, '[BEFORE_REDACTED]\n');
+      expect(evidence.newText, '[AFTER_REDACTED]\n');
+      expect(evidence.replaceAll, isFalse);
+      final envelopes = canonicalFileChangeEnvelopes(events);
+      expect(envelopes.map((event) => event.status), <String>[
+        'pending',
+        'completed',
+      ]);
+      expect(envelopes.map((event) => event.ownerId).toSet(), hasLength(1));
+      expect(
+        envelopes.map((event) => event.snapshotSignature).toSet(),
+        hasLength(1),
+      );
+      expect(events.whereType<AgentTurnCompletedEvent>(), hasLength(1));
     });
 
     test('emits live context usage only when _meta.totalTokens changes', () {

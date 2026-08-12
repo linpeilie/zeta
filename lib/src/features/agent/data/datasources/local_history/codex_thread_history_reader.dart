@@ -53,69 +53,80 @@ class _CodexThreadHistoryReader {
     Object? value,
     String fallbackThreadId,
   ) {
-    final map = _map(value);
-    final thread = _map(map['thread']);
-    final threadId = _string(thread['id']) ?? fallbackThreadId;
-    final turns = <AgentHistoryTurn>[];
-    AgentHistoryTurn? currentTurn;
-    final turnsList = thread['turns'];
+    final fileChangeTracker = CodexFileChangeTracker();
+    try {
+      final map = _map(value);
+      final thread = _map(map['thread']);
+      final threadId = _string(thread['id']) ?? fallbackThreadId;
+      final turns = <AgentHistoryTurn>[];
+      AgentHistoryTurn? currentTurn;
+      final turnsList = thread['turns'];
 
-    if (turnsList is List<Object?>) {
-      for (final turnValue in turnsList) {
-        final turn = _map(turnValue);
-        final turnId = _string(turn['id']) ?? threadId;
-        final turnEntries = <AgentHistoryEntry>[];
-        final items = turn['items'];
-        if (items is List<Object?>) {
-          for (final itemValue in items) {
-            final entry = _historyEntryFromItem(itemValue, turnId: turnId);
-            if (entry != null) {
-              turnEntries.add(entry);
+      if (turnsList is List<Object?>) {
+        for (final turnValue in turnsList) {
+          final turn = _map(turnValue);
+          final turnId = _string(turn['id']) ?? threadId;
+          fileChangeTracker.beginTurn(runtimeScope: null, sessionId: threadId);
+          final turnEntries = <AgentHistoryEntry>[];
+          final items = turn['items'];
+          if (items is List<Object?>) {
+            for (final itemValue in items) {
+              final entry = _historyEntryFromItem(
+                itemValue,
+                sessionId: threadId,
+                turnId: turnId,
+                fileChangeTracker: fileChangeTracker,
+              );
+              if (entry != null) {
+                turnEntries.add(entry);
+              }
             }
           }
+          final startedAt = _dateTimeFromAny(
+            turn['startedAt'] ?? turn['startedAtMs'],
+          );
+          final completedAt = _dateTimeFromAny(
+            turn['completedAt'] ?? turn['completedAtMs'],
+          );
+          final error = _map(turn['error']);
+          final historyTurn = AgentHistoryTurn(
+            id: turnId,
+            entries: List<AgentHistoryEntry>.unmodifiable(turnEntries),
+            status: _historyTurnStatus(_string(turn['status']), completedAt),
+            startedAt: startedAt,
+            completedAt: completedAt,
+            duration: _durationFromMilliseconds(turn['durationMs']),
+            cwd: _string(turn['cwd']),
+            model: _string(turn['model']),
+            modelContextWindow:
+                _numberToInt(turn['modelContextWindow']) ??
+                _numberToInt(turn['model_context_window']),
+            collaborationMode:
+                _conversationModeCodec.modeIdFromValue(
+                  turn['collaborationMode'],
+                ) ??
+                _conversationModeCodec.modeIdFromValue(
+                  turn['collaboration_mode'],
+                ),
+            tokenUsage: _tokenUsageFromTurnPayload(turn),
+            errorMessage: _string(error['message']),
+            errorCode: _codexErrorCode(error['codexErrorInfo']),
+            raw: turn,
+          );
+          turns.add(historyTurn);
+          currentTurn = historyTurn;
         }
-        final startedAt = _dateTimeFromAny(
-          turn['startedAt'] ?? turn['startedAtMs'],
-        );
-        final completedAt = _dateTimeFromAny(
-          turn['completedAt'] ?? turn['completedAtMs'],
-        );
-        final error = _map(turn['error']);
-        final historyTurn = AgentHistoryTurn(
-          id: turnId,
-          entries: List<AgentHistoryEntry>.unmodifiable(turnEntries),
-          status: _historyTurnStatus(_string(turn['status']), completedAt),
-          startedAt: startedAt,
-          completedAt: completedAt,
-          duration: _durationFromMilliseconds(turn['durationMs']),
-          cwd: _string(turn['cwd']),
-          model: _string(turn['model']),
-          modelContextWindow:
-              _numberToInt(turn['modelContextWindow']) ??
-              _numberToInt(turn['model_context_window']),
-          collaborationMode:
-              _conversationModeCodec.modeIdFromValue(
-                turn['collaborationMode'],
-              ) ??
-              _conversationModeCodec.modeIdFromValue(
-                turn['collaboration_mode'],
-              ),
-          tokenUsage: _tokenUsageFromTurnPayload(turn),
-          errorMessage: _string(error['message']),
-          errorCode: _codexErrorCode(error['codexErrorInfo']),
-          raw: turn,
-        );
-        turns.add(historyTurn);
-        currentTurn = historyTurn;
       }
-    }
 
-    return AgentThreadHistorySnapshot(
-      threadId: threadId,
-      turns: List<AgentHistoryTurn>.unmodifiable(turns),
-      currentTurn: currentTurn,
-      raw: map,
-    );
+      return AgentThreadHistorySnapshot(
+        threadId: threadId,
+        turns: List<AgentHistoryTurn>.unmodifiable(turns),
+        currentTurn: currentTurn,
+        raw: map,
+      );
+    } finally {
+      fileChangeTracker.dispose();
+    }
   }
 
   String? _codexErrorCode(Object? value) {
@@ -232,7 +243,9 @@ class _CodexThreadHistoryReader {
 
   AgentHistoryEntry? _historyEntryFromItem(
     Object? value, {
+    required String sessionId,
     required String turnId,
+    required CodexFileChangeTracker fileChangeTracker,
   }) {
     final item = _map(value);
     final type = _string(item['type']);
@@ -266,18 +279,44 @@ class _CodexThreadHistoryReader {
       ),
       final type when _isSystemThreadItemType(type) =>
         _systemHistoryEventFromThreadItem(item, id: id),
-      _ => _historyToolEntryFromThreadItem(item, id: id),
+      _ => _historyToolEntryFromThreadItem(
+        item,
+        id: id,
+        sessionId: sessionId,
+        turnId: turnId,
+        fileChangeTracker: fileChangeTracker,
+      ),
     };
   }
 
   AgentHistoryToolEntry? _historyToolEntryFromThreadItem(
     Map<String, Object?> item, {
     required String id,
+    required String sessionId,
+    required String turnId,
+    required CodexFileChangeTracker fileChangeTracker,
   }) {
+    final fileProjection =
+        _normalizedAgentItemType(_string(item['type'])) == 'filechange'
+        ? fileChangeTracker.projectTool(
+            runtimeScope: null,
+            sessionId: sessionId,
+            turnId: turnId,
+            toolCallId: id,
+            hasStructuredChanges: item.containsKey('changes'),
+            changes: item['changes'],
+          )
+        : null;
     final toolCall = _toolCallFromThreadItem(
       item,
       id: id,
       status: _historyToolStatus(_string(item['status'])),
+      sessionId: sessionId,
+      turnId: turnId,
+      fileChanges: fileProjection?.snapshot,
+      projectedLocations: fileProjection?.snapshot == null
+          ? null
+          : fileProjection!.locations,
     );
     return toolCall == null ? null : _historyTool(toolCall);
   }

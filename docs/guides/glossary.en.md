@@ -34,8 +34,11 @@ A subdivision within a single agent message. Also decided by the provider's redu
 **Reasoning phase**
 Phases of the agent's thinking process, rendered collapsed on the timeline.
 
-**Turn diff**
-The accumulated file changes for a turn, rendered with syntax highlighting at the end of that turn.
+**File-change snapshot**
+The complete ordered set of file changes for a tool or turn owner at one revision. A provider-local tracker decides change ids, actions, order, revision, and replayability before the shared pipeline; the Store only replaces the snapshot mechanically. `null` means no snapshot, while empty changes are an authoritative clear.
+
+**File-change evidence**
+Content explicitly supplied by the provider: before/after replacement snippets, written content, or a unified patch; a path/action-only summary is also valid. The three bodies must not be fabricated from one another, and a command-only path produces no file-change evidence. `replayable` can be rebuilt from history/replay; `liveOnly` is a current-stream fallback only.
 
 **Live / history / replay**
 The three timeline data sources: currently streaming, history read back from the provider, and local replay. **Each must use its own reducer instance**; sharing one bleeds state.
@@ -53,7 +56,7 @@ Sole owner of event resources, tying together the listener gate, coalescing buff
 Admission control for the event stream. When thread switches, provider restarts, and disposal interleave, this is what keeps a stale stream from projecting onto a new session.
 
 **Coalescing**
-The merge strategy for high-frequency events: text/reasoning deltas on the same item append, token/diff snapshots for the same turn take the latest, tool progress appends or replaces per protocol semantics. It reduces UI update frequency without changing semantics. Complete events, terminal states, approvals, and errors flush the buffer and publish immediately.
+The merge strategy for high-frequency events: text/reasoning deltas on the same item append, complete token/file-change snapshots for the same turn take the latest, and tool progress appends or replaces per protocol semantics. It reduces UI update frequency without changing semantics. Complete events, terminal states, approvals, and errors flush the buffer and publish immediately.
 
 **Bounded dispatcher**
 FIFO event delivery, capped at 64 per Dart event-loop turn by default, continuing via `Timer.run`. Independent of Flutter's frame scheduling.

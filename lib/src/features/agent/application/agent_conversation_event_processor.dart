@@ -201,8 +201,8 @@ final class AgentConversationEventProcessor {
         _timeline.updateMessage(mutation.event);
       case AgentReplaceActivePlanTimelineMutation():
         _timeline.replaceActivePlan(mutation.event);
-      case AgentUpsertTurnDiffTimelineMutation():
-        _timeline.upsertTurnDiff(mutation.event);
+      case AgentUpsertTurnFileChangesTimelineMutation():
+        _timeline.upsertTurnFileChanges(mutation.event);
       case AgentUpsertToolCallTimelineMutation():
         _timeline.upsertToolCall(mutation.toolCall);
       case AgentAddPermissionRequestTimelineMutation():

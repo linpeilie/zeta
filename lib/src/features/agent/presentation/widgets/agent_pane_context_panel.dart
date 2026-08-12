@@ -474,7 +474,7 @@ List<_ContextRawItem> _buildContextRawItems({
             id: toolCall.id,
             displayId: toolCall.id,
             kindLabel: _contextToolKindLabel(toolCall),
-            raw: _toolCallRawMap(toolCall),
+            raw: _toolCallContextMap(toolCall),
           ),
         );
       case AgentPermissionTimelineEntry(:final request):
@@ -555,18 +555,19 @@ List<_ContextRawItem> _buildContextRawItems({
                   },
           ),
         );
-      case AgentTurnDiffTimelineEntry(:final turnId, :final diff, :final raw):
+      case AgentTurnFileChangesTimelineEntry(:final turnId, :final snapshot):
         if (filterNonChat) {
           continue;
         }
         items.add(
           _ContextRawItem(
-            id: 'turn-diff-$turnId',
+            id: entry.id,
             displayId: turnId,
-            kindLabel: 'Diff',
-            raw: raw.isNotEmpty
-                ? raw
-                : <String, Object?>{'turnId': turnId, 'diff': diff},
+            kindLabel: '文件变更',
+            raw: <String, Object?>{
+              'turnId': turnId,
+              'fileChanges': _fileChangeSnapshotContextMap(snapshot),
+            },
           ),
         );
     }
@@ -617,7 +618,27 @@ String _contextHistoryEventLabel(AgentHistoryEventEntry event) {
   };
 }
 
-Map<String, Object?> _toolCallRawMap(AgentToolCall toolCall) {
+Map<String, Object?> _toolCallContextMap(AgentToolCall toolCall) {
+  final fileChanges = toolCall.fileChanges;
+  if (fileChanges != null) {
+    return <String, Object?>{
+      'id': toolCall.id,
+      'title': toolCall.displayTitle,
+      'kind': toolCall.kind.name,
+      'status': toolCall.status.name,
+      'fileChanges': _fileChangeSnapshotContextMap(fileChanges),
+    };
+  }
+  // 编辑工具没有 typed snapshot 时只展示中立元数据，不再退回 raw/wire payload
+  // 猜文件路径或差异正文。其他工具仍保留原有 raw 诊断能力。
+  if (toolCall.kind == AgentToolKind.edit) {
+    return <String, Object?>{
+      'id': toolCall.id,
+      'title': toolCall.displayTitle,
+      'kind': toolCall.kind.name,
+      'status': toolCall.status.name,
+    };
+  }
   if (toolCall.raw.isNotEmpty) {
     return toolCall.raw;
   }
@@ -630,6 +651,49 @@ Map<String, Object?> _toolCallRawMap(AgentToolCall toolCall) {
     if (toolCall.locations.isNotEmpty) 'locations': toolCall.locations,
     if (toolCall.rawInput.isNotEmpty) 'rawInput': toolCall.rawInput,
     if (toolCall.rawOutput.isNotEmpty) 'rawOutput': toolCall.rawOutput,
+  };
+}
+
+Map<String, Object?> _fileChangeSnapshotContextMap(
+  AgentFileChangeSnapshot snapshot,
+) {
+  return <String, Object?>{
+    'revision': snapshot.revision,
+    'replayability': snapshot.replayability.name,
+    'changes': snapshot.changes
+        .map(_fileChangeContextMap)
+        .toList(growable: false),
+  };
+}
+
+Map<String, Object?> _fileChangeContextMap(AgentFileChange change) {
+  return <String, Object?>{
+    'id': change.id,
+    'path': change.path,
+    'destinationPath': ?change.destinationPath,
+    'kind': change.kind.name,
+    'evidence': ?switch (change.evidence) {
+      null => null,
+      AgentTextReplacementEvidence(
+        :final oldText,
+        :final newText,
+        :final replaceAll,
+      ) =>
+        <String, Object?>{
+          'type': 'textReplacement',
+          'before': oldText,
+          'after': newText,
+          'replaceAll': ?replaceAll,
+        },
+      AgentWrittenContentEvidence(:final content) => <String, Object?>{
+        'type': 'writtenContent',
+        'writtenContent': content,
+      },
+      AgentUnifiedPatchEvidence(:final patch) => <String, Object?>{
+        'type': 'unifiedPatch',
+        'unifiedPatch': patch,
+      },
+    },
   };
 }
 

@@ -76,7 +76,7 @@ Responsibilities break down like this:
 | Stage | Owns | Explicitly doesn't own |
 | --- | --- | --- |
 | decoder | protocol syntax, transport lifecycle | any provider branching |
-| **provider adapter / reducer** | vendor field compatibility, entryId assignment, segmentation, dedup, terminal states | punting unresolved semantics downstream |
+| **provider adapter / reducer** | vendor field compatibility, entryId assignment, segmentation, dedup, terminal states, complete file-change snapshots | punting unresolved semantics downstream |
 | pipeline | subscription scope, coalescing, bounded dispatch | business semantics |
 | processor / reducer | state transitions, timeline mutation descriptions | async work, Flutter scheduling |
 | TimelineStore | update on same entryId, create on new entryId | inference, id rewriting |
@@ -87,6 +87,12 @@ The three rules most often violated:
 1. **A provider's `sourceItemId` / `sourceMessageId` is metadata only.** entryId, message segmentation, reasoning phases, dedup, and terminal states are all decided by that provider's own adapter/reducer. TimelineStore merges blindly — it never guesses.
 2. **Reducers must be purely synchronous.** No `Timer`, no `Future`, no Flutter scheduler, no external callbacks. Side effects go through the EffectRunner, which validates scope.
 3. **Live / history / replay each get their own reducer instance.** Sharing one bleeds state across them.
+4. **File changes render only typed evidence supplied by the provider.** Replacement snippets, written content, and unified patches retain their distinct meaning. A command-only path remains a command card; Zeta never parses the command or current workspace to invent a diff.
+
+An `AgentFileChangeSnapshot` is a complete cumulative snapshot assembled by the provider before the shared
+pipeline. The Store replaces it mechanically and the UI renders by evidence type. A Codex turn aggregate is
+an explicit `liveOnly` fallback: it cannot masquerade as recoverable history or appear alongside later
+tool-scoped evidence.
 
 Before adding or changing an `AgentEvent`, work through all 16 items of the onboarding checklist in [developer guide §7](../guides/developer_guide.md).
 
@@ -173,7 +179,7 @@ flowchart TD
 
 Page switching only swaps slot content; `WindowFrame` and `IdeWorkbenchScaffold` stay the same Element throughout. **Feature pages must not replace the top-level workbench.**
 
-Cross-page retention uses `IdeRetainedPageView`, not `IndexedStack` (the latter keeps paying layout cost for long timelines). The timeline is virtualized with `SliverList.builder`, and streaming turns, syntax highlighting, and diff regions each get a `RepaintBoundary`.
+Cross-page retention uses `IdeRetainedPageView`, not `IndexedStack` (the latter keeps paying layout cost for long timelines). The timeline is virtualized with `SliverList.builder`, and streaming turns, syntax highlighting, and file-change evidence regions each get a `RepaintBoundary`.
 
 Post-frame measurement, `GlobalKey` height probing, and post-layout `setState` feedback loops are forbidden — all of them produce visible jitter on long timelines.
 
@@ -194,7 +200,7 @@ Three hard requirements:
 
 - **Versioned JSON with tolerant decoding.** Missing fields, corruption, and old versions must never block startup.
 - **Read Provider-private data only inside that Provider's data adapter.** Protocol fields, raw content, and private paths stay out of upper layers; read access does not automatically authorize migration, rewriting, or deletion.
-- **Derived indexes store allow-listed fields only.** Never persist prompts, response bodies, tool output, raw error text, environment variables, credentials, or provider raw payloads.
+- **Derived indexes store allow-listed fields only.** Never persist prompts, response bodies, tool output, file-change evidence bodies, raw error text, environment variables, credentials, or provider raw payloads.
 
 Feature stores also must not assemble `File('~/.zeta/...')` themselves in presentation or application code — concrete files are injected from `lib/src/app`.
 
@@ -206,6 +212,7 @@ For the user-facing file listing and cleanup instructions, see the [data referen
 | --- | --- |
 | Restyle a timeline card | `features/agent/presentation` + `ui/core` tokens |
 | Fix a streaming glitch in one provider | that provider's `data/` adapter / reducer |
+| Add or fix provider file-change evidence | that provider's `data/` tracker + neutral domain/presentation; the shared Store only carries it mechanically |
 | Surface a capability the provider already supports | domain port and capability → application → presentation |
 | Onboard a brand-new agent CLI | new `data/` implementation + factory wiring + contract tests |
 | Change file-tree ignore rules | `features/workspace/domain/workspace_directory_rules.dart` |

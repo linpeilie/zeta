@@ -97,10 +97,8 @@ InlineSpan _fileEditGroupSummarySpan(
     0,
     (sum, item) => sum + (item.removedLines ?? 0),
   );
-  // 回合级聚合 diff 用固定标题，与单次 fileChange 工具卡区分。
-  final label = group.id.startsWith('turn-diff-group-')
-      ? '本回合改动'
-      : '${group.items.length} 个文件';
+  // 回合级降级汇总用固定标题，与单次 fileChange 工具卡区分。
+  final label = group.isTurnFallback ? '本回合改动' : '${group.items.length} 个文件';
   if (addedLines == 0 && removedLines == 0) {
     return TextSpan(text: label);
   }
@@ -128,39 +126,6 @@ InlineSpan _fileEditGroupSummarySpan(
   );
 }
 
-InlineSpan _fileEditLineStatsSpan(
-  BuildContext context,
-  AgentTimelineFileEditItem item,
-) {
-  final colors = IdeColors.of(context);
-  final textStyles = IdeTextStyles.of(context);
-  final added = item.addedLines ?? 0;
-  final removed = item.removedLines ?? 0;
-  return TextSpan(
-    style: textStyles.bodySmall.copyWith(
-      color: colors.textSecondary.withValues(alpha: 0.66),
-      height: 1.45,
-    ),
-    children: <InlineSpan>[
-      TextSpan(
-        text: '+$added',
-        style: TextStyle(
-          color: colors.success.withValues(alpha: 0.98),
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      const TextSpan(text: ' / '),
-      TextSpan(
-        text: '-$removed',
-        style: TextStyle(
-          color: colors.error.withValues(alpha: 0.98),
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    ],
-  );
-}
-
 String _toolKindLabel(AgentToolKind kind) {
   return switch (kind) {
     AgentToolKind.read => '读取',
@@ -173,22 +138,6 @@ String _toolKindLabel(AgentToolKind kind) {
     AgentToolKind.fetch => '获取',
     AgentToolKind.other => '操作',
   };
-}
-
-bool _shouldPreviewCodeBlock(String code, {required int maxLines}) {
-  return _codeBlockLineCount(code) > maxLines;
-}
-
-String _previewCodeBlock(String code, {required int maxLines}) {
-  final lines = LineSplitter.split(code).toList(growable: false);
-  if (lines.length <= maxLines) {
-    return code;
-  }
-  return lines.take(maxLines).join('\n');
-}
-
-int _codeBlockLineCount(String code) {
-  return LineSplitter.split(code).length;
 }
 
 /// 根据工具类型选择图标。

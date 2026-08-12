@@ -2,10 +2,27 @@ part of '../datasources/app_server/codex_app_server_agent_provider.dart';
 
 /// 负责把服务端通知转换成统一的 Agent 事件。
 class _CodexNotificationMapper {
-  const _CodexNotificationMapper({required this._providerId});
+  _CodexNotificationMapper({
+    required this._providerId,
+    CodexFileChangeTracker? fileChangeTracker,
+  }) : _fileChangeTracker = fileChangeTracker ?? CodexFileChangeTracker();
 
   final String _providerId;
+  final CodexFileChangeTracker _fileChangeTracker;
   static const _conversationModeCodec = _CodexConversationModeCodec();
+
+  void invalidateSession({
+    required AgentRuntimeScope? runtimeScope,
+    required String sessionId,
+  }) => _fileChangeTracker.invalidateSession(
+    runtimeScope: runtimeScope,
+    sessionId: sessionId,
+  );
+
+  void invalidateRuntime(AgentRuntimeScope? runtimeScope) =>
+      _fileChangeTracker.invalidateRuntime(runtimeScope);
+
+  void dispose() => _fileChangeTracker.dispose();
 
   _NotificationMapping map(
     JsonRpcNotification notification, {
@@ -131,6 +148,10 @@ class _CodexNotificationMapper {
         if (turn == null) {
           return _ignored('missing turn details');
         }
+        _fileChangeTracker.beginTurn(
+          runtimeScope: notification.runtimeScope,
+          sessionId: turn.sessionId,
+        );
         return _NotificationMapping(
           startedTurn: turn,
           events: <AgentEvent>[AgentTurnStartedEvent(turn)],
@@ -148,6 +169,11 @@ class _CodexNotificationMapper {
         if (turnId == null) {
           return _ignored('missing turn completion details');
         }
+        _fileChangeTracker.completeTurn(
+          runtimeScope: notification.runtimeScope,
+          sessionId: threadId,
+          turnId: turnId,
+        );
         return _NotificationMapping(
           completedTurn: _CompletedTurn(sessionId: threadId, turnId: turnId),
           events: <AgentEvent>[
@@ -260,13 +286,24 @@ class _CodexNotificationMapper {
         if (diff is! String) {
           return _ignored('missing turn diff');
         }
+        final projection = _fileChangeTracker.projectTurnDiff(
+          runtimeScope: notification.runtimeScope,
+          sessionId: threadId,
+          turnId: turnId,
+          diff: diff,
+        );
+        if (projection.suppressedByTool) {
+          return _ignored('turn diff suppressed by tool file change');
+        }
+        if (projection.malformed || projection.snapshot == null) {
+          return _ignored('unparseable turn diff');
+        }
         return _NotificationMapping(
           events: <AgentEvent>[
-            AgentTurnDiffEvent(
+            AgentTurnFileChangesEvent(
               sessionId: threadId,
               turnId: turnId,
-              diff: diff,
-              raw: notification.params,
+              snapshot: projection.snapshot!,
             ),
           ],
         );
@@ -286,12 +323,43 @@ class _CodexNotificationMapper {
             return _ignored('missing MCP tool progress details');
           }
         }
-        final toolCall = _toolCallFromProgressNotification(notification);
+        final method = notification.method;
+        final itemId = _string(notification.params['itemId']);
+        final threadId = _string(notification.params['threadId']);
+        final turnId = _string(notification.params['turnId']);
+        final fileProjection =
+            method.contains('fileChange') &&
+                itemId != null &&
+                threadId != null &&
+                turnId != null
+            ? _fileChangeTracker.projectTool(
+                runtimeScope: notification.runtimeScope,
+                sessionId: threadId,
+                turnId: turnId,
+                toolCallId: itemId,
+                hasStructuredChanges:
+                    method == 'item/fileChange/patchUpdated' &&
+                    notification.params.containsKey('changes'),
+                changes: notification.params['changes'],
+              )
+            : null;
+        final toolCall = _toolCallFromProgressNotification(
+          notification,
+          fileProjection: fileProjection,
+        );
         if (toolCall == null) {
           return _ignored('unsupported tool progress details');
         }
         return _NotificationMapping(
-          events: <AgentEvent>[AgentToolCallEvent(toolCall)],
+          events: <AgentEvent>[
+            if (fileProjection?.turnFallbackClear case final clear?)
+              AgentTurnFileChangesEvent(
+                sessionId: threadId!,
+                turnId: turnId!,
+                snapshot: clear,
+              ),
+            AgentToolCallEvent(toolCall),
+          ],
         );
       // `thread/tokenUsage/updated` 是当前协议的 token 用量通知;
       // 其余三个是旧版方法名,保留用于兼容旧版 app-server。
@@ -459,7 +527,23 @@ class _CodexNotificationMapper {
     if (systemItem != null) {
       return _NotificationMapping(events: <AgentEvent>[systemItem]);
     }
-    final toolCall = _toolCallFromItemNotification(notification);
+    final threadId = _string(notification.params['threadId']);
+    final turnId = _string(notification.params['turnId']);
+    final fileProjection =
+        normalizedType == 'filechange' && threadId != null && turnId != null
+        ? _fileChangeTracker.projectTool(
+            runtimeScope: notification.runtimeScope,
+            sessionId: threadId,
+            turnId: turnId,
+            toolCallId: id,
+            hasStructuredChanges: item.containsKey('changes'),
+            changes: item['changes'],
+          )
+        : null;
+    final toolCall = _toolCallFromItemNotification(
+      notification,
+      fileProjection: fileProjection,
+    );
     if (toolCall == null) {
       final reason = switch (normalizedType) {
         null => 'missing item type',
@@ -471,7 +555,15 @@ class _CodexNotificationMapper {
       return _ignored(reason);
     }
     return _NotificationMapping(
-      events: <AgentEvent>[AgentToolCallEvent(toolCall)],
+      events: <AgentEvent>[
+        if (fileProjection?.turnFallbackClear case final clear?)
+          AgentTurnFileChangesEvent(
+            sessionId: threadId!,
+            turnId: turnId!,
+            snapshot: clear,
+          ),
+        AgentToolCallEvent(toolCall),
+      ],
     );
   }
 
@@ -634,8 +726,9 @@ class _CodexNotificationMapper {
   }
 
   AgentToolCall? _toolCallFromItemNotification(
-    JsonRpcNotification notification,
-  ) {
+    JsonRpcNotification notification, {
+    CodexToolFileChangeProjection? fileProjection,
+  }) {
     final item = _map(notification.params['item']);
     final id = _string(item['id']) ?? _string(notification.params['itemId']);
     if (id == null) {
@@ -652,6 +745,10 @@ class _CodexNotificationMapper {
       sessionId: _string(notification.params['threadId']),
       turnId: _string(notification.params['turnId']),
       raw: notification.params,
+      fileChanges: fileProjection?.snapshot,
+      projectedLocations: fileProjection?.snapshot == null
+          ? null
+          : fileProjection!.locations,
     );
   }
 
@@ -714,8 +811,9 @@ class _CodexNotificationMapper {
   }
 
   AgentToolCall? _toolCallFromProgressNotification(
-    JsonRpcNotification notification,
-  ) {
+    JsonRpcNotification notification, {
+    CodexToolFileChangeProjection? fileProjection,
+  }) {
     final method = notification.method;
     // MCP 进度通知必填 itemId + message；缺一则丢弃，避免生成无归属卡片。
     if (method == 'item/mcpToolCall/progress') {
@@ -751,10 +849,15 @@ class _CodexNotificationMapper {
       content:
           _string(notification.params['delta']) ??
           _string(notification.params['output']) ??
-          _string(notification.params['patch']),
+          _string(notification.params['patch']) ??
+          _joinedStrings(fileProjection?.locations),
+      locations: fileProjection?.snapshot == null
+          ? const <String>[]
+          : fileProjection!.locations,
       sessionId: _string(notification.params['threadId']),
       turnId: _string(notification.params['turnId']),
       raw: notification.params,
+      fileChanges: fileProjection?.snapshot,
     );
   }
 

@@ -7,6 +7,8 @@ import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code
 import 'package:zeta/src/features/agent/data/mappers/claude_code_stream_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
+import '../../../../../testing/agent_file_change_canonical.dart';
+
 void main() {
   const scope = AgentRuntimeScope(
     runtimeId: 'claude-history-parity',
@@ -258,6 +260,131 @@ void main() {
         expect(tool.status, AgentToolStatus.completed);
       },
     );
+
+    test('Edit and Write typed evidence match isolated live/history', () async {
+      // Arrange
+      final fixture = _jsonObject(
+        'test/fixtures/agent_file_change_evidence/'
+        'claude_code_edit_write_2_1_227.json',
+      );
+      final scenarios = (fixture['scenarios']! as List<Object?>)
+          .map(_mapObject)
+          .toList(growable: false);
+
+      for (final scenario in scenarios) {
+        final name = scenario['name']! as String;
+        final frames = (scenario['frames']! as List<Object?>)
+            .map(_mapObject)
+            .toList(growable: false);
+        final sessionId = frames.first['session_id']! as String;
+        final turnId = 'turn-file-$name';
+        final liveIdentity = ClaudeCodeStreamIdentity();
+        final liveMapper = ClaudeCodeEventMapper(
+          providerId: 'claude-code',
+          identity: liveIdentity,
+        );
+        addTearDown(liveMapper.dispose);
+        liveMapper.beginTurn(
+          runtimeScope: scope,
+          sessionId: sessionId,
+          turnId: turnId,
+        );
+
+        // Act: live 与 history 使用不同 mapper/tracker 实例。
+        final liveEvents = <AgentEvent>[];
+        for (final frame in frames) {
+          liveEvents.addAll(
+            liveMapper
+                .mapFrame(
+                  raw: frame,
+                  runtimeScope: scope,
+                  runningTurnId: turnId,
+                )
+                .events,
+          );
+        }
+        final historyFile = await _writeHistoryFixture(
+          tempRoot: tempRoot,
+          projectPath: '/tmp/zeta-cc-file-$name',
+          sessionId: sessionId,
+          liveFrames: frames,
+        );
+        final historyIdentities = <ClaudeCodeStreamIdentity>[];
+        final reader = ClaudeCodeSessionHistoryReader(
+          claudeHome: tempRoot.path,
+          historyIdentityFactory: () {
+            final identity = ClaudeCodeStreamIdentity();
+            historyIdentities.add(identity);
+            return identity;
+          },
+          historyTurnIdFactory: (_, _, _) => turnId,
+        );
+        final history = await reader.readHistoryEvents(
+          threadId: sessionId,
+          providerId: 'claude-code',
+          projectPath: '/tmp/zeta-cc-file-$name',
+          sessionPath: historyFile.path,
+          runtimeScope: scope,
+        );
+        final replay = await reader.readHistoryEvents(
+          threadId: sessionId,
+          providerId: 'claude-code',
+          projectPath: '/tmp/zeta-cc-file-$name',
+          sessionPath: historyFile.path,
+          runtimeScope: scope,
+        );
+
+        // Assert
+        final liveTool = liveEvents
+            .whereType<AgentToolCallEvent>()
+            .last
+            .toolCall;
+        final historyTool = history.events
+            .whereType<AgentToolCallEvent>()
+            .last
+            .toolCall;
+        final replayTool = replay.events
+            .whereType<AgentToolCallEvent>()
+            .last
+            .toolCall;
+        expect(historyTool.title, liveTool.title, reason: name);
+        expect(historyTool.kind, liveTool.kind, reason: name);
+        expect(historyTool.status, liveTool.status, reason: name);
+        expect(historyTool.locations, liveTool.locations, reason: name);
+        final liveEnvelope = canonicalFileChangeToolCall(liveTool);
+        expect(
+          canonicalFileChangeToolCall(historyTool).signature,
+          liveEnvelope.signature,
+          reason: name,
+        );
+        expect(
+          canonicalFileChangeToolCall(replayTool).signature,
+          liveEnvelope.signature,
+          reason: name,
+        );
+        expect(historyIdentities, hasLength(2), reason: name);
+        expect(
+          identical(historyIdentities[0], liveIdentity),
+          isFalse,
+          reason: name,
+        );
+        expect(
+          identical(historyIdentities[0], historyIdentities[1]),
+          isFalse,
+          reason: name,
+        );
+        expect(
+          identical(liveTool.fileChanges, historyTool.fileChanges),
+          isFalse,
+          reason: name,
+        );
+        expect(
+          identical(historyTool.fileChanges, replayTool.fileChanges),
+          isFalse,
+          reason: name,
+        );
+      }
+    });
   });
 }
 
@@ -340,3 +467,10 @@ String _canonicalSignature(AgentEvent event) {
     _ => 'UnknownEvent|${event.runtimeType}',
   };
 }
+
+Map<String, Object?> _jsonObject(String path) =>
+    _mapObject(jsonDecode(File(path).readAsStringSync()));
+
+Map<String, Object?> _mapObject(Object? value) => (value! as Map).map(
+  (key, item) => MapEntry(key.toString(), item as Object?),
+);

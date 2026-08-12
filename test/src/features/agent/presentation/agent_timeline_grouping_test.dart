@@ -1,7 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/presentation/agent_file_change_projection.dart';
+import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 
 void main() {
   group('buildAgentTimelineRenderBlocks', () {
@@ -95,10 +96,16 @@ void main() {
             id: 'edit-1',
             kind: AgentToolKind.edit,
             title: 'Apply patch',
-            locations: <String>['lib/main.dart'],
-            rawOutput: _patchApplyChanges(<String, String?>{
-              'lib/main.dart': '@@ -1 +1 @@\n-old line\n+new line\n',
-            }),
+            fileChanges: _snapshot(<AgentFileChange>[
+              const AgentFileChange(
+                id: 'main-change',
+                path: 'lib/main.dart',
+                kind: AgentFileChangeKind.modified,
+                evidence: AgentUnifiedPatchEvidence(
+                  patch: '@@ -1 +1 @@\n-old line\n+new line\n',
+                ),
+              ),
+            ]),
           ),
         ],
       );
@@ -106,13 +113,20 @@ void main() {
       expect(blocks, hasLength(1));
       expect(blocks.single, isA<AgentTimelineFileEditGroupRenderBlock>());
       final group = blocks.single as AgentTimelineFileEditGroupRenderBlock;
-      expect(group.group.id, 'file-edit-group-turn-a-edit-1');
+      expect(group.group.id, 'file-edit-group-turn-a-tool-edit-1');
       expect(group.group.items, hasLength(1));
       expect(group.group.items.single.title, 'main.dart');
       expect(group.group.items.single.addedLines, 1);
       expect(group.group.items.single.removedLines, 1);
       expect(group.group.items.single.hasDetails, isTrue);
-      expect(group.group.items.single.details, contains('@@ -1 +1 @@'));
+      expect(
+        group.group.items.single.projection.detail,
+        isA<AgentUnifiedPatchDetailProjection>().having(
+          (detail) => detail.lines.first.text,
+          'first line',
+          '@@ -1 +1 @@',
+        ),
+      );
     });
 
     test('splits a multi-file patch into file-level edit items', () {
@@ -123,11 +137,24 @@ void main() {
             id: 'edit-1',
             kind: AgentToolKind.edit,
             title: 'Apply patch',
-            locations: <String>['lib/main.dart', 'README.md'],
-            rawOutput: _patchApplyChanges(<String, String?>{
-              'lib/main.dart': '@@ -1 +1 @@\n-old line\n+new line\n',
-              'README.md': '@@ -0,0 +1 @@\n+docs line\n',
-            }),
+            fileChanges: _snapshot(<AgentFileChange>[
+              const AgentFileChange(
+                id: 'main-change',
+                path: 'lib/main.dart',
+                kind: AgentFileChangeKind.modified,
+                evidence: AgentUnifiedPatchEvidence(
+                  patch: '@@ -1 +1 @@\n-old line\n+new line\n',
+                ),
+              ),
+              const AgentFileChange(
+                id: 'readme-change',
+                path: 'README.md',
+                kind: AgentFileChangeKind.modified,
+                evidence: AgentUnifiedPatchEvidence(
+                  patch: '@@ -0,0 +1 @@\n+docs line\n',
+                ),
+              ),
+            ]),
           ),
         ],
       );
@@ -140,9 +167,24 @@ void main() {
       expect(group.group.items[1].title, 'README.md');
       expect(group.group.items[1].addedLines, 1);
       expect(group.group.items[1].removedLines, 0);
-      expect(group.group.items[0].details, contains('+new line'));
-      expect(group.group.items[0].details, isNot(contains('+docs line')));
-      expect(group.group.items[1].details, contains('+docs line'));
+      final mainDetail = group.group.items[0].projection.detail;
+      final readmeDetail = group.group.items[1].projection.detail;
+      expect(
+        mainDetail,
+        isA<AgentUnifiedPatchDetailProjection>().having(
+          (detail) => detail.lines.map((line) => line.text),
+          'lines',
+          contains('+new line'),
+        ),
+      );
+      expect(
+        readmeDetail,
+        isA<AgentUnifiedPatchDetailProjection>().having(
+          (detail) => detail.lines.map((line) => line.text),
+          'lines',
+          contains('+docs line'),
+        ),
+      );
     });
 
     test('keeps file edits separate from command groups', () {
@@ -153,19 +195,31 @@ void main() {
             id: 'edit-1',
             kind: AgentToolKind.edit,
             title: 'Apply patch',
-            locations: <String>['lib/main.dart'],
-            rawOutput: _patchApplyChanges(<String, String?>{
-              'lib/main.dart': '@@ -0,0 +1 @@\n+new line\n',
-            }),
+            fileChanges: _snapshot(<AgentFileChange>[
+              const AgentFileChange(
+                id: 'main-change',
+                path: 'lib/main.dart',
+                kind: AgentFileChangeKind.modified,
+                evidence: AgentUnifiedPatchEvidence(
+                  patch: '@@ -0,0 +1 @@\n+new line\n',
+                ),
+              ),
+            ]),
           ),
           _toolEntry(
             id: 'edit-2',
             kind: AgentToolKind.edit,
             title: 'Apply patch',
-            locations: <String>['README.md'],
-            rawOutput: _patchApplyChanges(<String, String?>{
-              'README.md': '@@ -0,0 +1 @@\n+docs line\n',
-            }),
+            fileChanges: _snapshot(<AgentFileChange>[
+              const AgentFileChange(
+                id: 'readme-change',
+                path: 'README.md',
+                kind: AgentFileChangeKind.modified,
+                evidence: AgentUnifiedPatchEvidence(
+                  patch: '@@ -0,0 +1 @@\n+docs line\n',
+                ),
+              ),
+            ]),
           ),
           _toolEntry(
             id: 'tool-3',
@@ -192,7 +246,7 @@ void main() {
       ]);
     });
 
-    test('does not place delete or move tools into the file edit group', () {
+    test('keeps tools without typed snapshots in the command group', () {
       final blocks = buildAgentTimelineRenderBlocks(
         turnId: 'turn-a',
         entries: <AgentTimelineEntry>[
@@ -218,6 +272,34 @@ void main() {
       ]);
     });
 
+    test('uses typed snapshot presence instead of tool kind for grouping', () {
+      final blocks = buildAgentTimelineRenderBlocks(
+        turnId: 'turn-a',
+        entries: <AgentTimelineEntry>[
+          _toolEntry(
+            id: 'tool-move',
+            kind: AgentToolKind.move,
+            title: 'Move file',
+            fileChanges: _snapshot(<AgentFileChange>[
+              const AgentFileChange(
+                id: 'move-change',
+                path: 'lib/old.dart',
+                destinationPath: 'lib/new.dart',
+                kind: AgentFileChangeKind.moved,
+              ),
+            ]),
+          ),
+        ],
+      );
+
+      final group = blocks.single as AgentTimelineFileEditGroupRenderBlock;
+      expect(group.group.items.single.filePath, 'lib/old.dart');
+      expect(
+        group.group.items.single.projection.destinationPath,
+        'lib/new.dart',
+      );
+    });
+
     test(
       'shows file names without line stats when patch details are unavailable',
       () {
@@ -228,9 +310,13 @@ void main() {
               id: 'edit-1',
               kind: AgentToolKind.edit,
               title: 'File change',
-              rawOutput: _patchApplyChanges(<String, String?>{
-                'lib/main.dart': null,
-              }),
+              fileChanges: _snapshot(<AgentFileChange>[
+                const AgentFileChange(
+                  id: 'main-change',
+                  path: 'lib/main.dart',
+                  kind: AgentFileChangeKind.modified,
+                ),
+              ]),
             ),
           ],
         );
@@ -244,7 +330,7 @@ void main() {
       },
     );
 
-    test('does not use apply_patch input when unified diff is unavailable', () {
+    test('does not create file edits from legacy raw payloads', () {
       final blocks = buildAgentTimelineRenderBlocks(
         turnId: 'turn-a',
         entries: <AgentTimelineEntry>[
@@ -252,7 +338,6 @@ void main() {
             id: 'edit-legacy',
             kind: AgentToolKind.edit,
             title: 'Apply patch',
-            locations: <String>['lib/main.dart'],
             rawInput: <String, Object?>{
               'input':
                   '*** Begin Patch\n'
@@ -262,45 +347,56 @@ void main() {
                   '+new line\n'
                   '*** End Patch\n',
             },
-            rawOutput: _patchApplyChanges(<String, String?>{
-              'lib/main.dart': null,
-            }),
+            rawOutput: const <String, Object?>{
+              'changes': <String, Object?>{
+                'lib/main.dart': <String, Object?>{'type': 'update'},
+              },
+            },
           ),
         ],
       );
 
-      final group = blocks.single as AgentTimelineFileEditGroupRenderBlock;
-      expect(group.group.items.single.title, 'main.dart');
-      expect(group.group.items.single.addedLines, isNull);
-      expect(group.group.items.single.removedLines, isNull);
-      expect(group.group.items.single.hasDetails, isFalse);
+      final group = blocks.single as AgentTimelineCommandGroupRenderBlock;
+      expect(group.group.items.single.title, 'Apply patch');
     });
 
-    test('renders turn-level unified diff as a file edit group', () {
-      const diff =
-          'diff --git a/lib/a.dart b/lib/a.dart\n'
-          '--- a/lib/a.dart\n'
-          '+++ b/lib/a.dart\n'
-          '@@ -1 +1 @@\n'
-          '-old\n'
-          '+new\n'
-          'diff --git a/lib/b.dart b/lib/b.dart\n'
-          '--- a/lib/b.dart\n'
-          '+++ b/lib/b.dart\n'
-          '@@ -1 +1,2 @@\n'
-          ' keep\n'
-          '+added\n';
+    test('renders typed turn-level changes without parsing patch headers', () {
       final blocks = buildAgentTimelineRenderBlocks(
         turnId: 'turn-a',
         entries: <AgentTimelineEntry>[
-          AgentTurnDiffTimelineEntry(turnId: 'turn-a', diff: diff),
+          AgentTurnFileChangesTimelineEntry(
+            turnId: 'turn-a',
+            snapshot: AgentFileChangeSnapshot(
+              revision: 1,
+              replayability: AgentFileChangeReplayability.liveOnly,
+              changes: const <AgentFileChange>[
+                AgentFileChange(
+                  id: 'change-a',
+                  path: 'lib/a.dart',
+                  kind: AgentFileChangeKind.modified,
+                  evidence: AgentUnifiedPatchEvidence(
+                    patch: '@@ -1 +1 @@\n-old\n+new\n',
+                  ),
+                ),
+                AgentFileChange(
+                  id: 'change-b',
+                  path: 'lib/b.dart',
+                  kind: AgentFileChangeKind.modified,
+                  evidence: AgentUnifiedPatchEvidence(
+                    patch: '@@ -1 +1,2 @@\n keep\n+added\n',
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       );
 
       expect(blocks, hasLength(1));
       expect(blocks.single, isA<AgentTimelineFileEditGroupRenderBlock>());
       final group = blocks.single as AgentTimelineFileEditGroupRenderBlock;
-      expect(group.group.id, 'turn-diff-group-turn-a');
+      expect(group.group.id, 'turn-file-changes-group-turn-a');
+      expect(group.group.isTurnFallback, isTrue);
       expect(group.group.items, hasLength(2));
       expect(group.group.items[0].title, 'a.dart');
       expect(group.group.items[0].addedLines, 1);
@@ -364,6 +460,7 @@ AgentToolTimelineEntry _toolEntry({
   Map<String, Object?> rawInput = const <String, Object?>{},
   Map<String, Object?> rawOutput = const <String, Object?>{},
   Map<String, Object?> raw = const <String, Object?>{},
+  AgentFileChangeSnapshot? fileChanges,
 }) {
   return AgentToolTimelineEntry(
     toolCall: AgentToolCall(
@@ -376,6 +473,7 @@ AgentToolTimelineEntry _toolEntry({
       rawInput: rawInput,
       rawOutput: rawOutput,
       raw: raw,
+      fileChanges: fileChanges,
     ),
   );
 }
@@ -410,14 +508,10 @@ AgentMessageTimelineEntry _messageEntry({
   );
 }
 
-Map<String, Object?> _patchApplyChanges(Map<String, String?> diffsByPath) {
-  return <String, Object?>{
-    'changes': <String, Object?>{
-      for (final entry in diffsByPath.entries)
-        entry.key: <String, Object?>{
-          'type': 'update',
-          if (entry.value != null) 'unified_diff': entry.value,
-        },
-    },
-  };
+AgentFileChangeSnapshot _snapshot(List<AgentFileChange> changes) {
+  return AgentFileChangeSnapshot(
+    revision: 1,
+    replayability: AgentFileChangeReplayability.replayable,
+    changes: changes,
+  );
 }

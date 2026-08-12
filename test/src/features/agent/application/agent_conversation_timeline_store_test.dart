@@ -718,6 +718,138 @@ void main() {
       expect(store.isToolCallExpanded('mcp-1'), isTrue);
     });
 
+    test('mechanically replaces and clears incoming tool file snapshots', () {
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+      final initialSnapshot = _fileChangeSnapshot(revision: 1, patch: '-a\n+b');
+      final replacementSnapshot = _fileChangeSnapshot(
+        revision: 2,
+        patch: '-b\n+c',
+      );
+
+      store.startPendingLiveTurn();
+      store.beginLiveTurnGroup(
+        const AgentTurn(id: 'turn-1', sessionId: 'thread-1'),
+      );
+      store.upsertToolCall(
+        AgentToolCall(
+          id: 'edit-1',
+          title: 'Edit file',
+          kind: AgentToolKind.edit,
+          status: AgentToolStatus.inProgress,
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          fileChanges: initialSnapshot,
+        ),
+      );
+
+      expect(store.toolCalls.single.fileChanges, same(initialSnapshot));
+      expect(
+        (store.timelineEntries.single as AgentToolTimelineEntry)
+            .toolCall
+            .fileChanges,
+        same(initialSnapshot),
+      );
+
+      store.upsertToolCall(
+        AgentToolCall(
+          id: 'edit-1',
+          title: 'Edit file',
+          kind: AgentToolKind.edit,
+          status: AgentToolStatus.inProgress,
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          fileChanges: replacementSnapshot,
+        ),
+      );
+
+      expect(store.toolCalls.single.fileChanges, same(replacementSnapshot));
+      expect(store.timelineEntries, hasLength(1));
+
+      store.upsertToolCall(
+        const AgentToolCall(
+          id: 'edit-1',
+          title: 'Edit file',
+          kind: AgentToolKind.edit,
+          status: AgentToolStatus.completed,
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+      );
+
+      expect(store.toolCalls.single.fileChanges, isNull);
+      expect(
+        (store.timelineEntries.single as AgentToolTimelineEntry)
+            .toolCall
+            .fileChanges,
+        isNull,
+      );
+    });
+
+    test('upserts and clears typed turn file snapshots by turn id', () {
+      final store = AgentConversationTimelineStore();
+      addTearDown(store.dispose);
+      final initialSnapshot = _fileChangeSnapshot(
+        revision: 1,
+        patch: 'diff --git a/a b/a\n-old\n+new',
+      );
+      final replacementSnapshot = _fileChangeSnapshot(
+        revision: 2,
+        patch: 'diff --git a/a b/a\n-old\n+latest',
+      );
+
+      store.startPendingLiveTurn();
+      store.beginLiveTurnGroup(
+        const AgentTurn(id: 'turn-1', sessionId: 'thread-1'),
+      );
+      store.upsertTurnFileChanges(
+        AgentTurnFileChangesEvent(
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          snapshot: initialSnapshot,
+        ),
+      );
+
+      final initialEntry = store.timelineEntries.single;
+      expect(initialEntry, isA<AgentTurnFileChangesTimelineEntry>());
+      expect(
+        (initialEntry as AgentTurnFileChangesTimelineEntry).snapshot,
+        same(initialSnapshot),
+      );
+
+      store.upsertTurnFileChanges(
+        AgentTurnFileChangesEvent(
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          snapshot: replacementSnapshot,
+        ),
+      );
+
+      expect(store.timelineEntries, hasLength(1));
+      expect(
+        (store.timelineEntries.single as AgentTurnFileChangesTimelineEntry)
+            .snapshot,
+        same(replacementSnapshot),
+      );
+
+      store.upsertTurnFileChanges(
+        AgentTurnFileChangesEvent(
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          snapshot: AgentFileChangeSnapshot(
+            revision: 3,
+            replayability: AgentFileChangeReplayability.liveOnly,
+            changes: const <AgentFileChange>[],
+          ),
+        ),
+      );
+
+      expect(store.timelineEntries, isEmpty);
+      store.syncLiveTurnBinding();
+      expect(store.liveTurnState, isNotNull);
+      expect(store.liveTurnState!.entries, isEmpty);
+    });
+
     test('starts empty and creates only the real live turn', () {
       final store = AgentConversationTimelineStore();
       addTearDown(store.dispose);
@@ -1308,6 +1440,24 @@ void main() {
       );
     });
   });
+}
+
+AgentFileChangeSnapshot _fileChangeSnapshot({
+  required int revision,
+  required String patch,
+}) {
+  return AgentFileChangeSnapshot(
+    revision: revision,
+    replayability: AgentFileChangeReplayability.replayable,
+    changes: <AgentFileChange>[
+      AgentFileChange(
+        id: 'change-1',
+        path: 'lib/a.dart',
+        kind: AgentFileChangeKind.modified,
+        evidence: AgentUnifiedPatchEvidence(patch: patch),
+      ),
+    ],
+  );
 }
 
 /// 当前 live turn 条目；必要时同步 binding。

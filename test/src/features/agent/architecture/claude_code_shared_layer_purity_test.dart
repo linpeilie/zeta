@@ -25,8 +25,8 @@ void main() {
   /// T18：G1 五文件内容基线（lineCount + 规范化 byteLength + FNV-1a 指纹）。
   ///
   /// 接入 Claude Code 期间这些文件必须 `git diff` 为空；若实现不得不改共享层，
-  /// 先停下来开 Issue，不要默默更新本基线。长度与指纹统一按 LF 计算，避免不同
-  /// 平台的 checkout 行尾让守卫误报。
+  /// 必须先停线取得明确批准并记录边界，批准后才能更新本基线。长度与指纹统一按
+  /// LF 计算，避免不同平台的 checkout 行尾让守卫误报。
   const g1ContentBaselines = <String, _FileBaseline>{
     'lib/src/features/agent/application/agent_event_pipeline.dart':
         _FileBaseline(
@@ -37,8 +37,8 @@ void main() {
     'lib/src/features/agent/application/agent_event_coalescing_policy.dart':
         _FileBaseline(
           lineCount: 143,
-          byteLength: 4562,
-          fingerprint: '8ad5a571514553f4',
+          byteLength: 4569,
+          fingerprint: '53fcea25bd7a52d0',
         ),
     'lib/src/features/agent/application/coalescing_event_buffer.dart':
         _FileBaseline(
@@ -54,9 +54,9 @@ void main() {
         ),
     'lib/src/features/agent/application/agent_conversation_timeline_store.dart':
         _FileBaseline(
-          lineCount: 2010,
-          byteLength: 66936,
-          fingerprint: '9f7eb7de225cb500',
+          lineCount: 2008,
+          byteLength: 67153,
+          fingerprint: 'c77b7430c1d398ff',
         ),
   };
 

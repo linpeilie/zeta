@@ -13,6 +13,8 @@ import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_event_mapper.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
+import '../../../../../testing/agent_file_change_canonical.dart';
+
 void main() {
   const scope = AgentRuntimeScope(
     runtimeId: 'cc-mapper-test',
@@ -341,6 +343,10 @@ void main() {
 
       final doneOk = toolEvents[1].toolCall;
       expect(doneOk.id, 'toolu_fixture_read_ok');
+      expect(doneOk.title, startOk.title);
+      expect(doneOk.kind, startOk.kind);
+      expect(doneOk.locations, startOk.locations);
+      expect(doneOk.rawInput, startOk.rawInput);
       expect(doneOk.status, AgentToolStatus.completed);
       expect(doneOk.content, isNotNull);
 
@@ -350,8 +356,100 @@ void main() {
 
       final doneFail = toolEvents[3].toolCall;
       expect(doneFail.id, 'toolu_fixture_read_fail');
+      expect(doneFail.title, startFail.title);
+      expect(doneFail.kind, startFail.kind);
+      expect(doneFail.locations, startFail.locations);
+      expect(doneFail.rawInput, startFail.rawInput);
       expect(doneFail.status, AgentToolStatus.failed);
       expect(doneFail.content, isNotNull);
+    });
+
+    test('real-shape Edit and Write keep typed evidence through result', () {
+      // Arrange
+      final fixture = _loadJsonObject(
+        'test/fixtures/agent_file_change_evidence/'
+        'claude_code_edit_write_2_1_227.json',
+      );
+      final scenarios = (fixture['scenarios']! as List<Object?>)
+          .map(_stringMap)
+          .toList(growable: false);
+
+      for (final scenario in scenarios) {
+        final name = scenario['name']! as String;
+        final frames = (scenario['frames']! as List<Object?>)
+            .map(_stringMap)
+            .toList(growable: false);
+        final sessionId = frames.first['session_id']! as String;
+        final turnId = 'turn-$name';
+        final mapper = ClaudeCodeEventMapper(providerId: 'claude_code');
+        addTearDown(mapper.dispose);
+        mapper.beginTurn(
+          runtimeScope: scope,
+          sessionId: sessionId,
+          turnId: turnId,
+        );
+
+        // Act
+        final events = <AgentEvent>[];
+        for (final frame in frames) {
+          events.addAll(
+            mapper
+                .mapFrame(
+                  raw: frame,
+                  runtimeScope: scope,
+                  runningTurnId: turnId,
+                )
+                .events,
+          );
+        }
+
+        // Assert
+        final tools = events.whereType<AgentToolCallEvent>().toList();
+        expect(tools, hasLength(2), reason: name);
+        final started = tools.first.toolCall;
+        final completed = tools.last.toolCall;
+        expect(completed.status, AgentToolStatus.completed, reason: name);
+        expect(completed.title, started.title, reason: name);
+        expect(completed.kind, started.kind, reason: name);
+        expect(completed.locations, started.locations, reason: name);
+        expect(completed.rawInput, started.rawInput, reason: name);
+        expect(completed.fileChanges, same(started.fileChanges), reason: name);
+        final envelopes = canonicalFileChangeEnvelopes(events);
+        expect(envelopes.map((event) => event.status), <String>[
+          'inProgress',
+          'completed',
+        ], reason: name);
+        expect(
+          envelopes.map((event) => event.ownerId).toSet(),
+          hasLength(1),
+          reason: name,
+        );
+        expect(
+          envelopes.map((event) => event.snapshotSignature).toSet(),
+          hasLength(1),
+          reason: name,
+        );
+        final change = completed.fileChanges!.changes.single;
+        expect(change.path, contains('sample'), reason: name);
+        if (name == 'edit') {
+          expect(change.kind, AgentFileChangeKind.modified);
+          expect(change.evidence, isA<AgentTextReplacementEvidence>());
+        } else {
+          expect(change.kind, AgentFileChangeKind.unknown);
+          expect(change.evidence, isA<AgentWrittenContentEvidence>());
+        }
+        expect(events.whereType<AgentTurnCompletedEvent>(), hasLength(1));
+        expect(
+          mapper.fileChangeTracker.resolveToolResult(
+            runtimeScope: scope,
+            sessionId: sessionId,
+            turnId: turnId,
+            toolUseId: started.id,
+          ),
+          isNull,
+          reason: '$name result must clear the completed turn tracker',
+        );
+      }
     });
 
     test('ExitPlanMode and its tool_result never become tool cards', () {
@@ -517,6 +615,13 @@ List<Map<String, Object?>> _loadFixture(String path) {
   expect(frames, isNotEmpty);
   return frames;
 }
+
+Map<String, Object?> _loadJsonObject(String path) =>
+    _stringMap(jsonDecode(File(path).readAsStringSync()));
+
+Map<String, Object?> _stringMap(Object? value) => (value! as Map).map(
+  (key, item) => MapEntry(key.toString(), item as Object?),
+);
 
 /// 事件类型 + entryId/turnId + status 的 canonical 签名（逐位置比对用）。
 String _canonicalSignature(AgentEvent event) {

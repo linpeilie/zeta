@@ -310,6 +310,8 @@ AgentToolCall? _toolCallFromThreadItem(
   String? sessionId,
   String? turnId,
   Map<String, Object?> raw = const <String, Object?>{},
+  AgentFileChangeSnapshot? fileChanges,
+  List<String>? projectedLocations,
 }) {
   final normalizedType = _normalizedAgentItemType(_string(item['type']));
   if (normalizedType == null ||
@@ -326,7 +328,7 @@ AgentToolCall? _toolCallFromThreadItem(
     kind: _toolKind(_string(item['type'])),
     status: status,
     content: _toolContentFromThreadItem(item),
-    locations: _toolLocationsFromThreadItem(item),
+    locations: projectedLocations ?? _toolLocationsFromThreadItem(item),
     sessionId: sessionId,
     turnId: turnId,
     rawInput: _map(item['arguments']).isNotEmpty
@@ -336,6 +338,7 @@ AgentToolCall? _toolCallFromThreadItem(
         ? _map(item['result'])
         : _map(item['rawOutput']),
     raw: raw.isEmpty ? item : raw,
+    fileChanges: fileChanges,
   );
 }
 

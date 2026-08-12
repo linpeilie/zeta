@@ -1514,79 +1514,111 @@ void main() {
       expect(completed.kind, AgentMessageKind.plan);
     });
 
-    test('upserts turn-level aggregated diff into the live timeline', () async {
+    test('upserts turn-level file changes into the live timeline', () async {
       final provider = _FakeAgentProvider();
       final viewModel = _createViewModel(provider);
       addTearDown(viewModel.dispose);
 
       await viewModel.sendMessage('hello');
       provider.emit(
-        const AgentTurnDiffEvent(
+        AgentTurnFileChangesEvent(
           sessionId: 'thread-1',
           turnId: 'turn-1',
-          diff:
-              'diff --git a/lib/a.dart b/lib/a.dart\n'
-              '--- a/lib/a.dart\n'
-              '+++ b/lib/a.dart\n'
-              '@@ -1 +1 @@\n'
-              '-old\n'
-              '+new\n'
-              'diff --git a/lib/b.dart b/lib/b.dart\n'
-              '--- a/lib/b.dart\n'
-              '+++ b/lib/b.dart\n'
-              '@@ -1 +1,2 @@\n'
-              ' keep\n'
-              '+added\n',
+          snapshot: AgentFileChangeSnapshot(
+            revision: 1,
+            replayability: AgentFileChangeReplayability.liveOnly,
+            changes: const <AgentFileChange>[
+              AgentFileChange(
+                id: 'change-a',
+                path: 'lib/a.dart',
+                kind: AgentFileChangeKind.modified,
+                evidence: AgentUnifiedPatchEvidence(
+                  patch: '@@ -1 +1 @@\n-old\n+new\n',
+                ),
+              ),
+              AgentFileChange(
+                id: 'change-b',
+                path: 'lib/b.dart',
+                kind: AgentFileChangeKind.modified,
+                evidence: AgentUnifiedPatchEvidence(
+                  patch: '@@ -1 +1,2 @@\n keep\n+added\n',
+                ),
+              ),
+            ],
+          ),
         ),
       );
       await Future<void>.delayed(Duration.zero);
 
       final entry = viewModel.timelineEntries
-          .whereType<AgentTurnDiffTimelineEntry>()
+          .whereType<AgentTurnFileChangesTimelineEntry>()
           .single;
       expect(entry.turnId, 'turn-1');
-      expect(entry.diff, contains('lib/a.dart'));
-      expect(entry.diff, contains('lib/b.dart'));
+      expect(entry.snapshot.changes.map((change) => change.path), <String>[
+        'lib/a.dart',
+        'lib/b.dart',
+      ]);
 
       // 同一 turn 的后续通知覆盖全文，不追加第二条。
       provider.emit(
-        const AgentTurnDiffEvent(
+        AgentTurnFileChangesEvent(
           sessionId: 'thread-1',
           turnId: 'turn-1',
-          diff:
-              'diff --git a/lib/a.dart b/lib/a.dart\n'
-              '--- a/lib/a.dart\n'
-              '+++ b/lib/a.dart\n'
-              '@@ -1 +1 @@\n'
-              '-old\n'
-              '+newer\n',
+          snapshot: AgentFileChangeSnapshot(
+            revision: 2,
+            replayability: AgentFileChangeReplayability.liveOnly,
+            changes: const <AgentFileChange>[
+              AgentFileChange(
+                id: 'change-a',
+                path: 'lib/a.dart',
+                kind: AgentFileChangeKind.modified,
+                evidence: AgentUnifiedPatchEvidence(
+                  patch: '@@ -1 +1 @@\n-old\n+newer\n',
+                ),
+              ),
+            ],
+          ),
         ),
       );
       await Future<void>.delayed(Duration.zero);
 
-      expect(
-        viewModel.timelineEntries.whereType<AgentTurnDiffTimelineEntry>(),
-        hasLength(1),
-      );
       expect(
         viewModel.timelineEntries
-            .whereType<AgentTurnDiffTimelineEntry>()
-            .single
-            .diff,
-        contains('+newer'),
+            .whereType<AgentTurnFileChangesTimelineEntry>(),
+        hasLength(1),
+      );
+      final updatedEvidence = viewModel.timelineEntries
+          .whereType<AgentTurnFileChangesTimelineEntry>()
+          .single
+          .snapshot
+          .changes
+          .single
+          .evidence;
+      expect(
+        updatedEvidence,
+        isA<AgentUnifiedPatchEvidence>().having(
+          (evidence) => evidence.patch,
+          'patch',
+          contains('+newer'),
+        ),
       );
 
-      // 空 diff 移除条目。
+      // 空快照是权威清空，会移除回合级 fallback 条目。
       provider.emit(
-        const AgentTurnDiffEvent(
+        AgentTurnFileChangesEvent(
           sessionId: 'thread-1',
           turnId: 'turn-1',
-          diff: '',
+          snapshot: AgentFileChangeSnapshot(
+            revision: 3,
+            replayability: AgentFileChangeReplayability.liveOnly,
+            changes: const <AgentFileChange>[],
+          ),
         ),
       );
       await Future<void>.delayed(Duration.zero);
       expect(
-        viewModel.timelineEntries.whereType<AgentTurnDiffTimelineEntry>(),
+        viewModel.timelineEntries
+            .whereType<AgentTurnFileChangesTimelineEntry>(),
         isEmpty,
       );
     });
@@ -4125,7 +4157,7 @@ void main() {
         );
       });
 
-      test('maps tool, diff, and plan event families', () async {
+      test('maps tool, file-change, and plan event families', () async {
         final provider = _FakeAgentProvider();
         final viewModel = _createViewModel(provider);
         addTearDown(viewModel.dispose);
@@ -4148,10 +4180,21 @@ void main() {
         );
 
         provider.emit(
-          const AgentTurnDiffEvent(
+          AgentTurnFileChangesEvent(
             sessionId: 'thread-1',
             turnId: 'turn-1',
-            diff: 'diff --git a/a.dart b/a.dart\n+typed',
+            snapshot: AgentFileChangeSnapshot(
+              revision: 1,
+              replayability: AgentFileChangeReplayability.liveOnly,
+              changes: const <AgentFileChange>[
+                AgentFileChange(
+                  id: 'typed-change',
+                  path: 'a.dart',
+                  kind: AgentFileChangeKind.modified,
+                  evidence: AgentUnifiedPatchEvidence(patch: '+typed'),
+                ),
+              ],
+            ),
           ),
         );
         await _drainTypedUiUpdate();

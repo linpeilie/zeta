@@ -1,4 +1,5 @@
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_file_change_tracker.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_plan_approval_adapter.dart';
 import 'package:zeta/src/features/agent/data/mappers/claude_code_stream_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -32,13 +33,16 @@ final class ClaudeCodeEventMapper {
     required this.providerId,
     ClaudeCodeStreamIdentity? identity,
     ClaudeCodePlanApprovalAdapter? planApprovalAdapter,
+    ClaudeCodeFileChangeTracker? fileChangeTracker,
   }) : identity = identity ?? ClaudeCodeStreamIdentity(),
        planApprovalAdapter =
-           planApprovalAdapter ?? ClaudeCodePlanApprovalAdapter();
+           planApprovalAdapter ?? ClaudeCodePlanApprovalAdapter(),
+       fileChangeTracker = fileChangeTracker ?? ClaudeCodeFileChangeTracker();
 
   final String providerId;
   final ClaudeCodeStreamIdentity identity;
   final ClaudeCodePlanApprovalAdapter planApprovalAdapter;
+  final ClaudeCodeFileChangeTracker fileChangeTracker;
 
   int _unknownTypeDropped = 0;
   int _lateOrMissingTurnDropped = 0;
@@ -63,6 +67,10 @@ final class ClaudeCodeEventMapper {
     required String sessionId,
     required String turnId,
   }) {
+    fileChangeTracker.beginTurn(
+      runtimeScope: runtimeScope,
+      sessionId: sessionId,
+    );
     final generation = identity.beginTurn(
       runtimeScope: runtimeScope,
       sessionId: sessionId,
@@ -137,7 +145,45 @@ final class ClaudeCodeEventMapper {
   void dispose() {
     _initByRuntimeScope.clear();
     planApprovalAdapter.clear();
+    fileChangeTracker.dispose();
     identity.dispose();
+  }
+
+  /// 统一完成 identity 与 Claude-local tool tracker 生命周期。
+  ClaudeCodeTerminalResolution completeTurn({
+    required AgentRuntimeScope runtimeScope,
+    required String sessionId,
+    required String? runningTurnId,
+    required AgentHistoryTurnStatus status,
+    required ClaudeCodeTerminalSource source,
+    String? eventId,
+    String eventKind = 'result',
+  }) {
+    final terminal = identity.completeTurn(
+      runtimeScope: runtimeScope,
+      sessionId: sessionId,
+      runningTurnId: runningTurnId,
+      status: status,
+      source: source,
+      eventId: eventId,
+      eventKind: eventKind,
+    );
+    if (terminal.accepted) {
+      fileChangeTracker.completeTurn(
+        runtimeScope: runtimeScope,
+        sessionId: terminal.sessionId,
+        turnId: terminal.turnId,
+      );
+    }
+    return terminal;
+  }
+
+  void invalidateRuntime({
+    required AgentRuntimeScope runtimeScope,
+    required ClaudeCodeIdentityInvalidationReason reason,
+  }) {
+    fileChangeTracker.invalidateRuntime(runtimeScope);
+    identity.invalidateRuntime(runtimeScope: runtimeScope, reason: reason);
   }
 
   ClaudeCodeMappedFrame _mapSystem(
@@ -406,18 +452,29 @@ final class ClaudeCodeEventMapper {
         }
         final locations = _locationsFromToolInput(input);
         final kind = _kindForClaudeToolName(toolName);
+        final tracked = fileChangeTracker.recordToolUse(
+          runtimeScope: runtimeScope,
+          sessionId: resolved.sessionId,
+          turnId: resolved.turnId,
+          toolUseId: toolId,
+          toolName: toolName,
+          kind: kind,
+          locations: locations,
+          input: input,
+        );
         events.add(
           AgentToolCallEvent(
             AgentToolCall(
               id: toolId,
-              title: toolName,
-              kind: kind,
+              title: tracked.title,
+              kind: tracked.kind,
               status: AgentToolStatus.inProgress,
-              locations: locations,
+              locations: tracked.locations,
               sessionId: resolved.sessionId,
               turnId: resolved.turnId,
-              rawInput: input,
+              rawInput: tracked.rawInput,
               raw: const <String, Object?>{},
+              fileChanges: tracked.fileChanges,
             ),
           ),
         );
@@ -493,21 +550,31 @@ final class ClaudeCodeEventMapper {
       }
       final isError = block['is_error'] == true;
       final resultContent = _toolResultContent(block['content']);
+      final tracked = fileChangeTracker.resolveToolResult(
+        runtimeScope: runtimeScope,
+        sessionId: resolved.sessionId,
+        turnId: resolved.turnId,
+        toolUseId: toolUseId,
+      );
       events.add(
         AgentToolCallEvent(
           AgentToolCall(
             id: toolUseId,
-            title: toolUseId,
+            title: tracked?.title ?? toolUseId,
+            kind: tracked?.kind ?? AgentToolKind.other,
             status: isError
                 ? AgentToolStatus.failed
                 : AgentToolStatus.completed,
             content: resultContent,
+            locations: tracked?.locations ?? const <String>[],
             sessionId: resolved.sessionId,
             turnId: resolved.turnId,
             rawOutput: resultContent == null
                 ? const <String, Object?>{}
                 : <String, Object?>{'content': resultContent},
+            rawInput: tracked?.rawInput ?? const <String, Object?>{},
             raw: const <String, Object?>{},
+            fileChanges: tracked?.fileChanges,
           ),
         ),
       );
@@ -531,7 +598,7 @@ final class ClaudeCodeEventMapper {
     final subtype = _string(raw['subtype']) ?? 'success';
     final status = _statusForResultSubtype(subtype);
     final frameEventId = _string(raw['uuid']);
-    final terminal = identity.completeTurn(
+    final terminal = completeTurn(
       runtimeScope: runtimeScope,
       sessionId: sessionId,
       runningTurnId: runningTurnId,

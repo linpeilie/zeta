@@ -22,6 +22,7 @@ class _JsonlHistoryParser {
       <String, _JsonlPendingTool>{};
   final Map<String, _JsonlPendingHistoryEvent> _pendingEventsByCallId =
       <String, _JsonlPendingHistoryEvent>{};
+  final CodexFileChangeTracker _fileChangeTracker = CodexFileChangeTracker();
 
   String? _currentTurnId;
   int _lineNumber = 0;
@@ -549,7 +550,18 @@ class _JsonlHistoryParser {
     required Map<String, Object?> raw,
   }) {
     final callId = _string(payload['call_id']);
-    final locations = _patchApplyLocations(payload['changes']);
+    final toolCallId = callId ?? _nextHistoryId('patch');
+    final fileProjection = _fileChangeTracker.projectJsonlPatchApply(
+      runtimeScope: null,
+      sessionId: _threadId,
+      turnId: _currentTurnId ?? _unscopedTurnId,
+      toolCallId: toolCallId,
+      hasStructuredChanges: payload.containsKey('changes'),
+      changes: payload['changes'],
+    );
+    final locations = fileProjection.snapshot == null
+        ? _patchApplyLocations(payload['changes'])
+        : fileProjection.locations;
     final content =
         _patchApplySummary(
           locations,
@@ -571,12 +583,13 @@ class _JsonlHistoryParser {
         locations: locations,
         rawOutput: payload,
         raw: raw,
+        fileChanges: fileProjection.snapshot,
       );
       return;
     }
 
     final toolCall = AgentToolCall(
-      id: callId ?? _nextHistoryId('patch'),
+      id: toolCallId,
       title: 'Apply patch',
       kind: AgentToolKind.edit,
       status: payload['success'] == false
@@ -586,6 +599,7 @@ class _JsonlHistoryParser {
       locations: locations,
       rawOutput: payload,
       raw: raw,
+      fileChanges: fileProjection.snapshot,
     );
     _appendEntry(AgentHistoryToolEntry(toolCall: toolCall));
   }
@@ -756,6 +770,7 @@ class _JsonlHistoryParser {
     Map<String, Object?>? rawInput,
     Map<String, Object?>? rawOutput,
     Map<String, Object?>? raw,
+    AgentFileChangeSnapshot? fileChanges,
   }) {
     final pending = _pendingToolsByCallId[callId];
     if (pending == null) {
@@ -769,16 +784,16 @@ class _JsonlHistoryParser {
 
     final current = entry.toolCall;
     _entries[pending.index] = AgentHistoryToolEntry(
-      toolCall: AgentToolCall(
-        id: current.id,
-        title: title ?? current.title,
-        kind: kind ?? current.kind,
-        status: status ?? current.status,
-        content: content ?? current.content,
-        locations: locations ?? current.locations,
-        rawInput: rawInput ?? current.rawInput,
-        rawOutput: rawOutput ?? current.rawOutput,
-        raw: raw ?? current.raw,
+      toolCall: current.copyWith(
+        title: title,
+        kind: kind,
+        status: status,
+        content: content,
+        locations: locations,
+        rawInput: rawInput,
+        rawOutput: rawOutput,
+        raw: raw,
+        fileChanges: fileChanges,
       ),
     );
   }

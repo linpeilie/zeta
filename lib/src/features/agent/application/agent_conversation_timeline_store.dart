@@ -613,22 +613,21 @@ class AgentConversationTimelineStore {
     );
   }
 
-  /// 插入或更新回合级聚合 diff。
+  /// 插入或更新回合级中立文件变更快照。
   ///
-  /// 同一 `turnId` 只保留一条；空 diff 时移除已有条目。
-  void upsertTurnDiff(AgentTurnDiffEvent event) {
-    final entryId = 'turn-diff-${event.turnId}';
-    final trimmed = event.diff.trim();
-    if (trimmed.isEmpty) {
+  /// 同一 `turnId` 只保留一条；空 snapshot 是权威清空。Store 不解析 evidence，
+  /// 也不保留前一份 snapshot 替 Provider 补全 partial update。
+  void upsertTurnFileChanges(AgentTurnFileChangesEvent event) {
+    final entryId = 'turn-file-changes-${event.turnId}';
+    if (event.snapshot.changes.isEmpty) {
       _removeTimelineEntryById(entryId);
       return;
     }
 
-    final entry = AgentTurnDiffTimelineEntry(
+    final entry = AgentTurnFileChangesTimelineEntry(
       turnId: event.turnId,
       sessionId: event.sessionId,
-      diff: event.diff,
-      raw: event.raw,
+      snapshot: event.snapshot,
     );
     final index = _timelineEntries.indexWhere((item) => item.id == entryId);
     if (index != -1) {
@@ -638,7 +637,7 @@ class AgentConversationTimelineStore {
       return;
     }
 
-    // 优先挂到通知指定的 turn 分组；若不存在则落到当前活跃分组。
+    // 优先挂到事件指定的 turn 分组；若不存在则落到当前活跃分组。
     final previousCurrent = currentTurnGroupId;
     if (_turnGroups.containsKey(event.turnId)) {
       currentTurnGroupId = event.turnId;
@@ -850,6 +849,9 @@ class AgentConversationTimelineStore {
 
   /// 合并同 id 工具卡更新：进度追加 content，空 content 不冲掉已有正文。
   ///
+  /// `fileChanges` 始终采用 incoming 值；`null` 会清除旧 snapshot，Store 不替
+  /// Provider 保存 last-valid evidence。
+  ///
   /// [startedAt] 只写一次；进入终态时冻结 [duration]。
   AgentToolCall _mergeToolCallUpdate(
     AgentToolCall existing,
@@ -931,6 +933,7 @@ class AgentConversationTimelineStore {
           ? incoming.rawOutput
           : existing.rawOutput,
       raw: incoming.raw.isNotEmpty ? incoming.raw : existing.raw,
+      fileChanges: incoming.fileChanges,
     );
   }
 
@@ -1036,6 +1039,7 @@ class AgentConversationTimelineStore {
       raw: event.raw.isEmpty
           ? (existing?.raw ?? const <String, Object?>{})
           : event.raw,
+      fileChanges: existing?.fileChanges,
     );
 
     if (existingIndex == -1) {
@@ -1725,16 +1729,13 @@ class AgentHistoryEventTimelineEntry extends AgentTimelineEntry {
   final AgentHistoryEventEntry event;
 }
 
-/// 时间线回合级聚合 diff 条目。
-///
-/// 由 `turn/diff/updated` 驱动；UI 层解析为文件编辑组复用 diff 渲染。
-class AgentTurnDiffTimelineEntry extends AgentTimelineEntry {
-  AgentTurnDiffTimelineEntry({
+/// 时间线回合级中立文件变更条目。
+class AgentTurnFileChangesTimelineEntry extends AgentTimelineEntry {
+  AgentTurnFileChangesTimelineEntry({
     required this.turnId,
-    required this.diff,
+    required this.snapshot,
     this.sessionId,
-    this.raw = const <String, Object?>{},
-  }) : super(id: 'turn-diff-$turnId');
+  }) : super(id: 'turn-file-changes-$turnId');
 
   /// 所属回合 id。
   final String turnId;
@@ -1742,11 +1743,8 @@ class AgentTurnDiffTimelineEntry extends AgentTimelineEntry {
   /// 所属会话 id。
   final String? sessionId;
 
-  /// 最新聚合 unified diff。
-  final String diff;
-
-  /// 原始通知 payload。
-  final Map<String, Object?> raw;
+  /// Provider adapter 产出的完整、累计文件变更快照。
+  final AgentFileChangeSnapshot snapshot;
 }
 
 /// Agent 面板按 turn 聚合后的分组，供 UI 分回合渲染。

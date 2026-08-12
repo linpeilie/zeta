@@ -1,6 +1,6 @@
 # Codex app-server 协议版本锁定
 
-最后更新：2026-07-23
+最后更新：2026-08-12
 
 ## 1. 目的
 
@@ -197,3 +197,29 @@ Zeta 将 Codex Skills 映射为中立 domain 模型与 Composer token：
 
 发送回合时同时携带文本 `$name` 与结构化 `skill` item（Codex 推荐路径）。
 `skills/extraRoots/set` 尚未接入。
+
+### 8.5 文件变更证据
+
+Codex 文件变更分为 App-Server 结构化 tool、本地 JSONL `patch_apply_end`、turn 实时 fallback
+与 command-only 四条互不冒充的路径。`CodexFileChangeTracker` 在 data 层完成 identity、
+累计快照和优先级；共享 TimelineStore 与 UI 不读取 App Server 或 session JSONL raw 字段。
+
+| App Server 输入 | Zeta 映射 |
+| --- | --- |
+| `fileChange` ThreadItem、`item/fileChange/patchUpdated.changes[]` | `path`、`kind.type`、可选 `move_path` 与 `diff` → replayable tool-scoped `AgentFileChangeSnapshot` + unified patch evidence |
+| 本地 session JSONL `patch_apply_end.changes` | 以 map key 作为 Provider 明示路径；`update.unified_diff` → unified patch，`add.content` → written content，`delete` 无合适 evidence 时只保留动作摘要，非空 `move_path` → moved；结果是 replayable tool snapshot |
+| `item/fileChange/outputDelta` 或缺少合法 `changes` | 只保留普通工具进度；已有合法 snapshot 可继续携带，不从文本制造 evidence |
+| `turn/diff/updated` | 在 Codex data 层拆成 per-file typed `liveOnly` turn snapshot，仅作为 tool 证据缺失时的实时 fallback |
+| `commandExecution` | 普通 execute tool；不解析 command、`commandActions`、审批参数或工作区结果，不生成文件变更 snapshot |
+
+同一 turn 已有结构化 tool snapshot 时，后到的 turn aggregate 被抑制；若 turn fallback 先可见，
+后到的 tool snapshot 会先产生 empty turn snapshot 清除 fallback。Store/UI 不按路径跨 owner
+去重，也不从 unified patch header 反推文件 identity 或动作。`thread/read` 能恢复的结构化
+fileChange 使用独立 history tracker 重建。本地 JSONL 优先时，`patch_apply_end` 的 call id 作为
+独立 Apply patch owner；它不必与外层 `custom_tool_call(name: exec)` 相同。缺失或损坏的
+`changes` 保持普通工具降级，不解析 exec input、stdout 或 raw 补证据。turn fallback 明确不可
+作为历史完整性证据。
+
+当前环境若只观察到 `commandExecution`，正确降级就是保留命令卡而不显示文件变更卡。
+schema fixture 只证明结构化兼容路径，不能冒充当前运行时实测。所有 malformed/ignored 诊断
+只记录 method/type/reason/count，不记录命令、路径、patch、raw payload 或 stderr 原文。
