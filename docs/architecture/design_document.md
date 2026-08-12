@@ -1,6 +1,6 @@
 # 设计文档
 
-最后更新：2026-08-11
+最后更新：2026-08-12
 
 ## 1. 设计目标
 
@@ -25,7 +25,7 @@ Zeta 的设计目标是让 Flutter UI、Agent provider、会话持久化和本�
 - ui/core：窗口框架、主题、通用面板和共享 UI primitives。
 - ui/features/ide：IDE shell 视图；Provider 设置控制器位于 agent/application。
 
-依赖方向保持为 presentation/application 依赖 domain 接口，data 实现 domain 接口，app 负责组合默认实现。UI 不直接处理 Codex 原始协议或持久化 JSON。
+依赖方向保持为 presentation/application 依赖 domain 接口，data 实现 domain 接口，app 负责组合默认实现。UI 不直接处理 Codex 原始协议或持久化 JSON。Provider 自有 data adapter 可以按明确功能读取对应 CLI 的私有数据，但只向上返回中立模型，不暴露原始路径或 payload。
 
 ## 3. 运行时结构
 
@@ -643,7 +643,9 @@ provider 原始 payload、环境变量值或凭证。
 空启动状态抢先创建目标文件；marker 保持未完成并在下次启动重试。
 
 `~/.codex`、`~/.grok`、`~/.cursor`、项目 `.cursor/*` 和用户项目源码不属于 Zeta 自有
-存储。Agent CLI 配置及 session/rollout 正文保持原位；退役遗留的
+存储。Provider 自有 data adapter 可按明确功能读取 Agent CLI 配置、session、日志和账号
+metadata；读取权限不自动授权迁移、复制、改写或删除，原始内容也不得进入 Zeta
+持久化。Agent CLI 配置及 session/rollout 正文保持原位；退役遗留的
 `state/cursor_sessions.json` 不再被运行时读取或写入，只作为受保护用户数据保留。
 
 ### IDE 会话快照

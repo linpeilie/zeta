@@ -401,7 +401,7 @@ python tool/smoke_codex_plan_mode.py --expected-version <新版本>
 5. 写不写 migration marker？部分失败怎么办？
    （本次运行用内存状态，不标完成，不阻断启动，下次继续重试）
 
-守住 G8：新增的落盘字段只能是规范化白名单。
+守住 G7：新增的落盘字段只能是规范化白名单。
 不得写入 prompt、回复、工具输出、原始错误文本、环境变量、凭证或 Provider raw payload。
 ```
 

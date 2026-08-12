@@ -171,7 +171,7 @@ chore: bump flutter action pin
 **持久化与隐私**
 
 - Zeta 自有数据全部在 `~/.zeta/`，JSON 必须版本化 + 宽容 `tryDecode`（缺字段或损坏不能阻断启动）。
-- **严禁读取、迁移或改写 `~/.codex`、`~/.grok`、`~/.cursor` 及项目 `.cursor`。**
+- Provider 自有 data adapter 可以按明确功能读取对应 CLI 的私有数据；协议字段、原始内容和路径不得泄漏到上层。读取权限不等于迁移、改写或删除授权。
 - 派生索引与缓存只保存规范化白名单字段。**禁止持久化 prompt、回复、工具输出、原始错误文本、环境变量、凭证或 Provider raw payload。**
 
 **其他**

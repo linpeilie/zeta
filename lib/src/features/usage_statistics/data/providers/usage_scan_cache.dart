@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-/// 为本地 usage 源文件生成稳定的 64-bit FNV-1a 标识。
+/// 为本地用量源文件生成稳定的 64-bit FNV-1a 标识。
 ///
 /// 该标识只用于派生缓存匹配，避免把 Agent CLI session 文件路径写入 `~/.zeta`。
 String usageSourceId(String sourcePath) {

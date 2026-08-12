@@ -219,7 +219,7 @@ Everything lives under `~/.zeta/` (`%USERPROFILE%\.zeta\` on Windows) as plain J
     └── agent_models_v1.json           Model catalog cache, safe to delete
 ```
 
-**Zeta never touches your agent CLI's own configuration.** `~/.codex`, `~/.grok`, `~/.cursor`, and a project's `.cursor` directory are never read, migrated, or rewritten.
+**Zeta reads private data owned by active agent CLIs when a feature requires it.** The corresponding Provider data adapter may read configuration, session history, logs, and account metadata for connection setup, history recovery, diagnostics, and usage statistics. Raw bodies, credentials, and private paths are not copied into Zeta's derived indexes. Read access does not imply automatic migration, rewriting, or deletion; configuration is written only when you explicitly use the configuration editor. Cursor is retired, so its session data remains outside runtime reads and writes.
 
 ### What's in the usage index
 

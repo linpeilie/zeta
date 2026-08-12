@@ -607,9 +607,10 @@ Zeta 自有数据统一写入用户主目录下的以下结构：
 
 Agent CLI 的数据不属于这套目录：Codex/Grok/Claude Code/Cursor 配置与 session 历史
 继续保留在各 CLI 自有目录（包括 `~/.codex`、`~/.grok`、`~/.claude`、`~/.cursor`
-与项目 `.cursor/*`），迁移器不会复制或改写。运行时只允许 Provider 已登记的只读入口：
-Codex 使用统计、Grok/Claude Code 本地历史和 Claude Code 登录 metadata；派生索引与
-隐藏列表仍只写 `~/.zeta`。
+与项目 `.cursor/*`）。Provider 自有 data adapter 可以按明确功能读取对应 CLI 的配置、
+会话、日志和账号 metadata；application/presentation 不自行遍历这些目录，也不接收原始
+路径或 payload。读取权限不自动授权迁移、复制、改写或删除；派生索引与隐藏列表仍只写
+`~/.zeta`。
 退役遗留的 `cursor_sessions.json` 不再参与恢复或运行时组合，仅作为受保护用户数据原样
 保留；Codex 使用统计仍只读原 rollout JSONL，并把可重建的派生索引写入
 `~/.zeta/state`。

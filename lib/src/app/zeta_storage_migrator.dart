@@ -9,7 +9,7 @@ import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
-import 'package:zeta/src/features/usage_statistics/data/usage_statistics_index_store.dart';
+import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 
 /// 当前 Zeta 自有存储迁移版本。
 const int zetaStorageMigrationVersion = 1;
@@ -199,14 +199,16 @@ class ZetaStorageMigrator {
       return;
     }
 
-    UsageStatisticsIndexSnapshot snapshot;
+    Object? decoded;
     try {
-      snapshot = UsageStatisticsIndexSnapshot.tryDecode(jsonDecode(value));
+      decoded = jsonDecode(value);
     } catch (_) {
       // 派生索引损坏时迁移为空快照，后续统计加载会从各 Provider 历史重建。
-      snapshot = const UsageStatisticsIndexSnapshot();
+      decoded = null;
     }
-    await target.write(jsonEncode(snapshot.toJson()));
+    await target.write(
+      jsonEncode(normalizeUsageStatisticsPartitionIndex(decoded)),
+    );
     migratedKeys.add(usageStatisticsIndexStorageKey);
   }
 

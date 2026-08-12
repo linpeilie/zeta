@@ -66,16 +66,16 @@ UI 按 capability 渲染，不支持就 capability=false + 抛 UnsupportedError�
 **UI 与主题**（碰任何 Widget 时）
 
 ```text
-守住 G9：shadcn_flutter 只能 as sf 导入，语义色走 IdeColors.of(context)，
+守住 G8：shadcn_flutter 只能 as sf 导入，语义色走 IdeColors.of(context)，
 禁止裸 Color(0x...)、手写 BoxShadow、临时 BorderRadius.circular。
 优先复用 ui/core 已有原语，不要新造视觉组件。
-长文本一律有界布局 + 省略号。完成后跑 G9 的两条自查命令。
+长文本一律有界布局 + 省略号。完成后跑 G8 的两条自查命令。
 ```
 
 **持久化与隐私**（碰落盘的东西时）
 
 ```text
-守住 G7/G8：不碰 ~/.codex、~/.grok、~/.cursor 及项目 .cursor；
+守住 G6/G7：Provider 私有数据读取只在自有 data adapter，原始结构和路径不上浮；
 Zeta 自有数据只写 ~/.zeta，文件由 app 层注入，不在 presentation/application 拼路径；
 JSON 版本化 + 宽容解码；不落盘 prompt、回复、工具输出、原始错误文本、
 环境变量、凭证或 Provider raw payload。

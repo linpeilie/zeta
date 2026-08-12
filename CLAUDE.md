@@ -8,13 +8,13 @@ Zeta 是 Flutter Desktop 的本地 Agent IDE 壳层（macOS / Windows / Linux）
 
 ## 动手前先读
 
-1. **[`AGENTS.md`](AGENTS.md)** — 约束规则的**权威源**：9 条硬门禁、按任务的路由表、风格约定、收尾协议。**动手前完整读一遍**，然后按 §2 路由表对号入座，找到你这次要动的东西对应哪几条门禁和哪些必读文档。
+1. **[`AGENTS.md`](AGENTS.md)** — 约束规则的**权威源**：8 条硬门禁、按任务的路由表、风格约定、收尾协议。**动手前完整读一遍**，然后按 §2 路由表对号入座，找到你这次要动的东西对应哪几条门禁和哪些必读文档。
 2. **[`docs/architecture/overview.md`](docs/architecture/overview.md)** — 架构总览（含图），解释这些约束**为什么**存在。
 3. **[`docs/guides/glossary.md`](docs/guides/glossary.md)** — 术语表。遇到 entryId、bundle、capability、coalescing、lease 先查这里。
 
 规则冲突时的优先级：`AGENTS.md` > `docs/architecture/engineering_standards.md` > `docs/guides/developer_guide.md` > 本文件。
 
-## 九条硬门禁（标题索引，正文在 [`AGENTS.md` §1](AGENTS.md#1-硬门禁)）
+## 八条硬门禁（标题索引，正文在 [`AGENTS.md` §1](AGENTS.md#1-硬门禁)）
 
 违反任何一条，功能再正确也要打回。**不要凭这份索引下判断——动到相关代码就去读正文。**
 
@@ -26,9 +26,8 @@ Zeta 是 Flutter Desktop 的本地 Agent IDE 壳层（macOS / Windows / Linux）
 | G4 | 按 capability 渲染；不支持必须 `capability = false` + 抛 `UnsupportedError`，禁止静默成功 |
 | G5 | 权限 / 提问 / Plan 审批 / Plan 执行交接四种语义隔离；**绝不预授权任何操作** |
 | G6 | 分层依赖单向；Provider 协议只存在于 data 层；新代码进对应 feature 的四层目录 |
-| G7 | 不读、不迁移、不改写 `~/.codex`、`~/.grok`、`~/.cursor` 及项目 `.cursor` |
-| G8 | 不落盘敏感内容；持久化 JSON 版本化 + 宽容解码 |
-| G9 | 主题走 token；`shadcn_flutter` 只能 `as sf` 导入 |
+| G7 | 不落盘敏感内容；持久化 JSON 版本化 + 宽容解码 |
+| G8 | 主题走 token；`shadcn_flutter` 只能 `as sf` 导入 |
 
 ## 常用命令
 

@@ -7,7 +7,7 @@ import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
-import 'package:zeta/src/features/usage_statistics/data/usage_statistics_index_store.dart';
+import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 
 const _legacyCursorSessionIndexStorageKey = 'zeta.agent.cursor.sessions.v1';
 
@@ -102,11 +102,12 @@ void main() {
           preferences.readKeys,
           isNot(contains(_legacyCursorSessionIndexStorageKey)),
         );
-        // 迁移时经 tryDecode 归一到当前索引 schema（v3 多 Provider 分区）。
-        expect(
-          await paths.usageStatisticsIndexFile.readAsString(),
-          jsonEncode(const UsageStatisticsIndexSnapshot().toJson()),
-        );
+        // 迁移时归一到当前 v4 不透明分区，并保留 v2 的 Codex 空分区。
+        final usageIndex =
+            jsonDecode(await paths.usageStatisticsIndexFile.readAsString())
+                as Map<String, Object?>;
+        expect(usageIndex['version'], usageStatisticsPartitionIndexVersion);
+        expect((usageIndex['providers'] as Map).keys, <String>['codex']);
         final marker =
             jsonDecode(await paths.migrationMarkerFile.readAsString())
                 as Map<String, Object?>;

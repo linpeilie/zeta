@@ -48,7 +48,7 @@ void main() {
         expect(event.request.command, 'echo hi');
         expect(event.request.cwd, r'C:\tmp\proj');
         expect(event.request.raw['tool_name'], 'Bash');
-        // G8: raw 不含 input 正文。
+        // G7: raw 不含 input 正文。
         expect(event.request.raw.containsKey('input'), isFalse);
         expect(handler.pendingCount, 1);
         expect(handler.pending['req_42']!.toolUseId, 'toolu_req_42');

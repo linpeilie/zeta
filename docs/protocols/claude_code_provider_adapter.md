@@ -574,7 +574,7 @@ Claude Code 的 stream-json **不提供**宿主侧 turn id：`result` 帧无 tur
 | `resolveMetadata` | usage 等非叙事更新；terminal 后仍可幂等接受 |
 | `completeTurn` | first-terminal-wins；duplicate / conflicting 只记诊断 |
 | `invalidateTurn` / `invalidateRuntime` / `invalidateSession` | 丢弃旧 generation |
-| `snapshot` / `diagnostics` / `dispose` | 只读计数与状态；**不得**含正文、token、raw payload、source id 原文（G8） |
+| `snapshot` / `diagnostics` / `dispose` | 只读计数与状态；**不得**含正文、token、raw payload、source id 原文（G7） |
 
 #### `ClaudeCodeEventMapper`（纯翻译层）
 

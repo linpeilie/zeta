@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:zeta/src/features/agent/data/datasources/local_history/usage_scan_cache.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/usage_statistics/data/providers/usage_scan_cache.dart';
 
-/// 一条 Codex 模型请求的精确 token 用量。
+/// 一条 Codex 模型请求的精确 Token 用量。
 class CodexUsageSample {
   const CodexUsageSample({
     required this.deduplicationKey,

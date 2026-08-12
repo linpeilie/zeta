@@ -1,106 +1,127 @@
-import 'dart:async';
 import 'dart:io';
 
-import 'package:zeta/src/features/agent/data/datasources/local_history/codex_usage_log_scanner.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
-import 'package:zeta/src/features/usage_statistics/data/usage_statistics_index_store.dart';
+import 'package:zeta/src/features/usage_statistics/data/providers/codex/codex_usage_log_scanner.dart';
+import 'package:zeta/src/features/usage_statistics/data/providers/codex/codex_usage_partition_codec.dart';
+import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
+import 'package:zeta/src/features/usage_statistics/domain/agent_token_usage_source.dart';
+import 'package:zeta/src/features/usage_statistics/domain/agent_usage_query_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
-import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_repository.dart';
 
-typedef UsageAgentProviderLoader = Future<AgentProvider> Function();
-
-/// 基于 Codex 本地 rollout JSONL 的使用统计数据源。
+/// 直接从 Codex rollout 与自有 v4 分区读取 Token 历史。
 ///
-/// 记录身份固定为 Codex（[defaultAgentProviderId]），不依赖当前激活 Provider。
-/// [providerLoader] 仅用于解析 `CODEX_HOME` 与可选套餐额度；可为空，此时仅扫本机默认路径。
-/// app-server 仅用于读取当前套餐额度；历史 token 不依赖 thread/list。
-class CodexUsageStatisticsRepository implements UsageStatisticsRepository {
-  CodexUsageStatisticsRepository({
-    required this.indexStore,
-    this.providerLoader,
-    this.scanner = const FileSystemCodexUsageLogScanner(),
+/// 本 source 与实际 Provider 配置实例绑定；配置环境、CLI home 和 session 路径始终留在
+/// data 层，不进入 query service 或中立快照。
+final class CodexTokenUsageSource implements AgentTokenUsageSource {
+  factory CodexTokenUsageSource({
+    required AgentProviderConfig config,
+    required UsageStatisticsPartitionStore partitionStore,
+    CodexUsageLogScanner scanner = const FileSystemCodexUsageLogScanner(),
+    CodexUsagePartitionCodec codec = const CodexUsagePartitionCodec(),
     Map<String, String>? environment,
-    this.homeDirectory,
-    this.includeQuota = true,
-    this.providerId = defaultAgentProviderId,
-    String? providerName,
+    String? homeDirectory,
     DateTime Function()? clock,
-  }) : providerName =
-           providerName ?? AgentProviderConfig.defaultCodex.displayName,
-       _environment = environment ?? Platform.environment,
-       _clock = clock ?? DateTime.now;
-
-  /// 可选；仅用于配置环境中的 `CODEX_HOME` 与 [AgentUsageQuotaProvider]。
-  final UsageAgentProviderLoader? providerLoader;
-  final UsageStatisticsIndexStore indexStore;
-  final CodexUsageLogScanner scanner;
-  final Map<String, String> _environment;
-  final String? homeDirectory;
-  final bool includeQuota;
-
-  /// 写入记录的稳定 Provider 身份，不随 active provider 变化。
-  final String providerId;
-  final String providerName;
-  final DateTime Function() _clock;
-
-  @override
-  Future<UsageStatisticsSourceSnapshot> load({
-    required DateTime earliest,
-    bool forceRefresh = false,
-  }) async {
-    final warnings = <String>[];
-    AgentProvider? provider;
-    final loader = providerLoader;
-    if (loader != null) {
-      try {
-        provider = await loader();
-      } catch (_) {
-        warnings.add('Codex 运行时暂时不可用，已仅根据本地历史统计。');
-      }
-    }
-
-    final index = await indexStore.load();
-    final scan = await scanner.scan(
-      codexHome: _resolveCodexHome(provider),
-      cachedSessions: index.codexSessions,
-      forceRefresh: forceRefresh,
-    );
-    warnings.addAll(scan.warnings);
-    try {
-      // 按 sourceId 写入分区，与 Grok 并行 mergeSave 互不覆盖。
-      final codexSessions = <String, CodexUsageSessionSnapshot>{
-        for (final session in scan.sessions.values) session.sourceId: session,
-      };
-      await indexStore.mergeSave(codexSessions: codexSessions);
-    } catch (_) {
-      warnings.add('统计索引暂时无法保存，本次结果仍可正常查看。');
-    }
-
-    AgentUsageQuotaSnapshot? quota;
-    if (includeQuota && provider is AgentUsageQuotaProvider) {
-      try {
-        quota = await (provider as AgentUsageQuotaProvider).readUsageQuota();
-      } catch (_) {
-        warnings.add('Codex 当前未返回套餐额度信息。');
-      }
-    }
-
-    final records =
-        _recordsFromSessions(
-            scan.sessions.values,
-          ).where((record) => !record.startedAt.isBefore(earliest)).toList()
-          ..sort((left, right) => right.startedAt.compareTo(left.startedAt));
-    return UsageStatisticsSourceSnapshot(
-      records: List<AgentUsageRecord>.unmodifiable(records),
-      refreshedAt: _clock(),
-      quota: quota,
-      warnings: List<String>.unmodifiable(warnings),
+  }) {
+    return CodexTokenUsageSource._(
+      providerId: config.id,
+      providerName: config.displayName,
+      configuredEnvironment: config.environment,
+      partitionStore: partitionStore,
+      scanner: scanner,
+      codec: codec,
+      environment: environment ?? Platform.environment,
+      homeDirectory: homeDirectory,
+      clock: clock ?? DateTime.now,
     );
   }
 
-  String _resolveCodexHome(AgentProvider? provider) {
-    final configured = _nonEmpty(provider?.config.environment['CODEX_HOME']);
+  CodexTokenUsageSource._({
+    required this.providerId,
+    required this.providerName,
+    required Map<String, String> configuredEnvironment,
+    required this._partitionStore,
+    required this._scanner,
+    required this._codec,
+    required Map<String, String> environment,
+    required this._homeDirectory,
+    required this._clock,
+  }) : _configuredEnvironment = Map<String, String>.unmodifiable(
+         configuredEnvironment,
+       ),
+       _environment = Map<String, String>.unmodifiable(environment);
+
+  @override
+  final String providerId;
+
+  final String providerName;
+  final Map<String, String> _configuredEnvironment;
+  final UsageStatisticsPartitionStore _partitionStore;
+  final CodexUsageLogScanner _scanner;
+  final CodexUsagePartitionCodec _codec;
+  final Map<String, String> _environment;
+  final String? _homeDirectory;
+  final DateTime Function() _clock;
+
+  @override
+  Future<AgentTokenUsageSourceSnapshot> load(AgentUsageQuery query) async {
+    final warnings = <AgentUsageWarning>[];
+    Map<String, CodexUsageSessionSnapshot> cachedSessions;
+    try {
+      cachedSessions = _codec.decode(
+        await _partitionStore.readPartition(providerId),
+      );
+    } catch (_) {
+      cachedSessions = const <String, CodexUsageSessionSnapshot>{};
+      warnings.add(
+        const AgentUsageWarning(
+          code: 'codex-index-read',
+          message: 'Codex 统计索引暂时无法读取，已重新扫描本地历史。',
+        ),
+      );
+    }
+
+    final scan = await _scanner.scan(
+      codexHome: _resolveCodexHome(),
+      cachedSessions: cachedSessions,
+      forceRefresh: query.forceRefresh,
+    );
+    warnings.addAll(
+      scan.warnings.map(
+        (message) =>
+            AgentUsageWarning(code: 'codex-source-warning', message: message),
+      ),
+    );
+
+    try {
+      await _partitionStore.writePartition(
+        providerId,
+        _codec.encode(scan.sessions.values),
+      );
+    } catch (_) {
+      warnings.add(
+        const AgentUsageWarning(
+          code: 'codex-index-write',
+          message: '统计索引暂时无法保存，本次结果仍可正常查看。',
+        ),
+      );
+    }
+
+    final records =
+        _recordsFromSessions(scan.sessions.values)
+            .where((record) => !record.startedAt.isBefore(query.earliest))
+            .toList()
+          ..sort((left, right) => right.startedAt.compareTo(left.startedAt));
+    return AgentTokenUsageSourceSnapshot(
+      providerId: providerId,
+      providerName: providerName,
+      records: records,
+      refreshedAt: _clock(),
+      warnings: warnings,
+    );
+  }
+
+  String _resolveCodexHome() {
+    final configured = _nonEmpty(_configuredEnvironment['CODEX_HOME']);
     if (configured != null) {
       return configured;
     }
@@ -109,7 +130,7 @@ class CodexUsageStatisticsRepository implements UsageStatisticsRepository {
       return inherited;
     }
     final home =
-        _nonEmpty(homeDirectory) ??
+        _nonEmpty(_homeDirectory) ??
         _nonEmpty(_environment[Platform.isWindows ? 'USERPROFILE' : 'HOME']) ??
         Directory.current.path;
     return _joinPath(home, '.codex');
@@ -196,10 +217,6 @@ class CodexUsageStatisticsRepository implements UsageStatisticsRepository {
   }
 }
 
-/// 合并多个 rollout 文件中指向同一 thread/turn 的派生记录。
-///
-/// Token sample 已由调用方按原始事件键去重，这里只累加真正新增的 sample，
-/// 并保留终态、完成时间、模型和错误等更完整的元数据。
 AgentUsageRecord _mergeUsageRecords(
   AgentUsageRecord existing,
   AgentUsageRecord candidate,

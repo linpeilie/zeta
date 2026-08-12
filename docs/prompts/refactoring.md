@@ -82,7 +82,7 @@
 3. 测试覆盖现状：哪些行为有测试钉住，哪些是裸奔的
 4. Zeta 专项检查，逐条回答：
    - 搬迁后依赖方向会不会反向？（G6：domain 不能引入 Flutter / dart:io / Provider 协议）
-   - 涉及的字段名有没有被持久化 codec 当作 JSON key？改名会不会读不出旧数据？（G8）
+   - 涉及的字段名有没有被持久化 codec 当作 JSON key？改名会不会读不出旧数据？（G7）
    - 涉及的 Widget 有没有参与 IdeHome 跨页保活或稳定 Key？
    - 涉及的 reducer 是不是 live/history/replay 共用算法但必须各自独立实例？（G3）
    - 有没有把 Provider 专属逻辑上提到共享层的动作？（G1）
@@ -218,7 +218,7 @@
 
 | 重构动作 | 隐藏风险 | 怎么防 |
 |---|---|---|
-| 重命名 domain 字段 | codec 若用字段名推导 JSON key，改名直接让旧数据读不出来（G8） | 先确认 codec 的 key 是显式字符串常量；补旧版本 JSON 解码测试 |
+| 重命名 domain 字段 | codec 若用字段名推导 JSON key，改名直接让旧数据读不出来（G7） | 先确认 codec 的 key 是显式字符串常量；补旧版本 JSON 解码测试 |
 | 把 Provider 逻辑上提到共享层 | 直接违反 G1，且会让下一个 Provider 接入时被迫继续改共享层 | 上提前证明是跨 Provider 共同语义，否则退回 adapter/reducer |
 | 拆分 reducer | 拆着拆着引入 `Future`/`Timer`，或让 live/history 共用了实例（G3） | 拆完确认无 Timer/Future/scheduler；确认三个入口各自 `new` 独立实例 |
 | 重排 Widget 树 | 破坏 Element 复用 → 页面切换丢状态、丢滚动位置，且**测试不写就发现不了** | 稳定 Key 挂在会因 slot 增删而换位的 Flex 子节点上，不能只挂内部后代 |

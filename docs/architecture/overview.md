@@ -194,7 +194,7 @@ cache/    agent_models_v1.json
 三条硬性要求：
 
 - **JSON 必须版本化 + 宽容解码。** 缺字段、损坏、旧版本都不能阻断启动。
-- **严禁碰 `~/.codex`、`~/.grok`、`~/.cursor`** 以及项目里的 `.cursor`。不读、不迁移、不改写。
+- **Provider 私有数据只在自有 data adapter 中读取。** 协议字段、原始正文和私有路径不进入上层；读取权限不自动授权迁移、改写或删除。
 - **派生索引只存白名单字段。** 禁止落盘 prompt、回复正文、工具输出、原始错误文本、环境变量、凭证或 Provider raw payload。
 
 feature store 也不得在 presentation / application 里自己拼 `File('~/.zeta/...')`——具体文件由 `lib/src/app` 注入。

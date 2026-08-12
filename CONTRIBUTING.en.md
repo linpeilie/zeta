@@ -171,7 +171,7 @@ Common types: `feat` / `fix` / `docs` / `refactor` / `test` / `chore` / `perf`.
 **Persistence and privacy**
 
 - All Zeta-owned data lives under `~/.zeta/`. JSON must be versioned with tolerant `tryDecode` — missing or corrupt fields must never block startup.
-- **Never read, migrate, or rewrite `~/.codex`, `~/.grok`, `~/.cursor`, or a project's `.cursor`.**
+- Provider-owned data adapters may read the corresponding CLI's private data for an explicit feature. Protocol fields, raw content, and paths must not leak into upper layers; read access does not authorize migration, rewriting, or deletion.
 - Derived indexes and caches store only normalized allow-listed fields. **Never persist prompts, responses, tool output, raw error text, environment variables, credentials, or provider raw payloads.**
 
 **Misc**

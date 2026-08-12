@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 /// 视觉 token 守卫：把「零阴影法则」和「圆角只走 token」变成可回归的门禁，
-/// 而不是一次性清理。这些规则的正文见 `AGENTS.md` G9 与 `IdeEffects` 文档注释。
+/// 而不是一次性清理。这些规则的正文见 `AGENTS.md` G8 与 `IdeEffects` 文档注释。
 void main() {
   const effectsPath = 'lib/src/ui/core/ide_effects.dart';
 

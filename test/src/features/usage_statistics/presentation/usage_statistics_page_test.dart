@@ -77,7 +77,9 @@ void main() {
     expect(find.byKey(const ValueKey('usage-panel-tasks')), findsOneWidget);
     expect(find.byType(IdeDataRow), findsWidgets);
 
-    final taskRow = find.byKey(const ValueKey('usage-row-thread-1/turn-1'));
+    final taskRow = find.byKey(
+      const ValueKey('usage-row-codex/thread-1/turn-1'),
+    );
     await tester.ensureVisible(taskRow);
     await tester.pumpAndSettle();
     await tester.tap(taskRow);
@@ -335,11 +337,11 @@ void main() {
 
     expect(find.byKey(const ValueKey('usage-task-pagination')), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('usage-row-thread-0/turn-0')),
+      find.byKey(const ValueKey('usage-row-codex/thread-0/turn-0')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('usage-row-thread-20/turn-20')),
+      find.byKey(const ValueKey('usage-row-codex/thread-20/turn-20')),
       findsNothing,
     );
 
@@ -363,11 +365,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('usage-row-thread-20/turn-20')),
+      find.byKey(const ValueKey('usage-row-codex/thread-20/turn-20')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('usage-row-thread-0/turn-0')),
+      find.byKey(const ValueKey('usage-row-codex/thread-0/turn-0')),
       findsNothing,
     );
   });
@@ -406,7 +408,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final firstDuplicateRow = find.byKey(
-      const ValueKey('usage-row-thread-1/turn-1'),
+      const ValueKey('usage-row-codex/thread-1/turn-1'),
     );
     await tester.scrollUntilVisible(
       firstDuplicateRow,
@@ -421,7 +423,7 @@ void main() {
     );
     expect(firstDuplicateRow, findsOneWidget);
     expect(
-      find.byKey(const ValueKey('usage-row-thread-1/turn-1#2')),
+      find.byKey(const ValueKey('usage-row-codex/thread-1/turn-1#2')),
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);

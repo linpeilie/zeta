@@ -193,7 +193,7 @@ cache/    agent_models_v1.json
 Three hard requirements:
 
 - **Versioned JSON with tolerant decoding.** Missing fields, corruption, and old versions must never block startup.
-- **Never touch `~/.codex`, `~/.grok`, `~/.cursor`** or a project's `.cursor`. No reads, no migrations, no rewrites.
+- **Read Provider-private data only inside that Provider's data adapter.** Protocol fields, raw content, and private paths stay out of upper layers; read access does not automatically authorize migration, rewriting, or deletion.
 - **Derived indexes store allow-listed fields only.** Never persist prompts, response bodies, tool output, raw error text, environment variables, credentials, or provider raw payloads.
 
 Feature stores also must not assemble `File('~/.zeta/...')` themselves in presentation or application code — concrete files are injected from `lib/src/app`.

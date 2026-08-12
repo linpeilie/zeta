@@ -31,13 +31,6 @@ import 'package:zeta/src/features/settings/presentation/settings_page.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_controller.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_refresh_coordinator.dart';
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_controller.dart';
-import 'package:zeta/src/features/usage_statistics/data/codex_usage_statistics_repository.dart';
-import 'package:zeta/src/features/usage_statistics/data/composite_usage_statistics_repository.dart';
-import 'package:zeta/src/features/usage_statistics/data/grok_usage_statistics_repository.dart';
-import 'package:zeta/src/features/usage_statistics/data/provider_agent_usage_panel_repository.dart';
-import 'package:zeta/src/features/usage_statistics/data/usage_statistics_index_store.dart';
-import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
-import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_repository.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_panel.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_page.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
@@ -75,7 +68,7 @@ class IdeHome extends StatefulWidget {
     required this.sessionStore,
     required this.agentProviderFactory,
     required this.agentProviderConfigStore,
-    required this.usageStatisticsIndexStore,
+    required this.usageStatisticsDependencies,
     required this.projectLocationOpener,
     required this.appearanceController,
     required this.generalSettingsController,
@@ -84,7 +77,6 @@ class IdeHome extends StatefulWidget {
     this.enableAgentUsageAutoRefresh = true,
     this.agentProviderAvailabilityLoader,
     this.homeProviderDetectionLoader,
-    this.agentUsagePanelRepository,
     this.showWindowControls = true,
     this.desktopNotificationService,
     this.desktopAttentionIndicator,
@@ -103,7 +95,7 @@ class IdeHome extends StatefulWidget {
   final IdeSessionStore sessionStore;
   final AgentProviderFactory agentProviderFactory;
   final AgentProviderConfigStore agentProviderConfigStore;
-  final UsageStatisticsIndexStore usageStatisticsIndexStore;
+  final IdeShellUsageStatisticsDependencies usageStatisticsDependencies;
   final ProjectLocationOpener projectLocationOpener;
   final AppearanceSettingsController appearanceController;
   final GeneralSettingsController generalSettingsController;
@@ -114,7 +106,6 @@ class IdeHome extends StatefulWidget {
   final bool enableAgentUsageAutoRefresh;
   final AgentProviderAvailabilityLoader? agentProviderAvailabilityLoader;
   final HomeProviderDetectionLoader? homeProviderDetectionLoader;
-  final AgentUsagePanelRepository? agentUsagePanelRepository;
   final bool showWindowControls;
   final DesktopNotificationService? desktopNotificationService;
   final DesktopAttentionIndicator? desktopAttentionIndicator;
@@ -209,6 +200,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       onAgentAttention: (attention) {
         unawaited(_desktopAttentionController.handleAttention(attention));
       },
+      usageStatistics: widget.usageStatisticsDependencies,
     )..addListener(_handleShellChanged);
     if (widget.enableNativeWindowFrame) {
       windowManager.addListener(this);
@@ -230,32 +222,8 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       runtimeStateProvider: _managementRuntimeState,
       runtimeListenable: _shellController,
     )..addListener(_handleAgentManagementChanged);
-    // 使用统计聚合所有内置支持 Provider 的本地历史，不绑定当前激活 Agent。
-    // 身份由各数据源固定为 codex / grok；扫描本机 ~/.codex 与 ~/.grok。
-    _usageStatisticsController = UsageStatisticsController(
-      repository: CompositeUsageStatisticsRepository(
-        sources: <UsageStatisticsRepository>[
-          CodexUsageStatisticsRepository(
-            indexStore: widget.usageStatisticsIndexStore,
-            // 不启动 CLI：仅读本地 rollout；套餐额度由侧栏用量面板负责。
-            includeQuota: false,
-          ),
-          GrokUsageStatisticsRepository(
-            indexStore: widget.usageStatisticsIndexStore,
-            includeQuota: false,
-          ),
-        ],
-      ),
-    );
-    _agentUsagePanelController = AgentUsagePanelController(
-      repository:
-          widget.agentUsagePanelRepository ??
-          ProviderAgentUsagePanelRepository(
-            enabledProviderLoader: _loadEnabledAgentProviders,
-            globalRuntime: _shellController.agentProviderGlobalRuntime,
-            seedIndexStore: widget.usageStatisticsIndexStore,
-          ),
-    );
+    _usageStatisticsController = _shellController.usageStatisticsController;
+    _agentUsagePanelController = _shellController.agentUsagePanelController;
     _agentUsageRefreshCoordinator = AgentUsageRefreshCoordinator(
       // turn 完成 / 启动预热走静默刷新：已有数据时不闪加载横条。
       refresh: () => _agentUsagePanelController.refresh(showLoading: false),
@@ -276,9 +244,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       windowManager.removeListener(this);
     }
     _shellController.removeListener(_handleShellChanged);
-    _usageStatisticsController.dispose();
     _agentUsageRefreshCoordinator.dispose();
-    _agentUsagePanelController.dispose();
     _agentManagementController.removeListener(_handleAgentManagementChanged);
     _agentManagementController.dispose();
     _shellController.dispose();
@@ -826,12 +792,6 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       return injectedLoader();
     }
     return _agentManagementController.loadAvailableThreadProviders();
-  }
-
-  Future<List<AgentProviderConfig>> _loadEnabledAgentProviders() async {
-    final controller = _shellController.agentProviderController;
-    await controller.loadSettings();
-    return controller.enabledProviders;
   }
 
   void _scheduleInitialAgentUsageRefresh() {

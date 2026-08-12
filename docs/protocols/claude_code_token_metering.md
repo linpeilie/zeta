@@ -3,7 +3,7 @@
 > 基于本地源码树：`/Users/linpeilie/Development/Workspace/OpenSource/claude-code`  
 > 锚定 commit：`2ccc2162`（测绘时 HEAD）  
 > 配套文档：[Claude Code Provider 接入适配](./claude_code_provider_adapter.md)  
-> 约束基线：`AGENTS.md`（G1–G9）、`docs/guides/developer_guide.md`
+> 约束基线：`AGENTS.md`（G1–G8）、`docs/guides/developer_guide.md`
 
 本文拆开 Claude Code **实时会话底部 token 显示** 与 **上下文占用/压缩阈值** 两套计量，并对照 Zeta 现状给出可落地的参考边界——**借鉴语义与算法，不复制其 UI/进程模型**。
 
@@ -283,7 +283,8 @@ estimated = lastUsageWindowTokens  // 来自 last* / ContextWindow 事件
 
 - **必须做**：本文 R1–R3 + [适配文档](./claude_code_provider_adapter.md) §4.4 `AgentTokenUsageEvent`、§4.11 套餐。  
 - **可选做**：R5 流式粗估（体验），不阻塞 MVP。  
-- **不做**：把 CC 源码当运行时依赖；不读 `~/.claude` 会话 JSONL 做 token 聚合（G7/G8；适配文档已排除）。
+- **可以做**：由 Claude Code 自有 data source 复用 `~/.claude` 会话 JSONL 做 token 聚合；原始结构和路径不上浮，派生索引只保存 G7 白名单字段。
+- **不做**：把 CC 源码当运行时依赖，或把 prompt、回复、工具输出、凭据、原始错误与 session 路径写入统计索引。
 
 ---
 

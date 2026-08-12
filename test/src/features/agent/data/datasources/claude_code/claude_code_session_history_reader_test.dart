@@ -199,6 +199,74 @@ void main() {
       expect(page.threads.single.raw['model'], 'tail-model');
     });
 
+    test(
+      'reads one discovered project history without returning its source path',
+      () async {
+        const projectPath = '/workspace/usage-source';
+        const sessionId = 'usage-session';
+        final projectDirectory = await _projectDirectory(
+          tempRoot,
+          projectPath,
+        ).create(recursive: true);
+        final sessionFile = File(
+          '${projectDirectory.path}${Platform.pathSeparator}$sessionId.jsonl',
+        );
+        await sessionFile.writeAsString(
+          '${jsonEncode(<String, Object?>{
+            'type': 'user',
+            'sessionId': sessionId,
+            'uuid': 'usage-user',
+            'timestamp': '2026-08-10T05:00:00.000Z',
+            'cwd': projectPath,
+            'message': <String, Object?>{'role': 'user', 'content': '[PROMPT_REDACTED]'},
+          })}\n'
+          '${jsonEncode(<String, Object?>{
+            'type': 'assistant',
+            'sessionId': sessionId,
+            'uuid': 'usage-assistant',
+            'timestamp': '2026-08-10T05:00:01.000Z',
+            'message': <String, Object?>{
+              'role': 'assistant',
+              'model': 'claude-test-model',
+              'stop_reason': 'end_turn',
+              'content': <Object?>[
+                <String, Object?>{'type': 'text', 'text': '[RESPONSE_REDACTED]'},
+              ],
+              'usage': <String, Object?>{'input_tokens': 3, 'output_tokens': 2, 'cache_creation_input_tokens': 5, 'cache_read_input_tokens': 7},
+            },
+          })}\n',
+        );
+        final reader = ClaudeCodeSessionHistoryReader(
+          claudeHome: tempRoot.path,
+        );
+
+        final result = await reader.readLocalHistoryFile(
+          file: sessionFile,
+          providerId: 'claude-code',
+        );
+
+        expect(result?.threadId, sessionId);
+        expect(result?.projectPath, projectPath);
+        expect(result?.history.snapshot.turns, hasLength(1));
+        final turn = result!.history.snapshot.turns.single;
+        expect(turn.tokenUsageIsSessionCumulative, isFalse);
+        expect(turn.tokenUsage?.cachedInputTokens, 12);
+        expect(result.toString(), isNot(contains(sessionFile.path)));
+
+        final outside = File(
+          '${tempRoot.path}${Platform.pathSeparator}outside.jsonl',
+        );
+        await outside.writeAsString(await sessionFile.readAsString());
+        expect(
+          await reader.readLocalHistoryFile(
+            file: outside,
+            providerId: 'claude-code',
+          ),
+          isNull,
+        );
+      },
+    );
+
     test('hides a listed thread without modifying Claude history', () async {
       const projectPath = '/workspace/hidden';
       const sessionId = 'hidden-session';

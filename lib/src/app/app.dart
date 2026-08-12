@@ -7,6 +7,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/app_constants.dart';
+import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/app/window_bootstrap.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
@@ -30,7 +31,7 @@ import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
-import 'package:zeta/src/features/usage_statistics/data/usage_statistics_index_store.dart';
+import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
@@ -56,7 +57,7 @@ class MainApp extends StatefulWidget {
     this.appearanceController,
     this.generalSettingsController,
     this.dataPaths,
-    this.usageStatisticsIndexStore,
+    this.usageStatisticsPartitionStore,
     this.agentUsagePanelRepository,
     this.agentModelCatalogRepository,
     this.agentProviderRuntimeRegistry,
@@ -91,7 +92,7 @@ class MainApp extends StatefulWidget {
   final ZetaDataPaths? dataPaths;
 
   /// 使用统计索引存储注入点；默认按 [dataPaths] 选择文件或内存实现。
-  final UsageStatisticsIndexStore? usageStatisticsIndexStore;
+  final UsageStatisticsPartitionStore? usageStatisticsPartitionStore;
 
   /// Context Agent 统计面板的数据注入点，供 Widget 测试隔离本机 Agent 历史。
   final AgentUsagePanelRepository? agentUsagePanelRepository;
@@ -117,7 +118,7 @@ class MainAppState extends State<MainApp>
   late final AgentProviderRuntimeRegistry _agentProviderRuntimeRegistry;
   late final AgentProviderSettingsCodec _agentProviderSettingsCodec;
   late final Future<void> Function() _providerRuntimeShutdownHook;
-  late final UsageStatisticsIndexStore _usageStatisticsIndexStore;
+  late final UsageStatisticsPartitionStore _usageStatisticsPartitionStore;
   late final AgentModelCatalogRepository _agentModelCatalogRepository;
   bool _ownsAppearanceController = false;
   bool _ownsGeneralSettingsController = false;
@@ -175,13 +176,13 @@ class MainAppState extends State<MainApp>
     if (widget.enableNativeWindowFrame) {
       addDesktopWindowShutdownHook(_providerRuntimeShutdownHook);
     }
-    _usageStatisticsIndexStore =
-        widget.usageStatisticsIndexStore ??
+    _usageStatisticsPartitionStore =
+        widget.usageStatisticsPartitionStore ??
         (useFilePersistence
-            ? FileUsageStatisticsIndexStore(
+            ? FileUsageStatisticsPartitionStore(
                 file: dataPaths!.usageStatisticsIndexFile,
               )
-            : MemoryUsageStatisticsIndexStore());
+            : MemoryUsageStatisticsPartitionStore());
     _agentModelCatalogRepository =
         widget.agentModelCatalogRepository ??
         AgentModelCatalogRepository(
@@ -348,8 +349,12 @@ class MainAppState extends State<MainApp>
                     widget.projectLocationOpener ?? openPathInSystemFileManager,
                 appearanceController: _appearanceController,
                 generalSettingsController: _generalSettingsController,
-                usageStatisticsIndexStore: _usageStatisticsIndexStore,
-                agentUsagePanelRepository: widget.agentUsagePanelRepository,
+                usageStatisticsDependencies:
+                    IdeShellUsageStatisticsDependencies(
+                      partitionStore: _usageStatisticsPartitionStore,
+                      agentUsagePanelRepository:
+                          widget.agentUsagePanelRepository,
+                    ),
                 agentModelCatalogRepository: _agentModelCatalogRepository,
                 // 回调存储用于测试/嵌入宿主；未显式注入统计仓储时不读取本机 CLI 历史。
                 enableAgentUsageAutoRefresh:

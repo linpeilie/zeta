@@ -22,6 +22,22 @@ final class ClaudeCodeHistoryReadResult {
   final Map<String, ClaudeCodeTurnIdentitySnapshot> identitySnapshots;
 }
 
+/// 从 Claude Code 本地历史文件解析出的中立定位信息与历史结果。
+///
+/// 该对象不携带 session 文件路径；调用方若需要增量缓存，应在自己的 data 层内
+/// 单独管理源文件身份，不能把路径放进共享读模型。
+final class ClaudeCodeLocalHistoryReadResult {
+  const ClaudeCodeLocalHistoryReadResult({
+    required this.threadId,
+    required this.projectPath,
+    required this.history,
+  });
+
+  final String threadId;
+  final String projectPath;
+  final ClaudeCodeHistoryReadResult history;
+}
+
 /// 只读扫描 Claude Code 本地历史目录，生成轻量 thread 摘要。
 ///
 /// reader 只采样每个 JSONL 文件的头尾窗口，不改写 `~/.claude`，也不会把
@@ -220,16 +236,83 @@ class ClaudeCodeSessionHistoryReader {
       environment: environment,
     );
     if (file == null) {
-      return ClaudeCodeHistoryReadResult(
-        events: const <AgentEvent>[],
-        snapshot: AgentThreadHistorySnapshot(
-          threadId: threadId,
-          turns: const <AgentHistoryTurn>[],
-        ),
-        identitySnapshots: const <String, ClaudeCodeTurnIdentitySnapshot>{},
-      );
+      return _emptyHistory(threadId);
     }
 
+    final frames = await _readHistoryFrames(file);
+    if (frames == null) {
+      return _emptyHistory(threadId);
+    }
+
+    return _mapHistoryFrames(
+      frames: frames,
+      threadId: threadId,
+      providerId: providerId,
+      projectPath: projectPath,
+      runtimeScope: runtimeScope,
+    );
+  }
+
+  /// 读取 `projects/**.jsonl` 中的一份本地历史，并从帧内恢复 thread/project。
+  ///
+  /// 这是跨项目派生统计使用的窄只读入口。只接受 Claude home 的 `projects`
+  /// 目录内普通 JSONL 文件；不跟随链接，也不返回源路径或消息正文之外的新 raw。
+  Future<ClaudeCodeLocalHistoryReadResult?> readLocalHistoryFile({
+    required File file,
+    required String providerId,
+    Map<String, String>? environment,
+    AgentRuntimeScope runtimeScope = const AgentRuntimeScope(
+      runtimeId: 'claude-code-local-history',
+      connectionEpoch: 1,
+    ),
+  }) async {
+    final projectsDirectory = Directory(
+      '${resolveClaudeHome(environment: environment)}'
+      '${Platform.pathSeparator}projects',
+    );
+    if (!file.path.toLowerCase().endsWith('.jsonl') ||
+        !_isWithinDirectory(file.path, projectsDirectory.path)) {
+      return null;
+    }
+    try {
+      if (await FileSystemEntity.type(file.path, followLinks: false) !=
+          FileSystemEntityType.file) {
+        return null;
+      }
+    } on FileSystemException {
+      return null;
+    }
+
+    final frames = await _readHistoryFrames(file);
+    if (frames == null) {
+      return null;
+    }
+    final threadId = _firstNonEmpty(<String?>[
+      for (final frame in frames)
+        _string(frame['sessionId']) ?? _string(frame['session_id']),
+      _fileStem(file),
+    ]);
+    if (threadId == null) {
+      return null;
+    }
+    final projectPath = _firstNonEmpty(<String?>[
+      for (final frame in frames) _string(frame['cwd']),
+      'unknown',
+    ])!;
+    return ClaudeCodeLocalHistoryReadResult(
+      threadId: threadId,
+      projectPath: projectPath,
+      history: _mapHistoryFrames(
+        frames: frames,
+        threadId: threadId,
+        providerId: providerId,
+        projectPath: projectPath,
+        runtimeScope: runtimeScope,
+      ),
+    );
+  }
+
+  Future<List<Map<String, Object?>>?> _readHistoryFrames(File file) async {
     final frames = <Map<String, Object?>>[];
     try {
       final lines = file
@@ -238,7 +321,7 @@ class ClaudeCodeSessionHistoryReader {
           .transform(const LineSplitter());
       await for (final line in lines) {
         final trimmed = line.trim();
-        if (trimmed.isEmpty) {
+        if (trimmed.isEmpty || trimmed.startsWith('#')) {
           continue;
         }
         final frame = _tryDecodeObject(trimmed);
@@ -248,23 +331,20 @@ class ClaudeCodeSessionHistoryReader {
         }
         frames.add(frame);
       }
+      return frames;
     } on FileSystemException {
-      return ClaudeCodeHistoryReadResult(
-        events: const <AgentEvent>[],
-        snapshot: AgentThreadHistorySnapshot(
-          threadId: threadId,
-          turns: const <AgentHistoryTurn>[],
-        ),
-        identitySnapshots: const <String, ClaudeCodeTurnIdentitySnapshot>{},
-      );
+      return null;
     }
+  }
 
-    return _mapHistoryFrames(
-      frames: frames,
-      threadId: threadId,
-      providerId: providerId,
-      projectPath: projectPath,
-      runtimeScope: runtimeScope,
+  ClaudeCodeHistoryReadResult _emptyHistory(String threadId) {
+    return ClaudeCodeHistoryReadResult(
+      events: const <AgentEvent>[],
+      snapshot: AgentThreadHistorySnapshot(
+        threadId: threadId,
+        turns: const <AgentHistoryTurn>[],
+      ),
+      identitySnapshots: const <String, ClaudeCodeTurnIdentitySnapshot>{},
     );
   }
 
@@ -933,6 +1013,14 @@ String _stableToken(String value) {
 String _normalizedPath(String path) {
   final normalized = File(path).absolute.path.replaceAll('\\', '/');
   return Platform.isWindows ? normalized.toLowerCase() : normalized;
+}
+
+bool _isWithinDirectory(String candidatePath, String directoryPath) {
+  final candidate = _normalizedPath(candidatePath);
+  final directory = _normalizedPath(
+    directoryPath,
+  ).replaceFirst(RegExp(r'/+$'), '');
+  return candidate.startsWith('$directory/');
 }
 
 int? _integer(Object? value) {

@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zeta/src/features/agent/data/datasources/local_history/codex_usage_log_scanner.dart';
+import 'package:zeta/src/features/usage_statistics/data/providers/codex/codex_usage_log_scanner.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 void main() {

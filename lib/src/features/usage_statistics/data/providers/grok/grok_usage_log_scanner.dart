@@ -3,8 +3,8 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_updates_history_parser.dart';
-import 'package:zeta/src/features/agent/data/datasources/local_history/usage_scan_cache.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/usage_statistics/data/providers/usage_scan_cache.dart';
 
 /// Grok 派生索引中的单 turn 白名单快照。
 ///

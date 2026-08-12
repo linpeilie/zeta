@@ -10,6 +10,8 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
+import 'package:zeta/src/features/usage_statistics/application/query_agent_usage_panel_repository.dart';
+import 'package:zeta/src/features/usage_statistics/application/query_usage_statistics_repository.dart';
 
 import '../testing/agent_event_storm_fixture.dart';
 import '../testing/agent_provider_stub_base.dart';
@@ -30,6 +32,41 @@ void main() {
       }
     }
     tempDirectories.clear();
+  });
+
+  test('composes both usage controllers from the shared query service', () {
+    final shell = IdeShellController(
+      agentUiFrameSchedulerFactory: _createUiFrameScheduler,
+      directoryPicker: () async => null,
+      sessionStore: const CallbackIdeSessionStore(
+        loadJson: _loadEmptySession,
+        saveJson: _saveDiscardedSession,
+      ),
+      agentProviderFactory:
+          _RecordingAgentProviderFactory(<String, _ProviderBackend>{
+            defaultAgentProviderId: _ProviderBackend(
+              config: AgentProviderConfig.defaultCodex,
+              threadHistories: const <String, AgentThreadHistorySnapshot>{},
+              threadPages: const <AgentThreadPage>[],
+            ),
+          }),
+      agentProviderConfigStore: MemoryAgentProviderConfigStore(
+        const AgentProviderSettings(
+          providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
+          activeProviderId: defaultAgentProviderId,
+        ),
+      ),
+    );
+    addTearDown(shell.dispose);
+
+    expect(
+      shell.usageStatisticsController.repository,
+      isA<QueryUsageStatisticsRepository>(),
+    );
+    expect(
+      shell.agentUsagePanelController.repository,
+      isA<QueryAgentUsagePanelRepository>(),
+    );
   });
 
   test(

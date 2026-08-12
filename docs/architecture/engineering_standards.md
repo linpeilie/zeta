@@ -1,6 +1,6 @@
 # 工程规范
 
-最后更新：2026-08-09
+最后更新：2026-08-12
 
 本文从当前 `lib/` 重构后的代码结构中提炼长期遵循的工程规范。它补充根目录 `AGENTS.md`，用于指导后续功能开发、重构和评审。
 
@@ -71,7 +71,7 @@ main -> app -> presentation/application -> domain
 
 - presentation 可以读取 view model、controller 暴露的状态并触发动作，但不直接解析 provider 原始协议。
 - application 负责异步流程、恢复、分页、竞态隔离和状态写入，不负责绘制 widget。
-- data 实现 provider、JSON-RPC、JSONL、版本化本地 JSON 文件等具体细节，并把外部 payload 映射为 domain 模型。
+- data 实现 provider、JSON-RPC、JSONL、版本化本地 JSON 文件等具体细节，并把外部 payload 映射为 domain 模型。Provider 自有 data adapter 可按明确功能读取对应 CLI 的私有数据，但原始结构与路径不得泄漏到上层。
 - domain 不依赖 Flutter widget、不访问本地文件系统、不引用具体 provider 实现。
 - app 可以引用具体 data 实现，因为 app 是依赖注入和默认实现装配点。
 
@@ -420,9 +420,11 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
   排空待写队列。
 - 使用统计派生索引只保存聚合所需元数据；禁止写入 Prompt、回复正文、工具输出、
   session 文件路径和原始错误文本。索引必须版本化并支持损坏后重建。
-- `~/.codex`、`~/.grok`、`~/.cursor`、项目 `.cursor/*` 与用户源码始终由 CLI/用户
-  原地管理。迁移器不得遍历、复制或改写这些目录；退役遗留的
-  `cursor_sessions.json` 不再被运行时读取或写入，只作为受保护用户数据保留。
+- Provider 自有 data adapter 可以读取对应 CLI 的配置、会话、日志和账号 metadata；
+  application/presentation 不得自行遍历 Provider 私有目录，也不得接收原始文件路径或
+  payload。读取权限不自动授权迁移、复制、改写或删除；这些写操作必须有独立产品契约、
+  用户动作和失败恢复设计。退役遗留的 `cursor_sessions.json` 不再被运行时读取或写入，
+  只作为受保护用户数据保留。
 
 ## 6. UI 与交互
 

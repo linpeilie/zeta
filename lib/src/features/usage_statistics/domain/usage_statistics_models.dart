@@ -263,7 +263,8 @@ class AgentUsageRecord {
   final String? errorMessage;
   final String? errorCode;
 
-  String get id => '$threadId/$turnId';
+  /// 跨 Provider 唯一的规范记录 identity，供去重和稳定 UI key 使用。
+  String get id => '$providerId/$threadId/$turnId';
   String get projectName => usageProjectName(projectPath);
 
   Map<String, Object?> toJson() => <String, Object?>{

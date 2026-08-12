@@ -99,8 +99,16 @@ void main() {
       ).readAsStringSync();
       final usage = File(
         'lib/src/features/usage_statistics/data/'
-        'provider_agent_usage_panel_repository.dart',
+        'global_runtime_agent_usage_quota_source.dart',
       ).readAsStringSync();
+
+      expect(
+        File(
+          'lib/src/features/usage_statistics/data/'
+          'provider_agent_usage_panel_repository.dart',
+        ).existsSync(),
+        isFalse,
+      );
 
       expect(registry, contains('required AgentProviderRuntimeScopeKey scope'));
       expect(

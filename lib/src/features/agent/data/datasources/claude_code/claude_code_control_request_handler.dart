@@ -319,7 +319,7 @@ final class ClaudeCodeControlRequestHandler {
         : null;
     final title = _titleFor(pending.toolName, command: command);
 
-    // raw 只放白名单元数据（tool_name），不放 input/路径/命令正文（G8）。
+    // raw 只放白名单元数据（tool_name），不放 input/路径/命令正文（G7）。
     // command / description 走专用字段供 UI 展示。
     return AgentPermissionRequest(
       id: pending.requestId,

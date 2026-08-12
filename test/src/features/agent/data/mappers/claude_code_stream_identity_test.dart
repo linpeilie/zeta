@@ -456,7 +456,7 @@ void main() {
       expect(identity.diagnostics.identityCollisionDetected, greaterThan(0));
     });
 
-    test('11 diagnostics and snapshot omit secrets (G8)', () {
+    test('11 diagnostics and snapshot omit secrets (G7)', () {
       final identity = ClaudeCodeStreamIdentity();
       addTearDown(identity.dispose);
       identity.beginTurn(

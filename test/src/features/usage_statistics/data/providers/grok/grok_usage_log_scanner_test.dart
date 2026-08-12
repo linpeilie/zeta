@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zeta/src/features/agent/data/datasources/local_history/grok_usage_log_scanner.dart';
+import 'package:zeta/src/features/usage_statistics/data/providers/grok/grok_usage_log_scanner.dart';
 
 void main() {
   test('跨项目扫描 updates，并只保留 turn_completed 的单回合用量', () async {

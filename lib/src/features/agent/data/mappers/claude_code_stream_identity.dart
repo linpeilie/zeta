@@ -23,7 +23,7 @@ enum ClaudeCodeTerminalDisposition {
   missingScope,
 }
 
-/// identity reducer 的只读诊断快照（仅计数器，G8）。
+/// identity reducer 的只读诊断快照（仅计数器，G7）。
 final class ClaudeCodeStreamIdentityDiagnostics {
   const ClaudeCodeStreamIdentityDiagnostics({
     required this.syntheticEntryIdCreated,
@@ -119,7 +119,7 @@ final class ClaudeCodeTerminalResolution
   bool get accepted => disposition == ClaudeCodeTerminalDisposition.accepted;
 }
 
-/// 供单测读取的 turn identity 快照（toString 不含 source id 原文，G8）。
+/// 供单测读取的 turn identity 快照（toString 不含 source id 原文，G7）。
 final class ClaudeCodeTurnIdentitySnapshot {
   const ClaudeCodeTurnIdentitySnapshot({
     required this.generation,
@@ -638,7 +638,7 @@ final class ClaudeCodeStreamIdentity {
       _syntheticEntryIdCreated += 1;
     }
     // entryId 用 hash 绑定 source，避免把 source id 原文嵌进 entryId 后经
-    // diagnostics/snapshot 泄漏（G8）；碰撞时追加 generation 后缀。
+    // diagnostics/snapshot 泄漏（G7）；碰撞时追加 generation 后缀。
     final sourceToken = sourceId == null
         ? 'anon'
         : 's${sourceId.hashCode.toUnsigned(32).toRadixString(16)}';
