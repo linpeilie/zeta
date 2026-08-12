@@ -53,7 +53,7 @@
 
 ### 变更
 
-- Claude Code Provider 的展示名简化为 Claude，并改用 Claude 品牌图标
+- Claude Code Provider 的展示名简化为 Claude，并改用保留品牌原色的 Claude 图标
 - 使用统计派生索引升级为多 Provider 分区：Codex 与 Grok 共用 fingerprint 缓存，
   打开统计页时未变更的本地历史可跳过重解析
 - 界面字体改为内置 Geist，不再依赖各平台系统字体；中文仍由平台回退字体承接，

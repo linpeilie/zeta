@@ -59,8 +59,14 @@ void main() {
     expect(pictures[0].colorFilter, isNotNull);
     expect(pictures[1].width, 24);
     expect(pictures[1].height, 24);
+    expect(pictures[1].colorFilter, isNotNull);
     expect(pictures[2].width, 22);
     expect(pictures[2].height, 22);
+    expect(
+      pictures[2].colorFilter,
+      isNull,
+      reason: 'Claude SVG must preserve its bundled brand color',
+    );
     expect(find.bySemanticsLabel('Codex Agent'), findsOneWidget);
     expect(find.bySemanticsLabel('Grok Agent'), findsOneWidget);
     expect(find.bySemanticsLabel('Claude Agent'), findsOneWidget);
