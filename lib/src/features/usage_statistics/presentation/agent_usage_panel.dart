@@ -25,7 +25,7 @@ enum AgentUsagePanelMode { collapsed, expanded }
 
 /// 不包含 [PanelCard] 外框的 Agent 统计内容。
 ///
-/// 折叠态提供最多三行摘要；展开态复用既有 Pane、Provider Tabs 与完整统计内容。
+/// 折叠态提供最多三行摘要；展开态以 Provider Tabs 和完整统计内容自然撑高。
 class AgentUsagePanelContent extends StatelessWidget {
   const AgentUsagePanelContent({
     required this.controller,
@@ -50,30 +50,13 @@ class AgentUsagePanelContent extends StatelessWidget {
               : () => onModeChanged!(AgentUsagePanelMode.expanded),
         ),
       ),
-      AgentUsagePanelMode.expanded => Pane(
-        title: 'Agent 统计',
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (onModeChanged != null) ...[
-              _AgentUsageModeButton(
-                key: const ValueKey('agent-usage-collapse-button'),
-                icon: Icons.keyboard_arrow_down_rounded,
-                tooltip: '折叠 Agent 统计',
-                onPressed: () => onModeChanged!(AgentUsagePanelMode.collapsed),
-              ),
-              const SizedBox(width: IdeSpacing.space2),
-            ],
-            ListenableBuilder(
-              listenable: controller,
-              builder: (context, _) =>
-                  _AgentUsageRefreshButton(controller: controller),
-            ),
-          ],
-        ),
-        child: ListenableBuilder(
-          listenable: controller,
-          builder: (context, _) => _AgentUsagePanelBody(controller: controller),
+      AgentUsagePanelMode.expanded => ListenableBuilder(
+        listenable: controller,
+        builder: (context, _) => _AgentUsagePanelBody(
+          controller: controller,
+          onCollapse: onModeChanged == null
+              ? null
+              : () => onModeChanged!(AgentUsagePanelMode.collapsed),
         ),
       ),
     };
@@ -408,95 +391,151 @@ class _CompactAgentUsageMessage extends StatelessWidget {
 }
 
 class _AgentUsagePanelBody extends StatelessWidget {
-  const _AgentUsagePanelBody({required this.controller});
+  const _AgentUsagePanelBody({required this.controller, this.onCollapse});
 
   final AgentUsagePanelController controller;
+  final VoidCallback? onCollapse;
 
   @override
   Widget build(BuildContext context) {
+    final selected = controller.selectedProvider;
+    final Widget content;
     if (controller.providers.isEmpty) {
       if (controller.isLoading) {
         // 冷加载：呼吸 Skeleton 替代顶栏不定进度条与文案。
-        return const _AgentUsageSkeleton(
+        content = const _AgentUsageSkeleton(
           key: ValueKey<String>('agent-usage-panel-loading'),
           showProviderTitle: true,
         );
-      }
-      if (controller.errorMessage != null) {
-        return _RetryState(
+      } else if (controller.errorMessage != null) {
+        content = _RetryState(
           message: controller.errorMessage!,
           onRetry: () => unawaited(controller.refresh()),
         );
+      } else {
+        content = const EmptyState(text: '暂无已启用的 Agent');
       }
-      return const EmptyState(text: '暂无已启用的 Agent');
+    } else {
+      final resolvedSelected = selected!;
+      content = Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (controller.errorMessage case final error?)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                IdeSpacing.space12,
+                IdeSpacing.space6,
+                IdeSpacing.space12,
+                0,
+              ),
+              child: Text(
+                error,
+                style: IdeTextStyles.of(
+                  context,
+                ).caption.copyWith(color: IdeColors.of(context).warning),
+              ),
+            ),
+          if (resolvedSelected.entry != null &&
+              resolvedSelected.loadError != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                IdeSpacing.space12,
+                IdeSpacing.space6,
+                IdeSpacing.space12,
+                0,
+              ),
+              child: Text(
+                resolvedSelected.loadError!,
+                style: IdeTextStyles.of(
+                  context,
+                ).caption.copyWith(color: IdeColors.of(context).warning),
+              ),
+            ),
+          _SelectedProviderBody(
+            state: resolvedSelected,
+            controller: controller,
+          ),
+        ],
+      );
     }
 
-    final selected = controller.selectedProvider!;
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 有旧数据时的刷新只靠 Tab loading 呼吸提示，不再插入顶栏进度条。
-        if (controller.providers.length > 1)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              IdeSpacing.space8,
-              IdeSpacing.space8,
-              IdeSpacing.space8,
-              0,
-            ),
-            child: IdeTabs<String>(
-              key: const ValueKey('agent-usage-tabs'),
-              value: selected.provider.providerId,
-              semanticLabel: '选择 Agent 用量',
-              scrollContentAlignment: Alignment.center,
-              items: [
-                for (final state in controller.providers)
-                  IdeTabItem<String>(
-                    key: ValueKey<String>(
-                      'agent-usage-tab-${state.provider.providerId}',
-                    ),
-                    value: state.provider.providerId,
-                    label: state.provider.providerName,
-                    loading: state.isLoading,
-                  ),
-              ],
-              onChanged: controller.selectProvider,
-            ),
-          ),
-        if (controller.errorMessage case final error?)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              IdeSpacing.space12,
-              IdeSpacing.space6,
-              IdeSpacing.space12,
-              0,
-            ),
-            child: Text(
-              error,
-              style: IdeTextStyles.of(
-                context,
-              ).caption.copyWith(color: IdeColors.of(context).warning),
-            ),
-          ),
-        if (selected.entry != null && selected.loadError != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              IdeSpacing.space12,
-              IdeSpacing.space6,
-              IdeSpacing.space12,
-              0,
-            ),
-            child: Text(
-              selected.loadError!,
-              style: IdeTextStyles.of(
-                context,
-              ).caption.copyWith(color: IdeColors.of(context).warning),
-            ),
-          ),
-        Expanded(
-          child: _SelectedProviderBody(state: selected, controller: controller),
+        _AgentUsageTabsToolbar(
+          controller: controller,
+          selectedProviderId: selected?.provider.providerId,
+          onCollapse: onCollapse,
         ),
+        content,
       ],
+    );
+  }
+}
+
+class _AgentUsageTabsToolbar extends StatelessWidget {
+  const _AgentUsageTabsToolbar({
+    required this.controller,
+    required this.selectedProviderId,
+    required this.onCollapse,
+  });
+
+  final AgentUsagePanelController controller;
+  final String? selectedProviderId;
+  final VoidCallback? onCollapse;
+
+  @override
+  Widget build(BuildContext context) {
+    final showTabs =
+        controller.providers.length > 1 && selectedProviderId != null;
+    return Padding(
+      key: const ValueKey('agent-usage-tabs-toolbar'),
+      padding: const EdgeInsets.fromLTRB(
+        IdeSpacing.space8,
+        IdeSpacing.space8,
+        IdeSpacing.space6,
+        0,
+      ),
+      child: Row(
+        children: [
+          if (showTabs)
+            Expanded(
+              child: IdeTabs<String>(
+                key: const ValueKey('agent-usage-tabs'),
+                value: selectedProviderId!,
+                semanticLabel: '选择 Agent 用量',
+                scrollContentAlignment: Alignment.center,
+                items: [
+                  for (final state in controller.providers)
+                    IdeTabItem<String>(
+                      key: ValueKey<String>(
+                        'agent-usage-tab-${state.provider.providerId}',
+                      ),
+                      value: state.provider.providerId,
+                      label: state.provider.providerName,
+                      loading: state.isLoading,
+                    ),
+                ],
+                onChanged: controller.selectProvider,
+              ),
+            )
+          else
+            const Spacer(),
+          if (showTabs) const SizedBox(width: IdeSpacing.space4),
+          if (onCollapse != null) ...[
+            _AgentUsageModeButton(
+              key: const ValueKey('agent-usage-collapse-button'),
+              icon: Icons.keyboard_arrow_down_rounded,
+              tooltip: '折叠 Agent 统计',
+              onPressed: onCollapse,
+            ),
+            const SizedBox(width: IdeSpacing.space2),
+          ],
+          _AgentUsageRefreshButton(controller: controller),
+        ],
+      ),
     );
   }
 }
@@ -528,10 +567,7 @@ class _SelectedProviderBody extends StatelessWidget {
       return const EmptyState(text: '暂无统计');
     }
 
-    return SingleChildScrollView(
-      key: PageStorageKey<String>(
-        'agent-usage-scroll-${state.provider.providerId}',
-      ),
+    return Padding(
       padding: const EdgeInsets.all(IdeSpacing.space12),
       child: _ProviderUsage(
         key: ValueKey<String>(
@@ -556,7 +592,7 @@ class _AgentUsageSkeleton extends StatelessWidget {
     return Semantics(
       label: '正在读取 Agent 用量',
       container: true,
-      child: SingleChildScrollView(
+      child: Padding(
         padding: const EdgeInsets.all(IdeSpacing.space12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

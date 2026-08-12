@@ -20,7 +20,7 @@ final class IdeWorkbenchLayoutState {
   /// 用户提交的左栏逻辑像素宽度；为空时由 UI 使用默认 token。
   final double? leftSidebarWidth;
 
-  /// 展开统计区占左栏可用高度的比例；为空时由 UI 使用默认 token。
+  /// 旧版统计区高度比例，仅为会话 JSON 宽容兼容而保留；当前布局不再消费。
   final double? agentUsageHeightFraction;
 
   /// 统计面板关注的 Provider 配置 id；目录到达后再校验是否可用。

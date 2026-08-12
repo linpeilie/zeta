@@ -1,0 +1,98 @@
+{
+  "_fixture": {
+    "formatVersion": 1,
+    "provider": "claude_code",
+    "sourceKind": "sanitizedRealShape",
+    "cliVersion": "2.1.228",
+    "os": "macOS",
+    "architecture": "arm64",
+    "privacy": "Account identity, process identity, paths, credentials, and unrelated payload fields were removed."
+  },
+  "type": "control_response",
+  "response": {
+    "subtype": "success",
+    "request_id": "request_redacted",
+    "response": {
+      "models": [
+        {
+          "value": "default",
+          "resolvedModel": "claude-sonnet-5",
+          "displayName": "Default (recommended)",
+          "description": "Sonnet 5 · Efficient for routine tasks",
+          "supportsEffort": true,
+          "supportedEffortLevels": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "supportsAdaptiveThinking": true,
+          "supportsAutoMode": true
+        },
+        {
+          "value": "sonnet",
+          "resolvedModel": "claude-sonnet-5",
+          "displayName": "Sonnet",
+          "description": "Sonnet 5 · Efficient for routine tasks",
+          "supportsEffort": true,
+          "supportedEffortLevels": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "supportsAdaptiveThinking": true,
+          "supportsAutoMode": true
+        },
+        {
+          "value": "claude-fable-5[1m]",
+          "resolvedModel": "claude-fable-5",
+          "displayName": "Fable",
+          "description": "Fable 5 · For long-running tasks · Requires usage credits",
+          "supportsEffort": true,
+          "supportedEffortLevels": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "supportsAdaptiveThinking": true,
+          "supportsAutoMode": true
+        },
+        {
+          "value": "opus",
+          "resolvedModel": "claude-opus-5",
+          "displayName": "Opus",
+          "description": "Opus 5 · Best for complex tasks",
+          "supportsEffort": true,
+          "supportedEffortLevels": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "supportsAdaptiveThinking": true,
+          "supportsFastMode": true,
+          "supportsAutoMode": true
+        },
+        {
+          "value": "haiku",
+          "resolvedModel": "claude-haiku-4-5-20251001",
+          "displayName": "Haiku",
+          "description": "Haiku 4.5 · Fastest for quick answers"
+        }
+      ],
+      "account": {
+        "subscriptionType": "Claude Pro",
+        "apiProvider": "firstParty"
+      },
+      "futureMetadata": {
+        "mustBeIgnored": true
+      }
+    }
+  }
+}

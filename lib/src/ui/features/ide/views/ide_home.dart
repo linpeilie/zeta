@@ -668,9 +668,6 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
         },
       ),
       agentUsageExpanded: workbenchLayout.agentUsageExpanded,
-      agentUsageHeightFraction: workbenchLayout.agentUsageHeightFraction,
-      onAgentUsageHeightFractionChanged:
-          _shellController.setAgentUsageHeightFraction,
     );
   }
 

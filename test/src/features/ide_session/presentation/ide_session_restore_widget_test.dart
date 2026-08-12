@@ -244,7 +244,7 @@ void main() {
     );
   });
 
-  testWidgets('restores five workbench preferences after user interactions', (
+  testWidgets('restores active workbench preferences after user interactions', (
     tester,
   ) async {
     _useWideWindow(tester);
@@ -279,11 +279,6 @@ void main() {
       const Offset(44, 0),
     );
     await tester.pump();
-    await tester.drag(
-      find.byKey(const ValueKey('agent-usage-resize-handle')),
-      const Offset(0, -32),
-    );
-    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('agent-usage-tab-grok')));
     await tester.pump();
 
@@ -308,7 +303,7 @@ void main() {
     expect(persisted.leftSidebarVisible, isFalse);
     expect(persisted.agentUsageExpanded, isTrue);
     expect(persisted.leftSidebarWidth, 324);
-    expect(persisted.agentUsageHeightFraction, isNotNull);
+    expect(persisted.agentUsageHeightFraction, isNull);
     expect(persisted.selectedAgentUsageProviderId, 'grok');
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -339,7 +334,7 @@ void main() {
     expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
     expect(
       find.byKey(const ValueKey('agent-usage-resize-handle')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       tester

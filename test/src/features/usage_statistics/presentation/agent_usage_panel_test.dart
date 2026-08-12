@@ -41,7 +41,8 @@ void main() {
 
     await _pumpPanel(tester, controller);
 
-    expect(find.text('Agent 统计'), findsOneWidget);
+    expect(find.text('Agent 统计'), findsNothing);
+    expect(find.byType(Pane), findsNothing);
     expect(find.byKey(const ValueKey('agent-usage-tabs')), findsOneWidget);
     expect(find.text('Codex Work'), findsOneWidget);
     expect(find.text('Grok Personal'), findsOneWidget);
@@ -155,17 +156,20 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets('可容纳的 Provider Tab 组在面板内水平居中', (tester) async {
+  testWidgets('Provider Tabs 与右侧刷新操作保持同一行', (tester) async {
     final controller = AgentUsagePanelController(
       repository: _ImmediatePanelRepository(_usageEntries),
     );
     addTearDown(controller.dispose);
     await _pumpPanel(tester, controller, width: 420);
 
-    final panelCenter = tester.getCenter(find.byType(sf.Scaffold));
     final tabsCenter = tester.getCenter(find.byType(sf.Tabs));
+    final refreshCenter = tester.getCenter(
+      find.byKey(const ValueKey('agent-usage-refresh-button')),
+    );
 
-    expect(tabsCenter.dx, closeTo(panelCenter.dx, 1));
+    expect(refreshCenter.dx, greaterThan(tabsCenter.dx));
+    expect(refreshCenter.dy, closeTo(tabsCenter.dy, 1));
   });
 
   testWidgets('Provider Tabs 超宽时可横向滚动且不溢出', (tester) async {
@@ -522,7 +526,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('cardless 展开态复用 Tabs、完整套餐和 Token 内容', (tester) async {
+  testWidgets('cardless 展开态把操作并入 Tabs 且正文不再纵向滚动', (tester) async {
     final controller = AgentUsagePanelController(
       repository: _ImmediatePanelRepository(_usageEntries),
     );
@@ -538,9 +542,33 @@ void main() {
     );
 
     expect(find.byType(PanelCard), findsNothing);
-    expect(find.byType(Pane), findsOneWidget);
-    expect(find.text('Agent 统计'), findsOneWidget);
-    expect(find.byKey(const ValueKey('agent-usage-tabs')), findsOneWidget);
+    expect(find.byType(Pane), findsNothing);
+    expect(find.text('Agent 统计'), findsNothing);
+    final tabs = find.byKey(const ValueKey('agent-usage-tabs'));
+    final collapse = find.byKey(const ValueKey('agent-usage-collapse-button'));
+    final refresh = find.byKey(const ValueKey('agent-usage-refresh-button'));
+    expect(tabs, findsOneWidget);
+    expect(collapse, findsOneWidget);
+    expect(refresh, findsOneWidget);
+    expect(
+      tester.getCenter(collapse).dx,
+      greaterThan(tester.getTopRight(tabs).dx),
+    );
+    expect(
+      tester.getCenter(refresh).dx,
+      greaterThan(tester.getCenter(collapse).dx),
+    );
+    expect(
+      find.descendant(
+        of: find.byType(AgentUsagePanelContent),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is SingleChildScrollView &&
+              widget.scrollDirection == Axis.vertical,
+        ),
+      ),
+      findsNothing,
+    );
     expect(
       find.byKey(const ValueKey('agent-usage-plan-section')),
       findsOneWidget,
@@ -552,7 +580,7 @@ void main() {
     expect(find.text('5 小时'), findsOneWidget);
     expect(find.text('1.6K'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('agent-usage-collapse-button')));
+    await tester.tap(collapse);
     expect(requestedMode, AgentUsagePanelMode.collapsed);
     expect(tester.takeException(), isNull);
   });

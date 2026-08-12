@@ -1267,74 +1267,77 @@ void main() {
     expect(saved?.selectedThreadIdsByProject, isEmpty);
   });
 
-  test('restores, updates, and persists every workbench field', () async {
-    const restoredWorkbench = IdeWorkbenchLayoutState(
-      leftSidebarVisible: false,
-      agentUsageExpanded: true,
-      leftSidebarWidth: 305,
-      agentUsageHeightFraction: 0.41,
-      selectedAgentUsageProviderId: 'grok',
-    );
-    String? savedJson;
-    final shell = IdeShellController(
-      agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-      directoryPicker: () async => null,
-      sessionStore: CallbackIdeSessionStore(
-        loadJson: () async =>
-            const IdeSessionState(workbenchLayout: restoredWorkbench).encode(),
-        saveJson: (value) async {
-          savedJson = value;
-        },
-      ),
-      agentProviderFactory:
-          _RecordingAgentProviderFactory(<String, _ProviderBackend>{
-            defaultAgentProviderId: _ProviderBackend(
-              config: AgentProviderConfig.defaultCodex,
-              threadPages: const <AgentThreadPage>[],
-            ),
-          }),
-      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-    );
-    addTearDown(shell.dispose);
+  test(
+    'restores legacy usage height while persisting active workbench fields',
+    () async {
+      const restoredWorkbench = IdeWorkbenchLayoutState(
+        leftSidebarVisible: false,
+        agentUsageExpanded: true,
+        leftSidebarWidth: 305,
+        agentUsageHeightFraction: 0.41,
+        selectedAgentUsageProviderId: 'grok',
+      );
+      String? savedJson;
+      final shell = IdeShellController(
+        agentUiFrameSchedulerFactory: _createUiFrameScheduler,
+        directoryPicker: () async => null,
+        sessionStore: CallbackIdeSessionStore(
+          loadJson: () async => const IdeSessionState(
+            workbenchLayout: restoredWorkbench,
+          ).encode(),
+          saveJson: (value) async {
+            savedJson = value;
+          },
+        ),
+        agentProviderFactory:
+            _RecordingAgentProviderFactory(<String, _ProviderBackend>{
+              defaultAgentProviderId: _ProviderBackend(
+                config: AgentProviderConfig.defaultCodex,
+                threadPages: const <AgentThreadPage>[],
+              ),
+            }),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      );
+      addTearDown(shell.dispose);
 
-    await _flushAsync();
-    await _flushAsync();
+      await _flushAsync();
+      await _flushAsync();
 
-    expect(shell.initialRestoreCompleted, isTrue);
-    expect(shell.workbenchLayout, restoredWorkbench);
+      expect(shell.initialRestoreCompleted, isTrue);
+      expect(shell.workbenchLayout, restoredWorkbench);
 
-    shell
-      ..setLeftSidebarVisible(true)
-      ..setAgentUsageExpanded(false)
-      ..setLeftSidebarWidth(340)
-      ..setAgentUsageHeightFraction(0.56)
-      ..setSelectedAgentUsageProviderId('claude_code');
-    expect(savedJson, isNull);
+      shell
+        ..setLeftSidebarVisible(true)
+        ..setAgentUsageExpanded(false)
+        ..setLeftSidebarWidth(340)
+        ..setSelectedAgentUsageProviderId('claude_code');
+      expect(savedJson, isNull);
 
-    await Future<void>.delayed(
-      sessionSaveDelay + const Duration(milliseconds: 50),
-    );
+      await Future<void>.delayed(
+        sessionSaveDelay + const Duration(milliseconds: 50),
+      );
 
-    const updatedWorkbench = IdeWorkbenchLayoutState(
-      leftSidebarWidth: 340,
-      agentUsageHeightFraction: 0.56,
-      selectedAgentUsageProviderId: 'claude_code',
-    );
-    expect(shell.workbenchLayout, updatedWorkbench);
-    expect(
-      IdeSessionState.tryDecode(savedJson)?.workbenchLayout,
-      updatedWorkbench,
-    );
+      const updatedWorkbench = IdeWorkbenchLayoutState(
+        leftSidebarWidth: 340,
+        agentUsageHeightFraction: 0.41,
+        selectedAgentUsageProviderId: 'claude_code',
+      );
+      expect(shell.workbenchLayout, updatedWorkbench);
+      expect(
+        IdeSessionState.tryDecode(savedJson)?.workbenchLayout,
+        updatedWorkbench,
+      );
 
-    savedJson = null;
-    shell.setSelectedAgentUsageProviderId('codex');
-    await shell.saveNow();
+      savedJson = null;
+      shell.setSelectedAgentUsageProviderId('codex');
+      await shell.saveNow();
 
-    expect(
-      IdeSessionState.tryDecode(savedJson)?.workbenchLayout,
-      updatedWorkbench.copyWith(selectedAgentUsageProviderId: 'codex'),
-    );
-  });
+      expect(
+        IdeSessionState.tryDecode(savedJson)?.workbenchLayout,
+        updatedWorkbench.copyWith(selectedAgentUsageProviderId: 'codex'),
+      );
+    },
+  );
 
   test(
     'sorts recent projects and aggregates cached threads across projects',

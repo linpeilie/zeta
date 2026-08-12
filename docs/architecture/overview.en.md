@@ -181,7 +181,7 @@ Page switching only swaps slot content; `WindowFrame` and `IdeWorkbenchScaffold`
 
 The Agent home page mounts no Activity Rail. A leading title-bar action on `WindowFrame` is the sole visibility control for the merged sidebar; inside the Navigation slot, one `ProjectAgentSidebar` card contains Projects / Threads and the read-only agent-usage summary at the bottom. Usage starts collapsed. In Compact mode the entire sidebar reuses the Navigation Overlay, and dismissing it with the scrim or Escape restores focus to the title-bar action.
 
-Sidebar visibility, usage expansion, sidebar width, usage height fraction, and the selected usage provider are application-level Workbench preferences restored tolerantly from `ide_session.json`. A terminal signal from either a foreground or background thread only makes usage follow that signal's provider and refresh silently; it never switches the conversation's active provider.
+Sidebar visibility, usage expansion, sidebar width, and the selected usage provider are application-level Workbench preferences restored tolerantly from `ide_session.json`. Expanded usage takes its natural content height, with no height drag handle or internal vertical scrolling; legacy height-fraction fields are accepted only for tolerant compatibility. A terminal signal from either a foreground or background thread only makes usage follow that signal's provider and refresh silently; it never switches the conversation's active provider.
 
 Cross-page retention uses `IdeRetainedPageView`, not `IndexedStack` (the latter keeps paying layout cost for long timelines). The timeline is virtualized with `SliverList.builder`, and streaming turns, syntax highlighting, and diff regions each get a `RepaintBoundary`.
 

@@ -114,18 +114,10 @@ abstract final class IdeMetrics {
   /// 生效位置：`IdeWorkbenchScaffold.inspectorWidth` 默认值。
   static const double inspectorPaneWidth = 300;
 
-  /// Agent 统计展开态在空间充足时的最小高度。
+  /// 合并左栏折叠统计摘要为 Projects 正文优先保留的最小高度。
   ///
-  /// 生效位置：`ProjectAgentSidebar`；空间不足时按父约束降级，并由正文内部滚动。
-  static const double agentUsageExpandedMinHeight = 220;
-
-  /// 合并左栏为 Projects 正文优先保留的最小高度。
-  ///
-  /// 生效位置：`ProjectAgentSidebar` 的统计高度上界。
+  /// 生效位置：`ProjectAgentSidebar` 的折叠摘要高度上界。
   static const double projectsPaneMinHeight = 160;
-
-  /// 首次展开 Agent 统计时占合并左栏可用高度的默认比例。
-  static const double agentUsageDefaultFraction = 0.40;
 
   // ---------------------------------------------------------------------------
   // 内容最大宽与主编辑区

@@ -263,10 +263,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
     await tester.pump();
 
-    expect(find.text('Agent 统计'), findsOneWidget);
+    expect(find.text('Agent 统计'), findsNothing);
     expect(
       find.byKey(const ValueKey('agent-usage-resize-handle')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('workbench-navigation-inline')),
@@ -294,7 +294,7 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
-    expect(find.text('Agent 统计'), findsOneWidget);
+    expect(find.text('Agent 统计'), findsNothing);
     expect(
       find.byKey(const ValueKey('left-width-resize-handle')),
       findsOneWidget,
@@ -357,7 +357,7 @@ void main() {
 
       expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
       expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
-      expect(find.text('Agent 统计'), findsOneWidget);
+      expect(find.text('Agent 统计'), findsNothing);
       _expectRetainedAgentContentState(tester, retained);
 
       await tester.tap(
@@ -492,7 +492,7 @@ void main() {
   });
 
   testWidgets(
-    'usage height previews locally and persists only after drag end',
+    'expanded usage follows content height and ignores legacy resize fraction',
     (tester) async {
       final session = MemorySessionStore(
         const IdeSessionState(
@@ -505,27 +505,11 @@ void main() {
       await _pumpIde(tester, sessionStore: session);
 
       final usage = find.byKey(const ValueKey('project-agent-sidebar-usage'));
-      final initialHeight = tester.getSize(usage).height;
-      final handle = find.byKey(const ValueKey('agent-usage-resize-handle'));
-      final gesture = await tester.startGesture(tester.getCenter(handle));
-      await gesture.moveBy(const Offset(0, -40));
-      await tester.pump();
-
-      expect(tester.getSize(usage).height, greaterThan(initialHeight));
-      await pumpSessionSave(tester);
+      expect(tester.getSize(usage).height, lessThan(200));
       expect(
-        IdeSessionState.tryDecode(
-          session.value,
-        )?.workbenchLayout.agentUsageHeightFraction,
-        0.4,
+        find.byKey(const ValueKey('agent-usage-resize-handle')),
+        findsNothing,
       );
-
-      await gesture.up();
-      await pumpSessionSave(tester);
-      final savedLayout = IdeSessionState.tryDecode(
-        session.value,
-      )!.workbenchLayout;
-      expect(savedLayout.agentUsageHeightFraction, greaterThan(0.4));
 
       await tester.tap(
         find.byKey(const ValueKey('agent-usage-collapse-button')),
@@ -539,7 +523,7 @@ void main() {
         IdeSessionState.tryDecode(
           session.value,
         )?.workbenchLayout.agentUsageHeightFraction,
-        savedLayout.agentUsageHeightFraction,
+        0.4,
       );
     },
   );

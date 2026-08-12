@@ -1,0 +1,15 @@
+{
+  "_fixture": {
+    "formatVersion": 1,
+    "provider": "claude_code",
+    "sourceKind": "sanitizedRealShape",
+    "cliVersion": "2.1.228",
+    "os": "macOS",
+    "architecture": "arm64",
+    "privacy": "Only the documented authentication status projection is retained."
+  },
+  "loggedIn": true,
+  "authMethod": "claude.ai",
+  "apiProvider": "firstParty",
+  "subscriptionType": "pro"
+}

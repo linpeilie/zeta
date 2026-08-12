@@ -181,7 +181,7 @@ flowchart TD
 
 Agent 首页不挂载 Activity Rail。`WindowFrame` 的标题栏左侧按钮是合并左栏唯一的显隐入口，标题栏右侧按钮是 Files Inspector 唯一的显隐入口；Navigation slot 内的 `ProjectAgentSidebar` 以一个卡片承载 Projects / Threads 和底部只读 Agent 统计。统计默认折叠，Compact 模式下左右侧栏分别复用 Navigation / Inspector Overlay，scrim 或 Esc 关闭后焦点回到对应标题栏按钮。
 
-左栏显隐、统计展开态、左栏宽度、统计高度比例和统计 Provider 选择属于应用级 Workbench 偏好，随 `ide_session.json` 宽容恢复。前台或后台 thread 的终态只会让统计跟随该信号的 Provider 并静默刷新，不会切换会话 active Provider。
+左栏显隐、统计展开态、左栏宽度和统计 Provider 选择属于应用级 Workbench 偏好，随 `ide_session.json` 宽容恢复。统计展开后按内容自然撑高，不提供高度拖动或内部纵向滚动；旧快照中的高度比例字段只做宽容兼容。前台或后台 thread 的终态只会让统计跟随该信号的 Provider 并静默刷新，不会切换会话 active Provider。
 
 跨页面保活用 `IdeRetainedPageView`，不用 `IndexedStack`（后者会一直保留长时间线的布局开销）。时间线用 `SliverList.builder` 虚拟化，流式回合、代码高亮和 diff 区域各自加 `RepaintBoundary`。
 

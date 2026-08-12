@@ -290,13 +290,6 @@ class IdeShellController extends ChangeNotifier {
     _setWorkbenchLayout(_workbenchLayout.copyWith(leftSidebarWidth: width));
   }
 
-  /// 提交 Agent 统计展开高度比例；传空恢复 UI 默认比例。
-  void setAgentUsageHeightFraction(double? fraction) {
-    _setWorkbenchLayout(
-      _workbenchLayout.copyWith(agentUsageHeightFraction: fraction),
-    );
-  }
-
   /// 提交统计面板关注的 Provider id；传空清除偏好。
   void setSelectedAgentUsageProviderId(String? providerId) {
     _setWorkbenchLayout(
