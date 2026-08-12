@@ -2,14 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'package:zeta/src/features/agent/data/claude_code_cli_locator.dart'
+    show looksLikeClaudeCodeCliPath;
 import 'package:zeta/src/features/agent/data/codex_cli_locator.dart'
     show looksLikeCodexCliPath;
 import 'package:zeta/src/features/agent/data/grok_cli_locator.dart'
     show looksLikeGrokCliPath;
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent_management/data/claude_code_agent_management_repository.dart'
-    show looksLikeClaudeCodeCliPath;
 import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart'
     show isNewerVersion;
 import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';

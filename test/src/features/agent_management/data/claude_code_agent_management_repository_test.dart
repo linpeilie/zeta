@@ -1,7 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/data/codex_cli_locator.dart';
+import 'package:zeta/src/features/agent/data/claude_code_cli_locator.dart';
+import 'package:zeta/src/features/agent/data/cli_command_locator.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/stream_json_peer.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent_management/data/claude_code_agent_management_repository.dart';
@@ -21,6 +22,7 @@ void main() {
       final fileSystem = _FakeMetadataFileSystem();
       final probe = _FakeConnectionProbe();
       final repository = ClaudeCodeAgentManagementRepository(
+        locator: const _FakeClaudeCodeCliLocator(),
         processRunner: processRunner.call,
         connectionProbe: probe.call,
         fileSystem: fileSystem,
@@ -56,6 +58,7 @@ void main() {
         final probe = _FakeConnectionProbe();
         final progress = <AgentDetectionProgress>[];
         final repository = ClaudeCodeAgentManagementRepository(
+          locator: const _FakeClaudeCodeCliLocator(),
           processRunner: processRunner.call,
           connectionProbe: probe.call,
           fileSystem: fileSystem,
@@ -119,6 +122,7 @@ void main() {
       );
       final probe = _FakeConnectionProbe();
       final repository = ClaudeCodeAgentManagementRepository(
+        locator: const _FakeClaudeCodeCliLocator(),
         processRunner: _FakeProcessRunner.success().call,
         connectionProbe: probe.call,
         fileSystem: fileSystem,
@@ -175,6 +179,7 @@ void main() {
         ),
       );
       final repository = ClaudeCodeAgentManagementRepository(
+        locator: const _FakeClaudeCodeCliLocator(),
         processRunner: processRunner.call,
         connectionProbe: probe.call,
         fileSystem: fileSystem,
@@ -233,6 +238,22 @@ void main() {
     expect(afterResult?.cliVersion, '2.1.224');
     expect(afterResult?.model, 'claude-sonnet-4-5');
   });
+}
+
+class _FakeClaudeCodeCliLocator extends ClaudeCodeCliLocator {
+  const _FakeClaudeCodeCliLocator();
+
+  @override
+  Future<ResolvedCliCommand?> locate(AgentProviderConfig config) async {
+    return const ResolvedCliCommand(
+      displayPath: '/fake/claude',
+      executable: '/fake/claude',
+    );
+  }
+
+  @override
+  Future<ResolvedCliCommand?> resolvePath(String path) =>
+      locate(AgentProviderConfig.defaultClaudeCode);
 }
 
 final class _FakeProcessRunner {

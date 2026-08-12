@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
-import 'package:zeta/src/features/agent/data/codex_cli_locator.dart';
+import 'package:zeta/src/features/agent/data/cli_command_locator.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent_management/data/cli_process_runner.dart';

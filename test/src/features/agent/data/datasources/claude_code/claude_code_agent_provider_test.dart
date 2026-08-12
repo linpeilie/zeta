@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/features/agent/data/claude_code_cli_locator.dart';
+import 'package:zeta/src/features/agent/data/cli_command_locator.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_agent_provider.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_model_catalog.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_oauth_credentials_reader.dart';
@@ -23,7 +25,7 @@ void main() {
       final provider = ClaudeCodeAgentProvider(
         config: AgentProviderConfig.defaultClaudeCode,
         processStarter: _starter(process),
-        whichLookup: (command) async => command,
+        locator: const _FakeClaudeCodeCliLocator(),
         idFactory: () {
           idSeq += 1;
           return idSeq == 1
@@ -87,7 +89,7 @@ void main() {
         final provider = ClaudeCodeAgentProvider(
           config: AgentProviderConfig.defaultClaudeCode,
           processStarter: _starter(process),
-          whichLookup: (command) async => command,
+          locator: const _FakeClaudeCodeCliLocator(),
           idFactory: _sequenceIds(<String>[
             '00000000-0000-4000-8000-000000000031',
             'turn-compact-1',
@@ -148,7 +150,7 @@ void main() {
         final provider = ClaudeCodeAgentProvider(
           config: AgentProviderConfig.defaultClaudeCode,
           processStarter: _starter(process),
-          whichLookup: (command) async => command,
+          locator: const _FakeClaudeCodeCliLocator(),
           idFactory: () {
             idSeq += 1;
             return idSeq == 1 ? 'session-perm-1' : 'turn-perm-1';
@@ -229,7 +231,7 @@ void main() {
         final provider = ClaudeCodeAgentProvider(
           config: AgentProviderConfig.defaultClaudeCode,
           processStarter: _starter(process),
-          whichLookup: (command) async => command,
+          locator: const _FakeClaudeCodeCliLocator(),
           idFactory: _sequenceIds(<String>['session-plan-1', 'turn-plan-1']),
         );
         addTearDown(provider.dispose);
@@ -312,7 +314,7 @@ void main() {
       final provider = ClaudeCodeAgentProvider(
         config: AgentProviderConfig.defaultClaudeCode,
         processStarter: _starter(process),
-        whichLookup: (command) async => command,
+        locator: const _FakeClaudeCodeCliLocator(),
         idFactory: () => 'id-unknown-ctrl',
       );
       addTearDown(provider.dispose);
@@ -355,7 +357,7 @@ void main() {
         final provider = ClaudeCodeAgentProvider(
           config: AgentProviderConfig.defaultClaudeCode,
           processStarter: _queueStarter(processes, starts),
-          whichLookup: (command) async => command,
+          locator: const _FakeClaudeCodeCliLocator(),
           idFactory: () => 'session-switch-1',
         );
         addTearDown(provider.dispose);
@@ -398,7 +400,7 @@ void main() {
         final provider = ClaudeCodeAgentProvider(
           config: AgentProviderConfig.defaultClaudeCode,
           processStarter: _queueStarter(<_FakeClaudeProcess>[process], starts),
-          whichLookup: (command) async => command,
+          locator: const _FakeClaudeCodeCliLocator(),
         );
         addTearDown(provider.dispose);
         final events = <AgentEvent>[];
@@ -566,7 +568,7 @@ void main() {
           selectedModel: 'haiku',
         ),
         processStarter: _queueStarter(<_FakeClaudeProcess>[process], starts),
-        whichLookup: (command) async => command,
+        locator: const _FakeClaudeCodeCliLocator(),
         idFactory: () => 'session-initial-model-1',
       );
       addTearDown(provider.dispose);
@@ -594,7 +596,7 @@ void main() {
             firstProcess,
             secondProcess,
           ], starts),
-          whichLookup: (command) async => command,
+          locator: const _FakeClaudeCodeCliLocator(),
           idFactory: _sequenceIds(<String>[
             'session-model-switch-1',
             'turn-model-switch-1',
@@ -642,7 +644,7 @@ void main() {
             firstProcess,
             secondProcess,
           ], starts),
-          whichLookup: (command) async => command,
+          locator: const _FakeClaudeCodeCliLocator(),
           idFactory: _sequenceIds(<String>[
             'session-running-model-1',
             'turn-running-model-1',
@@ -701,7 +703,7 @@ void main() {
             planProcess,
             executionProcess,
           ], starts),
-          whichLookup: (command) async => command,
+          locator: const _FakeClaudeCodeCliLocator(),
           idFactory: _sequenceIds(<String>[
             'session-turn-permission-1',
             'turn-execution-1',
@@ -760,7 +762,7 @@ void main() {
       final provider = ClaudeCodeAgentProvider(
         config: AgentProviderConfig.defaultClaudeCode,
         processStarter: _queueStarter(<_FakeClaudeProcess>[process], starts),
-        whichLookup: (command) async => command,
+        locator: const _FakeClaudeCodeCliLocator(),
         idFactory: _sequenceIds(<String>[
           'session-turn-guard-1',
           'turn-running-1',
@@ -818,7 +820,7 @@ void main() {
       final provider = ClaudeCodeAgentProvider(
         config: AgentProviderConfig.defaultClaudeCode,
         processStarter: _queueStarter(<_FakeClaudeProcess>[process], starts),
-        whichLookup: (command) async => command,
+        locator: const _FakeClaudeCodeCliLocator(),
         idFactory: _sequenceIds(<String>[
           'session-running-1',
           'turn-running-1',
@@ -858,7 +860,7 @@ void main() {
         final provider = ClaudeCodeAgentProvider(
           config: AgentProviderConfig.defaultClaudeCode,
           processStarter: _starter(process),
-          whichLookup: (command) async => command,
+          locator: const _FakeClaudeCodeCliLocator(),
           sessionDecisionStoreFactory: (_) =>
               FileClaudeCodeSessionDecisionStore(file: cacheFile),
           idFactory: _sequenceIds(<String>['session-cache-1', 'turn-cache-1']),
@@ -910,6 +912,22 @@ void main() {
       expect(source, isNot(contains('尚未接入')));
     });
   });
+}
+
+class _FakeClaudeCodeCliLocator extends ClaudeCodeCliLocator {
+  const _FakeClaudeCodeCliLocator();
+
+  @override
+  Future<ResolvedCliCommand?> locate(AgentProviderConfig config) async {
+    return const ResolvedCliCommand(
+      displayPath: 'claude',
+      executable: 'claude',
+    );
+  }
+
+  @override
+  Future<ResolvedCliCommand?> resolvePath(String path) =>
+      locate(AgentProviderConfig.defaultClaudeCode);
 }
 
 final class _RecordingClaudeCodeSessionHistoryReader

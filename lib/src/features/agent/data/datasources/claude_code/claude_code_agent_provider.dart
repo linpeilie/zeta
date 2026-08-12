@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/data/claude_code_cli_locator.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_control_request_handler.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_event_mapper.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_hidden_thread_store.dart';
@@ -39,7 +40,7 @@ class ClaudeCodeAgentProvider
   ClaudeCodeAgentProvider({
     required this.config,
     ProcessStarter? processStarter,
-    this._whichLookup,
+    ClaudeCodeCliLocator? locator,
     ClaudeCodeEventMapper? mapper,
     ClaudeCodeModelCatalog? modelCatalog,
     ClaudeCodeUsageQuotaAdapter? usageQuotaAdapter,
@@ -49,6 +50,7 @@ class ClaudeCodeAgentProvider
     ClaudeCodeHiddenThreadStore? hiddenThreadStore,
     String Function()? idFactory,
   }) : _processStarterDelegate = processStarter,
+       _cliLocator = locator,
        _mapper = mapper ?? ClaudeCodeEventMapper(providerId: config.id),
        _modelCatalog =
            modelCatalog ??
@@ -93,7 +95,7 @@ class ClaudeCodeAgentProvider
   final AgentProviderConfig config;
 
   final ProcessStarter? _processStarterDelegate;
-  final Future<String?> Function(String command)? _whichLookup;
+  final ClaudeCodeCliLocator? _cliLocator;
   final ClaudeCodeEventMapper _mapper;
   final ClaudeCodeModelCatalog _modelCatalog;
   final ClaudeCodeUsageQuotaAdapter _usageQuotaAdapter;
@@ -791,7 +793,7 @@ class ClaudeCodeAgentProvider
       permissionMode: ClaudeCodePermissionModeCodec.toCliPermissionMode(
         _permissionMode,
       ),
-      whichLookup: _whichLookup,
+      locator: _cliLocator,
     );
 
     _connectionEpoch += 1;

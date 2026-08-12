@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/features/agent/data/claude_code_cli_locator.dart';
+import 'package:zeta/src/features/agent/data/cli_command_locator.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_process_starter.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
@@ -113,19 +117,21 @@ void main() {
   });
 
   group('resolveClaudeCodeProcessCommand', () {
-    test('uses which lookup result and config model', () async {
+    test('uses locator result and config model', () async {
       final resolved = await resolveClaudeCodeProcessCommand(
         AgentProviderConfig.defaultClaudeCode.copyWith(defaultModel: 'opus'),
         sessionId: 'abc',
         permissionMode: 'bypassPermissions',
-        whichLookup: (command) async {
-          expect(command, 'claude');
-          return r'C:\Tools\claude.exe';
-        },
+        locator: const _StaticClaudeCodeCliLocator(
+          ResolvedCliCommand(
+            displayPath: r'C:\Tools\claude.exe',
+            executable: r'C:\Tools\claude.exe',
+          ),
+        ),
       );
 
       expect(resolved.executable, r'C:\Tools\claude.exe');
-      expect(resolved.displayPath, 'claude');
+      expect(resolved.displayPath, r'C:\Tools\claude.exe');
       expect(
         resolved.arguments,
         buildClaudeCodeProcessArguments(
@@ -136,26 +142,59 @@ void main() {
       );
     });
 
-    test('keeps configured command when lookup returns null', () async {
-      final resolved = await resolveClaudeCodeProcessCommand(
-        AgentProviderConfig.defaultClaudeCode,
-        whichLookup: (_) async => null,
+    test('fails closed when locator cannot find an executable', () async {
+      await expectLater(
+        resolveClaudeCodeProcessCommand(
+          AgentProviderConfig.defaultClaudeCode,
+          locator: const _StaticClaudeCodeCliLocator(null),
+        ),
+        throwsA(isA<ProcessException>()),
       );
-      expect(resolved.executable, 'claude');
     });
 
-    test('prefers extra.cliPath for display and lookup key', () async {
-      final resolved = await resolveClaudeCodeProcessCommand(
-        AgentProviderConfig.defaultClaudeCode.copyWith(
-          extra: <String, Object?>{'cliPath': r'D:\bin\claude.cmd'},
-        ),
-        whichLookup: (command) async {
-          expect(command, r'D:\bin\claude.cmd');
-          return command;
-        },
-      );
-      expect(resolved.executable, r'D:\bin\claude.cmd');
-      expect(resolved.displayPath, r'D:\bin\claude.cmd');
-    });
+    test(
+      'prepends the locator shell arguments before protocol flags',
+      () async {
+        final resolved = await resolveClaudeCodeProcessCommand(
+          AgentProviderConfig.defaultClaudeCode,
+          locator: const _StaticClaudeCodeCliLocator(
+            ResolvedCliCommand(
+              displayPath: r'D:\bin\claude.cmd',
+              executable: r'C:\Windows\System32\cmd.exe',
+              prefixArguments: <String>[
+                '/d',
+                '/s',
+                '/c',
+                'call',
+                r'D:\bin\claude.cmd',
+              ],
+            ),
+          ),
+        );
+        expect(resolved.executable, r'C:\Windows\System32\cmd.exe');
+        expect(resolved.displayPath, r'D:\bin\claude.cmd');
+        expect(resolved.arguments.take(5), <String>[
+          '/d',
+          '/s',
+          '/c',
+          'call',
+          r'D:\bin\claude.cmd',
+        ]);
+        expect(resolved.arguments.skip(5), buildClaudeCodeProcessArguments());
+      },
+    );
   });
+}
+
+class _StaticClaudeCodeCliLocator extends ClaudeCodeCliLocator {
+  const _StaticClaudeCodeCliLocator(this.result);
+
+  final ResolvedCliCommand? result;
+
+  @override
+  Future<ResolvedCliCommand?> locate(AgentProviderConfig config) async =>
+      result;
+
+  @override
+  Future<ResolvedCliCommand?> resolvePath(String path) async => result;
 }

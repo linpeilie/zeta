@@ -1,27 +1,16 @@
 import 'dart:io';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
-import 'package:zeta/src/features/agent/data/codex_cli_locator.dart';
+import 'package:zeta/src/features/agent/data/cli_command_locator.dart';
+import 'package:zeta/src/features/agent/data/codex_cli_locator.dart'
+    show CodexCliLocator;
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 final _log = loggerFor('zeta.agent.codex_process_starter');
 
-/// 实际传给 [Process.start] 的 Codex app-server 启动参数。
-class ResolvedCodexProcessCommand {
-  const ResolvedCodexProcessCommand({
-    required this.executable,
-    required this.arguments,
-    required this.displayPath,
-  });
-
-  final String executable;
-  final List<String> arguments;
-  final String displayPath;
-}
-
 /// 在每次启动前重新校验 CLI，避免持久化的旧路径阻断 Agent 初始化。
-Future<ResolvedCodexProcessCommand> resolveCodexProcessCommand(
+Future<ResolvedCliProcessCommand> resolveCodexProcessCommand(
   AgentProviderConfig config, {
   CodexCliLocator? locator,
 }) async {
@@ -43,11 +32,7 @@ Future<ResolvedCodexProcessCommand> resolveCodexProcessCommand(
   }
 
   final protocolArguments = _protocolArguments(config.arguments);
-  return ResolvedCodexProcessCommand(
-    executable: resolved.executable,
-    arguments: resolved.argumentsFor(protocolArguments),
-    displayPath: resolved.displayPath,
-  );
+  return resolved.processCommandFor(protocolArguments);
 }
 
 /// 创建供 [JsonRpcStdioTransport] 使用的 Codex 进程启动器。

@@ -1,27 +1,15 @@
 import 'dart:io';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/data/cli_command_locator.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
 import 'package:zeta/src/features/agent/data/grok_cli_locator.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 final _log = loggerFor('zeta.agent.grok_process_starter');
 
-/// 实际传给 [Process.start] 的 Grok ACP 启动参数。
-class ResolvedGrokProcessCommand {
-  const ResolvedGrokProcessCommand({
-    required this.executable,
-    required this.arguments,
-    required this.displayPath,
-  });
-
-  final String executable;
-  final List<String> arguments;
-  final String displayPath;
-}
-
 /// 在每次启动前重新校验 CLI，避免持久化的旧路径阻断 Agent 初始化。
-Future<ResolvedGrokProcessCommand> resolveGrokProcessCommand(
+Future<ResolvedCliProcessCommand> resolveGrokProcessCommand(
   AgentProviderConfig config, {
   GrokCliLocator? locator,
   String? modelId,
@@ -49,11 +37,7 @@ Future<ResolvedGrokProcessCommand> resolveGrokProcessCommand(
     modelId: modelId ?? config.selectedModel ?? config.defaultModel,
     reasoningEffort: reasoningEffort ?? config.selectedReasoningEffort,
   );
-  return ResolvedGrokProcessCommand(
-    executable: resolved.executable,
-    arguments: resolved.argumentsFor(protocolArguments),
-    displayPath: resolved.displayPath,
-  );
+  return resolved.processCommandFor(protocolArguments);
 }
 
 /// 创建供 [JsonRpcStdioTransport] 使用的 Grok 进程启动器。

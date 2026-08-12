@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:zeta/src/features/agent/data/codex_cli_locator.dart';
+import 'package:zeta/src/features/agent/data/claude_code_cli_locator.dart';
+import 'package:zeta/src/features/agent/data/cli_command_locator.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_process_starter.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/stream_json_peer.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -151,6 +152,7 @@ class ClaudeCodeAgentManagementRepository
   ClaudeCodeAgentManagementRepository({
     ClaudeCodeCliProcessRun? processRunner,
     ClaudeCodeConnectionProbe? connectionProbe,
+    ClaudeCodeCliLocator? locator,
     ClaudeCodeMetadataFileSystem? fileSystem,
     DateTime Function()? now,
     String Function()? claudeHomeProvider,
@@ -164,7 +166,16 @@ class ClaudeCodeAgentManagementRepository
                environment: environment,
              );
            }),
-       _connectionProbe = connectionProbe ?? _probeClaudeCodeConnection,
+       _connectionProbe =
+           connectionProbe ??
+           ((providerConfig, {required timeout}) {
+             return _probeClaudeCodeConnection(
+               providerConfig,
+               timeout: timeout,
+               locator: locator,
+             );
+           }),
+       _locator = locator ?? const ClaudeCodeCliLocator(),
        _fileSystem = fileSystem ?? const IoClaudeCodeMetadataFileSystem(),
        _now = now ?? DateTime.now,
        _claudeHomeProvider = claudeHomeProvider ?? _defaultClaudeHome;
@@ -174,6 +185,7 @@ class ClaudeCodeAgentManagementRepository
 
   final ClaudeCodeCliProcessRun _processRunner;
   final ClaudeCodeConnectionProbe _connectionProbe;
+  final ClaudeCodeCliLocator _locator;
   final ClaudeCodeMetadataFileSystem _fileSystem;
   final DateTime Function() _now;
   final String Function() _claudeHomeProvider;
@@ -450,7 +462,14 @@ class ClaudeCodeAgentManagementRepository
   Future<_ClaudeCodeVersionRead> _readVersion(
     AgentProviderConfig providerConfig,
   ) async {
-    final command = _resolvedCommand(providerConfig);
+    final command = await _locator.locate(providerConfig);
+    final displayPath = _preferredClaudeCodePath(providerConfig);
+    if (command == null) {
+      return _ClaudeCodeVersionRead(
+        cliCallable: false,
+        displayPath: displayPath,
+      );
+    }
     try {
       final result = await _processRunner(
         command,
@@ -525,52 +544,19 @@ class ClaudeCodeAgentManagementRepository
   }
 }
 
-/// 路径 basename 是否像 Claude Code CLI（`claude` / `claude.exe` 等）。
-bool looksLikeClaudeCodeCliPath(String path) {
-  final normalized = path.replaceAll('\\', '/');
-  final slash = normalized.lastIndexOf('/');
-  final base = (slash >= 0 ? normalized.substring(slash + 1) : normalized)
-      .toLowerCase();
-  return base == 'claude' || base.startsWith('claude.');
-}
-
-ResolvedCliCommand _resolvedCommand(AgentProviderConfig config) {
+String _preferredClaudeCodePath(AgentProviderConfig config) {
   final configuredPath = config.extra['cliPath'];
-  final preferred = configuredPath is String && configuredPath.trim().isNotEmpty
+  return configuredPath is String && configuredPath.trim().isNotEmpty
       ? configuredPath.trim()
       : config.command.trim().isEmpty
       ? AgentProviderConfig.defaultClaudeCode.command
       : config.command.trim();
-  if (!Platform.isWindows) {
-    return ResolvedCliCommand(displayPath: preferred, executable: preferred);
-  }
-  final lower = preferred.toLowerCase();
-  if (lower.endsWith('.cmd') || lower.endsWith('.bat')) {
-    return ResolvedCliCommand(
-      displayPath: preferred,
-      executable: 'cmd.exe',
-      prefixArguments: <String>['/d', '/s', '/c', preferred],
-    );
-  }
-  if (lower.endsWith('.ps1')) {
-    return ResolvedCliCommand(
-      displayPath: preferred,
-      executable: 'powershell.exe',
-      prefixArguments: <String>[
-        '-NoLogo',
-        '-NoProfile',
-        '-NonInteractive',
-        '-File',
-        preferred,
-      ],
-    );
-  }
-  return ResolvedCliCommand(displayPath: preferred, executable: preferred);
 }
 
 Future<ClaudeCodeConnectionProbeResult> _probeClaudeCodeConnection(
   AgentProviderConfig providerConfig, {
   required Duration timeout,
+  ClaudeCodeCliLocator? locator,
 }) async {
   final sessionId = _randomSessionId();
   final directory = await Directory.systemTemp.createTemp(
@@ -585,6 +571,7 @@ Future<ClaudeCodeConnectionProbeResult> _probeClaudeCodeConnection(
       sessionId: sessionId,
       permissionPromptTool: null,
       noSessionPersistence: true,
+      locator: locator,
     );
     peer = StreamJsonPeer(
       command: command.executable,
