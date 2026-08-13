@@ -16,6 +16,7 @@ import 'package:zeta/src/features/project_threads/presentation/project_threads_v
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 
 import '../../../testing/agent_provider_stub_base.dart';
+import '../../../testing/legacy_bundle_factory_mixin.dart';
 
 void main() {
   group('ProjectThreadsController', () {
@@ -1401,8 +1402,9 @@ Future<void> _flushAsync() async {
   await Future<void>.delayed(Duration.zero);
 }
 
-class _FakeAgentProviderFactory implements AgentProviderFactory {
-  const _FakeAgentProviderFactory(this.provider);
+class _FakeAgentProviderFactory extends AgentProviderFactory
+    with LegacyBundleFactoryMixin {
+  _FakeAgentProviderFactory(this.provider);
 
   final _FakeAgentProvider provider;
 
@@ -1410,7 +1412,8 @@ class _FakeAgentProviderFactory implements AgentProviderFactory {
   AgentProvider create(AgentProviderConfig config) => provider;
 }
 
-class _MultiAgentProviderFactory implements AgentProviderFactory {
+class _MultiAgentProviderFactory extends AgentProviderFactory
+    with LegacyBundleFactoryMixin {
   _MultiAgentProviderFactory({
     required this.codex,
     required this.grok,

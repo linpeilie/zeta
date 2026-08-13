@@ -156,6 +156,14 @@ extension AgentProviderBundleAdapter on AgentProvider {
   AgentProviderBundle get bundle => AgentProviderBundle.adapt(this);
 }
 
+/// 直接创建原生 [AgentProviderBundle] 的工厂。
+///
+/// 方法名使用 [createBundle]，避免与仍返回 raw [AgentProvider] 的
+/// [AgentProviderFactory.create] 冲突。
+abstract interface class AgentProviderBundleFactory {
+  AgentProviderBundle createBundle(AgentProviderConfig config);
+}
+
 /// 运行时基础端口，收敛配置、生命周期和连接诊断信息。
 abstract interface class AgentRuntimePort {
   AgentProviderConfig get config;

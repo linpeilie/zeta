@@ -11,6 +11,7 @@ import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent_management/data/cli_process_runner.dart';
 import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import '../../../testing/legacy_bundle_factory_mixin.dart';
 
 void main() {
   group('CodexAgentManagementRepository', () {
@@ -22,7 +23,7 @@ void main() {
         'zeta-agent-management-test-',
       );
       final registry = AgentProviderRuntimeRegistry(
-        providerFactory: const _ThrowingProviderFactory(),
+        providerFactory: _ThrowingProviderFactory(),
       );
       addTearDown(registry.close);
       repository = CodexAgentManagementRepository(
@@ -162,14 +163,16 @@ refreshToken = "refresh-secret"
         AgentProviderConfig.defaultCodex,
         scope: const AgentProviderRuntimeScopeKey.session('entry-a'),
       );
-      expect(identical(sessionLease.provider, probedProvider), isFalse);
+      expect(factory.providers, hasLength(2));
+      expect(identical(factory.providers.last, probedProvider), isFalse);
       await sessionLease.release();
     });
   });
 }
 
-class _ThrowingProviderFactory implements AgentProviderFactory {
-  const _ThrowingProviderFactory();
+class _ThrowingProviderFactory extends AgentProviderFactory
+    with LegacyBundleFactoryMixin {
+  _ThrowingProviderFactory();
 
   @override
   AgentProvider create(AgentProviderConfig config) {
@@ -226,7 +229,8 @@ class _LoggedInProcessRunner implements CliProcessRunner {
 
 /// 每次 create 返回新实例，capabilities 全关（不声明模型目录支持），让
 /// `_probeProvider` 走最短路径：不触碰 `fetchAgentProviderModels`。
-class _ProbeProviderFactory implements AgentProviderFactory {
+class _ProbeProviderFactory extends AgentProviderFactory
+    with LegacyBundleFactoryMixin {
   final List<_ProbeFakeProvider> providers = <_ProbeFakeProvider>[];
 
   @override

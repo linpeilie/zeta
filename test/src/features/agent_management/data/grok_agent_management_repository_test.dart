@@ -10,6 +10,7 @@ import 'package:zeta/src/features/agent_management/data/grok_agent_management_re
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 
 import '../../../testing/ide_test_harness.dart';
+import '../../../testing/legacy_bundle_factory_mixin.dart';
 
 void main() {
   group('parseGrokUpdateCheckJson', () {
@@ -374,7 +375,8 @@ done
         AgentProviderConfig.defaultGrok,
         scope: const AgentProviderRuntimeScopeKey.session('entry-a'),
       );
-      expect(identical(sessionLease.provider, probedProvider), isFalse);
+      expect(factory.providers, hasLength(2));
+      expect(identical(factory.providers.last, probedProvider), isFalse);
       await sessionLease.release();
     });
   });
@@ -418,7 +420,8 @@ bool _listEquals(List<String> a, List<String> b) {
 /// 与 [FakeAgentProviderFactory] 不同：每次 create 返回**新**实例，用于证明
 /// 不同 scope 拿到的是可区分的对象（对齐
 /// codex_agent_management_repository_test.dart 里同名类的写法）。
-class _ProbeProviderFactory implements AgentProviderFactory {
+class _ProbeProviderFactory extends AgentProviderFactory
+    with LegacyBundleFactoryMixin {
   final List<_ProbeFakeProvider> providers = <_ProbeFakeProvider>[];
 
   @override

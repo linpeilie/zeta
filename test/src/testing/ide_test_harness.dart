@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 import 'agent_provider_stub_base.dart';
 
@@ -102,13 +103,20 @@ class MemorySessionStore {
   }
 }
 
-class FakeAgentProviderFactory implements AgentProviderFactory {
-  const FakeAgentProviderFactory(this.provider);
+class FakeAgentProviderFactory
+    implements AgentProviderFactory, AgentProviderBundleFactory {
+  FakeAgentProviderFactory(this.provider);
 
   final FakeAgentProvider provider;
+  AgentProviderBundle? _bundle;
 
   @override
   AgentProvider create(AgentProviderConfig config) => provider;
+
+  @override
+  AgentProviderBundle createBundle(AgentProviderConfig config) {
+    return _bundle ??= AgentProviderBundle.adapt(provider);
+  }
 }
 
 class FakeAgentProvider

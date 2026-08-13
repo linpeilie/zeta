@@ -8,6 +8,7 @@ import 'package:zeta/src/features/usage_statistics/data/global_runtime_agent_usa
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_query_models.dart';
 
 import '../../../testing/agent_provider_stub_base.dart';
+import '../../../testing/legacy_bundle_factory_mixin.dart';
 
 void main() {
   test(
@@ -61,7 +62,8 @@ void main() {
   });
 }
 
-final class _QuotaProviderFactory implements AgentProviderFactory {
+final class _QuotaProviderFactory extends AgentProviderFactory
+    with LegacyBundleFactoryMixin {
   _QuotaProviderFactory({required bool quotaThrows})
     : provider = _QuotaProvider(quotaThrows: quotaThrows);
 
@@ -71,7 +73,8 @@ final class _QuotaProviderFactory implements AgentProviderFactory {
   AgentProvider create(AgentProviderConfig config) => provider;
 }
 
-final class _PlainProviderFactory implements AgentProviderFactory {
+final class _PlainProviderFactory extends AgentProviderFactory
+    with LegacyBundleFactoryMixin {
   final _PlainProvider provider = _PlainProvider();
 
   @override

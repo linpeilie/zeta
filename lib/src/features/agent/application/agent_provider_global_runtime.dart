@@ -40,7 +40,7 @@ final class AgentProviderGlobalRuntime {
       scope: AgentProviderRuntimeScopeKey.global,
     );
     try {
-      final bundle = lease.provider.bundle;
+      final bundle = lease.bundle;
       _initializations.removeWhere(
         (identity, _) =>
             identity.providerId == config.id &&

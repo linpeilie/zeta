@@ -198,9 +198,8 @@ final class AgentConversationBinding extends ChangeNotifier {
     if (lease == null || !lease.isCurrent) {
       return null;
     }
-    final provider = lease.provider;
     return AgentConversationRuntimeContext(
-      bundle: provider.bundle,
+      bundle: lease.bundle,
       runtimeIdentity: lease.runtimeIdentity,
     );
   }
@@ -382,14 +381,14 @@ final class AgentConversationBinding extends ChangeNotifier {
     }
     final lease = await _runtimeRegistry.acquire(config, scope: _runtimeScope);
     try {
-      final provider = lease.provider;
-      await provider.bundle.runtime.initialize();
+      final bundle = lease.bundle;
+      await bundle.runtime.initialize();
       if (_disposed || !lease.isCurrent) {
         throw StateError('Agent conversation runtime was invalidated');
       }
       _runtimeLease = lease;
       final runtime = AgentConversationRuntimeContext(
-        bundle: provider.bundle,
+        bundle: bundle,
         runtimeIdentity: lease.runtimeIdentity,
       );
       permissions.bind(

@@ -10,7 +10,7 @@ import 'package:zeta/src/features/agent/data/cli_command_locator.dart';
 import 'package:zeta/src/features/agent/data/grok_cli_locator.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+
 import 'package:zeta/src/features/agent_management/data/cli_process_runner.dart';
 import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart'
     show isNewerVersion, maskSensitiveConfiguration, redactLogLine;
@@ -628,12 +628,12 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
         config,
         scope: AgentProviderRuntimeScopeKey.global,
       );
-      final provider = lease.provider;
-      await provider.initialize().timeout(_probeTimeout);
-      final modelCatalog = provider.bundle.modelCatalog;
+      final bundle = lease.bundle;
+      await bundle.runtime.initialize().timeout(_probeTimeout);
+      final modelCatalog = bundle.modelCatalog;
       final models = await _loadModels(
         config: config,
-        provider: provider,
+        bundle: bundle,
         hasModelCatalog: modelCatalog != null,
         forceRefresh: forceModelRefresh,
       ).timeout(_probeTimeout);
@@ -660,11 +660,11 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
 
   Future<AgentModelList> _loadModels({
     required AgentProviderConfig config,
-    required AgentProvider provider,
+    required AgentProviderBundle bundle,
     required bool hasModelCatalog,
     required bool forceRefresh,
   }) async {
-    final modelCatalog = provider.bundle.modelCatalog;
+    final modelCatalog = bundle.modelCatalog;
     if (!hasModelCatalog || modelCatalog == null) {
       return const AgentModelList(models: <AgentModelInfo>[]);
     }

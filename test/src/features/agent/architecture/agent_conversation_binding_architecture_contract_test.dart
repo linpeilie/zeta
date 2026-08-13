@@ -11,7 +11,9 @@ void main() {
           .where((file) => file.path.endsWith('.dart'))
           .where(
             (file) =>
-                file.readAsStringSync().contains('providerFactory.create('),
+                file.readAsStringSync().contains(
+                  'providerFactory.createBundle(',
+                ),
           )
           .map((file) => file.path.replaceAll(Platform.pathSeparator, '/'))
           .toList(growable: false);
@@ -135,8 +137,15 @@ void main() {
       ).readAsStringSync();
 
       expect(binding, isNot(contains('AgentProvider get provider')));
+      expect(binding, isNot(contains('lease.provider')));
       expect(bundle, isNot(contains('AgentProvider get provider')));
       expect(bundle, isNot(contains('runtime.provider')));
+      expect(
+        File(
+          'lib/src/features/agent/application/agent_provider_runtime_registry.dart',
+        ).readAsStringSync(),
+        isNot(contains('AgentProvider get provider')),
+      );
     });
 
     test('permission state belongs to one Binding without registries', () {

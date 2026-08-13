@@ -20,6 +20,7 @@ import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_mode
 
 import '../testing/agent_event_storm_fixture.dart';
 import '../testing/agent_provider_stub_base.dart';
+import '../testing/legacy_bundle_factory_mixin.dart';
 import '../testing/fake_agent_frame_scheduler.dart';
 
 final List<FakeAgentFrameScheduler> _uiFrameSchedulers =
@@ -1607,7 +1608,8 @@ final class _DirectoryTrackingUsageRepository
   }
 }
 
-class _RecordingAgentProviderFactory implements AgentProviderFactory {
+class _RecordingAgentProviderFactory extends AgentProviderFactory
+    with LegacyBundleFactoryMixin {
   _RecordingAgentProviderFactory(this.backendsById);
 
   final Map<String, _ProviderBackend> backendsById;

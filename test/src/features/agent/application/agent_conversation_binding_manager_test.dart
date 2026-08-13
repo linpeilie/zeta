@@ -8,6 +8,7 @@ import 'package:zeta/src/features/agent/application/agent_provider_runtime_regis
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 
+import '../../../testing/legacy_bundle_factory_mixin.dart';
 import '../presentation/harness/agent_pane_test_harness.dart';
 
 void main() {
@@ -355,7 +356,7 @@ void main() {
         AgentProviderConfig.defaultCodex,
         scope: AgentProviderRuntimeScopeKey.global,
       );
-      await global.provider.initialize();
+      await global.bundle.runtime.initialize();
       await global.release();
       now = now.add(const Duration(days: 1));
 
@@ -421,7 +422,8 @@ void main() {
   });
 }
 
-final class _BindingProviderFactory implements AgentProviderFactory {
+final class _BindingProviderFactory extends AgentProviderFactory
+    with LegacyBundleFactoryMixin {
   final List<_BindingProvider> providers = <_BindingProvider>[];
 
   @override

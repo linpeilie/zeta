@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 void main() {
   group('AgentProviderRuntimeRegistry', () {
@@ -23,7 +23,7 @@ void main() {
       );
 
       expect(factory.createCount, 1);
-      expect(leases.map((lease) => lease.provider).toSet(), hasLength(1));
+      expect(leases.map((lease) => lease.bundle.runtime).toSet(), hasLength(1));
       expect(registry.debugProviderCount, 1);
       expect(registry.debugLeaseCount, 12);
 
@@ -57,9 +57,9 @@ void main() {
       );
 
       expect(factory.createCount, 2);
-      expect(identical(codexA.provider, codexB.provider), isTrue);
-      expect(identical(grokA.provider, grokB.provider), isTrue);
-      expect(identical(codexA.provider, grokA.provider), isFalse);
+      expect(identical(codexA.bundle.runtime, codexB.bundle.runtime), isTrue);
+      expect(identical(grokA.bundle.runtime, grokB.bundle.runtime), isTrue);
+      expect(identical(codexA.bundle.runtime, grokA.bundle.runtime), isFalse);
 
       await registry.close();
       expect(
@@ -75,7 +75,7 @@ void main() {
         AgentProviderConfig.defaultCodex,
         scope: AgentProviderRuntimeScopeKey.global,
       );
-      final firstProvider = first.provider as _FakeProvider;
+      final firstProvider = first.bundle.runtime as _FakeProvider;
       final changed = AgentProviderConfig.defaultCodex.copyWith(
         command: 'codex-next',
       );
@@ -88,12 +88,12 @@ void main() {
       expect(factory.createCount, 2);
       expect(first.isCurrent, isFalse);
       expect(firstProvider.disposeCount, 1);
-      expect(identical(first.provider, second.provider), isFalse);
+      expect(identical(first.bundle.runtime, second.bundle.runtime), isFalse);
 
       await first.release();
       await second.release();
       await registry.close();
-      expect((second.provider as _FakeProvider).disposeCount, 1);
+      expect((second.bundle.runtime as _FakeProvider).disposeCount, 1);
     });
 
     test('重建 Provider 时递增 runtime generation', () async {
@@ -182,7 +182,10 @@ void main() {
       );
 
       expect(factory.createCount, 1);
-      expect(identical(sessionA.provider, sessionB.provider), isTrue);
+      expect(
+        identical(sessionA.bundle.runtime, sessionB.bundle.runtime),
+        isTrue,
+      );
       expect(sessionA.runtimeIdentity, sessionB.runtimeIdentity);
 
       await sessionA.release();
@@ -211,7 +214,7 @@ void main() {
       );
 
       expect(factory.createCount, 1);
-      expect(identical(second.provider, first.provider), isTrue);
+      expect(identical(second.bundle.runtime, first.bundle.runtime), isTrue);
       expect(second.runtimeIdentity, firstIdentity);
       await second.release();
     });
@@ -275,7 +278,7 @@ void main() {
       );
 
       expect(factory.createCount, 2);
-      expect(identical(second.provider, first.provider), isFalse);
+      expect(identical(second.bundle.runtime, first.bundle.runtime), isFalse);
       expect(
         second.runtimeIdentity.generation,
         first.runtimeIdentity.generation + 1,
@@ -300,7 +303,7 @@ void main() {
       );
 
       expect(factory.createCount, 1);
-      expect(identical(first.provider, second.provider), isTrue);
+      expect(identical(first.bundle.runtime, second.bundle.runtime), isTrue);
 
       await first.release();
       await second.release();
@@ -326,8 +329,14 @@ void main() {
       );
 
       expect(factory.createCount, 2);
-      expect(identical(sessionA.provider, sessionB.provider), isFalse);
-      expect(identical(sessionA.provider, sessionAAgain.provider), isTrue);
+      expect(
+        identical(sessionA.bundle.runtime, sessionB.bundle.runtime),
+        isFalse,
+      );
+      expect(
+        identical(sessionA.bundle.runtime, sessionAAgain.bundle.runtime),
+        isTrue,
+      );
 
       await sessionA.release();
       await sessionB.release();
@@ -350,7 +359,7 @@ void main() {
       );
 
       expect(factory.createCount, 2);
-      expect(identical(global.provider, session.provider), isFalse);
+      expect(identical(global.bundle.runtime, session.bundle.runtime), isFalse);
 
       await registry.invalidateScope(
         AgentProviderConfig.defaultCodex.id,
@@ -390,13 +399,17 @@ void main() {
       expect(registry.debugProviderCount, 1);
       expect(
         factory.providers
-            .firstWhere((provider) => identical(provider, leaseA.provider))
+            .firstWhere(
+              (provider) => identical(provider, leaseA.bundle.runtime),
+            )
             .disposeCount,
         1,
       );
       expect(
         factory.providers
-            .firstWhere((provider) => identical(provider, leaseB.provider))
+            .firstWhere(
+              (provider) => identical(provider, leaseB.bundle.runtime),
+            )
             .disposeCount,
         0,
       );
@@ -533,7 +546,7 @@ void main() {
   });
 }
 
-final class _CountingProviderFactory extends AgentProviderFactory {
+final class _CountingProviderFactory implements AgentProviderBundleFactory {
   _CountingProviderFactory({this.disposeThrows = false});
 
   final bool disposeThrows;
@@ -542,14 +555,15 @@ final class _CountingProviderFactory extends AgentProviderFactory {
   int get createCount => providers.length;
 
   @override
-  AgentProvider create(AgentProviderConfig config) {
+  AgentProviderBundle createBundle(AgentProviderConfig config) {
     final provider = _FakeProvider(config, disposeThrows: disposeThrows);
     providers.add(provider);
-    return provider;
+    return AgentProviderBundle(runtime: provider, conversation: provider);
   }
 }
 
-final class _FakeProvider extends Fake implements AgentProvider {
+final class _FakeProvider extends Fake
+    implements AgentRuntimePort, AgentConversationPort {
   _FakeProvider(this.config, {this.disposeThrows = false});
 
   @override
@@ -568,22 +582,27 @@ final class _FakeProvider extends Fake implements AgentProvider {
   }
 }
 
-final class _SingleProviderFactory extends AgentProviderFactory {
-  _SingleProviderFactory(this.provider);
+final class _SingleProviderFactory implements AgentProviderBundleFactory {
+  _SingleProviderFactory(this.runtime);
 
-  final AgentProvider provider;
+  final AgentRuntimePort runtime;
 
   @override
-  AgentProvider create(AgentProviderConfig config) => provider;
+  AgentProviderBundle createBundle(AgentProviderConfig config) {
+    return AgentProviderBundle(
+      runtime: runtime,
+      conversation: runtime as AgentConversationPort,
+    );
+  }
 }
 
-final class _GatedDisposeProviderFactory implements AgentProviderFactory {
+final class _GatedDisposeProviderFactory implements AgentProviderBundleFactory {
   final List<_GatedDisposeProvider> providers = <_GatedDisposeProvider>[];
   final Completer<void> disposeStarted = Completer<void>();
   final Completer<void> allowDispose = Completer<void>();
 
   @override
-  AgentProvider create(AgentProviderConfig config) {
+  AgentProviderBundle createBundle(AgentProviderConfig config) {
     final provider = _GatedDisposeProvider(
       config,
       isFirst: providers.isEmpty,
@@ -591,11 +610,12 @@ final class _GatedDisposeProviderFactory implements AgentProviderFactory {
       allowDispose: allowDispose,
     );
     providers.add(provider);
-    return provider;
+    return AgentProviderBundle(runtime: provider, conversation: provider);
   }
 }
 
-final class _GatedDisposeProvider extends Fake implements AgentProvider {
+final class _GatedDisposeProvider extends Fake
+    implements AgentRuntimePort, AgentConversationPort {
   _GatedDisposeProvider(
     this.config, {
     required this.isFirst,

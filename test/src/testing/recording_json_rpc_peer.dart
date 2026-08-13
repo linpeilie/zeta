@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 /// 一次由测试 harness 捕获的真实 JSON-RPC 请求。
 final class RecordedJsonRpcCall {
@@ -202,13 +203,20 @@ final class RecordingJsonRpcPeer implements JsonRpcPeer {
 }
 
 /// 始终返回同一运行实例，用于验证应用级共享 Provider。
-final class FixedAgentProviderFactory implements AgentProviderFactory {
-  const FixedAgentProviderFactory(this.provider);
+final class FixedAgentProviderFactory
+    implements AgentProviderFactory, AgentProviderBundleFactory {
+  FixedAgentProviderFactory(this.provider);
 
   final AgentProvider provider;
+  AgentProviderBundle? _bundle;
 
   @override
   AgentProvider create(AgentProviderConfig config) => provider;
+
+  @override
+  AgentProviderBundle createBundle(AgentProviderConfig config) {
+    return _bundle ??= AgentProviderBundle.adapt(provider);
+  }
 }
 
 Object? _freezeJson(Object? value) {

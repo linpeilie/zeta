@@ -18,6 +18,7 @@ import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_permission_migration.dart';
 import 'package:zeta/src/features/agent/data/default_agent_provider_factory.dart';
+import 'package:zeta/src/features/agent/data/legacy_agent_provider_factory_bundle_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_hidden_thread_store.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_permission_policy_adapter.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -170,7 +171,9 @@ class MainAppState extends State<MainApp>
     final injectedRuntimeRegistry = widget.agentProviderRuntimeRegistry;
     _agentProviderRuntimeRegistry =
         injectedRuntimeRegistry ??
-        AgentProviderRuntimeRegistry(providerFactory: _agentProviderFactory);
+        AgentProviderRuntimeRegistry(
+          providerFactory: asAgentProviderBundleFactory(_agentProviderFactory),
+        );
     _ownsAgentProviderRuntimeRegistry = injectedRuntimeRegistry == null;
     _providerRuntimeShutdownHook = _agentProviderRuntimeRegistry.close;
     if (widget.enableNativeWindowFrame) {

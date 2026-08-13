@@ -9,6 +9,7 @@ import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 
 import '../../../testing/ide_test_harness.dart';
+import '../../../testing/legacy_bundle_factory_mixin.dart';
 
 void main() {
   group('AgentProviderSettingsController', () {
@@ -135,8 +136,8 @@ void main() {
         scope: AgentProviderRuntimeScopeKey.global,
       );
       final sessionLease = await registry.acquire(initial, scope: sessionScope);
-      final oldGlobal = globalLease.provider as _TrackingFakeAgentProvider;
-      final oldSession = sessionLease.provider as _TrackingFakeAgentProvider;
+      final oldGlobal = factory.providers[0] as _TrackingFakeAgentProvider;
+      final oldSession = factory.providers[1] as _TrackingFakeAgentProvider;
       await globalLease.release();
       await sessionLease.release();
 
@@ -155,8 +156,8 @@ void main() {
         updated,
         scope: sessionScope,
       );
-      expect(replacementGlobal.provider, isNot(same(oldGlobal)));
-      expect(retainedSession.provider, same(oldSession));
+      expect(factory.providers.last, isNot(same(oldGlobal)));
+      expect(factory.providers[1], same(oldSession));
       await replacementGlobal.release();
       await retainedSession.release();
     });
@@ -355,7 +356,7 @@ void main() {
         controller.activeProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
-      expect(globalLease.provider, same(factory.providers.single));
+      expect(factory.providers, hasLength(1));
       globalLease.release();
     });
   });
@@ -391,7 +392,8 @@ class _RecordingConfigStore implements AgentProviderConfigStore {
   }
 }
 
-class _RuntimePathSpyFactory implements AgentProviderFactory {
+class _RuntimePathSpyFactory extends AgentProviderFactory
+    with LegacyBundleFactoryMixin {
   final List<String> createdProviderIds = <String>[];
   int cursorProviderCreations = 0;
   int cursorCliLocatorCalls = 0;
@@ -414,7 +416,8 @@ class _RuntimePathSpyFactory implements AgentProviderFactory {
 
 /// 与 [FakeAgentProviderFactory] 不同：每次 create 返回**新**实例，用于证明
 /// 不同 scope 拿到的是可区分的对象。
-class _MultiInstanceFakeProviderFactory implements AgentProviderFactory {
+class _MultiInstanceFakeProviderFactory extends AgentProviderFactory
+    with LegacyBundleFactoryMixin {
   final List<AgentProvider> providers = <AgentProvider>[];
 
   @override

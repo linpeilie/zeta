@@ -13,7 +13,8 @@ import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 ///
 /// 已实现 Codex app-server、Grok ACP stdio 与 Claude Code stream-json；
 /// Cursor 已从运行时组合中断开。
-class DefaultAgentProviderFactory implements AgentProviderFactory {
+class DefaultAgentProviderFactory
+    implements AgentProviderFactory, AgentProviderBundleFactory {
   const DefaultAgentProviderFactory({
     this.claudeCodeSessionDecisionStoreFactory,
     this.claudeCodeHiddenThreadStore,
@@ -53,8 +54,7 @@ class DefaultAgentProviderFactory implements AgentProviderFactory {
   }
 
   /// 原生 Bundle 创建入口；不经过 [AgentProviderBundle.adapt]。
-  ///
-  /// Registry 在 S3 之前仍走 [create]。本方法供测试与后续所有权切换使用。
+  @override
   AgentProviderBundle createBundle(AgentProviderConfig config) {
     if (CursorRetirementPolicy.isRetiredProvider(config)) {
       throw UnsupportedError(CursorRetirementPolicy.unavailableMessage);

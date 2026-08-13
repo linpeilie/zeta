@@ -21,6 +21,7 @@ import 'package:zeta/src/ui/core/ide_motion.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 
 import '../../../../testing/agent_provider_stub_base.dart';
+import '../../../../testing/legacy_bundle_factory_mixin.dart';
 import '../../../../testing/agent_conversation_binding_test_harness.dart';
 
 class AgentPaneTestApp extends StatelessWidget {
@@ -362,8 +363,9 @@ void expectMarkdownWidgetDefaults(MarkdownWidget widget) {
   expect(widget.contextMenuBuilder, isNotNull);
 }
 
-class AgentPaneFakeProviderFactory implements AgentProviderFactory {
-  const AgentPaneFakeProviderFactory(this.provider);
+class AgentPaneFakeProviderFactory extends AgentProviderFactory
+    with LegacyBundleFactoryMixin {
+  AgentPaneFakeProviderFactory(this.provider);
 
   final AgentPaneFakeProvider provider;
 

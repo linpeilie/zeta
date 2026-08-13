@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 final _log = loggerFor('zeta.agent.runtime_registry');
 
@@ -18,7 +18,7 @@ typedef _RuntimeKey = ({String providerId, AgentProviderRuntimeScopeKey scope});
 class AgentProviderRuntimeRegistry extends ChangeNotifier {
   AgentProviderRuntimeRegistry({required this.providerFactory});
 
-  final AgentProviderFactory providerFactory;
+  final AgentProviderBundleFactory providerFactory;
 
   final Map<_RuntimeKey, _AgentProviderRuntimeEntry> _entries =
       <_RuntimeKey, _AgentProviderRuntimeEntry>{};
@@ -56,7 +56,7 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
 
       final existing = _entries[key];
       if (existing != null) {
-        if (_requiresRuntimeRestart(existing.provider.config, config)) {
+        if (_requiresRuntimeRestart(existing.bundle.runtime.config, config)) {
           await _invalidateEntry(key, existing);
           continue;
         }
@@ -64,24 +64,25 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
       }
 
       _log.t('Creating application Agent provider: ${config.id} ($scope)');
-      final provider = providerFactory.create(config);
-      if (provider.config.id != config.id) {
+      final bundle = providerFactory.createBundle(config);
+      if (bundle.runtime.config.id != config.id) {
         // 测试/嵌入宿主的简化 factory 可能为不同配置返回同一对象；若该对象已由
         // 其他 entry 持有，不能因本次身份错配把仍在使用的共享运行时关闭。
-        if (!_isRegisteredProvider(provider)) {
+        if (!_isRegisteredRuntime(bundle.runtime)) {
           try {
-            await provider.dispose();
+            await bundle.runtime.dispose();
           } catch (error, stackTrace) {
             _log.w(
               'Could not dispose mismatched Agent provider '
-              '${provider.config.id}',
+              '${bundle.runtime.config.id}',
               error: error,
               stackTrace: stackTrace,
             );
           }
         }
         throw StateError(
-          'AgentProviderFactory returned ${provider.config.id} for ${config.id}',
+          'AgentProviderBundleFactory returned ${bundle.runtime.config.id} '
+          'for ${config.id}',
         );
       }
 
@@ -90,14 +91,14 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
         providerId: config.id,
         generation: generation,
       );
-      final entry = _AgentProviderRuntimeEntry(provider, identity, scope);
+      final entry = _AgentProviderRuntimeEntry(bundle, identity, scope);
       // acquire 在此之前没有让出执行权；若未来 factory 改成异步，这个保护仍可避免
       // 覆盖已登记的共享实例。
       final raced = _entries[key];
       if (raced != null) {
-        if (!identical(raced.provider, provider) &&
-            !_isRegisteredProvider(provider)) {
-          await provider.dispose();
+        if (!identical(raced.bundle.runtime, bundle.runtime) &&
+            !_isRegisteredRuntime(bundle.runtime)) {
+          await bundle.runtime.dispose();
         }
         continue;
       }
@@ -177,12 +178,17 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
   }
 
   bool _isCurrent(_AgentProviderRuntimeEntry entry) {
-    final key = (providerId: entry.provider.config.id, scope: entry.scope);
+    final key = (
+      providerId: entry.bundle.runtime.config.id,
+      scope: entry.scope,
+    );
     return !_closed && !entry.invalidated && identical(_entries[key], entry);
   }
 
-  bool _isRegisteredProvider(AgentProvider provider) {
-    return _entries.values.any((entry) => identical(entry.provider, provider));
+  bool _isRegisteredRuntime(AgentRuntimePort runtime) {
+    return _entries.values.any(
+      (entry) => identical(entry.bundle.runtime, runtime),
+    );
   }
 
   void _release(_AgentProviderRuntimeEntry entry) {
@@ -235,12 +241,12 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
     if (existing != null) {
       return existing;
     }
-    final future = entry.provider.dispose().catchError((
+    final future = entry.bundle.runtime.dispose().catchError((
       Object error,
       StackTrace stackTrace,
     ) {
       _log.w(
-        'Could not close Agent provider ${entry.provider.config.id}',
+        'Could not close Agent provider ${entry.bundle.runtime.config.id}',
         error: error,
         stackTrace: stackTrace,
       );
@@ -267,7 +273,7 @@ final class AgentProviderRuntimeLease {
   AgentProviderRuntimeRegistry? _registry;
   final _AgentProviderRuntimeEntry _entry;
 
-  AgentProvider get provider => _entry.provider;
+  AgentProviderBundle get bundle => _entry.bundle;
 
   /// 当前租约绑定的 provider runtime identity/generation。
   AgentProviderRuntimeIdentity get runtimeIdentity => _entry.identity;
@@ -287,9 +293,9 @@ final class AgentProviderRuntimeLease {
 }
 
 final class _AgentProviderRuntimeEntry {
-  _AgentProviderRuntimeEntry(this.provider, this.identity, this.scope);
+  _AgentProviderRuntimeEntry(this.bundle, this.identity, this.scope);
 
-  final AgentProvider provider;
+  final AgentProviderBundle bundle;
   final AgentProviderRuntimeIdentity identity;
   final AgentProviderRuntimeScopeKey scope;
   int leaseCount = 0;

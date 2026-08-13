@@ -16,6 +16,7 @@ import 'package:zeta/src/features/agent/presentation/agent_conversation_view_mod
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 
 import '../../../testing/agent_provider_stub_base.dart';
+import '../../../testing/legacy_bundle_factory_mixin.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
 import '../../../testing/fake_agent_frame_scheduler.dart';
 
@@ -4519,8 +4520,9 @@ AgentThreadHistorySnapshot _historySnapshot({
   );
 }
 
-class _FakeAgentProviderFactory implements AgentProviderFactory {
-  const _FakeAgentProviderFactory(this.provider);
+class _FakeAgentProviderFactory extends AgentProviderFactory
+    with LegacyBundleFactoryMixin {
+  _FakeAgentProviderFactory(this.provider);
 
   final _FakeAgentProvider provider;
 
@@ -4528,7 +4530,8 @@ class _FakeAgentProviderFactory implements AgentProviderFactory {
   AgentProvider create(AgentProviderConfig config) => provider;
 }
 
-class _MultiFakeAgentProviderFactory implements AgentProviderFactory {
+class _MultiFakeAgentProviderFactory extends AgentProviderFactory
+    with LegacyBundleFactoryMixin {
   _MultiFakeAgentProviderFactory(this.providers);
 
   final Map<String, AgentProvider> providers;
