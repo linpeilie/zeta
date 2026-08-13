@@ -461,14 +461,17 @@ Claude Code 模型目录是 Provider-local 的特殊协议来源，但不改变�
 - 独立 metadata peer 固定使用 `--no-session-persistence --setting-sources user`，只发送带
   随机 id 的 `control_request.initialize`，不发送 Prompt 或模型 turn。
 - mapper 只消费 `response.models` 与 `account.subscriptionType` 白名单；模型以 `value`
-  作为稳定 id/CLI 参数，旧形状才 fallback 到 `name`。raw、账号身份、`resolvedModel` 与
-  未兑现的 Fast/auto 字段不得上浮。`supportsEffort=true` 时必须把
+  作为稳定 id/CLI 参数，旧形状才 fallback 到 `name`；`value=default` 必须在 Claude
+  data mapper 中过滤。`resolvedModel` 只允许进入中立 `AgentModelInfo.model` 供历史匹配，
+  raw、账号身份与未兑现的 Fast/auto 字段不得上浮。`supportsEffort=true` 时必须把
   `supportedEffortLevels` 映射为 `supportedReasoningEfforts`，并同时声明 Provider 的
   `supportsReasoningOptions` 能力，否则 Composer 会按能力门禁隐藏这些档位。
 - initialize 表示当前 CLI 有效选项快照，不是实时远端全量保证。不得用 `/v1/models`、
   内置静态目录或 CLI 私有缓存补项。
 - probe 失败或模型为空必须抛错；app 仓储保留 stale cache，无缓存时 UI 显示中立错误，
   不得以空目录覆盖缓存。Provider coordinator 只能合并 in-flight，不能持有第二套长期 TTL。
+- 历史模型与缓存目录无法匹配时只允许强制刷新一次；仍不可匹配则保留当前有效模型，
+  不得把目录外模型 id 写进 Composer selection。
 - `claudeCode.accountDataEnrichment` 只控制额度凭据与 usage REST；关闭时模型和套餐名称仍
   来自 initialize。
 

@@ -171,10 +171,12 @@ presentation 只消费 typed snapshot，不读取 `file_path`、`old_string`、`
 `ClaudeCodeCliMetadataProbe` 向独立进程发送带随机 request id 的
 `control_request.initialize`，只接受同 id 的成功 `control_response`。模型目录来自
 `response.models`，保留 CLI 顺序，以 `value` 作为稳定 id 和 `--model` 参数；旧形状缺少
-`value` 时才读取 `name`。`value=default` 标记默认项。模型声明 `supportsEffort=true` 时，
+`value` 时才读取 `name`。Claude 专属的 `value=default` 别名不进入 Composer；
+`resolvedModel` 只投影为中立 `AgentModelInfo.model`，用于把历史中的实际模型名归一化回
+稳定 `value`，不会保留原始模型 payload。模型声明 `supportsEffort=true` 时，
 `supportedEffortLevels` 按 CLI 顺序映射为中立 `supportedReasoningEfforts`；选中值在下一回合
-作为 `--effort` 参数。`resolvedModel`、账号身份字段、未知字段，以及尚未接入中立契约的
-Fast/auto 能力均不会上浮或落盘。
+作为 `--effort` 参数。账号身份字段、未知字段，以及尚未接入中立契约的 Fast/auto 能力
+均不会上浮或落盘。
 
 这份目录表示**当前 CLI 在当前配置下给出的有效选项快照**。initialize 可能受 Claude CLI
 自身 bootstrap、账号权限与缓存影响；它不是 Zeta 直接同步调用的实时远端 API，也不保证
@@ -184,6 +186,9 @@ Fast/auto 能力均不会上浮或落盘。
 保留 7 天 stale snapshot；刷新成功才覆盖 `agent_models_v1.json`。首次读取失败或 CLI 返回
 空目录时不写空缓存，Composer 显示模型加载失败。Provider-local coordinator 只合并并发中的
 metadata 探测，不用已完成快照挡住显式刷新。
+
+打开历史时若缓存目录还没有可匹配的 resolved model，Zeta 强制刷新一次模型目录；刷新后
+仍不可匹配则保留当前有效模型，不把已下架的历史模型写成 Composer 的孤儿选中值。
 
 模型或推理档位切换不打断运行中的 turn：选择只影响下一回合；下一回合前，Provider 在
 空闲边界关闭 peer，以原 session `--resume` 并携带新的 `--model` / `--effort` 恢复。

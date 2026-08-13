@@ -48,7 +48,6 @@ void main() {
 
         // Assert
         expect(result.models.models.map((model) => model.id), <String>[
-          'default',
           'sonnet',
           'claude-fable-5[1m]',
           'opus',

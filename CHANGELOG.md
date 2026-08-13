@@ -77,6 +77,8 @@
 
 ### 修复
 
+- Claude Code 打开历史会话时会用 `resolvedModel` 匹配当前模型目录，并过滤重复的
+  `default` 模型项；历史模型已不可用时保留当前有效选择，不再让模型选择器显示为空
 - 新建 Agent 会话首次发送后会保留并重新校验权限选项目录，Codex、Grok 与 Claude
   不再因 global/session Provider 切换显示原始权限 ID 或丢失权限选项
 - Codex 本地历史中的 `Apply patch` 现在会从结构化 `patch_apply_end` 恢复文件路径、

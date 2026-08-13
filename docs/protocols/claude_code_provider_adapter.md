@@ -692,12 +692,14 @@ throw；这样 CLI 引入新事件类型时不会阻断整个 pipeline。
 `Provider.listModels()` 从 §2.4 的 metadata coordinator 获取 initialize snapshot，
 `ClaudeCodeInitializeMetadataMapper` 只投影 `response.models`：
 
-- `value` 是稳定 id、`model` 和下一回合 `--model` 参数；旧响应没有 `value` 时才兼容
-  `name`。CLI 返回顺序保持不变，`value=default` 是默认项。
+- `value` 是稳定 id 和下一回合 `--model` 参数；旧响应没有 `value` 时才兼容 `name`。
+  CLI 返回顺序保持不变，但 Claude 专属的 `value=default` 别名不进入 Composer。
+- `resolvedModel` 投影为中立 `AgentModelInfo.model`，只用于把历史实际模型名归一化回
+  可写回的稳定 `value`；不保留模型原始 payload。
 - 只保留展示名与可选描述；`supportsEffort=true` 时把 `supportedEffortLevels` 按原顺序映射为
   `supportedReasoningEfforts`，用户选择在下一回合通过 `--effort` 生效。
-- `resolvedModel`、账号身份、未知字段和尚未兑现的 Fast/auto 能力被丢弃，
-  `AgentModelInfo.raw` 不保存原始 payload。
+- 账号身份、未知字段和尚未兑现的 Fast/auto 能力被丢弃，`AgentModelInfo.raw` 不保存
+  原始 payload。
 - 列表为空或 probe 失败时抛出稳定、脱敏的刷新异常；不调用 `/v1/models`，也没有静态
   Claude 目录兜底。
 - Provider 只缓存最近一次**成功**结果。`refreshModels()` 总是要求新 probe，但可与同时

@@ -1410,7 +1410,21 @@ class AgentConversationViewModel {
   void _applyThreadSelectionFromHistory(AgentThreadHistorySnapshot history) {
     final fallback = _latestHistorySelectionPatch(history.turns);
     final current = _selectionPatchFromHistoryTurn(history.currentTurn);
-    _applyThreadSelectionPatch(_mergeThreadSelectionPatches(fallback, current));
+    _applyThreadSelectionPatch(
+      _mergeThreadSelectionPatches(fallback, current),
+      requireCatalogModel: true,
+    );
+  }
+
+  bool _historySelectionNeedsCatalogRefresh(
+    AgentThreadHistorySnapshot history,
+  ) {
+    final fallback = _latestHistorySelectionPatch(history.turns);
+    final current = _selectionPatchFromHistoryTurn(history.currentTurn);
+    final patch = _mergeThreadSelectionPatches(fallback, current);
+    final requestedModelId = _nonEmptyValue(patch?.modelId);
+    return requestedModelId != null &&
+        _resolveModelInfo(requestedModelId) == null;
   }
 
   void _applyThreadSelectionFromThreadSettings({String? modelId}) {
@@ -1479,7 +1493,10 @@ class AgentConversationViewModel {
     _applyThreadSelectionPatch(patch);
   }
 
-  void _applyThreadSelectionPatch(_ThreadModelSelectionPatch? patch) {
+  void _applyThreadSelectionPatch(
+    _ThreadModelSelectionPatch? patch, {
+    bool requireCatalogModel = false,
+  }) {
     if (patch == null || !patch.hasAny) {
       return;
     }
@@ -1488,6 +1505,13 @@ class AgentConversationViewModel {
     final resolvedModel = _resolveModelInfo(
       requestedModelId ?? currentSelection.modelId,
     );
+    if (requireCatalogModel &&
+        requestedModelId != null &&
+        resolvedModel == null) {
+      // 历史模型可能已经下架，或来自旧目录缓存。不能把目录外值写成选中项，
+      // 否则 Composer 会出现有 selectedModelId 却没有 selectedModel 的孤儿状态。
+      return;
+    }
     final targetModelId =
         resolvedModel?.id ?? requestedModelId ?? currentSelection.modelId;
     if (targetModelId == null || targetModelId.isEmpty) {
@@ -2195,8 +2219,13 @@ class AgentConversationViewModel {
       if (!_isCurrentSwitch(switchToken)) {
         return;
       }
-      if (!_isCurrentSwitch(switchToken)) {
-        return;
+      if (_historySelectionNeedsCatalogRefresh(history)) {
+        // 旧缓存可能还只有 CLI `value`，缺少用于历史匹配的 resolved model。
+        // 只强制刷新一次；刷新仍无法匹配时由历史应用入口保留当前有效选择。
+        await loadModels(forceRefresh: true);
+        if (!_isCurrentSwitch(switchToken)) {
+          return;
+        }
       }
       _timeline.applyHistorySnapshot(history, thread);
       _applyThreadSelectionFromHistory(history);

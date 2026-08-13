@@ -19,26 +19,26 @@ void main() {
 
       // Assert
       expect(result.models.models.map((model) => model.id), <String>[
-        'default',
         'sonnet',
         'claude-fable-5[1m]',
         'opus',
         'haiku',
       ]);
       expect(result.models.models.map((model) => model.displayName), <String>[
-        'Default (recommended)',
         'Sonnet',
         'Fable',
         'Opus',
         'Haiku',
       ]);
+      expect(result.models.models.map((model) => model.model), <String>[
+        'claude-sonnet-5',
+        'claude-fable-5',
+        'claude-opus-5',
+        'claude-haiku-4-5-20251001',
+      ]);
       expect(result.subscriptionType, 'Claude Pro');
-      expect(
-        result.models.models.where((model) => model.isDefault),
-        hasLength(1),
-      );
-      expect(result.models.models.first.id, 'default');
-      expect(result.models.models.first.model, 'default');
+      expect(result.models.models.where((model) => model.isDefault), isEmpty);
+      expect(result.models.models.first.id, 'sonnet');
       expect(
         result.models.models.first.supportedReasoningEfforts.map(
           (effort) => effort.effort,
@@ -46,7 +46,7 @@ void main() {
         <String>['low', 'medium', 'high', 'xhigh', 'max'],
       );
       expect(
-        result.models.models[3].supportedReasoningEfforts.map(
+        result.models.models[2].supportedReasoningEfforts.map(
           (effort) => effort.effort,
         ),
         <String>['low', 'medium', 'high', 'xhigh', 'max'],
@@ -63,7 +63,6 @@ void main() {
 
       // Assert
       expect(result.models.models.map((model) => model.id), <String>[
-        'default',
         'sonnet',
         'opus',
         'haiku',
@@ -73,7 +72,7 @@ void main() {
         result.models.models.first.supportedReasoningEfforts.map(
           (effort) => effort.effort,
         ),
-        <String>['low', 'medium', 'high'],
+        isEmpty,
       );
       expect(result.subscriptionType, 'Claude Pro');
     });
@@ -106,7 +105,6 @@ void main() {
       // Assert
       expect(result.models.models.map((model) => model.id), <String>[
         'legacy-name',
-        'default',
       ]);
       expect(result.models.models.first.model, 'legacy-name');
       expect(result.models.models.first.displayName, 'Legacy display');

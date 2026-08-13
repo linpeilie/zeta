@@ -65,7 +65,9 @@ class AgentModelInfo {
   /// 模型稳定 id。
   final String id;
 
-  /// 模型标识，与 CLI 参数中的 model 字段一致。
+  /// Provider 实际报告的模型标识，用于关联历史与运行时模型。
+  ///
+  /// 选择写回使用稳定 [id]；Provider 未区分选择值与实际模型名时两者可以相同。
   final String model;
 
   /// UI 展示名称。

@@ -3390,6 +3390,122 @@ void main() {
     );
 
     test(
+      'bound Claude thread maps resolved history model to catalog value',
+      () async {
+        final provider = _FakeAgentProvider(
+          providerConfig: AgentProviderConfig.defaultClaudeCode,
+          declaredCapabilities: AgentProviderStaticCapabilities.claudeCode,
+          availableModels: const AgentModelList(
+            models: <AgentModelInfo>[
+              AgentModelInfo(
+                id: 'opus',
+                model: 'claude-opus-5',
+                displayName: 'Opus',
+              ),
+            ],
+          ),
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'claude-thread-1': const AgentThreadHistorySnapshot(
+              threadId: 'claude-thread-1',
+              turns: <AgentHistoryTurn>[
+                AgentHistoryTurn(id: 'turn-1', model: 'claude-opus-5'),
+              ],
+              currentTurn: AgentHistoryTurn(
+                id: 'turn-1',
+                model: 'claude-opus-5',
+              ),
+            ),
+          },
+        );
+        final thread = AgentThreadSummary(
+          id: 'claude-thread-1',
+          providerId: defaultClaudeCodeProviderId,
+          projectPath: '/repo',
+          title: 'Claude thread',
+          preview: 'Claude history',
+          createdAt: DateTime.fromMillisecondsSinceEpoch(1),
+          updatedAt: DateTime.fromMillisecondsSinceEpoch(2),
+          status: AgentThreadRuntimeStatus.idle,
+        );
+        final viewModel = _createViewModel(
+          provider,
+          initialThread: thread,
+          providerSettings: const AgentProviderSettings(
+            providers: <AgentProviderConfig>[
+              AgentProviderConfig.defaultClaudeCode,
+            ],
+            activeProviderId: defaultClaudeCodeProviderId,
+          ),
+        );
+        addTearDown(viewModel.dispose);
+
+        await viewModel.initialization;
+
+        expect(viewModel.selectedModelId, 'opus');
+        expect(viewModel.selectedModel?.displayName, 'Opus');
+        expect(provider.listModelsCalls, 1);
+      },
+    );
+
+    test(
+      'bound Claude thread keeps a valid catalog model when history is stale',
+      () async {
+        final provider = _FakeAgentProvider(
+          providerConfig: AgentProviderConfig.defaultClaudeCode,
+          declaredCapabilities: AgentProviderStaticCapabilities.claudeCode,
+          availableModels: const AgentModelList(
+            models: <AgentModelInfo>[
+              AgentModelInfo(
+                id: 'opus',
+                model: 'claude-opus-5',
+                displayName: 'Opus',
+              ),
+            ],
+          ),
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'claude-thread-stale': const AgentThreadHistorySnapshot(
+              threadId: 'claude-thread-stale',
+              turns: <AgentHistoryTurn>[
+                AgentHistoryTurn(id: 'turn-1', model: 'claude-opus-4-1'),
+              ],
+              currentTurn: AgentHistoryTurn(
+                id: 'turn-1',
+                model: 'claude-opus-4-1',
+              ),
+            ),
+          },
+        );
+        final thread = AgentThreadSummary(
+          id: 'claude-thread-stale',
+          providerId: defaultClaudeCodeProviderId,
+          projectPath: '/repo',
+          title: 'Old Claude thread',
+          preview: 'Old Claude history',
+          createdAt: DateTime.fromMillisecondsSinceEpoch(1),
+          updatedAt: DateTime.fromMillisecondsSinceEpoch(2),
+          status: AgentThreadRuntimeStatus.idle,
+        );
+        final viewModel = _createViewModel(
+          provider,
+          initialThread: thread,
+          providerSettings: const AgentProviderSettings(
+            providers: <AgentProviderConfig>[
+              AgentProviderConfig.defaultClaudeCode,
+            ],
+            activeProviderId: defaultClaudeCodeProviderId,
+          ),
+        );
+        addTearDown(viewModel.dispose);
+
+        await viewModel.initialization;
+
+        expect(viewModel.selectedModelId, 'opus');
+        expect(viewModel.selectedModel?.displayName, 'Opus');
+        expect(provider.listModelsCalls, 2);
+      },
+    );
+
+    test(
       'session config update keeps last turn model when current session omits model',
       () async {
         final provider = _FakeAgentProvider(
@@ -4405,6 +4521,7 @@ void _expectLastUiUpdate(
 AgentConversationViewModel _createViewModel(
   _FakeAgentProvider provider, {
   AgentThreadSummary? initialThread,
+  AgentProviderSettings? providerSettings,
   AgentModelCatalogRepository? modelCatalogRepository,
   AgentConversationModeController? conversationModeController,
   void Function(AgentTurnTerminalSignal signal)? onTurnTerminal,
@@ -4417,7 +4534,9 @@ AgentConversationViewModel _createViewModel(
   addTearDown(registry.close);
   final controller = AgentProviderSettingsController(
     runtimeRegistry: registry,
-    configStore: MemoryAgentProviderConfigStore(),
+    configStore: MemoryAgentProviderConfigStore(
+      providerSettings ?? const AgentProviderSettings(),
+    ),
     modelCatalogRepository: modelCatalogRepository,
   );
   addTearDown(controller.dispose);
