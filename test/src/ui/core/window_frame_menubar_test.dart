@@ -70,20 +70,26 @@ void main() {
       );
 
       expect(find.byType(sf.Menubar), findsOneWidget);
-      expect(find.byKey(const ValueKey('window-menu-file')), findsOneWidget);
-      expect(find.text('文件'), findsOneWidget);
+      expect(find.byKey(const ValueKey('window-menu-trigger')), findsOneWidget);
+      // 顶层菜单折叠为单个汉堡 icon，不再展示各菜单组的文字标签。
+      expect(find.text('文件'), findsNothing);
+      expect(find.byIcon(sf.LucideIcons.menu), findsOneWidget);
 
-      // Menubar 撑满标题栏的设计高度，顶层按钮与文字在该高度内垂直居中。
-      final menuButton = find.byKey(const ValueKey('window-menu-file'));
-      final menuLabel = find.text('文件');
-      final menubarSize = tester.getSize(find.byType(sf.Menubar));
+      // 触发按钮不再靠标题栏高度撑开，而是按 padding + icon 自然定形，
+      // 与其它标题栏 icon 按钮（IdeMetrics.iconButtonHitSize）看齐成正方形，
+      // 由 _TitleBar 外层 Row 居中，而不是撑到 shadcn menubar 默认的
+      // 文字按钮尺寸（约 40px 宽、标题栏整高）。
+      final menuButton = find.byKey(const ValueKey('window-menu-trigger'));
+      final menuIcon = find.byIcon(sf.LucideIcons.menu);
       final titleBarSize = tester.getSize(
         find.byKey(const ValueKey('window-title-bar')),
       );
-      expect(menubarSize.height, IdeMetrics.titleBarHeight);
-      expect(tester.getSize(menuButton).height, IdeMetrics.titleBarHeight);
       expect(
-        tester.getCenter(menuLabel).dy,
+        tester.getSize(menuButton),
+        const Size(IdeMetrics.iconButtonHitSize, IdeMetrics.iconButtonHitSize),
+      );
+      expect(
+        tester.getCenter(menuIcon).dy,
         closeTo(tester.getCenter(menuButton).dy, 0.01),
       );
       expect(
@@ -128,7 +134,7 @@ void main() {
       );
 
       final logoFinder = find.byKey(const ValueKey('window-title-bar-logo'));
-      final menuFinder = find.byKey(const ValueKey('window-menu-file'));
+      final menuFinder = find.byKey(const ValueKey('window-menu-trigger'));
       expect(logoFinder, findsOneWidget);
       expect(find.text(appTitle), findsNothing);
       expect(
@@ -243,7 +249,7 @@ void main() {
 
         final titleBar = find.byKey(const ValueKey('window-title-bar'));
         final action = find.byKey(const ValueKey('window-leading-action'));
-        final menu = find.byKey(const ValueKey('window-menu-file'));
+        final menu = find.byKey(const ValueKey('window-menu-trigger'));
         final relativeActionLeft =
             tester.getTopLeft(action).dx - tester.getTopLeft(titleBar).dx;
         final expectedActionLeft = platform == TargetPlatform.macOS
@@ -295,7 +301,7 @@ void main() {
       final titleBar = find.byKey(const ValueKey('window-title-bar'));
       final logo = find.byKey(const ValueKey('window-title-bar-logo'));
       final action = find.byKey(const ValueKey('window-leading-action'));
-      final menu = find.byKey(const ValueKey('window-menu-file'));
+      final menu = find.byKey(const ValueKey('window-menu-trigger'));
 
       expect(logo, findsOneWidget);
       // 契约：Logo 紧贴标题栏最左边缘（其左外边距在 Logo 自身盒子内），
@@ -340,7 +346,7 @@ void main() {
         find.byKey(const ValueKey('window-title-bar-logo')),
       );
       final originalMenuRect = tester.getRect(
-        find.byKey(const ValueKey('window-menu-file')),
+        find.byKey(const ValueKey('window-menu-trigger')),
       );
       final originalDragRect = tester.getRect(find.byType(DragToMoveArea));
 
@@ -361,7 +367,7 @@ void main() {
         originalLogoRect,
       );
       expect(
-        tester.getRect(find.byKey(const ValueKey('window-menu-file'))),
+        tester.getRect(find.byKey(const ValueKey('window-menu-trigger'))),
         originalMenuRect,
       );
       expect(tester.getRect(find.byType(DragToMoveArea)), originalDragRect);

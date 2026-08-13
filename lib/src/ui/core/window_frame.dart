@@ -275,7 +275,10 @@ class _WindowMenuBar extends StatelessWidget {
     final textStyles = IdeTextStyles.of(context);
     final theme = sf.Theme.of(context);
 
-    // 菜单按钮由标题栏高度约束负责撑开，文字沿用 IDE 正常行高并在按钮内居中。
+    // 顶层只剩这一个纯 icon 触发按钮：不再用标题栏高度撑开，改为按
+    // padding + icon 自然定形，交给 _TitleBar 外层 Row 的
+    // CrossAxisAlignment.center 居中——和折叠 icon（_TitleBarActionButton）
+    // 走同一套布局逻辑，命中区才能对齐成同样的正方形。
     final menubarTextStyle = textStyles.bodyMedium.copyWith(
       color: colors.textSecondary,
     );
@@ -285,65 +288,77 @@ class _WindowMenuBar extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(left: IdeSpacing.space4),
-      child: SizedBox(
-        height: IdeMetrics.titleBarHeight,
+      child: sf.ComponentTheme(
+        data: sf.MenubarButtonTheme(
+          // shadcn 默认 menubar 按钮 padding 按文字标签设计（约 40×40 命中区），
+          // 收紧到与其它标题栏 icon 按钮一致的 IdeMetrics.iconButtonHitSize
+          // （28×28 = 16px 图标 + 上下左右各 IdeSpacing.space6）。
+          padding: (context, states, value) =>
+              const EdgeInsets.all(IdeSpacing.space6),
+          textStyle: (context, states, value) {
+            final openOrHover =
+                states.contains(WidgetState.hovered) ||
+                states.contains(WidgetState.selected) ||
+                states.contains(WidgetState.focused);
+            return menubarTextStyle.copyWith(
+              color: openOrHover ? colors.textPrimary : colors.textSecondary,
+            );
+          },
+          decoration: (context, states, value) {
+            final openOrHover =
+                states.contains(WidgetState.hovered) ||
+                states.contains(WidgetState.selected) ||
+                states.contains(WidgetState.focused);
+            if (!openOrHover || states.contains(WidgetState.disabled)) {
+              return const BoxDecoration();
+            }
+            final isDark = theme.brightness == Brightness.dark;
+            return BoxDecoration(
+              color: colors.border.withValues(alpha: isDark ? 0.26 : 0.38),
+              borderRadius: IdeRadius.allSmall,
+            );
+          },
+        ),
         child: sf.ComponentTheme(
-          data: sf.MenubarButtonTheme(
+          data: sf.MenuButtonTheme(
             textStyle: (context, states, value) {
-              final openOrHover =
-                  states.contains(WidgetState.hovered) ||
-                  states.contains(WidgetState.selected) ||
-                  states.contains(WidgetState.focused);
-              return menubarTextStyle.copyWith(
-                color: openOrHover ? colors.textPrimary : colors.textSecondary,
-              );
-            },
-            decoration: (context, states, value) {
-              final openOrHover =
-                  states.contains(WidgetState.hovered) ||
-                  states.contains(WidgetState.selected) ||
-                  states.contains(WidgetState.focused);
-              if (!openOrHover || states.contains(WidgetState.disabled)) {
-                return const BoxDecoration();
+              if (states.contains(WidgetState.disabled)) {
+                return menuItemTextStyle.copyWith(color: colors.textTertiary);
               }
-              final isDark = theme.brightness == Brightness.dark;
-              return BoxDecoration(
-                color: colors.border.withValues(alpha: isDark ? 0.26 : 0.38),
-                borderRadius: IdeRadius.allSmall,
-              );
+              return menuItemTextStyle;
             },
           ),
-          child: sf.ComponentTheme(
-            data: sf.MenuButtonTheme(
-              textStyle: (context, states, value) {
-                if (states.contains(WidgetState.disabled)) {
-                  return menuItemTextStyle.copyWith(color: colors.textTertiary);
-                }
-                return menuItemTextStyle;
-              },
-            ),
-            child: sf.Menubar(
-              border: false,
-              popoverOffset: const Offset(0, IdeSpacing.space8),
-              children: [
-                for (final menu in menus)
-                  sf.MenuButton(
-                    key: menu.key,
-                    subMenu: [
-                      for (final item in menu.items)
-                        sf.MenuButton(
-                          key: item.key,
-                          enabled: item.onPressed != null,
-                          onPressed: item.onPressed == null
-                              ? null
-                              : (context) => item.onPressed!.call(),
-                          child: Text(item.label),
-                        ),
-                    ],
-                    child: Text(menu.label),
+          child: sf.Menubar(
+            border: false,
+            popoverOffset: const Offset(0, IdeSpacing.space4),
+            children: [
+              sf.MenuButton(
+                key: const ValueKey('window-menu-trigger'),
+                subMenu: [
+                  for (var index = 0; index < menus.length; index += 1) ...[
+                    if (index > 0) const sf.MenuDivider(),
+                    for (final item in menus[index].items)
+                      sf.MenuButton(
+                        key: item.key,
+                        enabled: item.onPressed != null,
+                        onPressed: item.onPressed == null
+                            ? null
+                            : (context) => item.onPressed!.call(),
+                        child: Text(item.label),
+                      ),
+                  ],
+                ],
+                child: Semantics(
+                  button: true,
+                  label: '菜单',
+                  child: Icon(
+                    sf.LucideIcons.menu,
+                    size: 16,
+                    color: colors.textSecondary,
                   ),
-              ],
-            ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
