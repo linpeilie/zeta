@@ -77,6 +77,8 @@
 
 ### 修复
 
+- 修复桌面弹层在极少数窗口变换时产生非法鼠标命中矩阵，继而持续触发
+  `MouseTracker._deviceUpdatePhase` 断言并让鼠标交互失效的问题
 - Claude Code 打开历史会话时会用 `resolvedModel` 匹配当前模型目录，并过滤重复的
   `default` 模型项；历史模型已不可用时保留当前有效选择，不再让模型选择器显示为空
 - 新建 Agent 会话首次发送后会保留并重新校验权限选项目录，Codex、Grok 与 Claude

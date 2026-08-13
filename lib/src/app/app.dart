@@ -34,6 +34,7 @@ import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/ui/core/ide_stable_overlay_handler.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 
 /// 应用根组件。
@@ -322,6 +323,9 @@ class MainAppState extends State<MainApp>
             child: sf.ShadcnApp(
               debugShowCheckedModeBanner: false,
               title: appTitle,
+              popoverHandler: ideStablePopoverOverlayHandler,
+              tooltipHandler: ideStablePopoverOverlayHandler,
+              menuHandler: ideStablePopoverOverlayHandler,
               theme: buildShadcnTheme(lightIdeTheme),
               darkTheme: buildShadcnTheme(darkIdeTheme),
               materialTheme: buildMaterialTheme(materialIdeTheme),

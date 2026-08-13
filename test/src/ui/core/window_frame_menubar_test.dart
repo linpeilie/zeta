@@ -97,15 +97,28 @@ void main() {
         greaterThanOrEqualTo(IdeMetrics.titleBarHeight),
       );
 
-      await tester.tap(menuButton);
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(mouse.removePointer);
+      await mouse.addPointer(location: Offset.zero);
+      final menuButtonCenter = tester.getCenter(menuButton);
+      await mouse.moveTo(menuButtonCenter);
+      await tester.pump();
+      await mouse.down(menuButtonCenter);
+      await mouse.up();
       // Menubar / popover 可能持有持续动画，避免 pumpAndSettle。
       await tester.pump();
+      // 在展开动画内移动真实桌面鼠标，回归 Overlay 命中测试与 MouseTracker
+      // 设备更新交叠的生产故障路径。
+      await mouse.moveTo(tester.getCenter(find.text('打开项目')));
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('打开项目'), findsOneWidget);
       expect(find.text('退出'), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('window-menu-open-project')));
+      final menuItem = find.byKey(const ValueKey('window-menu-open-project'));
+      final menuItemCenter = tester.getCenter(menuItem);
+      await mouse.down(menuItemCenter);
+      await mouse.up();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
