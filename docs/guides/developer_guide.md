@@ -190,8 +190,10 @@ Registry acquire 必须显式选择 global/session scope；使用统计面板只
 新增 provider 时：
 
 1. 先确认现有 `AgentProviderBundle` 端口是否足够。已迁移的能力域优先接到
-   `conversation`、`threadCatalog`、`threadMutations`、`threadBranching`、
-   `turnSteering`、`interactions`、`modelCatalog`、`localThreadList`、
+   `conversation`、`threadCatalog`、`threadSubscription`、`threadNaming`、
+   `threadArchival`、`threadDeletion`、`threadCompaction`、`threadBranching`、
+   `turnSteering`、`permissionResponses`、`questions`、`deniedActionOverride`、
+   `modelCatalog`、`localThreadList`、
    `sessionConfiguration`、`planApproval`、`conversationModes`、`skills`、
    `permissionPolicy` 等端口，不要继续优先扩张 `AgentProvider` 旧必选接口。
    Bundle、`AgentRuntimePort` 与 Binding context 都不得提供取回原始 `AgentProvider` 的

@@ -160,6 +160,14 @@ abstract interface class AgentQuestionResponseProvider {
   Future<void> respondToQuestion(AgentQuestionResponse response);
 }
 
+/// 支持远端 thread 订阅释放的 Provider 可选接口。
+///
+/// 仅真实拥有订阅模型的 adapter 实现；无订阅的 Provider 不得实现，
+/// 以便 Bundle 把 [AgentThreadSubscriptionPort] 留空。
+abstract interface class AgentThreadSubscriptionProvider {
+  Future<void> unsubscribeThread(String threadId);
+}
+
 /// 支持绕过实例内存缓存、重新读取模型目录的 Provider 可选接口。
 abstract interface class AgentRefreshableModelCatalogProvider {
   Future<AgentModelList> refreshModels({

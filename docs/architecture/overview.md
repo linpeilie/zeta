@@ -104,14 +104,16 @@ flowchart TD
     bundle["AgentProviderBundle"]
     bundle --> req["必选<br/>runtime · conversation"]
     bundle --> opt["可选端口"]
-    opt --> o1["threadCatalog / threadMutations / threadBranching"]
-    opt --> o2["turnSteering / interactions / modelCatalog"]
-    opt --> o3["sessionConfiguration / planApproval / skills"]
+    opt --> o1["threadCatalog / threadSubscription / threadNaming"]
+    opt --> o2["threadArchival / threadDeletion / threadCompaction"]
+    opt --> o3["threadBranching / turnSteering / permissionResponses"]
+    opt --> o4["questions / deniedActionOverride / modelCatalog"]
+    opt --> o5["sessionConfiguration / planApproval / skills"]
 
     classDef must fill:#1B84FF22,stroke:#1B84FF
     classDef may fill:#8888,stroke:#888,stroke-dasharray:4
     class req must
-    class opt,o1,o2,o3 may
+    class opt,o1,o2,o3,o4,o5 may
 ```
 
 **UI 按 capability 渲染，绝不按 provider 名字硬编码。** 端口缺失或 `capability = false` 时，对应入口根本不会出现在菜单里；应用层误调用会抛 `UnsupportedError`——**不允许静默成功**，因为静默成功会让用户以为操作生效了。

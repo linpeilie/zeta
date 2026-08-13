@@ -9,25 +9,30 @@ import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 import '../../../testing/recording_json_rpc_peer.dart';
 
-/// S0 行为基线：三个生产 Provider 经 [AgentProviderBundle.adapt] 后的
-/// 当前端口有无、runtime owner、Registry 身份和模型目录刷新语义。
+/// 三个生产 Provider 经 [AgentProviderBundle.adapt] 后的细分端口矩阵。
 ///
-/// 端口名仍是删除前的聚合面；方法级 throw / no-op 也一并钉住，供 S1 拆端口对照。
+/// 不支持的能力必须是端口为 null，不能靠 Bundle 上的 no-op / 抛错方法冒充。
 void main() {
   const factory = DefaultAgentProviderFactory();
 
   group('production Bundle port matrix', () {
-    test('Codex exposes the current aggregated ports', () {
+    test('Codex exposes the split ports it actually supports', () {
       final provider = factory.create(AgentProviderConfig.defaultCodex);
       addTearDown(provider.dispose);
       final bundle = provider.bundle;
 
       _expectRuntimeOwner(bundle, provider);
       expect(bundle.threadCatalog, isNotNull);
-      expect(bundle.threadMutations, isNotNull);
+      expect(bundle.threadSubscription, isNotNull);
+      expect(bundle.threadNaming, isNotNull);
+      expect(bundle.threadArchival, isNotNull);
+      expect(bundle.threadDeletion, isNotNull);
+      expect(bundle.threadCompaction, isNotNull);
       expect(bundle.threadBranching, isNotNull);
       expect(bundle.turnSteering, isNotNull);
-      expect(bundle.interactions, isNotNull);
+      expect(bundle.permissionResponses, isNotNull);
+      expect(bundle.questions, isNotNull);
+      expect(bundle.deniedActionOverride, isNotNull);
       expect(bundle.modelCatalog, isNotNull);
       expect(bundle.conversationModes, isNotNull);
       expect(bundle.skills, isNotNull);
@@ -38,22 +43,30 @@ void main() {
       expect(bundle.usageQuota, isNotNull);
       expect(provider, isA<AgentRefreshableModelCatalogProvider>());
       expect(provider, isA<AgentQuestionResponseProvider>());
+      expect(provider, isA<AgentThreadSubscriptionProvider>());
+      expect(provider, isA<AgentDeniedActionOverridePort>());
       expect(provider, isNot(isA<AgentLocalThreadListProvider>()));
       expect(provider, isNot(isA<AgentSessionConfigProvider>()));
       expect(provider, isNot(isA<AgentPlanApprovalProvider>()));
     });
 
-    test('Grok exposes the current aggregated ports', () {
+    test('Grok exposes only the split ports it actually supports', () {
       final provider = factory.create(AgentProviderConfig.defaultGrok);
       addTearDown(provider.dispose);
       final bundle = provider.bundle;
 
       _expectRuntimeOwner(bundle, provider);
       expect(bundle.threadCatalog, isNotNull);
-      expect(bundle.threadMutations, isNotNull);
+      expect(bundle.threadSubscription, isNull);
+      expect(bundle.threadNaming, isNotNull);
+      expect(bundle.threadArchival, isNull);
+      expect(bundle.threadDeletion, isNotNull);
+      expect(bundle.threadCompaction, isNull);
       expect(bundle.threadBranching, isNull);
       expect(bundle.turnSteering, isNull);
-      expect(bundle.interactions, isNotNull);
+      expect(bundle.permissionResponses, isNotNull);
+      expect(bundle.questions, isNotNull);
+      expect(bundle.deniedActionOverride, isNull);
       expect(bundle.modelCatalog, isNotNull);
       expect(bundle.conversationModes, isNotNull);
       expect(bundle.skills, isNotNull);
@@ -65,21 +78,29 @@ void main() {
       expect(provider, isA<AgentRefreshableModelCatalogProvider>());
       expect(provider, isA<AgentQuestionResponseProvider>());
       expect(provider, isA<AgentPlanApprovalProvider>());
+      expect(provider, isNot(isA<AgentThreadSubscriptionProvider>()));
+      expect(provider, isNot(isA<AgentDeniedActionOverridePort>()));
       expect(provider, isNot(isA<AgentLocalThreadListProvider>()));
       expect(provider, isNot(isA<AgentSessionConfigProvider>()));
     });
 
-    test('Claude Code exposes the current aggregated ports', () {
+    test('Claude Code exposes only the split ports it actually supports', () {
       final provider = factory.create(AgentProviderConfig.defaultClaudeCode);
       addTearDown(provider.dispose);
       final bundle = provider.bundle;
 
       _expectRuntimeOwner(bundle, provider);
       expect(bundle.threadCatalog, isNotNull);
-      expect(bundle.threadMutations, isNotNull);
+      expect(bundle.threadSubscription, isNull);
+      expect(bundle.threadNaming, isNull);
+      expect(bundle.threadArchival, isNull);
+      expect(bundle.threadDeletion, isNull);
+      expect(bundle.threadCompaction, isNotNull);
       expect(bundle.threadBranching, isNull);
       expect(bundle.turnSteering, isNull);
-      expect(bundle.interactions, isNotNull);
+      expect(bundle.permissionResponses, isNotNull);
+      expect(bundle.questions, isNull);
+      expect(bundle.deniedActionOverride, isNull);
       expect(bundle.modelCatalog, isNotNull);
       expect(bundle.conversationModes, isNull);
       expect(bundle.skills, isNull);
@@ -92,94 +113,12 @@ void main() {
       expect(provider, isA<AgentLocalThreadListProvider>());
       expect(provider, isA<AgentPlanApprovalProvider>());
       expect(provider, isNot(isA<AgentQuestionResponseProvider>()));
+      expect(provider, isNot(isA<AgentThreadSubscriptionProvider>()));
+      expect(provider, isNot(isA<AgentDeniedActionOverridePort>()));
       expect(provider, isNot(isA<AgentSessionConfigProvider>()));
       expect(provider, isNot(isA<AgentSkillsCatalogProvider>()));
       expect(provider, isNot(isA<AgentConversationModeCatalogProvider>()));
     });
-  });
-
-  group('unsupported methods on current aggregated ports', () {
-    test(
-      'Grok no-ops subscription and Guardian, throws on missing mutations',
-      () async {
-        final provider = factory.create(AgentProviderConfig.defaultGrok);
-        addTearDown(provider.dispose);
-        final bundle = provider.bundle;
-
-        await expectLater(
-          bundle.threadCatalog!.unsubscribeThread('thread-1'),
-          completes,
-        );
-        await expectLater(
-          bundle.interactions!.approveGuardianDeniedAction(
-            threadId: 'thread-1',
-            event: 'guardian-event',
-          ),
-          completes,
-        );
-        await expectLater(
-          bundle.threadMutations!.archiveThread('thread-1'),
-          throwsA(isA<UnsupportedError>()),
-        );
-        await expectLater(
-          bundle.threadMutations!.unarchiveThread('thread-1'),
-          throwsA(isA<UnsupportedError>()),
-        );
-        await expectLater(
-          bundle.threadMutations!.compactThread('thread-1'),
-          throwsA(isA<UnsupportedError>()),
-        );
-      },
-    );
-
-    test(
-      'Claude Code no-ops subscription, throws on Guardian and missing mutations',
-      () async {
-        final provider = factory.create(AgentProviderConfig.defaultClaudeCode);
-        addTearDown(provider.dispose);
-        final bundle = provider.bundle;
-
-        await expectLater(
-          bundle.threadCatalog!.unsubscribeThread('thread-1'),
-          completes,
-        );
-        await expectLater(
-          bundle.interactions!.approveGuardianDeniedAction(
-            threadId: 'thread-1',
-            event: 'guardian-event',
-          ),
-          throwsA(isA<UnsupportedError>()),
-        );
-        await expectLater(
-          bundle.interactions!.respondToQuestion(
-            const AgentQuestionResponse(
-              requestId: 'question-1',
-              answers: <String, List<String>>{},
-            ),
-          ),
-          throwsA(isA<UnsupportedError>()),
-        );
-        await expectLater(
-          bundle.threadMutations!.renameThread(
-            threadId: 'thread-1',
-            name: 'Renamed',
-          ),
-          throwsA(isA<UnsupportedError>()),
-        );
-        await expectLater(
-          bundle.threadMutations!.archiveThread('thread-1'),
-          throwsA(isA<UnsupportedError>()),
-        );
-        await expectLater(
-          bundle.threadMutations!.unarchiveThread('thread-1'),
-          throwsA(isA<UnsupportedError>()),
-        );
-        await expectLater(
-          bundle.threadMutations!.deleteThread('thread-1'),
-          throwsA(isA<UnsupportedError>()),
-        );
-      },
-    );
   });
 
   group('factory and registry identity', () {

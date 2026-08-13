@@ -12,6 +12,7 @@ import 'package:zeta/src/features/agent/data/datasources/transport/provider_oper
 import 'package:zeta/src/features/agent/data/datasources/transport/provider_runtime_json_rpc_peer.dart';
 import 'package:zeta/src/features/agent/data/mappers/codex_permission_policy_codec.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_usage_window_labels.dart';
 
@@ -51,7 +52,9 @@ class CodexAppServerAgentProvider
         AgentQuestionResponseProvider,
         AgentConversationModeCatalogProvider,
         AgentSkillsCatalogProvider,
-        AgentPermissionPolicyProvider {
+        AgentPermissionPolicyProvider,
+        AgentThreadSubscriptionProvider,
+        AgentDeniedActionOverridePort {
   /// 创建 Codex app-server provider 实例。
   ///
   /// [config] 包含命令、参数、环境变量等 provider 配置。
@@ -124,6 +127,10 @@ class CodexAppServerAgentProvider
   /// 等待用户回答的服务端 JSON-RPC 请求。
   final Map<String, _PendingQuestion> _pendingQuestions =
       <String, _PendingQuestion>{};
+
+  /// 被拒操作人工放行所需的协议 event，按 reviewId 持有。
+  final Map<String, Map<String, Object?>> _deniedActionEventsByRequestId =
+      <String, Map<String, Object?>>{};
 
   /// 各 thread 当前运行中的 turn id。
   final Map<String, String> _runningTurnIdsBySessionId = <String, String>{};
@@ -585,6 +592,24 @@ class CodexAppServerAgentProvider
     await _client.approveGuardianDeniedAction(threadId: threadId, event: event);
   }
 
+  @override
+  Future<void> approveDeniedAction(
+    AgentDeniedActionOverrideRequest request,
+  ) async {
+    final event = _deniedActionEventsByRequestId.remove(request.requestId);
+    if (event == null) {
+      throw StateError(
+        'No pending denied action override for ${request.requestId}',
+      );
+    }
+    await initialize();
+    _log.i('Approving guardian-denied action for thread ${request.threadId}');
+    await _client.approveGuardianDeniedAction(
+      threadId: request.threadId,
+      event: event,
+    );
+  }
+
   /// 向 Codex app-server 分页读取完整 `model/list` 并缓存结果。
   Future<AgentModelList> _fetchModelList({
     required int limit,
@@ -874,6 +899,7 @@ class CodexAppServerAgentProvider
     _peer.beginClosing();
 
     _resolvePendingInteractionsOnConnectionClosed();
+    _deniedActionEventsByRequestId.clear();
 
     await _notificationSubscription?.cancel();
     await _serverRequestSubscription?.cancel();
@@ -1050,6 +1076,8 @@ class CodexAppServerAgentProvider
             'with no local pending approval',
           );
         }
+      } else if (event is AgentAutoApprovalReviewEvent) {
+        _trackDeniedActionOverride(event);
       } else if (event is AgentThreadDeletedEvent ||
           event is AgentThreadClosedEvent) {
         // 线程关闭/删除：清理该 thread 的运行态与服务端订阅。
@@ -1057,6 +1085,7 @@ class CodexAppServerAgentProvider
             ? event.threadId
             : (event as AgentThreadClosedEvent).threadId;
         _runningTurnIdsBySessionId.remove(threadId);
+        _clearDeniedActionOverridesForThread(threadId);
         _notificationMapper.invalidateSession(
           runtimeScope: notification.runtimeScope,
           sessionId: threadId,
@@ -1121,6 +1150,7 @@ class CodexAppServerAgentProvider
       );
     }
     _pendingApprovals.clear();
+    _deniedActionEventsByRequestId.clear();
     for (final pending in _pendingQuestions.values) {
       _events.add(
         AgentQuestionResolvedEvent(
@@ -1131,6 +1161,21 @@ class CodexAppServerAgentProvider
       );
     }
     _pendingQuestions.clear();
+  }
+
+  void _trackDeniedActionOverride(AgentAutoApprovalReviewEvent event) {
+    switch (event.status) {
+      case 'denied':
+        _deniedActionEventsByRequestId[event.reviewId] = event.raw;
+      case 'approved' || 'timedOut' || 'aborted':
+        _deniedActionEventsByRequestId.remove(event.reviewId);
+    }
+  }
+
+  void _clearDeniedActionOverridesForThread(String threadId) {
+    _deniedActionEventsByRequestId.removeWhere(
+      (requestId, raw) => raw['threadId'] == threadId,
+    );
   }
 
   /// 发出 provider 连接状态事件。

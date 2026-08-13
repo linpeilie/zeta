@@ -105,14 +105,16 @@ flowchart TD
     bundle["AgentProviderBundle"]
     bundle --> req["required<br/>runtime · conversation"]
     bundle --> opt["optional ports"]
-    opt --> o1["threadCatalog / threadMutations / threadBranching"]
-    opt --> o2["turnSteering / interactions / modelCatalog"]
-    opt --> o3["sessionConfiguration / planApproval / skills"]
+    opt --> o1["threadCatalog / threadSubscription / threadNaming"]
+    opt --> o2["threadArchival / threadDeletion / threadCompaction"]
+    opt --> o3["threadBranching / turnSteering / permissionResponses"]
+    opt --> o4["questions / deniedActionOverride / modelCatalog"]
+    opt --> o5["sessionConfiguration / planApproval / skills"]
 
     classDef must fill:#1B84FF22,stroke:#1B84FF
     classDef may fill:#8888,stroke:#888,stroke-dasharray:4
     class req must
-    class opt,o1,o2,o3 may
+    class opt,o1,o2,o3,o4,o5 may
 ```
 
 **UI renders by capability, never by provider name.** When a port is absent or `capability = false`, the corresponding entry point never appears in the menu, and an accidental call from the application layer throws `UnsupportedError` — **silent success is forbidden**, because it makes users believe something took effect when it didn't.

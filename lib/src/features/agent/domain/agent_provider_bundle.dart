@@ -10,10 +10,16 @@ final class AgentProviderBundle {
     required this.runtime,
     required this.conversation,
     this.threadCatalog,
-    this.threadMutations,
+    this.threadSubscription,
+    this.threadNaming,
+    this.threadArchival,
+    this.threadDeletion,
+    this.threadCompaction,
     this.threadBranching,
     this.turnSteering,
-    this.interactions,
+    this.permissionResponses,
+    this.questions,
+    this.deniedActionOverride,
     this.modelCatalog,
     this.conversationModes,
     this.skills,
@@ -32,13 +38,23 @@ final class AgentProviderBundle {
       threadCatalog: capabilities.canListThreads || capabilities.canReadHistory
           ? _LegacyAgentThreadCatalogPort(provider)
           : null,
-      threadMutations:
-          capabilities.canRenameThread ||
-              capabilities.canArchiveThread ||
-              capabilities.canUnarchiveThread ||
-              capabilities.canDeleteThread ||
-              capabilities.canCompactThread
-          ? _LegacyAgentThreadMutationsPort(provider)
+      threadSubscription: switch (provider) {
+        final AgentThreadSubscriptionProvider subscriptionProvider =>
+          _LegacyAgentThreadSubscriptionPort(subscriptionProvider),
+        _ => null,
+      },
+      threadNaming: capabilities.canRenameThread
+          ? _LegacyAgentThreadNamingPort(provider)
+          : null,
+      threadArchival:
+          capabilities.canArchiveThread || capabilities.canUnarchiveThread
+          ? _LegacyAgentThreadArchivalPort(provider)
+          : null,
+      threadDeletion: capabilities.canDeleteThread
+          ? _LegacyAgentThreadDeletionPort(provider)
+          : null,
+      threadCompaction: capabilities.canCompactThread
+          ? _LegacyAgentThreadCompactionPort(provider)
           : null,
       threadBranching: capabilities.canForkThread
           ? _LegacyAgentThreadBranchingPort(provider)
@@ -46,14 +62,20 @@ final class AgentProviderBundle {
       turnSteering: capabilities.canSteerTurn
           ? _LegacyAgentTurnSteeringPort(provider)
           : null,
-      interactions:
-          capabilities.supportsPermissionRequests ||
-              capabilities.supportsUserQuestions
-          ? _LegacyAgentInteractionPort(provider, switch (provider) {
-              final AgentQuestionResponseProvider responder => responder,
-              _ => null,
-            })
+      permissionResponses: capabilities.supportsPermissionRequests
+          ? _LegacyAgentPermissionResponsePort(provider)
           : null,
+      questions: capabilities.supportsUserQuestions
+          ? switch (provider) {
+              final AgentQuestionResponseProvider responder =>
+                _LegacyAgentQuestionResponsePort(responder),
+              _ => null,
+            }
+          : null,
+      deniedActionOverride: switch (provider) {
+        final AgentDeniedActionOverridePort overridePort => overridePort,
+        _ => null,
+      },
       modelCatalog:
           capabilities.supportsModelSelection ||
               capabilities.supportsReasoningOptions ||
@@ -103,10 +125,16 @@ final class AgentProviderBundle {
   final AgentRuntimePort runtime;
   final AgentConversationPort conversation;
   final AgentThreadCatalogPort? threadCatalog;
-  final AgentThreadMutationsPort? threadMutations;
+  final AgentThreadSubscriptionPort? threadSubscription;
+  final AgentThreadNamingPort? threadNaming;
+  final AgentThreadArchivalPort? threadArchival;
+  final AgentThreadDeletionPort? threadDeletion;
+  final AgentThreadCompactionPort? threadCompaction;
   final AgentThreadBranchingPort? threadBranching;
   final AgentTurnSteeringPort? turnSteering;
-  final AgentInteractionPort? interactions;
+  final AgentPermissionResponsePort? permissionResponses;
+  final AgentQuestionResponsePort? questions;
+  final AgentDeniedActionOverridePort? deniedActionOverride;
   final AgentModelCatalogPort? modelCatalog;
   final AgentConversationModeCatalogPort? conversationModes;
   final AgentSkillsPort? skills;
@@ -190,20 +218,32 @@ abstract interface class AgentThreadCatalogPort {
     String? sessionPath,
     String? projectPath,
   });
+}
 
+/// 远端 thread 订阅释放端口。
+abstract interface class AgentThreadSubscriptionPort {
   Future<void> unsubscribeThread(String threadId);
 }
 
-/// Thread 变更端口。
-abstract interface class AgentThreadMutationsPort {
+/// Thread 重命名端口。
+abstract interface class AgentThreadNamingPort {
   Future<void> renameThread({required String threadId, required String name});
+}
 
+/// Thread 归档 / 取消归档端口。
+abstract interface class AgentThreadArchivalPort {
   Future<void> archiveThread(String threadId);
 
   Future<void> unarchiveThread(String threadId);
+}
 
+/// Thread 删除端口。
+abstract interface class AgentThreadDeletionPort {
   Future<void> deleteThread(String threadId);
+}
 
+/// Thread 上下文压缩端口。
+abstract interface class AgentThreadCompactionPort {
   Future<void> compactThread(String threadId);
 }
 
@@ -230,16 +270,21 @@ abstract interface class AgentTurnSteeringPort {
   });
 }
 
-/// 用户交互回写端口。
-abstract interface class AgentInteractionPort {
+/// 权限审批回写端口。
+abstract interface class AgentPermissionResponsePort {
   Future<void> respondToPermission(AgentPermissionDecision decision);
+}
 
+/// 用户提问回写端口。
+abstract interface class AgentQuestionResponsePort {
   Future<void> respondToQuestion(AgentQuestionResponse response);
+}
 
-  Future<void> approveGuardianDeniedAction({
-    required String threadId,
-    required Object event,
-  });
+/// 被拒操作人工放行端口。
+///
+/// 只接受 typed [AgentDeniedActionOverrideRequest]；不得接收协议对象。
+abstract interface class AgentDeniedActionOverridePort {
+  Future<void> approveDeniedAction(AgentDeniedActionOverrideRequest request);
 }
 
 /// 模型目录端口。
@@ -419,6 +464,13 @@ final class _LegacyAgentThreadCatalogPort implements AgentThreadCatalogPort {
       projectPath: projectPath,
     );
   }
+}
+
+final class _LegacyAgentThreadSubscriptionPort
+    implements AgentThreadSubscriptionPort {
+  const _LegacyAgentThreadSubscriptionPort(this._provider);
+
+  final AgentThreadSubscriptionProvider _provider;
 
   @override
   Future<void> unsubscribeThread(String threadId) {
@@ -426,9 +478,19 @@ final class _LegacyAgentThreadCatalogPort implements AgentThreadCatalogPort {
   }
 }
 
-final class _LegacyAgentThreadMutationsPort
-    implements AgentThreadMutationsPort {
-  const _LegacyAgentThreadMutationsPort(this._provider);
+final class _LegacyAgentThreadNamingPort implements AgentThreadNamingPort {
+  const _LegacyAgentThreadNamingPort(this._provider);
+
+  final AgentProvider _provider;
+
+  @override
+  Future<void> renameThread({required String threadId, required String name}) {
+    return _provider.renameThread(threadId: threadId, name: name);
+  }
+}
+
+final class _LegacyAgentThreadArchivalPort implements AgentThreadArchivalPort {
+  const _LegacyAgentThreadArchivalPort(this._provider);
 
   final AgentProvider _provider;
 
@@ -438,23 +500,31 @@ final class _LegacyAgentThreadMutationsPort
   }
 
   @override
-  Future<void> compactThread(String threadId) {
-    return _provider.compactThread(threadId);
+  Future<void> unarchiveThread(String threadId) {
+    return _provider.unarchiveThread(threadId);
   }
+}
+
+final class _LegacyAgentThreadDeletionPort implements AgentThreadDeletionPort {
+  const _LegacyAgentThreadDeletionPort(this._provider);
+
+  final AgentProvider _provider;
 
   @override
   Future<void> deleteThread(String threadId) {
     return _provider.deleteThread(threadId);
   }
+}
+
+final class _LegacyAgentThreadCompactionPort
+    implements AgentThreadCompactionPort {
+  const _LegacyAgentThreadCompactionPort(this._provider);
+
+  final AgentProvider _provider;
 
   @override
-  Future<void> renameThread({required String threadId, required String name}) {
-    return _provider.renameThread(threadId: threadId, name: name);
-  }
-
-  @override
-  Future<void> unarchiveThread(String threadId) {
-    return _provider.unarchiveThread(threadId);
+  Future<void> compactThread(String threadId) {
+    return _provider.compactThread(threadId);
   }
 }
 
@@ -506,37 +576,27 @@ final class _LegacyAgentTurnSteeringPort implements AgentTurnSteeringPort {
   }
 }
 
-final class _LegacyAgentInteractionPort implements AgentInteractionPort {
-  const _LegacyAgentInteractionPort(this._provider, this._questionResponder);
+final class _LegacyAgentPermissionResponsePort
+    implements AgentPermissionResponsePort {
+  const _LegacyAgentPermissionResponsePort(this._provider);
 
   final AgentProvider _provider;
-  final AgentQuestionResponseProvider? _questionResponder;
-
-  @override
-  Future<void> approveGuardianDeniedAction({
-    required String threadId,
-    required Object event,
-  }) {
-    return _provider.approveGuardianDeniedAction(
-      threadId: threadId,
-      event: event,
-    );
-  }
 
   @override
   Future<void> respondToPermission(AgentPermissionDecision decision) {
     return _provider.respondToPermission(decision);
   }
+}
+
+final class _LegacyAgentQuestionResponsePort
+    implements AgentQuestionResponsePort {
+  const _LegacyAgentQuestionResponsePort(this._provider);
+
+  final AgentQuestionResponseProvider _provider;
 
   @override
   Future<void> respondToQuestion(AgentQuestionResponse response) {
-    final responder = _questionResponder;
-    if (responder == null) {
-      return Future<void>.error(
-        UnsupportedError('Provider does not support user questions'),
-      );
-    }
-    return responder.respondToQuestion(response);
+    return _provider.respondToQuestion(response);
   }
 }
 

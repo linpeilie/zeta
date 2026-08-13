@@ -399,11 +399,11 @@ class ProjectThreadsController {
           supported: bundle.capabilities.canRenameThread,
           operation: 'rename threads',
         );
-        final threadMutations = bundle.threadMutations;
-        if (threadMutations == null) {
+        final threadNaming = bundle.threadNaming;
+        if (threadNaming == null) {
           throw StateError(
             '${bundle.runtime.config.displayName} '
-            'missing thread mutation port',
+            'missing thread naming port',
           );
         }
         viewModel.updateThreadTitle(
@@ -411,7 +411,7 @@ class ProjectThreadsController {
           threadId: threadId,
           title: trimmed,
         );
-        await threadMutations.renameThread(threadId: threadId, name: trimmed);
+        await threadNaming.renameThread(threadId: threadId, name: trimmed);
       },
     );
   }
@@ -430,14 +430,14 @@ class ProjectThreadsController {
           supported: bundle.capabilities.canArchiveThread,
           operation: 'archive threads',
         );
-        final threadMutations = bundle.threadMutations;
-        if (threadMutations == null) {
+        final threadArchival = bundle.threadArchival;
+        if (threadArchival == null) {
           throw StateError(
             '${bundle.runtime.config.displayName} '
-            'missing thread mutation port',
+            'missing thread archival port',
           );
         }
-        await threadMutations.archiveThread(threadId);
+        await threadArchival.archiveThread(threadId);
         _removeThreadFromList(
           projectPath: projectPath,
           threadId: threadId,
@@ -461,14 +461,14 @@ class ProjectThreadsController {
           supported: bundle.capabilities.canUnarchiveThread,
           operation: 'unarchive threads',
         );
-        final threadMutations = bundle.threadMutations;
-        if (threadMutations == null) {
+        final threadArchival = bundle.threadArchival;
+        if (threadArchival == null) {
           throw StateError(
             '${bundle.runtime.config.displayName} '
-            'missing thread mutation port',
+            'missing thread archival port',
           );
         }
-        await threadMutations.unarchiveThread(threadId);
+        await threadArchival.unarchiveThread(threadId);
         _removeThreadFromList(
           projectPath: projectPath,
           threadId: threadId,
@@ -488,14 +488,14 @@ class ProjectThreadsController {
       threadId: threadId,
       operation: (bundle) async {
         if (bundle.capabilities.canDeleteThread) {
-          final threadMutations = bundle.threadMutations;
-          if (threadMutations == null) {
+          final threadDeletion = bundle.threadDeletion;
+          if (threadDeletion == null) {
             throw StateError(
               '${bundle.runtime.config.displayName} '
-              'missing thread mutation port',
+              'missing thread deletion port',
             );
           }
-          await threadMutations.deleteThread(threadId);
+          await threadDeletion.deleteThread(threadId);
         } else if (bundle.capabilities.canRemoveThreadFromList) {
           final localThreadList = bundle.localThreadList;
           if (localThreadList != null) {

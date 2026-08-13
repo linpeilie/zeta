@@ -79,7 +79,7 @@ Does exactly three things: update on matching entryId, create on new entryId, up
 An integration with one agent CLI. Currently active: Codex (default) and Grok. Cursor is retired.
 
 **AgentProviderBundle**
-The strict neutral entry point to a provider's capabilities. Required ports: `runtime` and `conversation`. Everything else (`threadCatalog`, `threadMutations`, `threadBranching`, `turnSteering`, `interactions`, `modelCatalog`, `localThreadList`, `sessionConfiguration`, `planApproval`, `conversationModes`, `skills`, `permissionPolicy`, `usageQuota`) is optional. The bundle does not expose the raw `AgentProvider`.
+The strict neutral entry point to a provider's capabilities. Required ports: `runtime` and `conversation`. Everything else (`threadCatalog`, `threadSubscription`, `threadNaming`, `threadArchival`, `threadDeletion`, `threadCompaction`, `threadBranching`, `turnSteering`, `permissionResponses`, `questions`, `deniedActionOverride`, `modelCatalog`, `localThreadList`, `sessionConfiguration`, `planApproval`, `conversationModes`, `skills`, `permissionPolicy`, `usageQuota`) is optional. The bundle does not expose the raw `AgentProvider`.
 `agent_provider_bundle.dart`
 
 **Capability**

@@ -81,8 +81,11 @@ AgentConversationViewModel
   -> AgentPlanExecutionHandoffController
   -> Binding / GlobalRuntime 提供的 AgentProviderBundle 端口
     -> AgentRuntimePort / AgentConversationPort
-    -> AgentThreadCatalogPort? / AgentThreadMutationsPort? / AgentThreadBranchingPort?
-    -> AgentTurnSteeringPort? / AgentInteractionPort? / AgentModelCatalogPort?
+    -> AgentThreadCatalogPort? / AgentThreadSubscriptionPort? / AgentThreadNamingPort?
+    -> AgentThreadArchivalPort? / AgentThreadDeletionPort? / AgentThreadCompactionPort?
+    -> AgentThreadBranchingPort? / AgentTurnSteeringPort?
+    -> AgentPermissionResponsePort? / AgentQuestionResponsePort? / AgentDeniedActionOverridePort?
+    -> AgentModelCatalogPort?
     -> AgentLocalThreadListPort? / AgentSessionConfigurationPort? / AgentPlanApprovalPort?
     -> AgentConversationModeCatalogPort?
 
@@ -94,7 +97,8 @@ AgentProviderRuntimeRegistry
 
 ProjectThreadsController
   -> AgentProviderBundle
-    -> AgentThreadCatalogPort? / AgentThreadMutationsPort? / AgentThreadBranchingPort?
+    -> AgentThreadCatalogPort? / AgentThreadNamingPort? / AgentThreadArchivalPort?
+    -> AgentThreadDeletionPort? / AgentThreadBranchingPort?
 
 AgentManagementController
   -> CodexAgentManagementRepository | GrokAgentManagementRepository
@@ -308,9 +312,11 @@ Bundle、RuntimePort 或 Binding 暴露给 ViewModel。
 `AgentProviderBundle` 当前负责把会话与线程能力拆成明确端口：
 
 - 必选：`runtime`、`conversation`。
-- 可选：`threadCatalog`、`threadMutations`、`threadBranching`、`turnSteering`、
-  `interactions`、`modelCatalog`、`localThreadList`、`sessionConfiguration`、
-  `planApproval`、`permissionPolicy`、`conversationModes`、`skills`、`usageQuota`。
+- 可选：`threadCatalog`、`threadSubscription`、`threadNaming`、`threadArchival`、
+  `threadDeletion`、`threadCompaction`、`threadBranching`、`turnSteering`、
+  `permissionResponses`、`questions`、`deniedActionOverride`、`modelCatalog`、
+  `localThreadList`、`sessionConfiguration`、`planApproval`、`permissionPolicy`、
+  `conversationModes`、`skills`、`usageQuota`。
 
 `AgentProvider` 仍负责承载具体 CLI 对接和运行时边界，核心职责包括：
 

@@ -79,7 +79,7 @@ reducer 唯一的副作用出口。带作用域校验（generation / runtime / t
 一个 Agent CLI 的接入实现。当前活跃的是 Codex（默认）与 Grok。Cursor 已退役。
 
 **AgentProviderBundle（能力包）**
-Provider 能力的严格中立入口。必选端口 `runtime` 和 `conversation`；其余（`threadCatalog`、`threadMutations`、`threadBranching`、`turnSteering`、`interactions`、`modelCatalog`、`localThreadList`、`sessionConfiguration`、`planApproval`、`conversationModes`、`skills`、`permissionPolicy`、`usageQuota`）都是可选的。Bundle 不暴露原始 `AgentProvider`。
+Provider 能力的严格中立入口。必选端口 `runtime` 和 `conversation`；其余（`threadCatalog`、`threadSubscription`、`threadNaming`、`threadArchival`、`threadDeletion`、`threadCompaction`、`threadBranching`、`turnSteering`、`permissionResponses`、`questions`、`deniedActionOverride`、`modelCatalog`、`localThreadList`、`sessionConfiguration`、`planApproval`、`conversationModes`、`skills`、`permissionPolicy`、`usageQuota`）都是可选的。Bundle 不暴露原始 `AgentProvider`。
 `agent_provider_bundle.dart`
 
 **Capability（能力声明）**

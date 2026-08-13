@@ -105,7 +105,7 @@ UI 一律按 `AgentProviderCapabilities` 和 `AgentProviderBundle` 端口是否�
 
 **不得用 no-op、空 answers 或语义不等价的降级伪造能力**——静默成功会让用户以为操作生效了。
 
-当前 bundle 端口：必选 `runtime` / `conversation`；可选 `threadCatalog` / `threadMutations` / `threadBranching` / `turnSteering` / `interactions` / `modelCatalog` / `conversationModes` / `skills` / `localThreadList` / `sessionConfiguration` / `planApproval` / `permissionPolicy` / `usageQuota`（见 `lib/src/features/agent/domain/agent_provider_bundle.dart`）。
+当前 bundle 端口：必选 `runtime` / `conversation`；可选 `threadCatalog` / `threadSubscription` / `threadNaming` / `threadArchival` / `threadDeletion` / `threadCompaction` / `threadBranching` / `turnSteering` / `permissionResponses` / `questions` / `deniedActionOverride` / `modelCatalog` / `conversationModes` / `skills` / `localThreadList` / `sessionConfiguration` / `planApproval` / `permissionPolicy` / `usageQuota`（见 `lib/src/features/agent/domain/agent_provider_bundle.dart`）。
 
 > 正文：[架构总览「Provider 能力协商」](docs/architecture/overview.md) · [工程规范 §4](docs/architecture/engineering_standards.md)
 

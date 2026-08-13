@@ -30,6 +30,9 @@ void main() {
         'codexAppServer',
         'grokAcp',
         'claudeCode',
+        'AgentThreadMutationsPort',
+        'AgentInteractionPort',
+        'threadMutations',
       ]) {
         expect(source, isNot(contains(token)), reason: token);
       }

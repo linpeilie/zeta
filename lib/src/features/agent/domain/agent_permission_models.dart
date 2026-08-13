@@ -104,3 +104,16 @@ class AgentPermissionDecision {
   /// 与 [AgentCommandApprovalDecisionKind.acceptWithExecpolicyAmendment] 配套的修正列表。
   final List<String> execpolicyAmendment;
 }
+
+/// 被拒操作的人工放行请求。
+///
+/// UI 只回传 typed [requestId]；协议对象由 Provider-local pending registry 持有。
+final class AgentDeniedActionOverrideRequest {
+  const AgentDeniedActionOverrideRequest({
+    required this.threadId,
+    required this.requestId,
+  });
+
+  final String threadId;
+  final String requestId;
+}

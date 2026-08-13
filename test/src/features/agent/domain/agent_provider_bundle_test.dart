@@ -68,10 +68,16 @@ void main() {
         expect(bundle.runtime.runtimeScope, provider.runtimeScope);
         expect(bundle.conversation, isNotNull);
         expect(bundle.threadCatalog, isNotNull);
-        expect(bundle.threadMutations, isNotNull);
+        expect(bundle.threadSubscription, isNotNull);
+        expect(bundle.threadNaming, isNotNull);
+        expect(bundle.threadArchival, isNotNull);
+        expect(bundle.threadDeletion, isNotNull);
+        expect(bundle.threadCompaction, isNotNull);
         expect(bundle.threadBranching, isNotNull);
         expect(bundle.turnSteering, isNotNull);
-        expect(bundle.interactions, isNotNull);
+        expect(bundle.permissionResponses, isNotNull);
+        expect(bundle.questions, isNotNull);
+        expect(bundle.deniedActionOverride, isNotNull);
         expect(bundle.modelCatalog, isNotNull);
         expect(bundle.conversationModes, isNotNull);
         expect(bundle.skills, isNotNull);
@@ -106,15 +112,15 @@ void main() {
           sessionPath: '/workspace/.session',
           projectPath: '/workspace',
         );
-        await bundle.threadCatalog!.unsubscribeThread('thread-1');
-        await bundle.threadMutations!.renameThread(
+        await bundle.threadSubscription!.unsubscribeThread('thread-1');
+        await bundle.threadNaming!.renameThread(
           threadId: 'thread-1',
           name: 'Renamed thread',
         );
-        await bundle.threadMutations!.archiveThread('thread-1');
-        await bundle.threadMutations!.unarchiveThread('thread-1');
-        await bundle.threadMutations!.deleteThread('thread-1');
-        await bundle.threadMutations!.compactThread('thread-1');
+        await bundle.threadArchival!.archiveThread('thread-1');
+        await bundle.threadArchival!.unarchiveThread('thread-1');
+        await bundle.threadDeletion!.deleteThread('thread-1');
+        await bundle.threadCompaction!.compactThread('thread-1');
         final forked = await bundle.threadBranching!.forkThread(
           threadId: 'thread-1',
           context: const AgentContext(projectPath: '/workspace'),
@@ -127,13 +133,13 @@ void main() {
           context: const AgentContext(projectPath: '/workspace'),
           inputs: const <AgentUserInput>[AgentUserInput.text('continue')],
         );
-        await bundle.interactions!.respondToPermission(
+        await bundle.permissionResponses!.respondToPermission(
           const AgentPermissionDecision(
             requestId: 'permission-1',
             approved: true,
           ),
         );
-        await bundle.interactions!.respondToQuestion(
+        await bundle.questions!.respondToQuestion(
           const AgentQuestionResponse(
             requestId: 'question-1',
             answers: <String, List<String>>{
@@ -141,9 +147,11 @@ void main() {
             },
           ),
         );
-        await bundle.interactions!.approveGuardianDeniedAction(
-          threadId: 'thread-1',
-          event: 'guardian-event',
+        await bundle.deniedActionOverride!.approveDeniedAction(
+          const AgentDeniedActionOverrideRequest(
+            threadId: 'thread-1',
+            requestId: 'review-1',
+          ),
         );
         final models = await bundle.modelCatalog!.listModels();
         final conversationModes = await bundle.conversationModes!
@@ -209,7 +217,7 @@ void main() {
             },
           ),
         ]);
-        expect(provider.guardianApprovals, <String>['thread-1:guardian-event']);
+        expect(provider.guardianApprovals, <String>['thread-1:review-1']);
         expect(provider.modelListCalls, 1);
         expect(conversationModes.presets, hasLength(2));
         expect(
@@ -247,10 +255,16 @@ void main() {
 
       expect(bundle.conversation, isNotNull);
       expect(bundle.threadCatalog, isNull);
-      expect(bundle.threadMutations, isNull);
+      expect(bundle.threadSubscription, isNull);
+      expect(bundle.threadNaming, isNull);
+      expect(bundle.threadArchival, isNull);
+      expect(bundle.threadDeletion, isNull);
+      expect(bundle.threadCompaction, isNull);
       expect(bundle.threadBranching, isNull);
       expect(bundle.turnSteering, isNull);
-      expect(bundle.interactions, isNull);
+      expect(bundle.permissionResponses, isNull);
+      expect(bundle.questions, isNull);
+      expect(bundle.deniedActionOverride, isNull);
       expect(bundle.modelCatalog, isNull);
       expect(bundle.conversationModes, isNull);
       expect(bundle.skills, isNull);
@@ -323,8 +337,13 @@ void main() {
         expect(provider.config.kind, AgentProviderKind.claudeCode);
         expect(bundle.capabilities.supportsPermissionRequests, isTrue);
         expect(bundle.capabilities.supportsPlanApproval, isTrue);
-        expect(bundle.interactions, isNotNull);
-        expect(bundle.threadMutations, isNotNull);
+        expect(bundle.permissionResponses, isNotNull);
+        expect(bundle.questions, isNull);
+        expect(bundle.deniedActionOverride, isNull);
+        expect(bundle.threadNaming, isNull);
+        expect(bundle.threadArchival, isNull);
+        expect(bundle.threadDeletion, isNull);
+        expect(bundle.threadCompaction, isNotNull);
         expect(bundle.modelCatalog, isNotNull);
         expect(bundle.permissionPolicy, isNotNull);
         expect(bundle.planApproval, isNotNull);
@@ -447,20 +466,32 @@ void main() {
         capabilities: AgentProviderCapabilities.unsupported,
       ).bundle;
       expect(codex.threadCatalog, isNotNull);
-      expect(codex.threadMutations, isNotNull);
+      expect(codex.threadSubscription, isNull);
+      expect(codex.threadNaming, isNotNull);
+      expect(codex.threadArchival, isNotNull);
+      expect(codex.threadDeletion, isNotNull);
+      expect(codex.threadCompaction, isNotNull);
       expect(codex.threadBranching, isNotNull);
       expect(codex.turnSteering, isNotNull);
-      expect(codex.interactions, isNotNull);
+      expect(codex.permissionResponses, isNotNull);
+      expect(codex.questions, isNull);
+      expect(codex.deniedActionOverride, isNull);
       expect(codex.modelCatalog, isNotNull);
       expect(codex.conversationModes, isNull);
       // Minimal fake 未实现 AgentSkillsCatalogProvider，即使 capability 打开也无端口。
       expect(codex.skills, isNull);
 
       expect(grok.threadCatalog, isNotNull);
-      expect(grok.threadMutations, isNotNull);
+      expect(grok.threadSubscription, isNull);
+      expect(grok.threadNaming, isNotNull);
+      expect(grok.threadArchival, isNull);
+      expect(grok.threadDeletion, isNotNull);
+      expect(grok.threadCompaction, isNull);
       expect(grok.threadBranching, isNull);
       expect(grok.turnSteering, isNull);
-      expect(grok.interactions, isNotNull);
+      expect(grok.permissionResponses, isNotNull);
+      expect(grok.questions, isNull);
+      expect(grok.deniedActionOverride, isNull);
       expect(grok.modelCatalog, isNotNull);
       expect(grok.conversationModes, isNull);
       expect(grok.skills, isNull);
@@ -734,7 +765,9 @@ class _BundleFakeProvider extends _MinimalBundleFakeProvider
         AgentRuntimeInfoProvider,
         AgentRuntimeLifecycleProvider,
         AgentRuntimeScopeProvider,
-        AgentQuestionResponseProvider {
+        AgentQuestionResponseProvider,
+        AgentThreadSubscriptionProvider,
+        AgentDeniedActionOverridePort {
   _BundleFakeProvider({
     this.runtimeInfo,
     this.runtimeScope,
@@ -805,6 +838,13 @@ class _BundleFakeProvider extends _MinimalBundleFakeProvider
         ),
       ],
     );
+  }
+
+  @override
+  Future<void> approveDeniedAction(
+    AgentDeniedActionOverrideRequest request,
+  ) async {
+    guardianApprovals.add('${request.threadId}:${request.requestId}');
   }
 
   @override

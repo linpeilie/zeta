@@ -1312,13 +1312,15 @@ class AgentConversationViewModel {
     }
     try {
       await _runCurrentBundle<void>((bundle) async {
-        final interactions = bundle.interactions;
-        if (interactions == null) {
+        final override = bundle.deniedActionOverride;
+        if (override == null) {
           return;
         }
-        await interactions.approveGuardianDeniedAction(
-          threadId: threadId,
-          event: review.raw,
+        await override.approveDeniedAction(
+          AgentDeniedActionOverrideRequest(
+            threadId: threadId,
+            requestId: review.reviewId,
+          ),
         );
       });
       _latestDeniedAutoReview = null;
@@ -2269,11 +2271,11 @@ class AgentConversationViewModel {
       'Responding to Agent permission ${request.kind.name}: approved=$approved',
     );
     await _runCurrentBundle<void>((bundle) async {
-      final interactions = bundle.interactions;
-      if (interactions == null) {
+      final permissionResponses = bundle.permissionResponses;
+      if (permissionResponses == null) {
         return;
       }
-      await interactions.respondToPermission(
+      await permissionResponses.respondToPermission(
         AgentPermissionDecision(
           requestId: request.id,
           approved: approved,
@@ -2314,11 +2316,11 @@ class AgentConversationViewModel {
       '(${answers.length} answered questions)',
     );
     await _runCurrentBundle<void>((bundle) async {
-      final interactions = bundle.interactions;
-      if (interactions == null) {
+      final questions = bundle.questions;
+      if (questions == null) {
         return;
       }
-      await interactions.respondToQuestion(
+      await questions.respondToQuestion(
         AgentQuestionResponse(requestId: request.id, answers: answers),
       );
     });
@@ -2590,14 +2592,14 @@ class AgentConversationViewModel {
     );
     try {
       await _runGlobalBundle((bundle) {
-        final threadMutations = bundle.threadMutations;
-        if (threadMutations == null) {
+        final threadNaming = bundle.threadNaming;
+        if (threadNaming == null) {
           throw UnsupportedError(
             '${bundle.runtime.config.displayName} '
             'does not support renaming threads',
           );
         }
-        return threadMutations.renameThread(threadId: threadId, name: trimmed);
+        return threadNaming.renameThread(threadId: threadId, name: trimmed);
       });
     } catch (error) {
       if (sessionId == threadId && _currentThreadTitle == trimmed) {
@@ -2622,14 +2624,14 @@ class AgentConversationViewModel {
     }
     try {
       await _runGlobalBundle((bundle) {
-        final threadMutations = bundle.threadMutations;
-        if (threadMutations == null) {
+        final threadArchival = bundle.threadArchival;
+        if (threadArchival == null) {
           throw UnsupportedError(
             '${bundle.runtime.config.displayName} '
             'does not support archiving threads',
           );
         }
-        return threadMutations.archiveThread(threadId);
+        return threadArchival.archiveThread(threadId);
       });
     } catch (error) {
       _log.w('Could not archive thread $threadId (${error.runtimeType})');
@@ -2640,7 +2642,7 @@ class AgentConversationViewModel {
   /// 压缩当前 thread；仅通过当前 Binding 的 session runtime 执行。
   ///
   /// Claude 的 compact 是一个真实 `/compact` 回合，因此不能走 global runtime；
-  /// Codex 等 Provider 也继续消费同一个中立 [AgentThreadMutationsPort]。
+  /// Codex 等 Provider 也继续消费同一个中立 [AgentThreadCompactionPort]。
   Future<void> compactCurrentThread() async {
     final threadId = sessionId;
     if (threadId == null || !canCompactCurrentThread) {
@@ -2696,15 +2698,15 @@ class AgentConversationViewModel {
         );
       }
 
-      final threadMutations = bundle.threadMutations;
-      if (threadMutations == null) {
+      final threadCompaction = bundle.threadCompaction;
+      if (threadCompaction == null) {
         throw UnsupportedError(
           '${bundle.runtime.config.displayName} '
           'does not support compacting threads',
         );
       }
       providerOperation = 'thread/compact';
-      await threadMutations.compactThread(threadId);
+      await threadCompaction.compactThread(threadId);
     } on ProcessException catch (error, stackTrace) {
       _logProviderOperationFailure(
         error: error,
@@ -3598,11 +3600,11 @@ class AgentConversationViewModel {
   ) async {
     try {
       await _runGlobalBundle((bundle) async {
-        final threadCatalog = bundle.threadCatalog;
-        if (threadCatalog == null) {
+        final subscription = bundle.threadSubscription;
+        if (subscription == null) {
           return;
         }
-        await threadCatalog.unsubscribeThread(threadId);
+        await subscription.unsubscribeThread(threadId);
       }, preferredProviderId: providerId);
     } catch (error) {
       _log.w(

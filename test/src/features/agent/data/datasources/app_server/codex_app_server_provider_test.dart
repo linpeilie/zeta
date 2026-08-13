@@ -12,6 +12,7 @@ import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdi
 import 'package:zeta/src/features/agent/data/datasources/transport/provider_operation_scheduler.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 import '../../../../../testing/agent_file_change_canonical.dart';
 
@@ -5459,13 +5460,24 @@ void main() {
       expect(reviews.last.status, 'denied');
       expect(reviews.last.rationale, 'risky');
 
-      await provider.approveGuardianDeniedAction(
-        threadId: 'thread-1',
-        event: reviews.last.raw,
+      await provider.bundle.deniedActionOverride!.approveDeniedAction(
+        const AgentDeniedActionOverrideRequest(
+          threadId: 'thread-1',
+          requestId: 'review-1',
+        ),
       );
       expect(
         peer.requestMethods,
         contains('thread/approveGuardianDeniedAction'),
+      );
+      await expectLater(
+        provider.bundle.deniedActionOverride!.approveDeniedAction(
+          const AgentDeniedActionOverrideRequest(
+            threadId: 'thread-1',
+            requestId: 'review-1',
+          ),
+        ),
+        throwsA(isA<StateError>()),
       );
       await subscription.cancel();
     });

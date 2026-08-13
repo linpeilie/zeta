@@ -112,8 +112,10 @@ main -> app -> presentation/application -> domain
 
 - UI 只消费 `AgentEvent`、`AgentThreadSummary`、`AgentPermissionRequest`、
   `AgentQuestionRequest`、`AgentToolCall` 等中立模型。
-- 已迁移能力域（`conversation`、`threadCatalog`、`threadMutations`、
-  `threadBranching`、`turnSteering`、`interactions`、`modelCatalog`、
+- 已迁移能力域（`conversation`、`threadCatalog`、`threadSubscription`、
+  `threadNaming`、`threadArchival`、`threadDeletion`、`threadCompaction`、
+  `threadBranching`、`turnSteering`、`permissionResponses`、`questions`、
+  `deniedActionOverride`、`modelCatalog`、
   `localThreadList`、`sessionConfiguration`、`planApproval`、`conversationModes`、
   `permissionPolicy`、`usageQuota`）优先通过 bundle 端口访问；Bundle 和
   `AgentRuntimePort` 不得向 controller / ViewModel 暴露原始 `AgentProvider`；
