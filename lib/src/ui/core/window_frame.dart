@@ -75,7 +75,8 @@ class WindowFrame extends StatelessWidget {
   /// 标题栏顶部菜单；菜单内容由上层 feature 决定。
   final List<WindowMenu> menus;
 
-  /// 标题栏左侧动作按钮；位于 macOS 交通灯 gutter 之后、其他平台最左侧。
+  /// 标题栏左侧动作按钮；位于 macOS 交通灯 gutter 之后、Windows 品牌 Logo
+  /// 之后，其余平台最左侧。
   final List<WindowTitleBarAction> titleBarLeadingActions;
 
   /// 标题栏右侧动作按钮；由上层 feature 注入具体行为。
@@ -157,6 +158,8 @@ class _TitleBar extends StatelessWidget {
               // macOS 下左侧让出交通灯按钮的空间，且不拦截点击。
               if (isMac)
                 const SizedBox(width: IdeMetrics.macOSTrafficLightGutter),
+              // Windows 下 Logo 固定在最左侧，折叠等 leading action 紧随其后。
+              if (isWindows) const _WindowsTitleBarLogo(),
               if (titleBarLeadingActions.isNotEmpty)
                 _TitleBarActionGroup(
                   actions: titleBarLeadingActions,
@@ -164,7 +167,6 @@ class _TitleBar extends StatelessWidget {
                   showWindowControls: showWindowControls,
                   isMac: isMac,
                 ),
-              if (isWindows) const _WindowsTitleBarLogo(),
               if (menus.isNotEmpty) _WindowMenuBar(menus: menus),
               Expanded(
                 child: DragToMoveArea(

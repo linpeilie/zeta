@@ -179,7 +179,6 @@ void main() {
 
   for (final platform in <TargetPlatform>[
     TargetPlatform.macOS,
-    TargetPlatform.windows,
     TargetPlatform.linux,
   ]) {
     testWidgets('${platform.name} 标题栏左侧 action 位于平台保留区与菜单之间', (tester) async {
@@ -224,21 +223,66 @@ void main() {
           tester.getTopRight(action).dx,
           lessThan(tester.getTopLeft(menu).dx),
         );
-
-        final logo = find.byKey(const ValueKey('window-title-bar-logo'));
-        if (platform == TargetPlatform.windows) {
-          expect(logo, findsOneWidget);
-          expect(
-            tester.getTopRight(action).dx,
-            lessThan(tester.getTopLeft(logo).dx),
-          );
-        } else {
-          expect(logo, findsNothing);
-        }
+        expect(
+          find.byKey(const ValueKey('window-title-bar-logo')),
+          findsNothing,
+        );
         expect(tester.takeException(), isNull);
       });
     });
   }
+
+  testWidgets('Windows 标题栏最左侧展示 Logo，折叠 action 紧随其后', (tester) async {
+    await _withTargetPlatform(TargetPlatform.windows, () async {
+      await pumpIdeComponent(
+        tester,
+        size: const Size(960, 640),
+        child: WindowFrame(
+          enableNativeWindowFrame: true,
+          showWindowControls: false,
+          titleBarLeadingActions: [
+            WindowTitleBarAction(
+              key: const ValueKey('window-leading-action'),
+              icon: Icons.view_sidebar_outlined,
+              tooltip: '显示左侧栏',
+              semanticLabel: '显示左侧栏',
+              onPressed: () {},
+            ),
+          ],
+          menus: const [
+            WindowMenu(
+              key: ValueKey('window-menu-file'),
+              label: '文件',
+              items: <WindowMenuItem>[],
+            ),
+          ],
+          child: const ColoredBox(color: Colors.black),
+        ),
+      );
+
+      final titleBar = find.byKey(const ValueKey('window-title-bar'));
+      final logo = find.byKey(const ValueKey('window-title-bar-logo'));
+      final action = find.byKey(const ValueKey('window-leading-action'));
+      final menu = find.byKey(const ValueKey('window-menu-file'));
+
+      expect(logo, findsOneWidget);
+      // 契约：Logo 紧贴标题栏最左边缘（其左外边距在 Logo 自身盒子内），
+      // 折叠 action 紧随其后，menu 再之后。
+      expect(
+        tester.getTopLeft(logo).dx - tester.getTopLeft(titleBar).dx,
+        closeTo(0, 0.01),
+      );
+      expect(
+        tester.getTopRight(logo).dx,
+        lessThan(tester.getTopLeft(action).dx),
+      );
+      expect(
+        tester.getTopRight(action).dx,
+        lessThan(tester.getTopLeft(menu).dx),
+      );
+      expect(tester.takeException(), isNull);
+    });
+  });
 
   testWidgets('省略左侧 actions 与显式空列表保持旧标题栏布局', (tester) async {
     await _withTargetPlatform(TargetPlatform.windows, () async {
