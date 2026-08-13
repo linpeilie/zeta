@@ -266,7 +266,9 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
         _IdeHomePage.home => <WindowTitleBarAction>[
           WindowTitleBarAction(
             key: const ValueKey('titlebar-left-sidebar-action'),
-            icon: Icons.view_sidebar_outlined,
+            icon: leftSidebarVisible
+                ? sf.LucideIcons.panelLeftClose
+                : sf.LucideIcons.panelLeftOpen,
             tooltip: leftSidebarVisible ? '隐藏左侧栏' : '显示左侧栏',
             semanticLabel: leftSidebarVisible ? '隐藏左侧栏' : '显示左侧栏',
             active: leftSidebarVisible,
@@ -314,7 +316,9 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
         if (homePage)
           WindowTitleBarAction(
             key: const ValueKey('titlebar-right-sidebar-action'),
-            icon: sf.LucideIcons.panelRight,
+            icon: rightSidebarExpanded
+                ? sf.LucideIcons.panelRightClose
+                : sf.LucideIcons.panelRightOpen,
             tooltip: rightSidebarExpanded ? '隐藏右侧栏' : '显示右侧栏',
             semanticLabel: rightSidebarExpanded ? '隐藏右侧栏' : '显示右侧栏',
             active: rightSidebarExpanded,

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/main.dart';
 import 'package:zeta/src/app/app.dart' show MainAppState;
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
@@ -313,6 +314,8 @@ void main() {
     expect(find.byKey(const ValueKey('workbench-leading-rail')), findsNothing);
     expect(find.byKey(const ValueKey('left-projects-action')), findsNothing);
     expect(find.byKey(const ValueKey('left-context-action')), findsNothing);
+    // 左侧栏展开时展示「收起」态 icon。
+    expect(find.byIcon(sf.LucideIcons.panelLeftClose), findsOneWidget);
 
     await tester.tap(
       find.byKey(const ValueKey('titlebar-left-sidebar-action')),
@@ -324,6 +327,8 @@ void main() {
       find.byKey(const ValueKey('workbench-navigation-inline')),
       findsNothing,
     );
+    // 左侧栏收起后切换为「展开」态 icon。
+    expect(find.byIcon(sf.LucideIcons.panelLeftOpen), findsOneWidget);
 
     await tester.tap(
       find.byKey(const ValueKey('titlebar-left-sidebar-action')),
@@ -333,6 +338,7 @@ void main() {
     expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
     expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
     expect(find.byKey(const ValueKey('agent-usage-compact')), findsOneWidget);
+    expect(find.byIcon(sf.LucideIcons.panelLeftClose), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
     await tester.pump();
@@ -396,6 +402,8 @@ void main() {
     expect(find.byKey(const ValueKey('right-tools-action')), findsNothing);
     expect(find.byKey(const ValueKey('files-panel-card')), findsNothing);
     expect(find.byKey(const ValueKey('tools-panel-card')), findsNothing);
+    // 右侧栏收起时展示「展开」态 icon。
+    expect(find.byIcon(sf.LucideIcons.panelRightOpen), findsOneWidget);
 
     await tester.tap(titlebarAction);
     await tester.pump();
@@ -410,6 +418,8 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('tools-panel-card')), findsNothing);
+    // 右侧栏展开后切换为「收起」态 icon。
+    expect(find.byIcon(sf.LucideIcons.panelRightClose), findsOneWidget);
 
     await tester.tap(titlebarAction);
     await tester.pump();
@@ -419,6 +429,7 @@ void main() {
       find.byKey(const ValueKey('workbench-inspector-inline')),
       findsNothing,
     );
+    expect(find.byIcon(sf.LucideIcons.panelRightOpen), findsOneWidget);
   });
 
   testWidgets(
