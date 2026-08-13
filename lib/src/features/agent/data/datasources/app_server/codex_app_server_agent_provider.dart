@@ -44,6 +44,22 @@ typedef JsonRpcPeerFactory = JsonRpcPeer Function(AgentProviderConfig config);
 class CodexAppServerAgentProvider
     implements
         AgentProvider,
+        AgentRuntimePort,
+        AgentConversationPort,
+        AgentThreadCatalogPort,
+        AgentThreadSubscriptionPort,
+        AgentThreadNamingPort,
+        AgentThreadArchivalPort,
+        AgentThreadDeletionPort,
+        AgentThreadCompactionPort,
+        AgentThreadBranchingPort,
+        AgentTurnSteeringPort,
+        AgentPermissionResponsePort,
+        AgentQuestionResponsePort,
+        AgentDeniedActionOverridePort,
+        AgentModelCatalogPort,
+        AgentConversationModeCatalogPort,
+        AgentSkillsPort,
         AgentUsageQuotaProvider,
         AgentRuntimeInfoProvider,
         AgentRuntimeLifecycleProvider,
@@ -53,8 +69,7 @@ class CodexAppServerAgentProvider
         AgentConversationModeCatalogProvider,
         AgentSkillsCatalogProvider,
         AgentPermissionPolicyProvider,
-        AgentThreadSubscriptionProvider,
-        AgentDeniedActionOverridePort {
+        AgentThreadSubscriptionProvider {
   /// 创建 Codex app-server provider 实例。
   ///
   /// [config] 包含命令、参数、环境变量等 provider 配置。
@@ -423,7 +438,11 @@ class CodexAppServerAgentProvider
   Future<AgentModelList> listModels({
     int limit = 20,
     bool includeHidden = false,
+    bool forceRefresh = false,
   }) async {
+    if (forceRefresh) {
+      return refreshModels(limit: limit, includeHidden: includeHidden);
+    }
     final cached = _modelLists[includeHidden];
     if (cached != null) {
       return cached;

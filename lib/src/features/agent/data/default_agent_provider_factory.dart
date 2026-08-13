@@ -1,11 +1,13 @@
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_acp_agent_provider.dart';
 import 'package:zeta/src/features/agent/data/datasources/app_server/codex_app_server_agent_provider.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_agent_provider.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_cli_metadata_coordinator.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_hidden_thread_store.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_permission_policy_adapter.dart';
+import 'package:zeta/src/features/agent/data/native_agent_provider_bundles.dart';
+import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 /// 生产环境默认 provider 工厂。
 ///
@@ -43,6 +45,28 @@ class DefaultAgentProviderFactory implements AgentProviderFactory {
       ),
       AgentProviderKind.claudeCode => ClaudeCodeAgentProvider(
         config: config,
+        metadataLoader: claudeCodeMetadataLoader,
+        sessionDecisionStoreFactory: claudeCodeSessionDecisionStoreFactory,
+        hiddenThreadStore: claudeCodeHiddenThreadStore,
+      ),
+    };
+  }
+
+  /// 原生 Bundle 创建入口；不经过 [AgentProviderBundle.adapt]。
+  ///
+  /// Registry 在 S3 之前仍走 [create]。本方法供测试与后续所有权切换使用。
+  AgentProviderBundle createBundle(AgentProviderConfig config) {
+    if (CursorRetirementPolicy.isRetiredProvider(config)) {
+      throw UnsupportedError(CursorRetirementPolicy.unavailableMessage);
+    }
+    return switch (config.kind) {
+      AgentProviderKind.codexAppServer => createCodexBundle(config),
+      AgentProviderKind.acp => createGrokBundle(config),
+      AgentProviderKind.cursorAcp => throw UnsupportedError(
+        CursorRetirementPolicy.unavailableMessage,
+      ),
+      AgentProviderKind.claudeCode => createClaudeCodeBundle(
+        config,
         metadataLoader: claudeCodeMetadataLoader,
         sessionDecisionStoreFactory: claudeCodeSessionDecisionStoreFactory,
         hiddenThreadStore: claudeCodeHiddenThreadStore,

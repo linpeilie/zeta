@@ -23,6 +23,7 @@ import 'package:zeta/src/features/agent/data/mappers/claude_code_permission_mode
 import 'package:zeta/src/features/agent/data/mappers/claude_code_stream_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 final _log = loggerFor('zeta.agent.claude_code.provider');
 
@@ -35,6 +36,14 @@ final _log = loggerFor('zeta.agent.claude_code.provider');
 class ClaudeCodeAgentProvider
     implements
         AgentProvider,
+        AgentRuntimePort,
+        AgentConversationPort,
+        AgentThreadCatalogPort,
+        AgentThreadCompactionPort,
+        AgentPermissionResponsePort,
+        AgentModelCatalogPort,
+        AgentLocalThreadListPort,
+        AgentPlanApprovalPort,
         AgentPermissionPolicyProvider,
         AgentPlanApprovalProvider,
         AgentLocalThreadListProvider,
@@ -157,6 +166,23 @@ class ClaudeCodeAgentProvider
 
   @override
   Stream<AgentEvent> get events => _events.stream;
+
+  @override
+  AgentRuntimeInfo? get runtimeInfo => null;
+
+  @override
+  AgentProviderLifecycleState get lifecycleState {
+    if (_disposed) {
+      return AgentProviderLifecycleState.closed;
+    }
+    if (_initialized) {
+      return AgentProviderLifecycleState.ready;
+    }
+    return AgentProviderLifecycleState.stopped;
+  }
+
+  @override
+  AgentRuntimeScope? get runtimeScope => _runtimeScope;
 
   @override
   AgentPermissionPolicyPort get permissionPolicy => _permissionPolicy;
@@ -313,7 +339,11 @@ class ClaudeCodeAgentProvider
   Future<AgentModelList> listModels({
     int limit = 20,
     bool includeHidden = false,
+    bool forceRefresh = false,
   }) async {
+    if (forceRefresh) {
+      return refreshModels(limit: limit, includeHidden: includeHidden);
+    }
     return _modelCatalog.listModels(limit: limit, includeHidden: includeHidden);
   }
 

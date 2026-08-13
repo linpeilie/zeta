@@ -48,6 +48,21 @@ void main() {
     },
   );
 
+  test('createBundle never creates a Cursor runtime', () {
+    const factory = DefaultAgentProviderFactory();
+
+    expect(
+      () => factory.createBundle(AgentProviderConfig.defaultCursor),
+      throwsA(
+        isA<UnsupportedError>().having(
+          (error) => error.message,
+          'message',
+          contains('已退役'),
+        ),
+      ),
+    );
+  });
+
   test('wires the Claude CLI metadata loader into the model catalog', () async {
     var metadataCalls = 0;
     final factory = DefaultAgentProviderFactory(

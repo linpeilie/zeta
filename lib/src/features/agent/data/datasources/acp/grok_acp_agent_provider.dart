@@ -23,6 +23,7 @@ import 'package:zeta/src/features/agent/data/mappers/grok_question_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_skills_mapper.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 final _log = loggerFor('zeta.agent.grok_acp');
 
@@ -39,6 +40,17 @@ typedef JsonRpcPeerFactory = JsonRpcPeer Function(AgentProviderConfig config);
 class GrokAcpAgentProvider
     implements
         AgentProvider,
+        AgentRuntimePort,
+        AgentConversationPort,
+        AgentThreadCatalogPort,
+        AgentThreadNamingPort,
+        AgentThreadDeletionPort,
+        AgentPermissionResponsePort,
+        AgentQuestionResponsePort,
+        AgentModelCatalogPort,
+        AgentConversationModeCatalogPort,
+        AgentSkillsPort,
+        AgentPlanApprovalPort,
         AgentUsageQuotaProvider,
         AgentRuntimeLifecycleProvider,
         AgentRuntimeScopeProvider,
@@ -206,6 +218,9 @@ class GrokAcpAgentProvider
   AgentProviderCapabilities get capabilities => AgentProviderCapabilities
       .grokAcp
       .copyWith(canResumeSession: _loadSessionSupported);
+
+  @override
+  AgentRuntimeInfo? get runtimeInfo => null;
 
   @override
   AgentProviderLifecycleState get lifecycleState => _peer.lifecycleState;
@@ -561,7 +576,11 @@ class GrokAcpAgentProvider
   Future<AgentModelList> listModels({
     int limit = 20,
     bool includeHidden = false,
+    bool forceRefresh = false,
   }) async {
+    if (forceRefresh) {
+      return refreshModels(limit: limit, includeHidden: includeHidden);
+    }
     final cached = _modelList;
     if (cached != null && cached.models.isNotEmpty) {
       return cached;
