@@ -54,6 +54,7 @@
 
 ### 新增
 
+- Claude 模型列表展示 CLI 返回的思考程度选项，并在下一回合通过 `--effort` 生效
 - Agent 统计展开态在 Provider 返回可用重置卡时展示权威数量；零张或未提供时保持隐藏
 - Agent 时间线新增中立文件变更证据：Grok 与 Claude Edit 展示替换片段，Claude Write
   展示写入内容，Codex 结构化 fileChange 展示 unified patch；仅有命令时继续显示命令卡，

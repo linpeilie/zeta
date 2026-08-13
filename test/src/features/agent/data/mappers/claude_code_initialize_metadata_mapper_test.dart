@@ -39,6 +39,19 @@ void main() {
       );
       expect(result.models.models.first.id, 'default');
       expect(result.models.models.first.model, 'default');
+      expect(
+        result.models.models.first.supportedReasoningEfforts.map(
+          (effort) => effort.effort,
+        ),
+        <String>['low', 'medium', 'high', 'xhigh', 'max'],
+      );
+      expect(
+        result.models.models[3].supportedReasoningEfforts.map(
+          (effort) => effort.effort,
+        ),
+        <String>['low', 'medium', 'high', 'xhigh', 'max'],
+      );
+      expect(result.models.models.last.supportedReasoningEfforts, isEmpty);
     });
 
     test('maps the reverse-source shape without resolvedModel', () {
@@ -56,6 +69,12 @@ void main() {
         'haiku',
       ]);
       expect(result.models.models.last.description, isNull);
+      expect(
+        result.models.models.first.supportedReasoningEfforts.map(
+          (effort) => effort.effort,
+        ),
+        <String>['low', 'medium', 'high'],
+      );
       expect(result.subscriptionType, 'Claude Pro');
     });
 
@@ -102,12 +121,52 @@ void main() {
 
       for (final model in result.models.models) {
         expect(model.raw, isEmpty);
-        expect(model.supportedReasoningEfforts, isEmpty);
         expect(model.defaultReasoningEffort, isNull);
         expect(model.serviceTiers, isEmpty);
         expect(model.defaultServiceTier, isNull);
         expect(model.contextWindowTokens, isNull);
       }
+    });
+
+    test('normalizes valid effort levels and ignores malformed capability', () {
+      final result = mapClaudeCodeInitializeMetadata(
+        _successFrame(
+          models: <Object?>[
+            <String, Object?>{
+              'value': 'supported',
+              'supportsEffort': true,
+              'supportedEffortLevels': <Object?>[
+                ' high ',
+                '',
+                7,
+                'low',
+                'high',
+                'future-level',
+              ],
+            },
+            <String, Object?>{
+              'value': 'disabled',
+              'supportsEffort': false,
+              'supportedEffortLevels': <Object?>['low'],
+            },
+            <String, Object?>{
+              'value': 'malformed',
+              'supportsEffort': true,
+              'supportedEffortLevels': 'low',
+            },
+          ],
+          account: const <String, Object?>{},
+        ),
+      );
+
+      expect(
+        result.models.models.first.supportedReasoningEfforts.map(
+          (effort) => effort.effort,
+        ),
+        <String>['high', 'low', 'future-level'],
+      );
+      expect(result.models.models[1].supportedReasoningEfforts, isEmpty);
+      expect(result.models.models[2].supportedReasoningEfforts, isEmpty);
     });
 
     test('returns empty for failed, empty, and malformed envelopes', () {

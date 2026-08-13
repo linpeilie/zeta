@@ -145,6 +145,7 @@ class ClaudeCodeAgentProvider
   String? _sessionId;
   String? _workingDirectory;
   String? _activePeerModel;
+  String? _activePeerReasoningEffort;
   final Map<String, String> _runningTurnIdsBySessionId = <String, String>{};
 
   bool _initialized = false;
@@ -235,6 +236,7 @@ class ClaudeCodeAgentProvider
       workingDirectory: cwd,
       resumeSessionId: null,
       model: _effectiveModel,
+      reasoningEffort: _effectiveReasoningEffort,
     );
     _sessionId = sessionId;
     _workingDirectory = cwd;
@@ -275,6 +277,7 @@ class ClaudeCodeAgentProvider
       workingDirectory: cwd,
       resumeSessionId: normalizedSessionId,
       model: _effectiveModel,
+      reasoningEffort: _effectiveReasoningEffort,
     );
     _sessionId = normalizedSessionId;
     _workingDirectory = cwd;
@@ -518,6 +521,7 @@ class ClaudeCodeAgentProvider
         );
       }
       final requestedModel = _effectiveModel;
+      final requestedReasoningEffort = _effectiveReasoningEffort;
 
       text = _resolvePromptText(message: message, inputs: inputs);
       if (text.trim().isEmpty) {
@@ -528,9 +532,10 @@ class ClaudeCodeAgentProvider
         session: session,
         snapshot: configuration.permissionSnapshot,
       );
-      await _applyTurnModelSelection(
+      await _applyTurnModelConfiguration(
         session: session,
         requestedModel: requestedModel,
+        requestedReasoningEffort: requestedReasoningEffort,
       );
       final activePeer = _peer;
       final activeRuntimeScope = _runtimeScope;
@@ -788,6 +793,7 @@ class ClaudeCodeAgentProvider
     _peer = null;
     _expectedPeerSessionId = null;
     _activePeerModel = null;
+    _activePeerReasoningEffort = null;
     if (peer != null) {
       try {
         await peer.close();
@@ -804,13 +810,18 @@ class ClaudeCodeAgentProvider
     required String workingDirectory,
     required String? resumeSessionId,
     required String? model,
+    required String? reasoningEffort,
   }) async {
     final normalizedModel = _normalizeModel(model);
+    final normalizedReasoningEffort = _normalizeReasoningEffort(
+      reasoningEffort,
+    );
     final existing = _peer;
     if (existing != null &&
         _sessionId == sessionId &&
         _workingDirectory == workingDirectory &&
-        _activePeerModel == normalizedModel) {
+        _activePeerModel == normalizedModel &&
+        _activePeerReasoningEffort == normalizedReasoningEffort) {
       return;
     }
     if (existing != null) {
@@ -822,6 +833,8 @@ class ClaudeCodeAgentProvider
       sessionId: resumeSessionId == null ? sessionId : null,
       resumeSessionId: resumeSessionId,
       model: normalizedModel,
+      reasoningEffort: normalizedReasoningEffort,
+      useConfiguredReasoningEffort: false,
       permissionMode: ClaudeCodePermissionModeCodec.toCliPermissionMode(
         _permissionMode,
       ),
@@ -853,6 +866,7 @@ class ClaudeCodeAgentProvider
     );
     await peer.start();
     _activePeerModel = normalizedModel;
+    _activePeerReasoningEffort = normalizedReasoningEffort;
     _emitStatus(
       AgentProviderStatus(
         state: AgentProviderConnectionState.ready,
@@ -870,6 +884,7 @@ class ClaudeCodeAgentProvider
     _peer = null;
     _expectedPeerSessionId = null;
     _activePeerModel = null;
+    _activePeerReasoningEffort = null;
     _controlHandler.clearPending();
     _planApprovalAdapter.clear();
     if (peer != null) {
@@ -1058,19 +1073,24 @@ class ClaudeCodeAgentProvider
     await _switchPermissionMode(nextMode, allowTurnAdmission: true);
   }
 
-  Future<void> _applyTurnModelSelection({
+  Future<void> _applyTurnModelConfiguration({
     required AgentSession session,
     required String? requestedModel,
+    required String? requestedReasoningEffort,
   }) async {
     final normalizedModel = _normalizeModel(requestedModel);
-    if (_activePeerModel == normalizedModel) {
+    final normalizedReasoningEffort = _normalizeReasoningEffort(
+      requestedReasoningEffort,
+    );
+    if (_activePeerModel == normalizedModel &&
+        _activePeerReasoningEffort == normalizedReasoningEffort) {
       return;
     }
     if (_runningTurnIdsBySessionId.isNotEmpty ||
         _controlHandler.pendingCount > 0 ||
         _planApprovalAdapter.pendingCount > 0) {
       throw StateError(
-        'Claude Code model cannot change while a turn is running',
+        'Claude Code model configuration cannot change while a turn is running',
       );
     }
     if (session.id != _sessionId) {
@@ -1085,6 +1105,7 @@ class ClaudeCodeAgentProvider
     }
 
     final previousModel = _activePeerModel;
+    final previousReasoningEffort = _activePeerReasoningEffort;
     await _tearDownPeer();
     try {
       await _ensurePeer(
@@ -1092,6 +1113,7 @@ class ClaudeCodeAgentProvider
         workingDirectory: workingDirectory,
         resumeSessionId: session.id,
         model: normalizedModel,
+        reasoningEffort: normalizedReasoningEffort,
       );
     } catch (error, stackTrace) {
       await _tearDownPeer();
@@ -1101,6 +1123,7 @@ class ClaudeCodeAgentProvider
           workingDirectory: workingDirectory,
           resumeSessionId: session.id,
           model: previousModel,
+          reasoningEffort: previousReasoningEffort,
         );
       } catch (restoreError) {
         _log.w(
@@ -1147,7 +1170,9 @@ class ClaudeCodeAgentProvider
       }
       final previousMode = _permissionMode;
       final previousModel = _activePeerModel;
+      final previousReasoningEffort = _activePeerReasoningEffort;
       final requestedModel = _effectiveModel;
+      final requestedReasoningEffort = _effectiveReasoningEffort;
       await _tearDownPeer();
       _permissionMode = nextMode;
       try {
@@ -1156,6 +1181,7 @@ class ClaudeCodeAgentProvider
           workingDirectory: workingDirectory,
           resumeSessionId: sessionId,
           model: requestedModel,
+          reasoningEffort: requestedReasoningEffort,
         );
       } catch (error, stackTrace) {
         await _tearDownPeer();
@@ -1166,6 +1192,7 @@ class ClaudeCodeAgentProvider
             workingDirectory: workingDirectory,
             resumeSessionId: sessionId,
             model: previousModel,
+            reasoningEffort: previousReasoningEffort,
           );
         } catch (restoreError) {
           _log.w(
@@ -1187,6 +1214,10 @@ class ClaudeCodeAgentProvider
   String? get _effectiveModel {
     return _normalizeModel(_modelSelection.modelId) ??
         _normalizeModel(config.defaultModel);
+  }
+
+  String? get _effectiveReasoningEffort {
+    return _normalizeReasoningEffort(_modelSelection.reasoningEffort);
   }
 
   String _resolvePromptText({
@@ -1212,6 +1243,11 @@ class ClaudeCodeAgentProvider
   }
 
   static String? _normalizeModel(String? value) {
+    final normalized = value?.trim();
+    return normalized == null || normalized.isEmpty ? null : normalized;
+  }
+
+  static String? _normalizeReasoningEffort(String? value) {
     final normalized = value?.trim();
     return normalized == null || normalized.isEmpty ? null : normalized;
   }

@@ -21,11 +21,12 @@ void main() {
       ]);
     });
 
-    test('session-id model permission-mode in fixed order', () {
+    test('session-id model effort permission-mode in fixed order', () {
       expect(
         buildClaudeCodeProcessArguments(
           sessionId: 'sid-1',
           model: 'haiku',
+          reasoningEffort: 'high',
           permissionMode: 'default',
         ),
         <String>[
@@ -39,6 +40,8 @@ void main() {
           'sid-1',
           '--model',
           'haiku',
+          '--effort',
+          'high',
           '--permission-prompt-tool',
           'stdio',
           '--permission-mode',
@@ -147,7 +150,10 @@ void main() {
   group('resolveClaudeCodeProcessCommand', () {
     test('uses locator result and config model', () async {
       final resolved = await resolveClaudeCodeProcessCommand(
-        AgentProviderConfig.defaultClaudeCode.copyWith(defaultModel: 'opus'),
+        AgentProviderConfig.defaultClaudeCode.copyWith(
+          defaultModel: 'opus',
+          selectedReasoningEffort: 'xhigh',
+        ),
         sessionId: 'abc',
         permissionMode: 'bypassPermissions',
         locator: const _StaticClaudeCodeCliLocator(
@@ -165,6 +171,7 @@ void main() {
         buildClaudeCodeProcessArguments(
           sessionId: 'abc',
           model: 'opus',
+          reasoningEffort: 'xhigh',
           permissionMode: 'bypassPermissions',
         ),
       );

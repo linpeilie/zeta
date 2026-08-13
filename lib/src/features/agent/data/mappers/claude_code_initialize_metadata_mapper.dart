@@ -4,8 +4,9 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 /// 将 Claude Code `control_response.initialize` 投影为最小元数据快照。
 ///
 /// `value` 是 Claude CLI 接受的稳定模型参数；旧形状缺少 `value` 时才读取
-/// `name`。`resolvedModel` 和尚未接入中立契约的 effort/Fast/auto 字段会被忽略，
-/// 原始 payload 也不会写入 [AgentModelInfo.raw]。
+/// `name`。`supportedEffortLevels` 在 Provider 边界映射为中立推理档位；
+/// `resolvedModel` 和尚未接入中立契约的 Fast/auto 字段会被忽略，原始 payload
+/// 也不会写入 [AgentModelInfo.raw]。
 ClaudeCodeCliMetadataSnapshot mapClaudeCodeInitializeMetadata(Object? raw) {
   final frame = _asMap(raw);
   if (frame == null || frame['type'] != 'control_response') {
@@ -39,6 +40,7 @@ ClaudeCodeCliMetadataSnapshot mapClaudeCodeInitializeMetadata(Object? raw) {
           model: id,
           displayName: _nonEmptyString(item['displayName']) ?? id,
           description: _nonEmptyString(item['description']),
+          supportedReasoningEfforts: _reasoningEfforts(item),
           isDefault: id == 'default',
         ),
       );
@@ -50,6 +52,27 @@ ClaudeCodeCliMetadataSnapshot mapClaudeCodeInitializeMetadata(Object? raw) {
     models: AgentModelList(models: List<AgentModelInfo>.unmodifiable(models)),
     subscriptionType: _nonEmptyString(account?['subscriptionType']),
   );
+}
+
+List<AgentModelReasoningEffort> _reasoningEfforts(Map<String, Object?> model) {
+  if (model['supportsEffort'] != true) {
+    return const <AgentModelReasoningEffort>[];
+  }
+  final rawLevels = model['supportedEffortLevels'];
+  if (rawLevels is! List) {
+    return const <AgentModelReasoningEffort>[];
+  }
+
+  final efforts = <AgentModelReasoningEffort>[];
+  final seen = <String>{};
+  for (final rawLevel in rawLevels) {
+    final effort = _nonEmptyString(rawLevel);
+    if (effort == null || !seen.add(effort)) {
+      continue;
+    }
+    efforts.add(AgentModelReasoningEffort(effort: effort));
+  }
+  return List<AgentModelReasoningEffort>.unmodifiable(efforts);
 }
 
 String? _nonEmptyString(Object? value) {

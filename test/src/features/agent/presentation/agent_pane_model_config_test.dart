@@ -217,6 +217,49 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
     });
 
+    testWidgets('Claude effort catalog renders reasoning options', (
+      tester,
+    ) async {
+      final provider = _ClaudeEffortModelProvider();
+      final viewModel = createAgentPaneViewModelWithStore(
+        provider,
+        MemoryAgentProviderConfigStore(
+          const AgentProviderSettings(
+            providers: <AgentProviderConfig>[
+              AgentProviderConfig.defaultClaudeCode,
+            ],
+            activeProviderId: defaultClaudeCodeProviderId,
+          ),
+        ),
+      );
+      addTearDown(viewModel.dispose);
+
+      await viewModel.loadModels();
+      await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
+      await pumpAgentPaneUi(tester);
+
+      expect(viewModel.modelConfigUiState.supportsReasoningOptions, isTrue);
+      await tapAndWaitForFinder(
+        tester,
+        find.byKey(const ValueKey('agent-model-selector')),
+        find.byKey(const ValueKey('agent-model-config-popover')),
+      );
+
+      expect(find.text('该模型未提供可配置的思考程度'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('agent-reasoning-segment-control')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('agent-reasoning-option-low')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('agent-reasoning-option-max')),
+        findsOneWidget,
+      );
+    });
+
     testWidgets(
       'reasoning slider previews continuously and commits once on release',
       (tester) async {
@@ -904,4 +947,34 @@ void main() {
       );
     });
   });
+}
+
+final class _ClaudeEffortModelProvider extends AgentPaneFakeProvider {
+  _ClaudeEffortModelProvider()
+    : super(
+        models: const AgentModelList(
+          models: <AgentModelInfo>[
+            AgentModelInfo(
+              id: 'opus',
+              model: 'opus',
+              displayName: 'Opus',
+              supportedReasoningEfforts: <AgentModelReasoningEffort>[
+                AgentModelReasoningEffort(effort: 'low'),
+                AgentModelReasoningEffort(effort: 'medium'),
+                AgentModelReasoningEffort(effort: 'high'),
+                AgentModelReasoningEffort(effort: 'xhigh'),
+                AgentModelReasoningEffort(effort: 'max'),
+              ],
+              isDefault: true,
+            ),
+          ],
+        ),
+      );
+
+  @override
+  AgentProviderConfig get config => AgentProviderConfig.defaultClaudeCode;
+
+  @override
+  AgentProviderCapabilities get capabilities =>
+      AgentProviderCapabilities.claudeCode;
 }

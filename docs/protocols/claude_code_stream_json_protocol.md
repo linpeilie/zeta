@@ -36,11 +36,12 @@ Zeta 按以下稳定顺序追加参数：
 
 1. 新会话使用 `--session-id <id>`；恢复使用 `--resume <id>`，两者互斥。
 2. 选定模型时追加 `--model <model>`。
-3. 交互审批追加 `--permission-prompt-tool stdio`。
-4. 追加 `--permission-mode <mode>`。
-5. 仅显式启用时追加 `--include-partial-messages` 或
+3. 选定推理档位时追加 `--effort <level>`。
+4. 交互审批追加 `--permission-prompt-tool stdio`。
+5. 追加 `--permission-mode <mode>`。
+6. 仅显式启用时追加 `--include-partial-messages` 或
    `--no-session-persistence`。
-6. 最后追加用户配置的额外参数。
+7. 最后追加用户配置的额外参数。
 
 默认实时路径不启用 partial messages。进程以当前项目为 working directory；Zeta 不把
 prompt、文件内容或凭证写入启动日志。
@@ -170,8 +171,10 @@ presentation 只消费 typed snapshot，不读取 `file_path`、`old_string`、`
 `ClaudeCodeCliMetadataProbe` 向独立进程发送带随机 request id 的
 `control_request.initialize`，只接受同 id 的成功 `control_response`。模型目录来自
 `response.models`，保留 CLI 顺序，以 `value` 作为稳定 id 和 `--model` 参数；旧形状缺少
-`value` 时才读取 `name`。`value=default` 标记默认项。`resolvedModel`、账号身份字段、未知
-字段，以及尚未接入中立契约的 effort/Fast/auto 能力均不会上浮或落盘。
+`value` 时才读取 `name`。`value=default` 标记默认项。模型声明 `supportsEffort=true` 时，
+`supportedEffortLevels` 按 CLI 顺序映射为中立 `supportedReasoningEfforts`；选中值在下一回合
+作为 `--effort` 参数。`resolvedModel`、账号身份字段、未知字段，以及尚未接入中立契约的
+Fast/auto 能力均不会上浮或落盘。
 
 这份目录表示**当前 CLI 在当前配置下给出的有效选项快照**。initialize 可能受 Claude CLI
 自身 bootstrap、账号权限与缓存影响；它不是 Zeta 直接同步调用的实时远端 API，也不保证
@@ -182,9 +185,9 @@ presentation 只消费 typed snapshot，不读取 `file_path`、`old_string`、`
 空目录时不写空缓存，Composer 显示模型加载失败。Provider-local coordinator 只合并并发中的
 metadata 探测，不用已完成快照挡住显式刷新。
 
-模型切换不打断运行中的 turn：选择只影响下一回合；下一回合前，Provider 在空闲边界关闭
-peer，以原 session `--resume` 并携带新 `--model` 恢复。若新 peer 启动失败，会尝试恢复
-上一模型，且不会静默吞掉原失败。
+模型或推理档位切换不打断运行中的 turn：选择只影响下一回合；下一回合前，Provider 在
+空闲边界关闭 peer，以原 session `--resume` 并携带新的 `--model` / `--effort` 恢复。
+若新 peer 启动失败，会尝试恢复上一组模型配置，且不会静默吞掉原失败。
 
 ## 8. 权限与 Plan
 

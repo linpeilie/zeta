@@ -250,6 +250,7 @@ class AgentProviderCapabilities {
     supportsPermissionRequests: true,
     supportsPlanApproval: true,
     supportsModelSelection: true,
+    supportsReasoningOptions: true,
     supportsUsage: true,
   );
 

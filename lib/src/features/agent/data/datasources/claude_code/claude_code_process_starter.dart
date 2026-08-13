@@ -16,6 +16,7 @@ List<String> buildClaudeCodeProcessArguments({
   String? sessionId,
   String? resumeSessionId,
   String? model,
+  String? reasoningEffort,
   String? permissionPromptTool = 'stdio',
   String? permissionMode,
   bool includePartialMessages = false,
@@ -50,6 +51,13 @@ List<String> buildClaudeCodeProcessArguments({
     args
       ..add('--model')
       ..add(modelId);
+  }
+
+  final effort = reasoningEffort?.trim();
+  if (effort != null && effort.isNotEmpty) {
+    args
+      ..add('--effort')
+      ..add(effort);
   }
 
   final promptTool = permissionPromptTool?.trim();
@@ -101,6 +109,8 @@ Future<ResolvedCliProcessCommand> resolveClaudeCodeProcessCommand(
   String? sessionId,
   String? resumeSessionId,
   String? model,
+  String? reasoningEffort,
+  bool useConfiguredReasoningEffort = true,
   String? permissionPromptTool = 'stdio',
   String? permissionMode,
   bool includePartialMessages = false,
@@ -122,6 +132,9 @@ Future<ResolvedCliProcessCommand> resolveClaudeCodeProcessCommand(
     sessionId: sessionId,
     resumeSessionId: resumeSessionId,
     model: model ?? config.selectedModel ?? config.defaultModel,
+    reasoningEffort: useConfiguredReasoningEffort
+        ? reasoningEffort ?? config.selectedReasoningEffort
+        : reasoningEffort,
     permissionPromptTool: permissionPromptTool,
     permissionMode: permissionMode,
     includePartialMessages: includePartialMessages,
@@ -156,6 +169,8 @@ ProcessStarter claudeCodeProcessStarter(
   String? sessionId,
   String? resumeSessionId,
   String? model,
+  String? reasoningEffort,
+  bool useConfiguredReasoningEffort = true,
   String? permissionPromptTool = 'stdio',
   String? permissionMode,
   bool includePartialMessages = false,
@@ -174,6 +189,8 @@ ProcessStarter claudeCodeProcessStarter(
       sessionId: sessionId,
       resumeSessionId: resumeSessionId,
       model: model,
+      reasoningEffort: reasoningEffort,
+      useConfiguredReasoningEffort: useConfiguredReasoningEffort,
       permissionPromptTool: permissionPromptTool,
       permissionMode: permissionMode,
       includePartialMessages: includePartialMessages,

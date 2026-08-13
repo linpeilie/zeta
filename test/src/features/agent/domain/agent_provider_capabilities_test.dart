@@ -74,7 +74,7 @@ void main() {
       expect(capabilities.bootstrapPolicy.allowsEagerModelPreload, isTrue);
     });
 
-    test('exposes M5 model selection and compact for Claude Code', () {
+    test('exposes model, reasoning, and compact support for Claude Code', () {
       final capabilities = AgentProviderCapabilities.defaultsFor(
         AgentProviderKind.claudeCode,
       );
@@ -100,7 +100,7 @@ void main() {
       expect(capabilities.supportsPlanApproval, isTrue);
       expect(capabilities.supportsModelSelection, isTrue);
       expect(capabilities.supportsModeSelection, isFalse);
-      expect(capabilities.supportsReasoningOptions, isFalse);
+      expect(capabilities.supportsReasoningOptions, isTrue);
       expect(capabilities.supportsServiceTierSelection, isFalse);
       expect(capabilities.supportsSkillInput, isFalse);
       expect(capabilities.supportsLocalImageInput, isFalse);

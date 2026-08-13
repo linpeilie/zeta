@@ -247,6 +247,7 @@ claude \
   [--resume <session-id>]               # 恢复
   [--fork-session]                      # 二期：resume 时分叉出新 session
   [--model <id>]                        # opus / sonnet / haiku / 明确 id
+  [--effort <level>]                    # initialize 返回的 supportedEffortLevels
   --permission-prompt-tool stdio        # 开启宿主 stdin control 审批通道
   [--permission-mode default|acceptEdits|plan|bypassPermissions]
   [--allowed-tools <csv>] [--disallowed-tools <csv>]
@@ -688,8 +689,10 @@ throw；这样 CLI 引入新事件类型时不会阻断整个 pipeline。
 
 - `value` 是稳定 id、`model` 和下一回合 `--model` 参数；旧响应没有 `value` 时才兼容
   `name`。CLI 返回顺序保持不变，`value=default` 是默认项。
-- 只保留展示名与可选描述；`resolvedModel`、账号身份、未知字段和尚未兑现的
-  effort/Fast/auto 能力被丢弃，`AgentModelInfo.raw` 不保存原始 payload。
+- 只保留展示名与可选描述；`supportsEffort=true` 时把 `supportedEffortLevels` 按原顺序映射为
+  `supportedReasoningEfforts`，用户选择在下一回合通过 `--effort` 生效。
+- `resolvedModel`、账号身份、未知字段和尚未兑现的 Fast/auto 能力被丢弃，
+  `AgentModelInfo.raw` 不保存原始 payload。
 - 列表为空或 probe 失败时抛出稳定、脱敏的刷新异常；不调用 `/v1/models`，也没有静态
   Claude 目录兜底。
 - Provider 只缓存最近一次**成功**结果。`refreshModels()` 总是要求新 probe，但可与同时

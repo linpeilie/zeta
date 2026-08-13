@@ -583,12 +583,13 @@ void main() {
       expect(quota?.windows.single.usedPercent, 20);
     });
 
-    test('persisted model selection is used for the first peer', () async {
+    test('persisted model configuration is used for the first peer', () async {
       final process = _FakeClaudeProcess();
       final starts = <_RecordedProcessStart>[];
       final provider = ClaudeCodeAgentProvider(
         config: AgentProviderConfig.defaultClaudeCode.copyWith(
           selectedModel: 'haiku',
+          selectedReasoningEffort: 'high',
         ),
         processStarter: _queueStarter(<_FakeClaudeProcess>[process], starts),
         locator: const _FakeClaudeCodeCliLocator(),
@@ -603,8 +604,99 @@ void main() {
       expect(starts, hasLength(1));
       expect(
         starts.single.arguments,
-        containsAllInOrder(<String>['--model', 'haiku']),
+        containsAllInOrder(<String>['--model', 'haiku', '--effort', 'high']),
       );
+    });
+
+    test(
+      'idle reasoning effort switch resumes the same session before next turn',
+      () async {
+        final firstProcess = _FakeClaudeProcess();
+        final secondProcess = _FakeClaudeProcess();
+        final starts = <_RecordedProcessStart>[];
+        final provider = ClaudeCodeAgentProvider(
+          config: AgentProviderConfig.defaultClaudeCode,
+          processStarter: _queueStarter(<_FakeClaudeProcess>[
+            firstProcess,
+            secondProcess,
+          ], starts),
+          locator: const _FakeClaudeCodeCliLocator(),
+          idFactory: _sequenceIds(<String>[
+            'session-effort-switch-1',
+            'turn-effort-switch-1',
+          ]),
+        );
+        addTearDown(provider.dispose);
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+        );
+
+        provider.updateModelSelection(
+          const AgentModelSelection(reasoningEffort: 'xhigh'),
+        );
+        await provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+          message: 'use selected effort',
+        );
+
+        expect(starts, hasLength(2));
+        expect(starts.first.arguments, isNot(contains('--effort')));
+        expect(
+          starts.last.arguments,
+          containsAllInOrder(<String>[
+            '--resume',
+            session.id,
+            '--effort',
+            'xhigh',
+          ]),
+        );
+        expect(firstProcess.receivedUserTexts, isEmpty);
+        expect(secondProcess.receivedUserTexts, <String>[
+          'use selected effort',
+        ]);
+      },
+    );
+
+    test('clearing persisted reasoning effort restores CLI default', () async {
+      final firstProcess = _FakeClaudeProcess();
+      final secondProcess = _FakeClaudeProcess();
+      final starts = <_RecordedProcessStart>[];
+      final provider = ClaudeCodeAgentProvider(
+        config: AgentProviderConfig.defaultClaudeCode.copyWith(
+          selectedReasoningEffort: 'high',
+        ),
+        processStarter: _queueStarter(<_FakeClaudeProcess>[
+          firstProcess,
+          secondProcess,
+        ], starts),
+        locator: const _FakeClaudeCodeCliLocator(),
+        idFactory: _sequenceIds(<String>[
+          'session-effort-clear-1',
+          'turn-effort-clear-1',
+        ]),
+      );
+      addTearDown(provider.dispose);
+      final session = await provider.startSession(
+        context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+      );
+
+      provider.updateModelSelection(const AgentModelSelection());
+      await provider.sendMessage(
+        session: session,
+        context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+        message: 'use CLI default effort',
+      );
+
+      expect(starts, hasLength(2));
+      expect(
+        starts.first.arguments,
+        containsAllInOrder(<String>['--effort', 'high']),
+      );
+      expect(starts.last.arguments, isNot(contains('--effort')));
+      expect(secondProcess.receivedUserTexts, <String>[
+        'use CLI default effort',
+      ]);
     });
 
     test(
