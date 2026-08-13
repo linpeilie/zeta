@@ -393,6 +393,42 @@ void main() {
       expect(provider.sentConfigurations[1], same(defaultConfiguration));
     });
 
+    test(
+      'routes forceRefresh to refreshModels when the provider supports it',
+      () async {
+        final provider = _RefreshableBundleFakeProvider(
+          availableModels: const AgentModelList(
+            models: <AgentModelInfo>[
+              AgentModelInfo(
+                id: 'model-1',
+                model: 'model-1',
+                displayName: 'Model 1',
+                supportedReasoningEfforts: <AgentModelReasoningEffort>[
+                  AgentModelReasoningEffort(effort: 'low'),
+                  AgentModelReasoningEffort(effort: 'high'),
+                ],
+              ),
+            ],
+          ),
+        );
+        final catalog = provider.bundle.modelCatalog!;
+
+        final first = await catalog.listModels();
+        final cached = await catalog.listModels();
+        final refreshed = await catalog.listModels(forceRefresh: true);
+
+        expect(provider.modelListCalls, 2);
+        expect(provider.modelRefreshCalls, 1);
+        expect(identical(first, cached), isTrue);
+        expect(
+          refreshed.models.single.supportedReasoningEfforts.map(
+            (item) => item.effort,
+          ),
+          <String>['low', 'high'],
+        );
+      },
+    );
+
     test('maps active provider capability domains to ports', () {
       final codex = _MinimalBundleFakeProvider(
         capabilities: AgentProviderCapabilities.codexAppServer,
@@ -660,6 +696,31 @@ class _MinimalBundleFakeProvider implements AgentProvider {
   @override
   Future<void> dispose() async {
     await _events.close();
+  }
+}
+
+class _RefreshableBundleFakeProvider extends _MinimalBundleFakeProvider
+    implements AgentRefreshableModelCatalogProvider {
+  _RefreshableBundleFakeProvider({super.availableModels});
+
+  int modelRefreshCalls = 0;
+
+  @override
+  Future<AgentModelList> listModels({
+    int limit = 20,
+    bool includeHidden = false,
+  }) async {
+    modelListCalls += 1;
+    return availableModels;
+  }
+
+  @override
+  Future<AgentModelList> refreshModels({
+    int limit = 20,
+    bool includeHidden = false,
+  }) async {
+    modelRefreshCalls += 1;
+    return availableModels;
   }
 }
 
